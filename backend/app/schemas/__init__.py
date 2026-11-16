@@ -134,6 +134,7 @@ if TYPE_CHECKING:
         FABulkDeleteResponse,
         FABulkUpsertResponse,
         FACurrentValue,
+        FACurrentValueRequest,
         FAHistoricalData,
         FAPriceDeleteResult,
         FAPricePoint,
@@ -291,6 +292,7 @@ __all__ = [  # noqa: RUF022 — grouped by domain with section comments; sorting
     "tags_to_csv",
     # Assets (FA prefix)
     "FACurrentValue",
+    "FACurrentValueRequest",
     "FAPricePoint",
     "FAHistoricalData",
     "FAAssetEventPoint",
@@ -542,6 +544,7 @@ _EXPORT_GROUPS = {
         "FABulkDeleteResponse",
         "FABulkUpsertResponse",
         "FACurrentValue",
+        "FACurrentValueRequest",
         "FAHistoricalData",
         "FAPriceDeleteResult",
         "FAPricePoint",

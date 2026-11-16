@@ -37,6 +37,7 @@ from pydantic import (
     model_validator,
 )
 
+from backend.app.db.models import IdentifierType
 from backend.app.schemas.assets.events import FAAssetEventPoint, FAAssetEventPointOut
 from backend.app.schemas.common import (
     BackwardFillInfo,
@@ -309,6 +310,19 @@ class FACurrentValue(StrictModel):
     @classmethod
     def currency_validate(cls, v: str) -> str:
         return Currency.validate_code(v)
+
+
+class FACurrentValueRequest(StrictModel):
+    """One asset of a bulk current-value read (``AssetSourceProvider.get_current_values_bulk``, project 76).
+
+    The inputs ``get_current_value`` would receive for that asset, and the ``key`` its answer comes back under: the
+    caller chooses it, the provider only echoes it, so two assets with the same identifier stay apart.
+    """
+
+    key: str = Field(min_length=1, description="The caller's key of this item; the answer is keyed by it")
+    identifier: str
+    identifier_type: IdentifierType
+    provider_params: dict = Field(default_factory=dict)
 
 
 class FAHistoricalData(StrictModel):

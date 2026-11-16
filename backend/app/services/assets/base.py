@@ -24,6 +24,7 @@ from backend.app.db.models import (
 from backend.app.logging_config import get_logger
 from backend.app.schemas import (
     FACurrentValue,
+    FACurrentValueRequest,
     FAHistoricalData,
     FAPricePoint,
 )
@@ -192,6 +193,20 @@ def _validate_search_declarations(cls: type) -> None:
         raise TypeError(f"{cls.__name__}.search_priority must be a whole number of at least 0, not {priority!r}")
 
 
+def _validate_bulk_current_declarations(cls: type) -> None:
+    """Check a provider class's bulk current-value declarations when it is defined (project 76, C1), so a wrong one
+    stops the import instead of reaching the core: ``supports_bulk_current`` a bool, ``bulk_current_max_items`` a whole
+    number of at least 1, and ``supports_bulk_current = True`` only beside an override of ``get_current_values_bulk``."""
+    supported = cls.supports_bulk_current
+    if not isinstance(supported, bool):
+        raise TypeError(f"{cls.__name__}.supports_bulk_current must be a bool, not {supported!r}")
+    most = cls.bulk_current_max_items
+    if isinstance(most, bool) or not isinstance(most, int) or most < 1:
+        raise TypeError(f"{cls.__name__}.bulk_current_max_items must be a whole number of at least 1, not {most!r}")
+    if supported and cls.get_current_values_bulk is AssetSourceProvider.get_current_values_bulk:
+        raise TypeError(f"{cls.__name__}.supports_bulk_current is True but get_current_values_bulk is not overridden")
+
+
 class AssetSourceProvider(PluginSettingsMixin, ABC):
     """
     Abstract base class for asset pricing providers (plugins).
@@ -258,6 +273,8 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
     - tier, search_priority: where the provider stands in the asset search (F21; see below)
     - get_icon(): Provider icon URL
     - supports_history: False if provider cannot fetch historical data
+    - supports_bulk_current, bulk_current_max_items, get_current_values_bulk(): current values of many assets in one
+      call (project 76)
     - search(): Search for assets by query
     - validate_params(): Validate provider-specific parameters
     - fetch_asset_metadata(): Fetch asset metadata (type, sector, etc.)
@@ -275,6 +292,15 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
     #: overrides it with LIBREFOLIO_ASSET_PROVIDERS_ORDER.
     search_priority: ClassVar[int] = DEFAULT_SEARCH_PRIORITY
 
+    #: Whether ``get_current_values_bulk`` prices many assets in one call (project 76): a source that answers several
+    #: identifiers in one request (Yahoo's quote list, CoinGecko's ``/simple/price``). False, the default: the core asks
+    #: ``get_current_value`` once per asset, each call with its own pause scope and timeout.
+    supports_bulk_current: ClassVar[bool] = False
+
+    #: The most items one ``get_current_values_bulk`` call receives: the core splits a larger group. A whole number of at
+    #: least 1; the source's own limit, or what fits in one request.
+    bulk_current_max_items: ClassVar[int] = 100
+
     def __init_subclass__(cls, **kwargs):
         """Wrap each concrete ``get_history_value`` with a post-execution OHLC guard.
 
@@ -287,6 +313,7 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
         """
         super().__init_subclass__(**kwargs)
         _validate_search_declarations(cls)
+        _validate_bulk_current_declarations(cls)
         impl = cls.__dict__.get("get_history_value")
         if impl is None or getattr(impl, "_ohlc_guarded", False):
             return
@@ -483,6 +510,36 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
             - FETCH_ERROR: Network/API error
             - MISSING_PARAMS: Required provider_params missing
         """
+
+    async def get_current_values_bulk(self, items: list[FACurrentValueRequest]) -> dict[str, FACurrentValue | AssetSourceError]:
+        """Fetch the current value of many assets in one call (project 76). Override only with
+        ``supports_bulk_current = True``; the default refuses with ``NOT_SUPPORTED``, and the core never calls it then.
+
+        PLUGIN RESPONSIBILITY:
+        - One request to the source for all ``items`` (at most ``bulk_current_max_items``), never a loop of
+          ``get_current_value`` calls: the core already makes those, each with its own pause scope and timeout.
+        - Answer each item under its ``key``: an ``FACurrentValue`` as ``get_current_value`` would give for the same
+          inputs, or the ``AssetSourceError`` of that asset alone (an unknown identifier, a quote without a price).
+        - Leave a key out when the source says nothing about that asset: the core serves its last stored price.
+        - Raise for the whole call when the whole call failed: ``AssetRateLimitedError`` for a refusal for too many
+          requests (the core pauses the provider, as for any call), ``AssetSourceError`` for any other failure.
+
+        CORE WILL:
+        - Group the assets of one provider, settings and pause scope, and split them into calls of at most
+          ``bulk_current_max_items``, each through ``call_provider()`` with a timeout of its own.
+        - Ignore a key it did not ask for, and cache each answer as the per-asset path does.
+
+        Args:
+            items: the assets to price, each with the caller's ``key``; the keys are distinct
+
+        Returns:
+            dict mapping each answered key to its ``FACurrentValue`` or its ``AssetSourceError``
+
+        Raises:
+            AssetRateLimitedError: the source refused the call for too many requests
+            AssetSourceError: ``NOT_SUPPORTED`` by default; any other failure of the whole call
+        """
+        raise AssetSourceError(f"Provider {self.provider_code} does not read current values in bulk", "NOT_SUPPORTED")
 
     @property
     def supports_history(self) -> bool:
