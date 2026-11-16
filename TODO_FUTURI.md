@@ -987,6 +987,27 @@ il bersaglio, perché `_populate_benchmark_indices` normalizza.
 **Il lavoro.** Decidere se `end_price` è un contratto o un'attesa e renderlo esplicito, oppure normalizzare anche le serie non
 indice. Cambia i numeri di tutte le superfici: va fatto come lavoro a sé, con il confronto prima e dopo.
 
+## 🔍 Da approfondire: XERJ, ricerca locale per gli agenti
+
+**Data aggiunta**: 16 Novembre 2026 (decisione del developer) · **Status**: ⏳ IN ATTESA che diventi stabile ·
+**Priorità**: Bassa
+
+**Cos'è.** [xerj-org/xerj](https://github.com/xerj-org/xerj) (Apache-2.0, Rust, un solo binario): indicizza cartelle (codice
+con tree-sitter, Markdown, log, CSV/JSON, PDF) e restituisce brani con `file:riga` (BM25, vettoriale, ibrida); server MCP
+(`xerj mcp`) e API compatibile Elasticsearch su `localhost:9200`. Corpus Hub (hub.xerj.org) con raccolte pronte. Ci hanno
+chiesto di usare commit di LibreFolio come esempi (il developer ha detto sì; LibreFolio è AGPL-3.0: la raccolta deve citarla).
+
+**Perché aspettare.** Al 16/11/2026 è ancora `v1.0.0-rc.102` (≈250 issue aperte, benchmark solo loro); dalla rc.101 i binari
+contengono crate proprietari (Query-1, opzionale), per restare solo Apache va compilato dai sorgenti.
+
+**Dove servirebbe.** Sul nostro codice si sovrappone a graphify e grep. Il guadagno è altrove: cercare in progetti di
+riferimento (Ghostfolio, Portfolio Performance, librerie FX e cripto) prima di scrivere codice, e cercare nel journal, che
+graphify non copre. Costo: zero soldi in locale (niente Jev, che manda i risultati a un servizio esterno), un processo in
+più, qualche centinaio di MB di indici.
+
+**Quando ripreso.** Prova breve su una copia: indicizzare repository e journal, cinque domande vere confrontate con
+graphify/grep (tempi e token), poi decidere se registrarlo come MCP del progetto.
+
 ---
 
 # Idee
