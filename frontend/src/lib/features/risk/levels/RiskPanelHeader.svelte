@@ -13,6 +13,7 @@
 
     import {RotateCw} from 'lucide-svelte';
     import RiskPeriodLine from './RiskPeriodLine.svelte';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     /**
      * Everything above the answer: what it is, how stale it is, how to refresh it.
@@ -33,9 +34,11 @@
         dateEnd: string;
         targetCurrency: string;
         showActions?: boolean;
+        /** The user page the docs icon on the header's right edge opens (RN-13, B1): the risk tab of Dashboard and Broker unless told otherwise. */
+        docsPath?: string;
     }
 
-    let {controller, title = '', subtitle = '', internalSubset = false, assetIds = [], dateStart, dateEnd, targetCurrency, showActions = true}: Props = $props();
+    let {controller, title = '', subtitle = '', internalSubset = false, assetIds = [], dateStart, dateEnd, targetCurrency, showActions = true, docsPath = 'user/dashboard/risk/'}: Props = $props();
 
     let syncOpen = $state(false);
 
@@ -82,8 +85,8 @@
         {/if}
         <RiskPeriodLine {dateStart} {dateEnd} currency={targetCurrency} />
     </div>
-    {#if showActions}
-        <div class="flex items-center gap-2">
+    <div class="flex items-center gap-2">
+        {#if showActions}
             <button
                 type="button"
                 class="flex items-center gap-1.5 rounded-lg border border-lf-subtle bg-lf-card px-3 py-1.5 text-xs text-lf-secondary disabled:opacity-50"
@@ -94,8 +97,9 @@
                 <RotateCw size={14} />
                 {$t('common.sync')}
             </button>
-        </div>
-    {/if}
+        {/if}
+        <DocsLink path={docsPath} label={$t('risk.docsHelp.header')} icon="book" size={16} testId="risk-levels-docs" />
+    </div>
 </div>
 
 {#if controller.loadError}

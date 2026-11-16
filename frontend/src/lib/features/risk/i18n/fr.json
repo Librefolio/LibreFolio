@@ -656,6 +656,9 @@
     "period": {
       "range": "Période {start} – {end} · en {currency}",
       "open": "Période depuis le {start} · en {currency}"
+    },
+    "docsHelp": {
+      "header": "Combien le portefeuille peut perdre, s'il est diversifié, si le risque est rémunéré et ce qui pourrait arriver : les quatre questions de l'onglet Risque, sur la période indiquée."
     }
   }
 }

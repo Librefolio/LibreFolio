@@ -656,6 +656,9 @@
     "period": {
       "range": "Period {start} – {end} · in {currency}",
       "open": "Period from {start} · in {currency}"
+    },
+    "docsHelp": {
+      "header": "How much the portfolio can lose, whether it is diversified, whether the risk is paid and what could happen: the four questions of the Risk tab, on the period shown."
     }
   }
 }

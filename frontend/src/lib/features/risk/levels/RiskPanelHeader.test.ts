@@ -247,3 +247,17 @@ describe('RiskPanelHeader — the period beside the title (RN-11, Q14)', () => {
         for (const text of [day('2026-01-01'), day('2026-06-30'), 'EUR']) expect(line?.textContent, `the line does not read ${text}`).toContain(text);
     });
 });
+
+describe('RiskPanelHeader — the docs icon beside the title (RN-13, B1)', () => {
+    it('opens the risk tab’s user page, beside the title', async () => {
+        const open = vi.spyOn(window, 'open').mockReturnValue(null);
+        const {controller} = fakeController([]);
+        render(RiskPanelHeader, {props: {controller, dateStart: '2026-01-01', dateEnd: '2026-06-30', targetCurrency: 'EUR', showActions: false}});
+
+        const icon = screen.queryByTestId('risk-levels-docs');
+        expect(icon, 'the risk header has no docs icon').not.toBeNull();
+        await fireEvent.click(icon as HTMLElement);
+        expect(open, 'the icon does not open the risk tab’s page').toHaveBeenCalledWith('/mkdocs/user/dashboard/risk/', '_blank', 'noopener');
+        open.mockRestore();
+    });
+});

@@ -656,6 +656,9 @@
     "period": {
       "range": "Periodo {start} – {end} · in {currency}",
       "open": "Periodo dal {start} · in {currency}"
+    },
+    "docsHelp": {
+      "header": "Quanto può perdere il portafoglio, se è diversificato, se il rischio è pagato e cosa potrebbe succedere: le quattro domande della scheda Rischio, sul periodo indicato."
     }
   }
 }
