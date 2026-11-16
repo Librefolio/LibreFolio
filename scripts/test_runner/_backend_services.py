@@ -1559,6 +1559,15 @@ def services_asset_profile_double_write(verbose: bool = False, test_names: list 
     return run_command(cmd, "Asset profile double write tests", verbose=verbose)
 
 
+def services_asset_profile_from(verbose: bool = False, test_names: list = None) -> bool:
+    """Run «use the source's value» ({"from": code}) in the profile writes of POST/PATCH /assets (project 68, lot B5b)."""
+    print_section("Services: Asset Profile From")
+    print_info("Testing: AssetCRUDService.create_assets_bulk / patch_assets_bulk with {'from': code} profile values")
+    print_info("Tests: cache hit or read now, the row in the source's name (force, same source no row), the item's new binding, refusals profileValueInvalid, seen and profileSourceChanged, dry run, POST")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_profile_from.py", test_names)
+    return run_command(cmd, "Asset profile from tests", verbose=verbose)
+
+
 def services_asset_profile_merge(verbose: bool = False, test_names: list = None) -> bool:
     """Run what merging two assets and deleting an asset do to the asset profile (project 68, lot A5)."""
     print_section("Services: Asset Profile Merge")
@@ -3686,6 +3695,17 @@ Note: No backend server required.
         desc="Project 68 A4: until D7, classification_params sent to create_assets_bulk / patch_assets_bulk (keyword user_id) is also written into the profile in the same transaction: source user, user_id the author, read_on today in scheduler_timezone and never before the voice's now; POST: three rows for description, geography and sector, none without classification; PATCH: only the voices it touches (sector alone: one row, even when the profile's geography differs from the column), sector_area null a NULL row, classification_params null NULL rows for the voices with a value only, the value now (another spelling) no row; the dry run (commit=False) and a batch rolled back on patchFailed write none; a patch that does not touch the classification writes none; a description of spaces counts as empty (no row on POST, an empty row on PATCH)",
         # PURE: every database is a private SQLite file under tmp_path built with create_all; no session on the lane DB,
         # no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "asset-profile-from",
+        services_asset_profile_from,
+        name="Asset Profile From",
+        desc="Project 68 B5b: a profile value {from: code} (optionally seen) on patch_assets_bulk / create_assets_bulk takes that enricher's value of the asset's binding after the item: from the enricher_read cache when it holds the voice (no call), else read now (fills the cache; a cached read of other voices does not answer); the row in the source's name (user_id NULL, the read's source_date), forced over the same value from another source, none when now is that value from that source; the binding the same item sets is used, a code it removes refused; profileValueInvalid on profile.<voice>, whole batch refused, dry run the same: code not bound, enricher not installed, no value for the voice, not found, error, raise, keys other than from/seen; seen in stored form: profileSourceChanged warning {voice, seen, now} only when different, the value read now saved; dry run same warning, nothing written; POST: from with the item's enrichers, a refused one fails its item",
+        # PURE: every database is a private SQLite file under tmp_path built with create_all; the synthetic enrichers are
+        # registered in the process's own EnricherRegistry (removed at teardown with their claims) and the process-wide
+        # enricher_read cache is cleared around each test; no server, no network.
         isolation="pure",
     )
     add_test(

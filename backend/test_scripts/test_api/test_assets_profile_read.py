@@ -12,18 +12,41 @@ Test Suite: reading the profile from the enrichers through the routes (project 6
    asset id that does not exist has a result with ``error``; an asset bound to ``MOCK_RATE_LIMITED`` has an outcome
    ``error`` with ``RATE_LIMITED`` and its ``retry_after``.
 
+3. B5b, the background «Aggiorna»: after ``POST /assets`` with non-empty ``enrichers`` (each item created) and after a
+   committed ``PATCH /assets`` whose item sets non-empty ``enrichers``, the server reads them after the answer: within
+   ``BACKGROUND_DEADLINE`` ``GET /assets`` answers ``state.mockenrich.status == "ok"`` and the database holds the
+   mockenrich rows, no user. Never after ``POST /assets/validate``, a refused batch, or a PATCH that does not set
+   ``enrichers``: those assets, bound beforehand, keep ``state == {}`` and no row after a marker — a later POST whose
+   own background read is awaited to ``ok``.
+4. B5b, ``{"from": "mockenrich", "seen": …}`` in ``profile`` through the routes: ``/validate`` answers the warning
+   ``profileSourceChanged`` (``params`` ``{voice, seen, now}`` in stored form) and writes nothing; ``PATCH`` answers the
+   same, committed, and writes the row in mockenrich's name, no user, mockenrich's ``source_date``. (The resolution's
+   rules are pinned in ``test_services/test_asset_profile_from.py``.)
+
 Every test registers its own user and creates its own assets under unique names, bound to an ISIN no other test uses:
 the backend's read cache is shared by every test of the lane and lives 30 minutes, so no assertion depends on what it
 holds — ``from_cache`` is asserted only on a first read of a fresh ISIN. The rows of the database are read for the
-test's own assets only.
+test's own assets only. ``_create_bound`` binds straight on the lane's database (``bindings.save_config``), never through
+a route: a route that sets ``enrichers`` starts a background read (B5b), which would race the read under test. A wait
+polls ``GET /assets`` against a deadline, never a sleep in place of a condition.
+
+Not pinned: a PATCH that sets ``enrichers`` to ``{}`` or ``null`` (nothing is left to read, so a read would leave no
+trace to observe). A POST item that fails has no asset to observe: pinned only that the batch's created items are still
+read, their ``config`` as sent.
 
 Red until B5a: both routes raise ``NotImplementedError`` (500). The three 422 cases are green already (the request's
 validator exists): they are guards.
+
+Red until B5b: no background read exists (the waits reach their deadline: an assertion, never a hang); the catalogue
+refuses ``{"from"}`` (``profileValueInvalid``). The tests of sections 1 and 2 stay green: their assets are bound without
+a route.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
+import time
 import uuid
 from typing import Any
 
@@ -43,6 +66,10 @@ API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30.0
 MOCK_CODE = "mockenrich"
 RATE_LIMITED = "RATE_LIMITED"
+PROFILE_SOURCE_CHANGED = "profileSourceChanged"
+#: How long the background «Aggiorna» may take to show its state, in seconds (a bound, never a wait).
+BACKGROUND_DEADLINE = 15.0
+POLL_INTERVAL = 0.1
 
 
 @pytest.fixture(scope="module")
@@ -92,14 +119,43 @@ async def _login(client: httpx.AsyncClient) -> int:
     return int(me.json()["user"]["id"])
 
 
-async def _create_bound(client: httpx.AsyncClient, tag: str, identifier: str) -> int:
-    """An ETF of the test, bound to mockenrich with ``identifier`` as ISIN."""
-    item = {"display_name": f"Profile read {unique_id(tag)}", "currency": "EUR", "asset_type": "ETF", "enrichers": {MOCK_CODE: {"identifier_type": "ISIN", "identifier": identifier}}}
-    resp = await client.post(f"{API_BASE}/assets", json=[item], timeout=TIMEOUT)
+def _binding(identifier: str) -> dict[str, str]:
+    return {"identifier_type": "ISIN", "identifier": identifier}
+
+
+def _item(tag: str, **fields: Any) -> dict[str, Any]:
+    return {"display_name": f"Profile read {unique_id(tag)}", "currency": "EUR", "asset_type": "ETF", **fields}
+
+
+async def _post(client: httpx.AsyncClient, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """``POST /assets``: the result of each item, in order."""
+    resp = await client.post(f"{API_BASE}/assets", json=items, timeout=TIMEOUT)
     assert resp.status_code == 201, f"POST /assets: {resp.status_code} {resp.text}"
-    result = resp.json()["results"][0]
+    results = resp.json()["results"]
+    assert len(results) == len(items), f"one result per item: {results}"
+    return results
+
+
+async def _create(client: httpx.AsyncClient, item: dict[str, Any]) -> int:
+    result = (await _post(client, [item]))[0]
     assert result["success"] and result["asset_id"] is not None, f"the asset must be created: {result}"
     return int(result["asset_id"])
+
+
+async def _bind(asset_id: int, identifier: str) -> None:
+    """Bind the asset to mockenrich straight on the lane's database: no route, so no background read (B5b)."""
+    from backend.app.services.enrichers import bindings  # noqa: PLC0415 — the service writing the bindings, imported in the test body
+
+    async with AsyncSession(get_async_engine()) as session:
+        await bindings.save_config(session, asset_id, {MOCK_CODE: _binding(identifier)})
+        await session.commit()
+
+
+async def _create_bound(client: httpx.AsyncClient, tag: str, identifier: str) -> int:
+    """An ETF of the test, bound to mockenrich with ``identifier`` as ISIN, without a route (see the module docstring)."""
+    asset_id = await _create(client, _item(tag))
+    await _bind(asset_id, identifier)
+    return asset_id
 
 
 async def _delete(client: httpx.AsyncClient, asset_ids: list[int]) -> None:
@@ -295,5 +351,134 @@ async def test_refresh_of_an_asset_refused_for_too_many_requests(test_server):
             assert result["written"] == [] and await _profile_rows(asset_id) == [], f"nothing written: {result}"
             state = _state_of(await _read_asset(client, asset_id)).get(MOCK_CODE) or {}
             assert (state.get("status"), state.get("error_code")) == ("error", RATE_LIMITED), f"the refusal is in the state: {state}"
+        finally:
+            await _delete(client, [asset_id])
+
+
+# =============================================================================
+# 3. B5b: the background «Aggiorna» after a save that sets the enrichers
+# =============================================================================
+
+
+async def _wait_for_state(client: httpx.AsyncClient, asset_id: int) -> dict[str, Any]:
+    """Poll ``GET /assets`` until the asset's ``state`` has a mockenrich entry, or the deadline: the last state seen."""
+    deadline = time.monotonic() + BACKGROUND_DEADLINE
+    while True:
+        state = _state_of(await _read_asset(client, asset_id))
+        if MOCK_CODE in state or time.monotonic() >= deadline:
+            return state
+        await asyncio.sleep(POLL_INTERVAL)
+
+
+async def _assert_read_in_background(client: httpx.AsyncClient, asset_id: int, isin: str) -> None:
+    """Within the deadline the asset's state says mockenrich read it, and its rows are mockenrich's, no user."""
+    state = await _wait_for_state(client, asset_id)
+    assert (state.get(MOCK_CODE) or {}).get("status") == "ok", f"within {BACKGROUND_DEADLINE}s the background read writes the state: {state}"
+    rows = await _profile_rows(asset_id)
+    assert {row["key"]: (row["stored"], row["source"], row["user_id"]) for row in rows} == {key: (value, MOCK_CODE, None) for key, value in _expected_voices(isin).items()}, f"mockenrich's rows, no user: {rows}"
+
+
+@pytest.mark.asyncio
+async def test_post_with_enrichers_reads_each_created_asset_after_the_answer(test_server):
+    print_section("B5b: POST /assets with enrichers, then «Aggiorna» in the background")
+    first, second = _fake_isin(), _fake_isin()
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        failing = _item("BG_POST_FAIL", enrichers={MOCK_CODE: _binding(_fake_isin())}, profile={"ter": "-1"})
+        results = await _post(client, [_item("BG_POST_A", enrichers={MOCK_CODE: _binding(first)}), failing, _item("BG_POST_B", enrichers={MOCK_CODE: _binding(second)})])
+        asset_ids = [int(result["asset_id"]) for result in results if result["success"]]
+        try:
+            assert [result["success"] for result in results] == [True, False, True], f"the two valid items created, the invalid one failed: {results}"
+
+            await _assert_read_in_background(client, asset_ids[0], first)
+            await _assert_read_in_background(client, asset_ids[1], second)
+            for asset_id, isin in zip(asset_ids, (first, second), strict=True):
+                assert ((await _read_asset(client, asset_id)).get("enrichers") or {}).get("config") == {MOCK_CODE: _binding(isin)}, "the binding sent, untouched by the read"
+            print_success("each created asset read after the answer")
+        finally:
+            await _delete(client, asset_ids)
+
+
+@pytest.mark.asyncio
+async def test_a_committed_patch_that_sets_enrichers_reads_them_after_the_answer(test_server):
+    isin = _fake_isin()
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        asset_id = await _create(client, _item("BG_PATCH"))
+        try:
+            resp = await client.patch(f"{API_BASE}/assets", json=[{"asset_id": asset_id, "enrichers": {MOCK_CODE: _binding(isin)}}], timeout=TIMEOUT)
+            assert resp.status_code == 200 and resp.json()["committed"] is True, f"PATCH /assets: {resp.status_code} {resp.text}"
+
+            await _assert_read_in_background(client, asset_id, isin)
+        finally:
+            await _delete(client, [asset_id])
+
+
+@pytest.mark.asyncio
+async def test_no_read_after_validate_a_refused_batch_or_a_patch_without_enrichers(test_server):
+    """Three assets bound beforehand (without a route), so a read started by mistake would leave a state and rows:
+    ``/validate`` setting their binding, a batch refused by a missing asset, a PATCH of the name only. Then a marker, a
+    POST whose own background read is awaited: the reads that the three requests could have started, all earlier,
+    have had their time."""
+    print_section("B5b: no «Aggiorna» after validate, a refused batch, a patch without enrichers")
+    validated, refused, renamed, marker = _fake_isin(), _fake_isin(), _fake_isin(), _fake_isin()
+    missing = 2_000_000_000 + int(uuid.uuid4().int % 1_000_000)
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        asset_ids: list[int] = []
+        try:
+            for tag, isin in (("BG_VALIDATE", validated), ("BG_REFUSED", refused), ("BG_RENAMED", renamed)):
+                asset_ids.append(await _create_bound(client, tag, isin))
+            validated_id, refused_id, renamed_id = asset_ids
+
+            check = await client.post(f"{API_BASE}/assets/validate", json=[{"asset_id": validated_id, "enrichers": {MOCK_CODE: _binding(validated)}}], timeout=TIMEOUT)
+            assert check.status_code == 200 and check.json()["committed"] is False and check.json()["issues"] == [], f"barrier: the dry run would save: {check.status_code} {check.text}"
+            batch = await client.patch(f"{API_BASE}/assets", json=[{"asset_id": refused_id, "enrichers": {MOCK_CODE: _binding(refused)}}, {"asset_id": missing, "display_name": "nobody"}], timeout=TIMEOUT)
+            assert batch.status_code == 200 and batch.json()["committed"] is False and batch.json()["issues"], f"barrier: the batch is refused: {batch.status_code} {batch.text}"
+            rename = await client.patch(f"{API_BASE}/assets", json=[{"asset_id": renamed_id, "display_name": f"Profile read renamed {unique_id('BG_REN')}"}], timeout=TIMEOUT)
+            assert rename.status_code == 200 and rename.json()["committed"] is True, f"barrier: the rename is saved: {rename.status_code} {rename.text}"
+
+            marker_id = await _create(client, _item("BG_MARKER", enrichers={MOCK_CODE: _binding(marker)}))
+            asset_ids.append(marker_id)
+            await _assert_read_in_background(client, marker_id, marker)
+
+            for asset_id in (validated_id, refused_id, renamed_id):
+                assert _state_of(await _read_asset(client, asset_id)) == {}, f"asset {asset_id}: no read started"
+                assert await _profile_rows(asset_id) == [], f"asset {asset_id}: no row written"
+            print_success("no read without a committed save that sets the enrichers")
+        finally:
+            await _delete(client, asset_ids)
+
+
+# =============================================================================
+# 4. B5b: {"from": …} through the routes
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_from_the_source_with_a_changed_seen_warns_and_writes_in_the_sources_name(test_server):
+    print_section("B5b: profile {from: mockenrich, seen} on /validate and PATCH")
+    mock = _mock()
+    isin = _fake_isin()
+    items = [{"asset_id": 0, "profile": {"ter": {"from": MOCK_CODE, "seen": "0.0030"}}}]
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        asset_id = await _create_bound(client, "FROM", isin)
+        items[0]["asset_id"] = asset_id
+        expected = [(asset_id, 0, PROFILE_SOURCE_CHANGED, "profile.ter", {"voice": "ter", "seen": "0.003", "now": "0.0022"})]
+        try:
+            check = await client.post(f"{API_BASE}/assets/validate", json=items, timeout=TIMEOUT)
+            assert check.status_code == 200, f"POST /assets/validate: {check.status_code} {check.text}"
+            body = check.json()
+            assert body["issues"] == [] and [(w["asset_id"], w["index"], w["code"], w["field"], w["params"]) for w in body["warnings"]] == expected, f"the dry run warns: {body}"
+            assert await _profile_rows(asset_id) == [], "the dry run writes nothing"
+
+            resp = await client.patch(f"{API_BASE}/assets", json=items, timeout=TIMEOUT)
+
+            assert resp.status_code == 200, f"PATCH /assets: {resp.status_code} {resp.text}"
+            body = resp.json()
+            assert body["committed"] is True and [(w["asset_id"], w["index"], w["code"], w["field"], w["params"]) for w in body["warnings"]] == expected, f"saved, with the warning: {body}"
+            rows = await _profile_rows(asset_id)
+            assert [(row["key"], row["stored"], row["source"], row["user_id"], str(row["source_date"])) for row in rows] == [("ter", "0.0022", MOCK_CODE, None, mock.SOURCE_DATE.isoformat())], f"the row in mockenrich's name: {rows}"
         finally:
             await _delete(client, [asset_id])
