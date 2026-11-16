@@ -70,3 +70,42 @@ class FAEnrichersCatalogue(StrictModel):
 
     enrichers: List[FAEnricherInfo]
     default_order: Dict[AssetType, List[str]] = Field(..., description="Per asset type, the codes of the enrichers that cover it: by degree, then by code")
+
+
+class FAEnricherRecognizeRequest(StrictModel):
+    """``POST /assets/enrichers/recognize``: «recognize» in cascade from the identifiers known (plan B4), also before
+    the asset exists."""
+
+    asset_type: AssetType = Field(..., description="The asset's type: only the enrichers that cover it are asked")
+    identifiers: Dict[str, str] = Field(..., min_length=1, description="Type → value of the identifiers known (ISIN, LEI, TICKER…)")
+    price_provider_code: Optional[str] = Field(None, description="The asset's price provider: at equal degree its enricher comes first in the order")
+    codes: Optional[List[str]] = Field(None, description="Only these enrichers; all installed when absent")
+
+
+class FAEnricherRecognition(StrictModel):
+    """What one enricher answered for one binding."""
+
+    code: str
+    identifier_type: str
+    identifier: str
+    status: str = Field(..., description="found, not_found, conflict (it names an identifier different from one already known), error")
+    name: Optional[str] = None
+    page_url: Optional[str] = None
+    identifiers: Dict[str, str] = Field(default_factory=dict, description="The other identifiers it knows")
+    conflicts: Dict[str, str] = Field(default_factory=dict, description="On a conflict: type → the value it named")
+    error: Optional[str] = None
+
+
+class FAEnricherSearchResult(StrictModel):
+    """One result of an enricher's search: what fills a binding."""
+
+    name: str
+    binding: FAEnricherBinding
+    asset_type: Optional[AssetType] = None
+    page_url: Optional[str] = None
+
+
+class FAEnricherTestRequest(StrictModel):
+    """``POST /assets/enrichers/{code}/test``: «recognize» one binding, as the E7 window's «test» does."""
+
+    binding: FAEnricherBinding
