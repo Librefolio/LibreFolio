@@ -23,6 +23,10 @@ binding the user removed meanwhile writes nothing, and the merge follows the ord
 
 This module holds the TTL cache, whose library starts a thread at import: import it lazily from modules in the import
 chain of the BRIM parse pool's forkserver preload (``services/assets/crud.py``).
+
+**The source's value** (``source_value``): what one enricher gives for one voice, from the cache or a read of that voice,
+for the user's «use the source's value» (``{"from": …}``). **The read after a save** (``refresh_in_background``):
+«Aggiorna» after a save that set the enrichers, after the answer, with a session of its own.
 """
 
 from __future__ import annotations
@@ -36,9 +40,10 @@ from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from backend.app.db.models import Asset, AssetType
+from backend.app.db.session import get_async_engine
 from backend.app.logging_config import get_logger
 from backend.app.services.assets.profile.catalogue import ProfileValueError, normalize_value
 from backend.app.services.assets.profile.store import ProfileWrite, profile_today, write_values
@@ -342,3 +347,43 @@ async def _save_asset(session: AsyncSession, asset_id: int, outcomes: list[ReadO
         return AssetRefreshResult(asset_id=asset_id, outcomes=outcomes, error=type(error).__name__)
     deferred = [outcome for outcome in kept if outcome.error_code == RATE_LIMITED]
     return AssetRefreshResult(asset_id=asset_id, written=[row.key for row in written], outcomes=kept, deferred=deferred)
+
+
+# =============================================================================
+# THE SOURCE'S VALUE, AND THE READ AFTER A SAVE
+# =============================================================================
+
+
+@dataclass(frozen=True, slots=True)
+class SourceValue:
+    """What an enricher gives now for one voice of one binding: the value in stored form and its ``source_date``."""
+
+    value: Any
+    source_date: date | None
+
+
+async def source_value(code: str, binding: Mapping[str, Any], key: str) -> SourceValue | str:
+    """The value ``code`` gives for ``key`` with ``binding`` (the cache when it holds it, else a read of that voice); the
+    reason as text when it gives none (not an installed enricher, not found, an error, the voice not given)."""
+    if EnricherRegistry.get_plugin(code) is None:
+        return f"'{code}' is not an installed enricher"
+    request = _requests(0, {code: binding})[0]
+    outcomes = [outcome async for outcome in read_bindings([request], {key})]
+    outcome = outcomes[-1] if outcomes else None
+    if outcome is None or outcome.status is not EnricherReadStatus.OK:
+        return f"'{code}' gave no value ({'no answer' if outcome is None else outcome.status.value})"
+    if key not in outcome.values:
+        return f"'{code}' gives no value for '{key}'"
+    return SourceValue(value=outcome.values[key], source_date=outcome.source_date)
+
+
+async def refresh_in_background(asset_ids: Sequence[int], *, engine: AsyncEngine | None = None) -> None:
+    """«Aggiorna» after a save that set the enrichers (plan §3.5), run after the answer with a session of its own. Never
+    raises: a failure is logged, and the weekly read or «Aggiorna» reads the asset later (its ``state`` says «never»)."""
+    if not asset_ids:
+        return
+    try:
+        async with AsyncSession(engine or get_async_engine(), expire_on_commit=False) as session:
+            await refresh_assets(session, asset_ids)
+    except Exception as error:  # noqa: BLE001 — a background task has nobody to raise to: log and end
+        logger.warning("Profile read after a save failed", asset_ids=list(asset_ids), exc_info=error)

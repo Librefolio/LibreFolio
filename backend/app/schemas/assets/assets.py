@@ -389,6 +389,7 @@ class FAAssetPatchCode(StrEnum):
     ASSET_FAMILY_CHANGE = "assetFamilyChange"
     PATCH_FAILED = "patchFailed"
     PROFILE_VALUE_INVALID = "profileValueInvalid"
+    PROFILE_SOURCE_CHANGED = "profileSourceChanged"
 
 
 class FAAssetPatchIssue(StrictModel):
