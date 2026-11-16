@@ -852,11 +852,14 @@ async def test_xr65_sync_stores_a_providers_rates_before_1900(monkeypatch, start
 #
 # Contract (D2): MOCKFX delivers EUR → XCD on a Friday, the Saturday and Sunday after it, a Monday (today) and the
 # Tuesday (tomorrow), whatever the range asked. Synced up to Monday, the pair stores Friday to Monday, weekend included,
-# and not Tuesday; synced again up to Tuesday, it stores Tuesday too, the other days unchanged.
+# and not Tuesday; synced again up to Tuesday, it stores Tuesday too, the other days unchanged. The same holds for a
+# chain, whose days _compute_multi_step filters on its own: BND → EUR → XCD, both legs MOCKFX and delivered on the same
+# five days, stores its chain rate Friday to Monday up to Monday, and Tuesday's at the next sync.
 #
-# The pair is this block's own (no seed and no other test uses XCD): MOCKFX quotes EUR → XCD, stored EUR/XCD as it comes.
-# Its rates in the window and its route are wiped before and after each test; the provider is a MockFXProvider whose
-# fetch answers the block's days whatever the range asked, behind a fetch cache of the test's own.
+# The pairs are this block's own (no seed and no other test stores a rate of XCD or BND): MOCKFX quotes EUR → XCD, stored
+# EUR/XCD as it comes, and EUR → BND, a leg BND/EUR; the chain stores BND/XCD alone. Their rates in the window and their
+# routes are wiped before and after each test; the provider is a MockFXProvider whose fetch answers the block's days
+# whatever the range asked, behind a fetch cache of the test's own.
 
 D2_PAIR = ("EUR", "XCD")
 D2_TODAY = date(1990, 6, 11)  # a Monday
@@ -864,33 +867,42 @@ D2_TOMORROW = D2_TODAY + timedelta(days=1)
 D2_FRIDAY, D2_SATURDAY, D2_SUNDAY = (D2_TODAY - timedelta(days=offset) for offset in (3, 2, 1))
 #: What MOCKFX delivers for XCD, by day: a weekday, the weekend after it, today and tomorrow.
 D2_DELIVERED = {D2_FRIDAY: "1.1", D2_SATURDAY: "1.2", D2_SUNDAY: "1.3", D2_TODAY: "1.4", D2_TOMORROW: "1.5"}
+#: BND → EUR → XCD, two MOCKFX legs: only the chain rate is stored, as BND/XCD.
+D2_CHAIN = ("BND", "XCD")
+#: What MOCKFX delivers for each leg of the chain, quoted EUR → currency, on the same five days.
+D2_CHAIN_DELIVERED = {
+    "BND": dict(zip(D2_DELIVERED, ("2", "4", "2", "4", "2"), strict=True)),
+    "XCD": dict(zip(D2_DELIVERED, ("3", "10", "7", "18", "11"), strict=True)),
+}
+#: BND/XCD by day: 1 BND is 1/BND-quote EUR, 1 EUR is XCD-quote XCD, so the XCD quote over the BND quote -- 3/2, 10/4, 7/2, 18/4, 11/2.
+D2_CHAIN_RATES = dict(zip(D2_DELIVERED, (Decimal("1.5"), Decimal("2.5"), Decimal("3.5"), Decimal("4.5"), Decimal("5.5")), strict=True))
 
 
 async def _d2_wipe() -> None:
-    """Drop this block's rates in its window, tomorrow included, and its routes."""
-    base, quote = D2_PAIR
+    """Drop this block's rates in its window, tomorrow included, and its routes: the direct pair, the chain and its BND leg."""
     async with AsyncSession(get_async_engine()) as session:
-        await session.execute(delete(FxRate).where(FxRate.base == base, FxRate.quote == quote, FxRate.date >= min(D2_DELIVERED), FxRate.date <= max(D2_DELIVERED)))
-        await session.execute(delete(FxConversionRoute).where(FxConversionRoute.base == base, FxConversionRoute.quote == quote))
+        for base, quote in (D2_PAIR, D2_CHAIN, ("BND", "EUR")):
+            await session.execute(delete(FxRate).where(FxRate.base == base, FxRate.quote == quote, FxRate.date >= min(D2_DELIVERED), FxRate.date <= max(D2_DELIVERED)))
+            await session.execute(delete(FxConversionRoute).where(FxConversionRoute.base == base, FxConversionRoute.quote == quote))
         await session.commit()
 
 
 @pytest.fixture
 def d2_pair():
-    """D2: this block's pair without a rate in the window nor a route, before and after the test."""
+    """D2: this block's pairs without a rate in the window nor a route, before and after the test."""
     asyncio.run(_d2_wipe())
     yield
     asyncio.run(_d2_wipe())
 
 
-def _d2_provider(monkeypatch: pytest.MonkeyPatch) -> None:
-    """MOCKFX handed out as a MockFXProvider whose fetch answers ``D2_DELIVERED`` for each currency asked, quoted
-    EUR → currency, whatever the range -- tomorrow's row included, as a bank publishing it early does; the fetch cache is
-    the test's own."""
+def _d2_provider(monkeypatch: pytest.MonkeyPatch, by_currency: dict[str, dict[date, str]] | None = None) -> None:
+    """MOCKFX handed out as a MockFXProvider whose fetch answers, for each currency asked, ``by_currency[currency]``
+    (``D2_DELIVERED`` without it), quoted EUR → currency, whatever the range -- tomorrow's row included, as a bank
+    publishing it early does; the fetch cache is the test's own."""
     provider = MockFXProvider()
 
     async def fetch_rates(date_range, currencies, base_currency=None):
-        return {currency: [(day, "EUR", currency, Decimal(rate)) for day, rate in D2_DELIVERED.items()] for currency in currencies}
+        return {currency: [(day, "EUR", currency, Decimal(rate)) for day, rate in (by_currency or {}).get(currency, D2_DELIVERED).items()] for currency in currencies}
 
     cached = {}
     cache = Mock()
@@ -901,10 +913,10 @@ def _d2_provider(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(fx_service, "_fx_fetch_cache", cache)
 
 
-async def _d2_sync(start, end: date) -> dict[date, Decimal]:
-    """``sync_pairs_bulk`` of the pair from ``start`` up to ``end``; the pair's result must be ``ok``. Returns the pair's
+async def _d2_sync(start, end: date, pair: tuple[str, str] = D2_PAIR) -> dict[date, Decimal]:
+    """``sync_pairs_bulk`` of ``pair`` from ``start`` up to ``end``; the pair's result must be ``ok``. Returns the pair's
     rates in the window by date, read through the model."""
-    base, quote = D2_PAIR
+    base, quote = pair
     slug = f"{base}-{quote}"
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         response = await sync_pairs_bulk(session, pairs=[slug], date_range=(start, end))
@@ -936,3 +948,25 @@ async def test_d2_sync_stores_no_future_day_and_keeps_the_weekend(monkeypatch, s
 
     stored = await _d2_sync(start, D2_TOMORROW)
     assert stored == delivered, f"synced from {start!r} up to tomorrow {D2_TOMORROW}, EUR/XCD stored {stored}: expected {delivered}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("d2_pair")
+@pytest.mark.parametrize("start", [pytest.param("min", id="start-min"), pytest.param(D2_FRIDAY, id="start-friday")])
+async def test_d2_chain_sync_stores_no_future_day_and_keeps_the_weekend(monkeypatch, start):
+    """D2 through a chain: MOCKFX delivers both legs of BND → EUR → XCD on Friday, Saturday, Sunday, Monday (today) and
+    Tuesday (tomorrow); _compute_multi_step picks the chain's days on its own.
+
+    Contract: synced up to today, BND/XCD stores its chain rate Friday to Monday, the weekend included, and not tomorrow;
+    synced again the next day, up to tomorrow, it stores tomorrow's too, the other days unchanged.
+    """
+    base, quote = D2_CHAIN
+    _d2_provider(monkeypatch, D2_CHAIN_DELIVERED)
+    await _xr38_route(base, quote, [("BND", "EUR"), ("EUR", "XCD")])
+
+    stored = await _d2_sync(start, D2_TODAY, D2_CHAIN)
+    up_to_today = {day: rate for day, rate in D2_CHAIN_RATES.items() if day <= D2_TODAY}
+    assert stored == up_to_today, f"chain synced from {start!r} up to today {D2_TODAY}, BND/XCD stored {stored}: expected {up_to_today}, tomorrow {D2_TOMORROW} not yet"
+
+    stored = await _d2_sync(start, D2_TOMORROW, D2_CHAIN)
+    assert stored == D2_CHAIN_RATES, f"chain synced from {start!r} up to tomorrow {D2_TOMORROW}, BND/XCD stored {stored}: expected {D2_CHAIN_RATES}"
