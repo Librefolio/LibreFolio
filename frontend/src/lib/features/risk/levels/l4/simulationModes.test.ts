@@ -9,9 +9,9 @@ import {DEFAULT_SIMULATION_MODE, SIMULATION_MODES, simulationModeSpec, type Simu
  * What this table is for, and therefore what these tests have to prove.
  *
  * The backend takes two fields, `process` and `regime`, and they are not
- * independent: `simulation.py:165` refuses any prescribed regime that is not
+ * independent: `SimulationParams._validate_parametric_params` refuses any prescribed regime that is not
  * carried by the block bootstrap. It refuses it **quietly** — the params
- * `ValidationError` is caught per-analytic (`service.py:141-150`, which does
+ * `ValidationError` is caught per-analytic (`RiskService.execute`, which does
  * `continue` rather than raise), so the response is a 200 with the analytic
  * marked `unavailable` and the simulation rung simply never appears.
  *
