@@ -21,7 +21,7 @@ All provider calls go through `_run_provider_in_thread()` in `assets/core.py` â€
 | Cache | TTL | Scope |
 |-------|-----|-------|
 | `asset_history_fetch` | 15 min | Smart range per-date |
-| `asset_current_fetch` | 2 min | Frontend polling |
+| `asset_current_fetch` | 2 min, or the provider's interval (`current_min_refresh_seconds`) | Frontend polling |
 | `asset_metadata_fetch` | 30 min | Explicit refresh |
 | `search_queries` | 15 min | Exact query dedup |
 | `search_results` | 24h | Individual items |
