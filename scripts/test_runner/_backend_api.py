@@ -504,6 +504,16 @@ def api_assets_patch_fields(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Assets patch fields tests", verbose=verbose)
 
 
+def api_assets_enrichers(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the enrichers and profile of an asset through the asset routes (project 68, lot B3)."""
+    print_section("Assets Enrichers (project 68 B3) API Tests")
+    print_info("Testing GET /assets/enrichers; enrichers and profile on POST/PATCH /assets and POST /assets/validate; enrichers on GET /assets")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_assets_enrichers.py", test_names)
+    return run_command(cmd, "Assets enrichers tests", verbose=verbose)
+
+
 def api_assets_validate(verbose: bool = False, test_names: list = None) -> bool:
     """Run POST /assets/validate (dry run of the asset PATCH) tests."""
     print_section("Assets Validate (lane 65 B4) API Tests")
@@ -1505,6 +1515,13 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "batch-split-promote", api_batch_split_promote, name="Batch Split/Promote", desc="Split/promote in unified batch + suggest")
     add_test(api, "transactions-wac", api_transactions_wac_inline, name="WAC Cost Basis", desc="WAC inline validate/commit (P16-P28)")
     add_test(api, "assets-patch-fields", api_assets_patch_fields, name="Assets Patch Fields", desc="PATCH /assets field-level updates, all or nothing batches, assetNameTaken; A4: POST/PATCH write classification_params into the profile in the authenticated user's name")
+    add_test(
+        api,
+        "assets-enrichers",
+        api_assets_enrichers,
+        name="Assets Enrichers",
+        desc="Project 68 B3: GET /assets/enrichers (mockenrich, a default order for every type); enrichers on POST/PATCH /assets kept in the order sent with free keys, replaced, cleared by {} or null, absent unchanged, malformed 422, state answered by GET; profile on PATCH (user row by the caller, null empties, absent untouched, invalid value profileValueInvalid on profile.<voice> and nothing saved, the same on validate, profile wins over classification_params, never changes the column) and on POST (user rows, invalid item not created)",
+    )
     add_test(api, "assets-validate", api_assets_validate, name="Assets Validate", desc="POST /assets/validate dry run of the all-or-nothing asset PATCH: never writes, a currency change keeps prices and events, same issues and warnings as PATCH")
     add_test(api, "ohlc-sentinel", api_ohlc_sentinel, name="OHLC Sentinel", desc="F.4 merge on POST /assets/prices (N92): null or absent keeps the stored value, 'clear' empties it, a number writes it; -1, any other text and a close not above 0 refused with 422, nothing written")
     add_test(api, "current-price-persistence", api_current_price_persistence, name="Current Price Persistence", desc="/current endpoint OHLC upsert")

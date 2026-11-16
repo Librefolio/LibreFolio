@@ -1969,6 +1969,14 @@ def services_enricher_contracts(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Enricher contract tests", verbose=verbose)
 
 
+def services_enricher_bindings(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the enricher bindings of an asset: config and state, the installed enrichers, their default order (project 68, lot B3)."""
+    print_section("Services: Enricher Bindings")
+    print_info("Testing: backend/app/services/enrichers/bindings.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_bindings.py", test_names)
+    return run_command(cmd, "Enricher bindings tests", verbose=verbose)
+
+
 def services_plugin_settings_crypto(verbose: bool = False, test_names: list = None) -> bool:
     """Test the encryption of the secret plugin settings and the re-encryption a restore needs."""
     print_section("Services: Plugin Settings Encryption")
@@ -4020,6 +4028,16 @@ Note: No backend server required.
         services_enricher_contracts,
         name="Enricher Contracts",
         desc="Declarations refused at registration (a degree for every AssetType and no other key, degrees int >= 0 or None, voices catalogue keys of covered types only, terms, identifier types, code), every discovered enricher keeps them, mockenrich recognize/read/page_url/no search/test only",
+        isolation="pure",
+    )
+    # PURE: every database is a private SQLite file under tmp_path built with create_all; the synthetic enrichers are
+    # registered in the process's own EnricherRegistry and removed at teardown with their claims; no server, no network.
+    add_test(
+        cat,
+        "enricher-bindings",
+        services_enricher_bindings,
+        name="Enricher Bindings",
+        desc="Project 68 B3: save_config keeps the order given (row and stored text), {} clears, never touches state (a removed enricher keeps its state entry); update_state sets its codes, never touches config, a read finishing after the user's save keeps the user's config (and the reverse); load_enrichers leaves out assets without a row; installed_enrichers by code; default_order by degree, price provider, found order, code; enrichers_catalogue declarations and a default order for every AssetType",
         isolation="pure",
     )
     add_test(cat, "plugin-settings-crypto", services_plugin_settings_crypto, name="Plugin Settings Encryption", desc="AES-256-GCM blob and AAD, key id, subkeys, count and rekey on a sqlite3 copy (savepoint, idempotent, unreadable rows kept), key status (unusable key: totals)", isolation="pure")
