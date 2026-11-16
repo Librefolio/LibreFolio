@@ -8,6 +8,8 @@
   Pattern: Svelte 5 runes, DataTable, data-testid, dark mode.
 -->
 <script lang="ts">
+    import BrokerBadgeStack from '$lib/components/ui/display/BrokerBadgeStack.svelte';
+    import {getBrokerInfo} from '$lib/stores/reference/brokerStore';
     import {_} from '$lib/i18n';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef} from '$lib/components/table/types';
@@ -35,6 +37,8 @@
         periodPnl: number | null;
         brokerId: number | null;
         brokerName: string | null;
+        /** The brokers of the row (project 74): several for a kind summed over them in «Globale». */
+        brokerIds: number[];
     }
 
     let {effects = [], displayCurrency = 'EUR'}: Props = $props();
@@ -50,6 +54,7 @@
             periodPnl: safeDecimal(effect.period_pnl),
             brokerId: safeNumber(effect.broker_id),
             brokerName: safeString(effect.broker_name),
+            brokerIds: effect.broker_ids ?? [],
         })),
     );
 
@@ -164,6 +169,23 @@
             resizable: true,
             getValue: (row) => row.brokerName ?? '',
             cell: (row) => {
+                // «Globale» (project 74): a kind summed over several brokers shows their icons
+                if (row.brokerIds.length > 1) {
+                    return {
+                        type: 'custom' as const,
+                        component: BrokerBadgeStack,
+                        props: {brokers: row.brokerIds.map((id) => getBrokerInfo(id) ?? {id, name: `#${id}`}), size: 14},
+                    };
+                }
+                // A «Globale» row of one broker names it in `broker_ids` only (project 74): its badge, the description bare
+                const single = row.brokerIds.length === 1 && row.brokerId == null ? (getBrokerInfo(row.brokerIds[0]) ?? {id: row.brokerIds[0], name: `#${row.brokerIds[0]}`}) : null;
+                if (single) {
+                    return {
+                        type: 'custom' as const,
+                        component: BrokerBadge,
+                        props: {broker: single, size: 14, showName: true, tooltip: single.name ?? null, nameClass: 'text-xs'},
+                    };
+                }
                 if (row.brokerId != null && row.brokerName) {
                     return {
                         type: 'custom' as const,

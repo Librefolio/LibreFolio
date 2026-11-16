@@ -188,6 +188,18 @@ def front_portfolio_broker_icons(verbose: bool = False, ui: bool = False, headed
     return _run_playwright("portfolio/broker-icons.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_portfolio_dashboard_grouping(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the «Globale / Broker» switch E2E tests of Dashboard › Positions (project 74)."""
+    print_section("Frontend Portfolio Dashboard Grouping Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("portfolio/dashboard-grouping.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_portfolio_dashboard(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run dashboard chart + view-matrix E2E tests (PositionsPanel 2x2, AllocationPanel)."""
     print_section("Frontend Portfolio Dashboard Tests")
@@ -691,6 +703,15 @@ def populate_registry(registry: dict) -> None:
         name="Negative Cash Allocation",
         desc="Decision 49 on an intercepted report: the type and sector tabs state the overdraft under the pie, signed and in the display currency, masked under privacy with the sign kept; the pie draws no arc for the cash; without the interception no note",
         tests="portfolio/allocation-negative-cash.spec.ts",
+    )
+    add_test(
+        cat,
+        "dashboard-grouping",
+        front_portfolio_dashboard_grouping,
+        name="Dashboard Positions Grouping",
+        desc="Project 74: the «Globale / Broker» switch of Dashboard › Positions — Broker by default, Globale one row per asset (Portfolio and Period), the chart asks the asset summed over its brokers (broker_id null), the choice survives a reload, no switch on a broker's page",
+        prereq="TEST_USER holds an asset at two owned brokers (populate_mock_data.py)",
+        tests="portfolio/dashboard-grouping.spec.ts",
     )
     add_test(cat, "dashboard", front_portfolio_dashboard, name="Dashboard Chart Tests", desc="PositionsPanel 2x2 view matrix (treemap + perf chart), toggle persistence, AllocationPanel now/history, loading state", tests="portfolio/dashboard.spec.ts")
     add_test(

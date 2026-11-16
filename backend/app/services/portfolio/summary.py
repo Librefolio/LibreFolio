@@ -22,6 +22,7 @@ from backend.app.schemas.portfolio.summary import AllocationItem, AssetAllocatio
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.holding_window import oldest_open_lot_date, quantity_moves
 from backend.app.services.financial_math.portfolio import period as period_math
+from backend.app.services.financial_math.portfolio.asset_groups import HoldingFacts, group_by_asset, group_holdings, group_yield_on_cost
 from backend.app.services.financial_math.returns import (
     annualized_to_cumulative,
     calculate_simple_roi,
@@ -64,12 +65,17 @@ class PortfolioSummaryMixin:
         date_from: date_type | None = None,
         date_to: date_type | None = None,
         _precomputed_engine_result=None,
+        group_by: str = "broker",
     ) -> PortfolioSummary:
         """Return aggregated portfolio summary via PortfolioCalculationEngine.
 
         Uses the new engine for aggregate values (NAV, market_value, book_value,
         allocation, performance) and derives holding rows from end-of-period
         position snapshots.
+
+        group_by: "broker" (default) gives one holding per asset and broker; "asset" one per asset, summed over its brokers
+        (``financial_math.portfolio.asset_groups``, project 74), and the holding groups by asset type over every broker.
+        Nothing else of the summary changes.
 
         _precomputed_engine_result: if provided by get_report(), skip engine re-run.
         """
@@ -199,6 +205,9 @@ class PortfolioSummaryMixin:
         )
         assets_map = await self._get_assets_map({ps.asset_id for ps in end_positions})
         brokers_map = await self._get_brokers_map({ps.broker_id for ps in end_positions})
+        # What each holding row is made of, by the row's index: the facts an asset summed over its brokers reads (project 74)
+        holding_facts: list[HoldingFacts] = []
+        holding_yields: list[tuple] = []
 
         for ps in end_positions:
             asset = assets_map.get(ps.asset_id)
@@ -229,6 +238,7 @@ class PortfolioSummaryMixin:
             price_change_1d: Decimal | None = None
             gain_loss_change_1d: Decimal | None = None
             gain_loss_change_1d_percent: Decimal | None = None
+            previous_position_value: Decimal | None = None
             if ps.valuation_source == "MARKET_PRICE" and current_price is not None and marks is not None:
                 # The day before: the last market quote on or before it, converted at that day's rate (a mark is converted
                 # on the day it is read); none on a day the engine did not replay
@@ -316,8 +326,32 @@ class PortfolioSummaryMixin:
                     oldest_open_lot_date=oldest_open_lot_dates.get((ps.broker_id, ps.asset_id)),
                     yield_on_cost=yield_on_cost_calculation.result if yield_on_cost_calculation is not None else None,
                     allocation_percent=None,
+                    broker_ids=[ps.broker_id],
                 )
             )
+            holding_facts.append(
+                HoldingFacts(
+                    broker_id=ps.broker_id,
+                    quantity=ps.quantity,
+                    market_value=current_value,
+                    cost_basis=ps.cost_basis if ps.cost_complete else None,
+                    gain_loss=gain_loss,
+                    wac_per_unit=wac_per_unit,
+                    current_price=current_price,
+                    valuation_source=ps.valuation_source.value,
+                    change_1d=gain_loss_change_1d,
+                    previous_value=previous_position_value,
+                    income=income_by_pos.get((ps.broker_id, ps.asset_id), Decimal("0")),
+                    costs=fees_taxes_by_pos.get((ps.broker_id, ps.asset_id), Decimal("0")),
+                    first_transaction=holding_first_tx,
+                    oldest_open_lot=oldest_open_lot_dates.get((ps.broker_id, ps.asset_id)),
+                    missing_fx_pair=ps.missing_fx_pair,
+                )
+            )
+            holding_yields.append((yield_on_cost_calculation.result, ps.quantity, wac_per_unit))
+
+        if group_by == "asset":
+            all_holdings = _holdings_by_asset(all_holdings, holding_facts, holding_yields, valuation_date)
 
         # Each card's cash is its native balances valued at valuation_date's rates; the headline
         # lists every currency held, summed over the cards. A broker whose movements are all
@@ -590,12 +624,16 @@ class PortfolioSummaryMixin:
         day_change = period_math.day_change(engine_result.daily_states, valuation_date)
 
         # Unrealized G/L of each broker's holdings, and of each asset type at each broker (the Dashboard treemap's groups).
-        group_members: dict[tuple[int, str | None], list[tuple[Decimal | None, Decimal | None]]] = defaultdict(list)
+        group_members: dict[tuple[int | None, str | None], list[tuple[Decimal | None, Decimal | None]]] = defaultdict(list)
         for holding in all_holdings:
+            if group_by == "asset":
+                # Every broker together (project 74): the groups are the asset types, the treemap has no broker level
+                group_members[(None, holding.asset_type)].append((holding.current_value, holding.gain_loss))
+                continue
             group_members[(holding.broker_id, None)].append((holding.current_value, holding.gain_loss))
             group_members[(holding.broker_id, holding.asset_type)].append((holding.current_value, holding.gain_loss))
         holding_groups: list[HoldingGroupGainLoss] = []
-        for (group_broker_id, group_asset_type), members in sorted(group_members.items(), key=lambda item: (item[0][0], item[0][1] is not None, item[0][1] or "")):
+        for (group_broker_id, group_asset_type), members in sorted(group_members.items(), key=lambda item: (item[0][0] or 0, item[0][1] is not None, item[0][1] or "")):
             group_gain, group_ratio = group_gain_loss(members)
             holding_groups.append(
                 HoldingGroupGainLoss(
@@ -657,3 +695,49 @@ class PortfolioSummaryMixin:
             missing_price_assets=missing_price_assets,
             data_quality=data_quality,
         )
+
+
+def _holdings_by_asset(rows: list[PortfolioHolding], facts: list[HoldingFacts], yields: list[tuple], valuation_date: date_type) -> list[PortfolioHolding]:
+    """The holdings as one row per asset, summed over its brokers (project 74, «Globale»).
+
+    ``facts`` and ``yields`` hold, at each row's index, what the row was made of. Every row is the asset's, keyed by the
+    asset alone (``broker_id`` None, its brokers in ``broker_ids``), held at one broker or several: the Period's rows and
+    the chart's series are keyed the same way. An asset held at one broker keeps its figures; one held at several gets
+    ``asset_groups.group_holdings``' and the Yield on Cost ``group_yield_on_cost``'s, the valuation details those of a
+    member valued the group's way. Rows keep the order in which each asset first appears.
+    """
+    out: list[PortfolioHolding] = []
+    for indexes in group_by_asset(range(len(rows)), lambda index: rows[index].asset_id).values():
+        if len(indexes) == 1:
+            out.append(rows[indexes[0]].model_copy(update={"broker_id": None, "broker_name": None}))
+            continue
+        members = [rows[index] for index in indexes]
+        group = group_holdings([facts[index] for index in indexes], valuation_date=valuation_date)
+        model = next((row for row in members if row.valuation_source == group.valuation_source), members[0])
+        price_changes = {row.price_change_1d for row in members}
+        out.append(
+            model.model_copy(
+                update={
+                    "broker_id": None,
+                    "broker_name": None,
+                    "broker_ids": group.broker_ids,
+                    "quantity": group.quantity,
+                    "wac_per_unit": group.wac_per_unit,
+                    "current_price": group.current_price,
+                    "current_value": group.market_value,
+                    "valuation_source": group.valuation_source,
+                    "missing_fx_pair": group.missing_fx_pair,
+                    "gain_loss": group.gain_loss,
+                    "gain_loss_percent": group.gain_loss_ratio,
+                    "annualized_return": group.annualized_return,
+                    "price_change_1d": price_changes.pop() if len(price_changes) == 1 else None,
+                    "gain_loss_change_1d": group.change_1d,
+                    "gain_loss_change_1d_percent": group.change_1d_percent,
+                    "oldest_open_lot_date": group.oldest_open_lot,
+                    "yield_on_cost": group_yield_on_cost([yields[index] for index in indexes]),
+                    "allocation_percent": None,
+                    "nav_weight_percent": None,
+                }
+            )
+        )
+    return out

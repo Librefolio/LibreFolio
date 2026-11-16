@@ -633,6 +633,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/tools/pac-allocator/planner/steps/FxStep.test.ts",
             "src/lib/features/tools/pac-allocator/planner/request.test.ts",
             "src/lib/components/ui/display/BrokerBadge.test.ts",
+            "src/lib/components/ui/display/BrokerBadgeStack.test.ts",
             "src/lib/features/instance/components/InstanceNotices.test.ts",
             "src/lib/features/instance/components/InstanceBlockedPage.test.ts",
             "src/lib/features/instance/components/UserLimitChoicePage.test.ts",

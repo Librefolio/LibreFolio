@@ -19,13 +19,19 @@
   - Holdings: summary.holdings from portfolioStore (engine snapshot at date_to)
   - Performance: positions_contribution from portfolioStore (fetched on demand)
 
+  «Globale / Broker» (project 74): with two brokers or more in the scope, a switch shows the rows one per asset, summed over its
+  brokers by the backend (`group_by=asset`): the grouped rows come with the contribution's answer (`groupedSummary`). The page
+  owns the choice (it changes what is asked) and persists it; the ticked lines follow it (`regroupSelection`).
+
   Pattern: Svelte 5 Runes, data-testid, dark mode.
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
-    import {Table2, Grid2x2} from 'lucide-svelte';
+    import {Table2, Grid2x2, Globe, Briefcase, ArrowUpRight} from 'lucide-svelte';
+    import ViewModeToggle from '$lib/components/ui/ViewModeToggle.svelte';
+    import type {PositionsGrouping} from '$lib/features/portfolio-view/portfolioDataScope';
     import {getUserStorage, getUserStorageKey, setUserStorage} from '$lib/utils/storage';
-    import {onDestroy} from 'svelte';
+    import {onDestroy, untrack} from 'svelte';
     import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
     import {themed} from '$lib/theme/themePair';
     import {GROWTH_SERIES} from '$lib/theme/chartTheme';
@@ -42,7 +48,8 @@
     import AllocationPanel from './AllocationPanel.svelte';
     import AssetCalendarWindowControls from '$lib/features/assets/detail/AssetCalendarWindowControls.svelte';
     import {DEFAULT_CALENDAR_RETURN_WINDOW, type CalendarReturnPresetKey, type CalendarReturnWindowSelection, type CalendarReturnWindowUnit} from '$lib/components/charts/calendarReturnWindow';
-    import {assetColorRanks, assetIdOfLineId, PORTFOLIO_LINE_ID, portfolioLine, positionLines, selectionKeys, type HistoryPointLike, type PositionKey, type PositionLine, type PositionsChartView, type PositionsSeriesResponse} from './positionsSeries';
+    import {assetColorRanks, assetIdOfLineId, PORTFOLIO_LINE_ID, portfolioLine, positionLines, regroupSelection, selectionKeys, type HistoryPointLike, type PositionKey, type PositionLine, type PositionsChartView, type PositionsSeriesResponse, type SelectedPosition} from './positionsSeries';
+    import {makePositionKey} from './positionKey';
     import {rollingLine, type PositionsRollingState} from './positionsRolling';
 
     import {closedPositionsToList} from './closedPositions';
@@ -92,6 +99,14 @@
         currentLanguage?: string;
         allocationHistory?: AllocationHistoryDimensions | null;
         onRequestAllocationHistory?: (dimension: 'type' | 'sector' | 'geo' | 'asset', brokerIds: number[] | undefined) => void | Promise<void>;
+        /** How the rows are grouped (project 74): one per asset and broker, or one per asset over its brokers («Globale»). */
+        grouping?: PositionsGrouping;
+        /** The scope has two brokers or more: the «Globale / Broker» switch is shown. */
+        groupingAvailable?: boolean;
+        /** The user picked a grouping; the page persists it and asks the rows again. */
+        onGroupingChange?: (grouping: PositionsGrouping) => void;
+        /** «Globale»: the summary of the grouped question, whose holdings and groups are one per asset; null until it lands. */
+        groupedSummary?: PortfolioSummary | null;
     }
 
     let {
@@ -118,7 +133,14 @@
         currentLanguage = 'en',
         allocationHistory = null,
         onRequestAllocationHistory,
+        grouping = 'broker',
+        groupingAvailable = false,
+        onGroupingChange,
+        groupedSummary = null,
     }: Props = $props();
+
+    /** «Globale» is on screen (project 74): the rows are the grouped question's. */
+    let globalView = $derived(grouping === 'asset');
 
     // =========================================================================
     // Toggle state (persisted in localStorage)
@@ -176,7 +198,8 @@
     // (needed for both the table and the chart, plus Other Period Effects), and with the Portfolio table:
     // the positions sold out inside the period are its last rows (FB-13).
     $effect(() => {
-        const needsContribution = semanticMode === 'performance' || (semanticMode === 'holdings' && visualMode === 'table');
+        // In «Globale» every view reads the grouped question, which is the contribution's (project 74)
+        const needsContribution = globalView || semanticMode === 'performance' || (semanticMode === 'holdings' && visualMode === 'table');
         if (needsContribution && !contribution && !contributionLoading) {
             onRequestContribution?.();
         }
@@ -193,7 +216,7 @@
         return stored === 'absolute' || stored === 'rolling' ? stored : 'percentage';
     }
 
-    type SelectedRow = {key: string; assetId: number; brokerId: number | null};
+    type SelectedRow = SelectedPosition;
 
     let chartView = $state<PositionsChartView>(readChartView());
     let selectedRows = $state<SelectedRow[]>([]);
@@ -224,6 +247,19 @@
     }
 
     let selectedKeys = $derived(selectedRows.map((row) => row.key));
+
+    // The ticked lines follow the switch (project 74): Globale ticks the assets, Broker every row of a ticked asset.
+    let shownGrouping: PositionsGrouping = untrack(() => grouping);
+    $effect(() => {
+        const next = grouping;
+        if (next === shownGrouping) return;
+        shownGrouping = next;
+        const perBroker = untrack(() => [...(summary?.holdings ?? [])]).map((holding) => {
+            const brokerId = safeNumberOrNull(holding.broker_id);
+            return {key: makePositionKey(holding.asset_id, brokerId), assetId: holding.asset_id, brokerId};
+        });
+        untrack(() => handleSelectionChange(regroupSelection(selectedRows, next, perBroker)));
+    });
 
     // The Rolling view asks the rolling return of the ticked positions' assets; the controller keeps what it already has.
     $effect(() => {
@@ -284,7 +320,10 @@
     // Derived data
     // =========================================================================
 
-    let holdings = $derived(summary?.holdings ?? []);
+    // «Globale»: the grouped question's rows (project 74); the totals, the allocation and the currency stay the main report's
+    let holdings = $derived((globalView ? groupedSummary?.holdings : summary?.holdings) ?? []);
+    let holdingGroups = $derived((globalView ? groupedSummary?.holding_groups : summary?.holding_groups) ?? []);
+    let groupedLoading = $derived(globalView && !groupedSummary);
     let displayCurrency = $derived(summary?.net_worth.code ?? 'EUR');
 
     /** Performance shows open+closed positions together — Status is a filterable
@@ -294,7 +333,15 @@
 
     /** The positions sold out inside the period: they are no longer holdings, but the Portfolio table lists them last (FB-13) — except those that moved to another broker of the report (T1). */
     let soldPositions = $derived(
-        closedPositionsToList(contributionPositions, holdings).map((position) => ({asset_id: position.asset_id, asset_name: position.asset_name, asset_type: position.asset_type, broker_id: position.broker_id, broker_name: position.broker_name, asset_ticker: typeof position.asset_ticker === 'string' ? position.asset_ticker : null})),
+        closedPositionsToList(contributionPositions, holdings).map((position) => ({
+            asset_id: position.asset_id,
+            asset_name: position.asset_name,
+            asset_type: position.asset_type,
+            broker_id: typeof position.broker_id === 'number' ? position.broker_id : null,
+            broker_name: typeof position.broker_name === 'string' ? position.broker_name : null,
+            broker_ids: position.broker_ids,
+            asset_ticker: typeof position.asset_ticker === 'string' ? position.asset_ticker : null,
+        })),
     );
 
     /**
@@ -302,11 +349,10 @@
      * whatever is ticked and in whatever order. The assets sold out in the period come after the ranked ones.
      */
     let assetRanks = $derived(
-        assetColorRanks(
-            (summary?.allocation_by_asset ?? []) as Array<{id?: number | null; amount?: string | null}>,
-            (allocationHistory?.asset ?? []) as Array<{date: string; through?: string; components?: Array<{id?: number | null; amount?: string | null}>}>,
-            [...holdings.map((holding) => holding.asset_id), ...soldPositions.map((position) => position.asset_id)],
-        ),
+        assetColorRanks((summary?.allocation_by_asset ?? []) as Array<{id?: number | null; amount?: string | null}>, (allocationHistory?.asset ?? []) as Array<{date: string; through?: string; components?: Array<{id?: number | null; amount?: string | null}>}>, [
+            ...holdings.map((holding) => holding.asset_id),
+            ...soldPositions.map((position) => position.asset_id),
+        ]),
     );
     // A new function each time the ranks or the theme move: the chart redraws when its `colorOf` changes.
     let colourOf = $derived((id: string): string => {
@@ -316,7 +362,7 @@
         return growthBrokerColor(rank ?? assetRanks.size, isDark);
     });
 
-    let showLoading = $derived(loading || (semanticMode === 'performance' && contributionLoading));
+    let showLoading = $derived(loading || groupedLoading || (semanticMode === 'performance' && contributionLoading));
     let showHoldingsEmpty = $derived(semanticMode === 'holdings' && holdings.length === 0);
     let showPerformanceEmpty = $derived(semanticMode === 'performance' && (!contribution || (contributionPositions.length === 0 && otherEffects.length === 0)));
 </script>
@@ -350,12 +396,13 @@
 {/snippet}
 
 <div class="bg-lf-card text-lf-primary rounded-xl border border-lf-subtle shadow-sm shadow-lf-shadow-card p-4 flex flex-col" data-testid="positions-panel" aria-busy={showLoading} data-busy={showLoading ? 'true' : 'false'}>
-    <!-- Header -->
-    <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <h2 class="text-sm font-semibold text-lf-secondary">
+    <!-- Header (project 74, layout rev 2): from sm up one row — title, then Portfolio/Period, Global/Broker, Table/Map, the
+         columns and the «see all» badge; on a phone the title row keeps the columns and the badge, the three selectors go below. -->
+    <div class="mb-3 flex flex-wrap items-center gap-2" data-testid="positions-header">
+        <h2 class="order-1 text-sm font-semibold text-lf-secondary">
             {$_('dashboard.positions')}
         </h2>
-        <div class="flex items-center gap-2">
+        <div class="order-3 flex w-full items-center gap-2 sm:order-2 sm:ml-auto sm:w-auto" data-testid="positions-selectors">
             <!-- Semantic toggle: Holdings / Performance -->
             <div class="flex rounded-lg border border-lf-subtle text-xs overflow-hidden" data-testid="positions-semantic-toggle">
                 <button class="px-2.5 py-1 transition-colors {semanticMode === 'holdings' ? 'bg-lf-checked text-lf-on-checked' : 'text-lf-muted hover:bg-lf-hover'}" onclick={() => (semanticMode = 'holdings')} aria-pressed={semanticMode === 'holdings'} data-testid="positions-toggle-holdings">
@@ -370,6 +417,22 @@
                     {$_('dashboard.performanceTab') || 'Performance'}
                 </button>
             </div>
+
+            <!-- Grouping toggle: Global / Broker (project 74), with two brokers or more -->
+            {#if groupingAvailable}
+                <ViewModeToggle
+                    mode={grouping}
+                    options={[
+                        {value: 'asset', icon: Globe, label: $_('dashboard.groupBy.global'), hint: $_('dashboard.groupBy.globalHint'), testId: 'positions-grouping-asset'},
+                        {value: 'broker', icon: Briefcase, label: $_('dashboard.groupBy.broker'), hint: $_('dashboard.groupBy.brokerHint'), testId: 'positions-grouping-broker'},
+                    ]}
+                    compact
+                    showLabels
+                    groupLabel={$_('dashboard.groupBy.label')}
+                    testId="positions-grouping-toggle"
+                    onchange={(mode) => onGroupingChange?.(mode === 'asset' ? 'asset' : 'broker')}
+                />
+            {/if}
 
             <!-- Visual toggle: Table / Map -->
             <div class="flex rounded-lg border border-lf-subtle text-xs overflow-hidden" data-testid="positions-visual-toggle">
@@ -386,14 +449,17 @@
                     <Grid2x2 size={14} />
                 </button>
             </div>
-
+        </div>
+        <div class="order-2 ml-auto flex items-center gap-2 sm:order-3 sm:ml-0" data-testid="positions-header-links">
             {#if visualMode === 'table' && activeTableRef}
                 <div data-testid="positions-column-visibility-toggle">
                     <ColumnVisibilityToggle tableRef={activeTableRef} />
                 </div>
             {/if}
 
-            <a href={assetsHref} class="text-xs text-lf-link hover:underline font-medium ml-1" data-testid="positions-see-all">
+            <!-- «See all» as a badge (layout rev 2), as the Transactions link of an asset's header -->
+            <a href={assetsHref} class="inline-flex items-center gap-1 rounded-full border border-lf-focus px-2 py-0.5 text-xs font-medium whitespace-nowrap text-lf-link hover:bg-lf-selected focus-visible:outline-lf-focus" data-testid="positions-see-all">
+                <ArrowUpRight size={12} />
                 {$_('dashboard.seeAllPositions')}
             </a>
         </div>
@@ -420,7 +486,7 @@
                 <ExposureTable bind:this={exposureTableComponent} {holdings} {soldPositions} {displayCurrency} {brokers} {onAnalyze} {analyzedAssetId} selectable {selectedKeys} onSelectionChange={handleSelectionChange} />
                 {@render chartSection()}
             {:else if semanticMode === 'holdings' && visualMode === 'map'}
-                <ExposureTreemap {holdings} holdingGroups={summary?.holding_groups ?? []} {displayCurrency} {onAnalyze} />
+                <ExposureTreemap {holdings} {holdingGroups} {displayCurrency} {onAnalyze} {globalView} />
             {:else if semanticMode === 'performance' && visualMode === 'table' && contribution}
                 <ContributionTable bind:this={contributionTableComponent} positions={contributionPositions} {holdings} {displayCurrency} {brokers} {onAnalyze} {analyzedAssetId} selectable {selectedKeys} onSelectionChange={handleSelectionChange} />
                 <OtherPeriodEffectsTable effects={otherEffects} {displayCurrency} />
