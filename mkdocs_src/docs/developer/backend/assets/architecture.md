@@ -158,7 +158,10 @@ graph TD
 
 When the range reaches today, FETCH asks a provider's history only up to yesterday, then calls
 `get_current_value()` and adds its value as the close of its `as_of_date` (today when the provider
-gives none), replacing any history point of that date; PERSIST stores it with the rest. A provider
+gives none), replacing any history point of that date, but only for today: a value dated before today (read
+before midnight and cached for the provider's interval) never replaces a past day's close, whether the round's
+history has it or only the database (a resume) — it only adds a day that is missing (project 76, C3b, the midnight
+rule). PERSIST stores it with the rest. A provider
 without history (`supports_history = False`, such as the CSS Scraper) therefore builds its series
 one sync at a time, one point per day; outside syncs, the
 [current-quote write-back](#current-quotes-and-todays-ohlc) stores the same day's point.
