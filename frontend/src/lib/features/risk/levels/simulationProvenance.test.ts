@@ -35,7 +35,7 @@ import {buildSimulationProvenance} from './simulationProvenance';
 /**
  * A real block-bootstrap run's output, field by field from its producer.
  *
- * Traced from `backend/app/services/risk_plugins/simulation/plugin.py:274-289`: the
+ * Traced from `SimulationAnalytic.execute` (`backend/app/services/risk_plugins/simulation/plugin.py`): the
  * resampler reports `empirical_resampled` / `not_estimated_joint_resampling`
  * (it estimates neither drift nor covariance — it reorders the reader's own
  * returns), `sampling_method` is forced to `mc`, and `block_length_days` comes
@@ -66,7 +66,7 @@ const BOOTSTRAP_OUTPUT = {
     probability_of_loss: 0.37,
 };
 
-/** The same run under the parametric engine (`simulation.py:283-287`, else branch). */
+/** The same run under the parametric engine (`SimulationAnalytic.execute`, the parametric branch). */
 const PARAMETRIC_OUTPUT = {
     ...BOOTSTRAP_OUTPUT,
     process: 'gbm',
@@ -112,11 +112,11 @@ const METADATA_WITHOUT_RUN_DISCLOSURE = {
 /**
  * What a bootstrap run discloses about how it was computed.
  *
- * `simulation.py:293-297` hands `sampling_method`, `path_count` and
- * `bootstrap_seed` to `RiskComputation`, and `service.py:855-859` copies them
+ * `SimulationAnalytic.execute` hands `sampling_method`, `path_count` and
+ * `bootstrap_seed` to `RiskComputation`, and `result_metadata` (`risk/results.py`) copies them
  * verbatim into the metadata. `random_seed` and `sobol_start_index` are None
  * there because the params validator forbids them for this engine
- * (`simulation.py:152-157`).
+ * (`SimulationParams._validate_bootstrap_params`).
  */
 const BOOTSTRAP_RUN_DISCLOSURE = {
     sampling_method: 'mc',
@@ -204,7 +204,7 @@ describe('buildSimulationProvenance', () => {
 
     it('follows the engine when the estimators change with it', () => {
         // The two engines disclose different estimators for the same run, and the
-        // pairing is the plugin's (`simulation.py:283-284`), not this module's: a
+        // pairing is the plugin's (`SimulationAnalytic.execute`), not this module's: a
         // resampler that reported `historical_log_mle` would be claiming an
         // estimate it never made.
         const parametric = contractSimulation({output: PARAMETRIC_OUTPUT});

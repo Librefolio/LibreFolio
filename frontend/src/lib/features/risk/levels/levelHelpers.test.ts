@@ -490,7 +490,7 @@ describe('uncoveredWeight', () => {
 
     /*
      * The derived cash is cleaned at the risk service's own weight tolerance, 1e-9
-     * (`services/risk/service.py:515` and `:524`): a difference thinner than that is
+     * (`load_scope_inputs`, `services/risk/scope.py`): a difference thinner than that is
      * float noise, and a card stating it would caption a sliver of cash nobody holds.
      * Only the derived figure is cleaned — `total` and `unpriced` are published
      * numbers and stay exactly as the payload states them.
@@ -759,7 +759,7 @@ describe('resultReasons', () => {
         expect(reasons).toHaveLength(2);
     });
 
-    // A partial wave with no warnings at all is ordinary: `service.py:736` also
+    // A partial wave with no warnings at all is ordinary: `success_result` (`risk/results.py`) also
     // turns a wave partial for exclusions and data quality, each disclosed by its
     // own surface. Inventing a reason here would be worse than showing none.
     it('stays empty rather than inventing a cause', () => {
