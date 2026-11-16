@@ -163,6 +163,14 @@
      */
     let syncOpen = $state(false);
     let syncGeneration = $state(0);
+    /**
+     * RN-03 (F2): the accepted syncs only, apart from `syncGeneration`, which a reload raises too.
+     * A sync can bring prices in, and a verdict follows the prices (D378): both eligibility
+     * questions below carry this count, so a sync asks the engine again. A reload syncs nothing
+     * and changes no verdict; were it to ask again, the verdicts would be unsettled meanwhile, and
+     * with a benchmark chosen L3° waits for settled verdicts (`labL3Waits`) by being unmounted.
+     */
+    let pricesSyncedGeneration = $state(0);
     let syncTargets = $derived.by(() => {
         void $assetStoreVersion;
         void $fxRoutesVersion;
@@ -204,6 +212,7 @@
             await onsynced?.();
         } finally {
             invalidateRisk();
+            pricesSyncedGeneration += 1;
             syncGeneration += 1;
         }
     }
@@ -252,13 +261,14 @@
             .join(','),
     );
     /**
-     * The eligibility question the page is asking now — list, period, currency — or `null`
+     * The eligibility question the page is asking now — list, period, currency, and the accepted
+     * syncs so far (`pricesSyncedGeneration`) — or `null`
      * while there is none yet (the page's list still loading, no period). The selection is
      * restored before the list arrives, so "nothing to ask yet" is not an answer: L3° keeps
      * waiting for the list and its verdicts rather than asking with a benchmark that might
      * prove unmeasurable (`labL3Waits`).
      */
-    let eligibilityQuestion = $derived(catalogueKey && dateStart ? `${catalogueKey}|${dateStart}|${dateEnd}|${targetCurrency}` : null);
+    let eligibilityQuestion = $derived(catalogueKey && dateStart ? `${catalogueKey}|${dateStart}|${dateEnd}|${targetCurrency}|${pricesSyncedGeneration}` : null);
     /** The question the last answer — or failure — was for. A failure settles it too: no verdict means selectable. */
     let eligibilityAnsweredFor = $state<string | null>(null);
     let eligibilitySettled = $derived(eligibilityQuestion !== null && eligibilityAnsweredFor === eligibilityQuestion);
@@ -322,6 +332,8 @@
         const ids = selectionKey ? selectionKey.split(',').map(Number) : [];
         const period = {start: dateStart, end: dateEnd};
         const currency = targetCurrency;
+        // Asked again after an accepted sync, like the catalogue's question (RN-03).
+        void pricesSyncedGeneration;
         const generation = ++selectionEligibilityGeneration;
         if (ids.length === 0 || !period.start) {
             selectionVerdicts = EMPTY_VERDICTS;
