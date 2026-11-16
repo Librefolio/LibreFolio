@@ -446,7 +446,7 @@ function replayed(scope: Scope, replayAudit: Audit, options: ReplayedOptions = {
     };
 }
 
-/** Nothing left to replay: every asset excluded (`stress.py`, the `if not selected:` branch). No output, as `schemas/risk.py` demands. */
+/** Nothing left to replay: every asset excluded (`stress.py`, the `if not selected:` branch). No output, as `RiskAnalyticResult.validate_status_payload` (`schemas/risk/results.py`) demands. */
 function nothingLeft(details: Record<string, unknown>): RiskAnalyticResult {
     return {instance_id: 'single-stress', analytic_code: 'stress', status: 'unavailable', output: null, error: {code: 'insufficient_history', message: 'No asset in the replay scope covers the replay window', details}};
 }

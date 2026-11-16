@@ -207,7 +207,7 @@ type ShockDimension = z.infer<typeof schemas.RiskScenarioDimension>;
 
 const SCOPE_VALUE = 50_000;
 
-/** One line of a holding's `bucket_audit`, fields in the wire's order; its contribution is the product `schemas/risk.py:904` validates. */
+/** One line of a holding's `bucket_audit`, fields in the wire's order; its contribution is the product `RiskStressBucketAudit.validate_resolution` (`schemas/risk/outputs.py`) validates. */
 function slice(exposure_bucket_id: string, exposure: number, candidate_bucket_ids: string[], applied_bucket_id: string | null, bucket_shock: number, rule: ShockSlice['rule']): ShockSlice {
     return {exposure_bucket_id, exposure, candidate_bucket_ids, applied_bucket_id, bucket_shock, shock_contribution: exposure * bucket_shock, rule};
 }
@@ -351,10 +351,11 @@ describe('tornadoRows — the figures the table states (k5b, D376)', () => {
 //
 // The Weight column of the shock table read `asset_exposure_total`, which the backend documents as
 // the *unweighted* sum of a bucket's exposures across the scope's assets, one that «may exceed 1 for
-// multi-asset scopes» (`schemas/risk.py:921-925`). A bucket's weight is its share of the scope: each
-// holding's weight times the part of it the bucket's shock applied to, summed — the notation of the
-// hypothetical-shock theory page — so that Weight × Return is the Contribution on every row. Ids and
-// weights are invented unless a comment says they were measured.
+// multi-asset scopes» (`RiskStressConfiguredBucketImpact.asset_exposure_total`, `schemas/risk/outputs.py`).
+// A bucket's weight is its share of the scope: each holding's weight times the part of it the
+// bucket's shock applied to, summed — the notation of the hypothetical-shock theory page — so that
+// Weight × Return is the Contribution on every row. Ids and weights are invented unless a comment
+// says they were measured.
 
 /** «Global risk-off» as `scenario_catalog/built_in/hypothetical/global_risk_off.yml` ships it; the Dashboard sends every bucket of a preset. */
 const GLOBAL_RISK_OFF: Record<string, number> = {
@@ -817,7 +818,7 @@ function replayed(scope: 'portfolio' | 'asset_set', replayAudit: ReplayAudit, wa
 }
 
 /**
- * A replay that did not run. `unavailable` and no output, as `schemas/risk.py` demands of it.
+ * A replay that did not run. `unavailable` and no output, as `RiskAnalyticResult.validate_status_payload` (`schemas/risk/results.py`) demands of it.
  *
  * `wrapped` sends the error inside a list: the generated client types the field as a value *or*
  * a list, and the helpers read it the way `firstError` / `singleValue` do.

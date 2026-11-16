@@ -188,7 +188,7 @@ function answeredSectorEmoji(key: string): string {
 // Answers, written the way `risk_plugins/stress/plugin.py::_hypothetical` writes them
 // ---------------------------------------------------------------------------
 
-/** One line of a holding's `bucket_audit`; its contribution is the product `schemas/risk.py` validates. */
+/** One line of a holding's `bucket_audit`; its contribution is the product `RiskStressBucketAudit.validate_resolution` (`schemas/risk/outputs.py`) validates. */
 function slice(exposure_bucket_id: string, exposure: number, candidate_bucket_ids: string[], applied_bucket_id: string | null, bucket_shock: number, rule: ShockSlice['rule']): ShockSlice {
     return {exposure_bucket_id, exposure, candidate_bucket_ids, applied_bucket_id, bucket_shock, shock_contribution: exposure * bucket_shock, rule};
 }

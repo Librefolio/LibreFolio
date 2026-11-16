@@ -79,7 +79,7 @@ const PARAMETRIC_OUTPUT = {
  * Metadata with no run disclosure at all.
  *
  * `annualization_factor` is not free: `RiskResultMetadata.validate_context`
- * (`backend/app/schemas/risk.py:543-547`) requires it to equal
+ * (`backend/app/schemas/risk/results.py`) requires it to equal
  * `n_observations * 365 / calendar_days` to within 1e-12, so 505 · 365 / 730 =
  * 252.5 exactly. `composition_policy` is required because the mode is
  * `current_composition` (same validator), and the simulation analytic supports
@@ -324,7 +324,7 @@ describe('buildSimulationProvenance', () => {
      *
      * `simulationSeed` used to read `output.bootstrap_seed`. The field is not
      * there and never was: `RiskResultMetadata` carries it
-     * (`backend/app/schemas/risk.py:502`), `RiskSimulationOutput` does not. The
+     * (`backend/app/schemas/risk/results.py`), `RiskSimulationOutput` does not. The
      * bug was invisible because a missing field yields no line rather than a
      * wrong line — nothing rendered, nothing threw, and every "does it render?"
      * assertion stayed green while the seed was silently never shown.
