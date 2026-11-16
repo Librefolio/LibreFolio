@@ -28,7 +28,7 @@ Currencies the bank no longer publishes (such as the Vietnamese dong, the Russia
 ## 📝 Important Notes
 
 - **Quotes format**: rates are expressed as CAD per one unit of the foreign currency (e.g. 1 USD = 1.4257 CAD on 13 November 2026). LibreFolio normalizes the rate behind the scenes.
-- **Indicative rates**: the Bank of Canada publishes daily averages as an indication, not as a benchmark for transactions. The routes that use BOC show this as an ℹ️ note.
+- **Indicative rates**: the Bank of Canada publishes daily averages as an indication, not as a benchmark for transactions. The routes that use BOC show this, with the rounding of IDR and KRW below, as a ⚠️ note.
 - **Few digits for some currencies**: the bank publishes the Indonesian rupiah and the South Korean won with few digits (1 IDR = 0.000078 CAD). Their BOC rates are therefore rounded, by up to about 1% for the rupiah.
 - **Holidays**: no rates are published at weekends or on Canadian holidays (for example 11 November, Remembrance Day).
 - **History**: rates start on 3 January 2017. The bank's older noon rates are a different series, computed another way, and are not downloaded.

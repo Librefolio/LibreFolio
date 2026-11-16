@@ -126,7 +126,8 @@ class BOCProvider(FXRateProvider):
 
     @property
     def warning_level(self) -> Literal["info", "warning"]:
-        return "info"
+        # A data limit that can mislead (the rounding of IDR and KRW), not only a fact worth knowing: warning (lane 75)
+        return "warning"
 
     @property
     def base_currency(self) -> str:

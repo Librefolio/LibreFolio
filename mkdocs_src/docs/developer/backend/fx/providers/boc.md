@@ -109,8 +109,9 @@ The same checks apply to the catalogue request: an HTML answer to `get_supported
   of Canada»). The terms also ask not to work around the limits the bank imposes on Valet requests: the provider makes
   one request per call and, after a 429, waits for the pause.
 - **Indicative rates**: the bank calls these rates indicative, not a benchmark for transactions. The provider says it in
-  its `warning_i18n` text, at **info** level (`warning_level = "info"`): ℹ️ on every route that uses BOC in the route
-  picker, not ⚠️. The English text:
+  its `warning_i18n` text, at **warning** level (`warning_level = "warning"`): ⚠️ on every route that uses BOC in the
+  route picker, because the rounding of IDR and KRW is a limit of the data that can mislead, not only a fact worth
+  knowing. The English text:
 
     > Bank of Canada rates are indicative daily averages, one per Canadian business day: none at weekends and on
     > Canadian holidays. IDR and KRW are published with few digits (IDR 0.000079 CAD), so their BOC rates are rounded,

@@ -209,7 +209,7 @@ async def test_boc_catalogue_refuses_an_html_answer(monkeypatch: pytest.MonkeyPa
 
 def test_boc_identity_and_texts():
     provider = BOCProvider()
-    assert (provider.code, provider.base_currency, provider.warning_level) == ("BOC", "CAD", "info")
+    assert (provider.code, provider.base_currency, provider.warning_level) == ("BOC", "CAD", "warning")
     for texts in (provider.description_i18n, provider.warning_i18n):
         assert set(texts) == {"en", "it", "fr", "es"} and all(texts.values())
     assert "Bank of Canada" in provider.description_i18n["en"]
