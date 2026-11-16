@@ -311,7 +311,8 @@
     "docsHelp": {
       "list": "I tuoi broker e conti: ognuno ha la sua liquidità e le sue posizioni. Aprine uno per vederne il portafoglio, importarne i report o condividerlo.",
       "info": "Le impostazioni del broker: se è attivo, quando è stato aperto e se ammette liquidità negativa o posizioni corte.",
-      "sharing": "Chi altro può vedere o modificare questo broker, e con quale ruolo: proprietario, editor o lettore."
+      "sharing": "Chi altro può vedere o modificare questo broker, e con quale ruolo: proprietario, editor o lettore.",
+      "lots": "I lotti di acquisto dietro questa posizione, abbinati FIFO o LIFO: quanto è costato ciascuno, da quanto è detenuto e quanto rende."
     }
   }
 }
