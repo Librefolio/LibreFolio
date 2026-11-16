@@ -9,6 +9,8 @@ Focus: pair-sync orchestration branches in services/fx/sync.py
 - X-R50 (E's review R13-SEC5 on X-R38): a rate whose double is 1E+14, in sync_pairs_bulk (in the X-R38 block)
 - X-R65 (N83, revised 19/10): no floor at 1900-01-01 -- a provider rate inside the requested range is stored whatever its
   date, "min" included -- in _is_date_within_sync_range and sync_pairs_bulk (its block at the end)
+- D2 (lane 75): a rate dated after the sync's end (today) is not stored until a later sync reaches its day; weekend rates
+  in range are kept -- in sync_pairs_bulk (its block at the end)
 """
 
 import asyncio
@@ -835,3 +837,102 @@ async def test_xr65_sync_stores_a_providers_rates_before_1900(monkeypatch, start
     expected = {day: Decimal(XR65_DELIVERED[day]) for day in expected_days}
     assert stored == expected, f"synced from {start!r} up to {XR65_END}, EUR/SOS stored {stored}: expected {expected}"
     assert result.status == "ok", result
+
+
+# ============================================================================
+# D2 (lane 75): a rate is stored under the day the bank says it is valid for, never a future day
+# ============================================================================
+#
+# Developer decision D2: every value is stored under the date the bank gives it, and never a date after today; a row
+# dated after today is not stored until that day arrives, and is read again at the next sync. Weekend and holiday values
+# a bank publishes are kept (no dedup). The providers filter nothing (NBU publishes tomorrow's rate in the afternoon):
+# "today" reaches the sync as its end -- POST /fx/currencies/sync refuses an end after date.today(), the scheduler passes
+# today -- and sync_pairs_bulk keeps only the days up to that end (_is_date_within_sync_range). Nothing in the sync reads
+# the clock, so the test's "today" is a fixed day passed as the end, the way the API and the scheduler pass it.
+#
+# Contract (D2): MOCKFX delivers EUR → XCD on a Friday, the Saturday and Sunday after it, a Monday (today) and the
+# Tuesday (tomorrow), whatever the range asked. Synced up to Monday, the pair stores Friday to Monday, weekend included,
+# and not Tuesday; synced again up to Tuesday, it stores Tuesday too, the other days unchanged.
+#
+# The pair is this block's own (no seed and no other test uses XCD): MOCKFX quotes EUR → XCD, stored EUR/XCD as it comes.
+# Its rates in the window and its route are wiped before and after each test; the provider is a MockFXProvider whose
+# fetch answers the block's days whatever the range asked, behind a fetch cache of the test's own.
+
+D2_PAIR = ("EUR", "XCD")
+D2_TODAY = date(1990, 6, 11)  # a Monday
+D2_TOMORROW = D2_TODAY + timedelta(days=1)
+D2_FRIDAY, D2_SATURDAY, D2_SUNDAY = (D2_TODAY - timedelta(days=offset) for offset in (3, 2, 1))
+#: What MOCKFX delivers for XCD, by day: a weekday, the weekend after it, today and tomorrow.
+D2_DELIVERED = {D2_FRIDAY: "1.1", D2_SATURDAY: "1.2", D2_SUNDAY: "1.3", D2_TODAY: "1.4", D2_TOMORROW: "1.5"}
+
+
+async def _d2_wipe() -> None:
+    """Drop this block's rates in its window, tomorrow included, and its routes."""
+    base, quote = D2_PAIR
+    async with AsyncSession(get_async_engine()) as session:
+        await session.execute(delete(FxRate).where(FxRate.base == base, FxRate.quote == quote, FxRate.date >= min(D2_DELIVERED), FxRate.date <= max(D2_DELIVERED)))
+        await session.execute(delete(FxConversionRoute).where(FxConversionRoute.base == base, FxConversionRoute.quote == quote))
+        await session.commit()
+
+
+@pytest.fixture
+def d2_pair():
+    """D2: this block's pair without a rate in the window nor a route, before and after the test."""
+    asyncio.run(_d2_wipe())
+    yield
+    asyncio.run(_d2_wipe())
+
+
+def _d2_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    """MOCKFX handed out as a MockFXProvider whose fetch answers ``D2_DELIVERED`` for each currency asked, quoted
+    EUR → currency, whatever the range -- tomorrow's row included, as a bank publishing it early does; the fetch cache is
+    the test's own."""
+    provider = MockFXProvider()
+
+    async def fetch_rates(date_range, currencies, base_currency=None):
+        return {currency: [(day, "EUR", currency, Decimal(rate)) for day, rate in D2_DELIVERED.items()] for currency in currencies}
+
+    cached = {}
+    cache = Mock()
+    cache.get.side_effect = lambda key: (cached.get(key), key in cached)
+    cache.set.side_effect = cached.__setitem__
+    monkeypatch.setattr(provider, "fetch_rates", fetch_rates)
+    monkeypatch.setattr(fx_service.FXProviderRegistry, "get_provider_instance", lambda code: provider if code == "MOCKFX" else None)
+    monkeypatch.setattr(fx_service, "_fx_fetch_cache", cache)
+
+
+async def _d2_sync(start, end: date) -> dict[date, Decimal]:
+    """``sync_pairs_bulk`` of the pair from ``start`` up to ``end``; the pair's result must be ``ok``. Returns the pair's
+    rates in the window by date, read through the model."""
+    base, quote = D2_PAIR
+    slug = f"{base}-{quote}"
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        response = await sync_pairs_bulk(session, pairs=[slug], date_range=(start, end))
+    result = next(item for item in response.results if item.pair == slug)
+    assert result.status == "ok", f"synced up to {end}: {result}"
+    async with AsyncSession(get_async_engine()) as session:
+        rows = (await session.execute(select(FxRate.date, FxRate.rate).where(FxRate.base == base, FxRate.quote == quote, FxRate.date >= min(D2_DELIVERED), FxRate.date <= max(D2_DELIVERED)))).all()
+    return {row.date: row.rate for row in rows}
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("d2_pair")
+@pytest.mark.parametrize("start", [pytest.param("min", id="start-min"), pytest.param(D2_FRIDAY, id="start-friday")])
+async def test_d2_sync_stores_no_future_day_and_keeps_the_weekend(monkeypatch, start):
+    """D2: MOCKFX delivers EUR → XCD on Friday, Saturday, Sunday, Monday (today) and Tuesday (tomorrow).
+
+    Contract: synced up to today, the pair stores Friday to Monday as delivered, the weekend included, and not tomorrow;
+    synced again the next day, up to tomorrow, it stores tomorrow too, the other days unchanged.
+    """
+    assert (D2_FRIDAY.weekday(), D2_SATURDAY.weekday(), D2_SUNDAY.weekday(), D2_TODAY.weekday(), D2_TOMORROW.weekday()) == (4, 5, 6, 0, 1), "barrier: the block's days are not Friday … Tuesday"
+    base, quote = D2_PAIR
+    _d2_provider(monkeypatch)
+    await _xr38_route(base, quote, [(base, quote)])
+    delivered = {day: Decimal(rate) for day, rate in D2_DELIVERED.items()}
+
+    stored = await _d2_sync(start, D2_TODAY)
+    up_to_today = {day: rate for day, rate in delivered.items() if day <= D2_TODAY}
+    assert stored == up_to_today, f"synced from {start!r} up to today {D2_TODAY}, EUR/XCD stored {stored}: expected {up_to_today}, tomorrow {D2_TOMORROW} not yet"
+
+    stored = await _d2_sync(start, D2_TOMORROW)
+    assert stored == delivered, f"synced from {start!r} up to tomorrow {D2_TOMORROW}, EUR/XCD stored {stored}: expected {delivered}"
