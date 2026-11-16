@@ -6,6 +6,11 @@
   only while that choice is active and the answer carries it (M32); «Target first» has no column, the line under the
   table says why (M33). While the preview waits the figures stay, muted; after a failure the table goes and a line says
   why. Every figure derives from the user's total: masked in privacy mode.
+
+  G6d (the developer's call): each column's minimum width fits its widest cell, so our `DataTable`, which cuts a cell
+  wider than its column, never cuts one; a phone scrolls sideways. A header never wraps and widens its column by itself.
+  The width is measured on the very text the cell shows, in the page's font; where no canvas exists (jsdom) a generous
+  estimate stands in. The planner's columns button moves and hides the columns, saved with the table's `storageKey`.
 -->
 <script lang="ts">
     import {MediaQuery} from 'svelte/reactivity';
@@ -17,6 +22,7 @@
     import {formatExactMoneyCompact, formatExactMoneyPlain} from '../format';
     import type {PlannerPreview, PreviewCostRow, PreviewMoney} from '../preview.svelte';
     import {fidelityName} from '../strategyText';
+    import TableColumns from '../shared/TableColumns.svelte';
     import {BADGE, HINT, SECTION_TITLE} from '../ui';
     import {getPlannerProfile, storageKey, testId} from '../profile';
 
@@ -50,10 +56,52 @@
     const showCustom = $derived(fidelity.kind === 'custom' && (table?.rows[0]?.custom ?? null) !== null);
     const totalText = $derived(numbers ? formatExactMoneyPlain(numbers.total) : null);
 
-    function cellHtml(row: Row, level: Level | 'misplaced', amount: PreviewMoney | null): string {
+    let tableRef: DataTable<Row> | undefined = $state(undefined);
+
+    /** A cell's text, the one the cell shows and the one its column is sized on. */
+    function cellText(level: Level | 'misplaced', amount: PreviewMoney | null): string {
         // G6-1: two significant digits and the symbol alone; the currency is named once, in the line above the table.
         const figure = amount ? formatExactMoneyCompact(amount) : '';
-        const text = level === 'misplaced' || phone.current || figure === '' ? figure : $t(`${T}.upTo`, {values: {amount: figure}});
+        return level === 'misplaced' || phone.current || figure === '' ? figure : $t(`${T}.upTo`, {values: {amount: figure}});
+    }
+
+    /** A canvas to measure text on, made once; `null` where none exists (jsdom). */
+    let ruler: OffscreenCanvasRenderingContext2D | null | undefined;
+
+    /**
+     * A text's width in pixels at `fontPx` and `weight`, in the page's font. Without a canvas, `em` per character, a factor
+     * above Inter's widest common glyphs (digits, `€`), so the stand-in errs wide.
+     */
+    function textWidth(text: string, fontPx: number, weight: number, em: number): number {
+        if (ruler === undefined) ruler = typeof OffscreenCanvas === 'undefined' ? null : new OffscreenCanvas(1, 1).getContext('2d');
+        if (!ruler) return Math.ceil(text.length * fontPx * em);
+        ruler.font = `${weight} ${fontPx}px ${getComputedStyle(document.documentElement).fontFamily}`;
+        // The cells draw `tabular-nums`, which a canvas cannot: every digit is measured as a «0», as wide as a tabular one.
+        return Math.ceil(ruler.measureText(text.replace(/\d/g, '0')).width);
+    }
+
+    /** The cell's padding (0.5 rem a side), the shade's (`px-2` a side), the badge's (`px-2`, its border, the space before it), a margin. */
+    const CELL_PADDING = 16;
+    const SHADE_PADDING = 16;
+    const BADGE_PADDING = 22;
+    const MARGIN = 4;
+
+    /** The narrowest a column may be: its widest cell (G6d). */
+    function fitWidth(level: Level | 'misplaced'): number {
+        let widest = 0;
+        for (const row of rows) {
+            const amount = level === 'misplaced' ? row.row.misplaced : row.row[level];
+            // The «Custom» column is bold and shaded; the reference row carries its badge beside the figure.
+            let width = textWidth(cellText(level, amount), 14, level === 'custom' ? 600 : 400, 0.64) + CELL_PADDING + MARGIN;
+            if (level === 'custom') width += SHADE_PADDING;
+            if (level === 'misplaced' && row.row.reference) width += textWidth($t(`${T}.reference`), 12, 400, 0.66) + BADGE_PADDING;
+            widest = Math.max(widest, width);
+        }
+        return widest;
+    }
+
+    function cellHtml(row: Row, level: Level | 'misplaced', amount: PreviewMoney | null): string {
+        const text = cellText(level, amount);
         const reference = level === 'misplaced' && row.row.reference ? ` <span class="${BADGE.neutral}">${escapeHtml($t(`${T}.reference`))}</span>` : '';
         const tone = stale ? 'text-lf-muted' : level === 'misplaced' || level === 'custom' ? 'text-lf-primary' : 'text-lf-secondary';
         // G6-2: the «Custom» column in the chosen cards' shade, bold, as the mockup.
@@ -78,7 +126,7 @@
             sortable: false,
             filterable: false,
             align: 'right',
-            minWidth: phone.current ? 64 : 110,
+            minWidth: fitWidth(level),
             cell: (row) => ({type: 'html', html: cellHtml(row, level, row.row[level])}),
         };
     }
@@ -90,7 +138,7 @@
             type: 'custom',
             sortable: false,
             filterable: false,
-            minWidth: phone.current ? 96 : 200,
+            minWidth: fitWidth('misplaced'),
             cell: (row) => ({type: 'html', html: cellHtml(row, 'misplaced', row.row.misplaced)}),
         },
         levelColumn('cost_aware'),
@@ -101,13 +149,16 @@
 </script>
 
 <section class="space-y-2" data-testid={testId('fidelity', profile)} data-preview={preview?.state ?? 'idle'} data-stale={stale ? 'true' : 'false'}>
-    <h3 class={SECTION_TITLE}>{$t(`${T}.title`)}</h3>
+    <div class="flex items-center gap-2">
+        <h3 class={SECTION_TITLE}>{$t(`${T}.title`)}</h3>
+        {#if table}<TableColumns table={tableRef} testid={testId('fidelity-columns', profile)} />{/if}
+    </div>
     <p class="text-sm text-lf-secondary">
         {$t(`${T}.lead`)}
         {#if totalText !== null}<span data-testid={testId('fidelity-total', profile)}>{$t(`${T}.leadTotal`, {values: {total: totalText}})}</span>{/if}
     </p>
     {#if table}
-        <DataTable data={rows} {columns} getRowId={(row) => row.id} storageKey={storageKey('fidelity', profile)} enableSorting={false} enablePagination={false} enableSelection={false} enableColumnFilters={false} tableLayout="auto" />
+        <DataTable bind:this={tableRef} data={rows} {columns} getRowId={(row) => row.id} storageKey={storageKey('fidelity', profile)} enableSorting={false} enablePagination={false} enableSelection={false} enableColumnFilters={false} tableLayout="auto" />
         <p class={HINT} data-testid={testId('fidelity-target-first', profile)}>{$t(`${T}.targetFirst`)}</p>
     {:else if preview?.reason}
         <p class={HINT} role="status" data-testid={testId('fidelity-reason', profile)} data-reason={preview.reason}>

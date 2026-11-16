@@ -8,6 +8,12 @@
  * the figures stay, muted; after a failure the table goes and a line says why. Every figure is the user's money (derived
  * from the total): masked in privacy mode. Nothing reads translated text: figures are compared with the planner's own
  * formatter.
+ *
+ * Each column's minimum width is derived from the texts it shows (G6d, the developer's call): our `DataTable` cuts a cell
+ * that is wider than its column, so the minimum must fit the widest figure (a header never wraps and widens its column by
+ * itself). A phone scrolls sideways.
+ * The test reads the minimum the column hands the table (`min-width` on its header cell), never a pixel literal: it grows
+ * when the figures do.
  */
 import {flushSync, tick} from 'svelte';
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
@@ -17,13 +23,13 @@ vi.mock('$lib/api', () => ({
     axiosInstance: {get: vi.fn(), post: vi.fn()},
 }));
 
-import {cleanup, render, screen, setupI18n} from '$test/component';
+import {cleanup, fireEvent, render, screen, setupI18n, within} from '$test/component';
 import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import ProfileHarness from '../../__tests__/ProfileHarness.svelte';
 import type {DraftFidelity} from '../draft.svelte';
 import {formatExactMoneyCompact, formatExactMoneyPlain} from '../format';
-import {PlannerPreview, type PreviewReady} from '../preview.svelte';
+import {PlannerPreview, type PreviewMoney, type PreviewReady} from '../preview.svelte';
 import {REBALANCER_PLANNER_PROFILE} from '../profile';
 import FidelityTable from './FidelityTable.svelte';
 
@@ -149,5 +155,32 @@ describe('the table «Maximum acceptable cost»', () => {
         flushSync();
         await tick();
         expect(cells('balanced')[3]).toContain(shown);
+    });
+
+    it('each column is at least as wide as its widest figure: larger money, wider columns (G6d)', () => {
+        const minWidths = (): Record<string, number> => Object.fromEntries(['misplaced', 'cost_aware', 'balanced', 'faithful', 'custom'].map((id) => [id, parseFloat((screen.getByTestId(`dt-header-${id}`) as HTMLElement).style.minWidth)]));
+        mount(previewWith('ready', ready(true)), {kind: 'custom', lambda: '0.6'});
+        const small = minWidths();
+        cleanup();
+
+        const big = ready(true);
+        const scale = (amount: PreviewMoney | null) => {
+            if (amount?.value.kind === 'finite_decimal') amount.value.value = (BigInt(Math.round(Number(amount.value.value) * 10)) * 100_000_000n).toString();
+        };
+        for (const row of big.table!.rows) [row.misplaced, row.cost_aware, row.balanced, row.faithful, row.custom].forEach(scale);
+        mount(previewWith('ready', big), {kind: 'custom', lambda: '0.6'});
+        const large = minWidths();
+        for (const id of Object.keys(small)) expect(large[id], id).toBeGreaterThan(small[id]);
+    });
+
+    it('a columns button moves and hides the columns of this table (G6d)', async () => {
+        mount(previewWith('ready', ready(false)));
+        const button = within(screen.getByTestId('rebalancer-planner-fidelity-columns')).getByTestId('column-visibility-toggle');
+        await fireEvent.click(button);
+        await fireEvent.click(screen.getByTestId('column-visibility-item-faithful'));
+        expect(screen.queryByTestId('dt-header-faithful')).toBeNull();
+        // Shown again: the choice is saved per user, and the next test must find the table whole.
+        await fireEvent.click(screen.getByTestId('column-visibility-item-faithful'));
+        expect(screen.getByTestId('dt-header-faithful')).toBeTruthy();
     });
 });
