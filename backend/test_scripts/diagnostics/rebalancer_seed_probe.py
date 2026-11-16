@@ -6,8 +6,12 @@ A diagnostic, not a test: it is not registered in the runner. The consultant's d
 the distance, on some random seeds only. This probe solves the first stage of the heavy Rebalancer scenarios over several
 seeds and branching priorities, and fails when a run's lower bound (or a stage it closes «optimal») sits above:
 
-- the best plan any run of the same scenario found (its exact score, replayed), or
-- the scenario's reference: the exact score of a valid plan known from outside (``--reference``).
+- the best plan any run of the same scenario found, valued «as the solver sees it» (``evaluation.solver_view``, row 6 of lot
+  CR: money continuous, each posting less its reserve), within ``CLOSED_TOLERANCE``.
+
+Since row 6 SCIP proves the optimum of that slightly pessimistic model, a few cents above the plan's published (exact)
+score, so the checks compare like with like. The reference of lot S1, the exact score 796.70 € of a valid G5 plan, is a
+published value: it bounds no model value any more, and is no longer used.
 
 It also fails when a run's plan cannot be carried out: the planner's own step counter (``planner._executable_steps``)
 refuses it, as it would refuse to publish it (lot CR of project 67: the cash rule makes every plan executable).
@@ -20,8 +24,8 @@ same, with every USD price, route and cash moved to EUR at the request's rate, a
     pipenv run python backend/test_scripts/diagnostics/rebalancer_seed_probe.py
     ... --scenarios g5 --seeds 0-9 --priorities none,bin10qty20,bin20qty10 --budget 5
 
-One line per run: scenario, seed, priorities, the machine's load, the stage's status, primal and dual in euros, and the
-exact score of its candidate. SCIP's timing depends on the machine: read every line with its load. Exit 1 when a check
+One line per run: scenario, seed, priorities, the machine's load, the stage's status, primal and dual in euros, the
+candidate's score as the solver sees it and its exact (published) score. SCIP's timing depends on the machine: read every line with its load. Exit 1 when a check
 fails. Priorities are a search parameter only (``chgVarBranchPriority``): they change no plan's value, so a bound that
 moves above a plan under them is a defect of the bound.
 """
@@ -47,14 +51,15 @@ from backend.app.schemas.pac_allocator.preview import REBALANCER_TOOL_INPUT_ADAP
 from backend.app.services.pac_allocator import planner, planner_report, rebalancer_report  # noqa: E402
 from backend.app.services.pac_allocator.compiler import compile_policy_program  # noqa: E402
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate, rounding_top_ups  # noqa: E402
+from backend.app.services.pac_allocator.evaluation.solver_view import solver_view_objectives  # noqa: E402
 from backend.app.services.pac_allocator.normalize import normalize_rebalancer_plan  # noqa: E402
 from backend.app.services.pac_allocator.plan_sequence import PlanNotExecutableError  # noqa: E402
 from backend.app.services.pac_allocator.solver import solve_policy_program  # noqa: E402
 
 G5_REQUEST = PROJECT_ROOT / "backend/test_scripts/fixtures/pac_allocator/rebalancer_plan_request.g5-browser.2-0-0.json"
-# The exact score of a valid G5 plan, «Balanced»: the as-is scenario solved with Broker 1's purchases forbidden, replayed
-# against the full scenario (journal 67_rebalancer/notes/67-G5-diagnosis/result-as_is-broker1-buys-forbidden.json).
-REFERENCES: dict[str, Fraction] = {"g5": Fraction("796.696628470523622586")}
+# How far above the best plan a closure may sit: after row 6 the closures of one scenario agree to four decimals (the
+# consultant's measure, 16/11), so a tenth of a cent tells a false closure from SCIP's own precision.
+CLOSED_TOLERANCE = Fraction(1, 1000)
 PRIORITIES = {"none": None, "bin10qty20": (10, 20), "bin20qty10": (20, 10)}
 
 
@@ -139,7 +144,7 @@ def run_once(request: dict, seed: int, priorities: tuple[int, int] | None, budge
     start = time.monotonic()
     run = solve_policy_program(program, time_budget_seconds=budget)
     stage = run.stages[0]
-    exact = None
+    exact = seen = None
     steps_ok = None
     if run.candidate is not None:
         evaluation = evaluate_exact_candidate(scenario, view, run.candidate)
@@ -147,6 +152,8 @@ def run_once(request: dict, seed: int, priorities: tuple[int, int] | None, budge
             by_ref = {item.ref_id: item.value for item in evaluation.objectives}
             first = by_ref[view.objectives[0].ref_id]
             exact = Fraction(first.numerator, first.denominator)
+            as_seen = solver_view_objectives(scenario, view, evaluation)[view.objectives[0].code]
+            seen = Fraction(as_seen.numerator, as_seen.denominator)
             steps_ok = executable(scenario, evaluation)
     scale = float(stage.scale)
     band = getattr(next((item for item in program.objective_stages if item.code == stage.objective_code), None), "band", 0.0) / scale
@@ -158,6 +165,7 @@ def run_once(request: dict, seed: int, priorities: tuple[int, int] | None, budge
         "primal": None if stage.primal is None else stage.primal / scale,
         "dual": None if stage.dual is None else stage.dual / scale,
         "exact": exact,
+        "seen": seen,
         "executable": steps_ok,
     }
 
@@ -185,20 +193,27 @@ def main(argv: list[str] | None = None) -> int:
             for seed in _seeds(args.seeds):
                 row = run_once(request, seed, PRIORITIES[priority], args.budget) | {"seed": seed, "priority": priority}
                 rows.append(row)
-                print(f"{name:<11} seed {seed:>2} {priority:<11} load {row['load']:>5} wall {row['wall']:>5}s {row['status']:<10} primal {row['primal']} dual {row['dual']} exact {None if row['exact'] is None else float(row['exact'])} executable {row['executable']}", flush=True)
-        best = min((row["exact"] for row in rows if row["exact"] is not None), default=None)
-        ceiling = min(value for value in (best, REFERENCES.get(name)) if value is not None)
+                print(
+                    f"{name:<11} seed {seed:>2} {priority:<11} load {row['load']:>5} wall {row['wall']:>5}s {row['status']:<10} primal {row['primal']} dual {row['dual']} seen {None if row['seen'] is None else float(row['seen'])} exact {None if row['exact'] is None else float(row['exact'])} executable {row['executable']}",
+                    flush=True,
+                )
+        best = min((row["seen"] for row in rows if row["seen"] is not None), default=None)
+        if best is None:
+            print(f"== {name}: {len(rows)} runs, no plan")
+            failures += 1
+            continue
+        ceiling = best + CLOSED_TOLERANCE
         for row in rows:
             if row["executable"] is False:
                 failures += 1
                 print(f"FAIL {name} seed {row['seed']} {row['priority']}: the plan cannot be carried out (the step counter refuses it)")
             above = row["dual"] is not None and Fraction(row["dual"]) > ceiling
-            # A closed stage's floating value may sit above the exact score of its own plan by its quadratic rows' band.
+            # A closed stage's floating value may sit above its own plan's value by its quadratic rows' band.
             closed_above = row["status"] == "finished" and row["primal"] is not None and Fraction(row["primal"]) > ceiling + Fraction(row["band"])
             if above or closed_above:
                 failures += 1
-                print(f"FAIL {name} seed {row['seed']} {row['priority']}: {'closed «optimal»' if closed_above else 'bound'} at {row['dual']} €, above a plan of {float(ceiling):.2f} €")
-        print(f"== {name}: {len(rows)} runs, best plan {None if best is None else float(best):.2f} €, ceiling {float(ceiling):.2f} €")
+                print(f"FAIL {name} seed {row['seed']} {row['priority']}: {'closed «optimal»' if closed_above else 'bound'} at {row['dual']} €, above a plan of {float(best):.4f} € as the solver sees it")
+        print(f"== {name}: {len(rows)} runs, best plan as the solver sees it {float(best):.4f} € (tolerance {float(CLOSED_TOLERANCE)} €)")
     return 1 if failures else 0
 
 
