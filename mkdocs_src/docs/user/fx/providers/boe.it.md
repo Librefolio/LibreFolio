@@ -24,4 +24,6 @@ La Bank of England supporta circa 15 valute principali, tra cui:
 ## 📝 Important Notes
 
 - **Formato quotazioni**: I tassi sono espressi come l'importo di valuta estera per 1 GBP (ad es. 1 GBP = 1,25 USD). LibreFolio normalizza automaticamente questa rappresentazione in background.
+- **Licenza**: la Bank of England pubblica il suo database con la UK Open Government Licence, che consente il riuso libero citando la fonte.
+- **Tassi dell'euro prima di LibreFolio 1.4**: il tasso dell'euro veniva da una serie sbagliata della Bank of England (euro contro dollaro USA invece che contro sterlina). Se hai usato BOE per l'euro, sincronizza di nuovo quelle coppie su tutto il periodo che detieni (pagina FX, periodo «Tutti», «Sinc. Tutto»).
 - **Festività**: La BOE non pubblica i tassi durante i giorni festivi bancari del Regno Unito o nei fine settimana.

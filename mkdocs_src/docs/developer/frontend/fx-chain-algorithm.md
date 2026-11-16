@@ -317,8 +317,8 @@ The picker opens from **Add conversion route** and also lists, under **Not usabl
 provider other than `MANUAL` that appears in no path for the pair. When there is no direct route,
 the first chain group opens by itself. The search splits the query on spaces and keeps a route only
 when every token matches its search text: provider codes and names, plus the code, name, flag and
-country names of each currency on the path. A provider's `warning_i18n` shows as ⚠️ on a selected
-route.
+country names of each currency on the path. A provider's `warning_i18n` shows on a route as ⚠️, or as ℹ️
+when its `warning_level` is `info`; a route with both kinds of note shows ⚠️ (`data-warning-level` publishes the level).
 
 ## Output Format
 

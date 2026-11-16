@@ -5,6 +5,16 @@ This provider fetches exchange rates from the Bank of England Statistical Intera
 BOE provides daily rates with GBP as base currency.
 
 API Documentation: https://www.bankofengland.co.uk/boeapps/database/
+Licence: the Bank of England Database is published under the UK Open Government Licence
+(https://www.bankofengland.co.uk/legal, «Bank of England Database»): free reuse, with attribution.
+
+Path used: ``/boeapps/database/_iadb-fromshowcolumns.asp`` with ``csv.x=yes``, one series per request. Measured on
+16/11/2026: the old ``/boeapps/database/fromshowcolumns.asp`` URL, and this one without ``csv.x``, answer the HTML page
+«Data Series» instead of the CSV; this path answers ``application/csv``. The site's robots.txt lists
+``Disallow: /boeapps/database/_iadb-FromShowColumns.asp`` (since 2024 at least). The developer's decision (lane 75,
+16/11/2026): robots.txt addresses search-engine crawlers, not a user's own fetch of an OGL dataset, so the provider
+uses this path. No anti-bot measure is involved or evaded: plain requests, an honest User-Agent. The path is not
+documented and can change again: ``_check_csv`` refuses any answer that is not the CSV of the series asked.
 """
 
 import asyncio
@@ -33,15 +43,16 @@ class BOEProvider(FXRateProvider):
     Update frequency: Daily (weekdays only, UK business days)
     """
 
-    # BOE API configuration
-    BASE_URL = "https://www.bankofengland.co.uk/boeapps/database/fromshowcolumns.asp"
+    # BOE API configuration: the CSV download of the Interactive Database (needs ``csv.x=yes``)
+    BASE_URL = "https://www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp"
+    #: The earliest ``Datefrom`` the database accepts: an earlier one is refused (302 to ``ErrorPage.asp?ei=905``)
+    FIRST_DAY = date(1963, 1, 1)
 
-    # Series codes for exchange rates
-    # Format: XUD{L/H}XXX where L=low, H=high, XXX=currency code
-    # We use spot rates (XUDL prefix for most currencies)
+    # Series codes for exchange rates: daily spot rates, every one «<currency> into Sterling» (CUR per 1 GBP).
+    # A code ending in D (e.g. XUDLERD, «Euro into US $») is against the dollar: never one of these.
     CURRENCY_SERIES = {
         "USD": "XUDLUSS",  # US Dollar spot
-        "EUR": "XUDLERD",  # Euro spot (vs Sterling)
+        "EUR": "XUDLERS",  # Euro spot (into Sterling)
         "JPY": "XUDLJYS",  # Japanese Yen spot
         "CHF": "XUDLSFS",  # Swiss Franc spot
         "CAD": "XUDLCDS",  # Canadian Dollar spot
@@ -147,14 +158,15 @@ class BOEProvider(FXRateProvider):
 
         start_date, end_date = date_range
         request_start = FX_HISTORY_MIN_FALLBACK if start_date == "min" else start_date
-        results = {}
+        request_start = max(request_start, self.FIRST_DAY)  # the database refuses an earlier Datefrom
+        # Every currency asked gets a list, empty when nothing arrives
+        results: dict[str, list[tuple[date, str, str, Decimal]]] = {c: [] for c in currencies if c != "GBP"}
 
-        # Filter valid currencies
-        valid_currencies = [c for c in currencies if c != "GBP" and c in self.CURRENCY_SERIES]
+        # Filter valid currencies; none when the whole range is before the database's first day
+        valid_currencies = [c for c in currencies if c != "GBP" and c in self.CURRENCY_SERIES and request_start <= end_date]
         skipped = [c for c in currencies if c != "GBP" and c not in self.CURRENCY_SERIES]
         for c in skipped:
             logger.warning(f"Currency {c} not supported by BOE, skipping")
-            results[c] = []
 
         if not valid_currencies:
             return results
@@ -164,6 +176,7 @@ class BOEProvider(FXRateProvider):
             series_code = self.CURRENCY_SERIES[currency]
 
             params = {
+                "csv.x": "yes",
                 "Datefrom": request_start.strftime("%d/%b/%Y"),
                 "Dateto": end_date.strftime("%d/%b/%Y"),
                 "SeriesCodes": series_code,
@@ -183,15 +196,13 @@ class BOEProvider(FXRateProvider):
                     response = await client.get(self.BASE_URL, params=params)
                     response.raise_for_status()
 
-                    # Guard: detect HTML bot-protection pages
                     body = response.text
-                    if "<html" in body.lower()[:500] or "<!doctype" in body.lower()[:500]:
-                        logger.error(f"BOE returned HTML instead of CSV for {currency} (first 200 chars: {body[:200]})")
-                        raise FXServiceError(f"BOE returned HTML instead of CSV for {currency} — possible bot protection or endpoint change")
-
+                    self._check_csv(body, series_code, currency)  # never parse an answer that is not this series' CSV
                     observations = self._parse_response(body, currency)
                     return currency, observations
 
+            except FXServiceError:  # already says what went wrong; logged once where the currency is skipped
+                raise
             except httpx.HTTPError as e:
                 raise_if_fx_rate_limited(e, self.provider_code)
                 logger.exception(f"Failed to fetch FX rates for {currency} from BOE: {e}")
@@ -215,6 +226,23 @@ class BOEProvider(FXRateProvider):
                 results[currency] = observations
 
         return results
+
+    @staticmethod
+    def _check_csv(body: str, series_code: str, currency: str) -> None:
+        """Refuse an answer that is not the CSV of ``series_code``: its first line must be ``DATE,<series_code>``.
+
+        An HTML page (a changed endpoint, the Bank's error page), an empty answer or the CSV of another series raises
+        ``FXServiceError`` naming the currency, the series and what arrived; nothing of it is parsed or stored.
+
+        Raises:
+            FXServiceError: the answer is not the CSV of ``series_code``
+        """
+        first_line = body.lstrip().split("\n", 1)[0].strip()
+        if first_line.upper() == f"DATE,{series_code}":
+            return
+        head = body.lstrip()[:200].lower()
+        what = "an HTML page" if "<html" in head or "<!doctype" in head or "<head" in head or "<body" in head else f"first line {first_line[:60]!r}"
+        raise FXServiceError(f"BOE answer for {currency} is not the CSV of series {series_code}: {what} (endpoint changed or request refused)")
 
     def _parse_response(self, response_text: str, currency: str) -> list[tuple[date, Decimal]]:  # pragma: no cover
         """
