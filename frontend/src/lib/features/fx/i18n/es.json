@@ -62,7 +62,8 @@
       "searchPlaceholder": "Buscar proveedores, divisas, países…",
       "noSearchResults": "Ninguna ruta coincide con la búsqueda",
       "addRoute": "Añadir ruta de conversión",
-      "hideRoutes": "Ocultar rutas disponibles"
+      "hideRoutes": "Ocultar rutas disponibles",
+      "showMore": "Mostrar más ({count} ocultas)"
     },
     "deletePair": "Eliminar par",
     "deletePairTitle": "Eliminar Par FX",

@@ -377,4 +377,82 @@ describe('FxProviderSelect', () => {
         const picker = await openPicker();
         expect(within(picker).getByTestId('fx-route-direct-ECB')).toHaveAttribute('data-warnings', '0');
     });
+
+    describe('a chain group larger than the picker draws at once (lane 75, L2d, developer decision «b1»)', () => {
+        /** 250 two-step chains EUR → Z000…Z249 → GBP: more than the 200 a group draws at once. */
+        const MANY: ChainStep[][] = Array.from({length: 250}, (_, i) => {
+            const via = `Z${String(i).padStart(3, '0')}`;
+            return [
+                {from: 'EUR', to: via, provider: 'ECB'},
+                {from: via, to: 'GBP', provider: 'FED'},
+            ];
+        });
+        const chainButtons = (picker: HTMLElement) => picker.querySelectorAll('[data-testid^="fx-route-chain-2step-"]');
+        const keyOf = (i: number) => `EUR-Z${String(i).padStart(3, '0')}:ECB|Z${String(i).padStart(3, '0')}-GBP:FED`;
+
+        it('draws the first 200 chains of a group in their order, and the rest on request', async () => {
+            await setupI18n();
+            graphReturns(MANY);
+            mount();
+            await settled();
+            const picker = await openPicker();
+
+            // No direct route: the 2-step group opens by itself, capped at 200.
+            expect(chainButtons(picker)).toHaveLength(200);
+            expect(within(picker).getByTestId('fx-route-chain-toggle-2')).toHaveTextContent('250');
+            const more = within(picker).getByTestId('fx-route-chain-more-2');
+            expect(more).toHaveAttribute('data-hidden', '50');
+            // Today's order is kept: the first drawn is the first of the sorted list, the 201st is not drawn.
+            expect(chainButtons(picker)[0]).toHaveAttribute('data-route-key', keyOf(0));
+            expect(picker.querySelector(`[data-route-key="${keyOf(200)}"]`)).toBeNull();
+
+            await fireEvent.click(more);
+            expect(chainButtons(picker)).toHaveLength(250);
+            expect(within(picker).queryByTestId('fx-route-chain-more-2')).toBeNull();
+        });
+
+        it('searches every chain of the group, those beyond the first 200 included', async () => {
+            await setupI18n();
+            graphReturns(MANY);
+            mount();
+            await settled();
+            const picker = await openPicker();
+
+            await fireEvent.input(within(picker).getByTestId('fx-route-search'), {target: {value: 'z240'}});
+
+            expect(chainButtons(picker)).toHaveLength(1);
+            expect(chainButtons(picker)[0]).toHaveAttribute('data-route-key', keyOf(240));
+            expect(within(picker).queryByTestId('fx-route-chain-more-2')).toBeNull();
+        });
+
+        it('draws 200 again when the search changes, whatever was shown before', async () => {
+            await setupI18n();
+            graphReturns(MANY);
+            mount();
+            await settled();
+            const picker = await openPicker();
+            await fireEvent.click(within(picker).getByTestId('fx-route-chain-more-2'));
+            expect(chainButtons(picker)).toHaveLength(250);
+
+            // 'fed' matches every chain: a new search starts from the first 200 again.
+            await fireEvent.input(within(picker).getByTestId('fx-route-search'), {target: {value: 'fed'}});
+            expect(chainButtons(picker)).toHaveLength(200);
+            expect(within(picker).getByTestId('fx-route-chain-more-2')).toHaveAttribute('data-hidden', '50');
+        });
+
+        it('draws 200 again when the search is cleared, after «show more» with no search', async () => {
+            await setupI18n();
+            graphReturns(MANY);
+            mount();
+            await settled();
+            const picker = await openPicker();
+            await fireEvent.click(within(picker).getByTestId('fx-route-chain-more-2'));
+            await fireEvent.input(within(picker).getByTestId('fx-route-search'), {target: {value: 'z24'}});
+
+            await fireEvent.click(within(picker).getByTestId('fx-route-search-clear'));
+
+            expect(chainButtons(picker)).toHaveLength(200);
+            expect(within(picker).getByTestId('fx-route-chain-more-2')).toHaveAttribute('data-hidden', '50');
+        });
+    });
 });

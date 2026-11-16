@@ -62,7 +62,8 @@
       "searchPlaceholder": "Cerca provider, valute, paesi…",
       "noSearchResults": "Nessun percorso corrisponde alla ricerca",
       "addRoute": "Aggiungi percorso di conversione",
-      "hideRoutes": "Nascondi percorsi disponibili"
+      "hideRoutes": "Nascondi percorsi disponibili",
+      "showMore": "Mostra altre ({count} nascoste)"
     },
     "deletePair": "Elimina coppia",
     "deletePairTitle": "Elimina Coppia FX",

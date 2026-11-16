@@ -68,8 +68,13 @@ AI_EXPORT_PURE_TEST_PATHS = (
 PROVIDER_ERROR_TEST_PATHS = (
     "backend/test_scripts/test_services/test_borsa_italiana_errors.py",
     "backend/test_scripts/test_services/test_fx_parse_errors.py",
+    "backend/test_scripts/test_services/test_fx_bcb.py",
+    "backend/test_scripts/test_services/test_fx_bdi.py",
+    "backend/test_scripts/test_services/test_fx_boc.py",
     "backend/test_scripts/test_services/test_fx_boe_quotes.py",
     "backend/test_scripts/test_services/test_fx_fed_quotes.py",
+    "backend/test_scripts/test_services/test_fx_nbu.py",
+    "backend/test_scripts/test_services/test_fx_norges.py",
     "backend/test_scripts/test_services/test_justetf_errors.py",
     "backend/test_scripts/test_services/test_snb_errors.py",
     "backend/test_scripts/test_services/test_yahoo_finance_errors.py",
@@ -4323,7 +4328,7 @@ Note: No backend server required.
         "fx-sync-service",
         services_fx_sync,
         name="FX Sync Orchestration",
-        desc="_is_date_within_sync_range (N83: an old rate is kept too, no 1900-01-01 floor), _process_route/_compute_multi_step",
+        desc="_is_date_within_sync_range (N83: an old rate is kept too, no 1900-01-01 floor; D2: no rate after the sync's end, weekend kept), _process_route/_compute_multi_step",
         exclusive_because="an autouse fixture truncates fx_rates and fx_conversion_routes before every test, so any concurrent unit reading rates or routes loses them mid-test",
     )
     add_test(cat, "provider-registry-misc", services_provider_registry_misc, name="Provider Registry Helpers", desc="auto_discover, register, get_provider_instance, BRIM plugin detection")
@@ -4352,7 +4357,7 @@ Note: No backend server required.
         "provider-errors",
         services_provider_errors,
         name="Provider Error Paths",
-        desc="justETF, Borsa Italiana, Yahoo Finance, SNB, BOE, FED and ECB when the source misbehaves or refuses for too many requests (every client doubled); a value that is no number skips its line only (X-R50, X-R52); FED and BOE read each currency from its series, in the direction the bank quotes it (lane 75)",
+        desc="justETF, Borsa Italiana, Yahoo Finance, SNB, BOE, FED and ECB when the source misbehaves or refuses for too many requests (every client doubled); a value that is no number skips its line only (X-R50, X-R52); FED and BOE read each currency from its series, in the direction the bank quotes it, NORGES divides each series by its unit, NBU keeps every day under its exchangedate, BOC reads one Valet group for every currency, BDI refuses a series not quoted per 1 EUR, BCB checks each row's code and symbol (lane 75)",
         isolation="pure",
     )
     add_test(cat, "borsa-italiana-search", services_borsa_italiana_search, name="Borsa Italiana Search", desc="Single-fetch search, IT+EN variants, ISIN direct hit (engine mocked)")
