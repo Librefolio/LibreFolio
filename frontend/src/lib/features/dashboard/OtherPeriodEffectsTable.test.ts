@@ -297,3 +297,20 @@ describe('OtherPeriodEffectsTable — the Transfers at market value row (Y5-F5)'
         expect(cellIn(row, 'description').textContent?.trim()).toBe('Probe unknown effect — Probe Broker');
     });
 });
+
+describe('OtherPeriodEffectsTable — «Globale» (project 74): a kind summed over its brokers', () => {
+    it('shows the icons of every broker of the row, and no broker name in the description', async () => {
+        const merged = {description: 'FX on cash', code: 'fx_on_cash', category: 'Other', period_pnl: '-89.74', broker_id: null, broker_name: null, broker_ids: [1, 5]} as Effect;
+        render(OtherPeriodEffectsTable, {effects: [merged], displayCurrency: 'EUR'});
+        await waitFor(() => expect(screen.getByTestId('broker-badge-stack').getAttribute('data-count')).toBe('2'));
+    });
+});
+
+describe('OtherPeriodEffectsTable — «Globale» (project 74): a kind of one broker', () => {
+    it('shows that broker’s badge, from broker_ids, with no broker in the description', async () => {
+        const single = {description: 'Unallocated costs', category: 'Cost', period_pnl: '-1.34', broker_id: null, broker_name: null, broker_ids: [1]} as Effect;
+        render(OtherPeriodEffectsTable, {effects: [single], displayCurrency: 'EUR'});
+        await waitFor(() => expect(screen.getByTestId('broker-badge-1')).toBeTruthy());
+        expect(screen.queryByTestId('broker-badge-stack')).toBeNull();
+    });
+});
