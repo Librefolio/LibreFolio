@@ -180,7 +180,7 @@
  * ⚠️ Every figure and name below was **invented while writing this file**: nothing was read off a
  * running backend. The payloads are shaped to be emittable — they satisfy the zod schemas
  * `assetSetLevels.ts` parses with (`buildAssetSetPaidRows`) and the pydantic models in
- * `backend/app/schemas/risk.py` that would have produced them: volatilities ≥ 0, falls ≤ 0, correlations
+ * `backend/app/schemas/risk/outputs.py` that would have produced them: volatilities ≥ 0, falls ≤ 0, correlations
  * in [−1, 1], and a reference that is never one of the comparison's items — though since D371 it may be
  * one of the selection, as in the `REFERENCE_SELECTED` and `REFERENCE_ALONE` mounts. They are also
  * roughly coherent with each other, so a reader can check them rather than trust them: with the zero

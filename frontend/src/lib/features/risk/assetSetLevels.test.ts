@@ -8,7 +8,7 @@
  * here may be described as measured — in a comment, in a commit message or in a
  * report. What makes a fixture trustworthy is not its provenance but its
  * *emittability*: each payload satisfies the contract in
- * `backend/app/schemas/risk.py` that would have produced it, so a reader can
+ * the `backend/app/schemas/risk/` package that would have produced it, so a reader can
  * check it against the model rather than against someone's memory of a run.
  *
  * The contracts that are load-bearing here, and are honoured deliberately:

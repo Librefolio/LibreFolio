@@ -239,7 +239,7 @@ function replayAnswer({excluded = true, warnings}: {excluded?: boolean; warnings
     return {instance_id: 'single-stress', analytic_code: 'stress', status: degraded ? 'partial' : 'ok', output, metadata, warnings: answerWarnings};
 }
 
-/** A replay that did not run: `unavailable` and no output, as `schemas/risk.py` demands of it. */
+/** A replay that did not run: `unavailable` and no output, as `RiskAnalyticResult.validate_status_payload` (`schemas/risk/results.py`) demands of it. */
 function refusal(code: 'execution_timeout' | 'insufficient_history', message: string, details?: Record<string, unknown>): RiskAnalyticResult {
     return {instance_id: 'single-stress', analytic_code: 'stress', status: 'unavailable', output: null, error: {code, message, ...(details === undefined ? {} : {details})}};
 }
