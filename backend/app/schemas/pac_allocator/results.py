@@ -596,6 +596,19 @@ def _validate_solver_units(
         raise ValueError("Solver valuation units must use the scenario valuation currency")
 
 
+def _validate_stage_order(solver_evidence: ReportedFloatingSolverEvidence, named_tie_breaks: dict[str, str] | None = None) -> None:
+    """Finished solver stages precede unfinished ones, except a Rebalancer tie-break whose plan the exact comparison
+    rejected (D4; lot CR of project 67). SCIP closed that stage, the solver reports it unfinished, and the cascade goes on, so
+    a later stage may finish after it: a legitimate state, which ``score.tie_breaks`` names (``rejected``). Every other
+    unfinished stage before a finished one is still refused. An infeasible stage is alone (the evidence's own rule)."""
+    rejected = {code for code, status in (named_tie_breaks or {}).items() if status == "rejected"}
+    statuses = [stage.status for stage in solver_evidence.stages if stage.objective_code not in rejected]
+    if "infeasible" in statuses:
+        return
+    if statuses != sorted(statuses, key={"finished": 0, "unfinished": 1}.__getitem__):
+        raise ValueError("Finished solver stages must precede unfinished stages")
+
+
 def _validate_stop_evidence(
     stop_reason: str,
     solver_evidence: ReportedFloatingSolverEvidence,
@@ -705,6 +718,7 @@ class _PacReadyResultBase(AllocationStrictModel):
         proof = getattr(self, "proof", None)
         deployment = getattr(self, "deployment", None)
         solution = getattr(self, "primary_solution", None)
+        _validate_stage_order(self.solver_evidence)
         _validate_stop_evidence(self.stop_reason, self.solver_evidence)
         _validate_solver_units(self.solver_evidence, self.scenario_basis.valuation_currency)
         _validate_optimal_proof_objectives(proof, solution)
@@ -771,6 +785,7 @@ class _RebalancerReadyResultBase(AllocationStrictModel):
         deployment = getattr(self, "deployment", None)
         solution = getattr(self, "primary_solution", None)
         named = _named_tie_breaks(solution)
+        _validate_stage_order(self.solver_evidence, named)
         _validate_stop_evidence(self.stop_reason, self.solver_evidence, named)
         _validate_solver_units(self.solver_evidence, self.scenario_basis.valuation_currency)
         _validate_optimal_proof_objectives(proof, solution)

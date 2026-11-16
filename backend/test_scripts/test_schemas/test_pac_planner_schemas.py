@@ -2960,6 +2960,37 @@ def test_solver_status_proof_is_bound_to_the_solver_evidence(
     _reject_because(adapter, build(product), message)
 
 
+def _second_stage_left_open(product: str, *, rejected: bool = False) -> JsonObject:
+    """The ready result with its second stage unfinished and the third finished after it. The Rebalancer's second stage is
+    its named tie-break ``operation_count``: ``score.tie_breaks`` says why it is open, rejected by the exact comparison
+    (D4) or not closed (a limit)."""
+    payload = _ready_source_result(product)
+    second = _find(payload["solver_evidence"]["stages"], "ordinal", 2)
+    second["status"] = "unfinished"
+    assert _find(payload["solver_evidence"]["stages"], "ordinal", 3)["status"] == "finished"
+    if product == "Rebalancer":
+        _find(payload["primary_solution"]["score"]["tie_breaks"], "objective_code", second["objective_code"])["status"] = "rejected" if rejected else "unfinished"
+    payload["stop_reason"] = "completed" if rejected else "time_limit"
+    return payload
+
+
+@pytest.mark.parametrize(("product", "adapter"), READY_PRODUCT_CASES)
+def test_an_unfinished_stage_before_a_finished_one_is_refused(product: str, adapter: TypeAdapter[Any]) -> None:
+    """Finished solver stages precede unfinished ones, for the PAC and the Rebalancer. Since lot CR of project 67 the ready
+    result checks it (``results._validate_stage_order``), no longer the evidence alone, so both products are pinned here."""
+    _reject_because(adapter, _second_stage_left_open(product), "Finished solver stages must precede unfinished stages")
+
+
+def test_a_rejected_tie_break_may_precede_a_finished_stage() -> None:
+    """D4 (B2 review of project 67): a tie-break whose plan the exact comparison rejected is reported unfinished and the
+    cascade goes on, so a later stage may finish after it. ``score.tie_breaks`` names it rejected, and the wire accepts the
+    order (lot CR; G5 seed 8 failed to publish without this)."""
+    model, _emitted = _strict_roundtrip(REBALANCER_PLAN_OUTPUT_ADAPTER, _second_stage_left_open("Rebalancer", rejected=True))
+    wire = REBALANCER_PLAN_OUTPUT_ADAPTER.dump_python(model, mode="json")
+    assert [stage["status"] for stage in wire["solver_evidence"]["stages"]] == ["finished", "unfinished", "finished"]
+    assert wire["stop_reason"] == "completed"
+
+
 def test_infeasible_solver_stage_is_accepted_only_as_the_first_global_stage_without_observations() -> None:
     model, _emitted = _strict_roundtrip(SOLVER_STAGE_ADAPTER, _infeasible_stage_specimen())
     wire = SOLVER_STAGE_ADAPTER.dump_python(model, mode="json")

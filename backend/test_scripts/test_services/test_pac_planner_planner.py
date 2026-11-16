@@ -110,6 +110,7 @@ from pathlib import Path
 from typing import get_args
 
 import pytest
+from pydantic import ValidationError
 
 from backend.app.schemas.pac_allocator.evidence import InfeasibilityProvenProof, ReportedFloatingSolverEvidence
 from backend.app.schemas.pac_allocator.exact import exact_fraction
@@ -806,6 +807,44 @@ def test_rebalancer_ready_output_revalidates_against_the_wire_union() -> None:
     result = plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.t4()))
     assert REBALANCER_PLAN_OUTPUT_ADAPTER.validate_python(result.model_dump(mode="python")) == result
     assert REBALANCER_PLAN_OUTPUT_ADAPTER.validate_json(REBALANCER_PLAN_OUTPUT_ADAPTER.dump_json(result), strict=True) == result
+
+
+def _t4_with_operation_count_left_open(monkeypatch: pytest.MonkeyPatch, *, rejected: bool) -> None:
+    """T4's real SCIP run, with its ``operation_count`` stage reported unfinished as the solver reports it: rejected by the
+    exact comparison (D4, ``solver._close_stage``) or stopped by the clock. ``route_priority`` stays finished after it."""
+    real_solve = planner.solve_policy_program
+
+    def left_open(*args, **kwargs):
+        run = real_solve(*args, **kwargs)
+        named = {stage.objective_code: stage.status for stage in run.stages if not stage.stage.startswith("tie:")}
+        assert (named["operation_count"], named["route_priority"]) == ("finished", "finished"), "PREMISE: T4 closes both"
+        stages = tuple(replace(stage, status="unfinished", rejected=rejected, scip_status="optimal" if rejected else "timelimit") if stage.objective_code == "operation_count" else stage for stage in run.stages)
+        return replace(run, stages=stages)
+
+    monkeypatch.setattr(planner, "solve_policy_program", left_open)
+
+
+def test_a_rejected_tie_break_before_a_closed_stage_publishes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """D4 (B2 review of project 67) meets the order of the solver evidence (lot CR; G5 seed 8 at 30 s failed to publish): a
+    tie-break whose plan the exact comparison rejected is reported unfinished, and the cascade goes on, so a later stage
+    can close. That is a legitimate state, and the wire says it: the order rule (finished before unfinished) skips a row
+    whose tie-break ``score.tie_breaks`` names as rejected."""
+    _t4_with_operation_count_left_open(monkeypatch, rejected=True)
+    result = plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.t4()))
+
+    assert REBALANCER_PLAN_OUTPUT_ADAPTER.validate_json(REBALANCER_PLAN_OUTPUT_ADAPTER.dump_json(result), strict=True) == result
+    statuses = {stage.objective_code: stage.status for stage in result.solver_evidence.stages}
+    assert (statuses["operation_count"], statuses["route_priority"]) == ("unfinished", "finished")
+    assert {stage.objective_code: stage.status for stage in result.primary_solution.score.tie_breaks}["operation_count"] == "rejected"
+    assert result.stop_reason == "completed"
+
+
+def test_an_unfinished_stage_before_a_closed_one_is_still_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The order rule stays for every row that is not a rejected tie-break: a stage the clock stopped, followed by a stage
+    that finished, is not a state the cascade produces, and the wire refuses it."""
+    _t4_with_operation_count_left_open(monkeypatch, rejected=False)
+    with pytest.raises(ValidationError, match="Finished solver stages must precede unfinished stages"):
+        plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.t4()))
 
 
 def _without_holdings() -> dict:

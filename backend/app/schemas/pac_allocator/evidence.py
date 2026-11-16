@@ -156,13 +156,11 @@ class ReportedFloatingSolverEvidence(AllocationStrictModel):
         if ordinals != sorted(ordinals) or len(ordinals) != len(set(ordinals)) or len(codes) != len(set(codes)):
             raise ValueError("Solver stages must have unique codes and ascending ordinals")
         statuses = [stage.status for stage in self.stages]
-        if "infeasible" in statuses:
-            # Nothing runs after an infeasible first stage, so nothing is reported after it.
-            if len(statuses) != 1:
-                raise ValueError("An infeasible solver stage must be the only reported stage")
-            return self
-        if statuses != sorted(statuses, key={"finished": 0, "unfinished": 1}.__getitem__):
-            raise ValueError("Finished solver stages must precede unfinished stages")
+        # Nothing runs after an infeasible first stage, so nothing is reported after it.
+        if "infeasible" in statuses and len(statuses) != 1:
+            raise ValueError("An infeasible solver stage must be the only reported stage")
+        # «Finished before unfinished» is checked by the ready result, which knows the Rebalancer's rejected tie-breaks
+        # (``results._validate_stage_order``, lot CR of project 67).
         return self
 
 
