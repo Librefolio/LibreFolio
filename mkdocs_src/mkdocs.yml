@@ -129,6 +129,7 @@ plugins:
             Federal Reserve (FED): Federal Reserve (FED)
             Bank of England (BOE): Banca d'Inghilterra (BoE)
             Swiss National Bank (SNB): Banca Nazionale Svizzera (BNS)
+            Norges Bank (NORGES): Norges Bank (NORGES)
             # Developer provider entries — kept in English per dev-manual policy
             Overview Providers: Overview Providers
             Yahoo Finance Tech: Yahoo Finance Tech
@@ -140,6 +141,7 @@ plugins:
             FED Tech: FED Tech
             BOE Tech: BOE Tech
             SNB Tech: SNB Tech
+            NORGES Tech: NORGES Tech
             # Developer transaction section — kept in English per dev-manual policy
             Service Architecture: Service Architecture
             "WAC & Cost Basis": "WAC & Cost Basis"
@@ -393,6 +395,7 @@ plugins:
             Federal Reserve (FED): Federal Reserve (FED)
             Bank of England (BOE): Banque d'Angleterre (BoE)
             Swiss National Bank (SNB): Banque Nationale Suisse (BNS)
+            Norges Bank (NORGES): Norges Bank (NORGES)
             # Developer provider entries — kept in English per dev-manual policy
             Overview Providers: Overview Providers
             Yahoo Finance Tech: Yahoo Finance Tech
@@ -404,6 +407,7 @@ plugins:
             FED Tech: FED Tech
             BOE Tech: BOE Tech
             SNB Tech: SNB Tech
+            NORGES Tech: NORGES Tech
             # Developer transaction section — kept in English per dev-manual policy
             Service Architecture: Service Architecture
             "WAC & Cost Basis": "WAC & Cost Basis"
@@ -658,6 +662,7 @@ plugins:
             Federal Reserve (FED): Federal Reserve (FED)
             Bank of England (BOE): Banco de Inglaterra (BoE)
             Swiss National Bank (SNB): Banco Nacional Suizo (BNS)
+            Norges Bank (NORGES): Norges Bank (NORGES)
             # Developer provider entries — kept in English per dev-manual policy
             Overview Providers: Overview Providers
             Yahoo Finance Tech: Yahoo Finance Tech
@@ -669,6 +674,7 @@ plugins:
             FED Tech: FED Tech
             BOE Tech: BOE Tech
             SNB Tech: SNB Tech
+            NORGES Tech: NORGES Tech
             # Developer transaction section — kept in English per dev-manual policy
             Service Architecture: Service Architecture
             "WAC & Cost Basis": "WAC & Cost Basis"
@@ -994,6 +1000,7 @@ nav:
               - Federal Reserve (FED): user/fx/providers/fed.md
               - Bank of England (BOE): user/fx/providers/boe.md
               - Swiss National Bank (SNB): user/fx/providers/snb.md
+              - Norges Bank (NORGES): user/fx/providers/norges.md
           - 🔎 Pair Detail:
               - Overview: user/fx/detail/index.md
               - Interactive Chart: user/fx/detail/chart.md
@@ -1248,6 +1255,7 @@ nav:
                   - FED Tech: developer/backend/fx/providers/fed.md
                   - BOE Tech: developer/backend/fx/providers/boe.md
                   - SNB Tech: developer/backend/fx/providers/snb.md
+                  - NORGES Tech: developer/backend/fx/providers/norges.md
           - "🕐 Scheduler (Daemon)": developer/backend/scheduler.md
           - "📧 Email (SMTP)": developer/backend/email.md
           - "🧮 Financial Math Layer": developer/backend/financial_math.md
