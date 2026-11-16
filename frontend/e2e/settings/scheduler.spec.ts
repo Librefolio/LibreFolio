@@ -226,12 +226,12 @@ test.describe('Scheduler — Log Modal contents', () => {
 // ---------------------------------------------------------------------------
 
 /**
- * What the modal's Save writes: all five of these *global* settings, every time, in one
+ * What the modal's Save writes: all seven of these *global* settings, every time, in one
  * PATCH /settings/global/bulk (SchedulerConfigModal.handleSave). A test that changes only
- * the frequency still rewrites the other four, for every user of the instance, so a
- * writer snapshots all five and puts all five back.
+ * the frequency still rewrites the other six, for every user of the instance, so a
+ * writer snapshots all seven and puts all seven back.
  */
-const SCHEDULER_KEYS = ['scheduler_current_price_frequency_minutes', 'scheduler_history_sync_times', 'scheduler_history_sync_days', 'scheduler_history_sync_horizon_days', 'scheduler_timezone'] as const;
+const SCHEDULER_KEYS = ['scheduler_current_price_frequency_minutes', 'scheduler_history_sync_times', 'scheduler_history_sync_days', 'scheduler_history_sync_horizon_days', 'scheduler_timezone', 'scheduler_profile_read_times', 'scheduler_profile_read_days'] as const;
 type SchedulerSettings = Record<(typeof SCHEDULER_KEYS)[number], string>;
 const BULK_PATH = `${API_BASE}/settings/global/bulk`;
 
@@ -319,7 +319,7 @@ test.describe('Scheduler — Config Modal', () => {
         await expect(page.getByTestId('scheduler-config-frequency')).toBeVisible({timeout: 5_000});
     });
 
-    // The file's only writers. Save rewrites five instance-wide settings, so each of
+    // The file's only writers. Save rewrites seven instance-wide settings, so each of
     // them snapshots those before acting and restores them in `finally`.
     test.describe('Saving', () => {
         // Why serial: a snapshot is the baseline only while no other writer sits between it
