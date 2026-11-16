@@ -19,6 +19,8 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Les administrateurs voient les changements d'e-mail en attente : un badge « Changement d'e-mail en attente » sur le compte, et le lien dans « Liens de compte » peut être révoqué.
 - Dashboard › Vos positions : «Global» ou «Courtier». Avec deux courtiers ou plus, un sélecteur affiche un actif détenu chez plusieurs courtiers sur une seule ligne, dans les vues Portefeuille et Période, leurs cartes et le graphique du rendement (une ligne par actif) ; la colonne Courtier montre les icônes de tous les courtiers qui le détiennent. Quantités, valeurs, P&L et revenus sont additionnés ; pourcentages, prix moyen et Yield on Cost sont calculés à partir des sommes, jamais en moyenne, et une vente garde le coût du courtier qui a vendu. Le choix est mémorisé sur chaque appareil. Merci à Daneltones8 ([#80](https://github.com/Librefolio/LibreFolio/issues/80)).
 - API : `POST /portfolio/report` accepte `group_by` (`broker`, par défaut, ou `asset`) ; ses lignes portent `broker_ids`.
+- Modification de plusieurs actifs : «Retirer l'icône» et «Retirer l'URL» effacent l'icône ou l'URL personnelle des actifs sélectionnés qui en ont une ; les autres restent tels quels.
+- Tableau des actifs : chaque ligne a une action «Modifier» qui ouvre l'éditeur de l'actif sur place, sans aller à la page de détail.
 
 ### 🔄 Modifié
 
@@ -34,6 +36,8 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Un actif qui a des transactions ne peut plus devenir un Indice depuis l'éditeur de l'actif : l'éditeur indique combien de transactions il a, et rien n'est enregistré.
 - Le changement d'e-mail attend une confirmation quand l'e-mail fonctionne : avec l'e-mail configuré et `LIBREFOLIO_PUBLIC_URL` défini, une nouvelle adresse dans le Profil n'est utilisée qu'après un clic sur le lien envoyé à cette adresse (valable 24 heures) en étant connecté à votre compte. Déjà connecté, un clic suffit ; sinon la page vous demande d'abord de vous connecter puis vous y ramène. Votre ancienne adresse est prévenue aussitôt. Vous restez connecté sur le navigateur depuis lequel vous confirmez, et vos autres appareils sont déconnectés. La page indique dès son ouverture s'il faut vous connecter, si le lien appartient à un autre compte (avec « Se déconnecter et se connecter avec le bon compte ») ou s'il n'est plus valable ; la page et les e-mails mettent une idée par ligne, avec les mots importants en gras. Sans e-mail rien ne change : la nouvelle adresse s'applique tout de suite.
 - Dashboard › Vos positions : «Voir tout» est désormais un petit badge, et sur téléphone les trois sélecteurs de vue (Portefeuille/Période, Global/Courtier, tableau/carte) ont leur propre ligne sous le titre.
+- Modification de plusieurs actifs : après l'enregistrement, la fenêtre reste ouverte sur le récapitulatif avec une coche verte «Enregistré», et la sélection reste, pour continuer à travailler sur les mêmes actifs. Le récapitulatif montre la nouvelle icône en miniature ; les champs sont sur une grille, avec la valeur actuelle sous chaque champ et son bouton de réinitialisation sur la même ligne, et la fenêtre n'a pas de barre de défilement interne.
+- La barre de sélection des tableaux (actifs, transactions, devises, transactions d'un courtier) flotte désormais en bas de l'écran tant que des lignes sont sélectionnées, et reste après un enregistrement ; Échap efface la sélection quand le focus est dans la barre.
 
 ### 🐛 Corrections
 
@@ -56,6 +60,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 - Sur une instance bloquée par son hébergeur, l'administrateur voit aussi les «Sauvegardes déjà conservées» et peut les télécharger, pas seulement en faire une nouvelle.
 - L'import d'un relevé n'affiche plus de message de succès quand la modification des identifiants d'un actif n'a pas été enregistrée.
+- Actifs : la puce «n sélectionnés» efface toujours toute la sélection, et le menu des colonnes et le redimensionnement des colonnes agissent sur les deux tableaux d'actifs (les vôtres et ceux des autres) ; avant, l'un des deux pouvait être oublié.
 
 ### ⚠️ Changements incompatibles
 

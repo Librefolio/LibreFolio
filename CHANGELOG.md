@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Administrators see pending email changes: an «Email change pending» badge on the account, and the link in «Account links» can be revoked.
 - Dashboard › Your Positions: «Global» or «Broker». With two brokers or more, a switch shows an asset held at several brokers as one row, in the Portfolio and Period views, their maps and the return chart (one line per asset); the Broker column shows the icons of every broker that holds it. Quantities, values, P&L and income are summed; percentages, average price and Yield on Cost are worked out from the sums, never averaged, and a sale keeps the cost of the broker that sold. The choice is remembered on each device. Thanks to Daneltones8 ([#80](https://github.com/Librefolio/LibreFolio/issues/80)).
 - API: `POST /portfolio/report` accepts `group_by` (`broker`, the default, or `asset`); its rows carry `broker_ids`.
+- Bulk edit of assets: «Remove icon» and «Remove URL» clear the icon or the personal URL of the selected assets that have one; the others are left as they are.
+- Assets table: each row has an «Edit» action that opens the asset editor in place, without going to the detail page.
 
 ### 🔄 Changed
 
@@ -34,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An asset that has transactions can no longer become an Index from the asset editor: the editor says how many transactions it has, and nothing is saved.
 - Changing your email waits for confirmation when email works: with email set up and `LIBREFOLIO_PUBLIC_URL` set, a new address in Profile is not used until you click the link sent to it (valid for 24 hours) while signed in to your account. Already signed in, one click is enough; otherwise the page asks you to sign in first and brings you back. Your old address is told at once. You stay signed in on the browser you confirm from, and your other devices are signed out. The page tells you as soon as it opens whether you need to sign in, whether the link belongs to another account (with «Sign out and sign in with the right account») or no longer works; the page and the emails put one idea per line, with the important words in bold. Without email nothing changes: the new address applies straight away.
 - Dashboard › Your Positions: «See all» is now a small badge, and on a phone the three view switches (Portfolio/Period, Global/Broker, table/map) sit on their own row under the title.
+- Bulk edit of assets: after a save the window stays open on the summary with a green «Saved» check, and the selection stays, so you can keep working on the same assets. The summary shows the new icon as a thumbnail; the fields sit on one grid, with the current value under each field and its reset button on the same row, and the window has no inner scrollbar.
+- The selection bar of the tables (assets, transactions, FX, a broker's transactions) now floats at the bottom of the screen while rows are selected, and stays there after a save; Esc clears the selection when the focus is in it.
 
 ### 🐛 Fixed
 
@@ -56,6 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - On an instance blocked by its hosting provider, the administrator also sees the «Backups already kept» and can download them, not only make a new one.
 - Importing a report no longer shows a success message when the change of an asset's identifiers was not saved.
+- Assets: the «n selected» chip always clears the whole selection, and the column menu and column resizing act on both asset tables (yours and the others'); before, one of the two could be left out.
 
 ### ⚠️ Breaking changes
 

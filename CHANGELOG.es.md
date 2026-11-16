@@ -19,6 +19,8 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Los administradores ven los cambios de correo pendientes: una insignia «Cambio de correo pendiente» en la cuenta, y el enlace en «Enlaces de cuenta» se puede revocar.
 - Dashboard › Tus posiciones: «Global» o «Bróker». Con dos brókers o más, un selector muestra un activo que está en varios brókers como una sola fila, en las vistas Cartera y Periodo, sus mapas y el gráfico de rentabilidad (una línea por activo); la columna Bróker muestra los iconos de todos los brókers que lo tienen. Cantidades, valores, P&L e ingresos se suman; porcentajes, precio medio y Yield on Cost se calculan a partir de las sumas, nunca como media, y una venta conserva el coste del bróker que vendió. La elección se recuerda en cada dispositivo. Gracias a Daneltones8 ([#80](https://github.com/Librefolio/LibreFolio/issues/80)).
 - API: `POST /portfolio/report` acepta `group_by` (`broker`, por defecto, o `asset`); sus filas llevan `broker_ids`.
+- Edición de varios activos: «Quitar el icono» y «Quitar la URL» borran el icono o la URL personal de los activos seleccionados que la tienen; los demás quedan como están.
+- Tabla de activos: cada fila tiene una acción «Editar» que abre el editor del activo en el sitio, sin ir a la página de detalle.
 
 ### 🔄 Cambios
 
@@ -34,6 +36,8 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Un activo con transacciones ya no puede convertirse en un Índice desde el editor del activo: el editor indica cuántas transacciones tiene y no se guarda nada.
 - El cambio de correo espera una confirmación cuando el correo funciona: con el correo configurado y `LIBREFOLIO_PUBLIC_URL` definido, una dirección nueva en el Perfil no se usa hasta que pulses el enlace enviado a ella (válido 24 horas) con la sesión de tu cuenta iniciada. Si ya has iniciado sesión basta un clic; si no, la página te pide primero que inicies sesión y luego te devuelve allí. Tu dirección anterior recibe un aviso enseguida. Sigues con la sesión iniciada en el navegador desde el que confirmas, y tus otros dispositivos se desconectan. La página dice en cuanto se abre si tienes que iniciar sesión, si el enlace es de otra cuenta (con «Cerrar sesión e iniciarla con la cuenta correcta») o si ya no vale; la página y los correos ponen una idea por línea, con las palabras importantes en negrita. Sin correo no cambia nada: la dirección nueva se aplica al momento.
 - Dashboard › Tus posiciones: «Ver todo» ahora es una pequeña insignia, y en el teléfono los tres selectores de vista (Cartera/Periodo, Global/Bróker, tabla/mapa) tienen su propia fila bajo el título.
+- Edición de varios activos: tras guardar, la ventana queda abierta en el resumen con una marca verde «Guardado», y la selección se mantiene, para seguir trabajando con los mismos activos. El resumen muestra el nuevo icono en miniatura; los campos están en una cuadrícula, con el valor actual bajo cada campo y su botón de restablecer en la misma fila, y la ventana no tiene barra de desplazamiento interna.
+- La barra de selección de las tablas (activos, transacciones, divisas, transacciones de un bróker) ahora flota en la parte inferior de la pantalla mientras hay filas seleccionadas, y se mantiene tras guardar; Esc quita la selección cuando el foco está en la barra.
 
 ### 🐛 Corregido
 
@@ -56,6 +60,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 - En una instancia bloqueada por su proveedor de alojamiento, el administrador también ve las «Copias de seguridad ya guardadas» y puede descargarlas, no solo hacer una nueva.
 - La importación de un informe ya no muestra un mensaje de éxito cuando el cambio de los identificadores de un activo no se ha guardado.
+- Activos: el chip «n seleccionados» siempre quita toda la selección, y el menú de columnas y el cambio de ancho de las columnas actúan en las dos tablas de activos (los tuyos y los de los demás); antes una de las dos podía quedar fuera.
 
 ### ⚠️ Cambios incompatibles
 

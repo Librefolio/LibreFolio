@@ -19,6 +19,8 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Gli amministratori vedono i cambi email in attesa: un badge «Cambio email in attesa» sull'account, e il link in «Link degli account» si può revocare.
 - Dashboard › Le tue posizioni: «Globale» o «Broker». Con due broker o più, un selettore mostra un asset tenuto su più broker come una riga sola, nelle viste Portafoglio e Periodo, nelle loro mappe e nel grafico del rendimento (una linea per asset); la colonna Broker mostra le icone di tutti i broker che lo detengono. Quantità, valori, P&L e redditi sono sommati; percentuali, prezzo medio e Yield on Cost sono calcolati dalle somme, mai come media, e una vendita tiene il costo del broker che ha venduto. La scelta è ricordata su ogni dispositivo. Grazie a Daneltones8 ([#80](https://github.com/Librefolio/LibreFolio/issues/80)).
 - API: `POST /portfolio/report` accetta `group_by` (`broker`, il default, o `asset`); le sue righe portano `broker_ids`.
+- Modifica di più asset: «Rimuovi icona» e «Rimuovi URL» tolgono l'icona o l'URL personale agli asset selezionati che ce l'hanno; gli altri restano come sono.
+- Tabella Asset: ogni riga ha un'azione «Modifica» che apre l'editor dell'asset sul posto, senza andare alla pagina di dettaglio.
 
 ### 🔄 Modifiche
 
@@ -34,6 +36,8 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Un asset con transazioni non può più diventare un Indice dall'editor dell'asset: l'editor dice quante transazioni ha e non salva niente.
 - Il cambio di email aspetta la conferma quando l'email funziona: con l'email configurata e `LIBREFOLIO_PUBLIC_URL` impostato, un nuovo indirizzo nel Profilo non vale finché non clicchi il link mandato a quell'indirizzo (valido 24 ore) mentre sei dentro il tuo account. Se sei già dentro basta un clic; altrimenti la pagina ti chiede prima di accedere e poi ti riporta lì. Il vecchio indirizzo viene avvisato subito. Resti dentro nel browser da cui confermi, e gli altri dispositivi vengono disconnessi. La pagina dice appena si apre se devi accedere, se il link è di un altro account (con «Esci e accedi con l'account giusto») o se non vale più; la pagina e le email mettono un concetto per riga, con le parole importanti in grassetto. Senza email non cambia nulla: il nuovo indirizzo vale subito.
 - Dashboard › Le tue posizioni: «Vedi tutte» ora è un piccolo badge, e sul telefono i tre selettori di vista (Portafoglio/Periodo, Globale/Broker, tabella/mappa) stanno in una riga loro sotto il titolo.
+- Modifica di più asset: dopo il salvataggio la finestra resta aperta sul riepilogo con una spunta verde «Salvato», e la selezione resta, così puoi continuare a lavorare sugli stessi asset. Il riepilogo mostra la nuova icona in miniatura; i campi stanno su una griglia, col valore attuale sotto ogni campo e il suo pulsante di ripristino sulla stessa riga, e la finestra non ha una barra di scorrimento interna.
+- La barra della selezione delle tabelle (asset, transazioni, cambi, transazioni di un broker) ora fluttua in fondo allo schermo finché ci sono righe selezionate, e resta dopo un salvataggio; Esc toglie la selezione quando il fuoco è nella barra.
 
 ### 🐛 Corretto
 
@@ -56,6 +60,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 - Su un'istanza bloccata dal fornitore di hosting l'amministratore vede anche i «Backup già conservati» e può scaricarli, non solo farne uno nuovo.
 - L'importazione di un report non mostra più un messaggio di successo quando la modifica degli identificativi di un asset non è stata salvata.
+- Asset: il chip «n selezionati» toglie sempre tutta la selezione, e il menu delle colonne e il ridimensionamento delle colonne agiscono su entrambe le tabelle degli asset (i tuoi e quelli degli altri); prima una delle due poteva restare fuori.
 
 ### ⚠️ Modifiche incompatibili
 
