@@ -255,6 +255,16 @@ def test_the_settings_families_their_registries_and_the_declarations_agree():
     assert MockProvider in (plugin for _family, _code, plugin in _registered()) and MockFXProvider in (plugin for _family, _code, plugin in _registered())
 
 
+def test_every_settings_family_is_a_value_of_the_api_family():
+    """2 (project 76, G2): every family of the settings — each registry's, and ``group`` — is a value of the API's
+    ``PluginSettingFamily``, and the API names no other. Else the catalogue fails (a 500) as soon as a plugin of a missing
+    family declares a field or reads a group: an enricher was missing until G2."""
+    from backend.app.schemas.plugin_settings import PluginSettingFamily  # noqa: PLC0415 — beside the check it serves
+
+    assert {family.value for family in PluginSettingFamily} == set(FAMILY_REGISTRIES) | {"group"}
+    print_success("the API's families are the settings' families")
+
+
 # =============================================================================
 # 3. NO ALIAS IS A VARIABLE LIBREFOLIO READS ITSELF
 # =============================================================================
