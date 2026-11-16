@@ -32,6 +32,7 @@ from backend.app.schemas.risk.vocabulary import (
     RiskStressMethod,
     RiskValueStatus,
 )
+from backend.app.services.financial_math.weights import effective_number_of_positions
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.risk import acquired
 from backend.app.services.risk import base as risk_base
@@ -3122,40 +3123,10 @@ def test_worst_realization_is_not_floored_when_every_day_gained():
     assert acquired.worst_realization(returns) == pytest.approx(0.001)
 
 
-def test_effective_number_of_assets_is_the_inverse_herfindahl():
-    weights = [0.5, 0.3, 0.15, 0.05]
-    computed = acquired.effective_number_of_assets(weights)
-
-    assert computed == pytest.approx(2.73972602739726, abs=1e-12)
-    assert computed == pytest.approx(1.0 / sum(weight**2 for weight in weights), abs=1e-12)
-
-    herfindahl_points = sum((weight * 100) ** 2 for weight in weights)
-    assert computed == pytest.approx(10000.0 / herfindahl_points, abs=1e-12)
-
-
-def test_effective_number_of_assets_counts_positions_not_percentages():
-    """Equal weights must return the position count itself, in units of positions."""
-    for count in (1, 4, 10, 37):
-        weights = [1.0 / count] * count
-        assert acquired.effective_number_of_assets(weights) == pytest.approx(count, abs=1e-9)
-
-
-def test_effective_number_of_assets_keeps_cash_in_the_denominator():
-    """Weights that do not sum to one are consumed as given.
-
-    Risk weights are ``position value / net worth``, the same denominator AI
-    Export uses. Renormalizing here would make the product state two different
-    concentrations for one portfolio.
-    """
-    invested = [0.25, 0.25]
-    assert acquired.effective_number_of_assets(invested) == pytest.approx(8.0, abs=1e-9)
-
-    renormalized = [0.5, 0.5]
-    assert acquired.effective_number_of_assets(renormalized) == pytest.approx(2.0, abs=1e-9)
-
-
-def test_effective_number_of_assets_is_none_for_a_fully_liquid_scope():
-    assert acquired.effective_number_of_assets([0.0, 0.0]) is None
+def _effective(weights) -> float | None:
+    """N_eff of plain float weights, through the one home of the formula (RN-15; its own tests: test_financial_math/test_weights.py)."""
+    value = effective_number_of_positions({index: Decimal(weight) for index, weight in enumerate(weights)})
+    return None if value is None else float(value)
 
 
 def test_diversification_ratio_sees_the_correlation_that_asset_count_cannot():
@@ -3174,7 +3145,7 @@ def test_diversification_ratio_sees_the_correlation_that_asset_count_cannot():
         variance = math.fsum(weights[row] * covariance[row][column] * weights[column] for row in range(size) for column in range(size))
         portfolio_volatility = math.sqrt(variance)
 
-        assert acquired.effective_number_of_assets(weights) == pytest.approx(size, abs=1e-9)
+        assert _effective(weights) == pytest.approx(size, abs=1e-9)
         ratios.append(acquired.diversification_ratio(covariance, weights, portfolio_volatility=portfolio_volatility))
 
     assert ratios[0] == pytest.approx(math.sqrt(size), abs=1e-9)
@@ -3221,8 +3192,6 @@ def test_acquired_measures_reject_malformed_input():
         acquired.ulcer_index([0.0])
     with pytest.raises(ValueError):
         acquired.drawdown_at_risk([0.0, -0.1], confidence_level=1.0)
-    with pytest.raises(ValueError):
-        acquired.effective_number_of_assets([0.5, -0.2])
     with pytest.raises(ValueError):
         acquired.diversification_ratio([[0.04]], [0.5, 0.5], portfolio_volatility=0.2)
 
@@ -3426,7 +3395,9 @@ def test_risk_contribution_publishes_concentration_next_to_the_contributions():
 
     assert output.effective_number_of_assets is not None
     assert output.effective_number_of_assets > 0
-    assert output.effective_number_of_assets == pytest.approx(1.0 / math.fsum(weight**2 for weight in weights), abs=1e-12)
+    measured = math.fsum(weights)
+    assert output.effective_number_of_assets == pytest.approx(1.0 / math.fsum((weight / measured) ** 2 for weight in weights), abs=1e-12)
+    assert output.effective_number_of_assets <= len(weights)
     assert output.diversification_ratio is not None
     assert output.diversification_ratio > 0
     # Cauchy-Schwarz: long-only weights cannot diversify below the weighted mean
@@ -3434,15 +3405,10 @@ def test_risk_contribution_publishes_concentration_next_to_the_contributions():
     assert output.diversification_ratio >= 1.0
 
 
-def test_risk_contribution_keeps_cash_in_the_denominator_of_the_effective_count():
-    """The pair of properties that makes the two fields meaningful together.
-
-    Risk weights are ``position value / net worth``, the same denominator AI
-    Export uses for ``nav_weight_percent``. Renormalizing to the invested part
-    would make the product state two different concentrations for one portfolio,
-    so the effective count *must* move when cash enters — while the ratio, being
-    scale-invariant, must not.
-    """
+def test_risk_contribution_leaves_cash_out_of_the_effective_count():
+    """RN-15 (Q8 a, developer 16/11/2026): N_eff is measured on the priced positions alone, their weights renormalized on
+    the measured part, so cash leaves the denominator: the same holdings in the same proportions give the same N_eff,
+    with or without cash. The diversification ratio, scale-invariant, did not move before and does not now."""
     base = make_context(_contribution_returns(), mode=RiskMode.CURRENT_COMPOSITION)
     invested = {1: 0.6, 2: 0.4}
     half_cash = {asset_id: weight * 0.5 for asset_id, weight in invested.items()}
@@ -3450,59 +3416,24 @@ def test_risk_contribution_keeps_cash_in_the_denominator_of_the_effective_count(
     no_cash = RiskContributionAnalytic().compute(RiskContributionParams(), replace(base, weights=invested, cash_weight=0.0)).output
     with_cash = RiskContributionAnalytic().compute(RiskContributionParams(), replace(base, weights=half_cash, cash_weight=0.5)).output
 
-    assert no_cash.cash_weight == pytest.approx(0.0, abs=1e-12)
+    assert RiskContributionAnalytic.algorithm_version == "1.3.0"
     assert with_cash.cash_weight == pytest.approx(0.5, abs=1e-12)
-
-    # Renormalizing the cash-heavy weights to the invested part makes these equal.
-    assert with_cash.effective_number_of_assets != pytest.approx(no_cash.effective_number_of_assets, abs=1e-9)
-    assert with_cash.effective_number_of_assets > no_cash.effective_number_of_assets
-    assert no_cash.effective_number_of_assets == pytest.approx(1.0 / math.fsum(weight**2 for weight in invested.values()), abs=1e-12)
-    assert with_cash.effective_number_of_assets == pytest.approx(1.0 / math.fsum(weight**2 for weight in half_cash.values()), abs=1e-12)
-
-    # Same holdings, same correlation structure: the ratio is the one figure
-    # comparable across portfolios holding different amounts of cash.
+    assert with_cash.effective_number_of_assets == pytest.approx(no_cash.effective_number_of_assets, rel=1e-12)
+    assert no_cash.effective_number_of_assets == pytest.approx(1.0 / (0.6**2 + 0.4**2), rel=1e-12)
     assert with_cash.diversification_ratio == pytest.approx(no_cash.diversification_ratio, abs=1e-12)
-    assert no_cash.diversification_ratio >= 1.0
 
 
-def test_effective_number_of_assets_may_exceed_the_number_of_positions():
-    """The consequence of the cash convention that no range constraint can show.
-
-    ``1 / sum(w^2)`` is bounded above by the position count only when the weights
-    sum to one. Risk weights do not: cash sits in the denominator without ever
-    being a term, so a mostly-liquid portfolio reports an effective count *above*
-    its own number of holdings. The shape below is the one measured end-to-end on
-    the seeded portfolio — two positions weighing 0.2492 and 0.1591 of net worth,
-    the remaining 0.5917 in cash — which reported 11.44 against two holdings.
-
-    This is arithmetic, not a defect, and it is the price of agreeing with AI
-    Export. It is pinned here because nothing else states it: the field is
-    constrained ``gt=0`` only, so capping it at the holding count, renormalizing
-    the weights, or building a caller that assumes ``NEA <= n`` would all pass
-    every other test in this file while changing a ratified decision in silence.
-    """
+def test_the_effective_count_never_exceeds_the_positions_measured():
+    """The shape that once reported 11.44 against two holdings — 0.2492 and 0.1591 of net worth, the rest in cash —
+    now reports the count of its two priced positions, weighed on themselves: at most 2, never «above the count»."""
     weights = {1: 0.24919719587288608, 2: 0.15911534301518165}
-    cash = 1.0 - math.fsum(weights.values())
-    context = replace(
-        make_context(_contribution_returns(), mode=RiskMode.CURRENT_COMPOSITION),
-        weights=weights,
-        cash_weight=cash,
-    )
+    context = replace(make_context(_contribution_returns(), mode=RiskMode.CURRENT_COMPOSITION), weights=weights, cash_weight=1.0 - math.fsum(weights.values()))
 
     output = RiskContributionAnalytic().compute(RiskContributionParams(), context).output
 
-    assert output.effective_number_of_assets == pytest.approx(11.439431068254814, rel=1e-9)
-    assert output.effective_number_of_assets > len(weights)
-
-    # Renormalizing to the invested part is what would restore `NEA <= n`, and is
-    # exactly the change this test exists to make visible.
-    invested_total = math.fsum(weights.values())
-    renormalized = 1.0 / math.fsum((weight / invested_total) ** 2 for weight in weights.values())
-    assert renormalized == pytest.approx(1.9071719886819818, rel=1e-9)
-    assert renormalized <= len(weights)
-
-    # The ratio is unaffected: it is the figure that stays honest under cash.
-    assert output.diversification_ratio >= 1.0
+    measured = math.fsum(weights.values())
+    assert output.effective_number_of_assets == pytest.approx(1.0 / math.fsum((weight / measured) ** 2 for weight in weights.values()), rel=1e-12)
+    assert 1.0 <= output.effective_number_of_assets <= len(weights)
 
 
 def test_historical_kpi_output_survives_the_discriminated_union_round_trip():

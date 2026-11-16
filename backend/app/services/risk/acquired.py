@@ -199,32 +199,6 @@ def average_drawdown(drawdowns: Sequence[float]) -> float:
     return math.fsum(series) / (len(series) - 1)
 
 
-def effective_number_of_assets(weights: Sequence[float]) -> float | None:
-    """Inverse Herfindahl over the supplied weights: equivalent position count.
-
-    The unit is a *number of positions*, never a percentage: ``0.5, 0.3, 0.15,
-    0.05`` yields ``2.74``, meaning the portfolio behaves like roughly two and
-    three-quarter equal positions.
-
-    The weights are consumed as given. Risk weights are already
-    ``position value / net worth`` — the same denominator AI Export uses for
-    ``nav_weight_percent`` — so passing them unmodified reproduces AI Export's
-    cash semantics: cash sits in the denominator but is never a term. Any
-    renormalization here would silently make the product state two different
-    numbers for one portfolio's concentration.
-
-    Returns ``None`` when no weight carries value, which is a fully liquid
-    scope rather than a zero-concentration one.
-    """
-    values = _finite(weights, name="weights")
-    if any(value < 0 for value in values):
-        raise ValueError("negative weights are outside the first-wave contract")
-    herfindahl = math.fsum(value * value for value in values)
-    if herfindahl <= _ZERO_TOLERANCE:
-        return None
-    return 1.0 / herfindahl
-
-
 def diversification_ratio(
     covariance: Sequence[Sequence[float]],
     weights: Sequence[float],
@@ -274,7 +248,6 @@ __all__ = [
     "conditional_drawdown_at_risk",
     "diversification_ratio",
     "drawdown_at_risk",
-    "effective_number_of_assets",
     "maximum_drawdown",
     "ulcer_index",
     "worst_realization",

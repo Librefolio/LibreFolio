@@ -146,7 +146,8 @@ class RiskContributionOutput(StrictModel):
     # Concentration, acquired. These two are published together on purpose: the
     # effective count is blind to correlation, so ten equally weighted holdings score
     # ten whether they are independent or move as one. Only the ratio tells them apart.
-    # Unit of effective_number_of_assets is *positions*, never a percentage.
+    # Unit of effective_number_of_assets is *positions*, never a percentage. Since RN-15 it is measured on the priced
+    # positions alone, weighed on their own sum: cash is not in its denominator, so it never exceeds `len(items)`.
     effective_number_of_assets: Optional[FiniteFloat] = Field(None, gt=0)
     # >= 1 for long-only weights by Cauchy-Schwarz, but constrained only to gt=0 so a
     # portfolio sitting exactly at the bound cannot fail validation on a rounding.
