@@ -72,6 +72,7 @@ from typing import Literal
 from pyscipopt import Model
 
 from backend.app.services.pac_allocator.compiler import CompiledProgram
+from backend.app.services.pac_allocator.constraints.pool import derive_transfer_quanta
 from backend.app.services.pac_allocator.evaluation.evaluator import evaluate_exact_candidate
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
@@ -325,10 +326,15 @@ def _extract_candidate(model: Model, program: CompiledProgram, sequence: int) ->
     ``evaluate_exact_candidate`` must be allowed to say so loudly rather than
     have it silently repaired here.
     """
+    quanta = {access.decision_id: round(model.getVal(program.variables.quanta[access.decision_id])) for access in program.view.decisions}
+    pool = program.variables.pool
+    if pool is not None:
+        # The Rebalancer's transfers are read off the cash rule's balances (lot CR of project 67): its lanes are zero in SCIP.
+        quanta |= derive_transfer_quanta(program.scenario.transfer_lanes, {cell: round(model.getVal(balance)) for cell, balance in pool.net.items()})
     return CandidateActionVector(
         view_id=program.view.view_id,
         candidate_id=f"solver:{program.view.view_id}:{sequence}",
-        decisions=tuple(CandidateDecision(decision_id=access.decision_id, quanta=round(model.getVal(program.variables.quanta[access.decision_id]))) for access in program.view.decisions),
+        decisions=tuple(CandidateDecision(decision_id=access.decision_id, quanta=quanta[access.decision_id]) for access in program.view.decisions),
     )
 
 

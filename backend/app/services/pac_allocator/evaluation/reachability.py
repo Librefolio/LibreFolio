@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from backend.app.services.pac_allocator.evaluation.keys import entity_refs, exact_decision_id, fx_debit_key, fx_pair_key
+from backend.app.services.pac_allocator.evaluation.keys import broker_transfer_key, entity_refs, exact_decision_id, fx_debit_key, fx_pair_key
 from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex
 from backend.app.services.pac_allocator.models import (
     Checkpoint,
@@ -178,21 +178,30 @@ def fx_decision_specs(
     A pair exists where a buy route of the Broker is quoted in the destination currency and the source is one of that buy's pool
     currencies (``buy_pool_currencies``: other currencies with cash possible on the Broker and a direct pair to the quote). Two buy
     routes on the same pair share the decision.
+
+    The Rebalancer also converts into a cash cell that has a target or a minimum, with or without a purchase there (lot CR of
+    project 67): its cash rule never lets converted money travel to another Broker (``transfer_relay_groups``), so a cell's
+    money in another currency can only come from a conversion on that Broker. The sources are the cell's pool currencies, as for
+    a buy quoted in the cell's currency.
     """
     pairs: set[tuple[str, str, str]] = set()
+    destinations: list[tuple[str, str]] = []
     for route in scenario.order_routes:
         if route.side != "buy":
             continue
+        destinations.append((route.broker_id, index.assets[route.asset_id].quote.price.currency))
+    if scenario.product == "rebalancer":
+        destinations += [(entry.broker_id, entry.currency) for entry in scenario.cash_entries if entry.weight > _EXACT_ZERO or entry.minimum is not None]
+    for broker_id, quote_currency in destinations:
         check_budget(checkpoint)
-        quote_currency = index.assets[route.asset_id].quote.price.currency
         for currency in buy_pool_currencies(
             scenario,
             index,
-            broker_id=route.broker_id,
+            broker_id=broker_id,
             quote_currency=quote_currency,
             checkpoint=checkpoint,
         ):
-            pairs.add((route.broker_id, currency, quote_currency))
+            pairs.add((broker_id, currency, quote_currency))
     specs: list[FxDecisionSpec] = []
     for broker_id, source_currency, destination_currency in sorted(pairs):
         key = fx_debit_key(broker_id, source_currency, destination_currency)
@@ -237,3 +246,51 @@ def fx_relay_groups(specs: tuple[FxDecisionSpec, ...]) -> tuple[FxRelayGroup, ..
         receiving.setdefault((spec.broker_id, spec.destination_currency), []).append(spec)
         giving.setdefault((spec.broker_id, spec.source_currency), []).append(spec)
     return tuple(FxRelayGroup(key=f"{len(broker_id)}:{broker_id}:{currency}", broker_id=broker_id, currency=currency, receiving=tuple(receiving[(broker_id, currency)]), giving=tuple(giving[(broker_id, currency)])) for broker_id, currency in sorted(receiving.keys() & giving.keys()))
+
+
+@dataclass(frozen=True, slots=True)
+class TransferRelayGroup:
+    """A Rebalancer cash cell (Broker × currency) that transfer lanes reach: the cash rule of lot CR, project 67.
+
+    ``receiving`` are the decisions that bring money into the cell: the transfers in from other Brokers and the conversions into
+    the currency on this Broker. ``giving`` are the transfers out. A plan uses one side at most:
+    - R1, a cell that receives a conversion sends nothing to another Broker;
+    - a cell does not both send and receive in one currency (the model keeps one signed balance per cell);
+    - so a cell that sends receives nothing, and with its final balance never negative it sends only its own money (R2:
+      converted money never travels).
+
+    Every plan that keeps it can be carried out in a fixed order: transfers, conversions, purchases (specification §16).
+    ``key`` is ``len(broker):broker:CURRENCY``, as ``FxRelayGroup``'s.
+    """
+
+    key: str
+    broker_id: str
+    currency: str
+    receiving: tuple[str, ...]
+    giving: tuple[str, ...]
+
+
+def transfer_relay_groups(scenario: ExactPlannerScenario, specs: tuple[FxDecisionSpec, ...]) -> tuple[TransferRelayGroup, ...]:
+    """The cash rule's groups, one per cell a lane leaves, in canonical (Broker, currency) order. The Rebalancer only: a PAC
+    scenario has no cash rule, even with a lane a test sets by hand (D4 a)."""
+    if scenario.product != "rebalancer":
+        return ()
+    receiving: dict[tuple[str, str], list[str]] = {}
+    giving: dict[tuple[str, str], list[str]] = {}
+    for lane in scenario.transfer_lanes:
+        decision_id = exact_decision_id("broker_transfer", broker_transfer_key(lane.source_broker_id, lane.destination_broker_id, lane.currency))
+        giving.setdefault((lane.source_broker_id, lane.currency), []).append(decision_id)
+        receiving.setdefault((lane.destination_broker_id, lane.currency), []).append(decision_id)
+    for spec in specs:
+        if (spec.broker_id, spec.destination_currency) in giving:
+            receiving.setdefault((spec.broker_id, spec.destination_currency), []).append(spec.decision_id)
+    return tuple(
+        TransferRelayGroup(
+            key=f"{len(broker_id)}:{broker_id}:{currency}",
+            broker_id=broker_id,
+            currency=currency,
+            receiving=tuple(sorted(receiving.get((broker_id, currency), ()))),
+            giving=tuple(sorted(giving[(broker_id, currency)])),
+        )
+        for broker_id, currency in sorted(giving)
+    )

@@ -61,6 +61,7 @@ from backend.app.services.pac_allocator.constraints import (
     build_scenario_facts,
     compile_hard_constraints,
 )
+from backend.app.services.pac_allocator.constraints.pool import create_pool_variables
 from backend.app.services.pac_allocator.evaluation.evaluator import evaluate_exact_candidate
 from backend.app.services.pac_allocator.evaluation.limits import limit_reference, resolve_scenario_limits
 from backend.app.services.pac_allocator.models import (
@@ -160,7 +161,10 @@ def _probe_objective_inputs(scenario: ExactPlannerScenario, view: ExactPolicyVie
 
 
 def _create_variables(model: Model, scenario: ExactPlannerScenario, view: ExactPolicyView) -> CompiledVariables:
-    quanta = {access.decision_id: model.addVar(vtype="I", lb=access.lower_quanta, ub=access.upper_quanta, name=access.decision_id) for access in view.decisions}
+    # The Rebalancer's lanes are held at zero in SCIP: its transfers are the cash rule's balances, and the candidate reads them
+    # off the balances (``constraints.pool``, lot CR of project 67). The view's box does not change.
+    held = scenario.product == "rebalancer"
+    quanta = {access.decision_id: model.addVar(vtype="I", lb=access.lower_quanta, ub=0 if held and access.family == "broker_transfer" else access.upper_quanta, name=access.decision_id) for access in view.decisions}
     buy_active = {}
     buy_fee = {}
     for route in scenario.order_routes:
@@ -171,10 +175,10 @@ def _create_variables(model: Model, scenario: ExactPlannerScenario, view: ExactP
     funding_active = {route.route_id: model.addVar(vtype="B", name=f"active_funding:{route.route_id}") for route in scenario.funding_routes}
     if scenario.product != "rebalancer":
         return CompiledVariables(quanta=quanta, buy_active=buy_active, funding_active=funding_active, buy_fee=buy_fee)
-    # The Rebalancer counts its operations (B2 of project 67): one activity binary per conversion and per transfer.
+    # The Rebalancer counts its operations (B2 of project 67): one activity binary per conversion; its transfers are counted
+    # off the cash rule's balances (lot CR).
     fx_active = {access.decision_id: model.addVar(vtype="B", name=f"active_fx:{access.decision_id}") for access in view.decisions if access.family == "fx_debit"}
-    transfer_active = {access.decision_id: model.addVar(vtype="B", name=f"active_transfer:{access.decision_id}") for access in view.decisions if access.family == "broker_transfer"}
-    return CompiledVariables(quanta=quanta, buy_active=buy_active, funding_active=funding_active, buy_fee=buy_fee, fx_active=fx_active, transfer_active=transfer_active)
+    return CompiledVariables(quanta=quanta, buy_active=buy_active, funding_active=funding_active, buy_fee=buy_fee, fx_active=fx_active, pool=create_pool_variables(model, scenario, view))
 
 
 def compile_policy_program(scenario: ExactPlannerScenario, view: ExactPolicyView) -> CompiledProgram:

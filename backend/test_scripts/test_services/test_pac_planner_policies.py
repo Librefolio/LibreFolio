@@ -1520,7 +1520,8 @@ def test_rounding_at_an_exact_multiple_posts_the_true_unit_under_the_score() -> 
 
 
 def test_rebalancer_compiled_variables_count_conversions_and_transfers() -> None:
-    """The Rebalancer gets one activity binary per conversion and per transfer, for ``operation_count``; the PAC none."""
+    """The Rebalancer gets one activity binary per conversion, for ``operation_count``, and its transfers are the cash rule's
+    balances, one per cell the lanes reach, each with its own activity binary (lot CR); the PAC has neither."""
     base = cases.t6(with_usd=True)
     broker_y = replace(base.brokers[0], broker_id="broker:y", name="broker:y")
     lane = pac_models.ExactTransferLane(source_broker_id=cases.BROKER, destination_broker_id="broker:y", currency="EUR")
@@ -1528,8 +1529,8 @@ def test_rebalancer_compiled_variables_count_conversions_and_transfers() -> None
     view = build_exact_policy_view(scenario)
     program = _fresh_program(scenario, view)
     assert set(program.variables.fx_active) == {item.decision_id for item in view.decisions if item.family == "fx_debit"} != set()
-    assert set(program.variables.transfer_active) == {item.decision_id for item in view.decisions if item.family == "broker_transfer"} != set()
+    assert set(program.variables.pool.active) == set(program.variables.pool.net) == {(cases.BROKER, "EUR"), ("broker:y", "EUR")}
 
     pac = _two_asset_pac_scenario()
     pac_program = _fresh_program(pac, build_exact_policy_view(pac))
-    assert (pac_program.variables.fx_active, pac_program.variables.transfer_active) == ({}, {})
+    assert (pac_program.variables.fx_active, pac_program.variables.pool) == ({}, None)

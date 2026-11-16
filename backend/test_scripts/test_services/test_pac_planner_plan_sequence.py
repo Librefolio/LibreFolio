@@ -171,10 +171,12 @@ def test_the_engine_numbers_the_g5_plan_in_an_executable_order() -> None:
     solution = result.primary_solution
     initial, final, flows = _published_flows(request, solution)
     assert_executable(initial, flows, final)
-    # The shape the fix is about: the EUR transfer, the exchange on Broker 2, then the USD transfer it pays for.
-    steps = sorted([(row.sequence, "transfer", row.amount.currency) for row in solution.transfers] + [(row.sequence, "conversion", row.destination_credit.currency) for row in solution.conversions if row.sequence is not None])
-    assert [kind for _, kind, _ in steps] == ["transfer", "conversion", "transfer"]
-    assert [currency for _, _, currency in steps] == ["EUR", "USD", "USD"]
+    # The cash rule (lot CR, specification §16.2): no transfer leaves a cell that a conversion or a transfer credits, so
+    # converted money never travels. The plan itself depends on the solver's clock (not proven at 3.5 s): the rule does not.
+    # Before the rule this plan was: EUR transfer, exchange, then the USD transfer it paid for.
+    credited = {(row.destination_broker_id, row.amount.currency) for row in solution.transfers} | {(row.broker_id, row.destination_credit.currency) for row in solution.conversions}
+    assert solution.transfers, "PREMISE: on G5 cash has to travel"
+    assert all((row.source_broker_id, row.amount.currency) not in credited for row in solution.transfers)
 
 
 def test_the_engine_numbers_the_g5_plan_executably_when_both_brokers_convert_by_themselves() -> None:

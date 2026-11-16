@@ -143,9 +143,10 @@ def compile_hard_constraints(model: Model, scenario: ExactPlannerScenario, facts
 
 
 def add_move_activity_constraints(model: Model, variables: CompiledVariables) -> None:
-    """Rebalancer only (B2 of project 67): a conversion or a transfer that moves money switches its activity binary on, for
-    ``operation_count``. ``decision <= upper * active``, the upper read off the variable (P5); minimizing the count keeps a
-    binary off when its decision is zero. The PAC has no such binary, so it gets no row."""
-    for decision_id, active in (*variables.fx_active.items(), *variables.transfer_active.items()):
+    """Rebalancer only (B2 of project 67): a conversion that moves money switches its activity binary on, for
+    ``operation_count`` and the cash rule's R1 (``constraints.pool``, lot CR, where a transfer is a cell balance).
+    ``decision <= upper * active``, the upper read off the variable (P5); minimizing the count keeps a binary off when its
+    decision is zero. The PAC has no such binary, so it gets no row."""
+    for decision_id, active in variables.fx_active.items():
         decision = variables.quanta[decision_id]
         model.addCons(decision <= decision.getUbOriginal() * active, name=f"move_active:{decision_id}")

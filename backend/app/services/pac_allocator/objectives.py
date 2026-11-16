@@ -221,8 +221,12 @@ def build_canonical_tie_stages(variables: CompiledVariables, view: ExactPolicyVi
     canonical tie-break vector confirmed to be the view's only
     ``TieBreakRef`` (ordinal 1). Read directly from the view rather than
     re-derived, for maximum robustness/consistency with evaluator.py.
+
+    A Rebalancer lane is held at zero in SCIP (lot CR of project 67): its stage minimizes what the lane's source cell sends,
+    which is the lane's amount when two Brokers share the currency, and otherwise never less than it.
     """
-    return [ObjectiveStage(code=f"tie:{decision_id}", expression=variables.quanta[decision_id], integral=True) for decision_id in view.tie_breaks[0].decision_ids]
+    sent_by_lane = variables.pool.sent_by_lane if variables.pool is not None else {}
+    return [ObjectiveStage(code=f"tie:{decision_id}", expression=sent_by_lane.get(decision_id, variables.quanta[decision_id]), integral=True) for decision_id in view.tie_breaks[0].decision_ids]
 
 
 @dataclass(frozen=True, slots=True)
@@ -273,9 +277,16 @@ def _rebalancer_parts(model: Model, scenario: ExactPlannerScenario, facts: Scena
 
 
 def build_operation_count_stage(scenario: ExactPlannerScenario, variables: CompiledVariables) -> ObjectiveStage:
-    """``operation_count`` (specifica §6.4): orders, deposits, conversions and transfers, each through its activity binary."""
-    binaries = (*variables.buy_active.values(), *variables.funding_active.values(), *variables.fx_active.values(), *variables.transfer_active.values())
-    return ObjectiveStage(code="operation_count", expression=sum(binaries, 0.0), integral=True, tie_break=True)
+    """``operation_count`` (specifica §6.4): orders, deposits, conversions and transfers, each through its activity binary.
+
+    The transfers come from the cash rule's balances (lot CR of project 67): per currency, the cells that move less one, the
+    number of transfers ``pool.derive_transfer_quanta`` makes from them (one when two Brokers share the currency).
+    """
+    binaries = (*variables.buy_active.values(), *variables.funding_active.values(), *variables.fx_active.values())
+    expression = sum(binaries, 0.0)
+    if variables.pool is not None:
+        expression = expression + sum(variables.pool.active.values(), 0.0) - sum(variables.pool.moving.values(), 0.0)
+    return ObjectiveStage(code="operation_count", expression=expression, integral=True, tie_break=True)
 
 
 def _over(wealth: Fraction) -> Fraction:

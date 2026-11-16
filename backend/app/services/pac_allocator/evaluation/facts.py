@@ -10,7 +10,7 @@ from backend.app.services.pac_allocator.evaluation.economics import EconomicStat
 from backend.app.services.pac_allocator.evaluation.errors import ExactPolicyContractError
 from backend.app.services.pac_allocator.evaluation.keys import asset_broker_key, exact_decision_id, is_quantum_multiple
 from backend.app.services.pac_allocator.evaluation.limits import limit_reference, resolve_scenario_limits
-from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs, fx_relay_groups
+from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs, fx_relay_groups, transfer_relay_groups
 from backend.app.services.pac_allocator.evaluation.references import ledger_keys
 from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex, fx_rate, order_prices, source_broker, valuation_rate_of
 from backend.app.services.pac_allocator.ledger import (
@@ -218,6 +218,30 @@ def _fx_relay_constraint_facts(
         check_budget(checkpoint)
         sides = ExactRatio(sum(1 for side in (group.receiving, group.giving) if any(spec.decision_id in active for spec in side)))
         facts[_constraint_id("FX_NO_RELAY", group.key)] = _ConstraintFact(value=sides, lower_bound=_EXACT_ZERO, upper_bound=ExactRatio(1), satisfied=sides <= ExactRatio(1))
+    return facts
+
+
+def _transfer_relay_constraint_facts(
+    *,
+    scenario: ExactPlannerScenario,
+    index: ScenarioIndex,
+    quanta: Mapping[str, int],
+    checkpoint: Checkpoint | None,
+) -> dict[str, _ConstraintFact]:
+    """The Rebalancer's cash rule (lot CR of project 67): in one currency, a Broker that receives a conversion or a transfer
+    sends no transfer (``TRANSFER_NO_RELAY``, ``reachability.TransferRelayGroup``).
+
+    The fact counts the sides in use, 0 to 2, as ``FX_NO_RELAY``'s. A plan that breaks it may still end with every balance
+    positive, but cash goes round: on G5, Broker 1 changed more euros than it held and sent the dollars away, Broker 2 changed
+    them back and returned the euros, and no order of the steps could pay it.
+    """
+    facts: dict[str, _ConstraintFact] = {}
+    if scenario.product != "rebalancer":
+        return facts
+    for group in transfer_relay_groups(scenario, fx_decision_specs(scenario, index, checkpoint)):
+        check_budget(checkpoint)
+        sides = ExactRatio(sum(1 for side in (group.receiving, group.giving) if any(quanta[decision_id] > 0 for decision_id in side)))
+        facts[_constraint_id("TRANSFER_NO_RELAY", group.key)] = _ConstraintFact(value=sides, lower_bound=_EXACT_ZERO, upper_bound=ExactRatio(1), satisfied=sides <= ExactRatio(1))
     return facts
 
 
@@ -526,6 +550,7 @@ def constraint_facts(
         )
     )
     facts.update(_fx_relay_constraint_facts(scenario=scenario, index=index, state=state, checkpoint=checkpoint))
+    facts.update(_transfer_relay_constraint_facts(scenario=scenario, index=index, quanta=quanta, checkpoint=checkpoint))
     facts.update(_limit_constraint_facts(scenario=scenario, index=index, state=state, checkpoint=checkpoint))
     facts.update(
         _order_constraint_facts(
@@ -572,11 +597,26 @@ def rebalancer_score(
 def _operation_count(view: ExactPolicyView, quanta: Mapping[str, int], state: EconomicState) -> ExactRatio:
     """The first tie-break of the Rebalancer (specifica §6.4): every operation of the plan, each counted once.
 
-    Orders and deposits by their rows (the replay posts only nonzero ones); conversions and transfers between Brokers by their
-    decisions, since a transfer has no row of its own and a conversion row can exist at zero.
+    Orders and deposits by their rows (the replay posts only nonzero ones); conversions by their decisions, since a conversion
+    row can exist at zero. Transfers by the cash rule's balances (lot CR of project 67, specification §16.3): per currency, the
+    Broker cells whose transfers do not cancel out, less one. It is the model's count (``objectives.build_operation_count_stage``)
+    and, with up to three Brokers, the number of transfers the plan lists; from four Brokers, when two groups of cells balance
+    each other exactly, the plan lists one transfer less (§16.9 n. 6). Counted the same way on both sides, the stage's bounds
+    never contradict the plan's exact value.
     """
-    moves = sum(1 for item in view.decisions if item.family in {"fx_debit", "broker_transfer"} and quanta[item.decision_id] > 0)
-    return ExactRatio(len(state.orders) + len(state.funding_transfers) + moves)
+    conversions = sum(1 for item in view.decisions if item.family == "fx_debit" and quanta[item.decision_id] > 0)
+    nets: dict[tuple[str, str], int] = defaultdict(int)
+    for item in view.decisions:
+        if item.family != "broker_transfer" or quanta[item.decision_id] == 0:
+            continue
+        refs = {ref.kind: ref.entity_id for ref in item.entity_refs}
+        nets[(refs["source_broker"], refs["currency"])] -= quanta[item.decision_id]
+        nets[(refs["destination_broker"], refs["currency"])] += quanta[item.decision_id]
+    moving: dict[str, int] = defaultdict(int)
+    for (_broker, currency), value in nets.items():
+        moving[currency] += value != 0
+    transfers = sum(max(count - 1, 0) for count in moving.values())
+    return ExactRatio(len(state.orders) + len(state.funding_transfers) + conversions + transfers)
 
 
 def objective_value_map(

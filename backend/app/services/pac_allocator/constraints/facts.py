@@ -18,6 +18,8 @@ from backend.app.services.pac_allocator.numeric import ExactRatio
 if TYPE_CHECKING:  # pragma: no cover - typing only, avoids a hard pyscipopt import for readers
     from pyscipopt import Expr, Variable
 
+    from backend.app.services.pac_allocator.constraints.pool import PoolVariables
+
     LinearTerm = float | Expr
 
 
@@ -145,10 +147,11 @@ class CompiledVariables:
     buy_active: dict[str, Variable]  # buy order_route_id -> binary var
     funding_active: dict[str, Variable]  # funding route_id -> binary var
     buy_fee: dict[str, Variable]  # buy order_route_id -> continuous fee var (quote currency), every buy route
-    # The Rebalancer only (B2 of project 67): one activity binary per conversion and per transfer, for ``operation_count``.
-    # The PAC has none, so its model stays the one of A3.
+    # The Rebalancer only (B2 of project 67): one activity binary per conversion, for ``operation_count`` and R1. Its transfers
+    # are the cash rule's balances (``pool``, lot CR): one per cell, the lanes held at zero. The PAC has neither, so its model
+    # stays the one of A3; a lane a PAC test sets by hand stays a plain decision.
     fx_active: dict[str, Variable] = field(default_factory=dict)  # fx decision_id -> binary var
-    transfer_active: dict[str, Variable] = field(default_factory=dict)  # transfer decision_id -> binary var
+    pool: PoolVariables | None = None
 
 
 def _minimum_value(route: ExactOrderRoute, field: str) -> float:

@@ -1,0 +1,346 @@
+"""The Rebalancer's cash rule: every plan it publishes can be carried out (lot CR of project 67).
+
+Found on the G5 browser scenario after lot S1 (journal ``67_rebalancer/notes/regola-cassa-eseguibilita.md``): the model
+checked only the final balances, and with free transfers and no spread a plan could send cash round between two Brokers, two
+opposite exchanges and two transfers, at no cost. No order of the steps can pay such a plan, and the planner refused it
+(``PlanNotExecutableError``): on G5, 4 random seeds out of 11 at 30 s.
+
+The rule, agreed with the developer on 16/11 (specification §16):
+- R1: a cell (Broker × currency) that receives a conversion sends nothing to another Broker;
+- R2: money travels only in the currency it already has: a cell sends at most its original money (its cash and its
+  deposits), never converted money.
+
+In the model each cell has one signed balance of what it receives from the other Brokers, the lanes' decisions are held at
+zero, and the transfers are derived from the balances when the plan is read. The exact replay checks the same rule as
+``TRANSFER_NO_RELAY``: in one currency, a Broker that receives (a conversion or a transfer) sends no transfer. With the final
+balances never negative that is R1 and R2 together: a cell that sends receives nothing, so what it sends is its own money.
+
+The PAC has no lanes (a test may set one by hand), and its model and refs do not move: the rule is the Rebalancer's.
+"""
+
+from __future__ import annotations
+
+import json
+from dataclasses import replace
+from pathlib import Path
+
+from backend.app.schemas.pac_allocator.preview import REBALANCER_TOOL_INPUT_ADAPTER
+from backend.app.services.pac_allocator import models as pac_models
+from backend.app.services.pac_allocator.compiler import compile_policy_program
+from backend.app.services.pac_allocator.evaluation.bounds import transfer_decision_id
+from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
+from backend.app.services.pac_allocator.models import CandidateActionVector, CandidateDecision, ExactPlannerScenario, ExactPolicyView
+from backend.app.services.pac_allocator.normalize import normalize_rebalancer_plan
+from backend.app.services.pac_allocator.solver import solve_policy_program
+from backend.test_scripts.test_services import _reb_small_cases as cases
+from backend.test_scripts.test_services import test_pac_planner_solver as solver_tests
+from backend.test_scripts.test_services.test_pac_planner_evaluator import _transfer_lane_scenario, _with_lane
+
+R = cases.R
+G5_REQUEST = Path(__file__).resolve().parents[1] / "fixtures" / "pac_allocator" / "rebalancer_plan_request.g5-browser.2-0-0.json"
+FX_1_EUR_USD = "fx:8:broker:1:EUR:USD"
+FX_1_USD_EUR = "fx:8:broker:1:USD:EUR"
+FX_2_USD_EUR = "fx:8:broker:2:USD:EUR"
+LANE_12_EUR = "transfer:8:broker:18:broker:2:EUR"
+LANE_12_USD = "transfer:8:broker:18:broker:2:USD"
+LANE_21_EUR = "transfer:8:broker:28:broker:1:EUR"
+LANE_21_USD = "transfer:8:broker:28:broker:1:USD"
+
+
+def _g5(*, one_route: bool = False) -> ExactPlannerScenario:
+    """The G5 scenario; ``one_route`` keeps only Broker 2's purchases, so Broker 1 holds nothing but its two cash targets."""
+    request = json.loads(G5_REQUEST.read_text())
+    if one_route:
+        request["order_routes"] = [route for route in request["order_routes"] if route["broker_id"] == "broker:2"]
+    outcome = normalize_rebalancer_plan(REBALANCER_TOOL_INPUT_ADAPTER.validate_python(request))
+    assert outcome.ready, [issue.code for issue in outcome.issues]
+    return outcome.normalized
+
+
+def _candidate(view: ExactPolicyView, quanta: dict[str, int]) -> CandidateActionVector:
+    unknown = set(quanta) - {access.decision_id for access in view.decisions}
+    assert not unknown, unknown
+    return CandidateActionVector(view_id=view.view_id, candidate_id="candidate:cash-rule", decisions=tuple(CandidateDecision(decision_id=access.decision_id, quanta=quanta.get(access.decision_id, 0)) for access in view.decisions))
+
+
+def _replay(scenario: ExactPlannerScenario, quanta: dict[str, int]):
+    view = build_exact_policy_view(scenario)
+    return evaluate_exact_candidate(scenario, view, _candidate(view, quanta))
+
+
+# ---------------------------------------------------------------------------
+# The exact replay: TRANSFER_NO_RELAY
+# ---------------------------------------------------------------------------
+
+
+def test_the_g5_cash_cycle_no_order_can_pay_is_refused() -> None:
+    """The cycle of the refused plan of seed 1 (journal ``67-S1/refused-new-seed1-30s.json``), its exchanges and transfers
+    without its purchases. Broker 1 changes 59 374 € holding 17 350 € and sends the dollars away; Broker 2 changes them back and
+    returns the euros. The final balances are all positive, so the replay accepted it; no order of the steps can pay it."""
+    evaluation = _replay(
+        _g5(),
+        {
+            FX_1_EUR_USD: 5_937_426,
+            FX_2_USD_EUR: 4_490_246,
+            LANE_12_EUR: 750,
+            LANE_12_USD: 6_652_618,
+            LANE_21_EUR: 4_829_246,
+            LANE_21_USD: 1_166_270,
+        },
+    )
+    assert all(row.final_spendable >= 0 for row in evaluation.ledgers)
+    assert evaluation.feasible is False
+    assert "TRANSFER_NO_RELAY" in evaluation.conflict_codes
+
+
+def test_a_cell_that_sends_and_receives_the_same_currency_is_refused() -> None:
+    """100 € from Broker 1 to Broker 2 and 100 € back: each EUR cell both sends and receives."""
+    evaluation = _replay(_g5(), {LANE_12_EUR: 10_000, LANE_21_EUR: 10_000})
+    assert evaluation.feasible is False
+    assert set(evaluation.conflict_codes) == {"TRANSFER_NO_RELAY"}
+
+
+def test_a_cell_that_receives_a_conversion_sends_nothing() -> None:
+    """R1: Broker 1 changes 1 000 € into dollars and sends 500 $ to Broker 2. It holds 5 344.53 $ of its own, so R2 alone
+    would allow the transfer: the dollar cell receives a conversion, and R1 forbids it to send."""
+    evaluation = _replay(_g5(), {FX_1_EUR_USD: 100_000, LANE_12_USD: 50_000})
+    assert evaluation.feasible is False
+    assert set(evaluation.conflict_codes) == {"TRANSFER_NO_RELAY"}
+
+
+def test_original_money_travels_and_is_changed_where_it_is_spent() -> None:
+    """What the rule allows: Broker 2 sends 1 000 € of its own to Broker 1, which changes them into dollars. Broker 1's EUR cell
+    receives a transfer and gives a conversion: a conversion out of a cell is not a transfer, so the cell sends nothing."""
+    evaluation = _replay(_g5(), {LANE_21_EUR: 100_000, FX_1_EUR_USD: 100_000})
+    assert evaluation.feasible is True, evaluation.conflict_codes
+    facts = [item for item in evaluation.constraints if item.ref_id.startswith("constraint:transfer_no_relay:")]
+    assert facts and all(item.satisfied for item in facts)
+
+
+def test_the_pac_has_no_cash_rule_even_with_a_lane_set_by_hand() -> None:
+    """The PAC's refs do not move: a PAC scenario with a lane (D4 a) gets no ``TRANSFER_NO_RELAY``."""
+    scenario = _with_lane(_transfer_lane_scenario(), "broker:a", "broker:b")
+    view = build_exact_policy_view(scenario)
+    assert not [ref for ref in view.constraints if ref.code == "TRANSFER_NO_RELAY"]
+
+
+# ---------------------------------------------------------------------------
+# The model: one signed balance per cell
+# ---------------------------------------------------------------------------
+
+
+def test_the_rebalancer_model_moves_cash_by_one_signed_balance_per_cell() -> None:
+    """G5: one integer balance per Broker × currency, each bounded below by the cell's own money (R2, the tightest bound,
+    which R1's rows read), one balance row per currency, the lanes held at zero in SCIP, and one R1 row per conversion."""
+    scenario = _g5()
+    program = compile_policy_program(scenario, build_exact_policy_view(scenario))
+    variables = {var.name: var for var in program.model.getVars()}
+    rows = {cons.name for cons in program.model.getConss()}
+    nets = {name: (var.vtype(), var.getLbOriginal()) for name, var in variables.items() if name.startswith("pool_net:")}
+    assert nets == {
+        "pool_net:broker:1:EUR": ("INTEGER", -1_735_000),
+        "pool_net:broker:1:USD": ("INTEGER", -534_453),
+        "pool_net:broker:2:EUR": ("INTEGER", -820_000),
+        "pool_net:broker:2:USD": ("INTEGER", 0),
+    }
+    assert {name for name in rows if name.startswith("pool_balance:")} == {"pool_balance:EUR", "pool_balance:USD"}
+    for lane in scenario.transfer_lanes:
+        assert variables[transfer_decision_id(lane)].getUbOriginal() == 0
+    assert not [name for name in variables if name.startswith("active_transfer:")]
+    fx = [access.decision_id for access in program.view.decisions if access.family == "fx_debit"]
+    assert {name for name in rows if name.startswith("own_first:")} == {f"own_first:{decision_id}" for decision_id in fx}
+
+
+def test_the_pac_model_with_a_lane_set_by_hand_keeps_its_transfer_decision() -> None:
+    """The PAC's model does not move: its lane is a decision SCIP can set, and no balance variable appears."""
+    scenario = _with_lane(_transfer_lane_scenario(), "broker:a", "broker:b")
+    program = compile_policy_program(scenario, build_exact_policy_view(scenario))
+    variables = {var.name: var for var in program.model.getVars()}
+    assert variables[transfer_decision_id(scenario.transfer_lanes[0])].getUbOriginal() > 0
+    assert not [name for name in variables if name.startswith("pool_")]
+
+
+def test_a_cash_target_alone_gets_its_conversions() -> None:
+    """§7 n. 3 of the note: G5 with only Broker 2's purchases. Broker 1 buys nothing but holds a target in euros and one in
+    dollars; with the rule, its dollars can come only from a conversion on Broker 1 itself (converted money never travels),
+    so the scenario needs that decision. Without it, the plan is 41 € worse (816.96 € against 775.82 €)."""
+    scenario = _g5(one_route=True)
+    fx = {access.decision_id for access in build_exact_policy_view(scenario).decisions if access.family == "fx_debit"}
+    assert {FX_1_EUR_USD, FX_1_USD_EUR} <= fx
+
+
+# ---------------------------------------------------------------------------
+# The transfers of a plan, derived from the balances
+# ---------------------------------------------------------------------------
+
+
+def _lanes(brokers: tuple[str, ...], currency: str = "EUR") -> tuple[pac_models.ExactTransferLane, ...]:
+    return tuple(pac_models.ExactTransferLane(source_broker_id=source, destination_broker_id=destination, currency=currency) for source in brokers for destination in brokers if source != destination)
+
+
+def test_transfers_are_derived_from_the_balances_by_a_fixed_rule() -> None:
+    """Senders and receivers in Broker order, the first sender serving the first receiver: a sends 3 to c, b sends 2 to c and
+    3 to d. Every other lane is zero."""
+    from backend.app.services.pac_allocator.constraints.pool import derive_transfer_quanta  # noqa: PLC0415 - the module comes with lot CR
+
+    lanes = _lanes(("a", "b", "c", "d"))
+    quanta = derive_transfer_quanta(lanes, {("a", "EUR"): -3, ("b", "EUR"): -5, ("c", "EUR"): 5, ("d", "EUR"): 3})
+    moved = {decision_id: value for decision_id, value in quanta.items() if value}
+    by_lane = {transfer_decision_id(lane): (lane.source_broker_id, lane.destination_broker_id) for lane in lanes}
+    assert {by_lane[decision_id]: value for decision_id, value in moved.items()} == {("a", "c"): 3, ("b", "c"): 2, ("b", "d"): 3}
+    assert set(quanta) == set(by_lane)
+
+
+def _t4_on_two_brokers() -> ExactPlannerScenario:
+    """T4 (cash 200 € on ``broker:x``, the best plan buys 195 € of B for a 5 € fee) with every purchase on ``broker:y``: the
+    plan has to move the cash first."""
+    base = cases.t4()
+    broker_y = replace(base.brokers[0], broker_id="broker:y", name="broker:y")
+    return replace(
+        base,
+        brokers=(base.brokers[0], broker_y),
+        order_routes=tuple(replace(route, broker_id="broker:y") for route in base.order_routes),
+        transfer_lanes=_lanes((cases.BROKER, "broker:y")),
+    )
+
+
+def test_the_solver_reads_the_transfers_off_the_balances() -> None:
+    """T4 on two Brokers: SCIP's plan moves the 200 € from x to y through the balances, the candidate carries the transfer on
+    its lane, the replay accepts it, and the plan counts two operations (the transfer and the purchase)."""
+    scenario = _t4_on_two_brokers()
+    view = build_exact_policy_view(scenario)
+    result = solve_policy_program(compile_policy_program(scenario, view), time_budget_seconds=10)
+    quanta = {item.decision_id: item.quanta for item in result.candidate.decisions}
+    lane_xy, lane_yx = (transfer_decision_id(lane) for lane in scenario.transfer_lanes)
+    assert (quanta[lane_xy], quanta[lane_yx]) == (20_000, 0)
+    assert quanta[cases.buy_decision("asset:b")] == 195
+    evaluation = evaluate_exact_candidate(scenario, view, result.candidate)
+    assert evaluation.feasible is True, evaluation.conflict_codes
+    count = next(item.value for item in evaluation.objectives if item.ref_id == next(ref.ref_id for ref in view.objectives if ref.code == "operation_count"))
+    assert count == 2
+    assert result.anomaly is None
+
+
+def _operation_count(scenario: ExactPlannerScenario, quanta: dict[str, int]) -> int:
+    view = build_exact_policy_view(scenario)
+    evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, quanta))
+    assert evaluation.feasible is True, evaluation.conflict_codes
+    (ref_id,) = [ref.ref_id for ref in view.objectives if ref.code == "operation_count"]
+    return next(item.value for item in evaluation.objectives if item.ref_id == ref_id)
+
+
+def test_the_replay_counts_transfers_from_the_balances_as_the_model_does() -> None:
+    """Specification §16.3 and §16.9 n. 6: per currency, the cells that move less one, on both sides. T4 on four Brokers, with
+    200 € on x and 200 € on z: x sends 100 € to y and z sends 50 € to w. Two pairs balance each other exactly, so the plan lists
+    2 transfers and the count is 3. Counted the same way as the model, the stage's bounds never contradict the plan's exact value
+    (``solver._flag_contradicted_bounds`` checks ``operation_count``). With one sender, two receivers it is exact: 2."""
+    base = cases.t4()
+    brokers = (cases.BROKER, "broker:y", "broker:z", "broker:w")
+    cash_z = replace(base.existing_cash[0], cash_id="cash:z:eur", broker_id="broker:z")
+    scenario = replace(
+        base,
+        brokers=tuple(sorted((replace(base.brokers[0], broker_id=broker, name=broker) for broker in brokers), key=lambda item: item.broker_id)),
+        existing_cash=tuple(sorted((*base.existing_cash, cash_z), key=lambda item: item.cash_id)),
+        transfer_lanes=_lanes(tuple(sorted(brokers))),
+    )
+    lane = {(item.source_broker_id, item.destination_broker_id): transfer_decision_id(item) for item in scenario.transfer_lanes}
+    assert _operation_count(scenario, {lane[(cases.BROKER, "broker:y")]: 10_000, lane[("broker:z", "broker:w")]: 5_000}) == 3
+    assert _operation_count(scenario, {lane[(cases.BROKER, "broker:y")]: 10_000, lane[(cases.BROKER, "broker:w")]: 5_000}) == 2
+
+
+# ---------------------------------------------------------------------------
+# The model and the replay agree: the solver against the exhaustive oracle
+# ---------------------------------------------------------------------------
+
+
+def _two_brokers_with_a_conversion() -> ExactPlannerScenario:
+    """The smallest case where cash must travel and be changed: 2 € on ``broker:x``, every purchase on ``broker:y`` (asset A
+    in euros, at most 1 €; asset USD in dollars, 1 $ a unit), lanes both ways in euros, a conversion on y, no fee and no
+    spread, whole units of money. The oracle walks every plan, so the model's rule must be exactly the replay's: x sends its
+    2 €, y changes them and buys 2 units of USD."""
+    base = cases.scenario(
+        "cash-rule-oracle",
+        holdings={"asset:a": cases.ONE},
+        cash=R(2),
+        weights={"asset:a": R(1, 2), "asset:usd": R(1, 2)},
+        usd_asset="asset:usd",
+        caps={"asset:a": cases.ONE},
+    )
+    no_fee = tuple(replace(item, fixed_fee=replace(item.fixed_fee, amount=cases.ZERO)) for item in base.brokers[0].fee_schedules)
+    broker_x = replace(base.brokers[0], fee_schedules=no_fee)
+    return replace(
+        base,
+        brokers=(broker_x, replace(broker_x, broker_id="broker:y", name="broker:y")),
+        order_routes=tuple(replace(route, broker_id="broker:y") for route in base.order_routes),
+        transfer_lanes=_lanes((cases.BROKER, "broker:y")),
+        currency_specs=tuple(replace(spec, minor_unit=cases.ONE) for spec in base.currency_specs),
+        fx_spread_rate=cases.ZERO,
+    )
+
+
+def test_the_solver_matches_the_oracle_with_lanes_both_ways_and_a_conversion() -> None:
+    """Row 4 of the note: the same rule in the model and in the exact replay. The oracle sees every plan the replay accepts,
+    «back and forth» and converted money sent away included; the solver's plan must be its optimum, quanta and key."""
+    solver_tests.test_solver_incumbent_equals_exhaustive_oracle_optimum(_two_brokers_with_a_conversion)
+    view = build_exact_policy_view(_two_brokers_with_a_conversion())
+    moved = {access.decision_id for access in view.decisions if access.family in {"fx_debit", "broker_transfer"}}
+    assert len(moved) == 3
+
+
+def test_the_solver_counts_three_brokers_as_the_replay_does() -> None:
+    """Two Brokers send, one receives (T4 with 200 € on x and 200 € on z, every purchase on w): the model's count of the
+    transfers and the replay's agree, so no stage's bounds contradict the plan (no anomaly)."""
+    base = cases.t4()
+    brokers = (cases.BROKER, "broker:w", "broker:z")
+    cash_z = replace(base.existing_cash[0], cash_id="cash:z:eur", broker_id="broker:z")
+    scenario = replace(
+        base,
+        brokers=tuple(replace(base.brokers[0], broker_id=broker, name=broker) for broker in sorted(brokers)),
+        existing_cash=tuple(sorted((*base.existing_cash, cash_z), key=lambda item: item.cash_id)),
+        order_routes=tuple(replace(route, broker_id="broker:w") for route in base.order_routes),
+        transfer_lanes=_lanes(tuple(sorted(brokers))),
+    )
+    view = build_exact_policy_view(scenario)
+    result = solve_policy_program(compile_policy_program(scenario, view), time_budget_seconds=10)
+    assert result.anomaly is None
+    evaluation = evaluate_exact_candidate(scenario, view, result.candidate)
+    assert evaluation.feasible is True, evaluation.conflict_codes
+    into_w = sum(item.quanta for item in result.candidate.decisions if item.decision_id.endswith("8:broker:w:EUR") and item.quanta)
+    assert into_w > 0
+
+
+def test_four_brokers_and_two_balanced_pairs_count_three_on_both_sides_with_no_anomaly() -> None:
+    """Spec §16.9 n. 6, the declared limit, pinned (the consultant's request): T4 with 200 € on x and on z, the purchases
+    on w and on y, and the balances held at x −100 €, w +100 €, z −50 €, y +50 €. In Broker order (w, x, y, z) the fixed rule
+    lists 2 transfers (x → w, z → y); the model and the replay both count 3 (four cells move, less one); the stage's bounds
+    agree with the plan, so the solver flags no anomaly."""
+    base = cases.t4()
+    brokers = tuple(sorted((cases.BROKER, "broker:w", "broker:y", "broker:z")))
+    cash_z = replace(base.existing_cash[0], cash_id="cash:z:eur", broker_id="broker:z")
+    routes = tuple(replace(route, route_id=f"{route.route_id}:{broker}", broker_id=broker) for route in base.order_routes for broker in ("broker:w", "broker:y"))
+    scenario = replace(
+        base,
+        brokers=tuple(replace(base.brokers[0], broker_id=broker, name=broker) for broker in brokers),
+        existing_cash=tuple(sorted((*base.existing_cash, cash_z), key=lambda item: item.cash_id)),
+        order_routes=tuple(sorted(routes, key=lambda item: item.route_id)),
+        transfer_lanes=_lanes(brokers),
+    )
+    view = build_exact_policy_view(scenario)
+    program = compile_policy_program(scenario, view)
+    held = {(cases.BROKER, "EUR"): -10_000, ("broker:w", "EUR"): 10_000, ("broker:z", "EUR"): -5_000, ("broker:y", "EUR"): 5_000}
+    for cell, value in held.items():
+        program.model.chgVarLb(program.variables.pool.net[cell], value)
+        program.model.chgVarUb(program.variables.pool.net[cell], value)
+    result = solve_policy_program(program, time_budget_seconds=10)
+
+    assert result.anomaly is None
+    moved = {item.decision_id: item.quanta for item in result.candidate.decisions if item.decision_id.startswith("transfer:") and item.quanta}
+    lane = {(item.source_broker_id, item.destination_broker_id): transfer_decision_id(item) for item in scenario.transfer_lanes}
+    assert moved == {lane[(cases.BROKER, "broker:w")]: 10_000, lane[("broker:z", "broker:y")]: 5_000}
+    (count_stage,) = [stage for stage in result.stages if stage.objective_code == "operation_count"]
+    evaluation = evaluate_exact_candidate(scenario, view, result.candidate)
+    (ref_id,) = [ref.ref_id for ref in view.objectives if ref.code == "operation_count"]
+    exact = next(item.value for item in evaluation.objectives if item.ref_id == ref_id)
+    orders = sum(1 for item in result.candidate.decisions if item.decision_id.startswith("buy:") and item.quanta)
+    assert exact == orders + 3
+    assert round(count_stage.primal) == exact

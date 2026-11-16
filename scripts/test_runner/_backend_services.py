@@ -113,6 +113,7 @@ PAC_PLANNER_WIRE_NUMBERS_TEST_PATH = "backend/test_scripts/test_services/test_pa
 PAC_PLANNER_REPORT_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_report.py"
 PAC_PLANNER_SERVICE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_planner.py"
 PAC_PLANNER_SEQUENCE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_plan_sequence.py"
+PAC_PLANNER_CASH_RULE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_cash_rule.py"
 PAC_PLANNER_SOUNDNESS_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_soundness.py"
 PAC_PLANNER_PREVIEW_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_preview.py"
 PAC_PLANNER_REFERENCE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_reference.py"
@@ -188,6 +189,13 @@ def services_pac_planner_sequence(verbose: bool = False, test_names: list = None
     print_section("Services: PAC/Rebalancer Step Counter")
     cmd = _build_pytest_cmd(PAC_PLANNER_SEQUENCE_TEST_PATH, test_names)
     return run_command(cmd, "PAC/Rebalancer step counter tests", verbose=verbose)
+
+
+def services_pac_planner_cash_rule(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Rebalancer's cash rule: no cash goes round, converted money never travels, transfers read off the balances."""
+    print_section("Services: Rebalancer Cash Rule")
+    cmd = _build_pytest_cmd(PAC_PLANNER_CASH_RULE_TEST_PATH, test_names)
+    return run_command(cmd, "Rebalancer cash rule tests", verbose=verbose)
 
 
 def services_pac_planner_service(verbose: bool = False, test_names: list = None) -> bool:
@@ -2670,6 +2678,14 @@ Note: No backend server required.
         services_pac_planner_sequence,
         name="PAC/Rebalancer Step Counter",
         desc="The plan's steps numbered in an order the balances can follow; the invariant replayed on the engine's own plans (G5, a PAC deposit and exchange)",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-cash-rule",
+        services_pac_planner_cash_rule,
+        name="Rebalancer Cash Rule",
+        desc="One signed balance per cash cell: a cell that receives sends nothing, converted money never travels, the transfers derived from the balances; the PAC unchanged",
         isolation="pure",
     )
     add_test(

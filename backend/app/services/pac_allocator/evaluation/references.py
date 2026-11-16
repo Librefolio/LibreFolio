@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from backend.app.services.pac_allocator.evaluation.keys import asset_broker_key, entity_refs
 from backend.app.services.pac_allocator.evaluation.limits import limited_entries
-from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs, fx_relay_groups
+from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs, fx_relay_groups, transfer_relay_groups
 from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex
 from backend.app.services.pac_allocator.models import (
     Checkpoint,
@@ -228,6 +228,27 @@ def _fx_relay_constraint_refs(
             bound_source="a currency that receives a conversion does not give one (V7)",
         )
         for group in fx_relay_groups(fx_decision_specs(scenario, index, checkpoint))
+    ]
+
+
+def _transfer_relay_constraint_refs(
+    scenario: ExactPlannerScenario,
+    index: ScenarioIndex,
+    checkpoint: Checkpoint | None,
+) -> list[ConstraintRef]:
+    """The Rebalancer's cash rule: one ref per Broker and currency a transfer lane leaves (``TRANSFER_NO_RELAY``, lot CR)."""
+    if scenario.product != "rebalancer":
+        return []
+    return [
+        _constraint_ref(
+            code="TRANSFER_NO_RELAY",
+            key=group.key,
+            scope="broker",
+            entity_refs=entity_refs(("broker", group.broker_id), ("currency", group.currency)),
+            unit=ExactUnit(kind="count"),
+            bound_source="a cash cell that receives a conversion or a transfer sends no transfer (cash rule, lot CR)",
+        )
+        for group in transfer_relay_groups(scenario, fx_decision_specs(scenario, index, checkpoint))
     ]
 
 
@@ -512,6 +533,7 @@ def build_constraint_refs(
         )
     )
     refs.extend(_fx_relay_constraint_refs(scenario, index, checkpoint))
+    refs.extend(_transfer_relay_constraint_refs(scenario, index, checkpoint))
     refs.extend(_limit_constraint_refs(scenario, index, valuation_unit, checkpoint))
     refs.extend(
         _order_constraint_refs(

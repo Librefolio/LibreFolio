@@ -67,6 +67,7 @@ type ExactConstraintCode = Literal[
     "FX_SOURCE_CASH",
     "FX_NATIVE_QUANTUM",
     "FX_NO_RELAY",
+    "TRANSFER_NO_RELAY",
     "ENTRY_VALUE_WITHIN_LIMITS",
     "ORDER_QUANTIZED",
     "ORDER_MIN_IF_ACTIVE",
