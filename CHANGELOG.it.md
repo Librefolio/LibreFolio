@@ -17,6 +17,8 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Il banner della qualità dei dati del pannello dei lotti offre «Aggiungi coppia FX» e «Sincronizza tassi» su un cambio mancante o vecchio, come il banner della Dashboard.
 - Cambio email in attesa nel Profilo: l'indirizzo che aspetta la conferma, scritto per intero, la scadenza del link, «Invia di nuovo» e «Annulla la richiesta».
 - Gli amministratori vedono i cambi email in attesa: un badge «Cambio email in attesa» sull'account, e il link in «Link degli account» si può revocare.
+- Dashboard › Le tue posizioni: «Globale» o «Broker». Con due broker o più, un selettore mostra un asset tenuto su più broker come una riga sola, nelle viste Portafoglio e Periodo, nelle loro mappe e nel grafico del rendimento (una linea per asset); la colonna Broker mostra le icone di tutti i broker che lo detengono. Quantità, valori, P&L e redditi sono sommati; percentuali, prezzo medio e Yield on Cost sono calcolati dalle somme, mai come media, e una vendita tiene il costo del broker che ha venduto. La scelta è ricordata su ogni dispositivo. Grazie a Daneltones8 ([#80](https://github.com/Librefolio/LibreFolio/issues/80)).
+- API: `POST /portfolio/report` accetta `group_by` (`broker`, il default, o `asset`); le sue righe portano `broker_ids`.
 
 ### 🔄 Modifiche
 
@@ -31,6 +33,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Intestazione del dettaglio asset su tablet e telefono: sotto i 1024 px i badge hanno una riga loro sotto il nome; sul telefono ← e ‹ n/N › stanno sulla prima riga, il nome ha tutta la larghezza e i badge seguono in due gruppi (tipo e valuta; Transazioni e provider).
 - Un asset con transazioni non può più diventare un Indice dall'editor dell'asset: l'editor dice quante transazioni ha e non salva niente.
 - Il cambio di email aspetta la conferma quando l'email funziona: con l'email configurata e `LIBREFOLIO_PUBLIC_URL` impostato, un nuovo indirizzo nel Profilo non vale finché non clicchi il link mandato a quell'indirizzo (valido 24 ore) mentre sei dentro il tuo account. Se sei già dentro basta un clic; altrimenti la pagina ti chiede prima di accedere e poi ti riporta lì. Il vecchio indirizzo viene avvisato subito. Resti dentro nel browser da cui confermi, e gli altri dispositivi vengono disconnessi. La pagina dice appena si apre se devi accedere, se il link è di un altro account (con «Esci e accedi con l'account giusto») o se non vale più; la pagina e le email mettono un concetto per riga, con le parole importanti in grassetto. Senza email non cambia nulla: il nuovo indirizzo vale subito.
+- Dashboard › Le tue posizioni: «Vedi tutte» ora è un piccolo badge, e sul telefono i tre selettori di vista (Portafoglio/Periodo, Globale/Broker, tabella/mappa) stanno in una riga loro sotto il titolo.
 
 ### 🐛 Corretto
 

@@ -17,6 +17,8 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - El aviso de calidad de datos del panel de lotes ofrece «Añadir par FX» y «Sincronizar tipos de cambio» ante un tipo de cambio que falta o es antiguo, como el aviso del panel principal.
 - Cambio de correo pendiente en el Perfil: la dirección que espera la confirmación, escrita completa, la caducidad del enlace, «Enviar de nuevo» y «Cancelar la solicitud».
 - Los administradores ven los cambios de correo pendientes: una insignia «Cambio de correo pendiente» en la cuenta, y el enlace en «Enlaces de cuenta» se puede revocar.
+- Dashboard › Tus posiciones: «Global» o «Bróker». Con dos brókers o más, un selector muestra un activo que está en varios brókers como una sola fila, en las vistas Cartera y Periodo, sus mapas y el gráfico de rentabilidad (una línea por activo); la columna Bróker muestra los iconos de todos los brókers que lo tienen. Cantidades, valores, P&L e ingresos se suman; porcentajes, precio medio y Yield on Cost se calculan a partir de las sumas, nunca como media, y una venta conserva el coste del bróker que vendió. La elección se recuerda en cada dispositivo. Gracias a Daneltones8 ([#80](https://github.com/Librefolio/LibreFolio/issues/80)).
+- API: `POST /portfolio/report` acepta `group_by` (`broker`, por defecto, o `asset`); sus filas llevan `broker_ids`.
 
 ### 🔄 Cambios
 
@@ -31,6 +33,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Cabecera del detalle de un activo en tableta y teléfono: por debajo de 1024 px las insignias tienen su propia fila bajo el nombre; en el teléfono ← y ‹ n/N › comparten la primera fila, el nombre ocupa todo el ancho y las insignias siguen en dos grupos (tipo y divisa; Transacciones y proveedor).
 - Un activo con transacciones ya no puede convertirse en un Índice desde el editor del activo: el editor indica cuántas transacciones tiene y no se guarda nada.
 - El cambio de correo espera una confirmación cuando el correo funciona: con el correo configurado y `LIBREFOLIO_PUBLIC_URL` definido, una dirección nueva en el Perfil no se usa hasta que pulses el enlace enviado a ella (válido 24 horas) con la sesión de tu cuenta iniciada. Si ya has iniciado sesión basta un clic; si no, la página te pide primero que inicies sesión y luego te devuelve allí. Tu dirección anterior recibe un aviso enseguida. Sigues con la sesión iniciada en el navegador desde el que confirmas, y tus otros dispositivos se desconectan. La página dice en cuanto se abre si tienes que iniciar sesión, si el enlace es de otra cuenta (con «Cerrar sesión e iniciarla con la cuenta correcta») o si ya no vale; la página y los correos ponen una idea por línea, con las palabras importantes en negrita. Sin correo no cambia nada: la dirección nueva se aplica al momento.
+- Dashboard › Tus posiciones: «Ver todo» ahora es una pequeña insignia, y en el teléfono los tres selectores de vista (Cartera/Periodo, Global/Bróker, tabla/mapa) tienen su propia fila bajo el título.
 
 ### 🐛 Corregido
 

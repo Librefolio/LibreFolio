@@ -17,6 +17,8 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Le bandeau de qualité des données du panneau des lots propose « Ajouter paire FX » et « Synchroniser les taux » sur un taux de change manquant ou ancien, comme le bandeau du tableau de bord.
 - Changement d'e-mail en attente dans le Profil : l'adresse qui attend la confirmation, écrite en entier, l'expiration du lien, « Renvoyer » et « Annuler la demande ».
 - Les administrateurs voient les changements d'e-mail en attente : un badge « Changement d'e-mail en attente » sur le compte, et le lien dans « Liens de compte » peut être révoqué.
+- Dashboard › Vos positions : «Global» ou «Courtier». Avec deux courtiers ou plus, un sélecteur affiche un actif détenu chez plusieurs courtiers sur une seule ligne, dans les vues Portefeuille et Période, leurs cartes et le graphique du rendement (une ligne par actif) ; la colonne Courtier montre les icônes de tous les courtiers qui le détiennent. Quantités, valeurs, P&L et revenus sont additionnés ; pourcentages, prix moyen et Yield on Cost sont calculés à partir des sommes, jamais en moyenne, et une vente garde le coût du courtier qui a vendu. Le choix est mémorisé sur chaque appareil. Merci à Daneltones8 ([#80](https://github.com/Librefolio/LibreFolio/issues/80)).
+- API : `POST /portfolio/report` accepte `group_by` (`broker`, par défaut, ou `asset`) ; ses lignes portent `broker_ids`.
 
 ### 🔄 Modifié
 
@@ -31,6 +33,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - En-tête du détail d'un actif sur tablette et téléphone : sous 1024 px, les badges ont leur propre ligne sous le nom ; sur téléphone, ← et ‹ n/N › partagent la première ligne, le nom prend toute la largeur et les badges suivent en deux groupes (type et devise ; Transactions et fournisseur).
 - Un actif qui a des transactions ne peut plus devenir un Indice depuis l'éditeur de l'actif : l'éditeur indique combien de transactions il a, et rien n'est enregistré.
 - Le changement d'e-mail attend une confirmation quand l'e-mail fonctionne : avec l'e-mail configuré et `LIBREFOLIO_PUBLIC_URL` défini, une nouvelle adresse dans le Profil n'est utilisée qu'après un clic sur le lien envoyé à cette adresse (valable 24 heures) en étant connecté à votre compte. Déjà connecté, un clic suffit ; sinon la page vous demande d'abord de vous connecter puis vous y ramène. Votre ancienne adresse est prévenue aussitôt. Vous restez connecté sur le navigateur depuis lequel vous confirmez, et vos autres appareils sont déconnectés. La page indique dès son ouverture s'il faut vous connecter, si le lien appartient à un autre compte (avec « Se déconnecter et se connecter avec le bon compte ») ou s'il n'est plus valable ; la page et les e-mails mettent une idée par ligne, avec les mots importants en gras. Sans e-mail rien ne change : la nouvelle adresse s'applique tout de suite.
+- Dashboard › Vos positions : «Voir tout» est désormais un petit badge, et sur téléphone les trois sélecteurs de vue (Portefeuille/Période, Global/Courtier, tableau/carte) ont leur propre ligne sous le titre.
 
 ### 🐛 Corrections
 
