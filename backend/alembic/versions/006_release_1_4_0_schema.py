@@ -53,9 +53,33 @@ The asset profile: the descriptive facts of an asset, each with its source and i
 
   Its ``asset_id`` prefix also serves the ``CASCADE`` of a deleted asset.
 - Downgrade: the two tables are dropped, the index with its table.
+
+asset_profile_legacy_copy (project 68, lot A4)
+──────────────────────────────────────────────
+Data only: what ``classification_params`` holds today becomes the first history of the profile (plan 68, §3.7).
+
+- For every asset, ``short_description`` (a non-empty text), ``geographic_area`` and ``sector_area`` become rows of
+  ``asset_profile_updates`` for the voices ``description``, ``geography`` and ``sector``: ``source`` ``legacy``, no
+  author, ``read_on`` the day of the upgrade in the scheduler's time zone (the ``scheduler_timezone`` setting, UTC when
+  it is missing or not valid). A map holds its weights as decimal strings, without the ``{"distribution": …}`` envelope.
+- The JSON is read with Decimals (``parse_float=Decimal``): weights written as numbers (the test data) and as strings
+  (the app) copy alike. The copy does not translate country or sector names: the profile store reads every row back
+  through its catalogue, so a row keeps the spelling the column had and still reads as the catalogue's stored form.
+- Nothing to copy (NULL, empty, not JSON, not an object) → no row; a distribution today's rule refuses (not an object,
+  empty, a weight not a number or negative, a sum farther than 0.01 from 1) → that voice skipped, the others copied.
+  Each skip is a warning of logger ``alembic.runtime.migration``.
+- Checks before it acts: an asset and voice that already has a ``legacy`` row is not copied again.
+- Downgrade, before the tables go: each asset's ``classification_params`` is rebuilt from its last row of each voice
+  in (``read_on``, ``id``) order — what the profile learned since the upgrade goes back to the column. A voice without
+  rows keeps its part; a last row left empty removes it; an asset without rows keeps its column as it was.
 """
 
+import json
+import logging
+from datetime import UTC, date, datetime
+from decimal import Decimal, InvalidOperation
 from typing import Sequence, Union
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import sqlalchemy as sa
 from alembic import op
@@ -122,13 +146,137 @@ def _downgrade_asset_profile(conn: sa.engine.Connection) -> None:
             op.drop_table(table)
 
 
+# ─── step asset_profile_legacy_copy (project 68, lot A4) ─────────────────────────────────────────────────────────────
+
+_LEGACY = "legacy"
+#: classification_params part → profile voice, and how a part becomes a value.
+_LEGACY_TEXT_PARTS = (("short_description", "description"),)
+_LEGACY_MAP_PARTS = (("geographic_area", "geography"), ("sector_area", "sector"))
+_LEGACY_VOICES = ("description", "geography", "sector")
+#: Today's rule for a distribution (``BaseDistribution``): weights not negative, summing to 1 within this.
+_LEGACY_SUM_TOLERANCE = Decimal("0.01")
+_legacy_log = logging.getLogger("alembic.runtime.migration")
+
+
+def _legacy_today(conn: sa.engine.Connection) -> date:
+    """The day of the upgrade in the scheduler's time zone (``scheduler_timezone``; UTC when unset or not valid)."""
+    name = conn.execute(sa.text("SELECT value FROM global_settings WHERE key = 'scheduler_timezone'")).scalar()
+    try:
+        zone = ZoneInfo(str(name)) if name else ZoneInfo("UTC")
+    except (ZoneInfoNotFoundError, ValueError):
+        zone = ZoneInfo("UTC")
+    return datetime.now(UTC).astimezone(zone).date()
+
+
+def _legacy_distribution(asset_id: int, part: str, block: object) -> dict[str, str] | None:
+    """The weights of a ``{"distribution": {...}}`` block as decimal strings, or None (logged) when today's rule refuses it."""
+    weights = block.get("distribution") if isinstance(block, dict) else None
+    if not isinstance(weights, dict) or not weights:
+        _legacy_log.warning("006 legacy copy: %s of asset %s is not a distribution, skipped", part, asset_id)
+        return None
+    parsed: dict[str, Decimal] = {}
+    for name, weight in weights.items():
+        if isinstance(weight, bool) or not isinstance(weight, (int, Decimal, str)):
+            _legacy_log.warning("006 legacy copy: %s of asset %s has a weight that is not a number, skipped", part, asset_id)
+            return None
+        try:
+            parsed[str(name)] = Decimal(str(weight))
+        except InvalidOperation:
+            _legacy_log.warning("006 legacy copy: %s of asset %s has a weight that is not a number, skipped", part, asset_id)
+            return None
+    if any(not weight.is_finite() or weight < 0 for weight in parsed.values()) or abs(sum(parsed.values()) - 1) > _LEGACY_SUM_TOLERANCE:
+        _legacy_log.warning("006 legacy copy: the weights of %s of asset %s fail today's rule, skipped", part, asset_id)
+        return None
+    return {name: format(weight, "f") for name, weight in sorted(parsed.items())}
+
+
+def _legacy_values(asset_id: int, text: str | None) -> dict[str, str]:
+    """The profile voices of one ``classification_params`` text, as JSON value texts; {} when there is nothing to copy."""
+    if not text or not text.strip():
+        return {}
+    try:
+        params = json.loads(text, parse_float=Decimal)
+    except ValueError:
+        _legacy_log.warning("006 legacy copy: classification_params of asset %s is not JSON, skipped", asset_id)
+        return {}
+    if not isinstance(params, dict):
+        _legacy_log.warning("006 legacy copy: classification_params of asset %s is not an object, skipped", asset_id)
+        return {}
+    values: dict[str, str] = {}
+    for part, voice in _LEGACY_TEXT_PARTS:
+        description = params.get(part)
+        if isinstance(description, str) and description.strip():
+            values[voice] = json.dumps(description.strip(), ensure_ascii=False)
+    for part, voice in _LEGACY_MAP_PARTS:
+        if params.get(part) is not None and (weights := _legacy_distribution(asset_id, part, params[part])) is not None:
+            values[voice] = json.dumps(weights, separators=(",", ":"))
+    return values
+
+
+def _upgrade_asset_profile_legacy_copy(conn: sa.engine.Connection) -> None:
+    """Step ``asset_profile_legacy_copy``: each asset's description, countries and sectors become ``legacy`` rows."""
+    already = {(row[0], row[1]) for row in conn.execute(sa.text(f"SELECT DISTINCT asset_id, key FROM {_PROFILE_UPDATES} WHERE source = :legacy"), {"legacy": _LEGACY})}
+    read_on = _legacy_today(conn)
+    created_at = datetime.now(UTC).replace(tzinfo=None)
+    rows = []
+    for asset_id, text in conn.execute(sa.text("SELECT id, classification_params FROM assets WHERE classification_params IS NOT NULL ORDER BY id")):
+        for voice, value in _legacy_values(asset_id, text).items():
+            if (asset_id, voice) not in already:
+                rows.append({"asset_id": asset_id, "key": voice, "value": value, "source": _LEGACY, "read_on": read_on, "created_at": created_at})
+    if rows:
+        updates = sa.table(
+            _PROFILE_UPDATES,
+            sa.column("asset_id", sa.Integer),
+            sa.column("key", sa.String),
+            sa.column("value", sa.Text),
+            sa.column("source", sa.String),
+            sa.column("read_on", sa.Date),
+            sa.column("created_at", sa.DateTime),
+        )
+        conn.execute(updates.insert(), rows)
+    _legacy_log.info("006 legacy copy: %s profile rows written", len(rows))
+
+
+def _downgrade_asset_profile_legacy_copy(conn: sa.engine.Connection) -> None:
+    """Step ``asset_profile_legacy_copy`` undone: each asset's ``classification_params`` rebuilt from its last rows of
+    ``description``, ``geography`` and ``sector`` (in (``read_on``, ``id``) order), the profile being what changed since."""
+    if _PROFILE_UPDATES not in _asset_profile_tables(conn):
+        return
+    last: dict[int, dict[str, str | None]] = {}
+    statement = sa.text(f"SELECT asset_id, key, value FROM {_PROFILE_UPDATES} WHERE key IN ('description', 'geography', 'sector') ORDER BY asset_id, key, read_on, id")
+    for asset_id, voice, value in conn.execute(statement):
+        last.setdefault(asset_id, {})[voice] = value
+    for asset_id, voices in last.items():
+        text = conn.execute(sa.text("SELECT classification_params FROM assets WHERE id = :id"), {"id": asset_id}).scalar()
+        try:
+            params = json.loads(text, parse_float=Decimal) if text else {}
+        except ValueError:
+            params = {}
+        if not isinstance(params, dict):
+            params = {}
+        for part, voice in (*_LEGACY_TEXT_PARTS, *_LEGACY_MAP_PARTS):
+            if voice not in voices:
+                continue
+            value = None if voices[voice] is None else json.loads(voices[voice], parse_float=Decimal)
+            if value is None:
+                params.pop(part, None)
+            elif voice == "description":
+                params[part] = value
+            else:
+                params[part] = {"distribution": {name: format(Decimal(str(weight)), "f") for name, weight in value.items()}}
+        rebuilt = json.dumps(params, default=str) if params else None
+        conn.execute(sa.text("UPDATE assets SET classification_params = :params WHERE id = :id"), {"params": rebuilt, "id": asset_id})
+
+
 def upgrade() -> None:
     """The steps of the docstring, one line each."""
     conn = op.get_bind()
     _upgrade_asset_profile(conn)
+    _upgrade_asset_profile_legacy_copy(conn)
 
 
 def downgrade() -> None:
     """Back to 1.3, step by step, in the reverse order of ``upgrade``."""
     conn = op.get_bind()
+    _downgrade_asset_profile_legacy_copy(conn)
     _downgrade_asset_profile(conn)

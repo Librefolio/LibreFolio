@@ -1,7 +1,8 @@
-"""Migration ``006_release_1_4_0_schema``, step ``asset_profile``: the two tables of the asset profile (project 68, lot A2).
+"""Migration ``006_release_1_4_0_schema``, steps ``asset_profile`` (lot A2: the two tables of the asset profile) and
+``asset_profile_legacy_copy`` (lot A4: ``classification_params`` copied into it), project 68.
 
 The 1.4 cycle has one revision (the developer's decision of 19/10/2026), and several workstreams each add a step of
-their own to it (its docstring says how). This file pins ONLY what the step ``asset_profile`` creates — the tables
+their own to it (its docstring says how). This file pins ONLY what the steps ``asset_profile`` and ``asset_profile_legacy_copy`` write (10); of ``asset_profile`` what it creates — the tables
 ``asset_profile_updates`` and ``asset_enrichers`` and the index ``ix_asset_profile_updates_asset_key_read_on`` — and
 never the whole schema at 006: what another step adds is that step's to pin. So a table set is asserted as a superset,
 rows are compared on the columns they had before the upgrade, and a full schema comparison appears only after a
@@ -33,11 +34,14 @@ The contract pinned here:
    ``config``/``state`` holds ``'{}'`` in both.
 4. A populated 1.3 database (at 005: a user and its settings, a broker, assets with and without
    ``classification_params``, prices; plain SQL) upgraded to 006 keeps every row of every table it had (guard, green
-   before and after), gets the two tables empty, and no foreign-key violation, integrity ``ok``.
+   before and after), gets ``asset_enrichers`` empty and — since A4 — the legacy copy of its classification in
+   ``asset_profile_updates`` (10), and no foreign-key violation, integrity ``ok``.
 5. Models = migration: ``SQLModel.metadata`` declares both tables and the index, and ``create_all`` builds them with
    the shape the migration gives them (``_full_shape``, and the defaults of every column).
 6. The downgrade 006 → 005 removes both tables and the index and leaves every other object as a new database at 005
-   has it; the populated database goes down keeping every other row, and up again, the two tables back and empty.
+   has it; the populated database goes down keeping every other row — ``assets.classification_params`` with the same
+   meaning, since A4 rebuilds it from the profile —, and up again, the two tables back, ``asset_enrichers`` empty and
+   the profile holding the legacy copy again.
 7. Every part checks before it acts: an upgrade run again over its own work changes no object and no row; an upgrade
    that finds one table, or both, or a table and its index already there completes with the shape of a new database
    at 006, a row it found kept; a downgrade that finds the index or a table already gone completes to 005.
@@ -51,6 +55,21 @@ The contract pinned here:
    (``read_on``, ``id``) order is the steps' (consultant's decision).
 9. The redundant-index check of ``db_schema_validate`` (``test_no_redundant_indexes``) passes on a database at 006; a
    guard runs it the same way on a database at 005.
+10. Step ``asset_profile_legacy_copy`` (project 68, lot A4), after ``asset_profile`` in ``upgrade()`` and before it in
+    ``downgrade()``; self-contained, like every migration (no import from ``backend.app``: guard). For every asset with
+    ``classification_params`` (read with ``parse_float=Decimal``: JSON numbers as ``populate_mock_data`` writes them,
+    strings as the app writes them), each part becomes a row of ``asset_profile_updates``, ``source='legacy'``,
+    ``user_id`` and ``source_date`` NULL: ``short_description`` (non-empty text) → ``description``,
+    ``geographic_area.distribution`` → ``geography``, ``sector_area.distribution`` → ``sector``. ``read_on`` is the day
+    of the upgrade in ``scheduler_timezone`` (the ``global_settings`` row; none, or not a zone → UTC); one
+    ``created_at`` for the run. Skipped, that asset or that voice only: a column NULL, ``''``, ``'{}'``, not JSON, not
+    an object; a description that is not a non-empty text; a distribution absent, not an object, empty, with a negative
+    weight, a weight that is not a number, or a sum farther than 0.01 from 1. Each copied value reads back as the store
+    reads it — ``normalize_value(key, json.loads(row.value))`` — equal to ``normalize_value(key, the part)``. Run
+    again, it adds no row: an asset and voice with a ``legacy`` row already is skipped. Every other row stays, no
+    violation. Downgrade: ``classification_params`` rebuilt from each asset's last row in (``read_on``, ``id``) order of
+    each of the three voices (a map as ``{"distribution": …}`` with string weights; a NULL last row removes the part; a
+    voice with no row keeps its part as it was); an asset with no profile row keeps its column byte for byte.
 
 Safety and fidelity: ``alembic_harness``. Every database is a file under ``tmp_path``; Alembic runs in this process on
 that file alone — a connect listener refuses any other — with ``PRAGMA foreign_keys`` asserted 1 at every step, as
@@ -62,21 +81,31 @@ Red until the cure: ``006_release_1_4_0_schema`` exists with no step, so every m
 tests fail on assertions — the tables, the index, the step functions, the models are missing; each test that needs the
 tables passes a barrier first, so none of them passes on an empty database. Guards, green before and after: the chain
 (1), the rows a 1.3 database keeps (4), the redundant-index check at 005 (9).
+
+Red until A4 (10): the step ``asset_profile_legacy_copy`` does not exist, so every upgrade leaves the profile empty and
+the tests fail on assertions — the step functions, the missing ``legacy`` rows. Each test about what the copy skips,
+what a second run adds or what the downgrade rebuilds passes a barrier first (the copy ran on that database: the fully
+classified asset has its three ``legacy`` rows), so none of them passes on an empty table. Guards, green before and
+after: no import from ``backend.app`` in the revision, the A2 round trip down to 005 (the column's meaning kept).
 """
 
 from __future__ import annotations
 
 import importlib
 import inspect
+import json
 import os
 import re
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 from types import ModuleType
 from typing import Any, NoReturn, Optional
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import create_engine
@@ -84,6 +113,7 @@ from sqlalchemy.pool import NullPool
 
 from backend.app.db import session as db_session
 from backend.app.db.base import SQLModel
+from backend.app.services.assets.profile.catalogue import normalize_value
 from backend.test_scripts.test_db.alembic_harness import (
     Rows,
     _connect,
@@ -95,6 +125,7 @@ from backend.test_scripts.test_db.alembic_harness import (
     _index_list,
     _integrity,
     _migrate,
+    _on_columns,
     _revision,
     _row_changes,
     _rows,
@@ -329,6 +360,60 @@ def _refused(conn: sqlite3.Connection, *fragments: str) -> Iterator[None]:
         yield
     conn.rollback()
     assert all(fragment in str(refused.value) for fragment in fragments), f"refused for another reason: {refused.value}"
+
+
+def _profile_rows(db: Path) -> list[dict[str, Any]]:
+    """Every row of ``asset_profile_updates``, by id, as dicts of its columns; none when the table is not there."""
+    if UPDATES not in _tables(db):
+        return []
+    with _connect(db) as conn:
+        conn.row_factory = sqlite3.Row
+        return [dict(row) for row in conn.execute(f"SELECT * FROM {UPDATES} ORDER BY id")]
+
+
+#: The parts of ``classification_params`` and the profile voice each becomes (plan 68, A4).
+VOICE_OF_PART = {"short_description": "description", "geographic_area": "geography", "sector_area": "sector"}
+
+
+def _part_meaning(part: str, value: Any) -> tuple[str, Any]:
+    """What one part of ``classification_params`` means: the catalogue's stored form when the catalogue takes it, else
+    the part as written (a part the copy skipped stays as it was)."""
+    voice = VOICE_OF_PART.get(part)
+    try:
+        if voice == "description" and isinstance(value, str):
+            return ("stored form", normalize_value(voice, value))
+        if voice in ("geography", "sector") and isinstance(value, dict) and "distribution" in value:
+            return ("stored form", normalize_value(voice, value["distribution"]))
+    except (ValueError, TypeError):
+        # Parsing probe: a part the catalogue refuses is compared as written
+        pass
+    return ("as written", value)
+
+
+def _meaning(text: Optional[str]) -> Any:
+    """What a ``classification_params`` text means, whatever its spelling: each part through ``_part_meaning``, the
+    JSON read with ``parse_float=Decimal`` (so ``1.0`` and ``"1.0"`` stay told apart only where the catalogue does)."""
+    if text is None:
+        return None
+    try:
+        data = json.loads(text, parse_float=Decimal)
+    except ValueError:
+        return ("not JSON", text)
+    if not isinstance(data, dict):
+        return ("not an object", data)
+    return {part: _part_meaning(part, value) for part, value in data.items()}
+
+
+def _classification_by_asset(rows: Rows) -> dict[int, Optional[str]]:
+    columns, content = rows["assets"]
+    return {row[columns.index("id")]: row[columns.index("classification_params")] for row in content}
+
+
+def _assert_assets_kept_but_classification(before: Rows, after: Rows) -> None:
+    """Every row of ``assets`` identical on every column but ``classification_params``, which A4's downgrade rebuilds."""
+    columns = [column for column in before["assets"][0] if column != "classification_params"]
+    lost, gained = (sorted(set(_on_columns(before, "assets", columns)) - set(_on_columns(after, "assets", columns)), key=repr), sorted(set(_on_columns(after, "assets", columns)) - set(_on_columns(before, "assets", columns)), key=repr))
+    assert not lost and not gained, f"assets changed outside classification_params: missing {lost[:2]}, unexpected {gained[:2]}"
 
 
 @contextmanager
@@ -656,13 +741,19 @@ def test_a_populated_1_3_database_keeps_every_row_of_every_table(upgraded_1_3: U
     print_success(f"{len(set(before) - BOOKKEEPING)} tables, every row kept")
 
 
-def test_a_populated_1_3_database_gets_the_two_tables_empty_and_no_violation(upgraded_1_3: Upgrade) -> None:
-    """The two tables are there and empty — the upgrade writes no profile —; ``foreign_key_check`` empty, integrity ``ok``."""
+def test_a_populated_1_3_database_gets_its_classification_copied_the_enrichers_empty_and_no_violation(upgraded_1_3: Upgrade) -> None:
+    """The two tables are there; ``asset_enrichers`` empty; ``asset_profile_updates`` holds the legacy copy of the
+    install's classification and nothing else — the geography of asset 1, the sector of asset 2, nothing for asset 3
+    (NULL column) —; ``foreign_key_check`` empty, integrity ``ok``.
+
+    Changed by A4, by design: under A2 this test was ``…_gets_the_two_tables_empty_…`` and asserted an empty profile
+    table; the step ``asset_profile_legacy_copy`` now fills it from ``classification_params``."""
     after = upgraded_1_3.rows_after
     missing = [table for table in NEW_TABLES if table not in after]
     assert not missing, f"red until A2: the upgraded 1.3 install has no {missing}"
-    filled = {table: len(after[table][1]) for table in NEW_TABLES if after[table][1]}
-    assert filled == {}, f"the upgrade must leave the two tables empty: {filled}"
+    assert after[ENRICHERS][1] == [], f"the upgrade must leave {ENRICHERS} empty: {after[ENRICHERS][1]}"
+    copied = sorted((row["asset_id"], row["key"], row["source"]) for row in _profile_rows(upgraded_1_3.db))
+    assert copied == [(1, "geography", "legacy"), (2, "sector", "legacy")], f"red until A4: the profile must hold the legacy copy of the two classified assets and nothing else: {copied}"
     assert upgraded_1_3.violations == [], f"foreign key violations: {upgraded_1_3.violations}"
     assert upgraded_1_3.integrity == [("ok",)], f"integrity_check: {upgraded_1_3.integrity}"
 
@@ -720,25 +811,42 @@ def test_the_downgrade_of_a_new_database_removes_the_two_tables_and_leaves_005(f
 
 def test_the_downgrade_of_a_populated_database_keeps_every_other_row(round_trip: RoundTrip | str) -> None:
     """The populated install at 006, given a profile row and an enricher row, goes down to 005: the two tables gone,
-    every other row as it was at 005, no violation, integrity ``ok``."""
+    every other row as it was at 005, no violation, integrity ``ok``.
+
+    Changed by A4, by design: the downgrade of ``asset_profile_legacy_copy`` rebuilds ``assets.classification_params``
+    from the profile, and the contract does not promise the column's text back (``"0.6"`` comes back as the stored
+    form's ``"0.6000"``, the keys in another order). So ``assets`` is compared on every other column exactly, and on
+    ``classification_params`` by meaning (``_meaning``); every other table exactly, as under A2."""
     trip = _ran(round_trip)
     assert trip.revision_down == REV_005
     assert not set(NEW_TABLES) & trip.tables_down, f"the downgrade must remove both tables: {sorted(set(NEW_TABLES) & trip.tables_down)}"
-    changes = _row_changes(trip.rows_at_005, trip.rows_down, set(trip.rows_at_005) - BOOKKEEPING, columns_of=trip.rows_at_005)
+    changes = _row_changes(trip.rows_at_005, trip.rows_down, set(trip.rows_at_005) - BOOKKEEPING - {"assets"}, columns_of=trip.rows_at_005)
     assert not changes, f"the downgrade changed other rows: {changes}"
+    _assert_assets_kept_but_classification(trip.rows_at_005, trip.rows_down)
+    meanings = {asset_id: (_meaning(text), _meaning(_classification_by_asset(trip.rows_down)[asset_id])) for asset_id, text in _classification_by_asset(trip.rows_at_005).items()}
+    differ = {asset_id: pair for asset_id, pair in meanings.items() if pair[0] != pair[1]}
+    assert not differ, f"the downgrade must give classification_params back with the same meaning: (at 005, after) {differ}"
     assert trip.violations_down == [] and trip.integrity_down == [("ok",)], f"violations {trip.violations_down}, integrity {trip.integrity_down}"
 
 
-def test_upgrading_the_downgraded_database_again_brings_the_tables_back_empty(round_trip: RoundTrip | str) -> None:
-    """Up again to 006: the two tables back and empty, every other row as at 005, no violation."""
+def test_upgrading_the_downgraded_database_again_brings_the_tables_back_with_the_legacy_copy(round_trip: RoundTrip | str) -> None:
+    """Up again to 006: the two tables back, ``asset_enrichers`` empty, the profile holding the legacy copy again — the
+    geography of asset 1, the sector of asset 2; the ``ter`` row written before the downgrade went with its table —,
+    every other row as at 005 (``classification_params`` by meaning), no violation.
+
+    Changed by A4, by design: under A2 this test was ``…_brings_the_tables_back_empty`` and asserted both tables empty;
+    the upgrade now copies ``classification_params`` again."""
     trip = _ran(round_trip)
     assert trip.revision_again == REV_006
     missing = [table for table in NEW_TABLES if table not in trip.rows_again]
     assert not missing, f"the upgrade again must create {missing}"
-    filled = {table: trip.rows_again[table][1] for table in NEW_TABLES if trip.rows_again[table][1]}
-    assert filled == {}, f"the tables come back empty: {filled}"
-    changes = _row_changes(trip.rows_at_005, trip.rows_again, set(trip.rows_at_005) - BOOKKEEPING, columns_of=trip.rows_at_005)
+    assert trip.rows_again[ENRICHERS][1] == [], f"{ENRICHERS} comes back empty: {trip.rows_again[ENRICHERS][1]}"
+    columns, content = trip.rows_again[UPDATES]
+    copied = sorted((row[columns.index("asset_id")], row[columns.index("key")], row[columns.index("source")]) for row in content)
+    assert copied == [(1, "geography", "legacy"), (2, "sector", "legacy")], f"red until A4: up again, the profile holds the legacy copy and nothing else: {copied}"
+    changes = _row_changes(trip.rows_at_005, trip.rows_again, set(trip.rows_at_005) - BOOKKEEPING - {"assets"}, columns_of=trip.rows_at_005)
     assert not changes, f"up again changed other rows: {changes}"
+    _assert_assets_kept_but_classification(trip.rows_at_005, trip.rows_again)
     assert trip.violations_again == []
 
 
@@ -868,3 +976,458 @@ def test_the_redundant_index_check_passes_at_006(fresh_006: Path, tmp_path: Path
     db = _copy(fresh_006, tmp_path / "app.db")
     assert UPDATES in _tables(db) and PROFILE_INDEX in _index_list(db, UPDATES), f"red until A2: no {PROFILE_INDEX} at 006: the check would prove nothing about it"
     _redundant_index_check(db, monkeypatch)
+
+
+# =============================================================================
+# 10. A4: THE LEGACY COPY OF classification_params
+# =============================================================================
+
+LEGACY_STEP = "asset_profile_legacy_copy"
+UPGRADE_LEGACY, DOWNGRADE_LEGACY = f"_upgrade_{LEGACY_STEP}", f"_downgrade_{LEGACY_STEP}"
+LEGACY = "legacy"
+#: Where each voice sits in ``classification_params``.
+PATH_OF_VOICE = {"description": ("short_description",), "geography": ("geographic_area", "distribution"), "sector": ("sector_area", "distribution")}
+#: Two zones 26 hours apart: their dates always differ, and at any hour at least one differs from UTC's.
+FAR_EAST, FAR_WEST = "Pacific/Kiritimati", "Etc/GMT+12"
+INSERT_SETTING = "INSERT INTO global_settings (key, value, value_type, description, updated_at, updated_by_user_id) VALUES ('scheduler_timezone', ?, 'str', NULL, ?, NULL)"
+INSERT_CLASSIFIED = "INSERT INTO assets (id, display_name, currency, classification_params, asset_type, active, created_at, updated_at) VALUES (?, ?, 'EUR', ?, 'ETF', 1, ?, ?)"
+
+
+@dataclass(frozen=True)
+class LegacyCase:
+    """One asset of the classified 1.3 install: its ``classification_params`` as written, and the voices the copy keeps."""
+
+    name: str
+    text: Optional[str]
+    copied: tuple[str, ...]
+
+
+#: The classified 1.3 install, one asset per case, ids in this order from 1. Texts as the two writers of 1.3 wrote them:
+#: the app (``FAClassificationParams.model_dump_json(exclude_none=True)``: string weights, four decimals) and
+#: ``populate_mock_data.py`` (``json.dumps`` of floats, non-standard sector names); then every shape the copy skips.
+LEGACY_CASES: tuple[LegacyCase, ...] = (
+    LegacyCase(
+        "full-as-the-app-writes-it",
+        '{"short_description":"Global developed-markets equity ETF","geographic_area":{"distribution":{"USA":"0.6000","JPN":"0.2500","DEU":"0.1500"}},' '"sector_area":{"distribution":{"Technology":"0.5000","Financials":"0.3000","Health Care":"0.2000"}}}',
+        ("description", "geography", "sector"),
+    ),
+    LegacyCase(
+        "floats-and-services-as-mock-data-writes-them",
+        json.dumps({"short_description": "Technology company", "geographic_area": {"distribution": {"USA": 1.0}}, "sector_area": {"distribution": {"Technology": 0.85, "Services": 0.15}}}),
+        ("description", "geography", "sector"),
+    ),
+    LegacyCase(
+        "floats-three-countries-and-cloud",
+        json.dumps({"short_description": "Software and cloud computing", "geographic_area": {"distribution": {"USA": 0.50, "CHN": 0.25, "DEU": 0.25}}, "sector_area": {"distribution": {"Technology": 0.70, "Cloud": 0.30}}}),
+        ("description", "geography", "sector"),
+    ),
+    LegacyCase("description-only", json.dumps({"short_description": "Digital gold, store of value", "sector_area": None}), ("description",)),
+    LegacyCase("null-column", None, ()),
+    LegacyCase("empty-string", "", ()),
+    LegacyCase("empty-object", "{}", ()),
+    LegacyCase("broken-json", '{"short_description": "Broken', ()),
+    LegacyCase("json-array", '["Technology"]', ()),
+    LegacyCase("json-string", '"just a text"', ()),
+    LegacyCase("bad-sum-geography-good-sector", '{"geographic_area":{"distribution":{"USA":"0.5","JPN":"0.3"}},"sector_area":{"distribution":{"Energy":"1"}}}', ("sector",)),
+    LegacyCase("geography-not-an-object", '{"short_description":"Euro government bond ladder","geographic_area":{"distribution":["ITA","DEU"]}}', ("description",)),
+    LegacyCase("empty-geography-good-sector", '{"geographic_area":{"distribution":{}},"sector_area":{"distribution":{"Utilities":"1.0"}}}', ("sector",)),
+    LegacyCase("negative-weight", '{"short_description":"Hedged world equity","geographic_area":{"distribution":{"USA":"1.2","JPN":"-0.2"}}}', ("description",)),
+    LegacyCase("weight-not-a-number", '{"geographic_area":{"distribution":{"ITA":1}},"sector_area":{"distribution":{"Technology":"lots"}}}', ("geography",)),
+    LegacyCase("weight-a-boolean", '{"short_description":"Energy tracker","sector_area":{"distribution":{"Energy":true}}}', ("description",)),
+    LegacyCase("empty-description-good-sector", '{"short_description":"","sector_area":{"distribution":{"Energy":"1"}}}', ("sector",)),
+    LegacyCase("description-not-a-text", '{"short_description":42,"sector_area":{"distribution":{"Energy":"1"}}}', ("sector",)),
+    LegacyCase("sum-within-a-hundredth", '{"geographic_area":{"distribution":{"USA":"0.605","JPN":"0.4"}}}', ("geography",)),
+    LegacyCase("distribution-missing", '{"short_description":"Odd shape","geographic_area":{"weights":{"USA":"1"}}}', ("description",)),
+)
+CASE_ID = {case.name: index for index, case in enumerate(LEGACY_CASES, start=1)}
+FULL = CASE_ID["full-as-the-app-writes-it"]
+MOCK_FLOATS = CASE_ID["floats-and-services-as-mock-data-writes-them"]
+DESCRIPTION_ONLY = CASE_ID["description-only"]
+COPIED_PAIRS = [pytest.param(case.name, key, id=f"{case.name}:{key}") for case in LEGACY_CASES for key in case.copied]
+
+
+def _part(text: str, key: str) -> Any:
+    """The part of ``classification_params`` that becomes voice ``key``, read with ``parse_float=Decimal`` as the copy reads it."""
+    value = json.loads(text, parse_float=Decimal)
+    for step in PATH_OF_VOICE[key]:
+        value = value[step]
+    return value
+
+
+def _read_back(key: str, text: Optional[str]) -> Any:
+    """A row's value as the store reads it (``store._same_value_text``): plain ``json.loads``, then the catalogue's stored
+    form. A value the store could not read back in its stored form fails here."""
+    if text is None:
+        return None
+    try:
+        return normalize_value(key, json.loads(text))
+    except (ValueError, TypeError) as exc:
+        pytest.fail(f"the store cannot read the {key} row {text!r} back in its stored form: {exc!r}", pytrace=False)
+
+
+def _populate_classified(db: Path) -> None:
+    """``LEGACY_CASES`` and the rest of a 1.3 install (a user and its settings, a broker, prices), as plain SQL."""
+    with _foreign_keys_on(db) as conn:
+        conn.execute(INSERT_USER, ("legacy_owner", "legacy_owner@example.test", STAMP, STAMP))
+        conn.execute("INSERT INTO user_settings (user_id, base_currency, language, ui_preferences, created_at, updated_at) VALUES (1, 'EUR', 'en', '{}', ?, ?)", (STAMP, STAMP))
+        conn.execute("INSERT INTO brokers (id, name, created_at, updated_at) VALUES (1, 'Legacy Broker', ?, ?)", (STAMP, STAMP))
+        conn.executemany(INSERT_CLASSIFIED, [(asset_id, f"Legacy {case.name}", case.text, STAMP, STAMP) for asset_id, case in enumerate(LEGACY_CASES, start=1)])
+        conn.executemany(
+            "INSERT INTO price_history (asset_id, date, close, currency, source_plugin_key, fetched_at) VALUES (?, ?, ?, 'EUR', 'manual', ?)",
+            [(FULL, "2026-11-02", 101.5, STAMP), (FULL, "2026-11-03", 102.25, STAMP), (CASE_ID["null-column"], "2026-11-03", 99.875, STAMP)],
+        )
+        conn.commit()
+
+
+def _legacy_rows_of(rows: list[dict[str, Any]], asset_id: int) -> dict[str, list[dict[str, Any]]]:
+    by_key: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        if row["asset_id"] == asset_id:
+            by_key.setdefault(row["key"], []).append(row)
+    return by_key
+
+
+def _copy_ran(rows: list[dict[str, Any]], where: str) -> Optional[str]:
+    """Barrier: why the copy did not run on that database (the fully classified asset lacks its three ``legacy`` rows), or None."""
+    found = sorted(key for key, of_key in _legacy_rows_of(rows, FULL).items() if any(row["source"] == LEGACY for row in of_key))
+    if found != ["description", "geography", "sector"]:
+        return f"red until A4: {where}: the fully classified asset has legacy rows for {found}, not its three voices: the step {LEGACY_STEP} has not copied it"
+    return None
+
+
+def _assert_copy_ran(rows: list[dict[str, Any]], where: str) -> None:
+    reason = _copy_ran(rows, where)
+    assert reason is None, reason
+
+
+def _today_in(zone: str) -> date:
+    return datetime.now(ZoneInfo(zone)).date()
+
+
+@dataclass(frozen=True)
+class ClassifiedUpgrade:
+    """A copy of the classified 1.3 install, before and right after ``upgrade 006``, and the UTC day around the run."""
+
+    db: Path
+    rows_before: Rows
+    rows_after: Rows
+    profile: list[dict[str, Any]]
+    days: set[date]
+    violations: list[tuple[Any, ...]]
+    integrity: list[tuple[Any, ...]]
+
+
+@pytest.fixture(autouse=True)
+def _no_timezone_variable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``LIBREFOLIO_DEFAULT_TIMEZONE`` stands behind ``scheduler_timezone`` in the app: never here, the copy reads the row."""
+    monkeypatch.delenv("LIBREFOLIO_DEFAULT_TIMEZONE", raising=False)
+
+
+@pytest.fixture(scope="module")
+def classified_1_3(at_005: Path, tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """The classified 1.3 install at 005 (``LEGACY_CASES``), no ``scheduler_timezone`` row. Read-only: ``_copy`` it to write."""
+    db = _copy(at_005, tmp_path_factory.mktemp("classified-1.3") / "app.db")
+    _populate_classified(db)
+    with _connect(db) as conn:
+        assets = conn.execute("SELECT count(*) FROM assets").fetchone()[0]
+        zones = conn.execute("SELECT count(*) FROM global_settings WHERE key = 'scheduler_timezone'").fetchone()[0]
+    assert (assets, zones) == (len(LEGACY_CASES), 0), f"setup: {len(LEGACY_CASES)} assets and no scheduler_timezone row: {(assets, zones)}"
+    assert _revision(db) == REV_005 and _violations(db) == [], "setup: a consistent 1.3 install at 005"
+    return db
+
+
+@pytest.fixture(scope="module")
+def classified_upgrade(classified_1_3: Path, tmp_path_factory: pytest.TempPathFactory) -> ClassifiedUpgrade:
+    db = _copy(classified_1_3, tmp_path_factory.mktemp("classified-upgrade") / "app.db")
+    rows_before = _rows(db)
+    first = datetime.now(UTC).date()
+    _migrate(db, "upgrade", REV_006)
+    last = datetime.now(UTC).date()
+    return ClassifiedUpgrade(db=db, rows_before=rows_before, rows_after=_rows(db), profile=_profile_rows(db), days={first, last}, violations=_violations(db), integrity=_integrity(db))
+
+
+@dataclass(frozen=True)
+class ClassifiedDowngrade:
+    """The classified install at 006, given newer rows by hand, then down to 005."""
+
+    rows_at_005: Rows
+    rows_down: Rows
+    revision: str
+    tables: set[str]
+    violations: list[tuple[Any, ...]]
+    integrity: list[tuple[Any, ...]]
+    newest_sector: Any
+
+
+@pytest.fixture(scope="module")
+def classified_downgrade(classified_upgrade: ClassifiedUpgrade, tmp_path_factory: pytest.TempPathFactory) -> ClassifiedDowngrade | str:
+    """The classified install upgraded, then: two newer ``user`` sector rows of the fully classified asset, inserted in
+    the reverse order of their days (the later day gets the lower id: the (``read_on``, ``id``) order picks it, not the
+    id), and a NULL ``user`` description of the mock-data asset; down to 005. Or, while the copy does not run, the reason."""
+    db = _copy(classified_upgrade.db, tmp_path_factory.mktemp("classified-downgrade") / "app.db")
+    profile = _profile_rows(db)
+    reason = _copy_ran(profile, "the classified install upgraded")
+    if reason is not None:
+        return reason
+    day = max(date.fromisoformat(str(row["read_on"])) for row in profile)
+    newest = {"Energy": "1"}
+    with _foreign_keys_on(db) as conn:
+        conn.execute(INSERT_UPDATE, (FULL, "sector", json.dumps(normalize_value("sector", newest)), "user", 1, (day + timedelta(days=2)).isoformat(), None, STAMP))
+        conn.execute(INSERT_UPDATE, (FULL, "sector", json.dumps(normalize_value("sector", {"Utilities": "1"})), "user", 1, (day + timedelta(days=1)).isoformat(), None, STAMP))
+        conn.execute(INSERT_UPDATE, (MOCK_FLOATS, "description", None, "user", 1, (day + timedelta(days=1)).isoformat(), None, STAMP))
+        conn.commit()
+    _migrate(db, "downgrade", REV_005)
+    return ClassifiedDowngrade(
+        rows_at_005=classified_upgrade.rows_before,
+        rows_down=_rows(db),
+        revision=_revision(db),
+        tables=_tables(db),
+        violations=_violations(db),
+        integrity=_integrity(db),
+        newest_sector=newest,
+    )
+
+
+def _with_zone(at_005: Path, target: Path, zone: Optional[str]) -> Path:
+    """A 1.3 install at 005 with one described asset and, unless ``zone`` is None, that ``scheduler_timezone`` row."""
+    db = _copy(at_005, target)
+    with _foreign_keys_on(db) as conn:
+        conn.execute(INSERT_CLASSIFIED, (1, "Zone probe ETF", '{"short_description":"Zone probe"}', STAMP, STAMP))
+        if zone is not None:
+            conn.execute(INSERT_SETTING, (zone, STAMP))
+        conn.commit()
+    return db
+
+
+def _read_on_after_upgrade(db: Path, zone: str) -> tuple[list[date], set[date]]:
+    """The ``read_on`` of every profile row after ``upgrade 006``, and the dates ``zone`` had around the run."""
+    first = _today_in(zone)
+    _migrate(db, "upgrade", REV_006)
+    last = _today_in(zone)
+    return [date.fromisoformat(str(row["read_on"])) for row in _profile_rows(db)], {first, last}
+
+
+# --- the step ----------------------------------------------------------------------------------------------------------
+
+
+def test_006_holds_the_legacy_copy_step_after_the_profile_step() -> None:
+    """``_upgrade_asset_profile_legacy_copy`` and ``_downgrade_asset_profile_legacy_copy`` exist; ``upgrade()`` calls the
+    copy after ``_upgrade_asset_profile`` (it writes into its table), ``downgrade()`` calls it before
+    ``_downgrade_asset_profile`` (it reads the table that one drops)."""
+    print_section(f"{REV_006}: step {LEGACY_STEP}")
+    module = _scripts().get_revision(REV_006).module
+    missing = [name for name in (UPGRADE_LEGACY, DOWNGRADE_LEGACY) if not callable(getattr(module, name, None))]
+    assert not missing, f"red until A4: {REV_006} defines no {missing}"
+    upgrade, downgrade = inspect.getsource(module.upgrade), inspect.getsource(module.downgrade)
+    assert f"{UPGRADE_STEP}(" in upgrade and f"{UPGRADE_LEGACY}(" in upgrade, f"upgrade() must call {UPGRADE_STEP} and {UPGRADE_LEGACY}"
+    assert upgrade.index(f"{UPGRADE_STEP}(") < upgrade.index(f"{UPGRADE_LEGACY}("), f"upgrade() must call {UPGRADE_LEGACY} after {UPGRADE_STEP}"
+    assert f"{DOWNGRADE_STEP}(" in downgrade and f"{DOWNGRADE_LEGACY}(" in downgrade, f"downgrade() must call {DOWNGRADE_LEGACY} and {DOWNGRADE_STEP}"
+    assert downgrade.index(f"{DOWNGRADE_LEGACY}(") < downgrade.index(f"{DOWNGRADE_STEP}("), f"downgrade() must call {DOWNGRADE_LEGACY} before {DOWNGRADE_STEP}"
+    print_success(f"{LEGACY_STEP}: after {STEP} up, before it down")
+
+
+def test_006_imports_nothing_from_the_application() -> None:
+    """GUARD, green before and after: the revision is self-contained, like every migration — no ``backend.app`` import,
+    so it runs the same on a release whose code has moved on."""
+    source = inspect.getsource(_scripts().get_revision(REV_006).module)
+    imports = [line.strip() for line in source.splitlines() if re.match(r"\s*(from|import)\s+backend\b", line)]
+    assert imports == [], f"{REV_006} must not import application code: {imports}"
+
+
+# --- what the upgrade copies -------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("case_name", [case.name for case in LEGACY_CASES])
+def test_the_upgrade_copies_the_valid_voices_of_each_asset_once(classified_upgrade: ClassifiedUpgrade, case_name: str) -> None:
+    """Each asset of the classified install gets one ``legacy`` row per voice its ``classification_params`` holds in a
+    shape today's rules accept, and none for the others: a NULL, empty, ``'{}'``, broken, non-object column gives no row;
+    a voice whose part fails the rule is skipped, the others of that asset kept. Barrier: the copy ran."""
+    _assert_copy_ran(classified_upgrade.profile, "the classified install upgraded")
+    case = LEGACY_CASES[CASE_ID[case_name] - 1]
+    by_key = _legacy_rows_of(classified_upgrade.profile, CASE_ID[case_name])
+    found = {key: len(rows) for key, rows in sorted(by_key.items())}
+    assert found == dict.fromkeys(sorted(case.copied), 1), f"{case_name}: rows by voice {found}, expected one each for {sorted(case.copied)}"
+
+
+@pytest.mark.parametrize(("case_name", "key"), COPIED_PAIRS)
+def test_each_copied_value_reads_back_in_the_catalogue_stored_form(classified_upgrade: ClassifiedUpgrade, case_name: str, key: str) -> None:
+    """What the store reads back from a copied row — plain ``json.loads``, then ``normalize_value`` — is the stored form
+    of the part it came from (read with ``parse_float=Decimal``): string weights and float weights alike, non-standard
+    sectors as the catalogue maps them."""
+    _assert_copy_ran(classified_upgrade.profile, "the classified install upgraded")
+    case = LEGACY_CASES[CASE_ID[case_name] - 1]
+    rows = _legacy_rows_of(classified_upgrade.profile, CASE_ID[case_name]).get(key, [])
+    assert len(rows) == 1, f"{case_name}: one {key} row expected, found {rows}"
+    expected = normalize_value(key, _part(case.text, key))
+    found = _read_back(key, rows[0]["value"])
+    assert found == expected, f"{case_name}: the {key} row {rows[0]['value']!r} reads back as {found}, the part's stored form is {expected}"
+
+
+def test_the_mock_data_floats_and_services_read_back_as_known_maps(classified_upgrade: ClassifiedUpgrade) -> None:
+    """An anchor written out: ``{"USA": 1.0}`` reads back ``{"USA": "1.0000"}``, ``{"Technology": 0.85, "Services":
+    0.15}`` reads back ``{"Other": "0.1500", "Technology": "0.8500"}`` (an unknown sector is «Other»)."""
+    _assert_copy_ran(classified_upgrade.profile, "the classified install upgraded")
+    by_key = _legacy_rows_of(classified_upgrade.profile, MOCK_FLOATS)
+    found = {key: _read_back(key, by_key[key][0]["value"]) for key in ("geography", "sector") if key in by_key}
+    assert found == {"geography": {"USA": "1.0000"}, "sector": {"Other": "0.1500", "Technology": "0.8500"}}, f"the mock-data maps read back as {found}"
+
+
+def test_every_legacy_row_has_no_author_no_source_date_the_upgrade_day_and_one_created_at(classified_upgrade: ClassifiedUpgrade) -> None:
+    """Every row of the copy: ``source='legacy'``, ``user_id`` and ``source_date`` NULL, ``read_on`` the day of the
+    upgrade in UTC (no ``scheduler_timezone`` row), and one ``created_at`` for the whole run."""
+    rows = classified_upgrade.profile
+    _assert_copy_ran(rows, "the classified install upgraded")
+    expected = sum(len(case.copied) for case in LEGACY_CASES)
+    assert len(rows) == expected, f"the copy writes {expected} rows, found {len(rows)}"
+    wrong = [row for row in rows if (row["source"], row["user_id"], row["source_date"]) != (LEGACY, None, None)]
+    assert wrong == [], f"a legacy row has no author and no source date: {wrong[:3]}"
+    days = {date.fromisoformat(str(row["read_on"])) for row in rows}
+    assert len(days) == 1 and days <= classified_upgrade.days, f"read_on must be the UTC day of the upgrade {sorted(classified_upgrade.days)}: {sorted(days)}"
+    stamps = {row["created_at"] for row in rows}
+    assert len(stamps) == 1, f"one created_at for the run, found {sorted(stamps)}"
+
+
+def test_the_classified_upgrade_keeps_every_other_row_and_no_violation(classified_upgrade: ClassifiedUpgrade) -> None:
+    """Every table but the profile keeps every row it had (``classification_params`` included: D7 drops the column, not
+    A4); ``asset_enrichers`` empty; ``foreign_key_check`` empty, integrity ``ok``. Barrier: the copy ran."""
+    _assert_copy_ran(classified_upgrade.profile, "the classified install upgraded")
+    before, after = classified_upgrade.rows_before, classified_upgrade.rows_after
+    changes = _row_changes(before, after, set(before) - BOOKKEEPING, columns_of=before)
+    assert not changes, f"the upgrade changed rows: {changes}"
+    assert after[ENRICHERS][1] == [], f"{ENRICHERS} stays empty: {after[ENRICHERS][1]}"
+    assert classified_upgrade.violations == [], f"foreign key violations: {classified_upgrade.violations}"
+    assert classified_upgrade.integrity == [("ok",)], f"integrity_check: {classified_upgrade.integrity}"
+
+
+# --- read_on in the scheduler's time zone ------------------------------------------------------------------------------
+
+
+def test_read_on_is_the_upgrade_day_in_the_scheduler_timezone(at_005: Path, tmp_path: Path) -> None:
+    """With ``scheduler_timezone`` saved, ``read_on`` is the day of the upgrade in that zone: two installs in zones 26
+    hours apart get two different days, each its zone's."""
+    found: dict[str, tuple[list[date], set[date]]] = {}
+    for zone in (FAR_EAST, FAR_WEST):
+        found[zone] = _read_on_after_upgrade(_with_zone(at_005, tmp_path / zone.replace("/", "-") / "app.db", zone), zone)
+    for zone, (days, around) in found.items():
+        assert len(days) == 1, f"red until A4: in {zone} the described asset must get one legacy row: read_on {days}"
+        assert days[0] in around, f"in {zone} read_on must be the zone's day of the upgrade {sorted(around)}: {days[0]}"
+    assert found[FAR_EAST][0] != found[FAR_WEST][0], f"two zones 26 hours apart must give two days: {found}"
+
+
+@pytest.mark.parametrize("zone", [pytest.param(None, id="no-row"), pytest.param("Not/AZone", id="not-a-zone")])
+def test_read_on_is_the_utc_day_without_a_valid_scheduler_timezone(at_005: Path, tmp_path: Path, zone: Optional[str]) -> None:
+    """No ``scheduler_timezone`` row, or one that names no zone: ``read_on`` is the day of the upgrade in UTC."""
+    days, around = _read_on_after_upgrade(_with_zone(at_005, tmp_path / "app.db", zone), "UTC")
+    assert len(days) == 1, f"red until A4: the described asset must get one legacy row: read_on {days}"
+    assert days[0] in around, f"read_on must be the UTC day of the upgrade {sorted(around)}: {days[0]}"
+
+
+# --- run again ---------------------------------------------------------------------------------------------------------
+
+
+def test_the_upgrade_run_again_after_the_copy_adds_no_row(classified_upgrade: ClassifiedUpgrade, tmp_path: Path) -> None:
+    """The classified install upgraded, ``alembic_version`` set back to 005 by hand — an upgrade that copied and stopped
+    before Alembic recorded it —: ``upgrade`` again leaves the profile rows exactly as they were. Barrier: the copy ran."""
+    db = _copy(classified_upgrade.db, tmp_path / "app.db")
+    before = _profile_rows(db)
+    _assert_copy_ran(before, "the classified install upgraded")
+    with _foreign_keys_on(db) as conn:
+        conn.execute("UPDATE alembic_version SET version_num = ?", (REV_005,))
+        conn.commit()
+
+    _migrate(db, "upgrade", REV_006)
+
+    assert _revision(db) == REV_006
+    after = _profile_rows(db)
+    assert after == before, f"the copy run again must add no row: {len(before)} rows before, {len(after)} after; new {[row for row in after if row not in before][:3]}"
+
+
+def test_an_upgrade_stopped_during_the_copy_skips_the_voices_already_copied(classified_1_3: Path, fresh_006: Path, tmp_path: Path) -> None:
+    """A classified install at 005 holding the step's tables (``asset_profile`` ran) and one ``legacy`` row already —
+    the fully classified asset's description, with another text —: ``upgrade 006`` keeps that row as the only
+    description of the asset, copies its geography and sector, and copies every other asset. Barrier: the copy ran."""
+    _assert_profile_tables(fresh_006)
+    db = _copy(classified_1_3, tmp_path / "app.db")
+    with _foreign_keys_on(db) as conn:
+        for name in (UPDATES, PROFILE_INDEX, ENRICHERS):
+            conn.execute(_sql_of(fresh_006, name))
+        kept = conn.execute(INSERT_UPDATE, (FULL, "description", '"An older description of the fund"', LEGACY, None, "2026-11-01", None, STAMP)).lastrowid
+        conn.commit()
+    assert _revision(db) == REV_005, "setup: the run stopped before Alembic recorded the revision"
+
+    _migrate(db, "upgrade", REV_006)
+
+    rows = _profile_rows(db)
+    full = _legacy_rows_of(rows, FULL)
+    assert sorted(full) == ["description", "geography", "sector"] and len(full["geography"]) == len(full["sector"]) == 1, f"red until A4: the stopped copy must complete the fully classified asset: {full}"
+    assert [(row["id"], row["value"]) for row in full["description"]] == [(kept, '"An older description of the fund"')], f"the description already copied must be the only one: {full['description']}"
+    described = _legacy_rows_of(rows, DESCRIPTION_ONLY)
+    assert {key: len(of_key) for key, of_key in described.items()} == {"description": 1}, f"every other asset is copied: {described}"
+
+
+# --- the downgrade -----------------------------------------------------------------------------------------------------
+
+
+def test_the_downgrade_of_the_copy_reaches_005_keeping_every_other_row(classified_downgrade: ClassifiedDowngrade | str) -> None:
+    """Down to 005: both tables gone, every other table's rows as at 005, ``assets`` identical but for
+    ``classification_params``; no violation, integrity ``ok``."""
+    trip = _ran(classified_downgrade)
+    assert trip.revision == REV_005
+    assert not set(NEW_TABLES) & trip.tables, f"the downgrade must remove both tables: {sorted(set(NEW_TABLES) & trip.tables)}"
+    changes = _row_changes(trip.rows_at_005, trip.rows_down, set(trip.rows_at_005) - BOOKKEEPING - {"assets"}, columns_of=trip.rows_at_005)
+    assert not changes, f"the downgrade changed other rows: {changes}"
+    _assert_assets_kept_but_classification(trip.rows_at_005, trip.rows_down)
+    assert trip.violations == [] and trip.integrity == [("ok",)], f"violations {trip.violations}, integrity {trip.integrity}"
+
+
+def test_the_downgrade_rebuilds_a_voice_from_its_last_row_in_read_on_order(classified_downgrade: ClassifiedDowngrade | str) -> None:
+    """The fully classified asset, two newer ``user`` sector rows (the later day inserted first): the column's sector is
+    the later day's, as ``{"distribution": …}`` with string weights; its description and geography stay those of the
+    copy (the same meaning as at 005)."""
+    trip = _ran(classified_downgrade)
+    original = _classification_by_asset(trip.rows_at_005)[FULL]
+    rebuilt = _classification_by_asset(trip.rows_down)[FULL]
+    assert rebuilt is not None, "the fully classified asset must keep a classification"
+    data = json.loads(rebuilt)
+    assert set(data) == {"short_description", "geographic_area", "sector_area"}, f"the three parts are rebuilt: {sorted(data)}"
+    assert data["sector_area"] == {"distribution": data["sector_area"].get("distribution")}, f"a map part is {{'distribution': …}}: {data['sector_area']}"
+    weights = data["sector_area"]["distribution"]
+    assert all(isinstance(weight, str) for weight in weights.values()), f"weights are written as strings: {weights}"
+    assert normalize_value("sector", weights) == normalize_value("sector", trip.newest_sector), f"the sector is the last row in (read_on, id) order, {trip.newest_sector}: {weights}"
+    expected = {part: meaning for part, meaning in _meaning(original).items() if part != "sector_area"}
+    assert {part: meaning for part, meaning in _meaning(rebuilt).items() if part != "sector_area"} == expected, f"description and geography keep their meaning: {rebuilt} against {original}"
+
+
+def test_the_downgrade_removes_a_part_whose_last_row_is_null(classified_downgrade: ClassifiedDowngrade | str) -> None:
+    """The mock-data asset, its description emptied on purpose by a newer NULL row: ``short_description`` is gone from
+    the column, geography and sector keep their meaning."""
+    trip = _ran(classified_downgrade)
+    original = _meaning(_classification_by_asset(trip.rows_at_005)[MOCK_FLOATS])
+    rebuilt = _meaning(_classification_by_asset(trip.rows_down)[MOCK_FLOATS])
+    expected = {part: meaning for part, meaning in original.items() if part != "short_description"}
+    assert rebuilt == expected, f"the NULL description removes short_description, the rest keeps its meaning: {rebuilt}, expected {expected}"
+
+
+@pytest.mark.parametrize("case_name", [case.name for case in LEGACY_CASES if case.copied and CASE_ID[case.name] not in (FULL, MOCK_FLOATS)])
+def test_the_downgrade_gives_back_the_meaning_of_an_untouched_asset(classified_downgrade: ClassifiedDowngrade | str, case_name: str) -> None:
+    """An asset with legacy rows and no later change: the rebuilt column means what the column meant at 005 — the parts
+    from the rows in the catalogue's stored form, a part the copy skipped as it was — and every map part rebuilt from a
+    row is ``{"distribution": …}`` with string weights."""
+    trip = _ran(classified_downgrade)
+    asset_id = CASE_ID[case_name]
+    original, rebuilt = _classification_by_asset(trip.rows_at_005)[asset_id], _classification_by_asset(trip.rows_down)[asset_id]
+    assert _meaning(rebuilt) == _meaning(original), f"{case_name}: the rebuilt {rebuilt!r} must mean what {original!r} meant"
+    data = json.loads(rebuilt)
+    for key in ("geography", "sector"):
+        if key in LEGACY_CASES[asset_id - 1].copied:
+            part = data[PATH_OF_VOICE[key][0]]
+            assert set(part) == {"distribution"} and all(isinstance(weight, str) for weight in part["distribution"].values()), f"{case_name}: {key} rebuilt as {part}"
+
+
+@pytest.mark.parametrize("case_name", [case.name for case in LEGACY_CASES if not case.copied])
+def test_the_downgrade_leaves_the_column_of_an_asset_without_profile_rows_untouched(classified_downgrade: ClassifiedDowngrade | str, case_name: str) -> None:
+    """An asset the copy gave no row (NULL, ``''``, ``'{}'``, broken, non-object column): its column byte for byte."""
+    trip = _ran(classified_downgrade)
+    asset_id = CASE_ID[case_name]
+    original, after = _classification_by_asset(trip.rows_at_005)[asset_id], _classification_by_asset(trip.rows_down)[asset_id]
+    assert after == original, f"{case_name}: the column must stay {original!r}, found {after!r}"
