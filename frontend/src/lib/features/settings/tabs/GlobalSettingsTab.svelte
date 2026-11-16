@@ -958,6 +958,8 @@
         times: editedValues['scheduler_history_sync_times'] || '06:00,23:00',
         days: editedValues['scheduler_history_sync_days'] || 'mon,tue,wed,thu,fri,sat',
         horizon: parseInt(editedValues['scheduler_history_sync_horizon_days'] || '14', 10),
+        profileTimes: editedValues['scheduler_profile_read_times'] || '03:00',
+        profileDays: editedValues['scheduler_profile_read_days'] || 'sat',
     }}
     onsave={async () => {
         await loadSettings();
