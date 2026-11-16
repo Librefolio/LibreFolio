@@ -12,7 +12,7 @@
      * **The reduction is expressed by supplying fewer snippets, not by a
      * variant.** `L4WhatIf` declares all three rungs optional and guards each
      * with an `{#if}`, so a container that hands it one rung gets one rung, with
-     * the same headings, the same `data-distance`, and — because the beta notice
+     * the same headings, the same `data-distance`, and — because the model warning
      * lives inside the simulation branch — no model warning over a replay that
      * is simply what happened. The seam for this page was already cut; a
      * `variant` prop on four components, or a fifth component, would both have
