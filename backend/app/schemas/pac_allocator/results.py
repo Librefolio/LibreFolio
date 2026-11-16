@@ -600,8 +600,16 @@ def _validate_stage_order(solver_evidence: ReportedFloatingSolverEvidence, named
     """Finished solver stages precede unfinished ones, except a Rebalancer tie-break whose plan the exact comparison
     rejected (D4; lot CR of project 67). SCIP closed that stage, the solver reports it unfinished, and the cascade goes on, so
     a later stage may finish after it: a legitimate state, which ``score.tie_breaks`` names (``rejected``). Every other
-    unfinished stage before a finished one is still refused. An infeasible stage is alone (the evidence's own rule)."""
+    unfinished stage before a finished one is still refused. A rejection cannot happen in the tail, so a rejected row never
+    follows an unfinished row that is not itself rejected (the consultant's invariant). An infeasible stage is alone (the
+    evidence's own rule)."""
     rejected = {code for code, status in (named_tie_breaks or {}).items() if status == "rejected"}
+    # D4 rejects only outside the tail: a rejected tie-break never follows a stage a limit left unfinished.
+    left_open = False
+    for stage in solver_evidence.stages:
+        if stage.objective_code in rejected and left_open:
+            raise ValueError("A rejected tie-break cannot follow a stage a limit left unfinished")
+        left_open = left_open or (stage.status == "unfinished" and stage.objective_code not in rejected)
     statuses = [stage.status for stage in solver_evidence.stages if stage.objective_code not in rejected]
     if "infeasible" in statuses:
         return

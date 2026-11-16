@@ -2981,6 +2981,16 @@ def test_an_unfinished_stage_before_a_finished_one_is_refused(product: str, adap
     _reject_because(adapter, _second_stage_left_open(product), "Finished solver stages must precede unfinished stages")
 
 
+def test_a_rejected_tie_break_never_follows_a_stage_a_limit_left_open() -> None:
+    """The consultant's invariant (D4): D4 rejects only outside the tail, so a rejected tie-break never comes after a stage
+    a limit left unfinished. [finished, unfinished by the clock, rejected] is a wire the cascade cannot produce."""
+    payload = _second_stage_left_open("Rebalancer")
+    third = _find(payload["solver_evidence"]["stages"], "ordinal", 3)
+    third["status"] = "unfinished"
+    _find(payload["primary_solution"]["score"]["tie_breaks"], "objective_code", third["objective_code"])["status"] = "rejected"
+    _reject_because(REBALANCER_PLAN_OUTPUT_ADAPTER, payload, "A rejected tie-break cannot follow a stage a limit left unfinished")
+
+
 def test_a_rejected_tie_break_may_precede_a_finished_stage() -> None:
     """D4 (B2 review of project 67): a tie-break whose plan the exact comparison rejected is reported unfinished and the
     cascade goes on, so a later stage may finish after it. ``score.tie_breaks`` names it rejected, and the wire accepts the
