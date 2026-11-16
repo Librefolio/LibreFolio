@@ -113,6 +113,25 @@
           "plan": {
             "buysAt": "Acquisti su {broker}",
             "sequenceHint": "Segui i numeri: prima i depositi, i trasferimenti e i cambi, nell’ordine indicato, poi gli acquisti."
+          },
+          "allocation": {
+            "beforeShare": "Quota oggi",
+            "beforeShareHelp": "La sua quota dell’intero portafoglio oggi, cassa compresa.",
+            "beforeValue": "Valore oggi",
+            "beforeValueHelp": "Quanto vale oggi la voce: le quote che hai al prezzo di quotazione, o la cassa.",
+            "targetShareHelp": "La quota che hai scelto per questa voce nel passo Obiettivi, sull’intero portafoglio.",
+            "targetValueHelp": "Quanto varrebbe la voce con esattamente la sua quota obiettivo dell’intero portafoglio di oggi.",
+            "finalShareHelp": "Il suo valore dopo il piano, come quota dell’intero portafoglio di oggi, cassa compresa. I soldi persi in commissioni e tasse contano nella riga del non investito.",
+            "finalValueHelp": "Quanto vale la voce dopo il piano: le quote che hai più quelle comprate, o la cassa rimasta.",
+            "boughtHelp": "Il valore di ciò che il piano compra di questo Asset, al prezzo di quotazione: senza commissioni né margine sul prezzo.",
+            "residualHelp": "Valore dopo il piano meno valore ideale: positivo se la voce finisce sopra la sua quota, negativo se sotto.",
+            "uninvested": "Non investito",
+            "uninvestedHelp": "Tutto ciò che non è né in un Asset né in una cassa con un suo obiettivo: oggi, e dopo il piano, quando conta anche i soldi persi in commissioni e tasse.",
+            "minimum": "Minimo",
+            "minimumHelp": "Il minimo che hai messo per questa voce nel passo Obiettivi: il suo valore dopo il piano non scende sotto.",
+            "maximum": "Massimo",
+            "maximumHelp": "Il massimo che hai messo per questa voce nel passo Obiettivi: il suo valore dopo il piano non sale sopra.",
+            "title": "Allocazione per voce"
           }
         }
       }

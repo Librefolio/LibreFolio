@@ -113,6 +113,25 @@
           "plan": {
             "buysAt": "Achats sur {broker}",
             "sequenceHint": "Suivez les numéros : d’abord les dépôts, les virements et les changes, dans l’ordre indiqué, puis les achats."
+          },
+          "allocation": {
+            "beforeShare": "Part aujourd’hui",
+            "beforeShareHelp": "Sa part de tout le portefeuille aujourd’hui, liquidités comprises.",
+            "beforeValue": "Valeur aujourd’hui",
+            "beforeValueHelp": "Ce que vaut la ligne aujourd’hui : les parts détenues au cours de cotation, ou les liquidités.",
+            "targetShareHelp": "La part choisie pour cette ligne à l’étape Objectifs, sur tout le portefeuille.",
+            "targetValueHelp": "Ce que vaudrait la ligne avec exactement sa part cible de tout le portefeuille d’aujourd’hui.",
+            "finalShareHelp": "Sa valeur après le plan, en part de tout le portefeuille d’aujourd’hui, liquidités comprises. L’argent perdu en frais et en impôts compte dans la ligne du non investi.",
+            "finalValueHelp": "Ce que vaut la ligne après le plan : les parts détenues plus celles achetées, ou les liquidités restantes.",
+            "boughtHelp": "La valeur de ce que le plan achète de cet Actif, au cours de cotation : sans frais ni marge sur le prix.",
+            "residualHelp": "Valeur après le plan moins valeur idéale : positive si la ligne finit au-dessus de sa part, négative si en dessous.",
+            "uninvested": "Non investi",
+            "uninvestedHelp": "Tout ce qui n’est ni dans un Actif ni dans des liquidités avec leur propre objectif : aujourd’hui, et après le plan, où cela compte aussi l’argent perdu en frais et en impôts.",
+            "minimum": "Minimum",
+            "minimumHelp": "Le minimum fixé pour cette ligne à l’étape Objectifs : sa valeur après le plan ne descend pas en dessous.",
+            "maximum": "Maximum",
+            "maximumHelp": "Le maximum fixé pour cette ligne à l’étape Objectifs : sa valeur après le plan ne dépasse pas.",
+            "title": "Allocation par ligne"
           }
         }
       }

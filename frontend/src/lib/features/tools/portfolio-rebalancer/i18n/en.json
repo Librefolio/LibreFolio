@@ -113,6 +113,25 @@
           "plan": {
             "buysAt": "Purchases on {broker}",
             "sequenceHint": "Follow the numbers: first the deposits, transfers and currency exchanges, in the order shown, then the purchases."
+          },
+          "allocation": {
+            "beforeShare": "Share today",
+            "beforeShareHelp": "Its share of the whole portfolio today, cash included.",
+            "beforeValue": "Value today",
+            "beforeValueHelp": "What the entry is worth today: the units you hold at the quote price, or the cash.",
+            "targetShareHelp": "The share you chose for this entry in the Targets step, of the whole portfolio.",
+            "targetValueHelp": "What the entry would be worth with exactly its target share of the whole portfolio today.",
+            "finalShareHelp": "Its value after the plan, as a share of the whole portfolio today, cash included. The money lost to fees and taxes counts in the uninvested row.",
+            "finalValueHelp": "What the entry is worth after the plan: the units you hold plus the ones bought, or the cash left.",
+            "boughtHelp": "The value of what the plan buys of this Asset, at the quote price: without fees or price margin.",
+            "residualHelp": "Value after the plan minus ideal value: positive if the entry ends above its share, negative if below.",
+            "uninvested": "Uninvested",
+            "uninvestedHelp": "Everything that is neither in an Asset nor in a cash with a target of its own: today, and after the plan, when it also counts the money lost to fees and taxes.",
+            "minimum": "Minimum",
+            "minimumHelp": "The minimum you set for this entry in the Targets step: its value after the plan does not go below it.",
+            "maximum": "Maximum",
+            "maximumHelp": "The maximum you set for this entry in the Targets step: its value after the plan does not go above it.",
+            "title": "Allocation per entry"
           }
         }
       }

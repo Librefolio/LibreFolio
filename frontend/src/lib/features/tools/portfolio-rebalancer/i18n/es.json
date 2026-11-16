@@ -113,6 +113,25 @@
           "plan": {
             "buysAt": "Compras en {broker}",
             "sequenceHint": "Sigue los números: primero los depósitos, las transferencias y los cambios, en el orden indicado, y después las compras."
+          },
+          "allocation": {
+            "beforeShare": "Parte hoy",
+            "beforeShareHelp": "Su parte de toda la cartera hoy, efectivo incluido.",
+            "beforeValue": "Valor hoy",
+            "beforeValueHelp": "Lo que vale hoy la partida: las participaciones que tienes al precio de cotización, o el efectivo.",
+            "targetShareHelp": "La parte que elegiste para esta partida en el paso Objetivos, sobre toda la cartera.",
+            "targetValueHelp": "Lo que valdría la partida con exactamente su parte objetivo de toda la cartera de hoy.",
+            "finalShareHelp": "Su valor después del plan, como parte de toda la cartera de hoy, efectivo incluido. El dinero perdido en comisiones e impuestos cuenta en la fila de lo no invertido.",
+            "finalValueHelp": "Lo que vale la partida después del plan: las participaciones que tienes más las compradas, o el efectivo restante.",
+            "boughtHelp": "El valor de lo que el plan compra de este Activo, al precio de cotización: sin comisiones ni margen sobre el precio.",
+            "residualHelp": "Valor después del plan menos valor ideal: positivo si la partida acaba por encima de su parte, negativo si por debajo.",
+            "uninvested": "No invertido",
+            "uninvestedHelp": "Todo lo que no está ni en un Activo ni en un efectivo con su propio objetivo: hoy, y después del plan, cuando también cuenta el dinero perdido en comisiones e impuestos.",
+            "minimum": "Mínimo",
+            "minimumHelp": "El mínimo que pusiste para esta partida en el paso Objetivos: su valor después del plan no baja de él.",
+            "maximum": "Máximo",
+            "maximumHelp": "El máximo que pusiste para esta partida en el paso Objetivos: su valor después del plan no lo supera.",
+            "title": "Asignación por partida"
           }
         }
       }
