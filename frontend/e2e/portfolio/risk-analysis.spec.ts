@@ -1956,13 +1956,11 @@ test.describe('Risk analysis functional integration', () => {
 
         const panel = await openDashboardRisk(page);
 
-        // The Dashboard now opens with no beta notice at all, and that absence is
-        // the claim: L1, L2 and L3 rest on observed facts and have left beta. The
-        // banner survives on one rung only — the simulation, inside the closed L4
-        // drawer — so zero here is what "the rest is finished" looks like from the
-        // reader's side. `toHaveCount(0)` rather than `not.toBeVisible()`: a closed
-        // drawer does not render its body, so the node is absent rather than
-        // hidden, and only a count can tell those two apart.
+        // The Dashboard opens with no beta notice at all, and that absence is the
+        // claim: every level has left beta, the simulation last (RN-06, Q6). The
+        // simulation rung, opened, carries none either: the level-4 test reads it.
+        // `toHaveCount(0)` rather than `not.toBeVisible()`: only a count tells an
+        // absent node from a hidden one.
         await expect(page.getByTestId('risk-beta-banner')).toHaveCount(0);
 
         // Dashboard's scope is the whole portfolio, so it must carry no subset
@@ -2494,32 +2492,13 @@ test.describe('Risk analysis functional integration', () => {
         await expect(panel.getByTestId('risk-l4-simulation').getByTestId('risk-l4-model-warning')).toBeVisible();
         await expect(panel.getByTestId('risk-l4-replay').getByTestId('risk-l4-model-warning')).toHaveCount(0);
 
-        // And the beta banner is *here*, on this rung and nowhere else.
-        //
-        // This is the assertion the three surfaces above cannot make. They each
-        // say the banner is absent, and three zeroes agree just as happily with a
-        // banner that was deleted outright as with one that moved: an absence does
-        // not name what caused it. Without this line the component could be
-        // removed from the codebase entirely and the whole suite would stay green.
-        //
-        // The page-wide count is the double-mount gate the three surfaces used to
-        // hold, following the banner to the one rung that still earns it. It is
-        // not decoration: `RiskAnalysisPanel` still carries its own mount behind a
-        // `showBetaBanner` prop, so "exactly one" is a live constraint rather than
-        // an observation about today's tree.
-        await expect(panel.getByTestId('risk-l4-simulation').getByTestId('risk-beta-banner')).toBeVisible();
-        await expect(panel.getByTestId('risk-l4-replay').getByTestId('risk-beta-banner')).toHaveCount(0);
-        await expect(page.getByTestId('risk-beta-banner')).toHaveCount(1);
-
-        // *Which* claim it makes, not merely that it is here. The component serves
-        // two surfaces that are beta for unrelated reasons — Asset Detail is parked
-        // whole, this rung is held back by one recorded defect — and their texts are
-        // translated, so no assertion in this suite can read them. `data-scope` is
-        // what makes the distinction assertable at all: without it, swapping the
-        // component's default would silently tell the reader of a finished
-        // Dashboard that the whole subsystem is still provisional, and every count
-        // above would still be right.
-        await expect(panel.getByTestId('risk-l4-simulation').getByTestId('risk-beta-banner')).toHaveAttribute('data-scope', 'simulation');
+        // And no beta banner, on this rung or anywhere on the page (RN-06, Q6: the
+        // simulation left beta on 16/11/2026). The model warning above stays: it is
+        // about epistemics, not maturity, and a model stays a model. Read once the
+        // simulation rung is on screen, so the zero is an absence and not a page
+        // still loading.
+        await expect(panel.getByTestId('risk-l4-simulation')).toBeVisible();
+        await expect(page.getByTestId('risk-beta-banner'), 'a beta banner on the Dashboard: no part of the four levels is in beta any more').toHaveCount(0);
 
         // Every editor really mounted, with the defaults the request will carry.
         await expect(panel.getByTestId('risk-replay')).toBeVisible();
