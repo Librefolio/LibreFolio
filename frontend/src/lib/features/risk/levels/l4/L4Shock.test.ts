@@ -14,7 +14,7 @@
  * its `title` and its fields' accessible names. What is pinned here:
  *
  *   1. **The rows are named as the legacy panel names them** (`stressBucketLabel`,
- *      `RiskAnalysisPanel.svelte:357-365`): `Other` → common.other; `european_union` →
+ *      `RiskAnalysisPanel.svelte`): `Other` → common.other; `european_union` →
  *      risk.stress.europeanUnion; an asset class → assets.types.<ID>; a sector → its emoji and
  *      sectors.<key> (`sectorI18nKey`); a country → its flag and its name, from the country cache. The
  *      dimension is the answer's (`output.dimension`): the sector and geography answers are put on

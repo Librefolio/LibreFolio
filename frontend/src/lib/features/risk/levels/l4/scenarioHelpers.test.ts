@@ -551,7 +551,7 @@ describe('tornadoRows — a configured bucket’s weight is its share of the sco
             rows.map((row) => row.bucketId),
             'premise: both buckets are drawn',
         ).toEqual(['CRYPTO', 'STOCK']);
-        // `TornadoChart` shows the column only when some row states a weight (`TornadoChart.svelte:57`).
+        // `TornadoChart` shows the column only when some row states a weight (`hasWeight` in `TornadoChart.svelte`).
         expect(
             rows.map((row) => row.weight),
             'a bucket states a weight on a scope that has none',
@@ -712,7 +712,7 @@ type ReplayErrorCode = z.infer<typeof schemas.RiskErrorCode>;
 const BLOCK_CODES = ['historical_replay_assets_excluded', 'historical_replay_mostly_excluded'];
 const REASON_ORDER = ['no_prices_in_window', 'starts_after_window_start', 'stale_at_window_start', 'stale_at_window_end', 'missing_fx', 'manual_exclusion'];
 
-// ⚠️ Every figure and id below is invented; the shapes are the backend's (`stress.py::_historical`,
+// ⚠️ Every figure and id below is invented; the shapes are the backend's (`StressAnalytic._historical`,
 // `_replay_exclusion_warning`, `service.py::_with_warning_asset_names`).
 const WINDOW = {start: '2020-02-03', end: '2020-03-31'};
 const NOTHING_LEFT_MESSAGE = 'No asset in the replay scope covers the replay window';
@@ -735,7 +735,7 @@ function omitted(assetId: number, reason: ExclusionReason): AuditExcludedAsset {
     return {asset_id: assetId, reason, weight: null, treatment: 'omitted_from_replay'};
 }
 
-/** An audit as `stress.py` builds it: the total is the sum of the weights, zero when there are none. */
+/** An audit as `StressAnalytic._historical` builds it: the total is the sum of the weights, zero when there are none. */
 function audit(excluded: AuditExcludedAsset[], extra: Partial<ReplayAudit> = {}): ReplayAudit {
     const weights = excluded.map((item) => item.weight).filter((weight): weight is number => typeof weight === 'number');
     return {
@@ -830,7 +830,7 @@ function refused(code: ReplayErrorCode, details: Record<string, unknown> | undef
     return {instance_id: 'single-stress', analytic_code: 'stress', status: 'unavailable', output: null, error: wrapped ? [error] : error};
 }
 
-/** Nothing left to replay: every asset excluded (`stress.py`, the `if not selected:` branch). */
+/** Nothing left to replay: every asset excluded (`StressAnalytic._historical`, the `if not selected:` branch). */
 function nothingLeft(details: Record<string, unknown>, {wrapped = false}: {wrapped?: boolean} = {}): RiskAnalyticResult {
     return refused('insufficient_history', details, {wrapped, message: NOTHING_LEFT_MESSAGE});
 }
@@ -902,7 +902,7 @@ describe('replayExclusions — from the audit, when something was replayed', () 
     });
 
     it('reads an asset set as having no weights at all — no total, not a total of zero', () => {
-        // `stress.py` pins `excluded_weight_total` to 0.0 on an unweighted scope; read as a number
+        // `StressAnalytic._historical` pins `excluded_weight_total` to 0.0 on an unweighted scope; read as a number
         // it would print "0.0% of the scope" beside assets that were never weighed.
         const result = replayed('asset_set', audit([omitted(21, 'starts_after_window_start'), omitted(22, 'no_prices_in_window')]), [exclusionWarning('no_prices_in_window', [22], 'omitted_from_replay'), exclusionWarning('starts_after_window_start', [21], 'omitted_from_replay')]);
 

@@ -505,7 +505,7 @@ describe('uncoveredWeight', () => {
     });
 
     it("keeps a residual of exactly 1e-9 as cash: the line is strict, as in the service's in-transit check", () => {
-        // `service.py` reads `abs(...) < 1e-9` as noise, so exactly 1e-9 is not.
+        // `load_scope_inputs` (`risk/scope.py`) reads `abs(...) < 1e-9` as noise, so exactly 1e-9 is not.
         expect(uncoveredWeight(contribution({cash_weight: 1e-9, excluded_weight: 0}))).toStrictEqual({total: 1e-9, unpriced: 0, cash: 1e-9});
     });
 
@@ -1300,7 +1300,7 @@ describe('resultReasons — keyed warnings', () => {
         expect(resultReasons(results), 'verbatim: one sentence standing for two causes claimed one of them, or badged one set of assets for both').toStrictEqual([{key: `${EXCLUDED_CASE.code}:${EXCLUDED_CASE.message}`, message: EXCLUDED_CASE.message, occurrences: 4}]);
     });
 
-    // `stress.py` emits one fallback per asset, naming it under `details.asset_id` beside the
+    // `StressAnalytic._hypothetical` emits one fallback per asset, naming it under `details.asset_id` beside the
     // cause. Worded, the names split the sentence, so each asset's line keeps its own badge.
     it('carries the one asset and the cause of each hypothetical fallback, which names its asset under asset_id', () => {
         const first = resolve(FALLBACK_CASE.key, {...FALLBACK_CASE.params, names: HOLDING_A});
@@ -1323,7 +1323,7 @@ describe('resultErrorCodes', () => {
         expect(resultErrorCodes([failed('a', {code: 'incompatible_scope'})])).toEqual(['incompatible_scope']);
     });
 
-    // `RiskResultFrame:23` reads the same field through `singleValue` because the
+    // `errorCode` in `RiskResultFrame` reads the same field through `singleValue` because the
     // generated client types it as a value *or* a list. Reaching for
     // `result.error.code` works on today's payload and returns `undefined` the
     // day one arrives wrapped — an error that would then disclose nothing at all,
@@ -1361,7 +1361,7 @@ describe('translateErrorCode', () => {
         expect(translateErrorCode('incompatible_scope', translate, 'risk.errors.unknown')).toBe('This analytic does not support the selected scope.');
     });
 
-    // The defect recorded at `RiskResultFrame:108`: without the `translated === key`
+    // The defect recorded at the return-basis line of `RiskResultFrame`: without the `translated === key`
     // comparison, a code the backend gains tomorrow prints `risk.errors.<code>` on
     // screen. Nothing else in the stack catches it — a key is a string, and a
     // string renders.
@@ -1390,7 +1390,7 @@ describe('translateErrorCode', () => {
  *
  * The simulation refuses a run too large to carry with `resource_limit`, and its `details` now
  * say which limit was hit and which setting brings the run back within reach: `{metric, actual,
- * limit, remedy}`, the remedy one of four (`simulation.py::_REMEDY_BY_METRIC`). The four are not
+ * limit, remedy}`, the remedy one of four (`REMEDY_BY_METRIC`, `risk/base.py`). The four are not
  * interchangeable — fewer paths or a shorter horizon cure only the path budgets, a history too
  * long needs a shorter period, the Sobol dimension ignores the paths, and no setting shrinks the
  * number of positions — so one generic «too large to run» leaves the reader guessing which
@@ -1432,7 +1432,7 @@ const UNKNOWN_ERROR_KEY = 'risk.errors.unknown';
 const remedyCode = (remedy: Remedy): string => `resource_limit_${remedy}`;
 const remedyKey = (remedy: Remedy): string => `risk.errors.${remedyCode(remedy)}`;
 
-/** One refusal per remedy, its details as the backend sends them for a metric that maps to it: `simulation.py::_resource_limit`, and `risk/scope.py::prepare_asset_series` for the price-day budget (J-50). */
+/** One refusal per remedy, its details as the backend sends them for a metric that maps to it: `resource_limit_error` (`risk/base.py`), and `risk/scope.py::prepare_asset_series` for the price-day budget (J-50). */
 const REFUSAL_DETAILS: Record<Remedy, Record<string, unknown>> = {
     paths_or_horizon: {metric: 'portfolio_cells', actual: 20_000_001, limit: 20_000_000, remedy: 'paths_or_horizon'},
     horizon_or_sampling: {metric: 'sobol_dimension', actual: 21_202, limit: 21_201, remedy: 'horizon_or_sampling'},
