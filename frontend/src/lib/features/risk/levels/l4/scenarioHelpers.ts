@@ -198,8 +198,8 @@ export function tornadoRows(output: unknown): TornadoRow[] {
 /**
  * The one error a caller can reason about, whichever shape the wire used.
  *
- * `generated.ts:7662` types the field as `RiskError | Array<RiskError | null>`
- * while the Zod validator at `:14415` only ever admits the single object — the
+ * the generated client (`generated.ts`) types the field as `RiskError | Array<RiskError | null>`
+ * while its Zod validator only ever admits the single object — the
  * backend declares `RiskAnalyticResult.error: Optional[RiskError]` (`schemas/risk/results.py`). The array
  * branch is therefore unreachable today, but casting it away would leave a lie
  * behind if the contract ever widens for real. Normalising costs one line.

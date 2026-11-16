@@ -40,7 +40,7 @@
      *
      * The brief asks for this control to go, and it is right that it should: a
      * Sobol start index is a quant's knob, not a question about a portfolio. But
-     * it cannot simply stop being *sent* — `simulation.py:138` refuses a QMC run
+     * it cannot simply stop being *sent* — `SimulationParams._validate_parametric_params` refuses a QMC run
      * without one — so the control disappears and the value becomes a constant.
      * A fixed entry point is also the reproducible choice, and the provenance
      * block states the seed either way.
