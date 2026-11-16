@@ -57,7 +57,7 @@ vi.mock('$lib/api', () => ({
 
 import en from '$lib/i18n/en.json';
 import type {PlannerExactNumber, PlannerLedgerRow, PlannerProof, PlannerReadyResult} from '../types';
-import {hasPlanSteps, LEDGER_FIELDS, ledgerFields, limitedEntries, notesBesideLimitsBanner, planSteps, resultBadges, type LimitedEntry, type ResultBadge} from './model';
+import {allocationRows, hasPlanSteps, LEDGER_FIELDS, ledgerFields, limitedEntries, notesBesideLimitsBanner, planSteps, resultBadges, type LimitedEntry, type ResultBadge} from './model';
 import type {RebalancerSolution} from '../types';
 import browser from './__fixtures__/rebalancer-browser.json';
 import type {PlannerResolvedRequest} from '../types';
@@ -258,5 +258,26 @@ describe('planSteps — the backend counter, transfers included (F4a step 1)', (
         expect(hasPlanSteps({funding_actions: [], conversions: [], order_rows: [], transfers: []})).toBe(false);
         // The PAC's solution carries no transfers at all.
         expect(hasPlanSteps({funding_actions: [], conversions: [], order_rows: []})).toBe(false);
+    });
+});
+
+/**
+ * The allocation's rows (F4a of project 67, step 3; contract §6.2): one per Asset, one per cash entry, then the
+ * «uninvested» row, last. On the engine's G5 answer: seven Assets, two cash entries with a target, the uninvested row. The
+ * rows are the published ones, in the published order: nothing is computed. The PAC's solution has its Assets only.
+ */
+describe('allocationRows — before, target and after (F4a step 3)', () => {
+    const solution = browser.result.primary_solution as unknown as RebalancerSolution;
+
+    it('before, target and after rows include cash entries and the uninvested row', () => {
+        const rows = allocationRows(solution);
+        expect(rows.map((row) => row.kind)).toEqual([...solution.asset_rows.map(() => 'asset'), ...solution.cash_rows.map(() => 'cash'), 'uninvested']);
+        expect(rows.map((row) => row.id)).toEqual([...solution.asset_rows.map((row) => row.asset_id), ...solution.cash_rows.map((row) => `cash:${row.broker_id}:${row.currency}`), 'uninvested']);
+        expect(rows.at(-1)?.row).toBe(solution.uninvested_row);
+    });
+
+    it('the PAC has its Assets only', () => {
+        const rows = allocationRows({asset_rows: solution.asset_rows});
+        expect(rows.map((row) => row.kind)).toEqual(solution.asset_rows.map(() => 'asset'));
     });
 });

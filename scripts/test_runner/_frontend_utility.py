@@ -656,6 +656,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/tools/pac-allocator/planner/steps/RebalancerStrategyStep.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/ResultView.rebalancer.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/OperationalPlan.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/result/RebalancerAllocationTable.test.ts",
             "src/lib/features/tools/pac-allocator/planner/profileContext.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/BusyPanel.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/AutomaticConversionNote.test.ts",

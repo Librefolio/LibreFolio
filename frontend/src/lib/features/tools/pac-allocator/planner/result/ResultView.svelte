@@ -8,9 +8,10 @@
     import {presentIssues} from '../issues';
     import {listIssue} from '../labels';
     import type {RunOutcome} from '../run.svelte';
-    import type {PlannerOrderRow, PlannerStep} from '../types';
+    import type {PlannerOrderRow, PlannerStep, RebalancerSolution} from '../types';
     import {BUTTON_LINK, CARD, SECTION_TITLE} from '../ui';
     import AssetTable from './AssetTable.svelte';
+    import RebalancerAllocationTable from './RebalancerAllocationTable.svelte';
     import ExposureSection from './ExposureSection.svelte';
     import FailurePanel from './FailurePanel.svelte';
     import KpiCards from './KpiCards.svelte';
@@ -139,8 +140,13 @@
         {/if}
 
         {#if solution}
-            <ResultSection id="allocation" title={title('allocation', 'Allocation per Asset')} open={open.has('allocation')} ontoggle={toggle}>
-                <AssetTable rows={solution.asset_rows} accounting={solution.accounting} {names} {digits} {draft} />
+            <ResultSection id="allocation" title={profile.text === 'rebalancer' ? $t('tools.portfolioRebalancer.planner.result.allocation.title') : title('allocation', 'Allocation per Asset')} open={open.has('allocation')} ontoggle={toggle}>
+                <!-- F4a step 3: the Rebalancer's before / target / after with its cash entries and the uninvested row; the PAC keeps its table. -->
+                {#if profile.text === 'rebalancer'}
+                    <RebalancerAllocationTable solution={solution as unknown as RebalancerSolution} {names} {digits} {draft} />
+                {:else}
+                    <AssetTable rows={solution.asset_rows} accounting={solution.accounting} {names} {digits} {draft} />
+                {/if}
             </ResultSection>
             {#if hasPlan}
                 <ResultSection id="plan" title={title('plan', 'Operational plan')} count={planCount} open={open.has('plan')} ontoggle={toggle}>

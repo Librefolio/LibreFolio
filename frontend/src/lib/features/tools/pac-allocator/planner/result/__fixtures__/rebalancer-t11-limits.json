@@ -1,0 +1,1129 @@
+{
+  "request": {
+    "operation": "plan",
+    "snapshot": {
+      "snapshot_id": "snapshot-reb-small-t11",
+      "draft_revision": 1,
+      "captured_at": "2026-11-13T20:00:00Z"
+    },
+    "as_of": "2026-11-13",
+    "valuation_currency": "EUR",
+    "provenance": [
+      {
+        "kind": "manual",
+        "provenance_id": "prov-reb-small",
+        "label": "Rebalancer small cases",
+        "entered_at": "2026-11-13T20:00:00Z"
+      }
+    ],
+    "assets": [
+      {
+        "asset_id": "asset-a",
+        "identity": {
+          "kind": "manual_asset",
+          "name": "Asset asset-a",
+          "ticker": null,
+          "asset_class": "etf"
+        },
+        "quote": {
+          "amount": "1",
+          "currency": "EUR",
+          "quote_base_quantity": "1",
+          "provenance_id": "prov-reb-small"
+        },
+        "exposures": [
+          {
+            "dimension": "asset_type",
+            "category_id": "equity",
+            "label": "Equity",
+            "weight": "1",
+            "provenance_id": "prov-reb-small"
+          }
+        ]
+      }
+    ],
+    "brokers": [
+      {
+        "broker_id": "broker-x",
+        "identity": {
+          "kind": "manual_broker",
+          "name": "Broker X"
+        },
+        "provenance_id": "prov-reb-small",
+        "capabilities": [
+          {
+            "kind": "monetary_amount",
+            "capability_id": "cap-eur-amount",
+            "order_amount_step": {
+              "amount": "1",
+              "currency": "EUR"
+            }
+          }
+        ],
+        "fee_schedules": [
+          {
+            "fee_schedule_id": "fee-cap-eur-amount",
+            "capability_id": "cap-eur-amount",
+            "side": "buy",
+            "fixed_fee": {
+              "amount": "5",
+              "currency": "EUR"
+            },
+            "rate": "0"
+          }
+        ],
+        "conversion_mode": "manual"
+      }
+    ],
+    "holdings": [
+      {
+        "holding_id": "holding-asset-a",
+        "asset_id": "asset-a",
+        "broker_id": "broker-x",
+        "custody_quantity": "170000",
+        "economic_share": "1",
+        "planning_quantity": "170000",
+        "quantity_unit": "asset_unit",
+        "provenance_id": "prov-reb-small"
+      }
+    ],
+    "existing_cash": [
+      {
+        "cash_id": "cash-x-eur",
+        "broker_id": "broker-x",
+        "available": {
+          "amount": "30000",
+          "currency": "EUR"
+        },
+        "selected": {
+          "amount": "30000",
+          "currency": "EUR"
+        },
+        "provenance_id": "prov-reb-small"
+      }
+    ],
+    "order_routes": [
+      {
+        "route_id": "route-buy-asset-a",
+        "asset_id": "asset-a",
+        "broker_id": "broker-x",
+        "capability_id": "cap-eur-amount",
+        "side": "buy",
+        "fee_schedule_id": "fee-cap-eur-amount",
+        "provenance_id": "prov-reb-small"
+      }
+    ],
+    "target_weights": [
+      {
+        "kind": "asset",
+        "asset_id": "asset-a",
+        "weight": "0.9",
+        "minimum": {
+          "kind": "amount",
+          "amount": {
+            "amount": "150000",
+            "currency": "EUR"
+          }
+        },
+        "maximum": null
+      },
+      {
+        "kind": "cash",
+        "broker_id": "broker-x",
+        "currency": "EUR",
+        "weight": "0.1",
+        "minimum": null,
+        "maximum": {
+          "kind": "amount",
+          "amount": {
+            "amount": "15000",
+            "currency": "EUR"
+          }
+        }
+      }
+    ],
+    "policy": "invest_only",
+    "target_fidelity": {
+      "kind": "level",
+      "level": "balanced"
+    }
+  },
+  "result": {
+    "operation": "plan",
+    "availability": "ready",
+    "snapshot": {
+      "snapshot_id": "snapshot-reb-small-t11",
+      "request_fingerprint": "1b63e645581669905b9336734a160f6360929c47f0c7d97b4e11fec2ced997fb"
+    },
+    "catalogs": {
+      "assets": [
+        {
+          "asset_id": "asset-a",
+          "name": "Asset asset-a",
+          "ticker": null,
+          "asset_class": "etf"
+        }
+      ],
+      "brokers": [
+        {
+          "broker_id": "broker-x",
+          "name": "Broker X"
+        }
+      ],
+      "currencies": [
+        {
+          "currency": "EUR",
+          "minor_unit": "0.01"
+        }
+      ]
+    },
+    "provenance": [
+      {
+        "kind": "manual",
+        "provenance_id": "prov-reb-small",
+        "label": "Rebalancer small cases",
+        "entered_at": "2026-11-13T20:00:00Z"
+      }
+    ],
+    "scenario_basis": {
+      "as_of": "2026-11-13",
+      "valuation_currency": "EUR",
+      "policy": "invest_only",
+      "counts": {
+        "assets": 1,
+        "brokers": 1,
+        "currencies": 1,
+        "holdings": 1,
+        "existing_cash": 1,
+        "contributions": 0,
+        "funding_routes": 0,
+        "capabilities": 1,
+        "fx_rates": 0,
+        "order_routes": 1,
+        "provenance": 1
+      },
+      "current_invested": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "170000"
+        },
+        "currency": "EUR"
+      },
+      "selected_funding": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "30000"
+        },
+        "currency": "EUR"
+      },
+      "reachable_funding": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "30000"
+        },
+        "currency": "EUR"
+      },
+      "trapped_funding": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "0"
+        },
+        "currency": "EUR"
+      },
+      "fixed_reference": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "200000"
+        },
+        "currency": "EUR"
+      },
+      "target_fidelity": {
+        "kind": "level",
+        "level": "balanced"
+      },
+      "initial_wealth": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "200000"
+        },
+        "currency": "EUR"
+      }
+    },
+    "stop_reason": "completed",
+    "solver_evidence": {
+      "kind": "reported_floating",
+      "stages": [
+        {
+          "kind": "reported_floating",
+          "stage": "plan_score",
+          "objective_code": "plan_score",
+          "ordinal": 1,
+          "status": "finished",
+          "scope": "global",
+          "sense": "min",
+          "unit": {
+            "kind": "valuation_money",
+            "currency_code": "EUR"
+          },
+          "primal": "254.85021",
+          "dual": "254.85021",
+          "absolute_gap": "0",
+          "relative_gap": "0",
+          "tolerances": {
+            "feasibility": "0.000001",
+            "integrality": "0.000000001",
+            "absolute_gap": "0",
+            "relative_gap": "0"
+          },
+          "engine": "SCIP",
+          "version": "10.0",
+          "settings": [
+            {
+              "name": "time_budget",
+              "value": "3.5"
+            }
+          ]
+        },
+        {
+          "kind": "reported_floating",
+          "stage": "operation_count",
+          "objective_code": "operation_count",
+          "ordinal": 2,
+          "status": "finished",
+          "scope": "incumbent_face",
+          "sense": "min",
+          "unit": {
+            "kind": "count"
+          },
+          "primal": "1",
+          "dual": "1",
+          "absolute_gap": "0",
+          "relative_gap": "0",
+          "tolerances": {
+            "feasibility": "0.000001",
+            "integrality": "0.000000001",
+            "absolute_gap": "0",
+            "relative_gap": "0"
+          },
+          "engine": "SCIP",
+          "version": "10.0",
+          "settings": [
+            {
+              "name": "time_budget",
+              "value": "3.5"
+            }
+          ]
+        },
+        {
+          "kind": "reported_floating",
+          "stage": "route_priority",
+          "objective_code": "route_priority",
+          "ordinal": 3,
+          "status": "finished",
+          "scope": "incumbent_face",
+          "sense": "min",
+          "unit": {
+            "kind": "ordinal_penalty"
+          },
+          "primal": "0",
+          "dual": "0",
+          "absolute_gap": "0",
+          "relative_gap": "0",
+          "tolerances": {
+            "feasibility": "0.000001",
+            "integrality": "0.000000001",
+            "absolute_gap": "0",
+            "relative_gap": "0"
+          },
+          "engine": "SCIP",
+          "version": "10.0",
+          "settings": [
+            {
+              "name": "time_budget",
+              "value": "3.5"
+            }
+          ]
+        }
+      ]
+    },
+    "issues": [],
+    "result_state": "ready_incumbent",
+    "outcome": "incumbent_found",
+    "proof": {
+      "kind": "optimal_proven",
+      "proof_source": "solver_status",
+      "witness": {
+        "kind": "solver_status",
+        "objective_codes": ["plan_score", "operation_count", "route_priority"]
+      }
+    },
+    "primary_solution": {
+      "solution_id": "solution:primary",
+      "solution_kind": "primary",
+      "validation": "decimal_verified",
+      "asset_rows": [
+        {
+          "asset_id": "asset-a",
+          "before_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "170000"
+            },
+            "currency": "EUR"
+          },
+          "before_weight": {
+            "kind": "finite_decimal",
+            "value": "0.85"
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.9"
+          },
+          "target_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "180000"
+            },
+            "currency": "EUR"
+          },
+          "final_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "184996"
+            },
+            "currency": "EUR"
+          },
+          "final_weight": {
+            "kind": "finite_decimal",
+            "value": "0.92498"
+          },
+          "residual": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "4996"
+            },
+            "currency": "EUR"
+          },
+          "buy_mid_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "14996"
+            },
+            "currency": "EUR"
+          },
+          "sell_mid_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "minimum": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "150000"
+            },
+            "currency": "EUR"
+          },
+          "maximum": null
+        }
+      ],
+      "cash_rows": [
+        {
+          "broker_id": "broker-x",
+          "currency": "EUR",
+          "before_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "30000"
+            },
+            "currency": "EUR"
+          },
+          "before_weight": {
+            "kind": "finite_decimal",
+            "value": "0.15"
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.1"
+          },
+          "target_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "20000"
+            },
+            "currency": "EUR"
+          },
+          "final_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "14999"
+            },
+            "currency": "EUR"
+          },
+          "final_weight": {
+            "kind": "finite_decimal",
+            "value": "0.074995"
+          },
+          "residual": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "-5001"
+            },
+            "currency": "EUR"
+          },
+          "minimum": null,
+          "maximum": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "15000"
+            },
+            "currency": "EUR"
+          }
+        }
+      ],
+      "uninvested_row": {
+        "before_value": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "before_weight": {
+          "kind": "finite_decimal",
+          "value": "0"
+        },
+        "final_value": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "5"
+          },
+          "currency": "EUR"
+        },
+        "final_weight": {
+          "kind": "finite_decimal",
+          "value": "0.000025"
+        }
+      },
+      "funding_actions": [],
+      "conversions": [],
+      "transfers": [],
+      "order_rows": [
+        {
+          "kind": "buy",
+          "order_id": "order:route-buy-asset-a",
+          "sequence": 1,
+          "asset_id": "asset-a",
+          "broker_id": "broker-x",
+          "route_id": "route-buy-asset-a",
+          "instruction": {
+            "kind": "monetary_amount",
+            "amount": {
+              "amount": "14996",
+              "currency": "EUR"
+            },
+            "order_amount_step": {
+              "amount": "1",
+              "currency": "EUR"
+            }
+          },
+          "economic_quantity": {
+            "kind": "exact",
+            "value": {
+              "kind": "finite_decimal",
+              "value": "14996"
+            },
+            "unit": "asset_unit"
+          },
+          "source_price": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "1"
+            },
+            "currency": "EUR",
+            "quote_base_quantity": "1",
+            "quantity_unit": "asset_unit"
+          },
+          "mid_price": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "1"
+            },
+            "currency": "EUR",
+            "quote_base_quantity": "1",
+            "quantity_unit": "asset_unit"
+          },
+          "charge_price": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "1"
+            },
+            "currency": "EUR",
+            "quote_base_quantity": "1",
+            "quantity_unit": "asset_unit"
+          },
+          "mid_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "14996"
+            },
+            "currency": "EUR"
+          },
+          "execution_margin_cost": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "cash_debit": {
+            "amount": "14996",
+            "currency": "EUR"
+          },
+          "fee": {
+            "amount": "5",
+            "currency": "EUR"
+          },
+          "buffer": {
+            "amount": "0",
+            "currency": "EUR"
+          },
+          "explanation_keys": [],
+          "provenance_ids": ["prov-reb-small"]
+        }
+      ],
+      "ledger_rows": [
+        {
+          "broker_id": "broker-x",
+          "currency": "EUR",
+          "initial_selected": "30000",
+          "funding_in": "0",
+          "funding_out": "0",
+          "transfer_in": "0",
+          "transfer_out": "0",
+          "fx_debit": "0",
+          "fx_credit": "0",
+          "buy_debit": "14996",
+          "gross_sell_credit": "0",
+          "buy_fees": "5",
+          "sell_fees": "0",
+          "broker_withheld_tax": "0",
+          "foreign_withholding_tax": "0",
+          "self_reserved_tax": "0",
+          "rounding_delta": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "final_spendable": "14999",
+          "final_physical": "14999"
+        }
+      ],
+      "rounding_top_ups": [],
+      "exposure_rows": [
+        {
+          "dimension": "asset_type",
+          "before_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0.85"
+            }
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.9"
+          },
+          "final_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "184996",
+              "denominator": "199995",
+              "display_decimal": "0.925003125078126953",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "kind": "category",
+          "category_id": "equity",
+          "label": "Equity",
+          "provenance_ids": ["prov-reb-small"]
+        },
+        {
+          "dimension": "asset_type",
+          "before_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0.15"
+            }
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.1"
+          },
+          "final_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "14999",
+              "denominator": "199995",
+              "display_decimal": "0.074996874921873047",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "kind": "cash",
+          "provenance_ids": ["prov-reb-small"]
+        },
+        {
+          "dimension": "sector",
+          "before_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0.85"
+            }
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.9"
+          },
+          "final_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "184996",
+              "denominator": "199995",
+              "display_decimal": "0.925003125078126953",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "kind": "category",
+          "category_id": "allocation.uncategorised",
+          "label": "Uncategorised",
+          "provenance_ids": ["prov-reb-small"]
+        },
+        {
+          "dimension": "sector",
+          "before_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0.15"
+            }
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.1"
+          },
+          "final_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "14999",
+              "denominator": "199995",
+              "display_decimal": "0.074996874921873047",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "kind": "cash",
+          "provenance_ids": ["prov-reb-small"]
+        },
+        {
+          "dimension": "geography",
+          "before_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0.85"
+            }
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.9"
+          },
+          "final_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "184996",
+              "denominator": "199995",
+              "display_decimal": "0.925003125078126953",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "kind": "category",
+          "category_id": "allocation.uncategorised",
+          "label": "Uncategorised",
+          "provenance_ids": ["prov-reb-small"]
+        },
+        {
+          "dimension": "geography",
+          "before_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0.15"
+            }
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.1"
+          },
+          "final_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "14999",
+              "denominator": "199995",
+              "display_decimal": "0.074996874921873047",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "kind": "cash",
+          "provenance_ids": ["prov-reb-small"]
+        }
+      ],
+      "accounting": {
+        "current_invested": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "170000"
+          },
+          "currency": "EUR"
+        },
+        "selected_funding": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "30000"
+          },
+          "currency": "EUR"
+        },
+        "reachable_funding": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "30000"
+          },
+          "currency": "EUR"
+        },
+        "trapped_funding": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "fixed_reference": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "200000"
+          },
+          "currency": "EUR"
+        },
+        "final_invested": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "184996"
+          },
+          "currency": "EUR"
+        },
+        "shortfall": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "15004"
+          },
+          "currency": "EUR"
+        },
+        "free_cash": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "14999"
+          },
+          "currency": "EUR"
+        },
+        "physical_reserves": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "economic_losses": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "5"
+          },
+          "currency": "EUR"
+        },
+        "rounding_delta": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "rounding_bound": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0.02"
+          },
+          "currency": "EUR"
+        },
+        "identity_delta": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        }
+      },
+      "costs": {
+        "buy_fees": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "5"
+          },
+          "currency": "EUR"
+        },
+        "sell_fees": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "fx_spread_loss": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "execution_margin_cost": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "broker_withheld_tax": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "self_reserved_tax": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "foreign_withholding_tax": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        }
+      },
+      "plan_accounts": {
+        "initial_wealth": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "200000"
+          },
+          "currency": "EUR"
+        },
+        "final_wealth": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "199995"
+          },
+          "currency": "EUR"
+        },
+        "money_lost": {
+          "buy_fees": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "5"
+            },
+            "currency": "EUR"
+          },
+          "sell_fees": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "fx_spread_loss": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "execution_margin_cost": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "broker_withheld_tax": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "self_reserved_tax": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "foreign_withholding_tax": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "rounding": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          }
+        },
+        "uninvested": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "5"
+          },
+          "currency": "EUR"
+        }
+      },
+      "score": {
+        "distance_weight": {
+          "kind": "finite_decimal",
+          "value": "1"
+        },
+        "target_distance": {
+          "kind": "finite_decimal",
+          "value": "49970042"
+        },
+        "distance_per_wealth": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "249.85021"
+          },
+          "currency": "EUR"
+        },
+        "wealth_loss": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "5"
+          },
+          "currency": "EUR"
+        },
+        "plan_score": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "254.85021"
+          },
+          "currency": "EUR"
+        },
+        "largest_deviation_before": {
+          "kind": "finite_decimal",
+          "value": "0.05"
+        },
+        "largest_deviation_after": {
+          "kind": "finite_decimal",
+          "value": "0.025005"
+        },
+        "tie_breaks": [
+          {
+            "objective_code": "operation_count",
+            "status": "closed"
+          },
+          {
+            "objective_code": "route_priority",
+            "status": "closed"
+          },
+          {
+            "objective_code": "canonical",
+            "status": "closed"
+          }
+        ]
+      },
+      "tax_basket_rows": [],
+      "tax_scope_rows": [],
+      "tax_reserves": [],
+      "asset_type_tax_rows": [],
+      "objectives": {
+        "stages": [
+          {
+            "objective_code": "plan_score",
+            "ordinal": 1,
+            "sense": "min",
+            "unit": {
+              "kind": "valuation_money",
+              "currency_code": "EUR"
+            },
+            "value": {
+              "kind": "finite_decimal",
+              "value": "254.85021"
+            }
+          },
+          {
+            "objective_code": "operation_count",
+            "ordinal": 2,
+            "sense": "min",
+            "unit": {
+              "kind": "count"
+            },
+            "value": {
+              "kind": "finite_decimal",
+              "value": "1"
+            }
+          },
+          {
+            "objective_code": "route_priority",
+            "ordinal": 3,
+            "sense": "min",
+            "unit": {
+              "kind": "ordinal_penalty"
+            },
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            }
+          }
+        ],
+        "tie_break": {
+          "code": "canonical_key",
+          "unit": {
+            "kind": "canonical_key"
+          },
+          "ordered_keys": ["buy:route-buy-asset-a"]
+        }
+      }
+    },
+    "deployment": {
+      "kind": "unavailable",
+      "reason_code": "allocation.deployment_omitted"
+    }
+  }
+}

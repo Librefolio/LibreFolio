@@ -12,7 +12,7 @@
         | {type: 'contribution'; label: string; currency: string | null}
         | {type: 'asset'; assetId: string; label: string; asset: DraftAsset | null; sequence?: number; orderId?: string; testid?: string}
         | {type: 'weight'; value: PlannerExactNumber | PlannerNumberAvailability}
-        | {type: 'bars'; target: PlannerExactNumber; final: PlannerNumberAvailability; scale: number}
+        | {type: 'bars'; target: PlannerExactNumber; final: PlannerExactNumber | PlannerNumberAvailability; scale: number}
         | {type: 'money'; amount: string | null; currency: string; digits: CurrencyDigits; signed?: boolean; testid?: string}
         | {type: 'exactMoney'; money: PlannerExactMoney; digits: CurrencyDigits; signed?: boolean; testid?: string}
         | {type: 'price'; price: PlannerExactPrice; digits: CurrencyDigits}

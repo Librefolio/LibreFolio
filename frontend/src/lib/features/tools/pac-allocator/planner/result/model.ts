@@ -20,7 +20,10 @@ import type {
     PlannerResolvedFundingRoute,
     PlannerResolvedOrderRoute,
     PlannerResolvedRequest,
+    RebalancerAssetRow,
+    RebalancerCashRow,
     RebalancerTransfer,
+    RebalancerUninvestedRow,
 } from '../types';
 
 export const UNCATEGORISED_CATEGORY_ID = 'allocation.uncategorised';
@@ -399,6 +402,23 @@ export function ordersByBroker(orders: readonly PlannerOrderRow[]): {brokerId: s
         groups.get(order.broker_id)!.push(order);
     }
     return [...groups].map(([brokerId, rows]) => ({brokerId, orders: rows}));
+}
+
+// -- allocation: before, target and after (F4a of project 67, contract §6.2) ----------------
+
+/** One row of the allocation: an Asset, a cash entry with a target (the Rebalancer's), or the «uninvested» row. */
+export type AllocationRow<A extends {asset_id: string} = RebalancerAssetRow> = {kind: 'asset'; id: string; row: A} | {kind: 'cash'; id: string; row: RebalancerCashRow} | {kind: 'uninvested'; id: 'uninvested'; row: RebalancerUninvestedRow};
+
+/**
+ * The allocation's rows, as published: every Asset, then every cash entry, then the «uninvested» row (contract §6.2). The
+ * PAC's solution has its Assets only. Nothing is computed: each row is the backend's.
+ */
+export function allocationRows<A extends {asset_id: string}>(solution: {asset_rows: readonly A[]; cash_rows?: readonly RebalancerCashRow[]; uninvested_row?: RebalancerUninvestedRow}): AllocationRow<A>[] {
+    return [
+        ...solution.asset_rows.map((row): AllocationRow<A> => ({kind: 'asset', id: row.asset_id, row})),
+        ...(solution.cash_rows ?? []).map((row): AllocationRow<A> => ({kind: 'cash', id: `cash:${row.broker_id}:${row.currency}`, row})),
+        ...(solution.uninvested_row ? [{kind: 'uninvested' as const, id: 'uninvested' as const, row: solution.uninvested_row}] : []),
+    ];
 }
 
 // -- ledger, transposed (one column per Broker × currency) ----------------------------

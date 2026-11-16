@@ -1,6 +1,11 @@
 {
   "ids": {
     "rebalancer-planner": 2,
+    "rebalancer-planner-allocation-columns": 1,
+    "rebalancer-planner-allocation-item": 3,
+    "rebalancer-planner-allocation-legend": 1,
+    "rebalancer-planner-allocation-table": 1,
+    "rebalancer-planner-allocation-uninvested-note": 1,
     "rebalancer-planner-asset": 1,
     "rebalancer-planner-asset-add": 1,
     "rebalancer-planner-asset-alert": 1,
@@ -320,6 +325,7 @@
     "rebalancer-planner-refresh-proceed": 1,
     "rebalancer-planner-refresh-retry": 1,
     "rebalancer-planner-result": 1,
+    "rebalancer-planner-result-allocation": 1,
     "rebalancer-planner-result-assets": 1,
     "rebalancer-planner-result-ledger": 1,
     "rebalancer-planner-result-orders": 1,

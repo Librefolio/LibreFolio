@@ -1,6 +1,11 @@
 {
   "ids": {
     "pac-planner": 2,
+    "pac-planner-allocation-columns": 1,
+    "pac-planner-allocation-item": 3,
+    "pac-planner-allocation-legend": 1,
+    "pac-planner-allocation-table": 1,
+    "pac-planner-allocation-uninvested-note": 1,
     "pac-planner-asset": 1,
     "pac-planner-asset-add": 1,
     "pac-planner-asset-alert": 1,
@@ -320,6 +325,7 @@
     "pac-planner-refresh-proceed": 1,
     "pac-planner-refresh-retry": 1,
     "pac-planner-result": 1,
+    "pac-planner-result-allocation": 1,
     "pac-planner-result-assets": 1,
     "pac-planner-result-ledger": 1,
     "pac-planner-result-orders": 1,

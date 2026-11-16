@@ -148,6 +148,17 @@ describe('a ready Rebalancer result renders', () => {
  * browser answer by emptying its purchases and exchanges (the fixture file stays the engine's, untouched); the codec
  * still accepts it.
  */
+describe('the Rebalancer allocation (F4a step 3)', () => {
+    it('shows the Rebalancer table, with Assets, cash entries and the uninvested row, not the PAC one', () => {
+        mounted(browser);
+        expect(screen.getByTestId('rebalancer-planner-allocation-table')).toBeTruthy();
+        expect(screen.queryByTestId('rebalancer-planner-assets-table')).toBeNull();
+        const ids = [...document.querySelectorAll('[data-testid="rebalancer-planner-allocation-table"] tbody tr[data-row-id]')].map((row) => row.getAttribute('data-row-id'));
+        expect(ids.at(-1)).toBe('uninvested');
+        expect(ids.filter((id) => id?.startsWith('cash:'))).toHaveLength(browser.result.primary_solution.cash_rows.length);
+    });
+});
+
 describe('the Rebalancer plan section', () => {
     const planSection = () => screen.getAllByTestId('rebalancer-planner-result-section').find((section) => section.getAttribute('data-section') === 'plan') ?? null;
 
