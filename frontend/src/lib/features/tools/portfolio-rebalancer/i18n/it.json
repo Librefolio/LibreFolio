@@ -66,9 +66,7 @@
         },
         "summary": {
           "positionsOnly": "Solo posizioni",
-          "positions": "Posizioni",
-          "entries": "Voci",
-          "fidelity": "Fedeltà al target"
+          "entries": "Voci"
         },
         "strategy": {
           "investOnly": "Investi soltanto",

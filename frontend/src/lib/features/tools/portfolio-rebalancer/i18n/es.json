@@ -66,9 +66,7 @@
         },
         "summary": {
           "positionsOnly": "Solo posiciones",
-          "positions": "Posiciones",
-          "entries": "Partidas",
-          "fidelity": "Fidelidad al objetivo"
+          "entries": "Partidas"
         },
         "strategy": {
           "investOnly": "Solo invertir",

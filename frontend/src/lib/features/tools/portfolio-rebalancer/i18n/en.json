@@ -66,9 +66,7 @@
         },
         "summary": {
           "positionsOnly": "Positions only",
-          "positions": "Positions",
-          "entries": "Entries",
-          "fidelity": "Target fidelity"
+          "entries": "Entries"
         },
         "strategy": {
           "investOnly": "Invest only",
