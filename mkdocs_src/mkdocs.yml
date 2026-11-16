@@ -133,6 +133,7 @@ plugins:
             National Bank of Ukraine (NBU): National Bank of Ukraine (NBU)
             Bank of Canada (BOC): Bank of Canada (BOC)
             Banca d'Italia (BDI): Banca d'Italia (BDI)
+            Banco Central do Brasil (BCB): Banco Central do Brasil (BCB)
             # Developer provider entries — kept in English per dev-manual policy
             Overview Providers: Overview Providers
             Yahoo Finance Tech: Yahoo Finance Tech
@@ -148,6 +149,7 @@ plugins:
             NBU Tech: NBU Tech
             BOC Tech: BOC Tech
             BDI Tech: BDI Tech
+            BCB Tech: BCB Tech
             # Developer transaction section — kept in English per dev-manual policy
             Service Architecture: Service Architecture
             "WAC & Cost Basis": "WAC & Cost Basis"
@@ -405,6 +407,7 @@ plugins:
             National Bank of Ukraine (NBU): National Bank of Ukraine (NBU)
             Bank of Canada (BOC): Bank of Canada (BOC)
             Banca d'Italia (BDI): Banca d'Italia (BDI)
+            Banco Central do Brasil (BCB): Banco Central do Brasil (BCB)
             # Developer provider entries — kept in English per dev-manual policy
             Overview Providers: Overview Providers
             Yahoo Finance Tech: Yahoo Finance Tech
@@ -420,6 +423,7 @@ plugins:
             NBU Tech: NBU Tech
             BOC Tech: BOC Tech
             BDI Tech: BDI Tech
+            BCB Tech: BCB Tech
             # Developer transaction section — kept in English per dev-manual policy
             Service Architecture: Service Architecture
             "WAC & Cost Basis": "WAC & Cost Basis"
@@ -678,6 +682,7 @@ plugins:
             National Bank of Ukraine (NBU): National Bank of Ukraine (NBU)
             Bank of Canada (BOC): Bank of Canada (BOC)
             Banca d'Italia (BDI): Banca d'Italia (BDI)
+            Banco Central do Brasil (BCB): Banco Central do Brasil (BCB)
             # Developer provider entries — kept in English per dev-manual policy
             Overview Providers: Overview Providers
             Yahoo Finance Tech: Yahoo Finance Tech
@@ -693,6 +698,7 @@ plugins:
             NBU Tech: NBU Tech
             BOC Tech: BOC Tech
             BDI Tech: BDI Tech
+            BCB Tech: BCB Tech
             # Developer transaction section — kept in English per dev-manual policy
             Service Architecture: Service Architecture
             "WAC & Cost Basis": "WAC & Cost Basis"
@@ -1022,6 +1028,7 @@ nav:
               - National Bank of Ukraine (NBU): user/fx/providers/nbu.md
               - Bank of Canada (BOC): user/fx/providers/boc.md
               - Banca d'Italia (BDI): user/fx/providers/bdi.md
+              - Banco Central do Brasil (BCB): user/fx/providers/bcb.md
           - 🔎 Pair Detail:
               - Overview: user/fx/detail/index.md
               - Interactive Chart: user/fx/detail/chart.md
@@ -1280,6 +1287,7 @@ nav:
                   - NBU Tech: developer/backend/fx/providers/nbu.md
                   - BOC Tech: developer/backend/fx/providers/boc.md
                   - BDI Tech: developer/backend/fx/providers/bdi.md
+                  - BCB Tech: developer/backend/fx/providers/bcb.md
           - "🕐 Scheduler (Daemon)": developer/backend/scheduler.md
           - "📧 Email (SMTP)": developer/backend/email.md
           - "🧮 Financial Math Layer": developer/backend/financial_math.md
