@@ -528,6 +528,29 @@ def test_drawdown_summary_output_serializes_through_discriminated_union():
     assert any(warning.code == "flat_series" for warning in computation.warnings)
 
 
+def _correlation_context_with_calendar_coverage(calendar_coverage: float) -> RiskExecutionContext:
+    """Two assets on one joint calendar that covers only part of the requested period."""
+    context = make_context({1: [0.01, -0.02, 0.015] * 7, 2: [-0.005, 0.01, 0.02] * 7}, scope_kind=RiskScopeKind.ASSET_SET)
+    prepared = context.prepared_series.model_copy(update={"calendar_coverage": calendar_coverage})
+    return replace(context, prepared_series=prepared, coverage=calendar_coverage)
+
+
+@pytest.mark.parametrize(("min_coverage", "warned"), [(0.6, True), (0.5, False)])
+def test_correlation_min_coverage_reads_the_common_calendar_coverage(min_coverage, warned):
+    """D144: `min_coverage` judges the common calendar, not the pairs.
+
+    Every pair lives on the one joint calendar, so the pairs' own coverage (observations
+    over the calendar's observations) is 1 by construction and the threshold could never
+    bite. The calendar covers 0.577 of the period here: below 0.6 the warning fires, above
+    0.5 it does not, and every cell carries that same coverage instead of 1.
+    """
+    computation = CorrelationAnalytic().compute(CorrelationParams(min_coverage=min_coverage), _correlation_context_with_calendar_coverage(0.577))
+
+    assert any(warning.code == "low_pair_coverage" for warning in computation.warnings) is warned
+    assert [cell.coverage for cell in computation.output.cells] == pytest.approx([0.577] * 4)
+    assert computation.coverage == pytest.approx(0.577)
+
+
 def test_risk_contribution_preserves_negative_pctr_and_additivity():
     driver = [0.01, -0.01] * 10
     context = make_context(
