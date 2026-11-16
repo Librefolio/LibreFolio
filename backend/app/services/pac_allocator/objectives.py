@@ -27,6 +27,7 @@ value agree up to the float/exact projection error.
 
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from dataclasses import dataclass, field
 from fractions import Fraction
@@ -73,7 +74,8 @@ class ObjectiveStage:
     """One cascade stage: minimize ``expression`` before moving to the next.
 
     ``scale``: SCIP minimizes ``scale ×`` the exact value of the view's objective (D2 of the step-2 plan of project 67): the
-    Rebalancer's ``plan_score`` is ``J``, SCIP minimizes ``λ·D + F·C = F · J``. ``band``: how far below the truth the stage's
+    Rebalancer's ``plan_score`` is ``J`` in euros at scale 1 (``λ·D/F + C``), and «Target first»'s ``target_distance`` is
+    ``D`` at scale ``1/F`` (lot S1: the residuals are written over ``√F``). ``band``: how far below the truth the stage's
     value may sit because of its quadratic rows, in SCIP's units (D3). ``integral``: the expression takes only whole values,
     so it is pinned exactly. ``tie_break``: a plan found at this stage replaces the best one only if the objectives before
     it are no worse in exact arithmetic (D4).
@@ -227,7 +229,7 @@ def build_canonical_tie_stages(variables: CompiledVariables, view: ExactPolicyVi
 class _RebalancerParts:
     """The Rebalancer's terms in SCIP (specifica §5-§6), each the float mirror of ``evaluation/facts._rebalancer_score``."""
 
-    distance: LinearTerm  # D: sum of the epigraph variables of every residual
+    distance: LinearTerm  # D/F: sum of the epigraph variables of every residual over √F (lot S1)
     distance_rows: int
     wealth_loss: LinearTerm  # C = F - W
 
@@ -240,6 +242,11 @@ def _rebalancer_parts(model: Model, scenario: ExactPlannerScenario, facts: Scena
     Assets, every cell, and the contributions no route deposited; ``N`` is ``F`` less the Assets and the cells with a
     target. ``D`` squares each residual through one epigraph variable: the square is convex, so minimizing pushes each
     variable down to the square itself.
+
+    Lot S1 of project 67 (the consultant's diagnosis of G5): each residual first goes into a variable of its own,
+    ``r = residual / √F``, and the epigraph squares ``r``. Squared as a long sum, SCIP expanded the row into pairwise
+    products of integer variables, and its cuts on them deduced a false bound at node 1. Over ``√F`` the squares are
+    already euros of ``J``: the returned ``distance`` is ``D/F``, and the score is ``λ·D/F + C`` at scale 1.
     """
     initial_wealth = float(inputs.initial_wealth)
     asset_values = asset_final_value_exprs(scenario, facts, variables)
@@ -248,10 +255,13 @@ def _rebalancer_parts(model: Model, scenario: ExactPlannerScenario, facts: Scena
     residuals: list[tuple[str, LinearTerm]] = [(f"asset:{asset_id}", asset_values[asset_id] - inputs.target_value_by_asset[asset_id]) for asset_id in sorted(asset_values)]
     residuals += [(f"cash:{broker_id}:{currency}", targeted[(broker_id, currency)] - target) for (broker_id, currency), target in sorted(inputs.cash_target_by_cell.items())]
     residuals.append(("uninvested", initial_wealth - sum(asset_values.values()) - sum(targeted.values())))
+    over_root = 1.0 / math.sqrt(initial_wealth) if initial_wealth > 0 else 1.0
     distance: LinearTerm = 0.0
     for name, residual in residuals:
+        scaled = model.addVar(vtype="C", lb=None, ub=None, name=f"distance_res:{name}")
+        model.addCons(scaled == residual * over_root, name=f"distance_residual:{name}")
         squared = model.addVar(vtype="C", lb=0.0, name=f"distance_sq:{name}")
-        model.addCons(squared >= residual**2, name=f"distance_epigraph:{name}")
+        model.addCons(squared >= scaled**2, name=f"distance_epigraph:{name}")
         distance = distance + squared
     undeposited: LinearTerm = sum(as_float(item.amount.amount) * valuation_rate(facts, item.amount.currency) for item in scenario.contributions)
     for route in scenario.funding_routes:
@@ -268,6 +278,11 @@ def build_operation_count_stage(scenario: ExactPlannerScenario, variables: Compi
     return ObjectiveStage(code="operation_count", expression=sum(binaries, 0.0), integral=True, tie_break=True)
 
 
+def _over(wealth: Fraction) -> Fraction:
+    """``1/F``, the scale of a stage SCIP sees over ``F``; 1 for an empty portfolio, where nothing is scaled."""
+    return 1 / wealth if wealth > 0 else Fraction(1)
+
+
 def _rebalancer_cascade(model: Model, scenario: ExactPlannerScenario, facts: ScenarioFacts, variables: CompiledVariables, inputs: ObjectiveInputs, view: ExactPolicyView, cells: dict) -> list[ObjectiveStage]:
     """The Rebalancer's cascade (B2 of project 67), in the order of the view: one score, or the «Target first» chain, then
     the tie-breaks, which choose only among plans no worse on what precedes them (D4)."""
@@ -275,7 +290,8 @@ def _rebalancer_cascade(model: Model, scenario: ExactPlannerScenario, facts: Sce
     fidelity = inputs.fidelity
     if fidelity is not None and fidelity.kind == "target_first":
         stages = [
-            ObjectiveStage(code="target_distance", expression=parts.distance, band=parts.distance_rows * _QUADRATIC_ROW_TOLERANCE),
+            # SCIP minimizes D/F (lot S1); the exact value of the stage is D.
+            ObjectiveStage(code="target_distance", expression=parts.distance, scale=_over(inputs.initial_wealth), band=parts.distance_rows * _QUADRATIC_ROW_TOLERANCE),
             ObjectiveStage(code="wealth_loss", expression=parts.wealth_loss),
         ]
     else:
@@ -283,8 +299,8 @@ def _rebalancer_cascade(model: Model, scenario: ExactPlannerScenario, facts: Sce
         stages = [
             ObjectiveStage(
                 code="plan_score",
-                expression=weight * parts.distance + float(inputs.initial_wealth) * parts.wealth_loss,
-                scale=inputs.initial_wealth,
+                # J in euros, as the replay counts it (lot S1): λ·D/F + C, at scale 1.
+                expression=weight * parts.distance + parts.wealth_loss,
                 band=weight * parts.distance_rows * _QUADRATIC_ROW_TOLERANCE,
             )
         ]

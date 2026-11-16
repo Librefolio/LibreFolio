@@ -1315,21 +1315,22 @@ def test_tolerance_text_spells_a_float_tolerance_positionally() -> None:
 
 
 def test_solver_evidence_bounds_use_the_published_unit() -> None:
-    """B2-9, D2: SCIP minimizes ``λ·D + F·C``, the view's ``plan_score`` is ``J``. The evidence publishes the stage's primal,
-    dual and gap divided by the stage's scale ``F``, so they read in money next to the published ``J``."""
+    """B2-9, D2: the view's ``plan_score`` is ``J``. Since lot S1 of project 67 SCIP minimizes ``J`` itself, in euros
+    (``λ·D/F + C``, the residuals over ``√F``): the stage's scale is 1, and the evidence publishes its primal, dual and gap
+    divided by it, so they read in money next to the published ``J``."""
     scenario = cases.t4()
     view = build_exact_policy_view(scenario)
     result = solve_policy_program(compile_policy_program(scenario, view), time_budget_seconds=30.0)
     (report,) = [stage for stage in result.stages if stage.objective_code == "plan_score"]
-    assert report.scale == Fraction(10_000)
+    assert report.scale == Fraction(1)
 
     evidence = PR.build_solver_evidence(scenario, view, result)
 
     (published,) = [stage for stage in evidence.stages if stage.objective_code == "plan_score"]
     assert published.unit.kind == "valuation_money"
-    assert float(published.primal) == pytest.approx(report.primal / 10_000, rel=1e-12)
+    assert float(published.primal) == pytest.approx(report.primal, rel=1e-12)
     assert float(published.primal) == pytest.approx(1_001 / 200, rel=1e-6)
-    assert float(published.dual) == pytest.approx(report.dual / 10_000, rel=1e-12)
+    assert float(published.dual) == pytest.approx(report.dual, rel=1e-12)
 
 
 # --------------------------------------------------------------------------

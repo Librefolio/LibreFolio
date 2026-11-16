@@ -265,8 +265,8 @@
             "kind": "valuation_money",
             "currency_code": "EUR"
           },
-          "primal": "254.85021",
-          "dual": "254.85021",
+          "primal": "254.85020999899982",
+          "dual": "254.85020999899982",
           "absolute_gap": "0",
           "relative_gap": "0",
           "tolerances": {

@@ -113,6 +113,7 @@ PAC_PLANNER_WIRE_NUMBERS_TEST_PATH = "backend/test_scripts/test_services/test_pa
 PAC_PLANNER_REPORT_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_report.py"
 PAC_PLANNER_SERVICE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_planner.py"
 PAC_PLANNER_SEQUENCE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_plan_sequence.py"
+PAC_PLANNER_SOUNDNESS_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_soundness.py"
 PAC_PLANNER_PREVIEW_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_preview.py"
 PAC_PLANNER_REFERENCE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_reference.py"
 
@@ -173,6 +174,13 @@ def services_pac_planner_report(verbose: bool = False, test_names: list = None) 
     print_section("Services: PAC/Rebalancer Wire Projection")
     cmd = _build_pytest_cmd(PAC_PLANNER_REPORT_TEST_PATH, test_names)
     return run_command(cmd, "PAC/Rebalancer wire projection tests", verbose=verbose)
+
+
+def services_pac_planner_soundness(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the distance's writing: one variable under every square, and the G5 seed that misled SCIP's cuts."""
+    print_section("Services: Rebalancer Distance Soundness")
+    cmd = _build_pytest_cmd(PAC_PLANNER_SOUNDNESS_TEST_PATH, test_names)
+    return run_command(cmd, "Rebalancer distance soundness tests", verbose=verbose)
 
 
 def services_pac_planner_sequence(verbose: bool = False, test_names: list = None) -> bool:
@@ -2646,6 +2654,14 @@ Note: No backend server required.
         services_pac_planner_wire_numbers,
         name="PAC/Rebalancer Wire Numbers",
         desc="Lossless exact-to-wire projection, canonical spelling, non-authoritative display and fail-closed envelope limits",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-soundness",
+        services_pac_planner_soundness,
+        name="Rebalancer Distance Soundness",
+        desc="Every square of the Rebalancer's distance holds one variable; the G5 seed whose cuts excluded better plans no longer bounds the score above a valid plan",
         isolation="pure",
     )
     add_test(

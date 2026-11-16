@@ -992,12 +992,12 @@ def test_finished_score_stage_bounds_bracket_the_exact_replay(build) -> None:
 
 
 def test_score_stage_pin_never_sits_below_the_scaled_exact_value(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The ``plan_score`` pin is at least ``λ·D + F·C`` of its candidate, exactly: SCIP reporting the score a little low does
-    not cut the plan out of the tie-break stages."""
+    """The ``plan_score`` pin is at least ``J`` of its candidate, exactly (``λ·D/F + C``, euros at scale 1 since lot S1 of
+    project 67): SCIP reporting the score a little low does not cut the plan out of the tie-break stages."""
     scenario = cases.t4()
     view, result, lever = _lever_run(monkeypatch, scenario, target_stage=0, shift=lambda value: value * 0.999)
     assert "plan_score" in lever.pins, lever.log
-    assert Fraction(lever.pins["plan_score"]) >= Fraction(10_000) * Fraction(1_001, 200)
+    assert Fraction(lever.pins["plan_score"]) >= Fraction(1_001, 200)
     assert result.candidate is not None
     assert {key: value for key, value in _quanta(result.candidate).items() if value} == {cases.buy_decision("asset:b"): 195}
 
