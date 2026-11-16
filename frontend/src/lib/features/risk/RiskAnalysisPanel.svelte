@@ -521,7 +521,7 @@
                 // caption (:1058) and renders no provenance block, so it describes a
                 // lognormal process whatever the engine did. Moving it to the
                 // resampled default would put honest numbers under a caption that
-                // misdescribes them — which is the case `simulation.py:118-138`
+                // misdescribes them — which is the case `SimulationParams._infer_process`
                 // names when it keeps pre-resampler callers on the parametric
                 // engine. The mode selector lives on L4, and so does the default.
                 process: 'gbm',

@@ -148,7 +148,7 @@ function byAsset<T extends {asset_id: number}>(items: readonly T[] | undefined):
  * otherwise would misdescribe the defence: the emitted **zod** schema for those
  * same fields is `z.union([z.number(), z.null()]).optional()`, which rejects a
  * list outright — so `riskOutput` discards the whole payload before a list could
- * reach here. `correlationHelpers.ts:28` records the same disagreement between
+ * reach here. `CorrelationCell.value` (`correlationHelpers.ts`) records the same disagreement between
  * the two halves of the generated client. What `singleValue` actually earns is
  * the right to read the field without a cast, and a cast is how a future shape
  * change would arrive unannounced.
