@@ -42,6 +42,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bulk edit of assets: after a save the window stays open on the summary with a green «Saved» check, and the selection stays, so you can keep working on the same assets. The summary shows the new icon as a thumbnail; the fields sit on one grid, with the current value under each field and its reset button on the same row, and the window has no inner scrollbar.
 - The selection bar of the tables (assets, transactions, FX, a broker's transactions) now floats at the bottom of the screen while rows are selected, and stays there after a save; Esc clears the selection when the focus is in it.
 - The route window of a currency pair opens faster, and a large group of chain routes shows its first 200, with «Show more (n hidden)» for the others; the search still looks through all of them. With the new central banks a single pair can have tens of thousands of chains.
+- Live prices with fewer requests: providers that can price many assets at once are now asked once per provider instead of once per asset; Yahoo Finance does so through its quote list. With 20 Yahoo assets an hour of the scheduler and open pages costs a few dozen requests instead of hundreds, so «too many requests» pauses become rare. A price sync takes today's value from the same read, at most one request per provider; when that read is refused, the history of that round waits for the next one.
+- A provider can keep its live prices fresh for longer than two minutes (for sources with a call budget); the default stays two minutes.
 
 ### 🐛 Fixed
 
@@ -67,6 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Assets: the «n selected» chip always clears the whole selection, and the column menu and column resizing act on both asset tables (yours and the others'); before, one of the two could be left out.
 - FED exchange rates for 16 currencies were stored upside down (JPY, CAD, CHF, SEK, DKK, NOK, CNY, INR, BRL, MXN, ZAR, SGD, HKD, KRW, TWD, THB): 1 JPY showed as 158 USD instead of 0.0063. Rates already stored are not changed. To correct them, open the FX page, choose the «All» period and use «Sync All»: every pair whose route uses FED, also as one step of a chain (for example INR → USD → EUR), is fetched again and overwritten.
 - The Bank of England (BOE) provider downloaded nothing, because the Bank's database changed its download address; it works again. Its euro rate also came from the wrong series (euro against the US dollar instead of against sterling): every pair whose route uses BOE for the euro stays wrong until you sync it again the same way («All» period, «Sync All»).
+- A past day's close is never overwritten by a live quote: a quote read before midnight only fills a day that is missing. Outside market hours an asset's last trading day also keeps its full candle (open, high, low) instead of a close-only point.
 
 ### ⚠️ Breaking changes
 
