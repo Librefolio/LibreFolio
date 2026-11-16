@@ -612,7 +612,8 @@
           "contribution": "Contribution",
           "impact": "Impact",
           "bar": "Effet"
-        }
+        },
+        "shockUnconfigured": "Absents de ce scénario, donc un choc de 0 : {names}. Le total les compte comme intacts."
       },
       "backtestNotice": "Avec un sous-ensemble actif, ces chiffres sont reconstruits à partir de la composition actuelle : ils disent ce qui *se serait* passé, pas ce qui s’est réellement passé.",
       "notice": {

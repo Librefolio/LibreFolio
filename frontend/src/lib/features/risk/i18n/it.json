@@ -612,7 +612,8 @@
           "contribution": "Contributo",
           "impact": "Impatto",
           "bar": "Effetto"
-        }
+        },
+        "shockUnconfigured": "Non sono nello scenario, quindi il loro shock è 0: {names}. Il totale li conta come intatti."
       },
       "backtestNotice": "Con una fetta attiva, questi numeri sono ricostruiti sulla composizione di oggi: dicono come *sarebbe* andata, non come è andata davvero.",
       "notice": {

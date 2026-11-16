@@ -144,6 +144,30 @@ function bucketShares(impacts: unknown): Map<string, number> | null {
 }
 
 /**
+ * The buckets a hypothetical shock left out of the scenario, each once, in order (RN-10, Q14).
+ *
+ * A request may name only some buckets. A held exposure no configured bucket takes is shocked by
+ * zero and applied to none — `unconfigured_zero` on its audit line (`_resolve_bucket` in
+ * `stress/plugin.py`) — so the total speaks as if that part of the scope were immune. These are its
+ * `exposure_bucket_id`s: on an asset-class shock, the classes the scenario does not name.
+ */
+export function unconfiguredBuckets(output: unknown): string[] {
+    if (!output || typeof output !== 'object') return [];
+    const impacts = (output as {impacts?: unknown}).impacts;
+    if (!Array.isArray(impacts)) return [];
+    const buckets = new Set<string>();
+    for (const impact of impacts) {
+        const audit = impact && typeof impact === 'object' ? (impact as {bucket_audit?: unknown}).bucket_audit : undefined;
+        if (!Array.isArray(audit)) continue;
+        for (const line of audit) {
+            const entry = line as {rule?: unknown; exposure_bucket_id?: unknown};
+            if (entry?.rule === 'unconfigured_zero' && typeof entry.exposure_bucket_id === 'string') buckets.add(entry.exposure_bucket_id);
+        }
+    }
+    return [...buckets].sort((left, right) => left.localeCompare(right));
+}
+
+/**
  * The bars of the tornado, worst first.
  *
  * Prefers the **configured buckets** when the scenario had a dimension, because

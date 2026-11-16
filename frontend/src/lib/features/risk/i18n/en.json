@@ -585,7 +585,7 @@
         "shockShowDetail": "Show the shock per bucket",
         "shockHideDetail": "Hide the shock per bucket",
         "shockTotal": "This scenario would move the scope by {percent} {amount}",
-        "shockCoverage": "Only {percent} of the scope could be classified, so the total speaks for that part alone.",
+        "shockCoverage": "Only {percent} of the scope has classification data; the rest was counted as \"Other\".",
         "replayPeriod": "Period",
         "replayExcludedResidual": "Left out of the replay: {count, plural, one {# asset} other {# assets}}; {weight} of the value counts as cash at zero return.",
         "replayExcludedOmitted": "Left out of the replay: {count, plural, one {# asset} other {# assets}}; the figures speak for the others.",
@@ -612,7 +612,8 @@
           "contribution": "Contribution",
           "impact": "Impact",
           "bar": "Effect"
-        }
+        },
+        "shockUnconfigured": "Not in this scenario, so shocked by 0: {names}. The total counts them as untouched."
       },
       "backtestNotice": "With a slice active, these figures are rebuilt from today’s composition: they say how it *would* have gone, not how it actually went.",
       "notice": {

@@ -612,7 +612,8 @@
           "contribution": "Contribución",
           "impact": "Impacto",
           "bar": "Efecto"
-        }
+        },
+        "shockUnconfigured": "No están en este escenario, así que su choque es 0: {names}. El total los cuenta como intactos."
       },
       "backtestNotice": "Con un subconjunto activo, estas cifras se reconstruyen sobre la composición de hoy: dicen cómo *habría* ido, no cómo fue en realidad.",
       "notice": {
