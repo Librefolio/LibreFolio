@@ -231,7 +231,7 @@ export function resultErrorCodes(results: ReadonlyArray<RiskAnalyticResult | nul
  * ⚠️ `translated === key` is the whole mechanism, and it is not a precaution:
  * `svelte-i18n` returns the key itself when no message exists, so without this
  * comparison an error code the backend gains tomorrow prints `risk.errors.foo`
- * on screen. That is the defect recorded at `RiskResultFrame:108`, which is why
+ * on screen. That is the defect recorded at the return-basis line of `RiskResultFrame`, which is why
  * this is a function with tests rather than three lines inlined in a component.
  *
  * The translator is **passed in** rather than imported. `$t` is a store, and a

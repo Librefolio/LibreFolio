@@ -37,7 +37,7 @@
      * on screen, and this docstring carried the warning until they were fixed.
      * Both are repaired, and the repairs are what this page now relies on:
      *   - the composition total is **withheld**, not degraded. `L4Replay` guards
-     *     it with `{#if output.portfolio_return != null}`, and `stress.py` leaves that
+     *     it with `{#if output.portfolio_return != null}`, and `StressAnalytic._historical` leaves that
      *     null on an unweighted scope — so the sentence does not render at all,
      *     rather than printing a dash that reads like a number which failed to
      *     load. The per-asset bars are the whole answer here.

@@ -115,7 +115,7 @@
     let historicalResults = $derived(controller.historicalResults);
     let currentResults = $derived(controller.currentResults);
     let contributionResult = $derived(resultByCode(currentResults, 'risk_contribution'));
-    // `correlation` is requested in the historical wave (`riskAnalysisHelpers:240`)
+    // `correlation` is requested in the historical wave (`buildBaseAnalytics` in `riskAnalysisHelpers.ts`)
     // and was resolved and handed to nobody. It is not a datum to ask for: it is
     // one already paid for and thrown away.
     let correlationResult = $derived(resultByCode(historicalResults, 'correlation'));
