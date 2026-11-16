@@ -23,6 +23,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Tabla de activos: cada fila tiene una acción «Editar» que abre el editor del activo en el sitio, sin ir a la página de detalle.
 - Los tipos de cambio FED cubren también el ringgit malayo (MYR), la rupia de Sri Lanka (LKR) y el bolívar venezolano (VES, desde el 4 de octubre de 2021, la última redenominación).
 - Las rutas que usan FED muestran una nota ℹ️: los tipos FED son diarios, uno por día hábil en EE. UU., pero la Reserva Federal los publica una vez a la semana, los lunes, así que el último tipo FED puede tener hasta unos 10 días. Las notas de los proveedores tienen ahora dos niveles en el selector de ruta: ℹ️ para un dato útil, ⚠️ para un límite de los datos como las medias mensuales del SNB.
+- Nuevos proveedores de tipos de cambio de otros cinco bancos centrales, todos gratuitos y sin clave API: la Banca d'Italia (BDI) y el Banco Central do Brasil (BCB) cubren casi todas las divisas del mundo, en un solo paso hacia el euro y hacia el dólar estadounidense; Norges Bank (NORGES), el Banco Nacional de Ucrania (NBU) y el Bank of Canada (BOC) añaden los tipos oficiales de sus países y fuentes secundarias para muchas otras. Datos BCB: Banco Central do Brasil, PTAX, ODbL.
 
 ### 🔄 Cambios
 
@@ -40,6 +41,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Dashboard › Tus posiciones: «Ver todo» ahora es una pequeña insignia, y en el teléfono los tres selectores de vista (Cartera/Periodo, Global/Bróker, tabla/mapa) tienen su propia fila bajo el título.
 - Edición de varios activos: tras guardar, la ventana queda abierta en el resumen con una marca verde «Guardado», y la selección se mantiene, para seguir trabajando con los mismos activos. El resumen muestra el nuevo icono en miniatura; los campos están en una cuadrícula, con el valor actual bajo cada campo y su botón de restablecer en la misma fila, y la ventana no tiene barra de desplazamiento interna.
 - La barra de selección de las tablas (activos, transacciones, divisas, transacciones de un bróker) ahora flota en la parte inferior de la pantalla mientras hay filas seleccionadas, y se mantiene tras guardar; Esc quita la selección cuando el foco está en la barra.
+- La ventana de rutas de un par de divisas se abre más rápido, y un grupo grande de cadenas muestra las primeras 200, con «Mostrar más (n ocultas)» para las demás; la búsqueda sigue mirando todas. Con los nuevos bancos centrales un solo par puede tener decenas de miles de cadenas.
 
 ### 🐛 Corregido
 

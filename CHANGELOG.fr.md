@@ -23,6 +23,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Tableau des actifs : chaque ligne a une action «Modifier» qui ouvre l'éditeur de l'actif sur place, sans aller à la page de détail.
 - Les taux FED couvrent aussi le ringgit malaisien (MYR), la roupie srilankaise (LKR) et le bolívar vénézuélien (VES, depuis le 4 octobre 2021, la dernière dénomination).
 - Les routes qui utilisent FED affichent une note ℹ️ : les taux FED sont quotidiens, un par jour ouvré américain, mais la Réserve fédérale les publie une fois par semaine, le lundi, donc le dernier taux FED peut avoir jusqu'à environ 10 jours. Les notes des fournisseurs ont désormais deux niveaux dans le choix de la route : ℹ️ pour un fait utile à savoir, ⚠️ pour une limite des données comme les moyennes mensuelles de la BNS.
+- Nouveaux fournisseurs de taux de change de cinq autres banques centrales, tous gratuits et sans clé API : la Banca d'Italia (BDI) et le Banco Central do Brasil (BCB) couvrent presque toutes les devises du monde, en une étape vers l'euro et vers le dollar américain ; Norges Bank (NORGES), la Banque nationale d'Ukraine (NBU) et la Banque du Canada (BOC) ajoutent les taux officiels de leurs pays et des sources secondaires pour beaucoup d'autres. Données BCB : Banco Central do Brasil, PTAX, ODbL.
 
 ### 🔄 Modifié
 
@@ -40,6 +41,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Dashboard › Vos positions : «Voir tout» est désormais un petit badge, et sur téléphone les trois sélecteurs de vue (Portefeuille/Période, Global/Courtier, tableau/carte) ont leur propre ligne sous le titre.
 - Modification de plusieurs actifs : après l'enregistrement, la fenêtre reste ouverte sur le récapitulatif avec une coche verte «Enregistré», et la sélection reste, pour continuer à travailler sur les mêmes actifs. Le récapitulatif montre la nouvelle icône en miniature ; les champs sont sur une grille, avec la valeur actuelle sous chaque champ et son bouton de réinitialisation sur la même ligne, et la fenêtre n'a pas de barre de défilement interne.
 - La barre de sélection des tableaux (actifs, transactions, devises, transactions d'un courtier) flotte désormais en bas de l'écran tant que des lignes sont sélectionnées, et reste après un enregistrement ; Échap efface la sélection quand le focus est dans la barre.
+- La fenêtre des routes d'une paire de devises s'ouvre plus vite, et un grand groupe de chaînes en montre les 200 premières, avec «Afficher plus (n masquées)» pour les autres ; la recherche parcourt toujours toutes les chaînes. Avec les nouvelles banques centrales, une seule paire peut avoir des dizaines de milliers de chaînes.
 
 ### 🐛 Corrections
 

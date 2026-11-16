@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Assets table: each row has an «Edit» action that opens the asset editor in place, without going to the detail page.
 - FED exchange rates now also cover the Malaysian ringgit (MYR), the Sri Lankan rupee (LKR) and the Venezuelan bolívar (VES, from 4 October 2021, the last redenomination).
 - Routes that use FED show an ℹ️ note: FED rates are daily, one per US business day, but the Federal Reserve publishes them once a week, on Mondays, so the latest FED rate can be up to about 10 days old. Provider notes now come in two levels in the route picker: ℹ️ for a fact worth knowing, ⚠️ for a data limit such as the SNB's monthly averages.
+- New exchange-rate providers from five more central banks, all free and without an API key: Banca d'Italia (BDI) and Banco Central do Brasil (BCB) cover almost every currency in the world, in one step to the euro and to the US dollar; Norges Bank (NORGES), the National Bank of Ukraine (NBU) and the Bank of Canada (BOC) add the official rates of their countries and second sources for many others. BCB data: Banco Central do Brasil, PTAX, ODbL.
 
 ### 🔄 Changed
 
@@ -40,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dashboard › Your Positions: «See all» is now a small badge, and on a phone the three view switches (Portfolio/Period, Global/Broker, table/map) sit on their own row under the title.
 - Bulk edit of assets: after a save the window stays open on the summary with a green «Saved» check, and the selection stays, so you can keep working on the same assets. The summary shows the new icon as a thumbnail; the fields sit on one grid, with the current value under each field and its reset button on the same row, and the window has no inner scrollbar.
 - The selection bar of the tables (assets, transactions, FX, a broker's transactions) now floats at the bottom of the screen while rows are selected, and stays there after a save; Esc clears the selection when the focus is in it.
+- The route window of a currency pair opens faster, and a large group of chain routes shows its first 200, with «Show more (n hidden)» for the others; the search still looks through all of them. With the new central banks a single pair can have tens of thousands of chains.
 
 ### 🐛 Fixed
 
