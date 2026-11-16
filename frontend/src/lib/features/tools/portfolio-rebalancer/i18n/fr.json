@@ -108,6 +108,12 @@
             "incomplete": "Les chiffres apparaissent une fois les champs en rouge complétés.",
             "unavailable": "Les chiffres ne sont pas disponibles pour le moment ; le calcul n’en est pas affecté."
           }
+        },
+        "result": {
+          "plan": {
+            "buysAt": "Achats sur {broker}",
+            "sequenceHint": "Suivez les numéros : d’abord les dépôts, les virements et les changes, dans l’ordre indiqué, puis les achats."
+          }
         }
       }
     }

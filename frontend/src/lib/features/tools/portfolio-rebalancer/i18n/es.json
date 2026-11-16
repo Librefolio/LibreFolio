@@ -108,6 +108,12 @@
             "incomplete": "Las cifras aparecen cuando los campos en rojo están completos.",
             "unavailable": "Las cifras no están disponibles ahora; el cálculo no se ve afectado."
           }
+        },
+        "result": {
+          "plan": {
+            "buysAt": "Compras en {broker}",
+            "sequenceHint": "Sigue los números: primero los depósitos, las transferencias y los cambios, en el orden indicado, y después las compras."
+          }
         }
       }
     }

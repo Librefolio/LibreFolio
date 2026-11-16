@@ -108,6 +108,12 @@
             "incomplete": "The figures appear once the fields marked in red are complete.",
             "unavailable": "The figures are not available right now; the calculation is not affected."
           }
+        },
+        "result": {
+          "plan": {
+            "buysAt": "Purchases on {broker}",
+            "sequenceHint": "Follow the numbers: first the deposits, transfers and currency exchanges, in the order shown, then the purchases."
+          }
         }
       }
     }
