@@ -5,6 +5,7 @@ import subprocess
 
 from . import _common
 from ._common import Colors, _get_category_tests_for_all, _run_test_suite, add_test, make_category, print_error, print_header, print_section, print_success
+from ._coverage import vitest_env
 from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright, reset_setup_scope
 
 
@@ -356,6 +357,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
         ],
         cwd="frontend",
         capture_output=not verbose,
+        env=vitest_env("front-utility"),
     )
     if result.returncode == 0:
         print_success("Core store Vitest unit tests - PASSED")
@@ -661,6 +663,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
         ],
         cwd="frontend",
         capture_output=not verbose,
+        env=vitest_env("front-utility"),
     )
     if result.returncode == 0:
         print_success("Svelte component unit tests - PASSED")
@@ -710,6 +713,7 @@ def front_onboarding_component_unit(
         ],
         cwd="frontend",
         capture_output=not verbose,
+        env=vitest_env("front-utility"),
     )
     if result.returncode == 0:
         print_success("Onboarding component unit tests - PASSED")
@@ -1141,6 +1145,28 @@ def front_csp_collector(verbose: bool = False, ui: bool = False, headed: bool = 
     if not _ensure_test_users():
         return False
     return _run_playwright("layout/csp-collector.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_login_reuse(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the tests of how login() signs a user in and what it costs (project 71, steps 3.14 and 3.15): the annotations login-path and login-ms."""
+    print_section("Frontend Login Reuse Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/login-reuse.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_js_coverage_sink(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the pure tests of the worker's JS coverage sink and of the stopwatches of the E2E collection (project 71, step 3.6): what a merge and a write cost, one record per test with six fields, the log of a worker, the flag that turns them on."""
+    print_section("Frontend JS Coverage Sink Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/js-coverage-sink.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_cloud_smoke(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -1693,6 +1719,24 @@ def populate_registry(registry: dict) -> None:
         desc="H-43 and H-55 v2: the collector of Content-Security-Policy violations of e2e/fixtures/playwright.ts (e2e/fixtures/csp.ts, e2e/csp-baseline.json, F1 only): its pure logic and a reading of a policy with an accept table and refusals; on any lane, the enforced header of every page of the build and /dashboard directive by directive (hashes read from the build, connect-src by profile, frame-ancestors iff frame protection), the report-only one where present, the trio alone on /mkdocs, no policy or frame-ancestors alone on an API answer; the sign-in and offline pages under the server's own policy with no violation, the global probe blocked and known by F1 alone; an injected inline script blocked, recorded, noted in sessionStorage and told in one console line",
         prereq="Populated DB + test users",
         tests="layout/csp-collector.spec.ts",
+    )
+    add_test(
+        cat,
+        "login-reuse",
+        front_login_reuse,
+        name="Login Reuse",
+        desc="Project 71 steps 3.14-3.15 (D7): login() annotates every test with login-path (form) and login-ms (its milliseconds), which Playwright's JSON report carries per test",
+        prereq="Populated DB + test users",
+        tests="layout/login-reuse.spec.ts",
+    )
+    add_test(
+        cat,
+        "js-coverage-sink",
+        front_js_coverage_sink,
+        name="JS Coverage Sink",
+        desc="Project 71 step 3.6: the worker's JS coverage sink (e2e/fixtures/js-coverage-sink.ts) and the stopwatches of the E2E coverage collection, all pure: with a write every two tests the sink returns the merge and write times (the second add has a write time, the first none), a record has exactly evaluate_ms, payload_bytes, merge_ms, flush_ms, rss_mb and heap_mb, the log appends one JSON line per test to coverage-js/timing/worker-<index>-<pid>.jsonl, only LF_COV_TIMING=1 turns them on and the size is counted in bytes",
+        prereq="Frontend build + test users",
+        tests="layout/js-coverage-sink.spec.ts",
     )
     add_test(
         cat,

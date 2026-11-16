@@ -43,7 +43,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from . import _common
+from . import _common, _coverage, _run_cache
 from ._archive import log_file_for
 from ._common import PROJECT_ROOT, Colors, print_error, print_info, print_success, print_warning
 
@@ -140,17 +140,40 @@ def _playwright_results(report_path: Path) -> dict[str, bool]:
     return outcome
 
 
-# Consolidation trades process count for process lifetime, and under JS coverage
-# the second one has a ceiling. Measured: 8 specs / 163 tests / 7.8 min completes
-# with room to spare, 25 specs / 215 tests / 20 min dies of heap exhaustion — the
-# growth tracks how long the worker lives, not what any single spec does. Chunking
-# bounds the lifetime without giving up the win: a category still pays setup a
-# handful of times instead of once per spec.
-_JS_COVERAGE_CHUNK = 8
+def _playwright_durations(report_path: Path, category: str) -> None:
+    """Hand the run's durations to ``_run_cache.DURATIONS``: per spec, per test (``<project> › <title>``), every attempt
+    counted — a retry is time the run spent. Milliseconds in the report, seconds in the record."""
+    try:
+        data = json.loads(report_path.read_text())
+    except Exception:
+        return
+
+    def walk(suite: dict, inherited: str = "") -> None:
+        file_name = suite.get("file") or inherited
+        for spec in suite.get("specs", []):
+            path = _norm_spec(spec.get("file") or file_name)
+            tests = {}
+            for test in spec.get("tests", []):
+                title = f"{test.get('projectName') or 'default'} › {spec.get('title', '')}"
+                tests[title] = tests.get(title, 0.0) + sum(r.get("duration", 0) for r in test.get("results", [])) / 1000
+            _run_cache.DURATIONS.add(category, "playwright", path, sum(tests.values()), tests)
+        for child in suite.get("suites", []):
+            walk(child, file_name)
+
+    for suite in data.get("suites", []):
+        walk(suite)
 
 
-def _chunk(specs: list[str], size: int) -> list[list[str]]:
-    return [specs[i : i + size] for i in range(0, len(specs), size)]
+# Consolidation trades process count for process lifetime. Under JS coverage that
+# lifetime used to have a ceiling: a worker summing full slices of
+# `window.__coverage__` grew with every test (25 specs / 215 tests / 20 min died
+# of heap exhaustion), so a category was split into Playwright runs of 8 specs.
+# The counter-based sink (step 3.7) and the light read (3.8) removed the growth:
+# measured on `front-utility all` run whole under `--coverage js` (13/11/2026),
+# 47 specs and 463 tests in one Playwright run, every worker's heap peaked under
+# 2 GB — 1 700 MB the highest, on a worker's first full read; 1 516 MB the
+# worker of 396 tests, 685 MB on average over its last 20. So a category is one
+# Playwright run, with or without JS coverage (step 3.11).
 
 
 def _group_log(category: str | None, unit: str):
@@ -202,19 +225,23 @@ def run_playwright_group(specs: list[str], coverage: bool, project: str | None =
     if env.get("E2E_WORKERS", "1") == "1":
         env["LF_TX_HYGIENE"] = "1"
     if coverage and _common._COVERAGE_PY:
+        _coverage.LEDGER.expect_python("frontend")
         env["COVERAGE_BACKEND"] = "1"
-        # Same spawn-worker wiring as _frontend_common._run_playwright_body:
+        # Same server wiring as _frontend_common._run_playwright_body:
         # Playwright hands this env to the webServer it launches.
-        _common.apply_subprocess_coverage_env(env)
+        _common.apply_server_coverage_env(env)
     if coverage and _common._COVERAGE_JS:
+        _coverage.LEDGER.expect_e2e_js()
         env["COVERAGE_JS"] = "1"
-        # A consolidated worker keeps one V8-coverage accumulator alive across every
-        # spec of the category instead of throwing it away with the process after
-        # each file. The per-worker monocart instance keeps that bounded, but the
-        # raw entries still carry the full source of every script the run touched,
-        # so the peak is genuinely higher than it used to be. Node's default old
-        # space is not sized for it, and running out shows up as an unrelated test
-        # dying with SIGABRT — a failure that names the victim, never the cause.
+        # A consolidated worker keeps one istanbul coverage map alive across every
+        # spec of the category (the sink of e2e/fixtures/js-coverage-sink.ts) instead
+        # of throwing it away with the process after each file. The map carries the
+        # statement, function and branch tables of every file the run touched, so
+        # the peak is higher than with a process per spec: measured under 2 GB per
+        # worker for a whole category (step 3.11, 1 700 MB the highest, with a 4 GB
+        # cap). Node's default old space is not sized for it, and running out shows up as
+        # an unrelated test dying with SIGABRT — a failure that names the victim,
+        # never the cause.
         node_opts = env.get("NODE_OPTIONS", "")
         if "max-old-space-size" not in node_opts:
             env["NODE_OPTIONS"] = f"{node_opts} --max-old-space-size=8192".strip()
@@ -232,6 +259,7 @@ def run_playwright_group(specs: list[str], coverage: bool, project: str | None =
         return dict.fromkeys(specs, False)
 
     results = _playwright_results(report)
+    _playwright_durations(report, category or "playwright")
     return {s: results.get(s, False) for s in specs}
 
 
@@ -258,16 +286,36 @@ def _vitest_results(report_path: Path, known: list[str]) -> dict[str, bool]:
     return outcome
 
 
+def _vitest_durations(report_path: Path, known: list[str], category: str) -> None:
+    """Hand each Vitest file's seconds (its ``endTime − startTime``) to ``_run_cache.DURATIONS``."""
+    try:
+        data = json.loads(report_path.read_text())
+    except Exception:
+        return
+    for result in data.get("testResults", []):
+        name = (result.get("name") or "").replace("\\", "/")
+        match = next((k for k in known if name.endswith(k)), None)
+        if match is None or result.get("endTime") is None or result.get("startTime") is None:
+            continue
+        _run_cache.DURATIONS.add(category, "vitest", match, (result["endTime"] - result["startTime"]) / 1000)
+
+
 def run_vitest_group(paths: list[str], coverage: bool, category: str | None = None) -> dict[str, bool]:
     """Run several vitest files in one invocation; return the per-file verdict.
 
     Coverage is *not* passed on the command line: ``vitest.config.ts`` reads
     ``COVERAGE_JS`` from the environment, which the CLI has already exported.
-    Adding ``--coverage`` here would turn the custom monocart provider on in
-    runs where that variable is absent, which is exactly the configuration it
-    does not support.
+    Adding ``--coverage`` here would turn the provider on in runs where that
+    variable is absent, which is exactly the configuration it does not support.
+
+    Under JS coverage the group is also told where to write: the ledger of the run
+    (``_coverage.LEDGER``) names its directory, ``coverage-js/unit/<category>-<n>``,
+    and hands it to the child as ``LF_VITEST_COVERAGE_DIR`` — the child's alone,
+    never the runner's own environment. ``vitest.config.ts`` writes the coverage of
+    a red run too (``reportOnFailure``), so the directory exists whatever the verdict.
     """
     report = Path(tempfile.mkdtemp(prefix="lf_vitest_")) / "report.json"
+    env = _coverage.vitest_env(category or "vitest") if coverage else None
 
     cmd = ["npx", "vitest", "run", *paths, "--reporter=default", "--reporter=json", f"--outputFile.json={report}"]
 
@@ -275,12 +323,13 @@ def run_vitest_group(paths: list[str], coverage: bool, category: str | None = No
 
     try:
         with _group_log(category, "vitest"):
-            subprocess.run(cmd, cwd=FRONTEND_DIR, text=True)
+            subprocess.run(cmd, cwd=FRONTEND_DIR, text=True, env=env)
     except Exception as exc:
         print_error(f"vitest error: {exc}")
         return dict.fromkeys(paths, False)
 
     results = _vitest_results(report, paths)
+    _vitest_durations(report, paths, category or "vitest")
     return {p: results.get(p, False) for p in paths}
 
 
@@ -354,13 +403,10 @@ def run_consolidated(scope: str | None, coverage: bool, resume: bool = False) ->
                 continue
             label = "desktop + mobile" if project == ALL_PROJECTS else project
             proj = None if project == ALL_PROJECTS else project
-            batches = _chunk(specs, _JS_COVERAGE_CHUNK) if (coverage and _common._COVERAGE_JS) else [specs]
-            suffix = f" in {len(batches)} batches" if len(batches) > 1 else ""
-            print_info(f"▸ {category}: {len(specs)} spec(s) in one Playwright run ({label}){suffix}")
-            for batch in batches:
-                verdict = run_playwright_group(batch, coverage, project=proj, category=category)
-                for spec, passed in verdict.items():
-                    claim(category, specs_by_path[spec], passed)
+            print_info(f"▸ {category}: {len(specs)} spec(s) in one Playwright run ({label})")
+            verdict = run_playwright_group(specs, coverage, project=proj, category=category)
+            for spec, passed in verdict.items():
+                claim(category, specs_by_path[spec], passed)
 
         files_by_path = kinds["vitest"]
         files = sorted(p for p, actions in files_by_path.items() if not already_green(category, actions))

@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 from scripts.cli_base import auto_build_frontend, pipenv_prefix
 
-from . import _common
+from . import _common, _coverage
 from ._archive import log_file_for
 from ._backend_db import db_populate
 from ._common import (
@@ -345,12 +345,14 @@ def _run_playwright_body(  # noqa: C901 — flat command/env assembly + error ha
             env = _common.apply_e2e_workers(env)
         if cov_py or cov_js:
             if cov_py:
+                _coverage.LEDGER.expect_python("frontend")
                 env["COVERAGE_BACKEND"] = "1"
                 # Playwright merges this env into its webServer (`dev.py server
-                # --coverage`), whose spawn workers then measure themselves —
-                # see _common.apply_subprocess_coverage_env.
-                _common.apply_subprocess_coverage_env(env)
+                # --coverage`), whose spawn workers then measure themselves, all of
+                # them into .coverage_data/parts/server/ — see _common.apply_server_coverage_env.
+                _common.apply_server_coverage_env(env)
             if cov_js:
+                _coverage.LEDGER.expect_e2e_js()
                 env["COVERAGE_JS"] = "1"
             else:
                 env.pop("COVERAGE_JS", None)

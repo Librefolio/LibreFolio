@@ -17,7 +17,7 @@
  * Registered in scripts/test_runner/_frontend_utility.py, action `ui-preferences` of front-utility.
  */
 import {expect, test, type Page} from '../fixtures/playwright';
-import {login} from '../fixtures/auth-helpers';
+import {login, loginWithForm} from '../fixtures/auth-helpers';
 import {completeWelcome, deleteDisposableUser, registerDisposableUser, skipDueFlowsExcept, type DisposableUser} from '../fixtures/onboarding-accounts';
 
 test.setTimeout(120_000);
@@ -70,7 +70,9 @@ test('theme and line shape follow the account into another browser, and a reset 
 
         // ---- B: another browser, the same account
         const pageB = await contextB.newPage();
-        await login(pageB, user);
+        // Through the form: the preferences reach another browser with the sign-in's own answer, which a session this
+        // worker kept from A would never ask for.
+        await loginWithForm(pageB, user);
         await expect(pageB.getByTestId('app-shell')).toBeVisible({timeout: 20_000});
         await expect(pageB.locator('html')).toHaveClass(DARK_CLASS);
         await openPreferences(pageB);

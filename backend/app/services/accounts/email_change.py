@@ -86,8 +86,16 @@ class ProfileEmailChangeLinkInvalidError(EmailError):
 class ProfileEmailChangeSignInRequiredError(EmailError):
     """A live link clicked without the session of its account (D10): nothing was written, the link stays live."""
 
+    def __init__(self, code: str = "EMAIL_CHANGE_SIGN_IN_REQUIRED") -> None:
+        super().__init__(code)
+
+
+class ProfileEmailChangeOtherAccountError(ProfileEmailChangeSignInRequiredError):
+    """The same refusal, with the session of ANOTHER account: the page can then say that the link is not for the account
+    signed in, so that its reader signs out instead of signing in to that account again. It names no account."""
+
     def __init__(self) -> None:
-        super().__init__("EMAIL_CHANGE_SIGN_IN_REQUIRED")
+        super().__init__("EMAIL_CHANGE_OTHER_ACCOUNT")
 
 
 class EmailChangeNotPendingError(EmailError):
@@ -341,12 +349,34 @@ async def _refusal(session: AsyncSession, record: AccountToken, user: Optional[U
     return None
 
 
+LinkCheck = Literal["ready", "signin", "other_account"]
+
+
+async def check_link(session: AsyncSession, token: str, *, acting_user_id: Optional[int], now: Optional[datetime] = None) -> LinkCheck:
+    """What the link page shows on opening (lots E2, E3): read only, the link neither spent nor revoked, and nothing that names
+    the account. A dead link: ``ProfileEmailChangeLinkInvalidError`` with its status, as its click would get. A live one:
+    its status — see ``EmailChangeCheckResponse``. The conditions read at the click (another account took the
+    address meanwhile) are not read here: the click still answers them."""
+    inspection = await token_service.inspect_token(session, token, CHANGE, now=now or utcnow())
+    record = inspection.record
+    if inspection.status is not token_service.TokenStatus.VALID or record is None:
+        raise ProfileEmailChangeLinkInvalidError(inspection.status.value)
+    if not (record.created_by_user_id is not None and record.created_by_user_id == record.user_id):
+        # The host's link of the instance owner: no session needed.
+        return "ready"
+    if acting_user_id is None:
+        return "signin"
+    if acting_user_id != record.user_id:
+        return "other_account"
+    return "ready"
+
+
 async def confirm_profile_change(session: AsyncSession, token: str, *, acting_user_id: Optional[int], now: Optional[datetime] = None) -> ConfirmedProfileChange:
     """The click on a Profile link, by ``acting_user_id`` (the account of the request's session; None without one); commits.
 
     A dead link: ``ProfileEmailChangeLinkInvalidError`` with its status, to anyone, nothing written. A live link whose account
-    is not ``acting_user_id``: ``ProfileEmailChangeSignInRequiredError``, nothing written — the link is read, never spent or
-    revoked. Otherwise the link is spent, the conditions read again, and the account moves (``move_email``, verified now);
+    is not ``acting_user_id``: ``ProfileEmailChangeSignInRequiredError`` (``ProfileEmailChangeOtherAccountError`` when another
+    account's session clicked it), nothing written — the link is read, never spent or revoked. Otherwise the link is spent, the conditions read again, and the account moves (``move_email``, verified now);
     when a condition fails the link is revoked in the same transaction and the error says ``revoked``.
     """
     moment = now or utcnow()
@@ -359,8 +389,8 @@ async def confirm_profile_change(session: AsyncSession, token: str, *, acting_us
         # Read before the rollback, which expires the row: an async session cannot reload it.
         token_id = record.id
         await session.rollback()
-        logger.info("Email change link needs the session of its account: nothing changed", token_id=token_id)
-        raise ProfileEmailChangeSignInRequiredError()
+        logger.info("Email change link needs the session of its account: nothing changed", token_id=token_id, other_account=acting_user_id is not None)
+        raise ProfileEmailChangeSignInRequiredError() if acting_user_id is None else ProfileEmailChangeOtherAccountError()
     # The write comes first: it takes SQLite's write lock, and of two clicks racing for the same link only one spends it.
     spent = await token_service.consume_token(session, token, CHANGE, consumed_by_user_id=acting_user_id, now=moment)
     if spent is None:

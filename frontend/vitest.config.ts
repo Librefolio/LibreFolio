@@ -46,11 +46,18 @@ export default defineConfig({
             provider: 'istanbul',
             // Il formato di scambio con il livello E2E. Ogni invocazione di
             // vitest scrive in una cartella propria perché il runner lo lancia
-            // otto volte, una per categoria: con una cartella condivisa
-            // l'ultima corsa cancellerebbe le precedenti. `frontend/scripts/
-            // unit-report.js` le riunisce poi in un report solo.
+            // una volta per categoria: con una cartella condivisa l'ultima corsa
+            // cancellerebbe le precedenti. `frontend/scripts/js-coverage-report.js`
+            // le riunisce poi in un report solo.
             reporter: ['json'],
-            reportsDirectory: `coverage-js/unit/${Date.now().toString(36)}-${process.pid}`,
+            // Scrive anche quando un test è rosso: senza questo Vitest 4 non produce
+            // nessuna coverage per la run, e un solo test rosso nascondeva quella di
+            // tutto il gruppo (il registro del runner non distingue «niente» da «rosso»).
+            reportOnFailure: true,
+            // La cartella la sceglie il runner (`LF_VITEST_COVERAGE_DIR`, relativa a
+            // `frontend/`: `coverage-js/unit/<categoria>-<n>`), così sa dove cercarla. Una
+            // chiamata diretta a vitest, che nessuno ha nominato, ne ha una datata.
+            reportsDirectory: process.env.LF_VITEST_COVERAGE_DIR ?? `coverage-js/unit/${Date.now().toString(36)}-${process.pid}`,
         },
     },
     resolve: {

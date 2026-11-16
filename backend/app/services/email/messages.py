@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import html
 import json
+import re
 import unicodedata
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -105,6 +106,22 @@ def _fill(template: str, values: Mapping[str, str]) -> str:
     return Template(template).substitute(values)
 
 
+#: A phrase that matters in a text of the catalogue: ``**…**`` (project 71, lot E4).
+_STRONG = re.compile(r"\*\*(.+?)\*\*", re.DOTALL)
+
+
+def _plain_text(template: str, values: Mapping[str, str]) -> str:
+    """A text of the catalogue for the plain-text part: its line breaks kept, its ``**`` marks dropped."""
+    return _fill(template.replace("**", ""), values)
+
+
+def _html_text(template: str, values: Mapping[str, str]) -> str:
+    """A text of the catalogue for the HTML part: escaped, ``**…**`` as ``<strong>``, a line break as ``<br>``, and only
+    then filled with the values, escaped: neither a translation nor a value can bring markup, and a value's ``**`` stays."""
+    marked = _STRONG.sub(r"<strong>\1</strong>", html.escape(template)).replace("\n", "<br>")
+    return _fill(marked, {key: html.escape(value) for key, value in values.items()})
+
+
 #: Bidirectional embeddings, overrides and isolates: removed, so a value cannot reorder the text around it.
 _BIDI_CONTROLS = frozenset("\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
 
@@ -128,25 +145,27 @@ def _render(
     link: str | None = None,
     subject_key: str = "subject",
 ) -> EmailContent:
-    """Assemble the two parts of an email from the keys of its section, filled with ``values`` (each on one line)."""
+    """Assemble the two parts of an email from the keys of its section, filled with ``values`` (each on one line).
+
+    A text may break its lines and mark what matters (``\\n``, ``**…**``): ``_plain_text`` and ``_html_text`` write them.
+    """
     catalog = _CATALOGS[language]
     section = catalog[kind.value]
     values = {key: _one_line(value) for key, value in values.items()}
-    lines_before = [_fill(section[key], values) for key in before]
-    lines_after = [_fill(section[key], values) for key in after]
-    opening = _fill(catalog["common"][greeting], values)
+    texts_before = [catalog["common"][greeting], *(section[key] for key in before)]
+    texts_after = [section[key] for key in after]
     footer = _fill(catalog["common"]["footer"], values)
 
-    text_blocks = [opening, *lines_before]
-    html_blocks = [_PARAGRAPH.format(html.escape(line)) for line in (opening, *lines_before)]
+    text_blocks = [_plain_text(text, values) for text in texts_before]
+    html_blocks = [_PARAGRAPH.format(_html_text(text, values)) for text in texts_before]
     if link is not None:
         action = section["action"]
         href = html.escape(link, quote=True)
         text_blocks.append(f"{action}\n{link}")
         html_blocks.append(_BUTTON.format(href=href, label=html.escape(action)))
         html_blocks.append(_FALLBACK.format(hint=html.escape(catalog["common"]["button_fallback"]), href=href, text=href))
-    text_blocks.extend(lines_after)
-    html_blocks.extend(_PARAGRAPH.format(html.escape(line)) for line in lines_after)
+    text_blocks.extend(_plain_text(text, values) for text in texts_after)
+    html_blocks.extend(_PARAGRAPH.format(_html_text(text, values)) for text in texts_after)
 
     text = "\n\n".join(text_blocks) + f"\n\n-- \n{footer}\n"
     page = _LAYOUT.substitute(lang=language, subject=html.escape(section[subject_key]), body="\n".join(html_blocks), footer=html.escape(footer), logo_cid=LOGO_CONTENT_ID)

@@ -182,11 +182,32 @@ The test runner modules in `scripts/test_runner/_backend_api.py` register entire
 ## Coverage
 
 ```bash
-./dev.py test --coverage api all
+./dev.py test --quotable all                   # the number to quote: clean, measure everything, check, summarise
+./dev.py test --coverage api all               # a partial measure: fine for a look, never to quote
 ./dev.py test coverage show backend
 ./dev.py test coverage show combined
-./dev.py test coverage-report --priority high  # uncovered functions analysis
+./dev.py test coverage-report --input <json>   # which functions are untested (ranks, does not quote)
 ```
+
+### The quotable run and its summary
+
+`--quotable` stands for `--fresh-run --coverage all` and the three `--cov-clean-*`; it needs the category `all`
+written and refuses (exit 2, before anything starts) `--resume`, test names, `--fail-fast`, the provider filters,
+another `--coverage`, `--list` and `--run-status`. Every coverage run, quotable or not:
+
+- **checks its pieces**: what it launched under coverage (pytest and its database, the shared backend's parts,
+  each vitest directory, each Playwright run) must be on disk at the end. A missing or empty piece is a red row of
+  the table *piece · where · expected · found*, and the run exits 1 whatever its tests said;
+- **writes `.coverage_data/coverage-summary.json`** (`lf-coverage-summary/1`): `quotable` with its `reasons`, the
+  commit and the tree, and for each base — backend `pytest`, `server`, `combined`, `financial_math`; frontend
+  `unit`, `e2e`, `combined` — `lines` and `branches` apart, `{covered, total, pct}`. Quote those, never
+  coverage.py's `TOTAL` or `percent_covered`, which count lines and branches together;
+- **writes `.coverage_data/durations.json`**: the seconds per category, spec, test, vitest file and pytest unit,
+  named by the invocation's campaign record.
+
+The numbers are a note, not a gate (D6): no threshold. Only an incomplete run is red. The backend HTML is written
+once, by the finalizer; no pytest invocation writes a report. In a backend category the shared backend's parts are
+folded into `.coverage_data/backend` by that run.
 
 ### `--coverage` takes an optional language
 
@@ -219,29 +240,19 @@ tests. Measured on this repo:
 `api/` read 31.6 % vs the real 87.2 %; `brim_providers/` read 34.8 % vs the real 84.8 %.
 Acting on the partial number would have sent weeks of work to the wrong place.
 
-**Full sequence for a comparable figure** (~50 min):
-
-```bash
-./dev.py test -q --coverage services all
-./dev.py test -q --coverage schemas all
-./dev.py test -q --coverage utils all
-./dev.py test -q --coverage db all
-./dev.py test -q --coverage api all            # ~20 min, starts a server per group
-./dev.py test -q --coverage external brim-providers
-./dev.py test -q --coverage external fx-providers      # needs network
-./dev.py test -q --coverage external asset-providers   # needs network
-```
+A comparable figure is **`./dev.py test --quotable all`**, nothing less: one run, everything, cleaned before.
 
 Rules:
 
 - **Always state which categories were run** alongside any coverage number. A figure
-  without that declaration is not comparable to anything.
+  without that declaration is not comparable to anything; the summary's `categories` and `quotable` say it.
 - Do **not** wrap `api all` in a short `timeout` — it silently truncates the last groups
   and their code then reads as 0 %.
-- `coverage-report` reads **`/tmp/cov_report.json`**, not the live DB. Regenerate first:
-  `COVERAGE_FILE=.coverage_data/backend pipenv run coverage json -o /tmp/cov_report.json`
-- The same command analyses the **frontend** with `--lang js`, reading monocart's istanbul
-  JSON from `frontend/coverage-js/` (no regeneration step needed — the test run writes it).
+- `coverage-report` needs a JSON report of the database you mean: `pipenv run coverage json
+  --data-file=.coverage_data/backend -o .coverage_data/cov_report.json`, then `--input .coverage_data/cov_report.json`.
+  It ranks untested functions; it does not give the number to quote.
+- The same command analyses the **frontend** with `--lang js`, reading the istanbul JSON the run wrote under
+  `frontend/coverage-js/`.
 - **Spawn children are covered only because the runner wires them.** Under
   `./dev.py test --coverage`, every spawned interpreter (pytest workers, shared
   backend, Playwright's webServer) gets `COVERAGE_PROCESS_START=<repo>/.coveragerc`

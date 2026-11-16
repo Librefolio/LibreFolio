@@ -11,6 +11,7 @@ import subprocess
 
 from . import _common
 from ._common import PROJECT_ROOT, Colors, _get_category_tests_for_all, _run_test_suite, add_test, make_category, print_error, print_section, print_success
+from ._coverage import vitest_env
 from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright, reset_setup_scope
 
 DESIGNER_LAB_UNIT_TEST_PATHS = (
@@ -50,7 +51,7 @@ def front_designer_lab_unit(verbose: bool = False, ui: bool = False, headed: boo
     print(f"\n{Colors.BLUE}Running: Designer Lab Vitest unit tests{Colors.NC}")
     print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")
     try:
-        result = subprocess.run(cmd, cwd=PROJECT_ROOT / "frontend", text=True)
+        result = subprocess.run(cmd, cwd=PROJECT_ROOT / "frontend", text=True, env=vitest_env("front-designer-lab"))
         if result.returncode == 0:
             print_success("Designer Lab Vitest unit tests - PASSED")
             return True

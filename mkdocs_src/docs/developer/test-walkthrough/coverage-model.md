@@ -1,4 +1,4 @@
-# Coverage Model
+# 📊 Coverage Model
 
 LibreFolio measures coverage on **two independent axes**. Keeping them apart is the
 single most important thing to understand about the reports — most of the confusion
@@ -30,7 +30,7 @@ graph LR
     style JS fill:#f0db4f,color:#000
 ```
 
-## The six reports
+## 📁 The six reports
 
 | Report | Language | Driven by | Opened with |
 |--------|----------|-----------|-------------|
@@ -49,7 +49,7 @@ graph LR
     only the folder name lied. Frontend *code* coverage now lives under
     `frontend/coverage-js/`.
 
-## The `--coverage` flag
+## 🏁 The `--coverage` flag
 
 ```bash
 ./dev.py test --coverage all            # both languages (default when omitted)
@@ -64,7 +64,7 @@ pre-existing invocation keeps working unchanged:
 ./dev.py test --coverage api all        # still valid — 'api' is the suite, not a language
 ```
 
-### `all` means "everything measurable *in that suite*"
+### 🎯 `all` means "everything measurable *in that suite*"
 
 Not "everything, always". Asking for something a suite cannot produce is an error,
 not an empty report:
@@ -82,10 +82,10 @@ not an empty report:
     is scoped to the `test` sub-command so it cannot corrupt the Playwright
     `webServer` command line.
 
-## How JS coverage is collected
+## 🧪 How JS coverage is collected
 
 ```text
-vitest     ──(istanbul provider)────▶ unit/<time>-<pid>/coverage-final.json ──▶ unit-combined/ ─┐
+vitest     ──(istanbul provider)────▶ unit/<category>-<n>/coverage-final.json ─▶ unit-combined/ ─┐
                                                                                                 ├──▶ combined/
 Playwright ──(window.__coverage__)──▶ e2e-raw/worker-<slot>-<pid>.json     ──▶ e2e/           ─┘
 ```
@@ -97,8 +97,9 @@ the same role `.coverage.<pid>` files play on the Python side before `coverage c
 Across workers nothing is merged until the run is over: then `_finalize_js_coverage()` (`scripts/test_runner/_coverage.py`) calls
 `frontend/scripts/js-coverage-report.js` once per arrow on the right. The script
 merges its inputs with `istanbul-lib-coverage` — same file, same statement map, hit
-counts summed — and writes a `coverage-final.json`, an HTML report and a console
-summary. `combined/` is built from the two level reports, and only when both exist;
+counts summed — and writes a `coverage-final.json`, an HTML report, a console summary
+and a `summary.json` (lines, branches, statements and functions as covered / total, and
+the input files it read and the ones it could not parse), which the run's summary reads. `combined/` is built from the two level reports, and only when both exist;
 with a single level, that level's report is the final one.
 
 The moving parts:
@@ -111,7 +112,8 @@ The moving parts:
 | `frontend/e2e/fixtures/js-coverage-sink.ts` | The worker's running sum of those slices, written to one JSON per worker |
 | `frontend/scripts/js-coverage-report.js` | Merges, remaps and filters its inputs into one report |
 | `scripts/test_runner/_frontend_common.py` | `_ensure_frontend_build()` — builds the instrumented frontend, and checks that it is |
-| `scripts/test_runner/_coverage.py` | Wipes `frontend/coverage-js/` before the run, builds the three reports after it |
+| `scripts/test_runner/_coverage.py` | Wipes `frontend/coverage-js/` before the run, builds the three reports after it, checks that every piece the run launched is there and writes the summary (see [The quotable run](#the-quotable-run)) |
+| `frontend/scripts/js-coverage-probe.mjs` | Test infrastructure, no report: `timing` reads the collection's stopwatches, `compare` holds two directories of worker files to each other |
 
 Nothing survives from one run to the next: `_clean_js_coverage_dirs()` deletes the
 whole `frontend/coverage-js/` at the start of every run that collects JS coverage.
@@ -132,7 +134,7 @@ deleted after three attempts stops the run, rather than let it report stale data
     files went from 0 to 11 620. A build that carries its own counters also left
     monocart without a job, and monocart left the project.
 
-### The Playwright fixture
+### 🎭 The Playwright fixture
 
 `frontend/e2e/fixtures/playwright.ts` is a **barrel**: every spec imports `test` and
 `expect` from it instead of from `@playwright/test`. It adds an `auto` fixture,
@@ -140,12 +142,21 @@ deleted after three attempts stops the run, rather than let it report stale data
 start before the test — the instrumented build counts by itself — so the whole job
 happens in the teardown:
 
-1. read `window.__coverage__` from every page of the test's browser context (a page
-   that has already closed is skipped) — about 17 MB of JSON per test on the
-   instrumented build;
-2. merge it into the worker's sum, an istanbul `CoverageMap` held by the worker-scoped
-   fixture `jsCoverageSink` (`e2e/fixtures/js-coverage-sink.ts`), with the same
-   `istanbul-lib-coverage` merge the report uses. No file is written per test.
+1. read every page of the test's browser context (a page that has already closed is
+   skipped) with `readCoverageInPage`, handing it the files the worker already holds
+   (`knownHashes()`: path → the build's `hash`). The page answers, for those files,
+   **their counters alone**, as arrays, and only when the test touched them; for any
+   other file — unknown to the worker, or of another build — the full istanbul object,
+   zeros included, since a file that never ran still belongs in the denominator;
+2. add it to the worker's sum, held by the worker-scoped fixture `jsCoverageSink`
+   (`e2e/fixtures/js-coverage-sink.ts`). No file is written per test.
+
+The full object of a module is mostly what never changes — its statement, function
+and branch maps and the `inputSourceMap` with the sources inside. So a worker reads it
+in full once, on its first test (about 25 MB on the instrumented build), and after that
+only counters: about 0.6 MB per test. Measured on `front-fx all` (13 November 2026,
+162 timed tests): the read went from 18.5 s to 0.9 s per test (median), and the
+Playwright part of the category from 66 to 18 minutes.
 
 `window.__coverage__` is keyed by source file, not by bundle chunk, and holds the
 statement, branch and function maps of every module the page loaded. Its positions
@@ -164,27 +175,44 @@ loses at most the tests since its last write.
 
 A new worker also **absorbs the files of dead workers** that held its `parallelIndex`
 before it: it merges them into its sum and deletes them once its own file, which now
-contains them, has been written. Under JS coverage the runner splits a category into
-Playwright runs of at most 8 specs (`_JS_COVERAGE_CHUNK` in
-`scripts/test_runner/_consolidate.py`), and Playwright replaces a worker after every
-failed test, so a full run starts a hundred or more worker processes; with absorption it
-still leaves about one file per parallel slot. A file whose pid is still alive is never
+contains them, has been written. Playwright replaces a worker after every failed test,
+and a run may launch several Playwright invocations, so a run can start many worker
+processes; with absorption it still leaves about one file per parallel slot. A file whose pid is still alive is never
 touched. A worker killed in the instant between writing its file and deleting the
 absorbed ones would count those tests' hits twice — hit counts change, covered and total
 do not.
 
-Until 8 November 2026 the fixture wrote **one file per test** instead, about 17 MB each
-and some 30 GB over a full run, all kept until the report. That design answered a real
-crash: the V8-era fixture kept every payload in memory — sources and sourcemaps
-included — and over the 25 spec files of a consolidated category, run in one worker, it
-reached 8 GB and took the worker down. An istanbul map does not grow that way.
-`FileCoverage.merge` replaces a file's hit counts and maps instead of appending a
-payload, and the bulk of a slice — the `inputSourceMap`, with the sources inside — is
-kept once per source file, from the first slice that loaded it. The map is bounded by
-the number of modules in the build, not by the number of tests: about one slice's size
-for the worker's whole life. Summing is associative, so the worker sums merged by the
-report give exactly the numbers the per-test files gave. `_JS_COVERAGE_CHUNK` was
-measured against the V8 accumulator, and stays as a bound on how long one worker lives.
+**How the sum is held, and why it equals istanbul's merge.** The sink keeps each
+module's fixed parts once and its counters as arrays, added index by index; it rebuilds
+full istanbul objects only when it writes, so the file and the report keep their format.
+The reference is istanbul's own `CoverageMap.merge`, which the report still uses: it
+keys every item by its **position**, so two items at one position are one item to it
+(the last one's count wins) and the keys are renumbered — from a file's second slice
+on, never for a file seen once. The sink replays exactly that fold; a slice whose layout
+differs (another build of the module) goes through istanbul's merge itself.
+`e2e/layout/js-coverage-sink.spec.ts` holds the sink to istanbul's merge on the same
+slices, duplicate positions and two hundred seeded sequences included, and
+`LF_COV_COMPARE=1` checks it on a real run: a second, full sink, fed from the same
+snapshots, writes `coverage-js/e2e-raw-full/`, and
+`node scripts/js-coverage-probe.mjs compare coverage-js/e2e-raw-full coverage-js/e2e-raw`
+must find 0 differences — it did on `front-fx all`.
+
+**Why one worker can now live through a whole category.** Until 8 November 2026 the
+fixture wrote one file per test, about 17 MB each and some 30 GB over a full run: the
+V8-era fixture kept every payload in memory and reached 8 GB over 25 spec files. Then the
+runner split a category into Playwright runs of 8 specs under JS coverage. With the
+counter sum and the light read the worker's memory no longer grows with its life:
+measured on `front-utility all` run whole (47 specs, 463 tests in one Playwright run),
+every worker's heap peaked under 2 GB — 1 700 MB the highest, at a worker's first full
+read; the worker of 396 tests stayed at 1 516 MB and ended at 685 MB on average. The
+split is gone: a category is one Playwright run, with or without JS coverage.
+
+**The stopwatches.** `LF_COV_TIMING=1` makes the fixture write one line per test into
+`coverage-js/timing/worker-<parallelIndex>-<pid>.jsonl`: `evaluate_ms` (the page read),
+`payload_bytes`, `merge_ms`, `flush_ms`, `rss_mb` and `heap_mb`.
+`node scripts/js-coverage-probe.mjs timing coverage-js/timing` prints, per field, the
+mean, the median, the 95th percentile, the total and the maximum. Without the flag
+nothing is measured and nothing is serialised a second time.
 
 When no page exposes `window.__coverage__` and the build has no instrumentation
 sentinel, the fixture warns once per worker that nothing will be collected — the case
@@ -215,13 +243,17 @@ of Playwright launched by hand against a plain build.
     and every vitest it launches inherits it, so no command line carries
     `--coverage`. It measures `src/**/*.{js,ts,svelte}` minus the test files,
     `__tests__/`, `__mocks__/` and `app.d.ts`, and writes a `json` report at the end
-    of every process. A run launches vitest several times — once per frontend
-    category, or once per action with `--no-consolidate` — and in a shared directory
-    each process would delete the previous one's report, so each writes into its own
-    `coverage-js/unit/<time>-<pid>/`. They are merged afterwards, like the E2E
+    of every process — of a process with a red test too (`reportOnFailure: true`).
+    A run launches vitest several times — once per frontend category, or once per
+    action with `--no-consolidate` — and in a shared directory each process would
+    delete the previous one's report, so the runner names a directory for each
+    launch, `coverage-js/unit/<category>-<n>/`, through `LF_VITEST_COVERAGE_DIR`
+    (`vitest_env()` in `scripts/test_runner/_coverage.py`, used by every launch of
+    vitest). The run's ledger records it, so the end of the run can tell a group that
+    wrote nothing from one that never ran. They are merged afterwards, like the E2E
     files.
 
-### Four non-obvious details
+### 🔍 Four non-obvious details
 
 1. **The build must really be instrumented — and the runner checks.**
    `vite-plugin-istanbul` installs itself only for `vite serve` unless told otherwise,
@@ -282,7 +314,7 @@ of Playwright launched by hand against a plain build.
    is covered by construction and would lift the percentage without anyone having
    tested anything.
 
-## How Python coverage reaches **spawned** children
+## 🧬 How Python coverage reaches **spawned** children
 
 `.coveragerc` already declares `concurrency = multiprocessing,thread,gevent`, which lets a
 *running* tracer follow **forked** children (e.g. `uvicorn --workers N`). It does nothing for a
@@ -322,7 +354,60 @@ Three load-bearing details:
   that block. The full post-mortem lives in the devWiki at
   `LibreFolio_devWiki/wiki/problems/sitecustomize-shadows-homebrew-python.md`.
 
-## Reading the reports
+## 🧾 The quotable run
+
+```bash
+./dev.py test --quotable all
+```
+
+`--quotable` stands for `--fresh-run --coverage all --cov-clean-backend
+--cov-clean-backend-e2e --cov-clean-js`, and needs the category `all` written. It
+refuses, with exit 2 before anything starts, whatever would make the run partial:
+`--resume`, test names, `--fail-fast`, `--providers` and `--exclude-providers`, a
+`--coverage` other than `all`, `--list` and `--run-status`. The previous summary is
+deleted when it starts, and the commit and the state of the tree are read before the run
+writes anything.
+
+**Every coverage run checks its pieces.** The runner records what it launches under
+coverage — each vitest directory, each pytest run and its database, each Playwright run,
+the shared backend — and at the end compares that ledger with what is on disk:
+`.coverage_data/backend` and `frontend` with at least one measured file and this run's
+server parts saved into them, no `.coverage.*` left over, a non-empty
+`coverage-final.json` per vitest directory, at least one readable worker file and no
+`*.tmp`, and the JS reports of what ran. It prints a table *piece · where · expected ·
+found*; one missing piece makes the run red, whatever its tests said — a measure with
+a piece missing is not the run's measure. A run that launched only pure specs under
+`--coverage js` is red too: it measured nothing.
+
+**The numbers.** Every coverage run then writes `.coverage_data/coverage-summary.json`
+(schema `lf-coverage-summary/1`) and prints it:
+
+| Field | What it holds |
+|---|---|
+| `quotable`, `reasons` | true only for a `--quotable all` run whose tests passed, whose pieces are all there and whose tree was clean when it began; otherwise each reason |
+| `sha`, `dirty`, `workers`, `argv`, `categories` | what was measured, and how |
+| `backend.pytest` / `server` / `combined` / `financial_math` | `.coverage_data/backend`, `.coverage_data/frontend`, their union, and the union restricted to `backend/app/services/financial_math/` (sub-folders included) |
+| `frontend.unit` / `e2e` / `combined` | the three JS reports |
+| `pieces` | the table above |
+
+Each base has `lines` and `branches` apart, as `{covered, total, pct}`. The percentage
+is the runner's own, covered / total. coverage.py's `TOTAL` and its `percent_covered`
+count lines and branches together — a number that is neither — so the runner never
+quotes them, and labels the `TOTAL` that `coverage report` still prints.
+
+!!! note "A note, not a gate"
+
+    The numbers are information: no threshold turns a run red for a low number (decision
+    D6). Only an **incomplete** run is red, because then the number is wrong, not low.
+
+**The durations.** The reports the consolidated passes read for their verdicts also
+carry times; each run keeps them in `.coverage_data/durations.json` (schema
+`lf-durations/1`): per category its total, per Playwright spec its seconds and its
+tests (every attempt counted), per vitest file and per pytest unit their seconds, and,
+for a run under JS coverage, the summary of its stopwatches. The campaign record of the
+invocation (`scripts/test_runner/.campaign.json`) names the file.
+
+## 📖 Reading the reports
 
 !!! tip "Coverage is a map, not a grade"
 
@@ -334,6 +419,23 @@ Three load-bearing details:
     roughly half of them — the ones caused by code that never ran. It says nothing
     about code that runs and is simply wrong.
 
+!!! warning "What the E2E level counts, and what it misses"
+
+    **Only what runs while the test runs.** Until the light read (13 November 2026) a
+    page stayed open about 18 s after its test while its coverage was read, and the work
+    it kept doing in the background in that time — the second wave of the Assets page,
+    the price processing pool — was counted. Now it is not: the E2E lines dropped by
+    0.9 % on `front-fx all`, almost all of it in that page. The new number is the closer
+    one to what the tests exercise.
+
+    **Counts before a full navigation are lost.** `window.__coverage__` lives in the
+    document: a full navigation (`page.goto`; `login()` itself navigates) starts the
+    counters again, and the fixture reads them once, at the end. So the hits of a
+    page before its last full navigation are not counted — never twice, but sometimes
+    not at all; another test often covers the same lines. Kept as it is by decision
+    D11: without a floor the number is a note, and «a little below the truth» does no
+    harm. It is the first thing to fix the day the frontend's percentage becomes a target.
+
 !!! tip "Running under coverage doubles as a slow-environment stress test"
 
     Python instrumentation slows the backend down enough to turn latent races into
@@ -341,7 +443,7 @@ Three load-bearing details:
     is worth investigating: it has usually found a real timing bug, not a measurement
     artefact.
 
-## Finding the gaps
+## 🕳️ Finding the gaps
 
 An HTML report tells you the percentage. It does not tell you *which* untested code
 is worth a test. `coverage-report` does:
@@ -356,7 +458,11 @@ Without `--lang js` the same command analyses the **backend** JSON, exactly as b
 one analyser, two languages, identical filters and output modes.
 
 The input is picked automatically: `combined`, then `e2e`, then `unit-combined`,
-whichever exists. Pass `--input` to point elsewhere.
+whichever exists. Pass `--input` to point elsewhere. For the backend, give it a JSON
+report of the database you want, for example
+`pipenv run coverage json --data-file=.coverage_data/backend -o .coverage_data/cov_report.json`
+then `./dev.py test coverage-report --input .coverage_data/cov_report.json`. For a
+percentage, read the summary, not this analyser: it ranks untested code.
 
 | Category | Covers |
 |---|---|
@@ -382,10 +488,11 @@ whichever exists. Pass `--input` to point elsewhere.
     itself and for its parent. Use the numbers to *rank* untested code by weight,
     not to quote a percentage.
 
-## Cleaning
+## 🧹 Cleaning
 
 ```bash
 ./dev.py test --coverage --cov-clean-backend --cov-clean-backend-e2e all
+./dev.py test --quotable all    # the three cleanings, and a fresh campaign
 ```
 
 JS coverage directories are cleaned automatically at the start of every run that

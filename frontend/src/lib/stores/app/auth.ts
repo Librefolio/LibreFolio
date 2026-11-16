@@ -6,6 +6,7 @@
  *
  * Now uses Zodios client for type-safe API calls with Zod validation.
  */
+import {setSignOutRequested} from './signOutIntent';
 import {derived, get, writable} from 'svelte/store';
 import {browser} from '$app/environment';
 import {goto} from '$app/navigation';
@@ -32,16 +33,8 @@ const initialState: AuthState = {
     isInitialized: false,
 };
 
-/**
- * A sign-out the user asked for (`auth.logout()`) returns to a plain login, while a session that ended
- * on its own (a 401) carries the page to come back to. Set before the store flips, so whatever reacts to
- * the flip can tell the two apart; cleared by the next sign-in or authenticated check.
- */
-let signOutRequested = false;
-
-export function isSignOutRequested(): boolean {
-    return signOutRequested;
-}
+// Whether the user asked to sign out: its own module (`signOutIntent.ts`), which the API client's 401 interceptor reads too.
+export {isSignOutRequested} from './signOutIntent';
 
 /** The `error_code` of a refused sign-in's `detail`, when it carries one. */
 function loginErrorCode(body: unknown): unknown {
@@ -108,7 +101,7 @@ function createAuthStore() {
                 debug.log('AuthStore', 'Login response:', response);
                 if (!isCurrentAuthOperation(operationGeneration)) return false;
                 transitionClientSession(response.user.id);
-                signOutRequested = false;
+                setSignOutRequested(false);
 
                 update((state) => ({
                     ...state,
@@ -177,7 +170,7 @@ function createAuthStore() {
          * Logout current user
          */
         logout: async (): Promise<void> => {
-            signOutRequested = true;
+            setSignOutRequested(true);
             const operationGeneration = beginAuthOperation();
             update((state) => ({...state, isLoading: true, error: null}));
 
@@ -222,7 +215,7 @@ function createAuthStore() {
                 debug.log('AuthStore', 'checkAuth success', response.user?.username);
                 if (!isCurrentAuthOperation(operationGeneration)) return 'superseded';
                 transitionClientSession(response.user.id);
-                signOutRequested = false;
+                setSignOutRequested(false);
                 update((state) => ({
                     ...state,
                     user: response.user,
@@ -263,7 +256,7 @@ function createAuthStore() {
          */
         reset: () => {
             beginAuthOperation();
-            signOutRequested = false;
+            setSignOutRequested(false);
             transitionClientSession(null);
             set(initialState);
         },

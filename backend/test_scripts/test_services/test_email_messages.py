@@ -61,6 +61,14 @@ test message — is built by one typed builder from the texts of ``templates/{en
    ``build_email_change_requested(*, language, instance)`` goes to the address the account has now, at the request: no
    link and nothing of the new address, under ``requested_subject``; its advice says that changing the password cancels
    the request.
+11. Marks for reading at a glance (project 71, lot E4, the developer's test of 13/11/2026): a text of the catalogue may
+   break its line (``\n``) and mark the words that matter (``**…**``). The plain-text part keeps the line breaks and
+   drops the marks; the HTML part writes ``<br>`` and ``<strong>…</strong>``, converted AFTER the text is escaped and
+   BEFORE the values are filled in, so neither a translation nor a value (the instance's name) can bring markup, and a
+   value holding ``**`` stays as written. Subjects, actions and ``common`` carry no mark; every text closes the marks it
+   opens; each text has the line breaks and the marked words of its English original, so the four languages read alike.
+   The two emails of a change asked from Profile (``email_change_request``) and both of a completed one
+   (``email_changed``) use them.
 
 Pure: no database, no server, no network; the catalogue is read from the package, never written. The autouse fixture
 that removes inherited ``LIBREFOLIO_SMTP_*`` variables is here as in every module of the e-mail lot, though nothing
@@ -295,6 +303,20 @@ def _mailboxes(header: object) -> list[tuple[str, str]]:
 def _lines(text: str) -> str:
     """``text`` without the line-ending differences a MIME round trip brings: CRLF as LF, no trailing line break."""
     return text.replace("\r\n", "\n").rstrip("\n")
+
+
+_MARK = re.compile(r"\*\*(.+?)\*\*", re.DOTALL)
+
+
+def _plain(text: str, values: dict[str, str]) -> str:
+    """A catalogue text as the plain-text part writes it (contract 11): the marks dropped, the line breaks kept."""
+    return string.Template(text.replace("**", "")).substitute(values)
+
+
+def _rich(text: str, values: dict[str, str]) -> str:
+    """A catalogue text as the HTML part writes it (contract 11): escaped, marks as ``<strong>``, breaks as ``<br>``, then filled with escaped values."""
+    marked = _MARK.sub(r"<strong>\1</strong>", html.escape(text)).replace("\n", "<br>")
+    return string.Template(marked).substitute({key: html.escape(value) for key, value in values.items()})
 
 
 # =============================================================================
@@ -912,11 +934,12 @@ def test_the_email_changed_notice_is_the_greeting_the_intro_the_advice_and_the_f
     content = build_email_changed(language=language, instance=INSTANCE)
 
     values = {"instance": INSTANCE}
-    blocks = [string.Template(text).substitute(values) for text in (common["greeting_anonymous"], section["intro"], section["advice"])]
+    texts = (common["greeting_anonymous"], section["intro"], section["advice"])
+    blocks = [_plain(text, values) for text in texts]
     footer = string.Template(common["footer"]).substitute(values)
     assert (content.kind, content.language, content.subject) == (EMAIL_CHANGED, language, section["subject"])
     assert content.text == "\n\n".join(blocks) + f"\n\n-- \n{footer}\n"
-    assert all(html.escape(block) in content.html for block in blocks), "each block, escaped, in the HTML"
+    assert all(_rich(text, values) in content.html for text in texts), "each block, escaped and marked, in the HTML"
     assert _hrefs(content.html) == [] and "<a " not in content.html, "no link and no button in the HTML"
     assert common["button_fallback"] not in content.text and html.escape(common["button_fallback"]) not in content.html
     assert "://" not in content.text
@@ -1064,12 +1087,13 @@ def test_the_email_to_the_new_address_is_the_greeting_its_intro_its_advice_and_t
     content = build_email_changed_new_address(language=language, instance=INSTANCE, by_host=by_host)
 
     values = {"instance": INSTANCE}
-    blocks = [string.Template(text).substitute(values) for text in (common["greeting_anonymous"], section[intro], section[advice])]
+    texts = (common["greeting_anonymous"], section[intro], section[advice])
+    blocks = [_plain(text, values) for text in texts]
     footer = string.Template(common["footer"]).substitute(values)
     assert (content.kind, content.language, content.subject) == (EMAIL_CHANGED, language, section["new_subject"])
     assert content.subject != section["subject"], "the new address gets its own subject, not the notice's"
     assert content.text == "\n\n".join(blocks) + f"\n\n-- \n{footer}\n"
-    assert all(html.escape(block) in content.html for block in blocks), "each block, escaped, in the HTML"
+    assert all(_rich(text, values) in content.html for text in texts), "each block, escaped and marked, in the HTML"
     assert _hrefs(content.html) == [] and "<a " not in content.html, "no link and no button in the HTML"
     assert common["button_fallback"] not in content.text and html.escape(common["button_fallback"]) not in content.html
     assert "://" not in content.text
@@ -1151,12 +1175,14 @@ def test_the_profile_confirmation_is_the_greeting_the_intro_the_button_the_expir
     content = build_email_change_request_confirmation(language=language, link=LINK, ttl=ttl, instance=INSTANCE)
 
     values = {"instance": INSTANCE, "duration": format_timedelta(ttl, locale=language)}
-    before = [string.Template(text).substitute(values) for text in (common["greeting_anonymous"], section["intro"])]
-    after = [string.Template(section[key]).substitute(values) for key in ("expiry", "signin", "ignore")]
+    before_texts = (common["greeting_anonymous"], section["intro"])
+    after_texts = tuple(section[key] for key in ("expiry", "signin", "ignore"))
+    before = [_plain(text, values) for text in before_texts]
+    after = [_plain(text, values) for text in after_texts]
     footer = string.Template(common["footer"]).substitute(values)
     assert (content.kind, content.language, content.subject) == (EMAIL_CHANGE_REQUEST, language, section["subject"])
     assert content.text == "\n\n".join([*before, f"{section['action']}\n{LINK}", *after]) + f"\n\n-- \n{footer}\n"
-    assert all(html.escape(block) in content.html for block in (*before, *after)), "each block, escaped, in the HTML"
+    assert all(_rich(text, values) in content.html for text in (*before_texts, *after_texts)), "each block, escaped and marked, in the HTML"
     print_success("anonymous greeting, intro, button, expiry, sign-in rule, ignore, footer")
 
 
@@ -1208,12 +1234,13 @@ def test_the_requested_notice_is_the_greeting_its_intro_its_advice_and_the_foote
     content = build_email_change_requested(language=language, instance=INSTANCE)
 
     values = {"instance": INSTANCE}
-    blocks = [string.Template(text).substitute(values) for text in (common["greeting_anonymous"], section["requested_intro"], section["requested_advice"])]
+    texts = (common["greeting_anonymous"], section["requested_intro"], section["requested_advice"])
+    blocks = [_plain(text, values) for text in texts]
     footer = string.Template(common["footer"]).substitute(values)
     assert (content.kind, content.language, content.subject) == (EMAIL_CHANGE_REQUEST, language, section["requested_subject"])
     assert content.subject != section["subject"], "the notice has its own subject, not the confirmation's"
     assert content.text == "\n\n".join(blocks) + f"\n\n-- \n{footer}\n"
-    assert all(html.escape(block) in content.html for block in blocks), "each block, escaped, in the HTML"
+    assert all(_rich(text, values) in content.html for text in texts), "each block, escaped and marked, in the HTML"
     assert _hrefs(content.html) == [] and "<a " not in content.html, "no link and no button in the HTML"
     assert common["button_fallback"] not in content.text and html.escape(common["button_fallback"]) not in content.html
     assert "://" not in content.text
@@ -1235,3 +1262,58 @@ def test_the_requested_notice_carries_no_part_of_the_new_address(language: str) 
         shown = [piece for piece in (NEW_LOCAL_PART, NEW_DOMAIN, "***", *CRAFTED_PIECES) if piece.casefold() in part.casefold()]
         assert shown == [], f"the {name} of the requested notice shows {shown}"
     print_success("no part of the new address, no username")
+
+
+# =============================================================================
+# 11 · Marks for reading at a glance (project 71, lot E4)
+# =============================================================================
+
+MARKED_SECTIONS = ("email_changed", "email_change_request")
+UNMARKED_KEYS = ("subject", "new_subject", "requested_subject", "action")
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_the_requested_notice_and_the_confirmation_break_their_lines_and_mark_what_matters(language: str) -> None:
+    """EMM-052 — contract 11: the notice of a request (to the address the account has) and the confirmation (to the new
+    one) each carry at least one marked phrase and one line break inside a block: the HTML writes ``<strong>`` and ``<br>``,
+    the plain text keeps the break and no ``**``; no subject holds a mark."""
+    print_section(f"EMM-052: marks of the two emails of a change, {language}")
+    for content in (build_email_change_requested(language=language, instance=INSTANCE), build_email_change_request_confirmation(language=language, link=LINK, ttl=timedelta(hours=24), instance=INSTANCE)):
+        assert "<strong>" in content.html and "<br>" in content.html, f"{content.subject}: nothing marked or broken in the HTML"
+        assert "**" not in content.text and "**" not in content.html and "**" not in content.subject
+        assert "<strong>" not in content.text and "<br>" not in content.text
+        body = content.text.split("\n-- \n", 1)[0]
+        assert any("\n" in block for block in body.split("\n\n")), "no block of the plain text breaks its line"
+    print_success("<strong> and <br> in the HTML, plain breaks and no marks in the text")
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_a_value_cannot_bring_a_mark_or_markup(language: str) -> None:
+    """EMM-053 — contract 11: the instance's name is filled in after the marks are converted: ``**x**`` in it stays as
+    written in both parts, and its markup is escaped."""
+    print_section(f"EMM-053: a value with marks, {language}")
+    instance = "zq **bold** <i>it</i>"
+
+    content = build_email_change_requested(language=language, instance=instance)
+
+    assert "<strong>bold</strong>" not in content.html and "zq **bold** &lt;i&gt;it&lt;/i&gt;" in content.html
+    assert "zq **bold** <i>it</i>" in content.text
+    print_success("the value stays as written")
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_the_marks_of_each_text_follow_its_english_original(language: str) -> None:
+    """EMM-054 — contract 11: in every catalogue, every text closes the marks it opens; subjects, actions and ``common``
+    carry none; and each text of ``email_changed`` and ``email_change_request`` has as many line breaks and marked
+    phrases as its English original."""
+    print_section(f"EMM-054: marks of {language}.json")
+    catalogue, english = _catalogue(language), _catalogue("en")
+
+    unpaired = [path for path, text in _leaves(catalogue).items() if text.count("**") % 2]
+    marked_where_not = [path for path, text in _leaves(catalogue).items() if ("**" in text or "\n" in text) and (path.startswith("common.") or path.rsplit(".", 1)[-1] in UNMARKED_KEYS)]
+    differing = {f"{section}.{key}": (text.count("\n"), text.count("**")) for section in MARKED_SECTIONS for key, text in catalogue[section].items() if (text.count("\n"), text.count("**")) != (english[section][key].count("\n"), english[section][key].count("**"))}
+
+    assert unpaired == [], f"a mark left open: {unpaired}"
+    assert marked_where_not == [], f"marks where an email cannot show them: {marked_where_not}"
+    assert differing == {}, f"(line breaks, marks) differ from English: {differing}"
+    print_success("marks closed, none in subjects, as many as in English")

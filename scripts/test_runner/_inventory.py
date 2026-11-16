@@ -157,6 +157,8 @@ def _collecting(sink):  # noqa: C901 — TODO(P2-refactor): nested module×attr 
         "_ensure_db_populated": stub_true,
         "_ensure_test_users": stub_true,
         "run_command": fake_run_command,
+        # A dry run launches nothing, so it must not tell the coverage ledger to expect a Vitest directory (step 3.3).
+        "vitest_env": lambda label, env=None: env,
     }
 
     # Modules import these symbols by value, so patching the defining module is
