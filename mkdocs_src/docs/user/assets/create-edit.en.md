@@ -342,7 +342,7 @@ each one.
 1. On the **Assets** page, switch to the **table** view and tick the assets. They can sit in any of
    the three tables (yours, other users' and watched ones); the selection adds them up. The card
    view has no selection.
-2. In the toolbar that appears, click the pencil, **Edit selected (N)**. The **Edit N assets**
+2. In the selection bar that appears at the bottom of the screen (it stays there while rows are selected, also after a save), click **Edit**. The **Edit N assets**
    window opens on the **Fields** step.
 
 ### 🧩 Step 1: Fields {: #bulk-edit-fields }
@@ -362,12 +362,15 @@ A field you touch gets a **modified** chip, a line telling for how many assets i
 is**; **Undo All**, in the title bar, does it for every field. The value you choose is the same for
 all the assets, and **only what changes is sent**: an asset that already has it is left out.
 
-!!! note "Nothing is cleared from here"
+!!! note "Removing an icon or a link"
 
-    An empty **User URL**, or no icon chosen, means **Leave as is**. To remove a link or an icon,
-    use the [asset's own form](#editing-an-asset). The same goes for the name, the currency, the
-    identifiers and the provider, which are not in this window, and for the description and the
-    sector and country distributions.
+    An empty **User URL**, or no icon chosen, means **Leave as is**. To take an icon or a link away
+    from the assets that have one, use **Remove icon** or **Remove URL**: an asset that has none is
+    left as it is, and the summary lists only the assets that change. Choosing an icon takes an
+    icon removal back; for a link, press the button again (the field is off meanwhile) or use
+    **Undo**. The name, the currency, the identifiers and the provider are not in this window, nor
+    are the description and the sector and country distributions: use the
+    [asset's own form](#editing-an-asset).
 
 **Continue to summary** turns on as soon as at least one asset would change. A units value that is
 not a whole number from 1 shows an error and keeps it off.
@@ -399,8 +402,10 @@ and turns **Save** off. On a phone, each asset is a card instead of a table row.
 **Back** returns to the fields as you left them. **Save N assets** sends everything at once, and
 the save is **all or nothing**:
 
-- If every asset passes, the window closes, a message tells how many assets and which fields were
-  updated, the selection is cleared and the list reloads.
+- If every asset passes, a message tells how many assets and which fields were updated and the
+  list reloads. The window stays open on the summary with a green **✓ Saved** next to the buttons
+  (**Cancel** becomes **Close**) and your selection stays, so you can go **Back** and change the
+  same assets again; the check goes away as soon as you do.
 - If one does not (it was deleted meanwhile, for example), **nothing is saved**: the summary stays,
   a red banner says *no asset was changed* and names the one that stopped it. Take it out of the edit
   and save the rest, or go back.

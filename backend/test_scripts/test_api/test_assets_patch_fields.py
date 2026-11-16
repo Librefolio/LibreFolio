@@ -604,6 +604,41 @@ async def test_patch_batch_three_configurations_are_saved(test_server):
 
 
 @pytest.mark.asyncio
+async def test_patch_batch_null_clears_icon_and_user_url_only_where_sent(test_server):
+    """Lane 65 UX (U7). The bulk edit removes an icon and a personal URL by sending an explicit ``null`` for the assets that
+    hold one: both fields are cleared for those assets, an asset left out of the request is not touched, and the
+    ``POST /assets/validate`` of the same payload writes nothing."""
+    print_section("U7: PATCH /assets - explicit null clears icon_url and user_url in a batch")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        id1, _ = await _create_owned_asset(client, "CLR1", AssetType.STOCK)
+        id2, _ = await _create_owned_asset(client, "CLR2", AssetType.STOCK)
+        id3, _ = await _create_owned_asset(client, "CLR3", AssetType.STOCK)
+        for asset_id in (id1, id2, id3):
+            data = await _patch_batch(client, [FAAssetPatchItem(asset_id=asset_id, icon_url="https://example.com/i.png", user_url="https://example.com/u")])
+            assert data.committed is True
+
+        items = [FAAssetPatchItem(asset_id=id1, icon_url=None, user_url=None), FAAssetPatchItem(asset_id=id2, icon_url=None)]
+
+        # The dry run answers «would be saved» and changes nothing.
+        dry = await client.post(f"{API_BASE}/assets/validate", json=[it.model_dump(mode="json", exclude_unset=True) for it in items], timeout=TIMEOUT)
+        assert dry.status_code == 200 and dry.json()["issues"] == []
+        for asset_id in (id1, id2, id3):
+            info = await _info_of(client, asset_id)
+            assert (info.icon_url, info.user_url) == ("https://example.com/i.png", "https://example.com/u")
+
+        data = await _patch_batch(client, items)
+        assert data.committed is True and data.success_count == 2, data
+
+        a1, a2, a3 = [await _info_of(client, a) for a in (id1, id2, id3)]
+        assert (a1.icon_url, a1.user_url) == (None, None)
+        assert a2.icon_url is None and a2.user_url == "https://example.com/u"
+        assert (a3.icon_url, a3.user_url) == ("https://example.com/i.png", "https://example.com/u")
+        print_success("✓ null clears the fields it names, only for the assets it is sent for; validate writes nothing")
+
+
+@pytest.mark.asyncio
 async def test_patch_batch_failing_item_rolls_back_the_flushed_ones(test_server):
     """Lane 65 B3. The only path where «nothing saved» undoes rows already flushed: item 0 renames its asset, item 1 sends
     an empty name, which the apply step stores as NULL and the flush refuses (NOT NULL). Contract: ``patchFailed`` on

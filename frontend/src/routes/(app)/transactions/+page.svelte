@@ -753,9 +753,10 @@
         <div class="flex items-center gap-2 ml-auto">
             {#if selectedRows.length > 0}
                 <DataTableToolbar
+                    variant="floating"
                     selectedCount={selectedRows.length}
                     bulkActions={[
-                        {id: 'edit', icon: Pencil, label: () => $_('common.edit') || 'Edit', onClick: () => onEditBulk()},
+                        {id: 'edit', icon: Pencil, label: () => $_('common.edit') || 'Edit', primary: true, onClick: () => onEditBulk()},
                         {id: 'clone', icon: Copy, label: () => $_('transactions.actions.clone') || 'Clone', onClick: () => onCloneBulk()},
                         ...(promoteMatch ? [{id: 'promote', icon: Link2, label: () => `🔗 ${$_('transactions.actions.promotePair') || 'Link as pair'}`, onClick: () => onPromotePair()}] : []),
                         {id: 'delete', icon: Trash2, label: () => $_('common.delete') || 'Delete', variant: 'danger', onClick: () => onBulkDelete()},

@@ -146,7 +146,8 @@
       },
       "tooManyItems": "Non è stato salvato nulla: il server accetta al massimo {max, number} valori per salvataggio, e questo ne conteneva {count, number}. Salvali in più parti."
     },
-    "errorWithRequestId": "{message} (codice: {requestId})"
+    "errorWithRequestId": "{message} (codice: {requestId})",
+    "selectionActions": "Azioni sulla selezione"
   },
   "csvImport": {
     "title": "Importa dati CSV",

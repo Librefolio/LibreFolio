@@ -435,8 +435,7 @@
       "selected": "Selected ({count})",
       "showAll": "Show all",
       "showLess": "Show fewer",
-      "zoneDetails": "Other details",
-      "zoneClassification": "Classification",
+      "zoneDetails": "Details and classification",
       "zonePrice": "Price and status",
       "leave": "Leave as is",
       "leaveDifferent": "Leave as is · different values",
@@ -477,7 +476,13 @@
       "save": "{count, plural, one {Save # asset} other {Save # assets}}",
       "saveFailedTitle": "⛔ Save failed: no asset was changed",
       "saveFailedBody": "The save is all or nothing: an asset did not pass, so nothing changed. The summary stays here: remove the asset or go back.",
-      "savedToast": "{count, plural, one {# asset updated} other {# assets updated}}: {fields}"
+      "savedToast": "{count, plural, one {# asset updated} other {# assets updated}}: {fields}",
+      "saved": "Saved",
+      "removeIcon": "Remove icon",
+      "removeUrl": "Remove URL",
+      "toBeRemoved": "To be removed",
+      "urlNone": "no URL",
+      "alreadyWithout": "{already} already without"
     }
   },
   "events": {
