@@ -209,10 +209,44 @@ def collect_frontend(src_dir: Path) -> Discovery:
             except OSError:
                 continue
             consts = dict(_CONST_DECL.findall(content))
-            for i, line in enumerate(content.splitlines(), 1):
+            for i, line in _code_lines(content):
                 _scan_line(found, line, f"{path}:{i}", content, consts)
 
     return found
+
+
+#: A block comment that opens at the start of a line, and what closes it.
+_BLOCK_COMMENTS = (("/*", "*/"), ("<!--", "-->"))
+
+
+def _code_lines(content: str) -> list[tuple[int, str]]:
+    """The numbered lines of a source that are not comments.
+
+    A path quoted in a comment (an old example, a removed link) is not a link the app shows, so the
+    gate must not check it. Conservative on purpose: a line is a comment when it *starts* with ``//``
+    or ``*`` (a JSDoc body), or lies in a ``/* … */`` or ``<!-- … -->`` block that *starts* a line.
+    A marker in the middle of a line (``'src/**/*.ts'``, a trailing ``// note``) leaves the line in, and
+    what follows a block's close on its last line (``/* note */ <DocsLink …>``) is still read: a missed
+    comment costs a false report, a missed line of code a missed link.
+    """
+    kept: list[tuple[int, str]] = []
+    closing: str | None = None
+    for number, line in enumerate(content.splitlines(), 1):
+        rest = line.lstrip()
+        if closing is None:
+            opened = next(((start, end) for start, end in _BLOCK_COMMENTS if rest.startswith(start)), None)
+            if opened is None:
+                if not rest.startswith(("//", "*")):
+                    kept.append((number, line))
+                continue
+            closing, rest = opened[1], rest[len(opened[0]) :]
+        if closing not in rest:
+            continue
+        rest = rest.split(closing, 1)[1]
+        closing = None
+        if rest.strip():
+            kept.append((number, rest))
+    return kept
 
 
 def collect_backend(services_dir: Path) -> Discovery:
