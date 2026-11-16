@@ -48,3 +48,41 @@ describe('ViewModeToggle', () => {
         expect(screen.queryByRole('tooltip'), 'the button owns its click').toBeNull();
     });
 });
+
+describe('ViewModeToggle with options (project 74: the Positions panel’s «Globale / Broker»)', () => {
+    async function options() {
+        const {Globe, Briefcase} = await import('lucide-svelte');
+        return [
+            {value: 'asset', icon: Globe, label: 'Globale', hint: 'One row per asset', testId: 'positions-grouping-asset'},
+            {value: 'broker', icon: Briefcase, label: 'Broker', testId: 'positions-grouping-broker'},
+        ];
+    }
+
+    it('draws the options given, the chosen one pressed, the grid/list buttons gone', async () => {
+        render(ViewModeToggle, {props: {mode: 'broker', options: await options(), testId: 'positions-grouping-toggle'}});
+        expect(screen.getByTestId('positions-grouping-broker').getAttribute('aria-pressed')).toBe('true');
+        expect(screen.getByTestId('positions-grouping-asset').getAttribute('aria-pressed')).toBe('false');
+        expect(screen.queryByTestId('view-mode-grid')).toBeNull();
+        expect(screen.getByTestId('positions-grouping-toggle').getAttribute('role')).toBe('group');
+    });
+
+    it('labels show only when asked, and hide below the sm breakpoint (the icon and the tooltip stay)', async () => {
+        render(ViewModeToggle, {props: {mode: 'broker', options: await options()}});
+        expect(screen.queryByTestId('positions-grouping-asset-label')).toBeNull();
+        document.body.innerHTML = '';
+        render(ViewModeToggle, {props: {mode: 'broker', options: await options(), showLabels: true}});
+        const label = screen.getByTestId('positions-grouping-asset-label');
+        expect(label.classList.contains('hidden') && label.classList.contains('sm:inline')).toBe(true);
+        expect(screen.getByTestId('positions-grouping-asset').querySelector('svg'), 'the icon is always there').not.toBeNull();
+    });
+
+    it('without a storage key the caller owns the persistence: a click reports the mode and stores nothing', async () => {
+        const storage = await import('$lib/utils/storage');
+        const onchange = vi.fn();
+        render(ViewModeToggle, {props: {mode: 'broker', options: await options(), onchange}});
+        await fireEvent.click(screen.getByTestId('positions-grouping-asset'));
+        expect(onchange).toHaveBeenCalledExactlyOnceWith('asset');
+        expect(storage.setUserStorage).not.toHaveBeenCalledWith(undefined, 'asset');
+        expect(vi.mocked(storage.setUserStorage).mock.calls.filter(([, value]) => value === 'asset')).toEqual([]);
+    });
+});
