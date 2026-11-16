@@ -84,6 +84,15 @@ Lot C4 — the minimum refresh interval of current values (``AssetSourceProvider
     turn within the interval cost one read each, not one per request.
 34. A current-value cache emptied within the stamp (the administrator's «clear caches») is read again at the next
     request, not served from the database until the stamp ends.
+
+Lot C3b — the midnight rule of the history refresh: the current quote never replaces a stored or fetched history point of
+a day BEFORE today; it only adds that day when it is missing (every provider, per-asset and bulk paths alike):
+
+35. The true close of yesterday survives: the round's history has yesterday (close 50), the quote is dated yesterday
+    (100): yesterday stays 50, no row for today.
+36. A missing yesterday gets the quote: the history stops the day before, the quote dated yesterday (100) is stored.
+37. Resume, yesterday only in the DB: no history is asked (the start resolves to today), the DB has yesterday's close 50,
+    the quote dated yesterday (100) is dropped; yesterday stays 50 and the result is not FAILED.
 """
 
 from __future__ import annotations
@@ -111,7 +120,7 @@ from backend.app.db import session as db_session
 from backend.app.db.base import SQLModel  # imports every model
 from backend.app.db.models import Asset, AssetProviderAssignment, AssetType, IdentifierType, PriceHistory, ProviderInputType
 from backend.app.schemas import FACurrentValueRequest
-from backend.app.schemas.prices import FACurrentValue
+from backend.app.schemas.prices import FACurrentValue, FAHistoricalData, FAPricePoint
 from backend.app.schemas.refresh import FARefreshItem, SyncDateRangeModel, SyncStatus
 from backend.app.services.asset_source_providers.mockprov.plugin import (
     BULK_OMIT_PARAM,
@@ -1157,3 +1166,141 @@ async def test_c4_an_emptied_cache_is_read_again_within_the_stamp(private_db: As
     assert len(_lens()) == 2, "the emptied cache makes the group read again"
     assert items[a].source == "provider:mockprov"
     print_success("read again after the cache was emptied")
+
+
+# =============================================================================
+# LOT C3b — the midnight rule
+# =============================================================================
+
+C3B_CODE_PER_ASSET = "c3b_per_asset"
+C3B_CODE_BULK = "c3b_bulk"
+C3B_QUOTE = Decimal("100")
+C3B_CLOSE = Decimal("50")
+
+
+def _c3b_quote() -> FACurrentValue:
+    """A cached quote read just after midnight: 100 USD dated YESTERDAY."""
+    return FACurrentValue(value=C3B_QUOTE, currency="USD", as_of_date=date.today() - timedelta(days=1), source="c3b")
+
+
+class _C3bMixin:
+    """History of close 50 on ``history_days`` only; the current quote is 100 USD dated yesterday."""
+
+    settings_fields = ()
+    history_days: set[date] = set()
+
+    async def get_history_value(self, identifier, identifier_type, provider_params, start_date, end_date):
+        start = date.min if start_date == "min" else start_date
+        prices = [FAPricePoint(date=day, open=C3B_CLOSE, high=C3B_CLOSE, low=C3B_CLOSE, close=C3B_CLOSE, volume=None, currency="USD") for day in sorted(self.history_days) if start <= day <= end_date]
+        return FAHistoricalData(prices=prices, events=[], currency="USD", source=self.provider_name)
+
+
+def _c3b_double(variant: str, days: set[date]) -> tuple[str, type]:
+    """The provider code and a double of the given variant ("per_asset" or "bulk") with that history."""
+    if variant == "bulk":
+
+        class _Bulk(_C3bMixin, MockProvider):
+            supports_bulk_current = True
+            history_days = days
+
+            @property
+            def provider_code(self) -> str:
+                return C3B_CODE_BULK
+
+            async def get_current_values_bulk(self, items):
+                return {item.key: _c3b_quote() for item in items}
+
+        return C3B_CODE_BULK, _Bulk
+
+    class _PerAsset(_C3bMixin, MockProvider):
+        supports_bulk_current = False
+        history_days = days
+
+        @property
+        def provider_code(self) -> str:
+            return C3B_CODE_PER_ASSET
+
+        async def get_current_value(self, identifier, identifier_type, provider_params=None):
+            return _c3b_quote()
+
+    return C3B_CODE_PER_ASSET, _PerAsset
+
+
+async def _c3b_asset(engine: AsyncEngine, code: str, last_price: tuple[date, Decimal] | None = None) -> int:
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        asset = Asset(display_name=_unique("C3b asset"), currency="USD", asset_type=AssetType.STOCK)
+        session.add(asset)
+        await session.flush()
+        session.add(AssetProviderAssignment(asset_id=asset.id, provider_code=code, identifier=_unique("C3b"), identifier_type=ProviderInputType.TICKER, provider_params="{}"))
+        if last_price is not None:
+            day, close = last_price
+            session.add(PriceHistory(asset_id=asset.id, date=day, close=close, currency="USD", source_plugin_key="test"))
+        await session.commit()
+        return asset.id
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("variant", ["per_asset", "bulk"])
+async def test_c3b_yesterdays_true_close_survives_the_quote(private_db: AsyncEngine, groups: _Groups, monkeypatch: pytest.MonkeyPatch, variant: str):
+    """C3b-01 — contract 35: the history has yesterday (close 50), the quote is dated yesterday (100): yesterday stays 50,
+    no row for today."""
+    print_section(f"C3b-01 yesterday's close survives ({variant})")
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    code, double = _c3b_double(variant, {today - timedelta(days=offset) for offset in (3, 2, 1)})
+    _hand_out(monkeypatch, {code: double})
+    asset_id = await _c3b_asset(private_db, code)
+    groups.bc  # noqa: B018
+
+    result = (await _refresh_many(private_db, [asset_id], today - timedelta(days=3), today))[asset_id]
+
+    days = await _days(private_db, asset_id)
+    assert result.status != SyncStatus.FAILED
+    assert days.get(yesterday) == C3B_CLOSE, f"yesterday overwritten by the stale quote: {days}"
+    assert today not in days
+    print_success("yesterday keeps its true close, no row for today")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("variant", ["per_asset", "bulk"])
+async def test_c3b_a_missing_yesterday_gets_the_quote(private_db: AsyncEngine, groups: _Groups, monkeypatch: pytest.MonkeyPatch, variant: str):
+    """C3b-02 — contract 36: the history stops the day before yesterday: the quote dated yesterday is stored (100)."""
+    print_section(f"C3b-02 a missing yesterday gets the quote ({variant})")
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    code, double = _c3b_double(variant, {today - timedelta(days=3), today - timedelta(days=2)})
+    _hand_out(monkeypatch, {code: double})
+    asset_id = await _c3b_asset(private_db, code)
+    groups.bc  # noqa: B018
+
+    result = (await _refresh_many(private_db, [asset_id], today - timedelta(days=3), today))[asset_id]
+
+    days = await _days(private_db, asset_id)
+    assert result.status != SyncStatus.FAILED
+    assert days.get(yesterday) == C3B_QUOTE, f"the quote did not fill the missing day: {days}"
+    assert days[today - timedelta(days=2)] == C3B_CLOSE
+    print_success("the quote filled yesterday")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("variant", ["per_asset", "bulk"])
+async def test_c3b_resume_keeps_a_close_that_only_the_db_has(private_db: AsyncEngine, groups: _Groups, monkeypatch: pytest.MonkeyPatch, variant: str):
+    """C3b-03 — contract 37: «resume» with yesterday only in the DB (close 50) asks no history; the quote dated yesterday
+    (100) is dropped, yesterday stays 50 and the result is not FAILED."""
+    print_section(f"C3b-03 resume keeps the DB close ({variant})")
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    code, double = _c3b_double(variant, set())
+    _hand_out(monkeypatch, {code: double})
+    asset_id = await _c3b_asset(private_db, code, last_price=(yesterday, C3B_CLOSE))
+    groups.bc  # noqa: B018
+
+    requests = [FARefreshItem(asset_id=asset_id, date_range=SyncDateRangeModel(start="resume", end=today))]
+    async with AsyncSession(private_db, expire_on_commit=False) as session:
+        response = await AssetSourceManager.bulk_refresh_prices(requests, session)
+    result = response.results[0]
+
+    days = await _days(private_db, asset_id)
+    assert result.status != SyncStatus.FAILED, f"{result.status} {result.error_code}"
+    assert days.get(yesterday) == C3B_CLOSE, f"the DB close was overwritten by the stale quote: {days}"
+    print_success("the DB close of yesterday survives a resume")
