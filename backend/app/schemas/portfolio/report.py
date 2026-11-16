@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date as date_type
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import Field
 
@@ -33,6 +33,7 @@ class PortfolioReportMetadata(StrictModel):
     computed_date_to: Optional[date_type] = None
     generated_at: date_type
     allocation_dimensions: List[str] = Field(default_factory=lambda: ["type", "sector", "geography"])
+    group_by: Literal["broker", "asset"] = Field("broker", description="How the rows of the positions are grouped: one per asset and broker, or one per asset summed over its brokers")
     included_features: List[str] = Field(default_factory=list)
 
 
@@ -57,6 +58,14 @@ class PortfolioReportQuery(StrictModel):
     include_deposit_history: bool = Field(False, description="Include the DEPOSIT history (batch 2). Same sparse/eager caller policy as include_income_history.")
     include_acquisition_funding: bool = Field(False, description="Include the new-vs-reinvested BUY funding split (batch 2). Same sparse/eager caller policy as include_income_history.")
     apply_ownership_share: bool = Field(True, description="True (default): an owner counts its share of each broker. False: every broker counts whole, as an editor sees it — the broker page (D4).")
+    group_by: Literal["broker", "asset"] = Field(
+        "broker",
+        description=(
+            "broker (default): one position row per asset and broker. asset: one row per asset, the sum of its brokers in the scope — "
+            "quantities, values and results summed, every ratio recomputed from the sums, never a replay as one broker (the Dashboard's "
+            "«Globale» view). Changes only summary.holdings, summary.holding_groups and positions_contribution; everything else is the same."
+        ),
+    )
 
 
 class PortfolioReportResponse(StrictModel):

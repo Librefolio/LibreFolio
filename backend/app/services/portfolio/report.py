@@ -137,6 +137,7 @@ class PortfolioReportMixin:
                 query.include_deposit_history,
                 query.include_acquisition_funding,
                 query.apply_ownership_share,
+                query.group_by,
                 tx_fp,
                 price_fp,
                 fx_fp,
@@ -176,6 +177,7 @@ class PortfolioReportMixin:
                 date_from=date_from,
                 date_to=effective_date_to,
                 _precomputed_engine_result=engine_result,
+                group_by=query.group_by,
             )
 
         # ── 3. History ──
@@ -217,6 +219,7 @@ class PortfolioReportMixin:
                 target_currency_override=base_currency,
                 _precomputed_engine_result=engine_result,
                 apply_ownership_share=query.apply_ownership_share,
+                group_by=query.group_by,
             )
 
         # ── 4c. Broker P&L history (additive per-broker overlay for GrowthChart P&L mode) ──
@@ -331,6 +334,7 @@ class PortfolioReportMixin:
             computed_date_to=computed_to,
             generated_at=today,
             included_features=included,
+            group_by=query.group_by,
         )
 
         # The window of the step series (D-P4): the days of the period that have a state
