@@ -1977,6 +1977,14 @@ def services_enricher_recognize(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Enricher recognize tests", verbose=verbose)
 
 
+def services_enricher_refresh(verbose: bool = False, test_names: list = None) -> bool:
+    """Test reading the profile from the enrichers: catalogue filter, read cache, merge, ask and refresh (project 68, lot B5a)."""
+    print_section("Services: Enricher Refresh")
+    print_info("Testing: backend/app/services/enrichers/refresh.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_refresh.py", test_names)
+    return run_command(cmd, "Enricher refresh tests", verbose=verbose)
+
+
 def services_enricher_bindings(verbose: bool = False, test_names: list = None) -> bool:
     """Test the enricher bindings of an asset: config and state, the installed enrichers, their default order (project 68, lot B3)."""
     print_section("Services: Enricher Bindings")
@@ -4056,6 +4064,17 @@ Note: No backend server required.
         services_enricher_recognize,
         name="Enricher Recognize",
         desc="Project 68 B4: recognize_cascade asks the enrichers covering the type with the first known identifier they accept (request order first); a strong identifier found and not known is learned before the round it starts (once, even from two sources); a different strong one is a conflict that adds and starts nothing; a ticker only reported; found never asked again, not found asked again with a learned identifier; a raising plugin is an error, the others answer; answers in order of arrival (threading.Event holds) and default_order keeps it; mockenrich ISIN → LEI learned",
+        isolation="pure",
+    )
+    # PURE: every database is a private SQLite file under tmp_path built with create_all; the synthetic enrichers are
+    # registered in the process's own EnricherRegistry (removed at teardown with their claims) and the process-wide
+    # enricher_read cache is cleared around each test; no server, no network.
+    add_test(
+        cat,
+        "enricher-refresh",
+        services_enricher_refresh,
+        name="Enricher Refresh",
+        desc="Project 68 B5a: read_bindings one read call per enricher with its bindings in order, enrichers at once (outcomes in order of arrival), as yielded, unanswered bindings (fewer items, index out of range or twice, raise mid-way) once as error, RATE_LIMITED with retry_after; values in stored form, refused/unknown/None voices dropped and logged; read cache 1800 s keyed on the whole binding (params), ok and not_found kept, error and RATE_LIMITED never, a partial read never answers more, use_cache=False; merge_voices first of the order per voice with its source_date, others, enricher down, not in order ignored; ask_profile config order, cache, keys; refresh_assets source rows and state, different from now, failure isolation, missing asset error, no bindings, not installed skipped, deferred, read_since, config read again when writing (removed, reordered), inactive read; A3 one wrong voice logged, the others written",
         isolation="pure",
     )
     add_test(cat, "plugin-settings-crypto", services_plugin_settings_crypto, name="Plugin Settings Encryption", desc="AES-256-GCM blob and AAD, key id, subkeys, count and rekey on a sqlite3 copy (savepoint, idempotent, unreadable rows kept), key status (unusable key: totals)", isolation="pure")
