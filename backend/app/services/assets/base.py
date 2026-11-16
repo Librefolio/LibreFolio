@@ -241,7 +241,7 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
 
     The core also caches results automatically:
     - get_history_value → smart range cache (15min TTL, per-date granularity)
-    - get_current_value → 2min TTL cache
+    - get_current_value → 2min TTL cache, or the provider's ``current_min_refresh_seconds``
     - fetch_asset_metadata → 30min TTL cache
     - search → 2-layer cache (query-level 15min + item-level 24h)
 
@@ -275,6 +275,7 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
     - supports_history: False if provider cannot fetch historical data
     - supports_bulk_current, bulk_current_max_items, get_current_values_bulk(): current values of many assets in one
       call (project 76)
+    - current_min_refresh_seconds: how long a current value stays fresh (project 76; default two minutes)
     - search(): Search for assets by query
     - validate_params(): Validate provider-specific parameters
     - fetch_asset_metadata(): Fetch asset metadata (type, sector, etc.)
@@ -510,6 +511,19 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
             - FETCH_ERROR: Network/API error
             - MISSING_PARAMS: Required provider_params missing
         """
+
+    @property
+    def current_min_refresh_seconds(self) -> float | None:
+        """How long a current value of this provider stays fresh, in seconds (project 76, C4): the core reads the
+        source again only after it. ``None``, the default: two minutes, as for every provider before.
+
+        For a source with a budget of calls (a free plan's credits): typically read from a setting, so the
+        administrator chooses. The core reads it only on the configured instance it calls, never on a bare one: a
+        setting is read through ``self.settings`` (``core.current_cache_ttl``). Less than two minutes, or a value that
+        is no number of seconds, is ignored and logged: two minutes then. The core reads it before the call, on its own
+        loop, outside the provider's thread: no I/O here, as in ``cooldown_scope``.
+        """
+        return None
 
     async def get_current_values_bulk(self, items: list[FACurrentValueRequest]) -> dict[str, FACurrentValue | AssetSourceError]:
         """Fetch the current value of many assets in one call (project 76). Override only with

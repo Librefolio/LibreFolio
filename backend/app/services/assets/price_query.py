@@ -143,7 +143,7 @@ async def _live_quote_item(asset_id: int, assignment: AssetProviderAssignment, s
     ``(None, None)`` without a configured provider, after a failure, or for a quote no price column keeps: the caller
     then falls back to the last stored price. The quote is served as the price columns keep it
     (``storable_current_value``: truncated like the history, or refused and logged once; X-R40, W-B62), and a quote is
-    cached only once its item is built: the current-value cache (2 minutes, shared with the refresh) never holds one
+    cached only once its item is built: the current-value cache (2 minutes, or the provider's interval, shared with the refresh) never holds one
     that cannot be served.
     """
     provider = await core.configured_provider(assignment.provider_code)
@@ -153,7 +153,7 @@ async def _live_quote_item(asset_id: int, assignment: AssetProviderAssignment, s
     mapped_id_type = AssetSourceProvider.map_input_type_to_identifier_type(assignment.identifier_type)
     source = f"provider:{assignment.provider_code}"
 
-    # Check core cache first (TTL 2min), under the key a refresh uses too: with the provider's parameters
+    # Check core cache first (TTL 2min, or the provider's interval), under the key a refresh uses too: with the provider's parameters
     # and settings (core.asset_cache_key), so that assets with other parameters never share a value (X-R28)
     cache_key = core.asset_cache_key(assignment.provider_code, assignment.identifier, assignment.identifier_type, params, core.settings_cache_part(provider))
     cached_cv, cache_ok = core._asset_current_cache.get(cache_key)
@@ -181,7 +181,7 @@ async def _live_quote_item(asset_id: int, assignment: AssetProviderAssignment, s
             if quote is None:
                 return None, None
             item = _quote_item(asset_id, quote, source)
-            core._asset_current_cache.set(cache_key, quote)
+            core.remember_current_value(provider, cache_key, quote)
             return item, None
     except AssetRateLimitedError as refused:
         # Paused after «too many requests»: no call was made, or the provider refused this one. The

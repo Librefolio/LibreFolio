@@ -36,6 +36,7 @@ import hashlib
 import json
 import math
 from collections.abc import Awaitable, Callable
+from datetime import timedelta
 from typing import Optional
 
 from backend.app.logging_config import get_logger
@@ -56,11 +57,16 @@ logger = get_logger(__name__)
 # ============================================================================
 
 _asset_history_cache = get_ttl_cache("asset_history_fetch", maxsize=500, ttl=900)  # 15 min
-_asset_current_cache = get_ttl_cache("asset_current_fetch", maxsize=5000, ttl=120)  # 2 min; a bulk read caches every active asset of its provider (76)
+_asset_current_cache = get_ttl_cache("asset_current_fetch", maxsize=5000, ttl=120)  # 2 min, or the provider's interval (current_cache_ttl); a bulk read caches every active asset of its provider (76)
 _asset_metadata_cache = get_ttl_cache("asset_metadata_fetch", maxsize=200, ttl=1800)  # 30 min
 _search_result_cache = get_ttl_cache("search_results", maxsize=5000, ttl=86400)  # 24h — individual items
 _search_query_cache = get_ttl_cache("search_queries", maxsize=500, ttl=900)  # 15 min — query→results
 _RISK_WARMUP_DAY_MULTIPLIER = 2
+
+#: How long a current value stays in ``_asset_current_cache`` when its provider declares nothing longer: two minutes.
+CURRENT_CACHE_DEFAULT_SECONDS = 120.0
+#: The providers and values already logged as an unusable ``current_min_refresh_seconds``: once each.
+_reported_refresh_seconds: set[tuple[str, str]] = set()
 
 
 def _provider_params_hash(provider_params: Optional[dict]) -> str:
@@ -161,6 +167,42 @@ async def drop_asset_cache_entries(provider_code: str, identifier: str | None, i
     from backend.app.services.assets.bulk_current import forget_member  # noqa: PLC0415 — bulk_current imports this module
 
     forget_member(key)
+
+
+def current_cache_ttl(provider: AssetSourceProvider) -> float:
+    """The seconds a current value of ``provider`` stays fresh (project 76, C4): its ``current_min_refresh_seconds``
+    when that is a number of at least ``CURRENT_CACHE_DEFAULT_SECONDS``, else two minutes.
+
+    Read on the configured instance the caller holds (``configured_provider``): the value may come from its settings.
+    A test double without the property, ``None``, a bool, a text, a number below two minutes or a property that raises
+    all give two minutes; the unusable ones are logged once per provider and value.
+    """
+    code = getattr(provider, "provider_code", None)
+    try:
+        declared = getattr(provider, "current_min_refresh_seconds", None)
+    except Exception as error:  # noqa: BLE001 — a broken property must not stop the prices: two minutes then
+        _report_refresh_seconds(code, f"raised {type(error).__name__}", error)
+        return CURRENT_CACHE_DEFAULT_SECONDS
+    if declared is None:
+        return CURRENT_CACHE_DEFAULT_SECONDS
+    if isinstance(declared, bool) or not isinstance(declared, (int, float)) or not math.isfinite(declared) or declared < CURRENT_CACHE_DEFAULT_SECONDS:
+        _report_refresh_seconds(code, repr(declared)[:40], None)
+        return CURRENT_CACHE_DEFAULT_SECONDS
+    return float(declared)
+
+
+def _report_refresh_seconds(code: str | None, shown: str, error: Exception | None) -> None:
+    """Log once per provider and value that its ``current_min_refresh_seconds`` is not used."""
+    if (str(code), shown) in _reported_refresh_seconds:
+        return
+    _reported_refresh_seconds.add((str(code), shown))
+    logger.warning("Provider current_min_refresh_seconds ignored: two minutes used", provider=code, value=shown, minimum=CURRENT_CACHE_DEFAULT_SECONDS, exc_info=error)
+
+
+def remember_current_value(provider: AssetSourceProvider, cache_key: tuple, quote: object) -> None:
+    """Cache a current value of ``provider`` under ``cache_key`` for the provider's interval (``current_cache_ttl``):
+    every writer of ``_asset_current_cache`` goes through here."""
+    _asset_current_cache.set(cache_key, quote, ttl=timedelta(seconds=current_cache_ttl(provider)))
 
 
 def cooldown_scope_for(provider: AssetSourceProvider, identifier: str, identifier_type=None, provider_params: dict | None = None) -> str | None:

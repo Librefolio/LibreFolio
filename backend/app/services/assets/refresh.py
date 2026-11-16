@@ -368,7 +368,7 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                             # as today's price, and the current-price path serves the cached one as stored (X-R40, W-B62)
                             current_data = storable_current_value(fetched_current, asset_id, provider_code)
                             if current_data:
-                                core._asset_current_cache.set(cache_key, current_data)
+                                core.remember_current_value(prov, cache_key, current_data)
                             elif fetched_current is not None:
                                 # Refused: the result says why, as the upsert did when the value reached it (X-R51)
                                 refused_note = unstorable_quote_reason(fetched_current.value)

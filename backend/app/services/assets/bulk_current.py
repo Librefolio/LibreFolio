@@ -53,8 +53,9 @@ logger = structlog.get_logger(__name__)
 #: The timeout of one bulk call, longer than a single asset's: one request answers up to ``bulk_current_max_items``.
 BULK_CURRENT_TIMEOUT = 30.0
 
-#: How long a group read stays fresh: the life of the per-asset current-value cache.
-GROUP_STAMP_SECONDS = 120.0
+#: How long a group read stays fresh when the provider declares no interval of its own: the life of the per-asset
+#: current-value cache. A provider's ``current_min_refresh_seconds`` lengthens both (``core.current_cache_ttl``).
+GROUP_STAMP_SECONDS = core.CURRENT_CACHE_DEFAULT_SECONDS
 
 #: How long a group read that failed (not refused) stays fresh at most: a broken source is not called at every request,
 #: and the prices it cannot give are not hidden for long.
@@ -75,6 +76,9 @@ class _Stamp:
     expires_at: float
     members: frozenset[tuple]
     notes: Mapping[tuple, str] = field(default_factory=dict)
+    #: The members the read left without a cached quote (omitted, their own error, refused for the price columns, or
+    #: the whole read failed): served from the database until the stamp expires, never read again before
+    without: frozenset[tuple] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -121,7 +125,8 @@ def _stamp(group_key: GroupKey, members: frozenset[tuple], seconds: float, since
     now = _clock()
     for key in [key for key, stamp in _stamps.items() if stamp.expires_at <= now]:
         del _stamps[key]
-    _stamps[group_key] = _Stamp(expires_at=since + seconds, members=members, notes=dict(notes))
+    without = frozenset(cache_key for cache_key in members if not core._asset_current_cache.get(cache_key)[1])
+    _stamps[group_key] = _Stamp(expires_at=since + seconds, members=members, notes=dict(notes), without=without)
 
 
 def _stamped_note(group_key: GroupKey, cache_key: tuple) -> str | None:
@@ -142,16 +147,19 @@ def forget_member(cache_key: tuple) -> None:
 
 
 def _needs_read(group_key: GroupKey, wanted: Sequence[tuple]) -> bool:
-    """Whether a group must be read for the cache keys ``wanted``: one has no cached quote and is not covered by a fresh
-    stamp (an asset the last read left without a quote is served from the database until the stamp expires)."""
+    """Whether a group must be read for the cache keys ``wanted``.
+
+    - No fresh stamp: read — the stamp's clock decides when a group expires (C4), whatever the cache still holds.
+    - Within the stamp, a key with a cached quote needs nothing, and a key the last read left without one is served
+      from the database until the stamp expires.
+    - Any other key — one the last read did not cover (an assignment newer than it, or an inactive asset asked by
+      another reader: it keeps the quote its own read cached), or whose quote has left the cache (dropped, the cache
+      emptied by the administrator) — reads the group again.
+    """
     stamp = _stamps.get(group_key)
-    fresh = stamp is not None and _clock() < stamp.expires_at
-    for cache_key in wanted:
-        if core._asset_current_cache.get(cache_key)[1]:
-            continue
-        if not (fresh and cache_key in stamp.members):
-            return True
-    return False
+    if stamp is None or _clock() >= stamp.expires_at:
+        return True
+    return any(not core._asset_current_cache.get(cache_key)[1] and cache_key not in stamp.without for cache_key in wanted)
 
 
 def supports_bulk(provider: AssetSourceProvider | None) -> bool:
@@ -188,6 +196,7 @@ async def _read_group(group_key: GroupKey, provider: AssetSourceProvider, entrie
         members = frozenset(entry.cache_key for entry in entries)
         since = _clock()
         most = provider.bulk_current_max_items
+        seconds = core.current_cache_ttl(provider)
         notes: dict[tuple, str] = {}
         try:
             for start in range(0, len(entries), most):
@@ -195,7 +204,7 @@ async def _read_group(group_key: GroupKey, provider: AssetSourceProvider, entrie
                 items = [FACurrentValueRequest(key=str(index), identifier=entry.identifier, identifier_type=entry.identifier_type, provider_params=entry.provider_params) for index, entry in enumerate(chunk)]
                 async with semaphore:
                     answer = await core.call_provider(provider, lambda items=items: provider.get_current_values_bulk(items), timeout=BULK_CURRENT_TIMEOUT, scope=scope)
-                notes.update(_cache_answers(code, chunk, answer))
+                notes.update(_cache_answers(provider, chunk, answer))
         except AssetRateLimitedError as refused:
             # Paused, or refused now: no stamp, the provider's pause decides when to call again (decision 34)
             logger.debug("Bulk current-value read refused", provider=code, retry_after=refused.retry_after)
@@ -208,16 +217,17 @@ async def _read_group(group_key: GroupKey, provider: AssetSourceProvider, entrie
                 logger.info("Bulk current-value read skipped: provider not configured", provider=code)
             else:
                 logger.warning("Bulk current-value read failed: last stored prices served", provider=code, error_code=getattr(error, "error_code", None), error=type(error).__name__, exc_info=error)
-            _stamp(group_key, members, min(GROUP_STAMP_SECONDS, SHORT_STAMP_SECONDS), since, notes)
+            _stamp(group_key, members, min(seconds, SHORT_STAMP_SECONDS), since, notes)
             return None, notes
-        _stamp(group_key, members, GROUP_STAMP_SECONDS, since, notes)
+        _stamp(group_key, members, seconds, since, notes)
         return None, notes
 
 
-def _cache_answers(provider_code: str, chunk: list[_Entry], answer: object) -> dict[tuple, str]:
-    """Cache the answers of one call, as the per-asset path caches a quote: only one the price columns can keep; the
-    reasons of the ones they refuse, by cache key (X-R51). A key the core did not ask for is ignored; an asset's own
-    error is logged by its code only (its text may come from the source)."""
+def _cache_answers(provider: AssetSourceProvider, chunk: list[_Entry], answer: object) -> dict[tuple, str]:
+    """Cache the answers of one call, as the per-asset path caches a quote: only one the price columns can keep, for the
+    provider's interval; the reasons of the ones they refuse, by cache key (X-R51). A key the core did not ask for is
+    ignored; an asset's own error is logged by its code only (its text may come from the source)."""
+    provider_code = provider.provider_code
     notes: dict[tuple, str] = {}
     if not isinstance(answer, dict):
         logger.warning("Bulk current-value answer is not a dict: ignored", provider=provider_code, answer_type=type(answer).__name__)
@@ -227,7 +237,7 @@ def _cache_answers(provider_code: str, chunk: list[_Entry], answer: object) -> d
         if isinstance(value, FACurrentValue):
             quote = storable_current_value(value, entry.asset_id, provider_code)
             if quote is not None:
-                core._asset_current_cache.set(entry.cache_key, quote)
+                core.remember_current_value(provider, entry.cache_key, quote)
             else:
                 notes[entry.cache_key] = unstorable_quote_reason(value.value)
         elif isinstance(value, AssetSourceError):
