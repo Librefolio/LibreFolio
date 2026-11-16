@@ -83,16 +83,16 @@ async def create_assets_bulk(
     ```
     """
     try:
-        return await AssetCRUDService.create_assets_bulk(assets, session)
+        return await AssetCRUDService.create_assets_bulk(assets, session, user_id=_current_user.id)
     except Exception as e:
         logger.exception(f"Error in bulk asset creation: {e}")
         raise HTTPException(status_code=500, detail="Internal error while creating assets") from e
 
 
-async def _run_asset_patch(assets: List[FAAssetPatchItem], session: AsyncSession, *, commit: bool) -> FABulkAssetPatchResponse:
+async def _run_asset_patch(assets: List[FAAssetPatchItem], session: AsyncSession, *, commit: bool, user_id: int | None) -> FABulkAssetPatchResponse:
     """Shared by ``PATCH /assets`` and ``POST /assets/validate``: one service, ``commit`` tells the save from the dry run."""
     try:
-        return await AssetCRUDService.patch_assets_bulk(assets, session, commit=commit)
+        return await AssetCRUDService.patch_assets_bulk(assets, session, commit=commit, user_id=user_id)
     except HTTPException:
         raise
     except Exception as e:
@@ -118,7 +118,7 @@ async def validate_assets_patch(
     - `warnings`: remarks that never block (e.g. `assetFamilyChange`)
     - `results`: with no issue, what the PATCH would save, per item (`updated_fields`)
     """
-    return await _run_asset_patch(assets, session, commit=False)
+    return await _run_asset_patch(assets, session, commit=False, user_id=_current_user.id)
 
 
 @crud_router.patch("", response_model=FABulkAssetPatchResponse, tags=["FA CRUD"])
@@ -168,7 +168,7 @@ async def patch_assets_bulk(
     - `updated_fields`: the fields written, old and new (every field sent, even when the value does not change)
     - Per-item success/failure status
     """
-    return await _run_asset_patch(assets, session, commit=True)
+    return await _run_asset_patch(assets, session, commit=True, user_id=_current_user.id)
 
 
 @crud_router.get("/query", response_model=List[FAinfoResponse], tags=["FA CRUD"])

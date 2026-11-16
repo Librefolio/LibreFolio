@@ -17,7 +17,7 @@ doubles ``mockprov`` (asset: four system fields, three user fields, a secret of 
    family's, stripped. A plugin that cannot be instantiated shows its code and no icon; a name that raises is the code,
    the icon read all the same; an icon that raises, or is not a non-blank string, is no icon, the name read all the
    same; a family without a row in ``FAMILY_ICON_ATTRIBUTES`` has no icon, and every family of ``FAMILY_REGISTRIES``
-   has its row.
+   has its row. The enrichers (plan 68, B1) are read through ``EnricherRegistry``, their icon from ``icon``.
 2. **Writes are all or nothing**: every item is checked first; one refused item refuses the write, the refusal lists
    every item with its outcome and nothing is written. A system field needs an administrator (``FORBIDDEN_SCOPE``); a
    field an environment variable sets is ``LOCKED_BY_ENV`` (the derived name, its ``_FILE``, the alias; never a user
@@ -81,6 +81,7 @@ from backend.app.db.models import PluginSystemSetting, PluginUserSetting, User
 from backend.app.schemas.plugin_settings import PluginSettingErrorCode, PluginSettingFamily, PluginSettingsCatalogResponse, PluginSettingsPluginRead, PluginSettingWriteItem, PluginSettingWriteResult
 from backend.app.services.asset_source_providers.mockprov.plugin import MockProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.fx import runtime as fx_runtime
 from backend.app.services.fx_providers.mockfx.plugin import MockFXProvider
 from backend.app.services.platform.instance_key import InstanceKeyError
@@ -540,6 +541,14 @@ def test_a_family_without_an_icon_attribute_has_no_icon_and_still_its_name():
 def test_the_name_is_provider_name_else_name_else_the_code(plugin_class: type, name: str, icon: str | None):
     """1: ``provider_name``, else ``name``, else the code; a name that raises is the code, and the icon is read all the same."""
     assert service._plugin_identity("asset", plugin_class, STAND_IN_CODE) == (name, icon)
+
+
+def test_the_enricher_family_is_read_through_its_registry_with_its_icon():
+    """1 (plan 68, B1): the catalogue reads the enrichers through ``EnricherRegistry``, and their icon from ``icon``, the
+    attribute ``EnricherPlugin`` declares."""
+    assert service.FAMILY_REGISTRIES.get("enricher") is EnricherRegistry
+    assert service.FAMILY_ICON_ATTRIBUTES.get("enricher") == "icon"
+    assert "enricher" not in service.FAMILIES_WITHOUT_ICON
 
 
 def test_every_settings_family_has_its_icon_attribute():

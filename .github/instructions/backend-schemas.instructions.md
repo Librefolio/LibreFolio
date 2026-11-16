@@ -13,7 +13,8 @@ backend/app/schemas/
 │   ├── assets.py      #   the asset and its CRUD (FAAssetCreateItem, FAinfoResponse, patch, merge, etc.)
 │   ├── metadata.py    #   distributions, classification, metadata (FAClassificationParams, FAGeographicArea, etc.)
 │   ├── scheduled_investment.py  # financial enums and the interest schedule (FAScheduledInvestmentSchedule, etc.)
-│   └── events.py      #   asset events (FAAssetEventPoint, event CRUD)
+│   ├── events.py      #   asset events (FAAssetEventPoint, event CRUD)
+│   └── profile.py     #   the asset profile: the catalogue voice and its value shapes (FAProfileVoice, ProfileShape, …)
 ├── prices.py          # Price schemas (FAUpsert, FAPriceQueryItem, etc.)
 ├── provider.py        # Provider schemas (FAProviderInfo, FAProviderAssignmentItem, etc.)
 ├── refresh.py         # Refresh/sync schemas

@@ -11,4 +11,5 @@ The package re-exports nothing: import every name from the module that defines i
 - ``crud.py`` holds ``AssetCRUDService``; ``search.py`` holds ``AssetSearchService``, with
   ``web_link_finder.py`` as its last-resort web lookup.
 - ``market_calendar.py`` holds the market holidays and the carry-versus-quote rule.
+- ``profile/`` holds the asset profile (plan 68): ``catalogue.py`` lists its voices and the stored form of their values.
 """
