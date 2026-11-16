@@ -31,7 +31,7 @@ from backend.app.schemas import (
     FAUpsert,
     SyncStatus,
 )
-from backend.app.services.assets import core
+from backend.app.services.assets import bulk_current, core
 from backend.app.services.assets.base import (
     AssetHistoryStartDate,
     AssetRateLimitedError,
@@ -80,6 +80,8 @@ class _PreparedRefreshItem:
     identifier_type: str
     start: AssetHistoryStartDate
     end: date_type
+    #: The assignment itself: a provider that reads in bulk prices today's value with its group (project 76, C3)
+    assignment: AssetProviderAssignment | None = None
 
 
 @dataclass(frozen=True)
@@ -210,6 +212,7 @@ async def _prepare_refresh_items(  # noqa: C901 — per-item validation maps eac
             identifier_type=assignment.identifier_type,
             start=resolved_start,
             end=request.date_range.end,
+            assignment=assignment,
         )
 
     return prepared_items, immediate_results
@@ -220,11 +223,15 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
     prep: _PreparedRefreshItem,
     semaphore: asyncio.Semaphore,
     semaphore_timeout: int,
+    bulk_quote: bulk_current.BulkQuote | None = None,
 ) -> tuple[_FetchedRefreshData | None, str | None, AssetRateLimitedError | None]:
     """Fetch prices from provider for a single asset (no DB access).
 
     Returns the data (or None), the error (or None), and the refusal for too many requests met on the way, if any: a
     paused provider fails the item, or leaves it partial, and the result tells when to try again (``retry_after``).
+
+    ``bulk_quote``: today's value, already read with the provider's bulk group (project 76, C3); the item then makes no
+    current-value call of its own.
     """
     refusal: AssetRateLimitedError | None = None
     refused_note: str | None = None  # a current value no price column keeps (X-R51)
@@ -343,7 +350,16 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                 if end >= today:
                     try:
                         cached_current, current_ok = core._asset_current_cache.get(cache_key)
-                        if current_ok and cached_current:
+                        if bulk_quote is not None:
+                            # Read with the provider's bulk group before the items (project 76, C3): its quote as the
+                            # price columns keep it, its refusal, or the reason the columns refused it (X-R51)
+                            current_data = bulk_quote.quote
+                            if bulk_quote.note:
+                                refused_note = bulk_quote.note
+                            if bulk_quote.refusal is not None:
+                                refusal = _refusal_of(bulk_quote.refusal, refusal)
+                                logger.warning(f"Current value fetch failed for asset {asset_id}: {bulk_quote.refusal}")
+                        elif current_ok and cached_current:
                             current_data = storable_current_value(cached_current, asset_id, provider_code)
                             logger.debug(f"Current cache HIT for asset {asset_id}")
                         else:
@@ -392,15 +408,22 @@ async def _fetch_refresh_items(
     prepared_items: dict[int, _PreparedRefreshItem],
     concurrency: int,
     semaphore_timeout: int,
+    bulk: bulk_current.BulkPlan | None = None,
 ) -> tuple[dict[int, _FetchedRefreshData], dict[int, str], dict[int, AssetRateLimitedError]]:
-    """Fetch every prepared item without touching the database; the third map holds the refusals for too many requests."""
+    """Fetch every prepared item without touching the database; the third map holds the refusals for too many requests.
+
+    ``bulk`` first: today's values of the providers that read in bulk, one call per group (project 76, C3), which the
+    items then take instead of a current-value call each.
+    """
     semaphore = asyncio.Semaphore(concurrency)
+    bulk_quotes = await bulk.read(semaphore) if bulk is not None else {}
     tasks = [
         _fetch_refresh_item(
             asset_id,
             prepared,
             semaphore,
             semaphore_timeout,
+            bulk_quotes.get(asset_id),
         )
         for asset_id, prepared in prepared_items.items()
     ]
@@ -788,10 +811,15 @@ class RefreshOperations:
             session,
             bulk_started_ns,
         )
+        # Today's values of the providers that read in bulk go through their group, as the live read's do (project 76,
+        # C3): planned here, with the session; read in the fetch phase, without it
+        today = date_type.today()
+        bulk = await bulk_current.prepare_bulk(session, [(asset_id, prepared.assignment) for asset_id, prepared in prepared_items.items() if prepared.assignment is not None and prepared.end >= today])
         fetch_results, fetch_errors, fetch_refusals = await _fetch_refresh_items(
             prepared_items,
             concurrency,
             semaphore_timeout,
+            bulk,
         )
         persist_results = await _persist_refresh_items(
             prepared_items,

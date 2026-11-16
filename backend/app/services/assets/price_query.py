@@ -1037,8 +1037,9 @@ class PriceQueryOperations:
         distinct_ids = list(dict.fromkeys(asset_ids))
         bulk = await bulk_current.prepare_bulk(session, [(aid, assign_map[aid]) for aid in distinct_ids if aid in asset_map and aid in assign_map])
         per_asset_ids = [aid for aid in distinct_ids if aid not in bulk.asked]
-        bulk_live, per_asset_live = await asyncio.gather(bulk.read(sem), asyncio.gather(*(_live_one(aid) for aid in per_asset_ids)))
-        live = {**bulk_live, **dict(zip(per_asset_ids, per_asset_live, strict=True))}
+        bulk_quotes, per_asset_live = await asyncio.gather(bulk.read(sem), asyncio.gather(*(_live_one(aid) for aid in per_asset_ids)))
+        live = {aid: ((_quote_item(aid, quote.quote, f"provider:{assign_map[aid].provider_code}") if quote.quote is not None else None), quote.refusal) for aid, quote in bulk_quotes.items()}
+        live.update(zip(per_asset_ids, per_asset_live, strict=True))
 
         # Fallback: the last known price from the DB, for the assets without a live quote, in one grouped read once the
         # quotes are in (MF-SEC9c). The latest close that reads a number: one the file holds as ±inf reads None, and is

@@ -34,8 +34,8 @@ from __future__ import annotations
 import asyncio
 import time
 import weakref
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field
 from typing import Optional
 
 import structlog
@@ -43,10 +43,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetProviderAssignment
-from backend.app.schemas.prices import FACurrentPriceItem, FACurrentValue, FACurrentValueRequest
+from backend.app.schemas.prices import FACurrentValue, FACurrentValueRequest
 from backend.app.services.assets import core
 from backend.app.services.assets.base import AssetRateLimitedError, AssetSourceError, AssetSourceProvider
-from backend.app.services.assets.price_store import storable_current_value
+from backend.app.services.assets.price_store import storable_current_value, unstorable_quote_reason
 
 logger = structlog.get_logger(__name__)
 
@@ -69,10 +69,12 @@ GroupKey = tuple[str, str, Optional[str]]
 
 @dataclass(frozen=True)
 class _Stamp:
-    """The last read of a group: when it expires, and the cache keys it covered."""
+    """The last read of a group: when it expires, the cache keys it covered, and the reasons of the quotes it refused
+    for the price columns (X-R51), so that a refresh within the stamp still reports them."""
 
     expires_at: float
     members: frozenset[tuple]
+    notes: Mapping[tuple, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -85,6 +87,17 @@ class _Entry:
     identifier_type: object  # the IdentifierType the plugin receives
     provider_params: dict
     cache_key: tuple
+
+
+@dataclass(frozen=True)
+class BulkQuote:
+    """What a bulk read gives one asked asset: its quote from the cache, as the price columns keep it (None: the caller
+    falls back to the database), the refusal for too many requests of its group, and, when this read refused its
+    quote for the price columns, the reason a refresh reports (X-R51)."""
+
+    quote: Optional[FACurrentValue]
+    refusal: Optional[AssetRateLimitedError] = None
+    note: Optional[str] = None
 
 
 _stamps: dict[GroupKey, _Stamp] = {}
@@ -102,13 +115,22 @@ def _group_lock(group_key: GroupKey) -> asyncio.Lock:
     return _locks.setdefault(asyncio.get_running_loop(), {}).setdefault(group_key, asyncio.Lock())
 
 
-def _stamp(group_key: GroupKey, members: frozenset[tuple], seconds: float, since: float) -> None:
+def _stamp(group_key: GroupKey, members: frozenset[tuple], seconds: float, since: float, notes: Mapping[tuple, str]) -> None:
     """Record a read of the group, from ``since`` (the clock before its first call: the stamp never outlives the
     entries the read cached, which start later), and drop the stamps that have expired."""
     now = _clock()
     for key in [key for key, stamp in _stamps.items() if stamp.expires_at <= now]:
         del _stamps[key]
-    _stamps[group_key] = _Stamp(expires_at=since + seconds, members=members)
+    _stamps[group_key] = _Stamp(expires_at=since + seconds, members=members, notes=dict(notes))
+
+
+def _stamped_note(group_key: GroupKey, cache_key: tuple) -> str | None:
+    """The X-R51 reason a fresh stamp of the group keeps for ``cache_key``: an earlier read refused its quote for the
+    price columns, and a refresh within the stamp reports it as the per-asset path would."""
+    stamp = _stamps.get(group_key)
+    if stamp is None or _clock() >= stamp.expires_at:
+        return None
+    return stamp.notes.get(cache_key)
 
 
 def forget_member(cache_key: tuple) -> None:
@@ -155,27 +177,29 @@ async def _active_assignments(session: AsyncSession, provider_codes: Sequence[st
     return list((await session.execute(statement)).scalars().all())
 
 
-async def _read_group(group_key: GroupKey, provider: AssetSourceProvider, entries: list[_Entry], wanted: list[tuple], semaphore: asyncio.Semaphore) -> AssetRateLimitedError | None:
+async def _read_group(group_key: GroupKey, provider: AssetSourceProvider, entries: list[_Entry], wanted: list[tuple], semaphore: asyncio.Semaphore) -> tuple[AssetRateLimitedError | None, dict[tuple, str]]:
     """Read one group, under its lock, unless another reader did meanwhile; the refusal for too many requests met, if
-    any. Every answer that the price columns can keep goes to the per-asset cache."""
+    any, and the reasons of the quotes this read refused for the price columns, by cache key. Every answer that the
+    price columns can keep goes to the per-asset cache."""
     code, _settings_part, scope = group_key
     async with _group_lock(group_key):
         if not _needs_read(group_key, wanted):
-            return None  # another reader read it while this one waited
+            return None, {}  # another reader read it while this one waited
         members = frozenset(entry.cache_key for entry in entries)
         since = _clock()
         most = provider.bulk_current_max_items
+        notes: dict[tuple, str] = {}
         try:
             for start in range(0, len(entries), most):
                 chunk = entries[start : start + most]
                 items = [FACurrentValueRequest(key=str(index), identifier=entry.identifier, identifier_type=entry.identifier_type, provider_params=entry.provider_params) for index, entry in enumerate(chunk)]
                 async with semaphore:
                     answer = await core.call_provider(provider, lambda items=items: provider.get_current_values_bulk(items), timeout=BULK_CURRENT_TIMEOUT, scope=scope)
-                _cache_answers(code, chunk, answer)
+                notes.update(_cache_answers(code, chunk, answer))
         except AssetRateLimitedError as refused:
             # Paused, or refused now: no stamp, the provider's pause decides when to call again (decision 34)
             logger.debug("Bulk current-value read refused", provider=code, retry_after=refused.retry_after)
-            return refused
+            return refused, notes
         except Exception as error:  # noqa: BLE001 — isolation boundary: a failed read falls back to the stored prices
             # The last stored prices are served, and a short stamp keeps a broken source from being called at every
             # request. The error leaves call_provider with the provider's secrets masked. A provider left without a
@@ -184,27 +208,31 @@ async def _read_group(group_key: GroupKey, provider: AssetSourceProvider, entrie
                 logger.info("Bulk current-value read skipped: provider not configured", provider=code)
             else:
                 logger.warning("Bulk current-value read failed: last stored prices served", provider=code, error_code=getattr(error, "error_code", None), error=type(error).__name__, exc_info=error)
-            _stamp(group_key, members, min(GROUP_STAMP_SECONDS, SHORT_STAMP_SECONDS), since)
-            return None
-        _stamp(group_key, members, GROUP_STAMP_SECONDS, since)
-        return None
+            _stamp(group_key, members, min(GROUP_STAMP_SECONDS, SHORT_STAMP_SECONDS), since, notes)
+            return None, notes
+        _stamp(group_key, members, GROUP_STAMP_SECONDS, since, notes)
+        return None, notes
 
 
-def _cache_answers(provider_code: str, chunk: list[_Entry], answer: object) -> None:
-    """Cache the answers of one call, as the per-asset path caches a quote: only one the price columns can keep. A key
-    the core did not ask for is ignored; an asset's own error is logged by its code only (its text may come from the
-    source)."""
+def _cache_answers(provider_code: str, chunk: list[_Entry], answer: object) -> dict[tuple, str]:
+    """Cache the answers of one call, as the per-asset path caches a quote: only one the price columns can keep; the
+    reasons of the ones they refuse, by cache key (X-R51). A key the core did not ask for is ignored; an asset's own
+    error is logged by its code only (its text may come from the source)."""
+    notes: dict[tuple, str] = {}
     if not isinstance(answer, dict):
         logger.warning("Bulk current-value answer is not a dict: ignored", provider=provider_code, answer_type=type(answer).__name__)
-        return
+        return notes
     for index, entry in enumerate(chunk):
         value = answer.get(str(index))
         if isinstance(value, FACurrentValue):
             quote = storable_current_value(value, entry.asset_id, provider_code)
             if quote is not None:
                 core._asset_current_cache.set(entry.cache_key, quote)
+            else:
+                notes[entry.cache_key] = unstorable_quote_reason(value.value)
         elif isinstance(value, AssetSourceError):
             logger.debug("Bulk current value refused for one asset", provider=provider_code, asset_id=entry.asset_id, error_code=value.error_code)
+    return notes
 
 
 @dataclass
@@ -217,23 +245,22 @@ class BulkPlan:
     wanted: dict[GroupKey, list[tuple]]
     entries: dict[GroupKey, dict[tuple, _Entry]]
 
-    async def read(self, semaphore: asyncio.Semaphore) -> dict[int, tuple[Optional[FACurrentPriceItem], Optional[AssetRateLimitedError]]]:
-        """Read the groups that need it, in parallel, and answer every asked asset: its item from the cache (None: the
-        caller falls back to the database) and the refusal for too many requests of its group. Never touches a
+    async def read(self, semaphore: asyncio.Semaphore) -> dict[int, BulkQuote]:
+        """Read the groups that need it, in parallel, and answer every asked asset (``BulkQuote``). Never touches a
         session."""
         to_read = list(self.entries)
-        refused = await asyncio.gather(*(_read_group(group_key, self.providers[group_key[0]], list(self.entries[group_key].values()), self.wanted[group_key], semaphore) for group_key in to_read))
-        refusals = dict(zip(to_read, refused, strict=True))
-        live: dict[int, tuple[Optional[FACurrentPriceItem], Optional[AssetRateLimitedError]]] = {}
+        outcomes = await asyncio.gather(*(_read_group(group_key, self.providers[group_key[0]], list(self.entries[group_key].values()), self.wanted[group_key], semaphore) for group_key in to_read))
+        refusals = {group_key: refusal for group_key, (refusal, _notes) in zip(to_read, outcomes, strict=True)}
+        notes = {cache_key: note for _refusal, group_notes in outcomes for cache_key, note in group_notes.items()}
+        quotes: dict[int, BulkQuote] = {}
         for asset_id, (group_key, entry) in self.asked.items():
-            code = group_key[0]
             cached, found = core._asset_current_cache.get(entry.cache_key)
-            quote = storable_current_value(cached, asset_id, code) if found else None
+            quote = storable_current_value(cached, asset_id, group_key[0]) if found else None
             if quote is not None:
-                live[asset_id] = (FACurrentPriceItem(asset_id=asset_id, value=quote.value, currency=quote.currency, as_of_date=quote.as_of_date, source=f"provider:{code}"), None)
+                quotes[asset_id] = BulkQuote(quote=quote)
             else:
-                live[asset_id] = (None, refusals.get(group_key))
-        return live
+                quotes[asset_id] = BulkQuote(quote=None, refusal=refusals.get(group_key), note=notes.get(entry.cache_key) or _stamped_note(group_key, entry.cache_key))
+        return quotes
 
 
 async def prepare_bulk(session: AsyncSession, requested: Sequence[tuple[int, AssetProviderAssignment]]) -> BulkPlan:
