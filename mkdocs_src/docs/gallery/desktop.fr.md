@@ -892,7 +892,7 @@ Une période passée réelle appliquée au portefeuille que vous détenez aujour
 
 ### 🎲 Simulation
 
-L'étape de simulation Et si… ? avec son avertissement beta.
+L'étape de simulation Et si… ? avec son avertissement sur le modèle.
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="🎲 Simulation">
