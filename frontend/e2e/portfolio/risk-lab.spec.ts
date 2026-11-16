@@ -2620,13 +2620,37 @@ async function titlesSpillingOut(table: Locator, columns: readonly string[]): Pr
  * `col-resize`, not by a class. The cell is scrolled into view first: the point is read off the
  * screen. One read, not a retry.
  */
-async function columnEdge(header: Locator): Promise<{x: number; y: number; handle: boolean}> {
-    await header.scrollIntoViewIfNeeded();
+async function columnEdge(header: Locator): Promise<{x: number; y: number; handle: boolean; hit: string}> {
+    // The title row in the middle of the window, two frames later. `scrollIntoViewIfNeeded` scrolls the least it can, so a
+    // row above the window lands on its top edge — where the app header, sticky, slides back in on a scroll up and covers
+    // it (wave-1 merge check, 16/11/2026). In the middle nothing sticky reaches it, wherever the page was left.
+    await header.evaluate((cell) => cell.scrollIntoView({block: 'center', inline: 'nearest'}));
+    await header.page().evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
     return header.evaluate((cell) => {
         const box = cell.getBoundingClientRect();
         const hit = document.elementFromPoint(box.right - 3, box.top + box.height / 2);
-        return {x: box.right - 3, y: box.top + box.height / 2, handle: hit !== null && hit !== cell && cell.contains(hit) && getComputedStyle(hit).cursor === 'col-resize'};
+        // What the point hit, for the message of a miss: the nearest testid, or the tag.
+        const what = hit === null ? 'nothing' : (hit.closest('[data-testid]')?.getAttribute('data-testid') ?? hit.tagName.toLowerCase());
+        return {x: box.right - 3, y: box.top + box.height / 2, handle: hit !== null && hit !== cell && cell.contains(hit) && getComputedStyle(hit).cursor === 'col-resize', hit: what};
     });
+}
+
+/**
+ * The page as the wave-1 merge check left it (16/11/2026), set on purpose: the title row at the top of the window and the
+ * app header — sticky — slid back in over it by a scroll up. {@link columnEdge} must find the edge from there; the old
+ * one, which scrolled the least it could, read the header instead of the handle.
+ */
+async function underTheReturningHeader(page: Page, header: Locator): Promise<void> {
+    // Two frames between the two scrolls: the header reads the scroll once a frame, and two scrolls in one frame are
+    // one net move to it.
+    const frames = () => page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await header.evaluate((cell) => window.scrollTo(0, window.scrollY + cell.getBoundingClientRect().top - 30 + 400));
+    await frames();
+    await expect(page.getByTestId('app-header')).toHaveAttribute('data-scroll-state', 'hidden');
+    await page.evaluate(() => window.scrollBy(0, -400));
+    await frames();
+    await expect(page.getByTestId('app-header')).toHaveAttribute('data-scroll-state', 'visible');
+    await expect.poll(() => page.getByTestId('app-header').evaluate((element) => element.getBoundingClientRect().bottom), {message: 'the app header is still sliding in'}).toBeGreaterThan(40);
 }
 
 /** Press at `from`, drag `by` px to the right in small steps, as a hand does, and let go. */
@@ -5093,8 +5117,10 @@ test.describe('Asset Global risk laboratory', () => {
         const badDay = lossTable(page).getByTestId('dt-header-badDay');
         const badDayWidth = () => badDay.evaluate((cell) => cell.getBoundingClientRect().width);
         const widthBefore = await badDayWidth();
+        // From the worst place the page can be left in: the title row under the app header that slid back in.
+        await underTheReturningHeader(page, badDay);
         const edge = await columnEdge(badDay);
-        expect(edge.handle, 'no resize handle under the right edge of the bad-day title').toBe(true);
+        expect(edge.handle, `no resize handle under the right edge of the bad-day title: the point hit ${edge.hit}`).toBe(true);
         await dragRight(page, edge, 60);
         await expect.poll(badDayWidth, {message: "a drag on the bad-day column's edge did not change its width"}).toBeGreaterThan(widthBefore + 30);
         // The pointer rested on the edge it dragged, beside no title: no help is open before the one below is read.
@@ -5364,7 +5390,7 @@ test.describe('Asset Global risk laboratory', () => {
         const volatilityWidth = () => volatility.evaluate((cell) => cell.getBoundingClientRect().width);
         const widthBefore = await volatilityWidth();
         const edge = await columnEdge(volatility);
-        expect(edge.handle, 'no resize handle under the right edge of the volatility title').toBe(true);
+        expect(edge.handle, `no resize handle under the right edge of the volatility title: the point hit ${edge.hit}`).toBe(true);
         await dragRight(page, edge, 60);
         await expect.poll(volatilityWidth, {message: "a drag on the volatility column's edge did not change its width"}).toBeGreaterThan(widthBefore + 30);
         // The pointer rested on the edge it dragged, beside no title: no help is open before the one below is read.
