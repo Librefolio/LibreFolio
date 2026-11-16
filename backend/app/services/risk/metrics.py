@@ -10,6 +10,7 @@ from datetime import date
 import numpy as np
 
 from backend.app.services.financial_math.returns import positive_annualization_factor, required_recovery_return
+from backend.app.services.risk.acquired import best_realization, best_realization_index
 
 ZERO_TOLERANCE = 1e-15
 """Absolute tolerance below which a dispersion statistic counts as exactly zero.
@@ -101,8 +102,8 @@ class HistoricalTailRisk:
 
 
 @dataclass(frozen=True, slots=True)
-class WorstHorizonWindow:
-    """The worst compounded stretch a series actually went through, over one horizon.
+class HorizonWindow:
+    """The worst (or the best) compounded stretch a series actually went through, over one horizon.
 
     ``start_index`` and ``end_index`` are positions in the **return** series, both inclusive:
     the first and the last return the window compounds (``end_index - start_index + 1`` is the
@@ -127,6 +128,9 @@ class ReturnHistogram:
     edges: tuple[float, ...]
     counts: tuple[int, ...]
     pinned_edge: float
+    # RN-14: the edge the green tail starts on — the gain threshold itself when the grid pins it too, otherwise the
+    # first edge at or past it; None when no threshold was asked.
+    gain_edge: float | None = None
 
 
 def _finite_values(
@@ -253,6 +257,41 @@ def annualized_sharpe(
     return excess_mean / volatility * math.sqrt(annualization_factor)
 
 
+def _period_downside_deviation(values: Sequence[float], target_daily: float) -> float:
+    """RMS shortfall below the per-observation target, over ``T`` (a population figure, not ``T - 1``)."""
+    downside_variance = math.fsum(min(value - target_daily, 0.0) ** 2 for value in values) / len(values)
+    return math.sqrt(downside_variance)
+
+
+def _no_downside(period_downside_deviation: float) -> bool:
+    """No observation below the target: the one condition that leaves the Sortino and the Omega undefined."""
+    return math.isclose(period_downside_deviation, 0.0, rel_tol=0.0, abs_tol=ZERO_TOLERANCE)
+
+
+def _sortino_inputs(returns: Sequence[float], annualization_factor: float, annual_target_return: float, *, measure: str) -> tuple[tuple[float, ...], float, float]:
+    values = _finite_values(returns, name="returns")
+    if len(values) < 2:
+        raise ValueError(f"{measure} requires at least two observations")
+    annualization_factor = positive_annualization_factor(annualization_factor)
+    return values, annualization_factor, daily_risk_free_rate(annual_target_return, annualization_factor)
+
+
+def annualized_downside_deviation(
+    returns: Sequence[float],
+    annualization_factor: float,
+    *,
+    annual_target_return: float = 0.0,
+) -> float:
+    """The semi-deviation: the volatility of the days below the Sortino's target, annualized (RN-14, Q23).
+
+    It is the Sortino's own denominator, exposed — «it swings 13.9 %, but only 9.8 % downwards» — in the unit of the
+    volatility. ⚠️ Over ``T``, not ``T - 1``, and around the target, not around the sample mean: riskfolio's
+    ``SemiDeviation`` answers another question, and its ``LPM(p=2)`` divides by ``T - 1`` (the oracle rescales it).
+    """
+    values, annualization_factor, target_daily = _sortino_inputs(returns, annualization_factor, annual_target_return, measure="downside deviation")
+    return _period_downside_deviation(values, target_daily) * math.sqrt(annualization_factor)
+
+
 def annualized_sortino(
     returns: Sequence[float],
     annualization_factor: float,
@@ -260,17 +299,143 @@ def annualized_sortino(
     annual_target_return: float = 0.0,
 ) -> float | None:
     """Return annualized Sortino using downside deviation versus an explicit MAR."""
-    values = _finite_values(returns, name="returns")
-    if len(values) < 2:
-        raise ValueError("Sortino requires at least two observations")
-    annualization_factor = positive_annualization_factor(annualization_factor)
-    target_daily = daily_risk_free_rate(annual_target_return, annualization_factor)
-    downside_variance = math.fsum(min(value - target_daily, 0.0) ** 2 for value in values) / len(values)
-    downside_deviation = math.sqrt(downside_variance)
-    if math.isclose(downside_deviation, 0.0, rel_tol=0.0, abs_tol=ZERO_TOLERANCE):
+    values, annualization_factor, target_daily = _sortino_inputs(returns, annualization_factor, annual_target_return, measure="Sortino")
+    downside_deviation = _period_downside_deviation(values, target_daily)
+    if _no_downside(downside_deviation):
         return None
     excess_mean = math.fsum(value - target_daily for value in values) / len(values)
     return excess_mean / downside_deviation * math.sqrt(annualization_factor)
+
+
+def omega_ratio(
+    returns: Sequence[float],
+    annualization_factor: float,
+    *,
+    annual_target_return: float = 0.0,
+) -> float | None:
+    """Gains against losses: ``Σ max(r − MAR, 0) ÷ Σ max(MAR − r, 0)``, the MAR being the Sortino's target (RN-14).
+
+    «For every euro lost on the bad days, 1.25 gained on the good ones.» Undefined — None — with no observation below
+    the target, which is exactly when the Sortino is undefined: one test for both (``_no_downside``), so the product
+    never prints a missing Sortino beside a huge Omega. riskfolio's ``LPM(p=1)`` is the oracle.
+    """
+    values, _, target_daily = _sortino_inputs(returns, annualization_factor, annual_target_return, measure="Omega")
+    if _no_downside(_period_downside_deviation(values, target_daily)):
+        return None
+    gains = math.fsum(max(value - target_daily, 0.0) for value in values)
+    losses = math.fsum(max(target_daily - value, 0.0) for value in values)
+    return gains / losses
+
+
+def positive_observation_share(returns: Sequence[float]) -> float:
+    """The share of observations with a gain: «up 54 days in 100». A day at exactly zero is not a positive day."""
+    values = _finite_values(returns, name="returns")
+    if not values:
+        raise ValueError("positive share requires at least one observation")
+    return sum(1 for value in values if value > 0) / len(values)
+
+
+def mean_positive_return(returns: Sequence[float]) -> float | None:
+    """The average up day: the mean of the returns above zero; None without one."""
+    gains = [value for value in _finite_values(returns, name="returns") if value > 0]
+    return math.fsum(gains) / len(gains) if gains else None
+
+
+def mean_negative_return(returns: Sequence[float]) -> float | None:
+    """The average down day: the mean of the returns below zero; None without one."""
+    losses = [value for value in _finite_values(returns, name="returns") if value < 0]
+    return math.fsum(losses) / len(losses) if losses else None
+
+
+@dataclass(frozen=True, slots=True)
+class ObservationRun:
+    """A run of consecutive observations: positions in the return series, both inclusive."""
+
+    length: int
+    start_index: int
+    end_index: int
+
+
+def longest_positive_run(returns: Sequence[float]) -> ObservationRun | None:
+    """The longest streak of consecutive observations with a gain (a flat day breaks it); the earliest of equal runs.
+
+    None without a positive observation.
+    """
+    best: ObservationRun | None = None
+    start: int | None = None
+    values = _finite_values(returns, name="returns")
+    for index, value in enumerate((*values, 0.0)):
+        if value > 0:
+            if start is None:
+                start = index
+            continue
+        if start is not None:
+            length = index - start
+            if best is None or length > best.length:
+                best = ObservationRun(length=length, start_index=start, end_index=index - 1)
+            start = None
+    return best
+
+
+NORMAL_PEARSON_KURTOSIS = 3.0
+
+
+def extreme_day_ratio(returns: Sequence[float]) -> float | None:
+    """«Extreme days»: the sample's Pearson kurtosis over the bell curve's 3 — «2.4 times as frequent» (RN-14).
+
+    Population moments, ``m4 / m2²`` (SciPy ``kurtosis(fisher=False)``, its default biased form) — not riskfolio's
+    ``Kurtosis``, which is a fourth root moment with the units of a squared return. None when the series does not
+    move, by the same test that leaves the Sharpe undefined.
+    """
+    values = _finite_values(returns, name="returns")
+    if len(values) < 2 or math.isclose(sample_standard_deviation(values), 0.0, rel_tol=0.0, abs_tol=ZERO_TOLERANCE):
+        return None
+    mean = math.fsum(values) / len(values)
+    second = math.fsum((value - mean) ** 2 for value in values) / len(values)
+    fourth = math.fsum((value - mean) ** 4 for value in values) / len(values)
+    return fourth / (second * second) / NORMAL_PEARSON_KURTOSIS
+
+
+@dataclass(frozen=True, slots=True)
+class ReturnShape:
+    """The shape of the days of one series: the positive twins and the measures of «How does it move?» (RN-14).
+
+    One bundle so that every analytic that publishes them — a single series or a set of assets — reads the same
+    functions. ``best_realization`` is None without a gaining observation (and its index with it), as the worst day
+    is without a losing one.
+    """
+
+    best_realization: float | None
+    best_realization_index: int | None
+    positive_observation_share: float
+    mean_positive_return: float | None
+    mean_negative_return: float | None
+    longest_positive_run: ObservationRun | None
+    omega_ratio: float | None
+    downside_deviation: float
+    extreme_day_ratio: float | None
+
+
+def return_shape(
+    returns: Sequence[float],
+    annualization_factor: float,
+    *,
+    annual_target_return: float = 0.0,
+) -> ReturnShape:
+    """Every measure of :class:`ReturnShape` for one return series, the Sortino's target shared by all of them."""
+    best = best_realization(returns)
+    gained = best > 0
+    return ReturnShape(
+        best_realization=best if gained else None,
+        best_realization_index=best_realization_index(returns) if gained else None,
+        positive_observation_share=positive_observation_share(returns),
+        mean_positive_return=mean_positive_return(returns),
+        mean_negative_return=mean_negative_return(returns),
+        longest_positive_run=longest_positive_run(returns),
+        omega_ratio=omega_ratio(returns, annualization_factor, annual_target_return=annual_target_return),
+        downside_deviation=annualized_downside_deviation(returns, annualization_factor, annual_target_return=annual_target_return),
+        extreme_day_ratio=extreme_day_ratio(returns),
+    )
 
 
 def beta(
@@ -305,6 +470,41 @@ def wealth_index(returns: Sequence[float]) -> list[float]:
     if np.any(array < -1.0):
         raise ValueError("simple returns must be greater than or equal to -1")
     return [1.0, *np.cumprod(1.0 + array).tolist()]
+
+
+@dataclass(frozen=True, slots=True)
+class LargestRally:
+    """The largest rise from a low to a later high: the twin of the maximum drawdown (RN-14).
+
+    ``trough_index`` and ``peak_index`` are positions in the **wealth index**, baseline included (index 0 is the value
+    before the first return). No rise is no rally: a gain of ``0.0`` with no positions, as ``no_drawdown``.
+    """
+
+    gain: float
+    trough_index: int | None
+    peak_index: int | None
+
+
+def largest_rally(wealth: Sequence[float]) -> LargestRally:
+    """The largest ``value / lowest value before it − 1`` on a wealth index; the earliest of equal rallies.
+
+    A value of zero (a total loss) cannot be a trough: nothing climbs from it, and the division is undefined.
+    """
+    values = _finite_values(wealth, name="wealth")
+    if any(value < 0 for value in values):
+        raise ValueError("wealth values must be non-negative")
+    best = LargestRally(gain=0.0, trough_index=None, peak_index=None)
+    low_index: int | None = None
+    for index, value in enumerate(values):
+        if value <= 0:
+            continue
+        if low_index is None or value < values[low_index]:
+            low_index = index
+            continue
+        gain = value / values[low_index] - 1.0
+        if gain > best.gain:
+            best = LargestRally(gain=gain, trough_index=low_index, peak_index=index)
+    return best
 
 
 def summarize_drawdown(
@@ -758,7 +958,7 @@ def horizon_compounded_returns(
     return [compounded_return(values[start : start + horizon_observations]) for start in range(len(values) - horizon_observations + 1)]
 
 
-def worst_horizon_window(horizon_returns: Sequence[float], horizon_observations: int) -> WorstHorizonWindow | None:
+def worst_horizon_window(horizon_returns: Sequence[float], horizon_observations: int) -> HorizonWindow | None:
     """Locate the lowest of the overlapping compounded returns of :func:`horizon_compounded_returns`.
 
     The monthly VaR is the mean of the worst 5 % of the windows, a figure no single month ever
@@ -771,7 +971,21 @@ def worst_horizon_window(horizon_returns: Sequence[float], horizon_observations:
     if not horizon_returns:
         return None
     start = min(range(len(horizon_returns)), key=lambda index: (horizon_returns[index], index))
-    return WorstHorizonWindow(compounded_return=float(horizon_returns[start]), start_index=start, end_index=start + horizon_observations - 1)
+    return HorizonWindow(compounded_return=float(horizon_returns[start]), start_index=start, end_index=start + horizon_observations - 1)
+
+
+def best_horizon_window(horizon_returns: Sequence[float], horizon_observations: int) -> HorizonWindow | None:
+    """The highest of the overlapping compounded returns: the twin of :func:`worst_horizon_window` (RN-14).
+
+    «The best 30 days»: the one window the series really lived through at the top. A tie keeps the earliest window;
+    an empty input has none. Not floored: a period in which every window lost has a best window that lost too.
+    """
+    if isinstance(horizon_observations, bool) or horizon_observations <= 0:
+        raise ValueError("horizon_observations must be a positive integer")
+    if not horizon_returns:
+        return None
+    start = max(range(len(horizon_returns)), key=lambda index: (horizon_returns[index], -index))
+    return HorizonWindow(compounded_return=float(horizon_returns[start]), start_index=start, end_index=start + horizon_observations - 1)
 
 
 def historical_var_cvar(
@@ -806,13 +1020,46 @@ def historical_var_cvar(
     anyway — it only rewrites observations that are gains, which enter the average
     solely when the tail is wider than the number of real losses.
     """
-    confidence_level = float(confidence_level)
-    if not 0 < confidence_level < 1 or not math.isfinite(confidence_level):
-        raise ValueError("confidence_level must be finite and between 0 and 1")
+    confidence_level = _confidence(confidence_level)
     horizon_returns = horizon_compounded_returns(returns, horizon_observations)
     if not horizon_returns:
         raise ValueError("insufficient returns for the requested horizon")
+    value_at_risk, conditional_value_at_risk = _tail_of_losses(horizon_returns, confidence_level)
+    return HistoricalTailRisk(
+        value_at_risk=value_at_risk,
+        conditional_value_at_risk=conditional_value_at_risk,
+        horizon_returns=tuple(horizon_returns),
+    )
 
+
+def gain_threshold(
+    returns: Sequence[float],
+    *,
+    confidence_level: float,
+    horizon_observations: int = 1,
+) -> float:
+    """Where the green tail starts: the mirror of the VaR (RN-14; consultant, 16/11/2026).
+
+    The same estimator, read on the gains: the ``ceil((1 - confidence_level) · T)``-th best compounded window, as the
+    VaR is that-th worst — «the best 5 % of the days, from +1.5 %». No second formula, so the two tails of the
+    distribution are cut by one rule. The VaR's zero floor applies too: a window without a gain has a threshold of zero.
+    """
+    confidence_level = _confidence(confidence_level)
+    horizon_returns = horizon_compounded_returns(returns, horizon_observations)
+    if not horizon_returns:
+        raise ValueError("insufficient returns for the requested horizon")
+    return _tail_of_losses([-value for value in horizon_returns], confidence_level)[0]
+
+
+def _confidence(confidence_level: float) -> float:
+    confidence_level = float(confidence_level)
+    if not 0 < confidence_level < 1 or not math.isfinite(confidence_level):
+        raise ValueError("confidence_level must be finite and between 0 and 1")
+    return confidence_level
+
+
+def _tail_of_losses(horizon_returns: Sequence[float], confidence_level: float) -> tuple[float, float]:
+    """The empirical VaR and the coherent CVaR of :func:`historical_var_cvar`, on returns already compounded."""
     losses = np.sort(np.maximum(-np.asarray(horizon_returns, dtype=float), 0.0))[::-1]
     observations = int(losses.size)
     nominal_tail = (1.0 - confidence_level) * observations
@@ -841,12 +1088,7 @@ def historical_var_cvar(
     # but a tail of equal losses can round a ulp below it, and RiskVarCvarOutput
     # rejects that. Clamp to the mathematical truth rather than publish the artefact.
     conditional_value_at_risk = max(conditional_value_at_risk, value_at_risk)
-
-    return HistoricalTailRisk(
-        value_at_risk=value_at_risk,
-        conditional_value_at_risk=conditional_value_at_risk,
-        horizon_returns=tuple(horizon_returns),
-    )
+    return value_at_risk, conditional_value_at_risk
 
 
 def _freedman_diaconis_width(sample: np.ndarray, interquartile_range: float, data_span: float) -> float:
@@ -867,10 +1109,35 @@ def _freedman_diaconis_width(sample: np.ndarray, interquartile_range: float, dat
     return data_span / (_MAX_HISTOGRAM_BINS + 1)
 
 
+def _histogram_width(sample: np.ndarray, lowest: float, highest: float) -> tuple[float, bool]:
+    """The bar width of :func:`return_distribution_histogram` before the pins, and whether Freedman-Diaconis sized it.
+
+    A zero width means «none found»: the caller falls back to a small fixed width.
+    """
+    if highest > lowest:
+        # D380: an interquartile range of zero — over half the window on one value, as cash or a
+        # flat-priced loan leaves it — gives Freedman-Diaconis a width of zero, and NumPy answers
+        # with ONE bar across the whole range, which the pin then cuts in two. Sturges reads the
+        # range instead. It is named rather than reached through `auto`, which here falls back to
+        # range / (2·√n) — 32 mostly empty bars for a year, 142 at 5000 observations — and changed
+        # meaning between NumPy 1 and 2. The quartiles are the ones NumPy's own rule computes, as
+        # Python floats so that an overflowing bin count is a silent `inf`.
+        upper_quartile, lower_quartile = (float(quartile) for quartile in np.percentile(sample, [75, 25]))
+        if upper_quartile > lower_quartile:
+            return _freedman_diaconis_width(sample, upper_quartile - lower_quartile, highest - lowest), True
+        return float(np.diff(np.histogram_bin_edges(sample, bins="sturges")).max(initial=0.0)), False
+    # A zero-range sample has no interquartile range for Freedman-Diaconis to work
+    # from, and NumPy pads such a sample by ±0.5 before binning it. Asking NumPy
+    # anyway would therefore hand back a width of 1.0 — a single bar a hundred
+    # percentage points wide for a series of decimal returns.
+    return 0.0, False
+
+
 def return_distribution_histogram(
     returns: Sequence[float],
     *,
     pinned_edge: float,
+    gain_edge: float | None = None,
 ) -> ReturnHistogram:
     """Return a Freedman-Diaconis histogram whose grid is shifted onto ``pinned_edge``.
 
@@ -889,38 +1156,31 @@ def return_distribution_histogram(
     the caller's ``pinned_edge`` is ``0.0``, so the pinned edge lands on zero rather
     than on a quantile of the data. That is a true picture of what is being reported,
     not a defect of this function.
+
+    ``gain_edge`` (RN-14, consultant's option A of 16/11/2026) is the green tail's threshold, :func:`gain_threshold`.
+    When it sits above ``pinned_edge`` and the width is a Freedman-Diaconis one, the width becomes the distance between
+    the two cuts over the whole number of bars nearest to it (at least one), so **both** tails are whole bars. Otherwise
+    — no Freedman-Diaconis width, a threshold not above the VaR cut, or a fit past the bar ceiling — the grid is the
+    one pinned on the VaR alone, and ``gain_edge`` names the first edge at or past the threshold.
+    A window without a gain puts the threshold at zero, above every return: the grid reaches it and the green bars
+    are empty — the same picture the VaR's floor draws on a series of pure gains.
     """
     pinned = float(pinned_edge)
     if not math.isfinite(pinned):
         raise ValueError("pinned_edge must be finite")
+    green = None if gain_edge is None else float(gain_edge)
+    if green is not None and not math.isfinite(green):
+        raise ValueError("gain_edge must be finite")
 
     values = _finite_values(returns, name="returns")
     if not values:
-        return ReturnHistogram(edges=(), counts=(), pinned_edge=pinned)
+        return ReturnHistogram(edges=(), counts=(), pinned_edge=pinned, gain_edge=green)
 
     sample = np.asarray(values, dtype=float)
     lowest = float(sample.min())
     highest = float(sample.max())
 
-    if highest > lowest:
-        # D380: an interquartile range of zero — over half the window on one value, as cash or a
-        # flat-priced loan leaves it — gives Freedman-Diaconis a width of zero, and NumPy answers
-        # with ONE bar across the whole range, which the pin then cuts in two. Sturges reads the
-        # range instead. It is named rather than reached through `auto`, which here falls back to
-        # range / (2·√n) — 32 mostly empty bars for a year, 142 at 5000 observations — and changed
-        # meaning between NumPy 1 and 2. The quartiles are the ones NumPy's own rule computes, as
-        # Python floats so that an overflowing bin count is a silent `inf`.
-        upper_quartile, lower_quartile = (float(quartile) for quartile in np.percentile(sample, [75, 25]))
-        if upper_quartile > lower_quartile:
-            width = _freedman_diaconis_width(sample, upper_quartile - lower_quartile, highest - lowest)
-        else:
-            width = float(np.diff(np.histogram_bin_edges(sample, bins="sturges")).max(initial=0.0))
-    else:
-        # A zero-range sample has no interquartile range for Freedman-Diaconis to work
-        # from, and NumPy pads such a sample by ±0.5 before binning it. Asking NumPy
-        # anyway would therefore hand back a width of 1.0 — a single bar a hundred
-        # percentage points wide for a series of decimal returns.
-        width = 0.0
+    width, sized_by_freedman_diaconis = _histogram_width(sample, lowest, highest)
     if not math.isfinite(width) or width <= 0.0:
         width = max(abs(highest), abs(pinned), 1.0) * 1e-3
 
@@ -928,7 +1188,7 @@ def return_distribution_histogram(
     # range — which is exactly what the VaR zero floor does to a series that only
     # ever gained. Widening here also keeps that case from exploding into empty bins.
     span_low = min(lowest, pinned)
-    span_high = max(highest, pinned)
+    span_high = max(highest, pinned) if green is None else max(highest, pinned, green)
     span = span_high - span_low
     # The grid is aligned to the pin rather than to the span, so both ends can be
     # rounded outward — costing up to two bins beyond ``span / width``. Clamping
@@ -936,7 +1196,29 @@ def return_distribution_histogram(
     clamp_divisor = _MAX_HISTOGRAM_BINS - 2
     if span > 0 and span / width > clamp_divisor:
         width = span / clamp_divisor
+    bars_to_green = _bars_between_the_cuts(pinned, green, width, span, clamp_divisor) if sized_by_freedman_diaconis else None
+    if bars_to_green is not None:
+        width = (green - pinned) / bars_to_green
 
+    edges, first_index = _lattice_edges(pinned, width, span_low, span_high)
+    if bars_to_green is not None:
+        # ``pinned + k · (distance / k)`` can miss the threshold by an ulp: the edge IS the threshold.
+        edges[bars_to_green - first_index] = green
+        green_edge: float | None = green
+    else:
+        green_edge = None if green is None else min((edge for edge in edges if edge >= green), default=edges[-1])
+
+    counts, _ = np.histogram(sample, bins=np.asarray(edges, dtype=float))
+    return ReturnHistogram(
+        edges=tuple(float(edge) for edge in edges),
+        counts=tuple(int(count) for count in counts),
+        pinned_edge=pinned,
+        gain_edge=green_edge,
+    )
+
+
+def _lattice_edges(pinned: float, width: float, span_low: float, span_high: float) -> tuple[list[float], int]:
+    """The edges ``pinned + k · width`` that cover the span, and the ``k`` of the first one."""
     # Every edge is ``pinned + k * width``, which is what puts one of them on the VaR.
     first_index = math.floor((span_low - pinned) / width)
     last_index = math.ceil((span_high - pinned) / width)
@@ -948,27 +1230,42 @@ def return_distribution_histogram(
         last_index += 1
     if last_index <= first_index:
         last_index = first_index + 1
-    edges = [pinned + index * width for index in range(first_index, last_index + 1)]
+    return [pinned + index * width for index in range(first_index, last_index + 1)], first_index
 
-    counts, _ = np.histogram(sample, bins=np.asarray(edges, dtype=float))
-    return ReturnHistogram(
-        edges=tuple(float(edge) for edge in edges),
-        counts=tuple(int(count) for count in counts),
-        pinned_edge=pinned,
-    )
+
+def _bars_between_the_cuts(pinned: float, green: float | None, width: float, span: float, clamp_divisor: int) -> int | None:
+    """How many bars fit between the VaR cut and the green threshold (option A), or None to keep the VaR pin alone.
+
+    The whole number nearest to ``distance / width`` and never below one; lowered while the grid would pass the bar
+    ceiling, and given up (None) when even one bar between the cuts would.
+    """
+    if green is None or green <= pinned or span <= 0:
+        return None
+    distance = green - pinned
+    bars = max(1, round(distance / width))
+    if span / (distance / bars) > clamp_divisor:
+        bars = math.floor(distance * clamp_divisor / span)
+    return bars if bars >= 1 else None
 
 
 __all__ = [
+    "NORMAL_PEARSON_KURTOSIS",
     "ZERO_TOLERANCE",
     "ComparisonSummary",
     "ContributionSummary",
     "DrawdownSummary",
     "HistoricalTailRisk",
+    "HorizonWindow",
+    "LargestRally",
+    "ObservationRun",
     "ReturnHistogram",
+    "ReturnShape",
+    "annualized_downside_deviation",
     "annualized_expected_return",
     "annualized_sharpe",
     "annualized_sortino",
     "annualized_volatility",
+    "best_horizon_window",
     "beta",
     "comparison_summary",
     "compounded_return",
@@ -976,14 +1273,23 @@ __all__ = [
     "covariance_matrix",
     "current_buy_and_hold_returns",
     "daily_risk_free_rate",
+    "extreme_day_ratio",
+    "gain_threshold",
     "historical_var_cvar",
     "horizon_compounded_returns",
     "hypothetical_stress_return",
+    "largest_rally",
+    "longest_positive_run",
+    "mean_negative_return",
+    "mean_positive_return",
+    "omega_ratio",
     "pairwise_correlation",
     "pairwise_correlation_matrix",
     "pearson_correlation",
     "period_returns_from_cumulative",
+    "positive_observation_share",
     "return_distribution_histogram",
+    "return_shape",
     "risk_contributions_from_covariance",
     "sample_covariance",
     "sample_standard_deviation",
@@ -991,4 +1297,5 @@ __all__ = [
     "summarize_drawdown",
     "underwater_drawdown",
     "wealth_index",
+    "worst_horizon_window",
 ]
