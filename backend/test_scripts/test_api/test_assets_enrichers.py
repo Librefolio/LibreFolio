@@ -30,6 +30,12 @@ Every test registers its own user and creates its own assets under unique names;
 for those assets only (``asset_profile_updates``, ``asset_enrichers``, ``assets``). Bodies are raw dicts: a
 ``model_dump`` would send ``enrichers: null`` and ``profile: null``, which mean «clear» here.
 
+The background «Aggiorna» (B5b): a POST or a committed PATCH that sets non-empty ``enrichers`` reads them after the
+answer, writing rows and ``state``. So ``ENRICHERS`` binds codes that are never installed only (the read has nothing to
+read, ``state`` stays ``{}`` by design), and the «test» route's asset is bound to mockenrich straight on the lane's
+database (``bindings.save_config``), never through a route: no read of the server runs beside the one under test.
+``ENRICHERS_AGAIN`` keeps mockenrich: the tests that send it compare ``config`` only, which no read ever writes.
+
 Not pinned: whether ``GET /assets`` answers ``enrichers: null`` or an empty ``config`` after a clear (both accepted),
 and what the ``classification_params`` column holds when ``classification_params`` and ``profile`` touch the same voice.
 
@@ -65,11 +71,12 @@ TIMEOUT = 30.0
 MOCK_CODE = "mockenrich"
 PROFILE_VALUE_INVALID = "profileValueInvalid"
 
-#: Not alphabetical, with two codes not installed and a free key of one plugin (``mic``).
-ENRICHERS_ORDER = ["zeta_lab", MOCK_CODE, "alpha_lab"]
+#: Not alphabetical, codes never installed only (B5b: no background read finds anything to read), a free key of one
+#: plugin (``mic``).
+ENRICHERS_ORDER = ["zeta_lab", "mid_lab", "alpha_lab"]
 ENRICHERS = {
     "zeta_lab": {"identifier_type": "ISIN", "identifier": "IE00B4L5Y983"},
-    MOCK_CODE: {"identifier_type": "ISIN", "identifier": "IE00B4L5Y983"},
+    "mid_lab": {"identifier_type": "ISIN", "identifier": "IE00B4L5Y983"},
     "alpha_lab": {"identifier_type": "ISIN", "identifier": "IT0003128367", "mic": "MTA"},
 }
 ENRICHERS_AGAIN_ORDER = ["alpha_lab", MOCK_CODE]
@@ -227,7 +234,7 @@ async def test_post_stores_the_enrichers_in_the_order_sent_with_their_free_keys(
             assert enrichers is not None, f"GET /assets must answer the enrichers: {asset}"
             assert list(enrichers["config"]) == ENRICHERS_ORDER, f"the order sent, codes not installed included: {list(enrichers['config'])}"
             assert enrichers["config"] == ENRICHERS, f"the bindings sent, the free key mic included: {enrichers['config']}"
-            assert enrichers["state"] == {}, f"a new asset has no reads: {enrichers['state']}"
+            assert enrichers["state"] == {}, f"a new asset bound to enrichers not installed has no reads: {enrichers['state']}"
             print_success("order, codes not installed and free keys kept")
         finally:
             await _delete(client, [asset_id])
@@ -763,9 +770,12 @@ async def test_test_route_writes_nothing_on_an_asset_bound_to_the_same_binding(t
     binding = {"identifier_type": "ISIN", "identifier": isin}
     async with httpx.AsyncClient() as client:
         await _login(client)
-        asset_id = await _create(client, _item("ENR_TEST_RO", enrichers={MOCK_CODE: binding}))
+        # Bound straight on the lane's database, not by the POST: a POST with enrichers starts a background read (B5b)
+        # that would write the state while this test compares it.
+        asset_id = await _create(client, _item("ENR_TEST_RO"))
         try:
             async with AsyncSession(get_async_engine()) as session:
+                await bindings.save_config(session, asset_id, {MOCK_CODE: binding})
                 await bindings.update_state(session, asset_id, {MOCK_CODE: {"read_on": "2026-11-10", "outcome": "ok"}})
                 await session.commit()
             before = (await _read(client, asset_id)).get("enrichers")
