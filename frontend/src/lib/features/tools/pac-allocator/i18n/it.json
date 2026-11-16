@@ -304,7 +304,8 @@
             "bound_max_below_current": "Il massimo è sotto ciò che il piano già possiede e le vendite sono disattivate.",
             "bound_min_above_max": "Il minimo è più alto del massimo.",
             "bounds_min_sum_exceeds_reference": "I minimi sommano più del denaro che il piano può raggiungere.",
-            "bounds_unsatisfiable": "Nessun piano rispetta i minimi e i massimi impostati qui."
+            "bounds_unsatisfiable": "Nessun piano rispetta i minimi e i massimi impostati qui.",
+            "solver_numerical_error": "Il risolutore ha incontrato un errore numerico mentre affinava il piano: è mostrato il miglior piano trovato fin qui. È valido ed eseguibile; manca solo la prova che sia il migliore."
           },
           "pac_allocator": {
             "initial_holding_forbidden": "Questo strumento non accetta posizioni esistenti.",

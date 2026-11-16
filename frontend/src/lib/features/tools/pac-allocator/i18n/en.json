@@ -304,7 +304,8 @@
             "bound_max_below_current": "The maximum is below what the plan already holds and sales are off.",
             "bound_min_above_max": "The minimum is higher than the maximum.",
             "bounds_min_sum_exceeds_reference": "The minimums add up to more than the money the plan can reach.",
-            "bounds_unsatisfiable": "No plan meets the minimums and maximums set here."
+            "bounds_unsatisfiable": "No plan meets the minimums and maximums set here.",
+            "solver_numerical_error": "The solver hit a numerical error while refining the plan: the best plan found so far is shown. It is valid and can be carried out; only its optimality is not proven."
           },
           "pac_allocator": {
             "initial_holding_forbidden": "This Tool does not accept existing holdings.",
