@@ -52,10 +52,9 @@ describe('buildHurtRows', () => {
         expect(rows.map((row) => row.id)).toEqual(['day', 'month', 'worst']);
     });
 
-    it('leads with the CVaR and keeps the VaR as the secondary figure', () => {
+    it('leads with the CVaR', () => {
         const [row] = buildHurtRows([varResult(DAILY_VAR_INSTANCE, 0.018, 0.024)]);
         expect(row.loss).toBe(0.024);
-        expect(row.secondaryLoss).toBe(0.018);
     });
 
     it('never mixes the daily and monthly VaR up, even though they share an analytic code', () => {
@@ -155,11 +154,6 @@ describe('buildHurtRows', () => {
     it('prefers the drawdown summary over the KPI when both are present', () => {
         const rows = buildHurtRows([ok('historical_kpi', {max_drawdown: -0.087, max_drawdown_duration_days: 19}), ok('drawdown_summary', {maximum_drawdown: -0.384, maximum_drawdown_duration_days: 570})]);
         expect(rows[0]).toMatchObject({loss: 0.384, durationDays: 570});
-    });
-
-    it('drops the secondary figure when VaR and CVaR coincide, instead of printing it twice', () => {
-        const [row] = buildHurtRows([varResult(DAILY_VAR_INSTANCE, 0.02, 0.02)]);
-        expect(row.secondaryLoss).toBeNull();
     });
 
     it('returns nothing at all when the wave is empty', () => {

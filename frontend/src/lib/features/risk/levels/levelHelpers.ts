@@ -331,7 +331,7 @@ export function lossMagnitude(value: unknown, sign: LossSign): number | null {
 /**
  * One rung of L1's scale of harm.
  *
- * `loss` and `secondaryLoss` are **positive magnitudes** — the sign lives in the
+ * `loss` is a **positive magnitude** — the sign lives in the
  * presentation, not in the datum, because the whole section is about losses and
  * a column of minus signs carries no information.
  */
@@ -340,8 +340,6 @@ export interface HurtRow {
     id: 'day' | 'month' | 'worst';
     /** The headline loss as a positive fraction, e.g. `0.018` for −1,8%. */
     loss: number;
-    /** The quieter companion figure, when the row has one. */
-    secondaryLoss: number | null;
     /** Days the worst fall lasted; only the `worst` row has it. */
     durationDays: number | null;
     /**
@@ -397,14 +395,12 @@ export function buildHurtRows(historicalResults: RiskAnalyticResult[]): HurtRow[
         if (!output) return;
         const cvar = lossMagnitude(output.conditional_value_at_risk, 'positive');
         const value = lossMagnitude(output.value_at_risk, 'positive');
-        // Both are positive magnitudes in the API. The CVaR leads; the VaR is
-        // only worth printing when it actually differs from it.
+        // Both are positive magnitudes in the API. The CVaR leads; the VaR stands in only when the CVaR is absent.
         const loss = cvar ?? value;
         if (loss === null) return;
         rows.push({
             id,
             loss,
-            secondaryLoss: cvar !== null && value !== null && value !== cvar ? value : null,
             durationDays: null,
             requiredRecovery: null,
             ...monthWindow(id, output),
@@ -426,7 +422,6 @@ export function buildHurtRows(historicalResults: RiskAnalyticResult[]): HurtRow[
         rows.push({
             id: 'worst',
             loss,
-            secondaryLoss: null,
             durationDays: summaryDepth !== null ? finite(drawdown?.maximum_drawdown_duration_days) : finite(kpi?.max_drawdown_duration_days),
             // The asymmetry that makes drawdowns expensive (−50% needs +100%), as the backend states it. It belongs to
             // the summary's own depth: none when the depth came from the KPI, nor for a zero fall with nothing to recover.
