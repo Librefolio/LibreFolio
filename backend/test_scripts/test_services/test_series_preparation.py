@@ -20,6 +20,16 @@ from backend.app.services.market_series import prepare_asset_series_set
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 
 
+def fresh_quote_share(prepared) -> float:
+    """The share of the set's points that are fresh quotes: not carried, the baseline left out.
+
+    Computed here from the valuation points the set publishes (RN-08 removed the field that held
+    it, which nothing read), so the carried-forward flag on every point stays checked.
+    """
+    observed = [point for item in prepared.series for point in item.valuations.points[1:]]
+    return sum(not point.is_price_carried_forward for point in observed) / len(observed) if observed else 0.0
+
+
 def converted_point(
     point_date: date,
     *,
@@ -170,7 +180,7 @@ def test_joint_calendar_converts_before_returns_and_tracks_carry():
     assert prepared.calendar_days == 3
     assert prepared.annualization_factor == pytest.approx(365.0)
     assert prepared.calendar_coverage == pytest.approx(1.0)
-    assert prepared.fresh_quote_coverage == pytest.approx(4 / 6)
+    assert fresh_quote_share(prepared) == pytest.approx(4 / 6)
 
     # Every carry is still tracked point by point: the equity price is one and two days old on
     # the second and third date, its rate one day old on the last two...
@@ -271,7 +281,7 @@ def test_carried_price_degrades_only_beyond_the_stale_threshold(carry_days, expe
     assert data_quality.carried_forward_fx_points == 0
     assert data_quality.data_quality_status == (DataQualityStatus.CARRIED_FORWARD if expected_points else DataQualityStatus.OK)
     # Freshness is a separate question: a carried price is never a fresh quote, however young.
-    assert prepared.fresh_quote_coverage == pytest.approx(carry_days / (2 * carry_days))
+    assert fresh_quote_share(prepared) == pytest.approx(carry_days / (2 * carry_days))
 
 
 @pytest.mark.parametrize(("carry_days", "expected_points"), CARRY_BOUNDARIES)
@@ -288,7 +298,7 @@ def test_carried_fx_rate_degrades_only_beyond_the_stale_threshold(carry_days, ex
     assert data_quality.carried_forward_price_points == 0
     assert data_quality.data_quality_status == (DataQualityStatus.CARRIED_FORWARD if expected_points else DataQualityStatus.OK)
     # Every price is a fresh quote, so the age of the rate leaves freshness alone.
-    assert prepared.fresh_quote_coverage == pytest.approx(1.0)
+    assert fresh_quote_share(prepared) == pytest.approx(1.0)
 
 
 def test_a_carried_baseline_never_degrades_even_when_older_than_the_threshold():
@@ -318,7 +328,7 @@ def test_a_carried_baseline_never_degrades_even_when_older_than_the_threshold():
     assert prepared.data_quality.carried_forward_price_points == 0
     assert prepared.data_quality.carried_forward_fx_points == 0
     assert prepared.data_quality.data_quality_status == DataQualityStatus.OK
-    assert prepared.fresh_quote_coverage == pytest.approx(1.0)
+    assert fresh_quote_share(prepared) == pytest.approx(1.0)
 
     # Control: quotes resume one date later, so the same stale price and rate are also the first
     # observation — and that one counts.
@@ -331,7 +341,7 @@ def test_a_carried_baseline_never_degrades_even_when_older_than_the_threshold():
     assert control.data_quality.carried_forward_price_asset_ids == [1]
     assert control.data_quality.carried_forward_fx_pairs == ["USD/EUR"]
     assert control.data_quality.data_quality_status == DataQualityStatus.CARRIED_FORWARD
-    assert control.fresh_quote_coverage == pytest.approx(9 / 10)
+    assert fresh_quote_share(control) == pytest.approx(9 / 10)
 
 
 def test_missing_fx_date_is_excluded_without_filling_returns():
@@ -555,7 +565,7 @@ def test_weekend_repeats_of_a_seven_day_source_are_not_observations():
     assert prepared.calendar_days == 18
     assert prepared.annualization_factor == pytest.approx(14 * 365 / 18)
     assert prepared.calendar_coverage == pytest.approx(1.0)
-    assert prepared.fresh_quote_coverage == pytest.approx(1.0)
+    assert fresh_quote_share(prepared) == pytest.approx(1.0)
     # Monday's return is measured from Friday's quote.
     monday = return_on(prepared, 1, date(2025, 1, 13))
     assert monday.previous_valuation_date == date(2025, 1, 10)
@@ -572,7 +582,6 @@ def calendar_projection(prepared) -> dict[str, object]:
         "calendar_days": prepared.calendar_days,
         "annualization_factor": prepared.annualization_factor,
         "calendar_coverage": prepared.calendar_coverage,
-        "fresh_quote_coverage": prepared.fresh_quote_coverage,
         "valuations": {item.valuations.asset_id: [(point.valuation_date, point.effective_price_date, point.is_price_carried_forward, point.target_close) for point in item.valuations.points] for item in prepared.series},
         "returns": {item.returns.asset_id: [(point.date, point.previous_valuation_date, point.value) for point in item.returns.points] for item in prepared.series},
         "carried_forward_price_points": prepared.data_quality.carried_forward_price_points,
@@ -626,7 +635,7 @@ def test_beside_a_weekend_quote_a_seven_day_source_is_carried_through_the_weeken
     monday = return_on(prepared, 1, date(2025, 1, 13))
     assert monday.value == pytest.approx(float(moving_close(date(2025, 1, 13)) / moving_close(date(2025, 1, 10)) - 1))
     # A carried point is no fresh quote: 14 of the ETF's 20 points, and all 20 of the crypto's.
-    assert prepared.fresh_quote_coverage == pytest.approx(34 / 40)
+    assert fresh_quote_share(prepared) == pytest.approx(34 / 40)
     # A carry of a day or two is ordinary: it degrades nothing.
     assert prepared.data_quality.carried_forward_price_points == 0
     assert prepared.data_quality.carried_forward_price_asset_ids == []

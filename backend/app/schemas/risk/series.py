@@ -166,7 +166,6 @@ class PreparedAssetSeriesSet(StrictModel):
     calendar_days: int = Field(0, ge=0)
     annualization_factor: Optional[FiniteFloat] = Field(None, gt=0)
     calendar_coverage: FiniteFloat = Field(0.0, ge=0, le=1)
-    fresh_quote_coverage: FiniteFloat = Field(0.0, ge=0, le=1)
     data_quality: DataQualityReport = Field(default_factory=DataQualityReport)
     fx_fingerprint: str = Field(..., pattern="^[0-9a-f]{64}$")
     warnings: List[str] = Field(default_factory=list)

@@ -151,7 +151,6 @@ def make_prepared_set(
         calendar_days=observations,
         annualization_factor=365,
         calendar_coverage=1,
-        fresh_quote_coverage=1,
         data_quality=DataQualityReport(),
         fx_fingerprint="0" * 64,
     )
