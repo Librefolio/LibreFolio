@@ -30,10 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Asset detail header: Transactions is now a badge with an icon and the number of transactions, so it reads as a link; the provider badge itself opens the asset's web page (the one you set, or else the provider's) in a new tab, and its tooltip says where it goes. The separate ↗ icon is gone.
 - Asset detail header on tablet and phone: below 1024 px the badges get a row of their own under the name; on a phone ← and ‹ n/N › share the top row, the name has the full width, and the badges follow in two groups (type and currency; Transactions and provider).
 - An asset that has transactions can no longer become an Index from the asset editor: the editor says how many transactions it has, and nothing is saved.
-- Changing your email waits for confirmation when email works: with email set up and `LIBREFOLIO_PUBLIC_URL` set, a new address in Profile is not used until you click the link sent to it (valid for 24 hours) while signed in to your account. Already signed in, one click is enough; otherwise the page asks you to sign in first and brings you back. Your old address is told at once. Without email nothing changes: the new address applies straight away.
+- Changing your email waits for confirmation when email works: with email set up and `LIBREFOLIO_PUBLIC_URL` set, a new address in Profile is not used until you click the link sent to it (valid for 24 hours) while signed in to your account. Already signed in, one click is enough; otherwise the page asks you to sign in first and brings you back. Your old address is told at once. You stay signed in on the browser you confirm from, and your other devices are signed out. The page tells you as soon as it opens whether you need to sign in, whether the link belongs to another account (with «Sign out and sign in with the right account») or no longer works; the page and the emails put one idea per line, with the important words in bold. Without email nothing changes: the new address applies straight away.
 
 ### 🐛 Fixed
 
+- Signing out while a page is still loading now always returns to the plain sign-in page, instead of offering to come back to that page.
+- In Profile, the username and email fields are as wide as the password field, so a long address is no longer cut.
 - Uploading a `.json` file no longer loses its contents, and files with an unusual or very long extension are stored safely.
 - The FX, Files and Assets lists no longer blank out to a spinner after a refresh or an edit: they stay on screen while the new data arrives.
 - Switching tabs on an asset's page keeps the date range you chose.
