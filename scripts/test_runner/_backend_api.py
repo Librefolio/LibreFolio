@@ -1053,6 +1053,16 @@ def api_portfolio(verbose: bool = False, test_names: list[str] | None = None) ->
     return run_command(cmd, "Portfolio API tests", verbose=verbose)
 
 
+def api_portfolio_group_by(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the group_by tests of POST /portfolio/report (project 74, the Dashboard's «Globale» view)."""
+    print_section("Portfolio group_by API Tests")
+    print_info("Testing POST /portfolio/report group_by=asset: holdings, holding groups, Performance rows and other effects summed over the brokers")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_portfolio_group_by_api.py", test_names)
+    return run_command(cmd, "Portfolio group_by API tests", verbose=verbose)
+
+
 def api_lots_wac_history(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the average-cost (WAC) history tests of the lots analysis."""
     print_section("Lots WAC History API Tests")
@@ -1769,6 +1779,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "broker-multiuser", api_broker_multiuser, name="Broker Multi-User", desc="Role-based permissions")
     add_test(api, "users-search", api_users_search, name="User Search API", desc="User search, share validation")
     add_test(api, "portfolio", api_portfolio, name="Portfolio API", desc="Summary, history, asset-history, FIFO lots endpoints")
+    add_test(api, "portfolio-group-by", api_portfolio_group_by, name="Portfolio group_by API", desc="POST /portfolio/report group_by=asset: an asset summed over its brokers (holdings, groups, Performance rows, other effects)")
     add_test(api, "lots-wac-history", api_lots_wac_history, name="Lots WAC History API", desc="BROKER_WAC_HISTORY of the lots analysis (average-cost line, split)")
     add_test(
         api,
