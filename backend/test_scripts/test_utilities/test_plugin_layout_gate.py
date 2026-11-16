@@ -2,14 +2,14 @@
 Gate of the plugin layout (workstream U, step U-1): every first-party plugin is a folder.
 
 Families under guard, in ``backend/app/services/``: ``brim_providers``, ``asset_source_providers``, ``fx_providers``,
-``risk_plugins``, ``signal_plugins`` and ``tool_plugins`` — the folders the application's registries discover, which
-this gate reads back from their declarations.
+``risk_plugins``, ``signal_plugins``, ``tool_plugins`` and ``enricher_providers`` — the folders the application's
+registries discover, which this gate reads back from their declarations.
 
 A plugin is the folder ``<family>/<name>/``. Its ``__init__.py`` is its docstring and nothing else; its code is in
 ``plugin.py``, which discovery loads as ``backend.app.services.<family>.<name>.plugin`` once the package is loaded; a
 helper private to it sits beside it as ``_*.py``, one shared by the family at the family root, as ``_*.py`` too.
 Discovery still loads a single ``<name>.py`` module, for test fixtures and test registries: this gate is what keeps the
-first-party families off it. Three rules:
+first-party families off it. Four rules:
 
 (a) Convention, per family: no top-level ``*.py`` besides ``__init__.py`` and the ``_*.py`` helpers (a contract lives
     in its family's runtime package, as ``services/signals/base.py`` does); every folder discovery loads — not ``_``-prefixed, holding ``__init__.py`` or
@@ -23,6 +23,12 @@ first-party families off it. Three rules:
 (c) Strings, same scope: no string constant names ``backend.app.services.<family>.<plugin>`` unless ``.plugin`` or a
     ``._helper`` follows — a ``patch()`` target, a logger name, a ``__module__`` assertion, an ``import_module``
     argument, a docstring.
+(d) Plugins, every family: no plugin imports another plugin (plan 68, B1). A plugin is ``<family>/<folder>/`` and every
+    module inside it, at any depth. From inside one, no import — any shape, relative included, inside a function or
+    under ``if TYPE_CHECKING:`` too — reaches another plugin folder of any family: ``backend.app.services.<family>.
+    <other>`` or anything under it, its ``.plugin`` and its ``_helpers`` included. Allowed: the modules of its own
+    folder; the family-root ``_*.py`` helpers (``brim_providers/_scalable.py``…), which are the family's core; the rest of
+    ``backend.app`` (the core); third-party and sub-libraries (``justetf_scraping``, ``borsa_italiana_scraping``…).
 
 Pure: the sources are parsed with ``ast`` and read from the filesystem, never imported — no database, no server, no
 network; the control cases build their trees under ``tmp_path``. Every rule asserts an absence, so each detector first
@@ -50,7 +56,7 @@ SERVICES_DIR = REPO_ROOT / "backend" / "app" / "services"
 SERVICES_PACKAGE = "backend.app.services"
 PROVIDER_REGISTRY = SERVICES_DIR / "platform" / "provider_registry.py"
 
-PLUGIN_FAMILIES = ("brim_providers", "asset_source_providers", "fx_providers", "risk_plugins", "signal_plugins", "tool_plugins")
+PLUGIN_FAMILIES = ("brim_providers", "asset_source_providers", "fx_providers", "risk_plugins", "signal_plugins", "tool_plugins", "enricher_providers")
 # The module of a plugin folder that holds its code: provider_registry.PLUGIN_MODULE_NAME, read back from its source.
 PLUGIN_MODULE = "plugin"
 PLUGIN_FILE = f"{PLUGIN_MODULE}.py"
@@ -161,6 +167,65 @@ def plugin_package_strings(tree: ast.AST, index: Mapping[str, frozenset[str]]) -
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
             found.extend((node.lineno, match.group(0)) for match in _DOTTED_NAME.finditer(node.value) if names_a_plugin_package(match.group(0), index))
     return sorted(found)
+
+
+def reaches_another_plugin(dotted: str, own: tuple[str, str], index: Mapping[str, frozenset[str]]) -> bool:
+    """True when ``dotted`` is a plugin folder of any family, or anything under it, other than ``own`` (family, folder).
+
+    A family-root ``_helper`` is no plugin folder (``plugin_folders`` leaves ``_`` names out), so it is never reached here.
+    """
+    prefix = SERVICES_PACKAGE + "."
+    if not dotted.startswith(prefix):
+        return False
+    family, _, rest = dotted.removeprefix(prefix).partition(".")
+    name = rest.partition(".")[0]
+    return name in index.get(family, frozenset()) and (family, name) != own
+
+
+def cross_plugin_imports(tree: ast.AST, package: str, own: tuple[str, str], index: Mapping[str, frozenset[str]]) -> list[tuple[int, str]]:
+    """``(line, what)`` for every import in ``tree``, a module of the plugin ``own``, that reaches another plugin.
+
+    ``import a.b`` reaches ``a.b``; ``from a import b`` reaches ``a.b``. Relative forms resolve against ``package``, as the
+    interpreter does; ``ast.walk`` visits every node, so an import inside a function or under ``if TYPE_CHECKING:``
+    counts like a top-level one.
+    """
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            found.extend((node.lineno, alias.name) for alias in node.names if reaches_another_plugin(alias.name, own, index))
+        elif isinstance(node, ast.ImportFrom):
+            try:
+                base = resolve_name("." * node.level + (node.module or ""), package)
+            except ImportError:
+                continue  # above the top-level package: it fails at import time, and it names no plugin
+            # From another plugin's folder every name is a reach; from a family package, the names that are plugins.
+            found.extend((node.lineno, f"{base}.{alias.name}") for alias in node.names if reaches_another_plugin(f"{base}.{alias.name}", own, index))
+    return sorted(found)
+
+
+@dataclass(frozen=True)
+class _FamilyPlugins:
+    """What (d) reads of one family: the modules of its plugin folders, and the imports among them that reach another plugin."""
+
+    files: tuple[str, ...]
+    offenders: tuple[str, ...]
+
+
+def family_cross_plugin_imports(root: Path, family: str, index: Mapping[str, frozenset[str]]) -> _FamilyPlugins:
+    """Every ``.py`` inside each plugin folder of ``family`` under ``root``'s ``backend/app/services``, at any depth, and
+    ``<file>:<line> reaches <what>`` for each import of it that reaches another plugin. ``root`` is the repository root, or
+    a synthetic one: a module's package is its folder, dotted from ``root``."""
+    services = root / Path(*SERVICES_PACKAGE.split("."))
+    files: list[str] = []
+    offenders: list[str] = []
+    for folder in plugin_folders(services / family):
+        for path in sorted(file for file in folder.rglob("*.py") if "__pycache__" not in file.relative_to(folder).parts):
+            relative = path.relative_to(root).as_posix()
+            files.append(relative)
+            package = ".".join(path.relative_to(root).parts[:-1])
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            offenders.extend(f"{relative}:{line} reaches {target}" for line, target in cross_plugin_imports(tree, package, (family, folder.name), index))
+    return _FamilyPlugins(tuple(files), tuple(offenders))
 
 
 def declared_families(tree: ast.AST) -> set[str]:
@@ -444,6 +509,118 @@ def test_the_gate_guards_what_discovery_loads():
     print_success(f"{len(declared)} families declared and guarded; discovery loads <name>/{PLUGIN_FILE}")
 
 
+# (d): a second probe family, for the reach across families; the plugin writing the imports is alpha.
+_PROBE_SOURCES = "gate_probe_sources"
+_SOURCES = f"{SERVICES_PACKAGE}.{_PROBE_SOURCES}"
+_CROSS_INDEX = {**_PROBE_INDEX, _PROBE_SOURCES: frozenset({"gamma"})}
+_ALPHA = (_PROBE_FAMILY, "alpha")
+
+# Every import shape (d) must reject, written from alpha/plugin.py: (source, line, what it reaches).
+_CROSS_PLUGIN_IMPORTS = (
+    ("from backend.app.services.gate_probe_plugins.alpha_deposit.plugin import DepositProvider", 1, f"{_PROBE}.alpha_deposit.plugin.DepositProvider"),
+    ("from backend.app.services.gate_probe_plugins.alpha_deposit import plugin", 1, f"{_PROBE}.alpha_deposit.plugin"),
+    ("import backend.app.services.gate_probe_plugins.alpha_deposit.plugin", 1, f"{_PROBE}.alpha_deposit.plugin"),
+    ("from backend.app.services.gate_probe_plugins.alpha_deposit._parsers import parse", 1, f"{_PROBE}.alpha_deposit._parsers.parse"),
+    ("from backend.app.services.gate_probe_plugins.alpha_deposit import _parsers", 1, f"{_PROBE}.alpha_deposit._parsers"),
+    ("from backend.app.services.gate_probe_plugins import _shared, alpha_deposit", 1, f"{_PROBE}.alpha_deposit"),
+    ("import backend.app.services.gate_probe_plugins.alpha_deposit", 1, f"{_PROBE}.alpha_deposit"),
+    ("from backend.app.services.gate_probe_plugins.alpha_deposit.plugin import *", 1, f"{_PROBE}.alpha_deposit.plugin.*"),
+    ("from .. import alpha_deposit", 1, f"{_PROBE}.alpha_deposit"),
+    ("from ..alpha_deposit import plugin", 1, f"{_PROBE}.alpha_deposit.plugin"),
+    ("from ..alpha_deposit.plugin import DepositProvider", 1, f"{_PROBE}.alpha_deposit.plugin.DepositProvider"),
+    ("from ..alpha_deposit._parsers import parse", 1, f"{_PROBE}.alpha_deposit._parsers.parse"),
+    ("from backend.app.services.gate_probe_sources.gamma.plugin import GammaSource", 1, f"{_SOURCES}.gamma.plugin.GammaSource"),
+    ("from ...gate_probe_sources.gamma.plugin import GammaSource", 1, f"{_SOURCES}.gamma.plugin.GammaSource"),
+    ("import os, backend.app.services.gate_probe_sources.gamma.plugin as gamma", 1, f"{_SOURCES}.gamma.plugin"),
+    ("def load():\n    from backend.app.services.gate_probe_sources.gamma import plugin\n", 2, f"{_SOURCES}.gamma.plugin"),
+    ("from typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n    from ..alpha_deposit.plugin import DepositProvider\n", 4, f"{_PROBE}.alpha_deposit.plugin.DepositProvider"),
+)
+
+# What (d) leaves alone, from the same module: none of it may be flagged.
+_ALLOWED_FROM_A_PLUGIN = (
+    "from . import plugin",
+    "from .plugin import AlphaProvider",
+    "from . import _parsers",
+    "from ._parsers import parse",
+    "from .sub.deep import helper",
+    "from backend.app.services.gate_probe_plugins.alpha.plugin import AlphaProvider",
+    "from backend.app.services.gate_probe_plugins.alpha._parsers import parse",
+    "import backend.app.services.gate_probe_plugins.alpha.plugin",
+    "from .. import _shared",
+    "from .._shared import helper",
+    "from backend.app.services.gate_probe_plugins import _shared",
+    "from backend.app.services.gate_probe_plugins._shared import helper",
+    "from backend.app.services.gate_probe_sources import _sources_io",  # another family's root helper: its core
+    "from backend.app.services.gate_probe_plugins import ProbeBase",  # a name of the family package, no plugin
+    "from backend.app.services.gate_probe_plugins import alphabet",  # a whole name: alphabet is no plugin
+    "from backend.app.services import gate_probe_plugins, gate_probe_sources",
+    "import backend.app.services.gate_probe_sources",
+    "from backend.app.services.assets.base import AssetSourceProvider",  # the core
+    "from backend.app.services.enrichers.registry import EnricherRegistry",
+    "from backend.app.services.platform.provider_registry import register_provider",
+    "from backend.app.db.models import AssetType",
+    "from ...assets.base import AssetSourceProvider",
+    "import justetf_scraping",  # sub-libraries and third parties
+    "from justetf_scraping.charts import load_raw_chart",
+    "from borsa_italiana_scraping import load_overview",
+    "import esma_registers",
+    "import httpx",
+)
+
+# Two families: alpha clean, its private helper and a deep module each reaching another plugin, alpha_deposit reaching
+# across families; gamma clean; data folders and the core, which (d) does not read, importing plugins freely.
+_CROSS_TREE = {
+    "backend/app/services/gate_probe_plugins/__init__.py": '"""The family."""\n',
+    "backend/app/services/gate_probe_plugins/_shared.py": "from backend.app.services.gate_probe_plugins.alpha.plugin import AlphaProvider\n",
+    "backend/app/services/gate_probe_plugins/alpha/__init__.py": '"""Alpha."""\n',
+    "backend/app/services/gate_probe_plugins/alpha/plugin.py": "import justetf_scraping\nfrom backend.app.services.assets.base import AssetSourceProvider\nfrom .._shared import helper\nfrom ._parsers import parse\n",
+    "backend/app/services/gate_probe_plugins/alpha/_parsers.py": "from ..alpha_deposit import plugin\n",
+    "backend/app/services/gate_probe_plugins/alpha/sub/__init__.py": "",
+    "backend/app/services/gate_probe_plugins/alpha/sub/deep.py": "def later():\n    import backend.app.services.gate_probe_plugins.alpha_deposit.plugin\n",
+    "backend/app/services/gate_probe_plugins/alpha_deposit/__init__.py": '"""Deposit."""\n',
+    "backend/app/services/gate_probe_plugins/alpha_deposit/plugin.py": "from ...gate_probe_sources.gamma.plugin import GammaSource\nfrom . import _own\n",
+    "backend/app/services/gate_probe_plugins/alpha_deposit/_own.py": "",
+    "backend/app/services/gate_probe_plugins/sample_reports/make.py": "from backend.app.services.gate_probe_plugins.alpha.plugin import AlphaProvider\n",
+    "backend/app/services/gate_probe_sources/__init__.py": '"""The other family."""\n',
+    "backend/app/services/gate_probe_sources/gamma/__init__.py": '"""Gamma."""\n',
+    "backend/app/services/gate_probe_sources/gamma/plugin.py": "from backend.app.services.gate_probe_sources import _sources_io\nfrom backend.app.db.models import AssetType\n",
+    "backend/app/services/gate_probe_sources/_sources_io.py": "",
+    "backend/app/services/assets/core.py": "from backend.app.services.gate_probe_sources.gamma.plugin import GammaSource\n",
+}
+
+
+def test_the_cross_plugin_matcher_flags_every_reach_to_another_plugin_and_nothing_allowed():
+    print_section("Plugin layout (d): the cross-plugin matcher")
+    for source, line, target in _CROSS_PLUGIN_IMPORTS:
+        assert cross_plugin_imports(ast.parse(source), _PROBE_PACKAGE, _ALPHA, _CROSS_INDEX) == [(line, target)], source
+    assert cross_plugin_imports(ast.parse("\n".join(_ALLOWED_FROM_A_PLUGIN)), _PROBE_PACKAGE, _ALPHA, _CROSS_INDEX) == []
+    # The owner decides: what alpha may import of itself, alpha_deposit may not, and the other way round.
+    own_module = "from backend.app.services.gate_probe_plugins.alpha.plugin import AlphaProvider"
+    assert cross_plugin_imports(ast.parse(own_module), f"{_PROBE}.alpha_deposit", (_PROBE_FAMILY, "alpha_deposit"), _CROSS_INDEX) == [(1, f"{_PROBE}.alpha.plugin.AlphaProvider")]
+    print_success(f"{len(_CROSS_PLUGIN_IMPORTS)} reaches to another plugin flagged, {len(_ALLOWED_FROM_A_PLUGIN)} allowed imports left alone")
+
+
+def test_the_cross_plugin_scan_reads_every_module_of_every_plugin_folder_and_only_those(tmp_path):
+    print_section("Plugin layout (d): the scan of a synthetic tree")
+    _write_tree(tmp_path, _CROSS_TREE)
+    index = plugin_index(tmp_path / "backend" / "app" / "services", (_PROBE_FAMILY, _PROBE_SOURCES))
+    assert index == {_PROBE_FAMILY: frozenset({"alpha", "alpha_deposit"}), _PROBE_SOURCES: frozenset({"gamma"})}, "barrier: the plugin folders of the tree"
+
+    probes = family_cross_plugin_imports(tmp_path, _PROBE_FAMILY, index)
+    sources = family_cross_plugin_imports(tmp_path, _PROBE_SOURCES, index)
+
+    base = "backend/app/services/gate_probe_plugins"
+    assert probes.files == tuple(f"{base}/{name}" for name in ("alpha/__init__.py", "alpha/_parsers.py", "alpha/plugin.py", "alpha/sub/__init__.py", "alpha/sub/deep.py", "alpha_deposit/__init__.py", "alpha_deposit/_own.py", "alpha_deposit/plugin.py"))
+    assert probes.offenders == (
+        f"{base}/alpha/_parsers.py:1 reaches {_PROBE}.alpha_deposit.plugin",
+        f"{base}/alpha/sub/deep.py:2 reaches {_PROBE}.alpha_deposit.plugin",
+        f"{base}/alpha_deposit/plugin.py:1 reaches {_SOURCES}.gamma.plugin.GammaSource",
+    )
+    assert sources.files == ("backend/app/services/gate_probe_sources/gamma/__init__.py", "backend/app/services/gate_probe_sources/gamma/plugin.py")
+    assert sources.offenders == ()
+    print_success("a private helper, a deep module and a cross-family import flagged; family helpers, data folders and the core left alone")
+
+
 # =============================================================================
 # The rules
 # =============================================================================
@@ -489,3 +666,20 @@ def test_no_string_names_a_plugin_package_instead_of_its_module(root):
     offenders = _scan(root).strings
     assert not offenders, "a string names a plugin's package, which holds no code: name its plugin module (<family>.<name>.plugin) instead:\n" + "\n".join(offenders)
     print_success(f"{root}: no string names a plugin package")
+
+
+@functools.cache
+def _cross_plugin_scan(family: str) -> _FamilyPlugins:
+    return family_cross_plugin_imports(REPO_ROOT, family, plugin_index(SERVICES_DIR, PLUGIN_FAMILIES))
+
+
+@pytest.mark.parametrize("family", PLUGIN_FAMILIES)
+def test_no_plugin_imports_another_plugin(family):
+    """(d) A plugin reaches its own folder, its family's root helpers, the core and the libraries; never another plugin,
+    of its family or of another. Each family is reached: every plugin folder's ``plugin.py`` is among the files read."""
+    scan = _cross_plugin_scan(family)
+    expected = {f"backend/app/services/{family}/{folder.name}/{PLUGIN_FILE}" for folder in plugin_folders(SERVICES_DIR / family)}
+    assert expected, f"{family} has no plugin folder: (d) would pass on nothing"
+    assert expected <= set(scan.files), f"the scan of {family} missed {sorted(expected - set(scan.files))}"
+    assert not scan.offenders, "a plugin imports another plugin: move what both need into the family's core (its runtime package, or a family-root _helper) or into a library:\n" + "\n".join(scan.offenders)
+    print_success(f"{family}: {len(scan.files)} modules of {len(expected)} plugins, none imports another plugin")
