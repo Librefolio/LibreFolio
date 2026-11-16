@@ -38,8 +38,9 @@
         asset_name: string;
         asset_ticker?: string | (string | null)[] | null;
         asset_type: string;
-        broker_id: number;
-        broker_name: string;
+        /** None for an asset summed over several brokers (project 74, «Globale»). */
+        broker_id: number | (number | null)[] | null;
+        broker_name: string | (string | null)[] | null;
         period_unrealized_delta?: string | (string | null)[] | null;
         period_realized_gain_loss?: string | (string | null)[] | null;
         period_income?: string | (string | null)[] | null;
@@ -343,12 +344,12 @@
             // Positive like period_fees_taxes: a cost, shown with the costs' sign as `costs` below.
             const feesTaxesPct = safeDecimal(position.period_fees_taxes_percent);
             return {
-                key: `asset-${position.broker_id}-${position.asset_id}-${index}`,
+                key: `asset-${safeNumber(position.broker_id) ?? 'all'}-${position.asset_id}-${index}`,
                 kind: 'asset',
                 label: position.asset_name,
                 assetId: position.asset_id,
                 assetTicker: safeString(position.asset_ticker),
-                brokerName: position.broker_name,
+                brokerName: safeString(position.broker_name) ?? '',
                 startValue: parseNumberOrZero(position.start_value),
                 endValue: parseNumberOrZero(position.end_value),
                 net: parseNumberOrZero(position.period_pnl),
