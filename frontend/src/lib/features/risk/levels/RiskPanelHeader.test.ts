@@ -27,6 +27,7 @@ import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBann
 import type {RiskPanelController} from '$lib/features/risk/riskPanelController.svelte';
 import {mergeAssets, resetAssetStore} from '$lib/stores/reference/assetStore';
 
+import {dayFormatter} from '../eligibility';
 import RiskPanelHeader from './RiskPanelHeader.svelte';
 
 const mocks = vi.hoisted(() => ({
@@ -226,5 +227,23 @@ describe('RiskPanelHeader — its sync button reads the shared rule (J-71)', () 
 
         expect(mocks.buildSyncTargets, 'the rule was asked, and found nothing').toHaveBeenCalledWith([UNKNOWN_ASSET_ID], 'EUR', expect.any(Function), expect.any(Set));
         expect(screen.getByTestId('risk-sync-button')).toBeDisabled();
+    });
+});
+
+describe('RiskPanelHeader — the period beside the title (RN-11, Q14)', () => {
+    // The figures below are measured on the page's period and currency: the header says which, in the
+    // reader's day format, through the line every risk surface shares (`RiskPeriodLine`). Read through its
+    // data attributes and the formatted days, never through the translated words around them.
+    it('writes the period asked for and the currency under the title', () => {
+        const {controller} = fakeController([]);
+        render(RiskPanelHeader, {props: {controller, dateStart: '2026-01-01', dateEnd: '2026-06-30', targetCurrency: 'EUR', showActions: false}});
+
+        const line = screen.queryByTestId('risk-period');
+        expect(line, 'the header does not say which period and currency its figures are measured on').not.toBeNull();
+        expect(line).toHaveAttribute('data-start', '2026-01-01');
+        expect(line).toHaveAttribute('data-end', '2026-06-30');
+        expect(line).toHaveAttribute('data-currency', 'EUR');
+        const day = dayFormatter();
+        for (const text of [day('2026-01-01'), day('2026-06-30'), 'EUR']) expect(line?.textContent, `the line does not read ${text}`).toContain(text);
     });
 });

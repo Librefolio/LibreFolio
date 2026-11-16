@@ -12,6 +12,7 @@
     import {addPairSides, buildSyncTargets, labQualityAction} from '$lib/features/risk/syncTargets';
 
     import {RotateCw} from 'lucide-svelte';
+    import RiskPeriodLine from './RiskPeriodLine.svelte';
 
     /**
      * Everything above the answer: what it is, how stale it is, how to refresh it.
@@ -79,6 +80,7 @@
                 {internalSubset ? $t('risk.internalSubset') : subtitle}
             </p>
         {/if}
+        <RiskPeriodLine {dateStart} {dateEnd} currency={targetCurrency} />
     </div>
     {#if showActions}
         <div class="flex items-center gap-2">

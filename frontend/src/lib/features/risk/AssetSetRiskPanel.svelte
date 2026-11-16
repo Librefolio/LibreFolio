@@ -100,6 +100,7 @@
     import {applyBulkAction, labBenchmarkId, labL3Waits, MAX_SELECTED_ASSETS, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectionSource} from './assetSetSelection';
     import {dayFormatter, describeEligibility, eligibilityBatches, EMPTY_VERDICTS, fitPeriodOffer, isSelectable, mergeEligibilityAnswers, type DayRange, type EligibilityView, type EligibilityVerdicts} from './eligibility';
     import {addPairSides, buildSyncTargets, labQualityAction} from './syncTargets';
+    import RiskPeriodLine from './levels/RiskPeriodLine.svelte';
     import {uiLocale} from '$lib/stores/app/uiLocale';
 
     interface AssetOption {
@@ -880,6 +881,8 @@
     {/snippet}
 
     {#if analysedIds.length > 0 && eligibilityKnown}
+        <!-- The period and the currency the sections below are measured on (RN-11): the line the levels' header uses. -->
+        <RiskPeriodLine {dateStart} {dateEnd} currency={targetCurrency} />
         <DataQualityBanner issues={qualityIssues} mode="grouped" onaction={(action, target) => handleQualityAction(action, target)} />
         <RiskPartialNotice partial={notice.partial} reasons={notice.reasons} />
         <AssetSetCorrelationSection bind:this={correlationSection} assetIds={analysedIds} assetLabels={selectionLabels} assetTypes={selectionTypes} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
