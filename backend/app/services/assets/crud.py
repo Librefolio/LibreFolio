@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from decimal import Decimal
 from typing import List, Optional
 
@@ -43,6 +44,8 @@ from backend.app.schemas.common import (
     OldNew,
 )
 from backend.app.services.assets.base import AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.profile.catalogue import normalize_value
+from backend.app.services.assets.profile.store import USER_SOURCE, ProfileWrite, profile_today, write_values
 from backend.app.services.assets.type_rules import TypeChangeVerdict, classify_type_change
 from backend.app.services.financial_math.ledger_totals import position_quantities
 from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
@@ -68,23 +71,47 @@ CLEARED_BY_NULL: frozenset[str] = frozenset(
     }
 )
 
+#: The parts of ``classification_params`` and the profile voices they are written to until lot D7 (plan 68, A4).
+_CLASSIFICATION_VOICES: dict[str, str] = {"short_description": "description", "geographic_area": "geography", "sector_area": "sector"}
+
+
+def _classification_writes(params: Optional[FAClassificationParams], parts: Iterable[str], user_id: Optional[int]) -> list[ProfileWrite]:
+    """The profile writes of the ``parts`` of ``classification_params`` a request touched, by hand (plan 68, A4).
+
+    A part that ``params`` no longer holds (removed, or the whole classification cleared) is written empty: the profile
+    follows the column for what the user changed, and never for what the request did not touch.
+    """
+    writes: list[ProfileWrite] = []
+    for part in parts:
+        value: object = None
+        if params is not None and part == "short_description":
+            # A text of spaces is no description: the profile has one empty value («Lascia vuoto»), never a blank text
+            value = (params.short_description or "").strip() or None
+        elif params is not None and (block := getattr(params, part)) is not None:
+            value = dict(block.distribution)
+        writes.append(ProfileWrite(key=_CLASSIFICATION_VOICES[part], value=value, source=USER_SOURCE, user_id=user_id))
+    return writes
+
 
 class AssetCRUDService:
     """Service for asset CRUD operations."""
 
     @staticmethod
-    async def create_assets_bulk(assets: List[FAAssetCreateItem], session: AsyncSession) -> FABulkAssetCreateResponse:
+    async def create_assets_bulk(assets: List[FAAssetCreateItem], session: AsyncSession, user_id: Optional[int] = None) -> FABulkAssetCreateResponse:
         """
         Create multiple assets in bulk (partial success allowed).
 
         Args:
             assets: List of assets to create
             session: Database session
+            user_id: The author of the request: until lot D7 the ``classification_params`` of an asset are also written
+                into its profile (plan 68, A4), as the values this user wrote
 
         Returns:
             FABulkAssetCreateResponse with per-item results
         """
         results: list[FAAssetCreateResult] = []
+        today = await profile_today(session) if any(item.classification_params for item in assets) else None
 
         for item in assets:
             try:
@@ -122,12 +149,19 @@ class AssetCRUDService:
                     identifier_other=item.identifier_other,
                 )
 
-                # Handle classification_params
+                # Handle classification_params, and its copy in the profile (checked first: a refused value never leaves
+                # an asset half written)
+                profile_writes: list[ProfileWrite] = []
                 if item.classification_params:
                     asset.classification_params = item.classification_params.model_dump_json(exclude_none=True)
+                    profile_writes = _classification_writes(item.classification_params, _CLASSIFICATION_VOICES, user_id)
+                    for write in profile_writes:
+                        normalize_value(write.key, write.value)
 
                 session.add(asset)
                 await session.flush()  # Get ID without committing
+                if profile_writes and today is not None:
+                    await write_values(session, asset.id, profile_writes, today=today)
 
                 results.append(
                     FAAssetCreateResult(
@@ -472,7 +506,7 @@ class AssetCRUDService:
         )
 
     @staticmethod
-    async def patch_assets_bulk(patches: List[FAAssetPatchItem], session: AsyncSession, commit: bool = True) -> FABulkAssetPatchResponse:
+    async def patch_assets_bulk(patches: List[FAAssetPatchItem], session: AsyncSession, commit: bool = True, user_id: Optional[int] = None) -> FABulkAssetPatchResponse:
         """
         Patch multiple assets in bulk: all or nothing.
 
@@ -495,6 +529,8 @@ class AssetCRUDService:
         For classification_params:
         - If None or empty: Set DB column to NULL
         - If present: shallow merge of the blocks sent (``exclude_unset``), an explicit null block removes that block
+        - Until lot D7, the blocks the item touched are also written into the asset's profile, by ``user_id``, in the
+          same transaction (plan 68, A4): a dry run and a refused batch write none
 
         Args:
             patches: List of asset patches, each with its own fields
@@ -531,12 +567,15 @@ class AssetCRUDService:
 
         # 2. Apply. Results are built from plain values: a rollback expires the rows.
         results: list[FAAssetPatchResult] = []
+        today = await profile_today(session) if any("classification_params" in patch_dict for _, patch_dict in prepared) else None
         failing = (0, patches[0].asset_id) if patches else (0, 0)
         try:
             for index, (patch, patch_dict) in enumerate(prepared):
                 failing = (index, patch.asset_id)
                 updated_fields = AssetCRUDService._apply_patch_item(assets_by_id[patch.asset_id], patch_dict)
                 await session.flush()
+                if today is not None and "classification_params" in patch_dict:
+                    await write_values(session, patch.asset_id, AssetCRUDService._patch_profile_writes(assets_by_id[patch.asset_id], patch_dict, user_id), today=today)
                 results.append(FAAssetPatchResult(asset_id=patch.asset_id, success=True, message=f"Asset patched successfully ({len(updated_fields)} fields)", updated_fields=updated_fields))
                 logger.info(f"Asset patched: id={patch.asset_id}, fields={updated_fields}")
 
@@ -563,6 +602,15 @@ class AssetCRUDService:
         await drop_provider_caches(cache_keys, asset_ids=currency_changed_ids)
 
         return FABulkAssetPatchResponse(results=results, success_count=len(results), errors=[], committed=True, issues=[], warnings=warnings)
+
+    @staticmethod
+    def _patch_profile_writes(asset: Asset, patch_dict: dict, user_id: Optional[int]) -> list[ProfileWrite]:
+        """The profile writes of one applied item: the classification blocks it sent, as the column now holds them; all
+        three when it cleared the classification."""
+        sent = patch_dict["classification_params"]
+        parts = [part for part in _CLASSIFICATION_VOICES if part in sent] if sent else list(_CLASSIFICATION_VOICES)
+        params = FAClassificationParams.model_validate_json(asset.classification_params) if asset.classification_params else None
+        return _classification_writes(params, parts, user_id)
 
     @staticmethod
     def _prepare_patch_payloads(patches: List[FAAssetPatchItem]) -> list[tuple[FAAssetPatchItem, dict]]:
