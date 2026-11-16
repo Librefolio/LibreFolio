@@ -267,7 +267,7 @@ function replayAudit(result: RiskAnalyticResult | null | undefined) {
 /**
  * The details of a replay that had nothing left to run, or `null`.
  *
- * `stress.py::_historical` answers `insufficient_history` when every asset is excluded, and lists
+ * `StressAnalytic._historical` answers `insufficient_history` when every asset is excluded, and lists
  * them in `details.excluded_asset_ids`. The same code without that list is another refusal (a
  * window with no observations at all), and stays an error the section discloses.
  */

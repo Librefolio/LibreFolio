@@ -33,8 +33,8 @@ import {formatShare} from '../shareFormat';
  * ⚠️ The scaling is not cosmetic and it is not the chart's job. `LineChart`'s
  * `viewMode='percentage'` does **not** convert anything: it moves the baseline
  * to zero, formats the axis as a one-decimal percentage and suffixes the tooltip
- * (`LineChart.svelte:378`, `:636`, `:714`), while the series still plots
- * `d.value` verbatim (`:373`). Handing it the decimal ratio the API returns
+ * (the `isPercentage` branches of `LineChart.svelte`), while the series still
+ * plots `d.value` verbatim. Handing it the decimal ratio the API returns
  * would draw a curve of exactly the right *shape* labelled with numbers a
  * hundred times too small — the failure no visual check can catch.
  *
