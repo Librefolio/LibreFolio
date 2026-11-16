@@ -1541,6 +1541,15 @@ def services_asset_profile_catalogue(verbose: bool = False, test_names: list = N
     return run_command(cmd, "Asset profile catalogue tests", verbose=verbose)
 
 
+def services_asset_profile_store(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the asset profile store: write a voice only when it changes, read it as steps (project 68, lot A3)."""
+    print_section("Services: Asset Profile Store")
+    print_info("Testing: backend/app/services/assets/profile/store.py")
+    print_info("Tests: profile_today in the scheduler's zone; now = last row in (read_on, id); writes only on a different stored form, force_source, None, order, refusals, read_on, the write lock; steps, carry_back, min; forget; recent changes and the volatile panel")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_profile_store.py", test_names)
+    return run_command(cmd, "Asset profile store tests", verbose=verbose)
+
+
 def services_asset_digit_limits(verbose: bool = False, test_names: list = None) -> bool:
     """Run the C-97a digit limits: manual prices and events refused beyond them, provider prices truncated."""
     print_section("Services: Asset Digit Limits")
@@ -3607,6 +3616,16 @@ Note: No backend server required.
         name="Asset Profile Catalogue",
         desc="Project 68 A1: CATALOGUE holds exactly the 37 voices of plan 3.6 in order (shape, sign, unit, groups, key figure, charted, volatile, choices, map keys; numeric shapes signed, choices only on choice voices, map keys only on maps, charted implies key figure); get_voice refuses an unknown key; normalize_value gives the stored form of every shape (number, percentage, amount, date, text, choice, country, currency, map, table), refuses floats, bools, NaN, huge exponents, wrong signs, loose dates, non-ISO codes, bad maps and overlapping coupon rows with ProfileValueError naming the voice; the form is deterministic (key order, rounding, thirds tie) and idempotent, also after a JSON round trip",
         # PURE: functions over the catalogue and in-memory values; no database, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "asset-profile-store",
+        services_asset_profile_store,
+        name="Asset Profile Store",
+        desc="Project 68 A3: profile_today is the date in scheduler_timezone (UTC when not set or not a zone); current_rows is each voice's last row in (read_on, id) order; write_values writes only when the stored form differs from now whoever wrote either (spelling, map key order and rounding, a row with non-canonical JSON text: the same value), force_source writes the source's row unless now is that value from that source, None is a NULL row only over a value, writes of one call apply in order, one refused value or unknown voice raises ProfileValueError and writes nothing, read_on never before now's, user_id only on user rows, source_date stored, two connections writing the same new value make one row (write lock before the comparison); read_steps: one step per stretch, carry_back per voice, min per asset among the voices asked, nothing for no rows or a first row after end, one day without end, the last row of a day holds it, same value and source merge, keys None all voices, an unknown key refused, value_at and points_between on the steps; forget_updates: now and steps follow, all or nothing (ProfileUpdatesNotFound, ProfileUpdatesNewer), the count; recent_changes newest first 20 a page with total and the value before, the panel hides a volatile voice's source rows but those by hand and the first after one",
+        # PURE: every database is a private SQLite file under tmp_path built with create_all (two engines on it for the
+        # lock case); no session on the lane DB, no server; every day and moment passed in.
         isolation="pure",
     )
     add_test(
