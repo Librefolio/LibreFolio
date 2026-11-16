@@ -45,7 +45,7 @@ from backend.app.schemas.common import (
 )
 from backend.app.services.assets.base import AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.profile.catalogue import normalize_value
-from backend.app.services.assets.profile.store import USER_SOURCE, ProfileWrite, profile_today, write_values
+from backend.app.services.assets.profile.store import USER_SOURCE, ProfileWrite, move_voices, profile_today, write_values
 from backend.app.services.assets.type_rules import TypeChangeVerdict, classify_type_change
 from backend.app.services.financial_math.ledger_totals import position_quantities
 from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
@@ -91,6 +91,25 @@ def _classification_writes(params: Optional[FAClassificationParams], parts: Iter
             value = dict(block.distribution)
         writes.append(ProfileWrite(key=_CLASSIFICATION_VOICES[part], value=value, source=USER_SOURCE, user_id=user_id))
     return writes
+
+
+def _column_with_voices(column: Optional[str], voices: dict[str, object]) -> Optional[str]:
+    """``classification_params`` with the parts of the profile ``voices`` moved to it by a merge (plan 68, A5): until lot
+    D7 the column follows the profile. The other parts stay as they were."""
+    parts = {voice: part for part, voice in _CLASSIFICATION_VOICES.items()}
+    moved = {parts[voice]: value for voice, value in voices.items() if voice in parts}
+    if not moved:
+        return column
+    try:
+        params = json.loads(column) if column else {}
+    except ValueError:
+        params = None
+    if not isinstance(params, dict):
+        # A column that does not read as an object (never written by the app) gives way to the moved parts
+        params = {}
+    for part, value in moved.items():
+        params[part] = value if part == "short_description" else {"distribution": value}
+    return FAClassificationParams(**params).model_dump_json(exclude_none=True)
 
 
 class AssetCRUDService:
@@ -793,6 +812,11 @@ class AssetCRUDService:
         Identifiers are never lost: whatever does not stay primary is demoted into the
         target's ``identifier_other``.
 
+        The profile (plan 68, A5): the target keeps its own; each voice the source holds now with a value and the target
+        has no row of moves to the target with its whole history, and until lot D7 the target's
+        ``classification_params`` takes the moved description, countries and sectors. The rest of the source's profile
+        and its enrichers go with it (``CASCADE``).
+
         Args:
             source_asset_id: Asset to fold in and delete.
             target_asset_id: Asset to keep.
@@ -915,6 +939,10 @@ class AssetCRUDService:
                     await session.flush()
                     await session.delete(source_assignment)
                     preview.provider_assignment_dropped = True
+
+            # ---------- profile: the voices only the source holds move with their history (plan 68, A5) ----------
+            moved_voices = await move_voices(session, source_asset_id, target_asset_id)
+            target.classification_params = _column_with_voices(target.classification_params, moved_voices)
 
             # ---------- transactions ----------
             moved = await session.execute(update(Transaction).where(Transaction.asset_id == source_asset_id).values(asset_id=target_asset_id))

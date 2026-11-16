@@ -21,6 +21,7 @@ Every value enters through ``catalogue.normalize_value`` and is stored as its JS
   carry.
 - **Empty on purpose.** ``None`` is a value: stored as NULL, read as a step whose value is ``None``.
 - **Forget.** Rows are deleted to forget a change; «now» and the steps then follow from the rows left.
+- **Merge.** A voice only the source asset holds moves to the target whole, its rows keeping their ids (``move_voices``).
 - **Changes.** The changes of an asset, newest first, each with the value before it; the panel leaves out the source
   rows of the volatile voices but those written by hand and the first source row that replaces one.
 
@@ -45,7 +46,7 @@ from datetime import date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import AssetProfileUpdate
@@ -440,3 +441,25 @@ def _shown_in_panel(record: AssetProfileUpdate, before: AssetProfileUpdate | Non
     if voice is None or not voice.volatile:
         return True
     return record.source == USER_SOURCE or (before is not None and before.source == USER_SOURCE)
+
+
+# =============================================================================
+# MERGE
+# =============================================================================
+
+
+async def move_voices(session: AsyncSession, source_id: int, target_id: int) -> dict[str, Any]:
+    """Merge of two assets (plan 68, A5): move to ``target_id`` each voice ``source_id`` holds now with a value and the
+    target has no row of; the voices moved and their value now. Not committed.
+
+    A voice moves whole, by changing only ``asset_id``: its rows keep their ids and days, so its order is unchanged and
+    two histories of one voice never mix. A voice the target has rows of — even emptied on purpose — stays the target's.
+    The rest of the source's profile goes with the source (``CASCADE``).
+    """
+    source_now = await current_rows(session, source_id)
+    target_keys = set((await session.execute(select(AssetProfileUpdate.key).where(AssetProfileUpdate.asset_id == target_id).distinct())).scalars().all())
+    moved = {key: row.value for key, row in source_now.items() if row.value is not None and key not in target_keys}
+    if moved:
+        statement = update(AssetProfileUpdate).where(AssetProfileUpdate.asset_id == source_id, AssetProfileUpdate.key.in_(list(moved)))
+        await session.execute(statement.values(asset_id=target_id).execution_options(synchronize_session=False))
+    return moved
