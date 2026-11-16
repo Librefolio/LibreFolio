@@ -30,6 +30,8 @@ exactly. **Table names are plural** — a lookup for `asset` or `transaction` fi
 | `FxRate` | `fx_rates` | base, quote, date, rate, **source** |
 | `FxConversionRoute` | `fx_conversion_routes` | base, quote, priority, chain_steps |
 | `AssetProviderAssignment` | `asset_provider_assignments` | asset_id, provider_code, identifier, identifier_type, provider_params, last_fetch_at |
+| `AssetProfileUpdate` | `asset_profile_updates` | asset_id, key (a voice of the profile catalogue, no CHECK), value (JSON text, NULL = left empty), source (enricher code, `user`, `legacy`), user_id, read_on, source_date — one row per change, never updated |
+| `AssetEnrichers` | `asset_enrichers` | asset_id (PK), config (JSON: ordered enricher bindings), state (JSON: last read per enricher), updated_at |
 
 Two traps this table used to set: a transaction carries a signed **`amount`**, not
 `price` + `fees` (unified transactions), and a user's role is the boolean

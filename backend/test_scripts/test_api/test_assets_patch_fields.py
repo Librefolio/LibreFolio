@@ -9,15 +9,21 @@ Tests for PATCH /api/v1/assets endpoint covering base fields:
 - active
 
 Metadata fields (classification_params) are tested in test_assets_metadata.py
+
+Project 68, lot A4: one test proves the routes write ``classification_params`` into the asset profile in the
+authenticated user's name (the service cases: test_services/test_asset_profile_double_write.py).
 """
 
 import httpx
 import pytest
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import get_settings
 
 # Import Pydantic schemas
 from backend.app.db.models import AssetType
+from backend.app.db.session import get_async_engine
 from backend.app.schemas.assets.assets import (
     FAAssetCreateItem,
     FAAssetPatchItem,
@@ -25,7 +31,7 @@ from backend.app.schemas.assets.assets import (
     FABulkAssetPatchResponse,
     FAinfoResponse,
 )
-from backend.app.schemas.assets.metadata import FAAssetMetadataResponse
+from backend.app.schemas.assets.metadata import FAAssetMetadataResponse, FAClassificationParams
 
 # Test server fixture
 from backend.test_scripts.test_server_helper import _TestingServerManager
@@ -767,3 +773,58 @@ async def test_patch_batch_name_checks_follow_the_batch_order(test_server):
         assert (await _info_of(client, id_a)).display_name == fresh
         assert (await _info_of(client, id_b)).display_name == name_a
         print_success("✓ moved-away names are free for later items, held names are not, own name is fine")
+
+
+# ============================================================
+# Project 68, lot A4: the double write in the authenticated user's name
+# ============================================================
+
+
+async def _profile_rows_of(asset_id: int) -> list[tuple[int, str, str, int | None]]:
+    """The profile rows of ``asset_id`` as (id, voice, source, author), read from the lane's database: rows of an asset
+    this test created, so no neighbour's row is ever among them."""
+    async with AsyncSession(get_async_engine()) as session:
+        result = await session.execute(text("SELECT id, key, source, user_id FROM asset_profile_updates WHERE asset_id = :asset ORDER BY id"), {"asset": asset_id})
+        return [(row.id, row.key, row.source, row.user_id) for row in result]
+
+
+@pytest.mark.asyncio
+async def test_post_and_patch_write_the_profile_in_the_authenticated_users_name(test_server):
+    """Until D7, ``classification_params`` sent to ``POST /assets`` and ``PATCH /assets`` also enters the asset profile,
+    ``source='user'``, ``user_id`` the user of the session: the route passes it to the service. POST with description,
+    geography and sector → three rows by that user; PATCH of the sector alone → one more ``sector`` row by that user."""
+    print_section("A4: POST/PATCH /assets write the profile in the user's name")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        me = await client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
+        assert me.status_code == 200, f"GET /auth/me: {me.status_code} {me.text}"
+        user_id = me.json()["user"]["id"]
+
+        classification = FAClassificationParams(
+            short_description="Global developed-markets equity ETF",
+            geographic_area={"distribution": {"USA": "0.6", "JPN": "0.4"}},
+            sector_area={"distribution": {"Technology": "1"}},
+        )
+        create_item = FAAssetCreateItem(display_name=f"Profile Author {unique_id('A4')}", currency="EUR", asset_type=AssetType.ETF, classification_params=classification)
+        create_resp = await client.post(f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT)
+        assert create_resp.status_code == 201, f"POST /assets: {create_resp.status_code} {create_resp.text}"
+        asset_id = FABulkAssetCreateResponse(**create_resp.json()).results[0].asset_id
+        assert asset_id is not None, f"the asset must be created: {create_resp.text}"
+
+        try:
+            created = await _profile_rows_of(asset_id)
+            found = sorted((key, source, author) for _, key, source, author in created)
+            assert found == [("description", "user", user_id), ("geography", "user", user_id), ("sector", "user", user_id)], f"red until A4: POST must write three user rows by user {user_id}: {found}"
+
+            patch = [{"asset_id": asset_id, "classification_params": {"sector_area": {"distribution": {"Energy": "1"}}}}]
+            patch_resp = await client.patch(f"{API_BASE}/assets", json=patch, timeout=TIMEOUT)
+            assert patch_resp.status_code == 200, f"PATCH /assets: {patch_resp.status_code} {patch_resp.text}"
+            assert FABulkAssetPatchResponse(**patch_resp.json()).committed is True, patch_resp.text
+
+            known = {row_id for row_id, *_ in created}
+            new = [(key, source, author) for row_id, key, source, author in await _profile_rows_of(asset_id) if row_id not in known]
+            assert new == [("sector", "user", user_id)], f"PATCH of the sector must write one sector row by user {user_id}: {new}"
+            print_success(f"profile rows written in the name of user {user_id}")
+        finally:
+            await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)

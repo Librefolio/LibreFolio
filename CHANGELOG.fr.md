@@ -23,6 +23,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Tableau des actifs : chaque ligne a une action «Modifier» qui ouvre l'éditeur de l'actif sur place, sans aller à la page de détail.
 - Les taux FED couvrent aussi le ringgit malaisien (MYR), la roupie srilankaise (LKR) et le bolívar vénézuélien (VES, depuis le 4 octobre 2021, la dernière dénomination).
 - Les routes qui utilisent FED affichent une note ℹ️ : les taux FED sont quotidiens, un par jour ouvré américain, mais la Réserve fédérale les publie une fois par semaine, le lundi, donc le dernier taux FED peut avoir jusqu'à environ 10 jours. Les notes des fournisseurs ont désormais deux niveaux dans le choix de la route : ℹ️ pour un fait utile à savoir, ⚠️ pour une limite des données comme les moyennes mensuelles de la BNS.
+- Nouveaux fournisseurs de taux de change de cinq autres banques centrales, tous gratuits et sans clé API : la Banca d'Italia (BDI) et le Banco Central do Brasil (BCB) couvrent presque toutes les devises du monde, en une étape vers l'euro et vers le dollar américain ; Norges Bank (NORGES), la Banque nationale d'Ukraine (NBU) et la Banque du Canada (BOC) ajoutent les taux officiels de leurs pays et des sources secondaires pour beaucoup d'autres. Données BCB : Banco Central do Brasil, PTAX, ODbL.
 
 ### 🔄 Modifié
 
@@ -40,6 +41,9 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Dashboard › Vos positions : «Voir tout» est désormais un petit badge, et sur téléphone les trois sélecteurs de vue (Portefeuille/Période, Global/Courtier, tableau/carte) ont leur propre ligne sous le titre.
 - Modification de plusieurs actifs : après l'enregistrement, la fenêtre reste ouverte sur le récapitulatif avec une coche verte «Enregistré», et la sélection reste, pour continuer à travailler sur les mêmes actifs. Le récapitulatif montre la nouvelle icône en miniature ; les champs sont sur une grille, avec la valeur actuelle sous chaque champ et son bouton de réinitialisation sur la même ligne, et la fenêtre n'a pas de barre de défilement interne.
 - La barre de sélection des tableaux (actifs, transactions, devises, transactions d'un courtier) flotte désormais en bas de l'écran tant que des lignes sont sélectionnées, et reste après un enregistrement ; Échap efface la sélection quand le focus est dans la barre.
+- La fenêtre des routes d'une paire de devises s'ouvre plus vite, et un grand groupe de chaînes en montre les 200 premières, avec «Afficher plus (n masquées)» pour les autres ; la recherche parcourt toujours toutes les chaînes. Avec les nouvelles banques centrales, une seule paire peut avoir des dizaines de milliers de chaînes.
+- Prix en temps réel avec moins de requêtes : les fournisseurs capables de coter beaucoup d'actifs à la fois sont désormais interrogés une fois par fournisseur au lieu d'une fois par actif ; Yahoo Finance le fait avec sa liste de cotations. Avec 20 actifs Yahoo, une heure de planificateur et de pages ouvertes coûte quelques dizaines de requêtes au lieu de centaines, donc les pauses « trop de requêtes » deviennent rares. Une synchronisation des prix prend la valeur du jour dans la même lecture, au plus une requête par fournisseur ; si cette lecture est refusée, l'historique de ce tour attend le tour suivant.
+- Un fournisseur peut garder ses prix en temps réel valables plus de deux minutes (pour les sources avec un quota d'appels) ; la valeur par défaut reste deux minutes.
 
 ### 🐛 Corrections
 
@@ -65,6 +69,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Actifs : la puce «n sélectionnés» efface toujours toute la sélection, et le menu des colonnes et le redimensionnement des colonnes agissent sur les deux tableaux d'actifs (les vôtres et ceux des autres) ; avant, l'un des deux pouvait être oublié.
 - Les taux FED de 16 devises étaient enregistrés à l'envers (JPY, CAD, CHF, SEK, DKK, NOK, CNY, INR, BRL, MXN, ZAR, SGD, HKD, KRW, TWD, THB) : 1 JPY valait 158 USD au lieu de 0,0063. Les taux déjà enregistrés ne sont pas modifiés. Pour les corriger, ouvrez la page Devises, choisissez la période «Tout» et utilisez «Sync. Tout» : chaque paire dont la route utilise FED, même comme étape d'une chaîne (par exemple INR → USD → EUR), est téléchargée à nouveau et écrasée.
 - Le fournisseur de la Bank of England (BOE) ne téléchargeait rien, car la base de données de la banque a changé son adresse de téléchargement ; il fonctionne de nouveau. Son taux de l'euro venait aussi de la mauvaise série (euro contre dollar américain au lieu de contre livre sterling) : chaque paire dont la route utilise BOE pour l'euro reste fausse jusqu'à une nouvelle synchronisation de la même façon (période «Tout», «Sync. Tout»).
+- La clôture d'un jour passé n'est plus écrasée par une cotation en temps réel : une cotation lue avant minuit ne remplit qu'un jour manquant. Hors heures de marché, le dernier jour de cotation d'un actif garde aussi sa bougie complète (ouverture, plus haut, plus bas) au lieu du seul cours de clôture.
 
 ### ⚠️ Changements incompatibles
 

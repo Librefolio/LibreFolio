@@ -167,15 +167,27 @@ def test_every_type_declares_cleanly_for_the_asset_family():
 
 def test_the_family_rules_are_the_documented_ones():
     """1: assets and BRIM take user fields and secrets; FX takes secrets but no user field; a Tool takes user fields and no
-    secret (a call is made for a user, and a Tool calls no external source); no other family is open yet.
+    secret (a call is made for a user, and a Tool calls no external source); an enricher takes secrets but no user field
+    (plan 68, B1: a read serves every user, as an FX sync does); no other family is open yet.
 
-    Red today (CP12, X5-4b): ``tool`` has no rules, so a Tool plugin cannot declare a setting."""
+    Red before B1: ``enricher`` has no rules, so an enricher cannot declare a setting."""
     assert FAMILY_RULES == {
         "asset": FamilyRules(user_scope=True, secrets=True),
         "fx": FamilyRules(user_scope=False, secrets=True),
         "brim": FamilyRules(user_scope=True, secrets=True),
         "tool": FamilyRules(user_scope=True, secrets=False),
+        "enricher": FamilyRules(user_scope=False, secrets=True),
     }
+
+
+def test_an_enricher_declares_system_fields_and_secrets_but_no_user_field():
+    """1 (plan 68, B1): a profile read serves every user of the asset, so only the instance's values reach an enricher."""
+    print_section("1: the enricher family rules")
+    validate_declaration((_secret("api_key"), _field("decimals", INTEGER, SYSTEM, default=6, minimum=0, maximum=10)), family="enricher")
+
+    with pytest.raises(SettingsDeclarationError, match="'limit'"):
+        validate_declaration((_field("limit", INTEGER, USER, default=10),), family="enricher")
+    print_success("enricher: system and secret accepted, a user field refused")
 
 
 def test_an_fx_plugin_declares_system_fields_and_secrets_but_no_user_field():

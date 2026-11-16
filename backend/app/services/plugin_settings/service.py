@@ -48,6 +48,7 @@ from backend.app.schemas.plugin_settings import (
 )
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.platform.instance_key import InstanceKeyError
 from backend.app.services.platform.provider_registry import AbstractProviderRegistry
@@ -61,7 +62,7 @@ from backend.app.utils.datetime_utils import utcnow
 logger = get_logger(__name__)
 
 #: The families whose plugins may declare settings, with their registries.
-FAMILY_REGISTRIES: dict[str, type[AbstractProviderRegistry]] = {"asset": AssetProviderRegistry, "fx": FXProviderRegistry, "brim": BRIMProviderRegistry, "tool": ToolPluginRegistry}
+FAMILY_REGISTRIES: dict[str, type[AbstractProviderRegistry]] = {"asset": AssetProviderRegistry, "fx": FXProviderRegistry, "brim": BRIMProviderRegistry, "tool": ToolPluginRegistry, "enricher": EnricherRegistry}
 
 #: The families whose plugins have no icon of their own: a Tool is drawn with the ``icon_key`` of its service by the Tools page, and the
 #: settings catalogue lists it with the neutral icon.
@@ -70,7 +71,7 @@ FAMILIES_WITHOUT_ICON: frozenset[str] = frozenset({"tool"})
 #: The attribute of a plugin instance that holds its icon URL, per family: the one its family's provider list publishes
 #: (``GET /assets/provider`` reads ``get_icon``, ``GET /fx/providers`` reads ``icon``, the BRIM plugins publish ``icon_url``). A new family
 #: adds one row, or joins ``FAMILIES_WITHOUT_ICON``.
-FAMILY_ICON_ATTRIBUTES: dict[str, str] = {"asset": "get_icon", "fx": "icon", "brim": "icon_url"}
+FAMILY_ICON_ATTRIBUTES: dict[str, str] = {"asset": "get_icon", "fx": "icon", "brim": "icon_url", "enricher": "icon"}
 
 
 class PluginSettingsRefused(Exception):

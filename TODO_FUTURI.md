@@ -173,6 +173,12 @@ di un giorno è la chiusura vera per il prodotto dei fattori di tutti i dividend
 con fattore `1/rapporto`). Dati che servono: le chiusure vere (dopo Z-35) e i dividendi salvati come eventi dell'asset.
 Il calcolo andrebbe nella casa della matematica finanziaria (`backend/app/services/financial_math/`).
 
+**Uso nel rischio** (corsia 70, 16/11/2026). Il rischio oggi lavora «solo prezzi» (`RiskReturnBasis.PRICE_ONLY`): lo
+stacco di un dividendo o di una cedola è un giorno di perdita che non c'è, e il rendimento sul periodo perde i dividendi.
+La serie rettificata di questa voce lo risolve: il rischio la leggerebbe al posto delle chiusure vere, dichiarando la base
+(«rendimento totale» o «solo prezzi») per asset. Il caso dei prestiti a piano (il prezzo torna al capitale a ogni cedola)
+è limite e non ha un trattamento suo. Rimandato dal developer il 16/11/2026.
+
 ## ⏳ Investimento programmato con mora: la cedola di scadenza (J-39, 28/10/2026)
 
 **Il difetto.** In un investimento programmato (provider Scheduled Investment) con **mora**, la cedola di scadenza è
@@ -986,6 +992,14 @@ il bersaglio, perché `_populate_benchmark_indices` normalizza.
 
 **Il lavoro.** Decidere se `end_price` è un contratto o un'attesa e renderlo esplicito, oppure normalizzare anche le serie non
 indice. Cambia i numeri di tutte le superfici: va fatto come lavoro a sé, con il confronto prima e dopo.
+
+## 🍰 Il rischio di una parte del portafoglio (D58, D59; corsia 70, 16/11/2026)
+
+Idea, da vedere come evolve: guardare il rischio di una sola parte del portafoglio (per esempio la parte azionaria) contro
+un indice scelto per quella parte (un azionario mondiale). Posto: il laboratorio o la Dashboard, non l'Asset Detail. Il
+backend c'è già: `PortfolioRiskScope.asset_ids` e `sliced_asset_ids`, pesi rinormalizzati al 100 % della fetta (D59);
+manca l'interfaccia e la scelta dell'indice di confronto. In modo storico una fetta non può leggere il TWRR e usa la
+composizione di oggi: va detto nella pagina.
 
 ## 🔍 Da approfondire: XERJ, ricerca locale per gli agenti
 

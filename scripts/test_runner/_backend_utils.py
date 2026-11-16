@@ -306,8 +306,8 @@ def utils_gate_i18n_catalog(verbose: bool = False, test_names: list = None) -> b
 def utils_gate_plugin_layout(verbose: bool = False, test_names: list = None) -> bool:
     """Test the plugin layout gate: every first-party plugin is a folder, reached through its plugin module."""
     print_section("Utils: Plugin Layout Gate")
-    print_info("Testing: backend/app/services/{brim_providers,asset_source_providers,fx_providers,risk_plugins,signal_plugins,tool_plugins}/, imports and strings of backend/app, backend/test_scripts, scripts, dev.py")
-    print_info("Tests: <name>/__init__.py (docstring only) + <name>/plugin.py, no single-module plugin, no import or string reaching a plugin package instead of its plugin module")
+    print_info("Testing: backend/app/services/{brim_providers,asset_source_providers,fx_providers,risk_plugins,signal_plugins,tool_plugins,enricher_providers}/, imports and strings of backend/app, backend/test_scripts, scripts, dev.py")
+    print_info("Tests: <name>/__init__.py (docstring only) + <name>/plugin.py, no single-module plugin, no import or string reaching a plugin package instead of its plugin module, no plugin importing another plugin of any family")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_plugin_layout_gate.py", test_names)
     return run_command(cmd, "Plugin layout gate tests", verbose=verbose)
 
@@ -315,7 +315,7 @@ def utils_gate_plugin_layout(verbose: bool = False, test_names: list = None) -> 
 def utils_gate_plugin_i18n_ownership(verbose: bool = False, test_names: list = None) -> bool:
     """Test the plugin i18n ownership gate: each plugin's keys live in its own i18n/ fragment."""
     print_section("Utils: Plugin i18n Ownership Gate")
-    print_info("Testing: the spaces and keys the BRIM, asset, FX, signal, risk and tool registries publish, against the catalogue sources scripts/i18n_catalog.py reads")
+    print_info("Testing: the spaces and keys the BRIM, asset, FX, signal, risk, tool and enricher registries publish, against the catalogue sources scripts/i18n_catalog.py reads")
     print_info("Tests: R1 fragment keys in their plugin's space, R2 declared keys of an exclusive space in its fragment, R3 no fragment key in another plugin's space or declared by another plugin, R4 every key under an exclusive space in its fragment (tools aside)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_plugin_i18n_ownership_gate.py", test_names)
     return run_command(cmd, "Plugin i18n ownership gate tests", verbose=verbose)
@@ -850,7 +850,7 @@ Tests for utility modules and helper functions:
         "gate-plugin-layout",
         utils_gate_plugin_layout,
         name="Plugin Layout Gate",
-        desc="Every first-party plugin is a folder <family>/<name>/ holding __init__.py (its docstring and nothing else) and plugin.py, in the six families the app's registries declare (brim, asset, FX, risk, signal, tool), plugin being the module discovery loads; no family keeps a plugin as a single module and none is empty; no import in backend/app, backend/test_scripts, scripts or dev.py reaches a plugin's package instead of its plugin module or a _helper beside it, relative and lazy imports included, and no string names one (patch targets, logger names, __module__)",
+        desc="Every first-party plugin is a folder <family>/<name>/ holding __init__.py (its docstring and nothing else) and plugin.py, in the seven families the app's registries declare (brim, asset, FX, risk, signal, tool, enricher), plugin being the module discovery loads; no family keeps a plugin as a single module and none is empty; no import in backend/app, backend/test_scripts, scripts or dev.py reaches a plugin's package instead of its plugin module or a _helper beside it, relative and lazy imports included, and no string names one (patch targets, logger names, __module__); no plugin imports another plugin of any family (its own folder, its family's root _helpers, the core and libraries only)",
         # ast and filesystem reads of the repository's sources, never imported; the control
         # cases build their trees under tmp_path. No DB, no server, no network, no writes
         # outside tmp_path.
