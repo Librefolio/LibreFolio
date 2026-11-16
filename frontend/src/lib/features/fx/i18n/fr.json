@@ -79,7 +79,11 @@
       "manualOnly": "Paire uniquement manuelle",
       "syncFromProvider": "Synchroniser les taux depuis le fournisseur"
     },
-    "loadFailed": "Impossible de charger les paires FX"
+    "loadFailed": "Impossible de charger les paires FX",
+    "docsHelp": {
+      "list": "Les paires de devises avec lesquelles LibreFolio convertit : leur dernier taux, la banque centrale qui le publie et le chemin utilisé quand aucune paire directe n'existe.",
+      "detail": "Une paire dans le temps : son graphique, les signaux que vous ajoutez, ses mesures et les taux que vous pouvez corriger à la main."
+    }
   },
   "fxDetail": {
     "editRates": "Modifier les taux",
