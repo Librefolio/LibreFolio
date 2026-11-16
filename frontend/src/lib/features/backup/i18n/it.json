@@ -372,6 +372,7 @@
       },
       "hintDays": "Inserisci 0 per tenere i backup finché non li elimini.",
       "timing": "Le regole si applicano entro un'ora: dopo ogni backup e a ogni avvio, al massimo una volta l'ora."
-    }
+    },
+    "docsHelp": "Copie dell'intera istanza — database, file e impostazioni — da scaricare, ripristinare o spostare su un altro server."
   }
 }
