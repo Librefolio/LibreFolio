@@ -24,4 +24,6 @@ The Bank of England supports approximately 15 major currencies, including:
 ## 📝 Important Notes
 
 - **Quotes format**: Rates are expressed as the amount of foreign currency per 1 GBP (e.g., 1 GBP = 1.25 USD). LibreFolio automatically normalizes this representation behind the scenes.
+- **Licence**: the Bank of England publishes its database under the UK Open Government Licence, which allows free reuse with attribution.
+- **Euro rates before LibreFolio 1.4**: the euro rate came from the wrong Bank of England series (euro against the US dollar instead of against sterling). If you used BOE for the euro, sync those pairs again over the whole period you hold (FX page, «All» period, «Sync All»).
 - **Holidays**: The BOE does not publish rates on UK bank holidays or weekends.

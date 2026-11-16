@@ -24,4 +24,6 @@ El Bank of England admite aproximadamente 15 monedas principales, incluyendo:
 ## 📝 Notas Importantes
 
 - **Formato de cotizaciones**: Los tipos se expresan como la cantidad de moneda extranjera por 1 GBP (ej. 1 GBP = 1,25 USD). LibreFolio normaliza automáticamente esta representación en segundo plano.
+- **Licencia**: el Banco de Inglaterra publica su base de datos con la UK Open Government Licence, que permite la reutilización libre citando la fuente.
+- **Tipos del euro antes de LibreFolio 1.4**: el tipo del euro venía de una serie equivocada del Banco de Inglaterra (euro contra dólar estadounidense en lugar de contra la libra esterlina). Si usaste BOE para el euro, sincroniza de nuevo esos pares en todo el período que mantienes (página FX, período «Todo», «Sinc. Todo»).
 - **Festivos**: El BOE no publica tipos en los días festivos bancarios del Reino Unido ni los fines de semana.
