@@ -28,6 +28,9 @@ a ``go`` file written once both are, runs, and writes its report as JSON. The pr
 generous deadline, the machine may be loaded far past its cores; no assertion depends on a duration. Both processes are
 killed and reaped in a ``finally``.
 
+Since lot B6 (project 68) "both jobs" reads "every job": the third, ``profile_read``, is faked and due like the other two,
+so a report lists three outcomes; red until B6 adds it to ``JOBS`` (the reports list two).
+
 Red until Z-11 exists: both processes ask ``am_i_leader`` and, told yes, run both jobs: a job runs twice, the state is
 written twice, no process finds the jobs done, and no ``.scheduler.lock`` is in the data directory.
 """
@@ -53,11 +56,13 @@ from backend.test_scripts.test_utils import print_section, print_success
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 #: The literals of the contract, never read from the module under test.
-JOBS = ("current_price", "history_sync")
+#: Lot B6 (project 68): the scheduler's jobs are three, ``profile_read`` (the weekly read of the enrichers) last; each
+#: worker fakes its due function and its body as it does the other two's, so the real job never runs here.
+JOBS = ("current_price", "history_sync", "profile_read")
 LOCK_FILE_NAME = ".scheduler.lock"
 STATE_FILE_NAME = "scheduler_state.json"
-RAN_BOTH = [["current_price", "ok"], ["history_sync", "ok"]]
-FOUND_BOTH_DONE = [["current_price", "not_due"], ["history_sync", "not_due"]]
+RAN_BOTH = [[job, "ok"] for job in JOBS]
+FOUND_BOTH_DONE = [[job, "not_due"] for job in JOBS]
 
 WORKERS = ("first", "second")
 #: How long each fake job lasts: two runs left unserialised overlap.
@@ -150,6 +155,10 @@ async def history_sync(state, horizon_days=None):
     await run_job("history_sync", state)
 
 
+async def profile_read(state, settings=None):
+    await run_job("profile_read", state)
+
+
 real_load_state = scheduler.load_state
 
 
@@ -167,6 +176,8 @@ scheduler.due_current_price = never_ran("current_price")
 scheduler.due_history_sync = never_ran("history_sync")
 scheduler.run_current_price_refresh = current_price
 scheduler.run_history_sync = history_sync
+scheduler.due_profile_read = never_ran("profile_read")
+scheduler.run_profile_read = profile_read
 
 
 async def main():
