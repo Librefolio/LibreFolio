@@ -59,7 +59,7 @@
             case 'assets':
                 return [
                     {id: 'assets', label: $t('tools.pacAllocator.planner.summary.assets', {default: 'Assets'}), value: String(c.assets.count)},
-                    ...(profile.positions ? [{id: 'positions', label: $t('tools.portfolioRebalancer.planner.summary.positions'), value: String(c.assets.positions)}] : []),
+                    ...(profile.positions ? [{id: 'positions', label: $t('tools.portfolioRebalancer.planner.positions.title'), value: String(c.assets.positions)}] : []),
                     {id: 'prices', label: $t('tools.pacAllocator.planner.summary.prices', {default: 'Prices'}), value: [c.assets.priced, c.assets.count].join('/'), warn: c.assets.priced < c.assets.count},
                     {id: 'stale', label: $t('tools.pacAllocator.planner.summary.stale', {default: 'Not of the day'}), value: String(c.assets.stale)},
                     {id: 'exposures', label: $t('tools.pacAllocator.planner.summary.exposures', {default: 'Exposures'}), value: [c.assets.withExposures, c.assets.count].join('/')},
@@ -91,7 +91,7 @@
                 if (fidelity !== null)
                     return [
                         {id: 'policy', label: $t('tools.pacAllocator.planner.summary.strategy', {default: 'Strategy'}), value: rebalancerStrategyName($t, c.strategy.policy)},
-                        {id: 'fidelity', label: $t('tools.portfolioRebalancer.planner.summary.fidelity'), value: fidelityName($t, fidelity)},
+                        {id: 'fidelity', label: $t('tools.portfolioRebalancer.planner.strategy.fidelityTitle'), value: fidelityName($t, fidelity)},
                     ];
                 return [
                     {

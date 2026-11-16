@@ -197,7 +197,8 @@
         withHelpCues<TableRow>([
             {
                 id: 'asset',
-                header: () => (profile.text === 'rebalancer' ? $t('tools.portfolioRebalancer.planner.targets.entry') : $t('tools.pacAllocator.planner.routing.asset', {default: 'Asset'})),
+                // «Voce» in both Tools (G6): the PAC's targets list cash rows too since step 14.
+                header: () => $t('tools.portfolioRebalancer.planner.targets.entry'),
                 type: 'text',
                 sortable: false,
                 filterable: false,
