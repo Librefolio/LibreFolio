@@ -8,7 +8,11 @@ Lot Z7b (SS-007..SS-011): ``JobState`` gains, after its six fields, ``last_items
 with their defaults, one written by a newer version loads ignoring the keys ``JobState`` does not know, and a section
 that is not an object loads as a fresh ``JobState``, without an exception, as today.
 
-Test IDs: SS-001..SS-011
+Lot B6 (project 68, SS-012..SS-015): ``SchedulerState`` gains a third job, ``profile_read`` (the weekly read of the
+enrichers), saved and loaded like the other two; a file without it loads a fresh one. ``JobState`` gains
+``round_started_at`` (ISO UTC, the start of the round a retry continues; None for the other jobs), last.
+
+Test IDs: SS-001..SS-015
 """
 
 import dataclasses
@@ -253,7 +257,7 @@ Z7B_FIELDS = ("last_items_deferred", "retry_at", "consecutive_failures", "next_a
 
 class TestZ7bFields:
     def test_job_state_gains_four_fields_after_its_six_with_their_defaults(self):
-        """SS-007: ``JobState``'s fields, in order, with their defaults: the six of before, then ``last_items_deferred`` 0, ``retry_at`` None, ``consecutive_failures`` 0, ``next_attempt_at`` None."""
+        """SS-007: ``JobState``'s fields, in order, with their defaults: the six of before, then ``last_items_deferred`` 0, ``retry_at`` None, ``consecutive_failures`` 0, ``next_attempt_at`` None; since lot B6, ``round_started_at`` None last."""
         print_section("SS-007: JobState fields of lot Z7b")
 
         shape = [(field.name, field.default) for field in dataclasses.fields(state_mod.JobState)]
@@ -269,8 +273,9 @@ class TestZ7bFields:
             ("retry_at", None),
             ("consecutive_failures", 0),
             ("next_attempt_at", None),
+            ("round_started_at", None),
         ]
-        print_success("four fields after the six, with their defaults")
+        print_success("four fields after the six, with their defaults; then round_started_at (lot B6)")
 
     def test_save_state_writes_the_new_fields_and_load_state_reads_them_back(self, tmp_path, monkeypatch):
         """SS-008: ``save_state`` writes the four fields in each job's object — set or at their defaults —, and ``load_state`` gives back the very state saved."""
@@ -345,4 +350,79 @@ class TestZ7bFields:
         result = state_mod.load_state()
 
         assert result.current_price == state_mod.JobState()
+        print_success("no exception, a fresh JobState")
+
+
+# ============================================================================
+# SS-012..SS-015: the third job of lot B6, profile_read
+# ============================================================================
+
+#: The literals of the contract: the jobs of ``SchedulerState``, in order.
+STATE_JOBS = ("current_price", "history_sync", "profile_read")
+ROUND_STARTED_AT = "2026-11-14T02:00:00+00:00"
+
+
+class TestProfileReadState:
+    def test_scheduler_state_has_three_jobs_in_order(self):
+        """SS-012: ``SchedulerState``'s fields are the three jobs, in order, each a fresh ``JobState`` by default."""
+        print_section("SS-012: SchedulerState — three jobs")
+
+        assert [field.name for field in dataclasses.fields(state_mod.SchedulerState)] == list(STATE_JOBS)
+        fresh = state_mod.SchedulerState()
+        assert all(getattr(fresh, job) == state_mod.JobState() for job in STATE_JOBS)
+        print_success("current_price, history_sync, profile_read")
+
+    def test_profile_read_and_round_started_at_are_saved_and_read_back(self, tmp_path, monkeypatch):
+        """SS-013: a state with ``profile_read`` set — ``round_started_at``, deferred items and ``retry_at`` among its
+        fields — is written under ``profile_read`` and read back as saved; the other jobs keep ``round_started_at`` None."""
+        print_section("SS-013: save_state + load_state with profile_read")
+        state_mod = _make_state_module(tmp_path, monkeypatch)
+        state = state_mod.SchedulerState(
+            current_price=state_mod.JobState(last_run_at="2026-11-14T10:00:00+00:00", last_status="ok", last_items_ok=3),
+            history_sync=state_mod.JobState(last_run_at="2026-11-14T06:00:00+00:00", last_status="ok", last_items_ok=5),
+        )
+        state.profile_read = state_mod.JobState(
+            last_run_at="2026-11-14T03:00:05+01:00",
+            last_duration_s=4.5,
+            last_status="partial",
+            last_items_ok=2,
+            last_items_err=1,
+            last_items_deferred=1,
+            retry_at="2026-11-14T02:01:00+00:00",
+            round_started_at=ROUND_STARTED_AT,
+        )
+
+        state_mod.save_state(state)
+        written = json.loads((tmp_path / "scheduler_state.json").read_text())
+
+        assert written.get("profile_read", {}).get("round_started_at", "<missing>") == ROUND_STARTED_AT, written
+        assert written["profile_read"]["retry_at"] == "2026-11-14T02:01:00+00:00" and written["profile_read"]["last_items_deferred"] == 1
+        assert {job: written[job].get("round_started_at", "<missing>") for job in ("current_price", "history_sync")} == {"current_price": None, "history_sync": None}
+        assert state_mod.load_state() == state
+        print_success("written, and read back as saved")
+
+    def test_a_file_without_profile_read_loads_a_fresh_one_and_keeps_the_others(self, tmp_path, monkeypatch):
+        """SS-014: a file written before lot B6 (two jobs, no ``round_started_at``) loads with a fresh ``profile_read`` and
+        the two jobs as they were."""
+        print_section("SS-014: load_state — a file written before lot B6")
+        state_mod = _make_state_module(tmp_path, monkeypatch)
+        (tmp_path / "scheduler_state.json").write_text(json.dumps(BEFORE_Z7B))
+
+        result = state_mod.load_state()
+
+        assert getattr(result, "profile_read", "<missing>") == state_mod.JobState()
+        assert (result.current_price, result.history_sync) == (state_mod.JobState(**BEFORE_Z7B["current_price"]), state_mod.JobState(**BEFORE_Z7B["history_sync"]))
+        print_success("a fresh profile_read, the others kept")
+
+    @pytest.mark.parametrize("section", [None, "garbage", [1, 2]], ids=["null", "a-string", "a-list"])
+    def test_a_profile_read_section_that_is_not_an_object_loads_as_a_fresh_job_state(self, tmp_path, monkeypatch, section):
+        """SS-015: ``profile_read`` is not a JSON object: ``load_state`` does not raise and gives a fresh ``JobState`` for
+        it, as SS-011 for the others."""
+        print_section(f"SS-015: load_state — profile_read is {section!r}")
+        state_mod = _make_state_module(tmp_path, monkeypatch)
+        (tmp_path / "scheduler_state.json").write_text(json.dumps({**BEFORE_Z7B, "profile_read": section}))
+
+        result = state_mod.load_state()
+
+        assert getattr(result, "profile_read", "<missing>") == state_mod.JobState()
         print_success("no exception, a fresh JobState")

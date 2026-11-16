@@ -1766,6 +1766,14 @@ def services_scheduler_backoff(verbose: bool = False, test_names: list = None) -
     return run_command(cmd, "Scheduler retry and backoff tests", verbose=verbose)
 
 
+def services_scheduler_profile_read(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the scheduler's third job, the weekly read of the enrichers, and refresh_assets(hold_deferred=…) (project 68, lot B6)."""
+    print_section("Services: Scheduler Profile Read")
+    print_info("Testing: backend/app/services/platform/scheduler/jobs.py (run_profile_read), joblog.py, enrichers/refresh.py (hold_deferred, read_since)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_profile_read.py", test_names)
+    return run_command(cmd, "Scheduler profile read tests", verbose=verbose)
+
+
 def services_scheduler_price_refresh(verbose: bool = False, test_names: list = None) -> bool:
     """Test «Aggiornamento prezzi…»: the catch-up tracker PRICE_REFRESH, its wiring in run_due_jobs and scheduler_loop (lot Z5)."""
     print_section("Services: Scheduler Price Refresh")
@@ -3886,6 +3894,19 @@ Note: No backend server required.
         # PRICE_REFRESH is reset before and after each test, and its ACTIVITY replaced only through monkeypatch by an
         # Activity on a fake clock. The loop runs as a task of the test's own event loop and is stopped and awaited within
         # a deadline; the FastAPI app of the header case is served in this process by httpx.ASGITransport (no socket).
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "scheduler-profile-read",
+        services_scheduler_profile_read,
+        name="Scheduler Profile Read",
+        desc="Project 68 B6: run_profile_read reads the active assets with a non-empty enricher config only; a regular round starts a round (round_started_at), refresh_assets(hold_deferred=True), counts assets ok / err / deferred (a RATE_LIMITED read), retry_at now + the shortest pause; the retry round (retry_at come) reads only what was not read since the round's start (plugin not called, cached values still merged), hold_deferred=False, never sets retry_at again, keeps round_started_at; a regular round after it reads everything; one log entry per run that validates as SchedulerLogEntry; the consultant's two cases (held in round one, written from the first in round two; refused again, written from the second); refresh_assets(hold_deferred) holds only the voices the refused enricher declares for the asset's type whose winner comes after it",
+        # PURE: every database is a private SQLite file under tmp_path built with create_all, reached by the job through
+        # jobs.get_async_engine / refresh.get_async_engine replaced for the test (a barrier checks the entry names only the
+        # file's assets); the job log is under tmp_path; synthetic enrichers registered in the process's own
+        # EnricherRegistry (removed at teardown) and the process-wide enricher_read cache cleared around each test; no
+        # server, no network, no sleep.
         isolation="pure",
     )
     add_test(
