@@ -826,7 +826,24 @@ class CoinGeckoProvider(AssetSourceProvider):
   byte, so a stored BRIM parse stays current); a required group field without a value leaves every
   plugin that uses the group not configured, named `<group>.<field>` in `missing`
   (`coingecko.api_key`): the boundaries answer [NOT_CONFIGURED](#not-configured).
-- **The catalogue and the writes** of a group, and its tab in the interface, come with G2 and G3.
+- **In the catalogue and the writes** (G2), a group is an entry of its own: `family="group"`,
+  `plugin_code` its name, `plugin_name` its label (`name_key` its i18n key), its fields as any
+  plugin's (system: written by an administrator, read-only for the others, a secret only as set or
+  unset, locked by its variable, hidden when locked in the managed profile), `configured` judged on
+  its fields, and `used_by`, the plugins that read it. A plugin's entry lists the groups it reads in
+  `groups`, and its `configured` counts their fields with the same rule as a call
+  (`contract.qualified_missing()`); a plugin that only reads groups is listed too, with no field of
+  its own. A write names a group as it names a plugin (`family: "group"`, `plugin_code: <name>`,
+  `scope: "system"`) and follows the same rules, all or nothing with plugin items.
+- **The test group `mock`** (`groups/mock.py`, `test_only`): a secret `account_token` and a select
+  `tier`, nothing required, read by `mockprov`, whose search `lf-group-echo` answers
+  `group: tier=…; account_token=set|unset`. Listed only when named, like the test-only plugins, and
+  withheld outside test mode (`groups.is_withheld()`, X-R44): a production instance neither lists
+  nor writes it, although the group registers in every process.
+- **Managed profile.** A group whose every field the environment locks has no entry, and the
+  plugins that read it do not name it in `groups` (decision N2: no trace of what the hoster set);
+  their `configured` still counts its fields.
+- **Its tab in the interface** comes with G3.
 
 ---
 
@@ -902,8 +919,8 @@ sees: [Search Preferences](../../../user/settings/plugins.md#search-preferences)
 
 | Endpoint | Caller | What it does |
 |----------|--------|--------------|
-| `GET /api/v1/settings/plugins` | Any signed-in user | Every plugin that declares settings, with `configured` (see [NOT_CONFIGURED](#not-configured)), its `icon_url` (the icon its family's provider list publishes: the `get_icon` property of a price provider, `icon` of an exchange-rate provider, `icon_url` of an import plugin; null without one) and each field as the caller sees it: its declaration (type, scope, labels and i18n keys, bounds, options, default) and its state (`value` for a plain field, `is_set`, `source`: `env`, `db`, `default` or `none`, `locked`, `editable`, `problem`, `updated_at`; `env_variable` for administrators). Filters: `family`, `plugin_code`. |
-| `PATCH /api/v1/settings/plugins/bulk` | Any signed-in user; `system` fields need an administrator | Writes 1 to 100 items, all or nothing. Each item names `family`, `plugin_code`, `field_key` and `scope`, and gives exactly one of `value` (a plain field), `secret_value` (a secret field) and `clear: true` (deletes the saved value, so the default applies again). |
+| `GET /api/v1/settings/plugins` | Any signed-in user | Every plugin that declares settings, with `configured` (see [NOT_CONFIGURED](#not-configured)), its `icon_url` (the icon its family's provider list publishes: the `get_icon` property of a price provider, `icon` of an exchange-rate provider, `icon_url` of an import plugin; null without one) and each field as the caller sees it: its declaration (type, scope, labels and i18n keys, bounds, options, default) and its state (`value` for a plain field, `is_set`, `source`: `env`, `db`, `default` or `none`, `locked`, `editable`, `problem`, `updated_at`; `env_variable` for administrators). Filters: `family`, `plugin_code`. The plugins come first, then the shared groups (`family: "group"`, with `used_by`); a plugin lists the groups it reads in `groups` ([Shared Groups](#groups)). |
+| `PATCH /api/v1/settings/plugins/bulk` | Any signed-in user; `system` fields need an administrator | Writes 1 to 100 items, all or nothing. Each item names `family`, `plugin_code`, `field_key` and `scope` (a shared group: `family: "group"`, `plugin_code` its name, `scope: "system"`), and gives exactly one of `value` (a plain field), `secret_value` (a secret field) and `clear: true` (deletes the saved value, so the default applies again). |
 
 A write checks every item before writing anything, then writes them all in one transaction:
 
