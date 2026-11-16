@@ -25,16 +25,16 @@ Beside the mode, the step asks for a **Horizon (days)** — 365 by default, at m
 The **Risk & Scenarios** tab of an asset's detail page still runs the normal curve alone, with Monte Carlo or quasi-Monte Carlo sampling.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="The Dashboard's What if…? Simulation box: the beta notice and the model warning, the five modes with Reshuffled history recommended, horizon, paths and seed, and after Simulate the terminal figures, the cone and What this simulation assumed" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="The Dashboard's What if…? Simulation box: the model warning, the five modes with Reshuffled history recommended, horizon, paths and seed, and after Simulate the terminal figures, the cone and What this simulation assumed" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
-## 🧪 Why the Simulation Is Still in Beta {: #why-beta }
+## 🧪 What the Simulation Does Not Yet Do {: #why-beta }
 
-Every other part of Risk Analysis has left beta. The simulation step alone opens with a notice: *Simulation is still in beta. Its outcome depends heavily on how much history is requested relative to the horizon: a short window with a long horizon can produce implausible figures.* Below it, a second warning stays for good, because a model stays a model: *This is the only rung that is a model rather than a measurement. Read it as a range of possibilities, not a forecast.*
+What the simulation does not yet do is read enough history for a long horizon: its outcome depends heavily on how much history is requested relative to the horizon, and a short window with a long horizon can produce implausible figures. At the top of the simulation step, a warning stays for good, because a model stays a model: *This is the only rung that is a model rather than a measurement. Read it as a range of possibilities, not a forecast.*
 
-The defect behind the first notice is the ratio between the horizon $H$, counted in steps, and the $n$ observations of the window. A resampled path of $H$ steps reuses each observation $H/n$ times on average: from a quarter of history, a one-year horizon is that quarter, reshuffled and repeated about four times over, and whatever the quarter did — a rally, a calm spell, a slide — becomes the year. The normal curve does not escape it, because its drift and its volatility are the window's, carried forward unchanged however long the horizon. Requesting more history does not always cure it either: a holding with a short history shortens the shared window for all of them (see [Data Quality](data-quality.md#alignment-what-missing-data-actually-costs)). No guard on that ratio is applied yet, and until one is, the step stays in beta. The [uncertainty of the drift](#the-drift-is-an-estimate), shown beside every result, is that ratio at work.
+The defect is the ratio between the horizon $H$, counted in steps, and the $n$ observations of the window. A resampled path of $H$ steps reuses each observation $H/n$ times on average: from a quarter of history, a one-year horizon is that quarter, reshuffled and repeated about four times over, and whatever the quarter did — a rally, a calm spell, a slide — becomes the year. The normal curve does not escape it, because its drift and its volatility are the window's, carried forward unchanged however long the horizon. Requesting more history does not always cure it either: a holding with a short history shortens the shared window for all of them (see [Data Quality](data-quality.md#alignment-what-missing-data-actually-costs)). No guard on that ratio is applied yet. The [uncertainty of the drift](#the-drift-is-an-estimate), shown beside every result, is that ratio at work.
 
 ---
 
@@ -184,7 +184,7 @@ $$
 
 and the median $M$ of the last day is given the range $\big[(1 + M)/\varphi - 1,\ (1 + M)\,\varphi - 1\big]$: *The drift comes from … observations: that alone puts this median between … and ….* When $\varphi$ exceeds the spread of the cone itself, $(1 + P_{95})/(1 + P_{5})$, the line becomes an amber warning: the uncertainty about the drift alone is then wider than the band the simulation drew.
 
-The exponent grows with $H$ and shrinks only with $\sqrt{n}$: doubling the horizon doubles it, while halving it takes four times as much history. That is the [ratio behind the beta notice](#why-beta), written as a number.
+The exponent grows with $H$ and shrinks only with $\sqrt{n}$: doubling the horizon doubles it, while halving it takes four times as much history. That is the [ratio behind this limit](#why-beta), written as a number.
 
 ---
 

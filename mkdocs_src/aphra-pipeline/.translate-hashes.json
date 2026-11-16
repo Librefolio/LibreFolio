@@ -437,7 +437,7 @@
     "last_translated": "2026-11-05T11:30:00.713344+00:00"
   },
   "user/installation.en.md": {
-    "md5": "718f4fcf2daf25dd5816211167993735",
+    "md5": "bf509bf870b1ea2706c7c5d1d1c8cfc0",
     "langs_done": [
       "es",
       "fr",
@@ -457,7 +457,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 152.2,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-16T18:36:24.125069+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -470,7 +470,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 180.1,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-16T18:36:24.125069+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -483,7 +483,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 181.6,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-16T18:36:24.125069+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -9968,7 +9968,7 @@
     }
   },
   "financial-theory/technical-analysis/risk-metrics/simulation-modes.en.md": {
-    "md5": "a5a3e73e1618a99684a0418627a02ad0",
+    "md5": "ab636bc374148b0ab4b4ba68d731d58d",
     "langs_done": [
       "es",
       "fr",
@@ -9988,7 +9988,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 242.4,
-        "stamped_at": "2026-11-05T20:58:48.484708+00:00",
+        "stamped_at": "2026-11-16T18:42:27.185064+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -10001,7 +10001,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 253.2,
-        "stamped_at": "2026-11-05T20:58:48.484708+00:00",
+        "stamped_at": "2026-11-16T18:42:27.185064+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -10014,13 +10014,13 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 223.6,
-        "stamped_at": "2026-11-05T20:58:48.484708+00:00",
+        "stamped_at": "2026-11-16T18:42:27.185064+00:00",
         "stamped_by": "translate-stamp"
       }
     }
   },
   "user/dashboard/risk.en.md": {
-    "md5": "8fd2483a927f8881aa52ff9da4a88dfa",
+    "md5": "97e1e3bf1ecdfbea862cbad0dbba30e8",
     "langs_done": [
       "es",
       "fr",
@@ -10040,7 +10040,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 121.4,
-        "stamped_at": "2026-11-09T08:52:52.256058+00:00",
+        "stamped_at": "2026-11-16T18:36:24.125069+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -10053,7 +10053,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 263.1,
-        "stamped_at": "2026-11-09T08:52:52.256058+00:00",
+        "stamped_at": "2026-11-16T18:36:24.125069+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -10066,7 +10066,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 147.7,
-        "stamped_at": "2026-11-09T08:52:52.256058+00:00",
+        "stamped_at": "2026-11-16T18:36:24.125069+00:00",
         "stamped_by": "translate-stamp"
       }
     }
