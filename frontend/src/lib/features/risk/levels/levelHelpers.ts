@@ -43,7 +43,7 @@ export function finite(value: unknown): number | null {
  *
  * `partial` is not an exotic state: the server returns it whenever a degrading
  * warning fired, an asset was excluded for want of a usable series, or the data
- * quality was anything but clean (`service.py:736`). A portfolio with one
+ * quality was anything but clean (`success_result`, `risk/results.py`). A portfolio with one
  * unpriceable holding is `partial`. Refusing it would blank every level for a
  * reader whose answer is merely incomplete — and it would blank L2 exactly in
  * the case L2 exists to explain, since `cash_weight` is where those excluded
@@ -151,7 +151,7 @@ export interface ResultReason {
  * key on screen — and where a code-named key with arguments showed its braces.
  *
  * Note that a `partial` with **no** warnings at all is ordinary, not a bug:
- * `service.py:736` also turns a wave partial for context exclusions, excluded
+ * `success_result` (`risk/results.py`) also turns a wave partial for context exclusions, excluded
  * assets, or data quality — each disclosed by its own surface.
  */
 export function resultReasons(results: ReadonlyArray<RiskAnalyticResult | null | undefined>, translate?: WarningTranslator): ResultReason[] {
@@ -511,7 +511,7 @@ export function buildDivergenceRows(contributionResult: RiskAnalyticResult | nul
         if (assetId === null || weight === null || percentage === null) continue;
         // Both arrive as **fractions**. `percentage_contribution` is named for the
         // question it answers, not for its scale: the backend computes it as
-        // `component / portfolio_volatility` (services/risk/metrics.py:487), and
+        // `component / portfolio_volatility` (`risk_contributions_from_covariance`, `services/risk/metrics.py`), and
         // its own API test asserts the items sum to 1,0 — not to 100. Dividing by
         // a hundred here made every contribution a hundredth of itself, so every
         // holding read as a risk *reducer* and the diverging bars pointed the
@@ -560,14 +560,14 @@ export interface Concentration {
      * share of NAV the positions' own weights are small, their squares smaller
      * still, and the index rises **far above the number of holdings** — it can
      * read in double figures over a mere handful of positions. The arithmetic is
-     * right and the parity with AI Export (`broker_concentration_context.py:97`)
+     * right and the parity with AI Export (`concentration_metrics`, `broker_concentration_context.py`)
      * depends on it; the word "count" is what would be wrong. An index promises
      * no maximum, a count does — and a card whose "effective number of assets"
      * plainly exceeds the holdings listed beneath it tells the reader the
      * software is broken.
      *
      * The case is described in shape and not in figures on purpose: the mock
-     * seeds its RNG per `(asset, date)` (`populate_mock_data.py:2162`) while the
+     * seeds its RNG per `(asset, date)` (`populate_price_history`, `populate_mock_data.py`) while the
      * window ends at `date.today()`, so a single date's price is stable forever
      * but **anything integrating over the window moves every day**. A measured
      * aggregate written here would be false tomorrow, and nothing would fail.

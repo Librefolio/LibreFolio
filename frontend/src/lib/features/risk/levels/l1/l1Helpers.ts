@@ -131,7 +131,7 @@ export interface ReturnHistogram {
  * is deliberate. `RiskVarCvarOutput.validate_return_bins` (`schemas/risk/outputs.py`) polices only that
  * `lower_bound` ascends — **not** contiguity, and **not** that the counts sum to
  * the observation total. The current producer happens to emit a uniform grid
- * (`historical_var.py:90` slices one edge array), but that is the producer's
+ * (`HistoricalVarAnalytic.compute` slices one edge array), but that is the producer's
  * contract and not the schema's, and drawing from the real widths costs nothing
  * while surviving a grid that stops being uniform.
  */
@@ -245,7 +245,7 @@ export interface TailMeasures {
      *
      * ⚠️ `null` here is a **refusal, not a gap**. When every day in the window
      * gained, the producer sets the field to `None` on purpose
-     * (`historical_kpi.py:126-137`): *"reporting zero here would claim a loss
+     * (`HistoricalKpiAnalytic.compute`): *"reporting zero here would claim a loss
      * that never happened while pointing at a profitable date."* Substituting a
      * zero downstream would reinstate exactly the number the producer declined
      * to publish, and hand it the authority of a measurement.
@@ -261,7 +261,7 @@ export interface TailMeasures {
      * The confidence the backend actually used, as a fraction in `(0,1)`.
      *
      * ⚠️ Read, never assumed. `drawdown_confidence_level` is a **parameter**
-     * (`historical_kpi.py:59`) that the backend publishes on its output, so a
+     * (`HistoricalKpiParams.drawdown_confidence_level`) that the backend publishes on its output, so a
      * hardcoded "95%" in a caption is a sentence that turns false silently the
      * day the parameter moves.
      */
