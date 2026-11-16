@@ -1336,6 +1336,45 @@ async function answerEligibility(page: Page, verdictFor: (assetId: number) => Ve
 }
 
 /**
+ * A gate in front of `POST /risk/eligibility`: it counts every question, and while held it
+ * keeps the answers back until released. Registered after the handler that answers, it runs
+ * first and hands each question on (`route.fallback`), so the verdicts stay that handler's.
+ *
+ * It lets a test read what waits for a verdict: whatever asks while an answer is held did not
+ * wait for it.
+ */
+async function gateEligibility(page: Page): Promise<{hold: () => void; release: () => void; asked: () => number; held: () => number}> {
+    let asked = 0;
+    let held = 0;
+    let holding = false;
+    let open: () => void = () => undefined;
+    let barrier: Promise<void> = Promise.resolve();
+    await page.route('**/api/v1/risk/eligibility', async (route) => {
+        asked += 1;
+        if (holding) {
+            held += 1;
+            await barrier;
+        }
+        await route.fallback();
+    });
+    return {
+        hold: () => {
+            holding = true;
+            held = 0;
+            barrier = new Promise<void>((resolve) => {
+                open = resolve;
+            });
+        },
+        release: () => {
+            holding = false;
+            open();
+        },
+        asked: () => asked,
+        held: () => held,
+    };
+}
+
+/**
  * The page's asset list: every id the page asked the engine about, across all its questions.
  *
  * The lab asks about its whole catalogue (`catalogueKey`), so this is the list the
@@ -7180,6 +7219,101 @@ test.describe('Asset Global risk laboratory', () => {
         expect(exchangeFor(engine.exchanges, selection, period)?.notEligible, 'the premise: every selected asset is eligible in the new period').toEqual([]);
 
         await expect(banner, 'the engine suggests a period, but it brings no selected asset back: there is nothing to offer').toHaveCount(0);
+    });
+
+    /**
+     * RN-03 (F2): a sync asks the eligibility engine again.
+     *
+     * A verdict follows the prices: a sync that brings an asset's history in can make it
+     * selectable, and a benchmark measurable (D378). Both questions the panel asks — the
+     * catalogue's, which decides the chips and what every section is asked about, and the
+     * selection's, which decides the fit-period offer — are keyed on the list, the period and
+     * the currency; a sync changes none of the three, so before RN-03 neither was asked again
+     * and the lab kept the verdicts of the prices it had before the sync.
+     *
+     * Told apart by the ids they ask about: the catalogue's question asks about every asset
+     * the page lists, the selection's about the chips alone. Nothing is written anywhere: the
+     * sync and every risk call are stubbed.
+     */
+    test('asks the eligibility engine again after a sync, both for the catalogue and for the selection', async ({page}) => {
+        await installRiskMocks(page);
+        const engine = await answerEligibility(page);
+        await installSyncMocks(page);
+        await openAssetGlobalRisk(page);
+        const selection = [...(await chipIds(page))].sort((left, right) => left - right);
+
+        const sameIds = (call: EligibilityCall, ids: readonly number[]) => sameMembers(call.assetIds.map(String), ids.map(String));
+        const catalogue = engine.find((call) => !sameIds(call, selection));
+        if (!catalogue) throw new Error('The page asked the eligibility engine only about the selection: no catalogue question to follow.');
+        const askedFor = (ids: readonly number[]) => engine.filter((call) => sameIds(call, ids)).length;
+        // Both questions answered once at least before the sync, so a count that grows is a new question.
+        await expect.poll(() => askedFor(selection), {timeout: 15_000, message: 'premise: the selection was never asked about'}).toBeGreaterThan(0);
+        const before = {catalogue: askedFor(catalogue.assetIds), selection: askedFor(selection)};
+
+        await runSyncToCompletion(page);
+
+        await expect.poll(() => askedFor(catalogue.assetIds), {timeout: 15_000, message: 'the sync did not ask the engine about the catalogue again: the chips keep the verdicts of the old prices'}).toBeGreaterThan(before.catalogue);
+        await expect.poll(() => askedFor(selection), {timeout: 15_000, message: 'the sync did not ask the engine about the selection again: the fit-period offer keeps the old prices'}).toBeGreaterThan(before.selection);
+        const last = engine.at(-1) as EligibilityCall;
+        expect({start: last.dateRange.start, currency: last.targetCurrency}, 'the question after the sync is the same period and currency').toEqual({start: catalogue.dateRange.start, currency: catalogue.targetCurrency});
+    });
+
+    /**
+     * RN-03, the two halves with a benchmark chosen (consultant's answer, 16/11/2026).
+     *
+     * - **A reload asks the engine nothing, and L3° does not wait.** «Reload All» syncs nothing,
+     *   so no verdict can have changed: re-asking would unsettle the verdicts, and with a
+     *   benchmark chosen L3° waits for settled verdicts (`labL3Waits`) by being unmounted —
+     *   the trap the lot avoids. So the eligibility answers are held at the gate, and L3° must
+     *   ask again all the same, with no question reaching the gate.
+     * - **A sync asks again, and L3° waits for the new verdict** (D378: the benchmark may have
+     *   become measurable, or stopped being). With the answers held, L1° — which never waits —
+     *   asks again while L3° does not; released, L3° asks.
+     *
+     * The opening is stored (selection and benchmark), so L3° asks with a benchmark from the
+     * start. Nothing is written anywhere: the sync and every risk call are stubbed.
+     */
+    test('with a benchmark, a reload asks the engine nothing and keeps L3° asking; a sync asks again and L3° waits for the verdict', async ({page}) => {
+        test.setTimeout(60_000);
+        const cast = await castBenchmark(page);
+        await storeLabOpening(page, cast.selection, cast.reference.id);
+        const requests = await installRiskMocks(page);
+        const gate = await gateEligibility(page);
+        await installSyncMocks(page);
+        await openLabOn(page, cast.selection);
+        const selection = cast.selection;
+        const paid = () => paidRequestsFor(requests, selection).length;
+        const loss = () => lossRequestsFor(requests, selection).length;
+        await expect.poll(paid, {timeout: 15_000, message: 'premise: L3° never asked on opening'}).toBeGreaterThan(0);
+        await waitForPaidTable(page);
+        await waitForLossTable(page);
+
+        // ── a reload: no question, and L3° asks without waiting ───────────────
+        const reload = page.getByTestId('assets-controls').getByTestId('risk-reload-button');
+        await expect(reload, 'the reload must be pressable once the opening waves are in').toBeEnabled({timeout: 15_000});
+        const beforeReload = {asked: gate.asked(), paid: paid(), loss: loss()};
+        gate.hold();
+        await reload.click();
+        await expect.poll(paid, {timeout: 15_000, message: 'L3° did not ask again after a reload while the eligibility answers were held: it waited for a verdict a reload does not change'}).toBeGreaterThan(beforeReload.paid);
+        await expect.poll(loss, {timeout: 15_000, message: 'L1° must re-read its base after a reload'}).toBeGreaterThan(beforeReload.loss);
+        await waitForPaidTable(page);
+        gate.release();
+
+        // ── a sync: a new question, and L3° waits for its answer ──────────────
+        const beforeSync = {paid: paid(), loss: loss()};
+        gate.hold();
+        await runSyncToCompletion(page);
+        await expect.poll(() => gate.held(), {timeout: 15_000, message: 'the sync did not ask the eligibility engine again'}).toBeGreaterThan(0);
+        await expect.poll(loss, {timeout: 15_000, message: 'L1° must re-read its base after a sync'}).toBeGreaterThan(beforeSync.loss);
+        expect(paid(), 'L3° asked before the new verdict came back: with a benchmark chosen it must wait for it (D378)').toBe(beforeSync.paid);
+        gate.release();
+        await expect.poll(paid, {timeout: 15_000, message: 'L3° never asked once the new verdict came back'}).toBeGreaterThan(beforeSync.paid);
+
+        // ── the reload's absence, whatever the timing ─────────────────────────
+        // Counted from the reload on, after everything that follows it has landed: the sync asks
+        // two questions (the catalogue's and the selection's, each one request at this size), so
+        // a reload that had asked too — early or late, held or not — would make it four.
+        expect(gate.asked() - beforeReload.asked, 'from the reload to the end, only the sync may have asked the eligibility engine: the catalogue and the selection, once each').toBe(2);
     });
 });
 
