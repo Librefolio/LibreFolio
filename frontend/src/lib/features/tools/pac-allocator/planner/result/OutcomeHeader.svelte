@@ -2,10 +2,10 @@
     import {ArrowDown} from 'lucide-svelte';
     import {t} from '$lib/i18n';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
-    import {formatObjectiveValue, formatPlannerDate, type CurrencyDigits} from '../format';
+    import {exactDisplay, formatExactMoneyPlain, formatObjectiveValue, formatPlannerDate, formatPlannerPlainDecimal, type CurrencyDigits} from '../format';
     import {L2_FORMULA_FALLBACK} from '../policies';
     import {tipHtml} from '../shared/tipHtml';
-    import type {PlannerReadyResult} from '../types';
+    import type {PlannerReadyResult, RebalancerSolution} from '../types';
     import {BADGE, BUTTON_LINK, BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, HINT} from '../ui';
     import {objectiveStage, resultBadges, type BadgeTone} from './model';
     import ResultBadgeTip from './ResultBadgeTip.svelte';
@@ -38,6 +38,11 @@
     /** A ready result never carries an error: a warning colours the badge, an information only marks it. */
     const notesTone = $derived<BadgeTone>(result.issues.some((issue) => issue.severity === 'warning') ? 'warning' : result.issues.length > 0 ? 'info' : 'neutral');
     const TIP_WIDTH = '320px';
+    /** The Rebalancer's score (F4a of project 67, step 4; contract §6.6): `J` and its parts, or under «Target first» the
+     * distance and the money lost, all published in `score`. Absent for the PAC. */
+    const R = 'tools.portfolioRebalancer.planner.result.header';
+    const score = $derived(profile.text === 'rebalancer' && 'primary_solution' in result ? (result.primary_solution as unknown as RebalancerSolution).score : null);
+    const scoreMoney = (value: Parameters<typeof formatExactMoneyPlain>[0]) => formatExactMoneyPlain(value, {digits});
 </script>
 
 <section class="{CARD} space-y-3" aria-labelledby={domId('result-title', profile)} data-testid={testId('outcome', profile)} data-state={result.result_state}>
@@ -66,7 +71,33 @@
             </li>
         {/each}
     </ul>
-    {#if l2 || shortfall}
+    {#if score}
+        <ul class="flex flex-wrap gap-2 tabular-nums" data-testid={testId('outcome-objectives', profile)}>
+            {#if score.plan_score && score.distance_weight}
+                <li data-testid={testId('outcome-objective', profile)} data-objective="plan_score">
+                    <Tooltip text={$t(`${R}.scoreHelp`, {values: {lambda: formatPlannerPlainDecimal(exactDisplay(score.distance_weight).text), distance: scoreMoney(score.distance_per_wealth), lost: scoreMoney(score.wealth_loss)}})} maxWidth={TIP_WIDTH}>
+                        <span class={BADGE.neutral}>{$t(`${R}.score`, {values: {value: scoreMoney(score.plan_score)}})}</span>
+                    </Tooltip>
+                </li>
+            {:else}
+                <li data-testid={testId('outcome-objective', profile)} data-objective="target_distance">
+                    <Tooltip text={$t(`${R}.distanceHelp`)} maxWidth={TIP_WIDTH}>
+                        <span class={BADGE.neutral}>{$t(`${R}.distance`, {values: {value: scoreMoney(score.distance_per_wealth)}})}</span>
+                    </Tooltip>
+                </li>
+                <li data-testid={testId('outcome-objective', profile)} data-objective="wealth_loss">
+                    <Tooltip text={$t('tools.portfolioRebalancer.planner.result.kpi.moneyLostHelp')} maxWidth={TIP_WIDTH}>
+                        <span class={BADGE.neutral}>{$t(`${R}.moneyLost`, {values: {value: scoreMoney(score.wealth_loss)}})}</span>
+                    </Tooltip>
+                </li>
+            {/if}
+            <li data-testid={testId('outcome-notes', profile)} data-tone={notesTone}>
+                <Tooltip text={$t(`${KEY}.notesHelp`, {default: 'The messages the calculation left about this plan, warnings or information. When there are any, they are listed just below.'})} maxWidth={TIP_WIDTH}>
+                    <span class={BADGE[notesTone]}>{$t(`${KEY}.notes`, {default: '{count, plural, =0 {no notes} one {# note} other {# notes}}', values: {count: result.issues.length}})}</span>
+                </Tooltip>
+            </li>
+        </ul>
+    {:else if l2 || shortfall}
         <ul class="flex flex-wrap gap-2 tabular-nums" data-testid={testId('outcome-objectives', profile)}>
             {#if l2}
                 <li data-testid={testId('outcome-objective', profile)} data-objective="fixed_l2">

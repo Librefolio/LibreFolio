@@ -3,13 +3,18 @@
   is made of as badges; beside them the «Calcolo» box: how long the optimizer worked and how far it
   got. Every amount is the backend's accounting and a part that is exactly 0 is left out. Without a
   plan (infeasible, nothing found within the limits) only the box is shown.
+
+  The Rebalancer (F4a of project 67, step 4; contract §6.1, X14) has its own six tiles, chosen by the Tool's profile:
+  «Worth today» (`F`), «Worth after» (`W`), «Money lost» (`F − W`, from the score) with its published entries, «Largest gap
+  from target» after and before (points), «Uninvested», «Orders». Every one is a published field: none is a sum, a
+  difference or a maximum of others.
 -->
 <script lang="ts">
     import {t} from '$lib/i18n';
     import type {ToolItemMetrics} from '$lib/features/tools/contracts';
     import HelpTip from '../shared/HelpTip.svelte';
-    import {formatExactMoneyPlain, formatObjectiveValue, type CurrencyDigits} from '../format';
-    import type {PlannerCosts, PlannerExactMoney, PlannerReadyResult, PlannerSolution} from '../types';
+    import {formatExactMoneyPlain, formatExactPercent, formatExactPoints, formatObjectiveValue, type CurrencyDigits} from '../format';
+    import type {PlannerCosts, PlannerExactMoney, PlannerReadyResult, PlannerSolution, RebalancerSolution} from '../types';
     import {BADGE, CARD, HINT, SECTION_TITLE} from '../ui';
     import {exactSign, objectiveStage} from './model';
     import {uiLocale} from '$lib/stores/app/uiLocale';
@@ -32,7 +37,7 @@
 
     type Tone = keyof typeof BADGE;
     type Chip = {id: string; label: string; value?: string; tone: Tone};
-    type Kpi = 'fixed_reference' | 'final_invested' | 'shortfall' | 'selected_funding' | 'explicit_cost' | 'orders';
+    type Kpi = 'fixed_reference' | 'final_invested' | 'shortfall' | 'selected_funding' | 'explicit_cost' | 'orders' | 'value_today' | 'value_after' | 'money_lost' | 'largest_deviation' | 'uninvested';
     type Tile = {kpi: Kpi; label: string; help: string; value: string; chips: Chip[]};
 
     const COST_PARTS = [
@@ -52,8 +57,63 @@
 
     const trapped = $derived(solution !== null && shown(solution.accounting.trapped_funding));
 
+    const R = 'tools.portfolioRebalancer.planner.result.kpi';
+    /** The money lost, entry by entry (contract §6.1): each published part, never grouped. */
+    const LOSS_PARTS = [
+        {field: 'buy_fees', key: `${RESULT_KEY}.ledger.fields.buy_fees`, fallback: 'Purchase fees'},
+        {field: 'sell_fees', key: `${RESULT_KEY}.ledger.fields.sell_fees`, fallback: 'Sale fees'},
+        {field: 'fx_spread_loss', key: `${RESULT_KEY}.detail.spreadLoss`, fallback: 'Spread loss'},
+        {field: 'execution_margin_cost', key: `${RESULT_KEY}.detail.marginCost`, fallback: 'Margin cost'},
+        {field: 'broker_withheld_tax', key: `${RESULT_KEY}.ledger.fields.broker_withheld_tax`, fallback: 'Tax withheld by the Broker'},
+        {field: 'self_reserved_tax', key: `${RESULT_KEY}.ledger.fields.self_reserved_tax`, fallback: 'Tax reserved by you'},
+        {field: 'foreign_withholding_tax', key: `${R}.foreignWithholding`, fallback: 'Foreign withholding tax'},
+        {field: 'rounding', key: `${RESULT_KEY}.ledger.fields.rounding_delta`, fallback: 'Rounding'},
+    ] as const;
+
+    function rebalancerTiles(rebalancer: RebalancerSolution): Tile[] {
+        const accounts = rebalancer.plan_accounts;
+        const score = rebalancer.score;
+        const lost = accounts.money_lost;
+        const losses = LOSS_PARTS.filter((entry) => shown(lost[entry.field])).map((entry) => part(entry.field, $t(entry.key, {default: entry.fallback}), lost[entry.field]));
+        const held = {
+            assets: rebalancer.asset_rows.filter((row) => shown(row.final_value)).length,
+            cash: rebalancer.cash_rows.filter((row) => shown(row.final_value)).length,
+        };
+        const brokers = new Set(rebalancer.order_rows.map((order) => order.broker_id)).size;
+        const manualConversions = rebalancer.conversions.filter((action) => action.mode === 'manual').length;
+        const automaticConversions = rebalancer.conversions.length - manualConversions;
+        const count = (id: string, key: string, fallback: string, value: number): Chip[] => (value > 0 ? [{id, label: $t(key, {default: fallback, values: {count: value}}), tone: 'neutral'}] : []);
+        const tile = (kpi: Kpi, key: string, value: string, chips: Chip[]): Tile => ({kpi, label: $t(`${R}.${key}`), help: $t(`${R}.${key}Help`), value, chips});
+        return [
+            tile('value_today', 'valueToday', money(accounts.initial_wealth), [part('assets', $t(`${R}.partsAssets`), rebalancer.accounting.current_invested), part('cash', $t(`${R}.partsCash`), rebalancer.accounting.selected_funding)]),
+            tile('value_after', 'valueAfter', money(accounts.final_wealth), [{id: 'held', label: $t(`${R}.valueAfterHeld`, {values: held}), tone: 'neutral'}]),
+            tile('money_lost', 'moneyLost', money(score.wealth_loss), losses.length > 0 ? losses : [{id: 'none', label: $t(`${R}.noLoss`), tone: 'success'}]),
+            tile('largest_deviation', 'largestDeviation', $t(`${R}.points`, {values: {value: formatExactPoints(score.largest_deviation_after)}}), [{id: 'before', label: $t(`${R}.beforePoints`, {values: {value: formatExactPoints(score.largest_deviation_before)}}), tone: 'neutral'}]),
+            {
+                kpi: 'uninvested',
+                label: $t('tools.portfolioRebalancer.planner.result.allocation.uninvested'),
+                help: $t('tools.portfolioRebalancer.planner.result.allocation.uninvestedHelp'),
+                value: money(accounts.uninvested),
+                chips: [{id: 'share', label: $t(`${R}.uninvestedShare`, {values: {value: formatExactPercent(rebalancer.uninvested_row.final_weight)}}), tone: 'neutral'}],
+            },
+            {
+                kpi: 'orders',
+                label: text('orders', 'Orders'),
+                help: text('help.orders', 'How many orders the plan asks you to place.'),
+                value: String(rebalancer.order_rows.length),
+                chips: [
+                    ...count('brokers', `${KEY}.brokers`, 'at {count, plural, one {# Broker} other {# Brokers}}', brokers),
+                    ...count('transfers', `${R}.transfers`, '{count, plural, one {# transfer} other {# transfers}}', rebalancer.transfers.length),
+                    ...count('fx', `${KEY}.fxActions`, '{count, plural, one {# currency exchange} other {# currency exchanges}}', manualConversions),
+                    ...count('fx_auto', `${KEY}.autoConversions`, '{count, plural, one {# automatic conversion} other {# automatic conversions}}', automaticConversions),
+                ],
+            },
+        ];
+    }
+
     const tiles = $derived.by((): Tile[] => {
         if (!solution) return [];
+        if (profile.text === 'rebalancer') return rebalancerTiles(solution as unknown as RebalancerSolution);
         const accounting = solution.accounting;
         const costs = solution.costs;
         const explicitCost = objectiveStage(solution.objectives.stages, 'explicit_cost');
@@ -155,7 +215,7 @@
                             <span>{tile.label}</span>
                             <HelpTip label={tile.label} help={tile.help} testid={testId('kpi-help', profile)} />
                         </dt>
-                        <dd class="mt-1 text-lg font-semibold tabular-nums text-lf-primary">{tile.value}</dd>
+                        <dd class="mt-1 text-lg font-semibold tabular-nums text-lf-primary" data-testid={testId('kpi-value', profile)}>{tile.value}</dd>
                         {#if tile.chips.length > 0}
                             <dd class="mt-2">
                                 <ul class="flex flex-wrap gap-1">
