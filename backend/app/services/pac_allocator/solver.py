@@ -71,9 +71,11 @@ from typing import Literal
 
 from pyscipopt import Model
 
+from backend.app.logging_config import get_logger
 from backend.app.services.pac_allocator.compiler import CompiledProgram
 from backend.app.services.pac_allocator.constraints.pool import derive_transfer_quanta
 from backend.app.services.pac_allocator.evaluation.evaluator import evaluate_exact_candidate
+from backend.app.services.pac_allocator.evaluation.solver_view import solver_view_objectives
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
     CandidateDecision,
@@ -82,6 +84,8 @@ from backend.app.services.pac_allocator.models import (
 )
 from backend.app.services.pac_allocator.objectives import ObjectiveStage
 from backend.app.services.pac_allocator.progress import ProgressReporter, report_phase
+
+logger = get_logger(__name__)
 
 __all__ = [
     "DEFAULT_SOLVER_TIME_BUDGET_SECONDS",
@@ -374,7 +378,7 @@ def _unfinished_report(stage: ObjectiveStage, ordinal: int, scope: Literal["glob
     )
 
 
-def _apply_engine_settings(model: Model, time_budget_seconds: float, node_limit: int | None) -> list[SolverSetting]:
+def _apply_engine_settings(model: Model, time_budget_seconds: float, node_limit: int | None, *, product: str = "pac") -> list[SolverSetting]:
     """Apply the settings that survive the whole run, and report only those.
 
     ``limits/time`` is deliberately **not** listed here: it is re-armed before
@@ -382,11 +386,21 @@ def _apply_engine_settings(model: Model, time_budget_seconds: float, node_limit:
     (`_stage_time_limit`), so a single value reported at the top would
     describe a configuration that was never executed. The overall budget is
     reported separately as ``time_budget``.
+
+    The Rebalancer also sets ``expr/pow/expandmaxexponent`` to 1 (row 6 of lot
+    CR, specification §16.8): SCIP never expands the square of its distance
+    back into products after simplifying. Without it, on G5 «one route» with
+    money continuous, 4 closures of 10 were «optimal» up to 0.98 € above a
+    plan of the same model; with it, 10 of 10 closed on the same value. The
+    PAC's settings do not change.
     """
     settings = [SolverSetting(name="time_budget", value=f"{time_budget_seconds:g}")]
     if node_limit is not None:
         model.setParam("limits/nodes", node_limit)
         settings.append(SolverSetting(name="limits/nodes", value=str(node_limit)))
+    if product == "rebalancer":
+        model.setParam("expr/pow/expandmaxexponent", 1)
+        settings.append(SolverSetting(name="expr/pow/expandmaxexponent", value="1"))
     return settings
 
 
@@ -404,10 +418,12 @@ def solve_policy_program(
     arithmetic and must be replayed through ``evaluate_exact_candidate``
     before any of it is published. Never raises on a solver outcome — a
     failed or limited search is data (``outcome``/``anomaly``), not an
-    exception.
+    exception. SCIP failing inside a stage is data too once a plan is held
+    (the stage reads ``solver_error``, with an anomaly); before any plan it
+    raises ``SolverStageError`` (lot CR of project 67).
     """
     model = program.model
-    settings = _apply_engine_settings(model, time_budget_seconds, node_limit)
+    settings = _apply_engine_settings(model, time_budget_seconds, node_limit, product=program.scenario.product)
     tolerances = _read_tolerances(model)
     started = time.monotonic()
 
@@ -510,13 +526,17 @@ def _exact_stage_values(cascade: _Cascade, candidate: CandidateActionVector) -> 
     objective's exact value times the stage's scale, SCIP's own unit (D2 of the
     step-2 plan of project 67): pins and bound checks compare like with like. A
     tie-break stage is the quanta of one decision, which is all its expression is.
+    The Rebalancer's money objectives are taken «as the solver sees them»
+    (``evaluation.solver_view``): continuous, each posting less its reserve,
+    as SCIP's model has them; the published values stay the replay's.
     """
     program = cascade.program
     evaluation = evaluate_exact_candidate(program.scenario, program.view, candidate, checkpoint=cascade.checkpoint)
     if not evaluation.candidate_valid:
         return None
-    value_by_ref = {item.ref_id: item.value for item in evaluation.objectives}
-    value_by_code = {ref.code: value_by_ref[ref.ref_id] for ref in program.view.objectives}
+    # The Rebalancer's money stages as the solver sees them (row 6 of lot CR): SCIP's model keeps money continuous, each
+    # posting less its reserve, so pins, D4 and the bound check compare like with like. The PAC's are the replay's own.
+    value_by_code = solver_view_objectives(program.scenario, program.view, evaluation)
     quanta = {decision.decision_id: decision.quanta for decision in candidate.decisions}
     values = []
     for stage in program.objective_stages:
@@ -607,14 +627,44 @@ def _run_stage(model: Model, stage: ObjectiveStage, limit: float, retry_limit: f
     """
     model.setParam("limits/time", limit)
     model.setObjective(stage.expression, "minimize")
-    model.optimize()
+    if not _optimize(model, stage):
+        return _SOLVER_ERROR
     observation = _observe(model)
     if retry_limit is not None and observation.scip_status == "timelimit" and not observation.has_solution:
         check_budget(checkpoint)
         model.setParam("limits/time", retry_limit)
-        model.optimize()
+        if not _optimize(model, stage):
+            return _SOLVER_ERROR
         observation = _observe(model)
     return observation
+
+
+class SolverStageError(RuntimeError):
+    """SCIP failed inside a stage before the cascade held any plan: nothing to publish, a defect for the administrator."""
+
+
+# A stage SCIP could not finish because it failed inside (lot CR of project 67: G5 seed 5 met «unresolved numerical
+# troubles in LP» in a tie-break): no observation can be read off a model in that state.
+_SOLVER_ERROR = _StageObservation(scip_status="solver_error", has_solution=False, primal=None, dual=None, absolute_gap=None, relative_gap=None, solving_seconds=0.0, nodes=0)
+
+
+def _optimize(model: Model, stage: ObjectiveStage) -> bool:
+    """Run SCIP on the stage; ``False`` when SCIP itself failed (its LP solver, for one).
+
+    PySCIPOpt raises a bare ``Exception`` for any SCIP error code, so this is an isolation boundary: the failure is
+    logged once, here (its class and the stage, no traceback), and becomes data, as the module promises (``solve_policy_program`` never raises on a solver
+    outcome). The stage is then reported with the status ``solver_error``; ``_stop_anomaly`` flags it and the cascade
+    ends on the best plan so far, which the exact replay still referees. With no plan held yet there is nothing to keep:
+    ``_solve_stages`` raises ``SolverStageError``, and the run fails as it did before.
+    """
+    try:
+        model.optimize()
+    except Exception as exc:  # noqa: BLE001 - isolation boundary: any SCIP error code, see the docstring
+        # Class and stage only, as ``tool_plugins.pac_allocator.plugin._log_engine_failure`` logs: the worker never configures
+        # logging, and a rendered traceback could show local values (the user's amounts).
+        logger.warning("SCIP failed inside a planner stage; the cascade stops on the best plan so far", stage=stage.code, error_type=type(exc).__qualname__)
+        return False
+    return True
 
 
 def _scope(index: int) -> Literal["global", "incumbent_face"]:
@@ -765,6 +815,10 @@ def _solve_stages(
 
         limit = _stage_time_limit(cascade, stage, index, remaining, reserve)
         observation = _run_stage(model, stage, limit, remaining if index == 0 and limit < remaining else None, checkpoint)
+        if observation is _SOLVER_ERROR and cascade.best is None:
+            # No plan to fall back on: the run fails as it did before (``execution_failed``), rather than reading as «no
+            # plan within the time limit», which would tell the user to raise a budget that is not the cause.
+            raise SolverStageError(f"SCIP failed inside stage {stage.code!r} before holding any plan")
         if observation.has_solution:
             _take_candidate(cascade, _extract_candidate(model, program, index + 1), index + 1)
         if not _close_stage(cascade, stage, index, observation):

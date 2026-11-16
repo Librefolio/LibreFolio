@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
-from fractions import Fraction
 from typing import TYPE_CHECKING, Literal
 
 from backend.app.services.pac_allocator.constraints.facts import CompiledVariables, ScenarioFacts, as_float, order_notional, planning_fx_rate
@@ -15,13 +14,12 @@ from backend.app.services.pac_allocator.constraints.funding import _source_cash_
 from backend.app.services.pac_allocator.constraints.pool import add_cash_pool_terms
 from backend.app.services.pac_allocator.evaluation.bounds import transfer_decision_id
 from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
-from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs
-from backend.app.services.pac_allocator.evaluation.scenario import build_scenario_index, fx_rate, order_prices, valuation_rate_of
+from backend.app.services.pac_allocator.evaluation.reachability import FxDecisionSpec
 from backend.app.services.pac_allocator.ledger import (
     _ROUNDED_FAMILIES as LEDGER_ROUNDED_FAMILIES,  # single source of truth for which families are rounded
 )
-from backend.app.services.pac_allocator.models import ExactPlannerScenario
-from backend.app.services.pac_allocator.numeric import ExactRatio, calculate_planning_fx_rate
+from backend.app.services.pac_allocator.models import ExactOrderRoute, ExactPlannerScenario
+from backend.app.services.pac_allocator.posting_reserve import posting_reserves
 
 if TYPE_CHECKING:  # pragma: no cover - typing only, avoids a hard pyscipopt import for readers
     from pyscipopt import Model, Variable
@@ -94,24 +92,6 @@ def _require_modelled_rounded_families(scenario: ExactPlannerScenario, facts: Sc
         raise LedgerPostingScopeError(f"this {scenario.product}/{scenario.policy} scenario posts rounded ledger families this build does not model: {sorted(unmodelled)}")
 
 
-def _exact_gap(generators: tuple[ExactRatio, ...], quantum: ExactRatio) -> float:
-    """The smallest positive distance between an exact amount and a multiple of ``quantum``, from the data (P5).
-
-    The exact amount of a posting is an integer combination of ``generators`` (a route's step, a fee's parts, a conversion's
-    rate times the source quantum), so ``exact − quantum·units`` lives on the lattice of their rational gcd with the quantum:
-    when it is not zero it is at least that gcd.
-
-    No threshold, however fine the gcd (the B2 review, 1(c)): EUR → USD at 1.085 with a 1 % spread steps by 1/2 000 000 of a
-    dollar, the common case for an FX credit. A tightened row cannot prune a true point: its slack is ``>= 0`` exactly, and the
-    float error of the row is far below SCIP's feasibility tolerance.
-    """
-    values = [Fraction(abs(item.numerator), item.denominator) for item in (*generators, quantum) if item.numerator != 0]
-    gap = values[0]
-    for value in values[1:]:
-        gap = Fraction(math.gcd(gap.numerator * value.denominator, value.numerator * gap.denominator), gap.denominator * value.denominator)
-    return float(gap)
-
-
 def _posted_units_term(
     model: Model,
     *,
@@ -121,7 +101,6 @@ def _posted_units_term(
     exact_upper: float,
     side: Literal["credit", "debit"],
     active_decision: Variable | None = None,
-    gap: float | None = None,
 ) -> LinearTerm:
     """Return the **posted** amount of one rounded ledger family, rounded
     against the plan, as ``quantum * units`` for a fresh integer ``units``.
@@ -145,15 +124,9 @@ def _posted_units_term(
     more for a debit. A credit enters every ledger row with a ``+`` sign, a
     debit with a ``-`` sign, and in the PAC neither appears in an objective, so a
     decision is feasible with some ``units`` exactly when it is feasible with
-    the true posting (in the Rebalancer they do, in ``F − W``: see ``gap``): up to SCIP's feasibility tolerance, the model's feasible
+    the true posting: up to SCIP's feasibility tolerance, the model's feasible
     set is the exact one. The Decimal-exact replay referees that tolerance; a
     point it moves surfaces as a rejection or a top-up, never as a plan.
-
-    ``gap`` (the Rebalancer only, B2 of project 67): the pair becomes strict, exactly. In the PAC nothing gains from a posting
-    one unit against the plan; in the Rebalancer the distance does, when a cash cell with a target holds more than its target
-    (lowering its cash shortens ``D``). With ``gap`` the far row is ``quantum*units <= exact + quantum - gap`` for a debit and
-    ``exact <= quantum*units + quantum - gap`` for a credit: no epsilon, since every amount ``exact - quantum*units`` that is
-    not zero is at least ``gap`` (``_exact_gap``), and ``units`` is the true posting.
 
     ``active_decision`` (FX credits only) adds the ``:active`` row
     ``decision <= upper * units``, ``FX_CREDIT_POSITIVE``: an active
@@ -171,12 +144,11 @@ def _posted_units_term(
     units_upper = math.ceil(exact_upper / quantum) + 1
     units = model.addVar(vtype="I", lb=0, ub=units_upper, name=name)
     model.addCons(exact_expr >= 0.0, name=f"{name}:nonneg")
-    far = quantum if gap is None else quantum - gap
     if side == "credit":
         model.addCons(quantum * units <= exact_expr, name=f"{name}:lo")
-        model.addCons(exact_expr <= quantum * units + far, name=f"{name}:hi")
+        model.addCons(exact_expr <= quantum * units + quantum, name=f"{name}:hi")
     else:
-        model.addCons(quantum * units - far <= exact_expr, name=f"{name}:lo")
+        model.addCons(quantum * units - quantum <= exact_expr, name=f"{name}:lo")
         model.addCons(exact_expr <= quantum * units, name=f"{name}:hi")
     if active_decision is not None:
         model.addCons(active_decision <= active_decision.getUbOriginal() * units, name=f"{name}:active")
@@ -213,7 +185,9 @@ def add_ledger_balance_constraints(model: Model, scenario: ExactPlannerScenario,
     """
     _require_modelled_rounded_families(scenario, facts)
     cells: dict[tuple[str, str], list[LinearTerm]] = defaultdict(list)
-    gaps = _rebalancer_posting_gaps(scenario) if scenario.product == "rebalancer" else {}
+    # The Rebalancer's money is continuous, each posting less its reserve (row 6 of lot CR, ``posting_reserve``); the PAC
+    # keeps its rounded postings, byte for byte.
+    reserve = {posting_id: as_float(amount) for posting_id, amount in posting_reserves(scenario).items()} if scenario.product == "rebalancer" else None
 
     for cash in scenario.existing_cash:
         cells[(cash.broker_id, cash.selected.currency)].append(as_float(cash.selected.amount))
@@ -226,59 +200,11 @@ def add_ledger_balance_constraints(model: Model, scenario: ExactPlannerScenario,
             cells[source_cell].append(-amount_expr)
 
     for route in scenario.order_routes:
-        if route.side != "buy":
-            continue
-        quote_currency = facts.assets_by_id[route.asset_id]
-        quote_quantum = facts.currency_quantum[quote_currency]
-        capability = facts.capability_by_key[(route.broker_id, route.capability_id)]
-        order_step = as_float(capability.order_step)
-        decision = variables.quanta[exact_decision_id("buy_quantum", route.route_id)]
-        measure = order_step * decision
-        notional_expr = order_notional(facts, route, capability, measure)
-        notional_upper = order_notional(facts, route, capability, order_step * decision.getUbOriginal())
-
-        cells[(route.broker_id, quote_currency)].append(
-            -_posted_units_term(
-                model,
-                name=f"posted_buy_debit:{route.route_id}",
-                exact_expr=notional_expr,
-                quantum=quote_quantum,
-                exact_upper=notional_upper,
-                side="debit",
-                gap=gaps.get(("buy_debit", route.route_id)),
-            )
-        )
-        fee_upper = _fee_variable_upper(facts, route, capability, notional_upper)
-        cells[(route.broker_id, quote_currency)].append(
-            -_posted_units_term(
-                model,
-                name=f"posted_buy_fee:{route.route_id}",
-                exact_expr=variables.buy_fee[route.route_id],
-                quantum=quote_quantum,
-                exact_upper=fee_upper,
-                side="debit",
-                gap=gaps.get(("buy_fee", route.route_id)),
-            )
-        )
+        if route.side == "buy":
+            _add_buy_terms(model, route, facts, variables, cells, reserve)
 
     for spec in facts.fx_decisions:
-        fx_decision = variables.quanta[spec.decision_id]
-        debit_expr = facts.currency_quantum[spec.source_currency] * fx_decision
-        cells[(spec.broker_id, spec.source_currency)].append(-debit_expr)
-        effective_rate = planning_fx_rate(facts, spec.source_currency, spec.destination_currency)
-        credit_upper = facts.currency_quantum[spec.source_currency] * fx_decision.getUbOriginal() * effective_rate
-        cells[(spec.broker_id, spec.destination_currency)].append(
-            _posted_units_term(
-                model,
-                name=f"posted_fx_credit:{spec.key}",
-                exact_expr=debit_expr * effective_rate,
-                quantum=facts.currency_quantum[spec.destination_currency],
-                exact_upper=credit_upper,
-                side="credit",
-                active_decision=fx_decision,
-                gap=gaps.get(("fx_credit", spec.decision_id)),
-            )
-        )
+        _add_fx_terms(model, spec, facts, variables, cells, reserve)
 
     # Transfers between Brokers (A2): exact flows, as funding is, out of the source cell and into the destination cell.
     if variables.pool is not None:
@@ -295,31 +221,72 @@ def add_ledger_balance_constraints(model: Model, scenario: ExactPlannerScenario,
     return cells
 
 
-def _rebalancer_posting_gaps(scenario: ExactPlannerScenario) -> dict[tuple[str, str], float]:
-    """The exact gap of every rounded posting of a Rebalancer scenario (``_exact_gap``), keyed by family and route or decision.
+def _add_buy_terms(model: Model, route: ExactOrderRoute, facts: ScenarioFacts, variables: CompiledVariables, cells: dict, reserve: dict[str, float] | None) -> None:
+    """A buy's cost and fee out of its quote currency's cell: posted (rounded, the PAC) or continuous less their reserve (the
+    Rebalancer, ``reserve`` given)."""
+    quote_currency = facts.assets_by_id[route.asset_id]
+    quote_quantum = facts.currency_quantum[quote_currency]
+    capability = facts.capability_by_key[(route.broker_id, route.capability_id)]
+    order_step = as_float(capability.order_step)
+    decision = variables.quanta[exact_decision_id("buy_quantum", route.route_id)]
+    measure = order_step * decision
+    notional_expr = order_notional(facts, route, capability, measure)
+    notional_upper = order_notional(facts, route, capability, order_step * decision.getUbOriginal())
 
-    * a buy debit is ``step`` times the quanta (an amount route) or ``step`` units at the execution price;
-    * a buy fee is zero or ``fixed`` plus one of ``floor``, ``rate`` times the notional, ``cap``;
-    * an FX credit is the source quantum times the quanta times the planning rate.
-    """
-    index = build_scenario_index(scenario)
-    gaps: dict[tuple[str, str], float] = {}
-    for route in scenario.order_routes:
-        if route.side != "buy":
-            continue
-        capability = index.capabilities[(route.broker_id, route.capability_id)]
-        fee = index.fees[(route.broker_id, route.fee_schedule_id)]
-        quantum = index.currency_quantum[index.assets[route.asset_id].quote.price.currency]
-        step = capability.order_step if capability.kind == "monetary_amount" else capability.order_step * order_prices(index, route).execution_native
-        gaps[("buy_debit", route.route_id)] = _exact_gap((step,), quantum)
-        fee_parts = (fee.fixed_fee.amount, fee.minimum_fee.amount, fee.proportional_rate * step, *((fee.maximum_fee.amount,) if fee.maximum_fee is not None else ()))
-        gaps[("buy_fee", route.route_id)] = _exact_gap(fee_parts, quantum)
-    for spec in fx_decision_specs(scenario, index, None):
-        rate = calculate_planning_fx_rate(
-            approved_rate=fx_rate(index.fx_rate_by_pair, spec.source_currency, spec.destination_currency),
-            spread=scenario.fx_spread_rate,
-            source_valuation_rate=valuation_rate_of(index, spec.source_currency),
-            destination_valuation_rate=valuation_rate_of(index, spec.destination_currency),
+    fee_upper = _fee_variable_upper(facts, route, capability, notional_upper)
+    if reserve is not None:
+        # A buy happens exactly when its binary is on (``order_active_floor``: at least one step); its fee only where the
+        # schedule can charge (``fee_upper > 0``). Each takes its reserve with it.
+        active = variables.buy_active[route.route_id]
+        cells[(route.broker_id, quote_currency)].append(-(notional_expr + reserve[f"buy-debit:{route.route_id}"] * active))
+        cells[(route.broker_id, quote_currency)].append(-(variables.buy_fee[route.route_id] + (reserve[f"buy-fee:{route.route_id}"] * active if fee_upper > 0 else 0.0)))
+        return
+    cells[(route.broker_id, quote_currency)].append(
+        -_posted_units_term(
+            model,
+            name=f"posted_buy_debit:{route.route_id}",
+            exact_expr=notional_expr,
+            quantum=quote_quantum,
+            exact_upper=notional_upper,
+            side="debit",
         )
-        gaps[("fx_credit", spec.decision_id)] = _exact_gap((index.currency_quantum[spec.source_currency] * rate,), index.currency_quantum[spec.destination_currency])
-    return gaps
+    )
+    cells[(route.broker_id, quote_currency)].append(
+        -_posted_units_term(
+            model,
+            name=f"posted_buy_fee:{route.route_id}",
+            exact_expr=variables.buy_fee[route.route_id],
+            quantum=quote_quantum,
+            exact_upper=fee_upper,
+            side="debit",
+        )
+    )
+
+
+def _add_fx_terms(model: Model, spec: FxDecisionSpec, facts: ScenarioFacts, variables: CompiledVariables, cells: dict, reserve: dict[str, float] | None) -> None:
+    """A conversion: its exact debit out of the source cell, its credit into the destination cell, posted (the PAC) or
+    continuous less its reserve (the Rebalancer, ``reserve`` given)."""
+    fx_decision = variables.quanta[spec.decision_id]
+    debit_expr = facts.currency_quantum[spec.source_currency] * fx_decision
+    cells[(spec.broker_id, spec.source_currency)].append(-debit_expr)
+    effective_rate = planning_fx_rate(facts, spec.source_currency, spec.destination_currency)
+    if reserve is not None:
+        # ``FX_CREDIT_POSITIVE``: a conversion that happens credits at least one minor unit, so its floor posts something.
+        # Its binary is on exactly when it happens (``move_active``), and the credit comes in less its reserve.
+        active = variables.fx_active[spec.decision_id]
+        credit = debit_expr * effective_rate
+        model.addCons(credit >= facts.currency_quantum[spec.destination_currency] * active, name=f"fx_credit_positive:{spec.key}")
+        cells[(spec.broker_id, spec.destination_currency)].append(credit - reserve[f"fx-credit:{spec.key}"] * active)
+        return
+    credit_upper = facts.currency_quantum[spec.source_currency] * fx_decision.getUbOriginal() * effective_rate
+    cells[(spec.broker_id, spec.destination_currency)].append(
+        _posted_units_term(
+            model,
+            name=f"posted_fx_credit:{spec.key}",
+            exact_expr=debit_expr * effective_rate,
+            quantum=facts.currency_quantum[spec.destination_currency],
+            exact_upper=credit_upper,
+            side="credit",
+            active_decision=fx_decision,
+        )
+    )

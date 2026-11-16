@@ -587,11 +587,25 @@ def rebalancer_score(
     ``C = F − W``, the money lost. ``J = λ·D/F + C`` for a weighted fidelity. A scenario worth nothing (``F = 0``) has no
     distance to scale: ``J = C``, and ``REBALANCER_NONEMPTY`` refuses the plan anyway.
     """
-    distance = sum((item.residual.square() for item in (*assets, *cash_targets)), _EXACT_ZERO) + accounting.uninvested.square()
-    score = accounting.wealth_loss
-    if fidelity is not None and fidelity.kind == "weighted" and accounting.initial_wealth > _EXACT_ZERO:
-        score += fidelity.distance_weight * distance / accounting.initial_wealth
-    return {"target_distance": distance, "wealth_loss": accounting.wealth_loss, "plan_score": score}
+    residuals = tuple(item.residual for item in (*assets, *cash_targets))
+    return rebalancer_score_of(fidelity, residuals, uninvested=accounting.uninvested, wealth_loss=accounting.wealth_loss, initial_wealth=accounting.initial_wealth)
+
+
+def rebalancer_score_of(
+    fidelity: ExactTargetFidelity | None,
+    residuals: tuple[ExactRatio, ...],
+    *,
+    uninvested: ExactRatio,
+    wealth_loss: ExactRatio,
+    initial_wealth: ExactRatio,
+) -> dict[ExactObjectiveCode, ExactRatio]:
+    """``rebalancer_score``'s formula on its plain parts: the residuals of the items, ``N``, ``F − W`` and ``F``. Also read by
+    the value «as the solver sees it» (``evaluation.solver_view``, row 6 of lot CR), on the same parts with continuous cash."""
+    distance = sum((item.square() for item in residuals), _EXACT_ZERO) + uninvested.square()
+    score = wealth_loss
+    if fidelity is not None and fidelity.kind == "weighted" and initial_wealth > _EXACT_ZERO:
+        score += fidelity.distance_weight * distance / initial_wealth
+    return {"target_distance": distance, "wealth_loss": wealth_loss, "plan_score": score}
 
 
 def _operation_count(view: ExactPolicyView, quanta: Mapping[str, int], state: EconomicState) -> ExactRatio:

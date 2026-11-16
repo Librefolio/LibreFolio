@@ -114,6 +114,7 @@ PAC_PLANNER_REPORT_TEST_PATH = "backend/test_scripts/test_services/test_pac_plan
 PAC_PLANNER_SERVICE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_planner.py"
 PAC_PLANNER_SEQUENCE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_plan_sequence.py"
 PAC_PLANNER_CASH_RULE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_cash_rule.py"
+PAC_PLANNER_CENTS_OUTSIDE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_cents_outside.py"
 PAC_PLANNER_SOUNDNESS_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_soundness.py"
 PAC_PLANNER_PREVIEW_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_preview.py"
 PAC_PLANNER_REFERENCE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_reference.py"
@@ -196,6 +197,13 @@ def services_pac_planner_cash_rule(verbose: bool = False, test_names: list = Non
     print_section("Services: Rebalancer Cash Rule")
     cmd = _build_pytest_cmd(PAC_PLANNER_CASH_RULE_TEST_PATH, test_names)
     return run_command(cmd, "Rebalancer cash rule tests", verbose=verbose)
+
+
+def services_pac_planner_cents_outside(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Rebalancer's continuous money: no rounding variable, the solver's view equal to SCIP's, the published values kept."""
+    print_section("Services: Rebalancer Cents Outside the Solver")
+    cmd = _build_pytest_cmd(PAC_PLANNER_CENTS_OUTSIDE_TEST_PATH, test_names)
+    return run_command(cmd, "Rebalancer cents outside the solver tests", verbose=verbose)
 
 
 def services_pac_planner_service(verbose: bool = False, test_names: list = None) -> bool:
@@ -2686,6 +2694,14 @@ Note: No backend server required.
         services_pac_planner_cash_rule,
         name="Rebalancer Cash Rule",
         desc="One signed balance per cash cell: a cell that receives sends nothing, converted money never travels, the transfers derived from the balances; the PAC unchanged",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-cents-outside",
+        services_pac_planner_cents_outside,
+        name="Rebalancer Cents Outside the Solver",
+        desc="The Rebalancer's money continuous in the model, each posting less its reserve: no rounding variable, SCIP's value equal to the replay's view, the published values unchanged, G5 closing with no anomaly",
         isolation="pure",
     )
     add_test(
