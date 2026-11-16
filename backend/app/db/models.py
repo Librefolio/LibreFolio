@@ -1280,6 +1280,63 @@ class AssetProviderAssignment(SQLModel, table=True):
 
 
 # ============================================================================
+# ASSET PROFILE (plan 68)
+# ============================================================================
+
+
+class AssetProfileUpdate(SQLModel, table=True):
+    """One change of one voice of an asset's profile: its TER, its countries, the maturity of a bond… (plan 68, §3.1).
+
+    A row is never updated. A new value is a new row, written only when it differs from the voice's value now
+    (``services/assets/profile/store.py``); «now» is the voice's row with the highest ``id``. A row can be deleted, to
+    forget a change (``DELETE /assets/profile``), and every row goes with its asset.
+
+    - ``key``: the voice, one of the profile catalogue (``services/assets/profile/catalogue.py``). Plain text with no
+      CHECK: a new voice is a catalogue entry, with no migration; the catalogue checks what is written.
+    - ``value``: the voice's stored form as JSON text (``catalogue.normalize_value``); NULL is a value left empty on
+      purpose.
+    - ``source``: the enricher's code, ``user`` for a value written by hand, ``legacy`` for the value copied from
+      ``classification_params`` by migration 006.
+    - ``user_id``: who wrote a ``user`` row; NULL for a source, and once that account is deleted.
+    - ``read_on``: the day the value was read or written, in the scheduler's time zone: the day it holds from.
+    - ``source_date``: the day the source says its data are of («data at 30/09»), when it says one.
+    """
+
+    __tablename__ = "asset_profile_updates"
+    __table_args__ = (
+        # The profile read: one asset, some voices, up to a day (store.py), and «now» of one voice. Proof in 006.
+        Index("ix_asset_profile_updates_asset_key_read_on", "asset_id", "key", "read_on"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    asset_id: int = Field(sa_column=Column(Integer, ForeignKey("assets.id", ondelete="CASCADE"), nullable=False))
+    key: str = Field(sa_column=Column(String, nullable=False))
+    value: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    source: str = Field(sa_column=Column(String, nullable=False))
+    user_id: Optional[int] = Field(default=None, sa_column=Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True))
+    read_on: date_type = Field(nullable=False)
+    source_date: Optional[date_type] = Field(default=None, nullable=True)
+    created_at: datetime = Field(default_factory=utcnow, sa_type=UtcDateTime)
+
+
+class AssetEnrichers(SQLModel, table=True):
+    """The enrichers of one asset (plan 68, §3.1): which plugins read its profile, in which order, and how they last did.
+
+    - ``config``: a JSON object, plugin code → the binding that plugin reads (identifier type, identifier, parameters).
+      The order of its keys is the priority, so it is stored as written and never re-sorted. Only the user writes it.
+    - ``state``: a JSON object, plugin code → when it last read this asset and with what outcome. Only the reads that
+      save write it (the weekly job, «Aggiorna», the read after a save): two columns, so neither overwrites the other.
+    """
+
+    __tablename__ = "asset_enrichers"
+
+    asset_id: int = Field(sa_column=Column(Integer, ForeignKey("assets.id", ondelete="CASCADE"), primary_key=True))
+    config: str = Field(default="{}", sa_column=Column(Text, nullable=False, server_default=text("'{}'")))
+    state: str = Field(default="{}", sa_column=Column(Text, nullable=False, server_default=text("'{}'")))
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=UtcDateTime)
+
+
+# ============================================================================
 # EVENT LISTENERS
 # ============================================================================
 
@@ -1291,6 +1348,7 @@ class AssetProviderAssignment(SQLModel, table=True):
 @event.listens_for(FxConversionRoute, "before_update")
 @event.listens_for(UserSettings, "before_update")
 @event.listens_for(BrokerUserAccess, "before_update")
+@event.listens_for(AssetEnrichers, "before_update")
 def receive_before_update(_mapper, _connection, target):
     """Update updated_at timestamp on update."""
     target.updated_at = utcnow()
