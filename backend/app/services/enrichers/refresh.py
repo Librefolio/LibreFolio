@@ -295,48 +295,82 @@ def _already_read(entry: Any, since: datetime) -> bool:
     return read_at is not None and read_at >= ensure_utc(since)
 
 
-async def refresh_assets(session: AsyncSession, asset_ids: Sequence[int], *, keys: Iterable[str] | None = None, now: datetime | None = None, read_since: datetime | None = None) -> list[AssetRefreshResult]:
+async def refresh_assets(
+    session: AsyncSession,
+    asset_ids: Sequence[int],
+    *,
+    keys: Iterable[str] | None = None,
+    now: datetime | None = None,
+    read_since: datetime | None = None,
+    hold_deferred: bool = False,
+) -> list[AssetRefreshResult]:
     """Read and save the profile of those assets, each in its own transaction (committed here).
 
     ``read_since`` skips the bindings whose ``state`` says they were read (``ok`` or ``not_found``) at or after it: the
-    scheduler's second round after a refusal (B6).
+    scheduler's second round after a refusal (B6); their values still join the merge, from the read cache.
+    ``hold_deferred`` (the scheduler's first round, consultant 16/11): where an enricher refused for too many requests,
+    the voices it declares for the asset's type whose winner comes after it in the asset's order are not written yet.
     """
     ids = list(dict.fromkeys(asset_ids))
-    existing = set((await session.execute(select(Asset.id).where(Asset.id.in_(ids)))).scalars().all()) if ids else set()
+    asset_types = dict((await session.execute(select(Asset.id, Asset.asset_type).where(Asset.id.in_(ids)))).all()) if ids else {}
     rows = await load_enrichers(session, ids)
     await session.commit()  # nothing held while the enrichers are read
+    wanted = None if keys is None else frozenset(keys)
     requests: list[ReadRequest] = []
+    carried: dict[int, list[ReadOutcome]] = {}
     for asset_id in ids:
         row = rows.get(asset_id)
-        if asset_id not in existing or row is None:
+        if asset_id not in asset_types or row is None:
             continue
         for request in _requests(asset_id, row.config):
             if EnricherRegistry.get_plugin(request.code) is None:
                 continue  # an enricher not installed (or turned off): its binding stays, the read skips it
             if read_since is not None and _already_read(row.state.get(request.code), read_since):
+                # Read in this round already: not read again, its values join the merge from the cache
+                if (cached := _cached(request.code, request.binding, wanted)) is not None:
+                    carried.setdefault(asset_id, []).append(dataclasses.replace(cached, owner=asset_id, from_cache=True))
                 continue
             requests.append(request)
     outcomes: dict[int, list[ReadOutcome]] = {}
-    async for outcome in read_bindings(requests, keys):
+    async for outcome in read_bindings(requests, wanted):
         outcomes.setdefault(outcome.owner, []).append(outcome)
     read_at = now or utcnow()
     results = []
     for asset_id in ids:
-        if asset_id not in existing:
+        if asset_id not in asset_types:
             results.append(AssetRefreshResult(asset_id=asset_id, error="asset not found"))
             continue
-        results.append(await _save_asset(session, asset_id, outcomes.get(asset_id, []), read_at))
+        hold_for = AssetType(asset_types[asset_id]) if hold_deferred else None
+        results.append(await _save_asset(session, asset_id, outcomes.get(asset_id, []), carried.get(asset_id, []), read_at, hold_for))
     return results
 
 
-async def _save_asset(session: AsyncSession, asset_id: int, outcomes: list[ReadOutcome], read_at: datetime) -> AssetRefreshResult:
-    """Write one asset's merged voices and its enrichers' state, in one transaction, against its ``config`` of now."""
+def _held_voices(order: Sequence[str], merged: Mapping[str, MergedVoice], deferred: Sequence[str], asset_type: AssetType) -> set[str]:
+    """The voices to hold for the second round: those a refused enricher declares for ``asset_type`` whose winner comes
+    after it in ``order``."""
+    held: set[str] = set()
+    for code in deferred:
+        plugin = EnricherRegistry.get_plugin(code)
+        declared = plugin.voices.get(asset_type, frozenset()) if plugin is not None else frozenset()
+        rank = order.index(code)
+        held.update(key for key, voice in merged.items() if key in declared and order.index(voice.source) > rank)
+    return held
+
+
+async def _save_asset(session: AsyncSession, asset_id: int, outcomes: list[ReadOutcome], carried: list[ReadOutcome], read_at: datetime, hold_for: AssetType | None) -> AssetRefreshResult:
+    """Write one asset's merged voices and its enrichers' state, in one transaction, against its ``config`` of now.
+
+    ``carried`` are the cached reads of the bindings this round skipped: they join the merge, their ``state`` stays.
+    ``hold_for`` (the asset's type) holds the voices of a refused enricher for the second round.
+    """
     try:
         config = (await load_enrichers(session, [asset_id])).get(asset_id)
         order = list(config.config) if config is not None else []
         kept = [outcome for outcome in outcomes if outcome.code in order]
-        merged = merge_voices(order, kept)
-        writes = [ProfileWrite(key=key, value=voice.value, source=voice.source, source_date=voice.source_date) for key, voice in merged.items()]
+        merged = merge_voices(order, kept + [outcome for outcome in carried if outcome.code in order])
+        deferred_codes = [outcome.code for outcome in kept if outcome.error_code == RATE_LIMITED]
+        held = _held_voices(order, merged, deferred_codes, hold_for) if hold_for is not None and deferred_codes else set()
+        writes = [ProfileWrite(key=key, value=voice.value, source=voice.source, source_date=voice.source_date) for key, voice in merged.items() if key not in held]
         written = await write_values(session, asset_id, writes, today=await profile_today(session, read_at)) if writes else []
         if kept:
             await update_state(session, asset_id, {outcome.code: _state_entry(outcome, read_at) for outcome in kept})

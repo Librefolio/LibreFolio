@@ -44,7 +44,6 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,7 +55,7 @@ from backend.app.schemas.settings import SETTINGS_REGISTRY
 from backend.app.services.accounts.global_settings_service import get_setting_value
 from backend.app.services.assets.profile.catalogue import CATALOGUE, get_voice, normalize_value
 from backend.app.services.financial_math.series_steps import steps_from_rows
-from backend.app.utils.datetime_utils import ensure_utc, utcnow
+from backend.app.utils.datetime_utils import ensure_utc, utcnow, zoneinfo_or_utc
 
 #: Rows of «Ultime variazioni» per page.
 CHANGES_PAGE_SIZE = 20
@@ -217,11 +216,7 @@ _ORDER = (AssetProfileUpdate.asset_id, AssetProfileUpdate.key, AssetProfileUpdat
 async def profile_today(session: AsyncSession, now: datetime | None = None) -> date:
     """Today in the scheduler's time zone (``scheduler_timezone``; UTC when it is not set or not valid)."""
     name = await get_setting_value(session, SETTINGS_REGISTRY.global_.SCHEDULER_TIMEZONE.key)
-    try:
-        zone = ZoneInfo(str(name)) if name else ZoneInfo("UTC")
-    except (ZoneInfoNotFoundError, ValueError):
-        zone = ZoneInfo("UTC")
-    return (now or utcnow()).astimezone(zone).date()
+    return (now or utcnow()).astimezone(zoneinfo_or_utc(name)).date()
 
 
 async def _rows_of(session: AsyncSession, asset_ids: Sequence[int], keys: Sequence[str] | None, *, until: date | None = None) -> list[AssetProfileUpdate]:
