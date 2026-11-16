@@ -96,7 +96,7 @@ from backend.app.services.pac_allocator.compiler import compile_policy_program
 from backend.app.services.pac_allocator.evaluation.errors import ExactEvaluatorError
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_do_nothing, evaluate_exact_candidate, rounding_top_ups
 from backend.app.services.pac_allocator.evaluation.limits import LimitEntry, limited_entries
-from backend.app.services.pac_allocator.issues import bounds_unsatisfiable_issue
+from backend.app.services.pac_allocator.issues import bounds_unsatisfiable_issue, solver_numerical_error_issue
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
     Checkpoint,
@@ -265,6 +265,9 @@ def plan_exact_scenario(
 
     search = _search(scenario, view, checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds, progress=progress)
     issue_list = list(issues)
+    if any(stage.scip_status == "solver_error" for stage in search.solver.stages):
+        # Lot SE: SCIP failed inside a stage after a plan was held (``solver._optimize``); the wire names it.
+        issue_list.append(solver_numerical_error_issue())
 
     if search.candidate is None:
         report_phase(progress, "verify")

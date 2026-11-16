@@ -1246,6 +1246,8 @@ EXPECTED_PLANNER_ISSUE_CODES = (
     "allocation.route_priority_negative",
     "allocation.saved_fx_invalid",
     "allocation.solver_limit_no_incumbent",
+    # Lot SE (project 67): SCIP failed inside a stage after a plan was held; the plan is published, not proven.
+    "allocation.solver_numerical_error",
     "allocation.target_total_not_one",
     "allocation.target_weight_missing",
     "allocation.target_weight_out_of_range",
@@ -1325,7 +1327,7 @@ def _catalogue_issue_specimen(code: str) -> JsonObject:
 
 
 def test_planner_issue_code_catalogue_is_exact_closed_and_sorted() -> None:
-    assert len(EXPECTED_PLANNER_ISSUE_CODES) == 77
+    assert len(EXPECTED_PLANNER_ISSUE_CODES) == 78
     assert EXPECTED_PLANNER_ISSUE_CODES == tuple(sorted(EXPECTED_PLANNER_ISSUE_CODES))
     assert get_args(PlannerIssueCode) == EXPECTED_PLANNER_ISSUE_CODES
     assert PLANNER_ISSUE_CODE_ADAPTER.json_schema()["enum"] == list(EXPECTED_PLANNER_ISSUE_CODES)
@@ -4008,17 +4010,19 @@ def test_distinct_deployment_rejects_identity_count_coverage_and_arithmetic_erro
 # the PAC's stays where A4 left it. C1 moves the Rebalancer's once more, to widen the strategy field.
 # The PAC accounts on the wire (B3, coordinator's instruction against X1): the PAC's moves once, for ``plan_accounts`` on its
 # solution, the shared type both Tools publish (contract §6.1); the PAC's screen does not change (X17).
+# Lot SE (project 67, the coordinator's decision of 16/11) moves both: one more closed issue code,
+# allocation.solver_numerical_error, in the shared PlannerIssueCode.
 PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param(
         PAC_PLAN_INPUT_ADAPTER,
         PAC_PLAN_OUTPUT_ADAPTER,
-        "b6aa8a5734d303082533c8497f074f5f43abfa1153d0443151b6e5d00b74eec1",
+        "015661a155c8a5fec62a8e9c7dfc0e3e7c019cdc863e318ca592eab0a7969a4d",
         id="pac",
     ),
     pytest.param(
         REBALANCER_PLAN_INPUT_ADAPTER,
         REBALANCER_PLAN_OUTPUT_ADAPTER,
-        "e7f6b5b6d5f2d6958d9d39946705637420f299df12bdce4e2f4058f8078cd7be",
+        "46d78a2c4779fae2e22de93923fae5a8432fa9fcc3838ba5c8546ead9542ac58",
         id="rebalancer",
     ),
 )
@@ -4597,8 +4601,8 @@ def test_open_canonical_vector_keeps_the_proof_and_reads_as_a_limit() -> None:
 # 1.4 still serves one contract 2.0.0). The two fingerprints above stay the ``plan`` contract alone (its own result union).
 # G5-2 of project 67 moves the Rebalancer's alone: its preview gains the «other cash» item (the PAC's preview has no items).
 TOOL_SCHEMA_FINGERPRINT_CASES = (
-    pytest.param("pac_allocator", PAC_TOOL_INPUT_ADAPTER, PAC_TOOL_OUTPUT_ADAPTER, "26b9e8d33466cfd12cb9b639e5a84cfc1772aa39d6d232ee8fc24b819358363d", id="pac"),
-    pytest.param("portfolio_rebalancer", REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER, "fa7ab9ee8f39aaabeb653f0d1cec53e8e57d2f4661c17db1400805bf67a387da", id="rebalancer"),
+    pytest.param("pac_allocator", PAC_TOOL_INPUT_ADAPTER, PAC_TOOL_OUTPUT_ADAPTER, "839e7884d632eb9121a57818d07a12876da73dead4bce9623b4d446b26f5861e", id="pac"),
+    pytest.param("portfolio_rebalancer", REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER, "ca604a6edfbe11de1f35b1612a5e5e22b00827ab1dab869b84611fd30d72041b", id="rebalancer"),
 )
 
 

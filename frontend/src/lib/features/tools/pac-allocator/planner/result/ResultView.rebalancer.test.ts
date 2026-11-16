@@ -178,3 +178,24 @@ describe('the Rebalancer plan section', () => {
         expect(planSection()).not.toBeNull();
     });
 });
+
+/**
+ * Lot SE of project 67: SCIP failed inside a stage after a plan was held. The result carries the warning
+ * `allocation.solver_numerical_error` on the `proof` section, beside the «time limit» notice. The notes list it, as a
+ * warning, with no «go to» link: nothing in the configuration causes it, and a link to Review would point at the user's
+ * inputs. The variant is the browser answer with the note added (the fixture file untouched); the codec accepts it.
+ */
+describe('a solver numerical error is a note of its own', () => {
+    it('lists the warning, without a link to a step', () => {
+        const result = structuredClone(browser.result) as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+        result.stop_reason = 'time_limit';
+        result.issues = [{code: 'allocation.solver_numerical_error', severity: 'warning', kind: 'proof', path: {kind: 'section', section: 'proof'}, message_key: 'allocation.solver_numerical_error', params: []}];
+        mounted({request: browser.request, result});
+        const item = screen.getAllByTestId('rebalancer-planner-notes-list-item').find((node) => node.getAttribute('data-code') === 'allocation.solver_numerical_error');
+        expect(item).toBeTruthy();
+        expect(item!.getAttribute('data-severity')).toBe('warning');
+        expect(item!.getAttribute('data-step')).toBe('');
+        expect(item!.querySelector('[data-testid="rebalancer-planner-notes-list-goto"]')).toBeNull();
+        expect(screen.getByTestId('rebalancer-planner-state').getAttribute('data-state')).toBe('limit');
+    });
+});

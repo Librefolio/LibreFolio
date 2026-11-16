@@ -2,7 +2,7 @@
 /**
  * The Rebalancer's issues and their step (F3a of project 67, step 12).
  *
- * The 77 codes of the closed universe all have their message already; what the Rebalancer adds is where its paths lead
+ * The codes of the closed universe all have their message already; what the Rebalancer adds is where its paths lead
  * and whom they name:
  *   - a position (`holding`) is named as the user knows it, «Asset · Broker», and leads to the Assets step;
  *   - a cash entry of the targets (`broker:N:EUR`, the engine's cell id) is named «Broker · EUR» and leads to Targets;

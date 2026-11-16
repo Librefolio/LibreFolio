@@ -223,18 +223,61 @@ def _failing_on(monkeypatch: pytest.MonkeyPatch, call: int) -> None:
     monkeypatch.setattr(compiler, "Model", FailingModel)
 
 
-def _plan(product: str):
+def _request(product: str):
+    """The validated request of each case: the PAC's r-3x3, the Rebalancer's T4, and T5 (nothing to do: the plan held is
+    the no-op)."""
     from backend.app.schemas.pac_allocator.preview import REBALANCER_TOOL_INPUT_ADAPTER  # noqa: PLC0415
     from backend.app.schemas.pac_allocator.results import PAC_PLAN_INPUT_ADAPTER  # noqa: PLC0415
-    from backend.app.services.pac_allocator.planner import plan_pac_allocation, plan_rebalancing  # noqa: PLC0415
     from backend.test_scripts.test_services import _pac_reference_values as reference  # noqa: PLC0415
     from backend.test_scripts.test_services import _reb_small_requests as reb  # noqa: PLC0415
 
     if product == "pac":
-        return plan_pac_allocation(PAC_PLAN_INPUT_ADAPTER.validate_python(reference.CASES["r-3x3"]()))
-    payload = reb.t4()
+        return PAC_PLAN_INPUT_ADAPTER.validate_python(reference.CASES["r-3x3"]())
+    payload = reb.t5() if product == "rebalancer-t5" else reb.t4()
     payload["operation"] = "plan"
-    return plan_rebalancing(REBALANCER_TOOL_INPUT_ADAPTER.validate_python(payload))
+    return REBALANCER_TOOL_INPUT_ADAPTER.validate_python(payload)
+
+
+def _plan(product: str):
+    from backend.app.services.pac_allocator.planner import plan_pac_allocation, plan_rebalancing  # noqa: PLC0415
+
+    return plan_pac_allocation(_request(product)) if product == "pac" else plan_rebalancing(_request(product))
+
+
+def _named_stages(product: str) -> int:
+    """How many named stages the case's cascade runs before its first ``tie:`` stage."""
+    from backend.app.services.pac_allocator.normalize import normalize_pac_plan  # noqa: PLC0415
+
+    normalized = (normalize_pac_plan if product == "pac" else normalize_rebalancer_plan)(_request(product)).normalized
+    program = compile_policy_program(normalized, build_exact_policy_view(normalized))
+    return sum(1 for stage in program.objective_stages if not stage.code.startswith("tie:"))
+
+
+def _roundtrips(product: str, result) -> None:
+    """The result survives its Tool's output union, as JSON, strictly."""
+    from backend.app.schemas.pac_allocator.preview import REBALANCER_TOOL_OUTPUT_ADAPTER  # noqa: PLC0415
+    from backend.app.schemas.pac_allocator.results import PAC_PLAN_OUTPUT_ADAPTER  # noqa: PLC0415
+
+    adapter = PAC_PLAN_OUTPUT_ADAPTER if product == "pac" else REBALANCER_TOOL_OUTPUT_ADAPTER
+    assert adapter.validate_json(adapter.dump_json(result), strict=True) == result
+
+
+_SOLVER_WARNING = [("allocation.solver_numerical_error", "warning", "proof", "section", "proof")]
+
+
+@pytest.mark.parametrize("product", ["pac", "rebalancer", "rebalancer-t5"])
+def test_a_scip_failure_in_the_first_tie_break_keeps_the_best_plan(monkeypatch: pytest.MonkeyPatch, product: str) -> None:
+    """Where G5 seed 5 actually failed: in a ``tie:`` stage, after every named stage. The PAC then borrows its last named
+    row as unfinished, the Rebalancer reports its canonical tie-break open; T5's plan held is the no-op. Each result
+    publishes, carries the warning, and survives its output union."""
+    _failing_on(monkeypatch, _named_stages(product) + 1)
+    result = _plan(product)
+
+    assert result.result_state == ("ready_no_op" if product == "rebalancer-t5" else "ready_incumbent")
+    assert result.proof.kind == "not_proven"
+    assert result.stop_reason == "time_limit"
+    assert [(issue.code, issue.severity, issue.kind, issue.path.kind, issue.path.section) for issue in result.issues] == _SOLVER_WARNING
+    _roundtrips(product, result)
 
 
 @pytest.mark.parametrize("product", ["pac", "rebalancer"])
@@ -252,6 +295,9 @@ def test_a_scip_failure_in_a_later_stage_keeps_the_best_plan(monkeypatch: pytest
     assert result.stop_reason == "time_limit"
     statuses = [stage.status for stage in result.solver_evidence.stages]
     assert statuses[:2] == ["finished", "finished"] and "unfinished" in statuses
+    # Lot SE: the wire names the failure, so «time limit» does not read as the only cause.
+    assert [(issue.code, issue.severity, issue.kind, issue.path.kind, issue.path.section) for issue in result.issues] == _SOLVER_WARNING
+    _roundtrips(product, result)
 
 
 @pytest.mark.parametrize("product", ["pac", "rebalancer"])

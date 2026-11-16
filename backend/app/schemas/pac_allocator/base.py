@@ -178,6 +178,7 @@ PlannerIssueCode = Literal[
     "allocation.route_priority_negative",
     "allocation.saved_fx_invalid",
     "allocation.solver_limit_no_incumbent",
+    "allocation.solver_numerical_error",
     "allocation.target_total_not_one",
     "allocation.target_weight_missing",
     "allocation.target_weight_out_of_range",

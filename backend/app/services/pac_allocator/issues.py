@@ -37,8 +37,9 @@ def _normalizer_definition(code: PlannerIssueCode, kind: NormalizerIssueKind) ->
 # Canonical public universe.  It intentionally carries no inferred
 # kind/severity policy for codes that this normalizer does not produce.
 CANONICAL_ISSUE_CODES: tuple[PlannerIssueCode, ...] = get_args(PlannerIssueCode)
-if len(CANONICAL_ISSUE_CODES) != 77 or len(set(CANONICAL_ISSUE_CODES)) != 77:
-    raise RuntimeError("PlannerIssueCode must remain the frozen 77-value universe (A4 closed it, step 4)")
+# Lot SE of project 67 added allocation.solver_numerical_error (77 → 78), by the coordinator's decision of 16/11.
+if len(CANONICAL_ISSUE_CODES) != 78 or len(set(CANONICAL_ISSUE_CODES)) != 78:
+    raise RuntimeError("PlannerIssueCode must remain the frozen 78-value universe (A4 closed it at 77, step 4; lot SE added one)")
 
 
 # Explicit W1 producer map.  Adding `self.issue(code, ...)` without first
@@ -134,6 +135,14 @@ def bounds_unsatisfiable_issue(entity_kind: Literal["asset", "cash"], entity_id:
     interface gathers the listed entries into one banner.
     """
     return PlannerIssue(code="allocation.bounds_unsatisfiable", severity="warning", kind="constraint", path=entity_path("targets", entity_kind, entity_id), message_key="allocation.bounds_unsatisfiable", params=[])
+
+
+def solver_numerical_error_issue() -> PlannerIssue:
+    """``allocation.solver_numerical_error``: SCIP failed inside a stage after the search already held a plan (lot SE of
+    project 67). The plan is published, not proven, and the run's stop reads ``time_limit``, the wire's only stop for an
+    unfinished stage: this warning names the real cause, so the user does not read it as the clock and raise a budget
+    that would not help. A ``warning`` of kind ``proof`` on the ``proof`` section; no parameter, nothing personal."""
+    return PlannerIssue(code="allocation.solver_numerical_error", severity="warning", kind="proof", path=section_path("proof"), message_key="allocation.solver_numerical_error", params=[])
 
 
 def normalizer_issue_definition(code: PlannerIssueCode) -> IssueDefinition:
