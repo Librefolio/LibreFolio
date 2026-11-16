@@ -45,6 +45,15 @@ export type PlannerIssueSection = PlannerIssuePath['section'];
 export type PlannerIssueParam = PlannerIssue['params'][number];
 
 export type PlannerSolution = PlannerPlanResult['primary_solution'];
+
+/**
+ * The Rebalancer's result (F4a of project 67). The result views are typed as the PAC's; what the Rebalancer adds is read
+ * through these names: its plan carries transfers between Brokers as steps of their own (contract §6.3).
+ */
+export type RebalancerResult = PlannerToolResult<'portfolio_rebalancer'>;
+export type RebalancerPlanResult = Extract<RebalancerResult, {result_state: 'ready_no_op' | 'ready_incumbent'}>;
+export type RebalancerSolution = RebalancerPlanResult['primary_solution'];
+export type RebalancerTransfer = RebalancerSolution['transfers'][number];
 export type PlannerAssetRow = PlannerSolution['asset_rows'][number];
 export type PlannerFundingAction = PlannerSolution['funding_actions'][number];
 export type PlannerConversion = PlannerSolution['conversions'][number];

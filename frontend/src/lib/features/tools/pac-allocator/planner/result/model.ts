@@ -20,6 +20,7 @@ import type {
     PlannerResolvedFundingRoute,
     PlannerResolvedOrderRoute,
     PlannerResolvedRequest,
+    RebalancerTransfer,
 } from '../types';
 
 export const UNCATEGORISED_CATEGORY_ID = 'allocation.uncategorised';
@@ -350,13 +351,35 @@ export function notesBesideLimitsBanner(result: PlannerReadyResult, limits: read
 
 // -- operational plan (C10–C12) -------------------------------------------------------
 
-export type PlanStep = {kind: 'funding'; sequence: number; action: PlannerFundingAction} | {kind: 'conversion'; sequence: number; action: PlannerConversion};
+export type PlanStep = {kind: 'funding'; sequence: number; action: PlannerFundingAction} | {kind: 'conversion'; sequence: number; action: PlannerConversion} | {kind: 'transfer'; sequence: number; action: RebalancerTransfer};
 
-/** R4.9: funding and the conversions the user makes, in the backend's sequence; orders are listed per Broker. */
-export function planSteps(funding: readonly PlannerFundingAction[], conversions: readonly PlannerConversion[]): PlanStep[] {
+/**
+ * R4.9: funding, the conversions the user makes and (the Rebalancer, F4a of project 67) the transfers between Brokers, in
+ * the backend's counter (contract §6.3): the steps follow `sequence` and nothing else, the frontend has no rule about
+ * which kind goes first. Orders are listed per Broker.
+ */
+export function planSteps(funding: readonly PlannerFundingAction[], conversions: readonly PlannerConversion[], transfers: readonly RebalancerTransfer[] = []): PlanStep[] {
     const manual = conversions.flatMap((action) => (action.mode === 'manual' && action.sequence !== null ? [{kind: 'conversion' as const, sequence: action.sequence, action}] : []));
-    const steps: PlanStep[] = [...funding.map((action) => ({kind: 'funding' as const, sequence: action.sequence, action})), ...manual];
+    const steps: PlanStep[] = [...funding.map((action) => ({kind: 'funding' as const, sequence: action.sequence, action})), ...manual, ...transfers.map((action) => ({kind: 'transfer' as const, sequence: action.sequence, action}))];
     return steps.sort((a, b) => a.sequence - b.sequence);
+}
+
+/** The lists a plan is made of; `transfers` only in the Rebalancer's. */
+export interface PlanLists {
+    funding_actions: readonly unknown[];
+    conversions: readonly unknown[];
+    order_rows: readonly unknown[];
+    transfers?: readonly unknown[];
+}
+
+/** Whether a solution has anything to do: a plan of transfers only, or of conversions only, is still a plan (contract §6.3). */
+export function hasPlanSteps(solution: PlanLists): boolean {
+    return solution.order_rows.length + solution.funding_actions.length + solution.conversions.length + (solution.transfers?.length ?? 0) > 0;
+}
+
+/** The transfers of a solution: the Rebalancer's, none in the PAC's. */
+export function planTransfers(solution: object): readonly RebalancerTransfer[] {
+    return 'transfers' in solution ? (solution.transfers as readonly RebalancerTransfer[]) : [];
 }
 
 /** R4.9: the conversions a Broker makes by itself when the orders are placed; they carry no step number. */

@@ -57,7 +57,9 @@ vi.mock('$lib/api', () => ({
 
 import en from '$lib/i18n/en.json';
 import type {PlannerExactNumber, PlannerLedgerRow, PlannerProof, PlannerReadyResult} from '../types';
-import {LEDGER_FIELDS, ledgerFields, limitedEntries, notesBesideLimitsBanner, resultBadges, type LimitedEntry, type ResultBadge} from './model';
+import {hasPlanSteps, LEDGER_FIELDS, ledgerFields, limitedEntries, notesBesideLimitsBanner, planSteps, resultBadges, type LimitedEntry, type ResultBadge} from './model';
+import type {RebalancerSolution} from '../types';
+import browser from './__fixtures__/rebalancer-browser.json';
 import type {PlannerResolvedRequest} from '../types';
 
 interface ProofCase {
@@ -223,5 +225,40 @@ describe('notesBesideLimitsBanner — the backend notes that would repeat the li
     it('keeps every note when there is no banner: no limit, or a state other than infeasible', () => {
         expect(notesBesideLimitsBanner(result('ready_infeasible'), [])).toEqual([BOUNDS, OTHER]);
         expect(notesBesideLimitsBanner(result('ready_no_incumbent'), [ENTRY])).toEqual([BOUNDS, OTHER]);
+    });
+});
+
+/**
+ * The plan's steps on the backend counter (F4a of project 67, step 1; contract §6.3). The fixture is the engine's own
+ * answer to the G5 browser scenario: two transfers (1, 2), then a conversion (3), then the purchases (4–8). The arrays
+ * come in their own order; the steps follow `sequence` and nothing else, with no rule of the frontend about which kind
+ * goes first. The purchases are not steps here: they are listed per Broker.
+ *
+ * The test follows the engine's counter as it is, not as it should be: in this answer step 2 moves dollars out of a
+ * Broker that has none until the exchange of step 3, a question raised with the engine lane (F4a checkpoint, steps 1–2).
+ */
+describe('planSteps — the backend counter, transfers included (F4a step 1)', () => {
+    const solution = browser.result.primary_solution as unknown as RebalancerSolution;
+
+    it('plan steps follow the backend counter: two transfers, then the conversion', () => {
+        const steps = planSteps(solution.funding_actions, solution.conversions, solution.transfers);
+        expect(steps.map((step) => [step.kind, step.sequence])).toEqual([
+            ['transfer', 1],
+            ['transfer', 2],
+            ['conversion', 3],
+        ]);
+    });
+
+    it('keeps the counter whatever order the lists come in', () => {
+        const steps = planSteps(solution.funding_actions, solution.conversions, [...solution.transfers].reverse());
+        expect(steps.map((step) => step.sequence)).toEqual([1, 2, 3]);
+    });
+
+    it('a plan of transfers only is still a plan', () => {
+        const transfersOnly = {funding_actions: [], conversions: [], order_rows: [], transfers: solution.transfers};
+        expect(hasPlanSteps(transfersOnly)).toBe(true);
+        expect(hasPlanSteps({funding_actions: [], conversions: [], order_rows: [], transfers: []})).toBe(false);
+        // The PAC's solution carries no transfers at all.
+        expect(hasPlanSteps({funding_actions: [], conversions: [], order_rows: []})).toBe(false);
     });
 });
