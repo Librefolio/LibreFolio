@@ -84,6 +84,22 @@ describe('AssetDetailMeasuresSection: publishes the mode, asks to fold on a clic
         expect(ontoggle).not.toHaveBeenCalled();
     });
 
+    it('opens the measures page from the docs icon on the header’s right edge, without folding the section (RN-13, B1)', async () => {
+        const open = vi.spyOn(window, 'open').mockReturnValue(null);
+        const {ontoggle} = renderSection();
+        const icon = screen.queryByTestId('asset-detail-measures-docs');
+        expect(icon, 'the measures header has no docs icon').not.toBeNull();
+        // Beside the toggle, never inside it: inside a role="button" header its click and its Enter would fold the section.
+        expect(screen.getByTestId('asset-detail-measures-toggle').contains(icon)).toBe(false);
+
+        await fireEvent.click(icon as HTMLElement);
+        expect(await fireEvent.keyDown(icon as HTMLElement, {key: 'Enter'})).toBe(true);
+
+        expect(open).toHaveBeenCalledWith('/mkdocs/user/assets/detail/measures/', '_blank', 'noopener');
+        expect(ontoggle).not.toHaveBeenCalled();
+        open.mockRestore();
+    });
+
     it.each([false, true])('renders its children with open %s', (open) => {
         renderSection({open});
 
