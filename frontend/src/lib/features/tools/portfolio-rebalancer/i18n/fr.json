@@ -132,6 +132,32 @@
             "maximum": "Maximum",
             "maximumHelp": "Le maximum fixé pour cette ligne à l’étape Objectifs : sa valeur après le plan ne dépasse pas.",
             "title": "Allocation par ligne"
+          },
+          "kpi": {
+            "valueToday": "Vaut aujourd’hui",
+            "valueTodayHelp": "Tout le portefeuille aujourd’hui : les Actifs détenus au cours de cotation, plus toutes les liquidités et tous les versements choisis pour le plan.",
+            "partsAssets": "Actifs",
+            "partsCash": "Liquidités",
+            "valueAfter": "Vaudra après",
+            "valueAfterHelp": "Tout le portefeuille après le plan : les Actifs et les liquidités restantes. C’est la valeur d’aujourd’hui moins l’argent perdu.",
+            "valueAfterHeld": "dans {assets, plural, one {# Actif} other {# Actifs}} et {cash, plural, one {# ligne de liquidités} other {# lignes de liquidités}}",
+            "moneyLost": "Argent perdu",
+            "moneyLostHelp": "Ce que le plan vous coûte : frais, écarts de change, marges sur le prix, impôts et arrondis. La valeur d’aujourd’hui moins ce montant est la valeur après.",
+            "noLoss": "Rien de perdu",
+            "foreignWithholding": "Retenue à la source étrangère",
+            "largestDeviation": "Écart maximal à l’objectif",
+            "largestDeviationHelp": "L’éloignement de la ligne la plus éloignée de son objectif, après et avant le plan, en points de pourcentage : l’écart entre sa part et sa part cible. Comptent les Actifs et les liquidités avec un objectif ; le non investi non.",
+            "points": "{value} points",
+            "beforePoints": "avant : {value} points",
+            "uninvestedShare": "{value} du total",
+            "transfers": "{count, plural, one {# virement} other {# virements}}"
+          },
+          "header": {
+            "score": "Score {value}",
+            "scoreHelp": "Le score que le plan minimise : λ × distance/F + argent perdu. Ici λ {lambda}, distance/F {distance}, argent perdu {lost}.",
+            "distance": "Distance/F {value}",
+            "distanceHelp": "L’éloignement du portefeuille de ses objectifs à la fin, en argent : les écarts au carré de chaque ligne sur tout le portefeuille. «La cible avant tout» la réduit au maximum, puis l’argent perdu.",
+            "moneyLost": "Argent perdu {value}"
           }
         }
       }

@@ -132,6 +132,32 @@
             "maximum": "Máximo",
             "maximumHelp": "El máximo que pusiste para esta partida en el paso Objetivos: su valor después del plan no lo supera.",
             "title": "Asignación por partida"
+          },
+          "kpi": {
+            "valueToday": "Vale hoy",
+            "valueTodayHelp": "Toda la cartera hoy: los Activos que tienes al precio de cotización, más todo el efectivo y las aportaciones elegidos para el plan.",
+            "partsAssets": "Activos",
+            "partsCash": "Efectivo",
+            "valueAfter": "Valdrá después",
+            "valueAfterHelp": "Toda la cartera después del plan: los Activos y el efectivo que queda. Es el valor de hoy menos el dinero perdido.",
+            "valueAfterHeld": "en {assets, plural, one {# Activo} other {# Activos}} y {cash, plural, one {# efectivo} other {# efectivos}}",
+            "moneyLost": "Dinero perdido",
+            "moneyLostHelp": "Lo que te cuesta el plan: comisiones, diferenciales de cambio, márgenes sobre el precio, impuestos y redondeos. El valor de hoy menos esto es el valor después.",
+            "noLoss": "Nada perdido",
+            "foreignWithholding": "Retención extranjera",
+            "largestDeviation": "Distancia máxima al objetivo",
+            "largestDeviationHelp": "Lo lejos que está de su objetivo la partida más alejada, después y antes del plan, en puntos porcentuales: la diferencia entre su parte y su parte objetivo. Cuentan los Activos y el efectivo con un objetivo; lo no invertido no.",
+            "points": "{value} puntos",
+            "beforePoints": "antes: {value} puntos",
+            "uninvestedShare": "{value} del total",
+            "transfers": "{count, plural, one {# transferencia} other {# transferencias}}"
+          },
+          "header": {
+            "score": "Puntuación {value}",
+            "scoreHelp": "La puntuación que el plan minimiza: λ × distancia/F + dinero perdido. Aquí λ {lambda}, distancia/F {distance}, dinero perdido {lost}.",
+            "distance": "Distancia/F {value}",
+            "distanceHelp": "Lo lejos que acaba la cartera de sus objetivos, en dinero: las diferencias al cuadrado de cada partida sobre toda la cartera. «El objetivo ante todo» la hace lo más pequeña posible, luego el dinero perdido.",
+            "moneyLost": "Dinero perdido {value}"
           }
         }
       }

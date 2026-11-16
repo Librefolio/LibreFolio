@@ -132,6 +132,32 @@
             "maximum": "Massimo",
             "maximumHelp": "Il massimo che hai messo per questa voce nel passo Obiettivi: il suo valore dopo il piano non sale sopra.",
             "title": "Allocazione per voce"
+          },
+          "kpi": {
+            "valueToday": "Vale oggi",
+            "valueTodayHelp": "L’intero portafoglio oggi: gli Asset che hai, al prezzo di quotazione, più tutta la cassa e i versamenti scelti per il piano.",
+            "partsAssets": "Asset",
+            "partsCash": "Cassa",
+            "valueAfter": "Varrà dopo",
+            "valueAfterHelp": "L’intero portafoglio dopo il piano: gli Asset e la cassa che resta. È il valore di oggi meno i soldi persi.",
+            "valueAfterHeld": "in {assets, plural, one {# Asset} other {# Asset}} e {cash, plural, one {# cassa} other {# casse}}",
+            "moneyLost": "Soldi persi",
+            "moneyLostHelp": "Quanto ti costa il piano: commissioni, spread dei cambi, margini sul prezzo, tasse e arrotondamenti. Il valore di oggi meno questo è il valore dopo.",
+            "noLoss": "Nessuna perdita",
+            "foreignWithholding": "Ritenuta estera",
+            "largestDeviation": "Distanza massima dall’obiettivo",
+            "largestDeviationHelp": "Quanto è lontana dal suo obiettivo la voce più lontana, dopo e prima del piano, in punti percentuali: lo scarto fra la sua quota e la quota obiettivo. Contano gli Asset e le casse con un obiettivo; il non investito no.",
+            "points": "{value} punti",
+            "beforePoints": "prima: {value} punti",
+            "uninvestedShare": "{value} del totale",
+            "transfers": "{count, plural, one {# trasferimento} other {# trasferimenti}}"
+          },
+          "header": {
+            "score": "Punteggio {value}",
+            "scoreHelp": "Il punteggio che il piano rende minimo: λ × distanza/F + soldi persi. Qui λ {lambda}, distanza/F {distance}, soldi persi {lost}.",
+            "distance": "Distanza/F {value}",
+            "distanceHelp": "Quanto il portafoglio finisce lontano dai suoi obiettivi, in denaro: gli scarti al quadrato di ogni voce sull’intero portafoglio. «Target prima di tutto» la rende più piccola possibile, poi i soldi persi.",
+            "moneyLost": "Soldi persi {value}"
           }
         }
       }
