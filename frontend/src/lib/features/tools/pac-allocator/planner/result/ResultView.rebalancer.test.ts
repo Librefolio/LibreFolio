@@ -12,9 +12,41 @@
  *     time limit there (`time_limit`, not proven): a new run need not give the same plan, so no test reads a literal of it.
  * Each request is parsed by the Rebalancer's own codec, as the run does, and each result by its output codec. Every section
  * is opened («Expand all»): the exposures, the ledger and the proof render too. Nothing reads translated text.
+ *
+ * `echarts` is a recorder, not a renderer, as in `ExposureBars.test.ts`: jsdom has no canvas, and the real zrender, given
+ * none, rejects outside the test (`setting 'dpr'`, `reading 'clearRect'` of null) once the exposure charts draw. The
+ * recorder answers every call the planner's charts make on an instance and keeps the options, so the test can see that
+ * the opened exposures did draw.
  */
 import {flushSync, tick} from 'svelte';
 import {beforeAll, describe, expect, it, vi} from 'vitest';
+
+const {charts, echartsModule} = vi.hoisted(() => {
+    const charts: {options: unknown[]}[] = [];
+    function fakeChart(dom: unknown) {
+        let disposed = false;
+        const record = {options: [] as unknown[]};
+        charts.push(record);
+        return {
+            setOption: (option: unknown) => {
+                record.options.push(option);
+            },
+            getOption: () => record.options.at(-1) ?? {},
+            getDom: () => dom,
+            on: () => {},
+            off: () => {},
+            dispatchAction: () => {},
+            resize: () => {},
+            isDisposed: () => disposed,
+            dispose: () => {
+                disposed = true;
+            },
+        };
+    }
+    return {charts, echartsModule: {init: (dom: unknown) => fakeChart(dom), registerMap: () => {}}};
+});
+
+vi.mock('echarts', () => echartsModule);
 
 vi.mock('$lib/api', () => ({
     zodiosApi: new Proxy({}, {get: () => vi.fn(async () => undefined)}),
@@ -55,6 +87,8 @@ const METRICS = {
 };
 
 function mounted(fixture: {request: unknown; result: unknown}): void {
+    // Each case sees its own charts only.
+    charts.length = 0;
     const draft = new PlannerDraft('EUR', 'invest_only', REBALANCER_PLANNER_PROFILE);
     const outcome = {
         kind: 'result',
@@ -88,6 +122,8 @@ describe('a ready Rebalancer result renders', () => {
         expect(root.getAttribute('data-state')).toBe(state);
         // Every section open: none throws.
         const errors: unknown[] = [];
+        // Closed sections draw nothing; the charts below come from opening them.
+        expect(charts.filter((chart) => chart.options.length > 0)).toHaveLength(0);
         const onError = (event: ErrorEvent) => errors.push(event.error);
         window.addEventListener('error', onError);
         try {
@@ -98,6 +134,8 @@ describe('a ready Rebalancer result renders', () => {
             window.removeEventListener('error', onError);
         }
         expect(errors).toEqual([]);
+        // The opened exposures drew, in this case: at least one chart was given its option.
+        expect(charts.some((chart) => chart.options.length > 0)).toBe(true);
         const sections = screen.getAllByTestId('rebalancer-planner-result-section');
         expect(sections.length).toBeGreaterThan(1);
         expect(sections.map((section) => section.querySelector('[data-testid="rebalancer-planner-result-section-toggle"]')?.getAttribute('aria-expanded'))).toEqual(sections.map(() => 'true'));
