@@ -35,6 +35,7 @@ def front_asset_unit(verbose: bool = False, ui: bool = False, headed: bool = Fal
         "src/lib/workers/__tests__/priceProcessingPool.test.ts",
         "src/lib/workers/__tests__/priceProcessing.worker.test.ts",
         "src/lib/features/signals/signalCatalogStore.test.ts",
+        "src/lib/features/signals/fxIssue.test.ts",
         "src/lib/features/assets/assetSimilarity.test.ts",
         "src/lib/features/assets/assetGrouping.test.ts",
         "src/lib/features/assets/identifierQuestions.test.ts",
