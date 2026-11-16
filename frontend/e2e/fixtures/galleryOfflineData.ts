@@ -54,6 +54,8 @@ export interface OfflineFxProvider {
     description: string;
     description_i18n: Record<string, string>;
     warning_i18n: Record<string, string>;
+    /** How serious warning_i18n is (the API's default: 'warning'). */
+    warning_level?: 'info' | 'warning';
     icon_url: string | null;
     docs_url: string | null;
 }
@@ -116,15 +118,21 @@ export const OFFLINE_FX_PROVIDERS: readonly OfflineFxProvider[] = [
         name: 'Federal Reserve Bank',
         base_currency: 'USD',
         base_currencies: ['USD'],
-        target_currencies: ['AUD', 'BRL', 'CAD', 'CHF', 'CNY', 'DKK', 'EUR', 'GBP', 'HKD', 'INR', 'JPY', 'KRW', 'MXN', 'NOK', 'NZD', 'SEK', 'SGD', 'THB', 'TWD', 'USD', 'ZAR'],
+        target_currencies: ['AUD', 'BRL', 'CAD', 'CHF', 'CNY', 'DKK', 'EUR', 'GBP', 'HKD', 'INR', 'JPY', 'KRW', 'LKR', 'MXN', 'MYR', 'NOK', 'NZD', 'SEK', 'SGD', 'THB', 'TWD', 'USD', 'VES', 'ZAR'],
         description: 'Official exchange rates from Federal Reserve (H.10 Release)',
         description_i18n: {
-            en: 'Federal Reserve Bank (FRED) — publishes daily exchange rates from the H.10 Statistical Release for 20+ currencies against USD. Updated each business day. One data point per day.',
-            it: 'Federal Reserve Bank (FRED) — pubblica tassi di cambio giornalieri dal bollettino statistico H.10 per 20+ valute contro USD. Aggiornamento ogni giorno lavorativo. Un dato al giorno.',
-            fr: 'Federal Reserve Bank (FRED) — publie des taux de change quotidiens du bulletin statistique H.10 pour 20+ devises contre USD. Mise à jour chaque jour ouvrable. Un point par jour.',
-            es: 'Federal Reserve Bank (FRED) — publica tipos de cambio diarios del boletín estadístico H.10 para 20+ monedas contra USD. Actualizado cada día hábil. Un dato por día.',
+            en: 'Federal Reserve Bank (FRED) — daily exchange rates from the H.10 Statistical Release for 23 currencies against USD. Published once a week. One data point per US business day.',
+            it: 'Federal Reserve Bank (FRED) — tassi di cambio giornalieri dal bollettino statistico H.10 per 23 valute contro USD. Pubblicati una volta alla settimana. Un dato per giorno lavorativo USA.',
+            fr: 'Federal Reserve Bank (FRED) — taux de change quotidiens du bulletin statistique H.10 pour 23 devises contre USD. Publiés une fois par semaine. Un point par jour ouvrable américain.',
+            es: 'Federal Reserve Bank (FRED) — tipos de cambio diarios del boletín estadístico H.10 para 23 monedas contra USD. Publicados una vez por semana. Un dato por día hábil de EE. UU.',
         },
-        warning_i18n: {},
+        warning_i18n: {
+            en: 'FED rates are daily: one value per US business day. The Federal Reserve publishes them once a week, on Mondays, with the days of the previous week, so the latest FED rate can be up to about 10 days old.',
+            it: "I tassi FED sono giornalieri: un valore per ogni giorno lavorativo statunitense. La Federal Reserve li pubblica una volta alla settimana, il lunedì, con i giorni della settimana precedente: l'ultimo tasso FED può quindi avere fino a circa 10 giorni.",
+            fr: "Les taux FED sont quotidiens : une valeur par jour ouvrable américain. La Réserve fédérale les publie une fois par semaine, le lundi, avec les jours de la semaine précédente : le dernier taux FED peut donc dater d'environ 10 jours.",
+            es: 'Los tipos FED son diarios: un valor por cada día hábil de EE. UU. La Reserva Federal los publica una vez por semana, los lunes, con los días de la semana anterior: el último tipo FED puede tener hasta unos 10 días.',
+        },
+        warning_level: 'info',
         icon_url: 'https://fred.stlouisfed.org/favicon.ico',
         docs_url: '/mkdocs/user/fx/providers/fed/',
     },
