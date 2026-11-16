@@ -364,7 +364,15 @@
       "total_loss_no_recovery": "The value fell to zero: no gain can bring it back to its peak, so the recovery needed is not shown.",
       "total_loss_no_recovery_assets": "{count, plural, one {# asset fell} other {# assets fell}} to zero: no gain can bring {count, plural, one {it} other {them}} back to the peak, so the recovery needed is not shown — {names}.",
       "analysis_starts_late": "The analysis starts on {start}: before that day, no complete day of prices is available.",
-      "short_history": "{names}: no price before the start of the period, so their history begins inside it."
+      "short_history": "{names}: no price before the start of the period, so their history begins inside it.",
+      "best_realization_undefined": "No gaining observation in the period.",
+      "best_realization_undefined_assets": "No gaining observation in the period for {names}.",
+      "average_loss_undefined": "No losing day in the period: there is no average down day.",
+      "average_loss_undefined_assets": "No losing day in the period for {names}: there is no average down day.",
+      "omega_undefined": "Gains against losses is undefined: no day fell below the target return.",
+      "omega_undefined_assets": "Gains against losses is undefined for {names}: no day fell below the target return.",
+      "extreme_day_ratio_undefined": "Extreme days are undefined because the series does not move.",
+      "extreme_day_ratio_undefined_assets": "Extreme days are undefined for {names}: the series does not move."
     },
     "assetDetail": {
       "overviewTab": "Overview",

@@ -364,7 +364,15 @@
       "total_loss_no_recovery": "Il valore è sceso a zero: nessun guadagno può riportarlo al picco, quindi il recupero richiesto non è mostrato.",
       "total_loss_no_recovery_assets": "{count, plural, one {# asset è sceso} other {# asset sono scesi}} a zero: nessun guadagno può {count, plural, one {riportarlo} other {riportarli}} al picco, quindi il recupero richiesto non è mostrato — {names}.",
       "analysis_starts_late": "L'analisi parte dal {start}: prima di quel giorno non c'è un giorno di prezzi completo.",
-      "short_history": "{names}: nessun prezzo prima dell'inizio del periodo, quindi la loro storia comincia al suo interno."
+      "short_history": "{names}: nessun prezzo prima dell'inizio del periodo, quindi la loro storia comincia al suo interno.",
+      "best_realization_undefined": "Nessuna osservazione in guadagno nel periodo.",
+      "best_realization_undefined_assets": "Nessuna osservazione in guadagno nel periodo per {names}.",
+      "average_loss_undefined": "Nessun giorno in perdita nel periodo: non c'è un giorno medio in discesa.",
+      "average_loss_undefined_assets": "Nessun giorno in perdita nel periodo per {names}: non c'è un giorno medio in discesa.",
+      "omega_undefined": "Guadagni contro perdite non definito: nessun giorno è sceso sotto il rendimento obiettivo.",
+      "omega_undefined_assets": "Guadagni contro perdite non definito per {names}: nessun giorno è sceso sotto il rendimento obiettivo.",
+      "extreme_day_ratio_undefined": "Giorni estremi non definiti perché la serie non si muove.",
+      "extreme_day_ratio_undefined_assets": "Giorni estremi non definiti per {names}: la serie non si muove."
     },
     "assetDetail": {
       "overviewTab": "Panoramica",
