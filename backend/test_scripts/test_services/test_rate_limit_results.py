@@ -92,6 +92,8 @@ class _CurrentRefused(MockProvider):
     """mockprov's history; its current value refused for too many requests (Retry-After 240 s). No settings."""
 
     settings_fields = ()
+    #: Its current value is the per-asset path's, as before project 76: mockprov reads in bulk, this double does not
+    supports_bulk_current = False
 
     @property
     def provider_code(self) -> str:
@@ -345,9 +347,10 @@ async def test_a_live_price_the_provider_answers_has_no_refusal_fields(private_d
 
 @pytest.mark.asyncio
 async def test_a_refused_refresh_fails_with_the_refusal_and_stores_nothing(private_db: AsyncEngine, monkeypatch: pytest.MonkeyPatch):
-    """XRL-R04 — contract 2: the history is refused (90 s) and the current value is then held by the pause: FAILED, RATE_LIMITED, 90 s, no row."""
+    """XRL-R04 — contract 2: the current value is read in bulk BEFORE the history (project 76, C3): the bulk read is refused (90 s) and the pause then holds the history: FAILED, RATE_LIMITED, 90 s, no row."""
     print_section("XRL-R04: refresh refused")
     history_calls = _count(monkeypatch, MockProvider, "get_history_value")
+    bulk_calls = _count(monkeypatch, MockProvider, "get_current_values_bulk")
     current_calls = _count(monkeypatch, MockProvider, "get_current_value")
     asset_id = await _asset(private_db, params={"mock_rate_limited": 90})
     today = date.today()
@@ -356,9 +359,10 @@ async def test_a_refused_refresh_fails_with_the_refusal_and_stores_nothing(priva
 
     assert (result.status, result.error_code, result.retry_after) == (SyncStatus.FAILED, "RATE_LIMITED", 90.0)
     assert result.points_fetched == 0 and result.errors, "a failed item says why"
-    assert (len(history_calls), len(current_calls)) == (1, 0)
+    # project 76, C3: bulk current value first (refused), then the pause holds the history; the per-asset read is never used
+    assert (len(history_calls), len(bulk_calls), len(current_calls)) == (0, 1, 0)
     assert await _stored_days(private_db, asset_id) == []
-    print_success("FAILED with RATE_LIMITED, the current value never asked")
+    print_success("FAILED with RATE_LIMITED, the bulk current value refused first, the history never asked")
 
 
 @pytest.mark.asyncio

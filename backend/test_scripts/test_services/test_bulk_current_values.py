@@ -1,4 +1,4 @@
-"""Project 76, lots C1 and C2 — the «bulk current-price read» of asset providers (no server, no network).
+"""Project 76, lots C1, C2 and C3 — the «bulk current-price read» of asset providers (no server, no network).
 
 Lot C1 is pure (no DB). Lot C2 runs ``PriceQueryOperations.get_current_prices_bulk`` on a private SQLite file (see the C2
 section at the end of this file).
@@ -47,6 +47,25 @@ The keys sent to the provider are opaque: the tests count calls and keys per cal
 17. A dropped cache entry (``core.drop_asset_cache_entries``: a parametric assignment changed, the asset's currency
     changed) is no member of the stamp any more: the next request for that asset reads the group again, instead of
     serving the database until the stamp expires.
+
+Lot C3 — the history refresh (``RefreshOperations.bulk_refresh_prices``, reached as ``AssetSourceManager``) reads today's
+current value through the same bulk group as the live read, BEFORE the per-asset history fetches:
+
+18. A refresh of 3 mockprov assets over a range reaching today makes ONE bulk call and never ``get_current_value``; each
+    result stores today's price 100.
+19. The refresh shares the live read's group: after a live ``get_current_prices_bulk``, a refresh within the stamp makes no
+    further call and still stores today's 100.
+20. A range that ends before today asks no current value: no bulk call.
+21. Aligned expiry: refreshing ONE asset reads the whole active group (3 keys); a following live read of the other two makes
+    no new call and serves ``provider:mockprov``.
+22. A refused bulk read (rate limited 90 s, refreshed alone): FAILED, ``RATE_LIMITED``, ``retry_after`` 90.0, nothing
+    stored, and the history is not asked (the bulk read comes first, the provider's pause holds the history).
+23. A current value the price columns refuse, read in bulk: the result carries the X-R51 note of the per-asset path
+    (``unstorable_quote_reason``) and today's price is not stored.
+24. An asset the bulk read left out, refreshed: the item takes the read's answer (no quote), never a
+    ``get_current_value`` of its own; a second refresh within the stamp makes no call at all.
+25. The X-R51 note outlives the read that met it: a live read refuses the quote for the price columns, then a refresh
+    within the stamp (no new call) still carries the note.
 """
 
 from __future__ import annotations
@@ -58,7 +77,7 @@ import os
 import threading
 import uuid
 from collections.abc import AsyncIterator, Iterator
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 from types import ModuleType
@@ -75,6 +94,7 @@ from backend.app.db.base import SQLModel  # imports every model
 from backend.app.db.models import Asset, AssetProviderAssignment, AssetType, IdentifierType, PriceHistory, ProviderInputType
 from backend.app.schemas import FACurrentValueRequest
 from backend.app.schemas.prices import FACurrentValue
+from backend.app.schemas.refresh import FARefreshItem, SyncDateRangeModel, SyncStatus
 from backend.app.services.asset_source_providers.mockprov.plugin import (
     BULK_OMIT_PARAM,
     RATE_LIMITED_PARAM,
@@ -84,7 +104,9 @@ from backend.app.services.asset_source_providers.mockprov.plugin import (
 )
 from backend.app.services.assets import core
 from backend.app.services.assets.base import AssetRateLimitedError, AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.assets.price_query import PriceQueryOperations
+from backend.app.services.assets.price_store import unstorable_quote_reason
 from backend.app.services.platform import provider_cooldown
 from backend.app.services.plugin_settings.fields import env_name, env_variables
 from backend.app.utils.runtime.cache import NamedCache
@@ -647,3 +669,183 @@ async def test_c2_a_dropped_cache_entry_makes_the_group_read_again(private_db: A
     assert _lens() == [2, 2], "the dropped asset makes the group read again"
     assert items[a].source == "provider:mockprov"
     print_success("dropped entry → group read again, served by the provider")
+
+
+# =============================================================================
+# LOT C3 — the history refresh reads today's current value through the bulk group
+# =============================================================================
+
+
+def _count_single(monkeypatch: pytest.MonkeyPatch, name: str) -> list[int]:
+    """Count the calls of ``MockProvider.<name>`` (still running it)."""
+    calls: list[int] = []
+    original = getattr(MockProvider, name)
+
+    async def counted(self, *args, **kwargs):
+        calls.append(1)
+        return await original(self, *args, **kwargs)
+
+    monkeypatch.setattr(MockProvider, name, counted)
+    return calls
+
+
+async def _refresh_many(engine: AsyncEngine, asset_ids: list[int], start: date, end: date):
+    """``AssetSourceManager.bulk_refresh_prices`` of those assets over [start, end]: the results by asset id."""
+    requests = [FARefreshItem(asset_id=i, date_range=SyncDateRangeModel(start=start, end=end)) for i in asset_ids]
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        response = await AssetSourceManager.bulk_refresh_prices(requests, session)
+    return {result.asset_id: result for result in response.results}
+
+
+async def _days(engine: AsyncEngine, asset_id: int) -> dict[date, Decimal]:
+    async with AsyncSession(engine) as session:
+        rows = await session.execute(select(PriceHistory.date, PriceHistory.close).where(PriceHistory.asset_id == asset_id))
+        return dict(rows.all())
+
+
+@pytest.mark.asyncio
+async def test_c3_a_refresh_reads_todays_value_in_one_bulk_call(private_db: AsyncEngine, groups: _Groups, monkeypatch: pytest.MonkeyPatch):
+    """C3-01 — contract 18: three assets refreshed over a range reaching today: ONE bulk call of 3 keys, no
+    ``get_current_value``; each stores today's price 100."""
+    print_section("C3-01: refresh, one bulk call")
+    ids = [await _asset(private_db) for _ in range(3)]
+    groups.bc  # noqa: B018
+    single = _count_single(monkeypatch, "get_current_value")
+    today = date.today()
+
+    results = await _refresh_many(private_db, ids, today - timedelta(days=3), today)
+
+    assert _lens() == [3]
+    assert single == [], "the per-asset current value is never asked"
+    for i in ids:
+        assert results[i].status != SyncStatus.FAILED
+        assert (await _days(private_db, i)).get(today) == Decimal("100.00")
+    print_success("1 bulk call, 3 keys, today stored")
+
+
+@pytest.mark.asyncio
+async def test_c3_a_refresh_shares_the_group_of_the_live_read(private_db: AsyncEngine, groups: _Groups):
+    """C3-02 — contract 19: after a live read of the group (one call), a refresh within the stamp makes no further call
+    and still stores today's 100."""
+    ids = [await _asset(private_db) for _ in range(3)]
+    groups.bc  # noqa: B018
+    await _prices(private_db, ids)
+    assert _lens() == [3]
+    today = date.today()
+
+    await _refresh_many(private_db, ids, today - timedelta(days=3), today)
+
+    assert _lens() == [3], "within the stamp the refresh reuses the live read's group"
+    for i in ids:
+        assert (await _days(private_db, i)).get(today) == Decimal("100.00")
+
+
+@pytest.mark.asyncio
+async def test_c3_a_range_ending_before_today_asks_no_current_value(private_db: AsyncEngine, groups: _Groups):
+    """C3-03 — contract 20: a range that ends yesterday: no bulk call at all."""
+    ids = [await _asset(private_db) for _ in range(2)]
+    groups.bc  # noqa: B018
+    yesterday = date.today() - timedelta(days=1)
+
+    await _refresh_many(private_db, ids, yesterday - timedelta(days=3), yesterday)
+
+    assert _lens() == []
+
+
+@pytest.mark.asyncio
+async def test_c3_refreshing_one_asset_reads_the_whole_group_and_caches_the_others(private_db: AsyncEngine, groups: _Groups):
+    """C3-04 — contract 21: refreshing one of three active assets: one call with 3 keys; a live read of the other two
+    makes no new call and serves ``provider:mockprov``."""
+    ids = [await _asset(private_db) for _ in range(3)]
+    groups.bc  # noqa: B018
+    today = date.today()
+
+    await _refresh_many(private_db, ids[:1], today - timedelta(days=3), today)
+
+    assert _lens() == [3]
+    rest = await _prices(private_db, ids[1:])
+    assert _lens() == [3]
+    assert {_served(rest[i]) for i in ids[1:]} == {(Decimal("100.00"), "provider:mockprov", None)}
+
+
+@pytest.mark.asyncio
+async def test_c3_a_refused_bulk_read_fails_the_refresh_and_holds_the_history(private_db: AsyncEngine, groups: _Groups, monkeypatch: pytest.MonkeyPatch):
+    """C3-05 — contract 22: the bulk read is refused (90 s): FAILED, RATE_LIMITED, 90.0, nothing stored, and the history
+    is never asked."""
+    print_section("C3-05: refused bulk read")
+    asset_id = await _asset(private_db, params={"mock_rate_limited": 90})
+    groups.bc  # noqa: B018
+    history = _count_single(monkeypatch, "get_history_value")
+    today = date.today()
+
+    results = await _refresh_many(private_db, [asset_id], today - timedelta(days=5), today)
+
+    result = results[asset_id]
+    assert (result.status, result.error_code, result.retry_after) == (SyncStatus.FAILED, "RATE_LIMITED", 90.0)
+    assert await _days(private_db, asset_id) == {}
+    assert history == [], "the bulk read comes first: the pause holds the history"
+    print_success("FAILED with RATE_LIMITED, history not asked")
+
+
+@pytest.mark.asyncio
+async def test_c3_an_unstorable_bulk_current_value_is_noted_and_not_stored(private_db: AsyncEngine, groups: _Groups, monkeypatch: pytest.MonkeyPatch):
+    """C3-06 — contract 23: the bulk answer is 1E-13 USD: the result carries the X-R51 note, today's price is not stored."""
+    asset_id = await _asset(private_db)
+    groups.bc  # noqa: B018
+    today = date.today()
+
+    async def refused_value(self, items):
+        return {item.key: FACurrentValue(value=Decimal("1E-13"), currency="USD", as_of_date=today) for item in items}
+
+    monkeypatch.setattr(MockProvider, "get_current_values_bulk", refused_value)
+
+    results = await _refresh_many(private_db, [asset_id], today - timedelta(days=3), today)
+
+    result = results[asset_id]
+    assert unstorable_quote_reason(Decimal("1E-13")) in result.errors
+    assert today not in await _days(private_db, asset_id)
+
+
+@pytest.mark.asyncio
+async def test_c3_an_omitted_asset_takes_the_bulk_answer_and_makes_no_call_of_its_own(private_db: AsyncEngine, groups: _Groups, monkeypatch: pytest.MonkeyPatch):
+    """C3-07 — contract 24: an asset left out of the bulk answer, refreshed twice over a range reaching today: one bulk
+    call in all, never a ``get_current_value``, today's price not stored."""
+    print_section("C3-07: an omitted asset takes the bulk answer")
+    asset_id = await _asset(private_db, params={BULK_OMIT_PARAM: True})
+    groups.bc  # noqa: B018
+    single = _count_single(monkeypatch, "get_current_value")
+    today = date.today()
+
+    await _refresh_many(private_db, [asset_id], today - timedelta(days=3), today)
+    await _refresh_many(private_db, [asset_id], today - timedelta(days=3), today)
+
+    assert _lens() == [1], "one bulk read, then the stamp"
+    assert single == [], "the item never asks its own current value"
+    assert today not in await _days(private_db, asset_id)
+    print_success("one bulk call, no single call, today not stored")
+
+
+@pytest.mark.asyncio
+async def test_c3_the_unstorable_note_outlives_the_read_that_met_it(private_db: AsyncEngine, groups: _Groups, monkeypatch: pytest.MonkeyPatch):
+    """C3-08 — contract 25: a live read meets a quote of 1E-13 (refused for the price columns); a refresh within the
+    stamp makes no call and still carries the X-R51 note."""
+    print_section("C3-08: the X-R51 note kept with the stamp")
+    asset_id = await _asset(private_db)
+    groups.bc  # noqa: B018
+    today = date.today()
+    calls = 0
+
+    async def refused_value(self, items):
+        nonlocal calls
+        calls += 1
+        return {item.key: FACurrentValue(value=Decimal("1E-13"), currency="USD", as_of_date=today) for item in items}
+
+    monkeypatch.setattr(MockProvider, "get_current_values_bulk", refused_value)
+    await _prices(private_db, [asset_id])
+    assert calls == 1
+
+    results = await _refresh_many(private_db, [asset_id], today - timedelta(days=3), today)
+
+    assert calls == 1, "within the stamp: no new call"
+    assert unstorable_quote_reason(Decimal("1E-13")) in results[asset_id].errors
+    print_success("no new call, the X-R51 note still reported")

@@ -1441,8 +1441,8 @@ def services_bulk_writes_chunked(verbose: bool = False, test_names: list = None)
 
 
 def services_bulk_current_values(verbose: bool = False, test_names: list = None) -> bool:
-    """Project 76 C1+C2: the bulk current-price read of asset providers (C1 pure; C2 on a private SQLite, no server, no network)."""
-    print_section("Services: Bulk Current Values (project 76, C1+C2)")
+    """Project 76 C1+C2+C3: the bulk current-price read of asset providers (C1 pure; C2 and C3 on a private SQLite, no server, no network)."""
+    print_section("Services: Bulk Current Values (project 76, C1+C2+C3)")
     print_info("Testing: schemas/prices.py (FACurrentValueRequest), services/assets/base.py (supports_bulk_current, bulk_current_max_items, get_current_values_bulk), asset_source_providers/mockprov/plugin.py, " "services/assets/bulk_current.py and price_query.get_current_prices_bulk (C2)")
     print_info(
         "Tests: the default refuses (NOT_SUPPORTED); class-definition guards (TypeError); the request refuses extra fields and an empty key; mockprov answers per key like get_current_value, omits on command, answers NOT_FOUND per item, refuses the whole call when rate limited, and records every call"
@@ -1450,6 +1450,7 @@ def services_bulk_current_values(verbose: bool = False, test_names: list = None)
     print_info(
         "C2: one provider call per group and chunk; aligned expiry (every active asset of the provider read, answers cached per asset); the 120 s group stamp (DB fallback without a call, re-read after it or for a new member); single-flight on the group lock; RATE_LIMITED on every requested item with no stamp left; a failed call falls back to the DB with a short stamp; a per-item error falls back alone; today's row only for requested assets"
     )
+    print_info("C3: the history refresh reads today's current value in one bulk call per group before the history, shares the live read's group and stamp, asks nothing for a past range, fails RATE_LIMITED without asking the history, notes an unstorable value (X-R51)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_bulk_current_values.py", test_names)
     return run_command(cmd, "Bulk current values tests", verbose=verbose)
 
@@ -3523,8 +3524,8 @@ Note: No backend server required.
         cat,
         "bulk-current-values",
         services_bulk_current_values,
-        name="Bulk Current Values (project 76, C1+C2)",
-        desc="The bulk current-price read of asset providers: C1 FACurrentValueRequest, supports_bulk_current / bulk_current_max_items / get_current_values_bulk with their class-definition guards, mockprov's bulk answer; C2 get_current_prices_bulk reading a bulk provider's group in one call (aligned expiry, group stamp, single-flight, rate limit, failure fallback, chunks)",
+        name="Bulk Current Values (project 76, C1+C2+C3)",
+        desc="The bulk current-price read of asset providers: C1 FACurrentValueRequest, supports_bulk_current / bulk_current_max_items / get_current_values_bulk with their class-definition guards, mockprov's bulk answer; C2 get_current_prices_bulk reading a bulk provider's group in one call (aligned expiry, group stamp, single-flight, rate limit, failure fallback, chunks); C3 the history refresh reads today's value through the same bulk group before the history (one call, shared with the live read, none for a past range, aligned expiry, refused read fails the refresh, unstorable value noted)",
         # PURE: schema and class-definition checks, mockprov called directly, and the service on a private SQLite file
         # swapped for the process engine, a private cache, pauses and group clock; no lane DB, no server, no network.
         isolation="pure",
