@@ -154,3 +154,4 @@ him to answer by number. He reads better from a file than from a long chat messa
   a DB unit, 9/9 alone), never assumed.
 - 13/11/2026 — A child can miss the notification of its own background run too (65UX: run ended 13:28, session idle
   until 14:18). The heartbeat also checks each idle child's last background log: finished run + idle child → wake it.
+- 16/11/2026 — Even with `source_branch: dev_release2` the app cut a new lane's worktree from `origin` (68 started at `771c25780`): right after `start_session`, check the worktree's HEAD and fast-forward it to the local integration branch before the child writes anything.
