@@ -12,8 +12,14 @@ exercised end to end. Searching for ``SETTINGS_ECHO_QUERY`` answers with one ite
 received: the plain values, and for each secret only whether it is set — never its value. Searching for
 ``MINOR_UNIT_QUERY`` answers a line quoted in pence, ``MINOR_UNIT_IDENTIFIER``, with a quote base suggestion of 100,
 which ``suggest_quote_base`` gives for it too (Z-32 d).
+
+It reads current values in bulk (project 76): ``get_current_values_bulk`` answers every item as ``get_current_value``
+would, records the keys of each call (``mock_bulk_calls``), leaves out an item that carries ``BULK_OMIT_PARAM`` and
+refuses the whole call for an item that carries ``RATE_LIMITED_PARAM``.
 """
 
+import threading
+from collections import deque
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Dict
@@ -28,6 +34,7 @@ from backend.app.schemas.assets.metadata import (
 )
 from backend.app.schemas.prices import (
     FACurrentValue,
+    FACurrentValueRequest,
     FAHistoricalData,
     FAPricePoint,
 )
@@ -52,6 +59,26 @@ MINOR_UNIT_QUERY = "lf-minor-unit"
 MINOR_UNIT_IDENTIFIER = "MOCK_MINOR_UNIT"
 #: The suggestion for that line.
 _MINOR_UNIT_SUGGESTION = {"quantity": 100, "quote_currency": "GBp"}
+#: The provider parameter that makes the mock leave an item out of a bulk current-value answer (project 76): no answer
+#: for that asset, as a source says nothing about an identifier it does not know.
+BULK_OMIT_PARAM = "mock_bulk_omit"
+
+#: The keys of the latest bulk current-value calls, in call order: one tuple per call. Module-level, since the core makes
+#: a new instance for every call, and bounded, since the mock also serves the shared test backend.
+_bulk_calls: deque[tuple[str, ...]] = deque(maxlen=256)
+_bulk_calls_lock = threading.Lock()
+
+
+def mock_bulk_calls() -> list[tuple[str, ...]]:
+    """The keys of each bulk current-value call made since the last reset, in call order (a copy)."""
+    with _bulk_calls_lock:
+        return list(_bulk_calls)
+
+
+def reset_mock_bulk_calls() -> None:
+    """Forget the recorded bulk current-value calls."""
+    with _bulk_calls_lock:
+        _bulk_calls.clear()
 
 
 def _refuse_if_asked(provider_params: Dict | None) -> None:
@@ -72,6 +99,8 @@ class MockProvider(AssetSourceProvider):
     """
 
     test_only = True
+    supports_bulk_current = True
+    bulk_current_max_items = 50
     settings_fields = (
         PluginSettingField(
             key="api_key",
@@ -146,6 +175,10 @@ class MockProvider(AssetSourceProvider):
         Always returns: 100.0 USD as of today
         """
         _refuse_if_asked(provider_params)
+        return self._mock_quote(identifier)
+
+    def _mock_quote(self, identifier: str) -> FACurrentValue:
+        """The fixed quote of ``identifier``: 100.00 USD as of today; NOT_FOUND for ``INVALID_TICKER_12345``."""
         if identifier == "INVALID_TICKER_12345":
             raise AssetSourceError("Invalid identifier for mock provider.", error_code="NOT_FOUND")
         return FACurrentValue(
@@ -154,6 +187,27 @@ class MockProvider(AssetSourceProvider):
             as_of_date=date.today(),
             source=self.provider_name,
         )
+
+    async def get_current_values_bulk(self, items: list[FACurrentValueRequest]) -> dict[str, FACurrentValue | AssetSourceError]:
+        """Answer every item as ``get_current_value`` would, in one recorded call.
+
+        The call is recorded first (``mock_bulk_calls``), so a refused call counts too. An item carrying
+        ``RATE_LIMITED_PARAM`` refuses the whole call; one carrying ``BULK_OMIT_PARAM`` gets no answer; an unknown
+        identifier answers its own ``AssetSourceError``.
+        """
+        with _bulk_calls_lock:
+            _bulk_calls.append(tuple(item.key for item in items))
+        for item in items:
+            _refuse_if_asked(item.provider_params)
+        answer: dict[str, FACurrentValue | AssetSourceError] = {}
+        for item in items:
+            if item.provider_params.get(BULK_OMIT_PARAM):
+                continue
+            try:
+                answer[item.key] = self._mock_quote(item.identifier)
+            except AssetSourceError as error:
+                answer[item.key] = error
+        return answer
 
     @property
     def supports_history(self) -> bool:

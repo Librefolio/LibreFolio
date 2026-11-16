@@ -1445,6 +1445,30 @@ def services_bulk_writes_chunked(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "Bulk writes chunked tests", verbose=verbose)
 
 
+def services_bulk_current_values(verbose: bool = False, test_names: list = None) -> bool:
+    """Project 76 C1+C2+C3: the bulk current-price read of asset providers (C1 pure; C2 and C3 on a private SQLite, no server, no network)."""
+    print_section("Services: Bulk Current Values (project 76, C1+C2+C3)")
+    print_info("Testing: schemas/prices.py (FACurrentValueRequest), services/assets/base.py (supports_bulk_current, bulk_current_max_items, get_current_values_bulk), asset_source_providers/mockprov/plugin.py, " "services/assets/bulk_current.py and price_query.get_current_prices_bulk (C2)")
+    print_info(
+        "Tests: the default refuses (NOT_SUPPORTED); class-definition guards (TypeError); the request refuses extra fields and an empty key; mockprov answers per key like get_current_value, omits on command, answers NOT_FOUND per item, refuses the whole call when rate limited, and records every call"
+    )
+    print_info(
+        "C2: one provider call per group and chunk; aligned expiry (every active asset of the provider read, answers cached per asset); the 120 s group stamp (DB fallback without a call, re-read after it or for a new member); single-flight on the group lock; RATE_LIMITED on every requested item with no stamp left; a failed call falls back to the DB with a short stamp; a per-item error falls back alone; today's row only for requested assets"
+    )
+    print_info("C3: the history refresh reads today's current value in one bulk call per group before the history, shares the live read's group and stamp, asks nothing for a past range, fails RATE_LIMITED without asking the history, notes an unstorable value (X-R51)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_bulk_current_values.py", test_names)
+    return run_command(cmd, "Bulk current values tests", verbose=verbose)
+
+
+def services_yahoo_finance_bulk(verbose: bool = False, test_names: list = None) -> bool:
+    """Project 76 C5: Yahoo Finance reads current values in bulk (recorded v7 response; no DB, no server, no network)."""
+    print_section("Services: Yahoo Finance Bulk Current Values (project 76, C5)")
+    print_info("Testing: asset_source_providers/yahoo_finance/plugin.py (get_current_values_bulk, _fetch_v7_quotes, _quote_from_info, _bulk_quote_available)")
+    print_info("Tests: same result as get_current_value on the recorded quotes, exchange-zone dates, one request, absent key for an unreturned symbol, previous-close fallback and NO_DATA, 429 raised once, ISIN resolution, wrong identifier type, capability, same symbol twice")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_yahoo_finance_bulk.py", test_names)
+    return run_command(cmd, "Yahoo Finance bulk tests", verbose=verbose)
+
+
 def services_current_prices_bulk(verbose: bool = False, test_names: list = None) -> bool:
     """R13-SEC9-1/-3/-4 + Y's D1: POST /assets/prices/current (no lane DB, no server, no network)."""
     print_section("Services: Current Prices Bulk (R13-SEC9, Y's D1)")
@@ -3556,6 +3580,16 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "bulk-current-values",
+        services_bulk_current_values,
+        name="Bulk Current Values (project 76, C1+C2+C3+C3b+C4)",
+        desc="The bulk current-price read of asset providers: C1 FACurrentValueRequest, supports_bulk_current / bulk_current_max_items / get_current_values_bulk with their class-definition guards, mockprov's bulk answer; C2 get_current_prices_bulk reading a bulk provider's group in one call (aligned expiry, group stamp, single-flight, rate limit, failure fallback, chunks); C3 the history refresh reads today's value through the same bulk group before the history (one call, shared with the live read, none for a past range, aligned expiry, refused read fails the refresh, unstorable value noted); C3b the midnight rule (the current quote never replaces a stored or fetched history point of a day before today, it only adds a missing one: yesterday's true close survives, a missing yesterday gets the quote, a resume keeps a close only the DB has); C4 a provider's minimum refresh interval of current values (current_min_refresh_seconds, core.current_cache_ttl and its fallbacks, the TTL of every cache writer and of the group stamp, the plan's call count of 2 per fake hour, a bulk provider refused once then served after the pause)",
+        # PURE: schema and class-definition checks, mockprov called directly, and the service on a private SQLite file
+        # swapped for the process engine, a private cache, pauses and group clock; no lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "current-prices-bulk",
         services_current_prices_bulk,
         name="Current Prices Bulk (R13-SEC9)",
@@ -4451,6 +4485,15 @@ Note: No backend server required.
         services_provider_errors,
         name="Provider Error Paths",
         desc="justETF, Borsa Italiana, Yahoo Finance, SNB, BOE, FED and ECB when the source misbehaves or refuses for too many requests (every client doubled); a value that is no number skips its line only (X-R50, X-R52); FED and BOE read each currency from its series, in the direction the bank quotes it, NORGES divides each series by its unit, NBU keeps every day under its exchangedate, BOC reads one Valet group for every currency, BDI refuses a series not quoted per 1 EUR, BCB checks each row's code and symbol (lane 75)",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "yahoo-finance-bulk",
+        services_yahoo_finance_bulk,
+        name="Yahoo Finance Bulk Current Values (project 76, C5)",
+        desc="Yahoo's current values in one v7 quote request: same value, currency and exchange-zone date as the single read on the recorded response, one request for all symbols, an unreturned symbol answers nothing, previous-close fallback and NO_DATA, a 429 raised once and never retried, ISIN resolved to its symbol, wrong identifier type refused per item, capability flags",
+        # PURE: the recorded v7 response served by a replaced YfData.get_raw_json and a fake yf; no DB, no server, no network.
         isolation="pure",
     )
     add_test(cat, "borsa-italiana-search", services_borsa_italiana_search, name="Borsa Italiana Search", desc="Single-fetch search, IT+EN variants, ISIN direct hit (engine mocked)")
