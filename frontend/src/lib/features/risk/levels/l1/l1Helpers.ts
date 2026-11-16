@@ -128,7 +128,7 @@ export interface ReturnHistogram {
  * equality test would be at the mercy of the last bit of a division.
  *
  * ⚠️ Bar widths come from `upper − lower` rather than from a constant, and that
- * is deliberate. `validate_return_bins` (`schemas/risk.py:959`) polices only that
+ * is deliberate. `RiskVarCvarOutput.validate_return_bins` (`schemas/risk/outputs.py`) polices only that
  * `lower_bound` ascends — **not** contiguity, and **not** that the counts sum to
  * the observation total. The current producer happens to emit a uniform grid
  * (`historical_var.py:90` slices one edge array), but that is the producer's

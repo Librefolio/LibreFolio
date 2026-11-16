@@ -203,12 +203,13 @@
      * L4's three steps, for the same reason as the three levels above — and it
      * was the only section without them.
      *
-     * `schemas/risk.py:1056` forbids an `unavailable` or `failed` result from
-     * carrying an output, so the `{#if output}` each step renders on is not
-     * *probably* empty on that branch: it is empty **by contract**. Without this
-     * the reader asks for a simulation, the spinner stops, and nothing appears —
-     * no figure and no cause. Reachable today with no exotic input at all: a busy
-     * worker, a timeout, a series too short.
+     * `RiskAnalyticResult.validate_status_payload` (`schemas/risk/results.py`)
+     * forbids an `unavailable` or `failed` result from carrying an output, so
+     * the `{#if output}` each step renders on is not *probably* empty on that
+     * branch: it is empty **by contract**. Without this the reader asks for a
+     * simulation, the spinner stops, and nothing appears — no figure and no
+     * cause. Reachable today with no exotic input at all: a busy worker, a
+     * timeout, a series too short.
      *
      * Naming the step and its state is all that is offered. A timeout is not a
      * question the reader can answer, so no remedy is promised — but it is still

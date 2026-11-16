@@ -200,7 +200,7 @@ export function tornadoRows(output: unknown): TornadoRow[] {
  *
  * `generated.ts:7662` types the field as `RiskError | Array<RiskError | null>`
  * while the Zod validator at `:14415` only ever admits the single object — the
- * backend declares `Optional[RiskError]` (`schemas/risk.py:1045`). The array
+ * backend declares `RiskAnalyticResult.error: Optional[RiskError]` (`schemas/risk/results.py`). The array
  * branch is therefore unreachable today, but casting it away would leave a lie
  * behind if the contract ever widens for real. Normalising costs one line.
  */
@@ -221,7 +221,7 @@ export const REPLAY_BLOCK_WARNING_CODES: readonly string[] = ['historical_replay
 
 /**
  * The order the block lists the reasons in: the order of `RiskHistoricalReplayExclusionReason`
- * (`schemas/risk.py`), with the reader's own exclusion last. A reason this list does not know
+ * (`schemas/risk/vocabulary.py`), with the reader's own exclusion last. A reason this list does not know
  * comes after the known ones, in the order it arrived.
  */
 export const REPLAY_EXCLUSION_REASON_ORDER: readonly string[] = ['no_prices_in_window', 'starts_after_window_start', 'stale_at_window_start', 'stale_at_window_end', 'missing_fx', 'manual_exclusion'];
