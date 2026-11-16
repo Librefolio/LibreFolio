@@ -237,6 +237,8 @@ def _add_buy_terms(model: Model, route: ExactOrderRoute, facts: ScenarioFacts, v
     if reserve is not None:
         # A buy happens exactly when its binary is on (``order_active_floor``: at least one step); its fee only where the
         # schedule can charge (``fee_upper > 0``). Each takes its reserve with it.
+        if fee_upper > 0:
+            _require_fee_on_every_order(facts, route)
         active = variables.buy_active[route.route_id]
         cells[(route.broker_id, quote_currency)].append(-(notional_expr + reserve[f"buy-debit:{route.route_id}"] * active))
         cells[(route.broker_id, quote_currency)].append(-(variables.buy_fee[route.route_id] + (reserve[f"buy-fee:{route.route_id}"] * active if fee_upper > 0 else 0.0)))
@@ -261,6 +263,17 @@ def _add_buy_terms(model: Model, route: ExactOrderRoute, facts: ScenarioFacts, v
             side="debit",
         )
     )
+
+
+def _require_fee_on_every_order(facts: ScenarioFacts, route: ExactOrderRoute) -> None:
+    """The fee's reserve rides on the buy's binary, so a schedule that can charge must charge every active order a positive
+    exact fee: then the model (reserve on the binary) and the replay (reserve on a positive amount) agree. ``fixed +
+    clamp(rate × notional, minimum, cap)`` does so whenever its upper bound is positive; a schedule that could be zero for
+    some active orders and positive for others would break it. None exists today: fail closed if one ever does."""
+    schedule = facts.fee_by_key[(route.broker_id, route.fee_schedule_id)]
+    if schedule.fixed_fee.amount > 0 or schedule.minimum_fee.amount > 0 or schedule.proportional_rate > 0:
+        return
+    raise LedgerPostingScopeError(f"fee schedule {route.fee_schedule_id} can charge some active orders of route {route.route_id} and not others")
 
 
 def _add_fx_terms(model: Model, spec: FxDecisionSpec, facts: ScenarioFacts, variables: CompiledVariables, cells: dict, reserve: dict[str, float] | None) -> None:

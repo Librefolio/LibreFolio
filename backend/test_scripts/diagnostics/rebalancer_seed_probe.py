@@ -18,8 +18,9 @@ refuses it, as it would refuse to publish it (lot CR of project 67: the cash rul
 
 Scenarios: ``g5`` (the planner's real request on the test server's mock data,
 ``backend/test_scripts/fixtures/pac_allocator/rebalancer_plan_request.g5-browser.2-0-0.json``), ``g5-all-eur`` (the
-same, with every USD price, route and cash moved to EUR at the request's rate, and no currency pair) and ``g5-one-route``
-(one buy route per Asset: a case that closes, for the «closed above» check).
+same, with every USD price, route and cash moved to EUR at the request's rate, and no currency pair), ``g5-one-route``
+(one buy route per Asset: a case that closes, for the «closed above» check), ``g5-fees`` (G5 with a percentage fee on
+one Broker and a fixed one on the other) and ``g5-target-first`` (the other fidelity).
 
     pipenv run python backend/test_scripts/diagnostics/rebalancer_seed_probe.py
     ... --scenarios g5 --seeds 0-9 --priorities none,bin10qty20,bin20qty10 --budget 5
@@ -57,9 +58,10 @@ from backend.app.services.pac_allocator.plan_sequence import PlanNotExecutableEr
 from backend.app.services.pac_allocator.solver import solve_policy_program  # noqa: E402
 
 G5_REQUEST = PROJECT_ROOT / "backend/test_scripts/fixtures/pac_allocator/rebalancer_plan_request.g5-browser.2-0-0.json"
-# How far above the best plan a closure may sit: after row 6 the closures of one scenario agree to four decimals (the
-# consultant's measure, 16/11), so a tenth of a cent tells a false closure from SCIP's own precision.
-CLOSED_TOLERANCE = Fraction(1, 1000)
+# How far above the best plan a closure may sit. After row 6 the closures of one scenario agree within a tenth of a cent
+# (G5 within 0.000003 €, the consultant's integer runs within 0.0008 €), while a false closure is a whole reserve too many
+# (a conversion's reserve is one cent): half a cent tells them apart.
+CLOSED_TOLERANCE = Fraction(1, 200)
 PRIORITIES = {"none": None, "bin10qty20": (10, 20), "bin20qty10": (20, 10)}
 
 
@@ -104,7 +106,41 @@ def _one_route(request: dict) -> dict:
     return request
 
 
-SCENARIOS = {"g5": _g5, "g5-all-eur": lambda: _all_eur(_g5()), "g5-one-route": lambda: _one_route(_g5())}
+def _with_fees(request: dict) -> dict:
+    """G5 with real fees, which G5 itself has none of (row 6 of lot CR: no evidence before touched a fee or its reserve).
+    Broker 1 charges 0.05 % of each order with a floor of 1.25 in the order's currency; Broker 2 a fixed 2.95. The
+    percentage rounds (a reserve), the fixed and the floor do not."""
+    request = copy.deepcopy(request)
+    for broker in request["brokers"]:
+        schedules = []
+        for capability in broker.get("capabilities", []):
+            currency = capability["capability_id"].rsplit(":", 1)[1]
+            schedule = {"fee_schedule_id": f"fee:{capability['capability_id']}", "capability_id": capability["capability_id"], "side": "buy"}
+            if broker["broker_id"] == "broker:1":
+                schedule |= {"rate": "0.0005", "variable_floor": {"amount": "1.25", "currency": currency}}
+            else:
+                schedule |= {"fixed_fee": {"amount": "2.95", "currency": currency}}
+            schedules.append(schedule)
+        broker["fee_schedules"] = schedules
+    for route in request["order_routes"]:
+        route["fee_schedule_id"] = f"fee:{route['capability_id']}"
+    return request
+
+
+def _target_first(request: dict) -> dict:
+    """G5 with the fidelity «Target first»: the distance first, then the money lost."""
+    request = copy.deepcopy(request)
+    request["target_fidelity"] = {"kind": "target_first"}
+    return request
+
+
+SCENARIOS = {
+    "g5": _g5,
+    "g5-all-eur": lambda: _all_eur(_g5()),
+    "g5-one-route": lambda: _one_route(_g5()),
+    "g5-fees": lambda: _with_fees(_g5()),
+    "g5-target-first": lambda: _target_first(_g5()),
+}
 
 
 def executable(scenario, evaluation) -> bool:
@@ -155,15 +191,19 @@ def run_once(request: dict, seed: int, priorities: tuple[int, int] | None, budge
             as_seen = solver_view_objectives(scenario, view, evaluation)[view.objectives[0].code]
             seen = Fraction(as_seen.numerator, as_seen.denominator)
             steps_ok = executable(scenario, evaluation)
-    scale = float(stage.scale)
-    band = getattr(next((item for item in program.objective_stages if item.code == stage.objective_code), None), "band", 0.0) / scale
+    # Compared in the unit SCIP minimizes (the stage's scale times its objective): euros for «Balanced» (``J``, scale 1)
+    # and for «Target first» (``D/F``, scale ``1/F``), so one tolerance in euros serves both.
+    scale = stage.scale
+    if seen is not None:
+        seen = seen * Fraction(scale)
+    band = getattr(next((item for item in program.objective_stages if item.code == stage.objective_code), None), "band", 0.0)
     return {
         "band": band,
         "load": round(load, 2),
         "wall": round(time.monotonic() - start, 1),
         "status": stage.status,
-        "primal": None if stage.primal is None else stage.primal / scale,
-        "dual": None if stage.dual is None else stage.dual / scale,
+        "primal": stage.primal,
+        "dual": stage.dual,
         "exact": exact,
         "seen": seen,
         "executable": steps_ok,

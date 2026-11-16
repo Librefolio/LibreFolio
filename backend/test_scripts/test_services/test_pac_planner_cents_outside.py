@@ -263,3 +263,20 @@ def test_a_scip_failure_before_any_plan_fails_the_run_as_before(monkeypatch: pyt
     _failing_on(monkeypatch, 1)
     with pytest.raises(SolverStageError):
         _plan(product)
+
+
+def test_a_fee_that_could_be_zero_on_some_active_orders_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The fee's reserve rides on the buy's binary, so a schedule that can charge must charge every active order (the
+    consultant's condition). ``fixed + clamp(rate × notional, floor, cap)`` always does when it can charge at all; a
+    schedule with nothing to charge but a positive upper bound would break the model = solver-view equality, and the
+    compiler refuses it. Forced here: T4 without its fixed fee, its upper bound made positive."""
+    from dataclasses import replace  # noqa: PLC0415
+
+    from backend.app.services.pac_allocator.constraints import cells  # noqa: PLC0415
+
+    base = cases.t4()
+    free = tuple(replace(item, fixed_fee=replace(item.fixed_fee, amount=R(0))) for item in base.brokers[0].fee_schedules)
+    scenario = replace(base, brokers=(replace(base.brokers[0], fee_schedules=free),))
+    monkeypatch.setattr(cells, "_fee_variable_upper", lambda *_args: 1.0)
+    with pytest.raises(cells.LedgerPostingScopeError, match="can charge some active orders"):
+        compile_policy_program(scenario, build_exact_policy_view(scenario))
