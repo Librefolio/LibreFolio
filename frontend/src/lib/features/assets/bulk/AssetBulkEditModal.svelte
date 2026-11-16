@@ -504,7 +504,9 @@
         </div>
 
         <!-- Body -->
-        <div class="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-4" data-testid="asset-bulk-body">
+        <!-- The body scrolls (wheel, touch, keyboard) with the bar hidden: the shared `scrollbar-hidden` of app.css. A scrollable region the keyboard can reach and scroll (tab stop, focus ring). -->
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+        <div class="scrollbar-hidden min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-4 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-lf-focus" role="region" aria-labelledby="asset-bulk-edit-title" tabindex="0" data-testid="asset-bulk-body">
             <!-- Steps -->
             <ol class="flex items-center gap-3 text-xs font-medium" data-testid="asset-bulk-steps">
                 <li class="flex items-center gap-1.5 {step === 'fields' ? 'text-lf-primary' : 'text-lf-muted'}" data-testid="asset-bulk-step-fields" data-active={step === 'fields'}>

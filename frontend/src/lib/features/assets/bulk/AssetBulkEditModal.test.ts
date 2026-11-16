@@ -368,3 +368,17 @@ describe('removing the icon and the personal URL (U7)', () => {
         expect(screen.getByTestId('asset-bulk-icon-remove')).toHaveAttribute('aria-pressed', 'false');
     });
 });
+
+describe('the scrolling body (U5)', () => {
+    it('scrolls without a visible scrollbar: the shared utility, still reachable and focusable by keyboard', () => {
+        mount();
+        const body = screen.getByTestId('asset-bulk-body');
+        // `overflow-y-auto` keeps the scroll (wheel, touch, keyboard); `scrollbar-hidden` (app.css) only hides the bar.
+        expect(body).toHaveClass('overflow-y-auto');
+        expect(body).toHaveClass('scrollbar-hidden');
+        // A scrollable area a keyboard user can reach: a region, named by the title, in the tab order.
+        expect(body).toHaveAttribute('tabindex', '0');
+        expect(body).toHaveAttribute('role', 'region');
+        expect(body).toHaveAttribute('aria-labelledby', 'asset-bulk-edit-title');
+    });
+});

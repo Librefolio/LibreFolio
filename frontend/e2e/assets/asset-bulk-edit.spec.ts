@@ -329,6 +329,18 @@ test.describe('Asset bulk edit', () => {
 
             await page.setViewportSize({width: 1280, height: 600});
             await expect.poll(async () => (await bodyScroll()).scroll > (await bodyScroll()).client, {timeout: 5_000}).toBe(true);
+            // The scrollbar is hidden (the shared utility), the scroll is not: the body takes no width for a bar, and the keyboard and the
+            // wheel still move it.
+            const bar = await page.getByTestId('asset-bulk-body').evaluate((el) => ({width: el.offsetWidth - el.clientWidth, scrollbarWidth: getComputedStyle(el).scrollbarWidth}));
+            expect(bar.scrollbarWidth, 'the bar is hidden').toBe('none');
+            expect(bar.width, 'no gutter for a bar').toBe(0);
+            await page.getByTestId('asset-bulk-body').focus();
+            await page.keyboard.press('PageDown');
+            await expect.poll(() => page.getByTestId('asset-bulk-body').evaluate((el) => el.scrollTop), {message: 'PageDown scrolls the body', timeout: 5_000}).toBeGreaterThan(0);
+            const afterKey = await page.getByTestId('asset-bulk-body').evaluate((el) => el.scrollTop);
+            await page.getByTestId('asset-bulk-body').hover();
+            await page.mouse.wheel(0, 200);
+            await expect.poll(() => page.getByTestId('asset-bulk-body').evaluate((el) => el.scrollTop), {message: 'the wheel scrolls the body', timeout: 5_000}).toBeGreaterThan(afterKey);
             const viewport = page.viewportSize()!;
             for (const part of ['asset-bulk-title', 'asset-bulk-footer-fields']) {
                 const found = await page.getByTestId(part).boundingBox();
