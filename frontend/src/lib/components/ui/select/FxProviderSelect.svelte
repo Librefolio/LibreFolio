@@ -86,6 +86,23 @@
     /** Set of expanded chain group step counts */
     let expandedChainGroups = $state<Set<number>>(new Set());
 
+    /**
+     * How many chains an open group draws: the first CHAIN_PAGE in today's order, CHAIN_PAGE more per «show more».
+     * The search always filters every chain. Developer decision «b1» (lane 75, L2d): drawn whole, the 4-step group of a
+     * pair such as NOK→USD (~36 000 chains once the wave-1 banks are in) crashed the browser tab.
+     */
+    const CHAIN_PAGE = 200;
+    /** Chains shown per group after «show more»: every change of the search (cleared included) or of the routes starts over. */
+    let shownChains = $state<Record<number, number>>({});
+
+    function chainLimit(stepCount: number): number {
+        return shownChains[stepCount] ?? CHAIN_PAGE;
+    }
+
+    function showMoreChains(stepCount: number) {
+        shownChains = {...shownChains, [stepCount]: chainLimit(stepCount) + CHAIN_PAGE};
+    }
+
     // =========================================================================
     // Derived
     // =========================================================================
@@ -241,6 +258,7 @@
             const paths = await findConversionPaths(base, quote, 4);
             const providers = getCachedFxProviders();
             searchTexts.clear();
+            shownChains = {};
             const direct: RouteOption[] = [];
             const chain: RouteOption[] = [];
             const usedProviderCodes = new Set<string>();
@@ -469,6 +487,7 @@
 
     function clearSearch() {
         searchQuery = '';
+        shownChains = {};
     }
 
     function routeKey(route: RouteOption): string {
@@ -665,6 +684,7 @@
                     <input
                         type="text"
                         bind:value={searchQuery}
+                        oninput={() => (shownChains = {})}
                         placeholder={$_('fx.route.searchPlaceholder')}
                         class="w-full pl-8 pr-8 py-1.5 text-xs rounded-lg border border-lf-input bg-lf-field text-lf-primary placeholder:text-lf-placeholder hover:border-lf-input-hover focus:ring-1 focus:ring-lf-focus focus:border-lf-focus outline-none transition-colors"
                         data-testid="fx-route-search"
@@ -757,11 +777,13 @@
 
                         <!-- Collapsible content -->
                         {#if isExpanded}
-                            {#each group.routes as route (route.key)}
+                            {@const limit = chainLimit(group.stepCount)}
+                            {#each group.routes.slice(0, limit) as route (route.key)}
                                 {@const warnings = getRouteWarnings(route)}
                                 <button
                                     type="button"
                                     data-testid="fx-route-chain-{route.stepCount}step-{route.providers.join('-')}"
+                                    data-route-key={route.key}
                                     data-warnings={warnings.length}
                                     data-warning-level={getRouteWarningLevel(route)}
                                     class="w-full text-left px-2.5 py-1.5 rounded-lg border transition-all text-xs border-lf-subtle bg-lf-card hover:border-lf-info-line hover:bg-lf-info-soft/50"
@@ -806,6 +828,17 @@
                                     </span>
                                 </button>
                             {/each}
+                            {#if group.routes.length > limit}
+                                <button
+                                    type="button"
+                                    class="w-full px-2.5 py-1.5 rounded-lg border border-dashed border-lf-subtle text-xs text-lf-link hover:bg-lf-hover transition-colors"
+                                    onclick={() => showMoreChains(group.stepCount)}
+                                    data-testid="fx-route-chain-more-{group.stepCount}"
+                                    data-hidden={group.routes.length - limit}
+                                >
+                                    {$_('fx.route.showMore', {values: {count: group.routes.length - limit}})}
+                                </button>
+                            {/if}
                         {/if}
                     </div>
                 {/each}
