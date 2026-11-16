@@ -190,6 +190,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/fx/fxConversionHelper.test.ts",
             "src/lib/utils/currency/currencyFormat.test.ts",
             "src/lib/utils/currency/currencyGraph.test.ts",
+            "src/lib/utils/currency/currencyGraph.scale.test.ts",
             "src/lib/utils/privacy/maskable.test.ts",
             "src/lib/utils/privacy/moneyRenderSites.test.ts",
             "src/routes/documentTitle.guard.test.ts",
