@@ -76,7 +76,7 @@
     "costs": "Costs",
     "noPositions": "No positions available",
     "noPeriodPnl": "No P&L in selected period",
-    "seeAllPositions": "See all →",
+    "seeAllPositions": "See all",
     "aiExport": "AI Export",
     "periodPnlTooltip": "Total gain or loss attributable to the selected period only (unrealized change + realized + income − fees). May differ from the position's total lifetime gain.",
     "unrealizedPnlPercent": "P&L %",
@@ -173,6 +173,14 @@
     "allocationNoShares": "No percentages to show: the slices add up to zero or less (for example, an overdraft that cancels your holdings). The amounts are listed below.",
     "allocationHistoryNoShares": "No percentages to show: on these days the slices add up to zero or less.",
     "pnlDeltaDayTooltip": "Today's change of the total P&L, and that change as a percentage of yesterday's portfolio value.",
-    "yieldOnCostFxStale": "old rate: {days} days before"
+    "yieldOnCostFxStale": "old rate: {days} days before",
+    "groupBy": {
+      "global": "Global",
+      "broker": "Broker",
+      "globalHint": "One row per asset: the sum of every broker that holds it",
+      "brokerHint": "One row per asset and broker",
+      "label": "Group the positions",
+      "brokerCount": "{count} brokers"
+    }
   }
 }
