@@ -470,11 +470,9 @@
         "showLess": "Show less",
         "effectiveAssets": {
           "label": "How many independent bets do I really hold?",
-          "aboveCount": "Above the {positions} measured positions: the excess comes from the part not covered ({share}: cash and holdings without prices), and says nothing about the weights",
           "belowCount": "Below the {positions} measured positions: the weights are lopsided, and a few carry the portfolio",
-          "evenCount": "Exactly the {positions} measured positions: even weights and nothing uncovered",
-          "name": "Effective number of positions",
-          "aboveCountNoShare": "Above the {positions} measured positions: the excess comes from the part not covered (cash and holdings without prices), and says nothing about the weights"
+          "evenCount": "Exactly the {positions} measured positions: the weights are even",
+          "name": "Effective number of positions"
         },
         "diversificationRatio": {
           "label": "Did spreading the money achieve anything?",

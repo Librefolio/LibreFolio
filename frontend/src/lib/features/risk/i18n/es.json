@@ -470,11 +470,9 @@
         "showLess": "Mostrar menos",
         "effectiveAssets": {
           "label": "¿Cuántas apuestas independientes tengo realmente?",
-          "aboveCount": "Por encima de las {positions} posiciones medidas: el exceso viene de la parte no cubierta ({share}: liquidez y posiciones sin precio), y no dice nada sobre los pesos",
           "belowCount": "Por debajo de las {positions} posiciones medidas: los pesos están desequilibrados, y unas pocas sostienen la cartera",
-          "evenCount": "Exactamente las {positions} posiciones medidas: pesos uniformes y nada sin cubrir",
-          "name": "Número efectivo de posiciones",
-          "aboveCountNoShare": "Por encima de las {positions} posiciones medidas: el exceso viene de la parte no cubierta (liquidez y posiciones sin precio), y no dice nada sobre los pesos"
+          "evenCount": "Exactamente las {positions} posiciones medidas: los pesos son uniformes",
+          "name": "Número efectivo de posiciones"
         },
         "diversificationRatio": {
           "label": "¿Repartir el dinero ha servido de algo?",

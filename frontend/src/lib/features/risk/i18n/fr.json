@@ -470,11 +470,9 @@
         "showLess": "Afficher moins",
         "effectiveAssets": {
           "label": "Combien de paris indépendants ai-je réellement ?",
-          "aboveCount": "Au-dessus des {positions} positions mesurées : l'excédent vient de la part non couverte ({share} : liquidités et positions sans prix), et ne dit rien des poids",
           "belowCount": "En dessous des {positions} positions mesurées : les poids sont déséquilibrés, et quelques-unes portent le portefeuille",
-          "evenCount": "Exactement les {positions} positions mesurées : poids uniformes et rien de non couvert",
-          "name": "Nombre effectif de positions",
-          "aboveCountNoShare": "Au-dessus des {positions} positions mesurées : l'excédent vient de la part non couverte (liquidités et positions sans prix), et ne dit rien des poids"
+          "evenCount": "Exactement les {positions} positions mesurées : les poids sont uniformes",
+          "name": "Nombre effectif de positions"
         },
         "diversificationRatio": {
           "label": "Répartir l'argent a-t-il servi à quelque chose ?",

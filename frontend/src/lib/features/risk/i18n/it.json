@@ -470,11 +470,9 @@
         "showLess": "Mostra meno",
         "effectiveAssets": {
           "label": "Quante scommesse indipendenti ho davvero?",
-          "aboveCount": "Sopra le {positions} posizioni misurate: l'eccesso viene dalla parte non coperta ({share}: liquidità e posizioni senza prezzo), e non dice nulla sui pesi",
           "belowCount": "Sotto le {positions} posizioni misurate: i pesi sono sbilanciati, e poche portano il portafoglio",
-          "evenCount": "Pari alle {positions} posizioni misurate: pesi uniformi e nessuna parte non coperta",
-          "name": "Numero effettivo di posizioni",
-          "aboveCountNoShare": "Sopra le {positions} posizioni misurate: l'eccesso viene dalla parte non coperta (liquidità e posizioni senza prezzo), e non dice nulla sui pesi"
+          "evenCount": "Pari alle {positions} posizioni misurate: i pesi sono uniformi",
+          "name": "Numero effettivo di posizioni"
         },
         "diversificationRatio": {
           "label": "Distribuire il denaro è servito a qualcosa?",
