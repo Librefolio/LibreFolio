@@ -141,3 +141,29 @@ describe('a ready Rebalancer result renders', () => {
         expect(sections.map((section) => section.querySelector('[data-testid="rebalancer-planner-result-section-toggle"]')?.getAttribute('aria-expanded'))).toEqual(sections.map(() => 'true'));
     });
 });
+
+/**
+ * The plan section (F4a step 2, contract §6.3). The browser answer has two transfers, one exchange and five purchases: the
+ * section counts all eight steps. A plan of transfers only is still a plan: that variant is derived here from the
+ * browser answer by emptying its purchases and exchanges (the fixture file stays the engine's, untouched); the codec
+ * still accepts it.
+ */
+describe('the Rebalancer plan section', () => {
+    const planSection = () => screen.getAllByTestId('rebalancer-planner-result-section').find((section) => section.getAttribute('data-section') === 'plan') ?? null;
+
+    it('counts every step: transfers and exchanges as well as purchases', () => {
+        mounted(browser);
+        const solution = browser.result.primary_solution;
+        const steps = solution.funding_actions.length + solution.conversions.length + solution.transfers.length + solution.order_rows.length;
+        const toggle = planSection()?.querySelector('[data-testid="rebalancer-planner-result-section-toggle"]');
+        expect(toggle?.textContent).toContain(`(${steps})`);
+    });
+
+    it('a plan of transfers only still has its section', () => {
+        const transfersOnly = structuredClone(browser);
+        transfersOnly.result.primary_solution.order_rows = [];
+        transfersOnly.result.primary_solution.conversions = [];
+        mounted(transfersOnly);
+        expect(planSection()).not.toBeNull();
+    });
+});

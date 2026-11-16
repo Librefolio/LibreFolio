@@ -23,7 +23,7 @@
     import StaleBanner from './StaleBanner.svelte';
     import StateNotice from './StateNotice.svelte';
     import ToolErrorPanel from './ToolErrorPanel.svelte';
-    import {isReady, limitedEntries, notesBesideLimitsBanner, planLookup, resultNames} from './model';
+    import {hasPlanSteps, isReady, limitedEntries, notesBesideLimitsBanner, planLookup, planSteps, planTransfers, resultNames} from './model';
     import {getPlannerProfile, domId, testId} from '../profile';
 
     /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
@@ -55,7 +55,10 @@
     const limits = $derived(limitedEntries(outcome.built.resolved));
     const notes = $derived(ready ? presentIssues(notesBesideLimitsBanner(ready, limits), draft, outcome.built.ids).map(listIssue) : []);
     const orderCount = $derived(solution ? solution.order_rows.length : 0);
-    const hasPlan = $derived(solution !== null && orderCount + solution.funding_actions.length + solution.conversions.length > 0);
+    // A plan of transfers only, or conversions only, is still a plan (contract §6.3).
+    const hasPlan = $derived(solution !== null && hasPlanSteps(solution));
+    // The section counts the orders in the PAC (unchanged), every step in the Rebalancer: its transfers and exchanges are steps too.
+    const planCount = $derived(solution && profile.text === 'rebalancer' ? planSteps(solution.funding_actions, solution.conversions, planTransfers(solution)).length + orderCount : orderCount);
     const sections = $derived(solution ? ['allocation', ...(hasPlan ? ['plan'] : []), 'exposures', 'ledger', 'proof'] : ['proof']);
     /** R9.8: the allocation and the operational plan open, the rest on request. */
     const OPEN_BY_DEFAULT = new Set(['allocation', 'plan']);
@@ -140,7 +143,7 @@
                 <AssetTable rows={solution.asset_rows} accounting={solution.accounting} {names} {digits} {draft} />
             </ResultSection>
             {#if hasPlan}
-                <ResultSection id="plan" title={title('plan', 'Operational plan')} count={orderCount} open={open.has('plan')} ontoggle={toggle}>
+                <ResultSection id="plan" title={title('plan', 'Operational plan')} count={planCount} open={open.has('plan')} ontoggle={toggle}>
                     <OperationalPlan {solution} {names} {lookup} {digits} {draft} onorder={(order) => (selectedOrder = order)} />
                 </ResultSection>
             {/if}

@@ -4,6 +4,9 @@
   conversion the Broker makes by itself has no number; it is shown above that Broker's orders and
   on the orders it pays for. Every amount is a backend figure rendered through the planner
   formatters: nothing is added up here.
+
+  The Rebalancer (F4a of project 67, contract §6.3): its transfers between Brokers are numbered steps of their own, in the
+  backend's counter with the deposits and the currency exchanges; its orders are «Purchases on {broker}», one table each.
 -->
 <script lang="ts">
     import {ArrowRight, Eye} from 'lucide-svelte';
@@ -19,7 +22,7 @@
     import {BADGE, HINT, NOTICE, STEP_NUMBER} from '../ui';
     import ResultCell, {type ResultCellContent} from './ResultCell.svelte';
     import AutomaticConversionNote from './AutomaticConversionNote.svelte';
-    import {automaticConversions, conversionsFor, ordersByBroker, planSteps, type PlanLookup, type PlanSource, type ResultNames} from './model';
+    import {automaticConversions, conversionsFor, ordersByBroker, planSteps, planTransfers, type PlanLookup, type PlanSource, type PlanStep, type ResultNames} from './model';
     import {withHelpCues} from '../shared/columnHelp';
     import TableColumns from '../shared/TableColumns.svelte';
     import {AMOUNT_MARKER, splitAtAmount} from '../shared/amountSentence';
@@ -47,7 +50,15 @@
         deposit: 'Make the deposit “{source}” of {amount} to the Broker “{destination}”',
     };
 
-    const steps = $derived(planSteps(solution.funding_actions, solution.conversions));
+    const steps = $derived(planSteps(solution.funding_actions, solution.conversions, planTransfers(solution)));
+    const R = 'tools.portfolioRebalancer.planner.result.plan';
+    const rebalancer = profile.text === 'rebalancer';
+
+    function stepKey(step: PlanStep): string {
+        if (step.kind === 'funding') return step.action.action_id;
+        if (step.kind === 'transfer') return step.action.transfer_id;
+        return step.action.conversion_id;
+    }
     const groups = $derived(ordersByBroker(solution.order_rows));
     let orderTables = $state<Record<string, DataTable<PlannerOrderRow> | undefined>>({});
     const otherTables = (brokerId: string) => groups.filter((group) => group.brokerId !== brokerId).map((group) => orderTables[group.brokerId]);
@@ -198,11 +209,11 @@
 
 <div class="space-y-4" data-testid={testId('plan', profile)}>
     <AutomaticConversionNote conversions={solution.conversions} {names} />
-    <p class={HINT}>{$t(`${KEY}.sequenceHint`, {default: 'Follow the numbers: first the cash, then the currency exchanges, then the orders.'})}</p>
+    <p class={HINT}>{rebalancer ? $t(`${R}.sequenceHint`) : $t(`${KEY}.sequenceHint`, {default: 'Follow the numbers: first the cash, then the currency exchanges, then the orders.'})}</p>
 
     {#if steps.length > 0}
         <ol class="divide-y divide-lf-subtle rounded-lg border border-lf-subtle">
-            {#each steps as step (step.kind === 'funding' ? step.action.action_id : step.action.conversion_id)}
+            {#each steps as step (stepKey(step))}
                 <li class="flex items-start gap-3 p-3 text-sm" data-testid={testId('plan-step', profile)} data-kind={step.kind} data-sequence={step.sequence}>
                     <span class={STEP_NUMBER}>{step.sequence}</span>
                     {#if step.kind === 'funding'}
@@ -216,6 +227,19 @@
                                 {parts.before}<span class="{BADGE.neutral} tabular-nums" data-testid={testId('plan-amount', profile)}>{formatPlannerMoneyPlain(action.amount.amount, action.amount.currency, {digits})}</span>{parts.after}
                             </p>
                             <p class="{HINT} first-letter:uppercase">{fundingDetail(action)}</p>
+                        </div>
+                    {:else if step.kind === 'transfer'}
+                        {@const action = step.action}
+                        {@const parts = splitAtAmount(
+                            $t(`${KEY}.sentence.transfer`, {
+                                default: SENTENCE_FALLBACKS.transfer,
+                                values: {source: names.broker(action.source_broker_id), destination: names.broker(action.destination_broker_id), amount: AMOUNT_MARKER},
+                            }),
+                        )}
+                        <div class="min-w-0 flex-1 space-y-1" data-transfer={action.transfer_id}>
+                            <p class="text-lf-primary" data-testid={testId('plan-sentence', profile)} data-broker={action.destination_broker_id} data-source-broker={action.source_broker_id} data-currency={action.amount.currency}>
+                                {parts.before}<span class="{BADGE.neutral} tabular-nums" data-testid={testId('plan-amount', profile)}>{formatPlannerMoneyPlain(action.amount.amount, action.amount.currency, {digits})}</span>{parts.after}
+                            </p>
                         </div>
                     {:else}
                         {@const action = step.action}
@@ -260,7 +284,9 @@
             <div class="flex flex-wrap items-center gap-2">
                 <h4 class="flex items-center gap-2 text-sm font-semibold text-lf-primary">
                     <PlannerBrokerIcon broker={draft.broker(group.brokerId)} size={24} />
-                    {$t(`${KEY}.ordersAt`, {default: 'Orders on {broker}', values: {broker: names.broker(group.brokerId)}})}
+                    <span data-testid={testId('plan-orders-title', profile)}>
+                        {rebalancer ? $t(`${R}.buysAt`, {values: {broker: names.broker(group.brokerId)}}) : $t(`${KEY}.ordersAt`, {default: 'Orders on {broker}', values: {broker: names.broker(group.brokerId)}})}
+                    </span>
                 </h4>
                 <TableColumns table={orderTables[group.brokerId]} others={otherTables(group.brokerId)} testid={testId('plan-orders-columns', profile)} />
             </div>
