@@ -46,6 +46,9 @@ from backend.app.services.plugin_settings.fields import PluginSettingField, Sett
 
 #: The search query that makes the mock describe the settings it received.
 SETTINGS_ECHO_QUERY = "lf-settings-echo"
+#: The search query that makes the mock describe the values of its shared group ``mock`` (project 76, G2): the plan as it
+#: is, the token only as set or unset — never its value.
+GROUP_ECHO_QUERY = "lf-group-echo"
 #: The search query that makes the mock refuse for too many requests, with a ``Retry-After`` of 30 s.
 RATE_LIMITED_QUERY = "lf-rate-limited"
 #: The provider parameter that makes the mock refuse for too many requests: a number of seconds (its ``Retry-After``) or
@@ -99,6 +102,8 @@ class MockProvider(AssetSourceProvider):
     """
 
     test_only = True
+    #: The test-only shared group (``plugin_settings/groups/mock.py``): nothing required, so the mock stays callable without it
+    settings_groups = ("mock",)
     supports_bulk_current = True
     bulk_current_max_items = 50
     settings_fields = (
@@ -262,6 +267,10 @@ class MockProvider(AssetSourceProvider):
         """
         if query == RATE_LIMITED_QUERY:
             raise AssetRateLimitedError("Mock provider refused for too many requests (testing)", retry_after=30.0)
+        if query == GROUP_ECHO_QUERY:
+            group = self.settings.group("mock")
+            summary = f"group: tier={group.get('tier')}; account_token={'set' if group.secret('account_token') else 'unset'}"
+            return [{"identifier": "MOCK_GROUP", "identifier_type": IdentifierType.TICKER, "display_name": summary, "currency": "USD", "type": "MOCK"}]
         if query == MINOR_UNIT_QUERY:
             return [
                 {
