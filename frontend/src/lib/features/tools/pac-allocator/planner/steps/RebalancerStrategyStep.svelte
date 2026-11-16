@@ -8,6 +8,9 @@
   for the same λ (§7.3). An empty, zero or negative field is an error on the field and a local problem of the step. Without
   the preview's table (a total that cannot be counted yet) the field is off and the table's line says why. No figure is
   computed here (N1).
+
+  Both choices are `ChoiceCards` (G6-3, M6): a group of native radios, the arrow keys moving the choice; «Custom»'s field
+  sits in its card through `extra`, outside the radio's label.
 -->
 <script lang="ts">
     import {t} from '$lib/i18n';
@@ -17,8 +20,10 @@
     import {cldrCurrencyDigits, exactMoneyDisplay, formatExactMoneyPlain, formatPlannerMoneyPlain} from '../format';
     import type {PlannerPreview} from '../preview.svelte';
     import {fidelityName, rebalancerStrategyName} from '../strategyText';
+    import ChoiceCards from '$lib/features/brokers/profile/ChoiceCards.svelte';
+    import CurrencyCode from '../shared/CurrencyCode.svelte';
     import HelpTip from '../shared/HelpTip.svelte';
-    import {BADGE, INPUT, SECTION_TITLE, TOGGLE_CARD, TOGGLE_OFF, TOGGLE_ON} from '../ui';
+    import {INPUT, SECTION_TITLE} from '../ui';
     import FidelityTable from './FidelityTable.svelte';
     import {domId, getPlannerProfile, testId} from '../profile';
 
@@ -36,6 +41,7 @@
     const S = 'tools.portfolioRebalancer.planner.strategy';
     type Choice = 'cost_aware' | 'balanced' | 'faithful' | 'target_first' | 'custom';
     const CHOICES: Choice[] = ['cost_aware', 'balanced', 'faithful', 'target_first', 'custom'];
+    type Strategy = 'invest_only' | 'invest_and_sell';
 
     const fidelity = $derived(draft.data.fidelity);
     const chosen = $derived<Choice>(fidelity.kind === 'level' ? fidelity.level : fidelity.kind);
@@ -83,6 +89,21 @@
         return fidelityName($t, {kind: 'level', level: choice});
     }
 
+    const strategies = $derived([
+        {value: 'invest_only' as Strategy, label: rebalancerStrategyName($t, 'invest_only'), description: $t(`${S}.investOnlyHelp`)},
+        // Off until F3b (S1): shown, never chosen.
+        {value: 'invest_and_sell' as Strategy, label: $t(`${S}.investAndSell`), description: $t(`${S}.investAndSellHelp`), disabled: true, badge: $t(`${S}.comingSoon`)},
+    ]);
+    const choices = $derived(
+        CHOICES.map((choice) => ({
+            value: choice,
+            label: choiceName(choice),
+            description: choiceNote(choice) || undefined,
+            tone: choice === 'target_first' ? ('warning' as const) : undefined,
+            wide: choice === 'custom',
+        })),
+    );
+
     function choiceNote(choice: Choice): string {
         switch (choice) {
             case 'cost_aware':
@@ -100,18 +121,20 @@
 </script>
 
 <div class="space-y-6" data-testid={testId('strategy', profile)}>
-    <div class="grid max-w-3xl gap-3 sm:grid-cols-2">
-        <button type="button" class="{TOGGLE_CARD} {TOGGLE_ON} p-3 text-left" aria-pressed="true" data-testid={testId('strategy-card', profile)} data-strategy="invest_only" data-selected="true">
-            <span class="block font-medium text-lf-primary">{rebalancerStrategyName($t, 'invest_only')}</span>
-            <span class="mt-1 block text-sm text-lf-secondary">{$t(`${S}.investOnlyHelp`)}</span>
-        </button>
-        <button type="button" class="{TOGGLE_CARD} {TOGGLE_OFF} cursor-not-allowed p-3 text-left opacity-60" disabled aria-pressed="false" data-testid={testId('strategy-card', profile)} data-strategy="invest_and_sell" data-selected="false">
-            <span class="flex flex-wrap items-center gap-2 font-medium text-lf-primary">
-                {$t(`${S}.investAndSell`)}
-                <span class={BADGE.neutral} data-testid={testId('strategy-coming-soon', profile)}>{$t(`${S}.comingSoon`)}</span>
-            </span>
-            <span class="mt-1 block text-sm text-lf-secondary">{$t(`${S}.investAndSellHelp`)}</span>
-        </button>
+    <div class="max-w-3xl">
+        <ChoiceCards
+            name={domId('strategy-group', profile)}
+            legend={$t('tools.pacAllocator.planner.steps.strategy')}
+            options={strategies}
+            value="invest_only"
+            testid={testId('strategies', profile)}
+            cardTestid={testId('strategy-card', profile)}
+            radioTestid={testId('strategy-radio', profile)}
+            valueAttribute="strategy"
+            onchange={() => {
+                // «Invest only» is the only strategy before F3b: nothing to change.
+            }}
+        />
     </div>
 
     <section class="space-y-3" aria-labelledby={domId('fidelity-title', profile)}>
@@ -120,54 +143,55 @@
             <HelpTip label={$t(`${S}.fidelityTitle`)} help={$t(`${S}.fidelityHelp`)} />
         </div>
         <p class="text-sm text-lf-secondary">{$t(`${S}.fidelityLead`)}</p>
-        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {#each CHOICES as choice (choice)}
-                {@const selected = choice === chosen}
-                {#if choice === 'custom'}
-                    <div class="{TOGGLE_CARD} {selected ? TOGGLE_ON : TOGGLE_OFF} p-3 sm:col-span-2 lg:col-span-4" data-testid={testId('fidelity-choice', profile)} data-choice={choice} data-selected={selected ? 'true' : 'false'}>
-                        <button type="button" class="block w-full cursor-pointer text-left font-medium text-lf-primary" aria-pressed={selected} data-testid={testId('fidelity-choice-button', profile)} onclick={() => choose(choice)}>
-                            {choiceName(choice)}
-                        </button>
-                        {#if selected}
-                            <div class="mt-2 flex flex-wrap items-center gap-2 text-sm text-lf-secondary">
-                                <span>{$t(`${S}.customSentence`, {values: {reference: reference ? formatExactMoneyPlain(reference.misplaced, {digits: () => 0}) : '—'}})}</span>
-                                <span class="flex w-36 shrink-0 items-center gap-1 whitespace-nowrap">
-                                    {#if isPrivacyEnabled()}
-                                        <!-- The figure derives from the user's total: masked, as the table's; editable again once privacy is off. -->
-                                        <span class="font-mono text-lf-primary" data-testid={testId('fidelity-custom-masked', profile)}>{formatPlannerMoneyPlain(fieldText || null, draft.data.valuationCurrency)}</span>
-                                    {:else}
-                                        <input
-                                            type="text"
-                                            inputmode="decimal"
-                                            class="{INPUT} text-right aria-invalid:border-lf-danger"
-                                            value={fieldText}
-                                            disabled={!table}
-                                            aria-invalid={fieldInvalid ? 'true' : 'false'}
-                                            aria-label={$t(`${S}.customLabel`)}
-                                            data-testid={testId('fidelity-custom-input', profile)}
-                                            oninput={(event) => typeEuros(event.currentTarget.value)}
-                                        />
-                                        <span class="text-xs text-lf-muted">{draft.data.valuationCurrency}</span>
-                                    {/if}
-                                </span>
-                            </div>
-                            {#if fieldInvalid}
-                                <p class="mt-1 text-xs text-lf-danger" role="alert" data-testid={testId('fidelity-custom-error', profile)}>{$t(`${S}.customInvalid`)}</p>
-                            {/if}
-                        {/if}
-                    </div>
-                {:else}
-                    <button type="button" class="{TOGGLE_CARD} {selected ? TOGGLE_ON : TOGGLE_OFF} cursor-pointer p-3 text-left" aria-pressed={selected} data-testid={testId('fidelity-choice', profile)} data-choice={choice} data-selected={selected ? 'true' : 'false'} onclick={() => choose(choice)}>
-                        <span class="flex flex-wrap items-center gap-2 font-medium text-lf-primary">
-                            {choiceName(choice)}
-                            {#if choice === 'balanced'}<span class={BADGE.neutral} data-testid={testId('fidelity-default', profile)}>{$t(`${S}.defaultBadge`)}</span>{/if}
-                        </span>
-                        <span class="mt-1 block text-sm {choice === 'target_first' ? 'text-lf-warning' : 'text-lf-secondary'}">{choiceNote(choice)}</span>
-                    </button>
-                {/if}
-            {/each}
-        </div>
+        <ChoiceCards
+            name={domId('fidelity-group', profile)}
+            legend={$t(`${S}.fidelityTitle`)}
+            options={choices}
+            value={chosen}
+            defaultValue="balanced"
+            defaultLabel={$t(`${S}.defaultBadge`)}
+            testid={testId('fidelity-choices', profile)}
+            cardTestid={testId('fidelity-choice', profile)}
+            radioTestid={testId('fidelity-choice-radio', profile)}
+            valueAttribute="choice"
+            wideGrid
+            extra={customField}
+            onchange={choose}
+        />
     </section>
 
     <FidelityTable {preview} {fidelity} />
 </div>
+
+{#snippet customField(choice: Choice, selected: boolean)}
+    {#if choice === 'custom' && selected}
+        <div class="px-3 pb-3 pl-9">
+            <div class="flex flex-wrap items-center gap-2 text-sm text-lf-secondary">
+                <span>{$t(`${S}.customSentence`, {values: {reference: reference ? formatExactMoneyPlain(reference.misplaced, {digits: () => 0}) : '—'}})}</span>
+                <span class="flex w-52 max-w-full shrink-0 items-center gap-1.5 whitespace-nowrap">
+                    {#if isPrivacyEnabled()}
+                        <!-- The figure derives from the user's total: masked, as the table's; editable again once privacy is off. -->
+                        <span class="font-mono text-lf-primary" data-testid={testId('fidelity-custom-masked', profile)}>{formatPlannerMoneyPlain(fieldText || null, draft.data.valuationCurrency)}</span>
+                    {:else}
+                        <input
+                            type="text"
+                            inputmode="decimal"
+                            class="{INPUT} min-w-0 flex-1 text-right aria-invalid:border-lf-danger"
+                            value={fieldText}
+                            disabled={!table}
+                            aria-invalid={fieldInvalid ? 'true' : 'false'}
+                            aria-label={$t(`${S}.customLabel`)}
+                            data-testid={testId('fidelity-custom-input', profile)}
+                            oninput={(event) => typeEuros(event.currentTarget.value)}
+                        />
+                        <!-- G6-5: the field's unit in the project's form, `€ 🇪🇺 EUR`. -->
+                        <span class="shrink-0 text-xs text-lf-muted"><CurrencyCode code={draft.data.valuationCurrency} testid={testId('fidelity-custom-unit', profile)} /></span>
+                    {/if}
+                </span>
+            </div>
+            {#if fieldInvalid}
+                <p class="mt-1 text-xs text-lf-danger" role="alert" data-testid={testId('fidelity-custom-error', profile)}>{$t(`${S}.customInvalid`)}</p>
+            {/if}
+        </div>
+    {/if}
+{/snippet}

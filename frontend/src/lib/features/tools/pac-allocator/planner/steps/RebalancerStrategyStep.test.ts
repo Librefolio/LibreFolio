@@ -8,7 +8,8 @@
  * spend for the reference row; the euros go to the preview, which gives λ back to the draft (the draft keeps λ, never the
  * euros). Empty, zero or negative: an error on the field and a local problem of the step. Without the preview's table (a
  * total that cannot be counted yet) the field is off. The table «Maximum acceptable cost» sits under the choices.
- * Nothing reads translated text.
+ * Both choices are `ChoiceCards` (G6-3): native radios, one group each; a choice is made on its radio. Nothing reads
+ * translated text.
  */
 import {flushSync, tick} from 'svelte';
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
@@ -76,9 +77,13 @@ function choice(name: string): HTMLElement {
     return found;
 }
 
-/** «Custom» is a card holding its field: its name is the button that chooses it. */
+/** A choice is made on its card's radio. */
+function pick(name: string): Promise<boolean> {
+    return fireEvent.click(within(choice(name)).getByTestId('rebalancer-planner-fidelity-choice-radio'));
+}
+
 function chooseCustom(): Promise<boolean> {
-    return fireEvent.click(within(choice('custom')).getByTestId('rebalancer-planner-fidelity-choice-button'));
+    return pick('custom');
 }
 
 describe('the Rebalancer Strategy step', () => {
@@ -89,9 +94,10 @@ describe('the Rebalancer Strategy step', () => {
             ['invest_only', 'true'],
             ['invest_and_sell', 'false'],
         ]);
-        const sell = cards[1];
-        expect((sell as HTMLButtonElement).disabled).toBe(true);
-        expect(screen.getByTestId('rebalancer-planner-strategy-coming-soon')).toBeTruthy();
+        const sell = within(cards[1]).getByTestId('rebalancer-planner-strategy-radio') as HTMLInputElement;
+        expect(sell.disabled).toBe(true);
+        expect(cards[1].getAttribute('data-disabled')).toBe('true');
+        expect(within(cards[1]).getByTestId('rebalancer-planner-strategies-badge')).toBeTruthy();
         await fireEvent.click(sell);
         expect(draft.data.policy).toBe('invest_only');
     });
@@ -100,11 +106,16 @@ describe('the Rebalancer Strategy step', () => {
         const {draft} = setup();
         expect(screen.getAllByTestId('rebalancer-planner-fidelity-choice').map((card) => card.getAttribute('data-choice'))).toEqual(['cost_aware', 'balanced', 'faithful', 'target_first', 'custom']);
         expect(choice('balanced').getAttribute('data-selected')).toBe('true');
-        expect(choice('balanced').querySelector('[data-testid="rebalancer-planner-fidelity-default"]')).not.toBeNull();
+        expect(choice('balanced').querySelector('[data-testid="rebalancer-planner-fidelity-choices-default"]')).not.toBeNull();
+        // One radio group: the arrow keys move the choice (M6).
+        const radios = screen.getAllByTestId('rebalancer-planner-fidelity-choice-radio') as HTMLInputElement[];
+        expect(new Set(radios.map((radio) => radio.name)).size).toBe(1);
+        expect(radios.map((radio) => radio.checked)).toEqual([false, true, false, false, false]);
+        expect(choice('target_first').querySelector('[data-tone="warning"]')).not.toBeNull();
 
-        await fireEvent.click(choice('faithful'));
+        await pick('faithful');
         expect(draft.data.fidelity).toEqual({kind: 'level', level: 'faithful'});
-        await fireEvent.click(choice('target_first'));
+        await pick('target_first');
         expect(draft.data.fidelity).toEqual({kind: 'target_first'});
         expect(choice('target_first').getAttribute('data-selected')).toBe('true');
     });
@@ -115,6 +126,10 @@ describe('the Rebalancer Strategy step', () => {
         expect(draft.data.fidelity).toEqual({kind: 'custom', lambda: ''});
         const field = screen.getByTestId('rebalancer-planner-fidelity-custom-input') as HTMLInputElement;
         expect(field.disabled).toBe(false);
+        // The field sits in «Custom»'s card, outside its radio's label; its unit in the project's form (G6-5).
+        expect(field.closest('label')).toBeNull();
+        expect(field.closest('[data-testid="rebalancer-planner-fidelity-choice"]')).toBe(choice('custom'));
+        expect(screen.getByTestId('rebalancer-planner-fidelity-custom-unit').getAttribute('data-currency')).toBe('EUR');
 
         await fireEvent.input(field, {target: {value: '60'}});
         expect(sent).toHaveBeenLastCalledWith(draft, '60');
