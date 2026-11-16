@@ -699,14 +699,17 @@ class YahooFinanceProvider(AssetSourceProvider):
 
     @property
     def test_cases(self) -> list[dict]:
-        """Test cases with identifier and provider_params."""
+        """Test cases with identifier and provider_params: a US stock, an ETF in Milan and a crypto in EUR, so the
+        external bulk check (``test_current_values_bulk``) reads three exchanges in one request."""
         return [
             {
                 "identifier": "AAPL",
                 "identifier_type": IdentifierType.TICKER,
                 "provider_params": None,
                 "expected_symbol": "AAPL",
-            }
+            },
+            {"identifier": "SWDA.MI", "identifier_type": IdentifierType.TICKER, "provider_params": None, "expected_symbol": "SWDA.MI"},
+            {"identifier": "BTC-EUR", "identifier_type": IdentifierType.TICKER, "provider_params": None, "expected_symbol": "BTC-EUR"},
         ]
 
     async def get_current_value(
