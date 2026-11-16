@@ -317,6 +317,10 @@
             {
               "name": "time_budget",
               "value": "3.5"
+            },
+            {
+              "name": "expr/pow/expandmaxexponent",
+              "value": "1"
             }
           ]
         },
@@ -347,6 +351,10 @@
             {
               "name": "time_budget",
               "value": "3.5"
+            },
+            {
+              "name": "expr/pow/expandmaxexponent",
+              "value": "1"
             }
           ]
         },
@@ -377,6 +385,10 @@
             {
               "name": "time_budget",
               "value": "3.5"
+            },
+            {
+              "name": "expr/pow/expandmaxexponent",
+              "value": "1"
             }
           ]
         }

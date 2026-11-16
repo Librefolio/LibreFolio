@@ -1201,8 +1201,8 @@
             "kind": "valuation_money",
             "currency_code": "EUR"
           },
-          "primal": "793.7300851806291",
-          "dual": "793.7300851806291",
+          "primal": "775.8364439286943",
+          "dual": "775.8364439286943",
           "absolute_gap": "0",
           "relative_gap": "0",
           "tolerances": {
@@ -1217,6 +1217,10 @@
             {
               "name": "time_budget",
               "value": "3.5"
+            },
+            {
+              "name": "expr/pow/expandmaxexponent",
+              "value": "1"
             }
           ]
         },
@@ -1225,7 +1229,7 @@
           "stage": "operation_count",
           "objective_code": "operation_count",
           "ordinal": 2,
-          "status": "finished",
+          "status": "unfinished",
           "scope": "incumbent_face",
           "sense": "min",
           "unit": {
@@ -1247,6 +1251,10 @@
             {
               "name": "time_budget",
               "value": "3.5"
+            },
+            {
+              "name": "expr/pow/expandmaxexponent",
+              "value": "1"
             }
           ]
         },
@@ -1255,7 +1263,7 @@
           "stage": "route_priority",
           "objective_code": "route_priority",
           "ordinal": 3,
-          "status": "finished",
+          "status": "unfinished",
           "scope": "incumbent_face",
           "sense": "min",
           "unit": {
@@ -1277,6 +1285,10 @@
             {
               "name": "time_budget",
               "value": "3.5"
+            },
+            {
+              "name": "expr/pow/expandmaxexponent",
+              "value": "1"
             }
           ]
         }
@@ -1286,8 +1298,12 @@
     "result_state": "ready_incumbent",
     "outcome": "incumbent_found",
     "proof": {
-      "kind": "not_proven",
-      "reason_code": "allocation.exact_proof_not_established"
+      "kind": "optimal_proven",
+      "proof_source": "solver_status",
+      "witness": {
+        "kind": "solver_status",
+        "objective_codes": ["plan_score"]
+      }
     },
     "primary_solution": {
       "solution_id": "solution:primary",
@@ -1333,9 +1349,9 @@
           "final_value": {
             "value": {
               "kind": "exact_ratio",
-              "numerator": "88951875825014",
-              "denominator": "7000775675",
-              "display_decimal": "12706.002870891017372871",
+              "numerator": "170730213277043",
+              "denominator": "14001551350",
+              "display_decimal": "12193.664045451863446546",
               "display_scale": 18,
               "display_authority": "non_authoritative"
             },
@@ -1343,18 +1359,18 @@
           },
           "final_weight": {
             "kind": "exact_ratio",
-            "numerator": "355807503300056000000000",
+            "numerator": "341460426554086000000000",
             "denominator": "1663145363006813570812429",
-            "display_decimal": "0.213936503215082065",
+            "display_decimal": "0.205310031311248111",
             "display_scale": 18,
             "display_authority": "non_authoritative"
           },
           "residual": {
             "value": {
               "kind": "exact_ratio",
-              "numerator": "115892153493466429187571",
+              "numerator": "44156769763616429187571",
               "denominator": "140015513500000000000",
-              "display_decimal": "827.709377314581853014",
+              "display_decimal": "315.370551875427926689",
               "display_scale": 18,
               "display_authority": "non_authoritative"
             },
@@ -1363,10 +1379,10 @@
           "buy_mid_value": {
             "value": {
               "kind": "exact_ratio",
-              "numerator": "18651199769761",
+              "numerator": "15781784420567",
               "denominator": "5600620540",
-              "display_decimal": "3330.202365354500521115",
-              "display_scale": 18,
+              "display_decimal": "2817.86353991534659479",
+              "display_scale": 17,
               "display_authority": "non_authoritative"
             },
             "currency": "EUR"
@@ -1420,28 +1436,28 @@
           "final_value": {
             "value": {
               "kind": "exact_ratio",
-              "numerator": "32783052670853339",
-              "denominator": "5600620540000",
-              "display_decimal": "5853.467921405248247724",
-              "display_scale": 18,
+              "numerator": "17202988035200267",
+              "denominator": "2800310270000",
+              "display_decimal": "6143.2435610787753887",
+              "display_scale": 16,
               "display_authority": "non_authoritative"
             },
             "currency": "EUR"
           },
           "final_weight": {
             "kind": "exact_ratio",
-            "numerator": "163915263354266695000000",
+            "numerator": "172029880352002670000000",
             "denominator": "1663145363006813570812429",
-            "display_decimal": "0.098557388307852419",
+            "display_decimal": "0.103436466936954024",
             "display_scale": 18,
             "display_authority": "non_authoritative"
           },
           "residual": {
             "value": {
               "kind": "exact_ratio",
-              "numerator": "-23992729464146620812429",
+              "numerator": "57153440513213129187571",
               "denominator": "280031027000000000000",
-              "display_decimal": "-85.678825382969512205",
+              "display_decimal": "204.096814290557628772",
               "display_scale": 18,
               "display_authority": "non_authoritative"
             },
@@ -1450,9 +1466,9 @@
           "buy_mid_value": {
             "value": {
               "kind": "exact_ratio",
-              "numerator": "973754039728317",
-              "denominator": "224024821600",
-              "display_decimal": "4346.634595102907114646",
+              "numerator": "324584679909439",
+              "denominator": "70007756750",
+              "display_decimal": "4636.410234776434255623",
               "display_scale": 18,
               "display_authority": "non_authoritative"
             },
@@ -1827,9 +1843,9 @@
           "final_value": {
             "value": {
               "kind": "exact_ratio",
-              "numerator": "586793439449603257",
+              "numerator": "523838173866219507",
               "denominator": "87509695937500",
-              "display_decimal": "6705.467698901559298999",
+              "display_decimal": "5986.058667605795062131",
               "display_scale": 18,
               "display_authority": "non_authoritative"
             },
@@ -1837,19 +1853,19 @@
           },
           "final_weight": {
             "kind": "exact_ratio",
-            "numerator": "187773900623873042240000",
+            "numerator": "167628215637190242240000",
             "denominator": "1663145363006813570812429",
-            "display_decimal": "0.112902879568142578",
-            "display_scale": 18,
+            "display_decimal": "0.10078987643878216",
+            "display_scale": 17,
             "display_authority": "non_authoritative"
           },
           "residual": {
             "value": {
               "kind": "exact_ratio",
-              "numerator": "214593643231916851587571",
+              "numerator": "13136793365088851587571",
               "denominator": "280031027000000000000",
-              "display_decimal": "766.32095211334153907",
-              "display_scale": 17,
+              "display_decimal": "46.911920817577302202",
+              "display_scale": 18,
               "display_authority": "non_authoritative"
             },
             "currency": "EUR"
@@ -1857,9 +1873,9 @@
           "buy_mid_value": {
             "value": {
               "kind": "exact_ratio",
-              "numerator": "453277912200363",
-              "denominator": "70007756750",
-              "display_decimal": "6474.681281661878131811",
+              "numerator": "201456849866828",
+              "denominator": "35003878375",
+              "display_decimal": "5755.272250366113894944",
               "display_scale": 18,
               "display_authority": "non_authoritative"
             },
@@ -1913,24 +1929,24 @@
           "final_value": {
             "value": {
               "kind": "finite_decimal",
-              "value": "6097.28"
+              "value": "6261"
             },
             "currency": "EUR"
           },
           "final_weight": {
             "kind": "exact_ratio",
-            "numerator": "170742758030656000000000",
+            "numerator": "175327426004700000000000",
             "denominator": "1663145363006813570812429",
-            "display_decimal": "0.102662558444060973",
+            "display_decimal": "0.105419183376565575",
             "display_scale": 18,
             "display_authority": "non_authoritative"
           },
           "residual": {
             "value": {
               "kind": "exact_ratio",
-              "numerator": "44282217299746429187571",
+              "numerator": "90128897040186429187571",
               "denominator": "280031027000000000000",
-              "display_decimal": "158.133253211782240071",
+              "display_decimal": "321.853253211782240071",
               "display_scale": 18,
               "display_authority": "non_authoritative"
             },
@@ -1979,9 +1995,9 @@
           "final_value": {
             "value": {
               "kind": "exact_ratio",
-              "numerator": "1625342500000",
+              "numerator": "1753182500000",
               "denominator": "280031027",
-              "display_decimal": "5804.151480685745583471",
+              "display_decimal": "6260.672321856677688791",
               "display_scale": 18,
               "display_authority": "non_authoritative"
             },
@@ -1989,18 +2005,18 @@
           },
           "final_weight": {
             "kind": "exact_ratio",
-            "numerator": "162534250000000000000000",
+            "numerator": "175318250000000000000000",
             "denominator": "1663145363006813570812429",
-            "display_decimal": "0.097727025920424089",
+            "display_decimal": "0.105413666116977748",
             "display_scale": 18,
             "display_authority": "non_authoritative"
           },
           "residual": {
             "value": {
               "kind": "exact_ratio",
-              "numerator": "-37802863006813570812429",
+              "numerator": "90037136993186429187571",
               "denominator": "280031027000000000000",
-              "display_decimal": "-134.995266102472176458",
+              "display_decimal": "321.525575068459928862",
               "display_scale": 18,
               "display_authority": "non_authoritative"
             },
@@ -2029,9 +2045,9 @@
         "final_value": {
           "value": {
             "kind": "exact_ratio",
-            "numerator": "4595910411",
-            "denominator": "224024821600",
-            "display_decimal": "0.020515183889783756",
+            "numerator": "45050256248371",
+            "denominator": "140015513500",
+            "display_decimal": "321.751891074348700653",
             "display_scale": 18,
             "display_authority": "non_authoritative"
           },
@@ -2039,9 +2055,9 @@
         },
         "final_weight": {
           "kind": "exact_ratio",
-          "numerator": "574488801375000000",
+          "numerator": "9010051249674200000000",
           "denominator": "1663145363006813570812429",
-          "display_decimal": "0.000000345423084568",
+          "display_decimal": "0.005417476698119073",
           "display_scale": 18,
           "display_authority": "non_authoritative"
         }
@@ -2054,11 +2070,11 @@
           "sequence": 2,
           "broker_id": "broker:1",
           "source_debit": {
-            "amount": "19452.72",
+            "amount": "18967.27",
             "currency": "EUR"
           },
           "destination_credit": {
-            "amount": "21789.46",
+            "amount": "21245.69",
             "currency": "USD"
           },
           "spot_rate": {
@@ -2094,7 +2110,7 @@
           "source_broker_id": "broker:2",
           "destination_broker_id": "broker:1",
           "amount": {
-            "amount": "8200",
+            "amount": "7878.27",
             "currency": "EUR"
           }
         }
@@ -2109,7 +2125,7 @@
           "route_id": "route:11",
           "instruction": {
             "kind": "whole_quantity",
-            "quantity": "9",
+            "quantity": "8",
             "quantity_step": "1",
             "unit": "asset_unit"
           },
@@ -2117,7 +2133,7 @@
             "kind": "exact",
             "value": {
               "kind": "finite_decimal",
-              "value": "9"
+              "value": "8"
             },
             "unit": "asset_unit"
           },
@@ -2151,9 +2167,9 @@
           "mid_value": {
             "value": {
               "kind": "exact_ratio",
-              "numerator": "453277912200363",
-              "denominator": "70007756750",
-              "display_decimal": "6474.681281661878131811",
+              "numerator": "201456849866828",
+              "denominator": "35003878375",
+              "display_decimal": "5755.272250366113894944",
               "display_scale": 18,
               "display_authority": "non_authoritative"
             },
@@ -2167,7 +2183,7 @@
             "currency": "EUR"
           },
           "cash_debit": {
-            "amount": "7252.45",
+            "amount": "6446.62",
             "currency": "USD"
           },
           "fee": {
@@ -2190,7 +2206,7 @@
           "route_id": "route:13",
           "instruction": {
             "kind": "whole_quantity",
-            "quantity": "15",
+            "quantity": "16",
             "quantity_step": "1",
             "unit": "asset_unit"
           },
@@ -2198,7 +2214,7 @@
             "kind": "exact",
             "value": {
               "kind": "finite_decimal",
-              "value": "15"
+              "value": "16"
             },
             "unit": "asset_unit"
           },
@@ -2232,9 +2248,9 @@
           "mid_value": {
             "value": {
               "kind": "exact_ratio",
-              "numerator": "973754039728317",
-              "denominator": "224024821600",
-              "display_decimal": "4346.634595102907114646",
+              "numerator": "324584679909439",
+              "denominator": "70007756750",
+              "display_decimal": "4636.410234776434255623",
               "display_scale": 18,
               "display_authority": "non_authoritative"
             },
@@ -2248,7 +2264,7 @@
             "currency": "EUR"
           },
           "cash_debit": {
-            "amount": "4868.78",
+            "amount": "5193.36",
             "currency": "USD"
           },
           "fee": {
@@ -2352,7 +2368,7 @@
           "route_id": "route:7",
           "instruction": {
             "kind": "whole_quantity",
-            "quantity": "13",
+            "quantity": "11",
             "quantity_step": "1",
             "unit": "asset_unit"
           },
@@ -2360,7 +2376,7 @@
             "kind": "exact",
             "value": {
               "kind": "finite_decimal",
-              "value": "13"
+              "value": "11"
             },
             "unit": "asset_unit"
           },
@@ -2394,10 +2410,10 @@
           "mid_value": {
             "value": {
               "kind": "exact_ratio",
-              "numerator": "18651199769761",
+              "numerator": "15781784420567",
               "denominator": "5600620540",
-              "display_decimal": "3330.202365354500521115",
-              "display_scale": 18,
+              "display_decimal": "2817.86353991534659479",
+              "display_scale": 17,
               "display_authority": "non_authoritative"
             },
             "currency": "EUR"
@@ -2410,7 +2426,7 @@
             "currency": "EUR"
           },
           "cash_debit": {
-            "amount": "3730.24",
+            "amount": "3156.36",
             "currency": "USD"
           },
           "fee": {
@@ -2432,9 +2448,9 @@
           "initial_selected": "17350",
           "funding_in": "0",
           "funding_out": "0",
-          "transfer_in": "8200",
+          "transfer_in": "7878.27",
           "transfer_out": "0",
-          "fx_debit": "19452.72",
+          "fx_debit": "18967.27",
           "fx_credit": "0",
           "buy_debit": "0",
           "gross_sell_credit": "0",
@@ -2447,8 +2463,8 @@
             "kind": "finite_decimal",
             "value": "0"
           },
-          "final_spendable": "6097.28",
-          "final_physical": "6097.28"
+          "final_spendable": "6261",
+          "final_physical": "6261"
         },
         {
           "broker_id": "broker:1",
@@ -2459,8 +2475,8 @@
           "transfer_in": "0",
           "transfer_out": "0",
           "fx_debit": "0",
-          "fx_credit": "21789.46",
-          "buy_debit": "20632.62",
+          "fx_credit": "21245.69",
+          "buy_debit": "19577.49",
           "gross_sell_credit": "0",
           "buy_fees": "0",
           "sell_fees": "0",
@@ -2469,10 +2485,10 @@
           "self_reserved_tax": "0",
           "rounding_delta": {
             "kind": "finite_decimal",
-            "value": "0.021703204535"
+            "value": "0.011740829808"
           },
-          "final_spendable": "6501.37",
-          "final_physical": "6501.37"
+          "final_spendable": "7012.73",
+          "final_physical": "7012.73"
         },
         {
           "broker_id": "broker:2",
@@ -2481,7 +2497,7 @@
           "funding_in": "0",
           "funding_out": "0",
           "transfer_in": "0",
-          "transfer_out": "8200",
+          "transfer_out": "7878.27",
           "fx_debit": "0",
           "fx_credit": "0",
           "buy_debit": "0",
@@ -2495,8 +2511,8 @@
             "kind": "finite_decimal",
             "value": "0"
           },
-          "final_spendable": "0",
-          "final_physical": "0"
+          "final_spendable": "321.73",
+          "final_physical": "321.73"
         },
         {
           "broker_id": "broker:2",
@@ -2547,8 +2563,8 @@
             "value": {
               "kind": "exact_ratio",
               "numerator": "424026948175463158572429",
-              "denominator": "1663144788518012195812429",
-              "display_decimal": "0.254954921004384256",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.254954926910791144",
               "display_scale": 18,
               "display_authority": "non_authoritative"
             }
@@ -2579,9 +2595,9 @@
             "kind": "available",
             "value": {
               "kind": "exact_ratio",
-              "numerator": "15909637038595472480000",
-              "denominator": "127934214501385553524033",
-              "display_decimal": "0.124357953035488938",
+              "numerator": "186679596515058342240000",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.112244948322335937",
               "display_scale": 18,
               "display_authority": "non_authoritative"
             }
@@ -2612,9 +2628,9 @@
             "kind": "available",
             "value": {
               "kind": "exact_ratio",
-              "numerator": "699015550810151895000000",
-              "denominator": "1663144788518012195812429",
-              "display_decimal": "0.420297472376429489",
+              "numerator": "692783091061917870000000",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.416550087457257651",
               "display_scale": 18,
               "display_authority": "non_authoritative"
             }
@@ -2645,9 +2661,9 @@
             "kind": "available",
             "value": {
               "kind": "exact_ratio",
-              "numerator": "333277008030656000000000",
-              "denominator": "1663144788518012195812429",
-              "display_decimal": "0.200389653583697318",
+              "numerator": "359655114236371000000000",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.216250037309615268",
               "display_scale": 18,
               "display_authority": "non_authoritative"
             }
@@ -2677,9 +2693,9 @@
             "value": {
               "kind": "exact_ratio",
               "numerator": "53787835246748760000000",
-              "denominator": "1663144788518012195812429",
-              "display_decimal": "0.03234104187325614",
-              "display_scale": 17,
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.032341042622484089",
+              "display_scale": 18,
               "display_authority": "non_authoritative"
             }
           },
@@ -2709,9 +2725,9 @@
             "kind": "available",
             "value": {
               "kind": "exact_ratio",
-              "numerator": "15909637038595472480000",
-              "denominator": "127934214501385553524033",
-              "display_decimal": "0.124357953035488938",
+              "numerator": "186679596515058342240000",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.112244948322335937",
               "display_scale": 18,
               "display_authority": "non_authoritative"
             }
@@ -2743,9 +2759,9 @@
             "value": {
               "kind": "exact_ratio",
               "numerator": "125504948909080440000000",
-              "denominator": "1663144788518012195812429",
-              "display_decimal": "0.07546243103759766",
-              "display_scale": 17,
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.075462432785796207",
+              "display_scale": 18,
               "display_authority": "non_authoritative"
             }
           },
@@ -2776,8 +2792,8 @@
             "value": {
               "kind": "exact_ratio",
               "numerator": "424026948175463158572429",
-              "denominator": "1663144788518012195812429",
-              "display_decimal": "0.254954921004384256",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.254954926910791144",
               "display_scale": 18,
               "display_authority": "non_authoritative"
             }
@@ -2808,9 +2824,9 @@
             "kind": "available",
             "value": {
               "kind": "exact_ratio",
-              "numerator": "519722766654322695000000",
-              "denominator": "1663144788518012195812429",
-              "display_decimal": "0.312493999465575689",
+              "numerator": "513490306906088670000000",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.308746612048977355",
               "display_scale": 18,
               "display_authority": "non_authoritative"
             }
@@ -2841,9 +2857,9 @@
             "kind": "available",
             "value": {
               "kind": "exact_ratio",
-              "numerator": "333277008030656000000000",
-              "denominator": "1663144788518012195812429",
-              "display_decimal": "0.200389653583697318",
+              "numerator": "359655114236371000000000",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.216250037309615268",
               "display_scale": 18,
               "display_authority": "non_authoritative"
             }
@@ -2873,9 +2889,9 @@
             "value": {
               "kind": "exact_ratio",
               "numerator": "44823196038957300000000",
-              "denominator": "1663144788518012195812429",
-              "display_decimal": "0.02695086822771345",
-              "display_scale": 17,
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.026950868852070074",
+              "display_scale": 18,
               "display_authority": "non_authoritative"
             }
           },
@@ -2906,9 +2922,9 @@
             "value": {
               "kind": "exact_ratio",
               "numerator": "44823196038957300000000",
-              "denominator": "1663144788518012195812429",
-              "display_decimal": "0.02695086822771345",
-              "display_scale": 17,
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.026950868852070074",
+              "display_scale": 18,
               "display_authority": "non_authoritative"
             }
           },
@@ -2939,8 +2955,8 @@
             "value": {
               "kind": "exact_ratio",
               "numerator": "424026948175463158572429",
-              "denominator": "1663144788518012195812429",
-              "display_decimal": "0.254954921004384256",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.254954926910791144",
               "display_scale": 18,
               "display_authority": "non_authoritative"
             }
@@ -2971,9 +2987,9 @@
             "kind": "available",
             "value": {
               "kind": "exact_ratio",
-              "numerator": "609369158732237295000000",
-              "denominator": "1663144788518012195812429",
-              "display_decimal": "0.366395735921002589",
+              "numerator": "603136698984003270000000",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.362648349753117503",
               "display_scale": 18,
               "display_authority": "non_authoritative"
             }
@@ -3004,9 +3020,9 @@
             "kind": "available",
             "value": {
               "kind": "exact_ratio",
-              "numerator": "15909637038595472480000",
-              "denominator": "127934214501385553524033",
-              "display_decimal": "0.124357953035488938",
+              "numerator": "186679596515058342240000",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.112244948322335937",
               "display_scale": 18,
               "display_authority": "non_authoritative"
             }
@@ -3037,9 +3053,9 @@
             "kind": "available",
             "value": {
               "kind": "exact_ratio",
-              "numerator": "333277008030656000000000",
-              "denominator": "1663144788518012195812429",
-              "display_decimal": "0.200389653583697318",
+              "numerator": "359655114236371000000000",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.216250037309615268",
               "display_scale": 18,
               "display_authority": "non_authoritative"
             }
@@ -3103,9 +3119,9 @@
         "final_invested": {
           "value": {
             "kind": "exact_ratio",
-            "numerator": "1329867780487356195812429",
+            "numerator": "1303489635752439370812429",
             "denominator": "28003102700000000000",
-            "display_decimal": "47490.015472012542232059",
+            "display_decimal": "46548.043254951151209842",
             "display_scale": 18,
             "display_authority": "non_authoritative"
           },
@@ -3114,9 +3130,9 @@
         "shortfall": {
           "value": {
             "kind": "exact_ratio",
-            "numerator": "2666220660155659",
-            "denominator": "224024821600",
-            "display_decimal": "11901.451995869635367227",
+            "numerator": "1798278636271871",
+            "denominator": "140015513500",
+            "display_decimal": "12843.424212931026389444",
             "display_scale": 18,
             "display_authority": "non_authoritative"
           },
@@ -3125,9 +3141,9 @@
         "free_cash": {
           "value": {
             "kind": "exact_ratio",
-            "numerator": "83319252007664",
-            "denominator": "7000775675",
-            "display_decimal": "11901.431480685745583471",
+            "numerator": "359655114236371",
+            "denominator": "28003102700",
+            "display_decimal": "12843.402321856677688791",
             "display_scale": 18,
             "display_authority": "non_authoritative"
           },
@@ -3150,9 +3166,9 @@
         "rounding_delta": {
           "value": {
             "kind": "exact_ratio",
-            "numerator": "4595910411",
-            "denominator": "224024821600",
-            "display_decimal": "0.020515183889783756",
+            "numerator": "766272504",
+            "denominator": "35003878375",
+            "display_decimal": "0.021891074348700653",
             "display_scale": 18,
             "display_authority": "non_authoritative"
           },
@@ -3243,9 +3259,9 @@
         "final_wealth": {
           "value": {
             "kind": "exact_ratio",
-            "numerator": "1663144788518012195812429",
+            "numerator": "1663144749988810370812429",
             "denominator": "28003102700000000000",
-            "display_decimal": "59391.446952698287815529",
+            "display_decimal": "59391.445576807828898632",
             "display_scale": 18,
             "display_authority": "non_authoritative"
           },
@@ -3304,9 +3320,9 @@
           "rounding": {
             "value": {
               "kind": "exact_ratio",
-              "numerator": "4595910411",
-              "denominator": "224024821600",
-              "display_decimal": "0.020515183889783756",
+              "numerator": "766272504",
+              "denominator": "35003878375",
+              "display_decimal": "0.021891074348700653",
               "display_scale": 18,
               "display_authority": "non_authoritative"
             },
@@ -3316,9 +3332,9 @@
         "uninvested": {
           "value": {
             "kind": "exact_ratio",
-            "numerator": "4595910411",
-            "denominator": "224024821600",
-            "display_decimal": "0.020515183889783756",
+            "numerator": "45050256248371",
+            "denominator": "140015513500",
+            "display_decimal": "321.751891074348700653",
             "display_scale": 18,
             "display_authority": "non_authoritative"
           },
@@ -3332,19 +3348,19 @@
         },
         "target_distance": {
           "kind": "exact_ratio",
-          "numerator": "920316674431598004608025012090031758866318967943",
+          "numerator": "903278264390705797942175577989069706225943967943",
           "denominator": "19604344020668682250000000000000000000000",
-          "display_decimal": "46944527.879194349706202391",
+          "display_decimal": "46075413.869415253534522181",
           "display_scale": 18,
           "display_authority": "non_authoritative"
         },
         "distance_per_wealth": {
           "value": {
             "kind": "exact_ratio",
-            "numerator": "920316674431598004608025012090031758866318967943",
+            "numerator": "903278264390705797942175577989069706225943967943",
             "denominator": "1164330760132714530580354293086457500000000000",
-            "display_decimal": "790.425458077477108808",
-            "display_scale": 18,
+            "display_decimal": "775.79180703578333054",
+            "display_scale": 17,
             "display_authority": "non_authoritative"
           },
           "currency": "EUR"
@@ -3352,9 +3368,9 @@
         "wealth_loss": {
           "value": {
             "kind": "exact_ratio",
-            "numerator": "4595910411",
-            "denominator": "224024821600",
-            "display_decimal": "0.020515183889783756",
+            "numerator": "766272504",
+            "denominator": "35003878375",
+            "display_decimal": "0.021891074348700653",
             "display_scale": 18,
             "display_authority": "non_authoritative"
           },
@@ -3363,9 +3379,9 @@
         "plan_score": {
           "value": {
             "kind": "exact_ratio",
-            "numerator": "920340560891250658947881364990560816113193967943",
+            "numerator": "903303752841942342342254930414752750545943967943",
             "denominator": "1164330760132714530580354293086457500000000000",
-            "display_decimal": "790.445973261366892564",
+            "display_decimal": "775.813698110132031193",
             "display_scale": 18,
             "display_authority": "non_authoritative"
           },
@@ -3390,11 +3406,11 @@
         "tie_breaks": [
           {
             "objective_code": "operation_count",
-            "status": "closed"
+            "status": "rejected"
           },
           {
             "objective_code": "route_priority",
-            "status": "closed"
+            "status": "rejected"
           },
           {
             "objective_code": "canonical",
@@ -3418,9 +3434,9 @@
             },
             "value": {
               "kind": "exact_ratio",
-              "numerator": "920340560891250658947881364990560816113193967943",
+              "numerator": "903303752841942342342254930414752750545943967943",
               "denominator": "1164330760132714530580354293086457500000000000",
-              "display_decimal": "790.445973261366892564",
+              "display_decimal": "775.813698110132031193",
               "display_scale": 18,
               "display_authority": "non_authoritative"
             }

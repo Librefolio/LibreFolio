@@ -299,8 +299,8 @@
             "kind": "valuation_money_squared",
             "currency_code": "EUR"
           },
-          "primal": "50.000000000007816",
-          "dual": "50.000000000007816",
+          "primal": "49.99999999999949",
+          "dual": "49.99999999999949",
           "absolute_gap": "0",
           "relative_gap": "0",
           "tolerances": {
@@ -315,6 +315,10 @@
             {
               "name": "time_budget",
               "value": "3.5"
+            },
+            {
+              "name": "expr/pow/expandmaxexponent",
+              "value": "1"
             }
           ]
         },
@@ -346,6 +350,10 @@
             {
               "name": "time_budget",
               "value": "3.5"
+            },
+            {
+              "name": "expr/pow/expandmaxexponent",
+              "value": "1"
             }
           ]
         },
@@ -376,6 +384,10 @@
             {
               "name": "time_budget",
               "value": "3.5"
+            },
+            {
+              "name": "expr/pow/expandmaxexponent",
+              "value": "1"
             }
           ]
         },
@@ -406,6 +418,10 @@
             {
               "name": "time_budget",
               "value": "3.5"
+            },
+            {
+              "name": "expr/pow/expandmaxexponent",
+              "value": "1"
             }
           ]
         }
