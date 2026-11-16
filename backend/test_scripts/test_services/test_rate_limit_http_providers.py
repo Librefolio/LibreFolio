@@ -53,7 +53,7 @@ _REAL_ASYNC_CLIENT = httpx.AsyncClient
 RANGE = (date(2026, 1, 2), date(2026, 1, 9))
 CSS_PARAMS = {"current_css_selector": ".price", "currency": "EUR"}
 #: What each FX provider's series code stands for, to read the currency a request is about.
-FED_SERIES = {series: currency for currency, series in FEDProvider.CURRENCY_SERIES.items()}
+FED_SERIES = {series.series_id: currency for currency, series in FEDProvider.CURRENCY_SERIES.items()}
 BOE_SERIES = {series: currency for currency, series in BOEProvider.CURRENCY_SERIES.items()}
 
 
