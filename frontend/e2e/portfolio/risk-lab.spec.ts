@@ -63,9 +63,9 @@ interface RiskRequest {
  *
  * Today the euro on this page is *latent*, not present: for an `AssetSetRiskScope`
  * the backend builds `asset_values={}` and `scope_value=None`
- * (`risk/service.py`), so the replay plugin returns `impact_amount=None` on every
- * row (`stress/plugin.py:542`) and leaves `portfolio_return` null (`:480-494`), which
- * makes the top-level amount unreachable too (`:564`). So loading the page and
+ * (`load_scope_inputs`, `risk/scope.py`), so the replay plugin returns `impact_amount=None` on every
+ * row and leaves `portfolio_return` null (`StressAnalytic._historical`, `stress/plugin.py`),
+ * which makes the top-level amount unreachable too. So loading the page and
  * finding no `€` would prove nothing — it would stay green with the rule
  * deleted, because the data simply is not there.
  *
@@ -194,7 +194,7 @@ const MOCK_ALGORITHM_VERSION = 'e2e-mock-v1';
  * None of these numbers was read off a running backend, a populated lane, or a
  * probe. They were chosen by hand so that:
  *
- *  - every one of them satisfies the payload contract in `schemas/risk.py` —
+ *  - every one of them satisfies the payload contract in `schemas/risk/outputs.py` (the `RiskAssetSet*` models) —
  *    the sign constraints (`ge=0` on the VaR pair, `le=0` on the drawdown pair),
  *    the tail orderings (`CVaR ≥ VaR`, `CDaR ≤ DaR`, `CDaR ≥ max_drawdown`) and
  *    the drawdown episode contract (`recovered` carries a recovery date, `open`
@@ -282,11 +282,11 @@ const AMPLE_OBSERVATIONS = 60;
  */
 const SHORT_OBSERVATIONS = 5;
 
-/** What `service.py:234` answers with when a window is below `min_observations`. */
+/** What `RiskService.execute` (`risk/service.py`) answers with when a window is below `min_observations`. */
 const INSUFFICIENT_HISTORY = 'insufficient_history';
 
 /**
- * The warning `_assets_excluded_warnings` (`service.py`) sends for the assets a request
+ * The warning `assets_excluded_warnings` (`risk/results.py`) sends for the assets a request
  * could not prepare, one per reason.
  *
  * Each carries the catalogue key of its reason, and the backend's English `message`
@@ -335,7 +335,7 @@ function unnamedAsset(assetId: number): string {
  * whoever edited it last.
  *
  * `historical_kpi` carried one of those drifts until that test was written: it
- * was declared `['historical']` while `historical_kpi/plugin.py:119` advertises
+ * was declared `['historical']` while `HistoricalKpiAnalytic.supported_modes` advertises
  * `(HISTORICAL, CURRENT_COMPOSITION)`. Corrected here rather than tolerated in
  * the guard — a guard with an exemption list is a guard that stops guarding. The
  * correction is inert on this page (the code is `ASSET`/`PORTFOLIO`-scoped, so an
@@ -376,7 +376,7 @@ const ASSET_SET_LEVEL_CODES = ['asset_set_kpi', 'asset_set_var', 'asset_set_draw
 /**
  * L1°'s share (`risk-asset-set-loss`): the bad day and the bad month — two instances of
  * `asset_set_var` — and the drawdown. Never `asset_set_comparison`, whatever the benchmark: the
- * engine prepares a request's comparison asset together with its scope (`risk/service.py:183-196`),
+ * engine prepares a request's comparison asset together with its scope (`RiskService.execute`, `risk/service.py`),
  * so a benchmark riding with L1° would move L1°'s window. The developer saw L1° turn «Partial»
  * because of one, and split the levels' request in two (02/10/2026).
  */
@@ -469,7 +469,7 @@ interface RiskStubOptions {
      * A window shorter than four of the five analytics can measure.
      *
      * `asset_set_drawdown` declares `min_observations = 2` where the other four
-     * declare 20, so the gate at `service.py:230-243` genuinely returns one `ok`
+     * declare 20, so the observation gate of `RiskService.execute` genuinely returns one `ok`
      * beside four `unavailable` — same selection, same period, same window, in
      * whichever level's request each of the five rides.
      */
@@ -545,7 +545,7 @@ function observationCount(options: RiskStubOptions): number {
  * The scope ids the stub could prepare, and the ones it had to drop.
  *
  * The dropped id is taken from the **end** of the request's own array, which the
- * client canonicalises ascending (`riskRequest.ts:83`, `asset_ids:
+ * client canonicalises ascending (`canonicalizeScope` in `riskRequest.ts`, `asset_ids:
  * sortedNumbers(...)`). A caller therefore recovers the omitted id by reading
  * the captured request rather than by assuming which asset the page happened to
  * seed — and the assertion stays true whatever the seed contains.
@@ -637,7 +637,7 @@ function metadata(request: RiskRequest, analytic: RiskAnalyticRequest, options: 
         excluded_assets: isHistoricalReplay(analytic) ? [] : excludedAssets(request, options),
         algorithm_version: MOCK_ALGORITHM_VERSION,
         computed_at: '2026-01-31T12:00:00Z',
-        // `service.py:860` copies the plugin's audit into the metadata of every
+        // `result_metadata` (`risk/results.py`) copies the plugin's audit into the metadata of every
         // replay, and `L4Replay` lists what the replay left out from it
         // (`risk-replay-excluded`) — the presence barrier the no-money tests stand
         // on since D372 retired the one-line audit. Omitting it here would leave
@@ -852,7 +852,7 @@ function assetSetKpiOutput(request: RiskRequest, analytic: RiskAnalyticRequest, 
     return {
         kind: 'kpi_set',
         // An echo of the request parameter, which the page never overrides, so
-        // the plugin's own default (`asset_set_kpi/plugin.py:59-60`) is what comes back.
+        // the plugin's own default (`AssetSetKpiParams.drawdown_confidence_level`) is what comes back.
         drawdown_confidence_level: Number(analytic.parameters?.drawdown_confidence_level ?? 0.95),
         items: covered.map((assetId, index) => {
             // The same figure `asset_set_drawdown` reports, because both are
@@ -891,7 +891,7 @@ function assetSetKpiOutput(request: RiskRequest, analytic: RiskAnalyticRequest, 
  * line is drawn only when a point whose role is `portfolio` exists. So the
  * verdict "paid well for the risk" is not switched off on this page — it is
  * unexpressible, and making it expressible again would take an edit to
- * `schemas/risk.py`, visible in a diff.
+ * `RiskAssetSetReturnOutput` (`schemas/risk/outputs.py`), visible in a diff.
  */
 function assetSetRiskReturnOutput(request: RiskRequest, options: RiskStubOptions) {
     const {covered} = preparedAssetIds(request, options);
@@ -971,8 +971,8 @@ function assetSetLevelOutput(request: RiskRequest, analytic: RiskAnalyticRequest
  * whether it still refuses to show it.
  *
  * `portfolio_return` is the other half of the same bait, and it is deliberately
- * NOT what the backend does here: `stress/plugin.py:480-494` leaves it null on an
- * unweighted scope, and `L4Replay:207` therefore *withholds* the whole sentence
+ * NOT what the backend does here: `StressAnalytic._historical` (`stress/plugin.py`) leaves it null on an
+ * unweighted scope, and `L4Replay` therefore *withholds* the whole sentence
  * rather than degrading it. Reproduce that faithfully and `output.impact_amount`
  * becomes unreachable by construction — its absence would then prove nothing
  * about the guard, which is the precise failure {@link MONEY_AMOUNT} warns
@@ -980,7 +980,7 @@ function assetSetLevelOutput(request: RiskRequest, analytic: RiskAnalyticRequest
  * the only thing left between the payload and a euro on screen.
  *
  * Shape-faithful in every other respect: a replay carries no `dimension` and no
- * `configured_buckets` (`stress/plugin.py:561-567`), which is what makes `tornadoRows`
+ * `configured_buckets` (`StressAnalytic._historical`), which is what makes `tornadoRows`
  * take its per-asset branch — the branch that reads `impact_amount`. A bucket
  * row carries `amount: null` and would have quietly disarmed the row half of
  * this test. And the holding the replay left out ({@link replayLeftOutAssetId})
@@ -1002,7 +1002,7 @@ function replayOutput(request: RiskRequest) {
             asset_id: assetId,
             // Spread so the bars differ from each other; `contribution_return` is
             // omitted because an unweighted scope has no weights to contribute
-            // with (`stress/plugin.py:541`), which sends `tornadoRows` to `shock_return`.
+            // with (`StressAnalytic._historical`), which sends `tornadoRows` to `shock_return`.
             shock_return: REPLAY_RETURN + index / 1000,
             impact_amount: MONEY_AMOUNT,
             metadata_fallback: false,
@@ -1046,8 +1046,9 @@ function replayAudit(request: RiskRequest) {
 
 /**
  * The exclusion warning `_replay_exclusion_warning` sends for that holding, one per reason,
- * named the way `service.py` names an asset it has no display name for. The section leaves
- * it to the block since D372; nothing here reads it, it is sent because the engine sends it.
+ * named the way `with_warning_asset_names` (`risk/results.py`) names an asset it has no display
+ * name for. The section leaves it to the block since D372; nothing here reads it, it is sent
+ * because the engine sends it.
  */
 function replayExclusionWarnings(request: RiskRequest) {
     const leftOut = replayLeftOutAssetId(request);
@@ -1089,9 +1090,9 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
     };
 
     // A window below this analytic's own `min_observations` never reaches the
-    // plugin: `service.py:230-243` answers `unavailable` with the count it had
+    // plugin: the observation gate of `RiskService.execute` answers `unavailable` with the count it had
     // and the count it needed, carrying metadata and data quality but **no
-    // warnings** — `_unavailable` does not take any. That asymmetry is what makes
+    // warnings** — `unavailable_result` (`risk/results.py`) does not take any. That asymmetry is what makes
     // `{testId}-errors` and `{testId}-reasons` two different disclosures rather
     // than two views of one, and reproducing it is what lets a test tell them
     // apart.
@@ -1332,6 +1333,45 @@ async function answerEligibility(page: Page, verdictFor: (assetId: number) => Ve
         await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify(body)});
     });
     return calls;
+}
+
+/**
+ * A gate in front of `POST /risk/eligibility`: it counts every question, and while held it
+ * keeps the answers back until released. Registered after the handler that answers, it runs
+ * first and hands each question on (`route.fallback`), so the verdicts stay that handler's.
+ *
+ * It lets a test read what waits for a verdict: whatever asks while an answer is held did not
+ * wait for it.
+ */
+async function gateEligibility(page: Page): Promise<{hold: () => void; release: () => void; asked: () => number; held: () => number}> {
+    let asked = 0;
+    let held = 0;
+    let holding = false;
+    let open: () => void = () => undefined;
+    let barrier: Promise<void> = Promise.resolve();
+    await page.route('**/api/v1/risk/eligibility', async (route) => {
+        asked += 1;
+        if (holding) {
+            held += 1;
+            await barrier;
+        }
+        await route.fallback();
+    });
+    return {
+        hold: () => {
+            holding = true;
+            held = 0;
+            barrier = new Promise<void>((resolve) => {
+                open = resolve;
+            });
+        },
+        release: () => {
+            holding = false;
+            open();
+        },
+        asked: () => asked,
+        held: () => held,
+    };
 }
 
 /**
@@ -2042,7 +2082,7 @@ async function expectNoMoneyOnPanel(panel: Locator, rendered: string, requests: 
  * already carried `data-busy`.
  *
  * It speaks for the replay below as well, and not by luck: `fetchRiskCatalog`
- * holds a module-level cache plus an in-flight promise (`riskStore:74-77`), so
+ * holds a module-level cache plus an in-flight promise (`catalogCache` and `catalogInflight` in `riskStore.svelte.ts`), so
  * the two sibling controllers await the *same* promise and both assign their
  * catalog in the same microtask drain — before any DOM flush could publish
  * `ready` here. Should that ever stop being true, the `expect.poll` on the
@@ -2580,13 +2620,37 @@ async function titlesSpillingOut(table: Locator, columns: readonly string[]): Pr
  * `col-resize`, not by a class. The cell is scrolled into view first: the point is read off the
  * screen. One read, not a retry.
  */
-async function columnEdge(header: Locator): Promise<{x: number; y: number; handle: boolean}> {
-    await header.scrollIntoViewIfNeeded();
+async function columnEdge(header: Locator): Promise<{x: number; y: number; handle: boolean; hit: string}> {
+    // The title row in the middle of the window, two frames later. `scrollIntoViewIfNeeded` scrolls the least it can, so a
+    // row above the window lands on its top edge — where the app header, sticky, slides back in on a scroll up and covers
+    // it (wave-1 merge check, 16/11/2026). In the middle nothing sticky reaches it, wherever the page was left.
+    await header.evaluate((cell) => cell.scrollIntoView({block: 'center', inline: 'nearest'}));
+    await header.page().evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
     return header.evaluate((cell) => {
         const box = cell.getBoundingClientRect();
         const hit = document.elementFromPoint(box.right - 3, box.top + box.height / 2);
-        return {x: box.right - 3, y: box.top + box.height / 2, handle: hit !== null && hit !== cell && cell.contains(hit) && getComputedStyle(hit).cursor === 'col-resize'};
+        // What the point hit, for the message of a miss: the nearest testid, or the tag.
+        const what = hit === null ? 'nothing' : (hit.closest('[data-testid]')?.getAttribute('data-testid') ?? hit.tagName.toLowerCase());
+        return {x: box.right - 3, y: box.top + box.height / 2, handle: hit !== null && hit !== cell && cell.contains(hit) && getComputedStyle(hit).cursor === 'col-resize', hit: what};
     });
+}
+
+/**
+ * The page as the wave-1 merge check left it (16/11/2026), set on purpose: the title row at the top of the window and the
+ * app header — sticky — slid back in over it by a scroll up. {@link columnEdge} must find the edge from there; the old
+ * one, which scrolled the least it could, read the header instead of the handle.
+ */
+async function underTheReturningHeader(page: Page, header: Locator): Promise<void> {
+    // Two frames between the two scrolls: the header reads the scroll once a frame, and two scrolls in one frame are
+    // one net move to it.
+    const frames = () => page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await header.evaluate((cell) => window.scrollTo(0, window.scrollY + cell.getBoundingClientRect().top - 30 + 400));
+    await frames();
+    await expect(page.getByTestId('app-header')).toHaveAttribute('data-scroll-state', 'hidden');
+    await page.evaluate(() => window.scrollBy(0, -400));
+    await frames();
+    await expect(page.getByTestId('app-header')).toHaveAttribute('data-scroll-state', 'visible');
+    await expect.poll(() => page.getByTestId('app-header').evaluate((element) => element.getBoundingClientRect().bottom), {message: 'the app header is still sliding in'}).toBeGreaterThan(40);
 }
 
 /** Press at `from`, drag `by` px to the right in small steps, as a hand does, and let go. */
@@ -3025,7 +3089,7 @@ async function expectNoComparison(page: Page, requests: readonly RiskRequest[], 
  * asked yet cannot satisfy it.
  *
  * Read off the wire because the wire is the one place this spec can see a benchmark reach L1°. The
- * engine prepares a request's comparison asset together with its scope (`risk/service.py:183-196`),
+ * engine prepares a request's comparison asset together with its scope (`RiskService.execute`, `risk/service.py`),
  * so a benchmark joins the prepared set of everything in its request and can move its window — what
  * turned L1° «Partial» for the developer. The stub answers every analytic on its own and reproduces
  * none of that, so L1°'s figures and provenance would be drawn the same with or without a benchmark
@@ -3848,7 +3912,7 @@ test.describe('Asset Global risk laboratory', () => {
         // on a legitimate label and still miss `$12,345.67`.
         //
         // The test is deliberately hostile: the stub above sends monetary fields the
-        // real backend never sends for this scope (`service.py` builds
+        // real backend never sends for this scope (`load_scope_inputs` in `risk/scope.py` builds
         // `asset_values={}` and `scope_value=None` for an `AssetSetRiskScope`). It
         // therefore fails the day someone wires those amounts through to the view —
         // which is its entire purpose.
@@ -4589,7 +4653,7 @@ test.describe('Asset Global risk laboratory', () => {
         await waitForRiskCatalog(page);
         await waitForLossTable(page);
 
-        // ① ONE REQUEST PER LEVEL. `service.py:170` prepares the joint series once
+        // ① ONE REQUEST PER LEVEL. `RiskService.execute` prepares the joint series once
         // per request, before the analytic loop, so a level split across requests
         // would pay for one preparation per piece and — the part that reaches the
         // reader — would draw one table, or one chart, from several calendars.
@@ -4597,7 +4661,7 @@ test.describe('Asset Global risk laboratory', () => {
         // together" is observable exactly here, on the wire, and nowhere else.
         //
         // And never one request for both levels: the engine prepares a request's
-        // comparison asset with its scope (`service.py:183-196`), so a level riding
+        // comparison asset with its scope (`RiskService.execute`), so a level riding
         // with L3°'s benchmark would be measured on the benchmark's calendar too —
         // the «Partial» the developer saw on L1°.
         //
@@ -5053,8 +5117,10 @@ test.describe('Asset Global risk laboratory', () => {
         const badDay = lossTable(page).getByTestId('dt-header-badDay');
         const badDayWidth = () => badDay.evaluate((cell) => cell.getBoundingClientRect().width);
         const widthBefore = await badDayWidth();
+        // From the worst place the page can be left in: the title row under the app header that slid back in.
+        await underTheReturningHeader(page, badDay);
         const edge = await columnEdge(badDay);
-        expect(edge.handle, 'no resize handle under the right edge of the bad-day title').toBe(true);
+        expect(edge.handle, `no resize handle under the right edge of the bad-day title: the point hit ${edge.hit}`).toBe(true);
         await dragRight(page, edge, 60);
         await expect.poll(badDayWidth, {message: "a drag on the bad-day column's edge did not change its width"}).toBeGreaterThan(widthBefore + 30);
         // The pointer rested on the edge it dragged, beside no title: no help is open before the one below is read.
@@ -5324,7 +5390,7 @@ test.describe('Asset Global risk laboratory', () => {
         const volatilityWidth = () => volatility.evaluate((cell) => cell.getBoundingClientRect().width);
         const widthBefore = await volatilityWidth();
         const edge = await columnEdge(volatility);
-        expect(edge.handle, 'no resize handle under the right edge of the volatility title').toBe(true);
+        expect(edge.handle, `no resize handle under the right edge of the volatility title: the point hit ${edge.hit}`).toBe(true);
         await dragRight(page, edge, 60);
         await expect.poll(volatilityWidth, {message: "a drag on the volatility column's edge did not change its width"}).toBeGreaterThan(widthBefore + 30);
         // The pointer rested on the edge it dragged, beside no title: no help is open before the one below is read.
@@ -7179,6 +7245,135 @@ test.describe('Asset Global risk laboratory', () => {
         expect(exchangeFor(engine.exchanges, selection, period)?.notEligible, 'the premise: every selected asset is eligible in the new period').toEqual([]);
 
         await expect(banner, 'the engine suggests a period, but it brings no selected asset back: there is nothing to offer').toHaveCount(0);
+    });
+
+    /**
+     * RN-03 (F2): a sync asks the eligibility engine again.
+     *
+     * A verdict follows the prices: a sync that brings an asset's history in can make it
+     * selectable, and a benchmark measurable (D378). Both questions the panel asks — the
+     * catalogue's, which decides the chips and what every section is asked about, and the
+     * selection's, which decides the fit-period offer — are keyed on the list, the period and
+     * the currency; a sync changes none of the three, so before RN-03 neither was asked again
+     * and the lab kept the verdicts of the prices it had before the sync.
+     *
+     * Told apart by the ids they ask about: the catalogue's question asks about every asset
+     * the page lists, the selection's about the chips alone. Nothing is written anywhere: the
+     * sync and every risk call are stubbed.
+     */
+    test('asks the eligibility engine again after a sync, both for the catalogue and for the selection', async ({page}) => {
+        await installRiskMocks(page);
+        const engine = await answerEligibility(page);
+        await installSyncMocks(page);
+        await openAssetGlobalRisk(page);
+        const selection = [...(await chipIds(page))].sort((left, right) => left - right);
+
+        const sameIds = (call: EligibilityCall, ids: readonly number[]) => sameMembers(call.assetIds.map(String), ids.map(String));
+        const catalogue = engine.find((call) => !sameIds(call, selection));
+        if (!catalogue) throw new Error('The page asked the eligibility engine only about the selection: no catalogue question to follow.');
+        const askedFor = (ids: readonly number[]) => engine.filter((call) => sameIds(call, ids)).length;
+        // Both questions answered once at least before the sync, so a count that grows is a new question.
+        await expect.poll(() => askedFor(selection), {timeout: 15_000, message: 'premise: the selection was never asked about'}).toBeGreaterThan(0);
+        const before = {catalogue: askedFor(catalogue.assetIds), selection: askedFor(selection)};
+
+        await runSyncToCompletion(page);
+
+        await expect.poll(() => askedFor(catalogue.assetIds), {timeout: 15_000, message: 'the sync did not ask the engine about the catalogue again: the chips keep the verdicts of the old prices'}).toBeGreaterThan(before.catalogue);
+        await expect.poll(() => askedFor(selection), {timeout: 15_000, message: 'the sync did not ask the engine about the selection again: the fit-period offer keeps the old prices'}).toBeGreaterThan(before.selection);
+        const last = engine.at(-1) as EligibilityCall;
+        expect({start: last.dateRange.start, currency: last.targetCurrency}, 'the question after the sync is the same period and currency').toEqual({start: catalogue.dateRange.start, currency: catalogue.targetCurrency});
+    });
+
+    /**
+     * RN-03, the two halves with a benchmark chosen (consultant's answer, 16/11/2026).
+     *
+     * - **A reload asks the engine nothing, and L3° does not wait.** «Reload All» syncs nothing,
+     *   so no verdict can have changed: re-asking would unsettle the verdicts, and with a
+     *   benchmark chosen L3° waits for settled verdicts (`labL3Waits`) by being unmounted —
+     *   the trap the lot avoids. So the eligibility answers are held at the gate, and L3° must
+     *   ask again all the same, with no question reaching the gate.
+     * - **A sync asks again, and L3° waits for the new verdict** (D378: the benchmark may have
+     *   become measurable, or stopped being). With the answers held, L1° — which never waits —
+     *   asks again while L3° does not; released, L3° asks.
+     *
+     * The opening is stored (selection and benchmark), so L3° asks with a benchmark from the
+     * start. Nothing is written anywhere: the sync and every risk call are stubbed.
+     */
+    test('with a benchmark, a reload asks the engine nothing and keeps L3° asking; a sync asks again and L3° waits for the verdict', async ({page}) => {
+        test.setTimeout(60_000);
+        const cast = await castBenchmark(page);
+        await storeLabOpening(page, cast.selection, cast.reference.id);
+        const requests = await installRiskMocks(page);
+        const gate = await gateEligibility(page);
+        await installSyncMocks(page);
+        await openLabOn(page, cast.selection);
+        const selection = cast.selection;
+        const paid = () => paidRequestsFor(requests, selection).length;
+        const loss = () => lossRequestsFor(requests, selection).length;
+        await expect.poll(paid, {timeout: 15_000, message: 'premise: L3° never asked on opening'}).toBeGreaterThan(0);
+        await waitForPaidTable(page);
+        await waitForLossTable(page);
+
+        // ── a reload: no question, and L3° asks without waiting ───────────────
+        const reload = page.getByTestId('assets-controls').getByTestId('risk-reload-button');
+        await expect(reload, 'the reload must be pressable once the opening waves are in').toBeEnabled({timeout: 15_000});
+        const beforeReload = {asked: gate.asked(), paid: paid(), loss: loss()};
+        gate.hold();
+        await reload.click();
+        await expect.poll(paid, {timeout: 15_000, message: 'L3° did not ask again after a reload while the eligibility answers were held: it waited for a verdict a reload does not change'}).toBeGreaterThan(beforeReload.paid);
+        await expect.poll(loss, {timeout: 15_000, message: 'L1° must re-read its base after a reload'}).toBeGreaterThan(beforeReload.loss);
+        await waitForPaidTable(page);
+        gate.release();
+
+        // ── a sync: a new question, and L3° waits for its answer ──────────────
+        const beforeSync = {paid: paid(), loss: loss()};
+        gate.hold();
+        await runSyncToCompletion(page);
+        await expect.poll(() => gate.held(), {timeout: 15_000, message: 'the sync did not ask the eligibility engine again'}).toBeGreaterThan(0);
+        await expect.poll(loss, {timeout: 15_000, message: 'L1° must re-read its base after a sync'}).toBeGreaterThan(beforeSync.loss);
+        expect(paid(), 'L3° asked before the new verdict came back: with a benchmark chosen it must wait for it (D378)').toBe(beforeSync.paid);
+        gate.release();
+        await expect.poll(paid, {timeout: 15_000, message: 'L3° never asked once the new verdict came back'}).toBeGreaterThan(beforeSync.paid);
+
+        // ── the reload's absence, whatever the timing ─────────────────────────
+        // Counted from the reload on, after everything that follows it has landed: the sync asks
+        // two questions (the catalogue's and the selection's, each one request at this size), so
+        // a reload that had asked too — early or late, held or not — would make it four.
+        expect(gate.asked() - beforeReload.asked, 'from the reload to the end, only the sync may have asked the eligibility engine: the catalogue and the selection, once each').toBe(2);
+    });
+
+    /**
+     * RN-09 (C-23): on opening, each section asks once — after the eligibility verdicts.
+     *
+     * The lab leaves out of every request what the engine rules out (`analysedIds`). A section
+     * that asks before the verdicts land asks about the whole selection, and asks again about
+     * the admitted part when they do: two requests, the first one wasted and drawn for a moment.
+     * Only L3° waited (`labL3Waits`). Here one selected asset is ruled out, so a section that does
+     * not wait is caught by the scope of its first request.
+     *
+     * Counted over every scope, not only the one on screen: the wasted request is precisely the
+     * one about another scope. Read once the three sections have drawn, so both requests of a
+     * section that asked twice have left. The replay rides the correlation section's flight.
+     */
+    test('on opening, each section asks once, about the admitted assets only', async ({page}) => {
+        const cast = await castBenchmark(page);
+        await storeLabOpening(page, cast.selection, null);
+        const requests = await installRiskMocks(page);
+        const ruledOut = cast.selection[0];
+        await answerEligibility(page, (assetId) => (assetId === ruledOut ? NO_PRICES : ELIGIBLE));
+        await openLabOn(page, cast.selection);
+        await waitForLossTable(page);
+        await waitForPaidTable(page);
+        await expect(page.getByTestId('risk-correlation-heatmap')).toBeVisible({timeout: 15_000});
+
+        const admitted = scopeKey(cast.selection.filter((assetId) => assetId !== ruledOut));
+        const sections = {
+            correlation: assetSetHistoricalRequests(requests).filter((request) => codesOf(request).has('correlation') && !request.analytics.some((analytic) => isAssetSetLevel(analytic))),
+            loss: assetSetLevelRequests(requests).filter((request) => carriesAny(request, LOSS_LEVEL_CODES)),
+            paid: assetSetLevelRequests(requests).filter((request) => carriesAny(request, PAID_LEVEL_CODES)),
+        };
+        const scopes = Object.fromEntries(Object.entries(sections).map(([name, sent]) => [name, sent.map((request) => (request.scope.kind === ASSET_SET_SCOPE ? scopeKey(request.scope.asset_ids) : request.scope.kind))]));
+        expect(scopes, `each section must ask once, about the admitted assets (${admitted}): a section that did not wait for the verdicts asked first about the whole selection`).toEqual({correlation: [admitted], loss: [admitted], paid: [admitted]});
     });
 });
 

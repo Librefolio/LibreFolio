@@ -92,6 +92,7 @@
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
     import {buildTransactionsFiltersUrl} from '$lib/features/transactions/filterState';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     // =========================================================================
     // Types
@@ -1917,6 +1918,7 @@
                 <Plus size={16} />
                 {$t('assets.modal.title')}
             </button>
+            <DocsLink path="user/assets/" label={$t('assets.docsHelp.list')} icon="book" size={16} testId="assets-docs" />
         </div>
     </div>
 

@@ -89,7 +89,7 @@ Under test: the app of ``backend/app/main.py``, its routes, and the schemas thei
     model: ``ToolTransportModel`` sets ``allow_inf_nan=False``, which ``JsonValue`` respects. The four others refuse
     through ``ensure_json_safe`` (``backend/app/utils/json_utils.py``) in a ``mode="before"`` validator of their field:
     ``SignalRequest.params``; ``provider_params`` in ``FAProviderConfigBase`` (``schemas/provider.py``), which both
-    provider requests inherit; and ``RiskAnalyticRequest.parameters`` (``schemas/risk.py``). The last two validators
+    provider requests inherit; and ``RiskAnalyticRequest.parameters`` (``schemas/risk/scope.py``). The last two validators
     came with H-34. Self-test, on an app of its own: ``Any``, ``object`` and ``JsonValue`` as a field, a list item
     behind ``Annotated``, a mapping value and behind ``Optional``, each noted with its type and its route, and the
     float beside them a leaf, not a free-form position.

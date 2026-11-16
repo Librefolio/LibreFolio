@@ -307,6 +307,12 @@
     "duplicateNameExists": "Ya existe un bróker llamado \"{name}\".",
     "deleted": "Bróker \"{name}\" eliminado.",
     "deletedWithTransactions": "Bróker \"{name}\" y {count} transacciones eliminados.",
-    "created": "Bróker \"{name}\" creado."
+    "created": "Bróker \"{name}\" creado.",
+    "docsHelp": {
+      "list": "Tus brókeres y cuentas: cada uno tiene su liquidez y sus posiciones. Abre uno para ver su cartera, importar sus informes o compartirlo.",
+      "info": "Los ajustes del bróker: si está activo, desde cuándo y si permite liquidez negativa o posiciones cortas.",
+      "sharing": "Quién más puede ver o editar este bróker, y con qué rol: propietario, editor o lector.",
+      "lots": "Los lotes de compra detrás de esta posición, emparejados FIFO o LIFO: cuánto costó cada uno, cuánto tiempo se ha mantenido y cuánto rinde."
+    }
   }
 }

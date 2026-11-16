@@ -83,6 +83,20 @@
     }
 
     /**
+     * A fall's money said as what it is (RN-11, C8): today's value times the fall, not what was lost when it
+     * happened — a 20 % fall from 100 000 to 80 000 lost 20 000, and the card reads 80 000 × 20 % = 16 000.
+     * For the worst and the current fall only: a bad day or month on today's value needs no such word.
+     */
+    function sameFallToday(money: string): string {
+        return money === '' ? '' : $t('risk.levels.l1.sameFallToday', {values: {amount: money}});
+    }
+
+    /** A loss card's money: the worst fall's says it is the same fall on today's value (C8). */
+    function rowCaption(row: {id: string; loss: number}): string {
+        return caption(row.id === 'worst' ? sameFallToday(lossMoney(row.loss)) : lossMoney(row.loss));
+    }
+
+    /**
      * The card caption, never an empty string.
      *
      * `RiskMetricCard` renders the caption behind an `{#if}`, so an empty string
@@ -164,7 +178,7 @@
         <div data-testid="risk-l1-cards">
             <RiskCardGrid>
                 {#each rows as row (row.id)}
-                    <RiskMetricCard layout="figure" label={$t(`risk.levels.l1.rows.${row.id}`)} technicalName={subtitle(row.id)} value={lossPercent(row.loss)} caption={caption(lossMoney(row.loss))} sentiment="negative" docsPath={DOC_PATHS[row.id]} testId="risk-l1-card-{row.id}">
+                    <RiskMetricCard layout="figure" label={$t(`risk.levels.l1.rows.${row.id}`)} technicalName={subtitle(row.id)} value={lossPercent(row.loss)} caption={rowCaption(row)} sentiment="negative" docsPath={DOC_PATHS[row.id]} testId="risk-l1-card-{row.id}">
                         {#snippet submetrics()}
                             <!-- Every card has the same shape (F8, 06/11/2026): which one it was, then the figures that refine the card's
                                  own. The day: the worst day seen and its date. The month: the worst 30 days really lived through and their
@@ -208,7 +222,7 @@
                         label={$t('risk.levels.l1.currentDrawdown')}
                         technicalName={$t('risk.levels.l1.technical.current')}
                         value={lossPercent(current.loss)}
-                        caption={caption(lossMoney(current.loss))}
+                        caption={caption(sameFallToday(lossMoney(current.loss)))}
                         sentiment="negative"
                         docsPath="{DOCS}/current-drawdown/"
                         testId="risk-l1-card-current"

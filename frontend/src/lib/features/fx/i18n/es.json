@@ -80,7 +80,11 @@
       "manualOnly": "Par solo manual",
       "syncFromProvider": "Sincronizar los tipos de cambio desde el proveedor"
     },
-    "loadFailed": "No se pudieron cargar los pares FX"
+    "loadFailed": "No se pudieron cargar los pares FX",
+    "docsHelp": {
+      "list": "Los pares de divisas con los que LibreFolio convierte: su último tipo, el banco central que lo publica y la ruta usada cuando no hay un par directo.",
+      "detail": "Un par a lo largo del tiempo: su gráfico, las señales que añades, sus medidas y los tipos que puedes corregir a mano."
+    }
   },
   "fxDetail": {
     "editRates": "Editar tipos de cambio",

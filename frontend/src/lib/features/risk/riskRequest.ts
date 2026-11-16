@@ -180,7 +180,7 @@ export function buildHypotheticalShockParameters(state: HypotheticalShockEditorS
  *
  * This used to be a hand-written copy of nine values while the enum had seventeen.
  * The eight it missed — `COMMODITY`, `REAL_ESTATE` and the six `ETF_*` subtypes — were
- * not rejected: the backend accepts any `AssetType` (`stress.py:150`) and shocks an
+ * not rejected: the backend accepts any `AssetType` (`_normalize_bucket_shocks`, `stress/plugin.py`) and shocks an
  * absent bucket by **zero, silently**. The backend guards its own scenario catalogue
  * against exactly that (`test_risk_scenario_catalog.py`, both directions); this list
  * lives one layer above, where that gate does not reach, so it is derived rather than
@@ -197,7 +197,7 @@ export function uniformAssetClassShocks(fraction: number): Record<string, number
  * Turn an editor state into simulation parameters the server can accept.
  *
  * The two engines take **disjoint** parameter sets, and the server enforces the
- * difference rather than tolerating it (`simulation.py:149-169`): the block
+ * difference rather than tolerating it (`SimulationParams.validate_engine_contract`): the block
  * bootstrap requires `bootstrap_seed`, forbids `random_seed` and
  * `sobol_start_index`, and only resamples under pseudo-random sampling; the
  * parametric engine requires exactly one of the two parametric seeds, forbids

@@ -362,7 +362,9 @@
       "historical_replay_mostly_excluded": "Le résultat ne décrit qu'une partie de votre portefeuille ({covered, number, percent}) : le reste est exclu du rejeu.",
       "assets_excluded_no_price_source": "{count, plural, one {# actif exclu} other {# actifs exclus}} du calcul : aucune source de prix attribuée et aucun prix jamais enregistré — {names}.",
       "total_loss_no_recovery": "La valeur est tombée à zéro : aucun gain ne peut la ramener à son sommet, la reprise nécessaire n'est donc pas affichée.",
-      "total_loss_no_recovery_assets": "{count, plural, one {# actif est tombé} other {# actifs sont tombés}} à zéro : aucun gain ne peut {count, plural, one {le ramener à son sommet} other {les ramener à leur sommet}}, la reprise nécessaire n'est donc pas affichée — {names}."
+      "total_loss_no_recovery_assets": "{count, plural, one {# actif est tombé} other {# actifs sont tombés}} à zéro : aucun gain ne peut {count, plural, one {le ramener à son sommet} other {les ramener à leur sommet}}, la reprise nécessaire n'est donc pas affichée — {names}.",
+      "analysis_starts_late": "L'analyse commence le {start} : avant ce jour, aucun jour de prix complet n'est disponible.",
+      "short_history": "{names} : aucun prix avant le début de la période, leur historique commence donc à l'intérieur."
     },
     "assetDetail": {
       "overviewTab": "Vue d'ensemble",
@@ -401,11 +403,7 @@
     },
     "betaBanner": {
       "title": "L'analyse des risques est en version bêta.",
-      "description": "Les calculs, les résultats et l'interface peuvent évoluer avant la version stable.",
-      "simulation": {
-        "title": "La simulation est encore en version bêta.",
-        "description": "Son résultat dépend fortement de la quantité d'historique demandée par rapport à l'horizon : une fenêtre courte avec un horizon long peut produire des chiffres invraisemblables. Tous les autres niveaux de l'analyse des risques sont sortis de la version bêta."
-      }
+      "description": "Les calculs, les résultats et l'interface peuvent évoluer avant la version stable."
     },
     "levels": {
       "l1": {
@@ -452,7 +450,8 @@
         "when": "Quand",
         "since": "Depuis",
         "duration": "Durée",
-        "daysCount": "{days, plural, one {# jour} other {# jours}}"
+        "daysCount": "{days, plural, one {# jour} other {# jours}}",
+        "sameFallToday": "{amount} · la même chute, sur la valeur d'aujourd'hui"
       },
       "l2": {
         "title": "Suis-je aussi diversifié que je le crois ?",
@@ -616,7 +615,8 @@
           "contribution": "Contribution",
           "impact": "Impact",
           "bar": "Effet"
-        }
+        },
+        "shockUnconfigured": "Absents de ce scénario, donc un choc de 0 : {names}. Le total les compte comme intacts."
       },
       "backtestNotice": "Avec un sous-ensemble actif, ces chiffres sont reconstruits à partir de la composition actuelle : ils disent ce qui *se serait* passé, pas ce qui s’est réellement passé.",
       "notice": {
@@ -652,6 +652,14 @@
     "benchmark": {
       "measuredHere": "Cette référence est aussi un actif mesuré ici et ne peut pas servir de mesure à elle-même : choisissez-en une autre pour la comparaison.",
       "blocked": "Inutilisables sur cette période"
+    },
+    "period": {
+      "range": "Période {start} – {end} · en {currency}",
+      "open": "Période depuis le {start} · en {currency}"
+    },
+    "docsHelp": {
+      "header": "Combien le portefeuille peut perdre, s'il est diversifié, si le risque est rémunéré et ce qui pourrait arriver : les quatre questions de l'onglet Risque, sur la période indiquée.",
+      "assetSet": "Choisissez quelques actifs et comparez-les sur la période : combien chacun a perdu, ce qu'il a rapporté pour son risque, lesquels évoluent ensemble et comment ils auraient traversé les crises passées."
     }
   }
 }

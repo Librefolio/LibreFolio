@@ -8,7 +8,7 @@
  * here may be described as measured — in a comment, in a commit message or in a
  * report. What makes a fixture trustworthy is not its provenance but its
  * *emittability*: each payload satisfies the contract in
- * `backend/app/schemas/risk.py` that would have produced it, so a reader can
+ * the `backend/app/schemas/risk/` package that would have produced it, so a reader can
  * check it against the model rather than against someone's memory of a run.
  *
  * The contracts that are load-bearing here, and are honoured deliberately:
@@ -82,7 +82,7 @@ function ok(analyticCode: string, output: Payload | Payload[] | null, instanceId
 /**
  * A degraded result, which still carries its output.
  *
- * `partial` is not an exotic case for this family: `service.py` sets it when an
+ * `partial` is not an exotic case for this family: `success_result` (`risk/results.py`) sets it when an
  * analytic excluded assets, which is precisely the situation where the items
  * cover fewer assets than were selected. The subset payloads below are what a
  * partial answer actually looks like.

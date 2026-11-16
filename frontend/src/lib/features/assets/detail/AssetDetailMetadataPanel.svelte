@@ -12,6 +12,7 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import type {ProviderAssignmentFlat} from '$lib/types';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     interface Props {
         /** The panel is unfolded; kept by the page, so it survives a tab switch and a change of asset. */
@@ -33,14 +34,21 @@
 </script>
 
 <div class="bg-lf-card text-lf-primary rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle">
-    <button class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-lf-secondary hover:bg-lf-hover transition-colors rounded-xl" data-testid="asset-detail-metadata-toggle" use:guideAnchor={'asset.detail.metadata'} onclick={() => (open = !open)}>
-        <span class="flex items-center gap-2">
-            <!-- colour: closest role, to review: decorative section icon in sky, mapped to the info state -->
-            <Info class="text-lf-info" size={15} />
-            {$t('assetDetail.metadata')}
-        </span>
-        <ChevronDown class="transition-transform {open ? 'rotate-180' : ''}" size={15} />
-    </button>
+    <!-- The fold toggle and the manual's icon side by side, never nested (RN-13, B1): a click or an Enter on the icon opens
+         the manual and leaves the panel as it is. -->
+    <div class="flex items-center">
+        <button class="flex min-w-0 flex-1 items-center justify-between px-4 py-2.5 text-sm font-medium text-lf-secondary hover:bg-lf-hover transition-colors rounded-l-xl" data-testid="asset-detail-metadata-toggle" use:guideAnchor={'asset.detail.metadata'} onclick={() => (open = !open)}>
+            <span class="flex items-center gap-2">
+                <!-- colour: closest role, to review: decorative section icon in sky, mapped to the info state -->
+                <Info class="text-lf-info" size={15} />
+                {$t('assetDetail.metadata')}
+            </span>
+            <ChevronDown class="transition-transform {open ? 'rotate-180' : ''}" size={15} />
+        </button>
+        <div class="shrink-0 px-3">
+            <DocsLink path="user/assets/detail/classification/" label={$t('assetDetail.docsHelp.metadata')} icon="book" size={16} testId="asset-detail-metadata-docs" />
+        </div>
+    </div>
     {#if open}
         <div data-testid="asset-detail-metadata-panel" class="px-4 pb-4 border-t border-lf-subtle pt-3 space-y-4">
             <!-- Description (from classification_params.short_description) — always first if set -->

@@ -84,7 +84,7 @@ export function levelMetadata(results: ReadonlyArray<RiskAnalyticResult | null |
  * — is itself informative, so degrading to it loses formatting and keeps the
  * meaning.
  *
- * ⚠️ The comparison is the point. `RiskResultFrame:108` builds
+ * ⚠️ The comparison is the point. the return-basis line of `RiskResultFrame` builds
  * `risk.returnBasis.${value}` with no guard at all, which is the defect
  * `levelHelpers` records: a value nobody has seen prints its own key on screen.
  * That line is still unguarded in the legacy frame; this is the redesign's

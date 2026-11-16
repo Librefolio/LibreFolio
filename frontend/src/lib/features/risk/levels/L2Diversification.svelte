@@ -51,7 +51,7 @@
         /**
          * Risk contribution over the scope.
          *
-         * PORTFOLIO-only by contract (`risk_contribution.py:46`), and measured:
+         * PORTFOLIO-only by contract (`RiskContributionAnalytic.supported_scopes`), and measured:
          * an `asset_set` asking for it is answered `unavailable` /
          * `incompatible_scope`. Everything derived from it — the three cards and
          * every row — is therefore absent on that scope rather than empty, which

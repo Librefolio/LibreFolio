@@ -15,6 +15,7 @@
     import {checkMessageValues} from '$lib/features/email/publicUrlExample';
     import {securityChecks, type SecurityChecksStore} from './securityChecks.svelte';
     import type {FindingSeverity} from './securityFindings';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     interface Props {
         /** The state to show: the shared one, which the badge reads too, unless a test hands its own. */
@@ -68,6 +69,7 @@
                 <RefreshCw class={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} aria-hidden="true" />
                 {$_('settings.securityTab.refresh')}
             </button>
+            <DocsLink path="admin/configuration_security/" label={$_('settings.docsHelp.security')} icon="book" size={16} testId="security-docs" />
         </div>
         <p class="text-sm text-lf-muted">{$_('settings.securityTab.description')}</p>
     </div>

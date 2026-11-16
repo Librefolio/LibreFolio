@@ -80,7 +80,11 @@
       "manualOnly": "Manual-only pair",
       "syncFromProvider": "Sync rates from provider"
     },
-    "loadFailed": "Failed to load FX pairs"
+    "loadFailed": "Failed to load FX pairs",
+    "docsHelp": {
+      "list": "The currency pairs LibreFolio converts with: their latest rate, the central bank that publishes it, and the route used when no direct pair exists.",
+      "detail": "One pair over time: its chart, the signals you add to it, its measures, and the rates you can correct by hand."
+    }
   },
   "fxDetail": {
     "editRates": "Edit Rates",

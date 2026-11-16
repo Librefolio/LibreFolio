@@ -281,7 +281,7 @@ test.describe('Risk analysis functional integration', () => {
 const COMPARISON_PICKER = 'risk-comparison-asset-select';
 
 type EligibilityLevel = 'eligible' | 'warning' | 'ineligible';
-/** `RiskEligibilityReason` (`schemas/risk.py`): the codes the engine can give. */
+/** `RiskEligibilityReason` (`schemas/risk/vocabulary.py`): the codes the engine can give. */
 type EligibilityReason = 'no_price_history' | 'no_prices' | 'too_few_quotes' | 'missing_fx' | 'starts_late' | 'stale_at_end';
 
 /** One verdict of the engine: a level, and the codes behind it. */

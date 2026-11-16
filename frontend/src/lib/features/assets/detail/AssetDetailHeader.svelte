@@ -16,6 +16,7 @@
     import type {AssetDetail} from '$lib/types';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     interface Props {
         /** The asset the page shows, for its browse navigation; known before its details load. */
@@ -122,5 +123,9 @@
     {:else if loading}
         <div class="order-last basis-full sm:order-none sm:basis-auto h-8 w-48 bg-lf-neutral rounded animate-pulse"></div>
     {/if}
-    <AssetBrowseNav {assetId} />
+    <!-- The browse arrows and the manual's icon at the right edge (RN-13, B1): the nav's own ml-auto has nothing to push inside this group. -->
+    <div class="ml-auto flex shrink-0 items-center gap-1">
+        <AssetBrowseNav {assetId} />
+        <DocsLink path="user/assets/detail/" label={$t('assetDetail.docsHelp.header')} icon="book" size={16} testId="asset-detail-docs" />
+    </div>
 </div>

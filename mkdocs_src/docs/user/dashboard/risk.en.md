@@ -114,12 +114,12 @@ What would a past crisis, or a shock you imagine, do to the portfolio you hold t
 - **Hypothetical shock**: click a scenario, such as *Equity crash*, to run it; **Show the shock per bucket** lets you change its assumptions.
 - **Simulation**: pick a mode — *Reshuffled history* is recommended — and a horizon, in days or as years, months and days (`2y3m5d`), then **Simulate**. Read the cone as a range of possibilities, not a forecast.
 
-!!! note "The simulation is still in beta"
+!!! note "The simulation depends on the history it reads"
 
-    Its outcome depends heavily on how much history the period holds compared with the horizon — see [Why the Simulation Is Still in Beta](../../financial-theory/technical-analysis/risk-metrics/simulation-modes.md#why-beta).
+    Its outcome depends heavily on how much history the period holds compared with the horizon — see [What the Simulation Does Not Yet Do](../../financial-theory/technical-analysis/risk-metrics/simulation-modes.md#why-beta).
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="The What if…? Simulation box: the beta notice and the model warning, the five modes with Reshuffled history recommended, horizon, paths and seed, and after Simulate the terminal figures, the cone and What this simulation assumed" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="The What if…? Simulation box: the model warning, the five modes with Reshuffled history recommended, horizon, paths and seed, and after Simulate the terminal figures, the cone and What this simulation assumed" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---

@@ -151,7 +151,6 @@ def make_prepared_set(
         calendar_days=observations,
         annualization_factor=365,
         calendar_coverage=1,
-        fresh_quote_coverage=1,
         data_quality=DataQualityReport(),
         fx_fingerprint="0" * 64,
     )
@@ -2740,3 +2739,77 @@ async def test_the_first_twrr_point_is_the_baseline_even_on_a_day_nothing_held_i
     assert list(context.primary_returns) == pytest.approx(returns, rel=1e-12, abs=1e-15)
     assert context.n_observations == 24
     assert context.calendar_days == 32  # Monday 5 January to Friday 6 February
+
+
+# --------------------------------------------------------------------------- #
+# RN-11 (Q14, D383): an analysis that starts later than the period asked for says so.
+#
+# The preparation knows it — `baseline_inside_requested_range` when no complete day lies before
+# the requested start, `short_history:<id>` for each asset with no point before it — and kept it
+# to itself (`PreparedAssetSeriesSet.warnings`, read by nobody). The results built on the prepared
+# series now carry it as two warnings, not degrading: the day the analysis really starts (the
+# analysed range's start) and the assets whose history begins inside the period. A start on a
+# Saturday raises nothing: the Friday before is a complete day before the start. The TWRR readers
+# of a historical portfolio measure another series and do not carry them (out of RN-11).
+# --------------------------------------------------------------------------- #
+
+LATE_START_WARNINGS = ["baseline_inside_requested_range", "short_history:1", "short_history:4"]
+
+
+def test_a_late_start_reaches_the_context_as_two_warnings():
+    prepared = make_prepared_set({1: [0.01, -0.02, 0.015], 4: [0.0, 0.01, -0.01]}).model_copy(update={"warnings": LATE_START_WARNINGS})
+    request = RiskQueryRequest.model_validate(
+        {
+            "scope": {"kind": "asset_set", "asset_ids": [1, 4]},
+            "date_range": {"start": "2025-12-15", "end": prepared.requested_range.end.isoformat()},
+            "target_currency": "EUR",
+            "mode": "historical",
+            "analytics": [{"instance_id": "kpi", "analytic_code": "asset_set_kpi"}],
+        }
+    )
+    context = build_execution_context(request=request, scope_inputs=scope_inputs((1, 4)), prepared=prepared)
+    by_code = {warning.code: warning for warning in context.execution_warnings}
+
+    late = by_code.get("analysis_starts_late")
+    assert late is not None, f"the late start stayed inside the preparation: {sorted(by_code)}"
+    assert late.message_i18n_key == "risk.warnings.analysis_starts_late"
+    assert late.message_params == {"start": prepared.effective_range.start.isoformat()}
+    assert late.details == {"start": prepared.effective_range.start.isoformat(), "requested_start": "2025-12-15"}
+    assert late.degrades_result is False
+
+    short = by_code.get("short_history")
+    assert short is not None, f"the assets with a short history are not named: {sorted(by_code)}"
+    assert short.message_i18n_key == "risk.warnings.short_history"
+    assert short.details["asset_ids"] == [1, 4]
+    assert short.degrades_result is False
+
+
+def test_no_late_start_no_warning():
+    prepared = make_prepared_set({1: [0.01, -0.02, 0.015]})
+    request = RiskQueryRequest.model_validate(
+        {
+            "scope": {"kind": "asset_set", "asset_ids": [1]},
+            "date_range": {"start": prepared.requested_range.start.isoformat(), "end": prepared.requested_range.end.isoformat()},
+            "target_currency": "EUR",
+            "mode": "historical",
+            "analytics": [{"instance_id": "kpi", "analytic_code": "asset_set_kpi"}],
+        }
+    )
+    context = build_execution_context(request=request, scope_inputs=scope_inputs((1,)), prepared=prepared)
+    assert {"analysis_starts_late", "short_history"}.isdisjoint(warning.code for warning in context.execution_warnings)
+
+
+@pytest.mark.asyncio
+async def test_the_twrr_readers_leave_out_the_late_start_of_the_per_asset_series(monkeypatch):
+    """The TWRR of a historical portfolio is another series: the per-asset preparation's start says nothing of it."""
+    results = await query_unpriced_holding(
+        monkeypatch,
+        analytics=[*TWRR_READERS.values(), CORRELATION],
+        prepared=prepared_without(reason=None).model_copy(update={"warnings": ["baseline_inside_requested_range"]}),
+    )
+
+    # Presence barrier: a reader of the per-asset series carries it.
+    assert "analysis_starts_late" in warning_codes(results["correlation"])
+    for instance_id in TWRR_READERS:
+        assert results[instance_id].metadata.return_basis == RiskReturnBasis.TWRR, instance_id
+        assert "analysis_starts_late" not in warning_codes(results[instance_id]), instance_id

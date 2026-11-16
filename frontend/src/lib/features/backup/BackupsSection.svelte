@@ -15,6 +15,7 @@
     import BackupCleanupPanel from './BackupCleanupPanel.svelte';
     import BackupList from './BackupList.svelte';
     import {notifyBackupListChanged} from './backupList.svelte';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     interface Props {
         /** The body folds (default), or it is always open. */
@@ -78,6 +79,7 @@
                 {/if}
             </button>
         {/if}
+        <DocsLink path="admin/backup_restore/" label={$_('backup.docsHelp')} icon="book" size={16} testId="backups-docs" />
     </header>
 
     {#if open}

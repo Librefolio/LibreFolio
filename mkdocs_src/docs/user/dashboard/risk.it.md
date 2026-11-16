@@ -114,12 +114,12 @@ Cosa farebbe una crisi passata, o uno shock che immagini, al portafoglio che det
 - **Shock ipotetico**: clicca su uno scenario, come *Crollo azionario*, per eseguirlo; **Mostra lo shock per bucket** ti consente di modificarne le ipotesi.
 - **Simulazione**: scegli una modalità — *Storia rimescolata* è quella consigliata — e un orizzonte, in giorni o come anni, mesi e giorni (`2a3m5g`), poi **Simula**. Leggi il cono come una gamma di possibilità, non come una previsione.
 
-!!! note "La simulazione è ancora in beta"
+!!! note "La simulazione dipende dalla storia che legge"
 
-    Il suo esito dipende fortemente da quanta storia contiene il periodo rispetto all'orizzonte — vedi [Why the Simulation Is Still in Beta](../../financial-theory/technical-analysis/risk-metrics/simulation-modes.md#why-beta).
+    Il suo esito dipende fortemente da quanta storia contiene il periodo rispetto all'orizzonte — vedi [Cosa la simulazione non fa ancora](../../financial-theory/technical-analysis/risk-metrics/simulation-modes.md#why-beta).
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="Il riquadro E se…? Simulazione: l'avviso beta e l'avvertenza sul modello, le cinque modalità con Storia rimescolata consigliata, orizzonte, percorsi e seed, e dopo Simula le cifre terminali, il cono e Cosa ha assunto questa simulazione" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="Il riquadro E se…? Simulazione: l'avvertenza sul modello, le cinque modalità con Storia rimescolata consigliata, orizzonte, percorsi e seed, e dopo Simula le cifre terminali, il cono e Cosa ha assunto questa simulazione" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---

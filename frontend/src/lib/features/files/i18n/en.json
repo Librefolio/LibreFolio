@@ -92,7 +92,8 @@
     },
     "deleteSkipped": "Files you are not allowed to delete were left in place",
     "backups": "Backups",
-    "systemUploader": "System"
+    "systemUploader": "System",
+    "docsHelp": "The files you uploaded: broker reports to import and the images LibreFolio uses, with the space they take."
   },
   "files": {
     "deleteFailed": "Failed to delete file"

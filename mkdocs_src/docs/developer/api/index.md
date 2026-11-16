@@ -42,7 +42,7 @@ The API is structured into routers, each handling a specific domain (all mounted
 - `/portfolio`: Portfolio analysis and metrics.
 - `/fx`: Foreign exchange operations — includes `/fx/providers` and `/fx/currencies`.
 - `/signals`: Domain-agnostic signal preview (`POST /signals/preview`).
-- `/risk`: Risk analysis — analytics catalog, queries, scenario catalog, and per-asset eligibility for a period (`POST /risk/eligibility`). The Asset Detail risk view and the *What if…?* simulation still carry a beta notice.
+- `/risk`: Risk analysis — analytics catalog, queries, scenario catalog, and per-asset eligibility for a period (`POST /risk/eligibility`). The Asset Detail risk view still carries a beta notice.
 - `/ai-export`: Versioned AI Export datasets and analyses.
 - `/tools`: Atomic Tool calculations — catalog, batch compute (`POST /tools/compute`), and per-process diagnostics; see [Tool plugins](../architecture/patterns/tool_plugins.md).
 - `/utilities`: Reference data (ISO currencies, etc.).
