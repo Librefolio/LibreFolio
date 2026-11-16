@@ -65,6 +65,8 @@
         ondelete?: (asset: AssetRow) => void;
         onmerge?: (asset: AssetRow) => void;
         onselectionchange?: (rows: AssetRow[]) => void;
+        /** Registers this table's DataTable with the owner, under the panel id (`browseSegment`); the owner keeps no `bind:this` of its own. Returns the function that takes this very registration away. */
+        registerTable?: (panelId: string, table: DataTable<AssetRow>) => () => void;
         /** Changes (by any step) when the owner wants the selection dropped. */
         clearSelectionToken?: number;
         /** F15 round-2 — stacked usage tables share column layout; this callback
@@ -76,7 +78,20 @@
         browseSegment?: AssetPanelId;
     }
 
-    let {data = [], loading = false, visiblePeriods = [], livePriceMap = new Map(), dateStart, dateEnd, onedit, onsync, onrefresh, ondelete, onmerge, onselectionchange, clearSelectionToken = 0, onColumnResize, storageKey = 'assetsTable', browseSegment}: Props = $props();
+    let {data = [], loading = false, visiblePeriods = [], livePriceMap = new Map(), dateStart, dateEnd, onedit, onsync, onrefresh, ondelete, onmerge, onselectionchange, registerTable, clearSelectionToken = 0, onColumnResize, storageKey = 'assetsTable', browseSegment}: Props = $props();
+
+    // The owner gets this table's DataTable by callback, not through `bind:this` on a record: that binding was left empty after the
+    // panels re-mounted, and the column menu and the width mirror then had no table to act on.
+    $effect(() => {
+        const table = tableRef;
+        const panelId = browseSegment;
+        if (!panelId || !table) return;
+        // Untracked: the owner's registry is state of its own, which must not become this effect's dependency (it would re-run on every
+        // write, and register again forever). Each registration is taken away by itself, so the order in which panels mount and are
+        // torn down cannot lose another table.
+        const unregister = untrack(() => registerTable?.(panelId, table));
+        return () => untrack(() => unregister?.());
+    });
 
     // The owner asks for the selection to be dropped by changing the token: this table clears its own DataTable.
     let seenClearToken = untrack(() => clearSelectionToken);
