@@ -45,7 +45,6 @@
         providers: string[];
         stepCount: number;
         isDirect: boolean;
-        searchText: string;
     }
 
     // =========================================================================
@@ -71,8 +70,10 @@
 
     let loading = $state(false);
     let error = $state<string | null>(null);
-    let directRoutes = $state<RouteOption[]>([]);
-    let chainRoutes = $state<RouteOption[]>([]);
+    // Raw, not deep: the routes are only ever replaced whole, and a deep proxy over tens of thousands of routes (a pair
+    // once the wave-1 banks are in) cost seconds at the picker's first read (lane 75, L2b).
+    let directRoutes = $state.raw<RouteOption[]>([]);
+    let chainRoutes = $state.raw<RouteOption[]>([]);
     let unusableProviders = $state<ProviderInfo[]>([]);
     /** A provider came without its currency list (backend could not read it): «no route» would be a guess, not an answer. */
     let providersUnavailable = $state(false);
@@ -123,7 +124,8 @@
 
     function matchesSearch(route: RouteOption): boolean {
         if (searchTokens.length === 0) return true;
-        return searchTokens.every((token) => route.searchText.includes(token));
+        const text = searchTextOf(route);
+        return searchTokens.every((token) => text.includes(token));
     }
 
     function matchesProviderSearch(prov: ProviderInfo): boolean {
@@ -219,12 +221,26 @@
         return parts.join(' ').toLowerCase();
     }
 
+    /** Each route's search text, built at the first search, not for every route of every pair (lane 75, L2b: ~60 ms
+     * for the ~37 000 routes of a pair once the wave-1 banks are in). Cleared when the routes are recomputed. */
+    const searchTexts = new Map<string, string>();
+
+    function searchTextOf(route: RouteOption): string {
+        let text = searchTexts.get(route.key);
+        if (text === undefined) {
+            text = buildSearchText(route.chainSteps, getCachedFxProviders());
+            searchTexts.set(route.key, text);
+        }
+        return text;
+    }
+
     async function computeRoutes(base: string, quote: string) {
         loading = true;
         error = null;
         try {
             const paths = await findConversionPaths(base, quote, 4);
             const providers = getCachedFxProviders();
+            searchTexts.clear();
             const direct: RouteOption[] = [];
             const chain: RouteOption[] = [];
             const usedProviderCodes = new Set<string>();
@@ -233,7 +249,6 @@
                 const provCodes = path.map((s) => s.provider);
                 provCodes.forEach((c) => usedProviderCodes.add(c));
                 const key = path.map((s) => `${s.from}-${s.to}:${s.provider}`).join('|');
-                const searchText = buildSearchText(path, providers);
 
                 if (path.length === 1) {
                     const provInfo = providers.find((p) => p.code === path[0].provider);
@@ -244,7 +259,6 @@
                         providers: provCodes,
                         stepCount: 1,
                         isDirect: true,
-                        searchText,
                     });
                 } else {
                     const intermediates = path.slice(0, -1).map((s) => s.to);
@@ -256,7 +270,6 @@
                         providers: provCodes,
                         stepCount: path.length,
                         isDirect: false,
-                        searchText,
                     });
                 }
             }
@@ -483,7 +496,7 @@
         const warning = getProviderWarning(prov.code);
         const level = getProviderWarningLevel(prov.code);
         let h = `<strong>${escapeHtml(prov.name)}</strong><br/>${escapeHtml(desc)}`;
-        if (warning) h += `<br/><br/><span class="${level === 'info' ? 'text-lf-info-on-inverse' : 'text-lf-warning-on-inverse'}">${NOTE_SIGN[level]} ${escapeHtml(warning)}</span>`;
+        if (warning) h += `<br/><br/><span class="${level === 'info' ? 'text-lf-info-on-inverse' : 'text-lf-warning-on-inverse'}">${escapeHtml(NOTE_SIGN[level])} ${escapeHtml(warning)}</span>`;
         return h;
     }
 </script>
