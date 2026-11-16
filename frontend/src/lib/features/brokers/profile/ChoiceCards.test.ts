@@ -4,6 +4,7 @@
  * The broker's operating profile uses it for the currency conversion and the tax regime; the option a profile starts
  * from carries the «default» badge. Props in, DOM and a callback out; read through test ids and states, never text.
  */
+import {createRawSnippet} from 'svelte';
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import {cleanup, fireEvent, render, screen, setupI18n} from '$test/component';
 import ChoiceCards from './ChoiceCards.svelte';
@@ -59,5 +60,41 @@ describe('ChoiceCards', () => {
         expect(screen.getAllByTestId('x-mode').map((item) => item.getAttribute('data-mode'))).toEqual(['administered', 'declarative']);
         expect(screen.getAllByTestId('x-mode-radio')).toHaveLength(2);
         expect(screen.getByTestId('x-modes').tagName).toBe('FIELDSET');
+    });
+
+    it('an option can be off with its badge, carry a warning note, and hold content in its card while chosen (G6-3)', async () => {
+        const onchange = vi.fn();
+        const extra = createRawSnippet((value: () => string, chosen: () => boolean) => ({
+            render: () => (chosen() ? `<span data-testid="probe-extra" data-for="${value()}"></span>` : '<span></span>'),
+        }));
+        render(ChoiceCards, {
+            name: 'probe',
+            legend: 'Fidelity',
+            options: [
+                {value: 'cost', label: 'Cost-aware', description: 'Moves for large deviations only.'},
+                {value: 'first', label: 'Target first', description: 'Pays any cost.', tone: 'warning'},
+                {value: 'sell', label: 'Invest and sell', disabled: true, badge: 'coming soon'},
+                {value: 'custom', label: 'Custom', wide: true},
+            ],
+            value: 'custom',
+            testid: 'probe',
+            extra,
+            onchange,
+        });
+        // Off: its radio disabled, its badge shown; a click changes nothing.
+        expect(card('sell').getAttribute('data-disabled')).toBe('true');
+        expect(card('sell').querySelector('[data-testid="probe-badge"]')).not.toBeNull();
+        expect((card('sell').querySelector('input[type="radio"]') as HTMLInputElement).disabled).toBe(true);
+        await fireEvent.click(card('sell').querySelector('input[type="radio"]') as HTMLInputElement);
+        expect(onchange).not.toHaveBeenCalled();
+        // The warning note says so.
+        expect(card('first').querySelector('[data-tone="warning"]')).not.toBeNull();
+        expect(card('cost').querySelector('[data-tone="warning"]')).toBeNull();
+        // The content shows in the chosen card only.
+        expect(screen.getAllByTestId('probe-extra').map((item) => item.getAttribute('data-for'))).toEqual(['custom']);
+        expect(card('custom').getAttribute('data-wide')).toBe('true');
+        // The content sits in the card but outside the radio's label: a field there would be a second labelable element.
+        expect(screen.getByTestId('probe-extra').closest('label')).toBeNull();
+        expect(screen.getByTestId('probe-extra').closest('[data-testid="probe-card"]')).toBe(card('custom'));
     });
 });
