@@ -183,3 +183,17 @@ describe('ContributionTable — row selection, to draw the positions chart under
         expect(onSelectionChange).not.toHaveBeenCalled();
     });
 });
+
+describe('ContributionTable — «Globale» (project 74): the brokers of a summed row', () => {
+    it('a row summed over two brokers shows their icons', async () => {
+        const summed = {...position(11, 1), broker_id: null, broker_name: null, broker_ids: [1, 2]};
+        render(ContributionTable, {
+            positions: [summed, position(22, 2)],
+            brokers: [
+                {id: 1, name: 'One'},
+                {id: 2, name: 'Two'},
+            ],
+        } as never);
+        await waitFor(() => expect(screen.getByTestId('broker-badge-stack').getAttribute('data-count')).toBe('2'));
+    });
+});

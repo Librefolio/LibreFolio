@@ -21,6 +21,7 @@
     import {ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {makePositionKey} from '$lib/features/dashboard/positionKey';
+    import BrokerBadgeStack from '$lib/components/ui/display/BrokerBadgeStack.svelte';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {priceFractionDigits} from '$lib/utils/core/formatFixed';
     import {maskableQuantity} from '$lib/utils/privacy/maskable';
@@ -40,6 +41,8 @@
         asset_type: string;
         broker_id?: number | (number | null)[] | null;
         broker_name?: string | (string | null)[] | null;
+        /** The brokers the row stands for (project 74): several for an asset summed over them («Globale»). */
+        broker_ids?: number[];
         quantity?: string | (string | null)[] | null;
         wac_per_unit?: string | (string | null)[] | null;
         current_price?: string | (string | null)[] | null;
@@ -86,6 +89,7 @@
         asset_type: string;
         broker_id?: number | null;
         broker_name?: string | null;
+        broker_ids?: number[];
     }
 
     interface Props {
@@ -120,6 +124,8 @@
         brokerId: number | null;
         brokerName: string;
         broker: BrokerLike | null;
+        /** «Globale» (project 74): the brokers of a row summed over several; one or none otherwise. */
+        brokers: BrokerLike[];
         currentValue: number | null;
         navWeight: number | null;
         unrealizedPnl: number | null;
@@ -194,6 +200,11 @@
         return translated === key ? fallback : translated;
     }
 
+    /** The brokers of a row's `broker_ids` (project 74), as the panel knows them; an unknown one by its id. */
+    function brokersOf(ids: number[] | undefined, brokerMap: Map<number, BrokerLike>): BrokerLike[] {
+        return (ids ?? []).map((id) => brokerMap.get(id) ?? {id, name: `#${id}`});
+    }
+
     /** The yield of a row that has none: the table reads a status, and this one says there is nothing to show. */
     const NO_YIELD: YieldOnCostLike = {status: 'unavailable', provenance: {window_start: '', window_end: ''}};
 
@@ -212,8 +223,15 @@
                     assetName: holding.asset_name,
                     assetType: holding.asset_type,
                     brokerId,
-                    brokerName: safeString(holding.broker_name) || broker?.name || '—',
+                    brokerName:
+                        safeString(holding.broker_name) ||
+                        broker?.name ||
+                        brokersOf(holding.broker_ids, brokerMap)
+                            .map((entry) => entry.name)
+                            .join(' · ') ||
+                        '—',
                     broker,
+                    brokers: brokersOf(holding.broker_ids, brokerMap),
                     currentValue,
                     // The backend's weight as it is (W7): null reads «—», never value / NAV computed here.
                     navWeight: safeDecimal(holding.nav_weight_percent),
@@ -250,6 +268,7 @@
                 brokerId,
                 brokerName: position.broker_name || (brokerId == null ? null : (brokerMap.get(brokerId)?.name ?? null)) || '—',
                 broker: brokerId == null ? null : (brokerMap.get(brokerId) ?? null),
+                brokers: brokersOf(position.broker_ids, brokerMap),
                 currentValue: null,
                 navWeight: null,
                 unrealizedPnl: null,
@@ -304,7 +323,10 @@
             sortable: true,
             getValue: (row) => row.brokerName,
             cell: (row) => {
-                const broker = row.broker;
+                // «Globale» (project 74): the brokers of an asset summed over several, as icons
+                if (row.brokers.length > 1) return {type: 'custom', component: BrokerBadgeStack, props: {brokers: row.brokers, countLabel: $_('dashboard.groupBy.brokerCount', {values: {count: row.brokers.length}})}};
+                // A «Globale» row of one broker names it in `broker_ids` only (project 74): its badge as a per-broker row's
+                const broker = row.broker ?? row.brokers[0] ?? null;
                 if (!broker && row.brokerId == null) return '—';
                 return {
                     type: 'custom',
