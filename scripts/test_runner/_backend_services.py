@@ -1969,6 +1969,14 @@ def services_enricher_contracts(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Enricher contract tests", verbose=verbose)
 
 
+def services_enricher_recognize(verbose: bool = False, test_names: list = None) -> bool:
+    """Test «recognize» in cascade over the enrichers (project 68, lot B4)."""
+    print_section("Services: Enricher Recognize")
+    print_info("Testing: backend/app/services/enrichers/recognize.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_recognize.py", test_names)
+    return run_command(cmd, "Enricher recognize tests", verbose=verbose)
+
+
 def services_enricher_bindings(verbose: bool = False, test_names: list = None) -> bool:
     """Test the enricher bindings of an asset: config and state, the installed enrichers, their default order (project 68, lot B3)."""
     print_section("Services: Enricher Bindings")
@@ -4038,6 +4046,16 @@ Note: No backend server required.
         services_enricher_bindings,
         name="Enricher Bindings",
         desc="Project 68 B3: save_config keeps the order given (row and stored text), {} clears, never touches state (a removed enricher keeps its state entry); update_state sets its codes, never touches config, a read finishing after the user's save keeps the user's config (and the reverse); load_enrichers leaves out assets without a row; installed_enrichers by code; default_order by degree, price provider, found order, code; enrichers_catalogue declarations and a default order for every AssetType",
+        isolation="pure",
+    )
+    # PURE: synthetic enrichers registered in the process's own EnricherRegistry (removed at teardown with their claims)
+    # and passed through plugins=; mockenrich read in test mode set with monkeypatch. No DB, no server, no network.
+    add_test(
+        cat,
+        "enricher-recognize",
+        services_enricher_recognize,
+        name="Enricher Recognize",
+        desc="Project 68 B4: recognize_cascade asks the enrichers covering the type with the first known identifier they accept (request order first); a strong identifier found and not known is learned before the round it starts (once, even from two sources); a different strong one is a conflict that adds and starts nothing; a ticker only reported; found never asked again, not found asked again with a learned identifier; a raising plugin is an error, the others answer; answers in order of arrival (threading.Event holds) and default_order keeps it; mockenrich ISIN → LEI learned",
         isolation="pure",
     )
     add_test(cat, "plugin-settings-crypto", services_plugin_settings_crypto, name="Plugin Settings Encryption", desc="AES-256-GCM blob and AAD, key id, subkeys, count and rekey on a sqlite3 copy (savepoint, idempotent, unreadable rows kept), key status (unusable key: totals)", isolation="pure")

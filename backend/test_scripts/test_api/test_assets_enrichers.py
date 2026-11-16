@@ -15,6 +15,16 @@ Test Suite: the enrichers and the profile of an asset through the asset routes (
    both (A4).
 4. ``profile`` on ``POST /assets``: ``user`` rows by the creator; an invalid value fails that item, the asset is not
    created.
+5. B4, ``POST /assets/enrichers/recognize`` (Server-Sent Events, each ``data: {json}`` with an ``event`` key): with an
+   ISIN and ``codes: ["mockenrich"]``, one ``enricher_result`` found with ``lei_of(isin)``, one ``identifier_learned``
+   LEI from mockenrich, and last ``done`` with ``found_order``, ``default_order`` (the enrichers covering the type) and
+   every identifier known. An ``UNKNOWN…`` ISIN is not found and teaches nothing; ``codes`` leaving mockenrich out
+   asks nothing (assumed: a code not installed is ignored); a type mockenrich does not cover asks nothing; empty
+   ``identifiers`` is a 422; without ``codes`` mockenrich is asked too (only its events read). Every other recognize
+   names ``codes``: an enricher of a later lot is never reached over the network with a fake ISIN.
+6. B4, ``GET /assets/enrichers/{code}/search``: mockenrich does not search → 400 with a detail; unknown code → 404.
+   ``POST /assets/enrichers/{code}/test``: mockenrich's answer for the binding (found, name, page, the LEI; not found
+   for ``UNKNOWN…``); unknown code → 404; an asset of the test bound to the same binding is unchanged after it.
 
 Every test registers its own user and creates its own assets under unique names; the rows of the database are read
 for those assets only (``asset_profile_updates``, ``asset_enrichers``, ``assets``). Bodies are raw dicts: a
@@ -26,6 +36,8 @@ and what the ``classification_params`` column holds when ``classification_params
 Red until B3: ``bindings.py`` raises ``NotImplementedError`` (``GET /assets/enrichers`` answers 500, the direct
 ``update_state`` raises); ``POST /assets`` ignores ``enrichers`` and ``profile``; a ``PATCH`` carrying ``profile`` fails
 the whole batch with ``patchFailed`` (``AttributeError`` while applying); ``GET /assets`` answers ``enrichers: null``.
+
+Red until B4: the three B4 routes raise ``NotImplementedError`` (500).
 """
 
 from __future__ import annotations
@@ -524,3 +536,245 @@ async def test_post_with_a_profile_writes_user_rows_and_an_invalid_value_fails_t
             print_success("valid profile written by the creator; invalid item not created")
         finally:
             await _delete(client, created)
+
+
+# =============================================================================
+# 5. B4: POST /assets/enrichers/recognize (Server-Sent Events)
+# =============================================================================
+
+#: The keys of an ``enricher_result`` event: the fields of ``FAEnricherRecognition``.
+RECOGNITION_KEYS = {"code", "identifier_type", "identifier", "status", "name", "page_url", "identifiers", "conflicts", "error"}
+
+
+def _fake_isin() -> str:
+    """An ISIN-shaped identifier no other test uses: mockenrich finds any identifier without the ``UNKNOWN`` prefix."""
+    return f"ZZ{uuid.uuid4().hex[:10].upper()}"
+
+
+def _mock_page(identifier_type: str, identifier: str) -> str | None:
+    from backend.app.services.enricher_providers.mockenrich.plugin import MockEnricher  # noqa: PLC0415 — the plugin's own rule, read in the test body
+    from backend.app.services.enrichers.base import EnricherBinding  # noqa: PLC0415
+
+    return MockEnricher().page_url(EnricherBinding(identifier_type=identifier_type, identifier=identifier))
+
+
+async def _recognize(client: httpx.AsyncClient, body: dict[str, Any]) -> list[dict[str, Any]]:
+    """The events of one recognize stream, read to its end: each ``data: {json}`` line, in order."""
+    resp = await client.post(f"{API_BASE}/assets/enrichers/recognize", json=body, timeout=TIMEOUT)
+    assert resp.status_code == 200, f"POST /assets/enrichers/recognize: {resp.status_code} {resp.text}"
+    assert resp.headers.get("content-type", "").startswith("text/event-stream"), f"a Server-Sent Events stream: {resp.headers.get('content-type')}"
+    events = [json.loads(line.removeprefix("data: ")) for line in resp.text.splitlines() if line.startswith("data: ")]
+    assert events and all("event" in event for event in events), f"every event names its kind: {resp.text[:1000]}"
+    assert [event["event"] for event in events].count("done") == 1 and events[-1]["event"] == "done", f"the stream ends with one done event: {events}"
+    return events
+
+
+def _results(events: list[dict[str, Any]], code: str | None = None) -> list[dict[str, Any]]:
+    return [event for event in events if event["event"] == "enricher_result" and (code is None or event.get("code") == code)]
+
+
+def _learned_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [event for event in events if event["event"] == "identifier_learned"]
+
+
+async def _catalogue_order(client: httpx.AsyncClient, asset_type: str) -> list[str]:
+    resp = await client.get(f"{API_BASE}/assets/enrichers", timeout=TIMEOUT)
+    assert resp.status_code == 200, f"GET /assets/enrichers: {resp.status_code} {resp.text}"
+    return resp.json()["default_order"][asset_type]
+
+
+@pytest.mark.asyncio
+async def test_recognize_streams_mockenrich_found_its_learned_lei_and_done(test_server):
+    """An ISIN, mockenrich only (``codes``: no other enricher is reached): one ``enricher_result`` found with the LEI, one
+    ``identifier_learned`` LEI from mockenrich, then ``done`` with the found order, the default order and every
+    identifier known."""
+    print_section("B4: POST /assets/enrichers/recognize")
+    from backend.app.services.enricher_providers.mockenrich.plugin import lei_of  # noqa: PLC0415 — the plugin's own rule, read in the test body
+
+    isin = _fake_isin()
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        events = await _recognize(client, {"asset_type": "ETF", "identifiers": {"ISIN": isin}, "codes": [MOCK_CODE]})
+        etf_order = await _catalogue_order(client, "ETF")
+
+    results = _results(events, MOCK_CODE)
+    assert len(results) == 1, f"one answer from mockenrich (found, not asked again with the LEI): {events}"
+    result = results[0]
+    assert RECOGNITION_KEYS <= set(result), f"the fields of FAEnricherRecognition: {sorted(result)}"
+    assert (result["identifier_type"], result["identifier"], result["status"]) == ("ISIN", isin, "found"), result
+    assert result["name"] == f"Mock {isin}" and result["page_url"] == _mock_page("ISIN", isin), result
+    assert result["identifiers"] == {"LEI": lei_of(isin)} and result["conflicts"] == {} and result["error"] is None, result
+    learned = _learned_events(events)
+    assert [(event["identifier_type"], event["identifier"], event["source"]) for event in learned] == [("LEI", lei_of(isin), MOCK_CODE)], f"the LEI learned from mockenrich: {learned}"
+    done = events[-1]
+    assert done["found_order"] == [MOCK_CODE], f"found_order: {done}"
+    assert done["identifiers"] == {"ISIN": isin, "LEI": lei_of(isin)}, f"every identifier known at the end: {done}"
+    assert MOCK_CODE in done["default_order"] and sorted(done["default_order"]) == sorted(etf_order), f"default_order: the enrichers covering ETF: {done['default_order']} vs {etf_order}"
+    print_success("found, LEI learned, done")
+
+
+@pytest.mark.asyncio
+async def test_recognize_an_unknown_isin_is_not_found_and_teaches_nothing(test_server):
+    from backend.app.services.enricher_providers.mockenrich.plugin import UNKNOWN_PREFIX  # noqa: PLC0415 — the plugin's own rule, read in the test body
+
+    unknown = f"{UNKNOWN_PREFIX}{uuid.uuid4().hex[:8].upper()}"
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        events = await _recognize(client, {"asset_type": "ETF", "identifiers": {"ISIN": unknown}, "codes": [MOCK_CODE]})
+
+    results = _results(events, MOCK_CODE)
+    assert [(result["identifier"], result["status"]) for result in results] == [(unknown, "not_found")], f"not found: {events}"
+    assert _learned_events(events) == [], f"nothing learned: {events}"
+    assert events[-1]["found_order"] == [] and events[-1]["identifiers"] == {"ISIN": unknown}, f"done: {events[-1]}"
+
+
+@pytest.mark.asyncio
+async def test_recognize_without_codes_asks_every_installed_enricher(test_server):
+    """No ``codes``: every installed enricher covering the type is asked, mockenrich among them. Only mockenrich's events
+    are read. Today mockenrich is the only enricher installed: the lot that adds a real one must make sure this test
+    never reaches its source over the network (a test mode of its own, or ``codes`` here)."""
+    from backend.app.services.enricher_providers.mockenrich.plugin import lei_of  # noqa: PLC0415 — the plugin's own rule, read in the test body
+
+    isin = _fake_isin()
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        events = await _recognize(client, {"asset_type": "ETF", "identifiers": {"ISIN": isin}})
+
+    assert [(result["identifier"], result["status"]) for result in _results(events, MOCK_CODE)] == [(isin, "found")], f"mockenrich is asked and finds the ISIN: {events}"
+    assert ("LEI", lei_of(isin), MOCK_CODE) in {(event["identifier_type"], event["identifier"], event["source"]) for event in _learned_events(events)}, f"the LEI learned from mockenrich: {events}"
+    assert MOCK_CODE in events[-1]["found_order"], f"done: {events[-1]}"
+
+
+@pytest.mark.asyncio
+async def test_recognize_codes_restricts_the_enrichers_asked(test_server):
+    """``codes`` naming an enricher not installed, mockenrich left out: mockenrich is not asked, nothing is found.
+    (Assumption: a code not installed is ignored, not refused.)"""
+    isin = _fake_isin()
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        events = await _recognize(client, {"asset_type": "ETF", "identifiers": {"ISIN": isin}, "codes": [f"lab_absent_{uuid.uuid4().hex[:8]}"]})
+
+    assert _results(events, MOCK_CODE) == [], f"mockenrich is left out by codes: {events}"
+    assert _results(events) == [] and _learned_events(events) == [], f"no enricher asked: {events}"
+    assert events[-1]["found_order"] == [] and events[-1]["identifiers"] == {"ISIN": isin}, f"done: {events[-1]}"
+
+
+@pytest.mark.asyncio
+async def test_recognize_asks_only_the_enrichers_covering_the_type(test_server):
+    """INDEX, which mockenrich does not cover: no answer, and the default order of INDEX."""
+    isin = _fake_isin()
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        events = await _recognize(client, {"asset_type": "INDEX", "identifiers": {"ISIN": isin}, "codes": [MOCK_CODE]})
+        index_order = await _catalogue_order(client, "INDEX")
+
+    assert _results(events, MOCK_CODE) == [], f"mockenrich does not cover INDEX: {events}"
+    assert events[-1]["found_order"] == [] and sorted(events[-1]["default_order"]) == sorted(index_order), f"done: {events[-1]}"
+
+
+@pytest.mark.asyncio
+async def test_recognize_with_no_identifiers_is_a_422(test_server):
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        resp = await client.post(f"{API_BASE}/assets/enrichers/recognize", json={"asset_type": "ETF", "identifiers": {}}, timeout=TIMEOUT)
+
+    assert resp.status_code == 422, f"empty identifiers: {resp.status_code} {resp.text}"
+
+
+# =============================================================================
+# 6. B4: GET /assets/enrichers/{code}/search and POST /assets/enrichers/{code}/test
+# =============================================================================
+
+
+def _absent_code() -> str:
+    return f"lab_absent_{uuid.uuid4().hex[:8]}"
+
+
+@pytest.mark.asyncio
+async def test_search_on_an_enricher_that_does_not_search_is_a_400(test_server):
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        resp = await client.get(f"{API_BASE}/assets/enrichers/{MOCK_CODE}/search", params={"q": "world"}, timeout=TIMEOUT)
+
+    assert resp.status_code == 400, f"mockenrich does not search: {resp.status_code} {resp.text}"
+    detail = resp.json().get("detail")
+    assert isinstance(detail, str) and detail.strip(), f"a detail that says why: {resp.text}"
+
+
+@pytest.mark.asyncio
+async def test_search_on_an_unknown_enricher_is_a_404(test_server):
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        resp = await client.get(f"{API_BASE}/assets/enrichers/{_absent_code()}/search", params={"q": "world"}, timeout=TIMEOUT)
+
+    assert resp.status_code == 404, f"an enricher not installed: {resp.status_code} {resp.text}"
+    assert resp.json().get("detail"), resp.text
+
+
+@pytest.mark.asyncio
+async def test_test_route_recognizes_one_binding_on_mockenrich(test_server):
+    print_section("B4: POST /assets/enrichers/{code}/test")
+    from backend.app.services.enricher_providers.mockenrich.plugin import lei_of  # noqa: PLC0415 — the plugin's own rule, read in the test body
+
+    isin = _fake_isin()
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        resp = await client.post(f"{API_BASE}/assets/enrichers/{MOCK_CODE}/test", json={"binding": {"identifier_type": "ISIN", "identifier": isin}}, timeout=TIMEOUT)
+
+    assert resp.status_code == 200, f"POST test: {resp.status_code} {resp.text}"
+    body = resp.json()
+    assert (body["code"], body["identifier_type"], body["identifier"], body["status"]) == (MOCK_CODE, "ISIN", isin, "found"), body
+    assert body["name"] == f"Mock {isin}" and body["page_url"] == _mock_page("ISIN", isin), body
+    assert body["identifiers"] == {"LEI": lei_of(isin)} and body["conflicts"] == {} and body["error"] is None, body
+    print_success("mockenrich recognizes the binding")
+
+
+@pytest.mark.asyncio
+async def test_test_route_answers_not_found_for_an_unknown_identifier(test_server):
+    from backend.app.services.enricher_providers.mockenrich.plugin import UNKNOWN_PREFIX  # noqa: PLC0415 — the plugin's own rule, read in the test body
+
+    unknown = f"{UNKNOWN_PREFIX}{uuid.uuid4().hex[:8].upper()}"
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        resp = await client.post(f"{API_BASE}/assets/enrichers/{MOCK_CODE}/test", json={"binding": {"identifier_type": "ISIN", "identifier": unknown}}, timeout=TIMEOUT)
+
+    assert resp.status_code == 200, f"POST test: {resp.status_code} {resp.text}"
+    body = resp.json()
+    assert (body["code"], body["identifier"], body["status"], body["identifiers"]) == (MOCK_CODE, unknown, "not_found", {}), body
+
+
+@pytest.mark.asyncio
+async def test_test_route_on_an_unknown_enricher_is_a_404(test_server):
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        resp = await client.post(f"{API_BASE}/assets/enrichers/{_absent_code()}/test", json={"binding": {"identifier_type": "ISIN", "identifier": _fake_isin()}}, timeout=TIMEOUT)
+
+    assert resp.status_code == 404, f"an enricher not installed: {resp.status_code} {resp.text}"
+    assert resp.json().get("detail"), resp.text
+
+
+@pytest.mark.asyncio
+async def test_test_route_writes_nothing_on_an_asset_bound_to_the_same_binding(test_server):
+    """An asset of this test bound to mockenrich with a state: after the «test» of the same binding, its config, state
+    and updated_at are as before."""
+    from backend.app.services.enrichers import bindings  # noqa: PLC0415 — the service writing the state, as a read will
+
+    isin = _fake_isin()
+    binding = {"identifier_type": "ISIN", "identifier": isin}
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        asset_id = await _create(client, _item("ENR_TEST_RO", enrichers={MOCK_CODE: binding}))
+        try:
+            async with AsyncSession(get_async_engine()) as session:
+                await bindings.update_state(session, asset_id, {MOCK_CODE: {"read_on": "2026-11-10", "outcome": "ok"}})
+                await session.commit()
+            before = (await _read(client, asset_id)).get("enrichers")
+            assert before is not None and before["config"] == {MOCK_CODE: binding} and before["state"], f"barrier: the asset is bound, with a state: {before}"
+
+            resp = await client.post(f"{API_BASE}/assets/enrichers/{MOCK_CODE}/test", json={"binding": binding}, timeout=TIMEOUT)
+
+            assert resp.status_code == 200 and resp.json()["status"] == "found", f"barrier: the test ran: {resp.status_code} {resp.text}"
+            after = (await _read(client, asset_id)).get("enrichers")
+            assert after == before, f"the test writes nothing: {before} → {after}"
+        finally:
+            await _delete(client, [asset_id])
