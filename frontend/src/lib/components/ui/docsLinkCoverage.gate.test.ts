@@ -38,6 +38,21 @@ const PANELS: ReadonlyArray<readonly [string, string, string]> = [
     ['lib/features/settings/tabs/AboutTab.svelte', 'user/settings/about/', 'settings.docsHelp.about'],
     ['lib/features/settings/tabs/UsersTab.svelte', 'admin/users/', 'settings.docsHelp.users'],
     ['lib/features/settings/security/SecurityTab.svelte', 'admin/configuration_security/', 'settings.docsHelp.security'],
+    // Group 1 — Overview tab of Dashboard and Broker (the KPIs carry theirs since before RN-13).
+    ['lib/features/dashboard/GrowthChart.svelte', 'user/dashboard/charts/', 'dashboard.docsHelp.growth'],
+    ['lib/features/dashboard/AllocationPanel.svelte', 'user/dashboard/charts/', 'dashboard.docsHelp.allocation'],
+    // Group 2 — Positions tab: the panel (its return chart and «other period effects» are parts of it, same page) and the lots analysis.
+    ['lib/features/dashboard/PositionsPanel.svelte', 'user/dashboard/positions/', 'dashboard.docsHelp.positions'],
+    ['lib/features/brokers/lots/LotsAnalysisPanel.svelte', 'user/dashboard/positions/', 'brokers.docsHelp.lots'],
+    // Group 6 — the assets list and the lab's selection card (the lab's sections carry their RiskLevelSection icons).
+    ['routes/(app)/assets/+page.svelte', 'user/assets/', 'assets.docsHelp.list'],
+    ['lib/features/risk/AssetSetRiskPanel.svelte', 'user/assets/correlation/', 'risk.docsHelp.assetSet'],
+    // Group 7 — Asset Detail, in its components only (the page itself is lane 68's and RN-17's).
+    ['lib/features/assets/detail/AssetDetailHeader.svelte', 'user/assets/detail/', 'assetDetail.docsHelp.header'],
+    ['lib/features/assets/detail/AssetDetailMeasuresSection.svelte', 'user/assets/detail/measures/', 'assetDetail.docsHelp.measures'],
+    ['lib/features/assets/detail/AssetDetailMetadataPanel.svelte', 'user/assets/detail/classification/', 'assetDetail.docsHelp.metadata'],
+    // The data editor: one icon at the right of its Prices | Events tab row (the page covers both; its title is the page's).
+    ['lib/features/assets/AssetDataEditorSection.svelte', 'user/assets/detail/data-editor/', 'assetDetail.docsHelp.dataEditor'],
 ];
 
 function escapeRegExp(text: string): string {
