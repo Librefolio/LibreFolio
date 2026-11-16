@@ -155,7 +155,13 @@ def _posted_units_term(
     return quantum * units
 
 
-def add_ledger_balance_constraints(model: Model, scenario: ExactPlannerScenario, facts: ScenarioFacts, variables: CompiledVariables) -> dict[tuple[str, str], list[LinearTerm]]:
+def add_ledger_balance_constraints(
+    model: Model,
+    scenario: ExactPlannerScenario,
+    facts: ScenarioFacts,
+    variables: CompiledVariables,
+    reserves_by_cell: dict[tuple[str, str], list[LinearTerm]] | None = None,
+) -> dict[tuple[str, str], list[LinearTerm]]:
     """``NO_SHORT_OR_LEVERAGE`` folding in ``FX_SOURCE_CASH``: every
     Broker×currency ledger cell's final spendable balance must stay >= 0.
 
@@ -201,10 +207,10 @@ def add_ledger_balance_constraints(model: Model, scenario: ExactPlannerScenario,
 
     for route in scenario.order_routes:
         if route.side == "buy":
-            _add_buy_terms(model, route, facts, variables, cells, reserve)
+            _add_buy_terms(model, route, facts, variables, cells, reserve, reserves_by_cell)
 
     for spec in facts.fx_decisions:
-        _add_fx_terms(model, spec, facts, variables, cells, reserve)
+        _add_fx_terms(model, spec, facts, variables, cells, reserve, reserves_by_cell)
 
     # Transfers between Brokers (A2): exact flows, as funding is, out of the source cell and into the destination cell.
     if variables.pool is not None:
@@ -221,7 +227,7 @@ def add_ledger_balance_constraints(model: Model, scenario: ExactPlannerScenario,
     return cells
 
 
-def _add_buy_terms(model: Model, route: ExactOrderRoute, facts: ScenarioFacts, variables: CompiledVariables, cells: dict, reserve: dict[str, float] | None) -> None:
+def _add_buy_terms(model: Model, route: ExactOrderRoute, facts: ScenarioFacts, variables: CompiledVariables, cells: dict, reserve: dict[str, float] | None, reserves_by_cell: dict | None = None) -> None:
     """A buy's cost and fee out of its quote currency's cell: posted (rounded, the PAC) or continuous less their reserve (the
     Rebalancer, ``reserve`` given)."""
     quote_currency = facts.assets_by_id[route.asset_id]
@@ -240,8 +246,10 @@ def _add_buy_terms(model: Model, route: ExactOrderRoute, facts: ScenarioFacts, v
         if fee_upper > 0:
             _require_fee_on_every_order(facts, route)
         active = variables.buy_active[route.route_id]
-        cells[(route.broker_id, quote_currency)].append(-(notional_expr + reserve[f"buy-debit:{route.route_id}"] * active))
-        cells[(route.broker_id, quote_currency)].append(-(variables.buy_fee[route.route_id] + (reserve[f"buy-fee:{route.route_id}"] * active if fee_upper > 0 else 0.0)))
+        kept = reserve[f"buy-debit:{route.route_id}"] * active + (reserve[f"buy-fee:{route.route_id}"] * active if fee_upper > 0 else 0.0)
+        cells[(route.broker_id, quote_currency)].append(-(notional_expr + variables.buy_fee[route.route_id] + kept))
+        if reserves_by_cell is not None:
+            reserves_by_cell[(route.broker_id, quote_currency)].append(kept)
         return
     cells[(route.broker_id, quote_currency)].append(
         -_posted_units_term(
@@ -276,7 +284,7 @@ def _require_fee_on_every_order(facts: ScenarioFacts, route: ExactOrderRoute) ->
     raise LedgerPostingScopeError(f"fee schedule {route.fee_schedule_id} can charge some active orders of route {route.route_id} and not others")
 
 
-def _add_fx_terms(model: Model, spec: FxDecisionSpec, facts: ScenarioFacts, variables: CompiledVariables, cells: dict, reserve: dict[str, float] | None) -> None:
+def _add_fx_terms(model: Model, spec: FxDecisionSpec, facts: ScenarioFacts, variables: CompiledVariables, cells: dict, reserve: dict[str, float] | None, reserves_by_cell: dict | None = None) -> None:
     """A conversion: its exact debit out of the source cell, its credit into the destination cell, posted (the PAC) or
     continuous less its reserve (the Rebalancer, ``reserve`` given)."""
     fx_decision = variables.quanta[spec.decision_id]
@@ -289,7 +297,10 @@ def _add_fx_terms(model: Model, spec: FxDecisionSpec, facts: ScenarioFacts, vari
         active = variables.fx_active[spec.decision_id]
         credit = debit_expr * effective_rate
         model.addCons(credit >= facts.currency_quantum[spec.destination_currency] * active, name=f"fx_credit_positive:{spec.key}")
-        cells[(spec.broker_id, spec.destination_currency)].append(credit - reserve[f"fx-credit:{spec.key}"] * active)
+        kept = reserve[f"fx-credit:{spec.key}"] * active
+        cells[(spec.broker_id, spec.destination_currency)].append(credit - kept)
+        if reserves_by_cell is not None:
+            reserves_by_cell[(spec.broker_id, spec.destination_currency)].append(kept)
         return
     credit_upper = facts.currency_quantum[spec.source_currency] * fx_decision.getUbOriginal() * effective_rate
     cells[(spec.broker_id, spec.destination_currency)].append(

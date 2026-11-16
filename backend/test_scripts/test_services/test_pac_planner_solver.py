@@ -1053,7 +1053,7 @@ def test_a_rejected_tie_break_is_reported_unfinished_and_keeps_the_best_plan(mon
     best = object()
     cascade.best, cascade.best_values = best, tuple(Fraction(0) for _ in stages)
     worse = (Fraction(1), *(Fraction(0) for _ in stages[1:]))
-    monkeypatch.setattr(solver_module, "_exact_stage_values", lambda _cascade, _candidate: worse)
+    monkeypatch.setattr(solver_module, "_replay", lambda _cascade, _candidate: (worse, True))
 
     solver_module._take_candidate(cascade, object(), 2)
     assert cascade.best is best and cascade.rejected == {2}

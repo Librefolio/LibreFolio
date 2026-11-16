@@ -344,3 +344,140 @@ def test_four_brokers_and_two_balanced_pairs_count_three_on_both_sides_with_no_a
     orders = sum(1 for item in result.candidate.decisions if item.decision_id.startswith("buy:") and item.quanta)
     assert exact == orders + 3
     assert round(count_stage.primal) == exact
+
+
+# ---------------------------------------------------------------------------
+# A cash maximum the replay refuses by a cent (the consultant's «cashmax», spec §16.11)
+# ---------------------------------------------------------------------------
+
+
+def _t4_with_a_cash_maximum() -> ExactPlannerScenario:
+    """T4 with B at 9.995 € a unit, bought in whole units: its debit rounds up, so it keeps a one-cent reserve in the model
+    (row 6). The cash cell has a maximum of 175 €. Two units of B cost 19.99 € exactly and a 5 € fee: the cell ends at
+    175.01 € in the replay, one cent above its maximum, while the model, which takes the reserve out, sees 175.00 €."""
+    return cases.scenario(
+        "t4-cash-maximum",
+        holdings={"asset:a": R(5000), "asset:b": R(4800)},
+        cash=R(200),
+        weights={"asset:a": cases.HALF, "asset:b": cases.HALF},
+        prices={"asset:b": R(1999, 200)},
+        whole_units=frozenset({"asset:b"}),
+        cash_entries=(pac_models.ExactCashEntry(broker_id=cases.BROKER, currency="EUR", minimum=None, maximum=pac_models.ExactLimit(kind="amount", value=R(175)), weight=R(0)),),
+    )
+
+
+def test_a_cash_maximum_holds_in_the_replay_not_only_in_the_model() -> None:
+    """The maximum's row reads the highest cash the replay can post: the model's cash plus the reserves the cell keeps back,
+    since a rounding never adds cash. Two units of B would leave 175.01 €: the model must refuse them."""
+    from pyscipopt import Model  # noqa: PLC0415, F401 - SCIP is what compile_policy_program builds
+
+    scenario = _t4_with_a_cash_maximum()
+    view = build_exact_policy_view(scenario)
+    two_of_b = {cases.buy_decision("asset:b"): 2}
+    replay = evaluate_exact_candidate(scenario, view, _candidate(view, two_of_b))
+    assert "ENTRY_VALUE_WITHIN_LIMITS" in replay.conflict_codes, "PREMISE: the replay refuses two units of B by a cent"
+
+    program = compile_policy_program(scenario, view)
+    for access in view.decisions:
+        variable = program.variables.quanta[access.decision_id]
+        program.model.chgVarLb(variable, two_of_b.get(access.decision_id, 0))
+        program.model.chgVarUb(variable, two_of_b.get(access.decision_id, 0))
+    program.model.setObjective(program.objective_stages[0].expression, "minimize")
+    program.model.optimize()
+    assert program.model.getStatus() == "infeasible"
+
+
+def test_a_cash_maximum_far_below_the_cell_holds_within_a_cent() -> None:
+    """Seen on «cashmax», seed 1: SCIP accepts a row within a tolerance relative to the side it sees, and the cell's own
+    cash moves to that side. Here the cell holds 19 996.01 € and its maximum is 2 000 €: the row reads «decisions ≤
+    −1 799 601 cents», and a cent too many passes. 1 800 units of B (17 991 € and a 5 € fee) leave 2 000.01 € in the
+    replay: the margin, taken on that side, makes the model refuse them."""
+    scenario = cases.scenario(
+        "t4-cash-maximum-far",
+        holdings={"asset:a": R(5000), "asset:b": R(4800)},
+        cash=R(1999601, 100),
+        weights={"asset:a": cases.HALF, "asset:b": cases.HALF},
+        prices={"asset:b": R(1999, 200)},
+        whole_units=frozenset({"asset:b"}),
+        cash_entries=(pac_models.ExactCashEntry(broker_id=cases.BROKER, currency="EUR", minimum=None, maximum=pac_models.ExactLimit(kind="amount", value=R(2000)), weight=R(0)),),
+    )
+    view = build_exact_policy_view(scenario)
+    bought = {cases.buy_decision("asset:b"): 1800}
+    replay = evaluate_exact_candidate(scenario, view, _candidate(view, bought))
+    assert "ENTRY_VALUE_WITHIN_LIMITS" in replay.conflict_codes, "PREMISE: the replay refuses 1 800 units of B by a cent"
+
+    program = compile_policy_program(scenario, view)
+    for access in view.decisions:
+        variable = program.variables.quanta[access.decision_id]
+        program.model.chgVarLb(variable, bought.get(access.decision_id, 0))
+        program.model.chgVarUb(variable, bought.get(access.decision_id, 0))
+    program.model.setObjective(program.objective_stages[0].expression, "minimize")
+    program.model.optimize()
+    assert program.model.getStatus() == "infeasible"
+
+
+def test_a_cash_minimum_far_above_holds_within_a_cent() -> None:
+    """The minimum's mirror of the case above: the cell holds 20 004.99 € and its minimum is 2 000 €, the row «decisions ≥
+    −1 800 499 cents». B at 10 € in whole units and the fixed 5 € fee never round, so the model's cash is the replay's:
+    1 800 units of B leave 1 999.99 €, a cent short, within SCIP's tolerance of that side. The margin refuses them."""
+    scenario = cases.scenario(
+        "t4-cash-minimum-far",
+        holdings={"asset:a": R(5000), "asset:b": R(4800)},
+        cash=R(2000499, 100),
+        weights={"asset:a": cases.HALF, "asset:b": cases.HALF},
+        prices={"asset:b": R(10)},
+        whole_units=frozenset({"asset:b"}),
+        cash_entries=(pac_models.ExactCashEntry(broker_id=cases.BROKER, currency="EUR", minimum=pac_models.ExactLimit(kind="amount", value=R(2000)), maximum=None, weight=R(0)),),
+    )
+    view = build_exact_policy_view(scenario)
+    bought = {cases.buy_decision("asset:b"): 1800}
+    replay = evaluate_exact_candidate(scenario, view, _candidate(view, bought))
+    assert "ENTRY_VALUE_WITHIN_LIMITS" in replay.conflict_codes, "PREMISE: the replay refuses 1 800 units of B by a cent"
+
+    program = compile_policy_program(scenario, view)
+    for access in view.decisions:
+        variable = program.variables.quanta[access.decision_id]
+        program.model.chgVarLb(variable, bought.get(access.decision_id, 0))
+        program.model.chgVarUb(variable, bought.get(access.decision_id, 0))
+    program.model.setObjective(program.objective_stages[0].expression, "minimize")
+    program.model.optimize()
+    assert program.model.getStatus() == "infeasible"
+
+
+def test_a_candidate_the_replay_refuses_never_replaces_the_plan_held() -> None:
+    """Seen on «cashmax», seed 0: a tie-break's plan left a cash cell a cent above its maximum, became the best plan all the
+    same, and the planner raised ``ExactReplayRejectedError``: no plan for the user. A candidate whose replay is refused
+    (and that no rounding top-up repairs) is flagged and never replaces the plan already held."""
+    from backend.app.services.pac_allocator import solver as solver_module  # noqa: PLC0415
+
+    scenario = _t4_with_a_cash_maximum()
+    view = build_exact_policy_view(scenario)
+    program = compile_policy_program(scenario, view)
+    cascade = solver_module._Cascade(program=program, checkpoint=None, reports=[])
+    held = _candidate(view, {cases.buy_decision("asset:b"): 3})  # 29.99 € and the fee: the cell ends at 165.01 €
+    solver_module._take_candidate(cascade, held, 1)
+    assert cascade.best is held and cascade.anomaly is None
+
+    solver_module._take_candidate(cascade, _candidate(view, {cases.buy_decision("asset:b"): 2}), 1)
+    assert cascade.best is held
+    assert cascade.anomaly is not None and "exact replay" in cascade.anomaly
+
+
+def test_a_plan_the_replay_refuses_found_first_gives_way_to_any_publishable_one() -> None:
+    """The first plan found is held even when its replay is refused, for want of another; it is no yardstick. A publishable
+    plan found later replaces it, in the tail too, however its values compare: two units of B score better than three,
+    but they leave the cell a cent above its maximum."""
+    from backend.app.services.pac_allocator import solver as solver_module  # noqa: PLC0415
+
+    scenario = _t4_with_a_cash_maximum()
+    view = build_exact_policy_view(scenario)
+    program = compile_policy_program(scenario, view)
+    cascade = solver_module._Cascade(program=program, checkpoint=None, reports=[])
+    refused = _candidate(view, {cases.buy_decision("asset:b"): 2})
+    solver_module._take_candidate(cascade, refused, 1)
+    assert cascade.best is refused and cascade.best_values is None, "a refused plan is held without values"
+
+    cascade.in_tail = True
+    publishable = _candidate(view, {cases.buy_decision("asset:b"): 3})
+    solver_module._take_candidate(cascade, publishable, 2)
+    assert cascade.best is publishable

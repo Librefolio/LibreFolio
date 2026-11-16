@@ -12,6 +12,7 @@ the constant value zero; a zero variable stands for it so a violated bound stays
 
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
@@ -50,6 +51,7 @@ def add_limit_constraints(
     variables: CompiledVariables,
     cells: dict[tuple[str, str], list[LinearTerm]],
     limits: ResolvedLimits | None,
+    reserves_by_cell: dict[tuple[str, str], list[LinearTerm]] | None = None,
 ) -> None:
     """``ENTRY_VALUE_WITHIN_LIMITS`` for every limited entry, written so that SCIP cannot accept what the replay refuses.
 
@@ -73,7 +75,7 @@ def add_limit_constraints(
     current = current_value_by_asset(scenario, index)
     for entry, bounds in limits.by_entry.items():
         if entry.kind == "cash":
-            _cash_rows(model, index, facts, cells, zero, entry, bounds)
+            _cash_rows(model, index, facts, cells, zero, entry, bounds, (reserves_by_cell or {}).get((entry.broker_id, entry.currency), []))
         elif len(buy_routes[entry.asset_id]) == 1:
             _single_route_bounds(model, index, variables, zero, entry, bounds, buy_routes[entry.asset_id][0], current.get(entry.asset_id, ExactRatio(0)))
         else:
@@ -94,21 +96,37 @@ def _single_route_bounds(model: Model, index, variables: CompiledVariables, zero
     model.chgVarLb(variable, lower)
 
 
-def _cash_rows(model: Model, index, facts: ScenarioFacts, cells, zero, entry: LimitEntry, bounds: ResolvedBounds) -> None:
-    """A cash cell in whole quanta of its currency, bounds floored or ceiled exactly in those units."""
+def _cash_rows(model: Model, index, facts: ScenarioFacts, cells, zero, entry: LimitEntry, bounds: ResolvedBounds, reserves: list | None = None) -> None:
+    """A cash cell in whole quanta of its currency, bounds floored or ceiled exactly in those units.
+
+    SCIP accepts a row within a tolerance relative to the side it sees, and the cell's constant (its own cash) moves to that
+    side: a cell holding 17 350 € with a maximum of 2 000 € is the row «decisions ≤ −1 535 000 units», and a violation of
+    1.5 units passes (the consultant's «cashmax», lot CR of project 67: a cell a cent above its maximum in the replay). So
+    the margin of ``ceil(1e-6 · N)`` units is taken on the side SCIP holds once the row is written, not on the bound alone.
+
+    The Rebalancer's cell is continuous, each posting less the reserve it keeps for its rounding (row 6): its value is the
+    lowest cash the replay can post. A minimum reads it as it is. A maximum reads the highest cash the replay can post, the
+    cell with its ``reserves`` back in, since a rounding never adds cash. The replay's cash is a whole number of quanta, so
+    a row held within SCIP's tolerance of a whole bound still holds the bound."""
     quantum = facts.currency_quantum[entry.currency]
     units = sum(cells.get((entry.broker_id, entry.currency), []), zero) / quantum
     per_unit = to_valuation(index, index.currency_quantum[entry.currency], entry.currency)  # valuation currency of one quantum
     if bounds.maximum is not None:
-        top = _floor(bounds.maximum / per_unit)
-        if top > _UNITS_WITH_RELATIVE_SLACK:
-            top -= -(-top // _UNITS_WITH_RELATIVE_SLACK)
-        model.addCons(units <= top, name=f"entry_limit_max:{entry.key}")
+        highest = units + sum(reserves, 0.0) / quantum if reserves else units
+        row = model.addCons(highest <= _floor(bounds.maximum / per_unit), name=f"entry_limit_max:{entry.key}")
+        side = model.getRhs(row)
+        model.chgRhs(row, side - _tolerance_margin(side))
     if bounds.minimum is not None:
-        bottom = _ceil(bounds.minimum / per_unit)
-        if bottom > _UNITS_WITH_RELATIVE_SLACK:
-            bottom += -(-bottom // _UNITS_WITH_RELATIVE_SLACK)
-        model.addCons(units >= bottom, name=f"entry_limit_min:{entry.key}")
+        row = model.addCons(units >= _ceil(bounds.minimum / per_unit), name=f"entry_limit_min:{entry.key}")
+        side = model.getLhs(row)
+        model.chgLhs(row, side + _tolerance_margin(side))
+
+
+def _tolerance_margin(side: float) -> int:
+    """The whole units SCIP's relative tolerance can let through on a row whose side is ``side`` units: none up to 10^6,
+    ``ceil(|side| / 10^6)`` above."""
+    magnitude = abs(side)
+    return -(-math.ceil(magnitude) // _UNITS_WITH_RELATIVE_SLACK) if magnitude > _UNITS_WITH_RELATIVE_SLACK else 0
 
 
 def _float_rows(model: Model, value: LinearTerm, entry: LimitEntry, bounds: ResolvedBounds) -> None:

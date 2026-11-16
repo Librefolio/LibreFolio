@@ -74,7 +74,8 @@ from pyscipopt import Model
 from backend.app.logging_config import get_logger
 from backend.app.services.pac_allocator.compiler import CompiledProgram
 from backend.app.services.pac_allocator.constraints.pool import derive_transfer_quanta
-from backend.app.services.pac_allocator.evaluation.evaluator import evaluate_exact_candidate
+from backend.app.services.pac_allocator.evaluation.errors import ExactReplayRejectedError
+from backend.app.services.pac_allocator.evaluation.evaluator import evaluate_exact_candidate, rounding_top_ups
 from backend.app.services.pac_allocator.evaluation.solver_view import solver_view_objectives
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
@@ -530,10 +531,28 @@ def _exact_stage_values(cascade: _Cascade, candidate: CandidateActionVector) -> 
     (``evaluation.solver_view``): continuous, each posting less its reserve,
     as SCIP's model has them; the published values stay the replay's.
     """
+    return _replay(cascade, candidate)[0]
+
+
+def _replay(cascade: _Cascade, candidate: CandidateActionVector) -> tuple[tuple[Fraction, ...] | None, bool]:
+    """``candidate``'s exact stage values (``_exact_stage_values``) and whether the plan can be published: its replay is
+    feasible, or only a rounding left cash short, which top-ups repair (``evaluator.rounding_top_ups``, the planner's own
+    rule). One replay serves both."""
     program = cascade.program
     evaluation = evaluate_exact_candidate(program.scenario, program.view, candidate, checkpoint=cascade.checkpoint)
     if not evaluation.candidate_valid:
-        return None
+        return None, False
+    try:
+        rounding_top_ups(program.scenario, evaluation)
+    except ExactReplayRejectedError:
+        publishable = False
+    else:
+        publishable = True
+    return _stage_values(cascade, candidate, evaluation), publishable
+
+
+def _stage_values(cascade: _Cascade, candidate: CandidateActionVector, evaluation) -> tuple[Fraction, ...]:
+    program = cascade.program
     # The Rebalancer's money stages as the solver sees them (row 6 of lot CR): SCIP's model keeps money continuous, each
     # posting less its reserve, so pins, D4 and the bound check compare like with like. The PAC's are the replay's own.
     value_by_code = solver_view_objectives(program.scenario, program.view, evaluation)
@@ -556,12 +575,21 @@ def _take_candidate(cascade: _Cascade, candidate: CandidateActionVector, ordinal
     After that, a plan replaces the best one only if its exact stage values
     are no worse, compared one stage at a time in cascade order; a plan that
     fails its exact replay never does.
+
+    A plan the replay refuses, and that no rounding top-up repairs, never
+    replaces a plan already held, wherever it is found (the consultant's
+    «cashmax», lot CR of project 67: a tie-break's plan a cent above a cash
+    maximum became the best one, and the planner raised instead of publishing
+    the plan it held). It is flagged as an anomaly. Found first, it is held
+    without values, like a plan that fails its replay: any publishable plan
+    found later replaces it.
     """
-    values = _exact_stage_values(cascade, candidate)
-    if values is None:
+    values, publishable = _replay(cascade, candidate)
+    if values is None or not publishable:
         cascade.flag(f"the plan found at stage ordinal {ordinal} failed its exact replay")
-        if cascade.in_tail:
+        if cascade.in_tail or cascade.best is not None:
             return
+        values = None  # held for want of another, never a yardstick: any publishable plan replaces it
     elif cascade.in_tail and cascade.best_values is not None and values > cascade.best_values:
         return
     elif cascade.best_values is not None and _worse_before_tie_break(cascade.program.objective_stages, ordinal, values, cascade.best_values):

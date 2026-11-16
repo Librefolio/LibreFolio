@@ -72,6 +72,7 @@ epigraph's Big-M and in the posted-fee units alike. Two defects found on
 
 from __future__ import annotations
 
+from collections import defaultdict
 from typing import TYPE_CHECKING
 
 from backend.app.services.pac_allocator.constraints.cells import (
@@ -132,12 +133,14 @@ def compile_hard_constraints(model: Model, scenario: ExactPlannerScenario, facts
     Rebalancer's objectives read (B2 of project 67).
     """
     add_funding_pool_constraints(model, scenario, facts, variables)
-    cells = add_ledger_balance_constraints(model, scenario, facts, variables)
+    # The reserves each Rebalancer cell keeps back (row 6): a cash maximum reads the cell without them (``add_limit_constraints``).
+    reserves_by_cell: dict[tuple[str, str], list] = defaultdict(list)
+    cells = add_ledger_balance_constraints(model, scenario, facts, variables, reserves_by_cell)
     add_order_activation_constraints(model, scenario, facts, variables)
     add_funding_activation_constraints(model, scenario, facts, variables)
     add_fee_epigraph_constraints(model, scenario, facts, variables)
     add_fx_no_relay_constraints(model, scenario, facts, variables)
-    add_limit_constraints(model, scenario, facts, variables, cells, limits)
+    add_limit_constraints(model, scenario, facts, variables, cells, limits, reserves_by_cell)
     add_move_activity_constraints(model, variables)
     return cells
 
