@@ -1961,6 +1961,14 @@ def services_plugin_settings_contract(verbose: bool = False, test_names: list = 
     return run_command(cmd, "Plugin settings contract tests", verbose=verbose)
 
 
+def services_enricher_contracts(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the enricher contract: what the registry refuses at registration, every discovered enricher, the test enricher."""
+    print_section("Services: Enricher Contracts")
+    print_info("Testing: backend/app/services/enrichers/base.py, enrichers/registry.py, enricher_providers/mockenrich/plugin.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_contracts.py", test_names)
+    return run_command(cmd, "Enricher contract tests", verbose=verbose)
+
+
 def services_plugin_settings_crypto(verbose: bool = False, test_names: list = None) -> bool:
     """Test the encryption of the secret plugin settings and the re-encryption a restore needs."""
     print_section("Services: Plugin Settings Encryption")
@@ -4004,6 +4012,16 @@ Note: No backend server required.
     # get_async_engine, the instance key is a test key set with monkeypatch (the data directory pointed into tmp_path,
     # so no key file is ever read or made in the lane), and the real plugin registries are only read.
     add_test(cat, "plugin-settings-contract", services_plugin_settings_contract, name="Plugin Settings Contract", desc="Declarations per family, refusal at registration, values per type, refusals without the value, derived variable names, BoundSettings and the test doubles", isolation="pure")
+    # Enrichers (plan 68, B1). PURE: the registry is read and synthetic classes registered in process, removed at each
+    # teardown with their environment claims; test mode is set with monkeypatch. No DB, no server, no network.
+    add_test(
+        cat,
+        "enricher-contracts",
+        services_enricher_contracts,
+        name="Enricher Contracts",
+        desc="Declarations refused at registration (a degree for every AssetType and no other key, degrees int >= 0 or None, voices catalogue keys of covered types only, terms, identifier types, code), every discovered enricher keeps them, mockenrich recognize/read/page_url/no search/test only",
+        isolation="pure",
+    )
     add_test(cat, "plugin-settings-crypto", services_plugin_settings_crypto, name="Plugin Settings Encryption", desc="AES-256-GCM blob and AAD, key id, subkeys, count and rekey on a sqlite3 copy (savepoint, idempotent, unreadable rows kept), key status (unusable key: totals)", isolation="pure")
     add_test(cat, "plugin-settings-runtime", services_plugin_settings_runtime, name="Plugin Settings Resolution", desc="env > _FILE > row > default, invalid variable unconfigures, unusable key, fingerprints, configure_instance, NOT_CONFIGURED and masking at both boundaries", isolation="pure")
     add_test(cat, "plugin-settings-service", services_plugin_settings_service, name="Plugin Settings Service", desc="Catalogue and all-or-nothing writes on a private DB: scopes, LOCKED_BY_ENV, managed profile, item rules, log without values, key unavailable, MOCKFX writes", isolation="pure")
