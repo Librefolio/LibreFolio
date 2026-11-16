@@ -41,10 +41,14 @@ The contract pinned here:
 7. Every part checks before it acts: an upgrade run again over its own work changes no object and no row; an upgrade
    that finds one table, or both, or a table and its index already there completes with the shape of a new database
    at 006, a row it found kept; a downgrade that finds the index or a table already gone completes to 005.
-8. The index serves the profile reads: ``EXPLAIN QUERY PLAN`` of the read of several voices up to a day, and of the
-   «now» of one voice — the row with the highest id (plan §3.7), ``ORDER BY id DESC LIMIT 1`` —, both search the table
-   through ``ix_asset_profile_updates_asset_key_read_on``, never scan it. The «now» read may sort the few rows of its
-   voice in a temporary B-tree (``USE TEMP B-TREE FOR ORDER BY``): that is allowed.
+8. The index serves the reads the profile store really runs (``services/assets/profile/store.py``, listed in the 006
+   docstring), each searching the table through ``ix_asset_profile_updates_asset_key_read_on`` with the constraint the
+   docstring states, never scanning it and never sorting (no ``USE TEMP B-TREE``): the index order is the store's
+   (``read_on``, ``id``) order within a voice. (a) The rows of some assets and voices up to a day, ``ORDER BY asset_id,
+   key, read_on, id`` → ``(asset_id=? AND key=? AND read_on<?)``; (b) the same with no voice named → ``(asset_id=?)``;
+   (c) the first day of each asset among the voices asked (``start: "min"``), ``min(read_on) … GROUP BY asset_id`` →
+   ``(asset_id=? AND key=?)``, a covering index allowed. «Now» of a voice is the last row of (a) or (b): its
+   (``read_on``, ``id``) order is the steps' (consultant's decision).
 9. The redundant-index check of ``db_schema_validate`` (``test_no_redundant_indexes``) passes on a database at 006; a
    guard runs it the same way on a database at 005.
 
@@ -188,18 +192,28 @@ INSERT INTO price_history (asset_id, date, close, currency, source_plugin_key, f
     (3, '2026-11-03', 99.875, 'EUR', 'manual', '{STAMP}');
 """
 
-#: The two reads the profile service runs, each with its parameters: the voices of an asset up to a day, and the «now»
-#: of one voice — the row with the highest id, not the latest ``read_on`` (plan §3.7).
+#: The statements the profile store runs (the 006 docstring lists them), each with its parameters and the constraint its
+#: index search must report: the rows of some assets and voices up to a day, the same for every voice, and the first day
+#: of each asset among the voices asked («start: min»).
+_PROFILE_ROW_COLUMNS = "id, asset_id, key, value, source, user_id, read_on, source_date, created_at"
 PROFILE_READS = [
     pytest.param(
-        "SELECT id, key, value, source, read_on FROM asset_profile_updates WHERE asset_id = ? AND key IN ('ter','geography') AND read_on <= ? ORDER BY key, read_on, id",
-        (1, "2026-11-16"),
-        id="voices-up-to-a-day",
+        f"SELECT {_PROFILE_ROW_COLUMNS} FROM asset_profile_updates WHERE asset_id IN (?, ?) AND key IN (?, ?) AND read_on <= ? ORDER BY asset_id, key, read_on, id",
+        (1, 2, "ter", "geography", "2026-11-16"),
+        "(asset_id=? AND key=? AND read_on<?)",
+        id="rows-of-some-voices-up-to-a-day",
     ),
     pytest.param(
-        "SELECT id, value, source FROM asset_profile_updates WHERE asset_id = ? AND key = ? ORDER BY id DESC LIMIT 1",
-        (1, "ter"),
-        id="latest-row-of-a-voice",
+        f"SELECT {_PROFILE_ROW_COLUMNS} FROM asset_profile_updates WHERE asset_id IN (?, ?) AND read_on <= ? ORDER BY asset_id, key, read_on, id",
+        (1, 2, "2026-11-16"),
+        "(asset_id=?)",
+        id="rows-of-every-voice-up-to-a-day",
+    ),
+    pytest.param(
+        "SELECT asset_id, min(read_on) FROM asset_profile_updates WHERE asset_id IN (?, ?) AND key IN (?) GROUP BY asset_id",
+        (1, 2, "ter"),
+        "(asset_id=? AND key=?)",
+        id="first-day-of-each-asset",
     ),
 ]
 #: An upgrade stopped half way: the objects of the step it had already created, by name, with the SQL a new database at
@@ -810,18 +824,20 @@ def test_a_downgrade_stopped_half_way_completes_to_005(fresh_006: Path, at_005: 
 # =============================================================================
 
 
-@pytest.mark.parametrize(("query", "parameters"), PROFILE_READS)
-def test_the_profile_read_searches_through_the_index(fresh_006: Path, query: str, parameters: tuple[Any, ...]) -> None:
-    """``EXPLAIN QUERY PLAN`` of the read reports ``USING INDEX ix_asset_profile_updates_asset_key_read_on``, and no
-    scan of the table. Any other line of the plan is allowed: the «now» read sorts the rows of one voice by id in a
-    temporary B-tree (``USE TEMP B-TREE FOR ORDER BY``), which costs a sort over a handful of rows, not a scan."""
+@pytest.mark.parametrize(("query", "parameters", "constraint"), PROFILE_READS)
+def test_the_profile_read_searches_through_the_index(fresh_006: Path, query: str, parameters: tuple[Any, ...], constraint: str) -> None:
+    """``EXPLAIN QUERY PLAN`` of each statement the store runs reports ``SEARCH asset_profile_updates USING (COVERING)
+    INDEX ix_asset_profile_updates_asset_key_read_on`` with the constraint the 006 docstring states, no scan of the
+    table, and no temporary B-tree: the index order is the order the store reads in."""
     _assert_profile_tables(fresh_006)
     assert PROFILE_INDEX in _index_list(fresh_006, UPDATES), f"red until A2: a new database at 006 has no {PROFILE_INDEX}"
     with _connect(fresh_006) as conn:
         plan = [detail for _id, _parent, _unused, detail in conn.execute(f"EXPLAIN QUERY PLAN {query}", parameters)]
 
-    assert any(re.search(rf"USING (COVERING )?INDEX {PROFILE_INDEX}\b", detail) for detail in plan), f"the read must search through {PROFILE_INDEX}: {plan}"
+    search = re.compile(rf"SEARCH {UPDATES} USING (COVERING )?INDEX {PROFILE_INDEX} {re.escape(constraint)}$")
+    assert any(search.match(detail) for detail in plan), f"the read must search {UPDATES} through {PROFILE_INDEX} {constraint}: {plan}"
     assert not any(detail.startswith(f"SCAN {UPDATES}") for detail in plan), f"the read must not scan {UPDATES}: {plan}"
+    assert not any("TEMP B-TREE" in detail for detail in plan), f"the read must come in the index order, with no sort: {plan}"
 
 
 # =============================================================================

@@ -1288,7 +1288,8 @@ class AssetProfileUpdate(SQLModel, table=True):
     """One change of one voice of an asset's profile: its TER, its countries, the maturity of a bond… (plan 68, §3.1).
 
     A row is never updated. A new value is a new row, written only when it differs from the voice's value now
-    (``services/assets/profile/store.py``); «now» is the voice's row with the highest ``id``. A row can be deleted, to
+    (``services/assets/profile/store.py``); «now» is the voice's last row in (``read_on``, ``id``) order, the order of
+    its steps. A row can be deleted, to
     forget a change (``DELETE /assets/profile``), and every row goes with its asset.
 
     - ``key``: the voice, one of the profile catalogue (``services/assets/profile/catalogue.py``). Plain text with no
@@ -1298,7 +1299,8 @@ class AssetProfileUpdate(SQLModel, table=True):
     - ``source``: the enricher's code, ``user`` for a value written by hand, ``legacy`` for the value copied from
       ``classification_params`` by migration 006.
     - ``user_id``: who wrote a ``user`` row; NULL for a source, and once that account is deleted.
-    - ``read_on``: the day the value was read or written, in the scheduler's time zone: the day it holds from.
+    - ``read_on``: the day the value was read or written, in the scheduler's time zone, never before the voice's row
+      now: the day it holds from.
     - ``source_date``: the day the source says its data are of («data at 30/09»), when it says one.
     """
 

@@ -36,17 +36,20 @@ The asset profile: the descriptive facts of an asset, each with its source and i
   dictionary of enrichers, ``state`` what each one last read: two columns so that neither write overwrites the other.
   Both start as ``'{}'``.
 - One index, ``ix_asset_profile_updates_asset_key_read_on (asset_id, key, read_on)``; ``asset_enrichers`` needs none
-  beyond its primary key. The profile read (one asset, some voices, up to a day) and «now» of one voice both search it
-  (SQLite 3.53)::
+  beyond its primary key. Every read of the profile store (``services/assets/profile/store.py``) searches it, and its
+  order is the store's (``read_on``, ``id``) order within a voice, so none sorts (SQLite 3.53)::
 
-    EXPLAIN QUERY PLAN SELECT id, key, value, source, read_on FROM asset_profile_updates
-      WHERE asset_id = ? AND key IN (?, ?) AND read_on <= ? ORDER BY key, read_on, id
+    the rows of some assets and voices up to a day (steps; «now» of the voices a write touches, without the day):
+    SELECT … FROM asset_profile_updates WHERE asset_id IN (?, ?) AND key IN (?, ?) AND read_on <= ?
+      ORDER BY asset_id, key, read_on, id
     → SEARCH asset_profile_updates USING INDEX ix_asset_profile_updates_asset_key_read_on (asset_id=? AND key=? AND read_on<?)
 
-    EXPLAIN QUERY PLAN SELECT id, value, source FROM asset_profile_updates
-      WHERE asset_id = ? AND key = ? ORDER BY id DESC LIMIT 1
-    → SEARCH asset_profile_updates USING INDEX ix_asset_profile_updates_asset_key_read_on (asset_id=? AND key=?)
-    → USE TEMP B-TREE FOR ORDER BY  («now» is the highest id: a sort over the few rows of one voice)
+    the same for every voice (a read that names none): the index on its asset_id prefix
+    → SEARCH asset_profile_updates USING INDEX ix_asset_profile_updates_asset_key_read_on (asset_id=?)
+
+    the first day of each asset («start: min»):
+    SELECT asset_id, min(read_on) FROM asset_profile_updates WHERE asset_id IN (?, ?) AND key IN (?) GROUP BY asset_id
+    → SEARCH asset_profile_updates USING COVERING INDEX ix_asset_profile_updates_asset_key_read_on (asset_id=? AND key=?)
 
   Its ``asset_id`` prefix also serves the ``CASCADE`` of a deleted asset.
 - Downgrade: the two tables are dropped, the index with its table.
