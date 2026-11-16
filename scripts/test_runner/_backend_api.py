@@ -1504,7 +1504,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "broker-overdraft-off-refused", api_broker_overdraft_off_refused, name="Broker Overdraft Off Refused", desc="PATCH allow_cash_overdraft=false over a negative cash is refused and the stored flag stays on (own user and broker)")
     add_test(api, "batch-split-promote", api_batch_split_promote, name="Batch Split/Promote", desc="Split/promote in unified batch + suggest")
     add_test(api, "transactions-wac", api_transactions_wac_inline, name="WAC Cost Basis", desc="WAC inline validate/commit (P16-P28)")
-    add_test(api, "assets-patch-fields", api_assets_patch_fields, name="Assets Patch Fields", desc="PATCH /assets field-level updates, all or nothing batches, assetNameTaken")
+    add_test(api, "assets-patch-fields", api_assets_patch_fields, name="Assets Patch Fields", desc="PATCH /assets field-level updates, all or nothing batches, assetNameTaken; A4: POST/PATCH write classification_params into the profile in the authenticated user's name")
     add_test(api, "assets-validate", api_assets_validate, name="Assets Validate", desc="POST /assets/validate dry run of the all-or-nothing asset PATCH: never writes, a currency change keeps prices and events, same issues and warnings as PATCH")
     add_test(api, "ohlc-sentinel", api_ohlc_sentinel, name="OHLC Sentinel", desc="F.4 merge on POST /assets/prices (N92): null or absent keeps the stored value, 'clear' empties it, a number writes it; -1, any other text and a close not above 0 refused with 422, nothing written")
     add_test(api, "current-price-persistence", api_current_price_persistence, name="Current Price Persistence", desc="/current endpoint OHLC upsert")

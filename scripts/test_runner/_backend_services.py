@@ -1550,6 +1550,15 @@ def services_asset_profile_store(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "Asset profile store tests", verbose=verbose)
 
 
+def services_asset_profile_double_write(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the double write of classification_params into the asset profile by POST/PATCH /assets (project 68, lot A4)."""
+    print_section("Services: Asset Profile Double Write")
+    print_info("Testing: AssetCRUDService.create_assets_bulk / patch_assets_bulk with user_id")
+    print_info("Tests: user rows by the author on create; only the voices a patch touches; null sector, null classification; same value; read_on never before now; dry run and rolled-back batch write nothing")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_profile_double_write.py", test_names)
+    return run_command(cmd, "Asset profile double write tests", verbose=verbose)
+
+
 def services_asset_digit_limits(verbose: bool = False, test_names: list = None) -> bool:
     """Run the C-97a digit limits: manual prices and events refused beyond them, provider prices truncated."""
     print_section("Services: Asset Digit Limits")
@@ -3626,6 +3635,16 @@ Note: No backend server required.
         desc="Project 68 A3: profile_today is the date in scheduler_timezone (UTC when not set or not a zone); current_rows is each voice's last row in (read_on, id) order; write_values writes only when the stored form differs from now whoever wrote either (spelling, map key order and rounding, a row with non-canonical JSON text: the same value), force_source writes the source's row unless now is that value from that source, None is a NULL row only over a value, writes of one call apply in order, one refused value or unknown voice raises ProfileValueError and writes nothing, read_on never before now's, user_id only on user rows, source_date stored, two connections writing the same new value make one row (write lock before the comparison); read_steps: one step per stretch, carry_back per voice, min per asset among the voices asked, nothing for no rows or a first row after end, one day without end, the last row of a day holds it, same value and source merge, keys None all voices, an unknown key refused, value_at and points_between on the steps; forget_updates: now and steps follow, all or nothing (ProfileUpdatesNotFound, ProfileUpdatesNewer), the count; recent_changes newest first 20 a page with total and the value before, the panel hides a volatile voice's source rows but those by hand and the first after one",
         # PURE: every database is a private SQLite file under tmp_path built with create_all (two engines on it for the
         # lock case); no session on the lane DB, no server; every day and moment passed in.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "asset-profile-double-write",
+        services_asset_profile_double_write,
+        name="Asset Profile Double Write",
+        desc="Project 68 A4: until D7, classification_params sent to create_assets_bulk / patch_assets_bulk (keyword user_id) is also written into the profile in the same transaction: source user, user_id the author, read_on today in scheduler_timezone and never before the voice's now; POST: three rows for description, geography and sector, none without classification; PATCH: only the voices it touches (sector alone: one row, even when the profile's geography differs from the column), sector_area null a NULL row, classification_params null NULL rows for the voices with a value only, the value now (another spelling) no row; the dry run (commit=False) and a batch rolled back on patchFailed write none; a patch that does not touch the classification writes none; a description of spaces counts as empty (no row on POST, an empty row on PATCH)",
+        # PURE: every database is a private SQLite file under tmp_path built with create_all; no session on the lane DB,
+        # no server, no network.
         isolation="pure",
     )
     add_test(
