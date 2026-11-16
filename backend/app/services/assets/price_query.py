@@ -43,7 +43,7 @@ from backend.app.schemas.prices import FACurrentPriceItem, FACurrentValue, FAPri
 from backend.app.schemas.provider import (
     FAVolumeKind,
 )
-from backend.app.services.assets import core
+from backend.app.services.assets import bulk_current, core
 from backend.app.services.assets.base import ASSET_HISTORY_MIN_FALLBACK, AssetRateLimitedError, AssetSourceProvider
 from backend.app.services.assets.market_calendar import ensure_market_holidays
 from backend.app.services.assets.observed_prices import ObservedPrices, fill_point, observe, series_points
@@ -985,7 +985,8 @@ class PriceQueryOperations:
 
         For each asset:
         1. If a provider is assigned → call provider.get_current_value() (parallel, semaphore-limited), served as the
-           price columns keep it: a quote they cannot keep is neither served nor cached (X-R40, W-B62)
+           price columns keep it: a quote they cannot keep is neither served nor cached (X-R40, W-B62). A provider that
+           reads in bulk is called once per group of its assets instead (project 76, ``bulk_current.py``)
         2. Fallback → the latest PriceHistory row whose close reads a number (W-B62)
 
         **Side effect (F.2 + F.3)**: for every successful provider fetch whose
@@ -1030,9 +1031,14 @@ class PriceQueryOperations:
                 return None, None
             return await _live_quote_item(asset_id, assignment, sem)
 
-        # The live quotes in parallel, one per distinct id (R13-SEC9-1: a repeated id is fetched, and written back, once)
+        # The live quotes in parallel, one per distinct id (R13-SEC9-1: a repeated id is fetched, and written back, once).
+        # The assets of a provider that reads in bulk are grouped, one call per group (project 76, bulk_current.py); the
+        # plan is built with the session, the reads run without it (MF-SEC9c); the others keep one call per asset.
         distinct_ids = list(dict.fromkeys(asset_ids))
-        live = dict(zip(distinct_ids, await asyncio.gather(*(_live_one(aid) for aid in distinct_ids)), strict=True))
+        bulk = await bulk_current.prepare_bulk(session, [(aid, assign_map[aid]) for aid in distinct_ids if aid in asset_map and aid in assign_map])
+        per_asset_ids = [aid for aid in distinct_ids if aid not in bulk.asked]
+        bulk_live, per_asset_live = await asyncio.gather(bulk.read(sem), asyncio.gather(*(_live_one(aid) for aid in per_asset_ids)))
+        live = {**bulk_live, **dict(zip(per_asset_ids, per_asset_live, strict=True))}
 
         # Fallback: the last known price from the DB, for the assets without a live quote, in one grouped read once the
         # quotes are in (MF-SEC9c). The latest close that reads a number: one the file holds as ±inf reads None, and is

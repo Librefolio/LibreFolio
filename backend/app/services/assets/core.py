@@ -56,7 +56,7 @@ logger = get_logger(__name__)
 # ============================================================================
 
 _asset_history_cache = get_ttl_cache("asset_history_fetch", maxsize=500, ttl=900)  # 15 min
-_asset_current_cache = get_ttl_cache("asset_current_fetch", maxsize=300, ttl=120)  # 2 min
+_asset_current_cache = get_ttl_cache("asset_current_fetch", maxsize=5000, ttl=120)  # 2 min; a bulk read caches every active asset of its provider (76)
 _asset_metadata_cache = get_ttl_cache("asset_metadata_fetch", maxsize=200, ttl=1800)  # 30 min
 _search_result_cache = get_ttl_cache("search_results", maxsize=5000, ttl=86400)  # 24h — individual items
 _search_query_cache = get_ttl_cache("search_queries", maxsize=500, ttl=900)  # 15 min — query→results
@@ -152,10 +152,15 @@ def asset_cache_key(provider_code: str, identifier: str | None, identifier_type:
 
 
 async def drop_asset_cache_entries(provider_code: str, identifier: str | None, identifier_type: object, provider_params: dict | str | None) -> None:
-    """Drop the cached history and current value of one provider assignment, keyed as a call would key them now."""
+    """Drop the cached history and current value of one provider assignment, keyed as a call would key them now, and the
+    bulk-read stamps that cover it (``bulk_current.forget_member``)."""
     key = asset_cache_key(provider_code, identifier, identifier_type, provider_params, await settings_cache_part_for(provider_code))
     _asset_history_cache.delete(key)
     _asset_current_cache.delete(key)
+    # A bulk read's stamp must not keep serving the database for it: the next request reads its group again (76, C2)
+    from backend.app.services.assets.bulk_current import forget_member  # noqa: PLC0415 — bulk_current imports this module
+
+    forget_member(key)
 
 
 def cooldown_scope_for(provider: AssetSourceProvider, identifier: str, identifier_type=None, provider_params: dict | None = None) -> str | None:
