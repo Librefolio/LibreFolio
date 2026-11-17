@@ -53,6 +53,7 @@ import pytest_asyncio
 from fastapi import HTTPException
 from pydantic import ValidationError
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -84,6 +85,8 @@ REGION_FIELD = PluginSettingField(key="region", type=SettingType.SELECT, scope=S
 A_OK, A_PLAIN, A_KEY, A_ZETA, A_ALPHA, A_PARAM, A_MANAGED = "n2_ok", "n2_plain", "n2_key", "n2_zeta", "n2_alpha", "n2_param", "n2_managed"
 # FX providers, upper-case as the route's steps are.
 F_OK, F_PLAIN, F_KEY, F_ZETA, F_ALPHA = "N2FXOK", "N2FXPLAIN", "N2FXKEY", "N2FXZETA", "N2FXALPHA"
+# N2b: an FX provider whose only field is the optional select ``region`` (an invalid variable leaves it unconfigured).
+F_REGION = "N2FXREGION"
 
 
 # =============================================================================
@@ -118,6 +121,7 @@ _FX_PLUGINS = {
     F_KEY: _fx_plugin(F_KEY, (KEY_FIELD,)),
     F_ZETA: _fx_plugin(F_ZETA, (KEY_FIELD,)),
     F_ALPHA: _fx_plugin(F_ALPHA, (ENDPOINT_FIELD,)),
+    F_REGION: _fx_plugin(F_REGION, (REGION_FIELD,)),
 }
 
 
@@ -270,9 +274,9 @@ async def _post_routes(engine: AsyncEngine, user: User, routes: list[FXConversio
         return await _outcome(fx_routes.create_routes_bulk(routes, replace=replace, session=session, _current_user=user))
 
 
-def _assert_refused(answer: Any, code: str, missing: list[str]) -> None:
+def _assert_refused(answer: Any, code: str, missing: list[str], *, reason: str = "missing_fields") -> None:
     assert isinstance(answer, HTTPException), f"the request was not refused: {answer!r}"
-    expected = not_configured_error(code, missing)
+    expected = not_configured_error(code, missing, reason=reason)
     assert answer.status_code == expected.status_code == 422, f"status {answer.status_code}, detail {answer.detail!r}"
     assert answer.detail == expected.detail
 
@@ -440,7 +444,8 @@ async def test_n2_managed_profile_refuses_without_naming_a_locked_field(engine, 
     answer = await _assign(engine, caller, [_item(asset_id, A_MANAGED)])
 
     assert asset_id not in await _assignments(engine), "the assignment of an unconfigured provider was written"
-    _assert_refused(answer, A_MANAGED, ["endpoint"])
+    # N2b: the region's variable is invalid, so the reason is the invalid locked setting, named by no variable in managed
+    _assert_refused(answer, A_MANAGED, ["endpoint"], reason="invalid_locked_setting")
     assert "region" not in answer.detail["missing"]
 
 
@@ -571,3 +576,181 @@ async def test_n2_fx_one_readiness_call_per_request(engine, caller, configured, 
     family, codes, user_id = spy.calls[0]
     assert family == "fx" and user_id == caller.id and F_KEY in codes
     _assert_refused(refused, F_KEY, ["api_key"])
+
+
+# =============================================================================
+# N2b. WHY A WRITE IS REFUSED, AND THE SETTINGS THAT COULD NOT BE READ
+# =============================================================================
+#
+# Contract (lot N2b):
+# - ``api/plugin_errors.py`` gains ``PLUGIN_SETTINGS_UNAVAILABLE`` and ``settings_unavailable_error()`` (503, ``detail =
+#   {"error_code": "PLUGIN_SETTINGS_UNAVAILABLE", "message"}``); ``not_configured_error(plugin_code, missing, *,
+#   reason="missing_fields", variables=())`` adds ``reason`` and ``variables`` (a list) to its body.
+# - The two writes: any provider the write would check that readiness answers with ``settings_unavailable`` → the whole
+#   request is refused with ``settings_unavailable_error()``, nothing written (``replace=true`` included); otherwise the
+#   422 of N2 carries ``reason`` and ``variables`` of the provider it names.
+# Each test asserts literals first and imports the new names last, so on HEAD c4cf8ae36 it fails on its own point.
+#
+# How the readiness database fails: AFTER the ``engine`` fixture, ``readiness.get_async_engine`` answers an engine on a
+# file in a missing folder (N1's DB-error test); the route's own session stays on the good engine, so the stored
+# assignments and routes are read and written as usual.
+
+
+@pytest_asyncio.fixture
+async def broken_readiness_db(engine: AsyncEngine, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
+    """Only the readiness check loses its database; the barrier proves that engine cannot be read."""
+    broken = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'no-such-dir' / 'n2b.db'}", poolclass=NullPool)
+    monkeypatch.setattr(readiness, "get_async_engine", lambda: broken)
+    try:
+        with pytest.raises(SQLAlchemyError):
+            async with AsyncSession(readiness.get_async_engine()) as session:
+                await session.execute(select(PluginSystemSetting))
+        yield
+    finally:
+        await broken.dispose()
+
+
+def _assert_unavailable(answer: Any) -> None:
+    """The 503 of N2b, by its literals (the builder's own shape is pinned by its own test)."""
+    assert isinstance(answer, HTTPException), f"the request was not refused: {answer!r}"
+    assert answer.status_code == 503, f"status {answer.status_code}, detail {answer.detail!r}"
+    assert isinstance(answer.detail, dict) and answer.detail.get("error_code") == "PLUGIN_SETTINGS_UNAVAILABLE", answer.detail
+
+
+async def _env_configured(family: str, code: str, user: User, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``code``'s key comes from its variable: configured without any row (the boundary agrees, on the good engine)."""
+    monkeypatch.setenv(env_name(family, code, "api_key"), "a-secret-value")
+    registry = AssetProviderRegistry if family == "asset" else FXProviderRegistry
+    instance = registry.get_plugin(code)()
+    await runtime.configure_instance(instance, family, user_id=user.id, plugin_code=code)
+    assert tuple(instance.settings.missing) == (), f"barrier: {code} is configured by its variable"
+
+
+@pytest.mark.parametrize("by", ["variable", "row"])
+@pytest.mark.asyncio
+async def test_n2b_asset_write_with_the_settings_unreadable_is_refused_503(by, engine, caller, configured, monkeypatch, broken_readiness_db):
+    """N2b 4: a new assignment of a provider that declares settings, while readiness cannot read the database → 503
+    ``PLUGIN_SETTINGS_UNAVAILABLE``, nothing written (the settingless item of the same request neither). ``variable``:
+    the provider is configured by its variable (HEAD writes it); ``row``: by a row the check cannot read (HEAD: 422)."""
+    print_section(f"N2b 4: asset write, settings unreadable ({by})")
+    code = A_KEY if by == "variable" else A_OK
+    if by == "variable":
+        await _env_configured("asset", code, caller, monkeypatch)
+    plain_asset, keyed_asset = await _assets(engine, 2)
+
+    answer = await _assign(engine, caller, [_item(plain_asset, A_PLAIN), _item(keyed_asset, code)])
+
+    assert not set(await _assignments(engine)) & {plain_asset, keyed_asset}, "a refused request wrote an assignment"
+    _assert_unavailable(answer)
+    from backend.app.api.plugin_errors import settings_unavailable_error  # noqa: PLC0415 — new name, red on HEAD
+
+    assert answer.detail == settings_unavailable_error().detail
+    print_success("503, nothing written")
+
+
+@pytest.mark.asyncio
+async def test_n2b_asset_write_of_settingless_providers_needs_no_settings(engine, caller, configured, broken_readiness_db):
+    """N2b 4 (guard, green on HEAD): only settingless providers → nothing is checked, so nothing is unavailable: written."""
+    (asset_id,) = await _assets(engine, 1)
+
+    answer = await _assign(engine, caller, [_item(asset_id, A_PLAIN)])
+
+    assert not isinstance(answer, HTTPException), f"refused: {getattr(answer, 'detail', answer)!r}"
+    assert (await _assignments(engine))[asset_id][0] == A_PLAIN
+
+
+@pytest.mark.parametrize("replace", [False, True])
+@pytest.mark.asyncio
+async def test_n2b_fx_write_with_the_settings_unreadable_is_refused_503(replace, engine, caller, configured, monkeypatch, broken_readiness_db):
+    """N2b 4: a route naming a provider new for its pair and configured by its variable, while readiness cannot read the
+    database → 503, nothing written; with ``replace=true`` the pair's stored priorities stay (HEAD writes / replaces)."""
+    print_section(f"N2b 4: FX write, settings unreadable (replace={replace})")
+    await _env_configured("fx", F_KEY, caller, monkeypatch)
+    await _store(engine, _stored_route("EUR", "USD", 1, ("EUR", "USD", F_PLAIN)), _stored_route("EUR", "USD", 2, ("EUR", "USD", F_OK)))
+    before = await _routes(engine)
+
+    answer = await _post_routes(engine, caller, [_route("EUR", "USD", 1, ("EUR", "USD", F_KEY)), _route("EUR", "CHF", 1, ("EUR", "CHF", F_PLAIN))], replace=replace)
+
+    assert await _routes(engine) == before, "a refused request changed the routes"
+    _assert_unavailable(answer)
+    from backend.app.api.plugin_errors import settings_unavailable_error  # noqa: PLC0415 — new name, red on HEAD
+
+    assert answer.detail == settings_unavailable_error().detail
+    print_success("503, routes untouched")
+
+
+def _refused_422(answer: Any) -> dict:
+    assert isinstance(answer, HTTPException), f"the request was not refused: {answer!r}"
+    assert answer.status_code == 422 and answer.detail.get("error_code") == "NOT_CONFIGURED", f"{answer.status_code} {answer.detail!r}"
+    return answer.detail
+
+
+@pytest.mark.parametrize(("profile", "missing", "variables"), [("selfhosted", ["endpoint", "region"], True), ("managed", ["endpoint"], False)])
+@pytest.mark.asyncio
+async def test_n2b_asset_422_says_invalid_locked_setting_and_its_variable(profile, missing, variables, engine, caller, configured, monkeypatch):
+    """N2b 4: a required field unset and a field locked by an invalid variable → the 422 carries ``reason ==
+    "invalid_locked_setting"``; self-hosted it names the variable, managed ``variables == []`` (the field unnamed)."""
+    monkeypatch.setenv("LIBREFOLIO_PROFILE", profile)
+    variable = env_name("asset", A_MANAGED, "region")
+    monkeypatch.setenv(variable, "zz")
+    (asset_id,) = await _assets(engine, 1)
+
+    answer = await _assign(engine, caller, [_item(asset_id, A_MANAGED)])
+
+    assert asset_id not in await _assignments(engine), "the assignment of an unconfigured provider was written"
+    detail = _refused_422(answer)
+    assert detail["missing"] == missing, "barrier: N2's missing"
+    assert (detail.get("reason"), detail.get("variables")) == ("invalid_locked_setting", [variable] if variables else [])
+
+
+@pytest.mark.asyncio
+async def test_n2b_asset_422_of_a_plain_missing_field_says_missing_fields(engine, caller, configured):
+    """N2b 4: a key nobody set → ``reason == "missing_fields"``, ``variables == []``."""
+    (asset_id,) = await _assets(engine, 1)
+
+    detail = _refused_422(await _assign(engine, caller, [_item(asset_id, A_KEY)]))
+
+    assert detail["missing"] == ["api_key"], "barrier: N2's missing"
+    assert (detail.get("reason"), detail.get("variables")) == ("missing_fields", [])
+
+
+@pytest.mark.asyncio
+async def test_n2b_fx_422_says_invalid_locked_setting_and_its_variable(engine, caller, configured, monkeypatch):
+    """N2b 4: self-hosted, an FX provider whose region a variable locks with an invalid value → 422 with ``reason ==
+    "invalid_locked_setting"`` and the variable; nothing written."""
+    variable = env_name("fx", F_REGION, "region")
+    monkeypatch.setenv(variable, "zz")
+
+    answer = await _post_routes(engine, caller, [_route("EUR", "CHF", 1, ("EUR", "CHF", F_REGION))])
+
+    assert await _routes(engine) == {}, "a route of a refused request was written"
+    detail = _refused_422(answer)
+    assert detail["missing"] == ["region"], "barrier: N2's missing"
+    assert (detail.get("reason"), detail.get("variables")) == ("invalid_locked_setting", [variable])
+
+
+def test_n2b_settings_unavailable_error_is_the_shared_503():
+    """N2b 3: ``settings_unavailable_error()`` → 503, ``detail`` exactly ``error_code`` + ``message`` (non-empty English)."""
+    from backend.app.api.plugin_errors import PLUGIN_SETTINGS_UNAVAILABLE, settings_unavailable_error  # noqa: PLC0415 — new names, red on HEAD
+
+    error = settings_unavailable_error()
+
+    assert PLUGIN_SETTINGS_UNAVAILABLE == "PLUGIN_SETTINGS_UNAVAILABLE"
+    assert isinstance(error, HTTPException) and error.status_code == 503
+    assert isinstance(error.detail, dict) and set(error.detail) == {"error_code", "message"}, error.detail
+    assert error.detail["error_code"] == PLUGIN_SETTINGS_UNAVAILABLE
+    assert isinstance(error.detail["message"], str) and error.detail["message"].strip()
+
+
+def test_n2b_not_configured_error_carries_reason_and_variables():
+    """N2b 3: the body is ``error_code``, ``message``, ``missing``, ``reason``, ``variables``; the defaults are
+    ``"missing_fields"`` and ``[]`` (lane 68's callers unchanged); ``variables`` a list in the order given."""
+    default = not_configured_error("n2_x", ["api_key"])
+    assert default.status_code == 422
+    assert set(default.detail) == {"error_code", "message", "missing", "reason", "variables"}, default.detail
+    assert (default.detail["missing"], default.detail["reason"], default.detail["variables"]) == (["api_key"], "missing_fields", [])
+
+    locked = not_configured_error("n2_x", ["region"], reason="invalid_locked_setting", variables=("LIBREFOLIO_B", "LIBREFOLIO_A"))
+    assert (locked.detail["error_code"], locked.detail["missing"]) == ("NOT_CONFIGURED", ["region"])
+    assert (locked.detail["reason"], locked.detail["variables"]) == ("invalid_locked_setting", ["LIBREFOLIO_B", "LIBREFOLIO_A"])
+    assert type(locked.detail["variables"]) is list

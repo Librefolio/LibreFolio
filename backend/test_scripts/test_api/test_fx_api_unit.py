@@ -48,6 +48,7 @@ from backend.app.schemas.refresh import FXSyncBulkResponse, FXSyncPairRequest, F
 from backend.app.services.fx import catalog as fx_catalog
 from backend.app.services.fx import storage as fx_storage
 from backend.app.services.fx.storage import fx_rate_refusal, normalize_storable_rate
+from backend.app.services.plugin_settings.readiness import PluginReadiness
 from backend.test_scripts.fx_steps_double import steps_double
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -328,6 +329,18 @@ def route_providers(monkeypatch):
     lookup = Mock(side_effect=AssertionError("Route configuration must not instantiate a provider"))
     monkeypatch.setattr(fx_providers_api.FXProviderRegistry, "get_provider_instance", lookup)
     return lookup
+
+
+@pytest.fixture(autouse=True)
+def _readiness_answers_configured(monkeypatch):
+    """Project 76 N2/N2b: these handler tests pin the routes' own control flow, with a session double and ``Mock()``
+    callers; whether a provider is configured (and the 503 when its settings cannot be read) is pinned in
+    ``test_not_configured_writes.py``. Here the readiness answers «configured» without a database."""
+
+    async def configured(family, codes, *, user_id):
+        return {code: PluginReadiness(True, ()) for code in dict.fromkeys(codes)}
+
+    monkeypatch.setattr(fx_providers_api, "plugins_readiness", configured)
 
 
 def _route_session(*, existing=None, listed_routes=()):
