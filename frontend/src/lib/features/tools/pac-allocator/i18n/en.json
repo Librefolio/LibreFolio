@@ -732,7 +732,9 @@
               "dual": "The bound the solver proved for this stage: none of the plans it searched can do better. From the second stage on, it searched only among plans as good as the chosen one on the stages above.",
               "absoluteGap": "Distance between the two values. A gap of 0 proves the best value only when the stage is finished.",
               "relativeGap": "The same distance, as a fraction of the value."
-            }
+            },
+            "notConfirmed": "One search ended on this plan, but no second search confirmed it: it is the best plan found, not a proven one.",
+            "limitsLeaveNoRoundingRoom": "The limits leave no room for rounding, so the plan was found counting the rounding in its favour. It respects the limits once any top-up shown is added, but it is not proven to be the best."
           },
           "reasons": {
             "allocation": {

@@ -732,7 +732,9 @@
               "dual": "La cota que demostró el solver para esta etapa: ninguno de los planes que buscó puede hacerlo mejor. A partir de la segunda etapa, solo buscó entre los planes tan buenos como el elegido en las etapas anteriores.",
               "absoluteGap": "Distancia entre los dos valores. Una brecha de 0 demuestra el mejor valor solo si la etapa está terminada.",
               "relativeGap": "La misma distancia, como fracción del valor."
-            }
+            },
+            "notConfirmed": "One search ended on this plan, but no second search confirmed it: it is the best plan found, not a proven one.",
+            "limitsLeaveNoRoundingRoom": "The limits leave no room for rounding, so the plan was found counting the rounding in its favour. It respects the limits once any top-up shown is added, but it is not proven to be the best."
           },
           "reasons": {
             "allocation": {

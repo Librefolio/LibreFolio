@@ -732,7 +732,9 @@
               "dual": "Il limite che il solver ha dimostrato per questo stadio: nessuno dei piani cercati può fare meglio. Dal secondo stadio in poi ha cercato solo fra i piani buoni quanto quello scelto negli stadi sopra.",
               "absoluteGap": "Distanza fra i due valori. Un gap di 0 dimostra il valore migliore solo se lo stadio è terminato.",
               "relativeGap": "La stessa distanza, come frazione del valore."
-            }
+            },
+            "notConfirmed": "One search ended on this plan, but no second search confirmed it: it is the best plan found, not a proven one.",
+            "limitsLeaveNoRoundingRoom": "The limits leave no room for rounding, so the plan was found counting the rounding in its favour. It respects the limits once any top-up shown is added, but it is not proven to be the best."
           },
           "reasons": {
             "allocation": {
