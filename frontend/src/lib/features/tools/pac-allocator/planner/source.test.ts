@@ -26,7 +26,7 @@ vi.mock('$lib/api', () => ({
 
 import {getClientSessionGeneration, transitionClientSession} from '$lib/stores/app/clientSession';
 import {effectiveTaxRegime} from '$lib/features/brokers/profile/brokerOperatingProfile';
-import {fetchPlannerSource, type SourceQuery} from './source';
+import {fetchPlannerSource, fromPlannerId, toPlannerId, type SourceQuery} from './source';
 
 const QUERY: SourceQuery = {
     asOf: '2026-09-15',
@@ -204,5 +204,21 @@ describe('fetchPlannerSource — positions (F3a of project 67, step 4)', () => {
         const source = await fetchPlannerSource({...QUERY, sections: ['holdings']}, getClientSessionGeneration());
 
         expect(source.holdings).toEqual([{holding_id: 'holding:asset:11:broker:7', asset_id: 'asset:11', broker_id: 'broker:7', provenance_id: 'source:portfolio-ledger', quantity: null}]);
+    });
+});
+
+/**
+ * The planner's identifiers (`toPlannerId`): a sector such as «Health Care» travels encoded, `enc:` plus its bytes. The
+ * result's exposure rows carry that id; `fromPlannerId` reads the name back, exactly, so a chart can find the sector's
+ * colour by its name.
+ */
+describe('fromPlannerId — the name a planner id was made from', () => {
+    it.each(['Health Care', 'Real Estate', 'Consumer Discretionary', 'snake_case', 'a+b', 'Énergie à 100%', 'enc:already'])('reads back %s', (name) => {
+        const id = toPlannerId(name) as string;
+        expect(fromPlannerId(id)).toBe(name);
+    });
+
+    it('leaves a plain identifier as it is', () => {
+        for (const id of ['STOCK', 'Energy', 'USA', 'allocation.uncategorised']) expect(fromPlannerId(id)).toBe(id);
     });
 });
