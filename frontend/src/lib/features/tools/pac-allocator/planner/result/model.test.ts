@@ -56,6 +56,9 @@ vi.mock('$lib/api', () => ({
 }));
 
 import en from '$lib/i18n/en.json';
+import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
+import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
+import {catalogCurrencyDigits, formatPlannerMoneyPlain} from '../format';
 import type {PlannerExactNumber, PlannerLedgerRow, PlannerProof, PlannerReadyResult} from '../types';
 import {allocationRows, hasPlanSteps, LEDGER_FIELDS, ledgerFieldList, ledgerFields, ledgerHelpKey, ledgerLabelKey, limitedEntries, notesBesideLimitsBanner, planSteps, proofStatusHelpKey, resultBadges, type LimitedEntry, type ResultBadge} from './model';
 import type {RebalancerSolution} from '../types';
@@ -382,5 +385,48 @@ describe('resultBadges — the Rebalancer proof badge', () => {
         expect(help.key).toBe('tools.portfolioRebalancer.planner.result.badges.help.optimalProven');
         expect(catalogueMessage(help.key), 'the key is in the catalogue').toBeTypeOf('string');
         expect(badgeById(resultBadges(readyResult(proven)), 'proof').help.key, 'the PAC keeps its own').toBe('tools.pacAllocator.planner.result.badges.help.optimalProven');
+    });
+});
+
+/**
+ * Lot MG of project 67 (the developer's «ottimo dimostrato» / «ottimo locale (entro X)»): a plan not proven reads «local
+ * optimum», with its margin in parentheses when the backend publishes one (`proof.margin`, in the valuation currency), and
+ * its help says what the margin is, with «should» (the bound is the solver's). The margin is money: personal, masked with
+ * privacy on. Without a margin, «local optimum» alone. Keys are tested, never the texts.
+ */
+describe('resultBadges — a result with no plan is not a «local optimum» (lot MG)', () => {
+    it('the no-plan states keep their own name for the proof', () => {
+        for (const c of CASES.filter((item) => item.outcome === 'no_incumbent')) expect(badgeById(resultBadges(readyResult(c)), 'proof').key, caseTitle(c)).toBe('tools.pacAllocator.planner.result.badges.noPlanNotProven');
+        expect(catalogueMessage('tools.pacAllocator.planner.result.badges.noPlanNotProven')).toBeTypeOf('string');
+    });
+});
+
+describe('resultBadges — «local optimum» and its margin (lot MG)', () => {
+    const digits = catalogCurrencyDigits([{currency: 'EUR', minor_unit: '0.01'}]);
+    const notProven = (margin: {amount: string; currency: string} | null) =>
+        ({outcome: 'incumbent_found', stop_reason: 'completed', proof: {kind: 'not_proven', reason_code: 'allocation.proof_not_confirmed', margin}, primary_solution: {validation: 'decimal_verified'}}) as unknown as PlannerReadyResult;
+
+    it('names the margin in the badge, and the help says what it is', () => {
+        const badge = badgeById(resultBadges(notProven({amount: '0.14', currency: 'EUR'}), 'rebalancer', digits), 'proof');
+        expect(badge.key).toBe('tools.pacAllocator.planner.result.badges.notProvenWithin');
+        expect(badge.values?.margin).toBe(formatPlannerMoneyPlain('0.14', 'EUR', {digits}));
+        expect(badge.help.extra?.key).toBe('tools.pacAllocator.planner.result.badges.help.margin');
+        expect(badge.help.extra?.values?.margin).toBe(badge.values?.margin);
+        for (const key of [badge.key, badge.help.extra?.key as string]) expect(catalogueMessage(key), key).toBeTypeOf('string');
+    });
+
+    it('without a margin, «local optimum» alone', () => {
+        const badge = badgeById(resultBadges(notProven(null), 'rebalancer', digits), 'proof');
+        expect(badge.key).toBe('tools.pacAllocator.planner.result.badges.notProven');
+        expect([badge.values, badge.help.extra]).toEqual([undefined, undefined]);
+    });
+
+    it('the margin is personal: masked with privacy on', () => {
+        setPrivacyEnabled(true);
+        try {
+            expect(badgeById(resultBadges(notProven({amount: '0.14', currency: 'EUR'}), 'rebalancer', digits), 'proof').values?.margin).toContain(PRIVACY_PLACEHOLDER);
+        } finally {
+            setPrivacyEnabled(false);
+        }
     });
 });

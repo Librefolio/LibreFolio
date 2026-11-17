@@ -5,7 +5,7 @@
  * presentation only. No amount is added, subtracted or converted here.
  */
 import {canonicalDecimal, compareDecimal, decimalSign} from '$lib/utils/core/exactDecimal';
-import {exactDisplay} from '../format';
+import {exactDisplay, formatPlannerMoneyPlain, type CurrencyDigits} from '../format';
 import type {
     PlannerConversion,
     PlannerExactNumber,
@@ -30,10 +30,12 @@ export const UNCATEGORISED_CATEGORY_ID = 'allocation.uncategorised';
 
 export type BadgeTone = 'success' | 'info' | 'warning' | 'danger' | 'neutral';
 
-/** R11.4: the explanation a badge opens on hover or focus. */
+/** R11.4: the explanation a badge opens on hover or focus; `extra`, a line after it (lot MG: what the margin is). */
 export interface BadgeHelp {
     key: string;
     fallback: string;
+    values?: Record<string, string>;
+    extra?: BadgeHelp;
 }
 
 export interface ResultBadge {
@@ -42,6 +44,8 @@ export interface ResultBadge {
     fallback: string;
     tone: BadgeTone;
     help: BadgeHelp;
+    /** The badge's own values (lot MG: the margin, formatted as personal money). */
+    values?: Record<string, string>;
 }
 
 const NO_INCUMBENT_HELP: BadgeHelp = {key: 'tools.pacAllocator.planner.result.states.noIncumbent.body', fallback: 'The solver found no plan before the limit. This is not a proof that no plan exists.'};
@@ -64,6 +68,9 @@ const NOT_PROVEN_REASON_HELP: Record<string, BadgeHelp> = {
 const REBALANCER_OPTIMAL_PROVEN =
     "The solver proved that no plan has a better score (with «Target first»: a smaller distance from the targets, then less money lost), and the exact check of the plan matches its numbers. The tie-breaks after it may have stopped earlier: they only choose among plans just as good. The proof holds within the solver's small calculation margin, which grows with the amounts.";
 
+/** Lot MG of project 67: what the margin of a «local optimum» is. «Should»: the bound is the solver's, not a proof. */
+const MARGIN_HELP = "The best possible plan should be at most {margin} better than this one: the solver's own bounds say so, and they are not a proof.";
+
 /** Lot ZB of project 67: a search that ended, with no limit, without a plan the exact check accepts. */
 export const NO_PLAN_COMPLETED = 'The search ended without a plan that can be carried out within these limits. This is not a proof that no plan exists.';
 const NO_INCUMBENT_COMPLETED_HELP: BadgeHelp = {key: 'tools.pacAllocator.planner.result.states.noIncumbent.completedBody', fallback: NO_PLAN_COMPLETED};
@@ -81,7 +88,7 @@ export function isReady(result: PlannerResult): result is PlannerReadyResult {
  * Four fields, four badges: availability, outcome, proof, stop reason (C1). "Completed" never means optimal. `text` is the
  * Tool's (F4a of project 67, step 7): the Rebalancer's proof names its objective, not the Strategy's order.
  */
-export function resultBadges(result: PlannerReadyResult, text: 'pac' | 'rebalancer' = 'pac'): ResultBadge[] {
+export function resultBadges(result: PlannerReadyResult, text: 'pac' | 'rebalancer' = 'pac', digits?: CurrencyDigits): ResultBadge[] {
     const badges: ResultBadge[] = [];
     const verified = 'primary_solution' in result && result.primary_solution.validation === 'decimal_verified';
     switch (result.outcome) {
@@ -146,12 +153,17 @@ export function resultBadges(result: PlannerReadyResult, text: 'pac' | 'rebalanc
                           },
             });
             break;
-        case 'not_proven':
+        case 'not_proven': {
+            // Lot MG: «local optimum», with the margin the backend published when two runs bound it; personal money.
+            const published = result.outcome === 'no_incumbent' ? null : ((result.proof as {margin?: {amount: string; currency: string} | null}).margin ?? null);
+            const margin = published ? {margin: formatPlannerMoneyPlain(published.amount, published.currency, {digits})} : undefined;
             badges.push({
                 id: 'proof',
-                key: 'tools.pacAllocator.planner.result.badges.notProven',
-                fallback: 'Optimality not proven',
+                // A result with no plan is not a «local optimum»: it keeps the plain «optimality not proven».
+                key: result.outcome === 'no_incumbent' ? 'tools.pacAllocator.planner.result.badges.noPlanNotProven' : margin ? 'tools.pacAllocator.planner.result.badges.notProvenWithin' : 'tools.pacAllocator.planner.result.badges.notProven',
+                fallback: result.outcome === 'no_incumbent' ? 'Optimality not proven' : margin ? 'Local optimum (within {margin})' : 'Local optimum',
                 tone: 'warning',
+                ...(margin ? {values: margin} : {}),
                 // With no plan, «the best plan found» would be false: the badge says what the state says.
                 // A completed search that is still not proven means the final exact check contradicted the solver's bounds.
                 help:
@@ -168,7 +180,12 @@ export function resultBadges(result: PlannerReadyResult, text: 'pac' | 'rebalanc
                               }
                             : {key: 'tools.pacAllocator.planner.result.proof.floatingUnfinished', fallback: 'The solver stopped before closing every stage: this is the best plan found, not a proven one.'},
             });
+            if (margin) {
+                const badge = badges[badges.length - 1];
+                badge.help = {...badge.help, extra: {key: 'tools.pacAllocator.planner.result.badges.help.margin', fallback: MARGIN_HELP, values: margin}};
+            }
             break;
+        }
         case 'infeasibility_proven':
             badges.push({
                 id: 'proof',

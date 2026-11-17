@@ -58,7 +58,7 @@
 
     const proof = $derived(result.proof);
     const solver = $derived(result.solver_evidence);
-    const badges = $derived(resultBadges(result, profile.text));
+    const badges = $derived(resultBadges(result, profile.text, digits));
     const outcomeBadges = $derived(badges.filter((badge) => badge.id === 'availability' || badge.id === 'validation'));
     const proofBadge = $derived(badges.find((badge) => badge.id === 'proof'));
     const stopBadge = $derived(badges.find((badge) => badge.id === 'stop'));

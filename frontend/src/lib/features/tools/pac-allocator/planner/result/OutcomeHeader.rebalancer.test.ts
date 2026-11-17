@@ -21,7 +21,7 @@ import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import {toolContractMap} from '$lib/api/tool-contract-map.generated';
 import ProfileHarness from '../../__tests__/ProfileHarness.svelte';
-import {catalogCurrencyDigits, formatExactMoneyPlain, formatPlannerPlainDecimal} from '../format';
+import {catalogCurrencyDigits, formatExactMoneyPlain, formatPlannerMoneyPlain, formatPlannerPlainDecimal} from '../format';
 import {REBALANCER_PLANNER_PROFILE} from '../profile';
 import type {PlannerReadyResult, RebalancerSolution} from '../types';
 import browser from './__fixtures__/rebalancer-browser.json';
@@ -91,6 +91,24 @@ describe('the Rebalancer result header', () => {
         expect(tip).toContain(formatPlannerPlainDecimal('0.25'));
         expect(tip).toContain(formatExactMoneyPlain(score.distance_per_wealth));
         expect(tip).toContain(formatExactMoneyPlain(score.wealth_loss));
+    });
+
+    it('a plan not proven shows its margin in the proof badge, masked and unmasked in place (lot MG)', async () => {
+        // The G5 answer made not proven, with the margin the backend publishes (the fixture file untouched).
+        const variant = structuredClone(browser) as {result: Record<string, unknown>};
+        variant.result.proof = {kind: 'not_proven', reason_code: 'allocation.proof_not_confirmed', margin: {amount: '0.14', currency: 'EUR'}};
+        mounted(variant);
+        const badge = () => document.querySelector('[data-badge="proof"]')?.textContent ?? '';
+        const digits = catalogCurrencyDigits((browser.result as {catalogs: {currencies: Parameters<typeof catalogCurrencyDigits>[0]}}).catalogs.currencies);
+        expect(badge()).toContain(formatPlannerMoneyPlain('0.14', 'EUR', {digits}));
+        setPrivacyEnabled(true);
+        flushSync();
+        await tick();
+        expect(badge()).toContain(PRIVACY_PLACEHOLDER);
+        setPrivacyEnabled(false);
+        flushSync();
+        await tick();
+        expect(badge()).toContain(formatPlannerMoneyPlain('0.14', 'EUR', {digits}));
     });
 
     it('in privacy mode the money of the header is masked and unmasked in place', async () => {
