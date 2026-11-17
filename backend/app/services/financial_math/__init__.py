@@ -58,7 +58,8 @@ Modules:
 * ``splits`` — the ADJUSTMENT rows linked to a SPLIT asset event, loaded with one query, the ids
   an average-cost replay marks as a rescale, and the rule for a usable split ratio.
 * ``weights`` — a part's share of a total (none on a total at or below zero), the slices of an
-  allocation (none on a sum at or below zero), gross weights, and concentration (largest weight, Herfindahl index).
+  allocation (none on a sum at or below zero), gross weights, concentration (largest weight, Herfindahl index), and
+  the effective number of positions (10 000 over the index of the weights renormalized on their own sum).
 * ``holding_window`` — how long a position has been held at its broker: the oldest lot still
   open and a closed position's flight time, from its quantity stream (a split rescales the lots).
 * ``fifo`` — FIFO lots: custody fragments, closures, transfers, and the allocation of

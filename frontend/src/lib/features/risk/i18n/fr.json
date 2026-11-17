@@ -364,7 +364,15 @@
       "total_loss_no_recovery": "La valeur est tombée à zéro : aucun gain ne peut la ramener à son sommet, la reprise nécessaire n'est donc pas affichée.",
       "total_loss_no_recovery_assets": "{count, plural, one {# actif est tombé} other {# actifs sont tombés}} à zéro : aucun gain ne peut {count, plural, one {le ramener à son sommet} other {les ramener à leur sommet}}, la reprise nécessaire n'est donc pas affichée — {names}.",
       "analysis_starts_late": "L'analyse commence le {start} : avant ce jour, aucun jour de prix complet n'est disponible.",
-      "short_history": "{names} : aucun prix avant le début de la période, leur historique commence donc à l'intérieur."
+      "short_history": "{names} : aucun prix avant le début de la période, leur historique commence donc à l'intérieur.",
+      "best_realization_undefined": "Aucune observation en gain sur la période.",
+      "best_realization_undefined_assets": "Aucune observation en gain sur la période pour {names}.",
+      "average_loss_undefined": "Aucun jour en perte sur la période : il n'y a pas de jour moyen en baisse.",
+      "average_loss_undefined_assets": "Aucun jour en perte sur la période pour {names} : il n'y a pas de jour moyen en baisse.",
+      "omega_undefined": "Gains contre pertes non défini : aucun jour n'est passé sous le rendement cible.",
+      "omega_undefined_assets": "Gains contre pertes non défini pour {names} : aucun jour n'est passé sous le rendement cible.",
+      "extreme_day_ratio_undefined": "Jours extrêmes non définis car la série ne bouge pas.",
+      "extreme_day_ratio_undefined_assets": "Jours extrêmes non définis pour {names} : la série ne bouge pas."
     },
     "assetDetail": {
       "overviewTab": "Vue d'ensemble",
@@ -462,11 +470,9 @@
         "showLess": "Afficher moins",
         "effectiveAssets": {
           "label": "Combien de paris indépendants ai-je réellement ?",
-          "aboveCount": "Au-dessus des {positions} positions mesurées : l'excédent vient de la part non couverte ({share} : liquidités et positions sans prix), et ne dit rien des poids",
           "belowCount": "En dessous des {positions} positions mesurées : les poids sont déséquilibrés, et quelques-unes portent le portefeuille",
-          "evenCount": "Exactement les {positions} positions mesurées : poids uniformes et rien de non couvert",
-          "name": "Nombre effectif de positions",
-          "aboveCountNoShare": "Au-dessus des {positions} positions mesurées : l'excédent vient de la part non couverte (liquidités et positions sans prix), et ne dit rien des poids"
+          "evenCount": "Exactement les {positions} positions mesurées : les poids sont uniformes",
+          "name": "Nombre effectif de positions"
         },
         "diversificationRatio": {
           "label": "Répartir l'argent a-t-il servi à quelque chose ?",

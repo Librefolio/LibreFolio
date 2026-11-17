@@ -76,7 +76,7 @@ backend/app/services/financial_math/
 ├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING; the days with an observation (observation_dates); an incoming TRANSFER's cost as an estimated trade observation while the asset has nothing else (W-B94)
 ├── series_steps.py          series as steps (D-P4): the point holding a day (value_at), the points of a window clipped (points_between), the steps of a list of change rows (steps_from_rows, Decimals compared with their exponent)
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
-├── weights.py               a share of a total (none on a total ≤ 0), allocation slices (none on a sum ≤ 0), gross weights, concentration (largest weight, HHI)
+├── weights.py               a share of a total (none on a total ≤ 0), allocation slices (none on a sum ≤ 0), gross weights, concentration (largest weight, HHI), N_eff
 ├── splits.py                stock splits in the ledger: the ADJUSTMENT rows linked to a SPLIT asset event (one query), the ids an average-cost replay rescales, the usable-ratio rule, the incoming adjustments without a cost that a SPLIT retype must not orphan, the split a share change implies (`implied_split_ratio`)
 ├── holding_window.py        how long a position has been held at its broker: oldest open lot, a closed position's window, its exits, the move that closed it (`closing_move`)
 ├── fifo/                    the lots, matched in FIFO or LIFO (the name stays fifo/, D5)

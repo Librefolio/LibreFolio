@@ -164,9 +164,10 @@ interface RiskMockOptions {
      *
      * Invented figures, like the rest of the branch, and read by no assertion; the
      * backend constrains both to be strictly positive, and that is all L2 checks
-     * before drawing the two cards. 2.07 is 1/Σw² of the stub's two weights (0.6
-     * and 0.35), the inverse Herfindahl the backend computes; 1.15 is a ratio above
-     * one, which a long-only pair that is not perfectly correlated has.
+     * before drawing the two cards. 1.87 is the inverse Herfindahl of the stub's two
+     * weights (0.6 and 0.35) re-taken over their own sum, as the backend computes it
+     * since RN-15 (it was 2.07, cash in the denominator); 1.15 is a ratio above one,
+     * which a long-only pair that is not perfectly correlated has.
      *
      * Opt-in, and absent means ABSENT: without it the output carries neither key,
      * byte for byte the payload of every other test.
@@ -471,7 +472,9 @@ function excludedWeightField(options: RiskMockOptions): {excluded_weight?: numbe
  * key is added, so the payload every other test reads is unchanged.
  */
 function concentrationFields(options: RiskMockOptions): {effective_number_of_assets?: number; diversification_ratio?: number} {
-    return options.concentration ? {effective_number_of_assets: 2.07, diversification_ratio: 1.15} : {};
+    // 1.87, what the backend gives these two items since RN-15: the weights 0.6 and 0.35 re-taken over their own sum,
+    // cash out — 1 / (0.632² + 0.368²). It can no longer exceed the two positions, as the old 2.07 did.
+    return options.concentration ? {effective_number_of_assets: 1.87, diversification_ratio: 1.15} : {};
 }
 
 /** One `comparison` item as Risk's k6 sends it: a holding's beta and correlation, each optional, as the contract declares them. */
