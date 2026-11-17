@@ -375,6 +375,19 @@ def _step(record: AssetProfileUpdate, first: date, through: date) -> ProfileStep
     return ProfileStep(date=first, through=through, value=_value(record), source=record.source, update_id=record.id)
 
 
+async def rows_fingerprint(session: AsyncSession, asset_ids: Iterable[int], keys: Iterable[str]) -> tuple[int, int, datetime | None]:
+    """What a cache of a reader of ``keys`` for ``asset_ids`` keys on: the rows' count, the sum of their ids and the
+    latest ``created_at``. A new row moves all three; a forgotten one moves the count; an id given again after a forget
+    (no AUTOINCREMENT, A2) moves ``created_at``."""
+    ids = sorted(set(asset_ids))
+    if not ids:
+        return (0, 0, None)
+    statement = select(func.count(AssetProfileUpdate.id), func.coalesce(func.sum(AssetProfileUpdate.id), 0), func.max(AssetProfileUpdate.created_at))
+    statement = statement.where(AssetProfileUpdate.asset_id.in_(ids), AssetProfileUpdate.key.in_(_checked_keys(keys) or []))
+    count, total, latest = (await session.execute(statement)).one()
+    return (int(count), int(total), latest)
+
+
 # =============================================================================
 # FORGET
 # =============================================================================
