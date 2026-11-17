@@ -86,6 +86,21 @@ describe('ProfileClassification', () => {
         expect(charts.pies).toHaveLength(0);
     });
 
+    it('has no day to choose with one composition in the period, and says its date', () => {
+        const one: ProfileVoices = {geography: [{...step('2025-11-17', '2026-11-17', {USA: '1'}), opened_on: '2025-10-04', source_date: '2025-09-30'} as ProfileStep]};
+        render(ProfileClassification, {props: {voices: one}});
+        expect(screen.queryByTestId('profile-classification-day')).toBeNull();
+        expect(screen.getByTestId('profile-classification-as-of')).toHaveAttribute('data-kind', 'source_date');
+        expect(screen.getByTestId('profile-classification-as-of')).toHaveAttribute('data-day', '2025-09-30');
+    });
+
+    it('says «before the profile» with no date for a legacy composition', () => {
+        const legacy: ProfileVoices = {sector: [{...step('2025-11-17', '2026-11-17', {Technology: '1'}), opened_on: '2019-03-01', source: 'legacy'} as ProfileStep]};
+        render(ProfileClassification, {props: {voices: legacy}});
+        expect(screen.getByTestId('profile-classification-as-of')).toHaveAttribute('data-kind', 'legacy');
+        expect(screen.getByTestId('profile-classification-as-of')).not.toHaveAttribute('data-day');
+    });
+
     it('has no day to choose with no composition in the period', () => {
         render(ProfileClassification, {props: {voices: {}}});
         expect(screen.queryByTestId('profile-classification-day')).toBeNull();

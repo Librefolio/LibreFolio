@@ -158,6 +158,36 @@ describe('the composition and its «dati al»', () => {
     });
 });
 
+describe('the label of a composition (PROF, 17/11)', () => {
+    function opened(date: string, through: string, value: unknown, extra: Partial<ProfileStep>): ProfileStep {
+        return {...step(date, through, value), opened_on: date, source_date: null, ...extra} as ProfileStep;
+    }
+
+    it('says the source date when the source gives one', () => {
+        const voices: ProfileVoices = {geography: [opened('2026-01-01', '2026-11-17', {USA: '1'}, {opened_on: '2025-10-04', source_date: '2025-09-30'})]};
+        expect(tab.compositionLabel(voices, '2026-06-01')).toEqual({kind: 'source_date', day: '2025-09-30'});
+    });
+
+    it('says the true day of the read without a source date, never the day the period cut it to', () => {
+        const voices: ProfileVoices = {sector: [opened('2026-01-01', '2026-11-17', {Technology: '1'}, {opened_on: '2025-10-04'})]};
+        expect(tab.compositionLabel(voices, '2026-06-01')).toEqual({kind: 'opened_on', day: '2025-10-04'});
+    });
+
+    it('gives no date to a value from before the profile', () => {
+        const voices: ProfileVoices = {geography: [opened('2026-01-01', '2026-11-17', {USA: '1'}, {opened_on: '2019-03-01', source: 'legacy'})]};
+        expect(tab.compositionLabel(voices, '2026-06-01')).toEqual({kind: 'legacy'});
+    });
+
+    it('takes the newest of the two parts, and nothing for a day with no composition', () => {
+        const voices: ProfileVoices = {
+            geography: [opened('2026-01-01', '2026-11-17', {USA: '1'}, {opened_on: '2025-10-04', source_date: '2025-09-30'})],
+            sector: [opened('2026-01-01', '2026-11-17', {Technology: '1'}, {opened_on: '2025-11-02', source_date: '2025-10-31'})],
+        };
+        expect(tab.compositionLabel(voices, '2026-06-01')).toEqual({kind: 'source_date', day: '2025-10-31'});
+        expect(tab.compositionLabel(voices, '2020-01-01')).toBeNull();
+    });
+});
+
 describe('a value as the tab writes it', () => {
     const labels: Record<string, string> = {
         'assets.profile.choices.distribution_policy.accumulating': 'Ad accumulo',

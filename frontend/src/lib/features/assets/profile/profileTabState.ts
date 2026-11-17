@@ -177,6 +177,31 @@ export function compositionAt(voices: ProfileVoices, day: string): {geography: R
     return {geography: at('geography'), sector: at('sector')};
 }
 
+/** What «dati al» says of a composition: the source's date, the day it was read, or «from before the profile». */
+export type CompositionLabel = {kind: 'source_date' | 'opened_on'; day: string} | {kind: 'legacy'};
+
+/**
+ * The label of the composition of one day (PROF, 17/11): the source's date when it gives one («dati al 30/09»), else the
+ * true day of the read («dal 04/10»), never the step's `date`, which the period cuts. A value from before the profile
+ * (`legacy`) gets no date: its day is a convention (A4b), and showing it would date the data. Of the two parts, the
+ * newest; null when the day has no composition.
+ */
+export function compositionLabel(voices: ProfileVoices, day: string): CompositionLabel | null {
+    let best: {kind: 'source_date' | 'opened_on'; day: string} | null = null;
+    let legacy = false;
+    for (const key of COMPOSITION_KEYS) {
+        const point = valueAt(voices[key] ?? [], day);
+        if (!point || point.value === null || point.value === undefined) continue;
+        if (point.source === 'legacy') {
+            legacy = true;
+            continue;
+        }
+        const candidate = point.source_date ? {kind: 'source_date' as const, day: String(point.source_date)} : {kind: 'opened_on' as const, day: String(point.opened_on ?? point.date)};
+        if (best === null || candidate.day > best.day) best = candidate;
+    }
+    return best ?? (legacy ? {kind: 'legacy'} : null);
+}
+
 // =============================================================================
 // Writing a value
 // =============================================================================
