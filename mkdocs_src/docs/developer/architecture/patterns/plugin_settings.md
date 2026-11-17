@@ -1096,8 +1096,11 @@ manual, [Plugin Settings](../../../user/settings/plugins.md); the code is in
     - `ProviderAssignmentSection.svelte` reads `fetchPluginEntry('asset', code)` whenever the chosen
       provider changes, with no module-level cache: a cache would outlive a logout and show the next
       user the personal values of the previous one. With an entry, row 1 shows **Configure** next to
-      the help link (unless the panel is read-only), and the badge **To configure** while
-      `configured` is false; a save replaces the entry, so the badge follows.
+      the help link (unless the panel is read-only). While the provider is not configured (its list
+      entry or its settings say so) the button's icon is a yellow warning triangle, with the reason
+      as its tooltip, in place of a text badge (project 76, N3b); a read-only panel shows the
+      triangle alone. A save replaces the entry and reads the provider list again, so the triangle
+      follows.
     - `AssetSearchAutocomplete.svelte` collects the providers that could not search: from the
       stream's `provider_error` events with `error_code: "NOT_CONFIGURED"`, or from
       `providers_not_configured` when it falls back to the standard endpoint. Each gets a row at the
@@ -1126,6 +1129,13 @@ manual, [Plugin Settings](../../../user/settings/plugins.md); the code is in
 
   A save in **Configure** reads the list again: the chip lights up, selected, and a typed search
   runs again. Texts: `pluginSettings.notConfigured.*`.
+
+  In the asset dialog's provider choice (N3b) such a provider's option is switched off the same way:
+  `SelectOption.needsSetup`, a state of `SimpleSelect` distinct from `disabled`. The option stays
+  reachable by the pointer and the keyboard (`aria-disabled`, an amber icon, a tooltip); choosing it
+  calls `onneedssetup` and opens the common window, and it never becomes the value. **The provider
+  saved on the asset is never switched off** (`savedProviderCode`, from `AssetModal` in edit mode):
+  saving it again is accepted (N2), so an asset whose provider lost its key can still be edited.
 - **Texts.** The interface's own are in the `pluginSettings` subsystem of the catalogue
   (`frontend/src/lib/features/plugin-settings/i18n/`), the two search texts in `assets.search`, and the probe's
   `providerErrors.NOT_CONFIGURED` and `providerErrors.PROVIDER_ERROR` in the `assets` subsystem. A

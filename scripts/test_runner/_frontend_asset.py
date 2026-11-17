@@ -432,7 +432,7 @@ def populate_registry(registry: dict) -> None:
         "asset-provider-not-configured",
         front_asset_provider_not_configured,
         name="Asset Search Provider Not Configured",
-        desc="Project 76 N3a, desktop and mobile: a provider the list says is not configured (justETF, patched in the page's own route; the search stream simulated) gets a switched-off chip, kept in its place and never named in a search; a touch opens the common window — a member sees the read-only settings link and no Configure, an administrator's Configure opens the plugin's settings (closed, nothing saved), the managed profile has no button and closes on Escape",
+        desc="Project 76 N3a/N3b, desktop and mobile: a provider the list says is not configured (justETF, patched in the page's own route; the search stream simulated) gets a switched-off chip, kept in its place and never named in a search; a touch opens the common window — a member sees the read-only settings link and no Configure, an administrator's Configure opens the plugin's settings (closed, nothing saved), the managed profile has no button and closes on Escape; in the provider select its option is switched off and choosing it opens the window without changing the selection, unless it is the provider saved on the asset (own asset, cleaned up), whose Configure carries the warning",
         tests="assets/asset-provider-not-configured.spec.ts",
     )
     add_test(cat, "all", front_asset_all, test_names=False, name="All Asset Tests", desc="Run all Asset tests (unit + E2E)")
