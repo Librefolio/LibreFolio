@@ -291,7 +291,8 @@
       "pairArrivalBeforeDeparture": "The arrival ({arrivalDate}) is dated before the departure ({departureDate}). It was saved as entered: check the two dates.",
       "pairCurrencyMismatch": "Both sides of a cash transfer must be in the same currency (found {currencyA} and {currencyB}). To change currency, use a currency exchange",
       "pairAmountMismatch": "A cash transfer must take out of one broker the same amount it brings into the other (found {amountA} and {amountB})",
-      "pairCurrencySame": "The two sides of a currency exchange must be in different currencies (both are {currency})"
+      "pairCurrencySame": "The two sides of a currency exchange must be in different currencies (both are {currency})",
+      "pairTypeNotLinkable": "{type} rows cannot be linked as a pair: only Asset Transfers, Currency Exchanges and Cash Transfers are pairs."
     },
     "pydantic": {
       "greaterThan": "Value must be greater than {gt}",

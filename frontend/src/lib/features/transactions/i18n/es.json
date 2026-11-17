@@ -291,7 +291,8 @@
       "pairArrivalBeforeDeparture": "La llegada ({arrivalDate}) tiene fecha anterior a la salida ({departureDate}). Se guardó tal como se introdujo: revisa las dos fechas.",
       "pairCurrencyMismatch": "Los dos lados de una transferencia de efectivo deben estar en la misma divisa (encontradas {currencyA} y {currencyB}). Para cambiar de divisa, usa un cambio de divisas",
       "pairAmountMismatch": "Una transferencia de efectivo debe sacar de un bróker el mismo importe que ingresa en el otro (encontrados {amountA} y {amountB})",
-      "pairCurrencySame": "Los dos lados de un cambio de divisas deben estar en divisas distintas (ambos están en {currency})"
+      "pairCurrencySame": "Los dos lados de un cambio de divisas deben estar en divisas distintas (ambos están en {currency})",
+      "pairTypeNotLinkable": "Las filas {type} no se pueden enlazar como par: solo las Transferencias de Activos, las Conversiones de divisa y las Transferencias de efectivo son pares."
     },
     "pydantic": {
       "greaterThan": "El valor debe ser mayor que {gt}",

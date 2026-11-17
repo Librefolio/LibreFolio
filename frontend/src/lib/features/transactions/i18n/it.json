@@ -291,7 +291,8 @@
       "pairArrivalBeforeDeparture": "L'arrivo ({arrivalDate}) è datato prima della partenza ({departureDate}). È stato salvato come inserito: controlla le due date.",
       "pairCurrencyMismatch": "I due lati di un bonifico devono essere nella stessa valuta (trovate {currencyA} e {currencyB}). Per cambiare valuta usa un cambio valuta",
       "pairAmountMismatch": "Un bonifico deve far uscire da un broker ed entrare nell'altro lo stesso importo (trovati {amountA} e {amountB})",
-      "pairCurrencySame": "I due lati di un cambio valuta devono essere in valute diverse (entrambi sono in {currency})"
+      "pairCurrencySame": "I due lati di un cambio valuta devono essere in valute diverse (entrambi sono in {currency})",
+      "pairTypeNotLinkable": "Le righe {type} non si possono collegare in coppia: solo Trasferimento Asset, Cambio valuta e Giroconto sono coppie."
     },
     "pydantic": {
       "greaterThan": "Il valore deve essere maggiore di {gt}",
