@@ -322,6 +322,16 @@ def _already_read(entry: Any, since: datetime) -> bool:
     return read_at is not None and read_at >= ensure_utc(since)
 
 
+async def _usable_bound(rows: Mapping[int, Any]) -> set[str]:
+    """The bound enrichers that can be used now; the others are named in ONE log line for the whole run (not one per
+    asset): their bindings stay, the reads skip them."""
+    bound = {code for row in rows.values() for code in row.config}
+    usable = await usable_codes(bound)
+    if skipped := sorted(bound - usable):
+        logger.info("Profile read skips enrichers not active or not configured", enrichers=skipped)
+    return usable
+
+
 async def refresh_assets(
     session: AsyncSession,
     asset_ids: Sequence[int],
@@ -345,7 +355,7 @@ async def refresh_assets(
     wanted = None if keys is None else frozenset(keys)
     requests: list[ReadRequest] = []
     carried: dict[int, list[ReadOutcome]] = {}
-    usable = await usable_codes(code for row in rows.values() for code in row.config)
+    usable = await _usable_bound(rows)
     for asset_id in ids:
         row = rows.get(asset_id)
         if asset_id not in asset_types or row is None:
