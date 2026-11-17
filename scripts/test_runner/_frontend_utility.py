@@ -661,6 +661,8 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/tools/pac-allocator/planner/result/RebalancerAllocationTable.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/KpiCards.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/ProofPanel.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/result/RebalancerExposureBullets.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/result/rebalancerExposureTooltip.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/OutcomeHeader.rebalancer.test.ts",
             "src/lib/features/tools/pac-allocator/planner/profileContext.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/BusyPanel.test.ts",
