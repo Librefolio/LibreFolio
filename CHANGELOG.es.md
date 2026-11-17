@@ -78,6 +78,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - El cierre de un día pasado ya no se sobrescribe con una cotización en tiempo real: una cotización leída antes de medianoche solo rellena un día que falta. Fuera del horario de mercado, el último día de cotización de un activo conserva además su vela completa (apertura, máximo, mínimo) en lugar del solo precio de cierre.
 - Laboratorio de riesgo: tras una sincronización, el laboratorio vuelve a preguntar qué activos se pueden analizar en el periodo, así que un activo cuyos precios trajo la sincronización pasa a ser seleccionable sin recargar la página.
 - Laboratorio de riesgo: cada sección pregunta una sola vez, al abrirse, qué activos puede analizar, en lugar de dos.
+- La ventana «Configuración del Horario» se desplaza por dentro cuando es más alta que la pantalla, así que «Guardar» ya no queda cortado en una ventana pequeña.
 
 ### ⚠️ Cambios incompatibles
 

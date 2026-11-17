@@ -78,6 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A past day's close is never overwritten by a live quote: a quote read before midnight only fills a day that is missing. Outside market hours an asset's last trading day also keeps its full candle (open, high, low) instead of a close-only point.
 - Risk lab: after a sync, the lab asks again which assets can be analysed over the period, so an asset whose prices the sync brought in becomes selectable without reloading the page.
 - Risk lab: each section asks once when the lab opens about the assets it can analyse, instead of twice.
+- The «Schedule Configuration» window scrolls inside when it is taller than the screen, so «Save» is never cut off on a small window.
 
 ### ⚠️ Breaking changes
 

@@ -78,6 +78,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - La clôture d'un jour passé n'est plus écrasée par une cotation en temps réel : une cotation lue avant minuit ne remplit qu'un jour manquant. Hors heures de marché, le dernier jour de cotation d'un actif garde aussi sa bougie complète (ouverture, plus haut, plus bas) au lieu du seul cours de clôture.
 - Laboratoire du risque : après une synchronisation, le laboratoire redemande quels actifs peuvent être analysés sur la période ; un actif dont la synchronisation a apporté les prix devient sélectionnable sans recharger la page.
 - Laboratoire du risque : chaque section demande une seule fois, à l'ouverture, quels actifs elle peut analyser, au lieu de deux.
+- La fenêtre «Configuration du Planning» défile à l'intérieur quand elle est plus haute que l'écran : «Enregistrer» n'est plus coupé sur une petite fenêtre.
 
 ### ⚠️ Changements incompatibles
 

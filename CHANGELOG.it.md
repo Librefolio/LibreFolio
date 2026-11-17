@@ -78,6 +78,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - La chiusura di un giorno passato non viene più sovrascritta da una quotazione in tempo reale: una quotazione letta prima di mezzanotte riempie solo un giorno che manca. Fuori orario di mercato l'ultimo giorno di contrattazione di un asset tiene anche la sua candela completa (apertura, massimo, minimo) invece del solo prezzo di chiusura.
 - Laboratorio del rischio: dopo una sincronizzazione il laboratorio chiede di nuovo quali asset si possono analizzare nel periodo, così un asset i cui prezzi sono arrivati con la sincronizzazione diventa selezionabile senza ricaricare la pagina.
 - Laboratorio del rischio: ogni sezione chiede una volta sola, all'apertura, quali asset può analizzare, invece di due.
+- La finestra «Configurazione Schedule» scorre al suo interno quando è più alta dello schermo, così «Salva» non resta mai tagliato su una finestra piccola.
 
 ### ⚠️ Modifiche incompatibili
 
