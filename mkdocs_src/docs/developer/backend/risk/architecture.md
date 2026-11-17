@@ -389,6 +389,7 @@ and may move; the request side is the contract: `buildBaseAnalytics()` in
 | Surface | Level | Analytics | How it is asked |
 |---|---|---|---|
 | Dashboard, Broker Detail (`portfolio`) | L1 *How much can it hurt?* | `historical_var` (1-day and 30-day instances), `drawdown_summary`, `historical_kpi` | Historical base wave |
+| | *How does it move?* (the positive twins, RN-18) | L1's own answers: the KPI's positive fields, the 30-day `historical_var`'s `best_horizon`, `drawdown_summary`'s largest rally and average drawdown; the daily instance's `gain_threshold` and `gain_bin_edge` colour L1's histogram | Nothing of its own: L1's historical base wave |
 | | L2 *Am I as diversified as I think?* | `risk_contribution`, `correlation` | Current-composition and historical base waves |
 | | L3 *Am I being paid for this risk?* | `historical_kpi` and `asset_risk_return` on the current composition; `comparison` against the shared benchmark | Base wave; comparison on demand |
 | | L4 *What if…?* | `stress` (historical replay and hypothetical shock), `simulation` | On demand |
@@ -398,6 +399,7 @@ and may move; the request side is the contract: `buildBaseAnalytics()` in
 | | L3° *What did each of these pay for its risk?* | `asset_set_kpi`, `asset_set_risk_return`, and `asset_set_comparison` when a benchmark is chosen | Historical base wave |
 | | L4° *What if…?* | `stress`, historical replay only | On demand |
 | Asset Detail (`asset`) | L1 *How much can it hurt?* | As on the Dashboard | Historical base wave |
+| | *How does it move?* | As on the Dashboard | Nothing of its own |
 | | L3 *Compared with a reference* | `historical_kpi` and `asset_risk_return` on the current composition — on one asset the pair is the asset's own (weight 1); `comparison` against the shared benchmark, never the asset itself | Base wave; comparison on demand |
 | | L4 *What if…?* | `stress` (historical replay; hypothetical shock by sector or region, never by asset type), `simulation` | On demand |
 | None | — | `portfolio_optimization` | API only: no panel requests it |

@@ -207,7 +207,8 @@ title-width rule (`titleWidth()` over `headerWidth()`).
   `average_drawdown` fields from the same request, so a row never mixes two calendars and the benchmark,
   which joins only L3°'s request, never moves it.
 - **Rows.** `buildAssetSetMoveRows()` (`assetSetLevels.ts`) builds one row per selected id, in the
-  selection's order. Columns: Best day, Best 30 days, Largest rally (dates and `lasted N d`), Gains /
+  selection's order; each row's figures come from `readMoveFigures()` (`moveFigures.ts`), the one reading
+  the levels' block *How does it move?* shares (RN-18), so a field means the same figure on both. Columns: Best day, Best 30 days, Largest rally (dates and `lasted N d`), Gains /
   losses (Omega, drawn `1.22×`), Positive days, Semi-dev.; then four `hiddenByDefault` columns, reached
   through the `ColumnVisibilityToggle` in the frame's header: Average day ±, Positive streak, Below peak,
   avg. (`asset_set_drawdown`'s `average_drawdown`, ≤ 0; a never-fallen asset prints `0.0%`) and Extreme
