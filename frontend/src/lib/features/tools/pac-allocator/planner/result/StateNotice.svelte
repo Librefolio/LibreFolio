@@ -5,6 +5,7 @@
     import {BUTTON_LINK, BUTTON_SECONDARY, HINT, NOTICE} from '../ui';
     import {NO_PLAN_COMPLETED, type LimitedEntry, type PlannerResolvedLimit, type ResultNames} from './model';
     import {getPlannerProfile, testId} from '../profile';
+    import {isTieBreak} from '../policies';
 
     /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
     const profile = getPlannerProfile();
@@ -24,8 +25,15 @@
 
     const KEY = 'tools.pacAllocator.planner.result.states';
     const limited = $derived(result.result_state === 'ready_incumbent' && result.stop_reason !== 'completed');
-    const stages = $derived(result.solver_evidence.stages);
+    // The objectives only: the Rebalancer's tie-breaks are counted apart (F4a of project 67, step 7). Every PAC stage is one.
+    const stages = $derived(result.solver_evidence.stages.filter((stage) => !isTieBreak(stage.objective_code, profile.text)));
     const finished = $derived(stages.filter((stage) => stage.status === 'finished').length);
+    /** What the limit stopped: the search for the objective, or, every objective closed and proven, a Rebalancer tie-break
+     * only. A closed objective whose proof no second run confirmed (lot SEEDS) is not proven: the search scope. */
+    const scope = $derived(profile.text === 'rebalancer' && result.proof.kind === 'optimal_proven' && stages.length > 0 && finished === stages.length ? 'tie_break' : 'search');
+    /** Why the search stopped: a numerical error inside SCIP (lot SE) names itself; otherwise the limit reached. */
+    // Read as a list that may be absent: the notice's own tests build minimal results without notes.
+    const cause = $derived((result.issues ?? []).some((issue) => issue.code === 'allocation.solver_numerical_error') ? 'solver_error' : result.stop_reason);
     // Cash the plan still needs per pool because every posting rounds against the plan (QX1-b): computed by the backend.
     const topUps: PlannerRoundingTopUp[] = $derived('primary_solution' in result ? result.primary_solution.rounding_top_ups : []);
     /** An amount limit is wealth (masked with privacy on); a share is a percentage, public. */
@@ -47,16 +55,24 @@
         <button type="button" class={BUTTON_SECONDARY} data-testid={testId('state-edit', profile)} onclick={onedit}>{$t(`${PLANNER_KEY}.actions.editConfiguration`, {default: 'Edit configuration'})}</button>
     </div>
 {:else if limited}
-    <div class="{NOTICE.warning} space-y-2" role="status" data-testid={testId('state', profile)} data-state="limit" data-stop={result.stop_reason}>
+    <div class="{NOTICE.warning} space-y-2" role="status" data-testid={testId('state', profile)} data-state="limit" data-stop={result.stop_reason} data-scope={scope} data-cause={cause}>
         <p>
-            {result.stop_reason === 'time_limit' ? $t(`${KEY}.limit.time`, {default: 'The solver stopped at the time limit with a valid plan. A better one may exist.'}) : $t(`${KEY}.limit.node`, {default: 'The solver stopped at the node limit with a valid plan. A better one may exist.'})}
+            {#if cause === 'solver_error'}
+                {$t(`${KEY}.limit.solverError`, {default: 'The solver stopped on a numerical error with a valid plan. A better one may exist.'})}
+            {:else if scope === 'tie_break'}
+                {$t(`tools.portfolioRebalancer.planner.result.states.limit.tieBreak`, {default: 'The plan is proven the best on its objective; the limit stopped a tie-break, so an equally good plan may exist.'})}
+            {:else}
+                {result.stop_reason === 'time_limit' ? $t(`${KEY}.limit.time`, {default: 'The solver stopped at the time limit with a valid plan. A better one may exist.'}) : $t(`${KEY}.limit.node`, {default: 'The solver stopped at the node limit with a valid plan. A better one may exist.'})}
+            {/if}
         </p>
-        <p class="tabular-nums">
-            {$t(`${KEY}.limit.stages`, {
-                default: 'Stages: {finished} finished · {unfinished} unfinished · no certified gap.',
-                values: {finished, unfinished: stages.length - finished},
-            })}
-        </p>
+        {#if scope === 'search'}
+            <p class="tabular-nums" data-finished={finished} data-unfinished={stages.length - finished}>
+                {$t(`${KEY}.limit.stages`, {
+                    default: 'Stages: {finished} finished · {unfinished} unfinished · no certified gap.',
+                    values: {finished, unfinished: stages.length - finished},
+                })}
+            </p>
+        {/if}
         <div class="flex flex-wrap items-center gap-3">
             <button type="button" class={BUTTON_SECONDARY} data-testid={testId('state-edit', profile)} onclick={onedit}>{$t(`${PLANNER_KEY}.actions.editConfiguration`, {default: 'Edit configuration'})}</button>
             <span class={HINT}>{$t(`${KEY}.limit.complete`, {default: 'The result below stays complete and can be consulted.'})}</span>

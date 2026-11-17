@@ -31,7 +31,7 @@
 
     const KEY = 'tools.pacAllocator.planner.result.header';
     const basis = $derived(result.scenario_basis);
-    const badges = $derived(resultBadges(result));
+    const badges = $derived(resultBadges(result, profile.text));
     const stages = $derived('primary_solution' in result ? result.primary_solution.objectives.stages : []);
     const l2 = $derived(objectiveStage(stages, 'fixed_l2'));
     const shortfall = $derived(objectiveStage(stages, 'shortfall'));

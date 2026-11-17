@@ -47,6 +47,8 @@ import {catalogCurrencyDigits, formatPlannerMoneyPlain} from '../format';
 import type {PlannerReadyResult} from '../types';
 import type {LimitedEntry, ResultNames} from './model';
 import StateNotice from './StateNotice.svelte';
+import ProfileHarness from '../../__tests__/ProfileHarness.svelte';
+import {REBALANCER_PLANNER_PROFILE} from '../profile';
 
 const STATES = 'tools.pacAllocator.planner.result.states';
 
@@ -319,5 +321,81 @@ describe('StateNotice limits banner (F2, M20)', () => {
 
         stateNotice('no_incumbent');
         expect(screen.queryByTestId('pac-planner-state-limits')).toBeNull();
+    });
+});
+
+/**
+ * F4a of project 67, step 7: the «limited» notice says why the search stopped, from the published stages and notes.
+ *
+ * - **The Rebalancer, its objective closed, a tie-break stopped** (the engine's G5 answer has this shape): the score is
+ *   proven, only an equally good plan may differ; the notice says so (`data-scope="tie_break"`) and counts no stage.
+ * - **The Rebalancer, its objective stopped:** the search notice, counting its objectives only (the tie-breaks apart).
+ * - **A numerical error** (`allocation.solver_numerical_error`, lot SE): named as the cause (`data-cause`), in both Tools.
+ * - **The PAC** counts every stage, as before.
+ */
+function limitedResult(stages: {objective_code: string; status: string}[], issues: {code: string}[] = [], proof: object = {kind: 'optimal_proven'}): PlannerReadyResult {
+    return {result_state: 'ready_incumbent', stop_reason: 'time_limit', issues, proof, solver_evidence: {stages}, primary_solution: {rounding_top_ups: []}} as unknown as PlannerReadyResult;
+}
+
+async function mountRebalancer(result: PlannerReadyResult): Promise<void> {
+    render(ProfileHarness, {props: {profile: REBALANCER_PLANNER_PROFILE, child: StateNotice, childProps: {result, names, digits, limits: [], ongoto: vi.fn(), onedit: vi.fn()}}});
+    flushSync();
+    await tick();
+}
+
+const SCORE_CLOSED = [
+    {objective_code: 'plan_score', status: 'finished'},
+    {objective_code: 'operation_count', status: 'unfinished'},
+    {objective_code: 'route_priority', status: 'unfinished'},
+];
+const DISTANCE_STOPPED = [
+    {objective_code: 'target_distance', status: 'finished'},
+    {objective_code: 'wealth_loss', status: 'unfinished'},
+    {objective_code: 'operation_count', status: 'unfinished'},
+    {objective_code: 'route_priority', status: 'unfinished'},
+];
+const counts = (notice: HTMLElement) => {
+    const line = notice.querySelector('[data-finished]');
+    return line ? [line.getAttribute('data-finished'), line.getAttribute('data-unfinished')] : null;
+};
+
+describe('the «limited» notice says why the search stopped (F4a step 7)', () => {
+    it('Rebalancer: the score closed and a tie-break stopped', async () => {
+        await mountRebalancer(limitedResult(SCORE_CLOSED));
+        const notice = screen.getByTestId('rebalancer-planner-state');
+        expect(notice).toHaveAttribute('data-state', 'limit');
+        expect(notice).toHaveAttribute('data-scope', 'tie_break');
+        expect(counts(notice)).toBeNull();
+    });
+
+    it('Rebalancer: the score closed but its proof not confirmed (lot SEEDS): never «proven»', async () => {
+        await mountRebalancer(limitedResult(SCORE_CLOSED, [], {kind: 'not_proven', reason_code: 'allocation.proof_not_confirmed'}));
+        const notice = screen.getByTestId('rebalancer-planner-state');
+        expect(notice).toHaveAttribute('data-scope', 'search');
+        expect(counts(notice)).toEqual(['1', '0']);
+    });
+
+    it('Rebalancer: an objective stopped: the search, counting the objectives only', async () => {
+        await mountRebalancer(limitedResult(DISTANCE_STOPPED));
+        const notice = screen.getByTestId('rebalancer-planner-state');
+        expect(notice).toHaveAttribute('data-scope', 'search');
+        expect(counts(notice)).toEqual(['1', '1']);
+    });
+
+    it('a numerical error is named as the cause, in both Tools', async () => {
+        const error = [{code: 'allocation.solver_numerical_error'}];
+        await mountRebalancer(limitedResult(SCORE_CLOSED, error));
+        expect(screen.getByTestId('rebalancer-planner-state')).toHaveAttribute('data-cause', 'solver_error');
+        cleanup();
+        await mount(limitedResult(SCORE_CLOSED, error));
+        expect(screen.getByTestId('pac-planner-state')).toHaveAttribute('data-cause', 'solver_error');
+    });
+
+    it('the PAC counts every stage, and the clock is the cause', async () => {
+        await mount(limitedResult(SCORE_CLOSED));
+        const notice = screen.getByTestId('pac-planner-state');
+        expect(notice).toHaveAttribute('data-scope', 'search');
+        expect(notice).toHaveAttribute('data-cause', 'time_limit');
+        expect(counts(notice)).toEqual(['1', '2']);
     });
 });

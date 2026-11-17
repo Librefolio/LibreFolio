@@ -20,6 +20,7 @@
     import {exactSign, objectiveStage, resultNames} from './model';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {getPlannerProfile, testId} from '../profile';
+    import {isTieBreak} from '../policies';
 
     /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
     const profile = getPlannerProfile();
@@ -201,7 +202,10 @@
     const budget = $derived(setting('time_budget'));
     const nodeLimit = $derived(setting('limits/nodes'));
     const infeasible = $derived(stages.some((stage) => stage.status === 'infeasible'));
-    const closed = $derived(stages.filter((stage) => stage.status === 'finished').length);
+    // The Rebalancer's tie-breaks are not objectives (F4a of project 67, step 6): only its score, or the distance and the
+    // money lost, are counted. Every stage of the PAC's cascade is an objective.
+    const objectiveStages = $derived(stages.filter((stage) => !isTieBreak(stage.objective_code, profile.text)));
+    const closed = $derived(objectiveStages.filter((stage) => stage.status === 'finished').length);
     const engines = $derived([...new Set(stages.map((stage) => `${stage.engine} ${stage.version}`))].join(', '));
 
     const formats = $derived.by(() => {
@@ -307,8 +311,8 @@
                                 testid={testId('kpi-compute-row-help', profile)}
                             />
                         </dt>
-                        <dd class="font-semibold tabular-nums text-lf-primary">
-                            {$t(`${KEY}.compute.objectivesValue`, {default: '{closed} of {total}', values: {closed, total: stages.length}})}
+                        <dd class="font-semibold tabular-nums text-lf-primary" data-closed={closed} data-total={objectiveStages.length}>
+                            {$t(`${KEY}.compute.objectivesValue`, {default: '{closed} of {total}', values: {closed, total: objectiveStages.length}})}
                         </dd>
                     </div>
                 {/if}

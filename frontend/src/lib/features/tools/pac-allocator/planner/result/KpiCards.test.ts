@@ -32,6 +32,7 @@ import {REBALANCER_PLANNER_PROFILE} from '../profile';
 import type {PlannerReadyResult} from '../types';
 import browser from './__fixtures__/rebalancer-browser.json';
 import t5 from './__fixtures__/rebalancer-t5.json';
+import targetFirst from './__fixtures__/rebalancer-t4-target-first.json';
 import KpiCards from './KpiCards.svelte';
 
 beforeAll(async () => {
@@ -174,5 +175,32 @@ describe('the Rebalancer key figures', () => {
         flushSync();
         await tick();
         expect(value('value_today')).toBe(formatExactMoneyPlain(solution.plan_accounts.initial_wealth));
+    });
+});
+
+/**
+ * F4a of project 67, step 6: the «Calculation» box counts the Rebalancer's objectives, not its tie-breaks. On the G5
+ * answer the score closed and the two tie-breaks stopped: one objective of one is closed. Under «Target first» (T4) every
+ * stage closed: two of two.
+ */
+describe('the Rebalancer «Objectives closed»', () => {
+    const counted = () => {
+        const row = document.querySelector(`[data-testid="${P}-kpi-compute-row"][data-row="objectives"] dd`);
+        return [row?.getAttribute('data-closed'), row?.getAttribute('data-total')];
+    };
+
+    it('counts the score, not the tie-breaks', () => {
+        const result = structuredClone(browser.result) as Json;
+        expect(
+            result.solver_evidence.stages.map((stage: Json) => stage.status),
+            'PREMISE',
+        ).toEqual(['finished', 'unfinished', 'unfinished']);
+        mounted(result);
+        expect(counted()).toEqual(['1', '1']);
+    });
+
+    it('counts two objectives under «Target first»', () => {
+        mounted(structuredClone(targetFirst.result) as Json);
+        expect(counted()).toEqual(['2', '2']);
     });
 });
