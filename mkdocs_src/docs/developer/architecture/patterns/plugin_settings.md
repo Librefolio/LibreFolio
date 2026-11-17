@@ -38,6 +38,7 @@ Paths are relative to `backend/`.
 | `app/services/plugin_settings/resolver.py` | The value each field takes (variable, saved row, default), its problems, the fields that leave a plugin not configured (`missing_field_keys()`, one rule for a call and for the catalogue), and the fingerprint of the cache keys |
 | `app/services/plugin_settings/groups/__init__.py` | The shared settings groups ([Shared Groups](#groups)): `SettingsGroup`, `register_group()`, `validate_plugin_groups()` (checked at registration), `plugin_groups()` |
 | `app/services/plugin_settings/runtime.py` | `configure_instance()`: reads the plugin's rows, and its groups' (`read_group_rows()`), and binds the values to a new instance; `bound_settings_for()`: the values of a plugin that cannot be bound where it is created, as the `BoundSettings` to hand over (`None` when it declares no field) |
+| `app/services/plugin_settings/readiness.py` | `plugins_readiness()` and `plugin_readiness()`: whether a plugin is configured for a caller, and what is missing, before any call ([NOT_CONFIGURED](#not-configured)) |
 | `app/services/plugin_settings/crypto.py` | The encryption of the secret values, and `plugin_secrets_key_status()` |
 | `app/services/plugin_settings/service.py` | The catalogue (`configured` and the plugin's icon included) and the all-or-nothing writes behind the API |
 | `app/api/v1/plugin_settings.py`, `app/schemas/plugin_settings.py` | The two endpoints and their schemas |
@@ -724,6 +725,15 @@ current key. The same rule serves both sides:
 - **The catalogue**: `configured` is `not missing_field_keys(states)`, judged on every field of the
   plugin, the ones the managed profile hides included: a yes or a no, which names none of them. The
   interface shows it as the badge **Configured** or **To configure** ([The Interface](#interface)).
+- **Before a call** (project 76, N1): `plugins_readiness(family, codes, user_id=…)` in `readiness.py`
+  answers, for each plugin asked, a `PluginReadiness(configured, missing)`: the plugin's fields and the
+  fields of the groups it reads, these as `<group>.<field>`, judged for that caller. It reads the rows
+  in one short session and resolves them in a worker thread, without decrypting and without calling
+  the source. An unknown code, or a plugin with no field and no group, is configured. In the managed
+  profile `missing` never names a field a variable locks, while `configured` still counts it. The
+  provider lists use it, one check per request: `GET /api/v1/assets/provider` and
+  `GET /api/v1/fx/providers` give each provider `configured` and `missing_settings`.
+  It shares the catalogue's divergence below: a blob the key id vouches for counts as set.
 
 What the refusal looks like:
 
@@ -1079,7 +1089,7 @@ Residual risks:
 
 ## ✅ Tests {: #tests }
 
-All seven run without a server or the lane's database (`isolation="pure"`):
+All eight run without a server or the lane's database (`isolation="pure"`):
 
 | Selector | Covers |
 |----------|--------|
@@ -1089,6 +1099,7 @@ All seven run without a server or the lane's database (`isolation="pure"`):
 | `./dev.py test services plugin-settings-service` | The catalogue, `configured` and each plugin's icon included (an icon that cannot be read, or an empty one, is null; a name that cannot be read falls back to the code), and the all-or-nothing writes |
 | `./dev.py test services secret-masking` | Masking in exceptions and log lines, across threads and tasks; overlapping or touching occurrences masked as one, against the overlap attack of the security review; `whole` |
 | `./dev.py test services plugin-settings-groups` | The shared groups ([Shared Groups](#groups)): registering and refusing a group, its variables, the checks of `settings_groups` at registration, the binding with no field of the plugin's own (variable, row, default), `missing` as `<group>.<field>` and `NOT_CONFIGURED` at the boundary, the masking of a group secret, the fingerprint (unchanged without groups), the pickle, and the gate: every named group exists, every shipped group is used |
+| `./dev.py test services plugin-readiness` | `plugins_readiness()`: the same answer as `configure_instance(...).settings.missing` for prices and exchange rates (own fields, groups, user fields, variables, a secret under another key), one database session per batch and none for a plugin without settings, never a decryption, the managed profile's locked fields counted but not named; the two provider lists, with one check per request |
 | `./dev.py test services plugin-settings-guards` | Shipped variables documented in `.env.example`, one owner per variable, no alias on a variable LibreFolio reads, AI Export kept away from the settings |
 
 The other units that touch the plugin settings:
