@@ -301,7 +301,10 @@
         }
       },
       "driftUncertainty": "The drift comes from {count} observations: that alone puts this median between {low} and {high}.",
-      "driftUncertaintyWide": "The drift comes from just {count} observations: that alone puts this median between {low} and {high} — wider than the band above."
+      "driftUncertaintyWide": "The drift comes from just {count} observations: that alone puts this median between {low} and {high} — wider than the band above.",
+      "estimation": "Estimated on {length} of history, from {start} to {end} ({count} observations), whatever the period chosen above.",
+      "estimationTruncated": "A longer common history exists: these are its most recent {count} observations, as many as the calculation can carry.",
+      "pathsReduced": "{used} paths instead of {requested}: as many as fit the calculation for this portfolio and horizon."
     },
     "errors": {
       "analytic_not_found": "Analytic not available.",
@@ -319,11 +322,10 @@
       "optimization_infeasible": "No allocation satisfies the requested constraints.",
       "unknown": "This measurement did not return a result.",
       "answer_discarded": "The answer was set aside because the data changed while it was arriving. Run the analysis again.",
-      "resource_limit_paths_or_horizon": "This simulation is too large to run. Use fewer simulation paths or a shorter horizon.",
       "resource_limit_horizon_or_sampling": "This quasi-Monte Carlo simulation is too large to run. Shorten the horizon or choose Monte Carlo sampling.",
-      "resource_limit_period": "This simulation is too large to run: the period holds too much history. Choose a shorter period.",
       "resource_limit_positions": "A simulation can include at most 100 holdings, and this portfolio has more. Simulate a broker with fewer holdings instead.",
-      "resource_limit_period_or_assets": "This analysis is too large to run: these assets cover too many days of prices. Choose a shorter period or fewer assets."
+      "resource_limit_period_or_assets": "This analysis is too large to run: these assets cover too many days of prices. Choose a shorter period or fewer assets.",
+      "resource_limit_horizon": "This simulation is too large to run, even after lowering the simulation paths to 1,024. Use a shorter horizon."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe is undefined because volatility is zero.",
@@ -372,7 +374,8 @@
       "omega_undefined": "Gains against losses is undefined: no day fell below the target return.",
       "omega_undefined_assets": "Gains against losses is undefined for {names}: no day fell below the target return.",
       "extreme_day_ratio_undefined": "Extreme days are undefined because the series does not move.",
-      "extreme_day_ratio_undefined_assets": "Extreme days are undefined for {names}: the series does not move."
+      "extreme_day_ratio_undefined_assets": "Extreme days are undefined for {names}: the series does not move.",
+      "simulation_history_shorter_than_horizon": "The simulation projects {horizon_days} days from {history_days} days of history: the band is only as wide as that history."
     },
     "assetDetail": {
       "overviewTab": "Overview",

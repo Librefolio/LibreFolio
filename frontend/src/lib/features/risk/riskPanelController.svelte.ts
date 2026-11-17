@@ -170,6 +170,15 @@ export function baseSignature(inputs: RiskControllerInputs): string {
     });
 }
 
+/**
+ * The simulation's own signature (RN-16, developer's Q4 c): it is estimated on its own history, never the page's
+ * period, so the dates take no part — a new period leaves its cone on screen. The scope and the currency change what it
+ * projects, so they drop it; so do the positions (`refreshVersion`, a sync) and its own controls.
+ */
+export function simulationSignature(inputs: RiskControllerInputs): string {
+    return JSON.stringify({scope: canonicalizeScope(inputs.scope), targetCurrency: inputs.targetCurrency});
+}
+
 type SingleOutcome = {kind: 'answered'; result: RiskAnalyticResult | null} | {kind: 'unsupported'} | {kind: 'discarded'};
 
 const SEVERITY_RANK: Record<DataQualityIssue['severity'], number> = {info: 0, warning: 1, error: 2};
@@ -335,6 +344,7 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
      *  `loadDiscarded` states for the base wave, kept per analysis. */
     const discarded = $state<Record<OnDemandAnalysis, boolean>>({comparison: false, stress: false, replay: false, simulation: false});
     let lastBaseSignature = '';
+    let lastSimulationSignature = '';
     /**
      * Counts how many times the base signature actually moved.
      *
@@ -387,9 +397,10 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
 
     /** Invalidate every on-demand analysis. Returns which of them were in flight,
      *  so the caller can decide whether the user's intent deserves a relaunch. */
-    function discardOnDemand(): OnDemandAnalysis[] {
-        const inFlight = ON_DEMAND_ANALYSES.filter((analysis) => isLoading(analysis));
-        for (const analysis of ON_DEMAND_ANALYSES) {
+    function discardOnDemand(keep: readonly OnDemandAnalysis[] = []): OnDemandAnalysis[] {
+        const dropped = ON_DEMAND_ANALYSES.filter((analysis) => !keep.includes(analysis));
+        const inFlight = dropped.filter((analysis) => isLoading(analysis));
+        for (const analysis of dropped) {
             generations[analysis] += 1;
             setResult(analysis, null);
             setLoading(analysis, false);
@@ -588,11 +599,14 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
      * without a component: this is the exact seam where the answers used to be
      * discarded together with the questions.
      */
-    function applyBaseSignature(signature: string): void {
+    function applyBaseSignature(signature: string, simulation?: string): void {
         if (signature === lastBaseSignature) return;
         lastBaseSignature = signature;
         baseEpoch += 1;
-        const rerun = untrack(() => discardOnDemand());
+        // The simulation stays when only what it does not read moved — the period (RN-16).
+        const keepSimulation = simulation !== undefined && lastSimulationSignature !== '' && simulation === lastSimulationSignature;
+        if (simulation !== undefined) lastSimulationSignature = simulation;
+        const rerun = untrack(() => discardOnDemand(keepSimulation ? ['simulation'] : []));
         untrack(() => {
             // The panel opens or its scope changes: its base wave holds the page's Refresh button (Y11). The
             // on-demand analyses keep their own indicators, and a sync (`handleSynced`) reloads in background.
@@ -649,7 +663,8 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
     });
 
     $effect(() => {
-        applyBaseSignature(baseSignature(inputs()));
+        const current = inputs();
+        applyBaseSignature(baseSignature(current), simulationSignature(current));
     });
 
     // A price catch-up (the bus's `{kind: 'prices'}`): what is on screen is asked again, in silence and outside `pageBusy` (Y5-1,
@@ -671,6 +686,12 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
         }
         if (version === lastRefreshVersion) return;
         lastRefreshVersion = version;
+        // The positions changed: the simulation projects today's composition, so its cone no longer holds (RN-16);
+        // one in flight is asked again, as a signature change does.
+        const rerun = untrack(() => discardOnDemand(ON_DEMAND_ANALYSES.filter((analysis) => analysis !== 'simulation')));
+        untrack(() => {
+            for (const analysis of rerun) void launchers.get(analysis)?.();
+        });
         untrack(() => void pageBusy.track('risk-refresh', () => loadBase(true)));
     });
 

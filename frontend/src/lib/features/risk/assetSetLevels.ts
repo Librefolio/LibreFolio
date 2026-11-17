@@ -464,3 +464,22 @@ export function calendarLength(start: string, end: string): CalendarLength {
     const days = Math.round((endExclusive - addMonthsClamped(start, wholeMonths)) / DAY_MS);
     return {years: Math.floor(wholeMonths / 12), months: wholeMonths % 12, days};
 }
+
+/** The `$_` this module is handed, so it stays a plain module (no store read here). */
+export type LengthTranslator = (key: string, options: {values: Record<string, number>}) => string;
+
+/**
+ * `calendarLength` in words — «3 mesi e 1 giorno», «4 anni e 2 mesi»: zero parts left out, the rest joined the way the
+ * reader's language joins a list; a span shorter than a day reads as its count of days. One sentence for every place
+ * that states how long a window is (L3°'s note in the lab, the simulation's history in L4 — RN-16).
+ */
+export function calendarLengthText(start: string, end: string, translate: LengthTranslator, language: string, fallbackDays = 0): string {
+    const {years, months, days} = calendarLength(start, end);
+    const parts = [
+        years > 0 ? translate('risk.assetSet.levels.l3.period.years', {values: {count: years}}) : null,
+        months > 0 ? translate('risk.assetSet.levels.l3.period.months', {values: {count: months}}) : null,
+        days > 0 ? translate('risk.assetSet.levels.l3.period.days', {values: {count: days}}) : null,
+    ].filter((part): part is string => part !== null);
+    if (parts.length === 0) return translate('risk.assetSet.levels.l3.period.days', {values: {count: fallbackDays}});
+    return new Intl.ListFormat(language, {style: 'long', type: 'conjunction'}).format(parts);
+}

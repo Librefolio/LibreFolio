@@ -301,7 +301,10 @@
         }
       },
       "driftUncertainty": "La deriva viene da {count} osservazioni: solo per questo la mediana sta fra {low} e {high}.",
-      "driftUncertaintyWide": "La deriva viene da appena {count} osservazioni: solo per questo la mediana sta fra {low} e {high} — più larga della banda qui sopra."
+      "driftUncertaintyWide": "La deriva viene da appena {count} osservazioni: solo per questo la mediana sta fra {low} e {high} — più larga della banda qui sopra.",
+      "estimation": "Stimata su {length} di storia, dal {start} al {end} ({count} osservazioni), qualunque sia il periodo scelto sopra.",
+      "estimationTruncated": "Esiste una storia comune più lunga: queste sono le sue {count} osservazioni più recenti, quante il calcolo ne può portare.",
+      "pathsReduced": "{used} percorsi invece di {requested}: quanti ne stanno nel calcolo per questo portafoglio e questo orizzonte."
     },
     "errors": {
       "analytic_not_found": "Analitica non disponibile.",
@@ -319,11 +322,10 @@
       "optimization_infeasible": "Nessuna allocazione soddisfa i vincoli richiesti.",
       "unknown": "Questa misurazione non ha restituito un risultato.",
       "answer_discarded": "La risposta è stata scartata perché i dati sono cambiati mentre arrivava. Rilancia l'analisi.",
-      "resource_limit_paths_or_horizon": "Questa simulazione è troppo grande per essere eseguita. Usa meno percorsi simulati o un orizzonte più breve.",
       "resource_limit_horizon_or_sampling": "Questa simulazione Quasi-Monte Carlo è troppo grande per essere eseguita. Accorcia l'orizzonte o scegli il campionamento Monte Carlo.",
-      "resource_limit_period": "Questa simulazione è troppo grande per essere eseguita: il periodo contiene troppa storia. Scegli un periodo più breve.",
       "resource_limit_positions": "Una simulazione può includere al massimo 100 posizioni, e questo portafoglio ne ha di più. Simula invece un broker con meno posizioni.",
-      "resource_limit_period_or_assets": "Questa analisi è troppo grande per essere eseguita: questi asset coprono troppi giorni di prezzi. Scegli un periodo più breve o meno asset."
+      "resource_limit_period_or_assets": "Questa analisi è troppo grande per essere eseguita: questi asset coprono troppi giorni di prezzi. Scegli un periodo più breve o meno asset.",
+      "resource_limit_horizon": "Questa simulazione è troppo grande da eseguire, anche abbassando i percorsi a 1.024. Usa un orizzonte più breve."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe non definito perché la volatilità è zero.",
@@ -372,7 +374,8 @@
       "omega_undefined": "Guadagni contro perdite non definito: nessun giorno è sceso sotto il rendimento obiettivo.",
       "omega_undefined_assets": "Guadagni contro perdite non definito per {names}: nessun giorno è sceso sotto il rendimento obiettivo.",
       "extreme_day_ratio_undefined": "Giorni estremi non definiti perché la serie non si muove.",
-      "extreme_day_ratio_undefined_assets": "Giorni estremi non definiti per {names}: la serie non si muove."
+      "extreme_day_ratio_undefined_assets": "Giorni estremi non definiti per {names}: la serie non si muove.",
+      "simulation_history_shorter_than_horizon": "La simulazione proietta {horizon_days} giorni da {history_days} giorni di storia: la banda è larga quanto quella storia, non di più."
     },
     "assetDetail": {
       "overviewTab": "Panoramica",

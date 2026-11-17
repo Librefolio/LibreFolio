@@ -319,12 +319,12 @@ describe('RiskResultFrame — the error branch is still worded by its code', () 
 describe('RiskResultFrame — a resource_limit refusal is worded by the remedy it names', () => {
     const SIMULATION_TEST_ID = 'risk-simulation-section';
     const GENERIC_LIMIT_KEY = 'risk.errors.resource_limit';
-    const PERIOD_KEY = 'risk.errors.resource_limit_period';
+    const PERIOD_KEY = 'risk.errors.resource_limit_horizon';
     const UNAVAILABLE_KEY = 'risk.states.unavailable';
     const FUTURE_REMEDY = 'future_remedy';
     const REFUSAL_MESSAGE = 'A synthetic backend refusal sentence.';
-    /** The details `resource_limit_error` (`risk/base.py`) sends for a history longer than the engine carries. */
-    const PERIOD_DETAILS = {metric: 'observations', actual: 5001, limit: 5000, remedy: 'period'};
+    /** The details `resource_limit_error` (`risk/base.py`) sends for a simulation too large even at its fewest paths (RN-16). */
+    const PERIOD_DETAILS = {metric: 'stochastic_cells', actual: 373_760_000, limit: 200_000_000, remedy: 'horizon'};
 
     type Refusal = {code: 'resource_limit'; message: string; details: Record<string, unknown>};
 
@@ -339,13 +339,13 @@ describe('RiskResultFrame — a resource_limit refusal is worded by the remedy i
         return normalize(screen.getByTestId(`${SIMULATION_TEST_ID}-unavailable`).textContent ?? '');
     }
 
-    it('resolves the generic sentence and the period remedy’s own: two sentences, neither of them the state fallback', () => {
+    it('resolves the generic sentence and the horizon remedy’s own: two sentences, neither of them the state fallback', () => {
         expect(typeof enLeaf(GENERIC_LIMIT_KEY), `${GENERIC_LIMIT_KEY} is missing from en.json`).toBe('string');
         const generic = resolve(GENERIC_LIMIT_KEY);
         expect(generic, `${GENERIC_LIMIT_KEY} does not resolve: the catalogue is not loaded`).not.toBe(GENERIC_LIMIT_KEY);
         expect(generic, `${GENERIC_LIMIT_KEY} reads like ${UNAVAILABLE_KEY}: the two fallbacks could not be told`).not.toBe(resolve(UNAVAILABLE_KEY));
 
-        expect(typeof enLeaf(PERIOD_KEY), `${PERIOD_KEY} is missing from en.json: a refusal naming the period remedy has no sentence to be worded by`).toBe('string');
+        expect(typeof enLeaf(PERIOD_KEY), `${PERIOD_KEY} is missing from en.json: a refusal naming the horizon remedy has no sentence to be worded by`).toBe('string');
         const period = resolve(PERIOD_KEY);
         expect(period, `${PERIOD_KEY} does not resolve through svelte-i18n`).not.toBe(PERIOD_KEY);
         expect(period, `${PERIOD_KEY} reads like ${GENERIC_LIMIT_KEY}: which sentence rendered could not be told`).not.toBe(generic);
@@ -357,7 +357,7 @@ describe('RiskResultFrame — a resource_limit refusal is worded by the remedy i
     it.each([
         {form: 'as it arrives', wrap: (error: Refusal): RiskAnalyticResult['error'] => error},
         {form: 'wrapped in a list', wrap: (error: Refusal): RiskAnalyticResult['error'] => [error]},
-    ])('words a refusal naming the period remedy by that remedy’s sentence, not the generic one — the error $form', ({wrap}) => {
+    ])('words a refusal naming the horizon remedy by that remedy’s sentence, not the generic one — the error $form', ({wrap}) => {
         const generic = resolve(GENERIC_LIMIT_KEY);
         expect(generic, `${GENERIC_LIMIT_KEY} does not resolve: the comparison below would prove nothing`).not.toBe(GENERIC_LIMIT_KEY);
 

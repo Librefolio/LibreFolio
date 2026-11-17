@@ -25,6 +25,7 @@ from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.app.services.risk import replay as risk_replay_module
 from backend.app.services.risk import scope as risk_scope_module
 from backend.app.services.risk import service as risk_service_module
+from backend.app.services.risk import simulation_window as risk_simulation_window_module
 from backend.app.services.risk.base import (
     RiskAnalytic,
     RiskAssetClassification,
@@ -33,6 +34,7 @@ from backend.app.services.risk.base import (
     RiskUnavailableError,
 )
 from backend.app.services.risk.data_quality import data_quality_warnings
+from backend.app.services.risk.eligibility import PriceWindowFacts
 from backend.app.services.risk.metrics import annualized_sharpe, annualized_sortino, beta, pearson_correlation
 from backend.app.services.risk.registry import RiskAnalyticRegistry
 from backend.app.services.risk.results import assets_excluded_warnings, build_execution_context, portfolio_twrr_returns, with_warning_asset_names
@@ -44,6 +46,10 @@ from backend.app.services.risk.scope import (
     scope_reference,
 )
 from backend.app.services.risk.service import RiskService
+from backend.app.services.risk.simulation_window import simulation_participants, simulation_window
+from backend.app.services.risk_plugins.simulation.plugin import SimulationAnalytic
+from backend.app.utils.date_range_limits import MAX_BULK_ITEM_DAYS
+from backend.app.utils.datetime_utils import latest_range_end
 
 
 class NamesDb:
@@ -2818,3 +2824,116 @@ async def test_the_twrr_readers_leave_out_the_late_start_of_the_per_asset_series
     for instance_id in TWRR_READERS:
         assert results[instance_id].metadata.return_basis == RiskReturnBasis.TWRR, instance_id
         assert "analysis_starts_late" not in warning_codes(results[instance_id]), instance_id
+
+
+# --------------------------------------------------------------------------- #
+# RN-16 (developer's Q4 c, 16/11/2026): the simulation is estimated on its own history — all the common history, never
+# the page's period — and the rest of the request keeps the period.
+# --------------------------------------------------------------------------- #
+
+
+def _facts(first_quote: date | None) -> PriceWindowFacts:
+    return PriceWindowFacts(first_quote=first_quote, last_quote=first_quote, last_quote_before_start=None, quotes_in_window=0, first_quote_ever=first_quote, last_quote_ever=first_quote)
+
+
+def test_the_simulation_window_starts_the_day_after_the_latest_first_quote():
+    end = date(2026, 11, 17)
+    window = simulation_window({1: _facts(date(2021, 3, 1)), 2: _facts(date(2023, 6, 15)), 3: _facts(None)}, end=end)
+
+    # The day after: the latest starter has its price on the baseline day the first return is measured from.
+    assert (window.start, window.end) == (date(2023, 6, 16), end)
+    assert simulation_window({1: _facts(None)}, end=end) is None
+
+
+def test_the_simulation_window_keeps_the_most_recent_days_the_price_budget_allows():
+    """J-50: one preparation builds at most MAX_BULK_ITEM_DAYS per-day points over every asset — the window starts as
+    late as that needs, instead of refusing (the page's refusal names a shorter period, which the simulation has not)."""
+    end = date(2026, 11, 17)
+    facts = {asset_id: _facts(date(1990, 1, 2)) for asset_id in range(1, 101)}
+
+    window = simulation_window(facts, end=end)
+
+    per_asset = MAX_BULK_ITEM_DAYS // 100
+    assert window.end == end
+    assert (end - window.start).days + 2 == per_asset
+    # Counted as the preparation counts it — from the day before the start, the baseline it loads, to the end.
+    assert 100 * ((end - (window.start - timedelta(days=1))).days + 1) <= MAX_BULK_ITEM_DAYS
+
+
+@pytest.mark.asyncio
+async def test_the_simulation_reads_its_own_window_and_the_rest_of_the_request_the_period(monkeypatch):
+    page = DateRangeModel(start=date(2026, 1, 2), end=date(2026, 1, 21))
+    page_prepared = make_prepared_set({1: [0.01, -0.01] * 10, 2: [0.005, -0.002] * 10})
+    simulation_prepared = make_prepared_set({1: [0.01, -0.01] * 30, 2: [0.005, -0.002] * 30}, baseline=date(2023, 6, 15))
+    prepared_ranges: list[DateRangeModel] = []
+    seen: dict[str, object] = {}
+
+    async def fake_scope(_db, **_kwargs):
+        return ScopeInputs(
+            requested_asset_ids=(1, 2),
+            weights={1: 0.6, 2: 0.4},
+            asset_values={1: Decimal("60"), 2: Decimal("40")},
+            cash_weight=0.0,
+            scope_value=Decimal("100"),
+            portfolio_report=None,
+            data_quality=DataQualityReport(),
+            warnings=(),
+            broker_ids=(3,),
+            composition_as_of=page.end,
+        )
+
+    async def fake_assets(_db, asset_ids):
+        return set(asset_ids)
+
+    async def fake_prepare(_db, **kwargs):
+        prepared_ranges.append(kwargs["date_range"])
+        return page_prepared if kwargs["date_range"] == page else simulation_prepared
+
+    async def fake_facts(_db, **kwargs):
+        seen["facts_assets"] = tuple(kwargs["asset_ids"])
+        return {1: _facts(date(2021, 3, 1)), 2: _facts(date(2023, 6, 14))}
+
+    async def capture_execute(self, params, context):
+        seen["simulation_series"] = context.prepared_series
+        raise RiskUnavailableError("captured", code=RiskErrorCode.DATA_UNAVAILABLE)
+
+    async def serve_holidays() -> frozenset[date]:
+        return frozenset()
+
+    monkeypatch.setattr(risk_service_module, "load_scope_inputs", fake_scope)
+    monkeypatch.setattr(risk_service_module, "load_existing_asset_ids", fake_assets)
+    monkeypatch.setattr(risk_service_module, "prepare_asset_series", fake_prepare)
+    monkeypatch.setattr(risk_simulation_window_module, "prepare_asset_series", fake_prepare)
+    monkeypatch.setattr(risk_simulation_window_module, "load_price_window_facts", fake_facts)
+    monkeypatch.setattr(risk_service_module, "ensure_market_holidays", serve_holidays)
+    monkeypatch.setattr(SimulationAnalytic, "execute", capture_execute)
+
+    response = await RiskService(db=EmptyRowsDb()).execute(
+        user_id=7,
+        request=RiskQueryRequest.model_validate(
+            {
+                "scope": {"kind": "portfolio", "broker_ids": [3]},
+                "date_range": {"start": page.start.isoformat(), "end": page.end.isoformat()},
+                "target_currency": "EUR",
+                "mode": "current_composition",
+                "composition_policy": "current_buy_and_hold",
+                "analytics": [{"instance_id": "simulation", "analytic_code": "simulation", "parameters": {"horizon_days": 30, "path_count": 256}}],
+            }
+        ),
+    )
+
+    assert prepared_ranges[0] == page
+    (window,) = prepared_ranges[1:]
+    assert (window.start, window.end) == (date(2023, 6, 15), latest_range_end())
+    assert seen["facts_assets"] == (1, 2)
+    # The plugin got the simulation's own series, never the page's.
+    assert seen["simulation_series"] is simulation_prepared
+    assert response.items[0].error.message == "captured"
+
+
+def test_every_quoted_holding_takes_part_in_the_simulation_and_only_the_unquoted_stay_out():
+    """The one place that decides who the simulation's history is estimated on (RN-16): today, every quoted holding — a
+    recent listing shortens the shared history of all of them (Q4 c as approved; leaving it out is the developer's call)."""
+    taking_part, left_out = simulation_participants({1: date(2018, 1, 2), 2: date(2026, 9, 1), 3: None})
+
+    assert (taking_part, left_out) == ((1, 2), (3,))

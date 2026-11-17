@@ -486,6 +486,13 @@ async def test_risk_query_runs_all_analytics_against_populated_test_database():
         "p95": pytest.approx(0),
     }
     assert len(simulation["percentile_bands"]) == 31
+    # RN-16: estimated on its own history read from the database — all the common history up to today, never the
+    # page's period — and stated with the answer, with none of the page-period warnings (it has no requested start).
+    assert simulation["estimation_start"] is not None and simulation["estimation_end"] is not None
+    assert simulation["estimation_start"] < simulation["estimation_end"] <= date.today().isoformat()
+    assert simulation["estimation_observations"] == simulation_result["metadata"]["n_observations"]
+    assert simulation["requested_path_count"] == 256
+    assert not {"analysis_starts_late", "short_history"} & {warning["code"] for warning in simulation_result["warnings"]}
 
 
 @pytest.mark.asyncio

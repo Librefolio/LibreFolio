@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import math
 import os
+from datetime import date
 
 import numpy as np
 import pytest
@@ -18,8 +19,11 @@ from backend.app.services.risk.quant import models as simulation_models
 from backend.app.services.risk.quant import resampling as resampling_module
 from backend.app.services.risk.quant.engine import (
     MAX_HISTORY_CELLS,
+    MIN_SIMULATION_PATHS,
     SimulationResourceLimitError,
     clear_simulation_cache,
+    fit_path_count,
+    history_observation_cap,
     run_simulation,
     validate_resource_budget,
 )
@@ -1991,11 +1995,10 @@ def test_bootstrap_refuses_more_observations_than_the_engine_carries_as_resource
     with pytest.raises(RiskUnavailableError) as refused:
         SimulationAnalytic._build_bootstrap_request(params, _returns_by_asset(1, over), (1,), [1.0], 0.0)
 
-    # `period`: the bootstrap carries the aligned history across the process boundary
-    # whole, and a shorter analysis period is what holds fewer observations. Fewer
-    # paths or a shorter horizon would change nothing here.
+    # A defence since RN-16: `execute` keeps the most recent observations that fit before it builds a
+    # request, so a user never reaches this — and no period they pick would move it, so it names no remedy.
     assert refused.value.code == RiskErrorCode.RESOURCE_LIMIT
-    assert refused.value.details == {"metric": "observations", "actual": over, "limit": MAX_HISTORY_OBSERVATIONS, "remedy": "period"}
+    assert refused.value.details == {"metric": "observations", "actual": over, "limit": MAX_HISTORY_OBSERVATIONS}
 
     # CONTROL -- exactly the limit, the same asset and parameters, is built with the
     # whole history: the ceiling is inclusive, and nothing is trimmed to reach it.
@@ -2064,3 +2067,48 @@ def test_the_ceilings_cited_to_the_user_are_pinned():
     assert simulation_models.MAX_SIMULATION_ASSETS == 100
     # The same CHANGELOG line cites 5,000 observations.
     assert simulation_models.MAX_HISTORY_OBSERVATIONS == 5000
+
+
+# ---------------------------------------------------------------------------
+# RN-16 (developer's Q4 c and Q5 a, 16/11/2026): the history ceiling keeps the most recent observations that fit, and
+# the path count falls to the largest power of two that fits, never below 1 024.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("requested", "horizon_days", "assets", "fitted"),
+    [
+        pytest.param(8192, 365, 66, 8192, id="the-defaults-fit-up-to-66-positions"),
+        pytest.param(8192, 365, 67, 4096, id="the-67th-position-halves-them"),
+        pytest.param(5000, 365, 10, 5000, id="a-request-that-fits-stays-as-asked"),
+        pytest.param(100_000, 365, 1, 32768, id="the-percentile-matrix-budget-too"),
+        pytest.param(512, 365, 1, 512, id="a-small-request-that-fits-stays"),
+        pytest.param(8192, 3650, 100, None, id="too-large-even-at-1024"),
+    ],
+)
+def test_the_path_count_falls_to_the_largest_power_of_two_that_fits(requested, horizon_days, assets, fitted):
+    assert fit_path_count(requested, horizon_days=horizon_days, asset_count=assets) == fitted
+    if fitted is not None:
+        validate_resource_budget(engine_request(horizon_days=horizon_days, path_count=fitted) if assets == 1 else bootstrap_request(bootstrap_history(observations=60, asset_count=assets), horizon_days=horizon_days, path_count=fitted))
+
+
+def test_the_fewest_paths_is_pinned():
+    """«Sotto un minimo (1 024) torna troppo grande» (Q5 a): the user is told the number."""
+    assert MIN_SIMULATION_PATHS == 1024
+
+
+@pytest.mark.parametrize(("assets", "cap"), [(1, 5000), (50, 5000), (51, 4901), (100, 2500)])
+def test_the_history_keeps_as_many_recent_observations_as_its_two_ceilings_allow(assets, cap):
+    assert history_observation_cap(assets) == cap
+
+
+def test_the_output_declares_the_paths_it_ran_against_the_ones_asked_and_its_window():
+    output = bootstrap_output(path_count=4096, requested_path_count=8192, estimation_start=date(2022, 1, 3), estimation_end=date(2026, 3, 2), estimation_observations=1050, history_truncated=True)
+    assert (output.path_count, output.requested_path_count) == (4096, 8192)
+
+    with pytest.raises(ValidationError):
+        bootstrap_output(path_count=8192, requested_path_count=4096)
+    with pytest.raises(ValidationError):
+        bootstrap_output(estimation_start=date(2026, 3, 2), estimation_end=date(2022, 1, 3), estimation_observations=10)
+    with pytest.raises(ValidationError):
+        bootstrap_output(estimation_start=date(2022, 1, 3), estimation_observations=10)

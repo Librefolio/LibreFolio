@@ -1062,6 +1062,12 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                     terminal_mean_return: 0.095,
                     terminal_volatility: 0.14,
                     probability_of_loss: 0.27,
+                    // RN-16: the simulation's own history, stated with the answer (invented, like the rest).
+                    requested_path_count: pathCount,
+                    estimation_start: '2022-09-01',
+                    estimation_end: '2026-11-13',
+                    estimation_observations: 1050,
+                    history_truncated: false,
                 },
             };
         }
@@ -2762,6 +2768,36 @@ test.describe('Risk analysis functional integration', () => {
 
         // The retired flow is nowhere in the block — behind the nothing-left line above.
         for (const testId of RETIRED_REPLAY_TEST_IDS) await expect(replay.getByTestId(testId), `${testId} belongs to the retired flow`).toHaveCount(0);
+    });
+
+    // RN-16 (developer's Q4 c; consultant, 17/11/2026): the simulation is estimated on its own history, never the page's
+    // period, so a new period leaves its cone on screen; a new currency changes what it projects, so it drops it.
+    test('a new period keeps the simulation on screen, a new currency drops it', async ({page}) => {
+        const requests = await installRiskMocks(page);
+
+        const panel = await openDashboardRisk(page);
+        await openLevel4(panel);
+        await expect(panel.getByTestId('risk-simulation-run')).toBeEnabled({timeout: 8_000});
+        await panel.getByTestId('risk-simulation-run').click();
+        await expect(panel.getByTestId('risk-simulation-terminal')).toBeVisible({timeout: 8_000});
+        await expect(panel.getByTestId('risk-simulation-estimation')).toBeVisible();
+
+        // A period the page demonstrably moves to, and the base wave demonstrably asked again for it: the barrier that
+        // makes the presence below a fact about the new period, not about a change not yet applied.
+        const asked = requests.length;
+        // The page's period, in the Dashboard's controls: L4 open, the replay's own picker offers the same presets.
+        const oneYear = page.getByTestId('dashboard-controls').getByTestId('date-preset-1y');
+        await expect(oneYear).toHaveAttribute('data-active', 'false');
+        await oneYear.click();
+        await expect(oneYear).toHaveAttribute('data-active', 'true');
+        await expect.poll(() => requests.length, {timeout: 15_000}).toBeGreaterThan(asked);
+        await expect(panel.getByTestId('risk-simulation-terminal')).toBeVisible();
+        await expect(panel.getByTestId('risk-simulation-estimation')).toBeVisible();
+
+        await page.getByTestId('dashboard-target-currency-trigger').click();
+        await page.getByTestId('dashboard-target-currency').getByTestId('search-select-option-USD').click();
+        await expect(panel.getByTestId('risk-simulation-terminal')).toHaveCount(0, {timeout: 15_000});
+        await expect(panel.getByTestId('risk-simulation-estimation')).toHaveCount(0);
     });
 
     test('an unavailable simulation names the step and its state instead of rendering nothing', async ({page}) => {

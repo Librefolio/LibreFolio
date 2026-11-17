@@ -301,7 +301,10 @@
         }
       },
       "driftUncertainty": "La dérive provient de {count} observations : cela seul situe cette médiane entre {low} et {high}.",
-      "driftUncertaintyWide": "La dérive provient de seulement {count} observations : cela seul situe cette médiane entre {low} et {high} — plus large que la bande ci-dessus."
+      "driftUncertaintyWide": "La dérive provient de seulement {count} observations : cela seul situe cette médiane entre {low} et {high} — plus large que la bande ci-dessus.",
+      "estimation": "Estimée sur {length} d'historique, du {start} au {end} ({count} observations), quelle que soit la période choisie plus haut.",
+      "estimationTruncated": "Un historique commun plus long existe : ce sont ses {count} observations les plus récentes, autant que le calcul peut en porter.",
+      "pathsReduced": "{used} trajectoires au lieu de {requested} : autant que le calcul en permet pour ce portefeuille et cet horizon."
     },
     "errors": {
       "analytic_not_found": "Analyse indisponible.",
@@ -319,11 +322,10 @@
       "optimization_infeasible": "Aucune allocation ne satisfait les contraintes demandées.",
       "unknown": "Cette mesure n'a pas renvoyé de résultat.",
       "answer_discarded": "La réponse a été écartée parce que les données ont changé pendant son arrivée. Relancez l'analyse.",
-      "resource_limit_paths_or_horizon": "Cette simulation est trop volumineuse pour être exécutée. Utilisez moins de trajectoires simulées ou un horizon plus court.",
       "resource_limit_horizon_or_sampling": "Cette simulation quasi-Monte-Carlo est trop volumineuse pour être exécutée. Raccourcissez l'horizon ou choisissez l'échantillonnage Monte-Carlo.",
-      "resource_limit_period": "Cette simulation est trop volumineuse pour être exécutée : la période contient trop d'historique. Choisissez une période plus courte.",
       "resource_limit_positions": "Une simulation peut inclure au plus 100 positions, et ce portefeuille en compte davantage. Simulez plutôt un courtier avec moins de positions.",
-      "resource_limit_period_or_assets": "Cette analyse est trop volumineuse pour être exécutée : ces actifs couvrent trop de jours de prix. Choisissez une période plus courte ou moins d'actifs."
+      "resource_limit_period_or_assets": "Cette analyse est trop volumineuse pour être exécutée : ces actifs couvrent trop de jours de prix. Choisissez une période plus courte ou moins d'actifs.",
+      "resource_limit_horizon": "Cette simulation est trop grande pour être exécutée, même en ramenant les trajectoires à 1 024. Choisissez un horizon plus court."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe est indéfini car la volatilité est nulle.",
@@ -372,7 +374,8 @@
       "omega_undefined": "Gains contre pertes non défini : aucun jour n'est passé sous le rendement cible.",
       "omega_undefined_assets": "Gains contre pertes non défini pour {names} : aucun jour n'est passé sous le rendement cible.",
       "extreme_day_ratio_undefined": "Jours extrêmes non définis car la série ne bouge pas.",
-      "extreme_day_ratio_undefined_assets": "Jours extrêmes non définis pour {names} : la série ne bouge pas."
+      "extreme_day_ratio_undefined_assets": "Jours extrêmes non définis pour {names} : la série ne bouge pas.",
+      "simulation_history_shorter_than_horizon": "La simulation projette {horizon_days} jours à partir de {history_days} jours d'historique : la bande n'est pas plus large que cet historique."
     },
     "assetDetail": {
       "overviewTab": "Vue d'ensemble",

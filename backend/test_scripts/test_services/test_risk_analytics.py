@@ -69,11 +69,12 @@ from backend.app.services.risk.quant.engine import (
     MAX_HISTORY_CELLS,
     MAX_PORTFOLIO_CELLS,
     MAX_STOCHASTIC_CELLS,
+    MIN_SIMULATION_PATHS,
     SimulationResourceLimitError,
     validate_resource_budget,
 )
 from backend.app.services.risk.quant.estimation import estimate_drift_uncertainty
-from backend.app.services.risk.quant.models import SimulationEngineResult
+from backend.app.services.risk.quant.models import MAX_HISTORY_OBSERVATIONS, SimulationEngineResult
 from backend.app.services.risk.quant.optimization_engine import (
     clear_optimization_cache,
 )
@@ -2738,7 +2739,8 @@ async def test_drift_uncertainty_compounds_over_the_observations_the_horizon_hol
 
 
 def test_simulation_steps_are_a_new_algorithm_version():
-    assert SimulationAnalytic.algorithm_version == "4.0.0-bootstrap-quantlib-1.43"
+    # 4.0.0: steps at the observed frequency. 5.0.0 (RN-16): its own history and paths that fit, declared.
+    assert SimulationAnalytic.algorithm_version == "5.0.0-bootstrap-quantlib-1.43"
 
 
 @pytest.mark.asyncio
@@ -2776,9 +2778,12 @@ async def test_the_plugin_compares_a_block_with_the_history_in_observations(engi
 @pytest.mark.parametrize(
     ("metric", "actual", "limit", "remedy"),
     [
-        pytest.param("portfolio_cells", MAX_PORTFOLIO_CELLS + 1, MAX_PORTFOLIO_CELLS, "paths_or_horizon", id="portfolio-cells"),
-        pytest.param("stochastic_cells", MAX_STOCHASTIC_CELLS + 1, MAX_STOCHASTIC_CELLS, "paths_or_horizon", id="stochastic-cells"),
-        pytest.param("history_cells", MAX_HISTORY_CELLS + 1, MAX_HISTORY_CELLS, "period", id="history-cells"),
+        # RN-16: the paths already fell as far as they go (Q5 a), so the cure left is a shorter horizon; and the
+        # history is trimmed to what fits (Q4 c), so a history refusal — a defence the plugin never reaches — names
+        # no remedy any more: no period the user picks moves it.
+        pytest.param("portfolio_cells", MAX_PORTFOLIO_CELLS + 1, MAX_PORTFOLIO_CELLS, "horizon", id="portfolio-cells"),
+        pytest.param("stochastic_cells", MAX_STOCHASTIC_CELLS + 1, MAX_STOCHASTIC_CELLS, "horizon", id="stochastic-cells"),
+        pytest.param("history_cells", MAX_HISTORY_CELLS + 1, MAX_HISTORY_CELLS, None, id="history-cells"),
         # A budget the plugin has never heard of is still "too large", only without a remedy
         # it cannot vouch for: the frontend falls back to its generic sentence.
         pytest.param("future_metric", 11, 10, None, id="unknown-metric-without-remedy"),
@@ -2830,32 +2835,88 @@ def positions_context(count: int) -> RiskExecutionContext:
 
 
 @pytest.mark.asyncio
-async def test_at_the_defaults_the_first_position_over_the_compute_budget_is_a_resource_limit(budgeted_engine_requests):
+async def test_at_the_defaults_the_first_position_over_the_compute_budget_halves_the_paths(budgeted_engine_requests):
+    """RN-16 (developer's Q5 a): the path count falls to the largest power of two that fits, and says so — no longer a
+    refusal at the 67th position. 66 was the threshold measured on 07/10/2026 at the defaults (365 days, 8192 paths)."""
     defaults = SimulationParams()
     largest = MAX_STOCHASTIC_CELLS // (defaults.path_count * defaults.horizon_days)
-    # The user-visible threshold A measured on 07/10/2026 at the defaults (block bootstrap,
-    # 365 days, 8192 paths), and the one the changelog cites: a change here must be
-    # deliberate, never the side effect of moving a default or a budget.
     assert largest == 66
 
-    # The first position too many, through the real budget. Before D379 this read "Invalid
-    # calculation parameters", at parameters the user had never touched.
+    over = (await SimulationAnalytic().execute(defaults, positions_context(largest + 1))).output
+    at = (await SimulationAnalytic().execute(defaults, positions_context(largest))).output
+
+    over_request, at_request = budgeted_engine_requests
+    assert (over_request.path_count, over.path_count, over.requested_path_count) == (4096, 4096, 8192)
+    assert (at_request.path_count, at.path_count, at.requested_path_count) == (8192, 8192, 8192)
+
+
+@pytest.mark.asyncio
+async def test_a_simulation_too_large_even_at_the_fewest_paths_is_refused_and_names_the_horizon(budgeted_engine_requests):
+    """Below 1 024 paths the answer is still «too large» (Q5 a): with fewer paths out of reach, the cure left is a
+    shorter horizon."""
+    params = SimulationParams(horizon_days=3650)
+    count = simulation_models.MAX_SIMULATION_ASSETS
+
     with pytest.raises(RiskUnavailableError) as refused:
-        await SimulationAnalytic().execute(defaults, positions_context(largest + 1))
+        await SimulationAnalytic().execute(params, positions_context(count))
 
     assert refused.value.code == RiskErrorCode.RESOURCE_LIMIT
-    assert refused.value.details == {
-        "metric": "stochastic_cells",
-        "actual": defaults.path_count * defaults.horizon_days * (largest + 1),
-        "limit": MAX_STOCHASTIC_CELLS,
-        "remedy": "paths_or_horizon",
-    }
+    assert refused.value.details == {"metric": "stochastic_cells", "actual": MIN_SIMULATION_PATHS * 3650 * count, "limit": MAX_STOCHASTIC_CELLS, "remedy": "horizon"}
     assert budgeted_engine_requests == []
 
-    # CONTROL -- one position fewer, the defaults untouched, runs.
-    await SimulationAnalytic().execute(defaults, positions_context(largest))
-    (request,) = budgeted_engine_requests
-    assert len(request.asset_ids) == largest
+
+@pytest.mark.asyncio
+async def test_the_simulation_publishes_the_history_it_was_estimated_on(engine_requests):
+    """RN-16 (developer's Q4 c): the page says «estimated on … from … to …»: the window comes with the result."""
+    context = simulation_context(252.0)
+
+    output = (await SimulationAnalytic().execute(bootstrap_params(30), context)).output
+
+    dates = context.prepared_series.joint_return_dates
+    assert SimulationAnalytic.algorithm_version.startswith("5.0.0")
+    assert (output.estimation_start, output.estimation_end) == (dates[0], dates[-1])
+    assert output.estimation_observations == len(SIMULATION_DRIVER)
+    assert output.history_truncated is False
+
+
+@pytest.mark.asyncio
+async def test_a_history_longer_than_fits_keeps_its_most_recent_observations_and_says_so(engine_requests):
+    """The bootstrap's history ceiling follows Q5's rule (plan, 16/11): the most recent observations that fit, declared.
+    GBM carries estimates, not the history, so it is not trimmed (`test_gbm_is_not_subject_to_the_bootstrap_observation_limit`)."""
+    over = MAX_HISTORY_OBSERVATIONS + 1000
+    returns = [0.001 * ((index % 7) - 3) for index in range(over)]
+    context = make_context({1: returns, 2: [value * 0.5 for value in returns]}, mode=RiskMode.CURRENT_COMPOSITION)
+
+    bootstrap = await SimulationAnalytic().execute(bootstrap_params(30), context)
+    gbm = await SimulationAnalytic().execute(gbm_params(30), context)
+
+    dates = context.prepared_series.joint_return_dates
+    cap = min(MAX_HISTORY_OBSERVATIONS, MAX_HISTORY_CELLS // 2)
+    output = bootstrap.output
+    assert output.estimation_observations == cap == bootstrap.n_observations
+    assert (output.estimation_start, output.estimation_end) == (dates[-cap], dates[-1])
+    assert output.history_truncated is True
+    assert output.drift_uncertainty_observations == cap
+    bootstrap_request, _gbm_request = engine_requests
+    assert len(bootstrap_request.historical_returns) == cap
+    assert (gbm.output.estimation_observations, gbm.output.history_truncated, gbm.output.estimation_start) == (over, False, dates[0])
+
+
+@pytest.mark.asyncio
+async def test_a_history_shorter_than_the_horizon_is_said_without_degrading_the_result(engine_requests):
+    """Q4's amber line, inside c: «projecting 365 days from 42 days of history». The data are complete, only short:
+    the warning does not make the result partial (consultant's principle, 16/11/2026)."""
+    context = simulation_context(252.0)
+
+    computation = await SimulationAnalytic().execute(bootstrap_params(365), context)
+
+    (warning,) = [item for item in computation.warnings if item.code == "simulation_history_shorter_than_horizon"]
+    assert warning.degrades_result is False
+    assert warning.message_i18n_key == "risk.warnings.simulation_history_shorter_than_horizon"
+    dates = context.prepared_series.joint_return_dates
+    assert warning.message_params == {"horizon_days": 365, "history_days": (dates[-1] - context.prepared_series.baseline_date).days}
+    long_enough = await SimulationAnalytic().execute(bootstrap_params(20), context)
+    assert not [item for item in long_enough.warnings if item.code == "simulation_history_shorter_than_horizon"]
 
 
 @pytest.mark.parametrize("params", [pytest.param(bootstrap_params, id="block-bootstrap"), pytest.param(gbm_params, id="gbm")])

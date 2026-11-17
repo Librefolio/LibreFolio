@@ -530,6 +530,48 @@ describe('riskPanelController', () => {
         stop();
     });
 
+    // RN-16 (developer's Q4 c; consultant, 17/11/2026): the simulation reads its own history, never the page's period, so
+    // a new period leaves its cone on screen; what changes its input — the currency, the scope, the positions — drops it.
+    it('keeps the simulation when only the period moves, and still drops the answers that read the period', async () => {
+        const {controller, inputs, stop} = mountController();
+        await vi.waitFor(() => expect(controller.initialLoading).toBe(false));
+        controller.setResult('simulation', {analytic_code: 'simulation'} as never);
+        controller.setResult('replay', {analytic_code: 'stress'} as never);
+
+        inputs.dateStart = '2024-01-01';
+        flushSync();
+
+        expect(controller.simulationResult).not.toBeNull();
+        expect(controller.replayResult).toBeNull();
+        stop();
+    });
+
+    it('drops the simulation when the currency moves', async () => {
+        const {controller, inputs, stop} = mountController();
+        await vi.waitFor(() => expect(controller.initialLoading).toBe(false));
+        controller.setResult('simulation', {analytic_code: 'simulation'} as never);
+
+        inputs.targetCurrency = 'USD';
+        flushSync();
+
+        expect(controller.simulationResult).toBeNull();
+        stop();
+    });
+
+    it('drops the simulation when the positions change (the refresh version), and keeps the other answers', async () => {
+        const {controller, inputs, stop} = mountController();
+        await vi.waitFor(() => expect(controller.initialLoading).toBe(false));
+        controller.setResult('simulation', {analytic_code: 'simulation'} as never);
+        controller.setResult('replay', {analytic_code: 'stress'} as never);
+
+        inputs.refreshVersion = 1;
+        flushSync();
+
+        expect(controller.simulationResult).toBeNull();
+        expect(controller.replayResult).not.toBeNull();
+        stop();
+    });
+
     it('separates a catalog that failed from one that is merely slow', async () => {
         const {controller, stop} = mountController();
         expect(controller.catalogState).toBe('pending');

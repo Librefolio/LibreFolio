@@ -22,9 +22,8 @@
  * member (`constructor`, `toString`) is not mistaken for a known one.
  */
 const RESOURCE_LIMIT_DISPLAY_CODES: ReadonlyMap<string, string> = new Map([
-    ['paths_or_horizon', 'resource_limit_paths_or_horizon'],
+    ['horizon', 'resource_limit_horizon'],
     ['horizon_or_sampling', 'resource_limit_horizon_or_sampling'],
-    ['period', 'resource_limit_period'],
     ['positions', 'resource_limit_positions'],
     ['period_or_assets', 'resource_limit_period_or_assets'],
 ]);

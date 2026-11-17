@@ -276,7 +276,8 @@
 
     let simulationData = $derived.by<LineDataPoint[]>(() =>
         (simulationOutput?.percentile_bands ?? []).map((point) => ({
-            date: addDays(dateEnd, point.day),
+            // The simulation starts where its own history ends (RN-16), never at the page's end: the period no longer moves it.
+            date: addDays(simulationOutput?.estimation_end ?? dateEnd, point.day),
             value: point.p50 * 100,
         })),
     );
