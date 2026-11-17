@@ -539,6 +539,9 @@
     "PROVIDER_ERROR": "Le fournisseur a échoué : {detail}",
     "PROBE_RATE_LIMITED": "Trop de vérifications : réessayez à {time}",
     "PROBE_RATE_LIMITED_DAY": "Trop de vérifications : réessayez le {time}",
-    "PROBE_RATE_LIMITED_NO_TIME": "Trop de vérifications : réessayez dans une minute"
+    "PROBE_RATE_LIMITED_NO_TIME": "Trop de vérifications : réessayez dans une minute",
+    "PLAN_REQUIRED": "Cette requête nécessite une offre payante du fournisseur.",
+    "WRONG_PLAN": "La clé du fournisseur ne correspond pas à l'offre choisie (Demo ou Pro) : vérifiez l'offre dans Paramètres › Plugins.",
+    "INVALID_API_KEY": "Le fournisseur a refusé la clé API : vérifiez-la dans Paramètres › Plugins."
   }
 }
