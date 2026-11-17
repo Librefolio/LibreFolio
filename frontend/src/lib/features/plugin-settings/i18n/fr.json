@@ -75,6 +75,19 @@
       "usedBy": "Partagés par : {plugins}",
       "inGroup": "Utilise aussi les paramètres partagés de {group}",
       "open": "Ouvrir"
+    },
+    "notConfigured": {
+      "tooltip": "{provider} doit être configuré",
+      "invalidAdmin": "La variable d'environnement {variable} a une valeur non valide : elle doit être corrigée sur le serveur.",
+      "invalidLimitAdmin": "La variable d'environnement {variable} a une valeur non valide (il faut un entier ≥ 0, ou rien) : elle doit être corrigée sur le serveur. Tant qu'elle ne l'est pas, {provider} est arrêté.",
+      "invalidMember": "{provider} est arrêté : un de ses paramètres sur le serveur n'est pas valide. Prévenez l'administrateur.",
+      "managed": "{provider} n'est pas disponible sur cette instance : sa configuration est gérée par le fournisseur du service. Contactez l'assistance.",
+      "readOnlyIntro": "Les paramètres, en lecture seule :",
+      "readOnlyLink": "Paramètres › Plugins",
+      "missingAdmin": "{provider} doit être configuré : {count, plural, one {il manque ce paramètre} other {il manque ces paramètres}} : {fields}.",
+      "missingMember": "{provider} doit être configuré : demandez à un administrateur de définir {count, plural, one {ce paramètre} other {ces paramètres}} : {fields}.",
+      "missingAdminGeneric": "{provider} doit être configuré : il manque un paramètre obligatoire.",
+      "missingMemberGeneric": "{provider} doit être configuré : demandez à un administrateur de définir ses paramètres obligatoires."
     }
   }
 }
