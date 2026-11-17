@@ -28,6 +28,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Riesgo: el periodo y la moneda en que se miden las cifras se escriben bajo el título y encima de las secciones del laboratorio.
 - Shock hipotético: las clases de activos que un escenario deja fuera, con shock cero, se nombran bajo el total.
 - Un icono de documentación a la derecha de más paneles (gráficos y posiciones del Dashboard, análisis de lotes, lista y laboratorio de activos, detalle del activo, brókers, FX, archivos y copias de seguridad, ajustes) abre la página correspondiente del manual, con una breve explicación del panel en su tooltip.
+- Los administradores pueden mantener activos solo algunos proveedores de precios y de tipos de cambio en una instancia (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`): los demás desaparecen de listas, búsqueda, asignaciones y ajustes; las asignaciones existentes conservan sus precios guardados. MANUAL siempre está activo.
 
 ### 🔄 Cambios
 
@@ -79,6 +80,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Laboratorio de riesgo: tras una sincronización, el laboratorio vuelve a preguntar qué activos se pueden analizar en el periodo, así que un activo cuyos precios trajo la sincronización pasa a ser seleccionable sin recargar la página.
 - Laboratorio de riesgo: cada sección pregunta una sola vez, al abrirse, qué activos puede analizar, en lugar de dos.
 - La ventana «Configuración del Horario» se desplaza por dentro cuando es más alta que la pantalla, así que «Guardar» ya no queda cortado en una ventana pequeña.
+- Tipos de cambio: cuando un par tiene varias rutas, cada ruta guarda ahora los tipos de su propio proveedor. Antes, un par podía guardar el tipo de otra ruta con el nombre del proveedor de la primera; una nueva sincronización del periodo reescribe las filas.
 
 ### ⚠️ Cambios incompatibles
 
