@@ -126,6 +126,8 @@ export interface EditableTextCell {
     placeholder?: string;
     /** Max length */
     maxLength?: number;
+    /** A fixed unit drawn beside the field, inside the cell («%», «years»): plan 68, E10c3 */
+    unit?: string;
     /** Callback when value changes (blur or Enter) */
     onchange: (newValue: string) => void;
 }

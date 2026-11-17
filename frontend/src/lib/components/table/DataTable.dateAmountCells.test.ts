@@ -10,6 +10,8 @@
  *   a float, so 55 173 000 000 or 0.0000001 stay exact. An empty field → `amount: null`; a text that is not a number →
  *   nothing is handed over and the field says it is invalid (`aria-invalid`). The currency is a choice among
  *   `currencies`; picking one hands over the amount as it is with the new currency.
+ * - `editable-text` (E10c3): an optional `unit` drawn beside the field, inside the cell («0.19 %», «6.8 years»), so a
+ *   value typed in percent is not read as a fraction; without one the cell is the field alone.
  * - `editable-select` (E10c2): an optional `placeholder` while nothing is chosen, and an optional `testId` — the select
  *   is `<testId>`, each option `<testId>-option-<value>` — so a table with many select cells (the profile window's voice
  *   and value columns) can be driven without reading translated text.
@@ -154,5 +156,23 @@ describe('DataTable — editable-select', () => {
         mount({type: 'editable-select', value: 'accumulating', options: OPTIONS, onchange: vi.fn()});
         expect(document.querySelector('[data-testid^="undefined"]')).toBeNull();
         expect(screen.queryByTestId('policy-button')).toBeNull();
+    });
+});
+
+describe('DataTable — editable-text with a unit', () => {
+    it('draws the unit beside the field, and hands over the text typed', async () => {
+        const onchange = vi.fn();
+        mount({type: 'editable-text', value: '0.19', unit: '%', onchange});
+
+        expect(screen.getByTestId('cell-editable-text-unit')).toHaveTextContent(/^%$/);
+        const input = screen.getByTestId('cell-editable-text') as HTMLInputElement;
+        await fireEvent.input(input, {target: {value: '0.20'}});
+        await fireEvent.blur(input);
+        expect(onchange).toHaveBeenCalledWith('0.20');
+    });
+
+    it('without a unit the cell is the field alone', () => {
+        mount({type: 'editable-text', value: 'Vanguard', onchange: vi.fn()});
+        expect(screen.queryByTestId('cell-editable-text-unit')).toBeNull();
     });
 });
