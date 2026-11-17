@@ -1,0 +1,11 @@
+{
+  "enrichers": {
+    "borsa_italiana": {
+      "params": {
+        "language": "Page language",
+        "mic": "Market MIC",
+        "platform": "Platform"
+      }
+    }
+  }
+}
