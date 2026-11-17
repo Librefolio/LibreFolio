@@ -906,8 +906,10 @@ the plugin.
   Today that means every price and exchange-rate provider but `scheduled_investment` and `MANUAL`.
 - **They are fields like any other**: written by an administrator, stored in
   `plugin_system_settings`, locked by their variable
-  (`LIBREFOLIO_PLUGIN_<FAMILY>_<CODE>_CALL_LIMIT_<WINDOW>`, documented once by its pattern in
-  `.env.example`), and part of the fingerprint. A changed limit therefore lifts the limit pause in
+  (`LIBREFOLIO_PLUGIN_<FAMILY>_<CODE>_CALL_LIMIT_<WINDOW>`, documented once in the block «Call limits»
+  of `.env.example`: the pattern, the families, codes and windows it takes today, and worked
+  examples; `plugin-settings-guards` keeps that list equal to the registries, so a plugin or group
+  that gains the limits is listed there in the same lot), and part of the fingerprint. A changed limit therefore lifts the limit pause in
   every process (U2b). An invalid variable leaves the plugin `NOT_CONFIGURED`, as for any field.
 - **The enrichers count too** (K1): `enrichers/refresh.read_bindings` counts one call per binding it
   hands to the plugin's `read`, in request order and before the read, on the owner `call_owner(plugin,
@@ -1185,7 +1187,7 @@ All eleven run without a server or the lane's database (`isolation="pure"`):
 | `./dev.py test services not-configured-writes` | The two writes that refuse a not-configured provider (N2): the asset assignment and the FX routes, the whole request refused before any write, the first item named, `replace=true` leaving the pair as it was, a re-saved assignment and a provider already on the pair passing, the managed profile naming no locked field, one readiness check per request |
 | `./dev.py test services call-limit-settings` | The core's call-limit fields (U4): who gets them at registration, their variables and lock, the fingerprint, the readiness skip, the catalogue's `call_usage` (one read, managed hiding, a database error), `mockcount`, one binding per operation |
 | `./dev.py test services enricher-call-limits` | The enrichers' read boundary (K1): one call counted per binding read, before the read; a full window refuses that binding and the rest as `RATE_LIMITED`, never cached; the credit-sharing group's row shared with an asset provider; a failing counter lets the reads go; cached bindings and plugins that call nothing out never counted |
-| `./dev.py test services plugin-settings-guards` | Shipped variables documented in `.env.example`, one owner per variable, no alias on a variable LibreFolio reads, AI Export kept away from the settings |
+| `./dev.py test services plugin-settings-guards` | Shipped variables documented in `.env.example`, one owner per variable, no alias on a variable LibreFolio reads, AI Export kept away from the settings; the block «Call limits» lists exactly the families and codes that own the limits, the five windows and real worked examples (U4c) |
 
 The other units that touch the plugin settings:
 
