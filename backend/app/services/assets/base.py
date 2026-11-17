@@ -76,6 +76,16 @@ class AssetRateLimitedError(AssetSourceError, RateLimitedError):
         self.scope = scope
 
 
+class AssetCallLimitError(AssetRateLimitedError):
+    """The instance's call limit of the provider is reached (project 76, U2): the call never left.
+
+    A ``RATE_LIMITED`` refusal like a source's, so every path that handles one (the pause, the scheduler's «deferred»,
+    the last stored price, the «too many requests» message) handles it unchanged. ``details`` says which limit:
+    ``{"reason": "call_limit", "window": "month", "limit": 10000}``; ``retry_after`` is the pause the boundary decided,
+    at most the end of the full window.
+    """
+
+
 def rate_limited_from_response(response: object, provider_name: str, *, scope: str | None = None) -> AssetRateLimitedError | None:
     """An ``AssetRateLimitedError`` when ``response`` (``httpx`` or ``requests``) is an HTTP 429, else None.
 
@@ -297,6 +307,11 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
     #: identifiers in one request (Yahoo's quote list, CoinGecko's ``/simple/price``). False, the default: the core asks
     #: ``get_current_value`` once per asset, each call with its own pause scope and timeout.
     supports_bulk_current: ClassVar[bool] = False
+
+    #: Whether the provider reaches an external service (project 76, U2): each call through the boundary is then counted,
+    #: and refused when an instance limit is full (``services/platform/call_counter.py``). False for a provider that
+    #: computes its answers itself, with no network (Scheduled Investment, the test doubles): never counted.
+    calls_external_service: ClassVar[bool] = True
 
     #: The most items one ``get_current_values_bulk`` call receives: the core splits a larger group. A whole number of at
     #: least 1; the source's own limit, or what fits in one request.

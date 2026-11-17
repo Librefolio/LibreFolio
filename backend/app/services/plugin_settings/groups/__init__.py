@@ -52,6 +52,9 @@ class SettingsGroup:
     description_key: str | None = None
     #: A group for the tests only: never listed to users, and not required to have a plugin that uses it
     test_only: bool = False
+    #: The plugins that read it spend the credits of one account (CoinGecko's key): they are counted, and limited, on
+    #: the group (``family="group"``), not each on its own row (project 76, U2). A plugin reads at most one such group.
+    shares_credits: bool = False
 
     @property
     def has_secrets(self) -> bool:
@@ -145,6 +148,9 @@ def validate_plugin_groups(plugin_class: type, *, family: str) -> None:
         raise SettingsDeclarationError(f"group {repeated[0]!r} is named twice in settings_groups")
     rules = FAMILY_RULES.get(family)
     own_keys = {declared.key for declared in getattr(plugin_class, "settings_fields", ())}
+    sharing = [name for name in names if (group := get_group(name)) is not None and group.shares_credits]
+    if len(sharing) > 1:
+        raise SettingsDeclarationError(f"settings_groups names two groups that share credits, {sharing[0]!r} and {sharing[1]!r}: a call is counted on one")
     for name in names:
         group = get_group(name)
         if group is None:
