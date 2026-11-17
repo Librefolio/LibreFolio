@@ -378,11 +378,13 @@ async def test_the_full_catalogue_lists_the_search_preferences_of_justetf_and_bo
     doubles = {code: (await _entry(lane, member, code))["configured"] for code in ("mockprov", "MOCKFX")}
 
     assert response.status_code == 200, response.text
-    entries = {entry["plugin_code"]: entry for entry in response.json()["plugins"]}
+    # By family and code: a source can be a price provider and an enricher under one code (justetf, borsa_italiana),
+    # two entries of the catalogue (plan 68: an enricher has the call-limit fields of U4)
+    entries = {(entry["family"], entry["plugin_code"]): entry for entry in response.json()["plugins"]}
     assert all(type(entry["configured"]) is bool for entry in entries.values()), f"configured must be a boolean: {entries}"
-    assert set(_SEARCH_PREFERENCES) <= set(entries), f"the full catalogue lists {sorted(entries)}"
+    assert {("asset", code) for code in _SEARCH_PREFERENCES} <= set(entries), f"the full catalogue lists {sorted(entries)}"
     for code, (key, options) in _SEARCH_PREFERENCES.items():
-        entry = entries[code]
+        entry = entries[("asset", code)]
         # U4 (project 76): the core's five call-limit fields follow the provider's own, which comes first
         own = [field for field in entry["fields"] if not field["key"].startswith("call_limit_")]
         assert (entry["family"], entry["configured"], [field["key"] for field in own]) == ("asset", True, [key]), code
@@ -405,11 +407,11 @@ async def test_a_member_saves_the_search_preferences_and_clears_them(lane: _Lane
     preferences = [_item("preferred_currency", "user", code="justetf", value="EUR"), _item("preferred_language", "user", code="borsa_italiana", value="en")]
     try:
         written = await _write(lane, member, preferences)
-        saved = {code: (await _fields(lane, member, code))[key] for code, (key, _options) in _SEARCH_PREFERENCES.items()}
+        saved = {code: (await _fields(lane, member, code, family="asset"))[key] for code, (key, _options) in _SEARCH_PREFERENCES.items()}
         refused = await _write(lane, member, [_item("preferred_currency", "user", code="justetf", value="JPY")])
     finally:
         cleared = await _write(lane, member, [_item(item["field_key"], "user", code=item["plugin_code"], clear=True) for item in preferences])
-    restored = {code: (await _fields(lane, member, code))[key] for code, (key, _options) in _SEARCH_PREFERENCES.items()}
+    restored = {code: (await _fields(lane, member, code, family="asset"))[key] for code, (key, _options) in _SEARCH_PREFERENCES.items()}
 
     assert written.status_code == 200 and written.json()["success_count"] == 2, written.text
     assert {code: (field["value"], field["source"], field["is_set"]) for code, field in saved.items()} == {"justetf": ("EUR", "db", True), "borsa_italiana": ("en", "db", True)}
