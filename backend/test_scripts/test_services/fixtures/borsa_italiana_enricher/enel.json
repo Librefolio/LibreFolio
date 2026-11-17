@@ -1,0 +1,61 @@
+{
+ "source": "borsa_italiana",
+ "asset": "enel",
+ "version": "borsa-italiana-scraping 0.3.5",
+ "recorded_at": "2026-11-10T17:07:49",
+ "calls": {
+  "scheda_en": {
+   "seconds": 0.48,
+   "error": null,
+   "response": {
+    "isin": "IT0003128367",
+    "nome": "Enel",
+    "prezzo": "9.878",
+    "variazione_percentuale": null,
+    "valuta": "EUR",
+    "tipo": "azione",
+    "mercato": "Euronext Milan",
+    "descrizione": "Enel Stock Market Summary (IT0003128367). Discover real time quotes, stock price, interactive charts and financial news on Borsa Italiana.",
+    "url_pagina": "https://www.borsaitaliana.it/borsa/azioni/scheda/IT0003128367-MTAA.html?lang=en",
+    "valuta_liquidazione": null,
+    "valuta_denominazione": null,
+    "minimo_anno": "8.599",
+    "massimo_anno": "10.31",
+    "apertura": "9.872",
+    "minimo_giorno": "9.841",
+    "massimo_giorno": "9.922",
+    "rendimento_lordo": null,
+    "rendimento_netto": null,
+    "rateo_lordo": null,
+    "rateo_netto": null,
+    "duration_modificata": null,
+    "cedola_annua": null,
+    "cedola_periodale": null,
+    "scadenza": null,
+    "emittente": null,
+    "tipo_bond": null,
+    "lotto_minimo": null,
+    "descrizione_payout": null,
+    "frequenza_cedola": null,
+    "convenzione_giorni": null,
+    "struttura_bond": null,
+    "outstanding": null,
+    "tipologia": null,
+    "prezzo_riferimento": null,
+    "data_prezzo_riferimento": null,
+    "data_primo_giorno": null,
+    "settore": "Utilities",
+    "capitalizzazione": null,
+    "ticker": "ENEL",
+    "performance_1m": "11.40",
+    "performance_6m": "2.63",
+    "performance_1y": "11.44",
+    "indici": [
+     "FTSE All-Share Capped",
+     "FTSE Italia All-Share",
+     "FTSE MIB"
+    ]
+   }
+  }
+ }
+}
