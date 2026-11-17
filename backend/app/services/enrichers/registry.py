@@ -12,6 +12,7 @@ import re
 from collections.abc import Mapping
 from typing import Type
 
+from backend.app.config.plugins import enrichers_enabled
 from backend.app.db.models import AssetType
 from backend.app.services.assets.profile.catalogue import CATALOGUE
 from backend.app.services.enrichers.base import EnricherTerms
@@ -86,6 +87,14 @@ class EnricherRegistry(AbstractProviderRegistry):
     @classmethod
     def settings_family(cls) -> str:
         return "enricher"
+
+    @classmethod
+    def _enabled_codes(cls) -> tuple[str, ...] | None:
+        return enrichers_enabled()
+
+    @classmethod
+    def _enabled_variable(cls) -> str | None:
+        return "LIBREFOLIO_ENRICHERS_ENABLED"
 
     @classmethod
     def _validate_plugin_class(cls, plugin_class: Type) -> None:

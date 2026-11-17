@@ -123,8 +123,9 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       `LIBREFOLIO_WEB_LINK_FINDER_*` (the API key also as `_FILE`), the variables of the plugin
       settings (`LIBREFOLIO_PLUGIN_*` and the aliases of secret fields, all also as `_FILE`), the order
       of the asset providers in the search (`LIBREFOLIO_ASSET_PROVIDERS_PREMIUM`,
-      `LIBREFOLIO_ASSET_PROVIDERS_ORDER`), the providers active on the instance
-      (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`) — are
+      `LIBREFOLIO_ASSET_PROVIDERS_ORDER`), the providers and enrichers active on the instance
+      (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`,
+      `LIBREFOLIO_ENRICHERS_ENABLED`) — are
       read in `backend/app/config/` (base or section module), from
       `os.environ` only. pydantic-settings does not export `.env` there, so they arrive through the
       launcher: `./dev.py server` copies `.env` into the environment (shell values win), Compose uses

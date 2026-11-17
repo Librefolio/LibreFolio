@@ -50,6 +50,7 @@ from backend.app.services.assets.profile.store import ProfileWrite, profile_toda
 from backend.app.services.enrichers.base import RATE_LIMITED, EnricherBinding, EnricherPlugin, EnricherReadItem, EnricherReadStatus
 from backend.app.services.enrichers.bindings import load_enrichers, update_state
 from backend.app.services.enrichers.registry import EnricherRegistry
+from backend.app.services.enrichers.usable import NOT_CONFIGURED, configured_enricher, usable_codes
 from backend.app.utils.datetime_utils import ensure_utc, utcnow
 from backend.app.utils.runtime.cache import get_ttl_cache
 
@@ -76,10 +77,16 @@ class ReadOutcome:
     status: EnricherReadStatus
     values: Mapping[str, Any] = field(default_factory=dict)
     source_date: date | None = None
+    #: The day of a voice that has one of its own; a voice not in it takes ``source_date``.
+    source_dates: Mapping[str, date] = field(default_factory=dict)
     error_code: str | None = None
     error_message: str | None = None
     retry_after: float | None = None
     from_cache: bool = False
+
+    def date_of(self, key: str) -> date | None:
+        """The source date of voice ``key``: its own, else the read's."""
+        return self.source_dates.get(key, self.source_date)
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,6 +170,7 @@ def _outcome(request: ReadRequest, item: EnricherReadItem) -> ReadOutcome:
         status=item.status,
         values=values,
         source_date=item.source_date,
+        source_dates={key: day for key, day in item.source_dates.items() if key in values},
         error_code=item.error_code,
         error_message=item.error_message,
         retry_after=item.retry_after,
@@ -171,6 +179,17 @@ def _outcome(request: ReadRequest, item: EnricherReadItem) -> ReadOutcome:
 
 def _unanswered(request: ReadRequest, message: str) -> ReadOutcome:
     return ReadOutcome(owner=request.owner, code=request.code, binding=request.binding, status=EnricherReadStatus.ERROR, error_code="NO_ANSWER", error_message=message)
+
+
+def _not_configured(request: ReadRequest, missing: Sequence[str]) -> ReadOutcome:
+    return ReadOutcome(
+        owner=request.owner,
+        code=request.code,
+        binding=request.binding,
+        status=EnricherReadStatus.ERROR,
+        error_code=NOT_CONFIGURED,
+        error_message=f"not configured: {', '.join(missing)} missing",
+    )
 
 
 def _drain(plugin: EnricherPlugin, bindings: list[EnricherBinding], keys: frozenset[str] | None, put: Any) -> None:
@@ -215,26 +234,34 @@ async def _read_plugin(plugin: EnricherPlugin, requests: list[ReadRequest], keys
 
 
 async def read_bindings(requests: Sequence[ReadRequest], keys: Iterable[str] | None = None, *, use_cache: bool = True) -> AsyncIterator[ReadOutcome]:
-    """Read every binding, the enrichers at once; the outcomes as they come."""
+    """Read every binding, the enrichers at once; the outcomes as they come.
+
+    An enricher the registry does not serve (not installed, turned off) answers «no answer», and one with a required
+    setting left empty «not configured», before the read cache: a value read before the switch is not served after it.
+    """
     wanted = None if keys is None else frozenset(keys)
-    to_read: dict[str, list[ReadRequest]] = {}
+    by_code: dict[str, list[ReadRequest]] = {}
     for request in requests:
-        cached = _cached(request.code, request.binding, wanted) if use_cache else None
-        if cached is not None:
-            yield dataclasses.replace(cached, owner=request.owner, from_cache=True)
-            continue
-        to_read.setdefault(request.code, []).append(request)
+        by_code.setdefault(request.code, []).append(request)
     out: asyncio.Queue = asyncio.Queue()
     pending = 0
     tasks: list[asyncio.Task] = []
-    for code, group in to_read.items():
-        plugin = EnricherRegistry.get_plugin_instance(code) if EnricherRegistry.get_plugin(code) is not None else None
-        if plugin is None:
+    for code, group in by_code.items():
+        plugin, missing = await configured_enricher(code)
+        if plugin is None or missing:
             for request in group:
-                yield _unanswered(request, "no such enricher")
+                yield _unanswered(request, "no such enricher") if plugin is None else _not_configured(request, missing)
             continue
-        pending += len(group)
-        tasks.append(asyncio.create_task(_read_plugin(plugin, group, wanted, out)))
+        to_read: list[ReadRequest] = []
+        for request in group:
+            cached = _cached(request.code, request.binding, wanted) if use_cache else None
+            if cached is not None:
+                yield dataclasses.replace(cached, owner=request.owner, from_cache=True)
+            else:
+                to_read.append(request)
+        if to_read:
+            pending += len(to_read)
+            tasks.append(asyncio.create_task(_read_plugin(plugin, to_read, wanted, out)))
     try:
         for _ in range(pending):
             yield await out.get()
@@ -255,7 +282,7 @@ def merge_voices(order: Sequence[str], outcomes: Iterable[ReadOutcome]) -> dict[
             if key in merged:
                 merged[key].others[code] = value  # type: ignore[index] — the dict built just below
             else:
-                merged[key] = MergedVoice(value=value, source=code, source_date=outcome.source_date, others={})
+                merged[key] = MergedVoice(value=value, source=code, source_date=outcome.date_of(key), others={})
     return merged
 
 
@@ -295,6 +322,16 @@ def _already_read(entry: Any, since: datetime) -> bool:
     return read_at is not None and read_at >= ensure_utc(since)
 
 
+async def _usable_bound(rows: Mapping[int, Any]) -> set[str]:
+    """The bound enrichers that can be used now; the others are named in ONE log line for the whole run (not one per
+    asset): their bindings stay, the reads skip them."""
+    bound = {code for row in rows.values() for code in row.config}
+    usable = await usable_codes(bound)
+    if skipped := sorted(bound - usable):
+        logger.info("Profile read skips enrichers not active or not configured", enrichers=skipped)
+    return usable
+
+
 async def refresh_assets(
     session: AsyncSession,
     asset_ids: Sequence[int],
@@ -318,13 +355,14 @@ async def refresh_assets(
     wanted = None if keys is None else frozenset(keys)
     requests: list[ReadRequest] = []
     carried: dict[int, list[ReadOutcome]] = {}
+    usable = await _usable_bound(rows)
     for asset_id in ids:
         row = rows.get(asset_id)
         if asset_id not in asset_types or row is None:
             continue
         for request in _requests(asset_id, row.config):
-            if EnricherRegistry.get_plugin(request.code) is None:
-                continue  # an enricher not installed (or turned off): its binding stays, the read skips it
+            if request.code not in usable:
+                continue  # not installed, turned off, or not configured: its binding and state stay, the read skips it
             if read_since is not None and _already_read(row.state.get(request.code), read_since):
                 # Read in this round already: not read again, its values join the merge from the cache
                 if (cached := _cached(request.code, request.binding, wanted)) is not None:
@@ -408,7 +446,7 @@ async def source_value(code: str, binding: Mapping[str, Any], key: str) -> Sourc
         return f"'{code}' gave no value ({'no answer' if outcome is None else outcome.status.value})"
     if key not in outcome.values:
         return f"'{code}' gives no value for '{key}'"
-    return SourceValue(value=outcome.values[key], source_date=outcome.source_date)
+    return SourceValue(value=outcome.values[key], source_date=outcome.date_of(key))
 
 
 async def refresh_in_background(asset_ids: Sequence[int], *, engine: AsyncEngine | None = None) -> None:

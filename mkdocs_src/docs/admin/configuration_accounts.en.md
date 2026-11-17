@@ -323,7 +323,8 @@ it starts, and applies them from the next search.
 
 ## 🔌 The Active Providers {: #enabled-providers }
 
-By default every price provider and every exchange-rate provider shipped with LibreFolio, or added to it, is active.
+By default every price provider, every exchange-rate provider and every enricher (a source of the asset profile)
+shipped with LibreFolio, or added to it, is active.
 An instance can keep only some of them: the others then do not exist for it. They are not listed, not searched, not
 offered when you assign a provider to an asset or to an exchange-rate route, and their settings are not shown. A
 provider that arrives with an update stays off until you list it.
@@ -335,13 +336,14 @@ it starts.
 | --- | --- | --- |
 | `LIBREFOLIO_ASSET_PROVIDERS_ENABLED` | _not set_ | The price providers to keep, by code, separated by commas, such as `yfinance,justetf`. Not set: all of them. |
 | `LIBREFOLIO_FX_PROVIDERS_ENABLED` | _not set_ | The exchange-rate providers to keep, by code, separated by commas, such as `ecb,fed`. Not set: all of them. Hand-entered rates (`MANUAL`) always stay. |
+| `LIBREFOLIO_ENRICHERS_ENABLED` | _not set_ | The enrichers to keep, the sources of the asset profile, by code, separated by commas, such as `justetf`. Not set: all of them. An asset bound to one left out keeps its binding and its profile, and is no longer read from it. |
 
 - Case and spaces around the codes do not matter. A code that no provider has is ignored, and the server logs it once.
   A list made only of such codes leaves no provider active (but `MANUAL`): check the log after a change.
 - Nothing is deleted. An asset already assigned to a provider you leave out keeps its assignment and its saved
   prices, and gets no new ones. A provider left out is never asked for exchange rates: a pair takes its rates from
   its next route, and they are saved under the name of the provider that gave them.
-- Settings shared by several providers (such as one API key) disappear with the last provider that reads them.
+- Settings shared by several providers or enrichers (such as one API key) disappear with the last one that reads them.
 
 ---
 
