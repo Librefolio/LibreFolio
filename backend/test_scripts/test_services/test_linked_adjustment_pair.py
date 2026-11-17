@@ -38,6 +38,14 @@ Guards — green before the cure, and the cure must keep them green:
   only ONE of them is refused by the older rule of the pair (``pairDescriptionMismatch``, ``validate_updated_pairs``),
   never by this one.
 
+Second section (lot R0 / F-1, red before the cure): the same entry rule for EVERY type that is not a pair type. Two creates of
+one type whose ``TX_TYPE_METADATA[type].requires_link`` is False (FEE, BUY, DEPOSIT…) under one ``link_uuid`` are accepted
+and linked today, because ``_validate_linked_pair`` only knows the three pair types. After the ``pairTypeMismatch`` and
+ADJUSTMENT checks it answers ``pairTypeNotLinkable`` (params ``{"type": <type>}``) on the FIRST create, nothing written, on
+/commit and /validate; two ADJUSTMENTs keep ``pairAdjustmentNotAllowed``. Not refused: a non-pair create whose ``link_uuid``
+a ``promotes[]`` item consumes. Classes: ``TestANonPairTypeCannotBeLinkedAlone``, ``TestANonPairTypeCannotBeLinkedInABatch``,
+``TestThePromoteOfTwoCreatesIsNotRefused`` (guard), ``TestTheNotLinkableMessageExistsInEveryLanguage``.
+
 Why a separate file: its world (one asset, two brokers, a BUY that lets ``source`` give units away) is
 ``test_transaction_cost_basis_rule.py``'s, copied minimal rather than imported, so that file stays the N2/N78 record.
 """
@@ -66,6 +74,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.models import Asset, AssetType, Broker, Transaction, TransactionType
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.transactions.batch import TXBatchResponse, TXValidationIssue
+from backend.app.schemas.transactions.type_metadata import TX_TYPE_METADATA
 from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import utcnow
 from scripts.i18n_catalog import flatten, load_catalog
@@ -423,3 +432,123 @@ class TestStoredPairsAreNotJudged:
         if response.committed is not True:
             assert await _rows(world) == before, "a refused batch changed the stored pair"
         assert before[giving_id][3] == receiving_id and before[receiving_id][3] == giving_id, "scaffold: the stored pair must be linked both ways"
+
+
+# ============================================================================
+# R0 / F-1 — A TYPE THAT IS NOT A PAIR TYPE CANNOT BE LINKED
+# ============================================================================
+
+NOT_LINKABLE_CODE = "pairTypeNotLinkable"
+# Derived from the table, so a new type is covered automatically. ADJUSTMENT keeps its own, older code.
+NON_PAIR_TYPES = tuple(t for t, meta in TX_TYPE_METADATA.items() if not meta.requires_link and t != TransactionType.ADJUSTMENT)
+
+
+def _cash_leg(world: World, tx_type: str, broker_id: int, amount: str, link_uuid: str | None) -> dict:
+    """A cash-only create (quantity 0, cash in EUR): the FEE and DEPOSIT shape."""
+    item = {"broker_id": broker_id, "type": tx_type, "date": MOVE_DAY.isoformat(), "quantity": "0", "cash": {"code": EUR, "amount": amount}, "description": world.description}
+    if link_uuid is not None:
+        item["link_uuid"] = link_uuid
+    return item
+
+
+def _non_pair_batch(world: World, tx_type: str) -> list[dict]:
+    """Two creates of ``tx_type`` under one ``link_uuid``, shaped by the type's own rules (cash sign, asset, quantity)."""
+    link_uuid = str(uuid.uuid4())
+    if tx_type == "BUY":
+        return [{"broker_id": broker, "asset_id": world.asset_id, "type": "BUY", "date": MOVE_DAY.isoformat(), "quantity": "1", "cash": {"code": EUR, "amount": "-100"}, "description": world.description, "link_uuid": link_uuid} for broker in (world.source_id, world.dest_id)]
+    amount = "100" if tx_type == "DEPOSIT" else "-100"
+    return [_cash_leg(world, tx_type, broker, amount, link_uuid) for broker in (world.source_id, world.dest_id)]
+
+
+class TestANonPairTypeCannotBeLinkedAlone:
+    """RED until the cure (the non-ADJUSTMENT cases): the function that judges a linked pair, on two rows in memory."""
+
+    @staticmethod
+    def _leg(tx_type: TransactionType, broker_id: int) -> Transaction:
+        return Transaction(broker_id=broker_id, asset_id=1, type=tx_type, date=MOVE_DAY, quantity=Decimal("0"), amount=Decimal("-10"))
+
+    def test_the_table_has_non_pair_types(self):
+        """Scaffold: the parametrisation below is not empty and does not hold a pair type."""
+        assert NON_PAIR_TYPES, "no type of TX_TYPE_METADATA has requires_link False"
+        assert TransactionType.TRANSFER not in NON_PAIR_TYPES
+
+    @pytest.mark.parametrize("tx_type", NON_PAIR_TYPES, ids=lambda t: t.value)
+    def test_two_legs_of_a_non_pair_type_are_refused(self, tx_type):
+        answer = TransactionService._validate_linked_pair(self._leg(tx_type, 1), self._leg(tx_type, 2))
+
+        assert answer is not None, f"_validate_linked_pair accepted two {tx_type.value} legs as a linked pair: it answered None"
+        message, code, params = answer
+        assert (code, params) == (NOT_LINKABLE_CODE, {"type": tx_type.value}), f"expected {NOT_LINKABLE_CODE} for {tx_type.value}, got {code} with {params}: {message!r}"
+
+    def test_two_adjustments_keep_their_own_code(self):
+        """Guard: the ADJUSTMENT answer comes before the generic one."""
+        answer = TransactionService._validate_linked_pair(self._leg(TransactionType.ADJUSTMENT, 1), self._leg(TransactionType.ADJUSTMENT, 2))
+
+        assert answer is not None and answer[1] == PAIR_CODE, f"two ADJUSTMENTs must answer {PAIR_CODE}: {answer}"
+
+    def test_a_transfer_pair_is_still_accepted(self):
+        """Guard: a pair type is not judged by the generic rule."""
+        a = Transaction(broker_id=1, asset_id=1, type=TransactionType.TRANSFER, date=MOVE_DAY, quantity=-UNITS, amount=Decimal("0"))
+        b = Transaction(broker_id=2, asset_id=1, type=TransactionType.TRANSFER, date=MOVE_DAY, quantity=UNITS, amount=Decimal("0"))
+
+        assert TransactionService._validate_linked_pair(a, b) is None
+
+
+class TestANonPairTypeCannotBeLinkedInABatch:
+    """RED until the cure: today the pair is saved, linked both ways."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("tx_type", ("FEE", "DEPOSIT", "BUY"))
+    @pytest.mark.parametrize("commit", (True, False), ids=("commit", "validate"))
+    async def test_the_pair_is_refused_on_its_first_create(self, world, commit, tx_type):
+        before = await _rows(world)
+
+        response = await _batch(world, commit=commit, creates=_non_pair_batch(world, tx_type))
+
+        assert _views(response.issues) == [("create", 0, None, NOT_LINKABLE_CODE, {"type": tx_type})], f"two {tx_type} creates under one link_uuid ({'/commit' if commit else '/validate'}) must be refused with exactly one {NOT_LINKABLE_CODE} on create 0; issues: {_render(response.issues)}"
+        assert response.committed is False, f"the refused pair was committed; issues: {_render(response.issues)}"
+        after = await _rows(world)
+        assert after == before, f"a refused batch wrote rows: new ids {sorted(set(after) - set(before))}"
+
+    @pytest.mark.asyncio
+    async def test_the_refusal_names_the_pair_types_in_english(self, world):
+        response = await _batch(world, commit=True, creates=_non_pair_batch(world, "FEE"))
+
+        refused = [issue for issue in response.issues if issue.code == NOT_LINKABLE_CODE]
+
+        assert len(refused) == 1, f"expected one {NOT_LINKABLE_CODE} issue, got: {_render(response.issues)}"
+        assert "Asset Transfer" in refused[0].error, f"the refusal text must name the pair types: {refused[0].error!r}"
+
+
+class TestThePromoteOfTwoCreatesIsNotRefused:
+    """Guard, green before the cure and after it: a non-pair create whose ``link_uuid`` a promote consumes is not judged."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", (True, False), ids=("commit", "validate"))
+    async def test_a_deposit_and_a_withdrawal_promote_into_a_cash_transfer(self, world, commit):
+        """The existing promote guard promotes a saved row with ONE create; this one promotes TWO creates (``link_uuid_a`` and
+        ``link_uuid_b``), each non-pair, each with its own ``link_uuid``."""
+        uuid_a, uuid_b = str(uuid.uuid4()), str(uuid.uuid4())
+        creates = [_cash_leg(world, "WITHDRAWAL", world.source_id, "-100", uuid_a), _cash_leg(world, "DEPOSIT", world.dest_id, "100", uuid_b)]
+
+        response = await _batch(world, commit=commit, creates=creates, promotes=[{"link_uuid_a": uuid_a, "link_uuid_b": uuid_b}])
+
+        assert NOT_LINKABLE_CODE not in {issue.code for issue in response.issues}, f"a promote of two creates was refused as not linkable: {_render(response.issues)}"
+        assert response.issues == [], f"the promote of a DEPOSIT and a WITHDRAWAL was refused ({'/commit' if commit else '/validate'}): {_render(response.issues)}"
+        if commit:
+            assert response.committed is True
+            first_id, second_id = _created_ids(response)
+            rows = await _rows(world)
+            assert (rows[first_id][1], rows[second_id][1]) == (TransactionType.CASH_TRANSFER, TransactionType.CASH_TRANSFER), f"both rows become CASH_TRANSFER: {rows[first_id]} / {rows[second_id]}"
+
+
+class TestTheNotLinkableMessageExistsInEveryLanguage:
+    """RED until the cure (the key is added with ``dev.py i18n add``)."""
+
+    @pytest.mark.parametrize("language", UI_LANGUAGES)
+    def test_the_code_has_its_message(self, language):
+        messages = flatten(load_catalog(language, fallback=False))
+
+        message = str(messages.get(f"transactions.errors.{NOT_LINKABLE_CODE}") or "").strip()
+
+        assert message, f"transactions.errors.{NOT_LINKABLE_CODE} has no {language} message"

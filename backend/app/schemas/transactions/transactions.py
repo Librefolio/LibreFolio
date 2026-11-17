@@ -241,7 +241,7 @@ class TXCreateItem(StrictModel):
     link_uuid: Optional[str] = Field(
         default=None,
         max_length=36,
-        description="Temporary UUID to link paired transactions (TRANSFER, FX_CONVERSION)",
+        description="Temporary UUID that links the two legs of a pair (TRANSFER, FX_CONVERSION, CASH_TRANSFER) or names a create for promotes[]",
     )
 
     tags: Optional[List[str]] = Field(default=None, description="List of tags for filtering/grouping")
