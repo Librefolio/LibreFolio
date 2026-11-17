@@ -45,6 +45,21 @@ export interface ResultBadge {
 }
 
 const NO_INCUMBENT_HELP: BadgeHelp = {key: 'tools.pacAllocator.planner.result.states.noIncumbent.body', fallback: 'The solver found no plan before the limit. This is not a proof that no plan exists.'};
+/**
+ * Lot SEEDS of project 67: a not-proven plan whose reason says why, before how the run ended. The Rebalancer plans three
+ * times: a run that proved its plan by itself, with no second run confirming it; and a plan of the wide model (lot ZB),
+ * found counting the rounding in its favour. Provisional EN texts, the developer's to word.
+ */
+const NOT_PROVEN_REASON_HELP: Record<string, BadgeHelp> = {
+    'allocation.proof_not_confirmed': {
+        key: 'tools.pacAllocator.planner.result.proof.notConfirmed',
+        fallback: 'One search ended on this plan, but no second search confirmed it: it is the best plan found, not a proven one.',
+    },
+    'allocation.limits_leave_no_rounding_room': {
+        key: 'tools.pacAllocator.planner.result.proof.limitsLeaveNoRoundingRoom',
+        fallback: 'The limits leave no room for rounding, so the plan was found counting the rounding in its favour. It respects the limits once any top-up shown is added, but it is not proven to be the best.',
+    },
+};
 /** Lot ZB of project 67: a search that ended, with no limit, without a plan the exact check accepts. */
 export const NO_PLAN_COMPLETED = 'The search ended without a plan that can be carried out within these limits. This is not a proof that no plan exists.';
 const NO_INCUMBENT_COMPLETED_HELP: BadgeHelp = {key: 'tools.pacAllocator.planner.result.states.noIncumbent.completedBody', fallback: NO_PLAN_COMPLETED};
@@ -131,12 +146,14 @@ export function resultBadges(result: PlannerReadyResult): ResultBadge[] {
                         ? result.stop_reason === 'completed'
                             ? NO_INCUMBENT_COMPLETED_HELP
                             : NO_INCUMBENT_HELP
-                        : result.stop_reason === 'completed'
-                          ? {
-                                key: 'tools.pacAllocator.planner.result.proof.floatingFinished',
-                                fallback: 'The solver finished its search, but its own numbers do not match the exact check of this plan, so the proof does not hold. The plan respects every constraint: it is the best plan found, but it is not proven to be the best.',
-                            }
-                          : {key: 'tools.pacAllocator.planner.result.proof.floatingUnfinished', fallback: 'The solver stopped before closing every stage: this is the best plan found, not a proven one.'},
+                        : result.proof.reason_code in NOT_PROVEN_REASON_HELP
+                          ? NOT_PROVEN_REASON_HELP[result.proof.reason_code]
+                          : result.stop_reason === 'completed'
+                            ? {
+                                  key: 'tools.pacAllocator.planner.result.proof.floatingFinished',
+                                  fallback: 'The solver finished its search, but its own numbers do not match the exact check of this plan, so the proof does not hold. The plan respects every constraint: it is the best plan found, but it is not proven to be the best.',
+                              }
+                            : {key: 'tools.pacAllocator.planner.result.proof.floatingUnfinished', fallback: 'The solver stopped before closing every stage: this is the best plan found, not a proven one.'},
             });
             break;
         case 'infeasibility_proven':

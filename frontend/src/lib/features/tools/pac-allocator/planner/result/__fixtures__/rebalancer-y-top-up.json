@@ -346,11 +346,15 @@
           "settings": [
             {
               "name": "time_budget",
-              "value": "3.48711"
+              "value": "3.4818"
             },
             {
               "name": "expr/pow/expandmaxexponent",
               "value": "1"
+            },
+            {
+              "name": "randomization/randomseedshift",
+              "value": "11"
             }
           ]
         },
@@ -380,11 +384,15 @@
           "settings": [
             {
               "name": "time_budget",
-              "value": "3.48711"
+              "value": "3.4818"
             },
             {
               "name": "expr/pow/expandmaxexponent",
               "value": "1"
+            },
+            {
+              "name": "randomization/randomseedshift",
+              "value": "11"
             }
           ]
         },
@@ -414,11 +422,15 @@
           "settings": [
             {
               "name": "time_budget",
-              "value": "3.48711"
+              "value": "3.4818"
             },
             {
               "name": "expr/pow/expandmaxexponent",
               "value": "1"
+            },
+            {
+              "name": "randomization/randomseedshift",
+              "value": "11"
             }
           ]
         }
@@ -429,7 +441,7 @@
     "outcome": "incumbent_found",
     "proof": {
       "kind": "not_proven",
-      "reason_code": "allocation.exact_proof_not_established"
+      "reason_code": "allocation.limits_leave_no_rounding_room"
     },
     "primary_solution": {
       "solution_id": "solution:primary",

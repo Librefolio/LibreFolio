@@ -66,6 +66,8 @@ interface ProofCase {
     proof: PlannerProof['kind'];
     outcome: PlannerReadyResult['outcome'];
     stop_reason: PlannerReadyResult['stop_reason'];
+    /** A not-proven proof's reason, when the case sets one (lot SEEDS of project 67). */
+    reason?: string;
     /** The catalogue key of the help the proof badge must open. */
     help: string;
     /** Why that help: the assertion's message when it fails. */
@@ -78,6 +80,22 @@ const CASES: ProofCase[] = [
     {proof: 'not_proven', outcome: 'incumbent_found', stop_reason: 'time_limit', help: 'tools.pacAllocator.planner.result.proof.floatingUnfinished', why: 'the solver reached its time limit before closing every stage'},
     {proof: 'not_proven', outcome: 'incumbent_found', stop_reason: 'node_limit', help: 'tools.pacAllocator.planner.result.proof.floatingUnfinished', why: 'the solver reached its node limit before closing every stage'},
     {proof: 'not_proven', outcome: 'no_incumbent', stop_reason: 'time_limit', help: 'tools.pacAllocator.planner.result.states.noIncumbent.body', why: 'with no plan, "the best plan found" would be false: the help says what the state says'},
+    {
+        proof: 'not_proven',
+        outcome: 'incumbent_found',
+        stop_reason: 'completed',
+        reason: 'allocation.proof_not_confirmed',
+        help: 'tools.pacAllocator.planner.result.proof.notConfirmed',
+        why: 'lot SEEDS: one search ended on this plan and no second one confirmed it; its numbers do match the exact check',
+    },
+    {
+        proof: 'not_proven',
+        outcome: 'incumbent_found',
+        stop_reason: 'completed',
+        reason: 'allocation.limits_leave_no_rounding_room',
+        help: 'tools.pacAllocator.planner.result.proof.limitsLeaveNoRoundingRoom',
+        why: 'lot SEEDS: a plan of the wide model, found counting the rounding in its favour; the exact check is not the cause',
+    },
     {proof: 'not_proven', outcome: 'no_incumbent', stop_reason: 'completed', help: 'tools.pacAllocator.planner.result.states.noIncumbent.completedBody', why: 'lot ZB: the search ended with no plan the exact check accepts; no limit stopped it, so "before the limit" would be false'},
     {proof: 'optimal_proven', outcome: 'incumbent_found', stop_reason: 'completed', help: 'tools.pacAllocator.planner.result.badges.help.optimalProven', why: 'a proven optimum explains its proof'},
     {proof: 'infeasibility_proven', outcome: 'infeasible_proven', stop_reason: 'completed', help: 'tools.pacAllocator.planner.result.proof.solverInfeasibleWitness', why: 'a proven infeasibility names the solver witness'},
@@ -89,13 +107,14 @@ const STOP_KEYS = ['tools.pacAllocator.planner.result.stop.completed', 'tools.pa
 const DECIMAL_CHECK_KEY = 'tools.pacAllocator.planner.result.badges.decimalVerified';
 
 function caseTitle(c: ProofCase): string {
-    return `${c.proof} + ${c.outcome} + ${c.stop_reason}`;
+    return `${c.proof} + ${c.outcome} + ${c.stop_reason}${c.reason ? ` + ${c.reason}` : ''}`;
 }
 
 /** Only what `resultBadges` reads. A plan carries its primary solution, as the contract requires. */
 function readyResult(c: ProofCase): PlannerReadyResult {
     const plan = c.outcome === 'incumbent_found' ? {primary_solution: {validation: 'decimal_verified'}} : {};
-    return {outcome: c.outcome, stop_reason: c.stop_reason, proof: {kind: c.proof}, ...plan} as unknown as PlannerReadyResult;
+    const proof = c.reason ? {kind: c.proof, reason_code: c.reason} : {kind: c.proof};
+    return {outcome: c.outcome, stop_reason: c.stop_reason, proof, ...plan} as unknown as PlannerReadyResult;
 }
 
 /** The badge with this id, found by what it is and never by its place in the list. */
