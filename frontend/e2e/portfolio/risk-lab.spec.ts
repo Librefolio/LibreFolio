@@ -3640,8 +3640,8 @@ function sameMembers(left: readonly string[], right: readonly string[]): boolean
  * Beyond similarity and name, the heatmap offers three orderings, and each one
  * exists only while the lab hands it a map to group by: by type (the page's own
  * asset list carries the types), by dominant sector and by dominant area (both
- * from one bulk read of the assets' stored metadata,
- * `GET /api/v1/assets?asset_ids=…`). That read is answered here and never
+ * from the assets' profile, plan 68 E5: `POST /api/v1/assets/profile/query`, today,
+ * the voices `sector` and `geography`). That read is answered here and never
  * inherited from the seed: a test built on what the seed happens to classify
  * would be measuring the seed.
  *
@@ -3658,17 +3658,15 @@ function sameMembers(left: readonly string[], right: readonly string[]): boolean
  *
  * Each distribution names its group well above `DOMINANT_SHARE` of its classified
  * weight, so `dominant` is the key `dominantExposure` picks. The weights are
- * Decimal strings, as the backend stores them and as the response schema demands
- * (`FASectorArea_Output`): the client validates every response, and a number here
- * would be refused and look exactly like a failed read.
+ * Decimal strings, as the profile stores a map.
  */
 const PLANTED_SECTORS = [
-    {dominant: 'Technology', distribution: {Technology: '0.7000', 'Health Care': '0.2000', Other: '0.1000'}},
-    {dominant: 'Financials', distribution: {Financials: '0.6000', Energy: '0.3000', Other: '0.1000'}},
+    {dominant: 'Technology', distribution: {Technology: '0.7', 'Health Care': '0.2', Other: '0.1'}},
+    {dominant: 'Financials', distribution: {Financials: '0.6', Energy: '0.3', Other: '0.1'}},
 ] as const;
 const PLANTED_AREAS = [
-    {dominant: 'USA', distribution: {USA: '0.8000', Other: '0.2000'}},
-    {dominant: 'DEU', distribution: {DEU: '0.6500', FRA: '0.3500'}},
+    {dominant: 'USA', distribution: {USA: '0.8', Other: '0.2'}},
+    {dominant: 'DEU', distribution: {DEU: '0.65', FRA: '0.35'}},
 ] as const;
 
 function plantedSector(rank: number): (typeof PLANTED_SECTORS)[number] {
@@ -3679,48 +3677,43 @@ function plantedArea(rank: number): (typeof PLANTED_AREAS)[number] {
     return PLANTED_AREAS[Math.floor(rank / 2) % PLANTED_AREAS.length];
 }
 
-/** One bulk metadata read, as the page asked it and as this file answered it. */
+/** One profile read, as the page asked it and as this file answered it. */
 interface MetadataRead {
-    /** The ids of the query string, as sent. */
+    /** The ids of the request's items, as sent. */
     assetIds: number[];
-    /** `planted`: the lane's rows with their classification replaced. `failed`: a 500. */
+    /** `planted`: the lane's answer with its two maps replaced. `failed`: a 500. */
     answer: 'planted' | 'failed';
-    /** The ids of the rows handed back; empty for a failed read. */
+    /** The ids of the items handed back; empty for a failed read. */
     rowIds: number[];
     /** Why the answer is not the one intended — the real read failed, the schema refuses the body — or `null`. */
     problem: string | null;
 }
 
 /**
- * Answer the lab's bulk metadata read with the planted classification, until
- * `failFromNow` turns every later read into a 500 — and `answerFromNow` back.
+ * Answer the lab's profile read (plan 68, E5) with the planted classification, until `failFromNow` turns every later
+ * read into a 500 — and `answerFromNow` back.
  *
- * Only that read is routed: a `GET /api/v1/assets` carrying `asset_ids`. The
- * page's other calls under `/api/v1/assets…` — its list (`/assets/query`), the
- * held live-price poll (`/assets/prices/current`) — have other paths and never
- * reach this handler, and anything but a GET falls through to the network.
- *
- * The lane's own rows are fetched and only `sector_area` and `geographic_area`
- * are replaced, so the rest of each row — name, currency, type — is what the lane
- * stores. It is a GET: nothing is written. The planted body is checked against
- * the generated schema before it leaves, and a refusal is recorded rather than
- * thrown, so the test can name it instead of timing out on buttons that never
- * came. The route dies with the test's page; there is nothing else to undo.
+ * Only that read is routed: a `POST /api/v1/assets/profile/query`. The lane is asked for real and only the voices
+ * `sector` and `geography` of each item are replaced by one step of today, so the request's own shape is the lane's
+ * answer. It writes nothing. The planted body is checked against the generated schema before it leaves, and a refusal
+ * is recorded rather than thrown, so the test can name it instead of timing out on buttons that never came. The route
+ * dies with the test's page; there is nothing else to undo.
  */
 async function plantAssetMetadata(page: Page): Promise<{reads: MetadataRead[]; failFromNow: () => void; answerFromNow: () => void}> {
     const reads: MetadataRead[] = [];
     let failing = false;
     await page.route(
-        (url) => url.pathname === '/api/v1/assets' && url.searchParams.has('asset_ids'),
+        (url) => url.pathname === '/api/v1/assets/profile/query',
         async (route) => {
             const request = route.request();
-            if (request.method() !== 'GET') {
+            if (request.method() !== 'POST') {
                 await route.fallback();
                 return;
             }
-            const assetIds = new URL(request.url()).searchParams.getAll('asset_ids').map(Number);
+            const asked = (request.postDataJSON() as Array<{asset_id: number; date_range?: {start?: string}}>) ?? [];
+            const assetIds = asked.map((item) => Number(item.asset_id));
             if (failing) {
-                await route.fulfill({status: 500, json: {detail: 'metadata read failed on purpose by risk-lab.spec.ts'}});
+                await route.fulfill({status: 500, json: {detail: 'profile read failed on purpose by risk-lab.spec.ts'}});
                 reads.push({assetIds, answer: 'failed', rowIds: [], problem: null});
                 return;
             }
@@ -3731,24 +3724,25 @@ async function plantAssetMetadata(page: Page): Promise<{reads: MetadataRead[]; f
                     reads.push({assetIds, answer: 'planted', rowIds: [], problem: `the lane answered the real read with ${response.status()}`});
                     return;
                 }
-                const rows = (await response.json()) as Array<Record<string, unknown>>;
+                const body = (await response.json()) as {as_of: string; items: Array<Record<string, unknown>>};
                 const ranked = [...new Set(assetIds)].sort((left, right) => left - right);
-                const planted: Array<Record<string, unknown>> = rows.map((row) => {
-                    const rank = ranked.indexOf(Number(row.asset_id));
-                    const stored = row.classification_params;
-                    const kept = stored !== null && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
-                    return {
-                        ...row,
-                        classification_params: {...kept, sector_area: {distribution: {...plantedSector(rank).distribution}}, geographic_area: {distribution: {...plantedArea(rank).distribution}}},
-                    };
-                });
-                const verdict = schemas.FAAssetMetadataResponse.array().safeParse(planted);
+                const day = asked[0]?.date_range?.start ?? new Date().toISOString().slice(0, 10);
+                const step = (value: Record<string, string>) => [{date: day, through: day, value: {...value}, source: 'user', update_id: 1, opened_on: day, source_date: null}];
+                const planted = {
+                    ...body,
+                    items: body.items.map((item) => {
+                        const rank = ranked.indexOf(Number(item.asset_id));
+                        const voices = item.voices && typeof item.voices === 'object' ? (item.voices as Record<string, unknown>) : {};
+                        return {...item, error: null, voices: {...voices, sector: step(plantedSector(rank).distribution), geography: step(plantedArea(rank).distribution)}};
+                    }),
+                };
+                const verdict = schemas.FAProfileQueryResponse.safeParse(planted);
                 await route.fulfill({response, json: planted});
                 reads.push({
                     assetIds,
                     answer: 'planted',
-                    rowIds: planted.map((row) => Number(row.asset_id)),
-                    problem: verdict.success ? null : `the planted rows fail FAAssetMetadataResponse: ${verdict.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ')}`,
+                    rowIds: planted.items.map((item) => Number(item.asset_id)),
+                    problem: verdict.success ? null : `the planted body fails FAProfileQueryResponse: ${verdict.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ')}`,
                 });
             } catch (error) {
                 reads.push({assetIds, answer: 'planted', rowIds: [], problem: `the read could not be answered: ${String(error)}`});
@@ -4462,8 +4456,8 @@ test.describe('Asset Global risk laboratory', () => {
 
     /**
      * The three grouping orderings are inputs the lab loads, not features the
-     * heatmap has: types from the page's asset list, sectors and areas from one
-     * read of the assets' stored metadata (see {@link plantAssetMetadata}). This
+     * heatmap has: types from the page's asset list, sectors and areas from the
+     * assets' profile, today (plan 68, E5; see {@link plantAssetMetadata}). This
      * test pins where each comes from — the behaviour the extraction of that
      * loading (K11) must leave exactly as it is.
      *
