@@ -2147,6 +2147,14 @@ def services_plugin_readiness(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "Plugin readiness tests", verbose=verbose)
 
 
+def services_not_configured_writes(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the writes that would put an unconfigured plugin to use: an asset assignment, an FX route (project 76, N2)."""
+    print_section("Services: Not Configured Writes")
+    print_info("Testing: POST /assets/provider and POST /fx/providers/routes refuse a new unconfigured provider (422 NOT_CONFIGURED)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_not_configured_writes.py", test_names)
+    return run_command(cmd, "Not configured writes tests", verbose=verbose)
+
+
 def services_plugin_settings_guards(verbose: bool = False, test_names: list = None) -> bool:
     """Test the plugin settings guards: variables documented, derived names unique, AI Export never reads them."""
     print_section("Services: Plugin Settings Guards")
@@ -4340,6 +4348,17 @@ Note: No backend server required.
         services_plugin_readiness,
         name="Plugin Readiness",
         desc="One readiness check per plugin = the call boundary's rule (rows, variables, unreadable secret, groups, user fields), managed profile hides locked fields, one DB session, provider schemas and the asset and FX lists",
+        isolation="pure",
+    )
+    # Not configured writes (project 76, N2). PURE: private SQLite under tmp_path handed to the routes and to the readiness check,
+    # a test instance key, every variable through monkeypatch; the two write routes are called in process, no server, no
+    # network. The real asset and FX registries receive this module's provider classes through monkeypatch (in-process only).
+    add_test(
+        cat,
+        "not-configured-writes",
+        services_not_configured_writes,
+        name="Not Configured Writes",
+        desc="POST /assets/provider and POST /fx/providers/routes: a provider newly put to use and not configured refuses the whole request (422 NOT_CONFIGURED, first in request order, nothing written, replace kept), re-save and a provider already on the pair pass, one readiness call per request, managed profile",
         isolation="pure",
     )
     add_test(cat, "plugin-settings-guards", services_plugin_settings_guards, name="Plugin Settings Guards", desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings", isolation="pure")

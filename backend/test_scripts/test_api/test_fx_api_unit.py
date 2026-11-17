@@ -541,7 +541,9 @@ async def test_create_routes_atomic_error_preserves_every_result_metadata(order,
     session.delete.assert_not_awaited()
     if "valid" in order:
         session.add.assert_called_once()
-        session.execute.assert_awaited_once()
+        # N2 (project 76): MOCKFX declares settings, so the stored routes of the posted pairs are read once before any
+        # write (is it new for its pair?), then the route's own lookup of the existing priority
+        assert session.execute.await_count == 2, session.execute.await_args_list
         (added,) = session.add.call_args.args
         assert isinstance(added, FxConversionRoute)
         assert (added.base, added.quote, added.priority) == ("RON", "USD", 2)
