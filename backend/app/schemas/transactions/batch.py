@@ -146,6 +146,25 @@ class TXValidationCode(StrEnum):
     # B2 (W5-3): a warning, never an error (it travels in ``TXBatchResponse.warnings``): a linked TRANSFER or CASH_TRANSFER
     # whose arrival is dated before its departure. Params {departureDate, arrivalDate} (ISO dates).
     PAIR_ARRIVAL_BEFORE_DEPARTURE = "pairArrivalBeforeDeparture"
+    # Project 66 (issue #25): the rules of a linked charge, ``services/transactions/charges.py``. Params: chargeNotACharge
+    # {type}; chargeRowIsPaired {role: "charge" | "parent"}; chargeParentNotFound {parentId} (also for a parent the user
+    # cannot see); chargeParentTypeNotAllowed {type}; chargeBrokerMismatch {brokerId, parentBrokerId}; chargeAssetMissing
+    # {parentAssetId}; chargeAssetMismatch {assetId, parentAssetId}; chargesBlockParentType {type, chargeIds}.
+    CHARGE_NOT_A_CHARGE = "chargeNotACharge"
+    CHARGE_ROW_IS_PAIRED = "chargeRowIsPaired"
+    CHARGE_PARENT_NOT_FOUND = "chargeParentNotFound"
+    CHARGE_PARENT_TYPE_NOT_ALLOWED = "chargeParentTypeNotAllowed"
+    CHARGE_BROKER_MISMATCH = "chargeBrokerMismatch"
+    CHARGE_ASSET_MISSING = "chargeAssetMissing"
+    CHARGE_ASSET_MISMATCH = "chargeAssetMismatch"
+    CHARGES_BLOCK_PARENT_TYPE = "chargesBlockParentType"
+    # The names of a batch (lot R3): chargeRefDuplicate {ref} on every create after the first that uses a ref;
+    # chargeParentRefNotFound {parentRef}. The parse-level refusals of a create item: chargeParentTwice (no params),
+    # chargeParentIdInvalid {parent_transaction_id}.
+    CHARGE_REF_DUPLICATE = "chargeRefDuplicate"
+    CHARGE_PARENT_REF_NOT_FOUND = "chargeParentRefNotFound"
+    CHARGE_PARENT_TWICE = "chargeParentTwice"
+    CHARGE_PARENT_ID_INVALID = "chargeParentIdInvalid"
 
 
 class TXValidationCodeInfo(StrictModel):

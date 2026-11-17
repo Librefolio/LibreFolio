@@ -292,7 +292,19 @@
       "pairCurrencyMismatch": "Los dos lados de una transferencia de efectivo deben estar en la misma divisa (encontradas {currencyA} y {currencyB}). Para cambiar de divisa, usa un cambio de divisas",
       "pairAmountMismatch": "Una transferencia de efectivo debe sacar de un bróker el mismo importe que ingresa en el otro (encontrados {amountA} y {amountB})",
       "pairCurrencySame": "Los dos lados de un cambio de divisas deben estar en divisas distintas (ambos están en {currency})",
-      "pairTypeNotLinkable": "Las filas {type} no se pueden enlazar como par: solo las Transferencias de Activos, las Conversiones de divisa y las Transferencias de efectivo son pares."
+      "pairTypeNotLinkable": "Las filas {type} no se pueden enlazar como par: solo las Transferencias de Activos, las Conversiones de divisa y las Transferencias de efectivo son pares.",
+      "chargeNotACharge": "Solo una Comisión o un Impuesto se puede enlazar a una transacción (esta es {type}).",
+      "chargeRowIsPaired": "Un lado de un par enlazado no puede tener gastos enlazados ni serlo: separa primero el par.",
+      "chargeParentNotFound": "La transacción a la que está enlazado este gasto no existe.",
+      "chargeParentTypeNotAllowed": "Un gasto solo se puede enlazar a una Compra, Venta, Dividendo, Interés, Depósito o Retiro (no a {type}).",
+      "chargeBrokerMismatch": "Un gasto enlazado debe estar en el mismo bróker que su transacción.",
+      "chargeAssetMissing": "Este gasto no tiene activo y su transacción sí: clona el gasto con ese activo y enlaza la copia.",
+      "chargeAssetMismatch": "Un gasto enlazado debe tener el mismo activo que su transacción (o ninguno, si la transacción no lo tiene).",
+      "chargesBlockParentType": "Esta transacción tiene gastos enlazados, y un {type} no puede tenerlos: desenlázalos primero.",
+      "chargeRefDuplicate": "El nombre '{ref}' se da a más de una fila de este envío.",
+      "chargeParentRefNotFound": "Ninguna fila de este envío se llama '{parentRef}': el gasto no se puede enlazar.",
+      "chargeParentTwice": "Un gasto indica su transacción una sola vez: por la fila de este envío o por una transacción guardada, no ambas.",
+      "chargeParentIdInvalid": "La transacción a la que está enlazado un gasto debe ser una transacción guardada (un id positivo)."
     },
     "pydantic": {
       "greaterThan": "El valor debe ser mayor que {gt}",

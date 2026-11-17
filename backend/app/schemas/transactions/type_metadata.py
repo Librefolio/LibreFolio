@@ -98,6 +98,13 @@ class TXTypeMetadata(StrictModel):
     # Whether this type can be linked to an AssetEvent (rule 9 of validate_transaction_business_rules)
     event_compatible: bool = Field(..., description="Can be linked to an AssetEvent")
 
+    # Linked charges (project 66, decision D2): a "charge" (FEE, TAX) may point at a "parent" (BUY, SELL, DIVIDEND,
+    # INTEREST, DEPOSIT, WITHDRAWAL) through parent_transaction_id. One field, so the two lists can share no type.
+    charge_role: Literal["charge", "parent"] | None = Field(
+        None,
+        description="Linked charges: 'charge' for a type that may point at the transaction it belongs to (FEE, TAX), 'parent' for a type a charge may point at, None for neither",
+    )
+
     # Pair form layout — tells frontend which dual-transaction form to use.
     # None = standard single form. Set for types that are inherently paired.
     pair_form_layout: PairFormLayout | None = Field(
@@ -181,6 +188,7 @@ def _build_tx_type_metadata() -> dict[TransactionType, TXTypeMetadata]:
             "quantity_sign": "positive",
             "cash_sign": "negative",
             "event_compatible": False,
+            "charge_role": "parent",
         },
         TransactionType.SELL: {
             "code": "SELL",
@@ -195,6 +203,7 @@ def _build_tx_type_metadata() -> dict[TransactionType, TXTypeMetadata]:
             "quantity_sign": "negative",
             "cash_sign": "positive",
             "event_compatible": False,
+            "charge_role": "parent",
         },
         TransactionType.DIVIDEND: {
             "code": "DIVIDEND",
@@ -209,6 +218,7 @@ def _build_tx_type_metadata() -> dict[TransactionType, TXTypeMetadata]:
             "quantity_sign": "zero",
             "cash_sign": "positive",
             "event_compatible": True,
+            "charge_role": "parent",
         },
         TransactionType.INTEREST: {
             "code": "INTEREST",
@@ -223,6 +233,7 @@ def _build_tx_type_metadata() -> dict[TransactionType, TXTypeMetadata]:
             "quantity_sign": "zero",
             "cash_sign": "positive",
             "event_compatible": True,
+            "charge_role": "parent",
         },
         TransactionType.DEPOSIT: {
             "code": "DEPOSIT",
@@ -237,6 +248,7 @@ def _build_tx_type_metadata() -> dict[TransactionType, TXTypeMetadata]:
             "quantity_sign": "zero",
             "cash_sign": "positive",
             "event_compatible": False,
+            "charge_role": "parent",
         },
         TransactionType.WITHDRAWAL: {
             "code": "WITHDRAWAL",
@@ -251,6 +263,7 @@ def _build_tx_type_metadata() -> dict[TransactionType, TXTypeMetadata]:
             "quantity_sign": "zero",
             "cash_sign": "negative",
             "event_compatible": False,
+            "charge_role": "parent",
         },
         TransactionType.FEE: {
             "code": "FEE",
@@ -265,6 +278,7 @@ def _build_tx_type_metadata() -> dict[TransactionType, TXTypeMetadata]:
             "quantity_sign": "zero",
             "cash_sign": "negative",
             "event_compatible": False,
+            "charge_role": "charge",
         },
         TransactionType.TAX: {
             "code": "TAX",
@@ -279,6 +293,7 @@ def _build_tx_type_metadata() -> dict[TransactionType, TXTypeMetadata]:
             "quantity_sign": "zero",
             "cash_sign": "negative",
             "event_compatible": False,
+            "charge_role": "charge",
         },
         TransactionType.TRANSFER: {
             "code": "TRANSFER",
@@ -442,6 +457,16 @@ def get_tx_type_metadata(tx_type: TransactionType) -> TXTypeMetadata | None:
     Rules 5-11 of ``validate_transaction_business_rules`` read it (W-B36).
     """
     return TX_TYPE_METADATA.get(tx_type)
+
+
+def charge_types() -> frozenset[TransactionType]:
+    """The types a linked charge may have (``charge_role`` "charge": FEE, TAX), read from ``TX_TYPE_METADATA`` at call time."""
+    return frozenset(tx_type for tx_type, meta in TX_TYPE_METADATA.items() if meta.charge_role == "charge")
+
+
+def charge_parent_types() -> frozenset[TransactionType]:
+    """The types a linked charge may point at (``charge_role`` "parent", decision D2), read from ``TX_TYPE_METADATA`` at call time."""
+    return frozenset(tx_type for tx_type, meta in TX_TYPE_METADATA.items() if meta.charge_role == "parent")
 
 
 def event_compatible(tx_type: TransactionType) -> bool:

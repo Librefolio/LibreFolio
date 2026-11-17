@@ -292,7 +292,19 @@
       "pairCurrencyMismatch": "Both sides of a cash transfer must be in the same currency (found {currencyA} and {currencyB}). To change currency, use a currency exchange",
       "pairAmountMismatch": "A cash transfer must take out of one broker the same amount it brings into the other (found {amountA} and {amountB})",
       "pairCurrencySame": "The two sides of a currency exchange must be in different currencies (both are {currency})",
-      "pairTypeNotLinkable": "{type} rows cannot be linked as a pair: only Asset Transfers, Currency Exchanges and Cash Transfers are pairs."
+      "pairTypeNotLinkable": "{type} rows cannot be linked as a pair: only Asset Transfers, Currency Exchanges and Cash Transfers are pairs.",
+      "chargeNotACharge": "Only a Fee or a Tax can be linked to a transaction (this is a {type}).",
+      "chargeRowIsPaired": "A side of a linked pair cannot have linked charges or be one: split the pair first.",
+      "chargeParentNotFound": "The transaction this charge is linked to does not exist.",
+      "chargeParentTypeNotAllowed": "A charge can be linked only to a Buy, Sell, Dividend, Interest, Deposit or Withdrawal (not to a {type}).",
+      "chargeBrokerMismatch": "A linked charge must be on the same broker as its transaction.",
+      "chargeAssetMissing": "This charge has no asset and its transaction has one: clone the charge with that asset, then link the copy.",
+      "chargeAssetMismatch": "A linked charge must have the same asset as its transaction (or none, when the transaction has none).",
+      "chargesBlockParentType": "This transaction has linked charges, and a {type} cannot have any: unlink them first.",
+      "chargeRefDuplicate": "The name '{ref}' is given to more than one row of this batch.",
+      "chargeParentRefNotFound": "No row of this batch is named '{parentRef}': the charge cannot be linked to it.",
+      "chargeParentTwice": "A charge names its transaction once: by the row of this batch or by a saved transaction, not both.",
+      "chargeParentIdInvalid": "The transaction a charge is linked to must be a saved transaction (a positive id)."
     },
     "pydantic": {
       "greaterThan": "Value must be greater than {gt}",
