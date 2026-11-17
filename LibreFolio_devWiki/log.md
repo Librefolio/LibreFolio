@@ -4057,3 +4057,8 @@ Filed: [[decisions/histogram-grid-pinned-to-var-cut]].
 Project 70, RN-15: the Risk tab's effective number of positions leaves cash and unpriced holdings out of its
 denominator, and its formula has one home in `financial_math/weights.py`. Added the change to the feature's history.
 Filed: [[features/F-111]].
+
+## [2026-11-17] file | The simulation on its own history
+Project 70, RN-16: the What if…? simulation reads all the holdings' common history, not the page's period, and lowers
+its path count to fit instead of refusing; L4Simulation has its component test. Added to the feature's history.
+Filed: [[features/F-111]].

@@ -43,6 +43,7 @@ described in [AI Export Composition](../../architecture/patterns/ai_export_compo
 | `backend/app/services/risk/plan.py` | `AnalyticPlan` — a requested analytic with its plugin and validated parameters — and the predicates on the kind of calculation it asks for (`is_historical_replay_plan()`, `is_hypothetical_plan()`, `is_geography_hypothetical_plan()`, `reads_the_twrr_alone()`). |
 | `backend/app/services/risk/scope.py` | The scope: access, holdings and weights (`load_scope_inputs()` into `ScopeInputs`), the asset lookups, the bulk price load (`prepare_asset_series()`), the exclusions (`scope_exclusions()`); `RiskScopeAccessError` and `RiskScopeNotFoundError`, which the API maps to 403 and 404. |
 | `backend/app/services/risk/replay.py` | A historical replay's own window and series (`prepare_historical_replay_context()`), and the shorter window it may suggest (`verified_replay_range()`). |
+| `backend/app/services/risk/simulation_window.py` | The simulation's own window (RN-16): all the common history up to today, never the page's period (`simulation_window()`), who takes part in it (`simulation_participants()`, the one place that decides), and the context rebuilt whole from its series (`prepare_simulation_context()`). |
 | `backend/app/services/risk/results.py` | The execution context (`build_execution_context()`), the gate rules (`available_observations()`, `requires_valid_composition()`), the result envelopes and their metadata (`success_result()`, `unavailable_result()`, `result_metadata()`), the portfolio TWRR series (`portfolio_twrr_returns()`), the warnings and their asset names (`with_warning_asset_names()`). |
 | `backend/app/services/risk/data_quality.py` | The data-quality report a result is judged on (`plan_data_quality()`), its warnings (`data_quality_warnings()`), and the banner issues of an `asset_set` scope (`with_asset_set_quality_issues()`). |
 | `backend/app/services/risk/base.py` | The plugin contract: `RiskAnalytic`, `RiskExecutionContext`, `RiskComputation`, `RiskUnavailableError`, `RiskSeriesInputs`. |
@@ -156,7 +157,8 @@ response echoes the request's own range. A replay bounds its window in
 6. **Per-analytic gates.** A current-composition portfolio analytic that needs valid weights
    (`risk_contribution`, `stress`, `comparison`, `historical_var`, `simulation`) is refused with
    `data_unavailable` when the composition is invalid. A historical replay prepares its own window
-   ([Replay Coverage](#replay-coverage)). Then the observation gate refuses with
+   ([Replay Coverage](#replay-coverage)), and so does the simulation: all the common history up to today, never the
+   page's period (`risk/simulation_window.py`, RN-16). Then the observation gate refuses with
    `insufficient_history` any analytic below its `min_observations`.
 7. **Execution.** `await analytic.execute(params, context)`. The default `execute()` runs the
    synchronous `compute()` in a worker thread (`asyncio.to_thread`); `simulation` and
@@ -554,7 +556,10 @@ and the refusals users meet are listed in its
 The `simulation` rows follow the order of its checks, and the first limit exceeded refuses the
 request: every check raises, so the ones after it never run. A scope over two limits is told only
 the first: at the defaults, 101 holdings with a usable return series get the remedy `positions`, not
-`paths_or_horizon`. The request builder of the chosen process runs its checks before a request
+`horizon`. Two budgets no longer refuse first (RN-16): above the path budgets the plugin lowers the path count
+(`fit_path_count`, `quant/engine.py`) to the largest power of two that fits, never below `MIN_SIMULATION_PATHS = 1024`,
+and declares `path_count` against `requested_path_count`; a bootstrap history longer than its two ceilings keeps its
+most recent observations (`history_observation_cap`) and declares `history_truncated`. The request builder of the chosen process runs its checks before a request
 exists; `run_simulation()` then starts with `validate_resource_budget()`, before its cache lookup.
 All these checks run after the service's parameter validation and observation gate
 ([Request Flow](#request-flow)), which are not size limits.
@@ -562,12 +567,12 @@ All these checks run after the service's parameter validation and observation ga
 | Limit | Value | Where | Answer |
 |---|---|---|---|
 | Assets with a usable return series, both processes (excluded holdings do not count) | `MAX_SIMULATION_ASSETS = 100` | `quant/models.py`, checked by the plugin before the request is built | `unavailable` · `resource_limit` |
-| Bootstrap window: aligned observations | `MAX_HISTORY_OBSERVATIONS = 5_000` | `quant/models.py`, checked by the plugin | `unavailable` · `resource_limit` |
+| Bootstrap window: aligned observations | `MAX_HISTORY_OBSERVATIONS = 5_000` | `quant/models.py`; `execute()` keeps the most recent observations that fit first, so the builder's check is a defence | `ok`, `history_truncated` (the builder's defence: `resource_limit`, no remedy) |
 | Bootstrap block longer than the window | Block, converted to observations, above the history's count | `risk_plugins/simulation/plugin.py` | `unavailable` · `invalid_parameters` |
 | Sobol dimension, QMC only: assets × horizon days | `MAX_SOBOL_DIMENSION = 21_201` | `quant/models.py`, checked by the GBM builder `_build_parametric_request()` | `unavailable` · `resource_limit` |
-| Percentile matrix: paths × (horizon + 1) | 20 000 000 | `quant/engine.py` | `unavailable` · `resource_limit` |
-| Stochastic workload: paths × horizon × assets | 200 000 000 | `quant/engine.py` | `unavailable` · `resource_limit` |
-| Bootstrap history: observations × assets | 250 000 | `quant/engine.py` | `unavailable` · `resource_limit` |
+| Percentile matrix: paths × (horizon + 1) | 20 000 000 | `quant/engine.py`; the plugin lowers the paths first (`fit_path_count`) | `ok` with fewer paths; never reached at 1 024 paths |
+| Stochastic workload: paths × horizon × assets | 200 000 000 | `quant/engine.py`; the plugin lowers the paths first (`fit_path_count`) | `ok` with fewer paths; `unavailable` · `resource_limit` (`horizon`) when 1 024 do not fit |
+| Bootstrap history: observations × assets | 250 000 | `quant/engine.py`; `execute()` keeps the most recent observations that fit first | `ok`, `history_truncated` (the engine's defence: `resource_limit`, no remedy) |
 | Optimization returns: observations × assets | 2 000 000 | `quant/optimization_engine.py` | `unavailable` · `resource_limit` |
 | Prices of the scope, every analytic: assets × days of the period (or of a replay window) | `MAX_BULK_ITEM_DAYS = 1_000_000` (Z-25, lowered by R13-SEC9-2) | `assets/price_query.py`, raised as `BulkTooManyDaysError` and turned into the refusal by `risk/scope.py::prepare_asset_series` (J-50) | `unavailable` · `resource_limit`, remedy `period_or_assets`, for every analytic of the request (a replay window: that analytic only) |
 
@@ -576,9 +581,10 @@ Every `resource_limit` with a remedy is built by `resource_limit_error()` (`risk
 `quant/engine.py`, which the plugin catches around `run_simulation()` and re-raises through
 `resource_limit_error()` with its `metric`, `actual` and `limit`. The refusal's `details` carry these
 three, plus the `remedy` that one table, `REMEDY_BY_METRIC` (`risk/base.py`), maps the metric to
-(`portfolio_cells` and `stochastic_cells` → `paths_or_horizon`, `history_cells` and `observations` →
-`period`, `assets` → `positions`, `sobol_dimension` → `horizon_or_sampling`, `price_item_days` →
-`period_or_assets`). A metric missing from the table still answers `resource_limit`, with no `remedy`.
+(`portfolio_cells` and `stochastic_cells` → `horizon`, `assets` → `positions`, `sobol_dimension` → `horizon_or_sampling`, `price_item_days` →
+`period_or_assets`). A metric missing from the table still answers `resource_limit`, with no `remedy`: so do
+`history_cells` and `observations` since RN-16, defences no period the user picks can move (the simulation reads its
+own history, `risk/simulation_window.py`, never the page's period).
 The scope's price budget is the one limit outside the plugin: `prepare_asset_series()` refuses through
 the same builder with `metric` `price_item_days`, and `RiskService.execute()` answers every planned
 analytic with that refusal (J-50). No other module writes a `remedy`, so the remedies the backend can

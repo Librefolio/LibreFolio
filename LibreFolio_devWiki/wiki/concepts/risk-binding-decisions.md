@@ -36,7 +36,7 @@ the entry point for whoever resumes Risk after release 1.2 (D382). The full reco
 | D373 | The data-quality banner, with «Sync», in the Lab too; Asset Detail stays as it is |
 | D374 | A discarded answer is asked again up to 3 times in all (`RISK_DISCARD_ATTEMPTS`) — [[problems/discarded-risk-answer-read-as-empty]] |
 | D375 | Allocation history by type: one area per family, subtypes only in the tooltip |
-| D379 | A simulation that is too large says so, with a cure that really works |
+| D379 | A simulation that is too large says so, with a cure that really works (since RN-16, 17/11/2026: above the path budgets the paths fall to the largest power of two that fits first; refused only below 1 024, the cure a shorter horizon) |
 | D380, D381 | The histogram: Sturges when the IQR is 0; the Freedman–Diaconis width computed, not built; never «−0.0%» nor «−0,00 €» |
 | D382 | The pause until after 1.2 |
 | D383 | The box of a level's notices is the same everywhere (Dashboard, broker, Lab) |

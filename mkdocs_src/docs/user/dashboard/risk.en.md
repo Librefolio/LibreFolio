@@ -116,7 +116,7 @@ What would a past crisis, or a shock you imagine, do to the portfolio you hold t
 
 !!! note "The simulation depends on the history it reads"
 
-    Its outcome depends heavily on how much history the period holds compared with the horizon — see [What the Simulation Does Not Yet Do](../../financial-theory/technical-analysis/risk-metrics/simulation-modes.md#why-beta).
+    It does not read the page's period: it uses all the history your holdings share, up to today, and the result says which dates and how many observations. A holding listed recently shortens that history for all of them, and when it is shorter than the horizon an amber line says so — see [How Much History the Simulation Reads](../../financial-theory/technical-analysis/risk-metrics/simulation-modes.md#why-beta).
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="The What if…? Simulation box: the model warning, the five modes with Reshuffled history recommended, horizon, paths and seed, and after Simulate the terminal figures, the cone and What this simulation assumed" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
