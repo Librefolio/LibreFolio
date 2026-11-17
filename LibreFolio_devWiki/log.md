@@ -4067,3 +4067,8 @@ Filed: [[features/F-111]].
 Project 70, RN-19: the Lab's «How did each one move?» table reads its KPI from an instance of its own in L1°'s request,
 so a benchmark never moves it; a request's analytic is attributed to a level by its instance. Added to the binding list.
 Filed: [[concepts/risk-binding-decisions]].
+
+## [2026-11-17] file | Two rolling risk signals
+Project 70, RN-22: rolling semi-deviation (sharing the rolling volatility's axis) and rolling Omega (1× line) joined the
+catalogue, 24 plugins; both read the one home's measures window by window. Added to the domain page.
+Filed: [[domains/signals]].

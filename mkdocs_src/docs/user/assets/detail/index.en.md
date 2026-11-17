@@ -20,7 +20,7 @@ From top to bottom:
 
 ### 📊 [Signals](signals.md)
 
-Draw any of the **22 technical indicators**, another asset or currency pair, or a reference curve over the chart.
+Draw any of the **24 technical indicators**, another asset or currency pair, or a reference curve over the chart.
 
 ### 📈 [Interactive Chart](chart.md)
 
