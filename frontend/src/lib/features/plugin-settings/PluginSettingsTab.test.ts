@@ -78,6 +78,7 @@ function nickname(): SettingField {
         description: '',
         label_key: null,
         description_key: null,
+        missing_key: null,
         options: [],
         min_length: null,
         max_length: null,

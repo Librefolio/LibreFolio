@@ -28,6 +28,8 @@ import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$t
 
 const fake = vi.hoisted(() => ({
     translate(key: string, options?: {values?: Record<string, unknown>}): string {
+        // A field's own phrase (N3a2) has a translation: `phrase:<field>`, so the test sees it was used
+        if (key.includes('.missing.') && !options) return `phrase:${key.split('.').pop()}`;
         const values = options?.values ?? {};
         const shown = Object.keys(values)
             .sort()
@@ -54,8 +56,8 @@ vi.mock('$lib/stores/app/auth', async () => {
 import PluginNotConfiguredModal from './PluginNotConfiguredModal.svelte';
 import type {ProviderReadiness} from './notConfigured';
 
-function field(key: string, label: string) {
-    return {key, label, label_key: null, description: '', description_key: null, type: 'string', scope: 'system', secret: true, required: true, value: null, is_set: false, locked: false, locked_by: null, options: [], admin_only: true};
+function field(key: string, label: string, missingKey: string | null = null) {
+    return {key, label, label_key: null, missing_key: missingKey, description: '', description_key: null, type: 'string', scope: 'system', secret: true, required: true, value: null, is_set: false, locked: false, locked_by: null, options: [], admin_only: true};
 }
 
 function entry(family: string, code: string, fields: ReturnType<typeof field>[], groups: string[] = []) {
@@ -117,6 +119,35 @@ describe('A — missing fields, administrator', () => {
         fake.fetchEntry.mockRejectedValue(new Error('down'));
         mount(MISSING);
         await waitFor(() => expect(message().textContent).toContain('fields=api_key, coingecko.plan'));
+    });
+});
+
+describe("N3a2 — the fields' own phrases", () => {
+    function phrased(plan: string | null) {
+        fake.fetchEntry.mockImplementation(async (family: string, code: string) => {
+            if (family === 'asset' && code === 'keyed') return entry('asset', 'keyed', [field('api_key', 'API key', 'pluginSettings.asset.keyed.missing.api_key')], ['coingecko']);
+            if (family === 'group' && code === 'coingecko') return entry('group', 'coingecko', [field('plan', 'Plan', plan)]);
+            return null;
+        });
+    }
+
+    it('every missing field declares a phrase: the phrase text, the phrases joined as a list of the language', async () => {
+        phrased('pluginSettings.group.coingecko.missing.plan');
+        mount(MISSING);
+        await waitFor(() => expect(message().textContent).toContain('pluginSettings.notConfigured.missingAdminPhrase {count=2, fields=phrase:api_key and phrase:plan, provider=Keyed}'));
+    });
+
+    it('another user reads the phrase too', async () => {
+        fake.admin = false;
+        phrased('pluginSettings.group.coingecko.missing.plan');
+        mount(MISSING);
+        await waitFor(() => expect(message().textContent).toContain('pluginSettings.notConfigured.missingMemberPhrase {count=2, fields=phrase:api_key and phrase:plan, provider=Keyed}'));
+    });
+
+    it('one field without a phrase: the labels, for every field', async () => {
+        phrased(null);
+        mount(MISSING);
+        await waitFor(() => expect(message().textContent).toContain('pluginSettings.notConfigured.missingAdmin {count=2, fields=API key, Plan, provider=Keyed}'));
     });
 });
 

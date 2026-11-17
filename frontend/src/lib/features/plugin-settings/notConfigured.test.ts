@@ -92,6 +92,17 @@ describe('the window texts, through the real catalogue', () => {
                 expect(one, `${language} ${key}: the plural picks a different form`).not.toEqual(two.replace('API key, Plan', 'API key'));
                 expect(one).not.toContain('{');
             }
+            // N3a2: the field's own phrase, in the sentence; the administrator's verb agrees with the count
+            for (const key of ['pluginSettings.notConfigured.missingAdminPhrase', 'pluginSettings.notConfigured.missingMemberPhrase']) {
+                const one = t(key, {values: {provider: 'CoinGecko', count: 1, fields: 'PHRASE-A'}});
+                const two = t(key, {values: {provider: 'CoinGecko', count: 2, fields: 'PHRASE-A, PHRASE-B'}});
+                expect(one, `${language} ${key}`).toContain('PHRASE-A');
+                expect(two).toContain('PHRASE-A, PHRASE-B');
+                expect(one).not.toContain('{');
+            }
+            const singular = t('pluginSettings.notConfigured.missingAdminPhrase', {values: {provider: 'X', count: 1, fields: 'F'}});
+            const plural = t('pluginSettings.notConfigured.missingAdminPhrase', {values: {provider: 'X', count: 2, fields: 'F'}});
+            expect(singular, `${language}: the verb agrees with the count`).not.toEqual(plural);
         }
         locale.set('en');
     });
