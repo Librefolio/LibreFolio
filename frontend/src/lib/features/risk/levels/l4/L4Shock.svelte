@@ -53,16 +53,21 @@
          * subsystem converge on the same predicate even where the string differs.
          */
         showMoney?: boolean;
+        /**
+         * One asset (RN-17, Q16-4): no shock by type. An asset has one type, so a shock by type lands in one bucket and
+         * its result is the shock itself; by sector and by area still pass through an ETF's breakdown.
+         */
+        withoutTypeShock?: boolean;
     }
 
-    let {controller, assetNames, currency, showMoney: showMoneyOverride}: Props = $props();
+    let {controller, assetNames, currency, showMoney: showMoneyOverride, withoutTypeShock = false}: Props = $props();
 
     let presetId = $state('');
-    let dimension = $state<RiskScenarioDimension>('asset_class');
+    let dimension = $state<RiskScenarioDimension>(untrack(() => withoutTypeShock) ? 'sector' : 'asset_class');
     let bucketShocks = $state<Record<string, number>>({});
     let showDetail = $state(false);
 
-    let options = $derived(shockOptions(controller.scenarioCatalog, $currentLanguage));
+    let options = $derived(shockOptions(controller.scenarioCatalog, $currentLanguage).filter((option) => !withoutTypeShock || shockScenario(controller.scenarioCatalog, option.value)?.dimension !== 'asset_class'));
     let result = $derived(controller.stressResult);
     let output = $derived(riskOutput(result, schemas.RiskStressOutput));
     let scopeKind = $derived(singleValue(riskMetadata(result)?.scope) ?? '');

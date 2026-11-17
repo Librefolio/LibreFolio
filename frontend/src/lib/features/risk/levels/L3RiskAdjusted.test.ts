@@ -550,3 +550,15 @@ describe('L3RiskAdjusted — the notes under the chart, one idea per line (T10)'
         expect(normalize(lines[4].textContent)).toBe(normalize(t('risk.levels.l3.scatter.notes.line')));
     });
 });
+
+// RN-17: on the Asset Detail the subject of the table is the asset, not a portfolio.
+describe('L3RiskAdjusted — on one asset, the subject row is the asset', () => {
+    it('names the subject row with the asset’s name, never «Portfolio», and keeps the benchmark after it', () => {
+        mount({historicalResults: [HISTORICAL_KPI], currentResults: [], comparisonResult: COMPARISON_UNHELD, benchmarkName: BENCHMARK_NAME, subjectLabel: 'Invented ETF'} as Props);
+
+        expect(drawnOrder()).toEqual(['ref-portfolio', `ref-${BENCHMARK_ID}`]);
+        const subject = within(rowById('ref-portfolio')).getByTestId('risk-l3-row-ref-name');
+        expect(normalize(subject.textContent)).toBe('Invented ETF');
+        expect(normalize(subject.textContent)).not.toBe(normalize(t('risk.levels.l3.scatter.portfolio')));
+    });
+});

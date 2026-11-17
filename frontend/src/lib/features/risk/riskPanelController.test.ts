@@ -1417,6 +1417,20 @@ describe('riskPanelController', () => {
             return scopeKind === 'asset_set' && mode === 'historical' && ASSET_SET_HISTORICAL_CODES.has(code);
         }
 
+        /** The catalogue as the backend declares it for one asset (RN-17): six analytics, each with its real modes. */
+        const ASSET_MODES: Readonly<Record<string, readonly string[]>> = {
+            historical_kpi: ['historical', 'current_composition'],
+            historical_var: ['historical', 'current_composition'],
+            drawdown_summary: ['historical'],
+            comparison: ['historical', 'current_composition'],
+            stress: ['current_composition'],
+            simulation: ['current_composition'],
+        };
+
+        function assetCatalogue(code: string, scopeKind: string, mode: string): boolean {
+            return scopeKind === 'asset' && (ASSET_MODES[code] ?? []).includes(mode);
+        }
+
         /** The lab's inputs: two holdings, a 0% risk-free rate (the page has no control for one), and a benchmark outside the selection. */
         function labInputs(): RiskControllerInputs {
             return {...defaultInputs(), scope: {kind: 'asset_set', asset_ids: [12, 15]}, appliedRiskFreePercent: 0, assetSetBenchmarkId: BENCHMARK};
@@ -1564,6 +1578,42 @@ describe('riskPanelController', () => {
             // `RiskAnalysisPanel`'s only option is a callback.
             await settledController({...defaultInputs(), scope: {kind: 'asset', asset_id: 12}}, {scenarioCatalogLoaded: () => undefined});
             expectIssuedToday(ASSET_DETAIL_TODAY, "Asset Detail's panel");
+        });
+
+        it("pins the levels panel on one asset (RN-17), under the asset's real catalogue: L1's wave and the current KPI, nothing of a basket", async () => {
+            capability.only = assetCatalogue;
+            await settledController({...defaultInputs(), scope: {kind: 'asset', asset_id: 12}}, {includeDrawdownSummary: true, includeMonthlyVar: true, includeCurrentCompositionRiskReturn: true});
+            expectIssuedToday(
+                [
+                    [
+                        {
+                            scope: {kind: 'asset', asset_id: 12},
+                            date_range: {start: '2025-01-01', end: '2025-12-31'},
+                            target_currency: 'EUR',
+                            mode: 'historical',
+                            analytics: [
+                                {instance_id: 'base-historical-historical_kpi', analytic_code: 'historical_kpi', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0}},
+                                {instance_id: 'base-historical-historical_var', analytic_code: 'historical_var', parameters: {confidence_level: 0.95, horizon_days: 1}},
+                                {instance_id: 'base-historical-historical_var-monthly', analytic_code: 'historical_var', parameters: {confidence_level: 0.95, horizon_days: 30}},
+                                {instance_id: 'base-historical-drawdown_summary', analytic_code: 'drawdown_summary', parameters: {}},
+                            ],
+                        },
+                        false,
+                    ],
+                    [
+                        {
+                            scope: {kind: 'asset', asset_id: 12},
+                            date_range: {start: '2025-01-01', end: '2025-12-31'},
+                            target_currency: 'EUR',
+                            mode: 'current_composition',
+                            composition_policy: 'current_buy_and_hold',
+                            analytics: [{instance_id: 'base-current_composition-historical_kpi', analytic_code: 'historical_kpi', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0}}],
+                        },
+                        false,
+                    ],
+                ],
+                'the levels panel on one asset',
+            );
         });
 
         it('pins the lab as it asks today, on the union with a benchmark: one request, byte for byte', async () => {

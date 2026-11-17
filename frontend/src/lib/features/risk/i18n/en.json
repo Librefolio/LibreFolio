@@ -581,7 +581,9 @@
           "notHeld": "Not in the portfolio: the benchmark is shown for comparison.",
           "expectedReturnShort": "Ann. return",
           "namedHelp": "{name}\n{help}"
-        }
+        },
+        "titleAsset": "Compared with a reference",
+        "benchmarkIsSubject": "The reference is this asset itself: choose another one to compare with."
       },
       "l4": {
         "title": "What if…?",
@@ -663,7 +665,8 @@
           "impact": "Impact",
           "bar": "Effect"
         },
-        "shockUnconfigured": "Not in this scenario, so shocked by 0: {names}. The total counts them as untouched."
+        "shockUnconfigured": "Not in this scenario, so shocked by 0: {names}. The total counts them as untouched.",
+        "replayTotalAsset": "This asset would have ended the period at {percent} {amount}"
       },
       "backtestNotice": "With a slice active, these figures are rebuilt from today’s composition: they say how it *would* have gone, not how it actually went.",
       "notice": {

@@ -581,7 +581,9 @@
           "notHeld": "Pas dans le portefeuille : l'indice de référence est là pour la comparaison.",
           "expectedReturnShort": "Rend. annuel",
           "namedHelp": "{name}\n{help}"
-        }
+        },
+        "titleAsset": "Par rapport à une référence",
+        "benchmarkIsSubject": "La référence est cet actif lui-même : choisissez-en une autre pour comparer."
       },
       "l4": {
         "title": "Que se passe-t-il si… ?",
@@ -663,7 +665,8 @@
           "impact": "Impact",
           "bar": "Effet"
         },
-        "shockUnconfigured": "Absents de ce scénario, donc un choc de 0 : {names}. Le total les compte comme intacts."
+        "shockUnconfigured": "Absents de ce scénario, donc un choc de 0 : {names}. Le total les compte comme intacts.",
+        "replayTotalAsset": "Cet actif aurait terminé la période à {percent} {amount}"
       },
       "backtestNotice": "Avec un sous-ensemble actif, ces chiffres sont reconstruits à partir de la composition actuelle : ils disent ce qui *se serait* passé, pas ce qui s’est réellement passé.",
       "notice": {

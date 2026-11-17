@@ -581,7 +581,9 @@
           "notHeld": "Non è in portafoglio: il benchmark è qui per il confronto.",
           "expectedReturnShort": "Rend. annuo",
           "namedHelp": "{name}\n{help}"
-        }
+        },
+        "titleAsset": "Rispetto a un riferimento",
+        "benchmarkIsSubject": "Il riferimento è questo stesso asset: scegline un altro per il confronto."
       },
       "l4": {
         "title": "Cosa succede se…?",
@@ -663,7 +665,8 @@
           "impact": "Impatto",
           "bar": "Effetto"
         },
-        "shockUnconfigured": "Non sono nello scenario, quindi il loro shock è 0: {names}. Il totale li conta come intatti."
+        "shockUnconfigured": "Non sono nello scenario, quindi il loro shock è 0: {names}. Il totale li conta come intatti.",
+        "replayTotalAsset": "Questo asset avrebbe chiuso il periodo a {percent} {amount}"
       },
       "backtestNotice": "Con una fetta attiva, questi numeri sono ricostruiti sulla composizione di oggi: dicono come *sarebbe* andata, non come è andata davvero.",
       "notice": {

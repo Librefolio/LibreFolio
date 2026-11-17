@@ -120,6 +120,8 @@
     // one already paid for and thrown away.
     let correlationResult = $derived(resultByCode(historicalResults, 'correlation'));
     let initialLoading = $derived(controller.initialLoading);
+    /** The Asset Detail's x-ray (RN-17): only the levels and tools that have meaning on one asset. */
+    let oneAsset = $derived(scope.kind === 'asset');
     let loadError = $derived(controller.loadError);
 
     // Each level discloses only the measurements it actually renders. The filter
@@ -343,17 +345,40 @@
             <L1HowMuchItHurts {historicalResults} {scopeValue} currency={targetCurrency} loading={initialLoading} />
         </RiskLevelSection>
 
-        <RiskLevelSection level={2} title={$t('risk.levels.l2.title')} lead={l2Lead} testId="risk-level-2" docsPath="financial-theory/technical-analysis/risk-metrics/" health={levelErrorHealth(l2Health)} errorCodes={l2Errors} metadata={l2Metadata}>
-            <L2Diversification {contributionResult} {correlationResult} {assetNames} loading={initialLoading} />
-        </RiskLevelSection>
+        <!-- One asset (RN-17): nothing to diversify — correlation and risk contribution do not declare the asset scope. -->
+        {#if !oneAsset}
+            <RiskLevelSection level={2} title={$t('risk.levels.l2.title')} lead={l2Lead} testId="risk-level-2" docsPath="financial-theory/technical-analysis/risk-metrics/" health={levelErrorHealth(l2Health)} errorCodes={l2Errors} metadata={l2Metadata}>
+                <L2Diversification {contributionResult} {correlationResult} {assetNames} loading={initialLoading} />
+            </RiskLevelSection>
+        {/if}
 
         {#snippet l3Actions()}
             <ColumnVisibilityToggle tableRef={l3Table} />
         {/snippet}
 
-        <RiskLevelSection level={3} title={$t('risk.levels.l3.title')} testId="risk-level-3" docsPath="financial-theory/technical-analysis/risk-metrics/" health={levelErrorHealth(l3Health)} errorCodes={l3Errors} metadata={l3Metadata} actions={l3Table ? l3Actions : undefined}>
-            <L3Benchmark {controller} riskFreePercent={appliedRiskFreePercent} period={{start: dateStart, end: dateEnd}} currency={targetCurrency} />
-            <L3RiskAdjusted bind:tableRef={l3Table} {historicalResults} {currentResults} {assetNames} {assetIcons} {appliedRiskFreePercent} comparisonResult={controller.comparisonResult} {benchmarkName} loading={initialLoading} />
+        <RiskLevelSection
+            level={3}
+            title={$t(oneAsset ? 'risk.levels.l3.titleAsset' : 'risk.levels.l3.title')}
+            testId="risk-level-3"
+            docsPath="financial-theory/technical-analysis/risk-metrics/"
+            health={levelErrorHealth(l3Health)}
+            errorCodes={l3Errors}
+            metadata={l3Metadata}
+            actions={l3Table ? l3Actions : undefined}
+        >
+            <L3Benchmark {controller} subjectAssetId={scope.kind === 'asset' ? scope.asset_id : null} riskFreePercent={appliedRiskFreePercent} period={{start: dateStart, end: dateEnd}} currency={targetCurrency} />
+            <L3RiskAdjusted
+                bind:tableRef={l3Table}
+                subjectLabel={scope.kind === 'asset' ? assetNames[scope.asset_id] : undefined}
+                {historicalResults}
+                {currentResults}
+                {assetNames}
+                {assetIcons}
+                {appliedRiskFreePercent}
+                comparisonResult={controller.comparisonResult}
+                {benchmarkName}
+                loading={initialLoading}
+            />
         </RiskLevelSection>
 
         <!-- Closed until asked for, and the scenario catalogue is fetched on that
@@ -376,7 +401,7 @@
                     <L4Replay {controller} {assetNames} currency={targetCurrency} {dateStart} {dateEnd} />
                 {/snippet}
                 {#snippet shock()}
-                    <L4Shock {controller} {assetNames} currency={targetCurrency} />
+                    <L4Shock {controller} {assetNames} currency={targetCurrency} withoutTypeShock={oneAsset} />
                 {/snippet}
                 {#snippet simulation()}
                     <L4Simulation {controller} {dateEnd} />

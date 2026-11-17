@@ -581,7 +581,9 @@
           "notHeld": "No está en la cartera: el índice de referencia está aquí para la comparación.",
           "expectedReturnShort": "Rent. anual",
           "namedHelp": "{name}\n{help}"
-        }
+        },
+        "titleAsset": "Respecto a una referencia",
+        "benchmarkIsSubject": "La referencia es este mismo activo: elige otra para comparar."
       },
       "l4": {
         "title": "¿Qué pasa si…?",
@@ -663,7 +665,8 @@
           "impact": "Impacto",
           "bar": "Efecto"
         },
-        "shockUnconfigured": "No están en este escenario, así que su choque es 0: {names}. El total los cuenta como intactos."
+        "shockUnconfigured": "No están en este escenario, así que su choque es 0: {names}. El total los cuenta como intactos.",
+        "replayTotalAsset": "Este activo habría cerrado el periodo en {percent} {amount}"
       },
       "backtestNotice": "Con un subconjunto activo, estas cifras se reconstruyen sobre la composición de hoy: dicen cómo *habría* ido, no cómo fue en realidad.",
       "notice": {

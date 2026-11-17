@@ -133,6 +133,7 @@ import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/compo
 import {assertEffectsRun, effectRoot} from '$test/runes.svelte';
 import {schemas} from '$lib/api';
 import {_, locale, SUPPORTED_LOCALES, type SupportedLocale} from '$lib/i18n';
+import {formatPercent} from '$lib/utils/core/formatPercent';
 import en from '$lib/i18n/en.json';
 import es from '$lib/i18n/es.json';
 import fr from '$lib/i18n/fr.json';
@@ -153,7 +154,7 @@ import {formatReplayDate, formatReplayShare, REPLAY_EXCLUSION_REASON_ORDER, repl
 /** The component's own source, for the one property that is markup rather than behaviour (see "the crisis menu"). */
 const L4_REPLAY_SOURCE = import.meta.glob('./L4Replay.svelte', {query: '?raw', import: 'default', eager: true})['./L4Replay.svelte'] as string;
 
-type Scope = 'portfolio' | 'asset_set';
+type Scope = 'portfolio' | 'asset_set' | 'asset';
 type ReplayWindow = {start: string; end: string};
 /** A type and not an interface: only an alias carries the implicit index signature svelte-i18n's values want. */
 type Values = Record<string, string | number>;
@@ -465,7 +466,7 @@ function suggestionOf(result: RiskAnalyticResult): ReplaySuggestion {
 
 function controllerInputs(scope: Scope): RiskControllerInputs {
     return {
-        scope: scope === 'portfolio' ? {kind: 'portfolio'} : {kind: 'asset_set', asset_ids: [7, 9, 12, 13, 15]},
+        scope: scope === 'portfolio' ? {kind: 'portfolio'} : scope === 'asset' ? {kind: 'asset', asset_id: 7} : {kind: 'asset_set', asset_ids: [7, 9, 12, 13, 15]},
         dateStart: WINDOW.start,
         dateEnd: WINDOW.end,
         targetCurrency: 'EUR',
@@ -1548,5 +1549,24 @@ describe('L4Replay — the exclude-and-retry flow is retired', () => {
         expectRetiredControlsGone();
         // Not a window that left everything out either: it names no excluded list.
         expect(screen.queryAllByTestId('risk-replay-nothing')).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// RN-17 (Q16-6): on one asset, one sentence — no bars
+// ---------------------------------------------------------------------------
+
+describe('L4Replay — on one asset, the answer is one sentence (Q16-6)', () => {
+    it('says how the asset would have closed the period, and draws no bar: one row at 100 % says nothing more', async () => {
+        mount('asset', replayed('asset', audit([]), {portfolioReturn: -0.337, impacts: [[7, -0.337]]}));
+
+        const total = screen.getByTestId('risk-replay-total');
+        const percent = `−${formatPercent(0.337, {scale: 100, signed: false})}`;
+        expect(total.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+            get(_)('risk.levels.l4.replayTotalAsset', {values: {percent, amount: ''}})
+                .replace(/\s+/g, ' ')
+                .trim(),
+        );
+        expect(screen.queryByTestId('risk-replay-tornado'), 'a bar chart of one asset at 100 %').toBeNull();
     });
 });

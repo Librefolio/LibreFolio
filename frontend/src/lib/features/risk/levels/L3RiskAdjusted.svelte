@@ -50,9 +50,12 @@
         loading?: boolean;
         /** The table's instance, for the column menu the panel draws beside the level's manual icon. */
         tableRef?: DataTable<RiskReturnRow>;
+        /** The subject row's name: the asset's on the Asset Detail (RN-17); «Portfolio» when not given. */
+        subjectLabel?: string;
     }
 
-    let {historicalResults, currentResults = [], comparisonResult, benchmarkName = null, assetNames = {}, assetIcons = new Map(), appliedRiskFreePercent = 0, loading = false, tableRef = $bindable()}: Props = $props();
+    let {historicalResults, currentResults = [], comparisonResult, benchmarkName = null, assetNames = {}, assetIcons = new Map(), appliedRiskFreePercent = 0, loading = false, tableRef = $bindable(), subjectLabel}: Props = $props();
+    let portfolioLabel = $derived(subjectLabel ?? $t('risk.levels.l3.scatter.portfolio'));
 
     let wave = $derived(selectKpiWave(currentResults, historicalResults));
     let figures = $derived(buildRiskAdjusted(wave.results, comparisonResult));
@@ -67,7 +70,7 @@
             comparisonResult,
             assetNames,
             benchmarkName,
-            portfolioLabel: $t('risk.levels.l3.scatter.portfolio'),
+            portfolioLabel,
             details: {
                 weight: (share) => $t('risk.levels.l3.scatter.tooltip.weight', {values: {share}}),
                 benchmark: $t('risk.levels.l3.scatter.tooltip.benchmark'),
@@ -89,7 +92,7 @@
             comparisonResult,
             assetNames,
             benchmarkName,
-            portfolioLabel: $t('risk.levels.l3.scatter.portfolio'),
+            portfolioLabel,
             portfolioKpi: {sortino: figures.sortino, sharpe: figures.sharpe, volatility: figures.volatility},
         }),
     );

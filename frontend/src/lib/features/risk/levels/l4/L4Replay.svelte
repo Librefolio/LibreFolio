@@ -99,6 +99,12 @@
     let output = $derived(riskOutput(result, schemas.RiskStressOutput));
     let scopeKind = $derived(singleValue(riskMetadata(result)?.scope) ?? '');
     let showMoney = $derived(showMoneyOverride ?? scopeKind === 'portfolio');
+    /**
+     * One asset (RN-17, Q16-6): the answer is the sentence alone. A bar chart of one row at 100 % — its weight, its
+     * contribution, its impact all equal to the total — says nothing the sentence does not. Read off the answer's
+     * metadata, like the money: fail-closed.
+     */
+    let oneAsset = $derived(scopeKind === 'asset');
     let rows = $derived(tornadoRows(output));
     let exclusions = $derived(replayExclusions(result));
     let suggestion = $derived(replaySuggestion(result));
@@ -271,7 +277,7 @@
         {#if output.portfolio_return != null}
             {@const total = output.portfolio_return}
             <p class="text-sm text-lf-secondary" data-testid="risk-replay-total">
-                {$t('risk.levels.l4.replayTotal', {
+                {$t(oneAsset ? 'risk.levels.l4.replayTotalAsset' : 'risk.levels.l4.replayTotal', {
                     values: {
                         percent: `${total < 0 ? '−' : '+'}${formatPercent(Math.abs(total), {scale: 100, signed: false})}`,
                         amount: !showMoney || output.impact_amount == null ? '' : formatCurrencyAmount(output.impact_amount, currency),
@@ -279,7 +285,9 @@
                 })}
             </p>
         {/if}
-        <TornadoChart {rows} label={rowLabel} amount={rowAmount} testId="risk-replay-tornado" />
+        {#if !oneAsset}
+            <TornadoChart {rows} label={rowLabel} amount={rowAmount} testId="risk-replay-tornado" />
+        {/if}
     {:else if nothingLeft}
         <div class="space-y-2 rounded-lg bg-lf-warning-soft p-3 text-xs text-lf-warning-on-soft" data-testid="risk-replay-nothing">
             <p class="font-medium">{$t('risk.levels.l4.replayNothing')}</p>
