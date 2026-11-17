@@ -110,7 +110,7 @@ _VOICES: tuple[FAProfileVoice, ...] = (
     _voice("interest_start_date", ProfileShape.DATE, topic=_T.COUPONS, groups=_BOND),
     _voice("loyalty_bonus", ProfileShape.PERCENTAGE, topic=_T.COUPONS, sign=_NON_NEGATIVE, groups=_BOND),
     _voice("coupon_schedule", ProfileShape.TABLE, topic=_T.COUPONS, sign=_NON_NEGATIVE, groups=_BOND),
-    _voice("payout_description", ProfileShape.TEXT, topic=_T.MATURITY, groups=_BOND),
+    _voice("payout_description", ProfileShape.TEXT, topic=_T.COUPONS, groups=_BOND),
     # Identity: what the instrument is and who issues it, neutral to any country's tax rules
     _voice(
         "legal_form",

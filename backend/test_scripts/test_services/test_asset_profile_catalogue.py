@@ -80,7 +80,7 @@ TOPICS: dict[str, ProfileTopic] = {
     "interest_start_date": T.COUPONS,
     "loyalty_bonus": T.COUPONS,
     "coupon_schedule": T.COUPONS,
-    "payout_description": T.MATURITY,
+    "payout_description": T.COUPONS,
     "legal_form": T.LEGAL_FORM,
     "issuer_type": T.ISSUER,
     "issuer_lei": T.ISSUER,
