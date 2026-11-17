@@ -360,7 +360,9 @@
       "omega_undefined_assets": "Gains contre pertes non défini pour {names} : aucun jour n'est passé sous le rendement cible.",
       "extreme_day_ratio_undefined": "Jours extrêmes non définis car la série ne bouge pas.",
       "extreme_day_ratio_undefined_assets": "Jours extrêmes non définis pour {names} : la série ne bouge pas.",
-      "simulation_history_shorter_than_horizon": "La simulation projette {horizon_days} jours à partir de {history_days} jours d'historique : la bande n'est pas plus large que cet historique."
+      "simulation_history_shorter_than_horizon": "La simulation projette {horizon_days} jours à partir de {history_days} jours d'historique : la bande n'est pas plus large que cet historique.",
+      "simulation_excluded_short_history": "{names} : {history_days} jours d'historique, moins que l'horizon de {horizon_days} jours : hors de la simulation, son poids compte comme liquidités.",
+      "simulation_mostly_excluded": "La simulation ne décrit qu'une partie de votre portefeuille ({covered, number, percent}) : le reste a moins d'historique que l'horizon."
     },
     "assetDetail": {
       "overviewTab": "Vue d'ensemble",

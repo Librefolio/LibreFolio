@@ -1667,3 +1667,29 @@ describe('warningSentence — a day travels in the reader’s format (RN-11)', (
         expect(seen[0], 'the ISO day reached the sentence as it came, or a non-day string was rewritten').toEqual({start: day, names: 'Fund 2026-03-16', count: 2});
     });
 });
+
+// RN-16b (developer's Q7 «per ora B»): the simulation leaves out a holding shorter than the horizon, and L4's notice names
+// it — the backend adds `names` (`with_warning_asset_names`), the sentence says its history and the horizon.
+describe('resultReasons — the simulation names a holding it left out (RN-16b)', () => {
+    it('says the holding, its history and the horizon, through the catalogue', () => {
+        const simulation = {
+            instance_id: 'simulation',
+            analytic_code: 'simulation',
+            status: 'partial',
+            output: null,
+            warnings: [
+                {
+                    code: 'simulation_asset_shorter_than_horizon',
+                    message: 'Asset 3 has 63 days of history, less than the 365-day horizon: left out of the simulation, its weight counted as cash.',
+                    message_i18n_key: 'risk.warnings.simulation_excluded_short_history',
+                    message_params: {history_days: 63, horizon_days: 365, names: 'Invented Fund', count: 1},
+                    details: {asset_id: 3, treatment: 'zero_return_residual'},
+                },
+            ],
+        } as unknown as RiskAnalyticResult;
+
+        const [reason] = levelHelpers.resultReasons([simulation], get(_));
+        expect(reason.message).toBe(get(_)('risk.warnings.simulation_excluded_short_history', {values: {history_days: 63, horizon_days: 365, names: 'Invented Fund', count: 1}}));
+        for (const part of ['Invented Fund', '63', '365']) expect(reason.message).toContain(part);
+    });
+});
