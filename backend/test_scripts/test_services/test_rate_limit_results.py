@@ -753,7 +753,9 @@ async def test_u2_a_full_limit_keeps_the_last_stored_price_like_a_refusal(privat
     assert (item.value, item.source) == (Decimal("42.5"), "db:last_known")
     assert (item.error_code, item.retry_after) == ("RATE_LIMITED", U2_HOUR_WAIT)
     assert calls == [], "the full window never calls the provider"
-    assert _state(cooldowns) == {("asset", code, None): (1, U2_HOUR_WAIT)}
+    # U2b: the limit pause is exact and on its own key (the settings fingerprint in it), no refusal counted
+    ((key, state),) = _state(cooldowns).items()
+    assert (key[:2], key[2][0], state) == (("asset", code), "call-limit", (0, U2_HOUR_WAIT))
     assert _u2_counts(u2_counter, "asset", code) == (1,) * 5
     print_success("last known price, RATE_LIMITED, 870 s, no call")
 

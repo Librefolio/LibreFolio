@@ -59,7 +59,7 @@ import threading
 import uuid
 from collections.abc import AsyncIterator, Callable, Iterator
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -157,8 +157,15 @@ def _plugin_class(code: str, *, fields: tuple[PluginSettingField, ...] = (), gro
 def _bind(plugin: AssetSourceProvider, values: dict[str, Any] | None = None, groups: dict[str, tuple[SettingsGroup, dict[str, Any]]] | None = None) -> AssetSourceProvider:
     """Bind ``values`` (the plugin's own plain fields) and each group's values, as the core would."""
     bound_groups = {name: BoundSettings(group.fields, group_values, {}) for name, (group, group_values) in (groups or {}).items()}
-    plugin.bind_settings(BoundSettings(type(plugin).settings_fields, values or {}, {}, groups=bound_groups))
+    # A fingerprint of the values, as the core's binding has one (U2b: the limit pause's key carries it)
+    fingerprint = repr((sorted((values or {}).items()), sorted((name, sorted(group_values.items())) for name, (_group, group_values) in (groups or {}).items())))
+    plugin.bind_settings(BoundSettings(type(plugin).settings_fields, values or {}, {}, groups=bound_groups, fingerprint=fingerprint))
     return plugin
+
+
+def _limit_key(code: str, plugin: AssetSourceProvider) -> tuple:
+    """U2b: the key of a limit pause, never the source's: the settings fingerprint in it."""
+    return ("asset", code, ("call-limit", plugin.settings.fingerprint))
 
 
 def _current(plugin: AssetSourceProvider, params: dict | None = None) -> _Calls:
@@ -508,15 +515,6 @@ async def test_u2_a_full_window_never_calls_the_provider_and_pauses_it(counter: 
     cls = _plugin_class(code, fields=(_limit_field("hour"),))
     plugin = _bind(cls(), {"call_limit_hour": 1})
     assert plugin.settings.get("call_limit_hour") == 1, "barrier: the limit reached the instance"
-    recorded: list[tuple] = []
-    real_record = core.record_refusal
-
-    def spied(*args, **kwargs):
-        recorded.append((args, kwargs))
-        return real_record(*args, **kwargs)
-
-    monkeypatch.setattr(core, "record_refusal", spied)
-
     first = _current(plugin)
     await core.call_provider(plugin, first, timeout=10, scope=SCOPE)
     second = _current(plugin)
@@ -526,22 +524,24 @@ async def test_u2_a_full_window_never_calls_the_provider_and_pauses_it(counter: 
     error = refused.value
     assert (first.count, second.count) == (1, 0), "the full window never calls the provider"
     assert (error.error_code, error.scope, error.details) == ("RATE_LIMITED", SCOPE, {"reason": "call_limit", "window": "hour", "limit": 1})
-    assert _state(cooldowns) == {("asset", code, SCOPE): (1, HOUR_WAIT)}
+    # U2b: exactly until the window ends, on the limit's own key, no refusal counted (the 429 streak untouched)
+    assert _state(cooldowns) == {_limit_key(code, plugin): (0, HOUR_WAIT)}
     assert error.retry_after == HOUR_WAIT, "retry_after is the pause recorded"
-    assert len(recorded) == 1
-    args, kwargs = recorded[0]
-    called = dict(zip(("domain", "provider", "scope", "retry_after"), args, strict=False)) | kwargs
-    assert (called["domain"], called["provider"], called["scope"]) == ("asset", code, SCOPE)
-    assert called["retry_after"] == pytest.approx(HOUR_WAIT), "the counter's own wait is handed to the pause"
     assert counter.counts("asset", code) == (1,) * 5
 
-    unlimited = _bind(cls(), {})
-    third = _current(unlimited)
-    with pytest.raises(AssetRateLimitedError) as paused:
-        await core.call_provider(unlimited, third, timeout=10, scope=SCOPE)
+    third = _current(plugin)
+    with pytest.raises(AssetCallLimitError) as paused:
+        await core.call_provider(plugin, third, timeout=10, scope=SCOPE)
     assert third.count == 0
-    assert paused.value.retry_after == HOUR_WAIT
+    assert (paused.value.retry_after, paused.value.details) == (HOUR_WAIT, {"reason": "call_limit"})
     assert counter.counts("asset", code) == (1,) * 5, "the paused call never reached the counter"
+
+    # U2b: a changed limit (another fingerprint) lifts the pause; the counter decides again
+    unlimited = _bind(cls(), {})
+    fourth = _current(unlimited)
+    await core.call_provider(unlimited, fourth, timeout=10, scope=SCOPE)
+    assert fourth.count == 1, "a raised limit lifts the limit pause"
+    assert counter.counts("asset", code) == (2,) * 5
     print_success("refused without a call, paused 870 s, the next call held by the pause")
 
 
@@ -571,7 +571,7 @@ async def test_u2_with_pauses_off_a_full_window_reports_the_counters_own_wait(co
 @pytest.mark.asyncio
 async def test_u2_a_limit_of_zero_stops_the_first_call(counter: Counter, cooldowns: Cooldowns):
     """5: ``call_limit_minute = 0`` is a stopped plugin, not «no limit»: the first call is refused, the provider never
-    called; the counter's 30 s are floored to the 60 s base pause."""
+    called; paused exactly until the minute ends, 30 s (U2b: no 60 s base)."""
     from backend.app.services.assets.base import AssetCallLimitError
 
     code = _code("stopped")
@@ -582,8 +582,8 @@ async def test_u2_a_limit_of_zero_stops_the_first_call(counter: Counter, cooldow
 
     assert calls.count == 0
     assert refused.value.details == {"reason": "call_limit", "window": "minute", "limit": 0}
-    assert refused.value.retry_after == BASE_PAUSE
-    assert _state(cooldowns) == {("asset", code, None): (1, BASE_PAUSE)}
+    assert refused.value.retry_after == MINUTE_WAIT
+    assert _state(cooldowns) == {_limit_key(code, plugin): (0, MINUTE_WAIT)}
     assert counter.counts("asset", code) is None
 
 
@@ -643,7 +643,8 @@ async def test_u2_two_plugins_of_a_credit_sharing_group_count_on_one_row(counter
     assert refused.value.details == {"reason": "call_limit", "window": "hour", "limit": 3}
     assert counter.rows() == {("group", "u2_credits")}, "one row, the group's; none of the plugins'"
     assert counter.counts("group", "u2_credits") == (3,) * 5
-    assert _state(cooldowns) == {("asset", code_b, None): (1, HOUR_WAIT)}, "the pause is the refused plugin's own"
+    ((key, state),) = _state(cooldowns).items()
+    assert (key[:2], key[2][0], state) == (("asset", code_b), "call-limit", (0, HOUR_WAIT)), "the limit pause is the refused plugin's own"
     print_success("A, B, A on one row; B refused by the group's window")
 
 
@@ -693,3 +694,85 @@ async def test_u2_a_counter_that_ends_without_a_verdict_frees_the_trial_of_an_ex
     calls = _current(plugin)
     await core.call_provider(plugin, calls, timeout=10)
     assert calls.count == 1, "the trial was freed: the next caller is called at once"
+
+
+# =============================================================================
+# U2b: THE LIMIT PAUSE IS EXACT, ITS OWN, AND LIFTED BY A CHANGED LIMIT
+# =============================================================================
+
+
+def test_u2b_cooldowns_hold_is_exact_counts_no_refusal_and_stops_at_24_hours() -> None:
+    """``Cooldowns.hold(key, seconds)``: exactly ``seconds`` (no base, no doubling, no jitter even at the maximum), no
+    refusal counted, capped at the 24 h hard maximum; a shorter hold never shortens a running one."""
+    clock = FakeClock()
+    pauses = Cooldowns(60, 3600, jitter=0.1, clock=clock, rng=lambda: 1.0)
+    assert pauses.hold("k", 30.0) == 30.0
+    assert pauses.check("k") == 30.0
+    assert [(state.refusals, state.remaining) for state in pauses.snapshot()] == [(0, 30.0)]
+    assert pauses.hold("k", 10.0) == 30.0, "a shorter hold never shortens the running pause"
+    assert pauses.hold("long", 200_000.0) == 86_400.0
+
+
+@pytest.mark.asyncio
+async def test_u2b_a_window_filled_twice_is_paused_exactly_each_time(counter: Counter, cooldowns: Cooldowns, clock: FakeClock, monkeypatch: pytest.MonkeyPatch):
+    """Minute limit 1: full at 13:45:30 → 30 s; at 13:46:31 the call passes, the next fills the minute again → 29 s, not
+    doubled: a limit pause never counts a refusal."""
+    from backend.app.services.assets.base import AssetCallLimitError
+
+    code = _code("twice")
+    plugin = _bind(_plugin_class(code, fields=(_limit_field("minute"),))(), {"call_limit_minute": 1})
+    await core.call_provider(plugin, _current(plugin), timeout=10)
+    with pytest.raises(AssetCallLimitError) as first:
+        await core.call_provider(plugin, _current(plugin), timeout=10)
+    assert first.value.retry_after == MINUTE_WAIT
+
+    clock.now += 61
+    later = NOW + timedelta(seconds=61)
+    monkeypatch.setattr(call_counter, "_utc", lambda now=None: (later if now is None else now).astimezone(UTC))
+    await core.call_provider(plugin, _current(plugin), timeout=10)
+    with pytest.raises(AssetCallLimitError) as second:
+        await core.call_provider(plugin, _current(plugin), timeout=10)
+    assert second.value.retry_after == 29.0, "exact again, never doubled"
+    assert _state(cooldowns) == {_limit_key(code, plugin): (0, 29.0)}
+
+
+@pytest.mark.asyncio
+async def test_u2b_a_limit_pause_never_feeds_the_streak_of_a_source_refusal(counter: Counter, cooldowns: Cooldowns):
+    """After a limit pause, a source's 429 on the same provider (another binding, so not held by the limit pause) gets
+    the base first pause, 60 s, its first refusal: the limit pause is on a key of its own."""
+    from backend.app.services.assets.base import AssetCallLimitError
+
+    code = _code("streak")
+    cls = _plugin_class(code, fields=(_limit_field("hour"),))
+    limited = _bind(cls(), {"call_limit_hour": 1})
+    await core.call_provider(limited, _current(limited), timeout=10)
+    with pytest.raises(AssetCallLimitError):
+        await core.call_provider(limited, _current(limited), timeout=10)
+
+    free = _bind(cls(), {})
+
+    async def refusing():
+        raise AssetRateLimitedError("source said 429")
+
+    with pytest.raises(AssetRateLimitedError) as refused:
+        await core.call_provider(free, refusing, timeout=10)
+    assert not isinstance(refused.value, AssetCallLimitError)
+    assert _state(cooldowns) == {_limit_key(code, limited): (0, HOUR_WAIT), ("asset", code, None): (1, BASE_PAUSE)}
+
+
+@pytest.mark.asyncio
+async def test_u2b_a_settings_change_never_lifts_a_source_pause(counter: Counter, cooldowns: Cooldowns):
+    """A source's 429 pause is the provider's, whatever its settings: another binding (another fingerprint) still meets
+    it, as a plain ``RATE_LIMITED``, and the counter is not reached."""
+    from backend.app.services.assets.base import AssetCallLimitError
+
+    code = _code("sourcepause")
+    cls = _plugin_class(code, fields=(_limit_field("hour"),))
+    record_refusal("asset", code, None, 100.0)
+    other = _bind(cls(), {"call_limit_hour": 50})
+    calls = _current(other)
+    with pytest.raises(AssetRateLimitedError) as paused:
+        await core.call_provider(other, calls, timeout=10)
+    assert not isinstance(paused.value, AssetCallLimitError)
+    assert calls.count == 0
+    assert counter.counts("asset", code) is None
