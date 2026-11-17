@@ -36,6 +36,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from backend.app.db.models import PluginCallCounter
 from backend.app.db.session import get_async_engine
 from backend.app.logging_config import get_logger
+from backend.app.services.plugin_settings.groups import GROUP_FAMILY, get_group
 
 logger = get_logger(__name__)
 
@@ -204,6 +205,29 @@ async def _run_statement(statement, family: str, plugin_code: str) -> tuple[tupl
                 await connection.invalidate()
                 raise
     return counted, row
+
+
+def _declared_limits(settings: object) -> CallLimits:
+    """The ``call_limit_<window>`` values of a binding: a window whose field is not declared, or has no value, has none."""
+    limits = {}
+    for window in WINDOWS:
+        try:
+            limits[window] = settings.get(f"call_limit_{window}")  # type: ignore[attr-defined]
+        except KeyError:  # not declared by this plugin or group
+            limits[window] = None
+    return CallLimits(**limits)
+
+
+def call_owner(provider: object, family: str) -> tuple[str, str, CallLimits]:
+    """Who a call of ``provider`` (a plugin of ``family`` with its settings bound) is counted and limited on: the shared
+    group whose credits it spends (``SettingsGroup.shares_credits``), else the plugin itself; and the limits, from that
+    owner's bound settings (project 76, U2/U3). One rule for every family's boundary."""
+    settings = provider.settings  # type: ignore[attr-defined]
+    for name in getattr(type(provider), "settings_groups", ()) or ():
+        group = get_group(name)
+        if group is not None and group.shares_credits:
+            return GROUP_FAMILY, name, _declared_limits(settings.group(name))
+    return family, provider.provider_code, _declared_limits(settings)  # type: ignore[attr-defined]
 
 
 async def count_and_check(family: str, plugin_code: str, limits: CallLimits | None = None, *, now: datetime | None = None) -> CallCounts | None:
