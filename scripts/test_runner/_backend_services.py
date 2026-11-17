@@ -549,6 +549,14 @@ def services_enricher_call_limits(verbose: bool = False, test_names: list = None
     return run_command(cmd, "Enricher call limit tests", verbose=verbose)
 
 
+def services_field_missing_phrase(verbose: bool = False, test_names: list = None) -> bool:
+    """Test a settings field's own phrase for the «to configure» window (project 76, N3a2)."""
+    print_section("Services: Field Missing Phrase")
+    print_info("Testing: plugin_settings/fields.py (PluginSettingField.missing_key), service._field_read")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_field_missing_phrase.py", test_names)
+    return run_command(cmd, "Field missing phrase tests", verbose=verbose)
+
+
 def services_call_limit_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test the call limits as core settings of their owner, and their usage in the catalogue (project 76, U4)."""
     print_section("Services: Call Limit Settings")
@@ -3044,6 +3052,15 @@ Note: No backend server required.
         # runtime, readiness and call_counter engines; call_counter._utc frozen; a private Cooldowns; throwaway registries
         # of the base for the registration rules; the real asset and FX registries read after discovery, test plugins put
         # in their storage with monkeypatch.setitem; u4 groups and claims released at teardown.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "field-missing-phrase",
+        services_field_missing_phrase,
+        name="Field Missing Phrase",
+        desc="N3a2: PluginSettingField.missing_key (the field named in a sentence, with its article, for the «to configure» window): optional, None by default, a declaration with it validates; the catalogue's field read carries it, None when undeclared",
+        # PURE: no database, no server, no network; the declaration and the read model only.
         isolation="pure",
     )
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation; the accrual golden: every number of the accrual walk pinned (regen: LIBREFOLIO_TEST_REGEN_SI_ACCRUAL_GOLDEN=1)")

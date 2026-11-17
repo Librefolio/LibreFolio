@@ -32,7 +32,7 @@ plugins, is not. The keys a plugin **declares** are those its metadata names: th
 ``description_key``, ``name_i18n_key``, ``description_i18n_key``, the outputs', reference levels' and value regions'
 ``label_key`` and ``description_key``, the params' ``x-i18n-key`` and ``x-tooltip-key`` (an enricher's binding params,
 ``params_schema``, read off an instance, included), and, for an asset, FX, BRIM or enricher plugin, its
-``settings_fields``: each field's ``label_key`` and ``description_key`` and each option's ``label_key``.
+``settings_fields``: each field's ``label_key``, ``description_key`` and ``missing_key`` (N3a2) and each option's ``label_key``.
 The settings are read like a definition: the frozen ``PluginSettingField`` and ``SettingOption`` dumped to plain data
 (a tuple a list, an enum its text), through the same walker; ``default`` holds a value, never a key.
 
@@ -104,7 +104,7 @@ PLUGIN_MODULE = "plugin"
 
 # The fields of a published definition that hold a translation key. A new one belongs here: the sentinel fails on
 # a field named like a key (``*_key``, ``x-*-key``) that is not listed.
-I18N_FIELDS = frozenset({"display_name_key", "description_key", "label_key", "name_i18n_key", "description_i18n_key", "x-i18n-key", "x-tooltip-key"})
+I18N_FIELDS = frozenset({"display_name_key", "description_key", "label_key", "missing_key", "name_i18n_key", "description_i18n_key", "x-i18n-key", "x-tooltip-key"})
 KEY_FIELD = re.compile(r"[_-]key$")
 # Values, not metadata: a setting's or a parameter's default, the parameters' defaults and the parameter matches of the
 # AI Export rules.
@@ -1059,7 +1059,7 @@ def test_an_asset_or_fx_plugin_declares_exactly_the_keys_of_its_settings(publish
             plugin_class = registry.get_plugin(code)
             keys = expected.setdefault(plugin_folder(plugin_class.__module__), set())
             for field in plugin_class.settings_fields:
-                keys.update(key for key in (field.label_key, field.description_key, *(option.label_key for option in field.options)) if key)
+                keys.update(key for key in (field.label_key, field.description_key, field.missing_key, *(option.label_key for option in field.options)) if key)
             if registry is EnricherRegistry:
                 keys.update(published_keys(plain(EnricherRegistry.get_plugin_instance(code).params_schema))[0])
 
@@ -1080,7 +1080,7 @@ def test_the_published_definitions_hold_no_key_field_the_gate_does_not_read():
         unread[name] |= published_keys(dump)[1]
 
     assert {name: sorted(fields) for name, fields in unread.items() if fields} == {}
-    assert published_keys(attribute_dump(PluginSettingField, SettingOption)) == (("PluginSettingField.label_key", "PluginSettingField.description_key", "SettingOption.label_key"), frozenset())
+    assert published_keys(attribute_dump(PluginSettingField, SettingOption)) == (("PluginSettingField.label_key", "PluginSettingField.description_key", "PluginSettingField.missing_key", "SettingOption.label_key"), frozenset())
 
 
 def test_r1_every_fragment_key_lies_in_its_plugin_space(repository):
