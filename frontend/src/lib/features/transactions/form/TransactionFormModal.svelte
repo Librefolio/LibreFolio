@@ -90,6 +90,7 @@
     import TxFormSingleSection from './TxFormSingleSection.svelte';
     import TxFormOptionalSection from './TxFormOptionalSection.svelte';
     import TxFormChargesSection from './TxFormChargesSection.svelte';
+    import TxFormParentSection from './TxFormParentSection.svelte';
     import {chargeCashDirection, chargeRowsMissingAmount, chargesFromRows, chargesKey, linkedCharges, type ChargeDraft} from './txCharges';
 
     // =========================================================================
@@ -156,6 +157,11 @@
         /** Project 66: the linked charges can be added, changed, unlinked and deleted here. Off by default: the host must
          *  save the `_charges` it receives (the Bulk does, from lot F7); until then the section is read-only. */
         allowChargeEdits?: boolean;
+        /** Project 66 (F3): open another transaction in this same modal, in the same mode («Open» on a charge or on the
+         *  parent). Without it there is no «Open». */
+        onOpenTransaction?: (id: number) => void;
+        /** Project 66 (F3): the charge the user came from, highlighted among the parent's charges. */
+        highlightTxId?: number | null;
     }
 
     let {
@@ -180,6 +186,8 @@
         pendingTxIds = null,
         initialOptionalOpen = false,
         allowChargeEdits = false,
+        onOpenTransaction,
+        highlightTxId = null,
     }: Props = $props();
 
     let guideObservedOpen = false;
@@ -346,6 +354,13 @@
     let chargesLoad = $state<'loading' | 'ready' | 'error'>('ready');
     /** Guards the charges' load: an answer for a row the form no longer shows is dropped. */
     let chargesRequest = 0;
+    /** The parent of a charge (F3): loaded by id, and whether the user unlinked the charge in this form. */
+    let parentRow = $state<TXReadItem | null>(null);
+    let parentLoad = $state<'loading' | 'ready' | 'error'>('ready');
+    let parentUnlinked = $state(false);
+    let parentRequest = 0;
+    /** «Open» waiting for the discard confirmation: the transaction to show once the user confirms. */
+    let pendingOpenId = $state<number | null>(null);
     /** Bug5-fix: broker_id of partner that the user cannot access.
      *  When set, the "To" side shows a locked placeholder instead of empty. */
     let inaccessiblePartnerBrokerId = $state<number | null>(null);
@@ -499,6 +514,8 @@
             }
             lastTypeForReset = draft.type;
             startChargesLoad(row);
+            startParentLoad(row);
+            pendingOpenId = null;
             initialDraftKey = baselineKey();
         });
         // Async hydration (brokers + currencies + asset cache for the picked asset).
@@ -629,7 +646,7 @@
 
     /** The form's state as one string: the draft, the pair's other side and the linked charges. */
     function baselineKey(): string {
-        return JSON.stringify(draft) + JSON.stringify(dualTo) + chargesKey(charges);
+        return JSON.stringify(draft) + JSON.stringify(dualTo) + chargesKey(charges) + (parentUnlinked ? '|parent-unlinked' : '');
     }
 
     /**
@@ -668,6 +685,40 @@
         })();
     }
 
+    /** The parent of the charge the form opens on (F3), fetched by id; a late answer for another row is dropped. */
+    function startParentLoad(row: TXReadItem | null) {
+        const request = ++parentRequest;
+        parentRow = null;
+        parentUnlinked = false;
+        const id = row?.parent_transaction_id ?? 0;
+        if (!id || id <= 0) {
+            parentLoad = 'ready';
+            return;
+        }
+        parentLoad = 'loading';
+        void (async () => {
+            try {
+                const rows = (await zodiosApi.query_transactions_api_v1_transactions_get({queries: {ids: [id]}} as never)) as TXReadItem[];
+                if (request !== parentRequest) return;
+                parentRow = (rows ?? []).find((candidate) => candidate.id === id) ?? null;
+                parentLoad = parentRow ? 'ready' : 'error';
+            } catch {
+                if (request !== parentRequest) return;
+                parentLoad = 'error';
+            }
+        })();
+    }
+
+    /** «Open» (F3): show another transaction in this modal; with unsaved changes, after the discard confirmation. */
+    function requestOpenTransaction(id: number) {
+        if (hasUnsavedChanges()) {
+            pendingOpenId = id;
+            confirmCloseOpen = true;
+            return;
+        }
+        onOpenTransaction?.(id);
+    }
+
     /** Detect unsaved changes vs. the snapshot taken at modal-open. */
     function hasUnsavedChanges(): boolean {
         if (isReadonly) return false;
@@ -685,6 +736,12 @@
 
     function confirmDiscardAndClose() {
         confirmCloseOpen = false;
+        if (pendingOpenId !== null) {
+            const id = pendingOpenId;
+            pendingOpenId = null;
+            onOpenTransaction?.(id);
+            return;
+        }
         onClose();
     }
 
@@ -904,6 +961,7 @@
     /** The linked charges: editable only in the form the Bulk hosts (it saves them, lot F7); read-only elsewhere. */
     let chargesEditable = $derived(!isReadonly && !commitOnSave && allowChargeEdits);
     let chargesMissing = $derived(chargesEditable ? chargeRowsMissingAmount(charges) : []);
+    let showParent = $derived(!pairLayout && rule.chargeRole === 'charge' && (mainRow?.parent_transaction_id ?? 0) > 0);
     let showCharges = $derived(!pairLayout && rule.chargeRole === 'parent' && (chargesEditable || chargesLoad !== 'ready' || linkedCharges(charges).length > 0));
     let hasLocalErrors = $derived(formChecks.some((check) => check.kind === 'format') || (showCharges && chargesMissing.length > 0));
 
@@ -1323,6 +1381,8 @@
                 (payload as any)._wac_currency_hint = wacCurrencyHint;
                 // Project 66: every charge draft, all states; the Bulk saves them with the parent (lot F7).
                 if (chargesEditable && showCharges) (payload as any)._charges = $state.snapshot(charges);
+                // F3: the charge unlinked from its parent in this form; the Bulk saves it (lot F7).
+                if (chargesEditable && showParent && parentUnlinked) (payload as any)._parent_unlink = true;
                 onPushDraft?.(payload);
             }
             onClose();
@@ -1738,7 +1798,29 @@
 
             <!-- Linked charges (project 66): the FEE and TAX rows of a parent, and the total with them -->
             {#if showCharges}
-                <TxFormChargesSection bind:charges editable={chargesEditable} canAdd={chargesEditable && mainRow?.related_transaction_id == null} parentCash={draft.cash} direction={chargeCashDirection(rule.cashSign)} loadState={chargesLoad} missingKeys={chargesMissing} />
+                <TxFormChargesSection
+                    bind:charges
+                    editable={chargesEditable}
+                    canAdd={chargesEditable && mainRow?.related_transaction_id == null}
+                    parentCash={draft.cash}
+                    direction={chargeCashDirection(rule.cashSign)}
+                    loadState={chargesLoad}
+                    missingKeys={chargesMissing}
+                    onOpen={onOpenTransaction ? requestOpenTransaction : null}
+                    highlightId={highlightTxId}
+                />
+            {/if}
+
+            <!-- F3: the transaction a charge belongs to, «Open» and «Unlink» -->
+            {#if showParent}
+                <TxFormParentSection
+                    parentId={mainRow?.parent_transaction_id ?? 0}
+                    parent={parentRow}
+                    loadState={parentLoad}
+                    unlinked={parentUnlinked}
+                    onOpen={onOpenTransaction && !parentUnlinked ? requestOpenTransaction : null}
+                    onUnlink={chargesEditable && !parentUnlinked ? () => (parentUnlinked = true) : null}
+                />
             {/if}
 
             <!-- Optional disclosure -->
@@ -1815,7 +1897,10 @@
     cancelText={$t('common.cancel')}
     warning
     onConfirm={confirmDiscardAndClose}
-    onCancel={() => (confirmCloseOpen = false)}
+    onCancel={() => {
+        confirmCloseOpen = false;
+        pendingOpenId = null;
+    }}
     zIndex={70}
 />
 

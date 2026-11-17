@@ -7,7 +7,7 @@
   form owns the rows and the Bulk saves them (lot F7). Editable only in the form the Bulk hosts; read-only elsewhere.
 -->
 <script lang="ts">
-    import {Link2Off, Trash2} from 'lucide-svelte';
+    import {Eye, Link2Off, Trash2} from 'lucide-svelte';
     import {_ as t} from '$lib/i18n';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {REAL_SIGNIFICANT_DIGITS} from '$lib/utils/core/parseDecimalInput';
@@ -30,9 +30,13 @@
         loadState: 'loading' | 'ready' | 'error';
         /** Keys of the rows without an amount (a local error of the form). */
         missingKeys: readonly string[];
+        /** Open a saved charge in the same window (F3); `null` hides «Open». */
+        onOpen?: ((id: number) => void) | null;
+        /** The charge the user came from, highlighted (F3). */
+        highlightId?: number | null;
     }
 
-    let {charges = $bindable(), editable, canAdd, parentCash, direction, loadState, missingKeys}: Props = $props();
+    let {charges = $bindable(), editable, canAdd, parentCash, direction, loadState, missingKeys, onOpen = null, highlightId = null}: Props = $props();
 
     let seq = 0;
     const shown = $derived(linkedCharges(charges));
@@ -73,12 +77,21 @@
 
     {#each shown as charge, index (charge.key)}
         {@const missing = missingKeys.includes(charge.key)}
-        <div class="py-2 flex flex-col gap-1.5 {index > 0 ? 'border-t border-lf-subtle' : ''}" data-testid="tx-form-charge-row" data-charge-key={charge.key} data-charge-id={charge.id ?? ''} data-charge-type={charge.type} data-missing={missing ? 'true' : 'false'}>
+        {@const highlighted = highlightId != null && charge.id === highlightId}
+        <div
+            class="py-2 flex flex-col gap-1.5 {index > 0 ? 'border-t border-lf-subtle' : ''} {highlighted ? 'bg-lf-selected -mx-2 px-2 rounded' : ''}"
+            data-testid="tx-form-charge-row"
+            data-charge-key={charge.key}
+            data-charge-id={charge.id ?? ''}
+            data-charge-type={charge.type}
+            data-missing={missing ? 'true' : 'false'}
+            data-highlighted={highlighted ? 'true' : 'false'}
+        >
             <div class="flex flex-wrap items-center gap-2">
                 <span class="min-w-0 flex items-center gap-2 grow">
                     <span class="font-medium">{$t(`transactions.types.${charge.type}`)}</span>
                     {#if charge.id !== null}
-                        <span class="text-xs text-lf-muted">#{charge.id}</span>
+                        <span class="text-xs {highlighted ? 'text-lf-secondary' : 'text-lf-muted'}">#{charge.id}</span>
                     {:else}
                         <span class="text-[10px] px-1.5 py-px rounded-full bg-lf-info-soft text-lf-info-on-soft">{$t('transactions.form.charges.new')}</span>
                     {/if}
@@ -86,9 +99,19 @@
                 <span class="w-full sm:w-64 min-w-0">
                     <CompactCashCell value={charge.cash} onChange={(next) => update(charge.key, {cash: next})} signHint="negative" defaultCode={parentCash?.code} disabled={!editable} testid={`tx-form-charge-cash-${charge.key}`} maxSignificantDigits={REAL_SIGNIFICANT_DIGITS} />
                 </span>
-                {#if editable}
+                {#if (onOpen && charge.id !== null) || editable}
                     <span class="inline-flex gap-1.5">
-                        {#if charge.id !== null}
+                        {#if onOpen && charge.id !== null}
+                            <button
+                                type="button"
+                                class="p-1.5 rounded-lg border border-lf-input text-lf-link bg-lf-card hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-lf-focus"
+                                aria-label={$t('transactions.form.charges.open')}
+                                title={$t('transactions.form.charges.open')}
+                                data-testid={`tx-form-charge-open-${charge.key}`}
+                                onclick={() => charge.id !== null && onOpen?.(charge.id)}><Eye size={14} /></button
+                            >
+                        {/if}
+                        {#if editable && charge.id !== null}
                             <button
                                 type="button"
                                 class="p-1.5 rounded-lg border border-lf-input text-lf-link bg-lf-card hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-lf-focus"
@@ -98,14 +121,16 @@
                                 onclick={() => unlink(charge.key)}><Link2Off size={14} /></button
                             >
                         {/if}
-                        <button
-                            type="button"
-                            class="p-1.5 rounded-lg border border-lf-input text-lf-danger bg-lf-card hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-lf-focus"
-                            aria-label={$t('transactions.form.charges.remove')}
-                            title={$t('transactions.form.charges.remove')}
-                            data-testid={`tx-form-charge-remove-${charge.key}`}
-                            onclick={() => remove(charge)}><Trash2 size={14} /></button
-                        >
+                        {#if editable}
+                            <button
+                                type="button"
+                                class="p-1.5 rounded-lg border border-lf-input text-lf-danger bg-lf-card hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-lf-focus"
+                                aria-label={$t('transactions.form.charges.remove')}
+                                title={$t('transactions.form.charges.remove')}
+                                data-testid={`tx-form-charge-remove-${charge.key}`}
+                                onclick={() => remove(charge)}><Trash2 size={14} /></button
+                            >
+                        {/if}
                     </span>
                 {/if}
             </div>
