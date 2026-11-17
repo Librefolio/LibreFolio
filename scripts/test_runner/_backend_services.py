@@ -114,6 +114,7 @@ PAC_PLANNER_REPORT_TEST_PATH = "backend/test_scripts/test_services/test_pac_plan
 PAC_PLANNER_SERVICE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_planner.py"
 PAC_PLANNER_SEQUENCE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_plan_sequence.py"
 PAC_PLANNER_CASH_RULE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_cash_rule.py"
+PAC_PLANNER_SEEDS_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_seeds.py"
 PAC_PLANNER_CENTS_OUTSIDE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_cents_outside.py"
 PAC_PLANNER_SOUNDNESS_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_soundness.py"
 PAC_PLANNER_PREVIEW_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_preview.py"
@@ -197,6 +198,13 @@ def services_pac_planner_cash_rule(verbose: bool = False, test_names: list = Non
     print_section("Services: Rebalancer Cash Rule")
     cmd = _build_pytest_cmd(PAC_PLANNER_CASH_RULE_TEST_PATH, test_names)
     return run_command(cmd, "Rebalancer cash rule tests", verbose=verbose)
+
+
+def services_pac_planner_seeds(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Rebalancer's seeded runs: three runs in processes, their outcome, the rule that reads them."""
+    print_section("Services: Rebalancer Seeded Runs")
+    cmd = _build_pytest_cmd(PAC_PLANNER_SEEDS_TEST_PATH, test_names)
+    return run_command(cmd, "Rebalancer seeded runs tests", verbose=verbose)
 
 
 def services_pac_planner_cents_outside(verbose: bool = False, test_names: list = None) -> bool:
@@ -2686,6 +2694,14 @@ Note: No backend server required.
         services_pac_planner_sequence,
         name="PAC/Rebalancer Step Counter",
         desc="The plan's steps numbered in an order the balances can follow; the invariant replayed on the engine's own plans (G5, a PAC deposit and exchange)",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-seeds",
+        services_pac_planner_seeds,
+        name="Rebalancer Seeded Runs",
+        desc="Three runs with their own seeds, in processes (forked) or in process; a run that fails or overruns is a run with no result; the lowest plan, proven only when two runs closed on it",
         isolation="pure",
     )
     add_test(
