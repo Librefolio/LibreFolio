@@ -31,6 +31,7 @@ from backend.app.services.fx.catalog import get_supported_currencies_status
 from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.fx.runtime import configured_fx_provider
 from backend.app.services.fx_providers.manual.plugin import MANUAL_PRIORITY
+from backend.app.services.plugin_settings.readiness import plugins_readiness
 
 logger = get_logger(__name__)
 
@@ -72,7 +73,8 @@ async def list_providers(
     ),
     _current_user: User = Depends(get_current_user),
 ):
-    """Get the list of available FX rate providers, optionally filtered."""
+    """Get the list of available FX rate providers, optionally filtered. ``configured`` and ``missing_settings`` are the
+    caller's: one readiness check for the whole list (plan 76, N1)."""
     try:
         # Get all providers from registry
         providers_list = FXProviderRegistry.list_providers()
@@ -114,6 +116,10 @@ async def list_providers(
                 )
             )
 
+        readiness = await plugins_readiness("fx", [info.code for info in result], user_id=_current_user.id)
+        for info in result:
+            state = readiness[info.code]
+            info.configured, info.missing_settings = state.configured, list(state.missing)
         return result
     except Exception as e:
         logger.exception(f"Error listing FX providers: {e}")
