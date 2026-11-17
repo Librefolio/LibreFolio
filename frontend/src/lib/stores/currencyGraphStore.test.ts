@@ -74,3 +74,42 @@ describe('getCurrencyGraph', () => {
         expect(api.list_providers_api_v1_fx_providers_get).toHaveBeenCalledTimes(1);
     });
 });
+
+describe("the providers' readiness (76 N3c)", () => {
+    const KEYFX_OFF = {code: 'KEYFX', name: 'Keyed FX', base_currency: 'EUR', base_currencies: ['EUR'], target_currencies: ['EUR', 'USD'], currencies_unavailable: false, configured: false, missing_settings: ['api_key'], missing_reason: 'missing_fields', invalid_variables: []};
+    const KEYFX_ON = {...KEYFX_OFF, configured: true, missing_settings: [], missing_reason: null};
+
+    it("N3c-S1: the cached providers keep the list's readiness fields; a list without them reads as configured", async () => {
+        api.list_providers_api_v1_fx_providers_get.mockResolvedValue([ECB_OK, KEYFX_OFF]);
+        const store = await freshStore();
+        await store.getCurrencyGraph();
+
+        const [ecb, keyfx] = store.getCachedFxProviders();
+        expect(keyfx).toMatchObject({configured: false, missing_settings: ['api_key'], missing_reason: 'missing_fields', invalid_variables: []});
+        expect(ecb.configured).toBe(true);
+    });
+
+    it('N3c-S2: refreshFxProviderReadiness reads the list again and updates the readiness, without rebuilding the graph', async () => {
+        api.list_providers_api_v1_fx_providers_get.mockResolvedValueOnce([ECB_OK, KEYFX_OFF]).mockResolvedValueOnce([ECB_OK, KEYFX_ON]);
+        const store = await freshStore();
+        const graph = await store.getCurrencyGraph();
+        const {get} = await import('svelte/store');
+        const versionBefore = get(store.fxProvidersVersion);
+
+        await store.refreshFxProviderReadiness();
+
+        expect(api.list_providers_api_v1_fx_providers_get).toHaveBeenCalledTimes(2);
+        expect(store.getCachedFxProviders().find((p) => p.code === 'KEYFX')?.configured).toBe(true);
+        expect(await store.getCurrencyGraph(), 'the same graph').toBe(graph);
+        expect(get(store.fxProvidersVersion)).toBeGreaterThan(versionBefore);
+    });
+
+    it('N3c-S3: a refresh that fails leaves the cached readiness as it was, and never throws', async () => {
+        api.list_providers_api_v1_fx_providers_get.mockResolvedValueOnce([ECB_OK, KEYFX_OFF]).mockRejectedValueOnce(new Error('down'));
+        const store = await freshStore();
+        await store.getCurrencyGraph();
+
+        await expect(store.refreshFxProviderReadiness()).resolves.toBeUndefined();
+        expect(store.getCachedFxProviders().find((p) => p.code === 'KEYFX')?.configured).toBe(false);
+    });
+});

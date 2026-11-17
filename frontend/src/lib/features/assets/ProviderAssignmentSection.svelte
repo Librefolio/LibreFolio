@@ -32,6 +32,8 @@
     import {safeScalar, safeString} from '$lib/types/common';
     import {extractErrorMessage} from '$lib/utils/trySave';
     import PluginSettingsModal from '$lib/features/plugin-settings/PluginSettingsModal.svelte';
+    import PluginNotConfiguredModal from '$lib/features/plugin-settings/PluginNotConfiguredModal.svelte';
+    import {needsSetup, type ProviderReadiness} from '$lib/features/plugin-settings/notConfigured';
     import {fetchPluginEntry, type PluginSettingsEntry} from '$lib/features/plugin-settings/pluginSettingsApi';
 
     import {numericArrows} from '$lib/actions/numericArrows';
@@ -54,7 +56,7 @@
         help_url?: string;
     }
 
-    interface ProviderInfo {
+    interface ProviderInfo extends ProviderReadiness {
         code: string;
         name: string;
         supports_search: boolean;
@@ -99,13 +101,30 @@
         providerParams?: Record<string, any> | null;
         providerUrl?: string | null;
         noProvider?: boolean;
+        /**
+         * The provider saved on the asset (project 76, N3b): never switched off in the choice, even when it is not
+         * configured — re-saving the same provider is accepted (N2). Empty for a new asset.
+         */
+        savedProviderCode?: string;
         disabled?: boolean;
         readonly?: boolean;
         probeState?: ProviderProbeState;
         onchange?: (data: {providerCode: string; identifier: string; identifierType: string; providerParams: Record<string, any> | null; noProvider: boolean; testStatus: TestStatus}) => void;
     }
 
-    let {providerCode = $bindable(''), identifier = $bindable(''), identifierType = $bindable('TICKER'), providerParams = $bindable(null), providerUrl = $bindable(null), noProvider = $bindable(false), disabled = false, readonly = false, probeState, onchange}: Props = $props();
+    let {
+        providerCode = $bindable(''),
+        identifier = $bindable(''),
+        identifierType = $bindable('TICKER'),
+        providerParams = $bindable(null),
+        providerUrl = $bindable(null),
+        noProvider = $bindable(false),
+        savedProviderCode = '',
+        disabled = false,
+        readonly = false,
+        probeState,
+        onchange,
+    }: Props = $props();
 
     // =========================================================================
     // State
@@ -132,6 +151,8 @@
     /** The selected provider's settings for the signed-in user (CP11): null when it declares none, or until read. */
     let settingsEntry = $state<PluginSettingsEntry | null>(null);
     let configureOpen = $state(false);
+    /** The switched-off provider whose «to configure» window is open (N3b); null when closed. */
+    let settingUp = $state<ProviderInfo | null>(null);
     // The dialog's plugin as plain strings: a save replaces `settingsEntry` with the same plugin, and the dialog must not
     // read it again (a derived string changes only when its value does).
     const settingsCode = $derived(settingsEntry?.plugin_code ?? '');
@@ -174,6 +195,9 @@
     // =========================================================================
 
     let selectedProvider = $derived(providers.find((p) => p.code === providerCode));
+    /** The selected provider needs settings: its own list entry (N1) or its settings (CP11) says so. */
+    const selectedNeedsSetup = $derived(!noProvider && (needsSetup(selectedProvider) || (settingsEntry !== null && !settingsEntry.configured)));
+    const setupHint = $derived(selectedProvider ? $t('pluginSettings.notConfigured.tooltip', {values: {provider: selectedProvider.name}}) : '');
     let paramsSchema = $derived(selectedProvider?.params_schema ?? []);
 
     /** Custom UI component name derived from params_schema meta-field */
@@ -217,6 +241,9 @@
                 value: p.code,
                 label: p.name,
                 icon: p.icon_url ?? undefined,
+                // N3b: not configured, and not the provider saved on the asset: reachable, never chosen
+                needsSetup: needsSetup(p) && p.code !== savedProviderCode,
+                needsSetupHint: $t('pluginSettings.notConfigured.tooltip', {values: {provider: p.name}}),
             })),
     );
 
@@ -436,11 +463,20 @@
                 </span>
                 <div class="flex items-center gap-2">
                     <div class="flex-1 min-w-0">
-                        <SimpleSelect value={providerCode} options={providerOptions} disabled={disabled || readonly} dropdownPosition="auto" testId="provider-code-select" optionTestId={(o) => `provider-option-${o.value}`} onchange={(v) => handleProviderChange(v)}>
+                        <SimpleSelect
+                            value={providerCode}
+                            options={providerOptions}
+                            disabled={disabled || readonly}
+                            dropdownPosition="auto"
+                            testId="provider-code-select"
+                            optionTestId={(o) => `provider-option-${o.value}`}
+                            onchange={(v) => handleProviderChange(v)}
+                            onneedssetup={(opt) => (settingUp = providers.find((p) => p.code === opt.value) ?? null)}
+                        >
                             {#snippet item(opt)}
                                 <div class="flex items-center gap-2">
                                     {#if opt.icon}
-                                        <img src={opt.icon} alt="" class="w-4 h-4 rounded-sm object-contain" />
+                                        <img src={opt.icon} alt="" class="w-4 h-4 rounded-sm object-contain {opt.needsSetup ? 'grayscale' : ''}" />
                                     {/if}
                                     <span>{opt.label}</span>
                                 </div>
@@ -460,23 +496,30 @@
                             <CircleHelp size={18} />
                         </a>
                     {/if}
-                    {#if settingsEntry && !settingsEntry.configured}
-                        <span class="shrink-0 inline-flex items-center rounded-full bg-lf-warning-soft px-2 py-0.5 text-xs font-semibold text-lf-warning-on-soft" data-configured="false" data-testid="provider-settings-status">
-                            {$t('pluginSettings.status.notConfigured')}
+                    {#if settingsEntry && selectedNeedsSetup && readonly}
+                        <!-- N3b: the yellow triangle on its own (no «Configure» on a read-only panel); the tooltip says why -->
+                        <span class="shrink-0 inline-flex text-lf-warning" data-configured="false" data-testid="provider-settings-status" title={setupHint}>
+                            <AlertTriangle aria-hidden="true" size={16} />
+                            <span class="sr-only">{setupHint}</span>
                         </span>
                     {/if}
                     {#if settingsEntry && !readonly}
+                        <!-- N3b: a provider to configure shows the yellow triangle on «Configure», in place of a text badge -->
                         <button
-                            aria-label={$t('pluginSettings.configure')}
+                            aria-label={selectedNeedsSetup ? `${$t('pluginSettings.configure')}: ${setupHint}` : $t('pluginSettings.configure')}
                             class="shrink-0 inline-flex items-center gap-1 rounded-md border border-lf-input bg-lf-card px-2 py-1 text-xs text-lf-secondary hover:bg-lf-hover disabled:cursor-not-allowed disabled:opacity-50"
-                            data-configured={settingsEntry.configured ? 'true' : 'false'}
+                            data-configured={selectedNeedsSetup ? 'false' : 'true'}
                             data-testid="provider-configure"
                             {disabled}
                             onclick={() => (configureOpen = true)}
-                            title={$t('pluginSettings.configure')}
+                            title={selectedNeedsSetup ? setupHint : $t('pluginSettings.configure')}
                             type="button"
                         >
-                            <SlidersHorizontal aria-hidden="true" size={14} />
+                            {#if selectedNeedsSetup}
+                                <AlertTriangle aria-hidden="true" class="text-lf-warning" data-testid="provider-configure-warning" size={14} />
+                            {:else}
+                                <SlidersHorizontal aria-hidden="true" size={14} />
+                            {/if}
                             <span class="hidden sm:inline">{$t('pluginSettings.configure')}</span>
                         </button>
                     {/if}
@@ -737,5 +780,21 @@
 
 {#if settingsEntry}
     <!-- «Configure» (CP11): the provider's settings over the asset dialog; a save refreshes the badge. -->
-    <PluginSettingsModal family="asset" onClose={() => (configureOpen = false)} onSaved={(fresh) => (settingsEntry = fresh)} open={configureOpen} pluginCode={settingsCode} pluginName={settingsName} />
+    <PluginSettingsModal
+        family="asset"
+        onClose={() => (configureOpen = false)}
+        onSaved={(fresh) => {
+            settingsEntry = fresh;
+            // N3b: the list says who is configured; read it again, so the triangle and the options follow the save
+            void loadProviders();
+        }}
+        open={configureOpen}
+        pluginCode={settingsCode}
+        pluginName={settingsName}
+    />
+{/if}
+
+{#if settingUp !== null}
+    <!-- A switched-off provider in the choice (N3b): why it cannot be chosen; a save in «Configure» reads the list again. -->
+    <PluginNotConfiguredModal family="asset" onClose={() => (settingUp = null)} onSaved={() => void loadProviders()} open={true} pluginCode={settingUp.code} pluginName={settingUp.name} readiness={settingUp} />
 {/if}

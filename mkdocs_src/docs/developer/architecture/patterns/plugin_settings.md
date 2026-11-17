@@ -355,6 +355,7 @@ under the branch of its settings:
 | `pluginSettings.<family>.<code>.label.<key>` | the field's `label_key` |
 | `pluginSettings.<family>.<code>.description.<key>` | the field's `description_key` |
 | `pluginSettings.<family>.<code>.option.<key>.<value>` | an option's `label_key` |
+| `pluginSettings.<family>.<code>.missing.<key>` | the field's `missing_key`: the field named in a sentence, with its article («la chiave API»), for the «to configure» window (project 76, N3a2); optional |
 
 `<family>` is `asset`, `fx` or `brim`, and `<code>` the code as the registry has it: the `provider_code` of
 an asset provider (`justetf`, `borsa_italiana`), the FX code with its case (`pluginSettings.fx.ECB`).
@@ -906,8 +907,10 @@ the plugin.
   Today that means every price and exchange-rate provider but `scheduled_investment` and `MANUAL`.
 - **They are fields like any other**: written by an administrator, stored in
   `plugin_system_settings`, locked by their variable
-  (`LIBREFOLIO_PLUGIN_<FAMILY>_<CODE>_CALL_LIMIT_<WINDOW>`, documented once by its pattern in
-  `.env.example`), and part of the fingerprint. A changed limit therefore lifts the limit pause in
+  (`LIBREFOLIO_PLUGIN_<FAMILY>_<CODE>_CALL_LIMIT_<WINDOW>`, documented once in the block «Call limits»
+  of `.env.example`: the pattern, the families, codes and windows it takes today, and worked
+  examples; `plugin-settings-guards` keeps that list equal to the registries, so a plugin or group
+  that gains the limits is listed there in the same lot), and part of the fingerprint. A changed limit therefore lifts the limit pause in
   every process (U2b). An invalid variable leaves the plugin `NOT_CONFIGURED`, as for any field.
 - **The enrichers count too** (K1): `enrichers/refresh.read_bindings` counts one call per binding it
   hands to the plugin's `read`, in request order and before the read, on the owner `call_owner(plugin,
@@ -1045,6 +1048,7 @@ manual, [Plugin Settings](../../../user/settings/plugins.md); the code is in
 | `PluginSettingsForm.svelte` | One plugin's form: its icon (`icon_url`, or a neutral `Puzzle` when it has none or the image does not load) and name, a control per field type, saved all or nothing |
 | `PluginSettingsTab.svelte` | The **Plugins** tab of Settings |
 | `PluginSettingsModal.svelte` | **Configure**: the same form for one plugin, in a dialog |
+| `PluginNotConfiguredModal.svelte`, `notConfigured.ts` | The common window of a provider that is not configured, and its case (project 76, N3) |
 
 - **The tab.** The `plugins` entry of `SETTINGS_TABS` (label `pluginSettings.tab.label`, icon
   `Puzzle`, order 25, visible to everyone; `?tab=plugins` opens it: see
@@ -1092,14 +1096,56 @@ manual, [Plugin Settings](../../../user/settings/plugins.md); the code is in
     - `ProviderAssignmentSection.svelte` reads `fetchPluginEntry('asset', code)` whenever the chosen
       provider changes, with no module-level cache: a cache would outlive a logout and show the next
       user the personal values of the previous one. With an entry, row 1 shows **Configure** next to
-      the help link (unless the panel is read-only), and the badge **To configure** while
-      `configured` is false; a save replaces the entry, so the badge follows.
+      the help link (unless the panel is read-only). While the provider is not configured (its list
+      entry or its settings say so) the button's icon is a yellow warning triangle, with the reason
+      as its tooltip, in place of a text badge (project 76, N3b); a read-only panel shows the
+      triangle alone. A save replaces the entry and reads the provider list again, so the triangle
+      follows.
     - `AssetSearchAutocomplete.svelte` collects the providers that could not search: from the
       stream's `provider_error` events with `error_code: "NOT_CONFIGURED"`, or from
       `providers_not_configured` when it falls back to the standard endpoint. Each gets a row at the
       top of the results, *{provider} must be configured before it can search*
       (`assets.search.notConfigured`), with **Configure**; a save starts the search again. When a
       result's `display_name` contains 👑, a legend closes the list (`assets.search.crownLegend`).
+      That row is now the safety net (a key removed while the page was open): before any search,
+      a provider the list says is not configured is switched off, below.
+- **A provider that is not configured is switched off** (project 76, N3). The provider lists say,
+  for the caller, `configured`, `missing_settings`, `missing_reason` and `invalid_variables`
+  ([NOT_CONFIGURED](#not-configured)). In the search, such a provider's chip keeps its place but is
+  dashed and muted, with an amber «settings» icon (`aria-disabled`, `data-configured="false"`),
+  and never searches. A touch opens the common window, `PluginNotConfiguredModal.svelte`, whose
+  case `notConfigured.ts` reads from those fields and the viewer's role:
+    - a value to set: an administrator reads the missing fields (one catalogue read): by the
+      phrase each declares (`missing_key`, N3a2), joined as a list of the language, when every one
+      declares it, «CoinGecko va configurato: manca la chiave API»; otherwise by their labels,
+      «manca: Chiave API»; a key when it cannot be read. The administrator gets **Configure**, which swaps the window for
+      `PluginSettingsModal`; another user gets a link to the read-only Settings › Plugins, in a new
+      tab so the open form is kept;
+    - an invalid environment variable: an administrator reads its name (the consultant's limit text
+      for a call-limit variable), another user that the provider is stopped; no **Configure**, the
+      field is locked;
+    - the managed profile, which never names a variable: «not available on this instance», no
+      button.
+
+  A save in **Configure** reads the list again: the chip lights up, selected, and a typed search
+  runs again. Texts: `pluginSettings.notConfigured.*`.
+
+  In the asset dialog's provider choice (N3b) such a provider's option is switched off the same way:
+  `SelectOption.needsSetup`, a state of `SimpleSelect` distinct from `disabled`. The option stays
+  reachable by the pointer and the keyboard (`aria-disabled`, an amber icon, a tooltip); choosing it
+  calls `onneedssetup` and opens the common window, and it never becomes the value. **The provider
+  saved on the asset is never switched off** (`savedProviderCode`, from `AssetModal` in edit mode):
+  saving it again is accepted (N2), so an asset whose provider lost its key can still be edited.
+
+  In the FX pair dialog's route picker (N3c, `FxProviderSelect.svelte`) every route through such a
+  provider is switched off the same way (dashed, the amber icon in place of +, `data-needs-setup`); a
+  touch asks the dialog (`onneedssetup`), which opens the common window with the family `fx`. **A
+  provider the pair's saved routes already use is never switched off** (`savedProviderCodes`, from
+  the routes the editor loaded): the criterion is the pair, as in N2, so a route removed and put
+  back stays on. A selected route through a provider that is not configured shows a yellow triangle
+  that opens the same window. The readiness comes with the FX provider list that
+  `currencyGraphStore` caches for the session; `refreshFxProviderReadiness()` reads it again when the
+  picker mounts and after a save in **Configure**, without rebuilding the graph.
 - **Texts.** The interface's own are in the `pluginSettings` subsystem of the catalogue
   (`frontend/src/lib/features/plugin-settings/i18n/`), the two search texts in `assets.search`, and the probe's
   `providerErrors.NOT_CONFIGURED` and `providerErrors.PROVIDER_ERROR` in the `assets` subsystem. A
@@ -1171,7 +1217,7 @@ Residual risks:
 
 ## ✅ Tests {: #tests }
 
-All eleven run without a server or the lane's database (`isolation="pure"`):
+All twelve run without a server or the lane's database (`isolation="pure"`):
 
 | Selector | Covers |
 |----------|--------|
@@ -1184,8 +1230,9 @@ All eleven run without a server or the lane's database (`isolation="pure"`):
 | `./dev.py test services plugin-readiness` | `plugins_readiness()`: the same answer as `configure_instance(...).settings.missing` for prices and exchange rates (own fields, groups, user fields, variables, a secret under another key), one database session per batch and none for a plugin without settings, never a decryption, the managed profile's locked fields counted but not named; the two provider lists, with one check per request |
 | `./dev.py test services not-configured-writes` | The two writes that refuse a not-configured provider (N2): the asset assignment and the FX routes, the whole request refused before any write, the first item named, `replace=true` leaving the pair as it was, a re-saved assignment and a provider already on the pair passing, the managed profile naming no locked field, one readiness check per request |
 | `./dev.py test services call-limit-settings` | The core's call-limit fields (U4): who gets them at registration, their variables and lock, the fingerprint, the readiness skip, the catalogue's `call_usage` (one read, managed hiding, a database error), `mockcount`, one binding per operation |
+| `./dev.py test services field-missing-phrase` | A field's own phrase for the «to configure» window (N3a2): `missing_key` optional, declared and validated, carried by the catalogue's field read |
 | `./dev.py test services enricher-call-limits` | The enrichers' read boundary (K1): one call counted per binding read, before the read; a full window refuses that binding and the rest as `RATE_LIMITED`, never cached; the credit-sharing group's row shared with an asset provider; a failing counter lets the reads go; cached bindings and plugins that call nothing out never counted |
-| `./dev.py test services plugin-settings-guards` | Shipped variables documented in `.env.example`, one owner per variable, no alias on a variable LibreFolio reads, AI Export kept away from the settings |
+| `./dev.py test services plugin-settings-guards` | Shipped variables documented in `.env.example`, one owner per variable, no alias on a variable LibreFolio reads, AI Export kept away from the settings; the block «Call limits» lists exactly the families and codes that own the limits, the five windows and real worked examples (U4c) |
 
 The other units that touch the plugin settings:
 
@@ -1201,8 +1248,8 @@ The other units that touch the plugin settings:
 | `./dev.py test services tool-settings-runtime` | The Tool values on a private database: `configure_instance(plugin_code=…)`, `bound_settings_for_batch()` (instance and user values, per tool code, one read per code, none for a Tool without fields), the catalogue by tool code, and the writes of a Tool (scopes, bounds, variable lock, all or nothing). Pure |
 | `./dev.py test services tool-settings-lifecycle` | Real spawn workers: the plugin sees the value the parent delivered, the defaults when none, the values of its own tool code, never another caller's; an unconfigured Tool starts no worker while its sibling runs. It starts processes, so it is exclusive like `tools-lifecycle` |
 | `./dev.py test services plugin-secrets-check` | The startup check of the stored secrets ([Plugin Secrets Check](../security.md#plugin-secrets-check)): `ok` without an unreadable `system` secret, otherwise an `error` that counts them alone; nothing logged and no key file generated without a stored secret; a check that cannot run is a warning, never an exception |
-| `./dev.py test front-utility core-unit` | `pluginSettingsForm.test.ts` (the rules without the DOM, `FAMILY_ICONS` included) and `pluginSettingsApi.test.ts` (the narrowing of the answers, `icon_url` included, and every outcome of a save through the real client, only the transport faked) |
-| `./dev.py test front-utility component-unit` | `PluginSettingsForm.component.test.ts` (PSF-01…40, the plugin's icon and its fallback in PSF-26…30, the shared groups in PSF-33…40), `PluginSettingsTab.test.ts` (PST-01…26, the families' icons in PST-07…09, the shared groups in PST-19…26) and `PluginSettingsModal.test.ts` (PSM-01…18, the shared groups in PSM-11…18); **Configure**, the badge, the search's row and the 👑 legend in `ProviderAssignmentSection.test.ts` and `AssetSearchAutocomplete.test.ts` |
+| `./dev.py test front-utility core-unit` | `pluginSettingsForm.test.ts` (the rules without the DOM, `FAMILY_ICONS` included) and `pluginSettingsApi.test.ts` (the narrowing of the answers, `icon_url` included, and every outcome of a save through the real client, only the transport faked), `notConfigured.test.ts` (the case of the «to configure» window, N3) |
+| `./dev.py test front-utility component-unit` | `PluginSettingsForm.component.test.ts` (PSF-01…40, the plugin's icon and its fallback in PSF-26…30, the shared groups in PSF-33…40), `PluginSettingsTab.test.ts` (PST-01…26, the families' icons in PST-07…09, the shared groups in PST-19…26) and `PluginSettingsModal.test.ts` (PSM-01…18, the shared groups in PSM-11…18), `PluginNotConfiguredModal.test.ts` (the window's cases, N3); **Configure**, the badge, the search's row, the switched-off chip (N3-1…5) and the 👑 legend in `ProviderAssignmentSection.test.ts` and `AssetSearchAutocomplete.test.ts` |
 | `./dev.py test front-utility plugin-settings` | End to end, on desktop (`frontend/e2e/settings/plugin-settings.spec.ts`): the tab as a member and as an administrator, **Configure** on `mockprov` from an asset's edit dialog, the search's row and the 👑 legend on a simulated stream ([Front-Utility Tests](../../test-walkthrough/front-utility.md#plugin-settings)) |
 
 ---

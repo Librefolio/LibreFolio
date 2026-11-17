@@ -138,6 +138,12 @@ vi.mock('$lib/stores/app/toastStore.svelte', () => ({
     toasts: {success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn()},
 }));
 vi.mock('$lib/stores/app/language', () => ({currentLanguage: writable('en')}));
+// N3b: the viewer's role decides the case of the «to configure» window; a member unless a case says otherwise.
+const viewer = vi.hoisted(() => ({admin: false}));
+vi.mock('$lib/stores/app/auth', async () => {
+    const {readable} = await import('svelte/store');
+    return {auth: {subscribe: (run: (value: unknown) => void) => readable({user: {is_superuser: viewer.admin}}).subscribe(run)}};
+});
 
 import ProviderAssignmentSection from './ProviderAssignmentSection.svelte';
 import {zodiosApi} from '$lib/api';
@@ -1523,14 +1529,16 @@ describe('ProviderAssignmentSection — the provider’s plugin settings (workst
         writeFn().mockReset();
     });
 
-    it('PAS-S1: reads the selected provider’s settings; a provider still to configure shows the badge and «Configure»', async () => {
+    it('PAS-S1: reads the selected provider’s settings; a provider still to configure shows «Configure» with the yellow triangle, no text badge (76 N3b)', async () => {
         settingsFn().mockResolvedValue(answer(pluginEntry('yahoo', false)));
 
         mount({providerCode: 'yahoo'});
 
-        expect(await screen.findByTestId('provider-settings-status')).toHaveAttribute('data-configured', 'false');
-        const configure = screen.getByTestId('provider-configure');
-        expect(configure).toHaveAttribute('data-configured', 'false');
+        const configure = await screen.findByTestId('provider-configure');
+        await waitFor(() => expect(configure).toHaveAttribute('data-configured', 'false'));
+        expect(within(configure).getByTestId('provider-configure-warning')).toBeInTheDocument();
+        expect(configure.getAttribute('title')).toBeTruthy();
+        expect(screen.queryByTestId('provider-settings-status'), 'no text badge beside an editable panel').toBeNull();
         expect(configure).toBeEnabled();
         expect(settingsFn()).toHaveBeenCalledTimes(1);
         expect(settingsFn()).toHaveBeenCalledWith(readOf('yahoo'));
@@ -1564,7 +1572,7 @@ describe('ProviderAssignmentSection — the provider’s plugin settings (workst
         expect(idInput()).toBeEnabled();
     });
 
-    it('PAS-S4: a read-only panel shows the badge, and offers no «Configure»', async () => {
+    it('PAS-S4: a read-only panel shows the yellow triangle on its own, and offers no «Configure»', async () => {
         settingsFn().mockResolvedValue(answer(pluginEntry('yahoo', false)));
 
         mount({providerCode: 'yahoo', readonly: true});
@@ -1628,7 +1636,7 @@ describe('ProviderAssignmentSection — the provider’s plugin settings (workst
             return {results: [{family: 'asset', plugin_code: 'yahoo', field_key: 'api_key', scope: 'user', success: true, error_code: null, message: null}], success_count: 1};
         });
         mount({providerCode: 'yahoo'});
-        expect(await screen.findByTestId('provider-settings-status'), 'premise: yahoo needs settings').toHaveAttribute('data-configured', 'false');
+        await waitFor(() => expect(screen.getByTestId('provider-configure'), 'premise: yahoo needs settings').toHaveAttribute('data-configured', 'false'));
         expect(settingsFn().mock.calls, 'the panel’s read').toStrictEqual([[readOf('yahoo')]]);
 
         await fireEvent.click(screen.getByTestId('provider-configure'));
@@ -1672,7 +1680,7 @@ describe('ProviderAssignmentSection — the provider’s plugin settings (workst
 
         await waitFor(() => expect(screen.queryByTestId('plugin-settings-modal')).toBeNull());
         await waitFor(() => expect(settingsFn()).toHaveBeenCalledWith(readOf('justetf')));
-        expect(await screen.findByTestId('provider-settings-status'), 'justetf’s own state').toHaveAttribute('data-configured', 'false');
+        await waitFor(() => expect(screen.getByTestId('provider-configure'), 'justetf’s own state: the triangle (76 N3b)').toHaveAttribute('data-configured', 'false'));
         expect(screen.queryByTestId('plugin-settings-modal'), 'and the dialog stays closed').toBeNull();
     });
 });
@@ -1762,5 +1770,120 @@ describe('ProviderAssignmentSection — the probe refused for too many probes (w
 
         expect(oneLineOf(row), 'the one line, as today').toBe(shown);
         expect(await copiedDetail(row), 'the detail, as today').toBe(shown);
+    });
+});
+
+// =========================================================================
+// Project 76, N3b — a provider that is not configured is switched off in the choice (mock section 1.2)
+// =========================================================================
+
+describe('ProviderAssignmentSection — a provider to configure is switched off (76 N3b)', () => {
+    const settingsFn = () => vi.mocked(zodiosApi.get_plugin_settings_api_v1_settings_plugins_get as never) as ReturnType<typeof vi.fn>;
+    const writeFn = () => vi.mocked(zodiosApi.update_plugin_settings_api_v1_settings_plugins_bulk_patch as never) as ReturnType<typeof vi.fn>;
+    const KEYED = {code: 'keyed', name: 'Keyed', supports_search: false, params_schema: [], icon_url: null, accepted_identifier_types: ['TICKER']};
+    const UNCONFIGURED = {...KEYED, configured: false, missing_settings: ['api_key'], missing_reason: 'missing_fields', invalid_variables: []};
+    const keyedEntry = (configured: boolean) => ({
+        plugins: [
+            {
+                family: 'asset',
+                plugin_code: 'keyed',
+                plugin_name: 'Keyed',
+                configured,
+                fields: [{key: 'api_key', type: 'string', scope: 'system', secret: true, required: true, label: 'API key', description: '', options: [], is_set: configured, source: configured ? 'db' : 'none', locked: false, editable: true, problem: null, updated_at: null}],
+            },
+        ],
+    });
+    const option = (code: string) => screen.getByTestId(`provider-option-${code}`);
+
+    async function openChoice(): Promise<void> {
+        await waitLoaded('Yahoo');
+        await fireEvent.click(screen.getByTestId('provider-code-select-button'));
+        await screen.findByTestId('provider-option-keyed');
+    }
+
+    beforeEach(() => {
+        viewer.admin = false;
+        listFn().mockResolvedValue([...PROVIDERS, UNCONFIGURED] as never);
+        settingsFn().mockImplementation(async ({queries}: {queries: {plugin_code: string}}) => (queries.plugin_code === 'keyed' ? keyedEntry(false) : {plugins: []}));
+    });
+
+    afterEach(() => {
+        settingsFn().mockReset();
+        writeFn().mockReset();
+    });
+
+    it('PAS-N1: its option is switched off; a touch opens the common window and the provider stays as it was', async () => {
+        const {onchange} = mount({providerCode: 'yahoo', savedProviderCode: 'yahoo'});
+        await openChoice();
+
+        expect(option('keyed')).toHaveAttribute('data-needs-setup', 'true');
+        expect(option('yahoo')).toHaveAttribute('data-needs-setup', 'false');
+        await fireEvent.click(option('keyed'));
+
+        const window = await screen.findByTestId('plugin-not-configured-modal');
+        expect(window).toHaveAttribute('data-plugin', 'keyed');
+        expect(window).toHaveAttribute('data-case', 'missing_member');
+        expect(
+            onchange.mock.calls.some(([data]) => data?.providerCode === 'keyed'),
+            'never chosen',
+        ).toBe(false);
+        expect(screen.getByTestId('provider-code-select-button')).toHaveAttribute('aria-label', expect.stringContaining('Yahoo'));
+    });
+
+    it('PAS-N2: the provider saved on the asset stays on: selected, «Configure» with the triangle, no text badge', async () => {
+        mount({providerCode: 'keyed', savedProviderCode: 'keyed'});
+        const configure = await screen.findByTestId('provider-configure');
+        await waitFor(() => expect(configure).toHaveAttribute('data-configured', 'false'));
+        expect(within(configure).getByTestId('provider-configure-warning')).toBeInTheDocument();
+        expect(screen.queryByTestId('provider-settings-status')).toBeNull();
+
+        await fireEvent.click(screen.getByTestId('provider-code-select-button'));
+        expect(await screen.findByTestId('provider-option-keyed')).toHaveAttribute('data-needs-setup', 'false');
+    });
+
+    it('PAS-N3: the exception is the saved provider, not the last choice: changed to another provider, the saved one is still choosable', async () => {
+        const {onchange} = mount({providerCode: 'yahoo', savedProviderCode: 'keyed'});
+        await openChoice();
+
+        expect(option('keyed')).toHaveAttribute('data-needs-setup', 'false');
+        await fireEvent.click(option('keyed'));
+
+        await waitFor(() => expect(onchange.mock.calls.some(([data]) => data?.providerCode === 'keyed')).toBe(true));
+        expect(screen.queryByTestId('plugin-not-configured-modal')).toBeNull();
+    });
+
+    it('PAS-N4: an administrator configures it from the window: the list is read again and the option lights up', async () => {
+        viewer.admin = true;
+        let configured = false;
+        listFn().mockImplementation(async () => [...PROVIDERS, configured ? {...KEYED, configured: true} : UNCONFIGURED] as never);
+        settingsFn().mockImplementation(async ({queries}: {queries: {plugin_code: string}}) => (queries.plugin_code === 'keyed' ? keyedEntry(configured) : {plugins: []}));
+        writeFn().mockImplementation(async () => {
+            configured = true;
+            return {results: [{family: 'asset', plugin_code: 'keyed', field_key: 'api_key', scope: 'system', success: true, error_code: null, message: null}], success_count: 1};
+        });
+        mount({providerCode: 'yahoo', savedProviderCode: 'yahoo'});
+        await openChoice();
+        const listsBefore = listFn().mock.calls.length;
+
+        await fireEvent.click(option('keyed'));
+        const window = await screen.findByTestId('plugin-not-configured-modal');
+        expect(window).toHaveAttribute('data-case', 'missing_admin');
+        await fireEvent.click(within(window).getByTestId('plugin-not-configured-configure'));
+        const form = await within(await screen.findByTestId('plugin-settings-modal')).findByTestId('plugin-settings-form-keyed');
+        await fireEvent.input(within(form).getByTestId('plugin-setting-secret-input'), {target: {value: 'sk-keyed-00000001'}});
+        await fireEvent.click(within(form).getByTestId('plugin-settings-save'));
+
+        await waitFor(() => expect(listFn().mock.calls.length).toBeGreaterThan(listsBefore));
+        await fireEvent.click(within(screen.getByTestId('plugin-settings-modal')).getByTestId('plugin-settings-modal-close'));
+        await waitFor(() => expect(screen.queryByTestId('plugin-settings-modal')).toBeNull());
+        await fireEvent.click(screen.getByTestId('provider-code-select-button'));
+        expect(await screen.findByTestId('provider-option-keyed')).toHaveAttribute('data-needs-setup', 'false');
+    });
+
+    it('PAS-N5: a list without the readiness fields (an older server) switches nothing off', async () => {
+        listFn().mockResolvedValue([...PROVIDERS, KEYED] as never);
+        mount({providerCode: 'yahoo', savedProviderCode: 'yahoo'});
+        await openChoice();
+        expect(option('keyed')).toHaveAttribute('data-needs-setup', 'false');
     });
 });

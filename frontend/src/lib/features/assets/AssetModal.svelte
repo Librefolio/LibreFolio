@@ -1610,6 +1610,7 @@
                 bind:expanded={providerExpanded}
                 bind:noProvider={providerNoProvider}
                 bind:providerCode
+                savedProviderCode={editMode ? initialProviderCode : ''}
                 bind:identifier={providerIdentifier}
                 bind:identifierType={providerIdentifierType}
                 bind:providerParams

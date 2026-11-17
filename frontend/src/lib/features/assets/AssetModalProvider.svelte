@@ -15,6 +15,8 @@
         expanded: boolean;
         noProvider: boolean;
         providerCode: string;
+        /** The provider saved on the asset: never switched off in the choice (project 76, N3b). Empty for a new asset. */
+        savedProviderCode?: string;
         identifier: string;
         identifierType: string;
         providerParams: Record<string, any> | null;
@@ -26,7 +28,7 @@
         onreconcile: () => void;
     }
 
-    let {expanded = $bindable(), noProvider = $bindable(), providerCode = $bindable(), identifier = $bindable(), identifierType = $bindable(), providerParams = $bindable(), providerUrl, probeState, testStatus, saving, onreconcile}: Props = $props();
+    let {expanded = $bindable(), noProvider = $bindable(), providerCode = $bindable(), savedProviderCode = '', identifier = $bindable(), identifierType = $bindable(), providerParams = $bindable(), providerUrl, probeState, testStatus, saving, onreconcile}: Props = $props();
 </script>
 
 <!-- Provider Assignment (collapsible) -->
@@ -90,7 +92,7 @@
 
     {#if expanded && !noProvider}
         <div class="px-4 py-3 border-t border-lf-subtle">
-            <ProviderAssignmentSection bind:providerCode bind:identifier bind:identifierType bind:providerParams {providerUrl} {probeState} bind:noProvider onchange={onreconcile} disabled={saving} />
+            <ProviderAssignmentSection bind:providerCode {savedProviderCode} bind:identifier bind:identifierType bind:providerParams {providerUrl} {probeState} bind:noProvider onchange={onreconcile} disabled={saving} />
         </div>
     {/if}
 </div>
