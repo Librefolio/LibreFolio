@@ -1136,6 +1136,16 @@ manual, [Plugin Settings](../../../user/settings/plugins.md); the code is in
   calls `onneedssetup` and opens the common window, and it never becomes the value. **The provider
   saved on the asset is never switched off** (`savedProviderCode`, from `AssetModal` in edit mode):
   saving it again is accepted (N2), so an asset whose provider lost its key can still be edited.
+
+  In the FX pair dialog's route picker (N3c, `FxProviderSelect.svelte`) every route through such a
+  provider is switched off the same way (dashed, the amber icon in place of +, `data-needs-setup`); a
+  touch asks the dialog (`onneedssetup`), which opens the common window with the family `fx`. **A
+  provider the pair's saved routes already use is never switched off** (`savedProviderCodes`, from
+  the routes the editor loaded): the criterion is the pair, as in N2, so a route removed and put
+  back stays on. A selected route through a provider that is not configured shows a yellow triangle
+  that opens the same window. The readiness comes with the FX provider list that
+  `currencyGraphStore` caches for the session; `refreshFxProviderReadiness()` reads it again when the
+  picker mounts and after a save in **Configure**, without rebuilding the graph.
 - **Texts.** The interface's own are in the `pluginSettings` subsystem of the catalogue
   (`frontend/src/lib/features/plugin-settings/i18n/`), the two search texts in `assets.search`, and the probe's
   `providerErrors.NOT_CONFIGURED` and `providerErrors.PROVIDER_ERROR` in the `assets` subsystem. A
