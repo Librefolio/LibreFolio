@@ -2059,6 +2059,14 @@ def services_enricher_refresh(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "Enricher refresh tests", verbose=verbose)
 
 
+def services_enricher_enabled(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the enrichers active on the instance: LIBREFOLIO_ENRICHERS_ENABLED and the required settings (project 68, lot B2)."""
+    print_section("Services: Enricher Enabled")
+    print_info("Testing: LIBREFOLIO_ENRICHERS_ENABLED, EnricherRegistry's gate, no clean-up, the read cache after the switch, NOT_CONFIGURED")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_enabled.py", test_names)
+    return run_command(cmd, "Enricher enabled tests", verbose=verbose)
+
+
 def services_enricher_bindings(verbose: bool = False, test_names: list = None) -> bool:
     """Test the enricher bindings of an asset: config and state, the installed enrichers, their default order (project 68, lot B3)."""
     print_section("Services: Enricher Bindings")
@@ -4219,7 +4227,7 @@ Note: No backend server required.
         "enricher-justetf",
         services_enricher_justetf,
         name="Enricher justETF",
-        desc="Plan 68 C1: JustETFEnricher declarations (justetf, PRICE_SOURCE, ISIN, ETF family + COMMODITY at 10, 13 voices, not test-only, pause_seconds > 0); recorded overviews (SWDA, VWCE, bond, hedged, gold ETC) mapped to stored forms through the real catalogue (TER and weights as fractions, fund size millions EUR, replication/distribution/legal-form codes, domicile ISO3, English dates, «Other» kept); synthetic sheets for every replication text, unknown texts absent and logged, ETC/ETN etc_etn, ETF absent, TER 0; empty «ETF Screener» sheet not found; recognize (non-ISIN no call, 429 raises); read per binding (error isolated, 429 RATE_LIMITED for the rest without a call); search over load_overview",
+        desc="Plan 68 C1: JustETFEnricher declarations (justetf, PRICE_SOURCE, ISIN, ETF family + COMMODITY at 10, 13 voices (legal_form only where an ETC or ETN can sit), not test-only, pause_seconds > 0); recorded overviews (SWDA, VWCE, bond, hedged, gold ETC) mapped to stored forms through the real catalogue (TER and weights as fractions, fund size millions EUR, replication/distribution/legal-form codes, domicile ISO3, English dates, «Other» kept, sectors helper first then the justETF table, holdings date on countries and sectors); synthetic sheets for every replication text, unknown texts absent and logged, ETC/ETN etc_etn, ETF absent, TER 0; empty «ETF Screener» sheet not found; recognize (non-ISIN no call, 429 raises); read per binding (error isolated, 429 RATE_LIMITED for the rest without a call); search over load_overview",
         isolation="pure",
     )
     # PURE: every database is a private SQLite file under tmp_path built with create_all; the synthetic enrichers are
@@ -4231,6 +4239,18 @@ Note: No backend server required.
         services_enricher_refresh,
         name="Enricher Refresh",
         desc="Project 68 B5a: read_bindings one read call per enricher with its bindings in order, enrichers at once (outcomes in order of arrival), as yielded, unanswered bindings (fewer items, index out of range or twice, raise mid-way) once as error, RATE_LIMITED with retry_after; values in stored form, refused/unknown/None voices dropped and logged; read cache 1800 s keyed on the whole binding (params), ok and not_found kept, error and RATE_LIMITED never, a partial read never answers more, use_cache=False; merge_voices first of the order per voice with its source_date, others, enricher down, not in order ignored; ask_profile config order, cache, keys; refresh_assets source rows and state, different from now, failure isolation, missing asset error, no bindings, not installed skipped, deferred, read_since, config read again when writing (removed, reordered), inactive read; A3 one wrong voice logged, the others written",
+        isolation="pure",
+    )
+    # PURE: no lane DB, no server, no network. The variables through monkeypatch in this process; a private SQLite file
+    # under tmp_path behind every get_async_engine touched (settings, readiness, refresh); the synthetic enrichers are
+    # MockEnricher subclasses registered in the process's own EnricherRegistry (removed at teardown with their claims);
+    # the enricher_read cache is cleared around each test; justetf's library calls are stubs that record and raise.
+    add_test(
+        cat,
+        "enricher-enabled",
+        services_enricher_enabled,
+        name="Enricher Enabled",
+        desc="Project 68 B2: LIBREFOLIO_ENRICHERS_ENABLED read at every call (enrichers_enabled, X1's parser); EnricherRegistry's gate: an enricher not listed is not found, listed, installed, in the catalogue or any default order, never asked by the cascade; unknown code warned once; no clean-up: a turned-off binding, its state and rows stay, the refresh skips it, the job item stays ok, a PATCH keeps it; the read cache never answers a turned-off or uninstalled enricher (NO_ANSWER), source_value says not installed; a required setting left empty: refresh skips, ask/source_value NOT_CONFIGURED without a call (warm cache too), the API cascade does not ask it, test/search routes 400 NOT_CONFIGURED with the missing keys; a turned-off one 404 like an unknown code; configured, it is used",
         isolation="pure",
     )
     add_test(cat, "plugin-settings-crypto", services_plugin_settings_crypto, name="Plugin Settings Encryption", desc="AES-256-GCM blob and AAD, key id, subkeys, count and rekey on a sqlite3 copy (savepoint, idempotent, unreadable rows kept), key status (unusable key: totals)", isolation="pure")
