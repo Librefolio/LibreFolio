@@ -193,6 +193,23 @@
             "limit": {
               "tieBreak": "The plan is proven the best on its objective; the limit stopped a tie-break, so an equally good plan may exist."
             }
+          },
+          "exposure": {
+            "scope": "On the whole portfolio, cash included",
+            "legendNow": "grey: today",
+            "legendAfter": "coloured: after the plan",
+            "legendTarget": "your target",
+            "cash": "Cash",
+            "now": "Today",
+            "after": "After the plan",
+            "target": "Target",
+            "belowTarget": "After the plan: below the target",
+            "aboveTarget": "After the plan: above the target",
+            "onTarget": "After the plan: in line with the target",
+            "showAll": "Show all ({count})",
+            "showFewer": "Show fewer",
+            "title": "Exposures – today, after the plan, target",
+            "help": "How the whole portfolio, cash included, spreads by Asset type, sector and country: today, after the plan, and your target. The cash is the last row of each chart. The charts do not change the plan."
           }
         },
         "objectives": {
