@@ -61,7 +61,7 @@ Owning many holdings is not the same as being diversified. This block shows whic
 **How to read it**
 
 - **A long red bar** to the right marks a holding that carries more of your risk than its weight suggests; when one stands out, the sentence under the title names it.
-- **In the matrix**, blue pairs move together, so holding both adds little; red pairs move in opposite directions and cushion each other.
+- **In the matrix**, blue pairs move together, so holding both adds little; red pairs move in opposite directions and cushion each other. Its five order buttons — by similarity, type, sector, region and name — are always there; one your holdings have no data for is greyed out and says why when tapped.
 - **Hover a square** for its value in words. The lists *The most alike* and *The ones that offset* pick out the pairs worth a look.
 
 ---

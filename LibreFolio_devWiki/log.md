@@ -4072,3 +4072,8 @@ Filed: [[concepts/risk-binding-decisions]].
 Project 70, RN-22: rolling semi-deviation (sharing the rolling volatility's axis) and rolling Omega (1× line) joined the
 catalogue, 24 plugins; both read the one home's measures window by window. Added to the domain page.
 Filed: [[domains/signals]].
+
+## [2026-11-17] file | Every ordering on every heatmap
+Project 70, RN-20: the correlation heatmap keeps its five orderings on screen, the unavailable ones saying why, and
+gains a type badge row. Added to the feature's history.
+Filed: [[features/F-111]].

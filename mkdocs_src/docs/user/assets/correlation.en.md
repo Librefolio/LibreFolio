@@ -40,7 +40,7 @@ The card at the top answers *which assets are compared?* Each chip is one select
 This section answers *which of these move together?* — to spot the assets that are really the same bet, and any that cushion the others.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="risk" data-name="lab-correlation" alt="The Correlation section with five assets: the triangular matrix with its legend, order buttons and sector and region badges; The most alike pairs RE Loan Roma with RE Loan Milano at 0.94, near-identical, and The ones that offset is empty" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="risk" data-name="lab-correlation" alt="The Correlation section with five assets: the triangular matrix with its legend, the five order buttons and the type, sector and region badges; The most alike pairs RE Loan Roma with RE Loan Milano at 0.94, near-identical, and The ones that offset is empty" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 **Tools shown**
@@ -53,7 +53,8 @@ This section answers *which of these move together?* — to spot the assets that
 - **One square per pair**: blue when the two assets move together, red when they move in opposite directions, grey when they move independently. Hover or tap it for the value in words.
 - **Start from the two lists**: **The most alike** names the pairs that are almost the same exposure, **The ones that offset** the pairs that cushion each other. An empty list is a finding. Click a pair to find it in the matrix.
 - **A dash is not a zero**: the pair could not be measured — too little history, or a price that never moved.
-- **The order buttons** rearrange the matrix; they never change a value.
+- **The order buttons** rearrange the matrix; they never change a value. All five are always there — by similarity, type, sector, region and name; one the selection has no data for is greyed out, and tapping it says why: no type, sector or region known for these assets, or their details still loading or not loaded — reload the page to try again.
+- **Above the matrix**, one row of badges per type, sector and region tells what the selection holds, each group with how many assets it covers.
 
 ---
 

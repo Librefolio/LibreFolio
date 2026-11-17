@@ -160,9 +160,17 @@ API. Which analytics each section asks for is the table in
   position. `type` follows the asset-type menu order, then the name. `sector` and `region` use
   `dominantExposure()` (l.362): the key holding at least `DOMINANT_SHARE` (0.5, l.337) of the classified
   weight, *Other* left out; `exposureOrder()` (l.396) then sorts named groups, *Diversified*, *Other*
-  only and *Unclassified*. A mode is offered only when its data exist (`CorrelationHeatmap.svelte:93`).
-  The sector and country distributions come from one bulk `GET /api/v1/assets?asset_ids=…`
-  (`matrixMetadata.svelte.ts:85`); a failed read only hides those two buttons.
+  only and *Unclassified*. All five modes are drawn always, in that order (RN-20, `MODES`); one without
+  its data is offered but unavailable — `aria-disabled`, not `disabled`, so its reason opens on a click
+  or Enter — with a stable `data-disabled-reason` (`loading`, `failed`, `no-data`) taken from the read's
+  state (`metadataStatus`). Offered is not available: a chosen mode whose data goes away stops ordering
+  the matrix (the caller's ordering is drawn and pressed) and applies again when the data returns. A
+  type counts only when an asset has one. The sector and country distributions come from one bulk
+  `GET /api/v1/assets?asset_ids=…` (`loadMatrixMetadata`), whose factory publishes `status`
+  (`loading`, `ready`, `failed`) beside the three maps.
+- **Badge rows.** Type, sector and region, in the order of the buttons: each group once with its count,
+  in the order its ordering draws it (`typeOrder`, `exposureOrder`); an asset type shows its PNG icon,
+  an asset without a type is *Unclassified*. A row too narrow folds to icon and count.
 
 ---
 
