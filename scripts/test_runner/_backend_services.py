@@ -1529,6 +1529,14 @@ def services_yahoo_finance_bulk(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Yahoo Finance bulk tests", verbose=verbose)
 
 
+def services_yahoo_search_crypto_eur(verbose: bool = False, test_names: list = None) -> bool:
+    """Project 76 Y1: Yahoo's search adds a crypto's euro ticker beside its dollar one (fake yf, replaced v7 wire)."""
+    print_section("Services: Yahoo Search, a Crypto's Euro Ticker (project 76, Y1)")
+    print_info("Testing: asset_source_providers/yahoo_finance/plugin.py (search, _with_euro_twins)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_yahoo_search_crypto_eur.py", test_names)
+    return run_command(cmd, "Yahoo search crypto EUR tests", verbose=verbose)
+
+
 def services_current_prices_bulk(verbose: bool = False, test_names: list = None) -> bool:
     """R13-SEC9-1/-3/-4 + Y's D1: POST /assets/prices/current (no lane DB, no server, no network)."""
     print_section("Services: Current Prices Bulk (R13-SEC9, Y's D1)")
@@ -4830,6 +4838,15 @@ Note: No backend server required.
         name="Yahoo Finance Bulk Current Values (project 76, C5)",
         desc="Yahoo's current values in one v7 quote request: same value, currency and exchange-zone date as the single read on the recorded response, one request for all symbols, an unreturned symbol answers nothing, previous-close fallback and NO_DATA, a 429 raised once and never retried, ISIN resolved to its symbol, wrong identifier type refused per item, capability flags",
         # PURE: the recorded v7 response served by a replaced YfData.get_raw_json and a fake yf; no DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "yahoo-search-crypto-eur",
+        services_yahoo_search_crypto_eur,
+        name="Yahoo Search, a Crypto's Euro Ticker (project 76, Y1)",
+        desc="Y1: a crypto's -EUR twin right after its -USD row when Yahoo quotes it in EUR, every twin asked in one v7 request; nothing asked without a crypto, with the twin listed, or without the v7 helper; a twin not returned or not in EUR adds no row; the extra request failing (an error or a 429) leaves the search as it was",
+        # PURE: a fake yf (Search, Ticker) and a replaced YfData.get_raw_json; no DB, no server, no network.
         isolation="pure",
     )
     add_test(cat, "borsa-italiana-search", services_borsa_italiana_search, name="Borsa Italiana Search", desc="Single-fetch search, IT+EN variants, ISIN direct hit (engine mocked)")
