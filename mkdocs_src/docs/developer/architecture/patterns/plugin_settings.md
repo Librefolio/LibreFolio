@@ -734,6 +734,13 @@ current key. The same rule serves both sides:
   provider lists use it, one check per request: `GET /api/v1/assets/provider` and
   `GET /api/v1/fx/providers` give each provider `configured` and `missing_settings`.
   It shares the catalogue's divergence below: a blob the key id vouches for counts as set.
+- **Before a write** (project 76, N2): `POST /api/v1/assets/provider` and `POST /api/v1/fx/providers/routes`
+  refuse a request that puts a not-configured provider newly to use, an asset's new or changed provider
+  or a step provider new for its pair, with the shared 422 of `api/plugin_errors.not_configured_error`
+  (`error_code: "NOT_CONFIGURED"`, `message`, `missing`, the same body as the enrichers'), before any
+  write and for the whole request. One readiness check per request. An assignment that re-saves its
+  asset's provider, and a provider a stored route of the pair already uses, pass: nothing that exists
+  is cleaned up, and its calls answer `NOT_CONFIGURED` at the boundary as before.
 
 What the refusal looks like:
 
@@ -1104,7 +1111,7 @@ Residual risks:
 
 ## ✅ Tests {: #tests }
 
-All eight run without a server or the lane's database (`isolation="pure"`):
+All nine run without a server or the lane's database (`isolation="pure"`):
 
 | Selector | Covers |
 |----------|--------|
@@ -1115,6 +1122,7 @@ All eight run without a server or the lane's database (`isolation="pure"`):
 | `./dev.py test services secret-masking` | Masking in exceptions and log lines, across threads and tasks; overlapping or touching occurrences masked as one, against the overlap attack of the security review; `whole` |
 | `./dev.py test services plugin-settings-groups` | The shared groups ([Shared Groups](#groups)): registering and refusing a group, its variables, the checks of `settings_groups` at registration, the binding with no field of the plugin's own (variable, row, default), `missing` as `<group>.<field>` and `NOT_CONFIGURED` at the boundary, the masking of a group secret, the fingerprint (unchanged without groups), the pickle, and the gate: every named group exists, every shipped group is used |
 | `./dev.py test services plugin-readiness` | `plugins_readiness()`: the same answer as `configure_instance(...).settings.missing` for prices and exchange rates (own fields, groups, user fields, variables, a secret under another key), one database session per batch and none for a plugin without settings, never a decryption, the managed profile's locked fields counted but not named; the two provider lists, with one check per request |
+| `./dev.py test services not-configured-writes` | The two writes that refuse a not-configured provider (N2): the asset assignment and the FX routes, the whole request refused before any write, the first item named, `replace=true` leaving the pair as it was, a re-saved assignment and a provider already on the pair passing, the managed profile naming no locked field, one readiness check per request |
 | `./dev.py test services plugin-settings-guards` | Shipped variables documented in `.env.example`, one owner per variable, no alias on a variable LibreFolio reads, AI Export kept away from the settings |
 
 The other units that touch the plugin settings:
