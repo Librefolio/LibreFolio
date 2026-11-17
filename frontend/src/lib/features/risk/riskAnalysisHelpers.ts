@@ -145,6 +145,18 @@ export function formatRatio(value: number | null | undefined): string {
 }
 
 /**
+ * An amount on a value the page states — Q17 A1, your position on the Asset Detail; the scope's worth on the Dashboard:
+ * the fraction times that value. `null` without a usable value (not owned, not valued), so no amount is shown.
+ * Declared exception to «the frontend computes no financial quantity» (`frontend.md`, «Financial numbers»): one
+ * presentation-only multiplication of two numbers the backend gave, in one shared helper (decision 1, 25/10/2026) —
+ * the one place a risk level turns a fraction into money.
+ */
+export function amountOnValue(fraction: number | null | undefined, value: number | null | undefined): number | null {
+    if (fraction == null || !Number.isFinite(fraction) || value == null || !Number.isFinite(value) || value <= 0) return null;
+    return fraction * value;
+}
+
+/**
  * A currency amount, or an em-dash when the value is absent or not finite. The
  * value may arrive as a string or an array of them (`singleValue` narrows it).
  * `locale` is optional so callers get the process default in the app but tests

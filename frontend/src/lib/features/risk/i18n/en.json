@@ -422,7 +422,9 @@
       "summaryDescription": "Observed risk, downside, real-asset comparison and scenarios for this asset.",
       "rollingMetric": "Configured rolling metric",
       "noRollingMetric": "No rolling-risk signal is configured for this asset.",
-      "configureSignals": "Configure advanced signals in Overview"
+      "configureSignals": "Configure advanced signals in Overview",
+      "positionNote": "Amounts are on your position today: {amount}.",
+      "planPrices": "Prices from the plan, not from the market: here volatility and VaR only say how regular the plan is."
     },
     "replay": {
       "title": "Historical replay",
@@ -666,7 +668,8 @@
           "bar": "Effect"
         },
         "shockUnconfigured": "Not in this scenario, so shocked by 0: {names}. The total counts them as untouched.",
-        "replayTotalAsset": "This asset would have ended the period at {percent} {amount}"
+        "replayTotalAsset": "This asset would have ended the period at {percent} {amount}",
+        "shockTotalAsset": "This asset would move by {percent} {amount}"
       },
       "backtestNotice": "With a slice active, these figures are rebuilt from today’s composition: they say how it *would* have gone, not how it actually went.",
       "notice": {

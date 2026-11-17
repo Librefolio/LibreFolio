@@ -43,6 +43,7 @@ import {uiLocale} from '$lib/stores/app/uiLocale';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import {
     addDays,
+    amountOnValue,
     ASSET_SET_DAILY_VAR_INSTANCE,
     ASSET_SET_MONTHLY_VAR_INSTANCE,
     buildBaseAnalytics,
@@ -1038,5 +1039,18 @@ describe('sync completion source contracts', () => {
         expect(riskPanelTag).not.toBe('');
         expect(riskPanelTag).toContain('{onsynced}');
         expect(riskPanelTag).not.toMatch(/\bonsynced\s*=/);
+    });
+});
+
+// RN-17 (Q17 A1): the one place a risk level turns a fraction into money — on your position, or on the scope's worth.
+describe('amountOnValue', () => {
+    it('is the fraction times the value', () => {
+        expect(amountOnValue(-0.125, 8000)).toBe(-1000);
+        expect(amountOnValue(0, 8000)).toBe(0);
+    });
+
+    it('is no amount without a usable value or fraction: never a guess, never a zero', () => {
+        for (const value of [null, undefined, 0, -100, Number.NaN, Number.POSITIVE_INFINITY]) expect(amountOnValue(-0.1, value), `value ${value}`).toBeNull();
+        for (const fraction of [null, undefined, Number.NaN]) expect(amountOnValue(fraction, 8000), `fraction ${fraction}`).toBeNull();
     });
 });

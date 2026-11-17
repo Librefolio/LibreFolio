@@ -8,7 +8,7 @@
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
 
-    import {formatCurrencyAmount} from '../riskAnalysisHelpers';
+    import {amountOnValue, formatCurrencyAmount} from '../riskAnalysisHelpers';
     import {buildCurrentDrawdown, buildHurtRows} from './levelHelpers';
     import {buildReturnHistogram, buildTailMeasures, buildUnderwater, gainPercent, lossAmount, lossPercent} from './l1/l1Helpers';
     import ReturnHistogram from './l1/ReturnHistogram.svelte';
@@ -78,8 +78,8 @@
 
     /** The money a loss fraction costs at the current scope value; a zero loss carries no minus. */
     function lossMoney(fraction: number): string {
-        if (!showMoney || scopeValue == null) return '';
-        return lossAmount(scopeValue * fraction, (value) => formatCurrencyAmount(value, currency));
+        const amount = showMoney ? amountOnValue(fraction, scopeValue) : null;
+        return amount === null ? '' : lossAmount(amount, (value) => formatCurrencyAmount(value, currency));
     }
 
     /**

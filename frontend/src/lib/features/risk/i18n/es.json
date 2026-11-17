@@ -422,7 +422,9 @@
       "summaryDescription": "Riesgo observado, riesgo bajista, comparación con un activo real y escenarios para este activo.",
       "rollingMetric": "Métrica móvil configurada",
       "noRollingMetric": "No hay ninguna señal de riesgo móvil configurada para este activo.",
-      "configureSignals": "Configurar señales avanzadas en Resumen"
+      "configureSignals": "Configurar señales avanzadas en Resumen",
+      "positionNote": "Los importes son sobre tu posición de hoy: {amount}.",
+      "planPrices": "Precios del plan, no del mercado: aquí la volatilidad y el VaR solo dicen lo regular que es el plan."
     },
     "replay": {
       "title": "Repetición histórica",
@@ -666,7 +668,8 @@
           "bar": "Efecto"
         },
         "shockUnconfigured": "No están en este escenario, así que su choque es 0: {names}. El total los cuenta como intactos.",
-        "replayTotalAsset": "Este activo habría cerrado el periodo en {percent} {amount}"
+        "replayTotalAsset": "Este activo habría cerrado el periodo en {percent} {amount}",
+        "shockTotalAsset": "Este activo se movería {percent} {amount}"
       },
       "backtestNotice": "Con un subconjunto activo, estas cifras se reconstruyen sobre la composición de hoy: dicen cómo *habría* ido, no cómo fue en realidad.",
       "notice": {

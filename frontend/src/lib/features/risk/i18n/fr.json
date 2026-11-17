@@ -422,7 +422,9 @@
       "summaryDescription": "Risque observé, risque baissier, comparaison avec un actif réel et scénarios pour cet actif.",
       "rollingMetric": "Mesure glissante configurée",
       "noRollingMetric": "Aucun signal de risque glissant n'est configuré pour cet actif.",
-      "configureSignals": "Configurer les signaux avancés dans Vue d'ensemble"
+      "configureSignals": "Configurer les signaux avancés dans Vue d'ensemble",
+      "positionNote": "Les montants portent sur votre position d'aujourd'hui : {amount}.",
+      "planPrices": "Prix issus du plan, pas du marché : ici, la volatilité et la VaR disent seulement à quel point le plan est régulier."
     },
     "replay": {
       "title": "Rejeu historique",
@@ -666,7 +668,8 @@
           "bar": "Effet"
         },
         "shockUnconfigured": "Absents de ce scénario, donc un choc de 0 : {names}. Le total les compte comme intacts.",
-        "replayTotalAsset": "Cet actif aurait terminé la période à {percent} {amount}"
+        "replayTotalAsset": "Cet actif aurait terminé la période à {percent} {amount}",
+        "shockTotalAsset": "Cet actif bougerait de {percent} {amount}"
       },
       "backtestNotice": "Avec un sous-ensemble actif, ces chiffres sont reconstruits à partir de la composition actuelle : ils disent ce qui *se serait* passé, pas ce qui s’est réellement passé.",
       "notice": {

@@ -10,7 +10,7 @@
     import {buildHistoricalReplayParameters} from '$lib/features/risk/riskRequest';
     import type {RiskPanelController} from '$lib/features/risk/riskPanelController.svelte';
 
-    import {formatCurrencyAmount} from '../../riskAnalysisHelpers';
+    import {amountOnValue, formatCurrencyAmount} from '../../riskAnalysisHelpers';
     import AssetChip from '../../AssetChip.svelte';
     import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {warningSentence} from '../warningSentence';
@@ -73,9 +73,11 @@
          * subsystem converge on the same predicate even where the string differs.
          */
         showMoney?: boolean;
+        /** Your position's value on one asset (Q17 A1): the sentence's money is the return times it; none when null. */
+        scopeValue?: number | null;
     }
 
-    let {controller, assetNames, currency, dateStart, dateEnd, showMoney: showMoneyOverride}: Props = $props();
+    let {controller, assetNames, currency, dateStart, dateEnd, showMoney: showMoneyOverride, scopeValue = null}: Props = $props();
 
     let presetId = $state('');
     /**
@@ -105,6 +107,12 @@
      * metadata, like the money: fail-closed.
      */
     let oneAsset = $derived(scopeKind === 'asset');
+
+    /** On one asset you own, the money on your position: the return times its value (Q17 A1); nothing otherwise. */
+    function positionAmount(fraction: number): string {
+        const amount = amountOnValue(fraction, scopeValue);
+        return amount === null ? '' : formatCurrencyAmount(String(amount), currency);
+    }
     let rows = $derived(tornadoRows(output));
     let exclusions = $derived(replayExclusions(result));
     let suggestion = $derived(replaySuggestion(result));
@@ -280,7 +288,7 @@
                 {$t(oneAsset ? 'risk.levels.l4.replayTotalAsset' : 'risk.levels.l4.replayTotal', {
                     values: {
                         percent: `${total < 0 ? '−' : '+'}${formatPercent(Math.abs(total), {scale: 100, signed: false})}`,
-                        amount: !showMoney || output.impact_amount == null ? '' : formatCurrencyAmount(output.impact_amount, currency),
+                        amount: oneAsset ? positionAmount(total) : !showMoney || output.impact_amount == null ? '' : formatCurrencyAmount(output.impact_amount, currency),
                     },
                 })}
             </p>

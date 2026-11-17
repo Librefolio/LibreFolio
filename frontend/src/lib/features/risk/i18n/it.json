@@ -422,7 +422,9 @@
       "summaryDescription": "Rischio osservato, downside, confronto con un asset reale e scenari per questo asset.",
       "rollingMetric": "Metrica rolling configurata",
       "noRollingMetric": "Nessun segnale di rischio rolling è configurato per questo asset.",
-      "configureSignals": "Configura i segnali avanzati in Panoramica"
+      "configureSignals": "Configura i segnali avanzati in Panoramica",
+      "positionNote": "Gli importi sono sulla tua posizione di oggi: {amount}.",
+      "planPrices": "Prezzi dal piano, non dal mercato: qui volatilità e VaR dicono solo quanto è regolare il piano."
     },
     "replay": {
       "title": "Replay storico",
@@ -666,7 +668,8 @@
           "bar": "Effetto"
         },
         "shockUnconfigured": "Non sono nello scenario, quindi il loro shock è 0: {names}. Il totale li conta come intatti.",
-        "replayTotalAsset": "Questo asset avrebbe chiuso il periodo a {percent} {amount}"
+        "replayTotalAsset": "Questo asset avrebbe chiuso il periodo a {percent} {amount}",
+        "shockTotalAsset": "Questo asset si muoverebbe di {percent} {amount}"
       },
       "backtestNotice": "Con una fetta attiva, questi numeri sono ricostruiti sulla composizione di oggi: dicono come *sarebbe* andata, non come è andata davvero.",
       "notice": {

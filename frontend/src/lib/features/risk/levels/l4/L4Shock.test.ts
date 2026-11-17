@@ -122,6 +122,7 @@ import {createRiskPanelController, type RiskControllerInputs, type RiskPanelCont
 import type {RiskAnalyticResult} from '$lib/features/risk/riskStore.svelte';
 import {sectorI18nKey} from '$lib/utils/assetTypes';
 import L4Shock from './L4Shock.svelte';
+import {formatCurrencyAmount} from '../../riskAnalysisHelpers';
 
 type Dimension = RiskScenarioDimension;
 type ShockImpact = NonNullable<RiskStressOutput['impacts']>[number];
@@ -959,5 +960,24 @@ describe('L4Shock — on one asset, no shock by type (Q16-4)', () => {
         expect(offered, 'premise: the catalogue reached the block').toContain('banking_crisis');
         expect(offered).toContain('host_italy_eu');
         expect(offered, 'a shock by type offered on one asset').not.toContain('global_risk_off');
+    });
+});
+
+// RN-17 (Q17 A1, consultant 17/11): on one asset you own, the shock's total carries the money on your position.
+describe('L4Shock — on one asset you own, the total in money on your position', () => {
+    it('prints the total as the return times your position, and nothing of money when the asset is not owned', async () => {
+        const assetAnswer: RiskStressOutput = {...BANKING_ANSWER, portfolio_return: -0.103, impact_amount: null};
+        const result = {...shockResult(assetAnswer), metadata: {...metadata(), scope: 'asset'}} as RiskAnalyticResult;
+        const {value: controller, stop} = effectRoot(() => createRiskPanelController(() => ({...controllerInputs(), scope: {kind: 'asset', asset_id: 7}})));
+        stops.push(stop);
+        flushSync();
+        controller.setResult('stress', result);
+        const view = render(L4Shock, {props: {controller, assetNames: {}, currency: 'EUR', withoutTypeShock: true, scopeValue: 12400}});
+
+        expect(screen.getByTestId('risk-shock-total').textContent).toContain(formatCurrencyAmount(String(-0.103 * 12400), 'EUR'));
+        view.unmount();
+
+        render(L4Shock, {props: {controller, assetNames: {}, currency: 'EUR', withoutTypeShock: true, scopeValue: null}});
+        expect(screen.getByTestId('risk-shock-total').textContent).not.toContain('€');
     });
 });
