@@ -117,8 +117,17 @@
         "totalIn": "Net encaissé",
         "loadError": "Les frais liés n'ont pas pu être chargés",
         "missingAmount": "Saisissez le montant de ce frais",
-        "loading": "Chargement des frais liés…"
-      }
+        "loading": "Chargement des frais liés…",
+        "open": "Ouvrir"
+      },
+      "parent": {
+        "title": "Liée à",
+        "unlink": "Délier",
+        "unlinked": "Déliée : à l'enregistrement, ce sera une transaction à part",
+        "loadError": "La transaction liée n'a pas pu être chargée",
+        "loading": "Chargement de la transaction liée…"
+      },
+      "openFailed": "La transaction n'a pas pu être ouverte"
     },
     "bulk": {
       "resetRow": "Réinitialiser la ligne",

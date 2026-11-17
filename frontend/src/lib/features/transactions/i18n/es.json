@@ -117,8 +117,17 @@
         "totalIn": "Neto cobrado",
         "loadError": "No se pudieron cargar los gastos enlazados",
         "missingAmount": "Introduce el importe de este gasto",
-        "loading": "Cargando los gastos enlazados…"
-      }
+        "loading": "Cargando los gastos enlazados…",
+        "open": "Abrir"
+      },
+      "parent": {
+        "title": "Enlazada a",
+        "unlink": "Desenlazar",
+        "unlinked": "Desenlazada: al guardar será una transacción independiente",
+        "loadError": "No se pudo cargar la transacción enlazada",
+        "loading": "Cargando la transacción enlazada…"
+      },
+      "openFailed": "No se pudo abrir la transacción"
     },
     "bulk": {
       "resetRow": "Restablecer fila",

@@ -117,8 +117,17 @@
         "totalIn": "Net received",
         "loadError": "The linked charges could not be loaded",
         "missingAmount": "Enter the amount of this charge",
-        "loading": "Loading the linked charges…"
-      }
+        "loading": "Loading the linked charges…",
+        "open": "Open"
+      },
+      "parent": {
+        "title": "Linked to",
+        "unlink": "Unlink",
+        "unlinked": "Unlinked: it will be a transaction of its own when saved",
+        "loadError": "The linked transaction could not be loaded",
+        "loading": "Loading the linked transaction…"
+      },
+      "openFailed": "The transaction could not be opened"
     },
     "bulk": {
       "resetRow": "Reset row",

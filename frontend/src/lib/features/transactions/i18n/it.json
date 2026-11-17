@@ -117,8 +117,17 @@
         "totalIn": "Netto incassato",
         "loadError": "Non è stato possibile caricare le spese collegate",
         "missingAmount": "Inserisci l'importo di questa spesa",
-        "loading": "Caricamento delle spese collegate…"
-      }
+        "loading": "Caricamento delle spese collegate…",
+        "open": "Apri"
+      },
+      "parent": {
+        "title": "Collegamento",
+        "unlink": "Scollega",
+        "unlinked": "Scollegata: al salvataggio sarà una transazione a sé",
+        "loadError": "Non è stato possibile caricare la transazione collegata",
+        "loading": "Caricamento della transazione collegata…"
+      },
+      "openFailed": "Non è stato possibile aprire la transazione"
     },
     "bulk": {
       "resetRow": "Reimposta riga",
