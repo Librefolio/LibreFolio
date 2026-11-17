@@ -28,7 +28,7 @@ import gettext
 import re
 from collections.abc import Iterable, Iterator, Mapping
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from functools import lru_cache
 from typing import Any
 
@@ -105,9 +105,11 @@ _BOND_VOICES = frozenset(
     }
 )
 _STOCK_VOICES = frozenset({"sector", "legal_form"})
-#: A fund page gives little that is the profile's: its currency and its launch date. Not written: «Gestione» (the
-#: management fee, not the TER), the fund's assets (no unit), the management company (not on the recorded page).
-_FUND_VOICES = frozenset({"fund_currency", "inception_date"})
+#: A fund page gives little that is the profile's: its currency, its launch date and its management fee («Gestione», C2e:
+#: only a part of the TER, so ``management_fee`` and never ``ter``). Not written: the fund's assets (no unit), the
+#: management company (not on the recorded page).
+_FUND_VOICES = frozenset({"fund_currency", "inception_date", "management_fee"})
+_FUND_FEE = "gestione"
 #: The identifier type of a fund: Borsa Italiana's internal code (``1FADB716664``), the one its fund page is reached by
 #: (searching by ISIN does not find funds); the price assignment stores it as ``codice_fondo``.
 FUND_CODE = "BI_FUND_CODE"
@@ -354,10 +356,31 @@ def _launch_date(value: Any) -> date | None:
         return None
 
 
+def _management_fee(text: Any) -> str | None:
+    """«Gestione» («0.4», «0,40», «0.4%»: a percentage per year) as a fraction («0.004»); None when it is not a
+    non-negative number (N.D., empty, a text)."""
+    if not isinstance(text, str):
+        return None
+    cleaned = text.strip().removesuffix("%").strip().replace(",", ".")
+    try:
+        value = Decimal(cleaned)
+    except InvalidOperation:  # parsing probe: a text that is no number is no fee
+        return None
+    if not value.is_finite() or value < 0:
+        return None
+    return str(value / 100)
+
+
 def fund_voices(fund: Any) -> dict[str, Any]:
-    """The catalogue voices of a fund page: its currency and its launch date («Data di partenza»)."""
+    """The catalogue voices of a fund page: its currency, its launch date («Data di partenza») and its management fee
+    («Gestione», C2e)."""
     characteristics = {str(key).strip().lower(): value for key, value in (fund.caratteristiche or {}).items()}
-    voices = {"fund_currency": _text(fund.valuta), "inception_date": _launch_date(characteristics.get(_FUND_LAUNCH))}
+    costs = {str(key).strip().lower(): value for key, value in (fund.costi or {}).items()}
+    voices = {
+        "fund_currency": _text(fund.valuta),
+        "inception_date": _launch_date(characteristics.get(_FUND_LAUNCH)),
+        "management_fee": _management_fee(costs.get(_FUND_FEE)),
+    }
     return {key: value for key, value in voices.items() if value is not None}
 
 
