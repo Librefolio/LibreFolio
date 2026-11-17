@@ -85,6 +85,31 @@ How many calls each plugin that reaches an external service made, per calendar w
   (``services/platform/call_counter.py``) reaches the row through its primary key: no index beyond it.
 - Starts empty: no call was counted before 1.4.
 - Downgrade: the table is dropped.
+
+charge_links (project 66, lot R1)
+─────────────────────────────────
+A FEE or a TAX can say which transaction it belongs to (issue #25, plan 66, «Il dato»).
+
+- ``transactions.parent_transaction_id``: INTEGER, NULL, a foreign key to ``transactions (id)`` with no action,
+  ``DEFERRABLE INITIALLY DEFERRED`` like ``related_transaction_id``: checked at commit, so a batch that deletes a parent
+  and its charges does not depend on their order, and a charge that points at a row gone cannot be saved. The charge
+  points at its parent; the parent knows nothing. ``related_transaction_id`` stays the link of the three pairs, untouched.
+- Added with a plain ``ALTER TABLE ADD COLUMN`` and a column-level ``REFERENCES``: SQLite drops a column that carries
+  its own ``REFERENCES``, not one named in a table-level ``FOREIGN KEY``. Every existing row gets NULL: no charge is
+  linked by the upgrade (no clean-up of stored data).
+- One partial index, ``idx_transactions_parent (parent_transaction_id) WHERE parent_transaction_id IS NOT NULL``: only
+  linked charges are in it, a handful of rows next to the whole ledger. The charges of some parents (the list, the
+  delete check, the lot engine; ``services/transactions/charges.py``, from lot R2), and SQLite's own foreign-key check
+  when any transaction is deleted, search it (SQLite 3.53)::
+
+    SELECT id FROM transactions WHERE parent_transaction_id IN (?, ?)
+    → SEARCH transactions USING COVERING INDEX idx_transactions_parent (parent_transaction_id=?)
+
+    DELETE FROM transactions WHERE id = ?   (foreign_keys=ON: the check for children of the deleted row)
+    → EXPLAIN shows an OpenRead on the rootpage of idx_transactions_parent; 2 000 deletes in 200 000 rows take
+      0.01 s with it (as with a full index) and 11.8 s without any index
+
+- Downgrade: the index, then the column.
 """
 
 import json
@@ -313,17 +338,40 @@ def _downgrade_plugin_call_counters(conn: sa.engine.Connection) -> None:
         op.drop_table(_CALL_COUNTERS)
 
 
+# ─── step charge_links (project 66, lot R1) ──────────────────────────────────────────────────────────────────────────
+
+_TRANSACTIONS = "transactions"
+_PARENT_COLUMN = "parent_transaction_id"
+_PARENT_INDEX = "idx_transactions_parent"
+
+
+def _upgrade_charge_links(conn: sa.engine.Connection) -> None:
+    """Step ``charge_links``: add ``transactions.parent_transaction_id`` and its partial index, those missing."""
+    if _PARENT_COLUMN not in _columns(conn, _TRANSACTIONS):
+        conn.execute(sa.text(f"ALTER TABLE {_TRANSACTIONS} ADD COLUMN {_PARENT_COLUMN} INTEGER REFERENCES {_TRANSACTIONS} (id) DEFERRABLE INITIALLY DEFERRED"))
+    conn.execute(sa.text(f"CREATE INDEX IF NOT EXISTS {_PARENT_INDEX} ON {_TRANSACTIONS} ({_PARENT_COLUMN}) WHERE {_PARENT_COLUMN} IS NOT NULL"))
+
+
+def _downgrade_charge_links(conn: sa.engine.Connection) -> None:
+    """Step ``charge_links`` undone: drop the index, then the column, those still there."""
+    conn.execute(sa.text(f"DROP INDEX IF EXISTS {_PARENT_INDEX}"))
+    if _PARENT_COLUMN in _columns(conn, _TRANSACTIONS):
+        conn.execute(sa.text(f"ALTER TABLE {_TRANSACTIONS} DROP COLUMN {_PARENT_COLUMN}"))
+
+
 def upgrade() -> None:
     """The steps of the docstring, one line each."""
     conn = op.get_bind()
     _upgrade_asset_profile(conn)
     _upgrade_asset_profile_legacy_copy(conn)
     _upgrade_plugin_call_counters(conn)
+    _upgrade_charge_links(conn)
 
 
 def downgrade() -> None:
     """Back to 1.3, step by step, in the reverse order of ``upgrade``."""
     conn = op.get_bind()
+    _downgrade_charge_links(conn)
     _downgrade_plugin_call_counters(conn)
     _downgrade_asset_profile_legacy_copy(conn)
     _downgrade_asset_profile(conn)
