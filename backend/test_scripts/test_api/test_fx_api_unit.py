@@ -48,6 +48,7 @@ from backend.app.schemas.refresh import FXSyncBulkResponse, FXSyncPairRequest, F
 from backend.app.services.fx import catalog as fx_catalog
 from backend.app.services.fx import storage as fx_storage
 from backend.app.services.fx.storage import fx_rate_refusal, normalize_storable_rate
+from backend.app.services.plugin_settings.readiness import PluginReadiness
 from backend.test_scripts.fx_steps_double import steps_double
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -129,7 +130,8 @@ async def test_list_providers_filters_hidden_and_sorts_targets(monkeypatch):
         lambda _code: _DummyProvider(),
     )
 
-    providers = await fx_providers_api.list_providers(providers=["manual", "fed"])
+    # The list is the caller's (plan 76, N1): FED declares no setting, so its readiness needs no database
+    providers = await fx_providers_api.list_providers(providers=["manual", "fed"], _current_user=Mock(id=1))
 
     assert len(providers) == 1
     assert providers[0].code == "FED"
@@ -138,6 +140,7 @@ async def test_list_providers_filters_hidden_and_sorts_targets(monkeypatch):
     assert providers[0].description_i18n == {"it": "Provider finto"}
     assert providers[0].warning_i18n == {"en": "Testing only"}
     assert providers[0].warning_level == "info", "the note's level reaches the client: an info note is no warning (lane 75)"
+    assert (providers[0].configured, providers[0].missing_settings) == (True, []), "a provider without settings is configured"
     print_success("Hidden providers filtered; targets sorted")
 
 
@@ -326,6 +329,18 @@ def route_providers(monkeypatch):
     lookup = Mock(side_effect=AssertionError("Route configuration must not instantiate a provider"))
     monkeypatch.setattr(fx_providers_api.FXProviderRegistry, "get_provider_instance", lookup)
     return lookup
+
+
+@pytest.fixture(autouse=True)
+def _readiness_answers_configured(monkeypatch):
+    """Project 76 N2/N2b: these handler tests pin the routes' own control flow, with a session double and ``Mock()``
+    callers; whether a provider is configured (and the 503 when its settings cannot be read) is pinned in
+    ``test_not_configured_writes.py``. Here the readiness answers «configured» without a database."""
+
+    async def configured(family, codes, *, user_id):
+        return {code: PluginReadiness(True, ()) for code in dict.fromkeys(codes)}
+
+    monkeypatch.setattr(fx_providers_api, "plugins_readiness", configured)
 
 
 def _route_session(*, existing=None, listed_routes=()):
@@ -539,6 +554,8 @@ async def test_create_routes_atomic_error_preserves_every_result_metadata(order,
     session.delete.assert_not_awaited()
     if "valid" in order:
         session.add.assert_called_once()
+        # N2/U4 (project 76): MOCKFX's fields are optional and no variable sets them, so it cannot be unconfigured and
+        # nothing is read before the write (readiness.plugin_may_be_unconfigured): the route's own lookup only
         session.execute.assert_awaited_once()
         (added,) = session.add.call_args.args
         assert isinstance(added, FxConversionRoute)

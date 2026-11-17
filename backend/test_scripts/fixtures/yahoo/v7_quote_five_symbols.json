@@ -1,0 +1,74 @@
+{
+  "_recorded": {
+    "date": "2026-11-16T19:52:06+00:00",
+    "what": "Yahoo Finance v7 quote list, ONE real call (project 76, lot C5, approved by the coordinator on 16/11/2026): five public symbols, no key, no user data",
+    "command": "YfData().get_raw_json(f'{_QUERY1_URL_}/v7/finance/quote?', params={'symbols': 'AAPL,SWDA.MI,EUNL.DE,BTC-EUR,PEPE24478-USD', 'formatted': 'false'}) — yfinance 1.7.0",
+    "sanitised": "each quote trimmed to the fields LibreFolio reads (price, previous close, currency, time, exchange timezone) and a few that name the case (symbol, type, exchange, name, market state); everything else dropped"
+  },
+  "quoteResponse": {
+    "result": [
+      {
+        "symbol": "AAPL",
+        "quoteType": "EQUITY",
+        "exchange": "NMS",
+        "shortName": "Apple Inc.",
+        "marketState": "REGULAR",
+        "currency": "USD",
+        "financialCurrency": "USD",
+        "regularMarketPrice": 351.81,
+        "regularMarketPreviousClose": 356.27,
+        "regularMarketTime": 1794858725,
+        "exchangeTimezoneName": "America/New_York"
+      },
+      {
+        "symbol": "SWDA.MI",
+        "quoteType": "ETF",
+        "exchange": "MIL",
+        "shortName": "ISHARES CORE MSCI WORLD UCITS E",
+        "marketState": "POSTPOST",
+        "currency": "EUR",
+        "regularMarketPrice": 130.02,
+        "regularMarketPreviousClose": 130.46,
+        "regularMarketTime": 1794846902,
+        "exchangeTimezoneName": "Europe/Rome"
+      },
+      {
+        "symbol": "EUNL.DE",
+        "quoteType": "ETF",
+        "exchange": "GER",
+        "shortName": "iShsIII-Core MSCI World U.ETF R",
+        "marketState": "POSTPOST",
+        "currency": "EUR",
+        "regularMarketPrice": 129.975,
+        "regularMarketPreviousClose": 130.44,
+        "regularMarketTime": 1794846945,
+        "exchangeTimezoneName": "Europe/Berlin"
+      },
+      {
+        "symbol": "BTC-EUR",
+        "quoteType": "CRYPTOCURRENCY",
+        "exchange": "CCC",
+        "shortName": "Bitcoin EUR",
+        "marketState": "REGULAR",
+        "currency": "EUR",
+        "regularMarketPrice": 59020.96,
+        "regularMarketPreviousClose": 59244.348,
+        "regularMarketTime": 1794858723,
+        "exchangeTimezoneName": "UTC"
+      },
+      {
+        "symbol": "PEPE24478-USD",
+        "quoteType": "CRYPTOCURRENCY",
+        "exchange": "CCC",
+        "shortName": "Pepe USD",
+        "marketState": "REGULAR",
+        "currency": "USD",
+        "regularMarketPrice": 3.91e-06,
+        "regularMarketPreviousClose": 3.865909e-06,
+        "regularMarketTime": 1794858685,
+        "exchangeTimezoneName": "UTC"
+      }
+    ],
+    "error": null
+  }
+}

@@ -41,6 +41,9 @@ class ManualProvider(FXRateProvider):
     - Auto-re-inserted when the last real provider is removed
     """
 
+    #: Never fetches: its calls are never counted against a limit (project 76, U3)
+    calls_external_service = False
+
     @property
     def code(self) -> str:
         return "MANUAL"

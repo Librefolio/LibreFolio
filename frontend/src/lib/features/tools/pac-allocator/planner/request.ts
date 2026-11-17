@@ -12,7 +12,7 @@
  * `resolved`, the codec's parsed output, which the result views read.
  */
 import {toolContractMap} from '$lib/api/tool-contract-map.generated';
-import {canonicalInput, compareDecimal, decimalSign, isWholeDecimal, percentToFraction} from './decimal';
+import {canonicalInput, compareDecimal, decimalSign, isWholeDecimal, percentToFraction} from '$lib/utils/core/exactDecimal';
 import {PLANNER_OPERATION} from './defaults';
 import {priceIsCopied, routeKey, sameExposures, selectionExceedsAvailable, type CopyRef, type DraftAsset, type DraftBroker, type DraftMode, type DraftRoute, type PlannerDraft} from './draft.svelte';
 import {toPlannerId, toPlannerTimestamp} from './source';

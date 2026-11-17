@@ -6,4 +6,6 @@ that defines it. The hub ``backend/app/schemas/__init__.py`` keeps exporting the
   parameters, the metadata response and the metadata refresh results.
 - ``scheduled_investment.py``: the financial enums and the interest schedule of scheduled investments.
 - ``events.py``: the asset event point and the event CRUD of ``/assets/events``.
+- ``profile.py``: the asset profile: the voice of the catalogue and the shapes of its values (plan 68).
+- ``enrichers.py``: the enricher bindings of an asset, their last reads, the installed enrichers (plan 68).
 """

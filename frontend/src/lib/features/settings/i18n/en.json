@@ -166,7 +166,9 @@
           "last7d": "Last 7 days",
           "last30d": "Last 30 days",
           "deferred": "Deferred: provider paused",
-          "retryAt": "Retry at {time}"
+          "retryAt": "Retry at {time}",
+          "profileRead": "Profile read",
+          "voicesWritten": "{count, plural, one {# profile field written} other {# profile fields written}}"
         },
         "status": {
           "title": "Scheduler Status",
@@ -180,7 +182,13 @@
         },
         "timezone": "Timezone",
         "timezoneChangeWarning": "Changing the timezone keeps these clock times and weekdays unchanged, but changes the actual UTC execution instant.",
-        "timezoneHintLocal": "Times and weekdays below are interpreted in this timezone."
+        "timezoneHintLocal": "Times and weekdays below are interpreted in this timezone.",
+        "profileReadSection": "Asset profile read",
+        "profileReadHint": "Reads each asset's profile (type, issuer, costs, allocation) from its data sources, in the scheduler timezone. Profiles change rarely: once a week is enough.",
+        "profileReadTimesLabel": "Read times",
+        "profileReadDaysLabel": "Read days",
+        "profileReadTimesRemove": "Remove profile read time {slot}",
+        "profileReadDay": "Read profiles on {day}"
       }
     },
     "devicePixelRatioHint": "Ratio between physical device pixels and CSS pixels. 1x = standard display, 2x+ = Retina/HiDPI display.",
@@ -483,6 +491,8 @@
       "about": "Which version of LibreFolio runs here, what changed in it, and its licence.",
       "users": "The accounts of this instance: who can sign in, who is an administrator, and the invitation links.",
       "security": "How this instance protects sign-ins and connections: the checks it runs, and what to fix when one fails."
-    }
+    },
+    "pluginSystemEnricher": "Enrichers",
+    "enrichers": "Enrichers"
   }
 }

@@ -13,6 +13,9 @@
 
   Adding a new field: just add it to DIFF_FIELD_SECTIONS array.
 
+  Plan 68, E10b: the asset profile's window opens it too. A voice brings its `group` (shown as its own section, after
+  the asset's), and may name its source (`sourceLabel`) and what the current value is (`currentLabel`).
+
   Svelte 5 runes.
 -->
 <script lang="ts">
@@ -39,6 +42,15 @@
         note?: string;
         /** The quote base row's proposal, for the modal that applies it (not rendered). */
         quoteBaseSource?: QuoteBaseSource;
+        /**
+         * Plan 68, E10b — the asset profile. A voice of the profile names the group of the «Profilo» tab it belongs to
+         * (`key` is stable, `title` already translated): it is shown under that group, not under the asset's sections.
+         */
+        group?: {key: string; title: string};
+        /** The name of the source above its value (an enricher's name, «justETF»), instead of «provider value». */
+        sourceLabel?: string;
+        /** What the current value is («yours, pending»), instead of «current value». */
+        currentLabel?: string;
         /**
          * Present only for `identifier_*` fields (P3/B-04).
          *
@@ -102,6 +114,9 @@
         /** Asset name, used by the inline identifier chooser. */
         assetName?: string;
         zIndex?: number;
+        /** The window's title and the line under it (`description`; `intro` is a Svelte mount option); the provider's defaults when absent (the profile names the sources, E10c3). */
+        title?: string;
+        description?: string;
         /**
          * Applied fields, plus the resolved identifier decisions.
          * `resolutions` is keyed by field name and only carries `identifier_*` rows.
@@ -110,7 +125,7 @@
         oncancel?: () => void;
     }
 
-    let {open = $bindable(false), differences = [], assetName = '', zIndex = 70, onapply, oncancel}: Props = $props();
+    let {open = $bindable(false), differences = [], assetName = '', zIndex = 70, title, description, onapply, oncancel}: Props = $props();
 
     // =========================================================================
     // State — local copy for checkbox management
@@ -169,7 +184,8 @@
         for (const section of DIFF_FIELD_SECTIONS) {
             const sectionItems: Array<{item: DiffItem; index: number}> = [];
             items.forEach((item, idx) => {
-                const match = section.matchPrefix ? section.fields.some((p) => item.field.startsWith(p)) : section.fields.includes(item.field);
+                // A voice of the asset profile goes under its own group, whatever its key (plan 68, E10b)
+                const match = !item.group && (section.matchPrefix ? section.fields.some((p) => item.field.startsWith(p)) : section.fields.includes(item.field));
                 if (match && !used.has(idx)) {
                     sectionItems.push({item, index: idx});
                     used.add(idx);
@@ -179,6 +195,21 @@
                 groups.push({title: $t(section.titleKey), sectionKey: section.titleKey, items: sectionItems});
             }
         }
+
+        // The asset profile's groups (plan 68, E10b), in the order their first voice comes
+        const profileGroups = new Map<string, {title: string; sectionKey: string; items: Array<{item: DiffItem; index: number}>}>();
+        items.forEach((item, idx) => {
+            if (!item.group || used.has(idx)) return;
+            const sectionKey = `profile:${item.group.key}`;
+            let group = profileGroups.get(sectionKey);
+            if (!group) {
+                group = {title: item.group.title, sectionKey, items: []};
+                profileGroups.set(sectionKey, group);
+            }
+            group.items.push({item, index: idx});
+            used.add(idx);
+        });
+        groups.push(...profileGroups.values());
 
         // Fallback: any unmatched fields go into "Other"
         const remaining = items.map((item, idx) => ({item, index: idx})).filter(({index: idx}) => !used.has(idx));
@@ -284,8 +315,8 @@
 <ModalBase {open} maxWidth="2xl" onRequestClose={handleCancel} {zIndex} testId="comparison-modal">
     <!-- Header -->
     <div class="flex items-center justify-between px-6 py-4 border-b border-lf-subtle">
-        <h2 class="text-lg font-semibold text-lf-primary">
-            {$t('assets.comparison.title')}
+        <h2 class="text-lg font-semibold text-lf-primary" data-testid="comparison-title">
+            {title ?? $t('assets.comparison.title')}
         </h2>
         <button type="button" onclick={handleCancel} class="text-lf-muted hover:text-lf-secondary transition-colors">
             <X size={20} />
@@ -294,8 +325,8 @@
 
     <!-- Body -->
     <div class="px-6 py-4 space-y-3 max-h-[60vh] overflow-y-auto" data-testid="comparison-body" data-selected-count={selectedCount} data-total-count={totalCount}>
-        <p class="text-sm text-lf-secondary">
-            {$t('assets.comparison.description')}
+        <p class="text-sm text-lf-secondary" data-testid="comparison-intro">
+            {description ?? $t('assets.comparison.description')}
         </p>
 
         <!-- Grouped items — uniform card layout for all types -->
@@ -331,8 +362,8 @@
                         <div class="grid grid-cols-[1fr_auto_1fr] gap-2 mt-2 items-center">
                             <!-- Current box -->
                             <div class="bg-lf-panel rounded p-2" data-testid="comparison-current-{item.field}">
-                                <span class="text-[10px] uppercase text-lf-muted block mb-0.5">
-                                    {$t('assets.comparison.currentValue')}
+                                <span class="text-[10px] uppercase text-lf-muted block mb-0.5" data-testid="comparison-current-label-{item.field}">
+                                    {item.currentLabel ?? $t('assets.comparison.currentValue')}
                                 </span>
                                 {#if item.type === 'distribution'}
                                     <div class="text-xs space-y-0.5">
@@ -357,8 +388,8 @@
 
                             <!-- Provider box -->
                             <div class="bg-lf-success-soft rounded p-2" data-testid="comparison-provider-{item.field}">
-                                <span class="text-[10px] uppercase text-lf-muted block mb-0.5">
-                                    {$t('assets.comparison.providerValue')}
+                                <span class="text-[10px] uppercase text-lf-muted block mb-0.5" data-testid="comparison-provider-label-{item.field}">
+                                    {item.sourceLabel ?? $t('assets.comparison.providerValue')}
                                 </span>
                                 {#if item.type === 'distribution'}
                                     <div class="text-xs space-y-0.5">

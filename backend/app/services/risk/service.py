@@ -138,7 +138,7 @@ class RiskService:
         if any(is_hypothetical_plan(plan) for plan in plans.values()):
             context = replace(
                 context,
-                asset_classifications=await load_asset_classifications(self.db, scope_inputs.requested_asset_ids),
+                asset_classifications=await load_asset_classifications(self.db, scope_inputs.requested_asset_ids, request.date_range.end or request.date_range.start),
                 geography_groups=(geography_group_members() if any(is_geography_hypothetical_plan(plan) for plan in plans.values()) else {}),
             )
 

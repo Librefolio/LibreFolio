@@ -11,7 +11,9 @@
       "asset": "Prezzi",
       "fx": "Tassi di cambio",
       "brim": "Importazione dai broker",
-      "tool": "Strumenti"
+      "tool": "Strumenti",
+      "enricher": "Profilo degli asset",
+      "group": "Impostazioni condivise"
     },
     "status": {
       "configured": "Configurato",
@@ -68,6 +70,11 @@
       "conflict": "Queste impostazioni sono cambiate nel frattempo: sono state ricaricate, salva di nuovo.",
       "keyUnavailable": "I segreti non si possono salvare: la chiave di questa istanza non è utilizzabile (vedi i controlli della configurazione).",
       "saveFailed": "Impossibile salvare le impostazioni."
+    },
+    "group": {
+      "usedBy": "Condivise da: {plugins}",
+      "inGroup": "Usa anche le impostazioni condivise di {group}",
+      "open": "Apri"
     }
   }
 }

@@ -291,7 +291,21 @@
       "pairArrivalBeforeDeparture": "L'arrivée ({arrivalDate}) est datée avant le départ ({departureDate}). Elle a été enregistrée telle quelle : vérifiez les deux dates.",
       "pairCurrencyMismatch": "Les deux côtés d'un virement doivent être dans la même devise (trouvées {currencyA} et {currencyB}). Pour changer de devise, utilisez un change de devises",
       "pairAmountMismatch": "Un virement doit faire sortir d'un courtier le même montant qu'il fait entrer dans l'autre (trouvés {amountA} et {amountB})",
-      "pairCurrencySame": "Les deux côtés d'un change de devises doivent être dans des devises différentes (les deux sont en {currency})"
+      "pairCurrencySame": "Les deux côtés d'un change de devises doivent être dans des devises différentes (les deux sont en {currency})",
+      "pairTypeNotLinkable": "Les lignes {type} ne peuvent pas être liées en paire : seuls les Transferts d'Actif, les Conversions de devises et les Virements de liquidités sont des paires.",
+      "chargeNotACharge": "Seuls des Frais ou un Impôt peuvent être liés à une transaction (ceci est {type}).",
+      "chargeRowIsPaired": "Un côté d'une paire liée ne peut pas avoir de frais liés ni en être un : séparez d'abord la paire.",
+      "chargeParentNotFound": "La transaction à laquelle ce frais est lié n'existe pas.",
+      "chargeParentTypeNotAllowed": "Un frais ne peut être lié qu'à un Achat, une Vente, un Dividende, un Intérêt, un Dépôt ou un Retrait (pas à {type}).",
+      "chargeBrokerMismatch": "Un frais lié doit être chez le même courtier que sa transaction.",
+      "chargeAssetMissing": "Ce frais n'a pas d'actif et sa transaction en a un : clonez le frais avec cet actif, puis liez la copie.",
+      "chargeAssetMismatch": "Un frais lié doit avoir le même actif que sa transaction (ou aucun, si la transaction n'en a pas).",
+      "chargesBlockParentType": "Cette transaction a des frais liés, et un {type} ne peut pas en avoir : déliez-les d'abord.",
+      "chargeRefDuplicate": "Le nom « {ref} » est donné à plusieurs lignes de cet envoi.",
+      "chargeParentRefNotFound": "Aucune ligne de cet envoi ne s'appelle « {parentRef} » : le frais ne peut pas y être lié.",
+      "chargeParentTwice": "Un frais désigne sa transaction une seule fois : par la ligne de cet envoi ou par une transaction enregistrée, pas les deux.",
+      "chargeParentIdInvalid": "La transaction à laquelle un frais est lié doit être une transaction enregistrée (un identifiant positif).",
+      "chargesDeleteIncomplete": "Cette transaction a des frais liés : supprimez-les ou déliez-les dans la même modification."
     },
     "pydantic": {
       "greaterThan": "La valeur doit être supérieure à {gt}",

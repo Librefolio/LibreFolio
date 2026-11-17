@@ -100,6 +100,12 @@ FAMILY_RULES: dict[str, FamilyRules] = {
     # A Tool is computed on behalf of the user who asks, so a personal value reaches it; it calls no external source, so it has
     # nothing to keep secret (CP12, X5-4b). A tool's settings are keyed by its tool code.
     "tool": FamilyRules(user_scope=True, secrets=False),
+    # An enricher reads the profile every user of the instance shares (plan 68, I14), in the weekly job too: only the
+    # instance's values reach it, as for FX.
+    "enricher": FamilyRules(user_scope=False, secrets=True),
+    # A shared settings group (project 76, G1; ``plugin_settings/groups``): one value for the whole instance that several
+    # plugins read, such as one source's key. Instance values only: it serves families that deliver no personal value.
+    "group": FamilyRules(user_scope=False, secrets=True),
 }
 
 

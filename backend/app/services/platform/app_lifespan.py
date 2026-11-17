@@ -32,6 +32,7 @@ from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.brim.brim_parse_pool import prewarm as prewarm_brim_parse_pool
 from backend.app.services.brim.brim_parse_pool import shutdown_pool as shutdown_brim_parse_pool
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.files.static_uploads import seed_default_avatars
 from backend.app.services.financial_math.portfolio.engine import shutdown_engine_executor
 from backend.app.services.fx.registry import FXProviderRegistry
@@ -206,6 +207,7 @@ def _shutdown_providers() -> None:
     AssetProviderRegistry.shutdown_all_providers()
     FXProviderRegistry.shutdown_all_providers()
     BRIMProviderRegistry.shutdown_all_providers()
+    EnricherRegistry.shutdown_all_providers()
 
 
 def _shutdown_brim_parse_pool() -> None:

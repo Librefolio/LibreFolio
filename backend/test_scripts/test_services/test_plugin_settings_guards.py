@@ -39,6 +39,7 @@ import pytest
 from backend.app.config import Settings
 from backend.app.services.asset_source_providers.mockprov.plugin import MockProvider
 from backend.app.services.fx_providers.mockfx.plugin import MockFXProvider
+from backend.app.services.plugin_settings.call_limits import CALL_LIMIT_KEYS
 from backend.app.services.plugin_settings.contract import PluginSettingsMixin
 from backend.app.services.plugin_settings.fields import (
     ENV_PREFIX,
@@ -99,8 +100,13 @@ def _variables(plugins: Iterable[Plugin], *, shipped_only: bool = False) -> Iter
 
 
 def undocumented(plugins: Iterable[Plugin], documented: set[str]) -> list[str]:
-    """The variables of the shipped plugins' system fields that ``.env.example`` does not list."""
-    return [f"{family}/{code}/{declared.key}: {variable}" for family, code, declared, variable in _variables(plugins, shipped_only=True) if variable not in documented]
+    """The variables of the shipped plugins' system fields that ``.env.example`` does not list.
+
+    The core's call limits (project 76, U4) are documented once, by their pattern, in the block «Call limits» of
+    ``.env.example`` (option (b), the developer's to confirm): they follow one rule for every plugin. Option (a), one line
+    per variable, is this exemption removed and the lines added.
+    """
+    return [f"{family}/{code}/{declared.key}: {variable}" for family, code, declared, variable in _variables(plugins, shipped_only=True) if variable not in documented and declared.key not in CALL_LIMIT_KEYS]
 
 
 def collisions(plugins: Iterable[Plugin]) -> dict[str, list[str]]:
@@ -164,6 +170,46 @@ def test_every_variable_of_a_shipped_system_field_is_documented():
 
 
 # =============================================================================
+# 1b. G1: THE SYSTEM FIELDS OF THE SHARED GROUPS ARE DOCUMENTED TOO
+# =============================================================================
+
+
+def undocumented_group_variables(groups: dict, documented: set[str]) -> list[str]:
+    """The variables of the system fields of the groups (not ``test_only``) that ``.env.example`` does not list."""
+    return [f"group/{name}/{declared.key}: {variable}" for name, group in groups.items() if not group.test_only for declared in group.fields for variable in env_variables("group", name, declared) if variable not in documented]
+
+
+def test_the_group_documentation_guard_flags_an_undocumented_group_field_and_skips_a_test_only_group():
+    """1b, barrier: a registered group's derived name is flagged until documented; a test-only group is skipped."""
+    from backend.app.services.plugin_settings.groups import SettingsGroup, all_groups, register_group, release_group  # noqa: PLC0415 — red on HEAD: import inside the test
+
+    names = ("g1_guard_a", "g1_guard_b")
+    try:
+        register_group(SettingsGroup(name=names[0], label="Guard A", fields=(_secret("api_key"),)))
+        register_group(SettingsGroup(name=names[1], label="Guard B", fields=(_secret("api_key"),), test_only=True))
+        groups = {name: group for name, group in all_groups().items() if name in names}
+        variable = env_name("group", names[0], "api_key")
+
+        flagged = undocumented_group_variables(groups, set())
+
+        assert flagged == [f"group/{names[0]}/api_key: {variable}"], flagged
+        assert variable.startswith("LIBREFOLIO_PLUGIN_GROUP_G1_GUARD_A_")
+        assert undocumented_group_variables(groups, {variable}) == []
+    finally:
+        for name in names:
+            release_group(name)
+
+
+def test_every_variable_of_a_shipped_group_field_is_documented():
+    """1b: over every registered group that is not test-only (vacuous while no group ships)."""
+    from backend.app.services.plugin_settings.groups import all_groups  # noqa: PLC0415 — red on HEAD: import inside the test
+
+    missing = undocumented_group_variables(all_groups(), _documented())
+
+    assert not missing, f"document these variables in {ENV_EXAMPLE.name} (section «Plugins»): {missing}"
+
+
+# =============================================================================
 # 2. ONE OWNER PER VARIABLE
 # =============================================================================
 
@@ -204,7 +250,8 @@ def test_every_variable_of_a_registered_plugin_is_claimed_by_that_plugin():
 
 def test_the_settings_families_their_registries_and_the_declarations_agree():
     """2: one registry per family with rules, naming that family; every registered declaration valid; no refused one in discovery."""
-    assert set(FAMILY_REGISTRIES) == set(FAMILY_RULES)
+    # "group" (G1) is a family of settings with rules and no registry of plugins: the groups have their own (groups/).
+    assert set(FAMILY_REGISTRIES) == set(FAMILY_RULES) - {"group"}
     assert {family: registry.settings_family() for family, registry in FAMILY_REGISTRIES.items()} == {family: family for family in FAMILY_REGISTRIES}
     for family, _code, plugin_class in _registered():
         if plugin_class.settings_fields:
@@ -212,6 +259,16 @@ def test_the_settings_families_their_registries_and_the_declarations_agree():
     refused = [failure for registry in FAMILY_REGISTRIES.values() for failure in registry.get_discovery_errors() if failure.error_type == SettingsDeclarationError.__name__]
     assert not refused, f"plugins refused for their declaration: {refused}"
     assert MockProvider in (plugin for _family, _code, plugin in _registered()) and MockFXProvider in (plugin for _family, _code, plugin in _registered())
+
+
+def test_every_settings_family_is_a_value_of_the_api_family():
+    """2 (project 76, G2): every family of the settings — each registry's, and ``group`` — is a value of the API's
+    ``PluginSettingFamily``, and the API names no other. Else the catalogue fails (a 500) as soon as a plugin of a missing
+    family declares a field or reads a group: an enricher was missing until G2."""
+    from backend.app.schemas.plugin_settings import PluginSettingFamily  # noqa: PLC0415 — beside the check it serves
+
+    assert {family.value for family in PluginSettingFamily} == set(FAMILY_REGISTRIES) | {"group"}
+    print_success("the API's families are the settings' families")
 
 
 # =============================================================================
@@ -367,3 +424,12 @@ def test_nothing_under_ai_export_reaches_the_plugin_settings():
     assert {"backend.app.db.models", "backend.app.services.ai_export._int_validation"} <= imports, "barrier: the scan sees the real imports, absolute and relative"
     assert not found, f"AI Export reaches the plugin settings: {found}"
     print_success(f"{len(files)} modules, none reaches the plugin settings")
+
+
+def test_the_call_limit_variables_are_documented_by_their_pattern():
+    """Project 76, U4, option (b): ``.env.example`` documents the core's call-limit variables by their pattern, with the
+    five windows, the rule of an empty value and of 0, and one example line."""
+    text = ENV_EXAMPLE.read_text(encoding="utf-8")
+    assert "_CALL_LIMIT_<MINUTE|HOUR|DAY|WEEK|MONTH>" in text
+    assert "LIBREFOLIO_PLUGIN_ASSET_YFINANCE_CALL_LIMIT_DAY" in _documented()
+    assert "0: the plugin is stopped" in text

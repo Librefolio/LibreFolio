@@ -227,6 +227,7 @@ class SchedulerStateResponse(BaseModel):
 
     current_price: SchedulerJobStateInfo
     history_sync: SchedulerJobStateInfo
+    profile_read: SchedulerJobStateInfo = Field(..., description="The weekly read of the asset profiles from the enrichers (plan 68)")
     server_tz: str = Field(..., description="Server timezone (always UTC)")
     server_now_utc: str = Field(..., description="Current server UTC wall clock, HH:MM")
     scheduler_timezone: str = Field(..., description="IANA timezone used to evaluate scheduler days/times")
@@ -318,8 +319,39 @@ class SchedulerLogHistorySyncEntry(BaseModel):
     fx: list[SchedulerLogHistoryFxItem]
 
 
+class SchedulerLogProfileReadItem(BaseModel):
+    """One asset of a profile-read log entry: how its enrichers' read went."""
+
+    asset_id: int
+    name: str
+    status: Literal["ok", "error", "deferred"] = Field(..., description="deferred: an enricher refused for too many requests")
+    voices_written: int = Field(0, description="Profile voices written for the asset")
+    error: Optional[str] = None
+    icon_url: Optional[str] = None
+
+
+class SchedulerLogProfileReadSummary(BaseModel):
+    """Counts of a profile-read run, per asset."""
+
+    ok: int = 0
+    err: int = 0
+    deferred: int = 0
+
+
+class SchedulerLogProfileReadEntry(BaseModel):
+    """JSONL log entry for a profile-read run (plan 68, B6)."""
+
+    ts: str = Field(..., description="ISO-8601 timestamp (with timezone)")
+    job: Literal["profile_read"] = Field(json_schema_extra={"enum": ["profile_read"]})
+    duration_s: float
+    status: str
+    summary: SchedulerLogProfileReadSummary
+    retry_at: Optional[str] = Field(None, description="ISO-8601 datetime when the deferred reads are retried; null when none")
+    items: list[SchedulerLogProfileReadItem]
+
+
 SchedulerLogEntry = Annotated[
-    SchedulerLogCurrentPriceEntry | SchedulerLogHistorySyncEntry,
+    SchedulerLogCurrentPriceEntry | SchedulerLogHistorySyncEntry | SchedulerLogProfileReadEntry,
     Field(discriminator="job"),
 ]
 """Scheduler log entry, discriminated by the ``job`` field."""
@@ -407,6 +439,16 @@ GLOBAL_SETTINGS_DEFAULTS = {
         "type": "int",
         "description": "Rolling horizon in days for history sync (1-365)",
     },
+    "scheduler_profile_read_days": {
+        "value": "sat",
+        "type": "str",
+        "description": "Comma-separated days of week of the weekly read of the asset profiles from the enrichers (mon,…,sun)",
+    },
+    "scheduler_profile_read_times": {
+        "value": "03:00",
+        "type": "str",
+        "description": "Comma-separated HH:MM local times of the weekly read of the asset profiles, in scheduler_timezone",
+    },
     "scheduler_timezone": {
         "value": "UTC",
         "type": "str",
@@ -463,6 +505,8 @@ GLOBAL_SETTINGS_CONSTRAINTS: dict[str, SettingConstraint] = {
     "scheduler_history_sync_times": SettingConstraint(format="hhmm_list"),
     "scheduler_history_sync_days": SettingConstraint(format="weekday_list"),
     "scheduler_history_sync_horizon_days": SettingConstraint(min=1, max=365),
+    "scheduler_profile_read_days": SettingConstraint(format="weekday_list"),
+    "scheduler_profile_read_times": SettingConstraint(format="hhmm_list"),
     "scheduler_timezone": SettingConstraint(format="timezone"),
     "default_currency": SettingConstraint(format="currency"),
     "default_language": SettingConstraint(choices=("en", "it", "fr", "es")),
@@ -650,6 +694,8 @@ class SETTINGS_REGISTRY:
         SCHEDULER_HISTORY_SYNC_TIMES = _global_spec("scheduler_history_sync_times")
         SCHEDULER_HISTORY_SYNC_DAYS = _global_spec("scheduler_history_sync_days")
         SCHEDULER_HISTORY_SYNC_HORIZON_DAYS = _global_spec("scheduler_history_sync_horizon_days")
+        SCHEDULER_PROFILE_READ_DAYS = _global_spec("scheduler_profile_read_days")
+        SCHEDULER_PROFILE_READ_TIMES = _global_spec("scheduler_profile_read_times")
         SCHEDULER_TIMEZONE = _global_spec("scheduler_timezone")
         # Display
         DEFAULT_CURRENCY = _global_spec("default_currency")

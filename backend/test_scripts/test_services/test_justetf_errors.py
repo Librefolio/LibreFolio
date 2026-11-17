@@ -331,7 +331,9 @@ def _rows(currencies) -> list[tuple[str, str, str]]:
 
 
 def test_preferred_currency_is_one_user_select_of_all_and_the_four_currencies():
-    (declared,) = JustETFProvider.settings_fields
+    # U4 (project 76): its own field, then the five call limits the core gives a provider that calls out
+    declared, *limits = JustETFProvider.settings_fields
+    assert [field.key for field in limits] == ["call_limit_minute", "call_limit_hour", "call_limit_day", "call_limit_week", "call_limit_month"]
 
     assert (declared.key, declared.type, declared.scope, declared.secret, declared.required, declared.default) == ("preferred_currency", SettingType.SELECT, SettingScope.USER, False, False, "all")
     assert declared.option_values == ("all", *JustETFProvider.SUPPORTED_CURRENCIES)

@@ -19,6 +19,8 @@ from backend.app.schemas.common import DateSpan
 from backend.app.schemas.portfolio.history import AcquisitionFundingSeries, BrokerPnlHistory, CostHistorySeries, DepositHistorySeries, IncomeHistorySeries, MwrrLinePoint, PnlCandleSeries, PortfolioHistoryPoint
 from backend.app.schemas.portfolio.report import AllocationHistoryDimensions, PortfolioReportMetadata, PortfolioReportQuery, PortfolioReportResponse
 from backend.app.schemas.portfolio.summary import AllocationHistoryPoint, PortfolioSummary, PositionsContribution
+from backend.app.services.assets.profile.store import rows_fingerprint
+from backend.app.services.financial_math.portfolio.engine import CLASSIFICATION_VOICES
 from backend.app.services.financial_math.yield_on_cost import (
     compute_yield_on_cost_dependency_identity,
 )
@@ -107,14 +109,17 @@ class PortfolioReportMixin:
                 scope_transactions=all_txs_for_fp,
                 as_of_date=effective_date_to,
             )
-            # The report shows each asset's name, icon, type, currency and classification: an edit of those changes no
-            # transaction, price or rate, so it has a fingerprint of its own.
+            # The report shows each asset's name, icon, type and currency, and splits it by the countries and sectors
+            # of its profile, day by day (plan 68, D2): an edit of those changes no transaction, price or rate, so they
+            # have fingerprints of their own. The profile's are every row of the two voices, not only the period's: the
+            # first value is carried back to the start, so a row read after the period moves it too (D2b).
             asset_ids_for_fp = sorted({tx.asset_id for tx in all_txs_for_fp if tx.asset_id})
             asset_fp = "no_assets"
             if asset_ids_for_fp:
-                asset_fp_stmt = select(Asset.id, Asset.display_name, Asset.icon_url, Asset.asset_type, Asset.currency, Asset.classification_params).where(Asset.id.in_(asset_ids_for_fp)).order_by(Asset.id)
+                asset_fp_stmt = select(Asset.id, Asset.display_name, Asset.icon_url, Asset.asset_type, Asset.currency).where(Asset.id.in_(asset_ids_for_fp)).order_by(Asset.id)
                 asset_fp_rows = (await self.db.execute(asset_fp_stmt)).all()
                 asset_fp = hashlib.sha256(repr([tuple(row) for row in asset_fp_rows]).encode("utf-8")).hexdigest()
+            classification_fp = await rows_fingerprint(self.db, asset_ids_for_fp, CLASSIFICATION_VOICES)
 
             l2_key = (
                 user_id,
@@ -138,6 +143,8 @@ class PortfolioReportMixin:
                 query.include_acquisition_funding,
                 query.apply_ownership_share,
                 query.group_by,
+                # Before the other fingerprints: a test reads fx_fp and yield_on_cost_fp from the end of the key
+                classification_fp,
                 tx_fp,
                 price_fp,
                 fx_fp,

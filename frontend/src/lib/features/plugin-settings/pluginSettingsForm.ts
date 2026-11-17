@@ -7,7 +7,7 @@
  * an option's `label_key`); the interface never builds a key (plan 03 §4.4). A missing translation falls back to the
  * English text (`translateOr`). Every class and key below is a whole literal (theme-roles rule 6, i18n audit).
  */
-import {Briefcase, ChartColumn, Coins, Wrench} from 'lucide-svelte';
+import {Briefcase, ChartColumn, Coins, IdCard, Share2, Wrench} from 'lucide-svelte';
 import {translateOr, type Translate} from '$lib/utils/core/translateOr';
 import type {PlainValue, PluginSettingsEntry, PluginSettingWriteItem, PluginSettingWriteResult, SettingField, SettingOption, SettingsFamily} from './pluginSettingsApi';
 
@@ -16,13 +16,16 @@ import type {PlainValue, PluginSettingsEntry, PluginSettingWriteItem, PluginSett
 // =============================================================================
 
 /** The families in the order the Plugins tab shows them. */
-export const FAMILY_ORDER: readonly SettingsFamily[] = ['asset', 'fx', 'brim', 'tool'];
+/** The families in the order the Plugins tab shows them; the shared groups last (project 76). */
+export const FAMILY_ORDER: readonly SettingsFamily[] = ['asset', 'fx', 'brim', 'tool', 'enricher', 'group'];
 
 export const FAMILY_TITLE_KEYS: Record<SettingsFamily, string> = {
     asset: 'pluginSettings.families.asset',
     fx: 'pluginSettings.families.fx',
     brim: 'pluginSettings.families.brim',
     tool: 'pluginSettings.families.tool',
+    enricher: 'pluginSettings.families.enricher',
+    group: 'pluginSettings.families.group',
 };
 
 /** The icon before a family's title: the one the family has on the documentation's home («A Modular Ecosystem»). */
@@ -31,6 +34,8 @@ export const FAMILY_ICONS: Record<SettingsFamily, typeof ChartColumn> = {
     fx: Coins,
     brim: Briefcase,
     tool: Wrench,
+    enricher: IdCard,
+    group: Share2,
 };
 
 export interface FamilyGroup {
@@ -41,6 +46,16 @@ export interface FamilyGroup {
 /** The entries by family, in `FAMILY_ORDER`, each family keeping the API's order; a family without entries is left out. */
 export function groupByFamily(entries: readonly PluginSettingsEntry[]): FamilyGroup[] {
     return FAMILY_ORDER.map((family) => ({family, entries: entries.filter((entry) => entry.family === family)})).filter((group) => group.entries.length > 0);
+}
+
+/** An entry's title: a group's translated name (`name_key`, the English `plugin_name` as fallback), a plugin's name. */
+export function entryTitle(entry: PluginSettingsEntry, t: Translate): string {
+    return entry.name_key ? translateOr(t, entry.name_key, entry.plugin_name) : entry.plugin_name;
+}
+
+/** The element id of a group's form in the Plugins tab: the target of a plugin's «open group» (project 76). */
+export function groupFormId(name: string): string {
+    return `plugin-settings-group-${name}`;
 }
 
 export function fieldLabel(field: SettingField, t: Translate): string {

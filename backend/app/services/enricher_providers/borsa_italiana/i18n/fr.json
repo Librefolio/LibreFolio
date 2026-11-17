@@ -1,0 +1,12 @@
+{
+  "enrichers": {
+    "borsa_italiana": {
+      "params": {
+        "language": "Langue de la page",
+        "mic": "MIC du marché",
+        "platform": "Plateforme",
+        "codice_fondo": "Code interne du fonds"
+      }
+    }
+  }
+}

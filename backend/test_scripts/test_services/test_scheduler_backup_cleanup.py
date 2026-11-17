@@ -2,9 +2,10 @@
 ``B6r-fb24-backend-interface`` §6, decision D3).
 
 ``run_due_jobs(reason)`` calls ``retention.apply_cleanup``, once an hour at most (the process's monotonic clock), on a
-worker thread (``asyncio.to_thread``), inside the busy span of the run. It is no third job: ``JOB_NAMES`` stays
-``("current_price", "history_sync")`` and so does the ``RunReport`` (and what ``wake-sync`` answers from it). Any error of
-the clean-up is logged and swallowed. The first run of a process applies it at once.
+worker thread (``asyncio.to_thread``), inside the busy span of the run. It is no job: ``JOB_NAMES`` holds the
+scheduler's jobs only — ``("current_price", "history_sync", "profile_read")`` since lot B6 of project 68, the weekly read
+of the enrichers being the third —, none of them the clean-up, and the ``RunReport`` (and what ``wake-sync`` answers from
+it) has one outcome per job and none for the clean-up. Any error of the clean-up is logged and swallowed. The first run of a process applies it at once.
 
 Pure, on the fakes of ``test_scheduler_catchup.py`` (its ``World``, ``MonotonicClock`` and ``Activity``, imported): every
 collaborator of ``run_due_jobs`` is replaced; ``scheduler.time_module`` is a fake monotonic clock that moves only when the
@@ -116,16 +117,19 @@ async def test_an_error_of_the_cleanup_is_logged_and_does_not_touch_the_run(worl
     with capture_logs() as events:
         report = await scheduler.run_due_jobs("tick")
     assert spy.calls, "barrier: the clean-up ran"
-    assert (report.status, [outcome.name for outcome in report.jobs]) == ("ok", ["current_price", "history_sync"]), f"the run is not changed by a clean-up that fails: {report}"
+    assert (report.status, [outcome.name for outcome in report.jobs]) == ("ok", ["current_price", "history_sync", "profile_read"]), f"the run is not changed by a clean-up that fails: {report}"
     assert {str(event.get("log_level")) for event in events} & {"warning", "error", "critical"}, f"the error is logged: {[(event.get('log_level'), event.get('event')) for event in events]}"
     assert "scheduler" not in activity.busy_reasons(), "and the busy span is closed"
 
 
 @pytest.mark.asyncio
-async def test_the_cleanup_is_no_third_job_and_the_report_has_the_same_shape(world, activity, clock, monkeypatch):
+async def test_the_cleanup_is_no_job_and_the_report_has_the_same_shape(world, activity, clock, monkeypatch):
+    """The clean-up ran, yet ``JOB_NAMES`` is the scheduler's three jobs (lot B6 added ``profile_read``) and no job is
+    the clean-up; the ``RunReport`` keeps its fields and has one outcome per job, in ``JOB_NAMES`` order, none for it."""
     spy = spy_on_cleanup(monkeypatch, activity)
     report = await scheduler.run_due_jobs("tick")
     assert spy.calls, "barrier: the clean-up ran"
-    assert scheduler.JOB_NAMES == ("current_price", "history_sync"), f"JOB_NAMES: {scheduler.JOB_NAMES}"
+    assert scheduler.JOB_NAMES == ("current_price", "history_sync", "profile_read"), f"JOB_NAMES are the scheduler's jobs only: {scheduler.JOB_NAMES}"
+    assert not any("clean" in name or "backup" in name for name in scheduler.JOB_NAMES), f"no job is the clean-up: {scheduler.JOB_NAMES}"
     assert [field.name for field in dataclasses.fields(scheduler.RunReport)] == ["reason", "status", "started_at", "finished_at", "jobs"], "the RunReport has its fields"
     assert tuple(outcome.name for outcome in report.jobs) == scheduler.JOB_NAMES, f"and one outcome per job, none for the clean-up: {report.jobs}"

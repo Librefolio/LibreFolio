@@ -66,6 +66,10 @@ from backend.app.services.platform.sleep_wake.activity import Activity
 from backend.test_scripts.test_utils import print_section, print_success
 
 JOBS = ("current_price", "history_sync")
+#: Lot B6 (project 68): the third job, ``profile_read``, is never due in this file's World — its due function and its
+#: body are fakes, so the real job never runs here — and closes every report not due. Its retry and backoff rules are
+#: pinned in ``test_scheduler_due.py`` and ``test_scheduler_loop.py``.
+QUIET_OUTCOME = scheduler.JobOutcome("profile_read", "not_due")
 REASONS = ("startup", "tick", "return", "wake")
 JOB_FAILED = "Scheduler job failed"
 SCHEDULER_CANARY = "scheduler backoff test: canary through the scheduler's logger"
@@ -169,6 +173,9 @@ class World:
         }
         for name, fake in fakes.items():
             monkeypatch.setattr(scheduler, name, fake)
+        # Lot B6: the third job never due here, its body a fake; raising=False: the names exist only once B6 does.
+        monkeypatch.setattr(scheduler, "due_profile_read", lambda now, settings, state: False, raising=False)
+        monkeypatch.setattr(scheduler, "run_profile_read", self.run_profile_read, raising=False)
         # Z-11 (N71): with fcntl the run takes the lock across processes; stood in for, so that no .scheduler.lock is
         # written in the lane's data directory. raising=False: the name exists only once Z-11 does.
         monkeypatch.setattr(scheduler, "scheduler_run_lock", _no_cross_process_lock, raising=False)
@@ -199,6 +206,9 @@ class World:
 
     async def run_history_sync(self, state: SchedulerState, horizon_days: int | None = None) -> None:
         self._job("history_sync", state)
+
+    async def run_profile_read(self, state: SchedulerState, settings: object = None) -> None:
+        self.calls.append("profile_read")
 
     def _job(self, name: str, state: SchedulerState) -> None:
         self.calls.append(name)
@@ -603,6 +613,7 @@ async def test_the_outcome_of_a_job_that_ran_carries_its_deferred_items_and_thei
     assert report.jobs == (
         scheduler.JobOutcome("current_price", "partial", started_at=start, duration_s=1.25, items_ok=5, items_err=1, error=None, items_deferred=4, retry_at=retry),
         scheduler.JobOutcome("history_sync", "ok", started_at=start, duration_s=3.5, items_ok=40, items_err=0, error=None, items_deferred=0, retry_at=None),
+        QUIET_OUTCOME,
     )
     _assert_utc(_outcome(report, "current_price").retry_at, "the outcome's retry_at")
     print_success("items_deferred and retry_at copied, retry_at in UTC")

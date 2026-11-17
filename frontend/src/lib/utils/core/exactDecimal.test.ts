@@ -27,7 +27,7 @@
  * "exact" from "close enough".
  */
 import {describe, expect, it} from 'vitest';
-import {decimalEqualsRatio, roundDecimal, roundRatio} from './decimal';
+import {decimalEqualsRatio, roundDecimal, roundRatio} from './exactDecimal';
 
 /** 30 significant digits: twice what a double carries. */
 const BIG = '123456789012345678901234567890';

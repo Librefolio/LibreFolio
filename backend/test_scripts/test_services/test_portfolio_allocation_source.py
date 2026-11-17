@@ -10,6 +10,7 @@ from __future__ import annotations
 import dataclasses
 import inspect
 import json
+from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
@@ -18,11 +19,16 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.pool import NullPool
 
+from backend.app.db import models as db_models
+from backend.app.db.base import SQLModel  # every model, for create_all
 from backend.app.db.models import AssetType, TransactionType, UserRole
 from backend.app.schemas.common import Currency, FxBackwardFillInfo
 from backend.app.schemas.portfolio.planner_source import PlannerSourceSection, PortfolioPlannerCurrentDistribution, PortfolioPlannerCurrentWeight, PortfolioPlannerSourceRequest, PortfolioPlannerSourceResponse
 from backend.app.schemas.wac import WACPreviewResultItem, WACQualifyingTX
+from backend.app.services.assets.profile.catalogue import normalize_value
 from backend.app.services.financial_math import average_cost
 from backend.app.services.financial_math.average_cost import CostEffect, CostMovement, CostMovementKind, CostPosition, _fold_average_costs
 from backend.app.services.financial_math.portfolio import engine as portfolio_engine
@@ -589,6 +595,7 @@ async def test_builder_authorizes_every_broker_before_all_private_reads(
     monkeypatch.setattr(source, "_load_planner_assets", assets)
     monkeypatch.setattr(source, "load_cash_by_broker", cash)
     monkeypatch.setattr(source, "load_latest_prices", prices)
+    monkeypatch.setattr(source, "load_profile_classifications", AsyncMock(return_value={}))
     monkeypatch.setattr(source, "build_planner_classifications", classifications)
     monkeypatch.setattr(source, "build_planner_wac_contexts", wac)
     monkeypatch.setattr(source, "build_planner_fx_quotes", fx)
@@ -800,6 +807,7 @@ async def test_empty_asset_scope_emits_no_asset_holding_price_classification_or_
         "load_holding_rows",
         AsyncMock(return_value=[(7, 11, Decimal("9"))]),
     )
+    monkeypatch.setattr(source, "load_profile_classifications", AsyncMock(return_value={}))
 
     response = await source.build_portfolio_planner_source(
         object(),
@@ -863,6 +871,7 @@ async def test_explicit_unheld_global_asset_keeps_identity_price_and_classificat
         "load_latest_prices",
         AsyncMock(return_value={11: price}),
     )
+    monkeypatch.setattr(source, "load_profile_classifications", AsyncMock(return_value={11: _valid_profile()}))
 
     response = await source.build_portfolio_planner_source(
         object(),
@@ -1379,99 +1388,61 @@ def test_saved_price_rows_preserve_quote_facts_and_make_missing_basis_explicit()
 
 
 def test_valid_saved_classification_is_exact_sorted_and_does_not_leak_raw_json():
-    asset = _asset(
-        11,
-        classification_params=_valid_classification(),
-    )
+    # D4: the rows come from the asset profile (voice → stored map), never from classification_params.
+    asset = _asset(11)
     issues = []
 
-    rows = source_classifications.build_planner_classifications([asset], issues=issues)
+    rows = _build_from_profile([asset], {11: _valid_profile()}, issues=issues)
     dumped = [row.model_dump(mode="json") for row in rows]
     by_dimension_category = {(row["dimension"], row["category_id"]): row for row in dumped}
 
     assert issues == []
-    assert by_dimension_category[("sector", "Financials")]["weight"] == "0.4"
-    assert by_dimension_category[("sector", "Technology")]["weight"] == "0.6"
-    assert by_dimension_category[("geography", "ITA")]["weight"] == "0.25"
-    assert by_dimension_category[("geography", "USA")]["weight"] == "0.75"
+    # The weight is the stored text, digit for digit: Decimal("0.4") == Decimal("0.4000") would hide a rewrite.
+    assert by_dimension_category[("sector", "Financials")]["weight"] == "0.4000"
+    assert by_dimension_category[("sector", "Technology")]["weight"] == "0.6000"
+    assert by_dimension_category[("geography", "ITA")]["weight"] == "0.2500"
+    assert by_dimension_category[("geography", "USA")]["weight"] == "0.7500"
+    assert [row["category_id"] for row in dumped if row["dimension"] == "sector"] == ["Financials", "Technology"]
+    assert [row["category_id"] for row in dumped if row["dimension"] == "geography"] == ["ITA", "USA"]
     assert all(row["label"] == row["category_id"] for row in dumped if row["dimension"] != "asset_type")
     serialized = json.dumps(dumped)
     assert "sector_area" not in serialized
     assert "geographic_area" not in serialized
     assert "distribution" not in serialized
-    repeated = source_classifications.build_planner_classifications([asset], issues=[])
+    repeated = _build_from_profile([asset], {11: _valid_profile()}, issues=[])
     assert [row.classification_id for row in repeated] == [row.classification_id for row in rows]
     assert {row.provenance_id for row in repeated} == {"source:market-data"}
 
 
 @pytest.mark.parametrize(
-    ("classification_params", "expected_code", "expected_field"),
+    ("profile", "expected_code", "expected_field"),
     [
         pytest.param(
-            None,
+            {},
             "allocation.classification_sector_missing",
             "sector",
             id="missing",
         ),
         pytest.param(
-            "{",
+            {11: {"sector": {"Technology": "1.0000"}, "geography": [["USA", "1.0000"]]}},
             "allocation.classification_invalid",
-            "classification_params",
-            id="malformed-json",
+            "geography",
+            id="not-a-map",
         ),
         pytest.param(
-            json.dumps(
-                {
-                    "sector_area": {
-                        "distribution": {
-                            "Technology": 0.9,
-                        }
-                    },
-                    "geographic_area": {
-                        "distribution": {
-                            "USA": 1,
-                        }
-                    },
-                }
-            ),
+            {11: {"sector": {"Technology": "0.9000"}, "geography": {"USA": "1.0000"}}},
             "allocation.classification_invalid",
             "sector",
             id="invalid-sum",
         ),
         pytest.param(
-            json.dumps(
-                {
-                    "sector_area": {
-                        "distribution": {
-                            "Invented Sector": 1,
-                        }
-                    },
-                    "geographic_area": {
-                        "distribution": {
-                            "USA": 1,
-                        }
-                    },
-                }
-            ),
+            {11: {"sector": {"Invented Sector": "1.0000"}, "geography": {"USA": "1.0000"}}},
             "allocation.classification_invalid",
             "sector",
             id="invalid-sector-key",
         ),
         pytest.param(
-            json.dumps(
-                {
-                    "sector_area": {
-                        "distribution": {
-                            "Technology": 1,
-                        }
-                    },
-                    "geographic_area": {
-                        "distribution": {
-                            "US": 1,
-                        }
-                    },
-                }
-            ),
+            {11: {"sector": {"Technology": "1.0000"}, "geography": {"US": "1.0000"}}},
             "allocation.classification_invalid",
             "geography",
             id="invalid-geography-key",
@@ -1479,21 +1450,321 @@ def test_valid_saved_classification_is_exact_sorted_and_does_not_leak_raw_json()
     ],
 )
 def test_missing_and_invalid_saved_classifications_emit_typed_placeholders(
-    classification_params,
+    profile,
     expected_code,
     expected_field,
 ):
     issues = []
-    rows = source_classifications.build_planner_classifications(
-        [_asset(11, classification_params=classification_params)],
-        issues=issues,
-    )
+    rows = _build_from_profile([_asset(11)], profile, issues=issues)
 
     assert any(issue.code == expected_code and issue.path.field == expected_field for issue in issues)
     if expected_field in {"sector", "geography"}:
         placeholder = next(row for row in rows if row.dimension == expected_field and row.category_id is None)
         assert placeholder.weight is None
         assert placeholder.provenance_id == "source:market-data"
+
+
+# ---------------------------------------------------------------------------
+# Project 68, lot D4 — the planner source reads each asset's sector and geography
+# from the asset profile on the analysis day, never from Asset.classification_params.
+#
+# - load_profile_classifications(session, asset_ids, day): store.read_steps over
+#   ("sector", "geography") with carry_back, the value of the step holding ``day``
+#   per voice (None for a voice emptied on purpose); an asset with no row is absent;
+#   [] answers {} without a query.
+# - build_planner_classifications(candidate_assets, *, profile, issues): an absent
+#   voice or a None value is the missing placeholder; a value that is not a valid
+#   distribution is the invalid placeholder of that dimension; a valid map gives one
+#   row per category, sorted, the weight exactly as stored.
+# - build_portfolio_planner_source calls the loader with the candidate ids and
+#   request.as_of, only when "classifications" is requested.
+#
+# RED until D4 lands: the builder has no ``profile`` keyword (TypeError), the loader
+# does not exist (AttributeError / failed lookup). The loader cases run on a private
+# SQLite file (create_all, NullPool, disposed): PURE with respect to the lane.
+# ---------------------------------------------------------------------------
+
+
+def _valid_profile() -> dict[str, dict[str, str]]:
+    """The stored form of the profile voices (catalogue.normalize_value): four decimals, summing to 1."""
+    return {
+        "sector": {"Financials": "0.4000", "Technology": "0.6000"},
+        "geography": {"ITA": "0.2500", "USA": "0.7500"},
+    }
+
+
+def _build_from_profile(assets, profile, *, issues):
+    return source_classifications.build_planner_classifications(assets, profile=profile, issues=issues)
+
+
+def _placeholder(asset_id: int, dimension: str) -> dict[str, object]:
+    return {
+        "classification_id": f"class:asset:{asset_id}:{dimension}:none",
+        "asset_id": f"asset:{asset_id}",
+        "dimension": dimension,
+        "category_id": None,
+        "label": None,
+        "weight": None,
+        "provenance_id": "source:market-data",
+    }
+
+
+def _issue_triples(issues) -> set[tuple[str, str, str | None]]:
+    return {(issue.code, issue.path.entity_id, issue.path.field) for issue in issues}
+
+
+def _dimension_rows(rows, asset_id: int, dimension: str) -> list[dict[str, object]]:
+    return [row.model_dump(mode="json") for row in rows if row.asset_id == f"asset:{asset_id}" and row.dimension == dimension]
+
+
+def test_profile_missing_asset_missing_voice_and_emptied_value_are_missing_placeholders():
+    # 11: absent from the profile. 12: only a sector voice. 13: a geography emptied on purpose (None).
+    profile = {
+        12: {"sector": {"Technology": "1.0000"}},
+        13: {"sector": {"Financials": "1.0000"}, "geography": None},
+    }
+    issues = []
+
+    rows = _build_from_profile([_asset(11), _asset(12), _asset(13)], profile, issues=issues)
+
+    assert _issue_triples(issues) == {
+        ("allocation.classification_sector_missing", "asset:11", "sector"),
+        ("allocation.classification_geography_missing", "asset:11", "geography"),
+        ("allocation.classification_geography_missing", "asset:12", "geography"),
+        ("allocation.classification_geography_missing", "asset:13", "geography"),
+    }
+    assert all(issue.kind == "missing" and issue.path.section == "classifications" for issue in issues)
+    assert _dimension_rows(rows, 11, "sector") == [_placeholder(11, "sector")]
+    assert _dimension_rows(rows, 11, "geography") == [_placeholder(11, "geography")]
+    assert _dimension_rows(rows, 12, "geography") == [_placeholder(12, "geography")]
+    assert _dimension_rows(rows, 13, "geography") == [_placeholder(13, "geography")]
+    # The voice that is there keeps its rows: one dimension missing never empties the other.
+    assert [(row["category_id"], row["weight"]) for row in _dimension_rows(rows, 12, "sector")] == [("Technology", "1.0000")]
+    assert [(row["category_id"], row["weight"]) for row in _dimension_rows(rows, 13, "sector")] == [("Financials", "1.0000")]
+    # The asset_type row does not depend on the profile.
+    assert {(row.asset_id, row.category_id) for row in rows if row.dimension == "asset_type"} == {
+        ("asset:11", "STOCK"),
+        ("asset:12", "STOCK"),
+        ("asset:13", "STOCK"),
+    }
+
+
+def test_profile_builder_never_reads_classification_params():
+    # 11: a valid legacy column and no profile → missing in both dimensions.
+    # 12: a malformed legacy column and a valid profile → clean rows, no whole-column issue.
+    issues = []
+
+    rows = _build_from_profile(
+        [_asset(11, classification_params=_valid_classification()), _asset(12, classification_params="{")],
+        {12: _valid_profile()},
+        issues=issues,
+    )
+
+    assert _issue_triples(issues) == {
+        ("allocation.classification_sector_missing", "asset:11", "sector"),
+        ("allocation.classification_geography_missing", "asset:11", "geography"),
+    }
+    assert all(issue.path.field != "classification_params" for issue in issues)
+    assert _dimension_rows(rows, 11, "sector") == [_placeholder(11, "sector")]
+    assert _dimension_rows(rows, 11, "geography") == [_placeholder(11, "geography")]
+    assert [(row["category_id"], row["weight"]) for row in _dimension_rows(rows, 12, "sector")] == [("Financials", "0.4000"), ("Technology", "0.6000")]
+    assert [(row["category_id"], row["weight"]) for row in _dimension_rows(rows, 12, "geography")] == [("ITA", "0.2500"), ("USA", "0.7500")]
+
+
+@pytest.mark.parametrize(
+    ("dimension", "value"),
+    [
+        pytest.param("sector", [["Technology", "1.0000"]], id="sector-list-not-map"),
+        pytest.param("sector", {"Invented Sector": "1.0000"}, id="sector-invented-key"),
+        pytest.param("sector", {"Technology": "0.6000", "Financials": "0.3000"}, id="sector-sum-below-one"),
+        pytest.param("sector", {"Technology": "abc"}, id="sector-weight-not-decimal"),
+        pytest.param("sector", {"Technology": "1.5000", "Financials": "-0.5000"}, id="sector-negative-weight"),
+        pytest.param("sector", {}, id="sector-empty-map"),
+        pytest.param("geography", [["USA", "1.0000"]], id="geography-list-not-map"),
+        pytest.param("geography", {"US": "1.0000"}, id="geography-alpha2-key"),
+        pytest.param("geography", {"usa": "1.0000"}, id="geography-lowercase-key"),
+        pytest.param("geography", {"XYZ": "1.0000"}, id="geography-unknown-alpha3"),
+        pytest.param("geography", {"USA": "0.7500", "ITA": "0.5000"}, id="geography-sum-above-one"),
+        pytest.param("geography", {"USA": "NaN"}, id="geography-weight-not-finite"),
+        pytest.param("geography", "USA", id="geography-text-not-map"),
+    ],
+)
+def test_profile_invalid_distribution_is_an_invalid_placeholder_of_that_dimension(dimension, value):
+    other = "geography" if dimension == "sector" else "sector"
+    profile = {11: {**_valid_profile(), dimension: value}}
+    issues = []
+
+    rows = _build_from_profile([_asset(11)], profile, issues=issues)
+
+    assert [(issue.code, issue.kind, issue.path.entity_id, issue.path.field) for issue in issues] == [
+        ("allocation.classification_invalid", "invalid", "asset:11", dimension),
+    ]
+    assert [(param.name, param.value) for param in issues[0].params] == [("dimension", dimension)]
+    assert _dimension_rows(rows, 11, dimension) == [_placeholder(11, dimension)]
+    # The other dimension is read on its own and stays exact.
+    expected_other = sorted(_valid_profile()[other].items())
+    assert [(row["category_id"], row["weight"]) for row in _dimension_rows(rows, 11, other)] == expected_other
+
+
+def test_profile_other_key_is_a_valid_geography_category():
+    issues = []
+
+    rows = _build_from_profile(
+        [_asset(11)],
+        {11: {"sector": {"Technology": "1.0000"}, "geography": {"Other": "0.1000", "USA": "0.9000"}}},
+        issues=issues,
+    )
+
+    assert issues == []
+    assert [(row["category_id"], row["weight"]) for row in _dimension_rows(rows, 11, "geography")] == [("Other", "0.1000"), ("USA", "0.9000")]
+
+
+def _profile_loader():
+    loader = getattr(source_classifications, "load_profile_classifications", None)
+    assert loader is not None, "classifications.load_profile_classifications(session, asset_ids, day) is missing"
+    return loader
+
+
+PROFILE_BEFORE, PROFILE_EMPTIED, PROFILE_DAY, PROFILE_AFTER = (
+    date(2026, 9, 1),
+    date(2026, 9, 8),
+    date(2026, 9, 15),
+    date(2026, 9, 20),
+)
+
+
+class _ProfileBook(NamedTuple):
+    engine: object
+    a_id: int
+    b_id: int
+    c_id: int
+    n_id: int
+
+
+def _profile_update(asset_id: int, key: str, value, read_on: date):
+    stored = None if value is None else json.dumps(normalize_value(key, value))
+    return db_models.AssetProfileUpdate(asset_id=asset_id, key=key, value=stored, source="justetf", read_on=read_on)
+
+
+@asynccontextmanager
+async def _private_profile_book(directory):
+    """A private SQLite file with the app schema. A: geography before and after the day, a sector before it, a TER the
+    loader must not return. B: a first geography after the day. C: a geography emptied before the day. N: no rows."""
+    engine = create_async_engine(f"sqlite+aiosqlite:///{directory / 'd4_profile_classifications.sqlite'}", poolclass=NullPool)
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(SQLModel.metadata.create_all)
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            a, b, c, n = (db_models.Asset(display_name=f"D4 {label}", currency="EUR", asset_type=AssetType.ETF) for label in "ABCN")
+            session.add_all([a, b, c, n])
+            await session.flush()
+            session.add_all(
+                [
+                    _profile_update(a.id, "geography", {"USA": "1"}, PROFILE_BEFORE),
+                    _profile_update(a.id, "geography", {"USA": "0.6", "JPN": "0.4"}, PROFILE_AFTER),
+                    _profile_update(a.id, "sector", {"Technology": "1"}, PROFILE_BEFORE),
+                    _profile_update(a.id, "ter", "0.0022", PROFILE_BEFORE),
+                    _profile_update(b.id, "geography", {"ITA": "1"}, PROFILE_AFTER),
+                    _profile_update(c.id, "geography", {"DEU": "1"}, PROFILE_BEFORE),
+                    _profile_update(c.id, "geography", None, PROFILE_EMPTIED),
+                ]
+            )
+            await session.commit()
+            book = _ProfileBook(engine=engine, a_id=a.id, b_id=b.id, c_id=c.id, n_id=n.id)
+        yield book
+    finally:
+        await engine.dispose()
+
+
+async def _load_profile(book: _ProfileBook, day: date):
+    loader = _profile_loader()
+    async with AsyncSession(book.engine, expire_on_commit=False) as session:
+        return await loader(session, [book.a_id, book.b_id, book.c_id, book.n_id], day)
+
+
+@pytest.mark.asyncio
+async def test_profile_loader_answers_the_step_holding_the_day_carried_back_and_emptied(tmp_path):
+    async with _private_profile_book(tmp_path) as book:
+        on_day = await _load_profile(book, PROFILE_DAY)
+        after = await _load_profile(book, PROFILE_AFTER)
+
+    # A: the step holding the day (not the newest row); B: its first row, after the day, carried back; C: emptied on
+    # purpose, read as None; N: no rows, absent. The TER is not a classification voice.
+    assert on_day == {
+        book.a_id: {"geography": {"USA": "1.0000"}, "sector": {"Technology": "1.0000"}},
+        book.b_id: {"geography": {"ITA": "1.0000"}},
+        book.c_id: {"geography": None},
+    }
+    assert after == {
+        book.a_id: {"geography": {"JPN": "0.4000", "USA": "0.6000"}, "sector": {"Technology": "1.0000"}},
+        book.b_id: {"geography": {"ITA": "1.0000"}},
+        book.c_id: {"geography": None},
+    }
+
+
+@pytest.mark.asyncio
+async def test_profile_loader_of_no_assets_answers_empty_without_a_query():
+    loader = _profile_loader()
+    session = _QueuedReadSession()  # any execute raises "Unexpected database read"
+
+    assert await loader(session, [], AS_OF) == {}
+    assert session.statements == []
+
+
+@pytest.mark.asyncio
+async def test_builder_reads_the_profile_on_as_of_for_the_candidates_only_when_classifications_are_requested(
+    monkeypatch,
+):
+    broker = _broker(7)
+    access = _access(7)
+    # 12 has a valid legacy column and no profile: the copy must not read the column.
+    candidates = [_asset(11), _asset(12, classification_params=_valid_classification())]
+    loader_calls: list[tuple[object, list[int], date]] = []
+
+    async def load_profile_classifications(session, asset_ids, day):
+        loader_calls.append((session, list(asset_ids), day))
+        return {11: _valid_profile()}
+
+    monkeypatch.setattr(
+        source,
+        "_load_selected_owner_accesses",
+        AsyncMock(return_value=([(access, broker)], {7: (access, broker)})),
+    )
+    monkeypatch.setattr(source, "load_holding_rows", AsyncMock(return_value=[]))
+    monkeypatch.setattr(source, "_load_planner_assets", AsyncMock(return_value=candidates))
+    monkeypatch.setattr(source, "load_profile_classifications", load_profile_classifications)
+    monkeypatch.setattr(source, "utcnow", lambda: CAPTURED_AT)
+    session = object()
+
+    without = await source.build_portfolio_planner_source(
+        session,
+        user_id=41,
+        request=_request(broker_ids=[7], asset_ids=[11, 12], requested_sections=["assets"], fx_pairs=[]),
+    )
+
+    assert loader_calls == []
+    assert without.classifications == []
+
+    response = await source.build_portfolio_planner_source(
+        session,
+        user_id=41,
+        request=_request(broker_ids=[7], asset_ids=[11, 12], requested_sections=["assets", "classifications"], fx_pairs=[]),
+    )
+
+    assert len(loader_calls) == 1
+    called_session, called_ids, called_day = loader_calls[0]
+    assert called_session is session
+    assert sorted(called_ids) == [11, 12]
+    assert called_day == AS_OF
+    # The loader's answer reaches the rows: 11 from its profile, 12 missing in both dimensions.
+    assert [(row["category_id"], row["weight"]) for row in _dimension_rows(response.classifications, 11, "sector")] == [("Financials", "0.4000"), ("Technology", "0.6000")]
+    assert [(row["category_id"], row["weight"]) for row in _dimension_rows(response.classifications, 11, "geography")] == [("ITA", "0.2500"), ("USA", "0.7500")]
+    assert _dimension_rows(response.classifications, 12, "sector") == [_placeholder(12, "sector")]
+    assert _dimension_rows(response.classifications, 12, "geography") == [_placeholder(12, "geography")]
+    assert {
+        ("allocation.classification_sector_missing", "asset:12", "sector"),
+        ("allocation.classification_geography_missing", "asset:12", "geography"),
+    } <= _issue_triples(response.issues)
 
 
 def test_planner_source_request_rejects_a_currency_specs_input():
@@ -2442,6 +2713,7 @@ async def test_complete_saved_domain_copy_is_select_only_private_and_stable(
         _Rows(scalar_values=[asset]),
         _Rows([_cash_ledger_row(1, 7, "EUR", "9.8700")]),
         _Rows(scalar_values=[price]),
+        _Rows([]),  # plan 68 D4: the asset profile read (sector, geography)
         _Rows(scalar_values=[fx]),
     )
     monkeypatch.setattr(source, "utcnow", lambda: CAPTURED_AT)

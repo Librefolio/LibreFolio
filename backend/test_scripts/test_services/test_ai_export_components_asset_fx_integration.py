@@ -50,8 +50,9 @@ from backend.test_scripts.test_db_config import setup_test_database
 setup_test_database()
 
 import backend.app.services.ai_export.components.technical_shared as technical_shared_module
-from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User
+from backend.app.db.models import Asset, AssetProfileUpdate, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User
 from backend.app.db.session import get_async_engine
+from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.portfolio.lots import LotAnalysisType
 from backend.app.services.ai_export.analyses.catalog import EXPECTED_ANALYSIS_COUNT
 from backend.app.services.ai_export.components.asset_fx_registry import (
@@ -86,6 +87,8 @@ from backend.app.services.ai_export.dependencies import (
     build_bucket_plan_for_scope,
 )
 from backend.app.services.assets.manager import AssetSourceManager
+from backend.app.services.assets.profile import store as profile_store
+from backend.app.services.assets.profile.catalogue import CATALOGUE, normalize_value
 from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.app.services.portfolio.report import _portfolio_l2_cache
@@ -321,6 +324,8 @@ def registry_placeholder(component_id: str):
 EXPECTED_ASSET_IDS = frozenset(
     {
         "asset.identity",
+        # D5 (plan 68): the profile of the asset, its voices as steps of the window
+        "asset.profile",
         "asset.market_snapshot",
         "asset.position_scope",
         "asset.provenance",
@@ -365,9 +370,10 @@ EXPECTED_FX_IDS = frozenset(
 
 class TestFragmentSanity:
     def test_exact_asset_and_fx_id_counts(self):
-        assert ASSET_REAL_COMPONENT_COUNT == 14
+        # D5 (plan 68): asset.profile joins the Asset components (before D5: 14 Asset, 26 in all)
+        assert ASSET_REAL_COMPONENT_COUNT == 15
         assert FX_REAL_COMPONENT_COUNT == 12
-        assert len(ASSET_FX_COMPONENTS) == 26
+        assert len(ASSET_FX_COMPONENTS) == 27
         assert set(ASSET_REAL_COMPONENT_IDS) == EXPECTED_ASSET_IDS
         assert set(FX_REAL_COMPONENT_IDS) == EXPECTED_FX_IDS
         assert not (set(ASSET_REAL_COMPONENT_IDS) & set(FX_REAL_COMPONENT_IDS))
@@ -790,7 +796,8 @@ class TestAssetDatasetComposition:
         context = _asset_context(session, scenario, asset_id=scenario.usd_asset.id, user_id=test_user.id)
         registry = build_asset_fx_dataset_registry()
         composition = await Composer().compose_dataset(registry.get("asset.overview"), context, detail_level=DetailLevel.STANDARD)
-        assert [e.component_id for e in composition.sections] == ["asset.identity", "asset.market_snapshot", "asset.position_scope", "asset.provenance"]
+        # D5 (plan 68): asset.profile is required, right after asset.identity (before D5: not in the dataset)
+        assert [e.component_id for e in composition.sections] == ["asset.identity", "asset.profile", "asset.market_snapshot", "asset.position_scope", "asset.provenance"]
         for envelope in composition.sections:
             assert envelope.payload  # real payload, never ComponentNotImplementedError
 
@@ -944,7 +951,7 @@ class TestAssetDomainValidations:
         registry = build_asset_fx_dataset_registry()
         composition = await Composer().compose_dataset(registry.get("asset.overview"), context, detail_level=DetailLevel.STANDARD)
         # Never a build failure: every required section still resolves, with an empty position scope.
-        assert {e.component_id for e in composition.sections} == {"asset.identity", "asset.market_snapshot", "asset.position_scope", "asset.provenance"}
+        assert {e.component_id for e in composition.sections} == {"asset.identity", "asset.profile", "asset.market_snapshot", "asset.position_scope", "asset.provenance"}
         scope_envelope = next(e for e in composition.sections if e.component_id == "asset.position_scope")
         assert scope_envelope.payload["brokers"] == []
         assert scope_envelope.payload["broker_count"] == 0
@@ -1157,15 +1164,21 @@ class TestAutomaticFxAndTechnicalCoverage:
 
 class TestMaliciousTextAndJsonSafety:
     @pytest.mark.asyncio
-    async def test_malicious_classification_text_passed_through_verbatim_never_executed(self, session, test_user, scenario):
-        context = _asset_context(session, scenario, asset_id=scenario.usd_asset.id, user_id=test_user.id)
-        envelope = await context.resolve("asset.identity", required=True)
-        short_description = envelope.payload["classification"]["short_description"]
-        assert short_description == "<script>alert(1)</script> normal text \u00e9\u00e8 \u2603"
+    async def test_malicious_profile_description_passed_through_verbatim_never_executed(self, session, test_user, scenario):
+        """D5 (plan 68): the free-text description is the profile voice `description` now, exported by
+        `asset.profile` in its `values` table — verbatim, as inert data, never interpreted or templated.
+
+        Before D5: the same text came from `classification_params` through `asset.identity`
+        (`payload["classification"]["short_description"]`)."""
+        text = "<script>alert(1)</script> normal text \u00e9\u00e8 \u2603"
+        await _profile_row(session, scenario.usd_asset, "description", text, day=PERIOD_START, source="user")
+        payload = await _resolve_profile(session, test_user, scenario.usd_asset, PERIOD_START, PERIOD_END)
+
+        description = [row for row in payload["values"] if row["voice"] == "description"]
+        assert [row["value"] for row in description] == [text]
         # Round-trips through JSON safely as inert text, never interpreted.
-        dumped = json.dumps(envelope.payload)
-        reloaded = json.loads(dumped)
-        assert reloaded["classification"]["short_description"] == short_description
+        reloaded = json.loads(json.dumps(payload))
+        assert [row["value"] for row in reloaded["values"] if row["voice"] == "description"] == [text]
 
     @pytest.mark.asyncio
     async def test_asset_all_data_is_fully_json_safe(self, session, test_user, scenario):
@@ -1184,6 +1197,396 @@ class TestMaliciousTextAndJsonSafety:
         for envelope in composition.sections:
             dumped = json.dumps(envelope.payload)
             assert json.loads(dumped) == envelope.payload
+
+
+# =============================================================================
+# D5 (plan 68): asset.identity v2 (no classification) and asset.profile v1
+#
+# Every profile row is seeded by hand as an `AssetProfileUpdate` with a chosen `read_on` (its value in the catalogue's
+# stored form, `normalize_value` + `json.dumps`), on an asset of the test's own, inside the rolled-back session. Each
+# test first checks its seeding through the store (`read_steps`, the very read the component makes), then resolves
+# `asset.profile` from the production registry.
+# =============================================================================
+
+WINDOW_START = date(2025, 9, 1)
+WINDOW_END = date(2025, 9, 30)
+
+#: The tables of `asset.profile`, each one a flat list of rows.
+PROFILE_TABLES = ("percentages", "amounts", "values", "weights", "coupon_schedule", "emptied", "thinned")
+STEP_KEYS = {"voice", "date", "through", "source"}
+
+
+async def _profile_row(session, asset: Asset, key: str, value, *, day: date, source: str = "justetf") -> None:
+    stored = normalize_value(key, value)
+    session.add(AssetProfileUpdate(asset_id=asset.id, key=key, value=None if stored is None else json.dumps(stored), source=source, read_on=day))
+    await session.flush()
+
+
+async def _profile_asset(session, ticker: str) -> Asset:
+    return await _make_asset(session, currency="EUR", ticker=ticker, asset_type=AssetType.ETF)
+
+
+async def _steps_in_window(session, asset: Asset, start: date = WINDOW_START, end: date = WINDOW_END) -> dict[str, int]:
+    """The number of steps of each voice in the window, as the store reads them (no carry-back): the precondition."""
+    steps = await profile_store.read_steps(session, [asset.id], DateRangeModel(start=start, end=end), keys=None, carry_back=False)
+    return {key: len(voice_steps) for key, voice_steps in steps.get(asset.id, {}).items()}
+
+
+async def _resolve_profile(session, user: User, asset: Asset, start: date = WINDOW_START, end: date = WINDOW_END) -> dict:
+    registry = _full_registry()
+    assert "asset.profile" in registry, "asset.profile is not registered in the production component registry (D5)"
+    scope = _asset_scope(user_id=user.id, asset_id=asset.id, start=start, end=end)
+    context = BuildContext(registry, request_id=scope.request_id, scope=scope, bucket_plan=build_bucket_plan_for_scope(scope), session=session)
+    envelope = await context.resolve("asset.profile", required=True)
+    assert (envelope.component_id, envelope.component_version) == ("asset.profile", 1)
+    return envelope.payload
+
+
+def _table(payload: dict, name: str, extra_keys: set[str]) -> list[dict]:
+    rows = payload[name]
+    for row in rows:
+        assert set(row) == STEP_KEYS | extra_keys, f"{name}: a flat row has exactly {sorted(STEP_KEYS | extra_keys)}, got {sorted(row)}"
+    return rows
+
+
+def _percentages(payload: dict) -> list[tuple]:
+    return [(r["voice"], r["date"], r["through"], r["source"], Decimal(r["value_ratio"])) for r in _table(payload, "percentages", {"value_ratio"})]
+
+
+def _amounts(payload: dict) -> list[tuple]:
+    return [(r["voice"], r["date"], r["through"], r["source"], Decimal(r["amount"]), r["currency"]) for r in _table(payload, "amounts", {"amount", "currency"})]
+
+
+def _values(payload: dict) -> list[tuple]:
+    return [(r["voice"], r["date"], r["through"], r["source"], r["value"], r["unit"]) for r in _table(payload, "values", {"value", "unit"})]
+
+
+def _weights(payload: dict) -> list[tuple]:
+    return [(r["voice"], r["date"], r["through"], r["source"], r["key"], Decimal(r["weight"])) for r in _table(payload, "weights", {"key", "weight"})]
+
+
+def _emptied(payload: dict) -> list[tuple]:
+    return [(r["voice"], r["date"], r["through"], r["source"]) for r in _table(payload, "emptied", set())]
+
+
+def _thinned(payload: dict) -> dict[str, int]:
+    for row in payload["thinned"]:
+        assert set(row) == {"voice", "changes_in_window"}, sorted(row)
+    return {row["voice"]: row["changes_in_window"] for row in payload["thinned"]}
+
+
+def _weight_rows(voice: str, value: dict, first: str, through: str, source: str = "justetf") -> list[tuple]:
+    """The weight rows one map step gives: one per key, keys sorted, weights as the catalogue stores them."""
+    stored = normalize_value(voice, value)
+    return [(voice, first, through, source, key, Decimal(weight)) for key, weight in sorted(stored.items())]
+
+
+def _assert_only_tables(payload: dict, *filled: str) -> None:
+    """Every table not named is empty."""
+    for name in PROFILE_TABLES:
+        if name not in filled:
+            assert payload[name] == [], f"{name} should be empty, got {payload[name]}"
+
+
+class TestAssetIdentityV2:
+    @pytest.mark.asyncio
+    async def test_identity_is_version_2_without_classification(self, session, test_user, scenario):
+        """The scenario's USD asset has only `classification_params` (a description) and no profile row: identity v2
+        builds, with every identity field and no `classification` (before D5: version 1 with the classification)."""
+        context = _asset_context(session, scenario, asset_id=scenario.usd_asset.id, user_id=test_user.id)
+        envelope = await context.resolve("asset.identity", required=True)
+
+        assert envelope.component_version == 2
+        assert "classification" not in envelope.payload
+        assert "<script>" not in json.dumps(envelope.payload)
+        assert envelope.payload["asset_id"] == scenario.usd_asset.id
+        assert envelope.payload["identifiers"]["ticker"] == "AFIUSDA"
+
+    @pytest.mark.asyncio
+    async def test_identity_never_reads_classification_params(self, session, test_user):
+        """`classification_params` is not read by the AI Export any more: an asset whose column holds text that is not a
+        classification at all still builds identity v2 (before D5 the metadata load parsed it and failed).
+        The model's validator does not run on a table model, so the text reaches the database as written."""
+        asset = await _make_asset(session, currency="EUR", ticker="AFIBADCL", classification_params="not a classification {")
+        scope = _asset_scope(user_id=test_user.id, asset_id=asset.id, start=WINDOW_START, end=WINDOW_END)
+        envelope = await _context(session, scope).resolve("asset.identity", required=True)
+
+        assert envelope.component_version == 2
+        assert "classification" not in envelope.payload
+        assert envelope.payload["asset_id"] == asset.id
+
+
+class TestAssetProfileComponent:
+    @staticmethod
+    def _assert_source_semantics(payload: dict) -> None:
+        semantics = payload["source_semantics"]
+        assert isinstance(semantics, str) and semantics.strip()
+        assert "legacy" in semantics and "user" in semantics
+
+    @pytest.mark.asyncio
+    async def test_a_stored_value_the_catalogue_no_longer_reads_is_a_value_row_never_a_failure(self, session, test_user):
+        """A row written before a catalogue rule was tightened comes back from the store as its own text (``store._value``
+        never refuses it). The component is REQUIRED in three datasets, so it never fails on such a row: the step is a
+        ``values`` row with the stored text, whatever the voice's shape (a percentage, a map)."""
+        asset = await _profile_asset(session, "AFIPRAW")
+        session.add(AssetProfileUpdate(asset_id=asset.id, key="ter", value=json.dumps("not a number"), source="legacy", read_on=date(2025, 9, 3)))
+        session.add(AssetProfileUpdate(asset_id=asset.id, key="geography", value=json.dumps([1, 2]), source="legacy", read_on=date(2025, 9, 3)))
+        await session.flush()
+
+        payload = await _resolve_profile(session, test_user, asset)
+
+        assert _values(payload) == [
+            ("geography", "2025-09-03", "2025-09-30", "legacy", "[1, 2]", None),
+            ("ter", "2025-09-03", "2025-09-30", "legacy", "not a number", None),
+        ]
+        _assert_only_tables(payload, "values")
+
+    @pytest.mark.asyncio
+    async def test_percentage_voice_read_on_two_days_gives_two_rows_as_ratios(self, session, test_user):
+        asset = await _profile_asset(session, "AFIPTER")
+        await _profile_row(session, asset, "ter", "0.0022", day=date(2025, 9, 3))
+        await _profile_row(session, asset, "ter", "0.0019", day=date(2025, 9, 15), source="user")
+        assert await _steps_in_window(session, asset) == {"ter": 2}
+
+        payload = await _resolve_profile(session, test_user, asset)
+
+        assert payload["asset_id"] == asset.id
+        assert payload["no_profile_data"] is False
+        assert payload["history_starts_on"] == "2025-09-03"
+        self._assert_source_semantics(payload)
+        assert _percentages(payload) == [
+            ("ter", "2025-09-03", "2025-09-14", "justetf", Decimal("0.0022")),
+            ("ter", "2025-09-15", "2025-09-30", "user", Decimal("0.0019")),
+        ]
+        _assert_only_tables(payload, "percentages")
+
+    @pytest.mark.asyncio
+    async def test_map_voice_gives_one_weight_row_per_key_in_sorted_order(self, session, test_user):
+        asset = await _profile_asset(session, "AFIPGEO")
+        geography = {"USA": "0.6", "JPN": "0.3", "DEU": "0.1"}
+        await _profile_row(session, asset, "geography", geography, day=date(2025, 9, 4))
+        assert await _steps_in_window(session, asset) == {"geography": 1}
+
+        payload = await _resolve_profile(session, test_user, asset)
+
+        assert _weights(payload) == _weight_rows("geography", geography, "2025-09-04", "2025-09-30")
+        assert [row["key"] for row in payload["weights"]] == ["DEU", "JPN", "USA"]
+        _assert_only_tables(payload, "weights")
+
+    @pytest.mark.asyncio
+    async def test_amount_voice_gives_an_amount_row_with_its_currency(self, session, test_user):
+        asset = await _profile_asset(session, "AFIPAMT")
+        await _profile_row(session, asset, "outstanding_amount", {"amount": "1500000.50", "currency": "EUR"}, day=date(2025, 9, 8))
+        assert await _steps_in_window(session, asset) == {"outstanding_amount": 1}
+
+        payload = await _resolve_profile(session, test_user, asset)
+
+        assert _amounts(payload) == [("outstanding_amount", "2025-09-08", "2025-09-30", "justetf", Decimal("1500000.5"), "EUR")]
+        _assert_only_tables(payload, "amounts")
+
+    @pytest.mark.asyncio
+    async def test_number_date_text_choice_country_and_currency_voices_are_values_with_their_unit(self, session, test_user):
+        """Shapes number, date, text, choice, country and currency go to `values`: the stored form as text, and the
+        catalogue voice's unit (`years` for the modified duration) or None. Seeded in the reverse of the catalogue
+        order: the rows come out in catalogue order."""
+        asset = await _profile_asset(session, "AFIPVAL")
+        seeded = [
+            ("min_lot", "1000"),
+            ("fund_currency", "USD"),
+            ("fund_domicile", "IRL"),
+            ("distribution_policy", "accumulating"),
+            ("maturity_date", "2030-01-15"),
+            ("modified_duration", "6.210"),
+            ("description", "A world equity index fund"),
+        ]
+        for key, value in seeded:
+            await _profile_row(session, asset, key, value, day=date(2025, 9, 2))
+        assert await _steps_in_window(session, asset) == dict.fromkeys((key for key, _ in seeded), 1)
+
+        payload = await _resolve_profile(session, test_user, asset)
+
+        assert _values(payload) == [
+            ("description", "2025-09-02", "2025-09-30", "justetf", "A world equity index fund", None),
+            ("modified_duration", "2025-09-02", "2025-09-30", "justetf", "6.21", "years"),
+            ("maturity_date", "2025-09-02", "2025-09-30", "justetf", "2030-01-15", None),
+            ("distribution_policy", "2025-09-02", "2025-09-30", "justetf", "accumulating", None),
+            ("fund_domicile", "2025-09-02", "2025-09-30", "justetf", "IRL", None),
+            ("fund_currency", "2025-09-02", "2025-09-30", "justetf", "USD", None),
+            ("min_lot", "2025-09-02", "2025-09-30", "justetf", "1000", None),
+        ]
+        # modified_duration is volatile, but one step drops nothing and is not thinned
+        assert _thinned(payload) == {}
+        _assert_only_tables(payload, "values")
+
+    @pytest.mark.asyncio
+    async def test_coupon_schedule_gives_one_row_per_schedule_row(self, session, test_user):
+        asset = await _profile_asset(session, "AFIPCPN")
+        schedule = [{"from": "2025-07-01", "to": "2025-12-31", "rate": "0.0350"}, {"from": "2025-01-01", "to": "2025-06-30", "rate": "0.03"}]
+        await _profile_row(session, asset, "coupon_schedule", schedule, day=date(2025, 9, 10))
+        assert await _steps_in_window(session, asset) == {"coupon_schedule": 1}
+
+        payload = await _resolve_profile(session, test_user, asset)
+
+        rows = _table(payload, "coupon_schedule", {"from_date", "to_date", "rate_ratio"})
+        assert [(r["voice"], r["date"], r["through"], r["source"], r["from_date"], r["to_date"], Decimal(r["rate_ratio"])) for r in rows] == [
+            ("coupon_schedule", "2025-09-10", "2025-09-30", "justetf", "2025-01-01", "2025-06-30", Decimal("0.03")),
+            ("coupon_schedule", "2025-09-10", "2025-09-30", "justetf", "2025-07-01", "2025-12-31", Decimal("0.035")),
+        ]
+        _assert_only_tables(payload, "coupon_schedule")
+
+    @pytest.mark.asyncio
+    async def test_a_voice_emptied_on_purpose_appears_only_in_emptied(self, session, test_user):
+        asset = await _profile_asset(session, "AFIPEMP")
+        await _profile_row(session, asset, "ter", "0.0022", day=date(2025, 9, 3))
+        await _profile_row(session, asset, "ter", None, day=date(2025, 9, 20), source="user")
+        await _profile_row(session, asset, "description", "Old text", day=date(2025, 9, 2))
+        await _profile_row(session, asset, "description", None, day=date(2025, 9, 10), source="user")
+        await _profile_row(session, asset, "geography", None, day=date(2025, 9, 5), source="user")
+        assert await _steps_in_window(session, asset) == {"ter": 2, "description": 2, "geography": 1}
+
+        payload = await _resolve_profile(session, test_user, asset)
+
+        assert _percentages(payload) == [("ter", "2025-09-03", "2025-09-19", "justetf", Decimal("0.0022"))]
+        assert _values(payload) == [("description", "2025-09-02", "2025-09-09", "justetf", "Old text", None)]
+        assert _emptied(payload) == [
+            ("geography", "2025-09-05", "2025-09-30", "user"),
+            ("description", "2025-09-10", "2025-09-30", "user"),
+            ("ter", "2025-09-20", "2025-09-30", "user"),
+        ]
+        _assert_only_tables(payload, "percentages", "values", "emptied")
+
+    @pytest.mark.asyncio
+    async def test_a_volatile_voice_with_four_steps_keeps_its_first_and_last_and_is_thinned(self, session, test_user):
+        """yield_gross is volatile: of its 4 steps in the window only the first and the last are rows, and `thinned`
+        says 3 changes. ter (not volatile, not a map) keeps all of its 4 steps and is never thinned."""
+        asset = await _profile_asset(session, "AFIPVOL")
+        for day, value in ((2, "0.031"), (9, "0.032"), (16, "0.033"), (23, "0.034")):
+            await _profile_row(session, asset, "yield_gross", value, day=date(2025, 9, day))
+        for day, value in ((2, "0.0020"), (9, "0.0021"), (16, "0.0022"), (23, "0.0023")):
+            await _profile_row(session, asset, "ter", value, day=date(2025, 9, day))
+        assert await _steps_in_window(session, asset) == {"yield_gross": 4, "ter": 4}
+
+        payload = await _resolve_profile(session, test_user, asset)
+
+        assert _percentages(payload) == [
+            ("ter", "2025-09-02", "2025-09-08", "justetf", Decimal("0.0020")),
+            ("ter", "2025-09-09", "2025-09-15", "justetf", Decimal("0.0021")),
+            ("ter", "2025-09-16", "2025-09-22", "justetf", Decimal("0.0022")),
+            ("ter", "2025-09-23", "2025-09-30", "justetf", Decimal("0.0023")),
+            ("yield_gross", "2025-09-02", "2025-09-08", "justetf", Decimal("0.031")),
+            ("yield_gross", "2025-09-23", "2025-09-30", "justetf", Decimal("0.034")),
+        ]
+        assert _thinned(payload) == {"yield_gross": 3}
+        _assert_only_tables(payload, "percentages", "thinned")
+
+    @pytest.mark.asyncio
+    async def test_a_volatile_voice_with_one_or_two_steps_drops_nothing_and_is_not_thinned(self, session, test_user):
+        asset = await _profile_asset(session, "AFIPVL2")
+        await _profile_row(session, asset, "fund_size", {"amount": "5000000", "currency": "EUR"}, day=date(2025, 9, 6))
+        await _profile_row(session, asset, "market_cap", {"amount": "100", "currency": "USD"}, day=date(2025, 9, 3))
+        await _profile_row(session, asset, "market_cap", {"amount": "120", "currency": "USD"}, day=date(2025, 9, 17))
+        assert await _steps_in_window(session, asset) == {"fund_size": 1, "market_cap": 2}
+
+        payload = await _resolve_profile(session, test_user, asset)
+
+        assert _amounts(payload) == [
+            ("fund_size", "2025-09-06", "2025-09-30", "justetf", Decimal("5000000"), "EUR"),
+            ("market_cap", "2025-09-03", "2025-09-16", "justetf", Decimal("100"), "USD"),
+            ("market_cap", "2025-09-17", "2025-09-30", "justetf", Decimal("120"), "USD"),
+        ]
+        assert _thinned(payload) == {}
+        _assert_only_tables(payload, "amounts")
+
+    @pytest.mark.asyncio
+    async def test_a_map_voice_with_three_steps_keeps_its_first_and_last_and_is_thinned(self, session, test_user):
+        """geography is not volatile, but a map is thinned too: of 3 steps only the first and the last give weight
+        rows, and `thinned` says 2 changes."""
+        asset = await _profile_asset(session, "AFIPMAP")
+        first, middle, last = {"USA": "0.6", "JPN": "0.4"}, {"USA": "0.5", "JPN": "0.5"}, {"USA": "0.7", "JPN": "0.3"}
+        await _profile_row(session, asset, "geography", first, day=date(2025, 9, 2))
+        await _profile_row(session, asset, "geography", middle, day=date(2025, 9, 10))
+        await _profile_row(session, asset, "geography", last, day=date(2025, 9, 20))
+        assert await _steps_in_window(session, asset) == {"geography": 3}
+
+        payload = await _resolve_profile(session, test_user, asset)
+
+        assert _weights(payload) == _weight_rows("geography", first, "2025-09-02", "2025-09-09") + _weight_rows("geography", last, "2025-09-20", "2025-09-30")
+        assert _thinned(payload) == {"geography": 2}
+        _assert_only_tables(payload, "weights", "thinned")
+
+    @pytest.mark.asyncio
+    async def test_a_window_before_the_first_row_shows_nothing_and_says_where_history_starts(self, session, test_user):
+        asset = await _profile_asset(session, "AFIPLATE")
+        await _profile_row(session, asset, "ter", "0.0022", day=date(2025, 10, 5))
+        await _profile_row(session, asset, "geography", {"USA": "1"}, day=date(2025, 10, 8))
+        assert await _steps_in_window(session, asset) == {}
+
+        payload = await _resolve_profile(session, test_user, asset)
+
+        assert payload["no_profile_data"] is False
+        assert payload["history_starts_on"] == "2025-10-05"
+        self._assert_source_semantics(payload)
+        _assert_only_tables(payload)
+
+    @pytest.mark.asyncio
+    async def test_an_asset_without_profile_rows_has_no_profile_data_and_is_not_an_error(self, session, test_user):
+        asset = await _profile_asset(session, "AFIPNONE")
+
+        payload = await _resolve_profile(session, test_user, asset)
+
+        assert payload["asset_id"] == asset.id
+        assert payload["no_profile_data"] is True
+        assert payload["history_starts_on"] is None
+        self._assert_source_semantics(payload)
+        _assert_only_tables(payload)
+
+    @pytest.mark.asyncio
+    async def test_rows_outside_the_window_are_not_reported(self, session, test_user):
+        """A row superseded before the window and a row after it are not reported. The row in force when the window
+        opens is: the store's step holding the window's first day starts on it (no carry-back: a voice whose history
+        begins inside the window starts where it begins, as in the other tests)."""
+        asset = await _profile_asset(session, "AFIPOUT")
+        await _profile_row(session, asset, "ter", "0.0030", day=date(2025, 7, 1))
+        await _profile_row(session, asset, "ter", "0.0025", day=date(2025, 8, 1))
+        await _profile_row(session, asset, "ter", "0.0020", day=date(2025, 9, 15))
+        await _profile_row(session, asset, "ter", "0.0010", day=date(2025, 10, 10))
+        await _profile_row(session, asset, "fund_provider", "Late Provider", day=date(2025, 10, 1))
+        assert await _steps_in_window(session, asset) == {"ter": 2}
+
+        payload = await _resolve_profile(session, test_user, asset)
+
+        assert payload["history_starts_on"] == "2025-07-01"
+        assert _percentages(payload) == [
+            ("ter", "2025-09-01", "2025-09-14", "justetf", Decimal("0.0025")),
+            ("ter", "2025-09-15", "2025-09-30", "justetf", Decimal("0.0020")),
+        ]
+        assert "Late Provider" not in json.dumps(payload)
+        _assert_only_tables(payload, "percentages")
+
+    @pytest.mark.asyncio
+    async def test_rows_follow_catalogue_order_then_date(self, session, test_user):
+        """Seeded latest-first and voice by voice against the catalogue: the rows come out by catalogue order of the
+        voice, then by date."""
+        asset = await _profile_asset(session, "AFIPORD")
+        await _profile_row(session, asset, "yield_gross", "0.041", day=date(2025, 9, 20))
+        await _profile_row(session, asset, "ter", "0.0019", day=date(2025, 9, 25))
+        await _profile_row(session, asset, "withholding_tax", "0.15", day=date(2025, 9, 12))
+        await _profile_row(session, asset, "yield_gross", "0.040", day=date(2025, 9, 5))
+        await _profile_row(session, asset, "ter", "0.0022", day=date(2025, 9, 4))
+        assert await _steps_in_window(session, asset) == {"yield_gross": 2, "ter": 2, "withholding_tax": 1}
+        catalogue_order = list(CATALOGUE)
+        assert catalogue_order.index("withholding_tax") < catalogue_order.index("ter") < catalogue_order.index("yield_gross")
+
+        payload = await _resolve_profile(session, test_user, asset)
+
+        assert _percentages(payload) == [
+            ("withholding_tax", "2025-09-12", "2025-09-30", "justetf", Decimal("0.15")),
+            ("ter", "2025-09-04", "2025-09-24", "justetf", Decimal("0.0022")),
+            ("ter", "2025-09-25", "2025-09-30", "justetf", Decimal("0.0019")),
+            ("yield_gross", "2025-09-05", "2025-09-19", "justetf", Decimal("0.040")),
+            ("yield_gross", "2025-09-20", "2025-09-30", "justetf", Decimal("0.041")),
+        ]
+        assert _thinned(payload) == {}
 
 
 # =============================================================================

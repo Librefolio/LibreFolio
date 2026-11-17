@@ -6,7 +6,7 @@
  * user has not changed and lists the rest as conflicts. Nothing here is live,
  * nothing prices an Asset (`/assets/prices/current` is never called).
  */
-import {canonicalInput, compareDecimal, decimalSign, fractionToPercent} from './decimal';
+import {canonicalInput, compareDecimal, decimalSign, fractionToPercent} from '$lib/utils/core/exactDecimal';
 import {EXPOSURE_DIMENSIONS, PlannerDraft, nowTimestamp, priceIsCopied, rateIsCopied, samePrice, type CopyKind, type CopyRecord, type CopyRef, type DraftAsset, type DraftBroker, type DraftCash, type DraftExposure, type DraftFx, type DraftPrice, type ExposureDimension} from './draft.svelte';
 import {rememberFxPairIssues} from './fxIssues';
 import type {PlannerSource, SourceAsset, SourceBroker, SourceCurrentWeight, SourceIssue, SourceQuery, SourceSection} from './source';

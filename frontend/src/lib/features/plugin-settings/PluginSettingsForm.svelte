@@ -8,7 +8,7 @@
   colours are roles only (theme-roles skill), every class a whole literal.
 -->
 <script lang="ts">
-    import {Lock, Puzzle} from 'lucide-svelte';
+    import {Lock, Puzzle, Share2} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import {SimpleSelect} from '$lib/components/ui/select';
     import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
@@ -22,6 +22,7 @@
         draftOf,
         draftProblems,
         EMPTY_FORM,
+        entryTitle,
         fieldDescription,
         fieldLabel,
         INPUT_CLASS,
@@ -50,9 +51,15 @@
         entry: PluginSettingsEntry;
         /** The plugin's state read again after a save (or a conflicting one): show it in place of `entry`. */
         onsaved?: (fresh: PluginSettingsEntry) => void;
+        /** The names of the shared groups as their own entries show them, by group code (project 76). */
+        groupNames?: Record<string, string>;
+        /** Bring a shared group's settings into view: without it, the row names the group and offers no button. */
+        onopengroup?: (name: string) => void;
+        /** The groups `onopengroup` can bring into view; absent, every group. A group the page does not show gets no button. */
+        openableGroups?: readonly string[];
     }
 
-    let {entry, onsaved}: Props = $props();
+    let {entry, onsaved, groupNames = {}, onopengroup, openableGroups}: Props = $props();
 
     const uid = $props.id();
     let form = $state<FormState>(EMPTY_FORM);
@@ -139,13 +146,17 @@
     data-testid="plugin-settings-form-{entry.plugin_code}"
 >
     <header class="flex flex-wrap items-center justify-between gap-2">
-        <h4 class="flex items-center gap-2 text-base font-semibold" id="{uid}-name">
+        <!-- tabindex -1: a plugin's «open group» moves the focus here, to the group's heading -->
+        <h4 class="flex items-center gap-2 text-base font-semibold focus-visible:outline-2 focus-visible:outline-lf-focus" id="{uid}-name" tabindex="-1">
             {#if showIcon}
                 <img alt="" class="h-5 w-5 shrink-0 rounded-sm object-contain" data-testid="plugin-settings-plugin-icon" onerror={() => (failedIconUrl = entry.icon_url)} referrerpolicy="no-referrer" src={entry.icon_url} />
+            {:else if entry.family === 'group'}
+                <!-- A shared group has no icon of its own: the icon of its section -->
+                <Share2 aria-hidden="true" class="h-5 w-5 shrink-0 text-lf-muted" data-testid="plugin-settings-plugin-icon-fallback" />
             {:else}
                 <Puzzle aria-hidden="true" class="h-5 w-5 shrink-0 text-lf-muted" data-testid="plugin-settings-plugin-icon-fallback" />
             {/if}
-            {entry.plugin_name}
+            {entryTitle(entry, $_)}
         </h4>
         {#if entry.configured}
             <span class={STATUS_BADGE_CLASSES.configured} data-testid="plugin-settings-status" data-configured="true">{$_('pluginSettings.status.configured')}</span>
@@ -153,6 +164,24 @@
             <span class={STATUS_BADGE_CLASSES.notConfigured} data-testid="plugin-settings-status" data-configured="false">{$_('pluginSettings.status.notConfigured')}</span>
         {/if}
     </header>
+
+    {#if entry.family === 'group' && (entry.used_by ?? []).length > 0}
+        <p class="text-sm text-lf-secondary" data-testid="plugin-settings-used-by">
+            {$_('pluginSettings.group.usedBy', {values: {plugins: (entry.used_by ?? []).map((user) => user.plugin_name).join(', ')}})}
+        </p>
+    {/if}
+    {#each entry.groups ?? [] as name (name)}
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-lf-secondary" data-group={name} data-testid="plugin-settings-in-group">
+            <!-- The icon and its text stay together on a narrow window; the button wraps below them -->
+            <span class="flex min-w-0 items-start gap-2">
+                <Share2 aria-hidden="true" class="mt-0.5 h-4 w-4 shrink-0 text-lf-muted" />
+                <span>{$_('pluginSettings.group.inGroup', {values: {group: groupNames[name] ?? name}})}</span>
+            </span>
+            {#if onopengroup && (!openableGroups || openableGroups.includes(name))}
+                <button class={LINK_BUTTON_CLASS} data-testid="plugin-settings-open-group" onclick={() => onopengroup(name)} type="button">{$_('pluginSettings.group.open')}</button>
+            {/if}
+        </div>
+    {/each}
 
     <div class="space-y-4">
         {#each entry.fields as field (field.key)}

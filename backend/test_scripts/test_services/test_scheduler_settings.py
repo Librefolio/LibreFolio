@@ -3,7 +3,10 @@ Test: Scheduler settings parsing — _parse_times() and _parse_days().
 
 Tests CSV parsing, validation, fallback behavior, and timezone storage semantics.
 
-Test IDs: SC-001..SC-011
+Lot B6 (project 68, SC-012..SC-016): the weekly read of the enrichers has its own days and times,
+``scheduler_profile_read_days`` (``sat``) and ``scheduler_profile_read_times`` (``03:00``), in ``scheduler_timezone``.
+
+Test IDs: SC-001..SC-016
 """
 
 import sys
@@ -231,3 +234,110 @@ class TestSchedulerTimezoneMigration:
 
         assert migration._convert_time_csv("06:00,23:00", "America/Bogota", from_utc=True) == "01:00,18:00"
         print_success("UTC times converted to configured local timezone")
+
+
+# ============================================================================
+# SC-012..SC-016: the weekly read of the enrichers (project 68, lot B6)
+# ============================================================================
+
+#: The literals of the contract, never read from the module under test.
+PROFILE_READ_DAYS_KEY = "scheduler_profile_read_days"
+PROFILE_READ_TIMES_KEY = "scheduler_profile_read_times"
+PROFILE_READ_DEFAULTS = {PROFILE_READ_DAYS_KEY: ("sat", "weekday_list"), PROFILE_READ_TIMES_KEY: ("03:00", "hhmm_list")}
+
+#: Every value ``load_scheduler_settings`` reads before B6, at a value of its own.
+_BEFORE_B6 = {
+    "scheduler_enabled": "true",
+    "scheduler_current_price_frequency_minutes": "10",
+    "scheduler_history_sync_times": "06:00,23:00",
+    "scheduler_history_sync_days": "mon,tue",
+    "scheduler_history_sync_horizon_days": "14",
+    "scheduler_timezone": "Europe/Rome",
+}
+
+
+async def _load_with(monkeypatch, values: dict):
+    """``load_scheduler_settings`` on ``values`` (key → stored text, a key absent reads None), without a database."""
+
+    async def fake_get_setting_value(_session, key):
+        return values.get(key)
+
+    monkeypatch.setattr(scheduler_settings, "get_async_engine", lambda: object())
+    monkeypatch.setattr(scheduler_settings, "AsyncSession", DummyAsyncSession)
+    monkeypatch.setattr(scheduler_settings, "get_setting_value", fake_get_setting_value)
+    return await scheduler_settings.load_scheduler_settings()
+
+
+class TestProfileReadSettings:
+    @pytest.mark.parametrize("key", list(PROFILE_READ_DEFAULTS))
+    def test_the_two_settings_are_global_settings_with_their_default_and_format(self, key):
+        """SC-012: ``scheduler_profile_read_days`` (default ``sat``, ``weekday_list``) and ``scheduler_profile_read_times``
+        (default ``03:00``, ``hhmm_list``) are global settings of type ``str``, in the registry, as the history-sync ones."""
+        from backend.app.schemas.settings import GLOBAL_SETTINGS_CONSTRAINTS, GLOBAL_SETTINGS_DEFAULTS, SETTINGS_REGISTRY  # noqa: PLC0415 — the contract's names, read at call
+
+        print_section(f"SC-012: {key} — default, type, format, registry")
+        value, fmt = PROFILE_READ_DEFAULTS[key]
+        entry = GLOBAL_SETTINGS_DEFAULTS.get(key)
+        assert entry is not None, f"{key} is a global setting: {sorted(GLOBAL_SETTINGS_DEFAULTS)}"
+        assert (entry.get("value"), entry.get("type")) == (value, "str"), entry
+        assert isinstance(entry.get("description"), str) and entry["description"], f"{key} has a description: {entry}"
+        constraint = GLOBAL_SETTINGS_CONSTRAINTS.get(key)
+        assert constraint is not None and constraint.format == fmt, f"{key} is checked as {fmt}: {constraint}"
+        specs = {spec.key: spec for spec in SETTINGS_REGISTRY.global_.all()}
+        assert key in specs and (specs[key].location, specs[key].value_type) == ("global", "str"), f"{key} in SETTINGS_REGISTRY.global_: {sorted(specs)}"
+        print_success(f"{key}: {value!r}, {fmt}, registered")
+
+    @pytest.mark.parametrize(
+        ("key", "refused"),
+        [
+            pytest.param(PROFILE_READ_DAYS_KEY, "saturday", id="days-full-name"),
+            pytest.param(PROFILE_READ_DAYS_KEY, "", id="days-empty"),
+            pytest.param(PROFILE_READ_TIMES_KEY, "3am", id="times-not-hhmm"),
+            pytest.param(PROFILE_READ_TIMES_KEY, "24:00", id="times-out-of-range"),
+        ],
+    )
+    def test_a_save_refuses_a_value_outside_the_format(self, key, refused):
+        """SC-013: a save of a value outside the format is refused, as for the history-sync ones; the default is accepted."""
+        from backend.app.schemas.settings import validate_global_setting_value  # noqa: PLC0415 — read at call
+
+        print_section(f"SC-013: {key} = {refused!r} refused")
+        assert validate_global_setting_value(key, PROFILE_READ_DEFAULTS[key][0], "str") == PROFILE_READ_DEFAULTS[key][0]
+        with pytest.raises(ValueError):
+            validate_global_setting_value(key, refused, "str")
+        print_success("refused")
+
+    @pytest.mark.asyncio
+    async def test_load_scheduler_settings_without_the_two_rows_gives_saturday_at_three(self, monkeypatch):
+        """SC-014: without the two rows (no migration: the defaults live in code), ``profile_read_days`` is ``["sat"]`` and
+        ``profile_read_times`` ``[time(3, 0)]``, local to ``scheduler_timezone``; the other settings are as before."""
+        print_section("SC-014: load_scheduler_settings — profile read defaults")
+
+        result = await _load_with(monkeypatch, dict(_BEFORE_B6))
+
+        assert getattr(result, "profile_read_days", "<missing>") == ["sat"]
+        assert getattr(result, "profile_read_times", "<missing>") == [time(3, 0)]
+        assert (result.scheduler_timezone, result.history_sync_days, result.history_sync_times) == ("Europe/Rome", ["mon", "tue"], [time(6, 0), time(23, 0)])
+        print_success("Saturday 03:00 by default")
+
+    @pytest.mark.asyncio
+    async def test_load_scheduler_settings_reads_the_configured_days_and_times_local(self, monkeypatch):
+        """SC-015: the stored days and times are read as stored, local (never shifted to UTC), the times sorted; they are
+        the profile read's own, distinct from the history sync's."""
+        print_section("SC-015: load_scheduler_settings — configured profile read days and times")
+        values = {**_BEFORE_B6, PROFILE_READ_DAYS_KEY: "sun,WED", PROFILE_READ_TIMES_KEY: "22:30,01:15"}
+
+        result = await _load_with(monkeypatch, values)
+
+        assert getattr(result, "profile_read_days", "<missing>") == ["sun", "wed"]
+        assert getattr(result, "profile_read_times", "<missing>") == [time(1, 15), time(22, 30)]
+        assert (result.history_sync_days, result.history_sync_times) == (["mon", "tue"], [time(6, 0), time(23, 0)]), "the history sync keeps its own"
+        print_success("configured, local, sorted")
+
+    def test_scheduler_settings_has_the_two_fields(self):
+        """SC-016: ``SchedulerSettings`` has ``profile_read_days`` and ``profile_read_times``."""
+        import dataclasses  # noqa: PLC0415 — test-local
+
+        print_section("SC-016: SchedulerSettings fields")
+        names = [field.name for field in dataclasses.fields(scheduler_settings.SchedulerSettings)]
+        assert {"profile_read_days", "profile_read_times"} <= set(names), names
+        print_success("both fields")

@@ -246,6 +246,12 @@ const REGISTRY: Site[] = [
         why: "The rate two imported amounts imply (|to| / |from|), written beside its currency pair. It is a rate (a ratio of two amounts), not an amount, and says nothing of the user's holdings; the two amounts it comes from are rendered elsewhere, through the channel.",
     },
     {
+        file: 'lib/features/assets/profile/ProfileEditModal.svelte',
+        snippet: "`${String(amount.amount ?? '')} ${String(amount.currency ?? '')}`",
+        status: 'public',
+        why: "An amount voice of the asset profile as the «Modifica i dati» window shows it (plan 68, E10c2): «Adesso», the comparison window's values and the source-changed toast. The amount voices of the catalogue are `fund_size`, `market_cap` and `outstanding_amount` (backend/app/services/assets/profile/catalogue.py): the size of a fund, a company's capitalisation, a bond's amount outstanding — figures of the asset, the same for every user, never what the user owns. Public under the 2026-09-22 rule, like prices.",
+    },
+    {
         file: 'lib/components/charts/PriceChartFull.svelte',
         snippet: '`${currencyHtml}: ${formatPrice(Number(value), {minDecimals: 4})}${valueSuffix}${axisNoteHtml}`',
         status: 'public',
@@ -321,6 +327,7 @@ describe('money rendered outside the masking channel (analysis §1.8 gate)', () 
         expect(listOf('public')).toEqual([
             // one element per line: parallel removals must not touch the same line
             'lib/components/charts/PriceChartFull.svelte',
+            'lib/features/assets/profile/ProfileEditModal.svelte',
             'lib/features/transactions/events/EventCreateMiniModal.svelte',
         ]);
     });

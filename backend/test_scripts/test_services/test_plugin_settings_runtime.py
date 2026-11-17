@@ -210,6 +210,7 @@ class _FailingSearch(MockProvider):
     """A searchable asset plugin of the tests, without settings, whose search fails with an error code of its own."""
 
     settings_fields = ()
+    settings_groups = ()  # without settings: not even mockprov's test group (project 76, G2)
 
     @property
     def provider_code(self) -> str:

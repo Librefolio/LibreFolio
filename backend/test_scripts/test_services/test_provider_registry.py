@@ -1,14 +1,16 @@
 """
 Provider Registry Tests
 
-Tests provider auto-discovery for Asset and FX providers.
+Tests provider auto-discovery for Asset and FX providers, and for the enrichers (plan 68, B1).
 """
 
 import pytest
 
+from backend.app.config import PROJECT_ROOT, is_test_mode
 from backend.app.schemas.provider import FAVolumeKind
 from backend.app.services.assets.base import AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.fx.base import FXRateProvider
 from backend.app.services.fx.registry import FXProviderRegistry
 
@@ -47,6 +49,25 @@ def test_fx_provider_discovery():
 
     assert expected_providers.issubset(provider_set), f"Missing expected FX providers: {expected_providers - provider_set}. Found: {provider_codes}"
     assert len(provider_codes) >= 4, f"Expected at least 4 providers, got {len(provider_codes)}"
+
+
+def test_enricher_provider_discovery(monkeypatch):
+    """The enricher registry discovers ``services/enricher_providers/``, reads each plugin's ``code`` and names the
+    settings family ``enricher``; in test mode its test enricher ``mockenrich`` is discovered, and nothing failed to load."""
+    monkeypatch.setenv("LIBREFOLIO_TEST_MODE", "1")
+    assert is_test_mode() is True, "barrier: the test runs in test mode, where the test-only enricher is served"
+
+    assert EnricherRegistry._get_provider_folder() == "enricher_providers"
+    assert EnricherRegistry._get_plugin_directory() == PROJECT_ROOT / "backend" / "app" / "services" / "enricher_providers"
+    assert EnricherRegistry._get_plugin_directory().is_dir()
+    assert EnricherRegistry._get_plugin_code_attr() == "code"
+    assert EnricherRegistry.settings_family() == "enricher"
+
+    errors = EnricherRegistry.get_discovery_errors()
+    assert errors == (), f"enricher plugins failed to load: {[(failure.module_name, failure.error_type, failure.message) for failure in errors]}"
+    codes = EnricherRegistry.list_plugin_codes()
+    assert "mockenrich" in codes, f"Expected 'mockenrich' in enrichers, got: {codes}"
+    assert EnricherRegistry.get_plugin("mockenrich").code == "mockenrich"
 
 
 if __name__ == "__main__":

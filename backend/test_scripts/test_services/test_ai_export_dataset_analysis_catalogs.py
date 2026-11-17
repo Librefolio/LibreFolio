@@ -180,15 +180,16 @@ class TestDatasetCatalog:
 
 
 class TestIntegratedComponentCatalog:
-    def test_production_registry_has_all_67_real_components_in_frozen_order(
+    def test_production_registry_has_all_68_real_components_in_frozen_order(
         self,
         component_registry: ComponentRegistry,
     ):
+        """D5 (plan 68): asset.profile is the 68th component (before D5: 67)."""
         expected_order = tuple(spec.component_id for spec in ALL_FOUNDATION_COMPONENTS)
 
-        assert len(ALL_FOUNDATION_COMPONENTS) == 67
-        assert len(ALL_REAL_COMPONENTS) == 67
-        assert len(ALL_COMPONENTS) == 67
+        assert len(ALL_FOUNDATION_COMPONENTS) == 68
+        assert len(ALL_REAL_COMPONENTS) == 68
+        assert len(ALL_COMPONENTS) == 68
         assert component_registry.canonical_order == expected_order
         assert tuple(spec.component_id for spec in ALL_COMPONENTS) == expected_order
         assert all(spec.output_model is not FoundationComponentPayload for spec in component_registry)
@@ -364,6 +365,48 @@ class TestIntegratedComponentCatalog:
         }
         untouched = next(spec for spec in ALL_REAL_COMPONENTS if spec.component_id == "broker.allocation_concentration")
         assert untouched.version == 1
+
+
+class TestAssetProfileWiring:
+    """D5 (plan 68): `asset.identity` moves to version 2 (no classification) and the new `asset.profile` v1 joins the
+    catalog — its placeholder and its real spec equal, required by the three asset datasets right after identity.
+    Dataset versions do not change (public ones stay at `AI_EXPORT_SELECTION_VERSION`, pinned above)."""
+
+    def test_identity_is_version_2_on_both_sides_of_the_catalog(self, component_registry: ComponentRegistry):
+        placeholder = next(spec for spec in ALL_FOUNDATION_COMPONENTS if spec.component_id == "asset.identity")
+        real = next(spec for spec in ALL_REAL_COMPONENTS if spec.component_id == "asset.identity")
+        registered = component_registry.get("asset.identity")
+
+        validate_asset_fx_replacements(ASSET_FX_COMPONENTS, placeholders=ALL_FOUNDATION_COMPONENTS)
+        assert registered is real
+        assert {"placeholder": placeholder.version, "real": real.version, "registered": registered.version} == {"placeholder": 2, "real": 2, "registered": 2}
+
+    def test_profile_is_registered_and_its_real_spec_equals_its_placeholder(self, component_registry: ComponentRegistry):
+        placeholder = next((spec for spec in ALL_FOUNDATION_COMPONENTS if spec.component_id == "asset.profile"), None)
+        real = next((spec for spec in ALL_REAL_COMPONENTS if spec.component_id == "asset.profile"), None)
+        assert placeholder is not None, "components.catalog has no asset.profile placeholder"
+        assert real is not None, "no real asset.profile spec among the real components"
+        assert "asset.profile" in component_registry
+        registered = component_registry.get("asset.profile")
+
+        assert registered is real
+        assert real.output_model is not FoundationComponentPayload
+        expected = (1, frozenset({Domain.ASSET}), (), PeriodBehavior.WINDOWED, None)
+        assert (placeholder.version, placeholder.domains, placeholder.dependencies, placeholder.period_behavior, placeholder.aggregator) == expected
+        assert (real.version, real.domains, real.dependencies, real.period_behavior, real.aggregator) == expected
+
+    @pytest.mark.parametrize("dataset_id", ["asset.overview", "asset.position_and_history", "asset.market_history"])
+    def test_profile_is_required_right_after_identity(self, dataset_registry: DatasetRegistry, dataset_id: str):
+        spec = dataset_registry.get(dataset_id)
+
+        assert "asset.profile" in spec.required_component_ids
+        assert "asset.profile" not in spec.optional_component_ids
+        order = list(spec.section_order)
+        assert "asset.profile" in order
+        assert order.index("asset.profile") == order.index("asset.identity") + 1
+
+    def test_profile_reaches_asset_all_data_as_required(self, dataset_registry: DatasetRegistry):
+        assert "asset.profile" in dataset_registry.get("asset.all_data").required_component_ids
 
 
 class TestAnalysisCatalog:

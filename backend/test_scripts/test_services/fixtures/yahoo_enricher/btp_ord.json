@@ -1,0 +1,18 @@
+{
+ "source": "yahoo",
+ "asset": "btp_ord",
+ "version": "yfinance 1.7.0",
+ "recorded_at": "2026-11-10T17:07:52",
+ "calls": {
+  "info_from_isin": {
+   "seconds": 0.26,
+   "error": "ValueError: Invalid ISIN number: IT0001444378",
+   "response": null
+  },
+  "search_isin": {
+   "seconds": 0.16,
+   "error": null,
+   "response": []
+  }
+ }
+}

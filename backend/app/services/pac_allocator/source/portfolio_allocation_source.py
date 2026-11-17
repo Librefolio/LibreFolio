@@ -17,7 +17,7 @@ from backend.app.schemas.portfolio.planner_source import (
     PortfolioPlannerSourceSnapshot,
     PortfolioPlannerWacContext,
 )
-from backend.app.services.pac_allocator.source.classifications import build_planner_classifications
+from backend.app.services.pac_allocator.source.classifications import build_planner_classifications, load_profile_classifications
 from backend.app.services.pac_allocator.source.distribution import build_planner_current_distribution
 from backend.app.services.pac_allocator.source.entities import build_planner_assets, build_planner_brokers, build_planner_cash_balances, build_planner_holdings, build_planner_prices, observed_currencies_by_broker
 from backend.app.services.pac_allocator.source.fx_quotes import build_planner_fx_quotes
@@ -286,6 +286,8 @@ async def build_portfolio_planner_source(
     classifications = (
         build_planner_classifications(
             candidate_assets,
+            # The sector and geography of the asset profile on the planner's day (plan 68, D4)
+            profile=await load_profile_classifications(session, (asset.id for asset in candidate_assets if asset.id is not None), request.as_of),
             issues=issues,
         )
         if "classifications" in requested_sections

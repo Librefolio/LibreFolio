@@ -62,7 +62,8 @@
       "searchPlaceholder": "Search providers, currencies, countries…",
       "noSearchResults": "No routes match the search query",
       "addRoute": "Add conversion route",
-      "hideRoutes": "Hide available routes"
+      "hideRoutes": "Hide available routes",
+      "showMore": "Show more ({count} hidden)"
     },
     "deletePair": "Delete pair",
     "deletePairTitle": "Delete FX Pair",

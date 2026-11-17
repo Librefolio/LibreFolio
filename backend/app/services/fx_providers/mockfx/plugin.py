@@ -45,6 +45,8 @@ class MockFXProvider(FXRateProvider):
     """
 
     test_only = True
+    #: A double with no network: never counted (project 76, U3)
+    calls_external_service = False
     #: The «too many requests» mode, for in-process tests only (never the shared test backend, where a pause would
     #: outlive the test): while ``rate_limited`` is true every call refuses with ``rate_limited_retry_after`` as its
     #: ``Retry-After`` (None: no header). Set them with ``monkeypatch.setattr`` on the class.
@@ -126,6 +128,8 @@ class MockFXFailProvider(FXRateProvider):
     """
 
     test_only = True
+    #: A double with no network: never counted (project 76, U3)
+    calls_external_service = False
 
     # Distinctive error message — tests assert on this string
     FAIL_MESSAGE = "MOCKFX_FAIL: simulated provider failure for testing"

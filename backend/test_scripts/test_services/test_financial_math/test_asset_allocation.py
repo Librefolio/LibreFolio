@@ -55,6 +55,7 @@ from unittest.mock import MagicMock
 from backend.app.db.models import TransactionType
 from backend.app.schemas.portfolio.report import AllocationHistoryDimensions
 from backend.app.schemas.portfolio.summary import AllocationHistoryPoint, AllocationItem, PortfolioSummary
+from backend.app.services.financial_math.portfolio import daily_state as daily_state_module
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder
@@ -496,3 +497,260 @@ class TestTheSchemas:
     def test_the_state_field_defaults_to_an_empty_dict(self):
         field = {f.name: f for f in dataclasses.fields(DailyPortfolioState)}["by_asset"]
         assert field.default_factory() == {}
+
+
+# =============================================================================
+# 4. COUNTRIES AND SECTORS FROM THE ASSET PROFILE, PER DAY (project 68, lot D2)
+# =============================================================================
+#
+# The builder's ``asset_classifications`` keeps its keyword; its value becomes, per asset, voice → its steps in ascending
+# order (``ClassificationStep(date, through, weights)``, ``weights`` a mapping of Decimals or None). A day reads the step
+# holding it; before the first step the first, after the last the last; None, an empty mapping or an absent voice put the
+# whole market value in "Unknown"; geography "Other" is "Unknown". A step whose weights differ from the previous step of
+# its voice opens a segment on its day; equal neighbours do not. Extra computed days change nothing else.
+#
+# The expected allocation is built here from the day's ``by_asset`` (the per-asset sum of the position values, pinned in
+# section 1) times the step's weights: a sum of products of exact Decimals, so per position or per asset is the same
+# number. Compared by value («the same numbers» of the contract), never as the products of today's dict code path.
+#
+# RED by absence until D2: ``daily_state`` has no ``ClassificationStep`` (``AttributeError`` inside each test, read
+# through ``_d2()``); the module still collects and every test above stays green.
+
+GEOGRAPHY, SECTOR = "geography", "sector"
+GEO_1 = {"USA": "0.6000", "JPN": "0.4000"}
+GEO_2 = {"DEU": "0.2500", "Other": "0.7500"}
+SECTOR_1 = {"Technology": "0.7000", "Financials": "0.3000"}
+W_GEO = {"ITA": "1.0000"}
+#: Quiet days of the book (no movement, quote, rate, in-transit boundary): each is inside a segment, never its start.
+QUIET_16, QUIET_18, QUIET_06 = date(2025, 4, 16), date(2025, 4, 18), date(2025, 4, 6)
+
+
+def _d2():
+    """The names D2 adds to ``daily_state``, read when a test runs: absent, the test fails with ``AttributeError``."""
+    return daily_state_module.ClassificationStep, daily_state_module.GEOGRAPHY_VOICE, daily_state_module.SECTOR_VOICE
+
+
+def _steps(*spans: tuple[date, date, dict[str, str] | None]) -> list:
+    step_type = _d2()[0]
+    return [step_type(date=first, through=through, weights=None if weights is None else {key: Decimal(value) for key, value in weights.items()}) for first, through, weights in spans]
+
+
+def _whole(weights: dict[str, str] | None) -> list:
+    return _steps((BOOK_FROM, BOOK_TO, weights))
+
+
+def _build_classified(classifications: dict, **overrides) -> PortfolioCalculationResult:
+    book = _book()
+    book["asset_classifications"] = classifications
+    return DailyStateBuilder(**_builder_kwargs(**book, date_from=BOOK_FROM, **overrides)).build()
+
+
+def _weights_on(steps, day: date):
+    """The weights of ``day`` as the contract reads them (independent of the builder): the step holding it, before the
+    first step the first, after the last the last."""
+    if not steps:
+        return None
+    if day < steps[0].date:
+        return steps[0].weights
+    holding = [step for step in steps if step.date <= day <= step.through]
+    return holding[0].weights if holding else steps[-1].weights
+
+
+def _expected_allocation(classifications: dict, day: date, dimension: str) -> dict[str, Decimal]:
+    """The dimension's allocation of ``day`` from the baseline's ``by_asset`` (no cash: the caller adds "Liquidity")."""
+    expected: dict[str, Decimal] = {}
+    for asset_id, market_value in _result().daily_states.state_on(day).by_asset.items():
+        voices = classifications.get(asset_id) or {}
+        weights = _weights_on(voices.get(dimension), day)
+        if not weights:
+            expected["Unknown"] = expected.get("Unknown", ZERO) + market_value
+            continue
+        for key, weight in weights.items():
+            bucket = "Unknown" if dimension == GEOGRAPHY and key == "Other" else key
+            expected[bucket] = expected.get(bucket, ZERO) + market_value * weight
+    return expected
+
+
+def _allocation_problems(result: PortfolioCalculationResult, classifications: dict) -> list[str]:
+    problems = []
+    for day in _days(BOOK_FROM, BOOK_TO):
+        state = result.daily_states.state_on(day)
+        baseline = _result().daily_states.state_on(day)
+        geography = _expected_allocation(classifications, day, GEOGRAPHY)
+        sector = _expected_allocation(classifications, day, SECTOR)
+        sector["Liquidity"] = baseline.by_sector["Liquidity"]
+        if dict(state.by_geography) != geography:
+            problems.append(f"{day} by_geography {dict(state.by_geography)}, expected {geography}")
+        if dict(state.by_sector) != sector:
+            problems.append(f"{day} by_sector {dict(state.by_sector)}, expected {sector}")
+    return problems
+
+
+def _segment_starts(result: PortfolioCalculationResult) -> list[date]:
+    return [segment.start for segment in result.daily_states.segments]
+
+
+def _baseline_starts() -> list[date]:
+    starts = _segment_starts(_result())
+    for day in (QUIET_06, QUIET_16, QUIET_18):
+        assert day not in starts, f"precondition: {day} is a quiet day of the book, not a segment start ({starts})"
+    return starts
+
+
+def _held_x_every_day() -> None:
+    for day in _days(date(2025, 4, 2), BOOK_TO):
+        assert _result().daily_states.state_on(day).by_asset.get(X, ZERO) > 0, f"precondition: X has a market value on {day}"
+
+
+def _classifications(x_geography: list, x_sector: list | None = None) -> dict:
+    """X with the given steps (its sector one step SECTOR_1 unless given), W with one geography step and no sector
+    voice, G (never valued) None."""
+    return {
+        X: {GEOGRAPHY: x_geography, SECTOR: x_sector if x_sector is not None else _whole(SECTOR_1)},
+        W: {GEOGRAPHY: _whole(W_GEO)},
+        G: None,
+    }
+
+
+class TestClassificationFromTheProfile:
+    def test_the_step_type_and_the_voice_names(self):
+        step_type, geography_voice, sector_voice = _d2()
+        assert (geography_voice, sector_voice) == ("geography", "sector")
+        assert dataclasses.is_dataclass(step_type)
+        assert [f.name for f in dataclasses.fields(step_type)] == ["date", "through", "weights"]
+        assert "__slots__" in vars(step_type), "a slotted dataclass"
+        step = step_type(date=BOOK_FROM, through=BOOK_TO, weights={"USA": Decimal("1.0000")})
+        try:
+            step.weights = None
+        except dataclasses.FrozenInstanceError:
+            pass
+        else:
+            raise AssertionError("ClassificationStep is frozen")
+
+    def test_one_step_per_voice_gives_the_products_every_day(self):
+        _held_x_every_day()
+        classifications = _classifications(_whole(GEO_1))
+        result = _build_classified(classifications)
+        assert _allocation_problems(result, classifications) == []
+        assert _segment_starts(result) == _baseline_starts(), "a step on date_from opens no extra segment"
+        on_18 = result.daily_states.state_on(QUIET_18)
+        x_value = _result().daily_states.state_on(QUIET_18).by_asset[X]
+        assert on_18.by_geography["USA"] == x_value * Decimal("0.6000") and on_18.by_sector["Technology"] == x_value * Decimal("0.7000")
+        assert on_18.by_sector["Unknown"] == _result().daily_states.state_on(QUIET_18).by_asset[W], "W has no sector voice: Unknown"
+
+    def test_a_second_geography_step_changes_the_allocation_on_its_day_with_a_segment(self):
+        _held_x_every_day()
+        baseline_starts = _baseline_starts()
+        classifications = _classifications(_steps((BOOK_FROM, QUIET_18 - timedelta(days=1), GEO_1), (QUIET_18, BOOK_TO, GEO_2)))
+        result = _build_classified(classifications)
+        assert _allocation_problems(result, classifications) == []
+        assert _segment_starts(result) == sorted([*baseline_starts, QUIET_18]), "the change day opens a segment, nothing else does"
+        before, on = result.daily_states.state_on(QUIET_18 - timedelta(days=1)), result.daily_states.state_on(QUIET_18)
+        assert "USA" in before.by_geography and "DEU" not in before.by_geography
+        assert "USA" not in on.by_geography and "DEU" in on.by_geography and "Other" not in on.by_geography, "Other → Unknown"
+
+    def test_equal_neighbouring_steps_add_no_segment(self):
+        _held_x_every_day()
+        baseline_starts = _baseline_starts()
+        classifications = _classifications(_steps((BOOK_FROM, QUIET_18 - timedelta(days=1), GEO_1), (QUIET_18, BOOK_TO, GEO_1)))
+        result = _build_classified(classifications)
+        assert _allocation_problems(result, classifications) == []
+        assert _segment_starts(result) == baseline_starts, "a step that only changes the source opens no segment"
+
+    def test_before_the_first_step_the_first_after_the_last_the_last(self):
+        """X's geography steps run 04-06..04-12 and 04-13..04-15: the days 04-02..04-05 read the first, 04-16..04-20
+        the last. A first step starting mid-range has no previous step: no segment on its day."""
+        _held_x_every_day()
+        baseline_starts = _baseline_starts()
+        classifications = _classifications(_steps((QUIET_06, date(2025, 4, 12), GEO_1), (date(2025, 4, 13), date(2025, 4, 15), GEO_2)))
+        result = _build_classified(classifications)
+        assert _allocation_problems(result, classifications) == []
+        for day in _days(date(2025, 4, 2), date(2025, 4, 5)):
+            assert "USA" in result.daily_states.state_on(day).by_geography, f"{day}: before the first step, the first step's weights"
+        for day in _days(QUIET_16, BOOK_TO):
+            assert "DEU" in result.daily_states.state_on(day).by_geography, f"{day}: after the last step, the last step's weights"
+        assert QUIET_06 not in _segment_starts(result), "the first step's day is no change"
+        assert _segment_starts(result) == baseline_starts, "04-13 is a segment start already"
+
+    def test_none_weights_mid_way_are_unknown_for_that_stretch_only(self):
+        """X: geography GEO_1 → None (emptied on purpose) → GEO_1, sector SECTOR_1 → {} → SECTOR_1, over 04-16..04-17:
+        those two days X's whole value is Unknown in both dimensions; both edges open a segment."""
+        _held_x_every_day()
+        baseline_starts = _baseline_starts()
+        stretch_end = QUIET_18 - timedelta(days=1)
+        classifications = _classifications(
+            _steps((BOOK_FROM, QUIET_16 - timedelta(days=1), GEO_1), (QUIET_16, stretch_end, None), (QUIET_18, BOOK_TO, GEO_1)),
+            _steps((BOOK_FROM, QUIET_16 - timedelta(days=1), SECTOR_1), (QUIET_16, stretch_end, {}), (QUIET_18, BOOK_TO, SECTOR_1)),
+        )
+        result = _build_classified(classifications)
+        assert _allocation_problems(result, classifications) == []
+        for day in (QUIET_16, stretch_end):
+            state = result.daily_states.state_on(day)
+            assert "USA" not in state.by_geography and "Technology" not in state.by_sector, f"{day}: X is Unknown"
+        for day in (QUIET_16 - timedelta(days=1), QUIET_18):
+            assert "USA" in result.daily_states.state_on(day).by_geography, f"{day}: outside the stretch X has its countries"
+        assert _segment_starts(result) == sorted([*baseline_starts, QUIET_16, QUIET_18])
+
+    def test_a_sector_change_alone_opens_a_segment(self):
+        """Geography one step, sector SECTOR_1 then all Technology from 04-06 (quiet): the sector voice alone makes the
+        change day a computed day."""
+        _held_x_every_day()
+        baseline_starts = _baseline_starts()
+        classifications = _classifications(_whole(GEO_1), _steps((BOOK_FROM, QUIET_06 - timedelta(days=1), SECTOR_1), (QUIET_06, BOOK_TO, {"Technology": "1.0000"})))
+        result = _build_classified(classifications)
+        assert _allocation_problems(result, classifications) == []
+        assert _segment_starts(result) == sorted([*baseline_starts, QUIET_06])
+        assert "Financials" in result.daily_states.state_on(QUIET_06 - timedelta(days=1)).by_sector
+        assert "Financials" not in result.daily_states.state_on(QUIET_06).by_sector
+
+    def test_other_and_an_asset_without_profile_are_unknown(self):
+        """X 50 % USA and 50 % "Other"; W absent from the mapping, G None: Unknown is X's half plus W's whole value."""
+        _held_x_every_day()
+        classifications = {X: {GEOGRAPHY: _whole({"USA": "0.5000", "Other": "0.5000"})}, G: None}
+        result = _build_classified(classifications)
+        assert _allocation_problems(result, classifications) == []
+        state, baseline = result.daily_states.state_on(QUIET_18), _result().daily_states.state_on(QUIET_18)
+        assert state.by_geography == {"USA": baseline.by_asset[X] * Decimal("0.5000"), "Unknown": baseline.by_asset[X] * Decimal("0.5000") + baseline.by_asset[W]}
+        assert state.by_sector["Unknown"] == baseline.by_asset[X] + baseline.by_asset[W], "X has no sector voice"
+
+
+def _state_differences(left: PortfolioCalculationResult, right: PortfolioCalculationResult, *, skip: set[str]) -> list[str]:
+    differences = []
+    for day in _days(BOOK_FROM, BOOK_TO):
+        a, b = left.daily_states.state_on(day), right.daily_states.state_on(day)
+        differences += [f"{day} {f.name}" for f in dataclasses.fields(a) if f.name not in skip and getattr(a, f.name) != getattr(b, f.name)]
+    return differences
+
+
+class TestExtraComputedDaysChangeNothingElse:
+    """The same book with and without a geography change on a quiet day (04-18): every field of every day equal but
+    ``by_geography``, which differs from the change day on; the result's frames, sales and snapshots equal too."""
+
+    FLAGS = [{}, {"compute_candles": True, "compute_acquisition_funding": True, "compute_position_frames": True}]
+
+    def _pair(self, flags: dict) -> tuple[PortfolioCalculationResult, PortfolioCalculationResult]:
+        plain = _build_classified(_classifications(_whole(GEO_1)), **flags)
+        changed = _build_classified(_classifications(_steps((BOOK_FROM, QUIET_18 - timedelta(days=1), GEO_1), (QUIET_18, BOOK_TO, GEO_2))), **flags)
+        assert QUIET_18 not in _segment_starts(plain) and QUIET_18 in _segment_starts(changed), "precondition: one more computed day"
+        return plain, changed
+
+    def test_every_other_field_of_every_day_is_equal(self):
+        for flags in self.FLAGS:
+            plain, changed = self._pair(flags)
+            assert _state_differences(plain, changed, skip={"by_geography"}) == [], f"flags {flags}"
+            if flags:
+                assert any(state.pnl_candle is not None for state in plain.daily_states), "precondition: candles computed"
+                assert plain.position_frames, "precondition: frames computed"
+            assert plain.position_frames == changed.position_frames, f"flags {flags}: position frames"
+            assert plain.realized_sales == changed.realized_sales, f"flags {flags}: realized sales"
+            assert plain.position_states_start == changed.position_states_start and plain.position_states_end == changed.position_states_end, f"flags {flags}: snapshots"
+
+    def test_only_by_geography_differs_and_only_from_the_change_day(self):
+        for flags in self.FLAGS:
+            plain, changed = self._pair(flags)
+            for day in _days(BOOK_FROM, BOOK_TO):
+                a, b = plain.daily_states.state_on(day).by_geography, changed.daily_states.state_on(day).by_geography
+                if day < QUIET_18:
+                    assert a == b, f"flags {flags}, {day}: before the change"
+                else:
+                    assert a != b, f"flags {flags}, {day}: from the change on"

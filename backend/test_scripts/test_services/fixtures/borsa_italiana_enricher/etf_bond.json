@@ -1,0 +1,13 @@
+{
+ "source": "borsa_italiana",
+ "asset": "etf_bond",
+ "version": "borsa-italiana-scraping 0.3.5",
+ "recorded_at": "2026-11-10T17:06:36",
+ "calls": {
+  "scheda_en": {
+   "seconds": 0.1,
+   "error": "StrumentoNonRisolto: La ricerca universale non ha risolto 'IE00B3F81409' (mic=None, platform=None): strumento inesistente o mercato non gestito.",
+   "response": null
+  }
+ }
+}

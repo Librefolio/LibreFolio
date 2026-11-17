@@ -33,6 +33,41 @@ one takes over.
         </div>
         <span class="card-desc">Stable monthly average Swiss Franc rates from the SNB, base currency CHF.</span>
     </a>
+    <a href="bdi/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <img src="https://www.bancaditalia.it/application/themes/bdi2/img/favicon.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="BDI favicon">
+            <span class="card-title" style="margin: 0;">Banca d'Italia (BDI)</span>
+        </div>
+        <span class="card-desc">About 150 currencies against EUR: almost every currency in the world in one step to the euro.</span>
+    </a>
+    <a href="bcb/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <img src="https://www.bcb.gov.br/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="BCB favicon">
+            <span class="card-title" style="margin: 0;">Banco Central do Brasil (BCB)</span>
+        </div>
+        <span class="card-desc">About 150 currencies against USD, and the Brazilian real, from the PTAX closing bulletin.</span>
+    </a>
+    <a href="norges/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <img src="https://www.norges-bank.no/Static/Favicons/favicon-32x32.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="NORGES favicon">
+            <span class="card-title" style="margin: 0;">Norges Bank (NORGES)</span>
+        </div>
+        <span class="card-desc">About 35 currencies against NOK, among them BDT, PKR, VND and MMK.</span>
+    </a>
+    <a href="nbu/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <img src="https://bank.gov.ua/frontend/icon/favicon-32x32.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="NBU favicon">
+            <span class="card-title" style="margin: 0;">National Bank of Ukraine (NBU)</span>
+        </div>
+        <span class="card-desc">Official rates of about 40 currencies against UAH, among them KZT, GEL, AZN and EGP.</span>
+    </a>
+    <a href="boc/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <img src="https://www.bankofcanada.ca/wp-content/themes/ews-build-2024/img/favicon/favicon-32x32.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="BOC favicon">
+            <span class="card-title" style="margin: 0;">Bank of Canada (BOC)</span>
+        </div>
+        <span class="card-desc">Daily averages of about 24 currencies against CAD, among them PEN, from 2017.</span>
+    </a>
     <a href="../../../community/contribute/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
      <div style="display: flex; align-items: center; gap: 0.75rem;">
      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--md-accent-fg-color);"><path d="M15.39 4.39a1 1 0 0 0 1.68-.474 2.5 2.5 0 1 1 3.014 3.015 1 1 0 0 0-.474 1.68l1.683 1.682a2.414 2.414 0 0 1 0 3.414L19.61 15.39a1 1 0 0 1-1.68-.474 2.5 2.5 0 1 0-3.014 3.015 1 1 0 0 1 .474 1.68l-1.683 1.682a2.414 2.414 0 0 1-3.414 0L8.61 19.61a1 1 0 0 0-1.68.474 2.5 2.5 0 1 1-3.014-3.015 1 1 0 0 0 .474-1.68l-1.683-1.682a2.414 2.414 0 0 1 0-3.414L4.39 8.61a1 1 0 0 1 1.68.474 2.5 2.5 0 1 0 3.014-3.015 1 1 0 0 1-.474-1.68l1.683-1.682a2.414 2.414 0 0 1 3.414 0z"/></svg>
@@ -52,6 +87,11 @@ Each central bank quotes other currencies against its own, the **base currency**
 | <img src="https://fred.stlouisfed.org/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **FED** (Federal Reserve FRED) | USD 🇺🇸 | Daily, on US business days | US-dollar pairs |
 | <img src="https://www.bankofengland.co.uk/favicon.svg?ver=2c06d" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **BOE** (Bank of England) | GBP 🇬🇧 | Daily, on UK business days | Sterling pairs |
 | <img src="https://data.snb.ch/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **SNB** (Swiss National Bank) | CHF 🇨🇭 | Monthly averages, one value per month | Swiss-franc pairs, when a monthly rate is enough |
+| <img src="https://www.bancaditalia.it/application/themes/bdi2/img/favicon.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **BDI** (Banca d'Italia) | EUR 🇪🇺 | Daily, on Italian business days | Almost any currency to the euro in one step |
+| <img src="https://www.bcb.gov.br/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **BCB** (Banco Central do Brasil) | USD 🇺🇸 | Daily, on Brazilian business days | Almost any currency to the US dollar, and BRL |
+| <img src="https://www.norges-bank.no/Static/Favicons/favicon-32x32.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **NORGES** (Norges Bank) | NOK 🇳🇴 | Daily, around 16:00 CET on Norwegian business days | Asian currencies the ECB does not publish (BDT, PKR, VND, MMK) |
+| <img src="https://bank.gov.ua/frontend/icon/favicon-32x32.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **NBU** (National Bank of Ukraine) | UAH 🇺🇦 | Every day, weekends included (each rate valid from the day after it is set) | Central Asia, the Caucasus, Eastern Europe, North Africa |
+| <img src="https://www.bankofcanada.ca/wp-content/themes/ews-build-2024/img/favicon/favicon-32x32.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **BOC** (Bank of Canada) | CAD 🇨🇦 | Daily, by 16:30 ET on Canadian business days | Canadian-dollar pairs, a second source for the Americas (PEN) |
 
 ## 🎯 How Routing & Fallback Works
 

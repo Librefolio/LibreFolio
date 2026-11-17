@@ -19,7 +19,8 @@ The Yahoo Finance provider fetches stock, ETF, crypto, and index prices using th
 1. The asset-source service checks its **core current-value cache** (120s TTL) before invoking
    the provider.
 2. Calls `ticker.info` — the Yahoo `quoteSummary` endpoint. Returns `regularMarketPrice`, `currency`, and `regularMarketTime` in a **single lightweight call**.
-3. Fallback price: `currentPrice` → `previousClose` (if `regularMarketPrice` is null).
+3. Fallback price: `currentPrice` → `previousClose` → `regularMarketPreviousClose` (if `regularMarketPrice` is
+   null). The mapping is `_quote_from_info()`, shared with the bulk read below.
 4. `as_of_date` is the date of `regularMarketTime` in the exchange's timezone,
    `info["exchangeTimezoneName"]`, which the plugin's private `_exchange_zone()` turns into a
    `ZoneInfo`: UTC when Yahoo gives none or one the server's timezone database does not know (see
@@ -38,6 +39,42 @@ The Yahoo Finance provider fetches stock, ETF, crypto, and index prices using th
 
     Frontend polls every **30s** for responsive UI, while the core cache has a **120s TTL**.
     Repeated polls for the same provider key can therefore return without another Yahoo call.
+
+### 📦 Current Values in Bulk (`get_current_values_bulk`) {: #bulk-current }
+
+Since project 76 (C5) Yahoo reads the current values of many assets with **one** request: the
+v7 quote list, `/v7/finance/quote?symbols=A,B,…`, up to 50 symbols per call
+(`bulk_current_max_items`). The core groups the assets and calls it once per group
+([Current Values Read in Bulk](architecture.md#bulk-current-reads)), so 20 Yahoo assets cost one
+request per refresh interval instead of 20 `ticker.info` calls (each of which makes two requests:
+`quoteSummary` and this same v7 quote).
+
+- **Same answer as `get_current_value`.** Each v7 quote goes through `_quote_from_info()`, the
+  mapping of `ticker.info`: price, currency, and `regularMarketTime` read in
+  `exchangeTimezoneName`. The v7 quote has no `currentPrice` or `previousClose`; its
+  `regularMarketPreviousClose` closes the fallback chain. A test checks both paths on one
+  recorded response (`backend/test_scripts/fixtures/yahoo/v7_quote_five_symbols.json`, recorded
+  once on 16/11/2026: a US stock, two ETFs in Milan and Xetra, two cryptos).
+- **ISIN.** An ISIN item is first resolved to its symbol as `yf.Ticker(isin)` resolves it (one
+  lookup per ISIN), then quoted in the same request.
+- **Missing and wrong items.** A symbol Yahoo does not return gets no answer (the core serves the
+  last stored price); a quote without any price answers `NO_DATA`; an identifier type other than
+  TICKER or ISIN answers `INVALID_IDENTIFIER_TYPE`. The other items are still answered.
+- **Matched by symbol (a known limit).** The bulk read matches each v7 quote to its assets by the
+  symbol Yahoo returns. `ticker.info` takes the first quote whatever its symbol, so a ticker Yahoo
+  answers under another symbol (an alias, a renamed listing) is priced by `.info` but not by the
+  bulk read: that asset is served its last stored price, and the symbol is logged once per
+  process («Yahoo Finance returned no v7 quote for a symbol»). The fix is to assign the symbol Yahoo
+  now uses.
+- **Checked against the real Yahoo** by `test_current_values_bulk` in the external suite
+  (`./dev.py test external asset-providers --providers yfinance`): one bulk call on the provider's
+  test cases (a US stock, an ETF in Milan, a crypto in EUR) against the single reads.
+- **Errors.** A «too many requests» refusal raises `AssetRateLimitedError` for the whole call, never
+  retried (the core pauses the provider); any other failure of the request is `FETCH_ERROR`.
+- **An internal of yfinance.** yfinance exposes no list read: the plugin calls the helper `.info`
+  uses inside, `YfData().get_raw_json()`. `_bulk_quote_available()` checks at import that it is
+  there; if a yfinance release moves it, `supports_bulk_current` is `False` and the core goes back
+  to one `ticker.info` per asset, with no other change.
 
 ### 📈 Historical Data (`get_history_value`)
 
@@ -109,6 +146,22 @@ history uses `NO_DATA`, and malformed or unexpected Yahoo responses use `FETCH_E
 - A result whose currency is a minor unit carries a `quote_base_suggestion`: `GBp` gives
   `{"quantity": 100, "quote_currency": "GBp"}`; any other currency, or none, adds no key
   ([Quote Base Suggestion](#quote-base-suggestion)).
+- **A crypto's euro ticker** (project 76, Y1). On Yahoo a coin has one ticker per currency
+  (`BTC-USD`, `BTC-EUR`), and the search answers the dollar one only. `_with_euro_twins()` asks
+  for the `-EUR` twin of every `CRYPTO` result ending in `-USD` whose twin is not already listed,
+  all in **one** v7 quote-list request (`_fetch_v7_quotes`, the one of the bulk read). A twin that
+  Yahoo quotes in `EUR` becomes a row right after its dollar row: `identifier` the twin,
+  `currency` `EUR`, `type` `CRYPTO`, `display_name` the quote's name.
+    - Nothing is asked when no twin is missing, or when the v7 helper is unavailable
+      (`_bulk_quote_available()`).
+    - Best effort: if the request fails, the search answers its dollar rows, with a warning. A
+      refusal for too many requests is the exception: it leaves the whole search as rate limited,
+      as a refusal on a result's currency does, and the core pauses Yahoo.
+    - A transient error is retried by `_yf_with_retry` (up to 4.5 s of waits) before the search
+      answers without the twins.
+    - The twin rows come on top of the 20 results, and the request is one more Yahoo request
+      inside the one counted search call, like the currency reads.
+    - A twin Yahoo does not return, or returns in another currency, adds no row.
 
 ### 📋 Metadata (`fetch_asset_metadata`)
 
@@ -184,7 +237,7 @@ version stored a day early stays, beside the one a sync fetches again
 
 | Owner / Cache | Key | TTL | Max Size | Purpose |
 |---|---|---|---|---|
-| **Core current value** | Provider code + identifier + identifier type (refresh also includes the provider-parameter hash) | 120 sec | 300 | Avoid repeated `ticker.info` calls during current-price polling and refresh. |
+| **Core current value** | Provider code + identifier + identifier type + provider-parameter hash + settings | 120 sec | 5000 | Avoid repeated Yahoo requests during current-price polling and refresh; filled by the [bulk read](#bulk-current) for every active Yahoo asset at once. |
 | **Core history** | Provider code + identifier + identifier type + provider-parameter hash | 15 min | 500 | Reuse fetched date ranges during provider-driven refresh. |
 | **Core search query** | Provider code + normalized query | 15 min | 500 | Avoid repeating the same provider search. |
 | **Yahoo currency lookup** | `symbol` | 24 hours | 2000 | Cache the provider's `fast_info` currency sub-operation used by `search()` and `suggest_quote_base()`. Only answers are cached, never a refusal or an error. |

@@ -166,7 +166,9 @@
           "last7d": "Derniers 7 jours",
           "last30d": "Derniers 30 jours",
           "deferred": "Reporté : fournisseur en pause",
-          "retryAt": "Nouvel essai à {time}"
+          "retryAt": "Nouvel essai à {time}",
+          "profileRead": "Lecture des profils",
+          "voicesWritten": "{count, plural, one {# champ du profil écrit} other {# champs du profil écrits}}"
         },
         "status": {
           "title": "État du Planificateur",
@@ -180,7 +182,13 @@
         },
         "timezone": "Fuseau horaire",
         "timezoneChangeWarning": "Changer de fuseau horaire conserve ces heures et jours inchangés, mais modifie l'instant d'exécution UTC réel.",
-        "timezoneHintLocal": "Les heures et jours ci-dessous sont interprétés dans ce fuseau horaire."
+        "timezoneHintLocal": "Les heures et jours ci-dessous sont interprétés dans ce fuseau horaire.",
+        "profileReadSection": "Lecture des profils d'actifs",
+        "profileReadHint": "Lit le profil de chaque actif (type, émetteur, frais, répartition) depuis ses sources de données, dans le fuseau du planificateur. Les profils changent rarement : une fois par semaine suffit.",
+        "profileReadTimesLabel": "Heures de lecture",
+        "profileReadDaysLabel": "Jours de lecture",
+        "profileReadTimesRemove": "Retirer l'heure de lecture des profils {slot}",
+        "profileReadDay": "Lire les profils le {day}"
       }
     },
     "devicePixelRatioHint": "Rapport entre les pixels physiques de l'appareil et les pixels CSS. 1x = écran standard, 2x+ = écran Retina/HiDPI.",
@@ -483,6 +491,8 @@
       "about": "Quelle version de LibreFolio tourne ici, ce qui a changé et sa licence.",
       "users": "Les comptes de cette instance : qui peut se connecter, qui est administrateur, et les liens d'invitation.",
       "security": "Comment cette instance protège les connexions : les contrôles qu'elle effectue et quoi corriger quand l'un échoue."
-    }
+    },
+    "pluginSystemEnricher": "Enrichisseurs",
+    "enrichers": "Enrichisseurs"
   }
 }
