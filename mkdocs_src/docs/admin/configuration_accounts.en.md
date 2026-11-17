@@ -306,8 +306,8 @@ provider. Each provider declares its tier, **premium** (a source an instance vou
 data) or **community** (the default), and its priority inside the tier. The results of the premium providers
 come first. None of the providers shipped with LibreFolio is premium, so without one the search keeps its order.
 
-**Where**: in LibreFolio's `.env`. No restart: LibreFolio reads them at every search, and they apply to the next
-search.
+**Where**: in LibreFolio's `.env`. Restart LibreFolio after a change: the server receives the variables of `.env` when
+it starts, and applies them from the next search.
 
 | Variable | Default | What it does |
 | --- | --- | --- |
@@ -340,7 +340,7 @@ it starts.
   A list made only of such codes leaves no provider active (but `MANUAL`): check the log after a change.
 - Nothing is deleted. An asset already assigned to a provider you leave out keeps its assignment and its saved
   prices, and gets no new ones. A provider left out is never asked for exchange rates: a pair takes its rates from
-  its other routes.
+  its next route, and they are saved under the name of the provider that gave them.
 - Settings shared by several providers (such as one API key) disappear with the last provider that reads them.
 
 ---
