@@ -4057,3 +4057,39 @@ Filed: [[decisions/histogram-grid-pinned-to-var-cut]].
 Project 70, RN-15: the Risk tab's effective number of positions leaves cash and unpriced holdings out of its
 denominator, and its formula has one home in `financial_math/weights.py`. Added the change to the feature's history.
 Filed: [[features/F-111]].
+
+## [2026-11-17] file | The simulation on its own history
+Project 70, RN-16: the What if…? simulation reads all the holdings' common history, not the page's period, and lowers
+its path count to fit instead of refusing; L4Simulation has its component test. Added to the feature's history.
+Filed: [[features/F-111]].
+
+## [2026-11-17] file | One row, one window in the Lab
+Project 70, RN-19: the Lab's «How did each one move?» table reads its KPI from an instance of its own in L1°'s request,
+so a benchmark never moves it; a request's analytic is attributed to a level by its instance. Added to the binding list.
+Filed: [[concepts/risk-binding-decisions]].
+
+## [2026-11-17] file | Two rolling risk signals
+Project 70, RN-22: rolling semi-deviation (sharing the rolling volatility's axis) and rolling Omega (1× line) joined the
+catalogue, 24 plugins; both read the one home's measures window by window. Added to the domain page.
+Filed: [[domains/signals]].
+
+## [2026-11-17] file | Every ordering on every heatmap
+Project 70, RN-20: the correlation heatmap keeps its five orderings on screen, the unavailable ones saying why, and
+gains a type badge row. Added to the feature's history.
+Filed: [[features/F-111]].
+
+## [2026-11-17] file | The Asset Detail's risk tab is the levels panel on one asset
+Project 70, RN-17: the tab mounts the Dashboard's levels on scope `asset`, with the money on your position and the
+plan-prices note; the legacy panel, its helpers, `KpiCard` and 73 i18n keys are deleted, and the sync's `{accepted}`
+reaches the page again. Pages whose source paths pointed at the deleted files are updated.
+Filed: [[features/F-113]], [[problems/risk-stress-buckets-hand-listed]], [[concepts/discard-the-answer-not-the-question]], [[decisions/asset-global-page-shows-no-money]], [[features/F-054]].
+
+## [2026-11-17] file | «How does it move?», the fifth question
+Project 70, RN-18: the levels' block of the positive twins after L1 on every surface and the green tail of the returns
+histogram; a dated line in the thesis decision (a fifth question, the count differs per page) and F-111's history.
+Filed: [[decisions/risk-answers-four-questions]], [[features/F-111]].
+
+## [2026-11-17] file | The simulation leaves out a holding shorter than the horizon
+Project 70, RN-16b: the developer's «per ora B» in `simulation_participants`, and the one-holding window fix; F-111's
+history.
+Filed: [[features/F-111]].

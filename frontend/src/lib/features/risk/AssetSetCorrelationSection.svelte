@@ -139,7 +139,7 @@
                 <button type="button" class="mt-2 rounded-md border border-lf-input px-3 py-1.5 text-sm text-lf-secondary hover:bg-lf-hover" onclick={() => void controller.loadBase(true)} data-testid="risk-correlation-retry">{$t('common.retry')}</button>
             </div>
         {:else if output}
-            <CorrelationHeatmap {output} {assetLabels} {assetTypes} assetSectors={matrixMetadata.sectors} assetRegions={matrixMetadata.regions} />
+            <CorrelationHeatmap {output} {assetLabels} {assetTypes} assetSectors={matrixMetadata.sectors} assetRegions={matrixMetadata.regions} metadataStatus={matrixMetadata.status} />
         {:else if controller.initialLoading}
             <div class="h-48 animate-pulse rounded-lg bg-lf-panel" data-testid="risk-correlation-loading"></div>
         {:else if controller.loadDiscarded}

@@ -236,7 +236,7 @@ describe('warning translator sites — the source tree', () => {
         // Keyed by file and helper, never by line: an unrelated edit must not move this control.
         expect([...new Set(calls.map((call) => `${call.file} · ${call.form}`))]).toEqual(
             expect.arrayContaining([
-                'lib/features/risk/RiskResultFrame.svelte · warningSentence',
+                'lib/features/risk/levels/l4/L4Replay.svelte · warningSentence',
                 'lib/features/risk/levels/RiskLevelsPanel.svelte · partialNotice',
                 'lib/features/risk/levels/RiskLevelsPanel.svelte · resultReasons',
                 'lib/features/risk/AssetSetRiskPanel.svelte · partialNotice',

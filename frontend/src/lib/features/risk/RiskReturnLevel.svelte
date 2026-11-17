@@ -299,7 +299,7 @@
 
 <div class="space-y-4">
     {#if title}
-        <h4 class="text-sm font-medium text-lf-secondary">{title}</h4>
+        <h4 class="text-sm font-medium text-lf-secondary" data-testid="{testIdPrefix}-title">{title}</h4>
     {/if}
 
     <div bind:this={tableWrapper} class="risk-return-table" data-testid="{testIdPrefix}-table" data-row-count={assetRowCount} data-reference-count={addedRowCount}>

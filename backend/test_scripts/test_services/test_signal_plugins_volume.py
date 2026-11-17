@@ -57,7 +57,7 @@ def neutral_points(frames):
 
 def test_volume_catalog_includes_technical_and_risk_plugins():
     definitions = {item.signal_code: item for item in SignalPluginRegistry.list_definitions()}
-    assert len(definitions) == 22
+    assert len(definitions) == 24  # RN-22: the rolling semi-deviation and the rolling Omega
     assert VOLUME_CODES.issubset(definitions)
     assert definitions["OBV"].input_requirements.price_fields == [
         "close",

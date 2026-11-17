@@ -530,6 +530,48 @@ describe('riskPanelController', () => {
         stop();
     });
 
+    // RN-16 (developer's Q4 c; consultant, 17/11/2026): the simulation reads its own history, never the page's period, so
+    // a new period leaves its cone on screen; what changes its input — the currency, the scope, the positions — drops it.
+    it('keeps the simulation when only the period moves, and still drops the answers that read the period', async () => {
+        const {controller, inputs, stop} = mountController();
+        await vi.waitFor(() => expect(controller.initialLoading).toBe(false));
+        controller.setResult('simulation', {analytic_code: 'simulation'} as never);
+        controller.setResult('replay', {analytic_code: 'stress'} as never);
+
+        inputs.dateStart = '2024-01-01';
+        flushSync();
+
+        expect(controller.simulationResult).not.toBeNull();
+        expect(controller.replayResult).toBeNull();
+        stop();
+    });
+
+    it('drops the simulation when the currency moves', async () => {
+        const {controller, inputs, stop} = mountController();
+        await vi.waitFor(() => expect(controller.initialLoading).toBe(false));
+        controller.setResult('simulation', {analytic_code: 'simulation'} as never);
+
+        inputs.targetCurrency = 'USD';
+        flushSync();
+
+        expect(controller.simulationResult).toBeNull();
+        stop();
+    });
+
+    it('drops the simulation when the positions change (the refresh version), and keeps the other answers', async () => {
+        const {controller, inputs, stop} = mountController();
+        await vi.waitFor(() => expect(controller.initialLoading).toBe(false));
+        controller.setResult('simulation', {analytic_code: 'simulation'} as never);
+        controller.setResult('replay', {analytic_code: 'stress'} as never);
+
+        inputs.refreshVersion = 1;
+        flushSync();
+
+        expect(controller.simulationResult).toBeNull();
+        expect(controller.replayResult).not.toBeNull();
+        stop();
+    });
+
     it('separates a catalog that failed from one that is merely slow', async () => {
         const {controller, stop} = mountController();
         expect(controller.catalogState).toBe('pending');
@@ -696,6 +738,32 @@ describe('riskPanelController', () => {
         slow.resolve({items: []});
         await reload;
         expect(controller.refreshing).toBe(false);
+        stop();
+    });
+
+    // RN-17 (c): the page that hosts the panel needs to know whether the sync wrote anything — the Asset Detail drops its
+    // comparison overlays only on an accepted one — so the completion reaches it unchanged, after the base wave.
+    it('hands the host the sync completion as the modal reported it, once the base wave is reloaded', async () => {
+        const order: string[] = [];
+        const onsynced = vi.fn(async () => {
+            order.push('host');
+        });
+        const {controller, stop} = mountController(undefined, {onsynced});
+        queryRisk.mockImplementation(async () => {
+            order.push('base');
+            return {items: []};
+        });
+
+        await controller.handleSynced({accepted: true});
+        expect(onsynced).toHaveBeenLastCalledWith({accepted: true});
+        expect(order.at(-1), 'the host heard of the sync before the base wave was asked again').toBe('host');
+
+        await controller.handleSynced({accepted: false});
+        expect(onsynced).toHaveBeenLastCalledWith({accepted: false});
+
+        // A reload that is not a sync's (a created FX pair) wrote nothing the host can tell about: not accepted.
+        await controller.handleSynced();
+        expect(onsynced).toHaveBeenLastCalledWith({accepted: false});
         stop();
     });
 
@@ -1362,7 +1430,7 @@ describe('riskPanelController', () => {
     // controller passes neither on, so the request it issues carries no per-asset analytic at all.
     //
     // The pins are the other half, green today and meant to stay so: the callers that never opt in
-    // — the Dashboard's levels, Asset Detail's panel — and the lab as it asks today, on the union,
+    // — the Dashboard's levels, the levels on one asset (RN-17) — and the lab as it asks today, on the union,
     // each send byte for byte the requests they send now. Copied from a run before the split.
     // ------------------------------------------------------------------
     describe('the asset-set wave, split per level', () => {
@@ -1373,6 +1441,22 @@ describe('riskPanelController', () => {
 
         function assetSetCatalogue(code: string, scopeKind: string, mode: string): boolean {
             return scopeKind === 'asset_set' && mode === 'historical' && ASSET_SET_HISTORICAL_CODES.has(code);
+        }
+
+        /** The catalogue as the backend declares it for one asset (RN-17): six analytics, each with its real modes. */
+        const ASSET_MODES: Readonly<Record<string, readonly string[]>> = {
+            historical_kpi: ['historical', 'current_composition'],
+            historical_var: ['historical', 'current_composition'],
+            drawdown_summary: ['historical'],
+            comparison: ['historical', 'current_composition'],
+            stress: ['current_composition'],
+            simulation: ['current_composition'],
+            // RN-17 (consultant 17/11, «A»): the asset's own risk/return pair, for L3's row and dot.
+            asset_risk_return: ['current_composition'],
+        };
+
+        function assetCatalogue(code: string, scopeKind: string, mode: string): boolean {
+            return scopeKind === 'asset' && (ASSET_MODES[code] ?? []).includes(mode);
         }
 
         /** The lab's inputs: two holdings, a 0% risk-free rate (the page has no control for one), and a benchmark outside the selection. */
@@ -1436,35 +1520,6 @@ describe('riskPanelController', () => {
             ],
         ];
 
-        /** Asset Detail's panel for one asset, same window: two requests. */
-        const ASSET_DETAIL_TODAY = [
-            [
-                {
-                    scope: {kind: 'asset', asset_id: 12},
-                    date_range: {start: '2025-01-01', end: '2025-12-31'},
-                    target_currency: 'EUR',
-                    mode: 'historical',
-                    analytics: [
-                        {instance_id: 'base-historical-historical_kpi', analytic_code: 'historical_kpi', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0}},
-                        {instance_id: 'base-historical-correlation', analytic_code: 'correlation', parameters: {}},
-                        {instance_id: 'base-historical-historical_var', analytic_code: 'historical_var', parameters: {confidence_level: 0.95, horizon_days: 1}},
-                    ],
-                },
-                false,
-            ],
-            [
-                {
-                    scope: {kind: 'asset', asset_id: 12},
-                    date_range: {start: '2025-01-01', end: '2025-12-31'},
-                    target_currency: 'EUR',
-                    mode: 'current_composition',
-                    composition_policy: 'current_buy_and_hold',
-                    analytics: [{instance_id: 'base-current_composition-risk_contribution', analytic_code: 'risk_contribution', parameters: {}}],
-                },
-                false,
-            ],
-        ];
-
         /** The lab's two levels as they ask today, on the union, the benchmark inside: one request for both. */
         const LAB_UNION_TODAY = [
             [
@@ -1488,7 +1543,7 @@ describe('riskPanelController', () => {
             ],
         ];
 
-        it('includeAssetSetLossLevels reaches the request: the bad day, the bad month and the drawdown, and nothing of the benchmark', async () => {
+        it("includeAssetSetLossLevels reaches the request: the bad day, the bad month, the drawdown and the move table's own KPI (RN-19), and nothing of the benchmark", async () => {
             capability.only = assetSetCatalogue;
             await settledController(labInputs(), {includeAssetSetLossLevels: true});
 
@@ -1496,6 +1551,7 @@ describe('riskPanelController', () => {
                 ['base-historical-asset_set_var', {confidence_level: 0.95, horizon_days: 1}],
                 ['base-historical-asset_set_var-monthly', {confidence_level: 0.95, horizon_days: 30}],
                 ['base-historical-asset_set_drawdown', {}],
+                ['base-historical-asset_set_kpi-move', {risk_free_annual_rate: 0, target_annual_return: 0}],
             ]);
         });
 
@@ -1517,10 +1573,43 @@ describe('riskPanelController', () => {
             expectIssuedToday(DASHBOARD_TODAY, "the Dashboard's levels");
         });
 
-        it("pins Asset Detail's panel: the requests it sends today, byte for byte", async () => {
-            // `RiskAnalysisPanel`'s only option is a callback.
-            await settledController({...defaultInputs(), scope: {kind: 'asset', asset_id: 12}}, {scenarioCatalogLoaded: () => undefined});
-            expectIssuedToday(ASSET_DETAIL_TODAY, "Asset Detail's panel");
+        it("pins the levels panel on one asset (RN-17), under the asset's real catalogue: L1's wave, the current KPI and the asset's own risk/return pair, nothing of a basket", async () => {
+            capability.only = assetCatalogue;
+            await settledController({...defaultInputs(), scope: {kind: 'asset', asset_id: 12}}, {includeDrawdownSummary: true, includeMonthlyVar: true, includeCurrentCompositionRiskReturn: true});
+            expectIssuedToday(
+                [
+                    [
+                        {
+                            scope: {kind: 'asset', asset_id: 12},
+                            date_range: {start: '2025-01-01', end: '2025-12-31'},
+                            target_currency: 'EUR',
+                            mode: 'historical',
+                            analytics: [
+                                {instance_id: 'base-historical-historical_kpi', analytic_code: 'historical_kpi', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0}},
+                                {instance_id: 'base-historical-historical_var', analytic_code: 'historical_var', parameters: {confidence_level: 0.95, horizon_days: 1}},
+                                {instance_id: 'base-historical-historical_var-monthly', analytic_code: 'historical_var', parameters: {confidence_level: 0.95, horizon_days: 30}},
+                                {instance_id: 'base-historical-drawdown_summary', analytic_code: 'drawdown_summary', parameters: {}},
+                            ],
+                        },
+                        false,
+                    ],
+                    [
+                        {
+                            scope: {kind: 'asset', asset_id: 12},
+                            date_range: {start: '2025-01-01', end: '2025-12-31'},
+                            target_currency: 'EUR',
+                            mode: 'current_composition',
+                            composition_policy: 'current_buy_and_hold',
+                            analytics: [
+                                {instance_id: 'base-current_composition-historical_kpi', analytic_code: 'historical_kpi', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0}},
+                                {instance_id: 'base-current_composition-asset_risk_return', analytic_code: 'asset_risk_return', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0}},
+                            ],
+                        },
+                        false,
+                    ],
+                ],
+                'the levels panel on one asset',
+            );
         });
 
         it('pins the lab as it asks today, on the union with a benchmark: one request, byte for byte', async () => {

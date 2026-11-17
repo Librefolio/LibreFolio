@@ -371,6 +371,24 @@ export function toPlannerId(raw: string, maxLength = 128): string | null {
 }
 
 /**
+ * The name a planner identifier was made from: the inverse of {@link toPlannerId}. A plain identifier is its own name; an
+ * `enc:` one reads its bytes back (`_` plus two hex digits each), as UTF-8. A chart that looks a category up by its name
+ * (a sector's colour) reads the result's id through this.
+ */
+export function fromPlannerId(id: string): string {
+    if (!id.startsWith(ENCODED_PREFIX)) return id;
+    const bytes: number[] = [];
+    const body = id.slice(ENCODED_PREFIX.length);
+    for (let index = 0; index < body.length; index += 1) {
+        if (body[index] === '_') {
+            bytes.push(Number.parseInt(body.slice(index + 1, index + 3), 16));
+            index += 2;
+        } else bytes.push(body.charCodeAt(index));
+    }
+    return new TextDecoder().decode(new Uint8Array(bytes));
+}
+
+/**
  * The planner accepts UTC timestamps with `Z` only and compares them in time
  * order (N25). Every timestamp goes through one form — millisecond `Z` — so
  * `.123Z` and `.123456Z` can never be compared as text. `null` = unparseable.

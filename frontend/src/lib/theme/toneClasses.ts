@@ -35,7 +35,7 @@ export const SIGN_TEXT = {
         loss: 'text-lf-loss',
         zero: 'text-lf-muted',
     },
-    /** KPI breakdown rows and the KpiCard change badge. */
+    /** KPI breakdown rows and their bars (`KpiSection`, `KpiDivergingFlowBar`). */
     kpi: {
         gain: 'text-lf-gain',
         loss: 'text-lf-loss',

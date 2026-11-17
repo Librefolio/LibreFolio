@@ -1,0 +1,11 @@
+{
+  "signals": {
+    "riskRollingOmega": {
+      "name": "Gains / pertes glissants (Oméga)",
+      "description": "Sur une fenêtre glissante, les gains au-dessus de la cible divisés par les pertes en dessous : au-dessus de 1, la fenêtre a gagné plus qu'elle n'a perdu.",
+      "output": "Oméga",
+      "outputDescription": "Somme des rendements au-dessus de la cible divisée par la somme des écarts en dessous.",
+      "referenceEven": "Gains = pertes"
+    }
+  }
+}

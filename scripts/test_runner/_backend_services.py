@@ -650,6 +650,38 @@ def services_linked_adjustment_pair(verbose: bool = False, test_names: list = No
     return run_command(cmd, "Linked adjustment pair tests", verbose=verbose)
 
 
+def services_transaction_charges(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the rules of the link of a charge (FEE, TAX) to its parent transaction (project 66, lot R2)."""
+    print_section("Services: Transaction Charges")
+    print_info("Testing: backend/app/services/transactions/charges.py + schemas/transactions/type_metadata.py (charge_role)")
+    print_info(
+        "Tests: the charge and parent type lists of the type table; each rule of a link (type, pair, parent found, broker, asset) in order; date and currency free; a parent with charges keeps a parent type; the reader of the charges of some parents through idx_transactions_parent; the messages in 4 languages"
+    )
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transaction_charges.py", test_names)
+    return run_command(cmd, "Transaction charges tests", verbose=verbose)
+
+
+def services_transaction_charge_links(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the batch stage that links a charge to its parent (project 66, lot R3)."""
+    print_section("Services: Transaction Charge Links")
+    print_info("Testing: backend/app/services/transactions/charges.py (link_charges) + the create items (ref, parent_ref, parent_transaction_id)")
+    print_info("Tests: a parent created in the batch or saved; unknown or duplicated names; a parent missing, not visible or deleted by the batch; the rules on the final state; the messages in 4 languages")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transaction_charge_links.py", test_names)
+    return run_command(cmd, "Transaction charge links tests", verbose=verbose)
+
+
+def services_transaction_charge_edits(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the deletes and updates of linked charges and their parents (project 66, lots R4 and R5)."""
+    print_section("Services: Transaction Charge Edits")
+    print_info("Testing: backend/app/services/transactions/charges.py (link_charges: unlink, relink, deleted parents, touched parents) + the update items")
+    print_info("Tests: a parent deleted with its charges left is refused; deleted with them, or with them unlinked, goes; updates link, unlink and relink; a promoted parent with charges is refused; a broker with linked rows is deleted")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transaction_charge_edits.py", test_names)
+    return run_command(cmd, "Transaction charge edits tests", verbose=verbose)
+
+
 def services_linked_cash_pair(verbose: bool = False, test_names: list = None) -> bool:
     """Test that a batch refuses a linked CASH_TRANSFER or FX_CONVERSION that contradicts its type (W6-7)."""
     print_section("Services: Linked Cash Pair")
@@ -2987,7 +3019,7 @@ Note: No backend server required.
     add_test(cat, "signal-plugins-close-only", services_signal_plugins_close_only, name="Close-only Signal Plugins", desc="SMA, ROC, StochRSI, KAMA and PPO delegation, warm-up and Asset/FX parity")
     add_test(cat, "signal-plugins-ohlc", services_signal_plugins_ohlc, name="OHLC Signal Plugins", desc="ATR, ADX, NATR, Aroon, Donchian and CCI strict input and numerical regression")
     add_test(cat, "signal-plugins-volume", services_signal_plugins_volume, name="Volume Signal Plugins", desc="OBV rebasing and MFI zero/missing volume, levels and TA-Lib delegation")
-    add_test(cat, "signal-plugin-matrix", services_signal_plugin_matrix, name="Full Signal Plugin Matrix", desc="Uniform 22-plugin domains, fields, gaps, boundaries and isolation gate")
+    add_test(cat, "signal-plugin-matrix", services_signal_plugin_matrix, name="Full Signal Plugin Matrix", desc="Uniform 24-plugin domains, fields, gaps, boundaries and isolation gate")
     add_test(cat, "asset-signals", services_asset_signals, name="Asset Signals", desc="Extended bulk load, FX-before-compute, signal-only response and isolation")
     # Write-scoped (the category default): unique-name assets deleted with their prices; FX rows only on AMD/BDT, AMD/SZL,
     # AMD/LSL, BBD/BZD (MVR/SCR never seeded), pairs no other test uses, dated 1980-1987, wiped before and after.
@@ -3118,6 +3150,27 @@ Note: No backend server required.
         services_linked_cash_pair,
         name="Linked Cash Pair",
         desc="W6-7: a CASH_TRANSFER pair in two currencies or with amounts that are not opposite, and an FX_CONVERSION in one currency, are refused on the first create (pairCurrencyMismatch, pairAmountMismatch, pairCurrencySame; commit and validate); coherent and stored pairs are not touched; the rule follows TX_TYPE_METADATA; the messages exist in EN/IT/FR/ES",
+    )
+    add_test(
+        cat,
+        "transaction-charges",
+        services_transaction_charges,
+        name="Transaction Charges",
+        desc="Project 66 R2: a FEE or TAX linked to its parent (BUY, SELL, DIVIDEND, INTEREST, DEPOSIT, WITHDRAWAL): the type lists of the table, each refusal in order (chargeNotACharge, chargeRowIsPaired, chargeParentNotFound, chargeParentTypeNotAllowed, chargeBrokerMismatch, chargeAssetMissing, chargeAssetMismatch), date and currency free, chargesBlockParentType, the reader through idx_transactions_parent; the messages exist in EN/IT/FR/ES",
+    )
+    add_test(
+        cat,
+        "transaction-charge-links",
+        services_transaction_charge_links,
+        name="Transaction Charge Links",
+        desc="Project 66 R3: the batch links a charge to the parent it names (parent_ref of a create, parent_transaction_id of a saved row) on the final state, on commit and validate: chargeRefDuplicate, chargeParentRefNotFound, chargeParentTwice, chargeParentIdInvalid, a parent missing, not visible or deleted by the batch is not found, the rules of R2 with parentRef; the messages exist in EN/IT/FR/ES",
+    )
+    add_test(
+        cat,
+        "transaction-charge-edits",
+        services_transaction_charge_edits,
+        name="Transaction Charge Edits",
+        desc="Project 66 R4/R5: a parent deleted while it keeps charges is refused (chargesDeleteIncomplete), with its charges deleted or unlinked in the batch it goes; updates link (parent_transaction_id, parent_ref), unlink (0) and relink; a saved row that keeps charges must stay a parent, not a leg of a pair (chargesBlockParentType); a broker with linked rows is deleted; the message exists in EN/IT/FR/ES",
     )
     add_test(
         cat,

@@ -24,6 +24,13 @@ The frontend consumes backend catalog JSON Schema to build controls and uses one
 > `EmaSignal.ts`, `RsiSignal.ts`, `MacdSignal.ts` and `BollingerSignal.ts` were deleted in `a332884f0` (2026-07-27).
 > AI Export reads the backend signals (`backend/app/services/ai_export/components/technical_shared.py`,
 > [[entities/ai-export-snapshot-service]]).
+>
+> 2026-11-17 (project 70, RN-22): 24 plugins. Rolling semi-deviation (`rolling_downside_deviation`, on the rolling
+> volatility's axis key `risk_volatility`, so the two lines share one axis) and rolling Omega (`rolling_omega`, its own
+> axis, a 1× reference line, undefined windows like the Sharpe). Both are the one home's scalar measures
+> (`risk/metrics.py`) window by window, vectorised in `signals/risk_adapters.py` with each window summed afresh, and
+> take `target_annual_return` — the parameter RN-21 fills from the user's common rate. AI Export curates no risk
+> signal, so neither declares temporal rules.
 
 ## Feature cluster
 
@@ -92,6 +99,7 @@ graph LR
 | Output contract and sanitization | `backend/app/services/signals/validation.py` |
 | Plugin registry | `backend/app/services/provider_registry.py` |
 | Production plugins | `backend/app/services/signal_plugins/` |
+| Rolling risk helpers (RN-22 semi-deviation, Omega) | `backend/app/services/signals/risk_adapters.py` |
 | Catalog + schema mapper | `frontend/src/lib/features/signals/catalogMapper.ts`, `schemaMapper.ts` |
 | Canonical renderer | `frontend/src/lib/features/signals/backendRenderer.ts` |
 | Request/result mapping | `frontend/src/lib/features/signals/requestBuilder.ts`, `resultMapper.ts` |

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.app.schemas.risk.outputs import RiskSimulationBandPoint, RiskSimulationOutput
+from backend.app.schemas.risk.results import RiskWarning
 from backend.app.schemas.risk.vocabulary import RiskCompositionPolicy, RiskErrorCode, RiskMode, RiskOutputKind, RiskSamplingStrategy, RiskScopeKind, RiskSimulationCovarianceEstimator, RiskSimulationDriftEstimator, RiskSimulationProcess, RiskSimulationRegime
 from backend.app.services.financial_math.returns import calendar_days_to_observations
 from backend.app.services.platform.provider_registry import register_plugin
@@ -18,12 +19,16 @@ from backend.app.services.risk.quant import (
     MAX_HISTORY_OBSERVATIONS,
     MAX_SIMULATION_ASSETS,
     MAX_SOBOL_DIMENSION,
+    MAX_STOCHASTIC_CELLS,
+    MIN_SIMULATION_PATHS,
     SimulationEngineRequest,
     SimulationResourceLimitError,
     align_simple_returns,
     estimate_drift_uncertainty,
     estimate_gbm_parameters,
+    fit_path_count,
     historical_returns_digest,
+    history_observation_cap,
     run_simulation,
 )
 from backend.app.services.risk.quant.models import DEFAULT_STEPS_PER_YEAR
@@ -185,7 +190,12 @@ class SimulationAnalytic(RiskAnalytic):
     # calendar horizon (`steps_per_year` = the observed frequency), and the drift
     # uncertainty compounds over those same observations. 3.x stepped once per
     # calendar day, so on a weekday series "365 days" simulated 1.45 years.
-    algorithm_version = "4.0.0-bootstrap-quantlib-1.43"
+    # 5.0.0 (RN-16, developer's Q4 c and Q5 a) — estimated on the simulation's own history (the service prepares it:
+    # all the common history, never the page's period), the bootstrap keeping its most recent observations that fit;
+    # the path count falls to the largest power of two that fits, never under 1 024; both declared in the output.
+    # RN-16b, in the same 5.0.0 (RN-16 is not released yet): a holding with less history than the horizon is left out,
+    # its weight with the cash, unless none reaches it (developer's Q7 «per ora B», `simulation_participants`).
+    algorithm_version = "5.0.0-bootstrap-quantlib-1.43"
     name_i18n_key = "risk.analytics.simulation.name"
     description_i18n_key = "risk.analytics.simulation.description"
     output_kind = RiskOutputKind.SIMULATION
@@ -224,6 +234,11 @@ class SimulationAnalytic(RiskAnalytic):
                 for asset_id in asset_ids
             ]
             cash_weight = context.cash_weight
+
+        _refuse_oversized_scope(len(asset_ids))
+        returns_by_asset, dates, history_baseline, history_truncated = self._estimation_history(params, prepared_by_asset[asset_ids[0]].returns.points, returns_by_asset)
+        requested_paths = params.path_count
+        params = params.model_copy(update={"path_count": self._fitted_path_count(params, len(asset_ids))})
 
         if params.process == RiskSimulationProcess.BLOCK_BOOTSTRAP:
             engine_request, observations = self._build_bootstrap_request(
@@ -308,7 +323,13 @@ class SimulationAnalytic(RiskAnalytic):
                 probability_of_loss=(engine_result.probability_of_loss),
                 drift_uncertainty_factor=(drift_uncertainty[0] if drift_uncertainty else None),
                 drift_uncertainty_observations=(drift_uncertainty[1] if drift_uncertainty else None),
+                requested_path_count=requested_paths,
+                estimation_start=dates[0] if dates else None,
+                estimation_end=dates[-1] if dates else None,
+                estimation_observations=len(dates) or None,
+                history_truncated=history_truncated,
             ),
+            warnings=self._history_warnings(params.horizon_days, history_baseline, dates, end=context.requested_range.end),
             method=self._method_label(params),
             n_observations=observations,
             sampling_method=params.sampling_method,
@@ -316,6 +337,62 @@ class SimulationAnalytic(RiskAnalytic):
             random_seed=params.random_seed,
             sobol_start_index=params.sobol_start_index,
             bootstrap_seed=params.bootstrap_seed,
+        )
+
+    @staticmethod
+    def _estimation_history(params: SimulationParams, points, returns_by_asset):
+        """The history the simulation is estimated on, its dates and the day before its first return; trimmed or not.
+
+        The bootstrap carries the history across the process boundary: its most recent observations that fit, once,
+        upstream of the matrix, the drift uncertainty and the count (Q4 c with Q5's rule, RN-16). GBM carries
+        estimates, so it reads the whole window.
+        """
+        baseline = points[0].previous_valuation_date if points else None
+        dates = [point.date for point in points]
+        cap = history_observation_cap(len(returns_by_asset))
+        if params.process != RiskSimulationProcess.BLOCK_BOOTSTRAP or len(dates) <= cap:
+            return returns_by_asset, dates, baseline, False
+        trimmed = {asset_id: values[-cap:] for asset_id, values in returns_by_asset.items()}
+        return trimmed, dates[-cap:], dates[-cap - 1], True
+
+    @staticmethod
+    def _fitted_path_count(params: SimulationParams, asset_count: int) -> int:
+        """The paths the simulation runs (Q5 a): the request, or the largest power of two that fits; refused below 1 024."""
+        path_count = fit_path_count(params.path_count, horizon_days=params.horizon_days, asset_count=asset_count)
+        if path_count is None:
+            # With fewer paths out of reach, the cure left is a shorter horizon.
+            raise resource_limit_error(
+                f"Simulation of {asset_count} positions over {params.horizon_days} days exceeds the compute budget even at {MIN_SIMULATION_PATHS} paths",
+                metric="stochastic_cells",
+                actual=MIN_SIMULATION_PATHS * params.horizon_days * asset_count,
+                limit=MAX_STOCHASTIC_CELLS,
+            )
+        return path_count
+
+    @staticmethod
+    def _history_warnings(horizon_days: int, baseline, dates, *, end=None) -> tuple[RiskWarning, ...]:
+        """Q4's amber line, inside c: a projection longer than the history it rests on.
+
+        Not degrading (consultant's principle, 16/11/2026): the data are complete, only short — the result stands, the
+        line says how far it reaches.
+
+        The history is the window's ``end`` minus the baseline (RN-16c, the consultant): the measure the participants
+        were chosen by (`simulation_participants`) — a holding at rest keeps its last price to the end, the page's rule —
+        so a holding admitted at exactly the horizon raises no line. Without an end, the last observation.
+        """
+        if baseline is None or not dates:
+            return ()
+        history_days = ((end or dates[-1]) - baseline).days
+        if history_days >= horizon_days:
+            return ()
+        return (
+            RiskWarning(
+                code="simulation_history_shorter_than_horizon",
+                message_i18n_key="risk.warnings.simulation_history_shorter_than_horizon",
+                message_params={"horizon_days": horizon_days, "history_days": history_days},
+                message=f"The simulation projects {horizon_days} days from {history_days} days of history.",
+                degrades_result=False,
+            ),
         )
 
     @staticmethod

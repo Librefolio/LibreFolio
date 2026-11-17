@@ -389,6 +389,30 @@ const PAID_LEVEL_CODES = ['asset_set_kpi', 'asset_set_risk_return', 'asset_set_c
 const PAID_UNCONDITIONAL_CODES = PAID_LEVEL_CODES.filter((code) => code !== 'asset_set_comparison');
 
 /**
+ * «How did each one move?» (RN-19): its day-level figures come from a KPI instance of its own, asked in L1°'s request
+ * beside the monthly VaR and the drawdown it also reads — so its rows share L1°'s calendar and a benchmark, L3°'s alone,
+ * never moves them. `asset_set_kpi` is therefore on both levels' requests, told apart by its instance.
+ */
+const MOVE_KPI_INSTANCE = 'base-historical-asset_set_kpi-move';
+
+/** L1°'s whole wave on the wire: its two codes, and the move table's KPI. */
+const LOSS_WAVE_CODES = [...LOSS_LEVEL_CODES, 'asset_set_kpi'] as const;
+
+/** The move table's value columns: six drawn, four a click away in its toggle (Q21 c, then ADD and the extreme days). */
+const MOVE_VISIBLE_CELLS = ['bestDay', 'bestMonth', 'rally', 'omega', 'positiveShare', 'downsideDeviation'] as const;
+const MOVE_HIDDEN_CELLS = ['meanUpDown', 'streak', 'averageDrawdown', 'extremeDays'] as const;
+
+/** True when an analytic belongs to L1°'s wave: one of its codes, or the move table's own KPI instance. */
+function isLossAnalytic(analytic: RiskAnalyticRequest): boolean {
+    return (LOSS_LEVEL_CODES as readonly string[]).includes(analytic.analytic_code) || analytic.instance_id === MOVE_KPI_INSTANCE;
+}
+
+/** True when an analytic belongs to L3°'s wave: one of its codes, never under the move table's instance. */
+function isPaidAnalytic(analytic: RiskAnalyticRequest): boolean {
+    return (PAID_LEVEL_CODES as readonly string[]).includes(analytic.analytic_code) && analytic.instance_id !== MOVE_KPI_INSTANCE;
+}
+
+/**
  * An empty but valid scenario catalog.
  *
  * Empty, not absent. The replay reads it — `replayOptions` turns it into the
@@ -802,6 +826,8 @@ function assetSetVarOutput(request: RiskRequest, analytic: RiskAnalyticRequest, 
                 asset_id: assetId,
                 value_at_risk: valueAtRisk,
                 conditional_value_at_risk: valueAtRisk * INVENTED.tailWidening,
+                // RN-14: the best stretch of the horizon, the move table's «best 30 days». Invented; a window of the period.
+                ...(horizonDays > 1 ? {best_horizon: {compounded_return: 0.05 + row * 0.01, start_date: INVENTED.troughDate, end_date: INVENTED.recoveryDate}} : {}),
             };
         }),
     };
@@ -841,6 +867,12 @@ function assetSetDrawdownOutput(request: RiskRequest, options: RiskStubOptions) 
                 // takes +6.4%, not +6%. Computed rather than tabulated so the
                 // relationship stays true whatever the fall above becomes.
                 remaining_to_peak_ratio: -currentDrawdown / (1 + currentDrawdown),
+                // RN-14: the twin of the worst fall, read by the move table. Invented: from the trough to the recovery.
+                largest_rally: 0.2 + row * 0.03,
+                largest_rally_start_date: INVENTED.troughDate,
+                largest_rally_end_date: INVENTED.recoveryDate,
+                largest_rally_duration_days: 134,
+                average_drawdown: maximumDrawdown / 4,
             };
         }),
     };
@@ -877,6 +909,18 @@ function assetSetKpiOutput(request: RiskRequest, analytic: RiskAnalyticRequest, 
                 drawdown_at_risk: maximumDrawdown * 0.6,
                 conditional_drawdown_at_risk: maximumDrawdown * 0.8,
                 ulcer_index: 0.05 + row * 0.01,
+                // RN-14: what the move table reads off its own KPI instance. Invented; every one a figure, so every cell measures.
+                best_realization: 0.02 + row * 0.004,
+                best_realization_date: INVENTED.recoveryDate,
+                positive_observation_share: 0.5 + row * 0.01,
+                mean_positive_return: 0.009 + row * 0.001,
+                mean_negative_return: -(0.008 + row * 0.001),
+                longest_positive_run_observations: 6 + row,
+                longest_positive_run_start_date: INVENTED.troughDate,
+                longest_positive_run_end_date: INVENTED.recoveryDate,
+                omega_ratio: 1.1 + row * 0.05,
+                downside_deviation: INVENTED.volatility(row) * 0.7,
+                extreme_day_ratio: 2 + row * 0.2,
             };
         }),
     };
@@ -1663,12 +1707,12 @@ function levelRequestsFor(requests: readonly RiskRequest[], selection: readonly 
  * red on it instead of reading whichever happened to leave first.
  */
 function lossRequestsFor(requests: readonly RiskRequest[], selection: readonly number[]): RiskRequest[] {
-    return levelRequestsFor(requests, selection).filter((request) => carriesAny(request, LOSS_LEVEL_CODES));
+    return levelRequestsFor(requests, selection).filter((request) => request.analytics.some(isLossAnalytic));
 }
 
-/** L3°'s requests about exactly this selection, in the order they left: those carrying any of {@link PAID_LEVEL_CODES}, told apart the same way. */
+/** L3°'s requests about exactly this selection, in the order they left: those carrying any of {@link PAID_LEVEL_CODES} — the KPI under its base instance — told apart the same way. */
 function paidRequestsFor(requests: readonly RiskRequest[], selection: readonly number[]): RiskRequest[] {
-    return levelRequestsFor(requests, selection).filter((request) => carriesAny(request, PAID_LEVEL_CODES));
+    return levelRequestsFor(requests, selection).filter((request) => request.analytics.some(isPaidAnalytic));
 }
 
 /**
@@ -1844,13 +1888,13 @@ interface LabNotice {
  *
  * The notice reads what those sections *render* (the developer's decision of 05/10/2026, the
  * Dashboard's pattern), and nothing else: the correlation section's `correlation`; L1°'s two VaR
- * horizons and its drawdown; L3°'s KPI, risk/return and — with a benchmark — comparison. Not the
+ * horizons, its drawdown and the move table's KPI (RN-19); L3°'s KPI, risk/return and — with a benchmark — comparison. Not the
  * `correlation` that rides in each level's own request, which no level draws; not the replay, which
  * keeps its own disclosure, as the Dashboard's L4 does.
  */
 function labNoticeFor(sent: NoticeRequests, options: RiskStubOptions): LabNotice {
-    const rendered = (request: RiskRequest, codes: readonly string[]) => request.analytics.filter((analytic) => codes.includes(analytic.analytic_code)).map((analytic) => resultFor(request, analytic, options));
-    const results = [...rendered(sent.correlation, ['correlation']), ...rendered(sent.loss, LOSS_LEVEL_CODES), ...rendered(sent.paid, PAID_LEVEL_CODES)];
+    const rendered = (request: RiskRequest, drawn: (analytic: RiskAnalyticRequest) => boolean) => request.analytics.filter(drawn).map((analytic) => resultFor(request, analytic, options));
+    const results = [...rendered(sent.correlation, (analytic) => analytic.analytic_code === 'correlation'), ...rendered(sent.loss, isLossAnalytic), ...rendered(sent.paid, isPaidAnalytic)];
     const warningsOf = (result: Record<string, unknown>) => (result.warnings ?? []) as ReturnType<typeof exclusionWarnings>;
     return {
         partial: results.filter((result) => result.status === 'partial').length,
@@ -4426,17 +4470,19 @@ test.describe('Asset Global risk laboratory', () => {
      * The failure is provoked on a *changed* selection, after a read that
      * succeeded, rather than on a fresh page. A fresh page starts with empty maps,
      * so a failed read that forgot to clear them would pass there unseen; here the
-     * sector and area orderings are on screen when the read fails, and they must
-     * go. The type ordering must stay, because its map never came from that read.
+     * sector and area orderings are available when the read fails, and they must
+     * become unavailable — still on screen since RN-20 (every ordering on every
+     * heatmap), saying the read failed. The type ordering stays available, because
+     * its map never came from that read.
      *
-     * And "by sector" is the ordering in use when it goes. An ordering that is no
-     * longer offered cannot stay in charge behind a row of unpressed buttons: the
-     * matrix falls back to its initial ordering — similarity — presses it and draws
-     * it, the very order it drew for the same assets at the start. The fallback
-     * only stands in: the moment "by sector" is offered again, the user's choice
-     * applies again.
+     * And "by sector" is the ordering in use when it becomes unavailable. An
+     * ordering that cannot order cannot stay in charge behind a row of unpressed
+     * buttons: the matrix falls back to its initial ordering — similarity — presses
+     * it and draws it, the very order it drew for the same assets at the start. The
+     * fallback only stands in: the moment "by sector" is available again, the
+     * user's choice applies again.
      */
-    test("the matrix offers type, sector and area orderings from the assets' stored metadata, and loses only those when the metadata read fails", async ({page}) => {
+    test("the matrix orders by type, sector and area from the assets' stored metadata, and keeps sector and area on screen, unavailable and saying the read failed, when the metadata read fails", async ({page}) => {
         // Four selections, each read and drawn, and the "+" once or twice in one
         // page: more than the default budget, no more than the neighbours' 45 s.
         test.setTimeout(45_000);
@@ -4474,13 +4520,15 @@ test.describe('Asset Global risk laboratory', () => {
         expect(answered?.problem ?? null, 'the planted answer must be one the client accepts, or the maps stay empty for a reason this test did not choose').toBeNull();
         expect(scopeKey(answered?.rowIds ?? []), 'every selected asset must come back with its planted classification').toBe(scopeKey(selection));
 
-        // The two orderings the heatmap always has, then the three the inputs open.
+        // All five orderings, always (RN-20); the three the inputs open become available — visibility alone proves
+        // nothing now, the unavailable ones are on screen too.
         await expect(ordering('similarity')).toBeVisible({timeout: 20_000});
         await expect(ordering('similarity')).toHaveAttribute('aria-pressed', 'true');
         await expect(ordering('name')).toBeVisible();
-        await expect(ordering('type')).toBeVisible();
-        await expect(ordering('sector')).toBeVisible({timeout: 10_000});
-        await expect(ordering('region')).toBeVisible();
+        for (const mode of ['type', 'sector', 'region']) {
+            await expect(ordering(mode)).toBeVisible();
+            await expect(ordering(mode), `"${mode}" never became available: the metadata never reached the matrix`).not.toHaveAttribute('aria-disabled', 'true', {timeout: 10_000});
+        }
         // The composition rows read the same two maps, whatever the ordering.
         await expect(panel.getByTestId('risk-correlation-groups-sector')).toBeVisible();
         await expect(panel.getByTestId('risk-correlation-groups-region')).toBeVisible();
@@ -4510,15 +4558,29 @@ test.describe('Asset Global risk laboratory', () => {
         await expect.poll(() => readAfter(beforeFailure, 'failed', remaining) !== undefined, {timeout: 15_000, message: 'a changed selection must be read again'}).toBe(true);
         await expect.poll(async () => scopeKey(await drawnAssetOrder(page)), {timeout: 20_000, message: 'the heatmap must redraw for the smaller selection'}).toBe(scopeKey(remaining.slice(0, MATRIX_LIMIT)));
 
-        // Presence before absence: the orderings the page supplies are on screen, so
-        // the two missing ones are missing from a rendered heatmap, not from one
-        // that has not drawn yet.
+        // The read failed: the five orderings stay (RN-20); sector and area are offered but unavailable, and say the
+        // read failed — not that no sector exists. The type comes from the chips, not from the read, and stays.
         await expect(ordering('similarity')).toBeVisible();
         await expect(ordering('name')).toBeVisible();
-        await expect(ordering('type')).toBeVisible();
-        await expect(ordering('sector')).toHaveCount(0);
-        await expect(ordering('region')).toHaveCount(0);
-        await expect(panel.getByTestId('risk-correlation-groups')).toHaveCount(0);
+        await expect(ordering('type')).not.toHaveAttribute('aria-disabled', 'true');
+        for (const mode of ['sector', 'region']) {
+            await expect(ordering(mode)).toHaveAttribute('aria-disabled', 'true');
+            await expect(ordering(mode)).toHaveAttribute('data-disabled-reason', 'failed');
+        }
+        await expect(panel.getByTestId('risk-correlation-groups-sector')).toHaveCount(0);
+        await expect(panel.getByTestId('risk-correlation-groups-region')).toHaveCount(0);
+        await expect(panel.getByTestId('risk-correlation-groups-type'), 'the type row reads the chips, which the failed read does not touch').toBeVisible();
+
+        // The reason opens in a real browser, from the keyboard: the greyed button keeps the focus (aria-disabled, not
+        // disabled), and Enter on it is the click that opens its Tooltip. Playwright's own click refuses an aria-disabled
+        // element, which a reader's pointer does not.
+        await ordering('sector').focus();
+        await page.keyboard.press('Enter');
+        await expect(page.getByTestId('tooltip-content'), 'the unavailable ordering does not say why').toBeVisible();
+        // The Tooltip takes an outside click only once it says so (the same barrier its component tests wait on).
+        await expect(page.getByTestId('tooltip-content')).toHaveAttribute('data-dismissable', 'true');
+        await page.mouse.click(2, 2);
+        await expect(page.getByTestId('tooltip-content')).toHaveCount(0);
 
         // 🔴 "By sector" was the ordering in use, and it is no longer offered. The
         // matrix must not keep ordering by it behind a row of unpressed buttons.
@@ -4531,7 +4593,7 @@ test.describe('Asset Global risk laboratory', () => {
         await addThroughPicker(page, [removed]);
         await expect.poll(() => readAfter(beforeReAdd, 'failed', selection) !== undefined, {timeout: 15_000, message: 'the restored selection must be read again'}).toBe(true);
         await expect.poll(async () => scopeKey(await drawnAssetOrder(page)), {timeout: 20_000, message: 'the heatmap must redraw for the restored selection'}).toBe(scopeKey(matrix));
-        await expect(ordering('sector')).toHaveCount(0);
+        await expect(ordering('sector')).toHaveAttribute('aria-disabled', 'true');
         await expectOnlyPressed('similarity', 'the fallback holds while "by sector" stays unavailable');
         await expect.poll(() => drawnAssetOrder(page), {message: 'the fallback must draw the similarity order phase 1 drew for these very assets'}).toEqual(clustered);
 
@@ -4542,8 +4604,8 @@ test.describe('Asset Global risk laboratory', () => {
         await page.getByTestId(`risk-remove-asset-${removed}`).click();
         await expect(page.getByTestId(`risk-selected-asset-${removed}`)).toHaveCount(0);
         await expect.poll(() => readAfter(beforeRecovery, 'planted', remaining) !== undefined, {timeout: 15_000, message: 'a changed selection must be read again'}).toBe(true);
-        await expect(ordering('sector')).toBeVisible({timeout: 10_000});
-        await expectOnlyPressed('sector', 'once "by sector" is offered again, the choice the user made applies again');
+        await expect(ordering('sector')).not.toHaveAttribute('aria-disabled', 'true', {timeout: 10_000});
+        await expectOnlyPressed('sector', 'once "by sector" is available again, the choice the user made applies again');
     });
 
     /**
@@ -4680,7 +4742,7 @@ test.describe('Asset Global risk laboratory', () => {
         // The counts above would still pass if a stray request had smuggled one
         // code out on its own, or if one request answered for both levels — it
         // counts as each level's; this is what forbids both outright.
-        const levelShapes = [[...LOSS_LEVEL_CODES].sort(), [...PAID_UNCONDITIONAL_CODES].sort()];
+        const levelShapes = [[...LOSS_WAVE_CODES].sort(), [...PAID_UNCONDITIONAL_CODES].sort()];
         for (const request of assetSetHistoricalRequests(requests)) {
             const carried = ASSET_SET_LEVEL_CODES.filter((code) => codesOf(request).has(code));
             if (carried.length === 0) continue;
@@ -4701,6 +4763,11 @@ test.describe('Asset Global risk laboratory', () => {
             expect([...codesOf(paid)], `${code} must travel with the rest of L3°'s wave`).toContain(code);
         }
         expect([...codesOf(paid)], 'no benchmark is chosen in this context, so the comparison must not have been asked for').not.toContain('asset_set_comparison');
+        // The KPI rides on both requests (RN-19), and only its instance tells whose it is: the move table's in L1°'s,
+        // the base one in L3°'s. Swapped, the move table would sit on the benchmark's calendar.
+        const kpiInstances = (request: RiskRequest) => request.analytics.filter((analytic) => analytic.analytic_code === 'asset_set_kpi').map((analytic) => analytic.instance_id);
+        expect(kpiInstances(loss), "L1°'s request must carry the move table's own KPI instance, and only it").toEqual([MOVE_KPI_INSTANCE]);
+        expect(kpiInstances(paid), "L3°'s request must carry the base KPI instance, never the move table's").toEqual(['base-historical-asset_set_kpi']);
 
         // ② THE TWO HORIZONS ARE TWO INSTANCES, NOT TWO REQUESTS. They share an
         // analytic code, so only the instance id keeps the bad day and the bad
@@ -5561,7 +5628,7 @@ test.describe('Asset Global risk laboratory', () => {
         await expect(toggle, "L3°'s frame offers no column toggle").toBeVisible();
         await expect(docs).toBeVisible();
         await expect(frame.getByTestId('risk-asset-set-paid-body').getByTestId('column-visibility-toggle'), "the toggle sits in L3°'s body: it belongs to the header, beside the manual icon").toHaveCount(0);
-        await expect(page.getByTestId('asset-global-risk-panel').getByTestId('column-visibility-toggle'), 'one column toggle per level table: L1° and L3°').toHaveCount(2);
+        await expect(page.getByTestId('asset-global-risk-panel').getByTestId('column-visibility-toggle'), 'one column toggle per table: L1°, «How did each one move?» and L3°').toHaveCount(3);
 
         // Order and geometry in one read, after the barriers above: both boxes come from the same
         // layout, so a section above that finishes loading and pushes the frame down cannot land
@@ -5612,6 +5679,62 @@ test.describe('Asset Global risk laboratory', () => {
         await sortino.click();
         await expect.poll(() => paidHeaderIds(page), {message: 'Sortino must come back where it was'}).toEqual(opening);
         await expect(paidTable(page).getByTestId('risk-asset-set-l3-sortino'), 'Sortino came back without its cells').toHaveCount(selected.length);
+    });
+
+    /**
+     * «How did each one move?» (RN-19, the developer's decision of 12/11/2026): the positive twin of L1°'s table, a frame
+     * of its own between L1° and L3°. What only a browser shows: the frame sits between the two, every selected asset has
+     * a row with every drawn figure measured — read off L1°'s own request, whose KPI is the move table's instance — and
+     * the four hidden columns (Q21 c, ADD, the extreme days) come in from the frame's own toggle and go again, touching no
+     * other table.
+     */
+    test("«How did each one move?» sits between L1° and L3°, measures every selected asset from L1°'s own request, and its hidden columns come in from its toggle", async ({page}) => {
+        const requests = await installRiskMocks(page);
+        await openAssetGlobalRisk(page);
+        await waitForRiskCatalog(page);
+        await waitForLossTable(page);
+
+        const frame = page.getByTestId('risk-asset-set-move-level');
+        const table = frame.getByTestId('risk-asset-set-move-table');
+        await expect(table, 'the move table never arrived').toBeVisible({timeout: 20_000});
+        await showAllRows(page, table);
+        const selected = await chipIds(page);
+        const headerIds = () => table.locator('thead th[data-testid^="dt-header-"]').evaluateAll((nodes) => nodes.map((node) => (node.getAttribute('data-testid') ?? '').slice('dt-header-'.length)));
+
+        await expect(table.locator('tbody tr[data-row-id]'), 'a row per selected asset').toHaveCount(selected.length);
+        await expect.poll(headerIds, {message: 'the six columns of 12/11, the other four hidden'}).toEqual(['name', ...MOVE_VISIBLE_CELLS]);
+        for (const cell of MOVE_VISIBLE_CELLS) {
+            await expect(table.locator(`[data-testid="risk-asset-set-move-${cell}"][data-measured="true"]`), `${cell}: a dash where the stub answered a figure`).toHaveCount(selected.length);
+        }
+
+        const between = await page.evaluate(() => {
+            const [loss, move, paid] = ['risk-asset-set-loss', 'risk-asset-set-move-level', 'risk-asset-set-paid'].map((id) => document.querySelector(`[data-testid="${id}"]`));
+            if (!loss || !move || !paid) return null;
+            const follows = (first: Element, second: Element) => (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+            return follows(loss, move) && follows(move, paid);
+        });
+        expect(between, 'the move frame must sit between «How much did each one hurt?» and «What was each one paid?»').toBe(true);
+
+        const loss = lossRequestsFor(requests, selected);
+        expect(loss, "L1°'s request must be asked for exactly once for the selection on screen").toHaveLength(1);
+        expect(
+            loss[0].analytics.map((analytic) => analytic.instance_id),
+            "the move table's KPI must ride in L1°'s request",
+        ).toContain(MOVE_KPI_INSTANCE);
+
+        // The hidden columns, from the frame's own toggle: in, with a measured cell per row, then out again.
+        await frame.getByTestId('column-visibility-toggle').click();
+        const menu = frame.getByTestId('column-visibility-dropdown');
+        await expect(menu).toBeVisible();
+        for (const cell of MOVE_HIDDEN_CELLS) await menu.getByTestId(`column-visibility-item-${cell}`).click();
+        await expect.poll(headerIds, {message: 'the four hidden columns must come in after the others'}).toEqual(['name', ...MOVE_VISIBLE_CELLS, ...MOVE_HIDDEN_CELLS]);
+        for (const cell of MOVE_HIDDEN_CELLS) {
+            await expect(table.locator(`[data-testid="risk-asset-set-move-${cell}"][data-measured="true"]`), `${cell} came in without its figures`).toHaveCount(selected.length);
+        }
+        expect(await lossHeaderIds(page), "showing the move table's columns changed L1°'s").toEqual(['name', ...L1_CELLS]);
+
+        for (const cell of MOVE_HIDDEN_CELLS) await menu.getByTestId(`column-visibility-item-${cell}`).click();
+        await expect.poll(headerIds, {message: 'switched off again, the four columns must go'}).toEqual(['name', ...MOVE_VISIBLE_CELLS]);
     });
 
     /**
@@ -7369,8 +7492,8 @@ test.describe('Asset Global risk laboratory', () => {
         const admitted = scopeKey(cast.selection.filter((assetId) => assetId !== ruledOut));
         const sections = {
             correlation: assetSetHistoricalRequests(requests).filter((request) => codesOf(request).has('correlation') && !request.analytics.some((analytic) => isAssetSetLevel(analytic))),
-            loss: assetSetLevelRequests(requests).filter((request) => carriesAny(request, LOSS_LEVEL_CODES)),
-            paid: assetSetLevelRequests(requests).filter((request) => carriesAny(request, PAID_LEVEL_CODES)),
+            loss: assetSetLevelRequests(requests).filter((request) => request.analytics.some(isLossAnalytic)),
+            paid: assetSetLevelRequests(requests).filter((request) => request.analytics.some(isPaidAnalytic)),
         };
         const scopes = Object.fromEntries(Object.entries(sections).map(([name, sent]) => [name, sent.map((request) => (request.scope.kind === ASSET_SET_SCOPE ? scopeKey(request.scope.asset_ids) : request.scope.kind))]));
         expect(scopes, `each section must ask once, about the admitted assets (${admitted}): a section that did not wait for the verdicts asked first about the whole selection`).toEqual({correlation: [admitted], loss: [admitted], paid: [admitted]});

@@ -133,6 +133,7 @@ import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/compo
 import {assertEffectsRun, effectRoot} from '$test/runes.svelte';
 import {schemas} from '$lib/api';
 import {_, locale, SUPPORTED_LOCALES, type SupportedLocale} from '$lib/i18n';
+import {formatPercent} from '$lib/utils/core/formatPercent';
 import en from '$lib/i18n/en.json';
 import es from '$lib/i18n/es.json';
 import fr from '$lib/i18n/fr.json';
@@ -153,7 +154,7 @@ import {formatReplayDate, formatReplayShare, REPLAY_EXCLUSION_REASON_ORDER, repl
 /** The component's own source, for the one property that is markup rather than behaviour (see "the crisis menu"). */
 const L4_REPLAY_SOURCE = import.meta.glob('./L4Replay.svelte', {query: '?raw', import: 'default', eager: true})['./L4Replay.svelte'] as string;
 
-type Scope = 'portfolio' | 'asset_set';
+type Scope = 'portfolio' | 'asset_set' | 'asset';
 type ReplayWindow = {start: string; end: string};
 /** A type and not an interface: only an alias carries the implicit index signature svelte-i18n's values want. */
 type Values = Record<string, string | number>;
@@ -465,7 +466,7 @@ function suggestionOf(result: RiskAnalyticResult): ReplaySuggestion {
 
 function controllerInputs(scope: Scope): RiskControllerInputs {
     return {
-        scope: scope === 'portfolio' ? {kind: 'portfolio'} : {kind: 'asset_set', asset_ids: [7, 9, 12, 13, 15]},
+        scope: scope === 'portfolio' ? {kind: 'portfolio'} : scope === 'asset' ? {kind: 'asset', asset_id: 7} : {kind: 'asset_set', asset_ids: [7, 9, 12, 13, 15]},
         dateStart: WINDOW.start,
         dateEnd: WINDOW.end,
         targetCurrency: 'EUR',
@@ -1548,5 +1549,55 @@ describe('L4Replay — the exclude-and-retry flow is retired', () => {
         expectRetiredControlsGone();
         // Not a window that left everything out either: it names no excluded list.
         expect(screen.queryAllByTestId('risk-replay-nothing')).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// RN-17 (Q16-6): on one asset, one sentence — no bars
+// ---------------------------------------------------------------------------
+
+describe('L4Replay — on one asset, the answer is one sentence (Q16-6)', () => {
+    it('says how the asset would have closed the period, and draws no bar: one row at 100 % says nothing more', async () => {
+        mount('asset', replayed('asset', audit([]), {portfolioReturn: -0.337, impacts: [[7, -0.337]]}));
+
+        const total = screen.getByTestId('risk-replay-total');
+        const percent = `−${formatPercent(0.337, {scale: 100, signed: false})}`;
+        expect(total.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+            get(_)('risk.levels.l4.replayTotalAsset', {values: {percent, amount: ''}})
+                .replace(/\s+/g, ' ')
+                .trim(),
+        );
+        expect(screen.queryByTestId('risk-replay-tornado'), 'a bar chart of one asset at 100 %').toBeNull();
+    });
+});
+
+// RN-17 (Q17 A1, consultant 17/11): on one asset you own, the replay's sentence carries the money on your position.
+describe('L4Replay — on one asset you own, the sentence in money on your position', () => {
+    it('prints the return times your position', () => {
+        const {value: controller, stop} = effectRoot(() => createRiskPanelController(() => controllerInputs('asset')));
+        stops.push(stop);
+        flushSync();
+        controller.setResult('replay', replayed('asset', audit([]), {portfolioReturn: -0.337, impacts: [[7, -0.337]]}));
+        render(L4Replay, {props: {controller, assetNames: ASSET_NAMES, currency: 'EUR', dateStart: WINDOW.start, dateEnd: WINDOW.end, scopeValue: 12400}});
+
+        expect(screen.getByTestId('risk-replay-total').textContent).toContain(formatCurrencyAmount(String(-0.337 * 12400), 'EUR'));
+    });
+});
+
+// RN-17: a young asset's replay usually falls before its first price — the common case on the Asset Detail. On one
+// asset nothing is left to replay, so the backend refuses the question (`stress/plugin.py`: «No asset in the replay
+// scope covers the replay window», `insufficient_history`) and the block says why, not an error.
+describe('L4Replay — on one asset whose prices start after the period, the block says why nothing is left', () => {
+    it('shows the «nothing left» notice with the asset’s reason, and no sentence and no bars', () => {
+        const {value: controller, stop} = effectRoot(() => createRiskPanelController(() => controllerInputs('asset')));
+        stops.push(stop);
+        flushSync();
+        controller.setResult('replay', nothingLeft({excluded_asset_ids: [7], excluded_assets: [{asset_id: 7, reason: 'starts_after_window_start', weight: null}]}));
+        render(L4Replay, {props: {controller, assetNames: ASSET_NAMES, currency: 'EUR', dateStart: WINDOW.start, dateEnd: WINDOW.end, scopeValue: 12400}});
+
+        const nothing = screen.getByTestId('risk-replay-nothing');
+        expect(within(nothing).getAllByTestId('risk-replay-excluded-reason').length, 'the notice names no reason').toBeGreaterThan(0);
+        expect(screen.queryByTestId('risk-replay-total')).toBeNull();
+        expect(screen.queryByTestId('risk-replay-tornado')).toBeNull();
     });
 });

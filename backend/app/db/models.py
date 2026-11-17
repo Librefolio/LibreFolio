@@ -264,7 +264,7 @@ class TransactionType(StrEnum):
 
     - ADJUSTMENT: Manual asset quantity correction (splits, gifts, etc.)
       Signs: quantity +/-, amount = 0
-      Optional: related_transaction_id
+      related_transaction_id: only on pairs stored before 22/10/2026; a new pair is refused (use TRANSFER)
       Example: Stock split 2:1 adds 100 shares
 
     == Cash-only transactions (quantity = 0) ==
@@ -897,6 +897,7 @@ class Transaction(SQLModel, table=True):
     - Both default to 0 and are NOT NULL for easier SUM calculations
     - currency is required only when amount != 0
     - related_transaction_id links paired transactions (transfers, FX)
+    - parent_transaction_id links a charge (FEE, TAX) to the transaction it belongs to, one-way
     - tags stored as comma-separated string for simple queries
 
     Field semantics:
@@ -907,7 +908,9 @@ class Transaction(SQLModel, table=True):
     Relationship rules:
     - TRANSFER: quantity != 0, amount = 0, related_transaction_id REQUIRED
     - FX_CONVERSION: quantity = 0, amount != 0, related_transaction_id REQUIRED
-    - ADJUSTMENT: quantity != 0, amount = 0, related_transaction_id OPTIONAL
+    - ADJUSTMENT: quantity != 0, amount = 0, related_transaction_id only on pairs stored before 22/10/2026 (a new
+      pair of ADJUSTMENTs is refused: a move of units between brokers is a TRANSFER)
+    - FEE, TAX: parent_transaction_id OPTIONAL, the transaction the charge belongs to (project 66)
     """
 
     __tablename__ = "transactions"
@@ -915,6 +918,8 @@ class Transaction(SQLModel, table=True):
         Index("idx_transactions_broker_date", "broker_id", "date", "id"),
         Index("idx_transactions_asset_date", "asset_id", "date"),
         Index("idx_transactions_related", "related_transaction_id"),
+        # Partial: only linked charges (project 66, migration 006 step charge_links).
+        Index("idx_transactions_parent", "parent_transaction_id", sqlite_where=text("parent_transaction_id IS NOT NULL")),
         Index("idx_transactions_asset_event", "asset_event_id"),
         {"sqlite_autoincrement": True},  # ids leave the backend: never reuse one (plan 34)
     )
@@ -958,6 +963,21 @@ class Transaction(SQLModel, table=True):
             nullable=True,
         ),
         description="Links to paired transaction (for TRANSFER, FX_CONVERSION). Bidirectional.",
+    )
+
+    # Link of a charge to its parent (project 66, issue #25): a FEE or a TAX points at the BUY, SELL, DIVIDEND,
+    # INTEREST, DEPOSIT or WITHDRAWAL it belongs to; the parent knows nothing. ONE-WAY, unlike related_transaction_id,
+    # which stays the link of the three pairs. DEFERRABLE INITIALLY DEFERRED like it: a batch that deletes a parent and
+    # its charges does not depend on their order. Read and written only through services/transactions/charges.py
+    # (from lot R2 of project 66).
+    parent_transaction_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(
+            Integer,
+            ForeignKey("transactions.id", deferrable=True, initially="DEFERRED"),
+            nullable=True,
+        ),
+        description="The transaction this FEE or TAX belongs to. One-way: the parent does not point back.",
     )
 
     # Relationship for ORM access (post_update=True for bidirectional self-reference)

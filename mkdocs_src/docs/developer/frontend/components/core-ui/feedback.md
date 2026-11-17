@@ -74,7 +74,7 @@ See [DataQualityBanner Developer Manual](../../data-quality-banner.md) for full 
 
 **CTA**: actions are emitted via `onaction(action, target, issue)` — the component does not navigate or open modals directly.
 
-**Used by**: Dashboard (`/dashboard`), Asset detail (`/assets/:id`), FX detail (`/fx/:pair`), and the risk panels (`RiskAnalysisPanel`, `AssetSetRiskPanel`, `RiskPanelHeader`).
+**Used by**: Dashboard (`/dashboard`), Asset detail (`/assets/:id`), FX detail (`/fx/:pair`), and the risk panels (`AssetSetRiskPanel`, `RiskPanelHeader`).
 
 ---
 

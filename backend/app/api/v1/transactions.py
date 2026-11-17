@@ -191,6 +191,8 @@ async def query_transactions(
     amount_abs_max: Optional[Decimal] = Query(None, description="ABS(amount) <= N (H.3 transfer-match)"),
     only_unlinked: bool = Query(False, description="Only transactions without related_transaction_id"),
     exclude_ids: Optional[List[int]] = Query(None, description="Exclude specific IDs (ignored when `ids` is set)"),
+    parent_ids: Optional[List[int]] = Query(None, description="Only the charges linked to these parent transactions (ignored when `ids` is set)"),
+    without_parent: bool = Query(False, description="Only the charges (FEE, TAX) linked to no parent and not a leg of a pair (ignored when `ids` is set)"),
     session: AsyncSession = Depends(get_session_generator),
     current_user: User = Depends(get_current_user),
 ) -> List[TXReadItem]:
@@ -221,6 +223,8 @@ async def query_transactions(
         amount_abs_max=amount_abs_max,
         only_unlinked=only_unlinked,
         exclude_ids=exclude_ids,
+        parent_ids=parent_ids,
+        without_parent=without_parent,
         limit=limit,
         offset=offset,
     )

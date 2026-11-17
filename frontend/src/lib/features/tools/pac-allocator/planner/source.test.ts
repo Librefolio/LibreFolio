@@ -25,7 +25,7 @@ vi.mock('$lib/api', () => ({
 }));
 
 import {getClientSessionGeneration, transitionClientSession} from '$lib/stores/app/clientSession';
-import {fetchPlannerSource, type SourceQuery} from './source';
+import {fetchPlannerSource, fromPlannerId, toPlannerId, type SourceQuery} from './source';
 
 const QUERY: SourceQuery = {
     asOf: '2026-09-15',
@@ -101,5 +101,16 @@ describe('fetchPlannerSource — current distribution valuation codes', () => {
             'asset:15': null,
             'asset:16': null,
         });
+    });
+});
+
+describe('fromPlannerId — the name a planner id was made from', () => {
+    it.each(['Health Care', 'Real Estate', 'Consumer Discretionary', 'snake_case', 'a+b', 'Énergie à 100%', 'enc:already'])('reads back %s', (name) => {
+        const id = toPlannerId(name) as string;
+        expect(fromPlannerId(id)).toBe(name);
+    });
+
+    it('leaves a plain identifier as it is', () => {
+        for (const id of ['STOCK', 'Energy', 'USA', 'allocation.uncategorised']) expect(fromPlannerId(id)).toBe(id);
     });
 });

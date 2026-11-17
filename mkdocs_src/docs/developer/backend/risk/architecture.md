@@ -24,7 +24,7 @@ the first two is in [Risk UI](../../frontend/components/features/risk-lab.md).
 | Dashboard, **Risk** tab | `{kind: "portfolio", broker_ids}`: the brokers the user **owns** with a positive share, a share never set counting as 100% for the owner (`getOwnedBrokers()`, `stores/reference/brokerStore.ts:262`), whatever the broker filter. The panel mounts only once they are known: without `broker_ids` the backend would widen the scope to every broker the user can see, editor and viewer ones included (`routes/(app)/dashboard/+page.svelte:1101-1110`) | `levels/RiskLevelsPanel.svelte` |
 | Broker Detail, **Risk** tab | `{kind: "portfolio", broker_ids: [id]}` | `levels/RiskLevelsPanel.svelte` |
 | Assets page, **Correlation** tab (the *Asset Global* lab) | `{kind: "asset_set", asset_ids: [...]}` | `AssetSetRiskPanel.svelte` |
-| Asset Detail, **Risk & Scenarios** tab | `{kind: "asset", asset_id}` | `AssetRiskScenariosView.svelte` → `RiskAnalysisPanel.svelte` |
+| Asset Detail, **Risk & Scenarios** tab | `{kind: "asset", asset_id}` | `AssetRiskTab.svelte` → `levels/RiskLevelsPanel.svelte` |
 | AI Export drawdown context | Portfolio, broker or asset; `drawdown_summary` only | `RiskService.execute()`, called in-process by `backend/app/services/ai_export/components/drawdown_context.py` |
 
 The Svelte paths are relative to `frontend/src/lib/features/risk/`. The AI Export side is
@@ -43,6 +43,7 @@ described in [AI Export Composition](../../architecture/patterns/ai_export_compo
 | `backend/app/services/risk/plan.py` | `AnalyticPlan` — a requested analytic with its plugin and validated parameters — and the predicates on the kind of calculation it asks for (`is_historical_replay_plan()`, `is_hypothetical_plan()`, `is_geography_hypothetical_plan()`, `reads_the_twrr_alone()`). |
 | `backend/app/services/risk/scope.py` | The scope: access, holdings and weights (`load_scope_inputs()` into `ScopeInputs`), the asset lookups, the bulk price load (`prepare_asset_series()`), the exclusions (`scope_exclusions()`); `RiskScopeAccessError` and `RiskScopeNotFoundError`, which the API maps to 403 and 404. |
 | `backend/app/services/risk/replay.py` | A historical replay's own window and series (`prepare_historical_replay_context()`), and the shorter window it may suggest (`verified_replay_range()`). |
+| `backend/app/services/risk/simulation_window.py` | The simulation's own window (RN-16): all the common history up to today, never the page's period (`simulation_window()`), who takes part in it (`simulation_participants()`, the one place that decides: since RN-16b a holding whose history — from the later of its first price and its first rate, `first_useful_day()` — is shorter than the horizon stays out, its weight with the cash, a warning naming it and `excluded_assets` recording it as `shorter_than_horizon` with `horizon_days` and `first_useful_day` in its `details`, unless none reaches the horizon; RN-16c), and the context rebuilt whole from its series (`prepare_simulation_context()`). |
 | `backend/app/services/risk/results.py` | The execution context (`build_execution_context()`), the gate rules (`available_observations()`, `requires_valid_composition()`), the result envelopes and their metadata (`success_result()`, `unavailable_result()`, `result_metadata()`), the portfolio TWRR series (`portfolio_twrr_returns()`), the warnings and their asset names (`with_warning_asset_names()`). |
 | `backend/app/services/risk/data_quality.py` | The data-quality report a result is judged on (`plan_data_quality()`), its warnings (`data_quality_warnings()`), and the banner issues of an `asset_set` scope (`with_asset_set_quality_issues()`). |
 | `backend/app/services/risk/base.py` | The plugin contract: `RiskAnalytic`, `RiskExecutionContext`, `RiskComputation`, `RiskUnavailableError`, `RiskSeriesInputs`. |
@@ -156,7 +157,8 @@ response echoes the request's own range. A replay bounds its window in
 6. **Per-analytic gates.** A current-composition portfolio analytic that needs valid weights
    (`risk_contribution`, `stress`, `comparison`, `historical_var`, `simulation`) is refused with
    `data_unavailable` when the composition is invalid. A historical replay prepares its own window
-   ([Replay Coverage](#replay-coverage)). Then the observation gate refuses with
+   ([Replay Coverage](#replay-coverage)), and so does the simulation: all the common history up to today, never the
+   page's period (`risk/simulation_window.py`, RN-16), of the holdings whose history reaches the horizon (RN-16b). Then the observation gate refuses with
    `insufficient_history` any analytic below its `min_observations`.
 7. **Execution.** `await analytic.execute(params, context)`. The default `execute()` runs the
    synchronous `compute()` in a worker thread (`asyncio.to_thread`); `simulation` and
@@ -323,7 +325,7 @@ registry described in [Registry Pattern](../../architecture/patterns/registry_pa
 | `drawdown_summary` | `drawdown` | asset, portfolio | historical | 2 | primary |
 | `correlation` | `matrix` | asset_set, portfolio | historical, current_composition | per pair, 20 by default | scope assets |
 | `risk_contribution` | `contribution` | portfolio | current_composition | 20 | scope assets |
-| `asset_risk_return` | `risk_return` | portfolio | current_composition | 20 | scope assets |
+| `asset_risk_return` | `risk_return` | asset, portfolio | current_composition | 20 | scope assets |
 | `comparison` | `comparison` | asset, portfolio | historical, current_composition | 20 | primary + benchmark |
 | `stress` | `stress` | asset, asset_set, portfolio | current_composition | 1 | scope assets |
 | `simulation` | `simulation` | asset, portfolio | current_composition | 30 | scope assets |
@@ -377,8 +379,8 @@ warning came with `algorithm_version` 1.2.0 of `drawdown_summary` and 1.1.0 of
 
 ### 🔢 By Level {: #by-level }
 
-The frontend asks the four questions of the Dashboard and Broker Detail as levels L1–L4, and the
-lab on the Assets page as its own sections. Which component renders which result is presentation
+The frontend asks the four questions of the Dashboard and Broker Detail as levels L1–L4 (on one asset, the
+Asset Detail asks three of them), and the lab on the Assets page as its own sections. Which component renders which result is presentation
 and may move; the request side is the contract: `buildBaseAnalytics()` in
 `frontend/src/lib/features/risk/riskAnalysisHelpers.ts` (the base waves) and
 `LEVEL_ON_DEMAND_ANALYSES` in `riskPanelController.svelte.ts` (L3: `comparison`; L4: `stress`,
@@ -387,14 +389,19 @@ and may move; the request side is the contract: `buildBaseAnalytics()` in
 | Surface | Level | Analytics | How it is asked |
 |---|---|---|---|
 | Dashboard, Broker Detail (`portfolio`) | L1 *How much can it hurt?* | `historical_var` (1-day and 30-day instances), `drawdown_summary`, `historical_kpi` | Historical base wave |
+| | *How does it move?* (the positive twins, RN-18) | L1's own answers: the KPI's positive fields, the 30-day `historical_var`'s `best_horizon`, `drawdown_summary`'s largest rally and average drawdown; the daily instance's `gain_threshold` and `gain_bin_edge` colour L1's histogram | Nothing of its own: L1's historical base wave |
 | | L2 *Am I as diversified as I think?* | `risk_contribution`, `correlation` | Current-composition and historical base waves |
 | | L3 *Am I being paid for this risk?* | `historical_kpi` and `asset_risk_return` on the current composition; `comparison` against the shared benchmark | Base wave; comparison on demand |
 | | L4 *What if…?* | `stress` (historical replay and hypothetical shock), `simulation` | On demand |
 | Assets, **Correlation** tab (`asset_set`) | Correlation | `correlation` | Historical base wave |
 | | L1° *How much did each of these hurt?* | `asset_set_var` (1-day and 30-day), `asset_set_drawdown` | Historical base wave, never with the benchmark |
+| | *How did each one move?* | `asset_set_kpi` under instance `base-historical-asset_set_kpi-move`; it also reads the 30-day `asset_set_var`'s `best_horizon` and `asset_set_drawdown`'s `largest_rally*` and `average_drawdown` fields | L1°'s historical base wave (same request), never with the benchmark |
 | | L3° *What did each of these pay for its risk?* | `asset_set_kpi`, `asset_set_risk_return`, and `asset_set_comparison` when a benchmark is chosen | Historical base wave |
 | | L4° *What if…?* | `stress`, historical replay only | On demand |
-| Asset Detail (`asset`) | Risk & Scenarios | `historical_kpi`, `historical_var`, `comparison`, `stress`, `simulation` (`process: "gbm"`) | Base wave; the rest on demand |
+| Asset Detail (`asset`) | L1 *How much can it hurt?* | As on the Dashboard | Historical base wave |
+| | *How does it move?* | As on the Dashboard | Nothing of its own |
+| | L3 *Compared with a reference* | `historical_kpi` and `asset_risk_return` on the current composition — on one asset the pair is the asset's own (weight 1); `comparison` against the shared benchmark, never the asset itself | Base wave; comparison on demand |
+| | L4 *What if…?* | `stress` (historical replay; hypothetical shock by sector or region, never by asset type), `simulation` | On demand |
 | None | — | `portfolio_optimization` | API only: no panel requests it |
 
 ---
@@ -554,7 +561,10 @@ and the refusals users meet are listed in its
 The `simulation` rows follow the order of its checks, and the first limit exceeded refuses the
 request: every check raises, so the ones after it never run. A scope over two limits is told only
 the first: at the defaults, 101 holdings with a usable return series get the remedy `positions`, not
-`paths_or_horizon`. The request builder of the chosen process runs its checks before a request
+`horizon`. Two budgets no longer refuse first (RN-16): above the path budgets the plugin lowers the path count
+(`fit_path_count`, `quant/engine.py`) to the largest power of two that fits, never below `MIN_SIMULATION_PATHS = 1024`,
+and declares `path_count` against `requested_path_count`; a bootstrap history longer than its two ceilings keeps its
+most recent observations (`history_observation_cap`) and declares `history_truncated`. The request builder of the chosen process runs its checks before a request
 exists; `run_simulation()` then starts with `validate_resource_budget()`, before its cache lookup.
 All these checks run after the service's parameter validation and observation gate
 ([Request Flow](#request-flow)), which are not size limits.
@@ -562,12 +572,12 @@ All these checks run after the service's parameter validation and observation ga
 | Limit | Value | Where | Answer |
 |---|---|---|---|
 | Assets with a usable return series, both processes (excluded holdings do not count) | `MAX_SIMULATION_ASSETS = 100` | `quant/models.py`, checked by the plugin before the request is built | `unavailable` · `resource_limit` |
-| Bootstrap window: aligned observations | `MAX_HISTORY_OBSERVATIONS = 5_000` | `quant/models.py`, checked by the plugin | `unavailable` · `resource_limit` |
+| Bootstrap window: aligned observations | `MAX_HISTORY_OBSERVATIONS = 5_000` | `quant/models.py`; `execute()` keeps the most recent observations that fit first, so the builder's check is a defence | `ok`, `history_truncated` (the builder's defence: `resource_limit`, no remedy) |
 | Bootstrap block longer than the window | Block, converted to observations, above the history's count | `risk_plugins/simulation/plugin.py` | `unavailable` · `invalid_parameters` |
 | Sobol dimension, QMC only: assets × horizon days | `MAX_SOBOL_DIMENSION = 21_201` | `quant/models.py`, checked by the GBM builder `_build_parametric_request()` | `unavailable` · `resource_limit` |
-| Percentile matrix: paths × (horizon + 1) | 20 000 000 | `quant/engine.py` | `unavailable` · `resource_limit` |
-| Stochastic workload: paths × horizon × assets | 200 000 000 | `quant/engine.py` | `unavailable` · `resource_limit` |
-| Bootstrap history: observations × assets | 250 000 | `quant/engine.py` | `unavailable` · `resource_limit` |
+| Percentile matrix: paths × (horizon + 1) | 20 000 000 | `quant/engine.py`; the plugin lowers the paths first (`fit_path_count`) | `ok` with fewer paths; never reached at 1 024 paths |
+| Stochastic workload: paths × horizon × assets | 200 000 000 | `quant/engine.py`; the plugin lowers the paths first (`fit_path_count`) | `ok` with fewer paths; `unavailable` · `resource_limit` (`horizon`) when 1 024 do not fit |
+| Bootstrap history: observations × assets | 250 000 | `quant/engine.py`; `execute()` keeps the most recent observations that fit first | `ok`, `history_truncated` (the engine's defence: `resource_limit`, no remedy) |
 | Optimization returns: observations × assets | 2 000 000 | `quant/optimization_engine.py` | `unavailable` · `resource_limit` |
 | Prices of the scope, every analytic: assets × days of the period (or of a replay window) | `MAX_BULK_ITEM_DAYS = 1_000_000` (Z-25, lowered by R13-SEC9-2) | `assets/price_query.py`, raised as `BulkTooManyDaysError` and turned into the refusal by `risk/scope.py::prepare_asset_series` (J-50) | `unavailable` · `resource_limit`, remedy `period_or_assets`, for every analytic of the request (a replay window: that analytic only) |
 
@@ -576,9 +586,10 @@ Every `resource_limit` with a remedy is built by `resource_limit_error()` (`risk
 `quant/engine.py`, which the plugin catches around `run_simulation()` and re-raises through
 `resource_limit_error()` with its `metric`, `actual` and `limit`. The refusal's `details` carry these
 three, plus the `remedy` that one table, `REMEDY_BY_METRIC` (`risk/base.py`), maps the metric to
-(`portfolio_cells` and `stochastic_cells` → `paths_or_horizon`, `history_cells` and `observations` →
-`period`, `assets` → `positions`, `sobol_dimension` → `horizon_or_sampling`, `price_item_days` →
-`period_or_assets`). A metric missing from the table still answers `resource_limit`, with no `remedy`.
+(`portfolio_cells` and `stochastic_cells` → `horizon`, `assets` → `positions`, `sobol_dimension` → `horizon_or_sampling`, `price_item_days` →
+`period_or_assets`). A metric missing from the table still answers `resource_limit`, with no `remedy`: so do
+`history_cells` and `observations` since RN-16, defences no period the user picks can move (the simulation reads its
+own history, `risk/simulation_window.py`, never the page's period).
 The scope's price budget is the one limit outside the plugin: `prepare_asset_series()` refuses through
 the same builder with `metric` `price_item_days`, and `RiskService.execute()` answers every planned
 analytic with that refusal (J-50). No other module writes a `remedy`, so the remedies the backend can
@@ -685,9 +696,9 @@ its own `risk.analytics.<name>.*` keys.
   limit: `errorDisplayCode()` (`frontend/src/lib/features/risk/levels/errorDisplayCode.ts`,
   re-exported from `levelHelpers.ts`) also reads `details.remedy`, and turns a `resource_limit`
   whose remedy it knows into the display code `resource_limit_<remedy>`. Any other code stays as
-  it is, and an unknown remedy keeps the generic `risk.errors.resource_limit`. It has two
-  callers: `resultErrorCodes()` in `levelHelpers.ts` (the four levels and the lab sections) and
-  `RiskResultFrame.svelte` (Asset Detail). `translateErrorCode()`
+  it is, and an unknown remedy keeps the generic `risk.errors.resource_limit`. Its caller is
+  `resultErrorCodes()` in `levelHelpers.ts` (the four levels, on the Asset Detail too, and the lab
+  sections). `translateErrorCode()`
   (`frontend/src/lib/features/risk/levels/levelHelpers.ts`) reads `risk.errors.<code>` and falls
   back to a generic sentence (`risk.errors.unknown` in the levels). The client-side
   `answer_discarded` code is worded the same way.
@@ -781,9 +792,8 @@ All under `frontend/src/lib/features/risk/`:
 
 | Family | Entry | Mounted by |
 |---|---|---|
-| Four levels | `levels/RiskLevelsPanel.svelte`, with the L1–L4 components and the L4 steps in `levels/l4/`; pure helpers sit next to them | Dashboard and Broker Detail, **Risk** tab |
+| Four levels | `levels/RiskLevelsPanel.svelte`, with the L1–L4 components and the L4 steps in `levels/l4/`; pure helpers sit next to them | Dashboard and Broker Detail, **Risk** tab; on one asset through `AssetRiskTab.svelte`, which reads the position's value (`assetRiskTabRules.ts`) and says when prices come from a plan |
 | *Asset Global* lab | `AssetSetRiskPanel.svelte`, with `AssetSetCorrelationSection`, `AssetSetComparisonLevels` (the L1° and L3° levels), `AssetSetReplaySection` and `LabAssetPicker` | Assets page, **Correlation** tab |
-| Legacy panel | `RiskAnalysisPanel.svelte`, through `AssetRiskScenariosView.svelte` | Asset Detail, **Risk & Scenarios** tab |
 
 Each lab section owns its controller; since requests are canonical, identical questions share one
 flight in the store. The lab never shows an amount of money: an asset set has no weights.
