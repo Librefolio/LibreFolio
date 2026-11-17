@@ -24,6 +24,7 @@ from backend.app.services.pac_allocator.evaluation.economics import EconomicStat
 from backend.app.services.pac_allocator.evaluation.errors import ExactPolicyContractError, ExactReplayRejectedError
 from backend.app.services.pac_allocator.evaluation.facts import constraint_facts, objective_value_map
 from backend.app.services.pac_allocator.evaluation.keys import candidate_quanta
+from backend.app.services.pac_allocator.evaluation.limits import limit_reference, resolve_scenario_limits
 from backend.app.services.pac_allocator.evaluation.policy import baseline_state_for_purpose, build_decision_accesses, canonical_tie_breaks, default_exact_view_id, validate_policy_purpose, validate_primary_baseline
 from backend.app.services.pac_allocator.evaluation.references import build_constraint_refs, build_objective_refs
 from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex, build_scenario_index, exact_scenario_fingerprint, to_valuation
@@ -32,6 +33,7 @@ from backend.app.services.pac_allocator.models import (
     CandidateDecision,
     Checkpoint,
     DecisionAccess,
+    ExactCashLimitOvershoot,
     ExactConflict,
     ExactConstraintEvaluation,
     ExactEvaluation,
@@ -45,6 +47,7 @@ from backend.app.services.pac_allocator.models import (
 from backend.app.services.pac_allocator.numeric import (
     ExactRatio,
 )
+from backend.app.services.pac_allocator.posting_reserve import RESERVED_FAMILIES, posting_reserves
 
 _EXACT_ZERO = ExactRatio(0)
 
@@ -343,6 +346,51 @@ _ROUNDING_DEFICIT_CODES = frozenset(
 )
 
 
+_LIMIT_REF_PREFIX = "constraint:entry_value_within_limits:"
+
+
+def cash_limit_overshoots(scenario: ExactPlannerScenario, evaluation: ExactEvaluation) -> tuple[ExactCashLimitOvershoot, ...]:
+    """Classify the limits a plan of the wide model misses (lot ZB of project 67, specification §16.16).
+
+    The wide model holds the cell's exact cash inside the limit, its reserves on the side that admits; the replay rounds
+    the postings against the plan, so the posted cash can end beyond the limit by at most ``R``, the reserves of the
+    cell's postings that happened (``posting_reserve``, one minor unit where a posting can round). Such a miss is a note
+    the plan carries, in the order of the limits. A miss beyond ``R`` (SCIP's tolerance on a row with no margin), or an
+    Asset limit missed, raises ``ExactReplayRejectedError``. The messages name rules and cells, never amounts.
+
+    Only the wide model's plans reach it (the planner's path, and the cascade on that model): the prudent model's meet
+    every limit to the cent.
+    """
+    if evaluation.accounting is None or "ENTRY_VALUE_WITHIN_LIMITS" not in evaluation.conflict_codes:
+        return ()
+    index = build_scenario_index(scenario)
+    entries = {f"{_LIMIT_REF_PREFIX}{entry.key}": entry for entry in resolve_scenario_limits(scenario, limit_reference(scenario, evaluation.accounting)).by_entry}
+    reserves = posting_reserves(scenario)
+    kept: dict[tuple[str, str], list[ExactRatio]] = {}
+    for posting in evaluation.postings:
+        reserve = reserves.get(posting.posting_id, _EXACT_ZERO)
+        if posting.family in RESERVED_FAMILIES and posting.exact_amount > _EXACT_ZERO and reserve > _EXACT_ZERO:
+            kept.setdefault((posting.broker_id, posting.currency), []).append(reserve)
+    overshoots = []
+    for constraint in evaluation.constraints:
+        entry = entries.get(constraint.ref_id)
+        if entry is None or constraint.satisfied:
+            continue
+        if entry.kind != "cash":
+            raise ExactReplayRejectedError("the exact replay rejected an Asset limit")
+        above = constraint.upper_bound is not None and constraint.value > constraint.upper_bound
+        miss = constraint.value - constraint.upper_bound if above else constraint.lower_bound - constraint.value if constraint.lower_bound is not None else _EXACT_ZERO
+        cell_reserves = kept.get((entry.broker_id, entry.currency), [])
+        allowance = sum(cell_reserves, _EXACT_ZERO)
+        if miss <= _EXACT_ZERO or miss > to_valuation(index, allowance, entry.currency):
+            raise ExactReplayRejectedError(f"the exact replay missed the cash limit of {entry.broker_id}/{entry.currency} beyond its postings' reserves")
+        quantum = index.currency_quantum[entry.currency]
+        units = miss / to_valuation(index, quantum, entry.currency)
+        whole = units.numerator // units.denominator + (1 if units.numerator % units.denominator else 0)
+        overshoots.append(ExactCashLimitOvershoot(broker_id=entry.broker_id, currency=entry.currency, side="maximum" if above else "minimum", amount=whole * quantum, reserved_postings=len(cell_reserves)))
+    return tuple(overshoots)
+
+
 def evaluate_do_nothing(scenario: ExactPlannerScenario, view: ExactPolicyView, *, checkpoint: Checkpoint | None = None) -> ExactEvaluation:
     """Evaluate the do-nothing plan: every decision at its frozen or baseline quanta.
 
@@ -360,11 +408,11 @@ def evaluate_do_nothing(scenario: ExactPlannerScenario, view: ExactPolicyView, *
     return evaluate_exact_candidate(scenario, view, candidate, checkpoint=checkpoint)
 
 
-def _require_rounding_only_rejection(evaluation: ExactEvaluation) -> frozenset[str]:
-    """Return the replay's conflict codes once they can only be cash a rounding left short."""
+def _require_rounding_only_rejection(evaluation: ExactEvaluation, tolerated: frozenset[str] = frozenset()) -> frozenset[str]:
+    """Return the replay's conflict codes, less the ``tolerated`` ones, once they can only be cash a rounding left short."""
     if not evaluation.candidate_valid or evaluation.accounting is None:
         raise ExactReplayRejectedError(f"the exact replay rejected a candidate outside the policy contract: {', '.join(evaluation.conflict_codes)}")
-    codes = frozenset(evaluation.conflict_codes)
+    codes = frozenset(evaluation.conflict_codes) - tolerated
     if "SPENDABLE_CASH_NONNEGATIVE" not in codes or not codes <= _ROUNDING_DEFICIT_CODES:
         raise ExactReplayRejectedError(f"the exact replay rejected rules no rounding explains: {', '.join(evaluation.conflict_codes)}")
     if any(row.final_quantity < _EXACT_ZERO for row in evaluation.holdings):
@@ -375,6 +423,8 @@ def _require_rounding_only_rejection(evaluation: ExactEvaluation) -> frozenset[s
 def rounding_top_ups(
     scenario: ExactPlannerScenario,
     evaluation: ExactEvaluation,
+    *,
+    tolerated: frozenset[str] = frozenset(),
 ) -> tuple[ExactRoundingTopUp, ...]:
     """Classify an exact replay: the cash each pool lacks to rounding, or a rejection.
 
@@ -387,10 +437,14 @@ def rounding_top_ups(
     top-ups repair it: the adjustment within the bound, and the shortfall within
     the bound once the top-ups are reachable cash. Anything else raises
     ``ExactReplayRejectedError``; the messages name rules and pools, never amounts.
+
+    ``tolerated`` rules were classified already (``cash_limit_overshoots``, lot ZB): they neither need nor refuse a top-up.
     """
     if evaluation.feasible:
         return ()
-    codes = _require_rounding_only_rejection(evaluation)
+    if tolerated and evaluation.candidate_valid and evaluation.accounting is not None and not frozenset(evaluation.conflict_codes) - tolerated:
+        return ()
+    codes = _require_rounding_only_rejection(evaluation, tolerated)
     index = build_scenario_index(scenario)
     rounded_postings = Counter((posting.broker_id, posting.currency) for posting in evaluation.postings if posting.quantum is not None)
     top_ups = []

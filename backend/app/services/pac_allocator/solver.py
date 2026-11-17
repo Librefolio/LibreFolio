@@ -75,7 +75,7 @@ from backend.app.logging_config import get_logger
 from backend.app.services.pac_allocator.compiler import CompiledProgram
 from backend.app.services.pac_allocator.constraints.pool import derive_transfer_quanta
 from backend.app.services.pac_allocator.evaluation.errors import ExactReplayRejectedError
-from backend.app.services.pac_allocator.evaluation.evaluator import evaluate_exact_candidate, rounding_top_ups
+from backend.app.services.pac_allocator.evaluation.evaluator import cash_limit_overshoots, evaluate_exact_candidate, rounding_top_ups
 from backend.app.services.pac_allocator.evaluation.solver_view import solver_view_objectives
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
@@ -537,13 +537,16 @@ def _exact_stage_values(cascade: _Cascade, candidate: CandidateActionVector) -> 
 def _replay(cascade: _Cascade, candidate: CandidateActionVector) -> tuple[tuple[Fraction, ...] | None, bool]:
     """``candidate``'s exact stage values (``_exact_stage_values``) and whether the plan can be published: its replay is
     feasible, or only a rounding left cash short, which top-ups repair (``evaluator.rounding_top_ups``, the planner's own
-    rule). One replay serves both."""
+    rule). On the wide model (lot ZB) a cash limit missed by the plan's rounding, within its postings' reserves, is a note
+    the planner publishes, not a refusal (``evaluator.cash_limit_overshoots``). One replay serves both."""
     program = cascade.program
     evaluation = evaluate_exact_candidate(program.scenario, program.view, candidate, checkpoint=cascade.checkpoint)
     if not evaluation.candidate_valid:
         return None, False
     try:
-        rounding_top_ups(program.scenario, evaluation)
+        # The wide model's plans may miss a cash limit by their rounding, a note the planner publishes (lot ZB, §16.16).
+        tolerated = frozenset({"ENTRY_VALUE_WITHIN_LIMITS"}) if program.outer and cash_limit_overshoots(program.scenario, evaluation) else frozenset()
+        rounding_top_ups(program.scenario, evaluation, tolerated=tolerated)
     except ExactReplayRejectedError:
         publishable = False
     else:

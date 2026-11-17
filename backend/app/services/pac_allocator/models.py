@@ -1478,3 +1478,28 @@ class ExactRoundingTopUp:
         if isinstance(self.rounded_postings, bool) or not isinstance(self.rounded_postings, int) or self.rounded_postings < 1:
             raise ValueError("top-up rounded_postings must be a positive integer")
         _require_positive(self.valuation_amount, "top-up valuation_amount")
+
+
+@dataclass(frozen=True, slots=True)
+class ExactCashLimitOvershoot:
+    """A cash limit a plan of the wide model misses by its rounding (lot ZB of project 67, specification §16.16).
+
+    The wide model holds the cell's exact cash inside the limit; the replay rounds every posting against the plan, so the
+    posted cash may end beyond it by at most the reserves of the cell's postings that happened (``posting_reserve``).
+    ``amount`` is that miss in the cell's own currency, in whole minor units (rounded up where the limit, set in the
+    valuation currency, does not convert to a whole number of them); ``side`` says which limit; ``reserved_postings``
+    counts the postings whose reserve allowed it.
+    """
+
+    broker_id: str
+    currency: str
+    side: Literal["minimum", "maximum"]
+    amount: ExactRatio
+    reserved_postings: int
+
+    def __post_init__(self) -> None:
+        _require_text(self.broker_id, "overshoot broker_id")
+        _require_currency(self.currency, "overshoot currency")
+        _require_positive(self.amount, "overshoot amount")
+        if isinstance(self.reserved_postings, bool) or not isinstance(self.reserved_postings, int) or self.reserved_postings < 1:
+            raise ValueError("overshoot reserved_postings must be a positive integer")

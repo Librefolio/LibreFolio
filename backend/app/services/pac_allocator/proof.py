@@ -169,6 +169,7 @@ def conclude_with_solver(
     *,
     objective_codes: Sequence[ExactObjectiveCode],
     published: CandidateActionVector | None,
+    outer_model: bool = False,
 ) -> PlanConclusion:
     """Read the proof out of a SCIP run.
 
@@ -191,6 +192,12 @@ def conclude_with_solver(
       The PAC's stages are never tie-breaks, so its rule is unchanged.
     * ``not_proven`` — everything else. Downgrading is always sound.
 
+    ``outer_model`` (lot ZB of project 67): the run was on the outer model, solved because the prudent one closed
+    infeasible (``planner.plan_exact_scenario``). It holds every plan the replay could accept, so its «infeasible» is the
+    proof above. It is not the model the cascade optimizes, so nothing it returns is proven the best: its plans are
+    ``not_proven`` whatever its stages say. The prudent model's own «infeasible» never reaches this function as a verdict:
+    the planner always checks it on the outer model first.
+
     Raises ``ProofForgeryError`` when a run that would prove something did not
     run exactly the named objectives: the view and the compiled cascade would
     disagree about what was optimized.
@@ -207,7 +214,7 @@ def conclude_with_solver(
             raise ProofForgeryError(f"SCIP closed stage {stage.objective_code!r} infeasible, but the first objective is {expected[0] if expected else None!r}")
         return InfeasibilityProvenConclusion(witness=_witness((stage.objective_code,)))
 
-    if solver.outcome != "incumbent" or solver.anomaly is not None or not solver.stages:
+    if outer_model or solver.outcome != "incumbent" or solver.anomaly is not None or not solver.stages:
         return UnprovenConclusion()
     if any((stage.status != "finished" or stage.scip_status != "optimal") and not stage.tie_break for stage in solver.stages):
         return UnprovenConclusion()
