@@ -741,6 +741,17 @@ current key. The same rule serves both sides:
   write and for the whole request. One readiness check per request. An assignment that re-saves its
   asset's provider, and a provider a stored route of the pair already uses, pass: nothing that exists
   is cleaned up, and its calls answer `NOT_CONFIGURED` at the boundary as before.
+- **Why, and when the rows cannot be read** (N2b): `PluginReadiness` also says `reason`,
+  `missing_fields` (a value to set) or `invalid_locked_setting` (a variable that locks a field has an
+  invalid value, fixed on the server), and, outside the managed profile, the `variables` concerned;
+  the 422 body carries both, and the two provider lists give them per provider (`missing_reason`,
+  `invalid_variables`), so the interface knows the case before any write. When the readiness cannot read the rows (a database error) it answers from
+  the environment and the defaults, as the boundary does, with `settings_unavailable`: the two writes
+  then refuse with **503 `PLUGIN_SETTINGS_UNAVAILABLE`** (`api/plugin_errors.settings_unavailable_error`),
+  nothing written, retry. The call boundary does not change.
+- **One divergence, accepted** (the consultant, after N2): the readiness never decrypts, so a stored
+  secret whose `key_id` is the current key's counts as set even if it does not decrypt (see the note
+  below). A write then passes, and the call answers `NOT_CONFIGURED` at the boundary.
 
 What the refusal looks like:
 
