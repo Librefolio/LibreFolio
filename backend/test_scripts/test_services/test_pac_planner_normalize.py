@@ -931,8 +931,8 @@ def test_canonical_issue_universe_matches_schema_and_w1_map_is_explicit() -> Non
     schema_codes = tuple(get_args(PlannerIssueCode))
 
     assert schema_codes == CANONICAL_ISSUE_CODES
-    assert len(schema_codes) == 78
-    assert len(set(schema_codes)) == 78
+    assert len(schema_codes) == 79
+    assert len(set(schema_codes)) == 79
     # FX conversion fix: an incoherent cross rate is a closed code of its own.
     assert "allocation.fx_rate_inconsistent" in schema_codes
     # Contract compaction: the planner reads neither a quote date nor a freshness any more.

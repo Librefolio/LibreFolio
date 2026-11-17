@@ -22,7 +22,10 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
+from fractions import Fraction
 from pathlib import Path
+
+import pytest
 
 from backend.app.schemas.pac_allocator.preview import REBALANCER_TOOL_INPUT_ADAPTER
 from backend.app.services.pac_allocator import models as pac_models
@@ -481,3 +484,232 @@ def test_a_plan_the_replay_refuses_found_first_gives_way_to_any_publishable_one(
     publishable = _candidate(view, {cases.buy_decision("asset:b"): 3})
     solver_module._take_candidate(cascade, publishable, 2)
     assert cascade.best is publishable
+
+
+_ZERO_BAND_CASES = {
+    # cell cash, B's price, units of B that leave exactly 2 000.00 € (B in whole units, a fixed 5 € fee), and R in cents:
+    # the reserves of the cell's postings that can round (B's debit at 9.995 €; the 5 € fee never rounds)
+    "far, B never rounds": (R(2000500, 100), R(10), 1800, 0),  # 18 000 € from the bounds: the margins of lot CM, 2 cents a row
+    "far, B rounds": (R(1999600, 100), R(1999, 200), 1800, 1),  # the margins, and B's debit keeps a cent (row 6)
+    "near, B rounds": (R(220490, 100), R(1999, 200), 20, 1),  # no margin; B's cent alone
+}
+
+
+def _cash_band_scenario(name: str, cash, price, minimum, maximum, **fields) -> ExactPlannerScenario:
+    """T4 with B in whole units at ``price``, A by the euro, and the cash cell held between ``minimum`` and ``maximum``;
+    ``fields`` go to ``cases.scenario`` (``caps``)."""
+    return cases.scenario(
+        name,
+        holdings={"asset:a": R(5000), "asset:b": R(4800)},
+        cash=cash,
+        weights={"asset:a": cases.HALF, "asset:b": cases.HALF},
+        prices={"asset:b": price},
+        whole_units=frozenset({"asset:b"}),
+        cash_entries=(pac_models.ExactCashEntry(broker_id=cases.BROKER, currency="EUR", minimum=pac_models.ExactLimit(kind="amount", value=minimum), maximum=pac_models.ExactLimit(kind="amount", value=maximum), weight=R(0)),),
+        **fields,
+    )
+
+
+def _spy_compile(monkeypatch) -> list[bool]:
+    """Record, per model the planner compiles, whether it is the wide one."""
+    from backend.app.services.pac_allocator import planner  # noqa: PLC0415
+
+    compiled: list[bool] = []
+    real_compile = planner.compile_policy_program
+
+    def spy(scenario, view, **kwargs):
+        compiled.append(kwargs.get("outer", False))
+        return real_compile(scenario, view, **kwargs)
+
+    monkeypatch.setattr(planner, "compile_policy_program", spy)
+    return compiled
+
+
+_OVERSHOOT_CODE = "allocation.cash_limit_exceeded_by_rounding"
+
+
+@pytest.mark.parametrize("case", sorted(_ZERO_BAND_CASES))
+def test_a_zero_cash_band_is_planned_on_the_wide_model_and_published(case: str, monkeypatch) -> None:
+    """Lot ZB of project 67 (specification §16.16): a cash cell held to exactly 2 000 € (minimum = maximum), and a plan the
+    replay accepts. The prudent model is infeasible (its margins and reserves ask a wider band), so the wide model is
+    solved: its plan is published, not proven, never «infeasibility proven». Where its rounding ends the cell off 2 000 €,
+    by at most R (the reserves of its postings), the plan carries the note with that miss. ``proof.py`` keeps the plan
+    unproven though the wide search closed: without its rule this reads ``optimal_proven``."""
+    from backend.app.services.pac_allocator import planner  # noqa: PLC0415
+
+    cash, price, units, reserve_cents = _ZERO_BAND_CASES[case]
+    scenario = _cash_band_scenario("zero-band", cash, price, R(2000), R(2000))
+    view = build_exact_policy_view(scenario)
+    assert evaluate_exact_candidate(scenario, view, _candidate(view, {cases.buy_decision("asset:b"): units})).feasible, "PREMISE: a plan meets the band"
+
+    compiled = _spy_compile(monkeypatch)
+    result = planner.plan_exact_scenario(scenario, solver_time_budget_seconds=10).result
+    assert compiled == [False, True], "the prudent model closed infeasible, the wide one was solved"
+    assert (result.result_state, result.proof.kind, result.stop_reason) == ("ready_incumbent", "not_proven", "completed")
+    final = next(row.final_value for row in result.primary_solution.cash_rows if row.broker_id == cases.BROKER and row.currency == "EUR")
+    miss = abs(_fraction(final) - 2000)
+    notes = [(issue.path.entity_id, issue.params[0].value.amount) for issue in result.issues if issue.code == _OVERSHOOT_CODE]
+    assert notes == ([(f"{cases.BROKER}:EUR", f"{miss:.2f}")] if miss else [])
+    assert miss <= Fraction(reserve_cents, 100), "at most R"
+    _roundtrip(result)
+
+
+def test_a_cash_limit_missed_within_its_postings_reserves_is_a_note_beyond_them_a_refusal() -> None:
+    """The replay's classification of the wide model's plans (``evaluator.cash_limit_overshoots``). T4, B at 9.995 €: two
+    units leave 175.01 €, past a 175 € maximum by a cent. R is one cent: B's debit can round, the 5 € fee cannot. A note.
+    Past a 174.99 € maximum by two cents, more than R (though two postings carry a quantum): refused."""
+    from backend.app.services.pac_allocator.evaluation.errors import ExactReplayRejectedError  # noqa: PLC0415
+    from backend.app.services.pac_allocator.evaluation.evaluator import cash_limit_overshoots  # noqa: PLC0415
+
+    two_of_b = {cases.buy_decision("asset:b"): 2}
+    scenario = _cash_band_scenario("overshoot", R(200), R(1999, 200), R(0), R(175))
+    view = build_exact_policy_view(scenario)
+    (overshoot,) = cash_limit_overshoots(scenario, evaluate_exact_candidate(scenario, view, _candidate(view, two_of_b)))
+    assert (overshoot.broker_id, overshoot.currency, overshoot.side, overshoot.amount, overshoot.reserved_postings) == (cases.BROKER, "EUR", "maximum", R(1, 100), 1)
+
+    scenario = _cash_band_scenario("overshoot", R(200), R(1999, 200), R(0), R(17499, 100))
+    view = build_exact_policy_view(scenario)
+    with pytest.raises(ExactReplayRejectedError):
+        cash_limit_overshoots(scenario, evaluate_exact_candidate(scenario, view, _candidate(view, two_of_b)))
+
+
+def test_a_plan_of_the_wide_model_that_misses_a_cash_limit_by_its_rounding_is_published_with_the_note(monkeypatch) -> None:
+    """End to end: 200 € in the cell, held to exactly 175 €; B at 9.995 € in whole units, A by the euro capped at 4 €. No
+    plan posts 175.00 € (the grid below says so); two units of B post 175.01 €, their exact cash 175.01 € inside the wide
+    model's band (175.00 € once B's reserve is taken). The cascade on the wide model, the replay and the output union all
+    carry it: published, not proven, with the note «exceeded by 0.01 EUR» on the cash entry."""
+    from backend.app.services.pac_allocator import planner  # noqa: PLC0415
+    from backend.app.services.pac_allocator.evaluation.economics import final_cash_by_cell  # noqa: PLC0415
+    from backend.app.services.pac_allocator.evaluation.scenario import build_scenario_index  # noqa: PLC0415
+
+    scenario = _cash_band_scenario("overshoot-e2e", R(200), R(1999, 200), R(175), R(175), caps={"asset:a": R(4)})
+    view = build_exact_policy_view(scenario)
+    index = build_scenario_index(scenario)
+    posted = set()
+    for units in range(0, 4):
+        for euros in range(0, 5):
+            evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, {cases.buy_decision("asset:b"): units, cases.buy_decision("asset:a"): euros}))
+            posted.add(final_cash_by_cell(index, evaluation.ledgers)[(cases.BROKER, "EUR")])
+    assert R(175) not in posted and R(17501, 100) in posted, "PREMISE: no plan posts 175.00 €; two units of B post 175.01 €"
+
+    compiled = _spy_compile(monkeypatch)
+    result = planner.plan_exact_scenario(scenario, solver_time_budget_seconds=10).result
+    assert compiled == [False, True]
+    assert (result.result_state, result.proof.kind) == ("ready_incumbent", "not_proven")
+    (note,) = [issue for issue in result.issues if issue.code == _OVERSHOOT_CODE]
+    assert (note.severity, note.kind, note.path.section, note.path.entity_kind, note.path.entity_id) == ("warning", "constraint", "targets", "cash", f"{cases.BROKER}:EUR")
+    assert [(param.kind, param.name, param.value.amount, param.value.currency) for param in note.params] == [("money", "exceeded_by", "0.01", "EUR")]
+    _roundtrip(result)
+
+
+def test_a_plan_the_prudent_model_holds_never_reaches_the_wide_model(monkeypatch) -> None:
+    """Unchanged where the prudent model has a plan: the limits hold to the cent, and the wide model is never compiled."""
+    from backend.app.services.pac_allocator import planner  # noqa: PLC0415
+
+    compiled = _spy_compile(monkeypatch)
+    result = planner.plan_exact_scenario(_cash_band_scenario("wide-band", R(200), R(1999, 200), R(150), R(175)), solver_time_budget_seconds=10).result
+    assert compiled == [False]
+    assert result.result_state == "ready_incumbent" and not [issue for issue in result.issues if issue.code == _OVERSHOOT_CODE]
+    final = next(row.final_value for row in result.primary_solution.cash_rows if row.broker_id == cases.BROKER and row.currency == "EUR")
+    assert 150 <= _fraction(final) <= 175
+
+
+def test_a_cash_band_no_plan_can_reach_stays_proven_infeasible_by_the_outer_model(monkeypatch) -> None:
+    """The cell moves by whole euros (A by the euro, B at 10 €, the 5 € fee) and must end at exactly 2 003.50 €, 18 000 €
+    away: no plan exists. The prudent model's «infeasible» is checked on the outer model, with no margin and the reserves
+    on the side that admits every plan the replay could accept; that one is infeasible too, so the proof stands."""
+    from backend.app.services.pac_allocator import planner  # noqa: PLC0415
+
+    compiled = _spy_compile(monkeypatch)
+    scenario = _cash_band_scenario("unreachable-band", R(2000500, 100), R(10), R(200350, 100), R(200350, 100))
+    result = planner.plan_exact_scenario(scenario, solver_time_budget_seconds=10).result
+    assert compiled == [False, True], "the outer model is solved after the prudent one closed infeasible"
+    assert result.proof.kind == "infeasibility_proven"
+    _roundtrip(result)
+
+
+def _fixed_feasible(program, view: ExactPolicyView, quanta: dict[str, int]) -> bool:
+    """Whether ``quanta``, fixed in ``program``'s model, is feasible there (its first stage solved to optimal)."""
+    for access in view.decisions:
+        variable = program.variables.quanta[access.decision_id]
+        program.model.chgVarLb(variable, quanta.get(access.decision_id, 0))
+        program.model.chgVarUb(variable, quanta.get(access.decision_id, 0))
+    program.model.setObjective(program.objective_stages[0].expression, "minimize")
+    program.model.optimize()
+    return program.model.getStatus() == "optimal"
+
+
+# Plans the replay accepts exactly on a boundary the prudent model refuses: B's debit at 9.995 € rounds up a half cent, so
+# its exact cash is half a cent above what the replay posts (one unit of B and the 5 € fee).
+_WIDE_BOUNDARIES = {
+    "a cell spent to zero": (R(15), R(0), R(1000)),  # 15 − 5 − 10.00 = 0.00 posted; 0.005 exact
+    "cash exactly on its maximum": (R(200), R(0), R(185)),  # 185.00 posted, 185.005 exact
+    "cash exactly on its minimum": (R(200), R(185), R(1000)),  # 185.00 posted, 185.005 exact
+}
+
+
+@pytest.mark.parametrize("case", sorted(_WIDE_BOUNDARIES))
+def test_the_wide_model_holds_a_plan_on_a_boundary_the_prudent_one_refuses(case: str) -> None:
+    """Each row of the wide model reads the cell on the side that admits: ``ledger_nonnegative`` and a minimum the highest
+    cash the replay can post (the reserves back in), a maximum the lowest. One unit of B lands each case exactly on its
+    boundary; the replay accepts it, the prudent model refuses it, the wide one must hold it. Moving any reserve to the
+    other side of its row turns one case red."""
+    cash, minimum, maximum = _WIDE_BOUNDARIES[case]
+    scenario = _cash_band_scenario("wide-boundary", cash, R(1999, 200), minimum, maximum)
+    view = build_exact_policy_view(scenario)
+    one_of_b = {cases.buy_decision("asset:b"): 1}
+    assert evaluate_exact_candidate(scenario, view, _candidate(view, one_of_b)).feasible, "PREMISE: the replay accepts it"
+    assert not _fixed_feasible(compile_policy_program(scenario, view), view, one_of_b), "PREMISE: the prudent model refuses it"
+    assert _fixed_feasible(compile_policy_program(scenario, view, outer=True), view, one_of_b)
+
+
+def test_the_outer_model_holds_every_plan_the_replay_publishes() -> None:
+    """The wide model's «infeasible» is a proof only if it holds every plan the replay accepts. T4 with a 150–175 € cash band
+    and B at 9.995 €: every count of B units and A euros the replay accepts, fixed in the wide model, is feasible there.
+    (Plans that need a rounding top-up, cash the user adds, are outside the claim: see the checkpoint of lot ZB.)"""
+    scenario = _cash_band_scenario("outer-holds", R(200), R(1999, 200), R(150), R(175))
+    view = build_exact_policy_view(scenario)
+    accepted = 0
+    for units in range(0, 6):
+        for euros in (0, 1, 7):
+            quanta = {cases.buy_decision("asset:b"): units, cases.buy_decision("asset:a"): euros}
+            if not evaluate_exact_candidate(scenario, view, _candidate(view, quanta)).feasible:
+                continue
+            accepted += 1
+            assert _fixed_feasible(compile_policy_program(scenario, view, outer=True), view, quanta), f"{units} units of B and {euros} € of A"
+    assert accepted >= 6, "PREMISE: several plans are accepted"
+
+
+def test_a_plan_of_the_wide_model_the_replay_refuses_is_no_plan_found_never_a_failure(monkeypatch) -> None:
+    """The wide model admits plans the replay may refuse beyond a rounding (SCIP's tolerance on rows with no margin). Such a
+    plan is «no plan found», not proven, its search completed: never an error, never a proof, and no note."""
+    from backend.app.services.pac_allocator import planner  # noqa: PLC0415
+    from backend.app.services.pac_allocator.evaluation.errors import ExactReplayRejectedError  # noqa: PLC0415
+
+    compiled = _spy_compile(monkeypatch)
+    real_overshoots = planner.cash_limit_overshoots
+
+    def refuse_on_the_wide_path(scenario, evaluation):
+        if compiled and compiled[-1]:
+            raise ExactReplayRejectedError("refused for the test")
+        return real_overshoots(scenario, evaluation)
+
+    monkeypatch.setattr(planner, "cash_limit_overshoots", refuse_on_the_wide_path)
+    cash, price, _, _ = _ZERO_BAND_CASES["far, B rounds"]
+    result = planner.plan_exact_scenario(_cash_band_scenario("zero-band", cash, price, R(2000), R(2000)), solver_time_budget_seconds=10).result
+    assert (result.result_state, result.proof.kind, result.stop_reason) == ("ready_no_incumbent", "not_proven", "completed")
+    assert not [issue for issue in result.issues if issue.code == _OVERSHOOT_CODE]
+    _roundtrip(result)
+
+
+def _fraction(money) -> Fraction:
+    from backend.app.schemas.pac_allocator.exact import money_fraction  # noqa: PLC0415
+
+    return money_fraction(money)
+
+
+def _roundtrip(result) -> None:
+    """The result survives the Rebalancer's output union, as JSON, strictly."""
+    from backend.app.schemas.pac_allocator.preview import REBALANCER_TOOL_OUTPUT_ADAPTER  # noqa: PLC0415
+
+    assert REBALANCER_TOOL_OUTPUT_ADAPTER.validate_json(REBALANCER_TOOL_OUTPUT_ADAPTER.dump_json(result), strict=True) == result

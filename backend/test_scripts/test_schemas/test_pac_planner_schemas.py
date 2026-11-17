@@ -1198,6 +1198,8 @@ EXPECTED_PLANNER_ISSUE_CODES = (
     "allocation.broker_execution_profile_unsupported",
     "allocation.broker_inactive",
     "allocation.capacity_unsupported",
+    # Lot ZB (project 67): a plan of the wide model, published with a cash limit missed by its rounding (a few cents).
+    "allocation.cash_limit_exceeded_by_rounding",
     "allocation.cash_selection_invalid",
     "allocation.classification_geography_missing",
     "allocation.classification_invalid",
@@ -1327,7 +1329,7 @@ def _catalogue_issue_specimen(code: str) -> JsonObject:
 
 
 def test_planner_issue_code_catalogue_is_exact_closed_and_sorted() -> None:
-    assert len(EXPECTED_PLANNER_ISSUE_CODES) == 78
+    assert len(EXPECTED_PLANNER_ISSUE_CODES) == 79
     assert EXPECTED_PLANNER_ISSUE_CODES == tuple(sorted(EXPECTED_PLANNER_ISSUE_CODES))
     assert get_args(PlannerIssueCode) == EXPECTED_PLANNER_ISSUE_CODES
     assert PLANNER_ISSUE_CODE_ADAPTER.json_schema()["enum"] == list(EXPECTED_PLANNER_ISSUE_CODES)
@@ -2853,14 +2855,13 @@ def _completed_no_incumbent_result(product: str) -> JsonObject:
 
 
 @pytest.mark.parametrize(("product", "adapter"), READY_PRODUCT_CASES)
-def test_ready_no_incumbent_is_only_a_limit_stop(product: str, adapter: TypeAdapter[Any]) -> None:
-    """A search that completed always holds a plan, so "no plan" is only ever a limit stop.
+def test_ready_no_incumbent_is_a_limit_stop_or_a_completed_search_with_no_accepted_plan(product: str, adapter: TypeAdapter[Any]) -> None:
+    """ "No plan" is a limit stop, or a completed search that holds no plan the replay accepts.
 
-    Since QX1-b the exact replay no longer suppresses a plan: it publishes it
-    with its rounding top-ups or raises.  The one remaining way to publish
-    nothing is SCIP stopping at a time or node limit before holding any
-    solution, so ``completed`` must be refused by the type itself - a
-    ``literal_error`` on ``stop_reason`` - not by some later cross-field rule.
+    Since QX1-b the exact replay no longer suppresses a plan of the prudent model: it publishes it with its rounding
+    top-ups or raises. Lot ZB of project 67 adds the other way: the prudent model closed infeasible, the outer one (which
+    holds every plan the replay could accept) returned only plans the replay refused. The search completed, its stages
+    finished, and nothing is proven. A ``completed`` stop still needs no unfinished stage, as for every ready result.
     """
     for stop_reason in ("time_limit", "node_limit"):
         payload = _ready_no_incumbent_result(product)
@@ -2870,10 +2871,14 @@ def test_ready_no_incumbent_is_only_a_limit_stop(product: str, adapter: TypeAdap
         assert (wire["result_state"], wire["stop_reason"]) == ("ready_no_incumbent", stop_reason)
         assert "primary_solution" not in wire and "deployment" not in wire
 
-    with pytest.raises(ValidationError) as exc_info:
-        adapter.validate_json(_wire(_completed_no_incumbent_result(product)), strict=True)
-    errors = exc_info.value.errors(include_url=False)
-    assert any(error["type"] == "literal_error" and error["loc"][-1] == "stop_reason" for error in errors), errors
+    model, _emitted = _strict_roundtrip(adapter, _completed_no_incumbent_result(product))
+    wire = adapter.dump_python(model, mode="json")
+    assert (wire["result_state"], wire["stop_reason"], wire["proof"]["kind"]) == ("ready_no_incumbent", "completed", "not_proven")
+
+    unfinished = _ready_no_incumbent_result(product)
+    unfinished["stop_reason"] = "completed"
+    with pytest.raises(ValidationError, match="Completed stops require no unfinished stage"):
+        adapter.validate_json(_wire(unfinished), strict=True)
 
 
 def _optimal_ready_result(product: str) -> JsonObject:
@@ -4012,17 +4017,19 @@ def test_distinct_deployment_rejects_identity_count_coverage_and_arithmetic_erro
 # solution, the shared type both Tools publish (contract §6.1); the PAC's screen does not change (X17).
 # Lot SE (project 67, the coordinator's decision of 16/11) moves both: one more closed issue code,
 # allocation.solver_numerical_error, in the shared PlannerIssueCode.
+# Lot ZB (project 67, the developer's decision of 17/11, specification §16.16) moves both: one more closed issue code,
+# allocation.cash_limit_exceeded_by_rounding, and ``completed`` among a ready_no_incumbent's stops.
 PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param(
         PAC_PLAN_INPUT_ADAPTER,
         PAC_PLAN_OUTPUT_ADAPTER,
-        "015661a155c8a5fec62a8e9c7dfc0e3e7c019cdc863e318ca592eab0a7969a4d",
+        "da813730a9280d76fa124f27f583da01b7e3c48f0db95c35d78f36ebf67a9cbf",
         id="pac",
     ),
     pytest.param(
         REBALANCER_PLAN_INPUT_ADAPTER,
         REBALANCER_PLAN_OUTPUT_ADAPTER,
-        "46d78a2c4779fae2e22de93923fae5a8432fa9fcc3838ba5c8546ead9542ac58",
+        "d5c8a98a6f841a9b381540a2f4778098bc01bc8e78c8bffe3ca7e5ca37a6793c",
         id="rebalancer",
     ),
 )
@@ -4600,9 +4607,10 @@ def test_open_canonical_vector_keeps_the_proof_and_reads_as_a_limit() -> None:
 # union, so the fingerprint the catalog publishes covers both. It moves for both services here, the PAC's included (accepted:
 # 1.4 still serves one contract 2.0.0). The two fingerprints above stay the ``plan`` contract alone (its own result union).
 # G5-2 of project 67 moves the Rebalancer's alone: its preview gains the «other cash» item (the PAC's preview has no items).
+# Lots SE and ZB of project 67 move both: a closed issue code each; ZB also ``completed`` among a ready_no_incumbent's stops.
 TOOL_SCHEMA_FINGERPRINT_CASES = (
-    pytest.param("pac_allocator", PAC_TOOL_INPUT_ADAPTER, PAC_TOOL_OUTPUT_ADAPTER, "839e7884d632eb9121a57818d07a12876da73dead4bce9623b4d446b26f5861e", id="pac"),
-    pytest.param("portfolio_rebalancer", REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER, "ca604a6edfbe11de1f35b1612a5e5e22b00827ab1dab869b84611fd30d72041b", id="rebalancer"),
+    pytest.param("pac_allocator", PAC_TOOL_INPUT_ADAPTER, PAC_TOOL_OUTPUT_ADAPTER, "c0c30a50354fec94fe856227d87ff00f2022fcabc365b6cb92aa17775eadeb75", id="pac"),
+    pytest.param("portfolio_rebalancer", REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER, "ac4238c7497db118243f6452bdd6d2f8cbeff96bdf2e00769af34aa05445315f", id="rebalancer"),
 )
 
 

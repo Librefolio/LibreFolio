@@ -2250,9 +2250,10 @@ def test_infeasible_with_limits_lists_the_limited_entries_and_no_incumbent_never
     assert feasible.limited_entries == ()
 
 
-def test_planner_calls_the_solver_once_per_request(monkeypatch):
-    """M20: no second search to find out whether the limits are the cause. ``solve_policy_program`` runs once for a
-    ``ready_infeasible`` with limits as for any other request."""
+def test_planner_solves_once_and_checks_a_prudent_infeasible_once_on_the_wide_model(monkeypatch):
+    """M20: no second search to find out whether the limits are the cause. ``solve_policy_program`` runs once for a request
+    with a plan. Lot ZB of project 67 (specification §16.16): the model is prudent, so when it closes infeasible the
+    planner solves the wide model once, the one whose «infeasible» is a proof; nothing more."""
     calls = []
     real_solve = planner.solve_policy_program
 
@@ -2263,7 +2264,12 @@ def test_planner_calls_the_solver_once_per_request(monkeypatch):
     monkeypatch.setattr(planner, "solve_policy_program", counting_solve)
     report = planner.plan_exact_scenario(_scenario_with_entry_limit(), solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
     assert isinstance(report.result, PacPlannerReadyInfeasibleResult)
-    assert len(calls) == 1
+    assert [program.outer for program in calls] == [False, True]
+
+    calls.clear()
+    feasible = planner.plan_exact_scenario(_scenario_with_entry_limit(minimum=None, cash_maximum="40"), solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+    assert isinstance(feasible.result, (PacPlannerReadyIncumbentResult, PacPlannerReadyNoOpResult))
+    assert [program.outer for program in calls] == [False]
 
 
 def test_a_limit_a_thousandth_under_a_reachable_value_never_makes_the_run_fail():
