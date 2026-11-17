@@ -48,50 +48,6 @@ export function localizedScenarioText(value: unknown, language: string): string 
 }
 
 /**
- * Reduce a field that may arrive as a string, or as an array of them, to a
- * single string — the first string in an array, or null when there is none.
- * The risk API sometimes widens scalars to arrays; this narrows them back.
- */
-export function scalarString(value: unknown): string | null {
-    if (typeof value === 'string') return value;
-    if (Array.isArray(value)) return value.find((candidate): candidate is string => typeof candidate === 'string') ?? null;
-    return null;
-}
-
-/**
- * Keep only the numeric entries of a `{bucket: shock}` object, dropping anything
- * non-numeric (and yielding `{}` for a value that is not a plain object). Used
- * to sanitise a scenario preset's bucket shocks before they seed the editor.
- */
-export function numberRecord(value: unknown): Record<string, number> {
-    if (value === null || typeof value !== 'object' || Array.isArray(value)) return {};
-    return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, number] => typeof entry[1] === 'number'));
-}
-
-/** The exposure context `presentStressBuckets` reads to decide its buckets. */
-export interface StressBucketContext {
-    assetClass?: string | null;
-    sectorExposure?: Record<string, number> | null;
-    geographyExposure?: Record<string, number> | null;
-}
-
-/**
- * Which buckets to show shock editors for, given the stress dimension:
- * - `asset_class` → the single asset class (upper-cased, or `OTHER` when blank);
- * - `sector`/`geography` → every exposure bucket with a finite positive weight,
- *   or the sentinel `['Other']` when the portfolio has no usable exposure there.
- */
-export function presentStressBuckets(dimension: RiskScenarioDimension, ctx: StressBucketContext): string[] {
-    if (dimension === 'asset_class') return [(ctx.assetClass?.trim().toUpperCase() || 'OTHER') as string];
-    const exposure = dimension === 'sector' ? ctx.sectorExposure : ctx.geographyExposure;
-    const buckets = Object.entries(exposure ?? {})
-        .filter(([, weight]) => Number.isFinite(weight) && weight > 0)
-        .map(([bucket]) => bucket.trim())
-        .filter(Boolean);
-    return buckets.length > 0 ? buckets : ['Other'];
-}
-
-/**
  * The dimension the backend actually stressed, echoed in the impact row. A valid
  * echoed dimension is trusted; anything else falls back to the dimension the UI
  * currently has selected, so a malformed echo never blanks the row's labels.
@@ -187,24 +143,6 @@ export function formatCurrencyAmount(value: string | readonly (string | null)[] 
     } catch {
         return `${maskFormattedNumber(amount.toLocaleString(locale, {minimumFractionDigits: 2, maximumFractionDigits: 2}))} ${currency}`;
     }
-}
-
-/**
- * A currency amount is only meaningful on a `portfolio` scope, where every
- * holding is a real position held in a real proportion. On an `asset` or
- * `asset_set` scope the weights are implicit — the reader never chose them — so
- * an impact in euros would be true arithmetic over a portfolio that does not
- * exist. An invented euro reads exactly like a measured one (D107).
- *
- * Today the backend sends `null` for those scopes, so this returns the same `—`
- * it would have returned anyway and no pixel moves. That is what makes the guard
- * safe to add, and also why it is easy to delete during a cleanup: it never
- * appears to fire. It exists for the day the backend starts sending a number,
- * which is the day nothing else would stop it from being printed.
- */
-export function formatScopedCurrencyAmount(value: string | readonly (string | null)[] | null | undefined, currency: string, scopeKind: string, locale: string = uiLocale()): string {
-    if (scopeKind !== 'portfolio') return '—';
-    return formatCurrencyAmount(value, currency, locale);
 }
 
 /**

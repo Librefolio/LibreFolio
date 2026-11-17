@@ -112,7 +112,7 @@
     /**
      * The card's subtitle, what the parentheses of the title used to say (F8): which part of the distribution, and the measure's name.
      * The worst fall's is built from two catalogue names — «lived through» and the glossary's own «maximum drawdown» — so the measure
-     * keeps the one name `riskGlossary.test.ts` holds everywhere.
+     * keeps one name (D8; since RN-17 c the legacy KPI card that named it a second time is gone).
      */
     function subtitle(id: 'day' | 'month' | 'worst'): string {
         return id === 'worst' ? `${$t('risk.levels.l1.technical.lived')} · ${$t('risk.levels.l1.technical.worst')}` : $t(`risk.levels.l1.technical.${id}`);

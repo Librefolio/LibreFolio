@@ -9,7 +9,6 @@
       "sampling": "Strategia di campionamento",
       "paths": "Percorsi simulati",
       "randomSeed": "Seed casuale",
-      "sobolStartIndex": "Indice iniziale Sobol",
       "optimizationStrategy": "Strategia",
       "covarianceEstimator": "Stimatore di covarianza",
       "riskFreeRate": "Tasso privo di rischio",
@@ -43,10 +42,8 @@
     "title": "Rischio",
     "dashboardTitle": "Rischio portafoglio",
     "brokerTitle": "Rischio broker",
-    "assetTitle": "Rischio asset",
     "internalSubset": "Rischio interno del sottoinsieme broker",
     "dashboardFullPortfolio": "Il rischio usa l'intero portafoglio; il filtro broker della dashboard non viene applicato.",
-    "assetRollingHint": "Il rischio rolling resta disponibile nei Segnali; questo pannello copre confronto, scenari, VaR e simulazione.",
     "states": {
       "partial": "Parziale",
       "empty": "Nessun risultato",
@@ -61,8 +58,7 @@
       "observations": "Osservazioni",
       "coverage": "Copertura",
       "annualization": "Fattore di annualizzazione",
-      "returnBasis": "Base rendimento",
-      "method": "Metodo"
+      "returnBasis": "Base rendimento"
     },
     "returnBasis": {
       "price_only": "Solo prezzo",
@@ -75,12 +71,6 @@
       "undefined": "Non definito"
     },
     "quality": {
-      "status": "Qualità dati",
-      "ok": "OK",
-      "carried_forward": "Dati mantenuti",
-      "partial": "Parziale",
-      "carriedPrices": "Punti prezzo mantenuti",
-      "carriedFx": "Punti FX mantenuti",
       "missingPrice": "{count} asset senza prezzo in questo periodo — esclusi dall'analisi",
       "missingFx": "{count} coppie di valute senza fonte di cambio — gli asset quotati in queste valute sono esclusi",
       "missingFxRates": "Cambi mancanti o più vecchi di {days} giorni per {count} coppie — sincronizza per completare l'analisi",
@@ -246,73 +236,30 @@
       }
     },
     "metrics": {
-      "volatility": "Volatilità",
-      "maxDrawdown": "Drawdown massimo",
-      "drawdownDuration": "Durata drawdown",
-      "sharpe": "Sharpe",
-      "sortino": "Sortino",
-      "portfolioVolatility": "Volatilità portafoglio",
       "cashWeight": "Liquidità e non coperto",
-      "var": "Value at Risk",
-      "cvar": "VaR condizionale",
-      "activeReturn": "Rendimento attivo",
-      "trackingError": "Tracking error",
-      "informationRatio": "Information ratio",
-      "correlation": "Correlazione",
-      "beta": "Beta",
-      "scenarioReturn": "Rendimento scenario",
-      "impactAmount": "Impatto monetario",
-      "shock": "Shock",
-      "contribution": "Contributo",
       "terminalMean": "Rendimento medio finale",
-      "terminalVolatility": "Volatilità finale",
       "probabilityOfLoss": "Probabilità di perdita"
     },
     "comparison": {
-      "comparisonAsset": "Asset di confronto",
-      "results": "Risultati confronto"
+      "comparisonAsset": "Asset di confronto"
     },
     "actions": {
-      "compare": "Confronta",
       "runScenario": "Esegui scenario",
       "simulate": "Simula",
       "runReplay": "Esegui replay"
     },
     "stress": {
-      "uniformShock": "Shock uniforme sugli asset",
-      "results": "Risultati stress",
       "preset": "Preset",
-      "dimension": "Dimensione",
-      "showAllBuckets": "Mostra tutti i bucket",
       "dimensions": {
         "asset_class": "Classe asset",
         "sector": "Settore",
         "geography": "Geografia"
       },
-      "auditTitle": "Audit delle esposizioni applicate",
-      "missingMetadataOther": "Per questo asset non erano disponibili dati di settore o geografia. È stato trattato come Altro al 100%.",
-      "exposureBucket": "Bucket di esposizione",
-      "exposure": "Esposizione",
-      "appliedBucket": "Bucket applicato",
-      "rule": "Regola",
-      "europeanUnion": "Unione Europea",
-      "rules": {
-        "direct": "Diretta",
-        "country": "Paese specifico",
-        "geography_group": "Gruppo geografico",
-        "other": "Ripiego su Altro",
-        "missing_metadata_other": "Metadata mancanti → Altro",
-        "unconfigured_zero": "Non configurato → shock zero"
-      }
+      "europeanUnion": "Unione Europea"
     },
     "simulation": {
       "simulated": "Bande percentili simulate",
       "assumptions": "{paths} percorsi su {days} giorni; composizione buy-and-hold corrente, senza costi, flussi, inflazione o ribilanciamento.",
-      "evolution": "Evoluzione",
-      "terminalDistribution": "Distribuzione finale",
-      "p05": "P5 finale",
-      "p50": "P50 finale",
-      "p95": "P95 finale",
       "mode": {
         "label": "Modalità di simulazione",
         "recommended": "Consigliata",
@@ -418,43 +365,8 @@
     "assetDetail": {
       "overviewTab": "Panoramica",
       "riskScenariosTab": "Rischio e scenari",
-      "summaryTitle": "Sintesi del rischio",
-      "summaryDescription": "Rischio osservato, downside, confronto con un asset reale e scenari per questo asset.",
-      "rollingMetric": "Metrica rolling configurata",
-      "noRollingMetric": "Nessun segnale di rischio rolling è configurato per questo asset.",
-      "configureSignals": "Configura i segnali avanzati in Panoramica",
       "positionNote": "Gli importi sono sulla tua posizione di oggi: {amount}.",
       "planPrices": "Prezzi dal piano, non dal mercato: qui volatilità e VaR dicono solo quanto è regolare il piano."
-    },
-    "replay": {
-      "title": "Replay storico",
-      "compositionNotice": "Applica i rendimenti storici osservati alla composizione corrente; non ricostruisce il possesso passato.",
-      "preset": "Preset periodo",
-      "proxy": "Proxy storico manuale",
-      "exclude": "Escludi questo asset dal replay",
-      "results": "Risultati replay storico",
-      "proxyCount": "Proxy manuali usati",
-      "excludedCount": "Asset esclusi",
-      "treatment": {
-        "omitted_from_replay": "Omesso dal replay",
-        "zero_return_residual": "Mantenuto come residuo a rendimento zero"
-      },
-      "missingHistoryPolicy": "Policy storia mancante",
-      "compositionPolicy": "Policy di composizione",
-      "proxySeriesUsage": "Uso della serie proxy",
-      "missingHistoryPolicies": {
-        "manual_proxy_or_exclude": "Proxy manuale o esclusione"
-      },
-      "compositionPolicies": {
-        "current_buy_and_hold": "Buy and hold corrente"
-      },
-      "proxySeriesUsages": {
-        "returns_only": "Solo rendimenti storici"
-      }
-    },
-    "betaBanner": {
-      "title": "L'Analisi del rischio è in beta.",
-      "description": "Calcoli, risultati e interfaccia possono cambiare prima del rilascio stabile."
     },
     "levels": {
       "l1": {
@@ -572,7 +484,8 @@
             "weight": "Peso nel portafoglio: {share}",
             "benchmark": "Benchmark",
             "heldBenchmark": "Benchmark · in portafoglio, peso {share}"
-          }
+          },
+          "titleOneAsset": "Rischio contro rendimento"
         },
         "rows": {
           "kpi": "Sortino, Sharpe e volatilità"
@@ -712,7 +625,8 @@
     },
     "docsHelp": {
       "header": "Quanto può perdere il portafoglio, se è diversificato, se il rischio è pagato e cosa potrebbe succedere: le quattro domande della scheda Rischio, sul periodo indicato.",
-      "assetSet": "Scegli alcuni asset e confrontali nel periodo: quanto ha perso ciascuno, quanto ha reso per il rischio corso, quali si muovono insieme e come avrebbero attraversato le crisi passate."
+      "assetSet": "Scegli alcuni asset e confrontali nel periodo: quanto ha perso ciascuno, quanto ha reso per il rischio corso, quali si muovono insieme e come avrebbero attraversato le crisi passate.",
+      "headerAsset": "Quanto può perdere questo asset, come si confronta con un riferimento e cosa potrebbe succedere: le domande della sua scheda Rischio e scenari, sul periodo indicato."
     }
   }
 }

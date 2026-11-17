@@ -42,15 +42,13 @@
          * `metadata` is fail-closed, because a caller cannot forget it; a prop
          * alone is fail-open, so a future mount on `asset_set` that omits it
          * brings the euros back. **What is returned**: `''` makes the amount
-         * absent, which is right everywhere, whereas the `—` of
-         * `formatScopedCurrencyAmount` is right inside a card and wrong inside a
-         * sentence — "would have ended the period at −12.30% —" reads as a
+         * absent, which is right everywhere, whereas a card's `—` is wrong inside
+         * a sentence — "would have ended the period at −12.30% —" reads as a
          * number that failed to load, not as one that does not apply.
          *
-         * So the default is derived from the payload and the prop is an explicit
-         * override. The condition is the one `formatScopedCurrencyAmount`
-         * already uses, reused rather than restated, so the guards across the
-         * subsystem converge on the same predicate even where the string differs.
+         * So the default is derived from the payload (the scope is a portfolio)
+         * and the prop is an explicit override. On one asset the money comes
+         * from `scopeValue` instead, your position (Q17 A1, RN-17).
          */
         showMoney?: boolean;
         /**

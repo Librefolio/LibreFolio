@@ -9,7 +9,6 @@
       "sampling": "Sampling strategy",
       "paths": "Simulation paths",
       "randomSeed": "Random seed",
-      "sobolStartIndex": "Sobol start index",
       "optimizationStrategy": "Strategy",
       "covarianceEstimator": "Covariance estimator",
       "riskFreeRate": "Risk-free rate",
@@ -43,10 +42,8 @@
     "title": "Risk",
     "dashboardTitle": "Portfolio risk",
     "brokerTitle": "Broker risk",
-    "assetTitle": "Asset risk",
     "internalSubset": "Internal risk of this broker subset",
     "dashboardFullPortfolio": "Risk uses the full portfolio; the dashboard broker filter is not applied.",
-    "assetRollingHint": "Rolling risk remains available in Signals; this panel covers comparison, scenarios, VaR and simulation.",
     "states": {
       "partial": "Partial",
       "empty": "No result yet",
@@ -61,8 +58,7 @@
       "observations": "Observations",
       "coverage": "Coverage",
       "annualization": "Annualization factor",
-      "returnBasis": "Return basis",
-      "method": "Method"
+      "returnBasis": "Return basis"
     },
     "returnBasis": {
       "price_only": "Price only",
@@ -75,12 +71,6 @@
       "undefined": "Undefined"
     },
     "quality": {
-      "status": "Data quality",
-      "ok": "OK",
-      "carried_forward": "Carried forward",
-      "partial": "Partial",
-      "carriedPrices": "Carried price points",
-      "carriedFx": "Carried FX points",
       "missingPrice": "{count} asset(s) have no price in this period — left out of the analysis",
       "missingFx": "{count} currency pair(s) have no exchange-rate source — the assets quoted in them are left out",
       "missingFxRates": "Exchange rates missing or older than {days} days for {count} pair(s) — sync to complete the analysis",
@@ -246,73 +236,30 @@
       }
     },
     "metrics": {
-      "volatility": "Volatility",
-      "maxDrawdown": "Maximum drawdown",
-      "drawdownDuration": "Drawdown duration",
-      "sharpe": "Sharpe",
-      "sortino": "Sortino",
-      "portfolioVolatility": "Portfolio volatility",
       "cashWeight": "Cash and uncovered",
-      "var": "Value at Risk",
-      "cvar": "Conditional VaR",
-      "activeReturn": "Active return",
-      "trackingError": "Tracking error",
-      "informationRatio": "Information ratio",
-      "correlation": "Correlation",
-      "beta": "Beta",
-      "scenarioReturn": "Scenario return",
-      "impactAmount": "Amount impact",
-      "shock": "Shock",
-      "contribution": "Contribution",
       "terminalMean": "Terminal mean return",
-      "terminalVolatility": "Terminal volatility",
       "probabilityOfLoss": "Probability of loss"
     },
     "comparison": {
-      "comparisonAsset": "Comparison asset",
-      "results": "Comparison results"
+      "comparisonAsset": "Comparison asset"
     },
     "actions": {
-      "compare": "Compare",
       "runScenario": "Run scenario",
       "simulate": "Simulate",
       "runReplay": "Run replay"
     },
     "stress": {
-      "uniformShock": "Uniform asset shock",
-      "results": "Stress results",
       "preset": "Preset",
-      "dimension": "Dimension",
-      "showAllBuckets": "Show all buckets",
       "dimensions": {
         "asset_class": "Asset class",
         "sector": "Sector",
         "geography": "Geography"
       },
-      "auditTitle": "Applied exposure audit",
-      "missingMetadataOther": "Sector or geography data was unavailable for this asset. It was treated as Other at 100%.",
-      "exposureBucket": "Exposure bucket",
-      "exposure": "Exposure",
-      "appliedBucket": "Applied bucket",
-      "rule": "Rule",
-      "europeanUnion": "European Union",
-      "rules": {
-        "direct": "Direct",
-        "country": "Specific country",
-        "geography_group": "Geographic group",
-        "other": "Other fallback",
-        "missing_metadata_other": "Missing metadata → Other",
-        "unconfigured_zero": "Unconfigured → zero shock"
-      }
+      "europeanUnion": "European Union"
     },
     "simulation": {
       "simulated": "Simulated percentile bands",
       "assumptions": "{paths} paths over {days} days; current buy-and-hold composition, without costs, cash flows, inflation or rebalancing.",
-      "evolution": "Evolution",
-      "terminalDistribution": "Terminal distribution",
-      "p05": "Terminal P5",
-      "p50": "Terminal P50",
-      "p95": "Terminal P95",
       "mode": {
         "label": "Simulation mode",
         "recommended": "Recommended",
@@ -418,43 +365,8 @@
     "assetDetail": {
       "overviewTab": "Overview",
       "riskScenariosTab": "Risk & Scenarios",
-      "summaryTitle": "Risk summary",
-      "summaryDescription": "Observed risk, downside, real-asset comparison and scenarios for this asset.",
-      "rollingMetric": "Configured rolling metric",
-      "noRollingMetric": "No rolling-risk signal is configured for this asset.",
-      "configureSignals": "Configure advanced signals in Overview",
       "positionNote": "Amounts are on your position today: {amount}.",
       "planPrices": "Prices from the plan, not from the market: here volatility and VaR only say how regular the plan is."
-    },
-    "replay": {
-      "title": "Historical replay",
-      "compositionNotice": "Applies observed historical returns to the current composition; it does not reconstruct past ownership.",
-      "preset": "Period preset",
-      "proxy": "Manual history proxy",
-      "exclude": "Exclude this asset from the replay",
-      "results": "Historical replay results",
-      "proxyCount": "Manual proxies used",
-      "excludedCount": "Excluded assets",
-      "treatment": {
-        "omitted_from_replay": "Omitted from replay",
-        "zero_return_residual": "Retained as zero-return residual"
-      },
-      "missingHistoryPolicy": "Missing-history policy",
-      "compositionPolicy": "Composition policy",
-      "proxySeriesUsage": "Proxy series usage",
-      "missingHistoryPolicies": {
-        "manual_proxy_or_exclude": "Manual proxy or exclusion"
-      },
-      "compositionPolicies": {
-        "current_buy_and_hold": "Current buy and hold"
-      },
-      "proxySeriesUsages": {
-        "returns_only": "Historical returns only"
-      }
-    },
-    "betaBanner": {
-      "title": "Risk Analysis is in beta.",
-      "description": "Calculations, results, and the interface may change before the stable release."
     },
     "levels": {
       "l1": {
@@ -572,7 +484,8 @@
             "weight": "Weight in the portfolio: {share}",
             "benchmark": "Benchmark",
             "heldBenchmark": "Benchmark · in the portfolio, weight {share}"
-          }
+          },
+          "titleOneAsset": "Risk against return"
         },
         "rows": {
           "kpi": "Sortino, Sharpe and volatility"
@@ -712,7 +625,8 @@
     },
     "docsHelp": {
       "header": "How much the portfolio can lose, whether it is diversified, whether the risk is paid and what could happen: the four questions of the Risk tab, on the period shown.",
-      "assetSet": "Pick a few assets and compare them over the period: how much each one lost, what it paid for its risk, which of them move together, and how they would have weathered past crises."
+      "assetSet": "Pick a few assets and compare them over the period: how much each one lost, what it paid for its risk, which of them move together, and how they would have weathered past crises.",
+      "headerAsset": "How much this asset can lose, how it compares with a reference and what could happen: the questions of its Risk & Scenarios tab, on the period shown."
     }
   }
 }

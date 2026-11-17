@@ -1491,7 +1491,7 @@
     /* flex/min-width let this shrink inside .enum-option instead of forcing the row (and
      * the whole popover) wider than intended; overflow-x-hidden/whitespace-nowrap/block come
      * from overflowScrollTextClass (applied in the markup) for the auto-scroll marquee —
-     * same pattern as AssetCard/BrokerCard/KpiCard for long names. */
+     * same pattern as AssetCard/BrokerCard for long names. */
     .enum-label {
         flex: 1 1 auto;
         min-width: 0;

@@ -9,7 +9,6 @@
       "sampling": "Stratégie d'échantillonnage",
       "paths": "Trajectoires simulées",
       "randomSeed": "Graine aléatoire",
-      "sobolStartIndex": "Indice de départ Sobol",
       "optimizationStrategy": "Stratégie",
       "covarianceEstimator": "Estimateur de covariance",
       "riskFreeRate": "Taux sans risque",
@@ -43,10 +42,8 @@
     "title": "Risque",
     "dashboardTitle": "Risque du portefeuille",
     "brokerTitle": "Risque du courtier",
-    "assetTitle": "Risque de l'actif",
     "internalSubset": "Risque interne de ce sous-ensemble du courtier",
     "dashboardFullPortfolio": "Le risque utilise tout le portefeuille ; le filtre de courtier du tableau de bord n'est pas appliqué.",
-    "assetRollingHint": "Le risque glissant reste disponible dans Signaux ; ce panneau couvre comparaison, scénarios, VaR et simulation.",
     "states": {
       "partial": "Partiel",
       "empty": "Aucun résultat",
@@ -61,8 +58,7 @@
       "observations": "Observations",
       "coverage": "Couverture",
       "annualization": "Facteur d'annualisation",
-      "returnBasis": "Base de rendement",
-      "method": "Méthode"
+      "returnBasis": "Base de rendement"
     },
     "returnBasis": {
       "price_only": "Prix uniquement",
@@ -75,12 +71,6 @@
       "undefined": "Indéfini"
     },
     "quality": {
-      "status": "Qualité des données",
-      "ok": "OK",
-      "carried_forward": "Valeurs reportées",
-      "partial": "Partielle",
-      "carriedPrices": "Points de prix reportés",
-      "carriedFx": "Points de change reportés",
       "missingPrice": "{count} actif(s) sans prix sur cette période — exclus de l'analyse",
       "missingFx": "{count} paire(s) de devises sans source de change — les actifs cotés dans ces devises sont exclus",
       "missingFxRates": "Taux de change manquants ou de plus de {days} jours pour {count} paire(s) — synchronisez pour compléter l'analyse",
@@ -246,73 +236,30 @@
       }
     },
     "metrics": {
-      "volatility": "Volatilité",
-      "maxDrawdown": "Perte maximale",
-      "drawdownDuration": "Durée du repli",
-      "sharpe": "Sharpe",
-      "sortino": "Sortino",
-      "portfolioVolatility": "Volatilité du portefeuille",
       "cashWeight": "Liquidités et non couvert",
-      "var": "Valeur à risque",
-      "cvar": "VaR conditionnelle",
-      "activeReturn": "Rendement actif",
-      "trackingError": "Erreur de suivi",
-      "informationRatio": "Ratio d'information",
-      "correlation": "Corrélation",
-      "beta": "Bêta",
-      "scenarioReturn": "Rendement du scénario",
-      "impactAmount": "Impact monétaire",
-      "shock": "Choc",
-      "contribution": "Contribution",
       "terminalMean": "Rendement terminal moyen",
-      "terminalVolatility": "Volatilité terminale",
       "probabilityOfLoss": "Probabilité de perte"
     },
     "comparison": {
-      "comparisonAsset": "Actif de comparaison",
-      "results": "Résultats de la comparaison"
+      "comparisonAsset": "Actif de comparaison"
     },
     "actions": {
-      "compare": "Comparer",
       "runScenario": "Exécuter le scénario",
       "simulate": "Simuler",
       "runReplay": "Lancer le rejeu"
     },
     "stress": {
-      "uniformShock": "Choc uniforme sur les actifs",
-      "results": "Résultats du stress",
       "preset": "Préréglage",
-      "dimension": "Dimension",
-      "showAllBuckets": "Afficher toutes les catégories",
       "dimensions": {
         "asset_class": "Classe d'actifs",
         "sector": "Secteur",
         "geography": "Géographie"
       },
-      "auditTitle": "Audit des expositions appliquées",
-      "missingMetadataOther": "Les données de secteur ou de géographie étaient indisponibles pour cet actif. Il a été traité comme Autre à 100 %.",
-      "exposureBucket": "Catégorie d'exposition",
-      "exposure": "Exposition",
-      "appliedBucket": "Catégorie appliquée",
-      "rule": "Règle",
-      "europeanUnion": "Union européenne",
-      "rules": {
-        "direct": "Directe",
-        "country": "Pays spécifique",
-        "geography_group": "Groupe géographique",
-        "other": "Repli sur Autre",
-        "missing_metadata_other": "Métadonnées manquantes → Autre",
-        "unconfigured_zero": "Non configuré → choc nul"
-      }
+      "europeanUnion": "Union européenne"
     },
     "simulation": {
       "simulated": "Bandes de percentiles simulées",
       "assumptions": "{paths} trajectoires sur {days} jours ; composition actuelle conservée, sans coûts, flux, inflation ni rééquilibrage.",
-      "evolution": "Évolution",
-      "terminalDistribution": "Distribution finale",
-      "p05": "P5 terminal",
-      "p50": "P50 terminal",
-      "p95": "P95 terminal",
       "mode": {
         "label": "Mode de simulation",
         "recommended": "Recommandé",
@@ -418,43 +365,8 @@
     "assetDetail": {
       "overviewTab": "Vue d'ensemble",
       "riskScenariosTab": "Risque et scénarios",
-      "summaryTitle": "Synthèse du risque",
-      "summaryDescription": "Risque observé, risque baissier, comparaison avec un actif réel et scénarios pour cet actif.",
-      "rollingMetric": "Mesure glissante configurée",
-      "noRollingMetric": "Aucun signal de risque glissant n'est configuré pour cet actif.",
-      "configureSignals": "Configurer les signaux avancés dans Vue d'ensemble",
       "positionNote": "Les montants portent sur votre position d'aujourd'hui : {amount}.",
       "planPrices": "Prix issus du plan, pas du marché : ici, la volatilité et la VaR disent seulement à quel point le plan est régulier."
-    },
-    "replay": {
-      "title": "Rejeu historique",
-      "compositionNotice": "Applique les rendements historiques observés à la composition actuelle ; ne reconstitue pas la détention passée.",
-      "preset": "Période prédéfinie",
-      "proxy": "Proxy historique manuel",
-      "exclude": "Exclure cet actif du rejeu",
-      "results": "Résultats du rejeu historique",
-      "proxyCount": "Proxies manuels utilisés",
-      "excludedCount": "Actifs exclus",
-      "treatment": {
-        "omitted_from_replay": "Omis du rejeu",
-        "zero_return_residual": "Conservé comme résidu à rendement nul"
-      },
-      "missingHistoryPolicy": "Politique d'historique manquant",
-      "compositionPolicy": "Politique de composition",
-      "proxySeriesUsage": "Utilisation de la série proxy",
-      "missingHistoryPolicies": {
-        "manual_proxy_or_exclude": "Proxy manuel ou exclusion"
-      },
-      "compositionPolicies": {
-        "current_buy_and_hold": "Buy and hold actuel"
-      },
-      "proxySeriesUsages": {
-        "returns_only": "Rendements historiques uniquement"
-      }
-    },
-    "betaBanner": {
-      "title": "L'analyse des risques est en version bêta.",
-      "description": "Les calculs, les résultats et l'interface peuvent évoluer avant la version stable."
     },
     "levels": {
       "l1": {
@@ -572,7 +484,8 @@
             "weight": "Poids dans le portefeuille : {share}",
             "benchmark": "Référence",
             "heldBenchmark": "Référence · en portefeuille, poids {share}"
-          }
+          },
+          "titleOneAsset": "Risque contre rendement"
         },
         "rows": {
           "kpi": "Sortino, Sharpe et volatilité"
@@ -712,7 +625,8 @@
     },
     "docsHelp": {
       "header": "Combien le portefeuille peut perdre, s'il est diversifié, si le risque est rémunéré et ce qui pourrait arriver : les quatre questions de l'onglet Risque, sur la période indiquée.",
-      "assetSet": "Choisissez quelques actifs et comparez-les sur la période : combien chacun a perdu, ce qu'il a rapporté pour son risque, lesquels évoluent ensemble et comment ils auraient traversé les crises passées."
+      "assetSet": "Choisissez quelques actifs et comparez-les sur la période : combien chacun a perdu, ce qu'il a rapporté pour son risque, lesquels évoluent ensemble et comment ils auraient traversé les crises passées.",
+      "headerAsset": "Combien cet actif peut perdre, comment il se compare à une référence et ce qui pourrait arriver : les questions de son onglet Risque et scénarios, sur la période indiquée."
     }
   }
 }
