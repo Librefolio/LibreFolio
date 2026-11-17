@@ -1408,6 +1408,18 @@ def services_probe_rate_limit(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "Probe rate-limit tests", verbose=verbose)
 
 
+def services_enricher_rate_limit(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that the enricher routes draw from the probe's per-user limit (plan 68 C0)."""
+    print_section("Services: Enricher Rate Limit")
+    print_info("Testing: api/v1/assets/enrichers.py (recognize_enrichers, test_enricher, search_enricher), api/v1/assets/profile.py (ask_profile, refresh_profile), api/v1/assets/providers.py (probe_limiter)")
+    print_info(
+        "Tests: recognize, test, search and ask count one hit each on probe_limiter() before anything else; past it 429 PROBE_RATE_LIMITED, retry_after = Retry-After = ceil(wait) >= 1, nothing reached, refusal not counted; per user; free again after the window; one count shared with the probe; off at 0; refresh not limited"
+    )
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_rate_limit.py", test_names)
+    return run_command(cmd, "Enricher rate-limit tests", verbose=verbose)
+
+
 def services_quote_base_suggestion(verbose: bool = False, test_names: list = None) -> bool:
     """Z-32 (d): a provider's quote base suggestion (FAQuoteBaseSuggestion) in its search results and in the probe's metadata."""
     print_section("Services: Quote Base Suggestion (Z-32 d)")
@@ -3555,6 +3567,17 @@ Note: No backend server required.
         # SlidingWindowLimiter on a fake clock (or PROBES_BY_LIMIT starts empty per test) and the manager's probe is a
         # recording stub, all with monkeypatch, so the lane's real limiters are never consumed. The lane switch runs dev.cmd_server in-process with every launch
         # stubbed (test_dev_designer_lab_banner.start_server): nothing starts.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "enricher-rate-limit",
+        services_enricher_rate_limit,
+        name="Enricher Rate Limit",
+        desc="Plan 68 C0: POST /assets/enrichers/recognize, POST /assets/enrichers/{code}/test, GET /assets/enrichers/{code}/search and POST /assets/profile/ask take the probe's per-user limit: one hit per call on probe_limiter() before anything else (recognize: one for all the enrichers it asks, checked before the stream starts); past it 429 PROBE_RATE_LIMITED with an int retry_after >= 1 (the wait rounded up) equal to Retry-After and a message, no registry, enricher or session reached, the refusal not counted (429 before an unknown enricher's 404); another user is not limited; past the window the user calls again; probes and enricher calls share one count (one limiter built by probe_limiter() for both); probe_limiter() None or LIBREFOLIO_PROBE_RATE_LIMIT=0 limits none; POST /assets/profile/refresh is not limited",
+        # PURE: no DB, no server, no network. The route coroutines are called directly; probe_limiter() returns a private
+        # SlidingWindowLimiter on a fake clock (or PROBES_BY_LIMIT starts empty per test), and the registry, the plugins,
+        # the cascade, the profile reads, the manager's probe and the session are recording stubs, all with monkeypatch.
         isolation="pure",
     )
     add_test(
