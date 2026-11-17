@@ -30,6 +30,8 @@
  */
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import {flushSync, tick} from 'svelte';
+import {get} from 'svelte/store';
+import {t} from 'svelte-i18n';
 
 // The formatter reads the currency catalogue store, which imports the API client. Nothing here
 // loads the catalogue: every call resolves to nothing, and each comparison runs the formatter on
@@ -45,6 +47,8 @@ import {catalogCurrencyDigits, formatPlannerMoneyPlain} from '../format';
 import type {PlannerReadyResult} from '../types';
 import type {LimitedEntry, ResultNames} from './model';
 import StateNotice from './StateNotice.svelte';
+
+const STATES = 'tools.pacAllocator.planner.result.states';
 
 const digits = catalogCurrencyDigits([
     {currency: 'EUR', minor_unit: '0.01'},
@@ -92,8 +96,9 @@ function noOp(): PlannerReadyResult {
     } as unknown as PlannerReadyResult;
 }
 
-function noIncumbent(): PlannerReadyResult {
-    return {result_state: 'ready_no_incumbent', stop_reason: 'time_limit', solver_evidence: {stages: [{status: 'unfinished'}]}} as unknown as PlannerReadyResult;
+function noIncumbent(stop_reason: 'time_limit' | 'completed' = 'time_limit'): PlannerReadyResult {
+    const status = stop_reason === 'completed' ? 'finished' : 'unfinished';
+    return {result_state: 'ready_no_incumbent', stop_reason, solver_evidence: {stages: [{status}]}} as unknown as PlannerReadyResult;
 }
 
 function infeasible(): PlannerReadyResult {
@@ -210,6 +215,28 @@ describe('StateNotice rounding top-ups', () => {
         expect(stateNotice('limit')).toHaveAttribute('data-stop', 'time_limit');
         const [row] = topUpRows();
         expect(row).toHaveAttribute('data-broker', 'broker-one');
+    });
+
+    it('lot ZB: a completed search with no plan says the search ended, not that a limit stopped it', async () => {
+        // The surface is frozen (plannerSurface.gate): no new test id. The rendered sentence is checked against the
+        // catalogue's own value of each key, so nothing here depends on its wording.
+        const ended = get(t)(`${STATES}.noIncumbent.completedBody`);
+        const limited = get(t)(`${STATES}.noIncumbent.body`);
+        const tips = get(t)(`${STATES}.noIncumbent.tips`);
+
+        await mount(noIncumbent('time_limit'));
+        let notice = stateNotice('no_incumbent');
+        expect(notice.textContent).toContain(limited);
+        expect(notice.textContent).toContain(tips);
+        expect(notice.textContent).not.toContain(ended);
+        cleanup();
+
+        await mount(noIncumbent('completed'));
+        notice = stateNotice('no_incumbent');
+        expect(notice).toHaveAttribute('data-stop', 'completed');
+        expect(notice.textContent).toContain(ended);
+        expect(notice.textContent).not.toContain(limited);
+        expect(notice.textContent).not.toContain(tips);
     });
 
     it('a result without a plan renders no top-up block and does not crash', async () => {

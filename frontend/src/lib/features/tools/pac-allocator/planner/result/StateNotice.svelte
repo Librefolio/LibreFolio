@@ -3,7 +3,7 @@
     import {formatExactMoneyPlain, formatPlannerMoneyPlain, formatPlannerPercent, type CurrencyDigits} from '../format';
     import type {PlannerReadyResult, PlannerRoundingTopUp, PlannerStep} from '../types';
     import {BUTTON_LINK, BUTTON_SECONDARY, HINT, NOTICE} from '../ui';
-    import type {LimitedEntry, PlannerResolvedLimit, ResultNames} from './model';
+    import {NO_PLAN_COMPLETED, type LimitedEntry, type PlannerResolvedLimit, type ResultNames} from './model';
     import {getPlannerProfile, testId} from '../profile';
 
     /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
@@ -102,8 +102,13 @@
 {:else if result.result_state === 'ready_no_incumbent'}
     <div class="{NOTICE.warning} space-y-2" role="alert" data-testid={testId('state', profile)} data-state="no_incumbent" data-stop={result.stop_reason}>
         <p class="font-semibold">{$t(`${KEY}.noIncumbent.title`, {default: 'No plan within the limits'})}</p>
-        <p>{$t(`${KEY}.noIncumbent.body`, {default: 'The solver found no plan before the limit. This is not a proof that no plan exists.'})}</p>
-        <p>{$t(`${KEY}.noIncumbent.tips`, {default: 'To reduce the search: fewer Assets or routes, tighter caps, larger steps.'})}</p>
+        {#if result.stop_reason === 'completed'}
+            <!-- Lot ZB: the search ended with no plan the exact check accepts; no limit stopped it, so «before the limit» would be false. -->
+            <p>{$t(`${KEY}.noIncumbent.completedBody`, {default: NO_PLAN_COMPLETED})}</p>
+        {:else}
+            <p>{$t(`${KEY}.noIncumbent.body`, {default: 'The solver found no plan before the limit. This is not a proof that no plan exists.'})}</p>
+            <p>{$t(`${KEY}.noIncumbent.tips`, {default: 'To reduce the search: fewer Assets or routes, tighter caps, larger steps.'})}</p>
+        {/if}
         <button type="button" class={BUTTON_SECONDARY} data-testid={testId('state-edit', profile)} onclick={onedit}>{$t(`${PLANNER_KEY}.actions.editConfiguration`, {default: 'Edit configuration'})}</button>
     </div>
 {/if}

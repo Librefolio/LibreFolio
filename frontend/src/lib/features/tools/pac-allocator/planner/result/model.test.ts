@@ -78,6 +78,7 @@ const CASES: ProofCase[] = [
     {proof: 'not_proven', outcome: 'incumbent_found', stop_reason: 'time_limit', help: 'tools.pacAllocator.planner.result.proof.floatingUnfinished', why: 'the solver reached its time limit before closing every stage'},
     {proof: 'not_proven', outcome: 'incumbent_found', stop_reason: 'node_limit', help: 'tools.pacAllocator.planner.result.proof.floatingUnfinished', why: 'the solver reached its node limit before closing every stage'},
     {proof: 'not_proven', outcome: 'no_incumbent', stop_reason: 'time_limit', help: 'tools.pacAllocator.planner.result.states.noIncumbent.body', why: 'with no plan, "the best plan found" would be false: the help says what the state says'},
+    {proof: 'not_proven', outcome: 'no_incumbent', stop_reason: 'completed', help: 'tools.pacAllocator.planner.result.states.noIncumbent.completedBody', why: 'lot ZB: the search ended with no plan the exact check accepts; no limit stopped it, so "before the limit" would be false'},
     {proof: 'optimal_proven', outcome: 'incumbent_found', stop_reason: 'completed', help: 'tools.pacAllocator.planner.result.badges.help.optimalProven', why: 'a proven optimum explains its proof'},
     {proof: 'infeasibility_proven', outcome: 'infeasible_proven', stop_reason: 'completed', help: 'tools.pacAllocator.planner.result.proof.solverInfeasibleWitness', why: 'a proven infeasibility names the solver witness'},
 ];

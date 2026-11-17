@@ -45,6 +45,9 @@ export interface ResultBadge {
 }
 
 const NO_INCUMBENT_HELP: BadgeHelp = {key: 'tools.pacAllocator.planner.result.states.noIncumbent.body', fallback: 'The solver found no plan before the limit. This is not a proof that no plan exists.'};
+/** Lot ZB of project 67: a search that ended, with no limit, without a plan the exact check accepts. */
+export const NO_PLAN_COMPLETED = 'The search ended without a plan that can be carried out within these limits. This is not a proof that no plan exists.';
+const NO_INCUMBENT_COMPLETED_HELP: BadgeHelp = {key: 'tools.pacAllocator.planner.result.states.noIncumbent.completedBody', fallback: NO_PLAN_COMPLETED};
 const STOP_HELP: Record<PlannerReadyResult['stop_reason'], BadgeHelp> = {
     completed: {key: 'tools.pacAllocator.planner.result.badges.help.completed', fallback: 'The solver ended its search by itself, without reaching a limit.'},
     time_limit: {key: 'tools.pacAllocator.planner.result.badges.help.timeLimit', fallback: 'The solver reached its time limit before ending the search.'},
@@ -125,7 +128,9 @@ export function resultBadges(result: PlannerReadyResult): ResultBadge[] {
                 // A completed search that is still not proven means the final exact check contradicted the solver's bounds.
                 help:
                     result.outcome === 'no_incumbent'
-                        ? NO_INCUMBENT_HELP
+                        ? result.stop_reason === 'completed'
+                            ? NO_INCUMBENT_COMPLETED_HELP
+                            : NO_INCUMBENT_HELP
                         : result.stop_reason === 'completed'
                           ? {
                                 key: 'tools.pacAllocator.planner.result.proof.floatingFinished',
