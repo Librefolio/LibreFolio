@@ -64,10 +64,12 @@
         hasProvider?: boolean;
         askingProvider?: boolean;
         onAskProvider?: () => void;
+        /** The ask button's text and title; «Chiedi al Provider» when absent (the profile asks its sources, E10c3). */
+        askLabel?: string;
         zIndex?: number;
     }
 
-    let {kind, value = $bindable({}), readonly: isReadonly = false, disabled = false, onchange, hasProvider = false, askingProvider = false, onAskProvider, zIndex = 80}: Props = $props();
+    let {kind, value = $bindable({}), readonly: isReadonly = false, disabled = false, onchange, hasProvider = false, askingProvider = false, onAskProvider, askLabel, zIndex = 80}: Props = $props();
 
     // =========================================================================
     // State
@@ -478,14 +480,14 @@
                     class="flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded
                                text-lf-muted hover:text-lf-secondary
                                disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    title={$t('assets.identifiers.askProvider')}
+                    title={askLabel ?? $t('assets.identifiers.askProvider')}
                 >
                     {#if askingProvider}
                         <Loader2 size={10} class="animate-spin" />
                     {:else}
                         <RefreshCw size={10} />
                     {/if}
-                    <span class="hidden sm:inline">{$t('assets.identifiers.askProvider')}</span>
+                    <span class="hidden sm:inline">{askLabel ?? $t('assets.identifiers.askProvider')}</span>
                 </button>
             {/if}
         </div>
