@@ -24,7 +24,7 @@ the first two is in [Risk UI](../../frontend/components/features/risk-lab.md).
 | Dashboard, **Risk** tab | `{kind: "portfolio", broker_ids}`: the brokers the user **owns** with a positive share, a share never set counting as 100% for the owner (`getOwnedBrokers()`, `stores/reference/brokerStore.ts:262`), whatever the broker filter. The panel mounts only once they are known: without `broker_ids` the backend would widen the scope to every broker the user can see, editor and viewer ones included (`routes/(app)/dashboard/+page.svelte:1101-1110`) | `levels/RiskLevelsPanel.svelte` |
 | Broker Detail, **Risk** tab | `{kind: "portfolio", broker_ids: [id]}` | `levels/RiskLevelsPanel.svelte` |
 | Assets page, **Correlation** tab (the *Asset Global* lab) | `{kind: "asset_set", asset_ids: [...]}` | `AssetSetRiskPanel.svelte` |
-| Asset Detail, **Risk & Scenarios** tab | `{kind: "asset", asset_id}` | `AssetRiskScenariosView.svelte` → `RiskAnalysisPanel.svelte` |
+| Asset Detail, **Risk & Scenarios** tab | `{kind: "asset", asset_id}` | `AssetRiskTab.svelte` → `levels/RiskLevelsPanel.svelte` |
 | AI Export drawdown context | Portfolio, broker or asset; `drawdown_summary` only | `RiskService.execute()`, called in-process by `backend/app/services/ai_export/components/drawdown_context.py` |
 
 The Svelte paths are relative to `frontend/src/lib/features/risk/`. The AI Export side is
@@ -325,7 +325,7 @@ registry described in [Registry Pattern](../../architecture/patterns/registry_pa
 | `drawdown_summary` | `drawdown` | asset, portfolio | historical | 2 | primary |
 | `correlation` | `matrix` | asset_set, portfolio | historical, current_composition | per pair, 20 by default | scope assets |
 | `risk_contribution` | `contribution` | portfolio | current_composition | 20 | scope assets |
-| `asset_risk_return` | `risk_return` | portfolio | current_composition | 20 | scope assets |
+| `asset_risk_return` | `risk_return` | asset, portfolio | current_composition | 20 | scope assets |
 | `comparison` | `comparison` | asset, portfolio | historical, current_composition | 20 | primary + benchmark |
 | `stress` | `stress` | asset, asset_set, portfolio | current_composition | 1 | scope assets |
 | `simulation` | `simulation` | asset, portfolio | current_composition | 30 | scope assets |
@@ -379,8 +379,8 @@ warning came with `algorithm_version` 1.2.0 of `drawdown_summary` and 1.1.0 of
 
 ### 🔢 By Level {: #by-level }
 
-The frontend asks the four questions of the Dashboard and Broker Detail as levels L1–L4, and the
-lab on the Assets page as its own sections. Which component renders which result is presentation
+The frontend asks the four questions of the Dashboard and Broker Detail as levels L1–L4 (on one asset, the
+Asset Detail asks three of them), and the lab on the Assets page as its own sections. Which component renders which result is presentation
 and may move; the request side is the contract: `buildBaseAnalytics()` in
 `frontend/src/lib/features/risk/riskAnalysisHelpers.ts` (the base waves) and
 `LEVEL_ON_DEMAND_ANALYSES` in `riskPanelController.svelte.ts` (L3: `comparison`; L4: `stress`,
@@ -397,7 +397,9 @@ and may move; the request side is the contract: `buildBaseAnalytics()` in
 | | *How did each one move?* | `asset_set_kpi` under instance `base-historical-asset_set_kpi-move`; it also reads the 30-day `asset_set_var`'s `best_horizon` and `asset_set_drawdown`'s `largest_rally*` and `average_drawdown` fields | L1°'s historical base wave (same request), never with the benchmark |
 | | L3° *What did each of these pay for its risk?* | `asset_set_kpi`, `asset_set_risk_return`, and `asset_set_comparison` when a benchmark is chosen | Historical base wave |
 | | L4° *What if…?* | `stress`, historical replay only | On demand |
-| Asset Detail (`asset`) | Risk & Scenarios | `historical_kpi`, `historical_var`, `comparison`, `stress`, `simulation` (`process: "gbm"`) | Base wave; the rest on demand |
+| Asset Detail (`asset`) | L1 *How much can it hurt?* | As on the Dashboard | Historical base wave |
+| | L3 *Compared with a reference* | `historical_kpi` and `asset_risk_return` on the current composition — on one asset the pair is the asset's own (weight 1); `comparison` against the shared benchmark, never the asset itself | Base wave; comparison on demand |
+| | L4 *What if…?* | `stress` (historical replay; hypothetical shock by sector or region, never by asset type), `simulation` | On demand |
 | None | — | `portfolio_optimization` | API only: no panel requests it |
 
 ---
@@ -692,9 +694,9 @@ its own `risk.analytics.<name>.*` keys.
   limit: `errorDisplayCode()` (`frontend/src/lib/features/risk/levels/errorDisplayCode.ts`,
   re-exported from `levelHelpers.ts`) also reads `details.remedy`, and turns a `resource_limit`
   whose remedy it knows into the display code `resource_limit_<remedy>`. Any other code stays as
-  it is, and an unknown remedy keeps the generic `risk.errors.resource_limit`. It has two
-  callers: `resultErrorCodes()` in `levelHelpers.ts` (the four levels and the lab sections) and
-  `RiskResultFrame.svelte` (Asset Detail). `translateErrorCode()`
+  it is, and an unknown remedy keeps the generic `risk.errors.resource_limit`. Its caller is
+  `resultErrorCodes()` in `levelHelpers.ts` (the four levels, on the Asset Detail too, and the lab
+  sections). `translateErrorCode()`
   (`frontend/src/lib/features/risk/levels/levelHelpers.ts`) reads `risk.errors.<code>` and falls
   back to a generic sentence (`risk.errors.unknown` in the levels). The client-side
   `answer_discarded` code is worded the same way.
@@ -788,9 +790,8 @@ All under `frontend/src/lib/features/risk/`:
 
 | Family | Entry | Mounted by |
 |---|---|---|
-| Four levels | `levels/RiskLevelsPanel.svelte`, with the L1–L4 components and the L4 steps in `levels/l4/`; pure helpers sit next to them | Dashboard and Broker Detail, **Risk** tab |
+| Four levels | `levels/RiskLevelsPanel.svelte`, with the L1–L4 components and the L4 steps in `levels/l4/`; pure helpers sit next to them | Dashboard and Broker Detail, **Risk** tab; on one asset through `AssetRiskTab.svelte`, which reads the position's value (`assetRiskTabRules.ts`) and says when prices come from a plan |
 | *Asset Global* lab | `AssetSetRiskPanel.svelte`, with `AssetSetCorrelationSection`, `AssetSetComparisonLevels` (the L1° and L3° levels), `AssetSetReplaySection` and `LabAssetPicker` | Assets page, **Correlation** tab |
-| Legacy panel | `RiskAnalysisPanel.svelte`, through `AssetRiskScenariosView.svelte` | Asset Detail, **Risk & Scenarios** tab |
 
 Each lab section owns its controller; since requests are canonical, identical questions share one
 flight in the store. The lab never shows an amount of money: an asset set has no weights.

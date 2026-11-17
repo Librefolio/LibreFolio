@@ -75,6 +75,11 @@ class AssetRiskReturnAnalytic(RiskAnalytic):
     is what licenses reading "above the line" as "better paid for the risk". It is the
     same convention the optimizer already uses, so an efficient frontier can one day be
     drawn on these axes without converting anything.
+
+    ON ONE ASSET (scope ``asset``, RN-17) the asset is its own whole: one point, weight 1,
+    on its own series, so the portfolio pair *is* the asset's pair — its annualized
+    volatility and ``annualized_expected_return``. The Asset Detail's levels read it (L3,
+    and RN-18's «how does it move?»); no second formula exists for one asset.
     """
 
     analytic_code = "asset_risk_return"
