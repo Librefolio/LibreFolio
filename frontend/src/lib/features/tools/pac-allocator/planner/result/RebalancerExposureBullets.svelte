@@ -27,6 +27,10 @@
     import {actualColours, idealColour} from './exposureBarColours';
     import {chartPercent, compareExact, UNCATEGORISED_CATEGORY_ID, type WeightRow} from './model';
     import {bulletTooltipHtml, bulletTooltipText, type BulletRow} from './rebalancerExposureTooltip';
+    import {getPlannerProfile, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
     const KEY = 'tools.portfolioRebalancer.planner.result.exposure';
 
     interface Props {
@@ -102,7 +106,7 @@
             const fresh = chart === null;
             if (!chart) {
                 chart = echarts.init(element, CHART_INIT_THEME, chartInitOptions(element));
-                attachChartReady(chart, element, `exposure-bullets-${dimension}`);
+                attachChartReady(chart, element, testId(`exposure-bullets-${dimension}`, profile));
             }
             // Whole options: a row hidden by «Show all» must not linger.
             chart.setOption(next, {...CHART_SET_OPTION_OPTS, notMerge: true});
@@ -176,10 +180,9 @@
     }
 </script>
 
-<!-- No test id of its own (the planner's surface is frozen): a test reads it as `[data-chart="exposure-bullets"]` inside its dimension. -->
-<div bind:this={container} class="w-full" style:height="{height}px" data-chart="exposure-bullets" data-dimension={dimension} aria-hidden="true"></div>
+<div bind:this={container} class="w-full" style:height="{height}px" data-testid={testId('exposures-bullets', profile)} data-dimension={dimension} aria-hidden="true"></div>
 {#if hidden > 0}
-    <button type="button" class="{BUTTON_LINK} mt-1" aria-expanded={showAll} data-action="show-all" onclick={() => (showAll = !showAll)}>
+    <button type="button" class="{BUTTON_LINK} mt-1" aria-expanded={showAll} data-testid={testId('exposures-show-all', profile)} onclick={() => (showAll = !showAll)}>
         {showAll ? $t(`${KEY}.showFewer`, {default: 'Show fewer'}) : $t(`${KEY}.showAll`, {default: 'Show all ({count})', values: {count: ordered.categories.length}})}
     </button>
 {/if}

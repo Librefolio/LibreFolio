@@ -93,7 +93,7 @@ const themeNow = (): Theme => (document.documentElement.classList.contains('dark
 
 function injectRoles(current: () => Record<Theme, Roles>): void {
     setRoleReader((role, scope) => {
-        if (scope?.getAttribute('data-chart') !== 'exposure-bullets') return '';
+        if (scope?.getAttribute('data-testid') !== 'rebalancer-planner-exposures-bullets') return '';
         const roles = current()[themeNow()];
         if (role === '--lf-text-primary') return roles.primary;
         if (role === '--lf-surface-card') return roles.card;
@@ -211,7 +211,7 @@ describe('the Rebalancer exposure bullets (F4a step 8)', () => {
         const poles = shadePoles(false, ROLES.light.card);
         const expected = codes.map((_code, rank) => sequenceColor(COUNTRY_SEQUENCE, rank, false, poles));
         expect(afterColours()).toEqual([...expected.slice(0, 12), ROLES.light.liquidity]);
-        await fireEvent.click(document.querySelector('[data-action="show-all"]') as HTMLElement);
+        await fireEvent.click(document.querySelector('[data-testid="rebalancer-planner-exposures-show-all"]') as HTMLElement);
         flushSync();
         await tick();
         await waitFor(() => expect(shownLabels()).toHaveLength(codes.length + 1));

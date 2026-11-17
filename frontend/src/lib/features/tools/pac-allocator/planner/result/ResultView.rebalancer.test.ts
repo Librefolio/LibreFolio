@@ -255,9 +255,8 @@ describe('the Rebalancer exposures', () => {
         flushSync();
         await tick();
         const exposures = screen.getByTestId('rebalancer-planner-exposures');
-        const dimensions = [...exposures.querySelectorAll('[data-testid="rebalancer-planner-exposures-dimension"]')];
-        expect(dimensions.map((dimension) => dimension.querySelector('[data-chart="exposure-bullets"]')?.getAttribute('data-dimension'))).toEqual(['asset_type', 'sector', 'geography']);
-        expect(exposures.querySelectorAll('[data-role="legend"]')).toHaveLength(1);
+        expect([...exposures.querySelectorAll('[data-testid="rebalancer-planner-exposures-bullets"]')].map((chart) => chart.getAttribute('data-dimension'))).toEqual(['asset_type', 'sector', 'geography']);
+        expect(exposures.querySelectorAll('[data-testid="rebalancer-planner-exposures-legend"]')).toHaveLength(1);
         expect(exposures.querySelectorAll('[data-testid="rebalancer-planner-exposures-bars"], [data-testid^="rebalancer-planner-exposures-map"]')).toHaveLength(0);
         expect(exposures.querySelectorAll('[data-testid="rebalancer-planner-exposures-row"]')).toHaveLength(browser.result.primary_solution.exposure_rows.length);
     });

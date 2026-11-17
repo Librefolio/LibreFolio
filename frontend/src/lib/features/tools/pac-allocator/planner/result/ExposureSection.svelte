@@ -94,7 +94,7 @@
 <div class="space-y-4" data-testid={testId('exposures', profile)}>
     {#if rebalancer}
         <!-- The legend, once for the three charts: the base of the weights, and the three marks of every row. -->
-        <p class="{HINT} flex flex-wrap items-center gap-x-3 gap-y-1" data-role="legend">
+        <p class="{HINT} flex flex-wrap items-center gap-x-3 gap-y-1" data-testid={testId('exposures-legend', profile)}>
             <span class="font-medium text-lf-secondary">{$t(`${R}.scope`, {default: 'On the whole portfolio, cash included'})}</span>
             <span aria-hidden="true">·</span>
             <span><span aria-hidden="true">▬ </span>{$t(`${R}.legendNow`, {default: 'grey: today'})}</span>
