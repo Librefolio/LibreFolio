@@ -405,7 +405,12 @@ transactions. A create request uses `link_uuid` only as transient correlation:
 `Transaction` has no persisted `link_uuid` column. The durable relationship is
 `A.related_transaction_id = B.id` and `B.related_transaction_id = A.id`.
 
-`_validate_linked_pair()` requires equal pair types (`pairTypeMismatch`), distinct
+`_validate_linked_pair()` requires equal pair types (`pairTypeMismatch`) and a type
+that is a pair: `requires_link` in `TX_TYPE_METADATA`, that is `TRANSFER`,
+`FX_CONVERSION` or `CASH_TRANSFER`. Two `ADJUSTMENT`s answer `pairAdjustmentNotAllowed`;
+two rows of any other type (two `FEE`s, two `BUY`s) answer `pairTypeNotLinkable`
+(param `type`). A `link_uuid` that a `promotes[]` item consumes never reaches this rule.
+It also requires distinct
 brokers for `TRANSFER` and `CASH_TRANSFER` (`pairSameBroker`), and one broker for
 both legs of an `FX_CONVERSION` (`pairBrokerMismatch`, params `brokerA`/`brokerB`).
 A `TRANSFER` pair must also move one asset
