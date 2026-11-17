@@ -33,7 +33,7 @@ from backend.app.services.pac_allocator.evaluation.economics import final_cash_b
 from backend.app.services.pac_allocator.evaluation.facts import rebalancer_score
 from backend.app.services.pac_allocator.evaluation.limits import limit_reference, resolve_scenario_limits
 from backend.app.services.pac_allocator.evaluation.scenario import build_scenario_index
-from backend.app.services.pac_allocator.models import FIDELITY_LEVEL_WEIGHTS, ExactEvaluation, ExactPlannerScenario, ExactPolicyView
+from backend.app.services.pac_allocator.models import FIDELITY_LEVEL_WEIGHTS, ExactEvaluation, ExactPlannerScenario, ExactPolicyView, ExactRoundingTopUp
 from backend.app.services.pac_allocator.numeric import ExactRatio
 from backend.app.services.pac_allocator.solver import SolverRunResult
 from backend.app.services.pac_allocator.wire_numbers import ratio_to_exact_number, ratio_to_fixed_decimal, ratio_to_money
@@ -198,14 +198,19 @@ def _exposure_row_weights(before: ExactRatio, target: ExactRatio, after: ExactRa
     }
 
 
-def build_rebalancer_exposure_rows(scenario: ExactPlannerScenario, evaluation: ExactEvaluation) -> list[RebalancerExposurePlanRow]:
+def build_rebalancer_exposure_rows(scenario: ExactPlannerScenario, evaluation: ExactEvaluation, top_ups: tuple[ExactRoundingTopUp, ...] = ()) -> list[RebalancerExposurePlanRow]:
     """The exposure of the whole portfolio (developer's decision of 13/11, project 67), per dimension: the categories the
     Assets declare (and the uncategorised rest), then one ``cash`` row, always there. Before is on ``F``, the target on the
     items' weights as they are (the cash items' weights make the cash row's), after on ``W``. The cash before is the
     selected cash and the contributions (``F`` less the invested value), after the spendable cash and the contributions not
-    deposited (``W`` less the final invested value); the tax set aside is money lost, in neither."""
+    deposited (``W`` less the final invested value); the tax set aside is money lost, in neither.
+
+    After is the portfolio once the plan's rounding ``top_ups`` are added (lot ZB-b of project 67): a plan of the wide model
+    may spend the cash to the last cent and ask one more for its rounding, and without it the cash after would be below
+    zero and a weight above one. With no top-up, after is on ``W`` as before."""
     accounting = _accounting(evaluation)
-    initial, final = accounting.initial_wealth, accounting.final_wealth
+    initial = accounting.initial_wealth
+    final = accounting.final_wealth + sum((top_up.valuation_amount for top_up in top_ups), _ZERO)
     target = {row.asset_id: row.target_weight for row in evaluation.assets}
     current = {row.asset_id: row.current_value for row in evaluation.assets}
     after = {row.asset_id: row.final_value for row in evaluation.assets}

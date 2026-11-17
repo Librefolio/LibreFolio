@@ -309,12 +309,14 @@ def _validate_rebalancer_exposure(solution: RebalancerPlanSolution) -> None:
     """The whole portfolio, in each of the three dimensions (developer's decision of 13/11, project 67): exactly one cash
     row, whose target is the cash items' weights and whose before and after are the cash of the accounts (``F`` less the
     invested value, ``W`` less the final invested value); the targets sum to one; before sums to one on ``F``, after on
-    ``W``, each unavailable with its own reason at a zero base."""
+    ``W``, each unavailable with its own reason at a zero base. After counts the plan's rounding top-ups as added (lot ZB-b
+    of project 67): ``W`` plus their value, so a plan that spends the cash to the last cent and asks one more for its
+    rounding ends with no cash, not with less than none."""
     dimensions: dict[str, list[RebalancerExposurePlanRow]] = {dimension: [] for dimension in _REBALANCER_EXPOSURE_DIMENSIONS}
     for row in solution.exposure_rows:
         dimensions[row.dimension].append(row)
     initial = money_fraction(solution.plan_accounts.initial_wealth)
-    final = money_fraction(solution.plan_accounts.final_wealth)
+    final = money_fraction(solution.plan_accounts.final_wealth) + sum((money_fraction(row.valuation_amount) for row in solution.rounding_top_ups), Fraction())
     cash_target = sum((exact_fraction(row.target_weight) for row in solution.cash_rows), Fraction())
     cash_before = None if initial == 0 else (initial - money_fraction(solution.accounting.current_invested)) / initial
     cash_after = None if final == 0 else (final - money_fraction(solution.accounting.final_invested)) / final
@@ -326,7 +328,7 @@ def _validate_rebalancer_exposure(solution: RebalancerPlanSolution) -> None:
         if exact_fraction(cash.target_weight) != cash_target:
             raise ValueError(f"{dimension} exposure cash target must be the cash items' weights, not renormalised")
         if (available_fraction(cash.before_weight), available_fraction(cash.final_weight)) != (cash_before, cash_after):
-            raise ValueError(f"{dimension} exposure cash must be the cash of the accounts, before on F and after on W")
+            raise ValueError(f"{dimension} exposure cash must be the cash of the accounts, before on F and after on W with the rounding top-ups")
         if sum((exact_fraction(row.target_weight) for row in rows), Fraction()) != 1:
             raise ValueError(f"{dimension} exposure targets must sum to one with the cash row")
         _validate_rebalancer_weights([row.before_weight for row in rows], initial, "zero_initial_wealth", f"{dimension} before exposure")

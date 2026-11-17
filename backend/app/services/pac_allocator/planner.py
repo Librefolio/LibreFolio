@@ -535,7 +535,7 @@ def _rebalancer_solution_parts(scenario: ExactPlannerScenario, view: ExactPolicy
         "order_rows": order_rows,
         "ledger_rows": ledger_rows,
         "rounding_top_ups": top_up_rows,
-        "exposure_rows": rebalancer_report.build_rebalancer_exposure_rows(scenario, evaluation),
+        "exposure_rows": rebalancer_report.build_rebalancer_exposure_rows(scenario, evaluation, top_ups),
         "accounting": report.build_accounting(scenario, evaluation),
         "costs": report.build_costs(scenario, evaluation),
         "plan_accounts": report.build_plan_accounts(scenario, evaluation),
