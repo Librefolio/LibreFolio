@@ -768,9 +768,9 @@ class PacPlannerReadyNoIncumbentResult(_PacReadyResultBase):
     result_state: Literal["ready_no_incumbent"]
     outcome: Literal["no_incumbent"]
     proof: NotProvenProof
-    # A completed search always holds a plan: the replay publishes it with its
-    # rounding top-ups or raises. "No plan" is only a limit stop (QX1-b).
-    stop_reason: Literal["time_limit", "node_limit"]
+    # "No plan" is a limit stop (QX1-b), or, since lot ZB of project 67, a completed search whose prudent model closed
+    # infeasible while the outer one held only plans the replay refused: «no plan found», never proven.
+    stop_reason: Literal["completed", "time_limit", "node_limit"]
 
 
 class _RebalancerReadyResultBase(AllocationStrictModel):
@@ -838,7 +838,8 @@ class RebalancerPlannerReadyNoIncumbentResult(_RebalancerReadyResultBase):
     result_state: Literal["ready_no_incumbent"]
     outcome: Literal["no_incumbent"]
     proof: NotProvenProof
-    stop_reason: Literal["time_limit", "node_limit"]
+    # A limit stop, or a completed search with no plan the replay accepts (lot ZB of project 67, as for the PAC).
+    stop_reason: Literal["completed", "time_limit", "node_limit"]
 
 
 type PacPlannerResult = Annotated[

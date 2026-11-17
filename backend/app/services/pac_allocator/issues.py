@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, get_args
 
-from backend.app.schemas.pac_allocator.base import PlannerIssueCode
-from backend.app.schemas.pac_allocator.issues import EntityIssuePath, FieldIssuePath, PlannerIssue, PlannerIssueEntityKind, PlannerIssueParam, PlannerIssuePath, PlannerIssueSection, SectionIssuePath
+from backend.app.schemas.pac_allocator.base import PlannerIssueCode, PlannerMoneyInput
+from backend.app.schemas.pac_allocator.issues import EntityIssuePath, FieldIssuePath, MoneyIssueParam, PlannerIssue, PlannerIssueEntityKind, PlannerIssueParam, PlannerIssuePath, PlannerIssueSection, SectionIssuePath
 
 type IssueKind = Literal["missing", "invalid", "unsupported", "constraint", "proof", "info"]
 type IssueSeverity = Literal["info", "warning", "error"]
@@ -37,9 +37,10 @@ def _normalizer_definition(code: PlannerIssueCode, kind: NormalizerIssueKind) ->
 # Canonical public universe.  It intentionally carries no inferred
 # kind/severity policy for codes that this normalizer does not produce.
 CANONICAL_ISSUE_CODES: tuple[PlannerIssueCode, ...] = get_args(PlannerIssueCode)
-# Lot SE of project 67 added allocation.solver_numerical_error (77 → 78), by the coordinator's decision of 16/11.
-if len(CANONICAL_ISSUE_CODES) != 78 or len(set(CANONICAL_ISSUE_CODES)) != 78:
-    raise RuntimeError("PlannerIssueCode must remain the frozen 78-value universe (A4 closed it at 77, step 4; lot SE added one)")
+# Lot SE of project 67 added allocation.solver_numerical_error (77 → 78), by the coordinator's decision of 16/11; lot ZB added
+# allocation.cash_limit_exceeded_by_rounding (78 → 79), by the developer's decision of 17/11 (specification §16.16).
+if len(CANONICAL_ISSUE_CODES) != 79 or len(set(CANONICAL_ISSUE_CODES)) != 79:
+    raise RuntimeError("PlannerIssueCode must remain the frozen 79-value universe (A4 closed it at 77, step 4; lots SE and ZB added one each)")
 
 
 # Explicit W1 producer map.  Adding `self.issue(code, ...)` without first
@@ -216,3 +217,19 @@ def normalization_availability(issues: list[PlannerIssue] | tuple[PlannerIssue, 
     if error_kinds & {"constraint", "proof"}:
         raise ValueError("Constraint/proof errors cannot determine input normalization availability")
     return "ready"
+
+
+def cash_limit_exceeded_by_rounding_issue(broker_id: str, currency: str, exceeded_by: str) -> PlannerIssue:
+    """``allocation.cash_limit_exceeded_by_rounding`` (lot ZB of project 67, specification §16.16): the prudent model held
+    no plan, the wide one did, and its plan ends this cash cell beyond its limit by the rounding of its postings, at most
+    the reserves of those that happened (one minor unit each). The plan is published, not proven, with this note:
+    ``exceeded_by`` is the miss in the cell's own ``currency``, whole minor units (``PlannerFixedDecimal``). A ``warning``
+    of kind ``constraint`` on the cell, like the rounding top-up's note."""
+    return PlannerIssue(
+        code="allocation.cash_limit_exceeded_by_rounding",
+        severity="warning",
+        kind="constraint",
+        path=entity_path("targets", "cash", f"{broker_id}:{currency}"),
+        message_key="allocation.cash_limit_exceeded_by_rounding",
+        params=[MoneyIssueParam(kind="money", name="exceeded_by", value=PlannerMoneyInput(amount=exceeded_by, currency=currency))],
+    )

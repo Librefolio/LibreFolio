@@ -62,6 +62,7 @@ missing package-level export.
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
@@ -92,11 +93,11 @@ from backend.app.schemas.pac_allocator.results import (
 from backend.app.schemas.pac_allocator.solutions import DeploymentUnavailable, PacIncumbentSolution, PacNoOpSolution, RebalancerIncumbentSolution, RebalancerNoOpSolution
 from backend.app.services.pac_allocator import plan_sequence, rebalancer_report
 from backend.app.services.pac_allocator import planner_report as report
-from backend.app.services.pac_allocator.compiler import compile_policy_program
-from backend.app.services.pac_allocator.evaluation.errors import ExactEvaluatorError
-from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_do_nothing, evaluate_exact_candidate, rounding_top_ups
+from backend.app.services.pac_allocator.compiler import CompiledProgram, compile_policy_program
+from backend.app.services.pac_allocator.evaluation.errors import ExactEvaluatorError, ExactReplayRejectedError
+from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, cash_limit_overshoots, evaluate_do_nothing, evaluate_exact_candidate, rounding_top_ups
 from backend.app.services.pac_allocator.evaluation.limits import LimitEntry, limited_entries
-from backend.app.services.pac_allocator.issues import bounds_unsatisfiable_issue, solver_numerical_error_issue
+from backend.app.services.pac_allocator.issues import bounds_unsatisfiable_issue, cash_limit_exceeded_by_rounding_issue, solver_numerical_error_issue
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
     Checkpoint,
@@ -108,6 +109,7 @@ from backend.app.services.pac_allocator.models import (
     check_budget,
 )
 from backend.app.services.pac_allocator.normalize import normalize_pac_plan, normalize_rebalancer_plan
+from backend.app.services.pac_allocator.numeric import ExactRatio
 from backend.app.services.pac_allocator.progress import ProgressReporter, report_phase
 from backend.app.services.pac_allocator.proof import (
     InfeasibilityProvenConclusion,
@@ -117,7 +119,7 @@ from backend.app.services.pac_allocator.proof import (
     UnprovenConclusion,
     conclude_with_solver,
 )
-from backend.app.services.pac_allocator.solver import SolverRunResult, solve_policy_program
+from backend.app.services.pac_allocator.solver import DEFAULT_SOLVER_TIME_BUDGET_SECONDS, SolverRunResult, solve_policy_program
 
 __all__ = ["plan_pac_allocation", "plan_rebalancing"]
 
@@ -148,6 +150,7 @@ class _Search:
 
     candidate: CandidateActionVector | None
     solver: SolverRunResult
+    program: CompiledProgram | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -257,17 +260,46 @@ def plan_exact_scenario(
     (entry limits, until contract 2.0.0). The solver runs once: whether the limits are the cause of an infeasible model is
     known without searching again, because without limits doing nothing is always a valid plan (M20), and the
     ``SolverInfeasibilityContradictedError`` guard keeps that honest.
+
+    Lot ZB of project 67 (specification §16.16): the model is prudent (row 6's reserves, the margins of the limit rows), so
+    when it closes infeasible the solver runs once more, on the wide model, which holds every plan the replay could
+    accept. Its «infeasible» is published as proven. Its plan is published, not proven, even when the rounding ends a cash
+    cell beyond its limit by at most one minor unit per rounded posting, with a note on that cell
+    (``allocation.cash_limit_exceeded_by_rounding``). A plan the replay refuses beyond that is «no plan found», not proven.
     """
     product = product or (_rebalancer_product(None) if scenario.product == "rebalancer" else _PAC)
     report_phase(progress, "model")
     view = build_exact_policy_view(scenario, purpose="primary")
     check_budget(checkpoint)
 
+    started = time.monotonic()
     search = _search(scenario, view, checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds, progress=progress)
     issue_list = list(issues)
-    if any(stage.scip_status == "solver_error" for stage in search.solver.stages):
-        # Lot SE: SCIP failed inside a stage after a plan was held (``solver._optimize``); the wire names it.
-        issue_list.append(solver_numerical_error_issue())
+    if search.candidate is None and search.solver.outcome == "reported_infeasible":
+        # Lot ZB (specification §16.16): the model is prudent, so its «infeasible» says nothing about the request; the wide
+        # model's does.
+        budget = DEFAULT_SOLVER_TIME_BUDGET_SECONDS if solver_time_budget_seconds is None else solver_time_budget_seconds
+        outer = _search(scenario, view, checkpoint=checkpoint, solver_time_budget_seconds=max(budget - (time.monotonic() - started), budget / 10), progress=progress, outer=True)
+        if outer.candidate is not None:
+            evaluation = evaluate_exact_candidate(scenario, view, outer.candidate, checkpoint=checkpoint)
+            try:
+                # A cash limit missed by the plan's rounding, at most one minor unit per rounded posting, is a note.
+                overshoots = cash_limit_overshoots(scenario, evaluation)
+                top_ups = rounding_top_ups(scenario, evaluation, tolerated=frozenset({"ENTRY_VALUE_WITHIN_LIMITS"}) if overshoots else frozenset())
+            except ExactReplayRejectedError:
+                # The wide model admits plans the replay refuses: this one is «no plan found», never a failure.
+                outer = _Search(candidate=None, solver=outer.solver, program=outer.program)
+            else:
+                # A plan of the wide model is published; ``proof.py`` says nothing proves it the best.
+                issue_list.extend(cash_limit_exceeded_by_rounding_issue(item.broker_id, item.currency, _fixed_decimal(item.amount)) for item in overshoots)
+                _note_solver_error(outer, issue_list)
+                report_phase(progress, "verify")
+                conclusion = _conclude(view, outer, published=outer.candidate)
+                check_budget(checkpoint)
+                report_phase(progress, "report")
+                return PlanReport(result=_ready_result(scenario, view, outer, evaluation, conclusion, issue_list, top_ups, product))
+        search = outer
+    _note_solver_error(search, issue_list)
 
     if search.candidate is None:
         report_phase(progress, "verify")
@@ -289,6 +321,17 @@ def plan_exact_scenario(
     return PlanReport(result=_ready_result(scenario, view, search, evaluation, conclusion, issue_list, top_ups, product))
 
 
+def _note_solver_error(search: _Search, issues: list[PlannerIssue]) -> None:
+    """Lot SE: SCIP failed inside a stage after a plan was held (``solver._optimize``); the wire names it."""
+    if any(stage.scip_status == "solver_error" for stage in search.solver.stages):
+        issues.append(solver_numerical_error_issue())
+
+
+def _fixed_decimal(value: ExactRatio) -> str:
+    """An exact amount with a finite decimal expansion, as the wire's ``PlannerFixedDecimal`` writes it."""
+    return format(Decimal(value.numerator) / Decimal(value.denominator), "f")
+
+
 def _search(
     scenario: ExactPlannerScenario,
     view: ExactPolicyView,
@@ -296,6 +339,7 @@ def _search(
     checkpoint: Checkpoint | None,
     solver_time_budget_seconds: float | None = None,
     progress: ProgressReporter | None = None,
+    outer: bool = False,
 ) -> _Search:
     """Compile the view and run SCIP, the only production search engine (D-X1).
 
@@ -307,14 +351,14 @@ def _search(
     until the Decimal replay accepts it, and its statuses become a proof only
     through ``proof.conclude_with_solver``.
     """
-    program = compile_policy_program(scenario, view)
+    program = compile_policy_program(scenario, view, outer=True) if outer else compile_policy_program(scenario, view)
     solver = solve_policy_program(
         program,
         checkpoint=checkpoint,
         progress=progress,
         **({} if solver_time_budget_seconds is None else {"time_budget_seconds": solver_time_budget_seconds}),
     )
-    return _Search(candidate=solver.candidate, solver=solver)
+    return _Search(candidate=solver.candidate, solver=solver, program=program)
 
 
 def _objective_codes(view: ExactPolicyView) -> tuple[ExactObjectiveCode, ...]:
@@ -328,7 +372,7 @@ def _conclude(view: ExactPolicyView, search: _Search, *, published: CandidateAct
     ``published`` is the candidate this result publishes — SCIP's, after the
     Decimal replay accepted it — or ``None`` when nothing is published.
     """
-    return conclude_with_solver(search.solver, objective_codes=_objective_codes(view), published=published)
+    return conclude_with_solver(search.solver, objective_codes=_objective_codes(view), published=published, outer_model=search.program is not None and search.program.outer)
 
 
 def _ready_result(

@@ -130,6 +130,7 @@ PlannerIssueCode = Literal[
     "allocation.broker_execution_profile_unsupported",
     "allocation.broker_inactive",
     "allocation.capacity_unsupported",
+    "allocation.cash_limit_exceeded_by_rounding",
     "allocation.cash_selection_invalid",
     "allocation.classification_geography_missing",
     "allocation.classification_invalid",
