@@ -2,8 +2,9 @@
 /**
  * DataTable — the two editable cells the asset profile needs (plan 68, E10a, §3.7): a date and an amount.
  *
- * - `editable-date`: a native date input (ISO `yyyy-mm-dd`, the browser draws the picker in the user's locale);
- *   `min`/`max` passed through; a picked date → `onchange('yyyy-mm-dd')`, a cleared field → `onchange(null)`.
+ * - `editable-date`: the app's own `SingleDatePicker` (typed or picked; never a native date input, which follows the
+ *   browser's language, not the app's: `nativeDateInput.gate.test.ts`); future dates allowed (a maturity); a date →
+ *   `onchange('yyyy-mm-dd')`, a cleared field → `onchange(null)`.
  * - `editable-amount`: a decimal text and a currency, side by side. The number is typed as text (a native number input
  *   reads the browser locale and eats «5,9»), normalized on blur («1.234,56» → «1234.56») and handed over as TEXT, never
  *   a float, so 55 173 000 000 or 0.0000001 stay exact. An empty field → `amount: null`; a text that is not a number →
@@ -38,17 +39,23 @@ beforeAll(async () => {
 afterEach(() => cleanup());
 
 describe('DataTable — editable-date', () => {
-    it('shows the ISO date with its bounds, and hands over the date picked', async () => {
+    const dateInput = () => screen.getByTestId('cell-editable-date') as HTMLInputElement;
+
+    it("is the app's own date field, never a native date input (it follows the browser language)", () => {
+        mount({type: 'editable-date', value: '2028-10-10', onchange: vi.fn()});
+
+        expect(dateInput().type).not.toBe('date');
+        expect(dateInput().value).toBe('2028-10-10');
+        expect(screen.getByTestId('cell-editable-date-root')).toBeInTheDocument();
+    });
+
+    it('hands over a typed date, future dates included (a maturity)', async () => {
         const onchange = vi.fn();
-        mount({type: 'editable-date', value: '2028-10-10', min: '2000-01-01', max: '2100-12-31', onchange});
-        const input = screen.getByTestId('cell-editable-date') as HTMLInputElement;
+        mount({type: 'editable-date', value: '2028-10-10', onchange});
 
-        expect(input.type).toBe('date');
-        expect(input.value).toBe('2028-10-10');
-        expect(input.min).toBe('2000-01-01');
-        expect(input.max).toBe('2100-12-31');
+        await fireEvent.input(dateInput(), {target: {value: '2031-05-01'}});
+        await fireEvent.blur(dateInput());
 
-        await fireEvent.change(input, {target: {value: '2031-05-01'}});
         expect(onchange).toHaveBeenLastCalledWith('2031-05-01');
     });
 
@@ -56,7 +63,8 @@ describe('DataTable — editable-date', () => {
         const onchange = vi.fn();
         mount({type: 'editable-date', value: '2028-10-10', onchange});
 
-        await fireEvent.change(screen.getByTestId('cell-editable-date'), {target: {value: ''}});
+        await fireEvent.focus(dateInput());
+        await fireEvent.click(screen.getByTestId('cell-editable-date-clear'));
 
         expect(onchange).toHaveBeenLastCalledWith(null);
     });

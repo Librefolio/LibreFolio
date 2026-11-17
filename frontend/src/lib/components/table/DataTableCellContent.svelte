@@ -12,6 +12,7 @@
     import {ExternalLink, ImageIcon} from 'lucide-svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
+    import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
     import type {CellContent} from './types';
     import {formatCellDate} from './dataTableLogic';
 
@@ -173,17 +174,13 @@
             </button>
         </div>
     {:else if cellContent.type === 'editable-date'}
-        <input
-            type="date"
-            class="cell-editable-date"
-            value={cellContent.value ?? ''}
-            min={cellContent.min}
-            max={cellContent.max}
-            aria-label={cellContent.ariaLabel}
-            data-testid="cell-editable-date"
-            onchange={(e) => cellContent.onchange(e.currentTarget.value === '' ? null : e.currentTarget.value)}
-            onclick={(e) => e.stopPropagation()}
-        />
+        <!-- The app's own date field, never a native date input: that one follows the browser's language, not the app's
+             (nativeDateInput.gate.test.ts). Future dates allowed: a maturity is one. -->
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="cell-editable-date" onclick={(e) => e.stopPropagation()}>
+            <SingleDatePicker value={cellContent.value ?? ''} label="" compact inputStyle clearable allowFuture testid="cell-editable-date" onchange={(date) => cellContent.onchange(date === '' ? null : date)} />
+        </div>
     {:else if cellContent.type === 'editable-amount'}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -442,23 +439,10 @@
         box-shadow: 0 0 0 1px color-mix(in oklab, var(--lf-focus) 25%, transparent);
     }
 
-    /* Editable date cell (plan 68, E10a): the look of the text cell */
+    /* Editable date cell (plan 68, E10a): SingleDatePicker in its input style, as wide as a date needs */
     .cell-editable-date {
-        width: 100%;
-        max-width: 160px;
-        padding: 0.25rem 0.375rem;
-        font-size: 0.8125rem;
-        border: 1px solid var(--lf-border-input);
-        border-radius: 4px;
-        background: var(--lf-surface-field);
-        color: var(--lf-text-primary);
-        outline: none;
-        transition: border-color 0.15s;
-    }
-
-    .cell-editable-date:focus {
-        border-color: var(--lf-focus);
-        box-shadow: 0 0 0 1px color-mix(in oklab, var(--lf-focus) 25%, transparent);
+        min-width: 9.5rem;
+        max-width: 12rem;
     }
 
     /* Editable amount cell (plan 68, E10a): the number cell and a currency choice side by side */

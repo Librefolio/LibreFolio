@@ -186,19 +186,15 @@ export interface EditableCheckboxCell {
 }
 
 /**
- * Editable date cell (plan 68, E10a) — renders a native date input: the value is an ISO date (`yyyy-mm-dd`), the
- * browser draws the picker in the user's locale. Used by the asset profile (maturity, inception date…).
+ * Editable date cell (plan 68, E10a) — the app's `SingleDatePicker` (typed or picked from its calendar, in the app's
+ * language; never a native date input). The value is an ISO date (`yyyy-mm-dd`); future dates are allowed. Used by the
+ * asset profile (maturity, inception date…).
  */
 export interface EditableDateCell {
     type: 'editable-date';
     /** Current value, ISO `yyyy-mm-dd` (null = empty) */
     value: string | null;
-    /** Earliest and latest date accepted, ISO */
-    min?: string;
-    max?: string;
-    /** Accessible name of the input (the column header is not read with it) */
-    ariaLabel?: string;
-    /** Callback with the date picked, or null when the field is cleared */
+    /** Callback with the date chosen, or null when the field is cleared */
     onchange: (newValue: string | null) => void;
 }
 
