@@ -40,7 +40,7 @@ from backend.app.schemas.pac_allocator.results import PAC_PLAN_INPUT_ADAPTER, PA
 from backend.app.services.accounts import user_service
 from backend.app.services.pac_allocator.planner import plan_pac_allocation, plan_rebalancing
 from backend.test_scripts.test_db_config import verify_test_database
-from backend.test_scripts.test_server_helper import _TestingServerManager
+from backend.test_scripts.test_server_helper import TEST_SERVER_PLANNER_SEEDS, _TestingServerManager
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
@@ -378,10 +378,11 @@ async def _plan(client: httpx.AsyncClient, tool_code: str, parameters: dict) -> 
 
 
 def _in_process(product: str, request: dict, budget_seconds: float) -> dict:
-    """The same request planned in this process, in the same engine window, dumped as the wire dumps it."""
+    """The same request planned in this process, in the same engine window, dumped as the wire dumps it. The Rebalancer
+    plans three times with the test server's seeds (lot SEEDS of project 67), as the server does."""
     if product == PAC:
         return PAC_PLAN_OUTPUT_ADAPTER.dump_python(plan_pac_allocation(PAC_PLAN_INPUT_ADAPTER.validate_python(request), solver_time_budget_seconds=budget_seconds), mode="json", by_alias=True)
-    return REBALANCER_PLAN_OUTPUT_ADAPTER.dump_python(plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(request), solver_time_budget_seconds=budget_seconds), mode="json", by_alias=True)
+    return REBALANCER_PLAN_OUTPUT_ADAPTER.dump_python(plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(request), solver_time_budget_seconds=budget_seconds, seeds=TEST_SERVER_PLANNER_SEEDS), mode="json", by_alias=True)
 
 
 def _exact(number: dict) -> Fraction:
