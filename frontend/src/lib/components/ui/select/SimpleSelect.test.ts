@@ -638,3 +638,62 @@ describe('SimpleSelect — the highlight published on the option as data-highlig
         }
     });
 });
+
+// =========================================================================
+// Project 76, N3b — an option to set up first: reachable, never the value
+// =========================================================================
+
+describe('SimpleSelect — an option that needs setting up first (76 N3b)', () => {
+    const PROVIDERS: SelectOption[] = [
+        {value: 'yahoo', label: 'Yahoo'},
+        {value: 'keyed', label: 'Keyed', needsSetup: true, needsSetupHint: 'Keyed needs configuring'},
+        {value: 'justetf', label: 'justETF'},
+    ];
+
+    function mountProviders(props: Partial<ComponentProps<typeof SimpleSelect>> = {}) {
+        const onneedssetup = vi.fn();
+        const utils = mount({options: PROVIDERS, value: 'yahoo', onneedssetup, ...props});
+        return {onneedssetup, ...utils};
+    }
+
+    it('N3b-1: it is drawn reachable — not disabled, aria-disabled, marked, with its hint', async () => {
+        const {trigger} = mountProviders();
+        await fireEvent.click(trigger);
+        const keyed = option('keyed');
+        expect(keyed).not.toBeDisabled();
+        expect(keyed).toHaveAttribute('aria-disabled', 'true');
+        expect(keyed).toHaveAttribute('data-needs-setup', 'true');
+        expect(keyed).toHaveAttribute('title', 'Keyed needs configuring');
+        expect(option('yahoo')).toHaveAttribute('data-needs-setup', 'false');
+    });
+
+    it('N3b-2: a click calls onneedssetup with the option, closes the list, and never changes the value', async () => {
+        const {trigger, onchange, onneedssetup} = mountProviders();
+        await fireEvent.click(trigger);
+        await fireEvent.click(option('keyed'));
+        expect(onneedssetup).toHaveBeenCalledTimes(1);
+        expect(onneedssetup.mock.calls[0][0]).toMatchObject({value: 'keyed'});
+        expect(onchange).not.toHaveBeenCalled();
+        expect(screen.queryByTestId('fruit-dropdown')).toBeNull();
+        expect(trigger).toHaveAttribute('aria-label', expect.stringContaining('Yahoo'));
+    });
+
+    it('N3b-3: the keyboard lands on it and Enter calls onneedssetup, not onchange', async () => {
+        const {trigger, onchange, onneedssetup} = mountProviders();
+        await fireEvent.click(trigger);
+        expectHighlighted(trigger, 'yahoo');
+        await fireEvent.keyDown(trigger, {key: 'ArrowDown'});
+        expectHighlighted(trigger, 'keyed');
+        await fireEvent.keyDown(trigger, {key: 'Enter'});
+        expect(onneedssetup).toHaveBeenCalledTimes(1);
+        expect(onchange).not.toHaveBeenCalled();
+    });
+
+    it('N3b-4: without an onneedssetup it is still never the value', async () => {
+        const onchange = vi.fn();
+        render(SimpleSelect, {value: 'yahoo', options: PROVIDERS, testId: 'fruit', optionTestId: (o: SelectOption) => `fruit-opt-${o.value}`, onchange});
+        await fireEvent.click(screen.getByTestId('fruit-button'));
+        await fireEvent.click(option('keyed'));
+        expect(onchange).not.toHaveBeenCalled();
+    });
+});
