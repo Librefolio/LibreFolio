@@ -4088,3 +4088,8 @@ Filed: [[features/F-113]], [[problems/risk-stress-buckets-hand-listed]], [[conce
 Project 70, RN-18: the levels' block of the positive twins after L1 on every surface and the green tail of the returns
 histogram; a dated line in the thesis decision (a fifth question, the count differs per page) and F-111's history.
 Filed: [[decisions/risk-answers-four-questions]], [[features/F-111]].
+
+## [2026-11-17] file | The simulation leaves out a holding shorter than the horizon
+Project 70, RN-16b: the developer's «per ora B» in `simulation_participants`, and the one-holding window fix; F-111's
+history.
+Filed: [[features/F-111]].

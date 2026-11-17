@@ -43,7 +43,7 @@ described in [AI Export Composition](../../architecture/patterns/ai_export_compo
 | `backend/app/services/risk/plan.py` | `AnalyticPlan` — a requested analytic with its plugin and validated parameters — and the predicates on the kind of calculation it asks for (`is_historical_replay_plan()`, `is_hypothetical_plan()`, `is_geography_hypothetical_plan()`, `reads_the_twrr_alone()`). |
 | `backend/app/services/risk/scope.py` | The scope: access, holdings and weights (`load_scope_inputs()` into `ScopeInputs`), the asset lookups, the bulk price load (`prepare_asset_series()`), the exclusions (`scope_exclusions()`); `RiskScopeAccessError` and `RiskScopeNotFoundError`, which the API maps to 403 and 404. |
 | `backend/app/services/risk/replay.py` | A historical replay's own window and series (`prepare_historical_replay_context()`), and the shorter window it may suggest (`verified_replay_range()`). |
-| `backend/app/services/risk/simulation_window.py` | The simulation's own window (RN-16): all the common history up to today, never the page's period (`simulation_window()`), who takes part in it (`simulation_participants()`, the one place that decides), and the context rebuilt whole from its series (`prepare_simulation_context()`). |
+| `backend/app/services/risk/simulation_window.py` | The simulation's own window (RN-16): all the common history up to today, never the page's period (`simulation_window()`), who takes part in it (`simulation_participants()`, the one place that decides: since RN-16b a holding whose history — from the later of its first price and its first rate, `first_useful_day()` — is shorter than the horizon stays out, its weight with the cash and a warning naming it, unless none reaches the horizon), and the context rebuilt whole from its series (`prepare_simulation_context()`). |
 | `backend/app/services/risk/results.py` | The execution context (`build_execution_context()`), the gate rules (`available_observations()`, `requires_valid_composition()`), the result envelopes and their metadata (`success_result()`, `unavailable_result()`, `result_metadata()`), the portfolio TWRR series (`portfolio_twrr_returns()`), the warnings and their asset names (`with_warning_asset_names()`). |
 | `backend/app/services/risk/data_quality.py` | The data-quality report a result is judged on (`plan_data_quality()`), its warnings (`data_quality_warnings()`), and the banner issues of an `asset_set` scope (`with_asset_set_quality_issues()`). |
 | `backend/app/services/risk/base.py` | The plugin contract: `RiskAnalytic`, `RiskExecutionContext`, `RiskComputation`, `RiskUnavailableError`, `RiskSeriesInputs`. |
@@ -158,7 +158,7 @@ response echoes the request's own range. A replay bounds its window in
    (`risk_contribution`, `stress`, `comparison`, `historical_var`, `simulation`) is refused with
    `data_unavailable` when the composition is invalid. A historical replay prepares its own window
    ([Replay Coverage](#replay-coverage)), and so does the simulation: all the common history up to today, never the
-   page's period (`risk/simulation_window.py`, RN-16). Then the observation gate refuses with
+   page's period (`risk/simulation_window.py`, RN-16), of the holdings whose history reaches the horizon (RN-16b). Then the observation gate refuses with
    `insufficient_history` any analytic below its `min_observations`.
 7. **Execution.** `await analytic.execute(params, context)`. The default `execute()` runs the
    synchronous `compute()` in a worker thread (`asyncio.to_thread`); `simulation` and
