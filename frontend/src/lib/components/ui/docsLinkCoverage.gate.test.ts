@@ -52,7 +52,8 @@ const PANELS: ReadonlyArray<readonly [string, string, string]> = [
     // Group 7 — Asset Detail, in its components only (the page itself is lane 68's and RN-17's).
     ['lib/features/assets/detail/AssetDetailHeader.svelte', 'user/assets/detail/', 'assetDetail.docsHelp.header'],
     ['lib/features/assets/detail/AssetDetailMeasuresSection.svelte', 'user/assets/detail/measures/', 'assetDetail.docsHelp.measures'],
-    ['lib/features/assets/detail/AssetDetailMetadataPanel.svelte', 'user/assets/detail/classification/', 'assetDetail.docsHelp.metadata'],
+    // The «Profilo» tab (plan 68, E3E4b) took the place of the metadata panel: its icon sits in the classification header.
+    ['lib/features/assets/profile/ProfileClassification.svelte', 'user/assets/detail/classification/', 'assetDetail.docsHelp.profile'],
     // The data editor: one icon at the right of its Prices | Events tab row (the page covers both; its title is the page's).
     ['lib/features/assets/AssetDataEditorSection.svelte', 'user/assets/detail/data-editor/', 'assetDetail.docsHelp.dataEditor'],
 ];

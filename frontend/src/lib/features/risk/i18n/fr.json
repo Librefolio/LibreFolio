@@ -368,7 +368,10 @@
       "overviewTab": "Vue d'ensemble",
       "riskScenariosTab": "Risque et scénarios",
       "positionNote": "Les montants portent sur votre position d'aujourd'hui : {amount}.",
-      "planPrices": "Prix issus du plan, pas du marché : ici, la volatilité et la VaR disent seulement à quel point le plan est régulier."
+      "planPrices": "Prix issus du plan, pas du marché : ici, la volatilité et la VaR disent seulement à quel point le plan est régulier.",
+      "profileTab": "Profil",
+      "profileNoEnrichers": "Aucun enrichisseur configuré",
+      "overviewNoPriceProvider": "Aucun fournisseur de prix"
     },
     "levels": {
       "l1": {

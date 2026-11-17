@@ -368,7 +368,10 @@
       "overviewTab": "Resumen",
       "riskScenariosTab": "Riesgo y escenarios",
       "positionNote": "Los importes son sobre tu posición de hoy: {amount}.",
-      "planPrices": "Precios del plan, no del mercado: aquí la volatilidad y el VaR solo dicen lo regular que es el plan."
+      "planPrices": "Precios del plan, no del mercado: aquí la volatilidad y el VaR solo dicen lo regular que es el plan.",
+      "profileTab": "Perfil",
+      "profileNoEnrichers": "Ningún enriquecedor configurado",
+      "overviewNoPriceProvider": "Ningún proveedor de precios"
     },
     "levels": {
       "l1": {

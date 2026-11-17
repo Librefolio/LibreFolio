@@ -7,11 +7,7 @@
     "editData": "Editar precios y eventos",
     "pricesTab": "Precios",
     "eventsTab": "Eventos",
-    "metadata": "Metadatos y clasificación",
-    "editViaModal": "Editar en el modal",
     "displayCurrency": "Convertir a",
-    "noIdentifiers": "Sin identificadores configurados",
-    "noClassification": "Sin datos de clasificación",
     "noDataScheduled": "Configure el calendario de intereses en Editar para generar precios",
     "syncPrices": "Sincronizar precios",
     "recalculate": "Recalcular",
@@ -75,8 +71,8 @@
     "docsHelp": {
       "header": "Un activo en detalle: su gráfico de precios y señales, medidas, eventos y clasificación, con la fuente de sus precios y tus transacciones.",
       "measures": "Elige dos días en el gráfico y lee cuánto cambiaron entre ellos el activo y las líneas dibujadas con él.",
-      "metadata": "Qué es el activo: su descripción, sectores y países, identificadores y el proveedor que da sus precios.",
-      "dataEditor": "Corrige y completa a mano los datos del activo: sus precios diarios y sus eventos, como dividendos y divisiones."
+      "dataEditor": "Corrige y completa a mano los datos del activo: sus precios diarios y sus eventos, como dividendos y divisiones.",
+      "profile": "Qué es el activo: sus países y sectores, su descripción, sus cifras clave y sus detalles, leídos por sus enriquecedores o escritos a mano."
     }
   },
   "assets": {
@@ -248,9 +244,7 @@
       "userUrl": "URL de Usuario",
       "providerUrl": "URL del Proveedor",
       "identifier": "Identificador",
-      "identifierType": "Tipo de Identificador",
-      "lastFetch": "Ultima actualizacion",
-      "neverFetched": "Nunca ejecutado"
+      "identifierType": "Tipo de Identificador"
     },
     "schedule": {
       "title": "Calendario de intereses",
