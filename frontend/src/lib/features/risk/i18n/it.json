@@ -406,9 +406,11 @@
           "position": {
             "beyond": "Oltre la soglia VaR ({value}): giorni che il VaR descrive",
             "holds": "Contiene la soglia VaR ({value})",
-            "above": "Sopra la soglia VaR ({value})"
+            "above": "Sopra la soglia VaR ({value})",
+            "gain": "Nel miglior {share} dei giorni (da {value})"
           },
-          "binDays": "{count, plural, one {# giorno} other {# giorni}} · {share}"
+          "binDays": "{count, plural, one {# giorno} other {# giorni}} · {share}",
+          "gain": "il miglior {share} dei giorni da {value}"
         },
         "when": "Quando",
         "since": "Dal",
@@ -597,6 +599,35 @@
           "insufficient_history": "{count, plural, one {# asset escluso} other {# asset esclusi}}: storico insufficiente nel periodo.",
           "no_price_source": "{count, plural, one {# asset escluso} other {# asset esclusi}}: nessuna fonte di prezzo assegnata e nessun prezzo mai registrato."
         }
+      },
+      "move": {
+        "title": "Come si muove?",
+        "cards": {
+          "bestDay": "Il giorno migliore",
+          "bestMonth": "Trenta giorni buoni",
+          "rally": "La salita più grande",
+          "days": "Come sono fatti i giorni"
+        },
+        "technical": {
+          "bestDay": "Gemello del giorno peggiore",
+          "bestMonth": "I 30 giorni migliori",
+          "rally": "Da un minimo al massimo dopo",
+          "days": "Guadagni contro perdite · Omega"
+        },
+        "omegaCaption": "{value} guadagnati per ogni 1 perso",
+        "sameRiseToday": "{amount} · la stessa salita, sul valore di oggi",
+        "rows": {
+          "meanUpDown": "Giorno medio",
+          "meanUpDownValue": "{up} in salita · {down} in discesa",
+          "semiDeviation": "Semi-deviazione",
+          "averageDrawdown": "Sotto il massimo, in media",
+          "extremeDaysValue": "{value}× una campana",
+          "semiDeviationValue": "verso il basso {down} · su un'oscillazione di {swing}"
+        },
+        "lead": {
+          "both": "Per ogni 1 perso nei giorni cattivi ne ha guadagnati {omega} nei buoni; la salita più grande è durata {days}.",
+          "omega": "Per ogni 1 perso nei giorni cattivi ne ha guadagnati {omega} nei buoni."
+        }
       }
     },
     "eligibility": {
@@ -624,9 +655,9 @@
       "open": "Periodo dal {start} · in {currency}"
     },
     "docsHelp": {
-      "header": "Quanto può perdere il portafoglio, se è diversificato, se il rischio è pagato e cosa potrebbe succedere: le quattro domande della scheda Rischio, sul periodo indicato.",
+      "header": "Quanto può perdere il portafoglio, come si muove, se è diversificato, se il rischio è pagato e cosa potrebbe succedere: le domande della scheda Rischio, sul periodo indicato.",
       "assetSet": "Scegli alcuni asset e confrontali nel periodo: quanto ha perso ciascuno, quanto ha reso per il rischio corso, quali si muovono insieme e come avrebbero attraversato le crisi passate.",
-      "headerAsset": "Quanto può perdere questo asset, come si confronta con un riferimento e cosa potrebbe succedere: le domande della sua scheda Rischio e scenari, sul periodo indicato."
+      "headerAsset": "Quanto può perdere questo asset, come si muove, come si confronta con un riferimento e cosa potrebbe succedere: le domande della sua scheda Rischio e scenari, sul periodo indicato."
     }
   }
 }

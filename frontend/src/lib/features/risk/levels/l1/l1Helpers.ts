@@ -101,6 +101,20 @@ export interface ReturnBin {
      * deliberately excluded from both.
      */
     belowCut: boolean;
+    /**
+     * RN-18: whether the whole bar lies at or past the gains' edge — the green tail, the twin of `belowCut`. A bar that
+     * holds the VaR cut is the VaR's and never green (a series of pure gains can put both edges at zero). Optional for a
+     * histogram built elsewhere: absent reads as not green.
+     */
+    aboveGain?: boolean;
+}
+
+/** The gains' tail (RN-18): where the best days start, and which share of the days that is. */
+export interface ReturnHistogramGain {
+    /** The threshold in percent units, always above zero: a threshold of zero means no gain, and no green line. */
+    threshold: number;
+    /** The share of the best days, `1 − confidence_level` of the answer (0.05 at 95 %). */
+    share: number;
 }
 
 /** The distribution of realised returns, with the VaR threshold located in it. */
@@ -117,6 +131,8 @@ export interface ReturnHistogram {
      * interesting.
      */
     cut: number | null;
+    /** The gains' tail (RN-18), or `null`/absent when the answer has no gain to show. */
+    gain?: ReturnHistogramGain | null;
 }
 
 /**
@@ -145,6 +161,10 @@ export function buildReturnHistogram(historicalResults: RiskAnalyticResult[], in
     // `finite` already answers null for an absent, null or non-numeric edge, and
     // it answers 0 for a real zero. That distinction is the whole point.
     const edge = finite(output.var_bin_edge);
+    // RN-18: the gains' tail — whole bars from the grid edge the backend pins on the threshold (RN-14), read the same way.
+    const gainEdge = finite(output.gain_bin_edge);
+    const gainThreshold = finite(output.gain_threshold);
+    const confidence = finite(output.confidence_level);
 
     const parsed: {lower: number; upper: number; count: number}[] = [];
     let observations = 0;
@@ -174,9 +194,11 @@ export function buildReturnHistogram(historicalResults: RiskAnalyticResult[], in
         // comparison never inherits the rounding of a multiplication.
         holdsCut: edge !== null && lower <= edge && edge < upper,
         belowCut: edge !== null && upper <= edge,
+        aboveGain: gainEdge !== null && lower >= gainEdge && !(edge !== null && lower <= edge && edge < upper),
     }));
 
-    return {bins, observations, cut: edge === null ? null : edge * 100};
+    const gain = gainThreshold !== null && gainThreshold > 0 && confidence !== null && confidence > 0 && confidence < 1 ? {threshold: gainThreshold * 100, share: 1 - confidence} : null;
+    return {bins, observations, cut: edge === null ? null : edge * 100, gain};
 }
 
 /* ------------------------------------------------------------- figures --- */
@@ -229,6 +251,17 @@ export function lossAmount(amount: number, format: (value: string) => string): s
     const magnitude = Math.abs(amount);
     const text = format(String(magnitude));
     return Number.isFinite(magnitude) && Math.round(magnitude * 100) !== 0 ? `${MINUS}${text}` : text;
+}
+
+/**
+ * Money that can rise or fall (RN-18, the move cards): `lossAmount`'s twin, «+» before a gain and U+2212 before a
+ * loss, only when the cents the caption prints are not zero. Decided on the number, never on the formatted text.
+ */
+export function signedAmount(amount: number, format: (value: string) => string): string {
+    const magnitude = Math.abs(amount);
+    const text = format(String(magnitude));
+    if (!Number.isFinite(magnitude) || Math.round(magnitude * 100) === 0) return text;
+    return `${amount < 0 ? MINUS : '+'}${text}`;
 }
 
 /* --------------------------------------------------------------- tails --- */

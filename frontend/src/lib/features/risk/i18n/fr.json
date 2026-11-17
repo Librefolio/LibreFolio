@@ -406,9 +406,11 @@
           "position": {
             "beyond": "Au-delà du seuil VaR ({value}) : jours que la VaR décrit",
             "holds": "Contient le seuil VaR ({value})",
-            "above": "Au-dessus du seuil VaR ({value})"
+            "above": "Au-dessus du seuil VaR ({value})",
+            "gain": "Dans les meilleurs {share} des jours (dès {value})"
           },
-          "binDays": "{count, plural, one {# jour} other {# jours}} · {share}"
+          "binDays": "{count, plural, one {# jour} other {# jours}} · {share}",
+          "gain": "les meilleurs {share} des jours dès {value}"
         },
         "when": "Quand",
         "since": "Depuis",
@@ -597,6 +599,35 @@
           "insufficient_history": "{count, plural, one {# actif exclu} other {# actifs exclus}} : historique insuffisant sur la période.",
           "no_price_source": "{count, plural, one {# actif exclu} other {# actifs exclus}} : aucune source de prix n'est assignée et aucun prix n'a jamais été enregistré."
         }
+      },
+      "move": {
+        "title": "Comment évolue-t-il ?",
+        "cards": {
+          "bestDay": "Le meilleur jour",
+          "bestMonth": "Trente bons jours",
+          "rally": "La plus forte hausse",
+          "days": "À quoi ressemblaient les jours"
+        },
+        "technical": {
+          "bestDay": "Le jumeau du pire jour",
+          "bestMonth": "Les 30 meilleurs jours",
+          "rally": "D'un creux au sommet qui suit",
+          "days": "Gains contre pertes · Omega"
+        },
+        "omegaCaption": "{value} gagnés pour 1 perdu",
+        "sameRiseToday": "{amount} · la même hausse, sur la valeur d'aujourd'hui",
+        "rows": {
+          "meanUpDown": "Jour moyen",
+          "meanUpDownValue": "{up} en hausse · {down} en baisse",
+          "semiDeviation": "Semi-écart",
+          "averageDrawdown": "Sous le sommet, en moyenne",
+          "extremeDaysValue": "{value}× une courbe en cloche",
+          "semiDeviationValue": "à la baisse {down} · sur une oscillation de {swing}"
+        },
+        "lead": {
+          "both": "Pour 1 perdu les mauvais jours, {omega} ont été gagnés les bons jours ; la plus forte hausse a duré {days}.",
+          "omega": "Pour 1 perdu les mauvais jours, {omega} ont été gagnés les bons jours."
+        }
       }
     },
     "eligibility": {
@@ -624,9 +655,9 @@
       "open": "Période depuis le {start} · en {currency}"
     },
     "docsHelp": {
-      "header": "Combien le portefeuille peut perdre, s'il est diversifié, si le risque est rémunéré et ce qui pourrait arriver : les quatre questions de l'onglet Risque, sur la période indiquée.",
+      "header": "Combien le portefeuille peut perdre, comment il évolue, s'il est diversifié, si le risque est rémunéré et ce qui pourrait arriver : les questions de l'onglet Risque, sur la période indiquée.",
       "assetSet": "Choisissez quelques actifs et comparez-les sur la période : combien chacun a perdu, ce qu'il a rapporté pour son risque, lesquels évoluent ensemble et comment ils auraient traversé les crises passées.",
-      "headerAsset": "Combien cet actif peut perdre, comment il se compare à une référence et ce qui pourrait arriver : les questions de son onglet Risque et scénarios, sur la période indiquée."
+      "headerAsset": "Combien cet actif peut perdre, comment il évolue, comment il se compare à une référence et ce qui pourrait arriver : les questions de son onglet Risque et scénarios, sur la période indiquée."
     }
   }
 }

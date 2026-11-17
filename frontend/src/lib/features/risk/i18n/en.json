@@ -406,9 +406,11 @@
           "position": {
             "beyond": "Beyond the VaR threshold ({value}): days the VaR describes",
             "holds": "Holds the VaR threshold ({value})",
-            "above": "Above the VaR threshold ({value})"
+            "above": "Above the VaR threshold ({value})",
+            "gain": "In the best {share} of days (from {value})"
           },
-          "binDays": "{count, plural, one {# day} other {# days}} · {share}"
+          "binDays": "{count, plural, one {# day} other {# days}} · {share}",
+          "gain": "the best {share} of days from {value}"
         },
         "when": "When",
         "since": "Since",
@@ -597,6 +599,35 @@
           "insufficient_history": "{count, plural, one {# asset excluded} other {# assets excluded}}: not enough history in the period.",
           "no_price_source": "{count, plural, one {# asset excluded} other {# assets excluded}}: no price source is assigned and no price has ever been recorded."
         }
+      },
+      "move": {
+        "title": "How does it move?",
+        "cards": {
+          "bestDay": "The best day",
+          "bestMonth": "Thirty good days",
+          "rally": "The largest rally",
+          "days": "What the days were like"
+        },
+        "technical": {
+          "bestDay": "The twin of the worst day",
+          "bestMonth": "The best 30 days",
+          "rally": "From a low to the high after it",
+          "days": "Gains against losses · Omega"
+        },
+        "omegaCaption": "{value} gained for every 1 lost",
+        "sameRiseToday": "{amount} · the same rise, on today's value",
+        "rows": {
+          "meanUpDown": "Average day",
+          "meanUpDownValue": "{up} up · {down} down",
+          "semiDeviation": "Semi-deviation",
+          "averageDrawdown": "Below the peak, on average",
+          "extremeDaysValue": "{value}× a bell curve",
+          "semiDeviationValue": "{down} downward · out of a {swing} swing"
+        },
+        "lead": {
+          "both": "For every 1 lost on the bad days, {omega} were gained on the good ones; the largest rally lasted {days}.",
+          "omega": "For every 1 lost on the bad days, {omega} were gained on the good ones."
+        }
       }
     },
     "eligibility": {
@@ -624,9 +655,9 @@
       "open": "Period from {start} · in {currency}"
     },
     "docsHelp": {
-      "header": "How much the portfolio can lose, whether it is diversified, whether the risk is paid and what could happen: the four questions of the Risk tab, on the period shown.",
+      "header": "How much the portfolio can lose, how it moves, whether it is diversified, whether the risk is paid and what could happen: the questions of the Risk tab, on the period shown.",
       "assetSet": "Pick a few assets and compare them over the period: how much each one lost, what it paid for its risk, which of them move together, and how they would have weathered past crises.",
-      "headerAsset": "How much this asset can lose, how it compares with a reference and what could happen: the questions of its Risk & Scenarios tab, on the period shown."
+      "headerAsset": "How much this asset can lose, how it moves, how it compares with a reference and what could happen: the questions of its Risk & Scenarios tab, on the period shown."
     }
   }
 }

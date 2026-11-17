@@ -39,7 +39,8 @@
     import {_ as t} from '$lib/i18n';
 
     import {formatShare} from '../shareFormat';
-    import {axisPercent, figurePercent, type ReturnHistogram} from './l1Helpers';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {axisPercent, figurePercent, gainPercent, type ReturnHistogram, type ReturnHistogramGain} from './l1Helpers';
 
     interface Props {
         histogram: ReturnHistogram | null;
@@ -77,6 +78,7 @@
     const linesOf = $derived.by(() => {
         const observations = histogram?.observations ?? 0;
         const cut = histogram?.cut ?? null;
+        const gain = histogram?.gain ?? null;
         const say = $t;
         return (math: boolean) =>
             (bin: HistogramBin, index: number): string[] => {
@@ -85,11 +87,18 @@
                     const where = bin.holdsCut ? 'holds' : bin.belowCut ? 'beyond' : 'above';
                     lines.push(say(`risk.levels.l1.histogram.position.${where}`, {values: {value: figurePercent(cut / 100)}}));
                 }
+                // RN-18: a bar of the gains' tail says it is among the best days, from where.
+                if (gain && bin.aboveGain) lines.push(say('risk.levels.l1.histogram.position.gain', gainValues(gain)));
                 return lines;
             };
     });
     const tooltipLines = $derived(linesOf(true));
     const plainLines = $derived(linesOf(false));
+
+    /** The gains' tail as its sentences say it: the share of the best days (from the answer) and where they start. */
+    function gainValues(gain: ReturnHistogramGain): {values: Record<string, string>} {
+        return {values: {share: formatPercent(gain.share, {scale: 100, signed: false, digits: 0}), value: gainPercent(gain.threshold / 100)}};
+    }
 
     /** The threshold's label on the chart: a figure, not a position, so a cut of −0.04% keeps its sign (D380). */
     const cutLabel = $derived(histogram?.cut == null ? '' : $t('risk.levels.l1.histogram.cutLine', {values: {value: figurePercent(histogram.cut / 100)}}));
@@ -109,7 +118,7 @@
             <!-- What the canvas drew, as text: for a screen reader, and for a test that cannot read pixels. -->
             <ul class="sr-only" data-testid="risk-l1-histogram-bins">
                 {#each histogram.bins as bin, index (index)}
-                    <li data-testid="risk-l1-histogram-bin-{index}" data-holds-cut={bin.holdsCut} data-below-cut={bin.belowCut} data-count={bin.count}>{plainLines(bin, index).join('. ')}</li>
+                    <li data-testid="risk-l1-histogram-bin-{index}" data-holds-cut={bin.holdsCut} data-below-cut={bin.belowCut} data-above-gain={bin.aboveGain === true} data-count={bin.count}>{plainLines(bin, index).join('. ')}</li>
                 {/each}
             </ul>
             <p class="sr-only">
@@ -127,6 +136,10 @@
             {:else}
                 <!-- A figure, not a position: a threshold of −0.04% keeps its sign (D380). -->
                 <span class="ml-1 font-medium text-lf-warning" data-testid="risk-l1-histogram-cut">— {$t('risk.levels.l1.histogram.cut', {values: {value: figurePercent(histogram.cut / 100)}})}</span>
+            {/if}
+            {#if histogram.gain}
+                <!-- RN-18: the gains' tail, the twin of the VaR's threshold, in the gain's colour. -->
+                <span class="ml-1 font-medium text-lf-gain" data-testid="risk-l1-histogram-gain">— {$t('risk.levels.l1.histogram.gain', gainValues(histogram.gain))}</span>
             {/if}
         </p>
     {/if}
