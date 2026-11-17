@@ -13,14 +13,26 @@
     import {_} from '$lib/i18n';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import PluginSettingsForm from './PluginSettingsForm.svelte';
-    import {fetchPluginSettings, type PluginSettingsEntry} from './pluginSettingsApi';
-    import {FAMILY_ICONS, FAMILY_TITLE_KEYS, groupByFamily, NOTE_CLASSES} from './pluginSettingsForm';
+    import {fetchPluginEntry, fetchPluginSettings, type PluginSettingsEntry} from './pluginSettingsApi';
+    import {entryTitle, FAMILY_ICONS, FAMILY_TITLE_KEYS, groupByFamily, groupFormId, NOTE_CLASSES} from './pluginSettingsForm';
 
     let entries = $state<PluginSettingsEntry[]>([]);
     let loading = $state(true);
     let loadFailed = $state(false);
 
     const groups = $derived(groupByFamily(entries));
+    /** The shared groups this tab lists (project 76): their names for the plugins' «in the group» rows, and the ones a
+     * plugin can bring into view. A group the tab does not list (a test-only one) is named, with no button. */
+    const groupNames = $derived(Object.fromEntries(entries.filter((entry) => entry.family === 'group').map((entry) => [entry.plugin_code, entryTitle(entry, $_)])));
+    const listedGroups = $derived(Object.keys(groupNames));
+
+    /** Bring a shared group's form into view, and the focus to its heading. */
+    function openGroup(name: string): void {
+        const target = document.getElementById(groupFormId(name));
+        if (!target) return;
+        target.scrollIntoView?.({behavior: 'smooth', block: 'start'});
+        target.querySelector<HTMLElement>('h4')?.focus({preventScroll: true});
+    }
 
     /** Only the latest read writes: an older answer never replaces a newer one, nor ends its `loading`. */
     let loadGeneration = 0;
@@ -42,6 +54,23 @@
 
     function replace(fresh: PluginSettingsEntry): void {
         entries = entries.map((entry) => (entry.family === fresh.family && entry.plugin_code === fresh.plugin_code ? fresh : entry));
+    }
+
+    /** A shared group saved: its fresh state, then each plugin that reads it read again — their «configured» counts the
+     * group's fields (project 76). A reader that cannot be read keeps the state shown until the next read. */
+    async function groupSaved(fresh: PluginSettingsEntry): Promise<void> {
+        replace(fresh);
+        const readers = entries.filter((entry) => entry.family !== 'group' && (entry.groups ?? []).includes(fresh.plugin_code));
+        await Promise.all(
+            readers.map(async (reader) => {
+                try {
+                    const again = await fetchPluginEntry(reader.family, reader.plugin_code);
+                    if (again) replace(again);
+                } catch {
+                    // The group is saved either way.
+                }
+            }),
+        );
     }
 
     onMount(() => {
@@ -74,7 +103,13 @@
                     {$_(FAMILY_TITLE_KEYS[group.family])}
                 </h3>
                 {#each group.entries as entry (entry.plugin_code)}
-                    <PluginSettingsForm {entry} onsaved={replace} />
+                    {#if entry.family === 'group'}
+                        <div id={groupFormId(entry.plugin_code)}>
+                            <PluginSettingsForm {entry} onsaved={groupSaved} />
+                        </div>
+                    {:else}
+                        <PluginSettingsForm {entry} {groupNames} onopengroup={openGroup} onsaved={replace} openableGroups={listedGroups} />
+                    {/if}
                 {/each}
             </section>
         {/each}
