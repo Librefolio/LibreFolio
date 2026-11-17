@@ -2919,6 +2919,7 @@ async def test_the_simulation_reads_its_own_window_and_the_rest_of_the_request_t
 
     async def capture_execute(self, params, context):
         seen["simulation_series"] = context.prepared_series
+        seen["requested_range"] = context.requested_range
         raise RiskUnavailableError("captured", code=RiskErrorCode.DATA_UNAVAILABLE)
 
     async def serve_holidays() -> frozenset[date]:
@@ -2952,6 +2953,9 @@ async def test_the_simulation_reads_its_own_window_and_the_rest_of_the_request_t
     assert seen["facts_assets"] == (1, 2)
     # The plugin got the simulation's own series, never the page's.
     assert seen["simulation_series"] is simulation_prepared
+    # RN-16c: and its own window as the context's range — the end the amber line counts the history to (today), never
+    # the page's 2026-01-21.
+    assert seen["requested_range"] == window
     assert response.items[0].error.message == "captured"
 
 
@@ -3032,7 +3036,7 @@ def _weighted_scope(weights: dict[int, float]) -> ScopeInputs:
 prepared_windows: list[DateRangeModel] = []
 
 
-async def _simulation_context(monkeypatch, *, weights: dict[int, float], first_quotes: dict[int, date], horizon_days: int = 365, currencies: dict[int, str] | None = None, fx_first: dict[str, date] | None = None):
+async def _simulation_context(monkeypatch, *, weights: dict[int, float], first_quotes: dict[int, date | None], horizon_days: int = 365, currencies: dict[int, str] | None = None, fx_first: dict[str, date] | None = None):
     prepared_ids: list[tuple[int, ...]] = []
     prepared_windows.clear()
 
@@ -3045,7 +3049,8 @@ async def _simulation_context(monkeypatch, *, weights: dict[int, float], first_q
     async def fake_prepare(_db, **kwargs):
         prepared_ids.append(tuple(kwargs["asset_ids"]))
         prepared_windows.append(kwargs["date_range"])
-        return make_prepared_set({asset_id: [0.01, -0.005] * 20 for asset_id in kwargs["asset_ids"]}, baseline=date(2025, 1, 2))
+        # A holding never quoted has no series: the preparation leaves it out, as it does with no prices.
+        return make_prepared_set({asset_id: [0.01, -0.005] * 20 for asset_id in kwargs["asset_ids"] if first_quotes.get(asset_id) is not None}, baseline=date(2025, 1, 2))
 
     monkeypatch.setattr(risk_simulation_window_module, "load_price_window_facts", fake_facts)
     monkeypatch.setattr(risk_simulation_window_module, "first_fx_rate_dates", fake_fx)
@@ -3191,3 +3196,44 @@ async def test_the_simulation_s_answer_names_the_holding_it_left_out(monkeypatch
     assert named.message_params["names"] == "#3"
     assert (named.message_params["history_days"], named.message_params["horizon_days"]) == (63, 365)
     assert all(3 not in (warning.details or {}).get("asset_ids", []) for warning in item.warnings if warning.code == "assets_excluded")
+    # RN-16c: the result's facts as precise as its warnings — the metadata records it with its own reason and figures.
+    (recorded,) = [excluded for excluded in item.metadata.excluded_assets if excluded.asset_id == 3]
+    assert recorded.reason == "shorter_than_horizon"
+    assert recorded.details == {"horizon_days": 365, "first_useful_day": recent.isoformat()}
+
+
+# --------------------------------------------------------------------------- #
+# RN-16c (the consultant's four decisions on RN-16b, 17/11/2026).
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_mostly_excluded_counts_every_exclusion_as_the_replay_does(monkeypatch):
+    """Point 3: «describes only X% of the portfolio» says how much is covered, not why — so it counts every holding left
+    out (here one never quoted, 0.4, and one short, 0.3), on the replay's constant."""
+    recent = latest_range_end() - timedelta(days=40)
+    context, _ = await _simulation_context(monkeypatch, weights={1: 0.3, 2: 0.4, 3: 0.3}, first_quotes={1: date(2015, 1, 2), 2: None, 3: recent})
+
+    (mostly,) = [warning for warning in context.execution_warnings if warning.code == "simulation_mostly_excluded"]
+    assert mostly.message_params["covered"] == pytest.approx(0.3)
+    assert mostly.details["excluded_weight_total"] == pytest.approx(0.7)
+
+
+@pytest.mark.asyncio
+async def test_mostly_excluded_also_without_a_short_holding(monkeypatch):
+    """One meaning on both analytics: holdings never quoted alone can leave the simulation describing a minority."""
+    context, _ = await _simulation_context(monkeypatch, weights={1: 0.3, 2: 0.7}, first_quotes={1: date(2015, 1, 2), 2: None})
+
+    assert [warning.code for warning in context.execution_warnings if warning.code == "simulation_mostly_excluded"] == ["simulation_mostly_excluded"]
+
+
+@pytest.mark.asyncio
+async def test_a_short_holding_is_recorded_with_its_own_reason_horizon_and_first_day(monkeypatch):
+    """Point 4: the result's facts are as precise as its warnings — `shorter_than_horizon`, with the horizon and the first
+    useful day; `insufficient_history` stays for its generic case."""
+    recent = latest_range_end() - timedelta(days=63)
+    context, _ = await _simulation_context(monkeypatch, weights={1: 0.7, 2: 0.2, 3: 0.1}, first_quotes={1: date(2015, 1, 2), 2: date(2016, 5, 2), 3: recent})
+
+    (short,) = [item for item in context.excluded_assets if item.asset_id == 3]
+    assert short.reason == "shorter_than_horizon"
+    assert short.details == {"horizon_days": 365, "first_useful_day": recent.isoformat()}

@@ -362,7 +362,7 @@
       "extreme_day_ratio_undefined_assets": "Giorni estremi non definiti per {names}: la serie non si muove.",
       "simulation_history_shorter_than_horizon": "La simulazione proietta {horizon_days} giorni da {history_days} giorni di storia: la banda è larga quanto quella storia, non di più.",
       "simulation_excluded_short_history": "{names}: {history_days} giorni di storia, meno dell'orizzonte di {horizon_days} giorni: fuori dalla simulazione, il suo peso conta come liquidità.",
-      "simulation_mostly_excluded": "La simulazione descrive solo una parte del tuo portafoglio ({covered, number, percent}): il resto ha meno storia dell'orizzonte."
+      "simulation_mostly_excluded": "La simulazione descrive solo una parte del tuo portafoglio ({covered, number, percent}): il resto è escluso dalla simulazione."
     },
     "assetDetail": {
       "overviewTab": "Panoramica",

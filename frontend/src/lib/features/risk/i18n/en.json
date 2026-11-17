@@ -362,7 +362,7 @@
       "extreme_day_ratio_undefined_assets": "Extreme days are undefined for {names}: the series does not move.",
       "simulation_history_shorter_than_horizon": "The simulation projects {horizon_days} days from {history_days} days of history: the band is only as wide as that history.",
       "simulation_excluded_short_history": "{names}: {history_days} days of history, less than the {horizon_days}-day horizon: left out of the simulation, its weight counts as cash.",
-      "simulation_mostly_excluded": "The simulation describes only part of your portfolio ({covered, number, percent}): the rest has less history than the horizon."
+      "simulation_mostly_excluded": "The simulation describes only part of your portfolio ({covered, number, percent}): the rest is left out of the simulation."
     },
     "assetDetail": {
       "overviewTab": "Overview",

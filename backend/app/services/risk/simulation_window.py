@@ -25,7 +25,7 @@ from datetime import date, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.risk.results import RiskWarning
+from backend.app.schemas.risk.results import RiskExcludedAsset, RiskWarning
 from backend.app.schemas.risk.scope import RiskQueryRequest
 from backend.app.schemas.risk.vocabulary import RiskErrorCode, RiskHistoricalReplayExclusionTreatment, RiskScopeKind
 from backend.app.services.platform.data_quality_thresholds import REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE
@@ -92,10 +92,10 @@ def simulation_window(first_days: Mapping[int, date], *, end: date) -> DateRange
     return bounded_range(DateRangeModel(start=min(start, end), end=end))
 
 
-def _short_history_warnings(short: tuple[int, ...], first_days: Mapping[int, date | None], *, horizon_days: int, end: date, weights: Mapping[int, float], weighted: bool) -> list[RiskWarning]:
-    """The page names each holding left out (RN-16b), with its history and the horizon, and — past the replay's own
-    threshold — says the simulation describes a minority of the scope. Degrading, as the replay's exclusions are: a part
-    of the scope is not in the projection (its weight is idle cash), unlike a history that is only short."""
+def _short_history_warnings(short: tuple[int, ...], first_days: Mapping[int, date | None], *, horizon_days: int, end: date) -> list[RiskWarning]:
+    """The page names each holding left out (RN-16b), with its history and the horizon. Degrading, as the replay's
+    exclusions are: a part of the scope is not in the projection (its weight is idle cash), unlike a history that is
+    only short."""
     warnings: list[RiskWarning] = []
     for asset_id in short:
         first = first_days[asset_id]
@@ -109,19 +109,24 @@ def _short_history_warnings(short: tuple[int, ...], first_days: Mapping[int, dat
                 message_params={"history_days": history_days, "horizon_days": horizon_days},
             )
         )
-    excluded_weight = sum(weights.get(asset_id, 0.0) for asset_id in short)
-    if weighted and excluded_weight > REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE:
-        covered = max(0.0, 1.0 - excluded_weight)
-        warnings.append(
-            RiskWarning(
-                code="simulation_mostly_excluded",
-                message=f"The simulation describes only {covered:.0%} of the portfolio: the rest has less history than the horizon.",
-                details={"excluded_weight_total": excluded_weight, "threshold": REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE},
-                message_i18n_key="risk.warnings.simulation_mostly_excluded",
-                message_params={"covered": round(covered, 4)},
-            )
-        )
     return warnings
+
+
+def _mostly_excluded_warning(excluded_ids: AbstractSet[int], weights: Mapping[int, float]) -> RiskWarning | None:
+    """Past the replay's own threshold, the simulation describes a minority of the portfolio (RN-16c, the consultant):
+    every holding left out counts — short, never quoted, without a rate — because the line says how much is covered,
+    and the per-reason warnings say why. One meaning on both analytics, on one constant."""
+    excluded_weight = sum(weights.get(asset_id, 0.0) for asset_id in excluded_ids)
+    if excluded_weight <= REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE:
+        return None
+    covered = max(0.0, 1.0 - excluded_weight)
+    return RiskWarning(
+        code="simulation_mostly_excluded",
+        message=f"The simulation describes only {covered:.0%} of the portfolio: the rest is left out of it.",
+        details={"excluded_weight_total": excluded_weight, "threshold": REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE},
+        message_i18n_key="risk.warnings.simulation_mostly_excluded",
+        message_params={"covered": round(covered, 4)},
+    )
 
 
 def _without_assets(warnings: tuple[RiskWarning, ...], asset_ids: frozenset[int]) -> list[RiskWarning]:
@@ -180,7 +185,13 @@ async def prepare_simulation_context(
         prepared=prepared,
         never_priced_asset_ids=never_priced_asset_ids,
     )
-    if not short:
-        return context
-    named = _short_history_warnings(chosen.short, first_days, horizon_days=horizon_days, end=end, weights=scope_inputs.weights, weighted=request.scope.kind == RiskScopeKind.PORTFOLIO)
-    return replace(context, execution_warnings=tuple(_without_assets(tuple(context.execution_warnings), short)) + tuple(named))
+    warnings = list(_without_assets(tuple(context.execution_warnings), short)) + _short_history_warnings(chosen.short, first_days, horizon_days=horizon_days, end=end)
+    if request.scope.kind == RiskScopeKind.PORTFOLIO:
+        excluded_ids = {item.asset_id for item in context.excluded_assets} | short
+        if (mostly := _mostly_excluded_warning(excluded_ids, scope_inputs.weights)) is not None:
+            warnings.append(mostly)
+    # RN-16c: the result's facts as precise as its warnings — a short holding has its own reason, with what it rests on.
+    excluded_assets = tuple(
+        RiskExcludedAsset(asset_id=item.asset_id, reason="shorter_than_horizon", details={"horizon_days": horizon_days, "first_useful_day": first_days[item.asset_id].isoformat()}) if item.asset_id in short and first_days.get(item.asset_id) is not None else item for item in context.excluded_assets
+    )
+    return replace(context, execution_warnings=tuple(warnings), excluded_assets=excluded_assets)
