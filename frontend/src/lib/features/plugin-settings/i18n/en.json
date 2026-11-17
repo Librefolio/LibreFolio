@@ -74,7 +74,28 @@
     "group": {
       "usedBy": "Shared by: {plugins}",
       "inGroup": "Also uses the shared settings of {group}",
-      "open": "Open"
+      "open": "Open",
+      "coingecko": {
+        "name": "CoinGecko",
+        "label": {
+          "api_key": "API key",
+          "plan": "Plan"
+        },
+        "about": "The CoinGecko account the CoinGecko plugins share: its API key and its plan.",
+        "description": {
+          "api_key": "The key of a CoinGecko account. A free Demo key is enough.",
+          "plan": "The plan of the key: a Demo key answers on the public API, a paid key on the Pro API."
+        },
+        "missing": {
+          "api_key": "the API key"
+        },
+        "option": {
+          "plan": {
+            "demo": "Demo (free)",
+            "pro": "Pro (paid)"
+          }
+        }
+      }
     },
     "notConfigured": {
       "tooltip": "{provider} needs configuring",
