@@ -374,10 +374,10 @@ A calculation ends with one of these outcomes:
 
 | Outcome | What it means |
 |---|---|
-| **Plan available** | A plan that respects every constraint. A second badge says what it is worth. **Proven optimal**: the solver proved, within its small calculation margin (which grows with the amounts), that no better plan exists, objective by objective in the order of the **Strategy** step, and the exact check of the plan matches its numbers. **Optimality not proven**: the solver reached its time or node limit, or its own numbers do not match the exact check of the plan; it is then the best plan found, but it is not proven to be the best. |
+| **Plan available** | A plan that respects every constraint. A second badge says what it is worth. **Proven optimal**: the solver proved, within its small calculation margin (which grows with the amounts), that no better plan exists, objective by objective in the order of the **Strategy** step, and the exact check of the plan matches its numbers. **Local optimum**: the solver reached its time or node limit, or its own numbers do not match the exact check of the plan; it is then the best plan found, but it is not proven to be the best. |
 | **No operation** | With the cash you chose, no purchase meets the constraints: the plan is to do nothing. No order, no currency exchange, and no funding. |
 | **Infeasible with these constraints** | Marked **Infeasibility proven**: no combination meets every hard constraint together. The constraints involved are listed (the liquidity that can reach the Brokers), each with a link to the step where you can change it. The planner does not choose which one to relax, and no partial plan is shown as valid. |
-| **No plan within the limits** | The solver found no plan before reaching its limit. This is not a proof that none exists. A lighter search helps: fewer Assets or routes, a lower **Maximum purchase**, or a larger **Increment**. |
+| **No plan within the limits** | The solver found no plan before reaching its limit; its badge reads **Optimality not proven**. This is not a proof that none exists. A lighter search helps: fewer Assets or routes, a lower **Maximum purchase**, or a larger **Increment**. |
 | **More data needed** | Something is missing. Your draft is intact, and no Asset is removed silently: add the missing fact or remove the Asset yourself. |
 | **Input not valid** | Some of the data are not valid. |
 | **Scenario not supported** | Not an error in your data: the tool does not handle this case yet. |
@@ -487,11 +487,11 @@ promise:
   never published.
 - **It never passes off an unproven plan as optimal.** A plan stopped by a time
   or node limit is shown as the best one found and marked
-  **Optimality not proven**. So is a plan whose exact check does not match the
+  **Local optimum**. So is a plan whose exact check does not match the
   solver's own numbers, even when the search ended by itself. When no plan is
   found, it says so instead of guessing. With amounts of around ten billion
   units of a currency or more, the solver's calculations can lose precision: the
-  tool may then stop with an error, or mark the plan **Optimality not proven**.
+  tool may then stop with an error, or mark the plan **Local optimum**.
 
 A completed calculation therefore reports one of the small set of honest
 outcomes listed in [Reading the result](#reading-the-result).
