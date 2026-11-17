@@ -6,8 +6,8 @@ What it promises, pinned here with no network:
 
 1. **Declarations**: ``code`` ``borsa_italiana``, ``name`` ``Borsa Italiana``, ``terms`` ``PRICE_SOURCE``, ISIN only, not
    test-only. ``BOND`` at degree 10, ``STOCK`` at degree 20 (Yahoo, a later lot, leads stocks), every other type ``None``
-   (``CRYPTO`` among them: the recognize API test without ``codes`` relies on it). Twenty bond voices, never
-   ``inception_date`` (correction C2-fix-1); ``sector`` and
+   (``CRYPTO`` among them: the recognize API test without ``codes`` relies on it). Twenty-one bond voices
+   (``description`` among them since C2d), never ``inception_date`` (correction C2-fix-1); ``sector`` and
    ``legal_form`` for a stock. Binding params ``language`` (select ``en``/``it``, default ``en``, not required), ``mic``
    and ``platform`` (strings, not required), each with an ``x-i18n-key`` under ``enrichers.borsa_italiana.`` (the texts are
    the implementer's: only keys and defaults are pinned). ``test_cases`` for the external suite. No import from the price
@@ -26,6 +26,11 @@ What it promises, pinned here with no network:
      one log line. A sovereign issuer gives its country and a geography of one country at 100 %, through the plugin's
      own table of issuers; any other issuer gives neither. The sector is «Government Bonds» for a sovereign issuer,
      «Corporate Bonds» for a corporate one. ``legal_form`` ``bond``. Never the page's advertising ``descrizione``.
+     A ``description`` composed from stable facts only (C2d, plan I19), in the binding's language: kind (from the
+     issuer type), issuer (for a state the country's name from pycountry, EN or IT; else the page's issuer as written),
+     coupon type (structured or inflation-linked only), frequency, then «; » and the maturity, month in words from a
+     fixed table, day without a leading zero; never a price, a yield, the annual coupon or the first day of trading.
+     The expected sentences are written out (``DESCRIPTIONS``), never built with pycountry or a month table here.
      Never ``inception_date`` (correction C2-fix-1): the page's ``data_primo_giorno`` is a venue's first day of
      trading, not a launch date (BTP 6 % 2031 shows 2008-11-03 on an ISIN of the late-90s series). The outstanding
      amount is in ``valuta_denominazione`` when the page gives it, else in ``valuta`` (correction C2-fix-2); both given
@@ -38,7 +43,8 @@ What it promises, pinned here with no network:
    - **per-voice dates**: yields, modified duration and accrued interest are «as of» the reference price date, given in
      ``source_dates`` for those of the four the item gives; nothing else is dated, the item's ``source_date`` stays None;
    - **language**: the binding's ``language`` is the page asked (``lingua``). For each MOT bond the English and the
-     Italian page give the same stored values but for ``payout_description``, a text in the page's language. The EuroTLX
+     Italian page give the same stored values but for ``payout_description`` and ``description``, texts in the page's
+     language. The EuroTLX
      bond (``bond_corp``) does not: each page is pinned as it is.
 
 3. **recognize**: non-ISIN → not found, no call; otherwise one ``ottieni_scheda`` with the binding's ``mic``,
@@ -142,6 +148,7 @@ BOND_VOICES = frozenset(
         "geography",
         "sector",
         "legal_form",
+        "description",
     }
 )
 STOCK_VOICES = frozenset({"sector", "legal_form"})
@@ -162,6 +169,24 @@ WAF_MESSAGE = "HTTP 403 — accesso bloccato dal WAF (url=https://www.borsaitali
 # Expected stored forms (written out from the catalogue, never recomputed with the plugin's own logic)
 # =============================================================================
 
+#: C2d: the composed description of every recorded bond, per page language (the consultant's four sentences, the
+#: others derived by the same rule from the recordings). Literal: never rebuilt with pycountry or a month table.
+DESCRIPTIONS: dict[tuple[str, str], str] = {
+    ("btp_valore", "en"): "Government bond, issuer Italy, structured interest rate, paying quarterly; matures on 10 October 2028.",
+    ("btp_valore", "it"): "Titolo di Stato, emittente Italia, a tasso strutturato, con cedola trimestrale; scade il 10 ottobre 2028.",
+    ("btp_ord", "en"): "Government bond, issuer Italy, paying semiannually; matures on 1 May 2031.",
+    ("btp_ord", "it"): "Titolo di Stato, emittente Italia, con cedola semestrale; scade il 1 maggio 2031.",
+    ("btp_italia", "en"): "Government bond, issuer Italy, inflation-linked, paying semiannually; matures on 4 June 2032.",
+    ("btp_italia", "it"): "Titolo di Stato, emittente Italia, indicizzato all'inflazione, con cedola semestrale; scade il 4 giugno 2032.",
+    ("btp_2072", "en"): "Government bond, issuer Italy, paying semiannually; matures on 1 March 2072.",
+    ("btp_2072", "it"): "Titolo di Stato, emittente Italia, con cedola semestrale; scade il 1 marzo 2072.",
+    ("austria_2117", "en"): "Government bond, issuer Austria, paying annually; matures on 20 September 2117.",
+    ("austria_2117", "it"): "Titolo di Stato, emittente Austria, con cedola annuale; scade il 20 settembre 2117.",
+    # EuroTLX: the English page has no tipologia (kind «Bond») but «12 Months»; the Italian one the reverse
+    ("bond_corp", "en"): "Bond, issuer Anima Holding S.P.A., paying annually; matures on 22 April 2028.",
+    ("bond_corp", "it"): "Obbligazione societaria, emittente Anima Holding S.P.A.; scade il 22 aprile 2028.",
+}
+
 GOVERNMENT = {"Government Bonds": "1.0000"}
 CORPORATE = {"Corporate Bonds": "1.0000"}
 
@@ -179,6 +204,7 @@ def _listed(**fields: Any) -> dict[str, Any]:
 EXPECTED_BONDS_EN: dict[str, dict[str, Any]] = {
     # step-up: «Structured Interest Rate»; quarterly 1.125 and annual 4.50 both given
     "btp_valore": _italian_bond(
+        description=DESCRIPTIONS[("btp_valore", "en")],
         maturity_date="2028-10-10",
         coupon_rate="0.045",
         coupon_period_rate="0.01125",
@@ -192,6 +218,7 @@ EXPECTED_BONDS_EN: dict[str, dict[str, Any]] = {
     ),
     # an ordinary BTP: no annual coupon on the page, 3.00 semiannual → 6 %; «Plain Vanilla» → no coupon type
     "btp_ord": _italian_bond(
+        description=DESCRIPTIONS[("btp_ord", "en")],
         maturity_date="2031-05-01",
         coupon_rate="0.06",
         coupon_period_rate="0.03",
@@ -203,6 +230,7 @@ EXPECTED_BONDS_EN: dict[str, dict[str, Any]] = {
         outstanding_amount={"amount": "30762750000", "currency": "EUR"},
     ),
     "btp_italia": _italian_bond(
+        description=DESCRIPTIONS[("btp_italia", "en")],
         maturity_date="2032-06-04",
         coupon_rate="0.0185",
         coupon_period_rate="0.00925",
@@ -216,6 +244,7 @@ EXPECTED_BONDS_EN: dict[str, dict[str, Any]] = {
     ),
     # no annual coupon on the page: 1.075 semiannual → 2.15 %, the rate of its name «Btp Tf 2,15% Mz72»
     "btp_2072": _italian_bond(
+        description=DESCRIPTIONS[("btp_2072", "en")],
         maturity_date="2072-03-01",
         coupon_rate="0.0215",
         coupon_period_rate="0.01075",
@@ -232,6 +261,7 @@ EXPECTED_BONDS_EN: dict[str, dict[str, Any]] = {
         "issuer_country": "AUT",
         "geography": {"AUT": "1.0000"},
         "sector": GOVERNMENT,
+        "description": DESCRIPTIONS[("austria_2117", "en")],
         **_listed(
             maturity_date="2117-09-20",
             coupon_rate="0.021",
@@ -258,6 +288,7 @@ EXPECTED_BONDS_EN: dict[str, dict[str, Any]] = {
         "legal_form": "bond",
         "min_lot": "100000",
         "reference_price_date": "2026-11-09",
+        "description": DESCRIPTIONS[("bond_corp", "en")],
     },
 }
 
@@ -266,6 +297,7 @@ EXPECTED_BOND_CORP_IT = {
     **{key: value for key, value in EXPECTED_BONDS_EN["bond_corp"].items() if key != "coupon_frequency"},
     "issuer_type": "corporate",
     "sector": CORPORATE,
+    "description": DESCRIPTIONS[("bond_corp", "it")],
 }
 
 #: The stocks and an ETF, English pages.
@@ -494,6 +526,13 @@ def _payout(name: str, language: str) -> dict[str, str]:
     return {"payout_description": text} if text else {}
 
 
+def _description(item: EnricherReadItem) -> str:
+    """The item's composed description (C2d) in stored form; fails with «no description» when it is absent."""
+    assert item.status == EnricherReadStatus.OK, f"barrier: the sheet is read: {item}"
+    assert "description" in item.values, f"C2d: a bond gets a composed description; voices given: {sorted(item.values)}"
+    return normalize_value("description", item.values["description"])
+
+
 def _page(isin: str, language: str = "en", mic: str | None = None, platform: str | None = None) -> str:
     url = f"https://www.borsaitaliana.it/borsa/search/scheda.html?code={isin}&lang={language}"
     return url + (f"&mic={mic}" if mic else "") + (f"&platform={platform}" if platform else "")
@@ -531,6 +570,9 @@ def test_expected_tables_are_stored_forms():
     tables = [*EXPECTED_BONDS_EN.values(), EXPECTED_BOND_CORP_IT, *EXPECTED_OTHERS.values()]
     for table in tables:
         assert _stored(table) == table
+    for key, sentence in DESCRIPTIONS.items():
+        assert normalize_value("description", sentence) == sentence, f"{key}: a stored text"
+    assert set(DESCRIPTIONS) == {(name, language) for name in BONDS for language in LANGUAGES}, "a sentence per bond page"
 
 
 # =============================================================================
@@ -559,8 +601,9 @@ def test_coverage_and_voices(bi):
     assert "inception_date" not in cls.voices[AssetType.BOND], "correction C2-fix-1: the first day of trading is no launch date"
     assert cls.voices[AssetType.BOND] == BOND_VOICES, f"bond voices: {sorted(cls.voices[AssetType.BOND] ^ BOND_VOICES)}"
     assert cls.voices[AssetType.STOCK] == STOCK_VOICES
-    assert BOND_VOICES <= set(CATALOGUE) and len(BOND_VOICES) == 20, "barrier: 20 catalogue voices"
-    assert "description" not in cls.voices[AssetType.BOND], "no description in this lot"
+    assert BOND_VOICES <= set(CATALOGUE) and len(BOND_VOICES) == 21, "barrier: 21 catalogue voices"
+    assert "description" in cls.voices[AssetType.BOND], "C2d: the composed description is a bond voice"
+    assert "description" not in cls.voices[AssetType.STOCK], "C2d: a share gets no description"
 
 
 def test_registered_and_served_in_production(bi, monkeypatch):
@@ -982,12 +1025,258 @@ def test_only_the_as_of_voices_given_are_dated(plugin, library):
 
 
 def test_the_page_description_is_never_read(plugin, library):
-    """The sheet's ``descrizione`` is the page's advertising line: changing it changes nothing."""
+    """The sheet's ``descrizione`` is the page's advertising line: changing it changes nothing, and the composed
+    description (C2d) never carries it."""
     first = _synthetic(library, "IT00TESTDS001", descrizione="Real time quotes")
     second = _synthetic(library, "IT00TESTDS002", descrizione="Something else entirely")
     items = _by_index(list(plugin.read([first, second])), 2)
+    assert _description(items[0]) == DESCRIPTIONS[("btp_valore", "en")], "barrier: the composed sentence is there"
     assert _stored(items[0].values) == _stored(items[1].values)
-    assert "description" not in items[0].values
+    assert "Real time quotes" not in _description(items[0]) and "Something else" not in _description(items[1])
+
+
+# =============================================================================
+# 2. Mapping: the composed description (C2d, plan I19)
+# =============================================================================
+#
+# A bond page has no prose about the instrument (its ``descrizione`` is an advertisement), so the plugin composes one
+# sentence from stable facts only, in the binding's language: kind, issuer, coupon type (structured or inflation-linked
+# only), frequency — joined by «, » — then «; » and the maturity, ending with «.». Never a price, a yield, the annual
+# coupon or the first day of trading. Every expected sentence below is a literal.
+#
+# Synthetic sheets use a maturity of 5 June 2030 (a single-digit day, no leading zero) unless the case is the maturity.
+
+SYNTHETIC_MATURITY = date(2030, 6, 5)
+MATURES = {"en": "; matures on 5 June 2030.", "it": "; scade il 5 giugno 2030."}
+
+
+def _synthetic_description(plugin, library: FakeLibrary, isin: str, base: str = "btp_ord", language: str = "en", **overrides: Any) -> str:
+    overrides.setdefault("scadenza", SYNTHETIC_MATURITY)
+    return _description(_read_one(plugin, _synthetic(library, isin, base, language, **overrides)))
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+@pytest.mark.parametrize("name", BONDS)
+def test_description_of_each_bond_recording(plugin, library, name, language):
+    """The exact sentence of every recorded bond page, in that page's language."""
+    item = _read_recording(plugin, library, name, language)
+    assert _description(item) == DESCRIPTIONS[(name, language)]
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+@pytest.mark.parametrize("name", BONDS)
+def test_description_is_a_catalogue_text(plugin, library, name, language):
+    """The yielded value is a text the catalogue stores as it is (``normalize_value``: no stray space, not empty)."""
+    item = _read_recording(plugin, library, name, language)
+    assert "description" in item.values, f"C2d: a bond gets a composed description: {sorted(item.values)}"
+    raw = item.values["description"]
+    assert isinstance(raw, str), f"a text: {raw!r}"
+    assert normalize_value("description", raw) == raw, f"a fixed point of the catalogue: {raw!r}"
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+@pytest.mark.parametrize("name", BONDS)
+def test_description_never_carries_the_page_advert(plugin, library, name, language):
+    """The page's ``descrizione`` (an advertisement) is never the description, nor any part of it."""
+    advert = _sheet(name, language).descrizione
+    assert advert, "barrier: the page has its advertising line"
+    description = _description(_read_recording(plugin, library, name, language))
+    assert description != advert.strip()
+    assert advert.strip() not in description
+    assert _sheet(name, language).isin not in description, f"no part of the advert (its ISIN in brackets): {description!r}"
+
+
+def test_no_description_for_shares_and_other_sheets(plugin, library):
+    """Only a bond gets a description: not a share, not an ETF (read beside a bond, which does get one)."""
+    names = ("btp_valore", "enel", "asml", "apple", "swda")
+    bindings = [_isin(_give_recording(library, name)) for name in names]
+    items = _by_index(list(plugin.read(bindings)), len(names))
+    assert _description(items[0]) == DESCRIPTIONS[("btp_valore", "en")], "barrier: the bond beside them has one"
+    for index, name in enumerate(names[1:], start=1):
+        assert items[index].status == EnricherReadStatus.OK, f"{name}: {items[index]}"
+        assert "description" not in items[index].values, f"{name}: no description: {items[index].values.get('description')!r}"
+
+
+def test_no_description_for_a_share_with_bond_fields(plugin, library):
+    """A share sheet carrying bond fields (synthetic) still gets no description (read beside a bond, which does)."""
+    bond = _isin(_give_recording(library, "btp_valore"))
+    share = _synthetic(library, "IT00TESTDE001", base="enel", scadenza=date(2030, 1, 1), emittente="Enel S.p.A.", frequenza_cedola="Annually")
+    items = _by_index(list(plugin.read([bond, share])), 2)
+    assert _description(items[0]) == DESCRIPTIONS[("btp_valore", "en")], "barrier: the bond beside it has one"
+    assert items[1].status == EnricherReadStatus.OK and "description" not in items[1].values, items[1]
+
+
+@pytest.mark.parametrize(
+    ("language", "expected"),
+    [
+        ("en", "Government bond, issuer Italy, structured interest rate, paying quarterly."),
+        ("it", "Titolo di Stato, emittente Italia, a tasso strutturato, con cedola trimestrale."),
+    ],
+    ids=LANGUAGES,
+)
+def test_description_without_a_maturity(plugin, library, language, expected):
+    """No maturity: no «; …» part, the sentence ends after the last of the first four parts."""
+    item = _read_one(plugin, _synthetic(library, "IT00TESTDE002", "btp_valore", language, scadenza=None))
+    assert "maturity_date" not in item.values, "barrier: no maturity"
+    assert _description(item) == expected
+
+
+@pytest.mark.parametrize(
+    ("language", "issuer", "expected"),
+    [
+        ("en", None, "Government bond, structured interest rate, paying quarterly; matures on 10 October 2028."),
+        ("it", None, "Titolo di Stato, a tasso strutturato, con cedola trimestrale; scade il 10 ottobre 2028."),
+        ("en", "  ", "Government bond, structured interest rate, paying quarterly; matures on 10 October 2028."),
+    ],
+    ids=["en-none", "it-none", "en-blank"],
+)
+def test_description_without_an_issuer(plugin, library, language, issuer, expected):
+    """No issuer: the issuer part is omitted, the kind still comes from the issuer type."""
+    item = _read_one(plugin, _synthetic(library, "IT00TESTDE003", "btp_valore", language, emittente=issuer))
+    assert "issuer_name" not in item.values and item.values.get("issuer_type") == "sovereign", "barrier: a sovereign sheet with no issuer"
+    assert _description(item) == expected
+
+
+@pytest.mark.parametrize(
+    ("language", "tipologia", "kind"),
+    [
+        ("en", "Corporate Bonds", "Corporate bond, issuer Lab Issuer S.p.A."),
+        ("it", "Obbligazioni Finanziarie", "Obbligazione societaria, emittente Lab Issuer S.p.A."),
+        ("en", "Supranational Bonds", "Supranational bond, issuer Lab Issuer S.p.A."),
+        ("it", "Obbligazioni Sovranazionali", "Obbligazione sovranazionale, emittente Lab Issuer S.p.A."),
+        ("en", "Lab Category", "Bond, issuer Lab Issuer S.p.A."),
+        ("en", None, "Bond, issuer Lab Issuer S.p.A."),
+        ("it", None, "Obbligazione, emittente Lab Issuer S.p.A."),
+    ],
+)
+def test_description_kind_from_the_issuer_type(plugin, library, language, tipologia, kind):
+    """The kind from ``issuer_type`` (unknown or absent: plain «Bond»); a company issuer is written as the page has it."""
+    frequency = {"en": ", paying semiannually", "it": ", con cedola semestrale"}[language]
+    description = _synthetic_description(plugin, library, "IT00TESTDE004", language=language, tipologia=tipologia, emittente="Lab Issuer S.p.A.")
+    assert description == f"{kind}{frequency}{MATURES[language]}"
+
+
+@pytest.mark.parametrize(
+    ("issuer", "english", "italian"),
+    [
+        ("REPUBLIC OF AUSTRIA", "Austria", "Austria"),
+        ("FEDERAL REPUBLIC OF GERMANY", "Germany", "Germania"),
+        ("KINGDOM OF THE NETHERLANDS", "Netherlands", "Paesi Bassi"),
+        ("UNITED STATES OF AMERICA", "United States", "Stati Uniti"),
+        ("UNITED KINGDOM", "United Kingdom", "Regno Unito"),
+        # a state the plugin's table does not know: no country, the issuer as the page writes it
+        ("REPUBLIC OF ATLANTIS", "REPUBLIC OF ATLANTIS", "REPUBLIC OF ATLANTIS"),
+    ],
+)
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_description_state_issuer_is_the_country_name(plugin, library, issuer, english, italian, language):
+    """A state issuer is named by its country, in the sentence's language (pycountry's offline names); a state the
+    table does not know keeps the page's issuer."""
+    tipologia = {"en": "Foreign Public Debt", "it": "Titoli di stato esteri"}[language]
+    item = _read_one(plugin, _synthetic(library, "IT00TESTDE005", "btp_ord", language, tipologia=tipologia, emittente=issuer, scadenza=SYNTHETIC_MATURITY))
+    assert item.values.get("issuer_type") == "sovereign", "barrier: a sovereign sheet"
+    expected = {
+        "en": f"Government bond, issuer {english}, paying semiannually{MATURES['en']}",
+        "it": f"Titolo di Stato, emittente {italian}, con cedola semestrale{MATURES['it']}",
+    }[language]
+    assert _description(item) == expected
+
+
+@pytest.mark.parametrize(
+    ("language", "text", "part"),
+    [
+        ("en", "Structured Interest Rate", ", structured interest rate"),
+        ("it", "Stuctured Interest Rate", ", a tasso strutturato"),
+        ("en", "Inflation Linked", ", inflation-linked"),
+        ("it", "Titoli Indicizzati All'inflazione", ", indicizzato all'inflazione"),
+        ("en", "Plain Vanilla", ""),
+        ("it", "Plain Vanilla", ""),
+        ("en", "Lab Exotic Structure", ""),
+        ("en", None, ""),
+    ],
+)
+def test_description_coupon_type(plugin, library, language, text, part):
+    """Only a structured or an inflation-linked coupon is said; anything else leaves the part out."""
+    start = {"en": "Government bond, issuer Italy", "it": "Titolo di Stato, emittente Italia"}[language]
+    frequency = {"en": ", paying semiannually", "it": ", con cedola semestrale"}[language]
+    description = _synthetic_description(plugin, library, "IT00TESTDE006", language=language, struttura_bond=text)
+    assert description == f"{start}{part}{frequency}{MATURES[language]}"
+
+
+@pytest.mark.parametrize(
+    ("language", "text", "part"),
+    [
+        ("en", "Monthly", ", paying monthly"),
+        ("en", "Quarterly", ", paying quarterly"),
+        ("en", "Semiannually", ", paying semiannually"),
+        ("en", "Annually", ", paying annually"),
+        ("en", "12 Months", ", paying annually"),
+        ("it", "Mensile", ", con cedola mensile"),
+        ("it", "Trimestrale", ", con cedola trimestrale"),
+        ("it", "Semestrale", ", con cedola semestrale"),
+        ("it", "Annuale", ", con cedola annuale"),
+        ("en", "Biennial", ""),
+        ("en", None, ""),
+        ("it", None, ""),
+    ],
+)
+def test_description_frequency(plugin, library, language, text, part):
+    """The frequency in words; unknown or absent, the part is left out."""
+    start = {"en": "Government bond, issuer Italy", "it": "Titolo di Stato, emittente Italia"}[language]
+    description = _synthetic_description(plugin, library, "IT00TESTDE007", language=language, frequenza_cedola=text)
+    assert description == f"{start}{part}{MATURES[language]}"
+
+
+@pytest.mark.parametrize(
+    ("month", "english", "italian"),
+    [
+        (1, "January", "gennaio"),
+        (2, "February", "febbraio"),
+        (3, "March", "marzo"),
+        (4, "April", "aprile"),
+        (5, "May", "maggio"),
+        (6, "June", "giugno"),
+        (7, "July", "luglio"),
+        (8, "August", "agosto"),
+        (9, "September", "settembre"),
+        (10, "October", "ottobre"),
+        (11, "November", "novembre"),
+        (12, "December", "dicembre"),
+    ],
+)
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_description_maturity_month_in_words(plugin, library, month, english, italian, language):
+    """The month in words from a fixed table (not the locale), the day without a leading zero."""
+    description = _synthetic_description(plugin, library, "IT00TESTDE008", language=language, scadenza=date(2031, month, 5))
+    suffix = {"en": f"; matures on 5 {english} 2031.", "it": f"; scade il 5 {italian} 2031."}[language]
+    assert description.endswith(suffix), f"{description!r} ends with {suffix!r}"
+    assert description.count(";") == 1 and " 05 " not in description
+
+
+def test_description_holds_stable_facts_only(plugin, library):
+    """Price, yields, both coupons, duration, accrued interest, reference date, outstanding amount and the first day of
+    trading change over time (or are no launch date): changing them all leaves the sentence as it was."""
+    first = _synthetic(library, "IT00TESTDE009", "btp_valore")
+    second = _synthetic(
+        library,
+        "IT00TESTDE010",
+        "btp_valore",
+        prezzo=Decimal("87.65"),
+        rendimento_lordo=Decimal("6.66"),
+        rendimento_netto=Decimal("5.55"),
+        cedola_annua=Decimal("7.25"),
+        cedola_periodale=Decimal("1.8125"),
+        duration_modificata=Decimal("9.99"),
+        rateo_lordo=Decimal("0.777"),
+        data_prezzo_riferimento=date(2031, 2, 3),
+        data_primo_giorno=date(2008, 11, 3),
+        outstanding=Decimal("123456789"),
+    )
+    items = _by_index(list(plugin.read([first, second])), 2)
+    assert _stored(items[0].values)["coupon_rate"] != _stored(items[1].values)["coupon_rate"], "barrier: the two sheets differ"
+    assert _description(items[0]) == _description(items[1]) == DESCRIPTIONS[("btp_valore", "en")]
+    for figure in ("87.65", "6.66", "7.25", "4.5", "1.125", "%", "2008", "2031"):
+        assert figure not in _description(items[1]), f"no price, yield, coupon or first day of trading: {figure!r}"
 
 
 # =============================================================================
@@ -1032,7 +1321,7 @@ def test_language_invariance_of_the_mot_bonds(plugin, library, name):
     english = _read_recording(plugin, library, name, "en")
     italian = _read_recording(plugin, library, name, "it")
     assert english.status == italian.status == EnricherReadStatus.OK
-    texts = {"payout_description"}
+    texts = {"payout_description", "description"}
     english_stored = {key: value for key, value in _stored(english.values).items() if key not in texts}
     italian_stored = {key: value for key, value in _stored(italian.values).items() if key not in texts}
     assert english_stored == italian_stored, f"{name}: EN and IT differ: {sorted(set(english_stored.items()) ^ set(italian_stored.items()), key=str)}"
@@ -1040,6 +1329,7 @@ def test_language_invariance_of_the_mot_bonds(plugin, library, name):
     assert dict(english.source_dates) == dict(italian.source_dates)
     assert set(_payout(name, "en")) == set(_payout(name, "it")), "barrier: both pages give a payout text, or neither"
     assert _stored(italian.values).get("payout_description") == _payout(name, "it").get("payout_description")
+    assert (_description(english), _description(italian)) == (DESCRIPTIONS[(name, "en")], DESCRIPTIONS[(name, "it")]), "C2d: each in its page's language"
 
 
 @pytest.mark.parametrize(("language", "expected"), [("en", EXPECTED_BONDS_EN["bond_corp"]), ("it", EXPECTED_BOND_CORP_IT)])
