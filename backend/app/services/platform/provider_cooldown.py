@@ -75,10 +75,11 @@ def _limit_key(domain: str, provider: str, fingerprint: str) -> tuple:
 
 def limit_pause_left(domain: str, provider: str, fingerprint: str) -> float:
     """0 when ``provider`` with these settings may reach its call counter now; else the seconds of its call-limit pause
-    left. When the pause ends one caller at a time gets 0, the trial, as for a source pause."""
+    left. No trial: the pause ends with its window, a fact, and then every caller reaches the counter, whose atomic
+    statement alone decides (U3)."""
     if not _settings().enabled:
         return 0.0
-    return PROVIDER_COOLDOWNS.check(_limit_key(domain, provider, fingerprint))
+    return PROVIDER_COOLDOWNS.peek(_limit_key(domain, provider, fingerprint))
 
 
 def record_limit_pause(domain: str, provider: str, fingerprint: str, seconds: float) -> float:
@@ -89,18 +90,6 @@ def record_limit_pause(domain: str, provider: str, fingerprint: str, seconds: fl
     wait = PROVIDER_COOLDOWNS.hold(_limit_key(domain, provider, fingerprint), seconds)
     logger.info("Provider paused: instance call limit full", domain=domain, provider=provider, wait_s=round(wait, 1))
     return wait
-
-
-def clear_limit_pause(domain: str, provider: str, fingerprint: str) -> None:
-    """The counter admitted a call of ``provider``: its expired call-limit pause, if any, is over."""
-    if _settings().enabled:
-        PROVIDER_COOLDOWNS.succeeded(_limit_key(domain, provider, fingerprint))
-
-
-def release_limit_trial(domain: str, provider: str, fingerprint: str) -> None:
-    """A count that ended with no verdict (cancelled): the trial of an expired call-limit pause goes to the next caller."""
-    if _settings().enabled:
-        PROVIDER_COOLDOWNS.released(_limit_key(domain, provider, fingerprint))
 
 
 def record_success(domain: str, provider: str, scope: str | None = None) -> None:

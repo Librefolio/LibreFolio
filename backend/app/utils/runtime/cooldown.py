@@ -227,6 +227,22 @@ class Cooldowns:
                 self._pauses.popitem(last=False)
             return wait
 
+    def peek(self, key: Hashable) -> float:
+        """The seconds of pause left on ``key``, 0 when none: a read that hands out no trial (project 76, U3).
+
+        For a pause whose end is a fact, not a guess about the remote (a full call limit, ``hold``): when it ends every
+        caller may go at once, and something else decides (the counter's atomic statement). An ended pause is forgotten.
+        """
+        with self._lock:
+            pause = self._pauses.get(key)
+            if pause is None:
+                return 0.0
+            left = self._left(pause, self._clock())
+            if left <= 0:
+                del self._pauses[key]
+                return 0.0
+            return left
+
     def succeeded(self, key: Hashable) -> int:
         """Forget ``key`` after an answer; return the refusals in a row it had, 0 when there was nothing to forget.
 

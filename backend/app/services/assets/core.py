@@ -43,9 +43,8 @@ from backend.app.logging_config import get_logger
 from backend.app.services.assets.base import AssetCallLimitError, AssetRateLimitedError, AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.platform import call_counter
-from backend.app.services.platform.provider_cooldown import clear_limit_pause, limit_pause_left, record_limit_pause, record_no_verdict, record_refusal, record_success, release_limit_trial, wait_before_call
+from backend.app.services.platform.provider_cooldown import limit_pause_left, record_limit_pause, record_no_verdict, record_refusal, record_success, wait_before_call
 from backend.app.services.plugin_settings.contract import PluginSettingsMixin
-from backend.app.services.plugin_settings.groups import GROUP_FAMILY, get_group
 from backend.app.services.plugin_settings.runtime import configure_instance
 from backend.app.utils.runtime.cache import get_ttl_cache
 from backend.app.utils.runtime.cooldown import RateLimitedError
@@ -224,26 +223,10 @@ def cooldown_scope_for(provider: AssetSourceProvider, identifier: str, identifie
     return scope if isinstance(scope, str) and scope else None
 
 
-def _declared_limits(settings: object) -> call_counter.CallLimits:
-    """The ``call_limit_<window>`` values of a binding: a window whose field is not declared, or has no value, has none."""
-    limits = {}
-    for window in call_counter.WINDOWS:
-        try:
-            limits[window] = settings.get(f"call_limit_{window}")  # type: ignore[attr-defined]
-        except KeyError:  # not declared by this plugin or group
-            limits[window] = None
-    return call_counter.CallLimits(**limits)
-
-
 def call_owner(provider: AssetSourceProvider) -> tuple[str, str, call_counter.CallLimits]:
-    """Who a call of ``provider`` is counted and limited on (project 76, U2): the shared group whose credits it spends
-    (``SettingsGroup.shares_credits``), else the provider itself; and the limits, from that owner's bound settings."""
-    settings = provider.settings
-    for name in getattr(type(provider), "settings_groups", ()) or ():
-        group = get_group(name)
-        if group is not None and group.shares_credits:
-            return GROUP_FAMILY, name, _declared_limits(settings.group(name))
-    return "asset", provider.provider_code, _declared_limits(settings)
+    """Who a call of ``provider`` is counted and limited on (project 76, U2): ``call_counter.call_owner`` for the asset
+    family — the shared group whose credits it spends, else the provider — with the limits of that owner."""
+    return call_counter.call_owner(provider, "asset")
 
 
 async def _admit_call(provider: AssetSourceProvider, code: str, scope: str | None) -> None:
@@ -259,12 +242,18 @@ async def _admit_call(provider: AssetSourceProvider, code: str, scope: str | Non
         raise AssetRateLimitedError(f"Provider {code} is paused after too many requests: {math.ceil(wait)} s left", retry_after=wait, scope=scope)
     # A test double with settings that is no AssetSourceProvider declares nothing: never counted, as a bare double
     if getattr(provider, "calls_external_service", False):
-        await _count_call(provider, code, scope)
+        try:
+            await _count_call(provider, code, scope)
+        except AssetCallLimitError:
+            # A limit refusal is no verdict on the source: the trial of its expired pause goes to the next caller
+            record_no_verdict("asset", code, scope)
+            raise
 
 
 async def _count_call(provider: AssetSourceProvider, code: str, scope: str | None) -> None:
     """Count the call before it leaves, whatever it then meets (project 76, U2). A full limit refuses it and pauses the
-    provider like a source's «too many requests», so every existing path handles it unchanged."""
+    provider exactly until the window ends, on the limit's own key (U2b: never a source's 429 streak), and the caller
+    gets a ``RATE_LIMITED`` refusal that every existing path handles unchanged."""
     fingerprint = provider.settings.fingerprint
     left = limit_pause_left("asset", code, fingerprint)
     if left > 0:
@@ -279,11 +268,9 @@ async def _count_call(provider: AssetSourceProvider, code: str, scope: str | Non
         details = {"reason": "call_limit", "window": full.window, "limit": full.limit}
         raise AssetCallLimitError(f"Provider {code} reached its {full.window} call limit ({full.limit})", retry_after=paused or full.retry_after, scope=scope, details=details) from full
     except BaseException:
-        # Neither an answer nor a refusal (cancelled, say): the trials of expired pauses go to the next caller
-        release_limit_trial("asset", code, fingerprint)
+        # Neither an answer nor a refusal (cancelled, say): the trial of an expired source pause goes to the next caller
         record_no_verdict("asset", code, scope)
         raise
-    clear_limit_pause("asset", code, fingerprint)
 
 
 async def call_provider[ResultT](provider: AssetSourceProvider, fn: Callable[[], Awaitable[ResultT]], *, timeout: float, scope: str | None = None) -> ResultT:
@@ -302,8 +289,8 @@ async def call_provider[ResultT](provider: AssetSourceProvider, fn: Callable[[],
     - A provider that reaches an external service (``calls_external_service``) is counted before the call leaves, on
       its own row or on the group whose credits it spends (``call_owner``, ``services/platform/call_counter.py``),
       even when the call then fails. A full instance limit refuses it without calling: ``AssetCallLimitError`` (a
-      ``RATE_LIMITED`` refusal, ``details`` naming the window and the limit), and the provider is paused like after a
-      source's «too many requests».
+      ``RATE_LIMITED`` refusal, ``details`` naming the window and the limit), and the provider is paused exactly until
+      the window ends, on the limit's own key (U2b).
     - The provider's secrets are in flight for the call: masked in every line logged meanwhile, here and in the
       provider's thread, and in the exception the call raises, its chain included (``utils/runtime/secret_masking.py``).
       An error that still shows a secret after masking (its text built by a ``__str__`` of its own) is replaced by an
