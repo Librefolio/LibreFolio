@@ -331,15 +331,17 @@ async def read_catalogue(session: AsyncSession, user: User, *, family: str | Non
         read = [group.name for group in plugin.groups]
         # A group the managed profile hides whole (every field locked) is not named either: no trace, no dead link (N2)
         names = [name for name in read if not (managed and all(state.locked for state in group_states[name]))]
-        if fields or names:
+        usage = _usage(plugin.family, plugin.code, states, counts[(plugin.family, plugin.code)], now, managed) if counts is not None and (plugin.family, plugin.code) in counts else None
+        # U4b: an owner whose every field the managed profile hides keeps its entry, read-only, for its usage block
+        if fields or names or usage is not None:
             # Judged on every field, the hidden ones and the groups' too: a yes or no, which names none of them (decision N2).
             configured = not qualified_missing(missing_field_keys(states), {name: missing_field_keys(group_states[name]) for name in read})
-            usage = _usage(plugin.family, plugin.code, states, counts[(plugin.family, plugin.code)], now, managed) if counts is not None and (plugin.family, plugin.code) in counts else None
             entries.append(PluginSettingsPluginRead(family=plugin.family, plugin_code=plugin.code, plugin_name=plugin.name, icon_url=plugin.icon_url, configured=configured, fields=fields, groups=names, call_usage=usage))
     for group in groups:
         states = group_states[group.name]
         fields = [_field_read(state, is_admin=user.is_superuser) for state in states if not (managed and state.locked)]
-        if fields:
+        group_usage = _usage(GROUP_FAMILY, group.name, states, counts[(GROUP_FAMILY, group.name)], now, managed) if counts is not None and (GROUP_FAMILY, group.name) in counts else None
+        if fields or group_usage is not None:
             entries.append(
                 PluginSettingsPluginRead(
                     family=GROUP_FAMILY,
@@ -350,7 +352,7 @@ async def read_catalogue(session: AsyncSession, user: User, *, family: str | Non
                     configured=not missing_field_keys(states),
                     fields=fields,
                     used_by=_group_users(group),
-                    call_usage=_usage(GROUP_FAMILY, group.name, states, counts[(GROUP_FAMILY, group.name)], now, managed) if counts is not None and (GROUP_FAMILY, group.name) in counts else None,
+                    call_usage=group_usage,
                 )
             )
     return PluginSettingsCatalogResponse(plugins=entries)

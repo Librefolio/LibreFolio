@@ -203,6 +203,16 @@ export const CALL_LIMIT_KEYS = ['call_limit_minute', 'call_limit_hour', 'call_li
 
 const CALL_LIMIT_KEY_SET: ReadonlySet<string> = new Set(CALL_LIMIT_KEYS);
 
+/**
+ * An entry that the server lists only for its usage block (U4b: in the managed profile, a provider whose every limit the
+ * hoster locks): no field, no group, a `call_usage`. Left out until U5 shows the block.
+ */
+function usageOnly(raw: unknown): boolean {
+    const entry = record(raw);
+    const empty = (value: unknown) => !Array.isArray(value) || value.length === 0;
+    return empty(entry.fields) && empty(entry.groups) && entry.call_usage != null;
+}
+
 /** `entry` without the call-limit fields; null when they were its only content (no field left, no group). */
 function withoutCallLimits(entry: PluginSettingsEntry): PluginSettingsEntry | null {
     const fields = entry.fields.filter((field) => !CALL_LIMIT_KEY_SET.has(field.key));
@@ -220,6 +230,7 @@ export async function fetchPluginSettings(filter: {family?: SettingsFamily; plug
     if (filter.pluginCode) queries.plugin_code = filter.pluginCode;
     const answer = await zodiosApi.get_plugin_settings_api_v1_settings_plugins_get({queries});
     return (answer.plugins ?? [])
+        .filter((raw) => !usageOnly(raw))
         .map(entryOf)
         .map(withoutCallLimits)
         .filter((entry): entry is PluginSettingsEntry => entry !== null);
