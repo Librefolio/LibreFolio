@@ -51,6 +51,8 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Un fournisseur peut garder ses prix en temps réel valables plus de deux minutes (pour les sources avec un quota d'appels) ; la valeur par défaut reste deux minutes.
 - Risque, corrélation : le seuil de couverture minimale juge désormais quelle part de la période couvre la fenêtre commune des actifs, son avertissement peut donc se déclencher ; l'infobulle de la carte de chaleur montre cette couverture réelle au lieu de toujours 100 %.
 - Risque : la pire baisse et la baisse actuelle en argent disent désormais qu'il s'agit de la même baisse mesurée sur la valeur d'aujourd'hui.
+- Les analyses de risque publient de nouvelles mesures à côté des existantes : le meilleur jour et les 30 meilleurs jours, la plus forte hausse, la part de jours positifs, les gains face aux pertes (Omega), la semi-déviation, la profondeur moyenne sous le sommet, les jours extrêmes, le jour moyen de hausse et de baisse et la plus longue série positive. La VaR, la CVaR et chaque chiffre déjà publié ne bougent pas. Une série qui n'a jamais gagné, ou jamais perdu, n'est plus marquée partielle pour son meilleur ou pire jour manquant.
+- Le nombre effectif de positions de l'onglet Risque se mesure sur les seules positions qui ont un prix : les liquidités et les positions sans prix ne le gonflent plus, il ne dépasse donc jamais les positions mesurées.
 
 ### 🐛 Corrections
 
