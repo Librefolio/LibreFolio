@@ -581,3 +581,32 @@ describe('L3RiskAdjusted — on one asset, the subject row is the asset', () => 
         expect(normalize(subject.textContent)).not.toBe(normalize(t('risk.levels.l3.scatter.portfolio')));
     });
 });
+
+// RN-17 (c): on one asset the level speaks of the asset — the title without «asset by asset» and without the perimeter
+// (one asset weighs 1: «on the current composition» says nothing). The portfolio's line note («runs through the
+// portfolio») never reaches one asset: with no benchmark the asset is one dot, and one dot draws no chart and no notes;
+// with a benchmark the line runs through the benchmark.
+describe('L3RiskAdjusted — on one asset, in the asset’s words', () => {
+    it('titles the table «risk against return» with no perimeter, and with no benchmark draws no chart, so no line note', () => {
+        mount({historicalResults: [HISTORICAL_KPI], currentResults: [ASSET_RISK_RETURN, CURRENT_KPI], comparisonResult: null, subjectLabel: 'Invented ETF', oneAsset: true} as Props);
+
+        expect(normalize(screen.getByTestId('risk-l3-title').textContent)).toBe(normalize(t('risk.levels.l3.scatter.titleOneAsset')));
+        expect(screen.queryByTestId('risk-l3-risk-return'), 'one dot drawn as a chart').toBeNull();
+        expect(screen.queryByTestId('risk-l3-scatter-line')).toBeNull();
+    });
+
+    it('with a benchmark, runs the line through the benchmark, never «through the portfolio»', () => {
+        mount({historicalResults: [HISTORICAL_KPI], currentResults: [ASSET_RISK_RETURN, CURRENT_KPI], comparisonResult: COMPARISON_UNHELD, benchmarkName: BENCHMARK_NAME, subjectLabel: 'Invented ETF', oneAsset: true} as Props);
+
+        const line = screen.getByTestId('risk-l3-scatter-line');
+        expect(line).toHaveAttribute('data-anchor', 'benchmark');
+        expect(normalize(line.textContent)).toBe(normalize(t('risk.levels.l3.scatter.notes.lineBenchmark')));
+    });
+
+    it('keeps the portfolio’s words on a portfolio: the title with its perimeter, the line through the portfolio', () => {
+        mount({historicalResults: [HISTORICAL_KPI], currentResults: [ASSET_RISK_RETURN, CURRENT_KPI], comparisonResult: null} as Props);
+
+        expect(normalize(screen.getByTestId('risk-l3-title').textContent)).toBe(normalize(`${t('risk.levels.l3.scatter.title')} · ${t('risk.levels.l3.perimeter.current_composition')}`));
+        expect(normalize(screen.getByTestId('risk-l3-scatter-line').textContent)).toBe(normalize(t('risk.levels.l3.scatter.notes.line')));
+    });
+});

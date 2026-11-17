@@ -65,8 +65,9 @@
     let wave = $derived(selectKpiWave(currentResults, historicalResults));
     let figures = $derived(buildRiskAdjusted(wave.results, comparisonResult));
     let perimeterLabel = $derived(wave.perimeter === null ? '' : $t(`risk.levels.l3.perimeter.${wave.perimeter}`));
-    // The perimeter the cards used to state, now said once, beside the table's title.
-    let title = $derived(perimeterLabel ? `${$t('risk.levels.l3.scatter.title')} · ${perimeterLabel}` : $t('risk.levels.l3.scatter.title'));
+    // The perimeter the cards used to state, now said once, beside the table's title. On one asset neither «asset by
+    // asset» nor the perimeter says anything (one asset weighs 1 in either): the title is the measure alone (RN-17 c).
+    let title = $derived(oneAsset ? $t('risk.levels.l3.scatter.titleOneAsset') : perimeterLabel ? `${$t('risk.levels.l3.scatter.title')} · ${perimeterLabel}` : $t('risk.levels.l3.scatter.title'));
 
     let riskReturnResult = $derived(resultByCode(currentResults, 'asset_risk_return'));
     let allPoints = $derived(
