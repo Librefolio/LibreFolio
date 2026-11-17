@@ -7,7 +7,7 @@ Test Suite: reading and forgetting the asset profile through the routes (project
    item, in request order, under an ``as_of`` (aware UTC, the server's time before the read).
    - ``voices``: per voice, the steps ``{date, through, value, source, update_id}`` in ``date_range`` (two days, one day
      with ``end`` absent, or ``start: "min"``); ``keys`` restricts, absent is every voice with rows; an asset with no
-     rows, or that does not exist, answers ``voices: {}``.
+     rows answers ``voices: {}``; one that does not exist answers ``error`` «Asset not found» in its item (D1b).
    - ``changes``: absent → ``null``; ``{}`` → the «Ultime variazioni» panel (a volatile voice shows only its ``user``
      rows and the first source row after one; the others every row); ``{"key": k}`` → every row of ``k``, volatile too.
      Newest first in (``read_on``, ``id``) order, each with ``previous``/``has_previous``; never filtered by
@@ -30,7 +30,7 @@ missing), and every route answer is asserted on its status before its body.
 
 Red until D1: the three routes do not exist (404/405), and each test fails on that status assertion.
 
-Not pinned (open in the contract): ``changes`` for an asset that does not exist; which item's refusal is answered when
+Not pinned (open in the contract): which item's refusal is answered when
 several items are refused; 404 against 409 when one item has both; ``date_range`` absent.
 """
 
@@ -364,20 +364,27 @@ async def test_without_keys_every_voice_with_rows_and_keys_restricts(test_server
 
 
 @pytest.mark.asyncio
-async def test_results_follow_the_request_order_and_a_missing_asset_answers_no_voice(test_server):
+async def test_results_follow_the_request_order_and_a_missing_asset_answers_an_error_in_its_item(test_server):
+    """D1b (PROF): an asset that does not exist answers in its own item with ``error`` «Asset not found», as the price
+    read does, and the other items are read; an asset that exists without rows answers ``voices: {}`` with no error, so
+    «deleted by another user» and «no profile yet» are told apart."""
     async with httpx.AsyncClient() as client:
         await _login(client)
         asset_id = await _create(client, "ORDER")
+        empty_id = await _create(client, "ORDER_EMPTY")
         missing = 2_000_000_000 + int(uuid.uuid4().int % 1_000_000)
         try:
             await _seed_ter(asset_id)
 
-            body = await _query(client, [_ask(missing), _ask(asset_id)])
+            body = await _query(client, [_ask(missing) | {"changes": {}}, _ask(asset_id), _ask(empty_id)])
 
-            assert body["items"][0]["voices"] == {}, f"an asset that does not exist: no voice, not an error: {body['items'][0]}"
-            assert set(body["items"][1]["voices"]) == {"ter"}, body["items"][1]
+            gone, read, empty = body["items"]
+            assert gone["asset_id"] == missing and gone["error"] == "Asset not found", f"an asset that does not exist: an error in its item: {gone}"
+            assert gone["voices"] == {} and gone["changes"] is None, gone
+            assert read["asset_id"] == asset_id and read["error"] is None and set(read["voices"]) == {"ter"}, read
+            assert empty["asset_id"] == empty_id and empty["error"] is None and empty["voices"] == {}, f"an asset with no rows: no voice, no error: {empty}"
         finally:
-            await _delete_assets(client, [asset_id])
+            await _delete_assets(client, [asset_id, empty_id])
 
 
 @pytest.mark.asyncio
