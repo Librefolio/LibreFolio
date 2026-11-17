@@ -164,6 +164,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/assets/currencyChangeErrors.test.ts",
             "src/lib/features/assets/assetPatchResult.test.ts",
             "src/lib/features/assets/profile/profileStore.test.ts",
+            "src/lib/features/assets/profile/profileEditState.test.ts",
             "src/lib/features/assets/bulk/assetBulkEdit.test.ts",
             "src/lib/features/assets/bulk/assetBulkVerify.test.ts",
             "src/lib/features/assets/assetPayload.test.ts",
