@@ -491,6 +491,8 @@
       "about": "Qué versión de LibreFolio funciona aquí, qué ha cambiado y su licencia.",
       "users": "Las cuentas de esta instancia: quién puede entrar, quién es administrador y los enlaces de invitación.",
       "security": "Cómo esta instancia protege los accesos y las conexiones: las comprobaciones que hace y qué corregir cuando una falla."
-    }
+    },
+    "pluginSystemEnricher": "Enriquecedores",
+    "enrichers": "Enriquecedores"
   }
 }
