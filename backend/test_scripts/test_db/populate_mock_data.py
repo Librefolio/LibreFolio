@@ -72,10 +72,11 @@ from backend.app.db import (
     UserRole,
     UserSettings,
 )
-from backend.app.db.models import GlobalSetting, UserOnboardingStepProgress
+from backend.app.db.models import AssetProfileUpdate, GlobalSetting, UserOnboardingStepProgress
 from backend.app.schemas.settings import GLOBAL_SETTINGS_DEFAULTS
 from backend.app.services.accounts.auth_service import hash_password
 from backend.app.services.accounts.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS
+from backend.app.services.assets.profile.catalogue import ProfileValueError, normalize_value
 from backend.app.services.brim.storage import save_uploaded_file
 from backend.app.services.files.static_uploads import get_uploads_dir, save_upload, seed_default_avatars
 from backend.app.services.fx_providers.manual.plugin import MANUAL_PRIORITY
@@ -759,6 +760,34 @@ def populate_broker_user_access(session: Session):  # noqa: C901 — sequential 
     session.commit()
 
 
+#: The parts of ``classification_params`` and the profile voices migration 006 copies them to (plan 68, A4).
+_LEGACY_PROFILE_PARTS = (("short_description", "description"), ("geographic_area", "geography"), ("sector_area", "sector"))
+
+
+def _legacy_profile_rows(asset: Asset) -> list[AssetProfileUpdate]:
+    """The ``legacy`` profile rows of an asset's ``classification_params``, as migration 006 writes them on an upgrade.
+
+    Mirrors migration 006 (plan 68, A4): a freshly populated database is created at the head, so the copy never ran
+    on these rows, and since D2 the portfolio engine reads countries and sectors from the profile only. A value the
+    catalogue refuses is skipped with a line, as the migration does.
+    """
+    params = json.loads(asset.classification_params, parse_float=Decimal) if asset.classification_params else {}
+    rows = []
+    for part, voice in _LEGACY_PROFILE_PARTS:
+        raw = params.get(part)
+        if raw is None:
+            continue
+        value = raw if part == "short_description" else {key: str(weight) for key, weight in raw.get("distribution", {}).items()}
+        try:
+            stored = normalize_value(voice, value)
+        except ProfileValueError as error:
+            print(f"  ⚠️  {asset.display_name}: {voice} not copied to the profile ({error.reason})")
+            continue
+        if stored is not None:
+            rows.append(AssetProfileUpdate(asset_id=asset.id, key=voice, value=json.dumps(stored, ensure_ascii=False, separators=(",", ":")), source="legacy", read_on=date.today()))
+    return rows
+
+
 def populate_assets(session: Session):
     """Create asset records."""
     print("\n📈 Creating Assets...")
@@ -1049,6 +1078,13 @@ def populate_assets(session: Session):
         print(f"  ✅ {asset.display_name} ({asset.currency})")
 
     session.commit()
+
+    # Their countries, sectors and description in the profile, as migration 006 copies them (plan 68, A4 and D2)
+    created_assets = session.exec(select(Asset).where(Asset.classification_params.is_not(None))).all()
+    profile_rows = [row for asset in created_assets for row in _legacy_profile_rows(asset)]
+    session.add_all(profile_rows)
+    session.commit()
+    print(f"  ✅ {len(profile_rows)} legacy profile rows")
 
 
 def populate_asset_provider_assignments(session: Session):

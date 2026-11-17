@@ -45,8 +45,9 @@ setup_test_database()
 
 # populate_mock_data configures the test database again when imported and builds a lazy NullPool
 # engine: the import opens no connection. Nothing below hands it a path outside tmp_path.
-from backend.app.db.models import Broker
+from backend.app.db.models import Asset, Broker
 from backend.app.schemas.assets.metadata import FAClassificationParams
+from backend.app.services.assets.profile.catalogue import normalize_value
 from backend.test_scripts.test_db import populate_mock_data
 from backend.test_scripts.test_db.populate_mock_data import reset_broker_reports
 
@@ -566,6 +567,28 @@ def test_every_mock_asset_classification_validates_against_the_model():
             refused[ast.literal_eval(entry["display_name"])] = str(exc).splitlines()[0]
 
     assert not refused, f"mock assets whose classification_params the model refuses: {refused}"
+
+
+def test_every_mock_asset_classification_is_mirrored_into_the_profile():
+    """Plan 68, D2: since the portfolio engine reads countries and sectors from the profile only, a populated database
+    holds the ``legacy`` profile rows migration 006 would copy from ``classification_params``: one per part present
+    (description, geography, sector), in the catalogue's stored form. Without them every mock allocation is Unknown."""
+    mirror = getattr(populate_mock_data, "_legacy_profile_rows", None)
+    assert mirror is not None, "populate_mock_data has no _legacy_profile_rows: the mock classifications never reach the profile"
+    mocks = _mock_classification_params()
+    assert len(mocks) >= 10, "the mock assets were not found: update this test"
+    parts = {"short_description": "description", "geographic_area": "geography", "sector_area": "sector"}
+    for name, params in mocks.items():
+        rows = mirror(Asset(id=7, display_name=name, currency="EUR", classification_params=json.dumps(params)))
+        expected = {}
+        for part, voice in parts.items():
+            if params.get(part) is None:
+                continue
+            raw = params[part] if part == "short_description" else {key: str(weight) for key, weight in params[part]["distribution"].items()}
+            expected[voice] = normalize_value(voice, raw)
+        got = {row.key: json.loads(row.value) for row in rows}
+        assert got == expected, f"{name}: profile rows {got} != {expected}"
+        assert all(row.asset_id == 7 and row.source == "legacy" and row.read_on is not None for row in rows), f"{name}: {rows}"
 
 
 def test_every_mock_broker_key_is_a_field_of_the_broker_model():
