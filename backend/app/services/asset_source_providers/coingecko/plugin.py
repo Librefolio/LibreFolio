@@ -14,7 +14,8 @@ plan's API root, the errors translated, the key never in a message.
 request (``supports_bulk_current``); the value is read as a decimal from the response's text, never through a float.
 The history is ``/coins/{id}/market_chart/range`` with ``interval=daily``: CoinGecko's point at 00:00 UTC of day D is
 the close of day D−1, and a point at another time (a «now» point) is dropped. The Demo plan gives the last 365 days only
-(10012 beyond): a start before today − 364 is moved there, logged, so the request never meets the refusal.
+(10012 beyond): a start before today − 364 is moved there, logged, so the request never meets the refusal, and the
+history says that first day (``history_starts``, P2b): the refresh tells the user from which day to import by hand.
 
 Search and metadata are lot P3.
 """
@@ -286,13 +287,16 @@ class CoinGeckoProvider(AssetSourceProvider):
         currency = self._vs_currency(provider_params)
         plan = self.settings.group(COINGECKO_GROUP_NAME).get("plan") or PLAN_DEMO
         start = COINGECKO_FIRST_DAY if start_date == "min" else start_date
+        # P2b: on the Demo plan the source has no price before its window's first day, and says so
+        first_day: date | None = None
         if plan == PLAN_DEMO:
             floor = _utc_today() - timedelta(days=DEMO_HISTORY_DAYS - 1)
+            first_day = floor
             if start < floor:
                 logger.info("CoinGecko's Demo plan gives one year of history: the start moves to its first day", identifier=coin, asked=str(start), first_day=str(floor))
                 start = floor
         if start > end_date:
-            return FAHistoricalData(prices=[], events=[], currency=currency, source=self.provider_name)
+            return FAHistoricalData(prices=[], events=[], currency=currency, source=self.provider_name, history_starts=first_day)
         raw = self._call(
             lambda client: client.coins.market_chart.with_raw_response.get_range(
                 coin,
@@ -315,4 +319,4 @@ class CoinGeckoProvider(AssetSourceProvider):
             day = datetime.fromtimestamp(stamp // 1000, UTC).date() - timedelta(days=1)
             if start <= day <= end_date:
                 points[day] = FAPricePoint(date=day, close=entry[1], currency=currency)
-        return FAHistoricalData(prices=[points[day] for day in sorted(points)], events=[], currency=currency, source=self.provider_name)
+        return FAHistoricalData(prices=[points[day] for day in sorted(points)], events=[], currency=currency, source=self.provider_name, history_starts=first_day)
