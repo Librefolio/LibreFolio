@@ -20,7 +20,7 @@ from backend.app.schemas.assets.enrichers import FAEnricherBinding, FAEnricherRe
 from backend.app.services.enrichers.base import EnricherBinding, EnricherPlugin
 from backend.app.services.enrichers.bindings import default_order, enrichers_catalogue, installed_enrichers
 from backend.app.services.enrichers.recognize import IdentifierLearned, Recognized, RecognizeStatus, recognize_cascade
-from backend.app.services.enrichers.registry import EnricherRegistry
+from backend.app.services.enrichers.usable import NOT_CONFIGURED, bind_settings, configured_enricher
 
 logger = get_logger(__name__)
 
@@ -33,11 +33,14 @@ def list_enrichers(_current_user: User = Depends(get_current_user)) -> FAEnriche
     return enrichers_catalogue()
 
 
-def _enricher(code: str) -> EnricherPlugin:
-    """The enricher of ``code``, or 404 (a test-only one outside test mode is not served)."""
-    plugin = EnricherRegistry.get_plugin_instance(code) if EnricherRegistry.get_plugin(code) is not None else None
+async def _enricher(code: str) -> EnricherPlugin:
+    """The enricher of ``code`` with its settings bound: 404 when it is not served (not installed, test-only outside
+    test mode, turned off by ``LIBREFOLIO_ENRICHERS_ENABLED``), 400 ``NOT_CONFIGURED`` when a required setting is empty."""
+    plugin, missing = await configured_enricher(code)
     if plugin is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No enricher '{code}'")
+    if missing:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"error_code": NOT_CONFIGURED, "missing": list(missing)})
     return plugin
 
 
@@ -61,10 +64,14 @@ def _sse(payload: dict) -> str:
 
 async def _recognize_events(request: FAEnricherRecognizeRequest) -> AsyncIterator[str]:
     """The cascade as Server-Sent Events: ``enricher_result``, ``identifier_learned``, and last ``done``."""
-    plugins = installed_enrichers()
+    installed = installed_enrichers()
     if request.codes is not None:
         wanted = set(request.codes)
-        plugins = [plugin for plugin in plugins if plugin.code in wanted]
+        installed = [plugin for plugin in installed if plugin.code in wanted]
+    plugins: list[EnricherPlugin] = []
+    for plugin in installed:
+        if not await bind_settings(plugin):  # one with a required setting left empty is not asked
+            plugins.append(plugin)
     found_order: list[str] = []
     known = dict(request.identifiers)
     async for event in recognize_cascade(request.asset_type, request.identifiers, plugins=plugins):
@@ -104,7 +111,7 @@ async def search_enricher(code: str, q: str = Query(..., min_length=1, max_lengt
     """One enricher's search by a word (the E7 window's «search»); 400 for an enricher that does not search; counted on the
     probe's per-user limit (plan C0)."""
     enforce_probe_limit(current_user.id)
-    plugin = _enricher(code)
+    plugin = await _enricher(code)
     if not plugin.supports_search:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"The enricher '{code}' does not search")
     results = await asyncio.to_thread(plugin.search, q)
@@ -116,7 +123,7 @@ async def test_enricher(code: str, request: FAEnricherTestRequest, current_user:
     """«Recognize» one binding on one enricher (the E7 window's «test»): writes nothing; counted on the probe's per-user
     limit (plan C0)."""
     enforce_probe_limit(current_user.id)
-    plugin = _enricher(code)
+    plugin = await _enricher(code)
     extra = {key: value for key, value in request.binding.model_dump().items() if key not in ("identifier_type", "identifier")}
     binding = EnricherBinding(identifier_type=request.binding.identifier_type, identifier=request.binding.identifier, params=extra)
     try:
