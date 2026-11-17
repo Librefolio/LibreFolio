@@ -573,6 +573,54 @@ def test_a_cash_limit_missed_within_its_postings_reserves_is_a_note_beyond_them_
         cash_limit_overshoots(scenario, evaluate_exact_candidate(scenario, view, _candidate(view, two_of_b)))
 
 
+def _y_plan_scenario(minimum, maximum):
+    """The consultant's case Y on a scenario: 29.99 € in the cell, B and C at 9.995 € in whole units, the band given."""
+    return cases.scenario(
+        "y-band",
+        holdings={"asset:b": R(480), "asset:c": R(480)},
+        cash=R(2999, 100),
+        weights={"asset:b": cases.HALF, "asset:c": cases.HALF},
+        prices={"asset:b": R(1999, 200), "asset:c": R(1999, 200)},
+        whole_units=frozenset({"asset:b", "asset:c"}),
+        cash_entries=(pac_models.ExactCashEntry(broker_id=cases.BROKER, currency="EUR", minimum=None if minimum is None else pac_models.ExactLimit(kind="amount", value=minimum), maximum=pac_models.ExactLimit(kind="amount", value=maximum), weight=R(0)),),
+    )
+
+
+@pytest.mark.parametrize("minimum", [pytest.param(None, id="maximum-0"), pytest.param(R(0), id="band-0-0")])
+def test_a_cash_limit_is_read_after_the_top_up_is_added(minimum) -> None:
+    """Lot ZB-c of project 67 (contract §6.2, specification §16.16 p. 3): case Y spends 29.99 € and posts 30.00 €, the cell
+    at −0.01 € and a top-up of 0.01 €. Once the cent is added the cell is at 0.00 €, inside a band 0–0 as inside a maximum
+    of 0: the plan carries the top-up alone, never also «limit exceeded». The same plan reads the same under both bands."""
+    from backend.app.services.pac_allocator import planner  # noqa: PLC0415
+
+    result = planner.plan_exact_scenario(_y_plan_scenario(minimum, R(0)), solver_time_budget_seconds=10).result
+    assert (result.result_state, result.proof.kind) == ("ready_incumbent", "not_proven")
+    assert [(row.broker_id, row.amount) for row in result.primary_solution.rounding_top_ups] == [(cases.BROKER, "0.01")]
+    assert not [issue for issue in result.issues if issue.code == _OVERSHOOT_CODE]
+    _roundtrip(result)
+
+
+def test_a_cash_limit_still_missed_after_the_top_up_keeps_its_note_with_what_is_still_missing() -> None:
+    """The plan of case Y replayed against a band 0.005–0.005 €: the cell posts −0.01 €, the top-up adds 0.01 €, and the cell
+    is still 0.005 € under its minimum. The note stays, with what is still missing, in whole cents rounded up (0.01 €);
+    the allowance is unchanged: the two debits that round keep a cent each."""
+    from backend.app.services.pac_allocator.evaluation.evaluator import cash_limit_overshoots, rounding_top_ups  # noqa: PLC0415
+
+    plan = {cases.buy_decision("asset:b"): 1, cases.buy_decision("asset:c"): 1}
+    scenario = _y_plan_scenario(R(1, 200), R(1, 200))
+    view = build_exact_policy_view(scenario)
+    evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, plan))
+    top_ups = rounding_top_ups(scenario, evaluation, tolerated=frozenset({"ENTRY_VALUE_WITHIN_LIMITS"}))
+    assert [(row.broker_id, row.amount) for row in top_ups] == [(cases.BROKER, R(1, 100))], "PREMISE: a top-up of a cent"
+    (overshoot,) = cash_limit_overshoots(scenario, evaluation, top_ups)
+    assert (overshoot.side, overshoot.amount) == ("minimum", R(1, 100))
+
+    scenario = _y_plan_scenario(R(0), R(0))
+    view = build_exact_policy_view(scenario)
+    evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, plan))
+    assert cash_limit_overshoots(scenario, evaluation, rounding_top_ups(scenario, evaluation, tolerated=frozenset({"ENTRY_VALUE_WITHIN_LIMITS"}))) == ()
+
+
 def test_a_plan_of_the_wide_model_that_misses_a_cash_limit_by_its_rounding_is_published_with_the_note(monkeypatch) -> None:
     """End to end: 200 € in the cell, held to exactly 175 €; B at 9.995 € in whole units, A by the euro capped at 4 €. No
     plan posts 175.00 € (the grid below says so); two units of B post 175.01 €, their exact cash 175.01 € inside the wide
@@ -689,10 +737,10 @@ def test_a_plan_of_the_wide_model_the_replay_refuses_is_no_plan_found_never_a_fa
     compiled = _spy_compile(monkeypatch)
     real_overshoots = planner.cash_limit_overshoots
 
-    def refuse_on_the_wide_path(scenario, evaluation):
+    def refuse_on_the_wide_path(scenario, evaluation, top_ups=()):
         if compiled and compiled[-1]:
             raise ExactReplayRejectedError("refused for the test")
-        return real_overshoots(scenario, evaluation)
+        return real_overshoots(scenario, evaluation, top_ups)
 
     monkeypatch.setattr(planner, "cash_limit_overshoots", refuse_on_the_wide_path)
     cash, price, _, _ = _ZERO_BAND_CASES["far, B rounds"]
@@ -731,8 +779,8 @@ def test_around_case_y_a_request_never_raises_and_its_result_roundtrips(prices: 
     """Lot ZB-b: around the consultant's case Y (one unit of two Assets, each order with its 5 € fee, spending the cash to
     the cent), with one or two Assets whose price rounds, the cash a cent below, at, or above the exact spend, and three
     cash bands. Whatever the engine answers (a plan with or without a top-up or a note, or «impossible»), it never raises,
-    and the result roundtrips strictly. Measured on 17/11: no case raises; at 29.99 € with a 0–0 band the plan carries both
-    a 0.01 € top-up and the note of a limit missed by 0.01 €."""
+    and the result roundtrips strictly. Measured on 17/11: no case raises. Since lot ZB-c the limit is read after the top-up,
+    so at 29.99 € with a 0–0 band the plan carries the 0.01 € top-up alone, as with a maximum of 0."""
     from backend.app.schemas.pac_allocator.preview import REBALANCER_TOOL_OUTPUT_ADAPTER  # noqa: PLC0415
     from backend.app.services.pac_allocator import planner  # noqa: PLC0415
 

@@ -545,8 +545,10 @@ def _replay(cascade: _Cascade, candidate: CandidateActionVector) -> tuple[tuple[
         return None, False
     try:
         # The wide model's plans may miss a cash limit by their rounding, a note the planner publishes (lot ZB, §16.16).
-        tolerated = frozenset({"ENTRY_VALUE_WITHIN_LIMITS"}) if program.outer and cash_limit_overshoots(program.scenario, evaluation) else frozenset()
-        rounding_top_ups(program.scenario, evaluation, tolerated=tolerated)
+        if program.outer:
+            cash_limit_overshoots(program.scenario, evaluation, rounding_top_ups(program.scenario, evaluation, tolerated=frozenset({"ENTRY_VALUE_WITHIN_LIMITS"})))
+        else:
+            rounding_top_ups(program.scenario, evaluation)
     except ExactReplayRejectedError:
         publishable = False
     else:

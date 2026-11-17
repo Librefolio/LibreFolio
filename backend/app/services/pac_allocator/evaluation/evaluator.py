@@ -349,7 +349,7 @@ _ROUNDING_DEFICIT_CODES = frozenset(
 _LIMIT_REF_PREFIX = "constraint:entry_value_within_limits:"
 
 
-def cash_limit_overshoots(scenario: ExactPlannerScenario, evaluation: ExactEvaluation) -> tuple[ExactCashLimitOvershoot, ...]:
+def cash_limit_overshoots(scenario: ExactPlannerScenario, evaluation: ExactEvaluation, top_ups: tuple[ExactRoundingTopUp, ...] = ()) -> tuple[ExactCashLimitOvershoot, ...]:
     """Classify the limits a plan of the wide model misses (lot ZB of project 67, specification §16.16).
 
     The wide model holds the cell's exact cash inside the limit, its reserves on the side that admits; the replay rounds
@@ -357,6 +357,10 @@ def cash_limit_overshoots(scenario: ExactPlannerScenario, evaluation: ExactEvalu
     cell's postings that happened (``posting_reserve``, one minor unit where a posting can round). Such a miss is a note
     the plan carries, in the order of the limits. A miss beyond ``R`` (SCIP's tolerance on a row with no margin), or an
     Asset limit missed, raises ``ExactReplayRejectedError``. The messages name rules and cells, never amounts.
+
+    A limit is read on the cell's cash once its rounding ``top_ups`` are added (lot ZB-c, contract §6.2, specification
+    §16.16 p. 3): a cell the top-up brings back inside its band carries the top-up alone, one line for one cent; one still
+    outside keeps the note, with what is still missing. The allowance is unchanged.
 
     Only the wide model's plans reach it (the planner's path, and the cascade on that model): the prudent model's meet
     every limit to the cent.
@@ -371,6 +375,7 @@ def cash_limit_overshoots(scenario: ExactPlannerScenario, evaluation: ExactEvalu
         reserve = reserves.get(posting.posting_id, _EXACT_ZERO)
         if posting.family in RESERVED_FAMILIES and posting.exact_amount > _EXACT_ZERO and reserve > _EXACT_ZERO:
             kept.setdefault((posting.broker_id, posting.currency), []).append(reserve)
+    added = {(top_up.broker_id, top_up.currency): top_up.valuation_amount for top_up in top_ups}
     overshoots = []
     for constraint in evaluation.constraints:
         entry = entries.get(constraint.ref_id)
@@ -378,8 +383,12 @@ def cash_limit_overshoots(scenario: ExactPlannerScenario, evaluation: ExactEvalu
             continue
         if entry.kind != "cash":
             raise ExactReplayRejectedError("the exact replay rejected an Asset limit")
-        above = constraint.upper_bound is not None and constraint.value > constraint.upper_bound
-        miss = constraint.value - constraint.upper_bound if above else constraint.lower_bound - constraint.value if constraint.lower_bound is not None else _EXACT_ZERO
+        value = constraint.value + added.get((entry.broker_id, entry.currency), _EXACT_ZERO)
+        above = constraint.upper_bound is not None and value > constraint.upper_bound
+        below = constraint.lower_bound is not None and value < constraint.lower_bound
+        if not above and not below:
+            continue  # the top-up brings the cell back inside its band
+        miss = value - constraint.upper_bound if above else constraint.lower_bound - value
         cell_reserves = kept.get((entry.broker_id, entry.currency), [])
         allowance = sum(cell_reserves, _EXACT_ZERO)
         if miss <= _EXACT_ZERO or miss > to_valuation(index, allowance, entry.currency):
@@ -438,7 +447,8 @@ def rounding_top_ups(
     the bound once the top-ups are reachable cash. Anything else raises
     ``ExactReplayRejectedError``; the messages name rules and pools, never amounts.
 
-    ``tolerated`` rules were classified already (``cash_limit_overshoots``, lot ZB): they neither need nor refuse a top-up.
+    ``tolerated`` rules are classified apart (``cash_limit_overshoots``, lots ZB and ZB-c, after these top-ups): they
+    neither need nor refuse a top-up.
     """
     if evaluation.feasible:
         return ()

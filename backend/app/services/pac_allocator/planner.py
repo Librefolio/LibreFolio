@@ -265,7 +265,8 @@ def plan_exact_scenario(
     when it closes infeasible the solver runs once more, on the wide model, which holds every plan the replay could
     accept. Its «infeasible» is published as proven. Its plan is published, not proven, even when the rounding ends a cash
     cell beyond its limit by at most one minor unit per rounded posting, with a note on that cell
-    (``allocation.cash_limit_exceeded_by_rounding``). A plan the replay refuses beyond that is «no plan found», not proven.
+    (``allocation.cash_limit_exceeded_by_rounding``); the limit is read once the rounding top-ups are added (lot ZB-c), so
+    a cell the top-up brings back inside its band carries the top-up alone. A plan the replay refuses beyond that is «no plan found», not proven.
     """
     product = product or (_rebalancer_product(None) if scenario.product == "rebalancer" else _PAC)
     report_phase(progress, "model")
@@ -284,8 +285,9 @@ def plan_exact_scenario(
             evaluation = evaluate_exact_candidate(scenario, view, outer.candidate, checkpoint=checkpoint)
             try:
                 # A cash limit missed by the plan's rounding, at most one minor unit per rounded posting, is a note.
-                overshoots = cash_limit_overshoots(scenario, evaluation)
-                top_ups = rounding_top_ups(scenario, evaluation, tolerated=frozenset({"ENTRY_VALUE_WITHIN_LIMITS"}) if overshoots else frozenset())
+                # Lot ZB-c: the limits are read on the cash once the top-ups are added, so the top-ups come first.
+                top_ups = rounding_top_ups(scenario, evaluation, tolerated=frozenset({"ENTRY_VALUE_WITHIN_LIMITS"}))
+                overshoots = cash_limit_overshoots(scenario, evaluation, top_ups)
             except ExactReplayRejectedError:
                 # The wide model admits plans the replay refuses: this one is «no plan found», never a failure.
                 outer = _Search(candidate=None, solver=outer.solver, program=outer.program)
