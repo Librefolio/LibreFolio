@@ -1,17 +1,19 @@
 """
 The Borsa Italiana enricher (plan 68, lot C2): ``enricher_providers/borsa_italiana/plugin.py``, class
-``BorsaItalianaEnricher``. Bonds first, and the sector of a stock; funds are not in this lot.
+``BorsaItalianaEnricher``. Bonds first, the sector of a stock, and two voices of a mutual fund (lot C2b, section 8).
 
 What it promises, pinned here with no network:
 
-1. **Declarations**: ``code`` ``borsa_italiana``, ``name`` ``Borsa Italiana``, ``terms`` ``PRICE_SOURCE``, ISIN only, not
-   test-only. ``BOND`` at degree 10, ``STOCK`` at degree 20 (Yahoo, a later lot, leads stocks), every other type ``None``
-   (``CRYPTO`` among them: the recognize API test without ``codes`` relies on it). Twenty-one bond voices
-   (``description`` among them since C2d), never ``inception_date`` (correction C2-fix-1); ``sector`` and
-   ``legal_form`` for a stock. Binding params ``language`` (select ``en``/``it``, default ``en``, not required), ``mic``
-   and ``platform`` (strings, not required), each with an ``x-i18n-key`` under ``enrichers.borsa_italiana.`` (the texts are
-   the implementer's: only keys and defaults are pinned). ``test_cases`` for the external suite. No import from the price
-   plugin of the same name (``asset_source_providers/``).
+1. **Declarations**: ``code`` ``borsa_italiana``, ``name`` ``Borsa Italiana``, ``terms`` ``PRICE_SOURCE``, identifier
+   types ``ISIN`` and ``BI_FUND_CODE`` (the site's internal fund code, C2b), not test-only. ``BOND`` and ``FUND`` at
+   degree 10, ``STOCK`` at degree 20 (Yahoo, a later lot, leads stocks), every other type ``None`` (``CRYPTO`` among
+   them: the recognize API test without ``codes`` relies on it). Twenty-one bond voices (``description`` among them
+   since C2d), never ``inception_date`` (correction C2-fix-1); ``sector`` and ``legal_form`` for a stock;
+   ``fund_currency`` and ``inception_date`` for a fund. Binding params ``language`` (select ``en``/``it``, default
+   ``en``, not required), ``mic``, ``platform`` and ``codice_fondo`` (strings, not required), each with an
+   ``x-i18n-key`` under ``enrichers.borsa_italiana.`` (the texts are the implementer's: only keys and defaults are
+   pinned). ``test_cases`` for the external suite. No import from the price plugin of the same name
+   (``asset_source_providers/``).
 
 2. **Mapping** of the recorded sheets (``fixtures/borsa_italiana_enricher/``, the library's ``SchedaStrumento`` rebuilt
    with its real field types), every yielded value passed through the real catalogue (``normalize_value``) and compared
@@ -29,7 +31,10 @@ What it promises, pinned here with no network:
      A ``description`` composed from stable facts only (C2d, plan I19), in the binding's language: kind (from the
      issuer type), issuer (for a state the country's name from pycountry, EN or IT; else the page's issuer as written),
      coupon type (structured or inflation-linked only), frequency, then «; » and the maturity, month in words from a
-     fixed table, day without a leading zero; never a price, a yield, the annual coupon or the first day of trading.
+     fixed table, day without a leading zero (Italian: «il 1º», «l'8», «l'11», else «il D»; English: the plain day);
+     never a price, a yield, the annual coupon or the first day of trading. Composed only when at least one fact beyond
+     the kind is known (issuer, frequency, coupon type or maturity): otherwise no ``description`` at all, never «Bond.»
+     or «Obbligazione.» (a source with nothing to say must not replace the ``legacy`` text).
      The expected sentences are written out (``DESCRIPTIONS``), never built with pycountry or a month table here.
      Never ``inception_date`` (correction C2-fix-1): the page's ``data_primo_giorno`` is a venue's first day of
      trading, not a launch date (BTP 6 % 2031 shows 2008-11-03 on an ISIN of the late-90s series). The outstanding
@@ -64,13 +69,31 @@ What it promises, pinned here with no network:
    ``BOND`` for a bond, ``STOCK`` for a share, ``None`` otherwise, with the plugin's page of that binding.
 
 6. **page_url**: ``https://www.borsaitaliana.it/borsa/search/scheda.html?code=<ISIN>&lang=<language>``, then
-   ``&mic=…`` and ``&platform=…`` when the binding has them (the price plugin's form).
+   ``&mic=…`` and ``&platform=…`` when the binding has them (the price plugin's form). A fund binding (C2b):
+   ``https://www.borsaitaliana.it/borsa/fondi/dettaglio/<code>.html?lang=<language>``, the price plugin's rule.
+
+8. **Funds** (lot C2b). The site's search does not find a mutual fund by its ISIN (the recording's ``cerca_isin`` answers
+   ``[]``): a fund is reached by the internal code the price assignment keeps in ``provider_params.codice_fondo``
+   (``1FADB716664`` for Anima Dinamix). A ``BI_FUND_CODE`` binding, and an ``ISIN`` binding whose params carry a
+   non-empty ``codice_fondo``, read ``ottieni_dati_fondo(code, sessione=…)``, never ``ottieni_scheda``; any other ISIN
+   binding stays on the sheet. Voices: ``fund_currency`` ← ``valuta``; ``inception_date`` ← ``caratteristiche["Data di
+   partenza"]`` (dd/mm/yy or dd/mm/yyyy; two-digit years pivot on today's year), absent when missing or unparsable.
+   Never ``ter`` («Gestione» is the management fee), ``fund_size`` (no unit), ``fund_provider`` (not guessed),
+   ``description``, nor a risk grade or category (no catalogue voice). ``recognize``: the fund's name, its page, and
+   ``{"ISIN": …}`` when the page gives one (a strong identifier for the cascade, plan B4). ``StrumentoNonTrovato`` and
+   ``DatiNonDisponibili`` of a fund → not found; ``RateLimitRaggiunto`` → a refusal, as on the sheet path; the
+   session rules of the read are the sheet's. The recording ``mutual_fund.json`` rebuilds the library's ``DatiFondo``.
 
 No network, by construction: the plugin module is imported in a fixture, which replaces ``ottieni_scheda``, ``cerca`` and
 ``Sessione`` on it (``raising=True``: the names must be imported at module level into the plugin) with fakes. The fake
 library answers only the ``(isin, lingua)`` pairs a test offered and fails the test (``pytest.fail``, a
 ``BaseException`` no plugin ``except Exception`` swallows) for any other call; the fake session fails on any request.
-Assumed: the plugin keeps no sheet cache of its own (the read cache is the core's), so the call logs are exact.
+``ottieni_dati_fondo`` is replaced the same way but with ``raising=False`` (red before C2b: the plugin does not import
+it yet, and ``raising=True`` would fail every test of this file at its fixture);
+``test_the_fund_reader_is_imported_at_module_level`` pins the module-level import instead, and the library's own
+``ottieni_dati_fondo`` is replaced by a failing stub for every test, so a plugin reaching it another way still makes no
+request. Assumed: the plugin keeps no sheet or fund cache of its own (the read cache is the core's), so the call logs
+are exact.
 
 Kept in one section, «Language», the tests of the ``language`` binding param: its placement may move to an instance
 setting after the consultant's answer.
@@ -152,7 +175,16 @@ BOND_VOICES = frozenset(
     }
 )
 STOCK_VOICES = frozenset({"sector", "legal_form"})
-COVERED = {AssetType.BOND: 10, AssetType.STOCK: 20}
+#: C2b: exactly the two fund voices the fund page gives with a unit and a meaning.
+FUND_VOICES = frozenset({"fund_currency", "inception_date"})
+COVERED = {AssetType.BOND: 10, AssetType.STOCK: 20, AssetType.FUND: 10}
+#: C2b: the identifier type of the site's internal fund code, and the recorded fund (Anima Dinamix).
+FUND_CODE_TYPE = "BI_FUND_CODE"
+FUND_CODE = "1FADB716664"
+FUND_ISIN = "IT0005487001"
+FUND_RECORDING = "mutual_fund"
+#: The recorded fund in stored form: «EUR», «14/03/22».
+EXPECTED_FUND = {"fund_currency": "EUR", "inception_date": "2022-03-14"}
 #: The voices «as of» the reference price date.
 AS_OF_VOICES = frozenset({"yield_gross", "yield_net", "modified_duration", "accrued_interest"})
 #: The reference price date of every bond recording (2026-11-09).
@@ -175,11 +207,12 @@ DESCRIPTIONS: dict[tuple[str, str], str] = {
     ("btp_valore", "en"): "Government bond, issuer Italy, structured interest rate, paying quarterly; matures on 10 October 2028.",
     ("btp_valore", "it"): "Titolo di Stato, emittente Italia, a tasso strutturato, con cedola trimestrale; scade il 10 ottobre 2028.",
     ("btp_ord", "en"): "Government bond, issuer Italy, paying semiannually; matures on 1 May 2031.",
-    ("btp_ord", "it"): "Titolo di Stato, emittente Italia, con cedola semestrale; scade il 1 maggio 2031.",
+    # day 1 in Italian: «1º» (U+00BA, the masculine ordinal indicator)
+    ("btp_ord", "it"): "Titolo di Stato, emittente Italia, con cedola semestrale; scade il 1\u00ba maggio 2031.",
     ("btp_italia", "en"): "Government bond, issuer Italy, inflation-linked, paying semiannually; matures on 4 June 2032.",
     ("btp_italia", "it"): "Titolo di Stato, emittente Italia, indicizzato all'inflazione, con cedola semestrale; scade il 4 giugno 2032.",
     ("btp_2072", "en"): "Government bond, issuer Italy, paying semiannually; matures on 1 March 2072.",
-    ("btp_2072", "it"): "Titolo di Stato, emittente Italia, con cedola semestrale; scade il 1 marzo 2072.",
+    ("btp_2072", "it"): "Titolo di Stato, emittente Italia, con cedola semestrale; scade il 1\u00ba marzo 2072.",
     ("austria_2117", "en"): "Government bond, issuer Austria, paying annually; matures on 20 September 2117.",
     ("austria_2117", "it"): "Titolo di Stato, emittente Austria, con cedola annuale; scade il 20 settembre 2117.",
     # EuroTLX: the English page has no tipologia (kind «Bond») but «12 Months»; the Italian one the reverse
@@ -317,6 +350,8 @@ EXPECTED_OTHERS: dict[str, dict[str, Any]] = {
 
 _FIELDS = tuple(field.name for field in dataclasses.fields(bis.SchedaStrumento))
 _HINTS = typing.get_type_hints(bis.SchedaStrumento)
+_FUND_FIELDS = tuple(field.name for field in dataclasses.fields(bis.DatiFondo))
+_FUND_HINTS = typing.get_type_hints(bis.DatiFondo)
 
 
 def _recording(name: str) -> dict[str, Any]:
@@ -327,11 +362,15 @@ def _call(name: str, language: str) -> dict[str, Any]:
     return _recording(name)["calls"][f"scheda_{language}"]
 
 
-def _typed(field: str, value: Any) -> Any:
-    """A recorded JSON value as the library's field type: text → ``Decimal`` or ``date``, never a plain string."""
+def _typed(field: str, value: Any, hints: dict[str, Any] = _HINTS) -> Any:
+    """A recorded JSON value as the library's field type (of ``SchedaStrumento`` by default, or of the class whose
+    ``hints`` are given): text → ``Decimal`` or ``date``, never a plain string."""
     if value is None:
         return None
-    hint = _HINTS[field]
+    hint = hints[field]
+    if typing.get_origin(hint) is dict:
+        assert isinstance(value, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in value.items()), f"{field}: a dict of texts, got {value!r}"
+        return dict(value)
     kinds = set(typing.get_args(hint)) - {type(None)} or {hint}
     if Decimal in kinds:
         assert isinstance(value, str), f"{field}: a recorded decimal is text, got {value!r}"
@@ -356,6 +395,14 @@ def _sheet(name: str, language: str = "en") -> bis.SchedaStrumento:
     assert response is not None, f"barrier: {name} {language} recorded a sheet"
     assert set(response) == set(_FIELDS), f"{name}: the recording does not match the installed library: {sorted(set(response) ^ set(_FIELDS))}"
     return bis.SchedaStrumento(**{field: _typed(field, response[field]) for field in _FIELDS})
+
+
+def _fund(name: str = FUND_RECORDING) -> bis.DatiFondo:
+    """The recorded ``DatiFondo`` of ``name`` (``ottieni_dati_fondo``), with the library's real types."""
+    response = _recording(name)["calls"]["ottieni_dati_fondo"]["response"]
+    assert response is not None, f"barrier: {name} recorded a fund page"
+    assert set(response) == set(_FUND_FIELDS), f"{name}: the recording does not match the installed library: {sorted(set(response) ^ set(_FUND_FIELDS))}"
+    return bis.DatiFondo(**{field: _typed(field, response[field], _FUND_HINTS) for field in _FUND_FIELDS})
 
 
 def _recorded_error(name: str, language: str = "en") -> BaseException:
@@ -406,10 +453,30 @@ class FakeLibrary:
         self.answers: dict[str, list[bis.RisultatoRicerca]] = {}
         self.search_calls: list[tuple[str, str]] = []
         self.sessions: list[FakeSession] = []
+        self.funds: dict[str, Any] = {}
+        self.fund_calls: list[str] = []
+        self.fund_call_sessions: list[Any] = []
 
     def give(self, isin: str, answer: Any, language: str = "en") -> str:
         self.sheets[(isin, language)] = answer
         return isin
+
+    def give_fund(self, code: str, answer: Any) -> str:
+        """C2b: offer a fund page (a ``DatiFondo``, or an exception to raise) under its internal code."""
+        self.funds[code] = answer
+        return code
+
+    def ottieni_dati_fondo(self, codice: str, sessione: Any = None) -> bis.DatiFondo:
+        self.fund_calls.append(codice)
+        self.fund_call_sessions.append(sessione)
+        if isinstance(sessione, FakeSession) and sessione.closes:
+            pytest.fail(f"ottieni_dati_fondo called for {codice!r} on a session already closed")
+        if codice not in self.funds:
+            pytest.fail(f"ottieni_dati_fondo called for {codice!r}, which this test never offered (a call the contract forbids, or a fetch from borsaitaliana.it)")
+        answer = self.funds[codice]
+        if isinstance(answer, BaseException):
+            raise answer
+        return copy.deepcopy(answer)
 
     def ottieni_scheda(self, isin: str, mic: str | None = None, lingua: str = "en", sessione: Any = None, platform: str | None = None, url_diretto: str | None = None) -> bis.SchedaStrumento:
         self.calls.append((isin, mic, lingua, platform))
@@ -455,6 +522,15 @@ def bi(monkeypatch: pytest.MonkeyPatch) -> Iterator[ModuleType]:
     monkeypatch.setattr(module, "ottieni_scheda", lambda *a, **k: pytest.fail(f"unpatched ottieni_scheda{a}"), raising=True)
     monkeypatch.setattr(module, "cerca", lambda *a, **k: pytest.fail(f"unpatched cerca{a}"), raising=True)
     monkeypatch.setattr(module, "Sessione", FakeSession, raising=True)
+
+    # C2b: raising=False, the plugin does not import it before C2b (test_the_fund_reader_is_imported_at_module_level
+    # pins the import); the library's own entry points fail too, whichever way the plugin reaches them
+    def unpatched_fund(*a: Any, **k: Any) -> Any:
+        pytest.fail(f"unpatched ottieni_dati_fondo{a}")
+
+    monkeypatch.setattr(module, "ottieni_dati_fondo", unpatched_fund, raising=False)
+    monkeypatch.setattr(bis, "ottieni_dati_fondo", unpatched_fund, raising=True)
+    monkeypatch.setattr(bis.fondi, "ottieni_dati_fondo", unpatched_fund, raising=True)
     yield module
 
 
@@ -464,6 +540,7 @@ def library(bi: ModuleType, monkeypatch: pytest.MonkeyPatch) -> FakeLibrary:
     monkeypatch.setattr(bi, "ottieni_scheda", fake.ottieni_scheda, raising=True)
     monkeypatch.setattr(bi, "cerca", fake.cerca, raising=True)
     monkeypatch.setattr(bi, "Sessione", fake.new_session, raising=True)
+    monkeypatch.setattr(bi, "ottieni_dati_fondo", fake.ottieni_dati_fondo, raising=False)
     return fake
 
 
@@ -585,7 +662,7 @@ def test_declarations(bi):
     assert cls.code == CODE
     assert cls.name == "Borsa Italiana"
     assert cls.terms is EnricherTerms.PRICE_SOURCE
-    assert cls.accepted_identifier_types == ("ISIN",)
+    assert cls.accepted_identifier_types == ("ISIN", FUND_CODE_TYPE), "C2b: the ISIN, and the site's internal fund code"
     assert not getattr(cls, "test_only", False), "a real enricher, served outside test mode"
     assert cls().supports_search is True
 
@@ -597,13 +674,15 @@ def test_coverage_and_voices(bi):
         expected = COVERED.get(asset_type)
         assert cls.default_priority[asset_type] == expected, f"{asset_type.value}: degree {cls.default_priority[asset_type]!r}, expected {expected!r}"
     assert cls.default_priority[AssetType.CRYPTO] is None, "CRYPTO stays uncovered (the recognize API test without codes relies on it)"
-    assert set(cls.voices) == set(COVERED), f"voices for BOND and STOCK only: {sorted(t.value for t in cls.voices)}"
+    assert set(cls.voices) == set(COVERED), f"voices for BOND, STOCK and FUND only: {sorted(t.value for t in cls.voices)}"
     assert "inception_date" not in cls.voices[AssetType.BOND], "correction C2-fix-1: the first day of trading is no launch date"
     assert cls.voices[AssetType.BOND] == BOND_VOICES, f"bond voices: {sorted(cls.voices[AssetType.BOND] ^ BOND_VOICES)}"
     assert cls.voices[AssetType.STOCK] == STOCK_VOICES
     assert BOND_VOICES <= set(CATALOGUE) and len(BOND_VOICES) == 21, "barrier: 21 catalogue voices"
     assert "description" in cls.voices[AssetType.BOND], "C2d: the composed description is a bond voice"
     assert "description" not in cls.voices[AssetType.STOCK], "C2d: a share gets no description"
+    assert cls.voices[AssetType.FUND] == FUND_VOICES, f"C2b: exactly the fund currency and the inception date: {sorted(cls.voices[AssetType.FUND])}"
+    assert FUND_VOICES <= set(CATALOGUE), "barrier: catalogue voices"
 
 
 def test_registered_and_served_in_production(bi, monkeypatch):
@@ -620,9 +699,8 @@ def test_registered_and_served_in_production(bi, monkeypatch):
 
 
 def test_binding_params_mic_and_platform(plugin):
-    """The same keys as the price plugin's binding (``codice_fondo`` aside: funds are not in this lot); only keys,
-    types and defaults are pinned, the texts are the i18n fragment's. (``language`` and the whole key set: section
-    «Language».)"""
+    """The same keys as the price plugin's binding (``codice_fondo`` since C2b); only keys, types and defaults are
+    pinned, the texts are the i18n fragment's. (``language`` and the whole key set: section «Language».)"""
     for key in ("mic", "platform"):
         param = _param(plugin, key)
         assert param["type"] == "string", f"{key}: {param}"
@@ -636,7 +714,7 @@ def test_test_cases_for_the_external_suite(plugin):
     assert cases, "test_cases for the external suite"
     types = set()
     for case in cases:
-        assert case["binding"]["identifier_type"] == "ISIN", case
+        assert case["binding"]["identifier_type"] in ("ISIN", FUND_CODE_TYPE), case
         asset_type = AssetType(case["asset_type"])
         assert plugin.voices.get(asset_type), f"a case of a type with declared voices: {case}"
         types.add(asset_type)
@@ -1044,6 +1122,10 @@ def test_the_page_description_is_never_read(plugin, library):
 # only), frequency — joined by «, » — then «; » and the maturity, ending with «.». Never a price, a yield, the annual
 # coupon or the first day of trading. Every expected sentence below is a literal.
 #
+# The Italian day (consultant's answer): day 1 is «1º» (U+00BA), days 8 and 11 elide the article («l'8», «l'11», ASCII
+# apostrophe as in «all'inflazione»), every other day is «il D»; English is the plain day. Only the kind known (no
+# issuer, frequency, coupon type or maturity): no description at all.
+#
 # Synthetic sheets use a maturity of 5 June 2030 (a single-digit day, no leading zero) unless the case is the maturity.
 
 SYNTHETIC_MATURITY = date(2030, 6, 5)
@@ -1253,6 +1335,62 @@ def test_description_maturity_month_in_words(plugin, library, month, english, it
     assert description.count(";") == 1 and " 05 " not in description
 
 
+@pytest.mark.parametrize(
+    ("day", "english", "italian"),
+    [
+        (1, "matures on 1 May 2030", "scade il 1\u00ba maggio 2030"),
+        (8, "matures on 8 May 2030", "scade l'8 maggio 2030"),
+        (11, "matures on 11 May 2030", "scade l'11 maggio 2030"),
+        (21, "matures on 21 May 2030", "scade il 21 maggio 2030"),
+        (18, "matures on 18 May 2030", "scade il 18 maggio 2030"),
+    ],
+    ids=["day-1", "day-8", "day-11", "day-21", "day-18"],
+)
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_description_maturity_day(plugin, library, day, english, italian, language):
+    """The consultant's Italian day: «il 1º» (U+00BA), «l'8» and «l'11» (ASCII apostrophe), «il D» for every other day
+    (21 ends in 1, 18 starts with 8: neither is special); English is the plain day."""
+    assert "\u00ba" in italian or day != 1, "barrier: the masculine ordinal indicator, not the degree sign"
+    description = _synthetic_description(plugin, library, "IT00TESTDE011", language=language, scadenza=date(2030, 5, day))
+    expected = {
+        "en": f"Government bond, issuer Italy, paying semiannually; {english}.",
+        "it": f"Titolo di Stato, emittente Italia, con cedola semestrale; {italian}.",
+    }[language]
+    assert description == expected
+
+
+@pytest.mark.parametrize(
+    ("language", "tipologia"),
+    [("en", "Italian Government Bonds"), ("it", "Titoli di Stato Italiani"), ("en", None), ("it", None)],
+    ids=["en-sovereign", "it-sovereign", "en-no-kind", "it-no-kind"],
+)
+def test_no_description_when_only_the_kind_is_known(plugin, library, language, tipologia):
+    """No issuer, frequency, coupon type or maturity: nothing beyond the kind, so no ``description`` at all (never
+    «Bond.» or «Obbligazione.»): a source with nothing to say must not replace the ``legacy`` text."""
+    binding = _synthetic(library, "IT00TESTDE012", "btp_ord", language, tipologia=tipologia, emittente=None, frequenza_cedola=None, struttura_bond=None, scadenza=None)
+    item = _read_one(plugin, binding)
+    assert item.status == EnricherReadStatus.OK, item
+    assert not {"issuer_name", "coupon_frequency", "coupon_type", "maturity_date"} & set(item.values), f"barrier: no fact beyond the kind: {sorted(item.values)}"
+    assert item.values.get("legal_form") == "bond", "barrier: still a bond, read with its other voices"
+    assert "description" not in item.values, f"no description with only the kind known: {item.values.get('description')!r}"
+
+
+@pytest.mark.parametrize(
+    ("language", "tipologia", "expected"),
+    [
+        ("en", "Italian Government Bonds", "Government bond; matures on 5 June 2030."),
+        ("it", "Titoli di Stato Italiani", "Titolo di Stato; scade il 5 giugno 2030."),
+        ("en", None, "Bond; matures on 5 June 2030."),
+        ("it", None, "Obbligazione; scade il 5 giugno 2030."),
+    ],
+    ids=["en-sovereign", "it-sovereign", "en-no-kind", "it-no-kind"],
+)
+def test_description_with_only_the_maturity(plugin, library, language, tipologia, expected):
+    """The maturity alone is a fact beyond the kind: the sentence is composed."""
+    binding = _synthetic(library, "IT00TESTDE013", "btp_ord", language, tipologia=tipologia, emittente=None, frequenza_cedola=None, struttura_bond=None, scadenza=SYNTHETIC_MATURITY)
+    assert _description(_read_one(plugin, binding)) == expected
+
+
 def test_description_holds_stable_facts_only(plugin, library):
     """Price, yields, both coupons, duration, accrued interest, reference date, outstanding amount and the first day of
     trading change over time (or are no launch date): changing them all leaves the sentence as it was."""
@@ -1285,10 +1423,10 @@ def test_description_holds_stable_facts_only(plugin, library):
 
 
 def test_language_param(plugin):
-    """``language`` is a binding param beside ``mic`` and ``platform``, the price plugin's keys (``codice_fondo`` aside:
-    funds are not in this lot). The other language cases of this file go through ``_read_recording`` and
-    ``_synthetic``, which put ``language`` in the binding's params: the one place to change if it becomes a setting."""
-    assert {param["key"] for param in plugin.params_schema} == {"language", "mic", "platform"}
+    """``language`` is a binding param beside ``mic``, ``platform`` and ``codice_fondo`` (C2b), the price plugin's keys.
+    The other language cases of this file go through ``_read_recording`` and ``_synthetic``, which put ``language`` in
+    the binding's params: the one place to change if it becomes a setting."""
+    assert {param["key"] for param in plugin.params_schema} == {"language", "mic", "platform", "codice_fondo"}
     param = _param(plugin, "language")
     assert param["type"] == "select"
     assert set(param["options"]) == {"en", "it"}
@@ -1572,3 +1710,285 @@ def test_the_search_session_is_closed_when_cerca_raises(plugin, library, error):
     assert library.search_calls == [("lab failing query", "it")], "barrier: cerca was called"
     assert len(library.sessions) == 1, f"one session for the search: {library.sessions}"
     _every_session_closed_once(library)
+
+
+# =============================================================================
+# 8. Funds (lot C2b): the fund page, by the site's internal code
+# =============================================================================
+
+
+def _fund_binding(code: str = FUND_CODE, **params: Any) -> EnricherBinding:
+    return EnricherBinding(FUND_CODE_TYPE, code, params=params)
+
+
+def _fund_page(code: str, language: str = "en") -> str:
+    return f"https://www.borsaitaliana.it/borsa/fondi/dettaglio/{code}.html?lang={language}"
+
+
+def _synthetic_fund(library: FakeLibrary, code: str, **overrides: Any) -> EnricherBinding:
+    """The recorded fund with ``overrides``, offered under ``code``; its ``BI_FUND_CODE`` binding."""
+    library.give_fund(code, dataclasses.replace(_fund(), codice=code, **overrides))
+    return _fund_binding(code)
+
+
+def _with_start(text: str | None) -> dict[str, str]:
+    """The recorded «Caratteristiche» with «Data di partenza» set to ``text``, or without it (None)."""
+    features = {key: value for key, value in _fund().caratteristiche.items() if key != "Data di partenza"}
+    return features if text is None else {**features, "Data di partenza": text}
+
+
+def _read_fund(plugin, library: FakeLibrary, binding: EnricherBinding) -> EnricherReadItem:
+    """One fund binding read; barrier: the fund page was asked (today a fund binding is NOT_FOUND with no call)."""
+    item = _read_one(plugin, binding)
+    assert library.fund_calls == [binding.identifier if binding.identifier_type == FUND_CODE_TYPE else binding.params["codice_fondo"]], f"C2b: a fund binding reads the fund page (ottieni_dati_fondo): fund calls {library.fund_calls}, sheet calls {library.calls}, item {item}"
+    assert library.calls == [], f"a fund binding never reads a sheet: {library.calls}"
+    return item
+
+
+def _read_fund_values(plugin, library: FakeLibrary, binding: EnricherBinding) -> dict[str, Any]:
+    item = _read_fund(plugin, library, binding)
+    assert item.status == EnricherReadStatus.OK, f"the fund page is read: {item}"
+    assert all(value is not None for value in item.values.values()), f"a voice the page does not give is absent, never None: {item.values}"
+    return _stored(item.values)
+
+
+def test_fund_recording_rebuilds_as_the_library_types():
+    """The recorded fund (green before C2b: it checks the fixture): English envelope, the fund page and the ISIN search
+    that finds nothing (the reason for C2b), and a ``DatiFondo`` with the library's real types."""
+    recording = _recording(FUND_RECORDING)
+    assert set(recording) == {"source", "asset", "version", "recorded_at", "calls"}, f"English envelope keys: {sorted(recording)}"
+    assert set(recording["calls"]) == {"ottieni_dati_fondo", "cerca_isin"}
+    assert all(call["error"] is None for call in recording["calls"].values())
+    assert recording["calls"]["cerca_isin"]["response"] == [], "the site's search does not find the fund by its ISIN"
+    fund = _fund()
+    assert (fund.codice, fund.isin, fund.nome, fund.valuta) == (FUND_CODE, FUND_ISIN, "Anima Dinamix", "EUR")
+    assert isinstance(fund.nav, Decimal) and isinstance(fund.variazione_percentuale, Decimal) and isinstance(fund.data_nav, date)
+    assert fund.caratteristiche["Data di partenza"] == "14/03/22"
+    assert fund.societa_gestione == {}, "no management company on the only recording: fund_provider is not guessed"
+
+
+def test_expected_fund_table_is_a_stored_form():
+    assert _stored(EXPECTED_FUND) == EXPECTED_FUND
+    assert set(EXPECTED_FUND) == FUND_VOICES
+
+
+def test_the_fund_reader_is_imported_at_module_level():
+    """``ottieni_dati_fondo`` is a module-level name of the plugin, as ``ottieni_scheda``: the fixtures replace it there,
+    so no fund read of this file reaches borsaitaliana.it."""
+    module = importlib.import_module(PLUGIN_MODULE)
+    assert getattr(module, "ottieni_dati_fondo", None) is bis.ottieni_dati_fondo, "C2b: `from borsa_italiana_scraping import ottieni_dati_fondo` in the plugin"
+
+
+def test_binding_param_codice_fondo(plugin):
+    param = _param(plugin, "codice_fondo")
+    assert param["type"] == "string", param
+    assert not param.get("required", False), f"codice_fondo is optional: {param}"
+    assert param.get("default") in (None, ""), f"codice_fondo has no default: {param}"
+    assert param.get("x-i18n-key") == "enrichers.borsa_italiana.params.codice_fondo", param
+
+
+@pytest.mark.parametrize(
+    ("binding", "url"),
+    [
+        (_fund_binding(), _fund_page(FUND_CODE)),
+        (_fund_binding(language="it"), _fund_page(FUND_CODE, "it")),
+        (_isin(FUND_ISIN, codice_fondo=FUND_CODE), _fund_page(FUND_CODE)),
+        (_isin(FUND_ISIN, codice_fondo=FUND_CODE, language="it"), _fund_page(FUND_CODE, "it")),
+    ],
+    ids=["fund-code", "fund-code-it", "isin-codice-fondo", "isin-codice-fondo-it"],
+)
+def test_page_url_of_a_fund(plugin, binding, url):
+    """The price plugin's rule (``get_asset_url``): the fund-detail page of the internal code, in the binding's language."""
+    assert plugin.page_url(binding) == url
+
+
+# --- read ---------------------------------------------------------------------
+
+
+def test_read_a_fund_code_binding(plugin, library):
+    library.give_fund(FUND_CODE, _fund())
+    item = _read_fund(plugin, library, _fund_binding())
+    assert item.status == EnricherReadStatus.OK, item
+    assert _stored(item.values) == EXPECTED_FUND
+    assert len(library.sessions) == 1 and library.fund_call_sessions == library.sessions, "the read's one session handed to the fund call"
+    _every_session_closed_once(library)
+
+
+def test_read_an_isin_binding_with_codice_fondo(plugin, library):
+    """The price plugin's binding shape: the ISIN, the internal code in ``codice_fondo``."""
+    library.give_fund(FUND_CODE, _fund())
+    assert _read_fund_values(plugin, library, _isin(FUND_ISIN, codice_fondo=FUND_CODE)) == EXPECTED_FUND
+
+
+@pytest.mark.parametrize("params", [{}, {"codice_fondo": ""}, {"codice_fondo": None}], ids=["no-codice-fondo", "empty", "none"])
+def test_read_an_isin_binding_without_a_fund_code_stays_on_the_sheet(plugin, library, params):
+    """Guard (green before C2b): an ISIN binding without a fund code reads the sheet, never the fund page."""
+    isin = _give_recording(library, "btp_valore")
+    item = _read_one(plugin, _isin(isin, **params))
+    assert item.status == EnricherReadStatus.OK
+    assert library.isins_called == [isin] and library.fund_calls == []
+
+
+@pytest.mark.parametrize("voice", ["ter", "fund_size", "fund_provider", "description", "sector", "legal_form"])
+def test_fund_voices_not_written(plugin, library, voice):
+    """«Gestione» is the management fee, not the TER; «Patrimonio del fondo» has no unit; no management company is
+    guessed; no fund sentence is approved; risk grade and category have no catalogue voice."""
+    library.give_fund(FUND_CODE, _fund())
+    values = _read_fund_values(plugin, library, _fund_binding())
+    assert voice not in values, f"{voice} is not written for a fund: {values}"
+    assert set(values) <= FUND_VOICES, f"only the declared fund voices: {sorted(values)}"
+
+
+def test_a_management_company_on_the_page_writes_no_fund_provider(plugin, library):
+    binding = _synthetic_fund(library, "1FTESTSG0001", societa_gestione={"Denominazione": "Anima SGR S.p.A."})
+    values = _read_fund_values(plugin, library, binding)
+    assert values == EXPECTED_FUND, f"fund_provider is not guessed: {values}"
+
+
+@pytest.mark.parametrize(
+    ("text", "stored"),
+    [("14/03/22", "2022-03-14"), ("01/12/99", "1999-12-01"), ("01/01/50", "1950-01-01"), ("14/03/2022", "2022-03-14"), ("05/07/1998", "1998-07-05")],
+    ids=["two-digit-20yy", "two-digit-19yy", "two-digit-mid-range-19yy", "four-digit", "four-digit-1900s"],
+)
+def test_fund_inception_date(plugin, library, text, stored):
+    """«Data di partenza», day/month/year. Two-digit years pivot on today's year (20yy up to its two digits, else 19yy):
+    the pivot's edge moves with the calendar, so only years far from it are pinned. «50» → 1950 holds until 2049 and
+    tells the contract's pivot from ``strptime``'s fixed one (``%y``: 00–68 → 20yy), which gives 2050."""
+    values = _read_fund_values(plugin, library, _synthetic_fund(library, "1FTESTID0001", caratteristiche=_with_start(text)))
+    assert values.get("inception_date") == stored, f"{text!r}: {values}"
+
+
+@pytest.mark.parametrize("text", [None, "", "N.D.", "N.A.", "31/02/22", "14/03", "not a date"], ids=["missing", "empty", "nd", "na", "no-such-day", "no-year", "text"])
+def test_fund_inception_date_absent_when_unparsable(plugin, library, text):
+    values = _read_fund_values(plugin, library, _synthetic_fund(library, "1FTESTID0002", caratteristiche=_with_start(text)))
+    assert "inception_date" not in values, f"{text!r}: {values}"
+    assert values == {"fund_currency": "EUR"}, "the currency still comes"
+
+
+def test_fund_currency_from_the_page(plugin, library):
+    values = _read_fund_values(plugin, library, _synthetic_fund(library, "1FTESTCU0001", valuta="USD"))
+    assert values == {**EXPECTED_FUND, "fund_currency": "USD"}
+
+
+def test_fund_without_a_currency_has_none(plugin, library):
+    """An empty ``valuta`` leaves the voice out, never the price plugin's «EUR» default."""
+    values = _read_fund_values(plugin, library, _synthetic_fund(library, "1FTESTCU0002", valuta=""))
+    assert values == {"inception_date": "2022-03-14"}
+
+
+@pytest.mark.parametrize("error_class", [bis.StrumentoNonTrovato, bis.StrumentoNonRisolto, bis.DatiNonDisponibili])
+@pytest.mark.parametrize("by_isin", [False, True], ids=["fund-code", "isin-codice-fondo"])
+def test_fund_not_found_errors(plugin, library, error_class, by_isin):
+    """A fund page the site does not give, or gives without data, is not found (unlike ``DatiNonDisponibili`` on the
+    sheet path, a ``SOURCE_ERROR``)."""
+    code = library.give_fund("1FTESTNF0001", error_class("not found"))
+    binding = _isin(FUND_ISIN, codice_fondo=code) if by_isin else _fund_binding(code)
+    item = _read_fund(plugin, library, binding)
+    assert item.status == EnricherReadStatus.NOT_FOUND and item.error_code is None, item
+
+
+@pytest.mark.parametrize("error", [bis.ErroreConnessione("timeout"), ValueError("unexpected page layout")], ids=["connection", "other"])
+def test_fund_read_error_is_an_error_item_and_the_next_is_read(plugin, library, error):
+    failing = library.give_fund("1FTESTER0001", error)
+    valore = _give_recording(library, "btp_valore")
+    items = _by_index(list(plugin.read([_fund_binding(failing), _isin(valore)])), 2)
+    assert library.fund_calls == [failing], f"C2b: the fund page was asked: {library.fund_calls}"
+    assert items[0].status == EnricherReadStatus.ERROR and items[0].error_code == SOURCE_ERROR, items[0]
+    assert items[1].status == EnricherReadStatus.OK
+    assert library.isins_called == [valore]
+    _every_session_closed_once(library)
+
+
+def test_fund_rate_limited_defers_every_remaining_binding(plugin, library):
+    ord_ = _give_recording(library, "btp_ord")
+    refused = library.give_fund("1FTESTRL0001", bis.RateLimitRaggiunto(WAF_MESSAGE))
+    # never offered: a call for either fails the test
+    bindings = [_isin(ord_), _fund_binding(refused), _fund_binding("1FTESTRL0002"), _isin("IT00TESTRL005")]
+
+    items = _by_index(list(plugin.read(bindings)), len(bindings))
+
+    assert items[0].status == EnricherReadStatus.OK
+    for index in (1, 2, 3):
+        assert items[index].status == EnricherReadStatus.ERROR and items[index].error_code == RATE_LIMITED, f"binding {index}: {items[index]}"
+    assert library.isins_called == [ord_] and library.fund_calls == [refused], "no call after the refusal"
+    _every_session_closed_once(library)
+
+
+def test_a_sheet_refusal_defers_a_fund_binding(plugin, library):
+    refused = library.give("IT00TESTRL006", bis.RateLimitRaggiunto(WAF_MESSAGE))
+    items = _by_index(list(plugin.read([_isin(refused), _fund_binding()])), 2)  # the fund is never offered
+    assert items[1].status == EnricherReadStatus.ERROR and items[1].error_code == RATE_LIMITED, items[1]
+    assert library.fund_calls == []
+
+
+def test_one_session_for_sheets_and_funds(plugin, library):
+    """A read mixing sheets and funds: one session, handed to every call of either kind, closed once."""
+    library.give_fund(FUND_CODE, _fund())
+    valore = _give_recording(library, "btp_valore")
+    bindings = [_isin(valore), _fund_binding(), _isin(FUND_ISIN, codice_fondo=FUND_CODE)]
+
+    items = _by_index(list(plugin.read(bindings)), 3)
+
+    assert [items[i].status for i in range(3)] == [EnricherReadStatus.OK] * 3, items
+    assert _stored(items[1].values) == _stored(items[2].values) == EXPECTED_FUND
+    assert library.isins_called == [valore] and library.fund_calls == [FUND_CODE, FUND_CODE]
+    assert len(library.sessions) == 1, f"one session for the read: {library.sessions}"
+    assert library.call_sessions == [library.sessions[0]] and library.fund_call_sessions == [library.sessions[0]] * 2
+    _every_session_closed_once(library)
+
+
+# --- recognize ----------------------------------------------------------------
+
+
+def test_recognize_a_fund_code(plugin, library):
+    """Found, its name and page, and its ISIN: a strong identifier that carries the cascade to the other enrichers."""
+    fund = _fund()
+    library.give_fund(FUND_CODE, fund)
+    recognition = plugin.recognize(_fund_binding())
+    assert library.fund_calls == [FUND_CODE], f"C2b: recognize reads the fund page: {library.fund_calls}"
+    assert recognition == EnricherRecognition(found=True, name="Anima Dinamix", page_url=fund.url, identifiers={"ISIN": FUND_ISIN})
+    assert library.calls == []
+
+
+def test_recognize_a_fund_without_an_isin(plugin, library):
+    binding = _synthetic_fund(library, "1FTESTRC0001", isin=None)
+    recognition = plugin.recognize(binding)
+    assert library.fund_calls == ["1FTESTRC0001"], f"C2b: recognize reads the fund page: {library.fund_calls}"
+    assert recognition.found is True and recognition.identifiers == {}, recognition
+
+
+def test_recognize_a_fund_without_a_page_url_uses_the_plugins(plugin, library):
+    binding = _synthetic_fund(library, "1FTESTRC0002", url="")
+    recognition = plugin.recognize(binding)
+    assert recognition.found is True, recognition
+    assert recognition.page_url == plugin.page_url(binding) == _fund_page("1FTESTRC0002")
+
+
+def test_recognize_an_isin_binding_with_codice_fondo(plugin, library):
+    """The ISIN binding of the price plugin's shape reads the fund page too (its ``identifiers`` are not pinned)."""
+    fund = _fund()
+    library.give_fund(FUND_CODE, fund)
+    recognition = plugin.recognize(_isin(FUND_ISIN, codice_fondo=FUND_CODE))
+    assert library.fund_calls == [FUND_CODE] and library.calls == [], f"the fund page, not the sheet: {library.fund_calls} {library.calls}"
+    assert (recognition.found, recognition.name, recognition.page_url) == (True, "Anima Dinamix", fund.url)
+
+
+@pytest.mark.parametrize("error_class", [bis.StrumentoNonTrovato, bis.StrumentoNonRisolto, bis.DatiNonDisponibili])
+def test_recognize_a_fund_not_found(plugin, library, error_class):
+    code = library.give_fund("1FTESTNF0002", error_class("not found"))
+    assert plugin.recognize(_fund_binding(code)).found is False
+    assert library.fund_calls == [code], f"C2b: the fund page was asked: {library.fund_calls}"
+
+
+def test_recognize_a_fund_rate_limited_raises(plugin, library):
+    code = library.give_fund("1FTESTRL0003", bis.RateLimitRaggiunto(WAF_MESSAGE))
+    with pytest.raises(Exception) as raised:
+        plugin.recognize(_fund_binding(code))
+    assert rate_limited_from_exception(raised.value, CODE) is not None, f"the core must read it as a refusal: {raised.value!r}"
+
+
+def test_recognize_a_fund_other_error_raises(plugin, library):
+    code = library.give_fund("1FTESTRE0001", bis.ErroreConnessione("timeout"))
+    with pytest.raises(Exception) as raised:
+        plugin.recognize(_fund_binding(code))
+    assert rate_limited_from_exception(raised.value, CODE) is None, f"not a refusal: {raised.value!r}"
