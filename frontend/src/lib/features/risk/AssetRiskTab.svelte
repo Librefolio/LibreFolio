@@ -15,6 +15,7 @@
     import RiskLevelsPanel from './levels/RiskLevelsPanel.svelte';
     import {formatCurrencyAmount} from './riskAnalysisHelpers';
     import {loadAssetPositionValue, pricesFromPlan} from './assetRiskTabRules';
+    import type {RiskSyncCompletion} from './riskPanelController.svelte';
 
     interface Props {
         assetId: number;
@@ -25,7 +26,7 @@
         dateEnd: string;
         targetCurrency: string;
         refreshVersion?: number;
-        onsynced?: () => void | Promise<void>;
+        onsynced?: (detail: RiskSyncCompletion) => void | Promise<void>;
     }
 
     let {assetId, assetType, parametricPrices, dateStart, dateEnd, targetCurrency, refreshVersion = 0, onsynced}: Props = $props();

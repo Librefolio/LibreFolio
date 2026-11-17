@@ -1,7 +1,7 @@
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
     import type {RiskAnalyticResult, RiskScope} from '$lib/features/risk/riskStore.svelte';
-    import {createRiskPanelController, discardedErrorCodes, LEVEL_ON_DEMAND_ANALYSES} from '$lib/features/risk/riskPanelController.svelte';
+    import {createRiskPanelController, discardedErrorCodes, LEVEL_ON_DEMAND_ANALYSES, type RiskSyncCompletion} from '$lib/features/risk/riskPanelController.svelte';
     import {setTweenHydration} from '$lib/components/ui/TweenedValue.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
@@ -74,7 +74,7 @@
         /** Asset ids in scope, seeding the names and the scenario editors. */
         assetIds?: number[];
         refreshVersion?: number;
-        onsynced?: () => void | Promise<void>;
+        onsynced?: (detail: RiskSyncCompletion) => void | Promise<void>;
     }
 
     let {scope, dateStart, dateEnd, targetCurrency, title = '', subtitle = '', wholeBroker = false, internalSubset = false, scopeValue = null, assetIds = [], refreshVersion = 0, onsynced}: Props = $props();
@@ -84,7 +84,7 @@
     let appliedRiskFreePercent = $state(0);
 
     const controller = createRiskPanelController(() => ({scope: withWholeBroker(scope, wholeBroker), dateStart, dateEnd, targetCurrency, appliedRiskFreePercent, refreshVersion}), {
-        onsynced: () => onsynced?.(),
+        onsynced: (detail) => onsynced?.(detail),
         // Page cache: a failed refresh of the figures on screen keeps them, and says so.
         onrefreshfailed: () => toasts.error($t('risk.states.loadFailed')),
         // L1 is the only consumer of these two, and both are opt-in so that
@@ -327,8 +327,9 @@
 </script>
 
 <div class="space-y-4 text-lf-primary" data-testid="risk-levels-panel" data-scope={scope.kind} data-catalog={controller.catalogState} data-busy={initialLoading ? 'true' : 'false'}>
-    <!-- One asset: the Asset Detail toolbar holds the page's one Refresh (Y11, decision 48), so the header draws no sync of its own. -->
-    <RiskPanelHeader {controller} {title} {subtitle} {internalSubset} {assetIds} {dateStart} {dateEnd} {targetCurrency} showActions={!oneAsset} />
+    <!-- One asset: the Asset Detail toolbar holds the page's one Refresh (Y11, decision 48), so the header draws no sync of its own;
+         its docs icon opens the Asset Detail's own page, in the asset's words (RN-17 c). -->
+    <RiskPanelHeader {controller} {title} {subtitle} {internalSubset} {assetIds} {dateStart} {dateEnd} {targetCurrency} showActions={!oneAsset} {oneAsset} />
 
     {#if backtest}
         <p class="rounded-lg border border-lf-warning-line bg-lf-warning-soft px-3 py-2 text-xs text-lf-warning-on-soft" data-testid="risk-backtest-notice">

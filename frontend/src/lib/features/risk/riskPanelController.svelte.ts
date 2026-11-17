@@ -99,21 +99,23 @@ export interface RiskControllerInputs {
     assetSetBenchmarkId?: number | null;
 }
 
+/**
+ * How a sync ended, as `PageSyncModal` reports it: `accepted` when it wrote something. The host decides on it — the
+ * Asset Detail drops its comparison overlays only on an accepted sync — so it travels from the modal to the page unchanged.
+ */
+export interface RiskSyncCompletion {
+    accepted: boolean;
+}
+
 export interface RiskControllerOptions {
-    /** Called after a sync completes and the base wave has been reloaded. */
-    onsynced?: () => void | Promise<void>;
+    /** Called after a sync completes and the base wave has been reloaded, with the sync's completion. */
+    onsynced?: (detail: RiskSyncCompletion) => void | Promise<void>;
     /**
      * Called when a refresh of a base wave already on screen fails (page cache, phase 1): the
      * figures stay up and the host tells the user, with a toast. Without it a failed refresh is
      * reported as today, through `loadError`, which the panels render in place of the levels.
      */
     onrefreshfailed?: () => void;
-    /** Called once the scenario catalogue settles, successfully or not, so a host
-     *  can seed its editors from the presets it just received. */
-    scenarioCatalogLoaded?: () => void;
-    /** Loads the scenario catalogue eagerly. The legacy asset view needs it up
-     *  front; the level panels ask for it when L4 is first opened. */
-    eagerScenarioCatalog?: boolean;
     /**
      * Adds `drawdown_summary` to the historical base wave.
      *
@@ -624,17 +626,17 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
             console.error('[Risk] Failed to load scenario catalog:', error);
         } finally {
             scenarioCatalogLoading = false;
-            options.scenarioCatalogLoaded?.();
         }
     }
 
-    async function handleSynced(): Promise<void> {
+    /** A reload that is not a sync's (a created FX pair) passes no completion: nothing it wrote is known, so not accepted. */
+    async function handleSynced(detail: RiskSyncCompletion = {accepted: false}): Promise<void> {
         // A sync marks the answers stale instead of forgetting them: the figures stay on screen
         // while the base wave is asked again, and the catalogs, which a sync cannot change, stay.
         markRiskStale();
         discardOnDemand();
         await loadBase(true);
-        await options.onsynced?.();
+        await options.onsynced?.(detail);
     }
 
     const allResults = $derived(
@@ -694,12 +696,6 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
         });
         untrack(() => void pageBusy.track('risk-refresh', () => loadBase(true)));
     });
-
-    if (options.eagerScenarioCatalog) {
-        $effect(() => {
-            untrack(() => void loadScenarioCatalog());
-        });
-    }
 
     return {
         get catalog() {

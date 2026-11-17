@@ -36,9 +36,11 @@
         showActions?: boolean;
         /** The user page the docs icon on the header's right edge opens (RN-13, B1): the risk tab of Dashboard and Broker unless told otherwise. */
         docsPath?: string;
+        /** One asset (the Asset Detail): the docs icon opens the asset page and names the asset's questions (RN-17 c). */
+        oneAsset?: boolean;
     }
 
-    let {controller, title = '', subtitle = '', internalSubset = false, assetIds = [], dateStart, dateEnd, targetCurrency, showActions = true, docsPath = 'user/dashboard/risk/'}: Props = $props();
+    let {controller, title = '', subtitle = '', internalSubset = false, assetIds = [], dateStart, dateEnd, targetCurrency, showActions = true, docsPath = 'user/dashboard/risk/', oneAsset = false}: Props = $props();
 
     let syncOpen = $state(false);
 
@@ -98,7 +100,11 @@
                 {$t('common.sync')}
             </button>
         {/if}
-        <DocsLink path={docsPath} label={$t('risk.docsHelp.header')} icon="book" size={16} testId="risk-levels-docs" />
+        {#if oneAsset}
+            <DocsLink path="user/assets/detail/" label={$t('risk.docsHelp.headerAsset')} icon="book" size={16} testId="risk-levels-docs" />
+        {:else}
+            <DocsLink path={docsPath} label={$t('risk.docsHelp.header')} icon="book" size={16} testId="risk-levels-docs" />
+        {/if}
     </div>
 </div>
 
@@ -112,7 +118,7 @@
     <DataQualityBanner issues={controller.dataQualityIssues} mode="grouped" onaction={(action, target) => handleQualityAction(action, target)} />
 {/if}
 
-<PageSyncModal bind:open={syncOpen} {dateStart} {dateEnd} assets={syncTargets.assets} fxPairs={syncTargets.fxPairs} onsynced={() => controller.handleSynced()} onclose={() => (syncOpen = false)} />
+<PageSyncModal bind:open={syncOpen} {dateStart} {dateEnd} assets={syncTargets.assets} fxPairs={syncTargets.fxPairs} onsynced={(detail) => controller.handleSynced(detail)} onclose={() => (syncOpen = false)} />
 
 {#if addPairOpen}
     <FxPairAddModal bind:open={addPairOpen} initialBase={addPairInitial.base} initialQuote={addPairInitial.quote} oncreated={refreshAfterPair} onsynced={refreshAfterPair} />

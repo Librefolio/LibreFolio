@@ -33,8 +33,10 @@ vi.mock('echarts', () => ({
     }),
 }));
 
+import {readFileSync} from 'node:fs';
+import {resolve} from 'node:path';
 import {get} from 'svelte/store';
-import {cleanup, render, screen, setupI18n, waitFor} from '$test/component';
+import {cleanup, fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
 import {_} from '$lib/i18n';
 import type {RiskScope} from '$lib/features/risk/riskRequest';
 import RiskLevelsPanel from './RiskLevelsPanel.svelte';
@@ -87,10 +89,54 @@ describe('RiskLevelsPanel — on one asset, the levels that have meaning on one 
         expect(screen.queryByTestId('risk-sync-button')).toBeNull();
     });
 
+    // RN-17 (c): the header's docs icon on one asset names the asset's questions and opens the Asset Detail's own page (no anchor, RN-13 B1),
+    // not the Dashboard's «four questions of the Risk tab».
+    it('points the docs icon at the Asset Detail’s page, in the asset’s words, and keeps the Dashboard’s on a portfolio', async () => {
+        const t = get(_);
+        const open = vi.spyOn(window, 'open').mockReturnValue(null);
+        const view = mountPanel({kind: 'asset', asset_id: 7} as RiskScope);
+        await waitFor(() => expect(screen.getByTestId('risk-levels-panel')).toHaveAttribute('data-catalog', 'ready'));
+        const icon = screen.getByTestId('risk-levels-docs');
+        expect(icon).toHaveAttribute('aria-label', t('risk.docsHelp.headerAsset'));
+        await fireEvent.click(icon);
+        expect(open).toHaveBeenLastCalledWith('/mkdocs/user/assets/detail/', '_blank', 'noopener');
+        view.unmount();
+
+        mountPanel({kind: 'portfolio'} as RiskScope);
+        await waitFor(() => expect(screen.getByTestId('risk-levels-panel')).toHaveAttribute('data-catalog', 'ready'));
+        expect(screen.getByTestId('risk-levels-docs')).toHaveAttribute('aria-label', t('risk.docsHelp.header'));
+        open.mockRestore();
+    });
+
     it('keeps «Am I diversified?» on a portfolio: the Dashboard draws what it drew before', async () => {
         mountPanel({kind: 'portfolio'} as RiskScope);
 
         await waitFor(() => expect(screen.getByTestId('risk-levels-panel')).toHaveAttribute('data-catalog', 'ready'));
         expect(screen.getByTestId('risk-level-2')).toBeInTheDocument();
+    });
+});
+
+const riskLevelsPanelSource = readFileSync(resolve(process.cwd(), 'src/lib/features/risk/levels/RiskLevelsPanel.svelte'), 'utf8');
+const assetRiskTabSource = readFileSync(resolve(process.cwd(), 'src/lib/features/risk/AssetRiskTab.svelte'), 'utf8');
+
+// The sync's completion travels unchanged from the modal to the page (the Asset Detail drops its comparison overlays only
+// on an accepted sync): the header hands it to `controller.handleSynced` (`RiskPanelHeader.test.ts`), the controller to
+// its `onsynced` (`riskPanelController.test.ts`); these two pin the last links, the panel and the Asset Detail's tab
+// (RN-17 c; they replace the contracts of the legacy `RiskAnalysisPanel` → `AssetRiskScenariosView` chain, now gone).
+describe('RiskLevelsPanel — the sync completion source contracts', () => {
+    it('forwards the controller’s sync completion through RiskLevelsPanel unchanged', () => {
+        expect(riskLevelsPanelSource).toMatch(/\bonsynced\?\s*:\s*\(\s*detail\s*:\s*RiskSyncCompletion\s*\)\s*=>\s*void\s*\|\s*Promise<void>\s*;/);
+        expect(riskLevelsPanelSource, 'the controller option drops the detail').toMatch(/\bonsynced\s*:\s*\(\s*detail\s*\)\s*=>\s*onsynced\?\.\(\s*detail\s*\)\s*,/);
+        expect(riskLevelsPanelSource).not.toMatch(/\bonsynced\s*:\s*\(\s*\)\s*=>/);
+    });
+
+    it('types and forwards the Asset Detail tab’s completion callback unchanged', () => {
+        expect(assetRiskTabSource).toMatch(/\bonsynced\?\s*:\s*\(\s*detail\s*:\s*RiskSyncCompletion\s*\)\s*=>\s*void\s*\|\s*Promise<void>\s*;/);
+        const propsBinding = assetRiskTabSource.match(/let\s*\{([\s\S]*?)\}\s*:\s*Props\s*=\s*\$props\(\)\s*;/)?.at(1) ?? '';
+        expect(propsBinding).toMatch(/(?:^|,)\s*onsynced\s*(?:,|$)/);
+        const panelTag = assetRiskTabSource.match(/<RiskLevelsPanel\b[\s\S]*?\/>/)?.at(0) ?? '';
+        expect(panelTag).not.toBe('');
+        expect(panelTag).toContain('{onsynced}');
+        expect(panelTag).not.toMatch(/\bonsynced\s*=/);
     });
 });

@@ -741,6 +741,32 @@ describe('riskPanelController', () => {
         stop();
     });
 
+    // RN-17 (c): the page that hosts the panel needs to know whether the sync wrote anything — the Asset Detail drops its
+    // comparison overlays only on an accepted one — so the completion reaches it unchanged, after the base wave.
+    it('hands the host the sync completion as the modal reported it, once the base wave is reloaded', async () => {
+        const order: string[] = [];
+        const onsynced = vi.fn(async () => {
+            order.push('host');
+        });
+        const {controller, stop} = mountController(undefined, {onsynced});
+        queryRisk.mockImplementation(async () => {
+            order.push('base');
+            return {items: []};
+        });
+
+        await controller.handleSynced({accepted: true});
+        expect(onsynced).toHaveBeenLastCalledWith({accepted: true});
+        expect(order.at(-1), 'the host heard of the sync before the base wave was asked again').toBe('host');
+
+        await controller.handleSynced({accepted: false});
+        expect(onsynced).toHaveBeenLastCalledWith({accepted: false});
+
+        // A reload that is not a sync's (a created FX pair) wrote nothing the host can tell about: not accepted.
+        await controller.handleSynced();
+        expect(onsynced).toHaveBeenLastCalledWith({accepted: false});
+        stop();
+    });
+
     it('drops every on-demand result after a sync, then reloads the base wave', async () => {
         const {controller, stop} = mountController();
         controller.setResult('simulation', {analytic_code: 'simulation'} as never);
@@ -1404,7 +1430,7 @@ describe('riskPanelController', () => {
     // controller passes neither on, so the request it issues carries no per-asset analytic at all.
     //
     // The pins are the other half, green today and meant to stay so: the callers that never opt in
-    // — the Dashboard's levels, Asset Detail's panel — and the lab as it asks today, on the union,
+    // — the Dashboard's levels, the levels on one asset (RN-17) — and the lab as it asks today, on the union,
     // each send byte for byte the requests they send now. Copied from a run before the split.
     // ------------------------------------------------------------------
     describe('the asset-set wave, split per level', () => {
@@ -1494,35 +1520,6 @@ describe('riskPanelController', () => {
             ],
         ];
 
-        /** Asset Detail's panel for one asset, same window: two requests. */
-        const ASSET_DETAIL_TODAY = [
-            [
-                {
-                    scope: {kind: 'asset', asset_id: 12},
-                    date_range: {start: '2025-01-01', end: '2025-12-31'},
-                    target_currency: 'EUR',
-                    mode: 'historical',
-                    analytics: [
-                        {instance_id: 'base-historical-historical_kpi', analytic_code: 'historical_kpi', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0}},
-                        {instance_id: 'base-historical-correlation', analytic_code: 'correlation', parameters: {}},
-                        {instance_id: 'base-historical-historical_var', analytic_code: 'historical_var', parameters: {confidence_level: 0.95, horizon_days: 1}},
-                    ],
-                },
-                false,
-            ],
-            [
-                {
-                    scope: {kind: 'asset', asset_id: 12},
-                    date_range: {start: '2025-01-01', end: '2025-12-31'},
-                    target_currency: 'EUR',
-                    mode: 'current_composition',
-                    composition_policy: 'current_buy_and_hold',
-                    analytics: [{instance_id: 'base-current_composition-risk_contribution', analytic_code: 'risk_contribution', parameters: {}}],
-                },
-                false,
-            ],
-        ];
-
         /** The lab's two levels as they ask today, on the union, the benchmark inside: one request for both. */
         const LAB_UNION_TODAY = [
             [
@@ -1574,12 +1571,6 @@ describe('riskPanelController', () => {
             // Every analytic stays advertised, so a split option that defaulted to on would put the per-asset family on this wire.
             await settledController(defaultInputs(), {includeDrawdownSummary: true, includeMonthlyVar: true, includeCurrentCompositionRiskReturn: true});
             expectIssuedToday(DASHBOARD_TODAY, "the Dashboard's levels");
-        });
-
-        it("pins Asset Detail's panel: the requests it sends today, byte for byte", async () => {
-            // `RiskAnalysisPanel`'s only option is a callback.
-            await settledController({...defaultInputs(), scope: {kind: 'asset', asset_id: 12}}, {scenarioCatalogLoaded: () => undefined});
-            expectIssuedToday(ASSET_DETAIL_TODAY, "Asset Detail's panel");
         });
 
         it("pins the levels panel on one asset (RN-17), under the asset's real catalogue: L1's wave, the current KPI and the asset's own risk/return pair, nothing of a basket", async () => {
