@@ -19,11 +19,13 @@
         texts: Record<string, string>;
         isin: string | null;
         ticker: string | null;
+        /** The asset's other identifiers (CUSIP, FIGI…), label and value, shown after the ISIN and the ticker when present. */
+        otherIdentifiers?: [string, string][];
         /** Opens a voice's history (E6); without it the rows are plain text. */
         onhistory?: (key: string) => void;
     }
 
-    let {groups, texts, isin, ticker, onhistory}: Props = $props();
+    let {groups, texts, isin, ticker, otherIdentifiers = [], onhistory}: Props = $props();
 
     const left = $derived(groups.filter((group) => group.group !== 'bond'));
     const right = $derived(groups.filter((group) => group.group === 'bond'));
@@ -46,7 +48,8 @@
                     {#each group.cells as cell (cell.key)}
                         {@const text = cell.state === 'value' ? (texts[cell.key] ?? '') : ''}
                         <div class="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 py-2 text-sm" data-testid="profile-detail-{cell.key}" data-state={cell.state}>
-                            <dt class="text-lf-secondary">{$t(`assets.profile.voices.${cell.key}`)}</dt>
+                            <!-- The company's sector is its one sector («Settore»), not the classification's map -->
+                            <dt class="text-lf-secondary">{group.group === 'company' && cell.key === 'sector' ? $t('assets.profile.tab.companySector') : $t(`assets.profile.voices.${cell.key}`)}</dt>
                             <dd class="min-w-0 break-words text-lf-primary">
                                 {#if text === ''}
                                     {@render missing()}
@@ -62,9 +65,15 @@
                         {#each identifiers as identifier (identifier.id)}
                             <div class="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 py-2 text-sm" data-testid="profile-detail-{identifier.id}" data-state={identifier.value ? 'value' : 'unavailable'}>
                                 <dt class="text-lf-secondary">{identifier.label}</dt>
-                                <dd class="min-w-0 break-all font-mono text-lf-primary">
-                                    {#if identifier.value}{identifier.value}{:else}{@render missing()}{/if}
+                                <dd class="min-w-0 break-all text-lf-primary">
+                                    {#if identifier.value}<span class="font-mono">{identifier.value}</span>{:else}{@render missing()}{/if}
                                 </dd>
+                            </div>
+                        {/each}
+                        {#each otherIdentifiers as [label, value], index (`${label}-${value}-${index}`)}
+                            <div class="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 py-2 text-sm" data-testid="profile-detail-identifier-{index}" data-state="value">
+                                <dt class="text-lf-secondary">{label}</dt>
+                                <dd class="min-w-0 break-all font-mono text-lf-primary">{value}</dd>
                             </div>
                         {/each}
                     {/if}

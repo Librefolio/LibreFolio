@@ -184,7 +184,10 @@
         "missing": "Este activo ya no existe",
         "editData": "Editar los datos",
         "isin": "ISIN",
-        "ticker": "Ticker"
+        "ticker": "Ticker",
+        "dataSince": "desde el {date}",
+        "beforeProfile": "valor de antes del perfil",
+        "companySector": "Sector"
       }
     }
   }

@@ -35,6 +35,8 @@
         /** The asset's identifiers, shown with the identity. */
         isin: string | null;
         ticker: string | null;
+        /** The asset's other identifiers (CUSIP, FIGI…), shown with the identity. */
+        otherIdentifiers?: [string, string][];
         /** Bumped by the page after anything that writes the profile: the tab reads again. */
         refreshKey?: number;
         /** «Modifica i dati» (E8); without it, no button. */
@@ -43,7 +45,7 @@
         onhistory?: (key: string) => void;
     }
 
-    let {assetId, period, isin, ticker, refreshKey = 0, onedit, onhistory}: Props = $props();
+    let {assetId, period, isin, ticker, otherIdentifiers = [], refreshKey = 0, onedit, onhistory}: Props = $props();
 
     type Status = 'loading' | 'ready' | 'failed' | 'missing';
     let status = $state<Status>('loading');
@@ -137,7 +139,7 @@
 
         <section class="rounded-xl border border-lf-subtle bg-lf-card p-4 shadow-sm shadow-lf-shadow-card">
             <h3 class="mb-3 text-xs font-semibold uppercase tracking-wide text-lf-muted">{$t('assets.profile.tab.details')}</h3>
-            <ProfileDetails {groups} {texts} {isin} {ticker} {onhistory} />
+            <ProfileDetails {groups} {texts} {isin} {ticker} {otherIdentifiers} {onhistory} />
         </section>
     {/if}
 </div>

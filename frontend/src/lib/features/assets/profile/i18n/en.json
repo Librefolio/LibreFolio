@@ -184,7 +184,10 @@
         "missing": "This asset no longer exists",
         "editData": "Edit data",
         "isin": "ISIN",
-        "ticker": "Ticker"
+        "ticker": "Ticker",
+        "dataSince": "from {date}",
+        "beforeProfile": "value from before the profile",
+        "companySector": "Sector"
       }
     }
   }

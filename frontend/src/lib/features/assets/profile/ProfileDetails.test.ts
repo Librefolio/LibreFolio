@@ -14,6 +14,8 @@ import {fireEvent, render, screen, setupI18n, within} from '$test/component';
 import type {ProfileStep, ProfileVoice} from './profileStore';
 import type {DetailGroup, ProfileCell} from './profileTabState';
 import ProfileDetails from './ProfileDetails.svelte';
+import {get} from 'svelte/store';
+import {_} from '$lib/i18n';
 
 function cell(key: string, state: ProfileCell['state']): ProfileCell {
     const step = state === 'unavailable' ? null : ({date: '2026-01-01', through: '2026-11-17', value: state === 'value' ? 'x' : null, source: 'justetf', update_id: 1} as ProfileStep);
@@ -44,12 +46,41 @@ describe('ProfileDetails', () => {
         expect(screen.getByTestId('profile-detail-industry')).not.toHaveTextContent('should not show');
     });
 
+    it('names the sector of the company «Sector», not after the map of the classification', () => {
+        const company: DetailGroup[] = [{group: 'company', cells: [cell('sector', 'unavailable')]}];
+        render(ProfileDetails, {props: {groups: company, texts: {}, isin: null, ticker: null}});
+        expect(screen.getByTestId('profile-detail-sector')).toHaveTextContent(get(_)('assets.profile.tab.companySector'));
+        expect(screen.getByTestId('profile-detail-sector')).not.toHaveTextContent(get(_)('assets.profile.voices.sector'));
+    });
+
     it('adds the ISIN and the ticker to the identity group', () => {
         render(ProfileDetails, {props: {groups: GROUPS, texts: TEXTS, isin: 'IE00BK5BQT80', ticker: null}});
         const identity = screen.getByTestId('profile-details-group-identity');
         expect(within(identity).getByTestId('profile-detail-isin')).toHaveAttribute('data-state', 'value');
         expect(within(identity).getByTestId('profile-detail-isin')).toHaveTextContent('IE00BK5BQT80');
         expect(within(identity).getByTestId('profile-detail-ticker')).toHaveAttribute('data-state', 'unavailable');
+    });
+
+    it('adds the other identifiers of the asset after the ISIN and the ticker', () => {
+        render(ProfileDetails, {
+            props: {
+                groups: GROUPS,
+                texts: TEXTS,
+                isin: null,
+                ticker: 'VWCE',
+                otherIdentifiers: [
+                    ['FIGI', 'BBG00XYZ'],
+                    ['CUSIP', '123456789'],
+                ],
+            },
+        });
+        const identity = screen.getByTestId('profile-details-group-identity');
+        const rows = within(identity)
+            .getAllByTestId(/^profile-detail-identifier-/)
+            .map((node) => node.textContent);
+        expect(rows).toHaveLength(2);
+        expect(rows[0]).toContain('BBG00XYZ');
+        expect(rows[1]).toContain('123456789');
     });
 
     it('opens the history of a voice with a value, when the page handles it', async () => {
