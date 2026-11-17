@@ -615,7 +615,8 @@ def _risk_return_context() -> RiskExecutionContext:
 def test_asset_risk_return_registers_canonical_capabilities():
     assert AssetRiskReturnAnalytic.analytic_code == "asset_risk_return"
     assert AssetRiskReturnAnalytic.output_kind.value == "risk_return"
-    assert AssetRiskReturnAnalytic.supported_scopes == (RiskScopeKind.PORTFOLIO,)
+    # RN-17 (consultant, 17/11): the Asset Detail reads the same pair on one asset — its own risk and return.
+    assert AssetRiskReturnAnalytic.supported_scopes == (RiskScopeKind.ASSET, RiskScopeKind.PORTFOLIO)
     # A per-asset point is a statement about the mix held now. `historical` has one
     # TWRR curve and no composition to decompose, so offering it there would have to
     # invent weights — and the invented ones would be today's, which is this mode.
@@ -625,6 +626,38 @@ def test_asset_risk_return_registers_canonical_capabilities():
     # request's risk-free rate and target.
     assert AssetRiskReturnAnalytic.algorithm_version == "1.2.0"
     assert AssetRiskReturnAnalytic.catalog_definition().name_i18n_key == "risk.analytics.assetRiskReturn.name"
+
+
+def _asset_scope_risk_return_context(returns: list[float]) -> RiskExecutionContext:
+    """One asset, as the service prepares it: no weights, no cash, no value (`load_scope_inputs`), the asset's own series as the primary."""
+    context = make_context({1: returns}, scope_kind=RiskScopeKind.ASSET, mode=RiskMode.CURRENT_COMPOSITION, scope_asset_ids=(1,))
+    return replace(context, weights={}, asset_values={}, cash_weight=0, scope_value=None)
+
+
+def test_asset_risk_return_on_one_asset_is_the_asset_s_own_pair():
+    """RN-17: on the Asset Detail the pair is the asset itself — `annualized_expected_return` of its own series, weight 1."""
+    returns = _risk_return_returns()[1]
+    context = _asset_scope_risk_return_context(returns)
+    annualization = context.annualization_factor
+    output = AssetRiskReturnAnalytic().compute(AssetRiskReturnParams(), context).output
+
+    assert [(item.asset_id, item.weight) for item in output.items] == [(1, 1.0)]
+    assert output.items[0].expected_annual_return == pytest.approx(annualized_expected_return(returns, annualization), rel=1e-12)
+    assert output.items[0].volatility == pytest.approx(annualized_volatility(returns, annualization), rel=1e-12)
+    assert output.portfolio_expected_annual_return == pytest.approx(output.items[0].expected_annual_return, rel=1e-12)
+    assert output.portfolio_volatility == pytest.approx(output.items[0].volatility, rel=1e-12)
+    assert output.cash_weight == 0
+
+
+def test_asset_risk_return_one_holding_portfolio_equals_the_asset_scope():
+    """A portfolio holding one asset, all invested, gives the very numbers the asset scope gives for it."""
+    returns = _risk_return_returns()[1]
+    on_asset = AssetRiskReturnAnalytic().compute(AssetRiskReturnParams(), _asset_scope_risk_return_context(returns)).output
+    portfolio = replace(make_context({1: returns}, mode=RiskMode.CURRENT_COMPOSITION, scope_asset_ids=(1,)), weights={1: 1.0}, cash_weight=0)
+    on_portfolio = AssetRiskReturnAnalytic().compute(AssetRiskReturnParams(), portfolio).output
+
+    assert on_portfolio.items == on_asset.items
+    assert (on_portfolio.portfolio_volatility, on_portfolio.portfolio_expected_annual_return) == (on_asset.portfolio_volatility, on_asset.portfolio_expected_annual_return)
 
 
 def test_asset_risk_return_weights_close_with_cash_and_are_not_renormalized():

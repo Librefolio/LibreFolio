@@ -630,7 +630,8 @@ def test_singular_risk_return_stays_pinned_to_portfolio_and_current_composition(
     why it is pinned here as well as beside its own plugin: widening either class
     silently invalidates the justification of the other.
     """
-    assert AssetRiskReturnAnalytic.supported_scopes == (RiskScopeKind.PORTFOLIO,)
+    # RN-17 (17/11): one asset joined the portfolio — the Asset Detail's own pair; still disjoint from the asset set below.
+    assert AssetRiskReturnAnalytic.supported_scopes == (RiskScopeKind.ASSET, RiskScopeKind.PORTFOLIO)
     assert AssetRiskReturnAnalytic.supported_modes == (RiskMode.CURRENT_COMPOSITION,)
     assert AssetSetRiskReturnAnalytic.supported_scopes == (RiskScopeKind.ASSET_SET,)
     assert AssetSetRiskReturnAnalytic.supported_modes == (RiskMode.HISTORICAL,)

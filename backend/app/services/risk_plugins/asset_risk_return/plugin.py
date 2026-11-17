@@ -87,14 +87,18 @@ class AssetRiskReturnAnalytic(RiskAnalytic):
     name_i18n_key = "risk.analytics.assetRiskReturn.name"
     description_i18n_key = "risk.analytics.assetRiskReturn.description"
     output_kind = RiskOutputKind.RISK_RETURN
-    supported_scopes = (RiskScopeKind.PORTFOLIO,)
+    # RN-17 (consultant, 17/11): the Asset Detail reads the same pair on one asset — its own risk and return, the
+    # asset weighing 1, no new formula. The portfolio's numbers do not change, so no version bump.
+    supported_scopes = (RiskScopeKind.ASSET, RiskScopeKind.PORTFOLIO)
     supported_modes = (RiskMode.CURRENT_COMPOSITION,)
     params_model = AssetRiskReturnParams
     min_observations = RISK_MIN_OBSERVATIONS
 
     def compute(self, params, context):
         asset_ids = context.scope_asset_ids
-        if any(asset_id not in context.weights for asset_id in asset_ids):
+        # One asset is its own whole: weight 1, and the primary series is its own (the service prepares no weights for it).
+        weights = {asset_ids[0]: 1.0} if context.scope_kind == RiskScopeKind.ASSET and asset_ids else context.weights
+        if any(asset_id not in weights for asset_id in asset_ids):
             raise RiskUnavailableError(
                 "Current target-currency weights are unavailable",
                 code=RiskErrorCode.DATA_UNAVAILABLE,
@@ -123,7 +127,7 @@ class AssetRiskReturnAnalytic(RiskAnalytic):
             items.append(
                 RiskReturnItem(
                     asset_id=asset_id,
-                    weight=context.weights[asset_id],
+                    weight=weights[asset_id],
                     volatility=annualized_volatility(returns, annualization),
                     expected_annual_return=annualized_expected_return(returns, annualization),
                     sharpe=sharpe,
