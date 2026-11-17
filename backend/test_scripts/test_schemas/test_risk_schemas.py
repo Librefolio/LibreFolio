@@ -130,7 +130,6 @@ def test_risk_schemas_serialize_strict_canonical_series():
         calendar_days=1,
         annualization_factor=365.0,
         calendar_coverage=1.0,
-        fresh_quote_coverage=1.0,
         data_quality=DataQualityReport(),
         fx_fingerprint="0" * 64,
     )
@@ -149,6 +148,17 @@ def test_risk_schemas_serialize_strict_canonical_series():
                 "unexpected": True,
             }
         )
+
+
+def test_prepared_series_set_carries_no_fresh_quote_coverage():
+    """RN-08 (Q14): `fresh_quote_coverage` was computed and set, and nobody ever read it.
+
+    `PreparedAssetSeriesSet` is internal — no route answers with it, the generated client never
+    sees it, AI Export does not read it — so the field goes with no API change. Whether a point
+    is a fresh quote stays on every valuation point (`is_price_carried_forward`), and the
+    carried ones that matter are counted in `data_quality`.
+    """
+    assert "fresh_quote_coverage" not in PreparedAssetSeriesSet.model_fields
 
 
 def test_risk_series_rejects_inconsistent_provenance_and_calendars():

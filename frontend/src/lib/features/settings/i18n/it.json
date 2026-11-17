@@ -484,6 +484,13 @@
       "rateLimited": "Troppe richieste: riprova tra qualche minuto.",
       "deliveryFailed": "Non è stato possibile inviare l'email: l'indirizzo non è cambiato. Riprova più tardi.",
       "unavailable": "Questa istanza ora non può inviare email: il cambio non può essere confermato."
+    },
+    "docsHelp": {
+      "profile": "Il tuo account: nome, email, avatar e password.",
+      "global": "Le impostazioni dell'intera istanza, scelte da un amministratore: valgono per tutti gli utenti.",
+      "about": "Quale versione di LibreFolio gira qui, cosa è cambiato e la sua licenza.",
+      "users": "Gli account di questa istanza: chi può accedere, chi è amministratore e i link di invito.",
+      "security": "Come questa istanza protegge gli accessi e le connessioni: i controlli che esegue e cosa sistemare quando uno fallisce."
     }
   }
 }

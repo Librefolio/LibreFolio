@@ -137,7 +137,7 @@ describe('tornadoRows', () => {
         // A bar at zero is a statement ("this did nothing"); a missing number is
         // not. Inventing the first from the second is the whole failure mode.
         // As an asset set sends it: two stocks in the bucket, and no contribution,
-        // because the scope has no weights (`stress.py:450`).
+        // because the scope has no weights (`StressAnalytic._hypothetical`).
         const rows = tornadoRows({dimension: 'asset_class', configured_buckets: [{bucket_id: 'STOCK', shock: -0.2, applied_asset_count: 2, asset_exposure_total: 2, contribution_return: null}]});
         expect(rows).toEqual([]);
     });
@@ -190,7 +190,7 @@ function figures(row: TableRow) {
     return {key: row.key, value: row.value, ownReturn: row.ownReturn, contribution: row.contribution, amount: row.amount, weight: row.weight};
 }
 
-// Hypothetical-shock payloads, written the way `stress.py::_hypothetical` writes them (`:338-452`).
+// Hypothetical-shock payloads, written the way `StressAnalytic._hypothetical` (`stress/plugin.py`) writes them.
 //
 // A bucket row takes its figures from `configured_buckets` and its weight from the holdings — each
 // one's `weight` and `bucket_audit` — and the backend derives the first from the second. A fixture
@@ -207,12 +207,12 @@ type ShockDimension = z.infer<typeof schemas.RiskScenarioDimension>;
 
 const SCOPE_VALUE = 50_000;
 
-/** One line of a holding's `bucket_audit`, fields in the wire's order; its contribution is the product `schemas/risk.py:904` validates. */
+/** One line of a holding's `bucket_audit`, fields in the wire's order; its contribution is the product `RiskStressBucketAudit.validate_resolution` (`schemas/risk/outputs.py`) validates. */
 function slice(exposure_bucket_id: string, exposure: number, candidate_bucket_ids: string[], applied_bucket_id: string | null, bucket_shock: number, rule: ShockSlice['rule']): ShockSlice {
     return {exposure_bucket_id, exposure, candidate_bucket_ids, applied_bucket_id, bucket_shock, shock_contribution: exposure * bucket_shock, rule};
 }
 
-/** A holding as `stress.py:431-442` reports it: its shock the sum of its slices' (`:418`), its contribution its weight times that. An `undefined` weight is not sent at all. */
+/** A holding as `StressAnalytic._hypothetical` reports it: its shock the sum of its slices', its contribution its weight times that. An `undefined` weight is not sent at all. */
 function holding(asset_id: number, weight: number | null | undefined, dimension: ShockDimension, bucket_audit: ShockSlice[]): ShockImpact {
     const shock_return = bucket_audit.reduce((sum, line) => sum + line.shock_contribution, 0);
     const weighted = typeof weight === 'number';
@@ -228,16 +228,16 @@ function holding(asset_id: number, weight: number | null | undefined, dimension:
     };
 }
 
-/** A holding wholly in one asset class (`stress.py:233`): applied directly when the class is a configured bucket, else shocked by zero and applied to none (`unconfigured_zero`, `:260-266`). */
+/** A holding wholly in one asset class (`_classification_exposures`, `stress/plugin.py`): applied directly when the class is a configured bucket, else shocked by zero and applied to none (`unconfigured_zero`, `_resolve_bucket`). */
 function classHolding(asset_id: number, weight: number | null | undefined, assetClass: string, shocks: Record<string, number>): ShockImpact {
     const line = assetClass in shocks ? slice(assetClass, 1, [assetClass], assetClass, shocks[assetClass], 'direct') : slice(assetClass, 1, [], null, 0, 'unconfigured_zero');
     return holding(asset_id, weight, 'asset_class', [line]);
 }
 
 /**
- * The output `stress.py:444-452` writes around those holdings: one configured bucket per shock, ordered by
+ * The output `StressAnalytic._hypothetical` writes around those holdings: one configured bucket per shock, ordered by
  * id, with the number of holdings applied to it, the sum of their *unweighted* exposures, and — on a
- * weighted scope only — Σ wᵢ·eᵢ_b·shock_b (`:412-416`).
+ * weighted scope only — Σ wᵢ·eᵢ_b·shock_b.
  */
 function shockOutput(dimension: ShockDimension, shocks: Record<string, number>, impacts: ShockImpact[]): RiskStressOutput {
     const weighted = impacts.every((impact) => typeof impact.weight === 'number');
@@ -351,10 +351,11 @@ describe('tornadoRows — the figures the table states (k5b, D376)', () => {
 //
 // The Weight column of the shock table read `asset_exposure_total`, which the backend documents as
 // the *unweighted* sum of a bucket's exposures across the scope's assets, one that «may exceed 1 for
-// multi-asset scopes» (`schemas/risk.py:921-925`). A bucket's weight is its share of the scope: each
-// holding's weight times the part of it the bucket's shock applied to, summed — the notation of the
-// hypothetical-shock theory page — so that Weight × Return is the Contribution on every row. Ids and
-// weights are invented unless a comment says they were measured.
+// multi-asset scopes» (`RiskStressConfiguredBucketImpact.asset_exposure_total`, `schemas/risk/outputs.py`).
+// A bucket's weight is its share of the scope: each holding's weight times the part of it the
+// bucket's shock applied to, summed — the notation of the hypothetical-shock theory page — so that
+// Weight × Return is the Contribution on every row. Ids and weights are invented unless a comment
+// says they were measured.
 
 /** «Global risk-off» as `scenario_catalog/built_in/hypothetical/global_risk_off.yml` ships it; the Dashboard sends every bucket of a preset. */
 const GLOBAL_RISK_OFF: Record<string, number> = {
@@ -417,7 +418,8 @@ describe('tornadoRows — a configured bucket’s weight is its share of the sco
         ).toEqual([]);
         // Together the buckets hold at most what the holdings weigh — exactly that here, where every
         // exposure met a bucket — and the holdings at most the scope: the rest is cash, and a leveraged
-        // composition never reaches the analytic (`service.py:553-555`, refused at `:232`).
+        // composition never reaches the analytic (`load_scope_inputs` in `risk/scope.py` records it,
+        // `RiskService.execute` refuses it).
         const shares = rows.reduce((sum, row) => sum + (row.weight ?? 0), 0);
         const holdings = (RISK_OFF_LANE.impacts ?? []).reduce((sum, impact) => sum + Number(impact.weight), 0);
         expect(shares, 'the buckets together state more than the holdings weigh').toBeLessThanOrEqual(holdings + SUM_EPSILON);
@@ -427,7 +429,7 @@ describe('tornadoRows — a configured bucket’s weight is its share of the sco
 
     it('states the factor that, times the bucket’s shock, is the contribution the backend sent: Weight × Return = Contribution on every row', () => {
         // On an asset-class shock every exposure is applied directly (the premise), so a bucket's
-        // contribution_return is Σ wᵢ·eᵢ_b·shock_b as the backend sums it (`stress.py:416`): the weight is
+        // contribution_return is Σ wᵢ·eᵢ_b·shock_b as the backend sums it (`StressAnalytic._hypothetical`): the weight is
         // the one factor in front of the shock. Checked against the payload's own figures, not restated.
         const rules = new Set((RISK_OFF_LANE.impacts ?? []).flatMap((impact) => (impact.bucket_audit ?? []).map((line) => line.rule)));
         expect([...rules], 'premise: every exposure is applied directly').toEqual(['direct']);
@@ -473,8 +475,9 @@ describe('tornadoRows — a configured bucket’s weight is its share of the sco
     it('adds up a holding split across sectors, each part in the bucket that took it', () => {
         // An ETF 60% Technology and 40% Health Care at half the scope, beside a stock wholly in
         // Technology at 30%: Technology holds 0.5·0.6 + 0.3 = 60%, Health Care 0.5·0.4 = 20%. A sector
-        // the scenario does not name falls to Other (`stress.py:274-278`): the energy stock, 10%. A
-        // sector shock always carries Other (`:216-224`), and an audit lists its sectors in order (`:388`).
+        // the scenario does not name falls to Other (`_resolve_bucket`): the energy stock, 10%. A
+        // sector shock always carries Other (`_normalize_bucket_shocks`), and an audit lists its sectors
+        // in order (`StressAnalytic._hypothetical`).
         const shocks = {'Health Care': -0.1, Other: -0.05, Technology: -0.3};
         const output = shockOutput('sector', shocks, [
             holding(31, 0.5, 'sector', [slice('Health Care', 0.4, ['Health Care', 'Other'], 'Health Care', -0.1, 'direct'), slice('Technology', 0.6, ['Technology', 'Other'], 'Technology', -0.3, 'direct')]),
@@ -495,7 +498,7 @@ describe('tornadoRows — a configured bucket’s weight is its share of the sco
 
     it('counts an exposure no configured bucket took — unconfigured_zero — in no bucket at all', () => {
         // A request may name only some classes: the API takes any subset, the presets name them all. A
-        // class it leaves out is shocked by zero, silently, and applied to no bucket (`stress.py:260-266`),
+        // class it leaves out is shocked by zero, silently, and applied to no bucket (`_resolve_bucket`),
         // so the bond's 15% is nobody's share and the buckets hold 75% of the 90% invested.
         const shocks = {ETF: -0.25, STOCK: -0.35};
         const output = shockOutput('asset_class', shocks, [classHolding(41, 0.3, 'STOCK', shocks), classHolding(42, 0.2, 'STOCK', shocks), classHolding(43, 0.25, 'ETF', shocks), classHolding(44, 0.15, 'BOND', shocks)]);
@@ -511,7 +514,7 @@ describe('tornadoRows — a configured bucket’s weight is its share of the sco
     it('adds up two parts of one holding that the same geography group took', () => {
         // «European Union shock» (`scenario_catalog/built_in/hypothetical/european_union_shock.yml`). An
         // ETF 30% Germany, 20% Italy and 50% United States at 40% of the scope: Germany and Italy both
-        // fall to the european_union group (`stress.py:279-311`), which takes 0.4·(0.3 + 0.2) of it, and
+        // fall to the european_union group (`_resolve_bucket`), which takes 0.4·(0.3 + 0.2) of it, and
         // an Italian stock at 25% — 45% in all, from two assets and three audit lines. The United States
         // fall to Other, whose zero shock contributes nothing: a 20% share beside a 0 contribution.
         const shocks = {Other: 0, european_union: -0.2};
@@ -534,7 +537,7 @@ describe('tornadoRows — a configured bucket’s weight is its share of the sco
 
     it('states no weight on a scope without weights, so the Weight column is left out', () => {
         // An asset set: its holdings carry no weight — null, or not sent at all — and the backend
-        // sends no contribution on its buckets either (`stress.py:450`), so today they are dropped
+        // sends no contribution on its buckets either (`StressAnalytic._hypothetical`), so today they are dropped
         // before any weight is read (the drop rule above).
         const shocks = {CRYPTO: -0.3, STOCK: -0.2};
         const sent = shockOutput('asset_class', shocks, [classHolding(61, null, 'STOCK', shocks), classHolding(62, undefined, 'STOCK', shocks), classHolding(63, null, 'CRYPTO', shocks)]);
@@ -548,7 +551,7 @@ describe('tornadoRows — a configured bucket’s weight is its share of the sco
             rows.map((row) => row.bucketId),
             'premise: both buckets are drawn',
         ).toEqual(['CRYPTO', 'STOCK']);
-        // `TornadoChart` shows the column only when some row states a weight (`TornadoChart.svelte:57`).
+        // `TornadoChart` shows the column only when some row states a weight (`hasWeight` in `TornadoChart.svelte`).
         expect(
             rows.map((row) => row.weight),
             'a bucket states a weight on a scope that has none',
@@ -709,7 +712,7 @@ type ReplayErrorCode = z.infer<typeof schemas.RiskErrorCode>;
 const BLOCK_CODES = ['historical_replay_assets_excluded', 'historical_replay_mostly_excluded'];
 const REASON_ORDER = ['no_prices_in_window', 'starts_after_window_start', 'stale_at_window_start', 'stale_at_window_end', 'missing_fx', 'manual_exclusion'];
 
-// ⚠️ Every figure and id below is invented; the shapes are the backend's (`stress.py::_historical`,
+// ⚠️ Every figure and id below is invented; the shapes are the backend's (`StressAnalytic._historical`,
 // `_replay_exclusion_warning`, `service.py::_with_warning_asset_names`).
 const WINDOW = {start: '2020-02-03', end: '2020-03-31'};
 const NOTHING_LEFT_MESSAGE = 'No asset in the replay scope covers the replay window';
@@ -732,7 +735,7 @@ function omitted(assetId: number, reason: ExclusionReason): AuditExcludedAsset {
     return {asset_id: assetId, reason, weight: null, treatment: 'omitted_from_replay'};
 }
 
-/** An audit as `stress.py` builds it: the total is the sum of the weights, zero when there are none. */
+/** An audit as `StressAnalytic._historical` builds it: the total is the sum of the weights, zero when there are none. */
 function audit(excluded: AuditExcludedAsset[], extra: Partial<ReplayAudit> = {}): ReplayAudit {
     const weights = excluded.map((item) => item.weight).filter((weight): weight is number => typeof weight === 'number');
     return {
@@ -817,7 +820,7 @@ function replayed(scope: 'portfolio' | 'asset_set', replayAudit: ReplayAudit, wa
 }
 
 /**
- * A replay that did not run. `unavailable` and no output, as `schemas/risk.py` demands of it.
+ * A replay that did not run. `unavailable` and no output, as `RiskAnalyticResult.validate_status_payload` (`schemas/risk/results.py`) demands of it.
  *
  * `wrapped` sends the error inside a list: the generated client types the field as a value *or*
  * a list, and the helpers read it the way `firstError` / `singleValue` do.
@@ -827,7 +830,7 @@ function refused(code: ReplayErrorCode, details: Record<string, unknown> | undef
     return {instance_id: 'single-stress', analytic_code: 'stress', status: 'unavailable', output: null, error: wrapped ? [error] : error};
 }
 
-/** Nothing left to replay: every asset excluded (`stress.py`, the `if not selected:` branch). */
+/** Nothing left to replay: every asset excluded (`StressAnalytic._historical`, the `if not selected:` branch). */
 function nothingLeft(details: Record<string, unknown>, {wrapped = false}: {wrapped?: boolean} = {}): RiskAnalyticResult {
     return refused('insufficient_history', details, {wrapped, message: NOTHING_LEFT_MESSAGE});
 }
@@ -899,7 +902,7 @@ describe('replayExclusions — from the audit, when something was replayed', () 
     });
 
     it('reads an asset set as having no weights at all — no total, not a total of zero', () => {
-        // `stress.py` pins `excluded_weight_total` to 0.0 on an unweighted scope; read as a number
+        // `StressAnalytic._historical` pins `excluded_weight_total` to 0.0 on an unweighted scope; read as a number
         // it would print "0.0% of the scope" beside assets that were never weighed.
         const result = replayed('asset_set', audit([omitted(21, 'starts_after_window_start'), omitted(22, 'no_prices_in_window')]), [exclusionWarning('no_prices_in_window', [22], 'omitted_from_replay'), exclusionWarning('starts_after_window_start', [21], 'omitted_from_replay')]);
 

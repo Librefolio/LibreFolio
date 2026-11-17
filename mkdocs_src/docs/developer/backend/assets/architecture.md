@@ -21,6 +21,7 @@ responsibility:
 | `event_links.py` | The transactions linked to asset events, as a refusal names them for its caller: `visible_transaction_ids()`, the ids on a broker the caller holds an access to, none without a caller (the rule `split_guard.py` imports), and `events_with_linked_transactions()`, the events among those given that transactions are linked to, each with the caller's view: the count of transactions the provider-change dry run reports. |
 | `event_store.py` | Event upserts (rows updated in place: a provider refresh commits them in the same bounded chunks as prices, the manual upsert once for the whole request, all or nothing, after deleting the events its items list in `delete_ids`) and deletes scoped to one asset, plus the event queries and reads by id behind `/assets/events`. |
 | `price_query.py` | DB-backed history/event queries, backward fill, FX and signal preparation, plus current-price lookup and today's OHLC write-back. |
+| `bulk_current.py` | The current values of the providers that read in bulk (project 76): one call per group of a provider's assets, every active asset of the provider read with the requested ones, a stamp and a lock per group ([Current Values Read in Bulk](#bulk-current-reads)). |
 | `period_changes.py` | The fixed-period changes of the Assets table, and on request the whole-range change of the Assets cards: each asset's price on the days the change needs, read in grouped queries and converted at each day's rate ([Fixed-Period Changes](#fixed-period-changes)). |
 | `refresh.py` | Provider-driven price refresh and its explicit PREPARE/FETCH/PERSIST phases. |
 | `crud.py` | Asset create, list, delete and merge operations, and the all-or-nothing patch `patch_assets_bulk()` ([Asset Patch](#asset-patch)). |
@@ -157,10 +158,23 @@ graph TD
 
 When the range reaches today, FETCH asks a provider's history only up to yesterday, then calls
 `get_current_value()` and adds its value as the close of its `as_of_date` (today when the provider
-gives none), replacing any history point of that date; PERSIST stores it with the rest. A provider
+gives none), replacing any history point of that date, but only for today: a value dated before today (read
+before midnight and cached for the provider's interval) never replaces a past day's close, whether the round's
+history has it or only the database (a resume) — it only adds a day that is missing (project 76, C3b, the midnight
+rule). PERSIST stores it with the rest. A provider
 without history (`supports_history = False`, such as the CSS Scraper) therefore builds its series
 one sync at a time, one point per day; outside syncs, the
 [current-quote write-back](#current-quotes-and-todays-ohlc) stores the same day's point.
+
+A provider that [reads in bulk](#bulk-current-reads) gets no `get_current_value()` call per asset:
+PREPARE also plans, with its session, one bulk read of the group of the items whose range reaches
+today, and FETCH runs it before the items (project 76, C3). Each item then takes its quote from that
+read, or its refusal for too many requests (the pause the read met then holds the history too, so
+the history is not asked), or the reason the price columns refused it (X-R51). The read is the live
+read's: within its stamp, a refresh makes no call, and a refresh of one asset reads the whole group.
+So for a bulk provider a refusal of that read costs the round its history too: nothing is stored, the
+result is FAILED with `RATE_LIMITED`, and the next round, once the pause is over, stores it (a delay,
+never a wrong value; racing the history against the pause would gain nothing).
 
 Before asking a provider's history from a dated start, FETCH reads the core history cache
 (`core._asset_history_cache`): it asks from the first day the cached entry misses between the start
@@ -923,6 +937,8 @@ Several of these requests can be in flight at once, a range change during a refr
 asset, `_live_quote_item()` reads the core current-price cache, or calls an assigned provider
 through `core.call_provider()`, and checks the quote; the asset falls back to the database when
 the provider fails, is [paused](#provider-pauses) or is absent, or when its quote is refused.
+A provider that [reads in bulk](../../architecture/patterns/asset_plugin_guide.md#bulk-current)
+is called once per group of its assets instead ([Current Values Read in Bulk](#bulk-current-reads)).
 
 The request is bounded like the other bulk requests (R13-SEC9-1): more than `MAX_BULK_ITEMS`
 (1,000) ids get the 422 `bulk_too_many_items` of [bulk request limits](#bulk-request-limits)
@@ -1033,6 +1049,63 @@ currency, only when the summary converts the live price (the display currency is
 configured). The answer's `range_change` becomes `rangeDelta`, the Δ the summary shows beside the live price: none
 beside a price left native because its conversion failed (the change is in the display currency), and none from the
 moment the asset, the range's start or the display currency changes until the next poll.
+
+---
+
+### 📦 Current Values Read in Bulk {: #bulk-current-reads }
+
+A provider that declares `supports_bulk_current` prices many assets with one call
+([Current Values in Bulk](../../architecture/patterns/asset_plugin_guide.md#bulk-current)).
+`get_current_prices_bulk()` hands those assets to `bulk_current.py` (project 76); the others keep
+one `_live_quote_item()` per asset, unchanged, and both run in the same `gather`.
+
+- **The group.** One provider, one set of its settings (`settings_cache_part()`) and one pause
+  scope (`cooldown_scope_for()`): what one call can serve. A group is read with one
+  `call_provider()` per chunk of `bulk_current_max_items`, each with a timeout of 30 s
+  (`BULK_CURRENT_TIMEOUT`, against 10 s for one asset). Every answer the price columns can keep
+  (`storable_current_value()`) goes to the per-asset cache under `asset_cache_key()`, so the
+  per-asset readers and the refresh find it.
+- **Aligned expiry.** When a group must be read, the call covers every **active** asset assigned to
+  the provider, plus the assets asked for (a detail page may ask for an inactive one). The readers
+  that ask different sets — the scheduler every 10 minutes, the Assets list, a detail page, the
+  dashboard — then find their quotes in the cache, and the whole group expires at once: one call
+  per group per expiry.
+- **The interval.** A provider may declare `current_min_refresh_seconds` (a property, typically
+  from a setting): its current values stay fresh that long, two minutes otherwise, and less than
+  two minutes is ignored and logged (`core.current_cache_ttl()`, read on the configured instance
+  only). Every writer of the current-value cache stores with it (`core.remember_current_value()`),
+  bulk or per asset, and a group's stamp lasts as long. Whether a group must be read is decided by
+  the stamp alone.
+- **The group stamp.** A read leaves `(expiry, members, notes)` for its group, members being the
+  cache keys it covered and notes the reasons of the quotes it refused for the price columns
+  (X-R51), which a refresh within the stamp still reports. Within the stamp, a member without a cached quote — left out of the answer,
+  answered with its own error, or refused by the price columns — is served from the database
+  without a call. An asset outside the members (an assignment newer than the read) reads the group
+  again. A read that fails for another reason leaves a short stamp, so a broken source is not
+  called at every request; a refusal for too many requests leaves none, and the provider's
+  [pause](#provider-pauses) decides.
+- **Single-flight.** One `asyncio.Lock` per group and event loop, and the need checked again once
+  it is held: two readers that find the same group expired make one call. Only the read and the
+  cache fill run under the lock.
+- **Only what was asked is written.** The assets read but not asked for go to the cache only, never
+  to today's row of `price_history`: the scheduler asks for every active asset and writes them
+  then.
+- **The session.** The plan of the reads (`prepare_bulk()`, one statement for the active
+  assignments of the providers to read) uses it before the reads; the reads never touch it
+  (MF-SEC9c).
+
+!!! note "Per process"
+
+    Stamps, locks and the current-value cache live in each uvicorn worker. The Docker image runs
+    one worker and the scheduler runs in one process at a time, so only the reads the pages drive
+    multiply with more workers.
+
+| The call | What the requested assets of the group get |
+|---|---|
+| answers the asset | the quote, `source="provider:<code>"` |
+| leaves it out, or answers its own error | the last stored price (`db:last_known`), or the error item |
+| refused for too many requests, or the provider paused | the last stored price with `error_code="RATE_LIMITED"` and `retry_after`, as on the per-asset path |
+| fails otherwise | the last stored price, without refusal fields |
 
 ---
 
@@ -1211,7 +1284,9 @@ cost unknown it stays `MISSING`.
 - **Canonical cache ownership**: `assets/core.py` owns the history, current, metadata,
   search-result, and search-query singleton caches. Responsibility modules dereference these
   objects through `core`, preserving one identity and one monkeypatch point.
-- **`_asset_current_cache`**: caches provider current-value results for two minutes, as the price
+- **`_asset_current_cache`**: up to 5,000 entries, since a [bulk read](#bulk-current-reads) caches every
+  active asset of its provider; caches provider current-value results for two minutes, or for the
+  provider's [interval](#bulk-current-reads) (`current_min_refresh_seconds`), as the price
   columns keep them: the live-query path and the refresh store a quote only once
   `storable_current_value()` has passed it, truncated if need be, so the cache never holds one
   that cannot be served or written ([Current Quotes and Today's OHLC](#current-quotes-and-todays-ohlc)).

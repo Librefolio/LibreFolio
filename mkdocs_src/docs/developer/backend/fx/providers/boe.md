@@ -48,7 +48,7 @@ series code, asked with its own request, in parallel.
 | ZAR 🇿🇦 | `XUDLZRS` | South African Rand into Sterling | `(d, GBP, ZAR, v)` |
 | INR 🇮🇳 | `XUDLBK97` | Indian Rupee into Sterling | `(d, GBP, INR, v)` |
 
-`test_fx_provider_quotes.py` pins every series, its endpoint, `csv.x=yes`, the start date and the response check
+`test_fx_boe_quotes.py` pins every series, its endpoint, `csv.x=yes`, the start date and the response check
 against a table written by hand, with synthetic answers only.
 
 ### 🔗 The download path and robots.txt

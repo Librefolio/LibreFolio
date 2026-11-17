@@ -114,12 +114,12 @@ El riesgo vale la pena solo si paga. Este bloque compara el rendimiento de tu ca
 - **Choque hipotético**: haz clic en un escenario, como *Equity crash*, para ejecutarlo; **Mostrar el choque por grupo** te permite cambiar sus supuestos.
 - **Simulación**: elige un modo — *Historial remezclado* es el recomendado — y un horizonte, en días o como años, meses y días (`2a3m5d`), luego **Simular**. Lee el cono como un rango de posibilidades, no como un pronóstico.
 
-!!! note "La simulación sigue en beta"
+!!! note "La simulación depende del historial que lee"
 
-    Su resultado depende en gran medida de cuánta historia contiene el período en comparación con el horizonte — consulta [Por qué la simulación sigue en beta](../../financial-theory/technical-analysis/risk-metrics/simulation-modes.md#why-beta).
+    Su resultado depende en gran medida de cuánta historia contiene el período en comparación con el horizonte — consulta [Lo que la simulación todavía no hace](../../financial-theory/technical-analysis/risk-metrics/simulation-modes.md#why-beta).
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="El cuadro ¿Y si…? Simulación: el aviso de beta y la advertencia del modelo, los cinco modos con Historial remezclado recomendado, horizonte, trayectorias y semilla, y tras Simular las cifras terminales, el cono y Qué asumió esta simulación" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="El cuadro ¿Y si…? Simulación: la advertencia del modelo, los cinco modos con Historial remezclado recomendado, horizonte, trayectorias y semilla, y tras Simular las cifras terminales, el cono y Qué asumió esta simulación" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---

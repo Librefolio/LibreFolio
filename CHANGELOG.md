@@ -23,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Assets table: each row has an «Edit» action that opens the asset editor in place, without going to the detail page.
 - FED exchange rates now also cover the Malaysian ringgit (MYR), the Sri Lankan rupee (LKR) and the Venezuelan bolívar (VES, from 4 October 2021, the last redenomination).
 - Routes that use FED show an ℹ️ note: FED rates are daily, one per US business day, but the Federal Reserve publishes them once a week, on Mondays, so the latest FED rate can be up to about 10 days old. Provider notes now come in two levels in the route picker: ℹ️ for a fact worth knowing, ⚠️ for a data limit such as the SNB's monthly averages.
+- New exchange-rate providers from five more central banks, all free and without an API key: Banca d'Italia (BDI) and Banco Central do Brasil (BCB) cover almost every currency in the world, in one step to the euro and to the US dollar; Norges Bank (NORGES), the National Bank of Ukraine (NBU) and the Bank of Canada (BOC) add the official rates of their countries and second sources for many others. BCB data: Banco Central do Brasil, PTAX, ODbL.
+- Risk: when the analysis starts later than the chosen period, because there are no prices before its start, the level says from which day, and names the assets whose history begins inside the period.
+- Risk: the period and the currency the figures are measured on are written under the title, and above the lab's sections.
+- Hypothetical shock: the asset classes a scenario leaves out, shocked by zero, are named under the total.
+- A documentation icon on the right of more panels (Dashboard charts and positions, lots analysis, assets list and lab, asset detail, brokers, FX, files and backups, settings) opens the matching page of the manual, with a short explanation of the panel in its tooltip.
 
 ### 🔄 Changed
 
@@ -40,6 +45,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dashboard › Your Positions: «See all» is now a small badge, and on a phone the three view switches (Portfolio/Period, Global/Broker, table/map) sit on their own row under the title.
 - Bulk edit of assets: after a save the window stays open on the summary with a green «Saved» check, and the selection stays, so you can keep working on the same assets. The summary shows the new icon as a thumbnail; the fields sit on one grid, with the current value under each field and its reset button on the same row, and the window has no inner scrollbar.
 - The selection bar of the tables (assets, transactions, FX, a broker's transactions) now floats at the bottom of the screen while rows are selected, and stays there after a save; Esc clears the selection when the focus is in it.
+- The route window of a currency pair opens faster, and a large group of chain routes shows its first 200, with «Show more (n hidden)» for the others; the search still looks through all of them. With the new central banks a single pair can have tens of thousands of chains.
+- Live prices with fewer requests: providers that can price many assets at once are now asked once per provider instead of once per asset; Yahoo Finance does so through its quote list. With 20 Yahoo assets an hour of the scheduler and open pages costs a few dozen requests instead of hundreds, so «too many requests» pauses become rare. A price sync takes today's value from the same read, at most one request per provider; when that read is refused, the history of that round waits for the next one.
+- A provider can keep its live prices fresh for longer than two minutes (for sources with a call budget); the default stays two minutes.
+- Risk, correlation: the minimum-coverage threshold now judges how much of the period the assets' common window covers, so its warning can fire; the heatmap tooltip shows that real coverage instead of always 100 %.
+- Risk: the worst and the current fall in money now say they are the same fall measured on today's value.
 
 ### 🐛 Fixed
 
@@ -65,6 +75,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Assets: the «n selected» chip always clears the whole selection, and the column menu and column resizing act on both asset tables (yours and the others'); before, one of the two could be left out.
 - FED exchange rates for 16 currencies were stored upside down (JPY, CAD, CHF, SEK, DKK, NOK, CNY, INR, BRL, MXN, ZAR, SGD, HKD, KRW, TWD, THB): 1 JPY showed as 158 USD instead of 0.0063. Rates already stored are not changed. To correct them, open the FX page, choose the «All» period and use «Sync All»: every pair whose route uses FED, also as one step of a chain (for example INR → USD → EUR), is fetched again and overwritten.
 - The Bank of England (BOE) provider downloaded nothing, because the Bank's database changed its download address; it works again. Its euro rate also came from the wrong series (euro against the US dollar instead of against sterling): every pair whose route uses BOE for the euro stays wrong until you sync it again the same way («All» period, «Sync All»).
+- A past day's close is never overwritten by a live quote: a quote read before midnight only fills a day that is missing. Outside market hours an asset's last trading day also keeps its full candle (open, high, low) instead of a close-only point.
+- Risk lab: after a sync, the lab asks again which assets can be analysed over the period, so an asset whose prices the sync brought in becomes selectable without reloading the page.
+- Risk lab: each section asks once when the lab opens about the assets it can analyse, instead of twice.
+- The «Schedule Configuration» window scrolls inside when it is taller than the screen, so «Save» is never cut off on a small window.
 
 ### ⚠️ Breaking changes
 

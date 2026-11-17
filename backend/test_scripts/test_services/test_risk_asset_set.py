@@ -217,7 +217,6 @@ def make_prepared_set(returns_by_asset: dict[int, list[float]]) -> PreparedAsset
         calendar_days=observations,
         annualization_factor=365.0,
         calendar_coverage=1.0,
-        fresh_quote_coverage=1.0,
         data_quality=DataQualityReport(),
         fx_fingerprint="0" * 64,
     )

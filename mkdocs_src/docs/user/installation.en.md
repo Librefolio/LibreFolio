@@ -222,7 +222,7 @@ For what to save and how, see the [Backup section of the Admin Manual](../admin/
 
 ## 🔄 Updating LibreFolio {#updating}
 
-Database migrations run automatically when the container starts and are designed to keep existing data, while some features, such as the **What if…?** risk simulation, are [still in beta](../financial-theory/technical-analysis/risk-metrics/simulation-modes.md#why-beta) and can change between versions. Take a [backup](#data-backup) before updating: it is your way back if something goes wrong.
+Database migrations run automatically when the container starts and are designed to keep existing data, while some features, such as the **What if…?** risk simulation, can still change between versions ([what it does not yet do](../financial-theory/technical-analysis/risk-metrics/simulation-modes.md#why-beta)). Take a [backup](#data-backup) before updating: it is your way back if something goes wrong.
 
 - With the `latest` tag you always get the newest release, along with any change it brings.
 - To update only when you decide, pin a version instead of `latest`: `ghcr.io/librefolio/librefolio:1.1.0` (full variant) or `ghcr.io/librefolio/librefolio:1.1.0-light` (light variant). See [Image Variants](#image-variants-full-and-light).

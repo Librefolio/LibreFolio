@@ -51,6 +51,7 @@
 
     import {buildAssetSetHurtRows, type AssetSetHurtRow} from './assetSetLevels';
     import {assetNameColumn, figureCell} from './assetSetTable';
+    import {headerFontsSettled} from './headerFonts.svelte';
     import {headerWidth, measureHeaderTitle} from './riskReturnLevel';
 
     interface Props {
@@ -138,6 +139,8 @@
      * title spill out of its column (the developer's review, 30/09).
      */
     function titleWidth(id: LossColumn): number {
+        // Measured again once the page's fonts are in: before, the canvas draws the fallback face (RN-09).
+        void headerFontsSettled();
         return headerWidth($t(`risk.assetSet.levels.l1.columns.${id}`), measureHeaderTitle);
     }
 
@@ -266,20 +269,24 @@
         <p class="py-4 text-center text-sm text-lf-muted" data-testid="risk-asset-set-l1-empty">{$t('risk.states.empty')}</p>
     {:else}
         <div bind:this={tableWrapper} data-testid="risk-asset-set-l1-table" data-row-count={rows.length}>
-            <DataTable
-                bind:this={tableRef}
-                data={rows}
-                {columns}
-                getRowId={(row) => String(row.assetId)}
-                storageKey="risk-asset-set-l1"
-                enableSelection={false}
-                selectionMode="none"
-                enableActions={false}
-                enableColumnFilters={false}
-                defaultPageSize={RISK_PAGE_SIZE}
-                pageSizeOptions={RISK_PAGE_SIZES}
-                enableContextMenu={false}
-            />
+            <!-- Drawn again once the page's fonts are in (RN-09): DataTable takes its column widths when it is
+                 created, and widths measured with the fallback face cut the last title. Once, at most. -->
+            {#key headerFontsSettled()}
+                <DataTable
+                    bind:this={tableRef}
+                    data={rows}
+                    {columns}
+                    getRowId={(row) => String(row.assetId)}
+                    storageKey="risk-asset-set-l1"
+                    enableSelection={false}
+                    selectionMode="none"
+                    enableActions={false}
+                    enableColumnFilters={false}
+                    defaultPageSize={RISK_PAGE_SIZE}
+                    pageSizeOptions={RISK_PAGE_SIZES}
+                    enableContextMenu={false}
+                />
+            {/key}
         </div>
     {/if}
 </div>

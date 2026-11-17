@@ -362,7 +362,9 @@
       "historical_replay_mostly_excluded": "El resultado describe solo una parte de tu cartera ({covered, number, percent}): el resto queda fuera de la repetición.",
       "assets_excluded_no_price_source": "{count, plural, one {# activo excluido} other {# activos excluidos}} del cálculo: sin fuente de precios asignada ni ningún precio registrado — {names}.",
       "total_loss_no_recovery": "El valor cayó a cero: ninguna ganancia puede devolverlo a su máximo, así que no se muestra la recuperación necesaria.",
-      "total_loss_no_recovery_assets": "{count, plural, one {# activo cayó} other {# activos cayeron}} a cero: ninguna ganancia puede {count, plural, one {devolverlo a su máximo} other {devolverlos a su máximo}}, así que no se muestra la recuperación necesaria — {names}."
+      "total_loss_no_recovery_assets": "{count, plural, one {# activo cayó} other {# activos cayeron}} a cero: ninguna ganancia puede {count, plural, one {devolverlo a su máximo} other {devolverlos a su máximo}}, así que no se muestra la recuperación necesaria — {names}.",
+      "analysis_starts_late": "El análisis empieza el {start}: antes de ese día no hay ningún día de precios completo.",
+      "short_history": "{names}: ningún precio antes del inicio del período, así que su historial empieza dentro de él."
     },
     "assetDetail": {
       "overviewTab": "Resumen",
@@ -401,11 +403,7 @@
     },
     "betaBanner": {
       "title": "El análisis de riesgos está en beta.",
-      "description": "Los cálculos, los resultados y la interfaz pueden cambiar antes de la versión estable.",
-      "simulation": {
-        "title": "La simulación sigue en beta.",
-        "description": "Su resultado depende en gran medida de cuánto historial se solicita en relación con el horizonte: una ventana corta con un horizonte largo puede producir cifras inverosímiles. Todos los demás niveles del análisis de riesgos han salido de la beta."
-      }
+      "description": "Los cálculos, los resultados y la interfaz pueden cambiar antes de la versión estable."
     },
     "levels": {
       "l1": {
@@ -452,7 +450,8 @@
         "when": "Cuándo",
         "since": "Desde",
         "duration": "Duración",
-        "daysCount": "{days, plural, one {# día} other {# días}}"
+        "daysCount": "{days, plural, one {# día} other {# días}}",
+        "sameFallToday": "{amount} · la misma caída, sobre el valor de hoy"
       },
       "l2": {
         "title": "¿Estoy tan diversificado como creo?",
@@ -616,7 +615,8 @@
           "contribution": "Contribución",
           "impact": "Impacto",
           "bar": "Efecto"
-        }
+        },
+        "shockUnconfigured": "No están en este escenario, así que su choque es 0: {names}. El total los cuenta como intactos."
       },
       "backtestNotice": "Con un subconjunto activo, estas cifras se reconstruyen sobre la composición de hoy: dicen cómo *habría* ido, no cómo fue en realidad.",
       "notice": {
@@ -652,6 +652,14 @@
     "benchmark": {
       "measuredHere": "Este índice de referencia es también un activo medido aquí y no puede servir de medida de sí mismo: elige otro para la comparación.",
       "blocked": "No utilizables en este periodo"
+    },
+    "period": {
+      "range": "Período {start} – {end} · en {currency}",
+      "open": "Período desde el {start} · en {currency}"
+    },
+    "docsHelp": {
+      "header": "Cuánto puede perder la cartera, si está diversificada, si el riesgo se paga y qué podría pasar: las cuatro preguntas de la pestaña Riesgo, sobre el período indicado.",
+      "assetSet": "Elige algunos activos y compáralos en el período: cuánto perdió cada uno, cuánto rindió por su riesgo, cuáles se mueven juntos y cómo habrían atravesado las crisis pasadas."
     }
   }
 }

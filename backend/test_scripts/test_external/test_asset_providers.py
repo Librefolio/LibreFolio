@@ -10,6 +10,7 @@ which translate to pytest -k expressions at the CLI level.
 
 import sys
 from datetime import date, timedelta
+from decimal import Decimal
 
 import pytest
 
@@ -21,7 +22,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import traceback
 
-from backend.app.schemas.prices import FACurrentValue
+from backend.app.schemas.prices import FACurrentValue, FACurrentValueRequest
 from backend.app.services.assets.base import AssetSourceError
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.test_scripts.test_utils import (
@@ -196,6 +197,47 @@ async def test_current_value(provider_code: str):  # noqa: C901 — per-case tes
         print_error(f"Unexpected error: {e}")
         traceback.print_exc()
         raise
+
+
+#: How far the bulk and the single read of one asset may differ: they are two requests, a few seconds apart
+BULK_PRICE_TOLERANCE = Decimal("0.02")
+
+
+@pytest.mark.asyncio
+async def test_current_values_bulk(provider_code: str):
+    """Project 76, C5b: a provider that reads current values in bulk answers, in ONE ``get_current_values_bulk`` call on
+    its test cases, what ``get_current_value`` answers one by one: the same items, the same currency, a date at most one
+    day apart (midnight between the two reads) and a price within ``BULK_PRICE_TOLERANCE`` (two reads, not
+    simultaneous). It is the only test that meets the source's real bulk endpoint (Yahoo's v7 quote list): a library
+    release that changes it turns this red. Skipped for a provider without bulk support."""
+    print_section(f"Test 2b: {provider_code} - Current Values in Bulk")
+    provider = AssetProviderRegistry.get_provider_instance(provider_code)
+    if not getattr(provider, "supports_bulk_current", False):
+        pytest.skip(f"{provider_code} does not read current values in bulk")
+    cases = list(provider.test_cases)[: provider.bulk_current_max_items]
+    if not cases:
+        pytest.skip(f"{provider_code} has no test_cases defined")
+    items = []
+    for index, case in enumerate(cases):
+        identifier_type = case.get("identifier_type", IdentifierType.TICKER)
+        if isinstance(identifier_type, str):
+            identifier_type = IdentifierType[identifier_type]
+        items.append(FACurrentValueRequest(key=str(index), identifier=case["identifier"], identifier_type=identifier_type, provider_params=case.get("provider_params") or {}))
+
+    answer = await provider.get_current_values_bulk(items)
+
+    assert set(answer) == {item.key for item in items}, f"bulk answered {sorted(answer)}, asked {[item.key for item in items]}"
+    for item in items:
+        bulk = answer[item.key]
+        assert isinstance(bulk, FACurrentValue), f"{item.identifier}: bulk answered {bulk!r}"
+        single = await provider.get_current_value(item.identifier, item.identifier_type, item.provider_params)
+        assert bulk.currency == single.currency, f"{item.identifier}: currency {bulk.currency} in bulk, {single.currency} alone"
+        assert abs((bulk.as_of_date - single.as_of_date).days) <= 1, f"{item.identifier}: date {bulk.as_of_date} in bulk, {single.as_of_date} alone"
+        assert bulk.value > 0 and single.value > 0
+        drift = abs(bulk.value - single.value) / single.value
+        assert drift <= BULK_PRICE_TOLERANCE, f"{item.identifier}: {bulk.value} in bulk, {single.value} alone ({drift:.2%} apart)"
+        print_success(f"  ✓ {item.identifier}: {bulk.value} {bulk.currency} in bulk, {single.value} alone, {bulk.as_of_date}")
+    print_success(f"{len(items)} items: one bulk call agrees with the single reads")
 
 
 @pytest.mark.asyncio

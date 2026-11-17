@@ -23,6 +23,11 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Tabella Asset: ogni riga ha un'azione «Modifica» che apre l'editor dell'asset sul posto, senza andare alla pagina di dettaglio.
 - I cambi FED coprono anche il ringgit malese (MYR), la rupia dello Sri Lanka (LKR) e il bolívar venezuelano (VES, dal 4 ottobre 2021, l'ultima ridenominazione).
 - Le route che usano FED mostrano una nota ℹ️: i cambi FED sono giornalieri, uno per giorno lavorativo USA, ma la Federal Reserve li pubblica una volta a settimana, il lunedì, quindi l'ultimo cambio FED può avere fino a circa 10 giorni. Le note dei provider hanno ora due livelli nella scelta della route: ℹ️ per un fatto utile da sapere, ⚠️ per un limite dei dati come le medie mensili della SNB.
+- Nuovi provider dei cambi da altre cinque banche centrali, tutti gratuiti e senza chiave API: Banca d'Italia (BDI) e Banco Central do Brasil (BCB) coprono quasi tutte le valute del mondo, con un passo solo verso l'euro e verso il dollaro USA; Norges Bank (NORGES), la Banca Nazionale d'Ucraina (NBU) e la Bank of Canada (BOC) aggiungono i cambi ufficiali dei loro paesi e seconde fonti per molti altri. Dati BCB: Banco Central do Brasil, PTAX, ODbL.
+- Rischio: quando l'analisi parte dopo l'inizio del periodo scelto, perché prima non ci sono prezzi, il livello dice da quale giorno e nomina gli asset la cui storia comincia dentro il periodo.
+- Rischio: il periodo e la valuta su cui sono misurate le cifre sono scritti sotto il titolo e sopra le sezioni del laboratorio.
+- Shock ipotetico: le classi di asset che uno scenario lascia fuori, con shock zero, sono nominate sotto il totale.
+- Un'icona della documentazione a destra di altri pannelli (grafici e posizioni della Dashboard, analisi dei lotti, lista e laboratorio degli asset, dettaglio dell'asset, broker, FX, file e backup, impostazioni) apre la pagina corrispondente del manuale, con una breve spiegazione del pannello nel suo tooltip.
 
 ### 🔄 Modifiche
 
@@ -40,6 +45,11 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Dashboard › Le tue posizioni: «Vedi tutte» ora è un piccolo badge, e sul telefono i tre selettori di vista (Portafoglio/Periodo, Globale/Broker, tabella/mappa) stanno in una riga loro sotto il titolo.
 - Modifica di più asset: dopo il salvataggio la finestra resta aperta sul riepilogo con una spunta verde «Salvato», e la selezione resta, così puoi continuare a lavorare sugli stessi asset. Il riepilogo mostra la nuova icona in miniatura; i campi stanno su una griglia, col valore attuale sotto ogni campo e il suo pulsante di ripristino sulla stessa riga, e la finestra non ha una barra di scorrimento interna.
 - La barra della selezione delle tabelle (asset, transazioni, cambi, transazioni di un broker) ora fluttua in fondo allo schermo finché ci sono righe selezionate, e resta dopo un salvataggio; Esc toglie la selezione quando il fuoco è nella barra.
+- La finestra delle route di una coppia di valute si apre più in fretta, e un gruppo grande di catene ne mostra le prime 200, con «Mostra altre (n nascoste)» per le restanti; la ricerca guarda sempre tutte. Con le nuove banche centrali una sola coppia può avere decine di migliaia di catene.
+- Prezzi in tempo reale con meno richieste: i provider che sanno prezzare molti asset insieme ora vengono interrogati una volta per provider invece che una per asset; Yahoo Finance lo fa con la sua lista di quotazioni. Con 20 asset Yahoo, un'ora di scheduler e pagine aperte costa qualche decina di richieste invece di centinaia, quindi le pause per «troppe richieste» diventano rare. Una sincronizzazione dei prezzi prende il valore di oggi dalla stessa lettura, al massimo una richiesta per provider; se quella lettura viene rifiutata, la storia di quel giro aspetta il giro dopo.
+- Un provider può tenere validi i prezzi in tempo reale più a lungo di due minuti (per le fonti con un limite di chiamate); il valore predefinito resta due minuti.
+- Rischio, correlazione: la soglia di copertura minima ora giudica quanta parte del periodo copre la finestra comune degli asset, così il suo avviso può scattare; il tooltip della mappa di calore mostra quella copertura reale invece di sempre 100 %.
+- Rischio: il calo peggiore e quello attuale in denaro ora dicono di essere lo stesso calo misurato sul valore di oggi.
 
 ### 🐛 Corretto
 
@@ -65,6 +75,10 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Asset: il chip «n selezionati» toglie sempre tutta la selezione, e il menu delle colonne e il ridimensionamento delle colonne agiscono su entrambe le tabelle degli asset (i tuoi e quelli degli altri); prima una delle due poteva restare fuori.
 - I cambi FED di 16 valute erano salvati capovolti (JPY, CAD, CHF, SEK, DKK, NOK, CNY, INR, BRL, MXN, ZAR, SGD, HKD, KRW, TWD, THB): 1 JPY risultava 158 USD invece di 0,0063. I cambi già salvati non vengono toccati. Per correggerli apri la pagina Cambi, scegli il periodo «Tutti» e usa «Sinc. Tutto»: ogni coppia la cui route usa FED, anche come passo di una catena (per esempio INR → USD → EUR), viene riscaricata e sovrascritta.
 - Il provider della Bank of England (BOE) non scaricava nulla, perché il database della banca ha cambiato indirizzo di download; ora funziona di nuovo. Anche il suo cambio dell'euro veniva dalla serie sbagliata (euro contro dollaro USA invece che contro sterlina): ogni coppia la cui route usa BOE per l'euro resta sbagliata finché non la risincronizzi allo stesso modo (periodo «Tutti», «Sinc. Tutto»).
+- La chiusura di un giorno passato non viene più sovrascritta da una quotazione in tempo reale: una quotazione letta prima di mezzanotte riempie solo un giorno che manca. Fuori orario di mercato l'ultimo giorno di contrattazione di un asset tiene anche la sua candela completa (apertura, massimo, minimo) invece del solo prezzo di chiusura.
+- Laboratorio del rischio: dopo una sincronizzazione il laboratorio chiede di nuovo quali asset si possono analizzare nel periodo, così un asset i cui prezzi sono arrivati con la sincronizzazione diventa selezionabile senza ricaricare la pagina.
+- Laboratorio del rischio: ogni sezione chiede una volta sola, all'apertura, quali asset può analizzare, invece di due.
+- La finestra «Configurazione Schedule» scorre al suo interno quando è più alta dello schermo, così «Salva» non resta mai tagliato su una finestra piccola.
 
 ### ⚠️ Modifiche incompatibili
 

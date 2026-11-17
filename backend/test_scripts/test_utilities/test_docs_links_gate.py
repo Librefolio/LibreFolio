@@ -253,6 +253,35 @@ class TestFrontendDiscovery:
         assert found.links == []
         assert found.unverified == []
 
+    COMMENTED = """
+    <script lang="ts">
+        // docsPath: 'user/ghost/line-comment'
+        /** An old example: <DocsLink path="user/ghost/jsdoc" /> */
+        /*
+            docsPath = 'user/ghost/block'
+        */
+        /**
+         * docsPath: 'user/ghost/jsdoc-body'
+         */
+        const live = {docsPath: 'user/live/code'};
+    </script>
+    <!-- <DocsLink path="user/ghost/html-one-line" /> -->
+    <!--
+        <DocsLink path="user/ghost/html-block" />
+    -->
+    <DocsLink path="user/live/markup" />
+    <!-- a note --> <DocsLink path="user/live/after-comment" />
+    """
+
+    def test_comment_lines_are_not_links(self, tmp_path):
+        # RN-05 (F7): a path quoted in a comment — an old example, a removed link — is not a link the app shows.
+        src = tmp_path / "src"
+        src.mkdir()
+        (src / "Commented.svelte").write_text(self.COMMENTED, encoding="utf-8")
+        found = collect_frontend(src)
+        assert {link.path for link in found.links} == {"user/live/code", "user/live/markup", "user/live/after-comment"}
+        assert found.unverified == []
+
     def test_a_route_placeholder_is_not_reported_at_all(self, tmp_path):
         # `/mkdocs/:path` is a URL pattern, not a link. Listing it as
         # "unverifiable" would be noise in the one section meant to be read.

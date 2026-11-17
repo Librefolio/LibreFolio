@@ -8,7 +8,8 @@
 import {isAxiosError} from 'axios';
 import {ApiError, zodiosApi} from '$lib/api';
 
-export type SettingsFamily = 'asset' | 'fx' | 'brim' | 'tool';
+/** The plugin families, and `group`: a shared settings group, the values several plugins read (project 76). */
+export type SettingsFamily = 'asset' | 'fx' | 'brim' | 'tool' | 'enricher' | 'group';
 export type SettingType = 'string' | 'number' | 'integer' | 'boolean' | 'select';
 export type SettingScope = 'user' | 'system';
 /** Where a value comes from: an environment variable of the server, a saved value, the declared default, nowhere. */
@@ -66,6 +67,19 @@ export interface PluginSettingsEntry {
     /** Every required field has a usable value: otherwise the plugin answers its calls with NOT_CONFIGURED. */
     configured: boolean;
     fields: SettingField[];
+    /** The shared groups the plugin reads, by name: their fields are in the groups' own entries (project 76). */
+    groups: string[];
+    /** For a group: the plugins that read it. */
+    used_by: PluginRef[];
+    /** For a group: the i18n key of its name; `plugin_name` is the English fallback. */
+    name_key: string | null;
+}
+
+/** A plugin another entry names: the plugins that read a group. */
+export interface PluginRef {
+    family: SettingsFamily;
+    plugin_code: string;
+    plugin_name: string;
 }
 
 /** One write item: exactly one of `value`, `secret_value`, `clear`. */
@@ -96,7 +110,7 @@ export interface PluginSettingWriteResult {
  */
 export type SaveOutcome = {kind: 'saved'} | {kind: 'refused'; results: PluginSettingWriteResult[]} | {kind: 'conflict'} | {kind: 'keyUnavailable'} | {kind: 'failed'};
 
-const FAMILIES: readonly string[] = ['asset', 'fx', 'brim', 'tool'];
+const FAMILIES: readonly string[] = ['asset', 'fx', 'brim', 'tool', 'enricher', 'group'];
 const TYPES: readonly string[] = ['string', 'number', 'integer', 'boolean', 'select'];
 const SOURCES: readonly string[] = ['env', 'db', 'default', 'none'];
 const PROBLEMS: readonly string[] = ['unreadable', 'invalid_env', 'invalid_stored'];
@@ -157,6 +171,14 @@ export function fieldOf(raw: unknown): SettingField {
     };
 }
 
+/** A plugin named by a group, or null for an item that is not one: no object, no code, a family this module does not know. */
+function refOf(raw: unknown): PluginRef | null {
+    const ref = record(raw);
+    const code = textOrNull(ref.plugin_code);
+    if (code === null || typeof ref.family !== 'string' || !FAMILIES.includes(ref.family)) return null;
+    return {family: ref.family as SettingsFamily, plugin_code: code, plugin_name: textOrNull(ref.plugin_name) ?? code};
+}
+
 export function entryOf(raw: unknown): PluginSettingsEntry {
     const entry = record(raw);
     return {
@@ -166,6 +188,9 @@ export function entryOf(raw: unknown): PluginSettingsEntry {
         icon_url: textOrNull(entry.icon_url),
         configured: entry.configured === true,
         fields: Array.isArray(entry.fields) ? entry.fields.map(fieldOf) : [],
+        groups: Array.isArray(entry.groups) ? entry.groups.filter((name): name is string => typeof name === 'string' && name.length > 0) : [],
+        used_by: Array.isArray(entry.used_by) ? entry.used_by.map(refOf).filter((ref): ref is PluginRef => ref !== null) : [],
+        name_key: textOrNull(entry.name_key),
     };
 }
 

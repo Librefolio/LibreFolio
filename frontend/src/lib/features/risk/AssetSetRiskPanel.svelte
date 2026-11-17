@@ -100,7 +100,9 @@
     import {applyBulkAction, labBenchmarkId, labL3Waits, MAX_SELECTED_ASSETS, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectionSource} from './assetSetSelection';
     import {dayFormatter, describeEligibility, eligibilityBatches, EMPTY_VERDICTS, fitPeriodOffer, isSelectable, mergeEligibilityAnswers, type DayRange, type EligibilityView, type EligibilityVerdicts} from './eligibility';
     import {addPairSides, buildSyncTargets, labQualityAction} from './syncTargets';
+    import RiskPeriodLine from './levels/RiskPeriodLine.svelte';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     interface AssetOption {
         id: number;
@@ -163,6 +165,14 @@
      */
     let syncOpen = $state(false);
     let syncGeneration = $state(0);
+    /**
+     * RN-03 (F2): the accepted syncs only, apart from `syncGeneration`, which a reload raises too.
+     * A sync can bring prices in, and a verdict follows the prices (D378): both eligibility
+     * questions below carry this count, so a sync asks the engine again. A reload syncs nothing
+     * and changes no verdict; were it to ask again, the verdicts would be unsettled meanwhile, and
+     * with a benchmark chosen L3° waits for settled verdicts (`labL3Waits`) by being unmounted.
+     */
+    let pricesSyncedGeneration = $state(0);
     let syncTargets = $derived.by(() => {
         void $assetStoreVersion;
         void $fxRoutesVersion;
@@ -204,6 +214,7 @@
             await onsynced?.();
         } finally {
             invalidateRisk();
+            pricesSyncedGeneration += 1;
             syncGeneration += 1;
         }
     }
@@ -252,16 +263,29 @@
             .join(','),
     );
     /**
-     * The eligibility question the page is asking now — list, period, currency — or `null`
+     * The eligibility question the page is asking now — list, period, currency, and the accepted
+     * syncs so far (`pricesSyncedGeneration`) — or `null`
      * while there is none yet (the page's list still loading, no period). The selection is
      * restored before the list arrives, so "nothing to ask yet" is not an answer: L3° keeps
      * waiting for the list and its verdicts rather than asking with a benchmark that might
      * prove unmeasurable (`labL3Waits`).
      */
-    let eligibilityQuestion = $derived(catalogueKey && dateStart ? `${catalogueKey}|${dateStart}|${dateEnd}|${targetCurrency}` : null);
+    let eligibilityQuestion = $derived(catalogueKey && dateStart ? `${catalogueKey}|${dateStart}|${dateEnd}|${targetCurrency}|${pricesSyncedGeneration}` : null);
     /** The question the last answer — or failure — was for. A failure settles it too: no verdict means selectable. */
     let eligibilityAnsweredFor = $state<string | null>(null);
     let eligibilitySettled = $derived(eligibilityQuestion !== null && eligibilityAnsweredFor === eligibilityQuestion);
+    /**
+     * RN-09 (C-23): the sections are mounted once a first verdict is in — an answer or a failure —
+     * and stay mounted after it. A section's controller asks the moment it exists
+     * (`RiskControllerHost`), and the lab leaves out of every request what the engine rules out
+     * (`analysedIds`); mounted before the first verdict, each section asked about the whole
+     * selection and again about the admitted part: two requests at every opening, the first one
+     * drawn for a moment. Later questions (a new period, a sync) keep the sections mounted: L3°
+     * waits for them through `labL3Waits` when a benchmark is chosen. A question not asked yet because
+     * the page's list is still loading is waited for too: the selection is restored before the list
+     * arrives. Only with no period is there no question to wait for.
+     */
+    let eligibilityKnown = $derived(eligibilityAnsweredFor !== null || !dateStart);
 
     $effect(() => {
         const ids = catalogueKey ? catalogueKey.split(',').map(Number) : [];
@@ -322,6 +346,8 @@
         const ids = selectionKey ? selectionKey.split(',').map(Number) : [];
         const period = {start: dateStart, end: dateEnd};
         const currency = targetCurrency;
+        // Asked again after an accepted sync, like the catalogue's question (RN-03).
+        void pricesSyncedGeneration;
         const generation = ++selectionEligibilityGeneration;
         if (ids.length === 0 || !period.start) {
             selectionVerdicts = EMPTY_VERDICTS;
@@ -803,6 +829,7 @@
                     {$t('risk.assetSet.selectedCount', {values: {selected: analysedIds.length, total: candidates.length}})}
                 </span>
             </Tooltip>
+            <DocsLink path="user/assets/correlation/" label={$t('risk.docsHelp.assetSet')} icon="book" size={16} testId="risk-asset-set-docs" />
         </div>
 
         {#if brokerLoadFailed}
@@ -855,7 +882,9 @@
         </div>
     {/snippet}
 
-    {#if analysedIds.length > 0}
+    {#if analysedIds.length > 0 && eligibilityKnown}
+        <!-- The period and the currency the sections below are measured on (RN-11): the line the levels' header uses. -->
+        <RiskPeriodLine {dateStart} {dateEnd} currency={targetCurrency} />
         <DataQualityBanner issues={qualityIssues} mode="grouped" onaction={(action, target) => handleQualityAction(action, target)} />
         <RiskPartialNotice partial={notice.partial} reasons={notice.reasons} />
         <AssetSetCorrelationSection bind:this={correlationSection} assetIds={analysedIds} assetLabels={selectionLabels} assetTypes={selectionTypes} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
@@ -875,6 +904,10 @@
         <AssetSetReplaySection bind:this={replaySection} assetIds={analysedIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
     {:else if seeding}
         <div class="rounded-xl border border-lf-subtle bg-lf-card p-8 text-center" data-testid="risk-asset-set-seeding">
+            <RefreshCw size={20} class="mx-auto animate-spin text-lf-link" />
+        </div>
+    {:else if analysedIds.length > 0}
+        <div class="rounded-xl border border-lf-subtle bg-lf-card p-8 text-center" data-testid="risk-asset-set-eligibility-pending">
             <RefreshCw size={20} class="mx-auto animate-spin text-lf-link" />
         </div>
     {:else}

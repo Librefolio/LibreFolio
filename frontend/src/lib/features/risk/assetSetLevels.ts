@@ -148,7 +148,7 @@ function byAsset<T extends {asset_id: number}>(items: readonly T[] | undefined):
  * otherwise would misdescribe the defence: the emitted **zod** schema for those
  * same fields is `z.union([z.number(), z.null()]).optional()`, which rejects a
  * list outright — so `riskOutput` discards the whole payload before a list could
- * reach here. `correlationHelpers.ts:28` records the same disagreement between
+ * reach here. `CorrelationCell.value` (`correlationHelpers.ts`) records the same disagreement between
  * the two halves of the generated client. What `singleValue` actually earns is
  * the right to read the field without a cast, and a cast is how a future shape
  * change would arrive unannounced.
@@ -401,8 +401,8 @@ function utcDay(isoDay: string): number {
  *
  * The engine reports an asset set's `analyzed_range` from its first to its last RETURN, and
  * `calendar_days` from the BASELINE PRICE to that last return. The baseline is the last day
- * BEFORE the toolbar's period whenever every asset has a price there (`risk/service.py` loads
- * from the day before; `market_series.py` takes the latest such day), and the first price
+ * BEFORE the toolbar's period whenever every asset has a price there (the preparation,
+ * `market_series.py`, loads from the day before and takes the latest such day), and the first price
  * inside it otherwise. So the period opens the day after the baseline — `end − calendar_days + 1`,
  * the first day whose movement the figures capture — which is the toolbar's own first day in the
  * common case, quoted or not. Not `analyzed_range.start`: that is the first QUOTED day, a Monday

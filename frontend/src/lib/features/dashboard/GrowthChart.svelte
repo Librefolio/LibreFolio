@@ -66,6 +66,7 @@
     import {buildLadderData, buildResolutionData, buildZoomWindow, cascadeIndicesAt, countBuckets, ladderIndicesAt, type AggregatedResolutionData, type AggregationInputs, type CandleWidth} from './growthChartData';
     import {buildGrowthFullSeries, buildGrowthUpdateSeries, INCOME_BAR_SHARE, PNL_REFERENCE_SERIES_NAME, type GrowthMode, type GrowthSeriesContext, type GrowthSeriesData, type PnlSubmode} from './growthChartSeries';
     import {buildGrowthTooltip, type GrowthTooltipView} from './growthChartTooltip';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     // =========================================================================
     // Props
@@ -1419,11 +1420,11 @@
 
 <div class="bg-lf-card text-lf-primary rounded-xl border border-lf-subtle shadow-sm shadow-lf-shadow-card p-4 flex flex-col gap-3" data-testid="growth-chart">
     <!-- Header row: title + toggle -->
-    <div class="flex items-center justify-between">
+    <div class="flex items-center gap-2">
         <h2 class="text-sm font-semibold text-lf-secondary">{$_('dashboard.growth')}</h2>
 
         <!-- Abs / % / P&L segmented toggle -->
-        <div class="flex rounded-lg overflow-hidden border border-lf-subtle text-xs font-medium">
+        <div class="ml-auto flex rounded-lg overflow-hidden border border-lf-subtle text-xs font-medium">
             <button class="px-3 py-1 transition-colors {viewMode === 'eur' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}" onclick={() => selectMode('eur')} aria-pressed={viewMode === 'eur'} data-testid="growth-toggle-eur">
                 {$_('dashboard.abs')}
             </button>
@@ -1441,6 +1442,7 @@
                 {$_('dashboard.pnl')}
             </button>
         </div>
+        <DocsLink path="user/dashboard/charts/" label={$_('dashboard.docsHelp.growth')} icon="book" size={16} testId="growth-chart-docs" />
     </div>
 
     <!-- Chart area — container always in DOM for animation persistence -->

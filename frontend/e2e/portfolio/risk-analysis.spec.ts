@@ -51,12 +51,13 @@ interface RiskMockOptions {
      * Answers the simulation with `unavailable`, the way a busy worker, a
      * timeout or a series too short does.
      *
-     * `schemas/risk.py:1056` forbids an `unavailable` result from carrying an
-     * output, so this is not an unlikely corner: it is the **only** shape that
-     * branch can take. Every step of L4 renders on `{#if output}`, so before
-     * the level disclosed its health the reader got a blank panel with no cause
-     * — and no fixture in this suite had ever produced the state that reveals
-     * it. Opt-in, so every other test is unmoved.
+     * `RiskAnalyticResult.validate_status_payload` (`schemas/risk/results.py`)
+     * forbids an `unavailable` result from carrying an output, so this is not
+     * an unlikely corner: it is the **only** shape that branch can take. Every
+     * step of L4 renders on `{#if output}`, so before the level disclosed its
+     * health the reader got a blank panel with no cause — and no fixture in
+     * this suite had ever produced the state that reveals it. Opt-in, so every
+     * other test is unmoved.
      */
     unavailableSimulation?: boolean;
     /**
@@ -109,7 +110,8 @@ interface RiskMockOptions {
      * code would degrade both at once, and a test asking *under which level* a
      * measurement is disclosed could not tell the two claims apart.
      *
-     * Each status keeps a shape `validate_status_payload` (`schemas/risk.py`)
+     * Each status keeps a shape that
+     * `RiskAnalyticResult.validate_status_payload` (`schemas/risk/results.py`)
      * accepts. `partial` keeps the output the stub answered with — a partial
      * measurement is still drawn, which is what makes it partial rather than
      * missing — and `unavailable` drops it (`output: null`) and carries an
@@ -609,7 +611,7 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
             // written down and the provenance is not dressed up as a measurement.
             //
             //  1. `portfolio_volatility` is strictly positive. At zero
-            //     `capitalMarketLine` (`scatterChartHelpers.ts:111`) returns null
+            //     `capitalMarketLine` (`scatterChartHelpers.ts`) returns null
             //     and the line vanishes *silently*, leaving a chart that still
             //     looks finished.
             //  2. Two items with **different** volatilities. `hasScatter` is
@@ -807,9 +809,10 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                 // `risk_contribution` answer above gives them (0.6 and 0.35), and the 0.05 that
                 // answer calls cash is here a third holding, with no price in the window. Every
                 // weight travels as the raw fraction it is, and the names are synthetic markers
-                // where `service.py` would put display names — so a test reads these numbers back
-                // and tells the sentences apart without reading a translated word. With the
-                // option absent, and on every other scope, the replay answers as it always has.
+                // where `with_warning_asset_names` (`risk/results.py`) would put display names — so a
+                // test reads these numbers back and tells the sentences apart without reading a
+                // translated word. With the option absent, and on every other scope, the replay
+                // answers as it always has.
                 if (request.scope.kind === 'portfolio' && options.replayExclusions) {
                     const askedRange = (analytic.parameters?.replay_range ?? request.date_range) as {start: string; end: string};
                     // The late listing's first quote: 10 days after the panel's own window starts,
@@ -1096,9 +1099,10 @@ function withInjectedWarnings(result: Record<string, unknown>, options: RiskMock
  * Replaces a result with the failure its analytic would have returned.
  *
  * `output: null` and `status: 'failed'` together, never one without the other:
- * `schemas/risk.py` forbids a failed result from carrying an output, so a stub
- * that kept the output while flipping the status would model a payload the
- * backend cannot emit — and the level would render its rows *and* its error.
+ * `RiskAnalyticResult.validate_status_payload` (`schemas/risk/results.py`)
+ * forbids a failed result from carrying an output, so a stub that kept the
+ * output while flipping the status would model a payload the backend cannot
+ * emit — and the level would render its rows *and* its error.
  */
 function withInjectedError(result: Record<string, unknown>, options: RiskMockOptions): Record<string, unknown> {
     const code = options.analyticErrors?.[String(result.analytic_code)];
@@ -1952,13 +1956,11 @@ test.describe('Risk analysis functional integration', () => {
 
         const panel = await openDashboardRisk(page);
 
-        // The Dashboard now opens with no beta notice at all, and that absence is
-        // the claim: L1, L2 and L3 rest on observed facts and have left beta. The
-        // banner survives on one rung only — the simulation, inside the closed L4
-        // drawer — so zero here is what "the rest is finished" looks like from the
-        // reader's side. `toHaveCount(0)` rather than `not.toBeVisible()`: a closed
-        // drawer does not render its body, so the node is absent rather than
-        // hidden, and only a count can tell those two apart.
+        // The Dashboard opens with no beta notice at all, and that absence is the
+        // claim: every level has left beta, the simulation last (RN-06, Q6). The
+        // simulation rung, opened, carries none either: the level-4 test reads it.
+        // `toHaveCount(0)` rather than `not.toBeVisible()`: only a count tells an
+        // absent node from a hidden one.
         await expect(page.getByTestId('risk-beta-banner')).toHaveCount(0);
 
         // Dashboard's scope is the whole portfolio, so it must carry no subset
@@ -2141,7 +2143,7 @@ test.describe('Risk analysis functional integration', () => {
         await expect(panel.locator('[data-testid="risk-level-1-metadata-row"][data-codes="historical_var drawdown_summary"]')).toHaveCount(1);
         await expect(panel.locator('[data-testid="risk-level-1-metadata-row"][data-codes="historical_kpi"]')).toHaveCount(1);
 
-        // The guard of `translateOrRaw` on the real catalogue: `RiskResultFrame:108`
+        // The guard of `translateOrRaw` on the real catalogue: the return-basis line of `RiskResultFrame`
         // builds this same key unguarded, and a basis it has not seen prints
         // `risk.returnBasis.<value>` on screen. Neither row may do that.
         for (const text of await bases.allTextContents()) {
@@ -2490,32 +2492,13 @@ test.describe('Risk analysis functional integration', () => {
         await expect(panel.getByTestId('risk-l4-simulation').getByTestId('risk-l4-model-warning')).toBeVisible();
         await expect(panel.getByTestId('risk-l4-replay').getByTestId('risk-l4-model-warning')).toHaveCount(0);
 
-        // And the beta banner is *here*, on this rung and nowhere else.
-        //
-        // This is the assertion the three surfaces above cannot make. They each
-        // say the banner is absent, and three zeroes agree just as happily with a
-        // banner that was deleted outright as with one that moved: an absence does
-        // not name what caused it. Without this line the component could be
-        // removed from the codebase entirely and the whole suite would stay green.
-        //
-        // The page-wide count is the double-mount gate the three surfaces used to
-        // hold, following the banner to the one rung that still earns it. It is
-        // not decoration: `RiskAnalysisPanel` still carries its own mount behind a
-        // `showBetaBanner` prop, so "exactly one" is a live constraint rather than
-        // an observation about today's tree.
-        await expect(panel.getByTestId('risk-l4-simulation').getByTestId('risk-beta-banner')).toBeVisible();
-        await expect(panel.getByTestId('risk-l4-replay').getByTestId('risk-beta-banner')).toHaveCount(0);
-        await expect(page.getByTestId('risk-beta-banner')).toHaveCount(1);
-
-        // *Which* claim it makes, not merely that it is here. The component serves
-        // two surfaces that are beta for unrelated reasons — Asset Detail is parked
-        // whole, this rung is held back by one recorded defect — and their texts are
-        // translated, so no assertion in this suite can read them. `data-scope` is
-        // what makes the distinction assertable at all: without it, swapping the
-        // component's default would silently tell the reader of a finished
-        // Dashboard that the whole subsystem is still provisional, and every count
-        // above would still be right.
-        await expect(panel.getByTestId('risk-l4-simulation').getByTestId('risk-beta-banner')).toHaveAttribute('data-scope', 'simulation');
+        // And no beta banner, on this rung or anywhere on the page (RN-06, Q6: the
+        // simulation left beta on 16/11/2026). The model warning above stays: it is
+        // about epistemics, not maturity, and a model stays a model. Read once the
+        // simulation rung is on screen, so the zero is an absence and not a page
+        // still loading.
+        await expect(panel.getByTestId('risk-l4-simulation')).toBeVisible();
+        await expect(page.getByTestId('risk-beta-banner'), 'a beta banner on the Dashboard: no part of the four levels is in beta any more').toHaveCount(0);
 
         // Every editor really mounted, with the defaults the request will carry.
         await expect(panel.getByTestId('risk-replay')).toBeVisible();
@@ -2787,10 +2770,11 @@ test.describe('Risk analysis functional integration', () => {
         await expect(panel.getByTestId('risk-simulation-run')).toBeEnabled({timeout: 8_000});
         await panel.getByTestId('risk-simulation-run').click();
 
-        // `schemas/risk.py:1056` forbids an `unavailable` result from carrying an
-        // output, and every rung renders on `{#if output}`. So the absence below
-        // is guaranteed by the contract, not by this fixture's choices — which is
-        // exactly why the *presence* of the disclosure is the whole assertion.
+        // `RiskAnalyticResult.validate_status_payload` (`schemas/risk/results.py`)
+        // forbids an `unavailable` result from carrying an output, and every
+        // rung renders on `{#if output}`. So the absence below is guaranteed by
+        // the contract, not by this fixture's choices — which is exactly why the
+        // *presence* of the disclosure is the whole assertion.
         const health = panel.getByTestId('risk-level-4-health');
         await expect(health).toBeVisible({timeout: 8_000});
         await expect(health).toHaveAttribute('data-count', '1');

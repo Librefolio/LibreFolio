@@ -164,6 +164,46 @@ def test_every_variable_of_a_shipped_system_field_is_documented():
 
 
 # =============================================================================
+# 1b. G1: THE SYSTEM FIELDS OF THE SHARED GROUPS ARE DOCUMENTED TOO
+# =============================================================================
+
+
+def undocumented_group_variables(groups: dict, documented: set[str]) -> list[str]:
+    """The variables of the system fields of the groups (not ``test_only``) that ``.env.example`` does not list."""
+    return [f"group/{name}/{declared.key}: {variable}" for name, group in groups.items() if not group.test_only for declared in group.fields for variable in env_variables("group", name, declared) if variable not in documented]
+
+
+def test_the_group_documentation_guard_flags_an_undocumented_group_field_and_skips_a_test_only_group():
+    """1b, barrier: a registered group's derived name is flagged until documented; a test-only group is skipped."""
+    from backend.app.services.plugin_settings.groups import SettingsGroup, all_groups, register_group, release_group  # noqa: PLC0415 — red on HEAD: import inside the test
+
+    names = ("g1_guard_a", "g1_guard_b")
+    try:
+        register_group(SettingsGroup(name=names[0], label="Guard A", fields=(_secret("api_key"),)))
+        register_group(SettingsGroup(name=names[1], label="Guard B", fields=(_secret("api_key"),), test_only=True))
+        groups = {name: group for name, group in all_groups().items() if name in names}
+        variable = env_name("group", names[0], "api_key")
+
+        flagged = undocumented_group_variables(groups, set())
+
+        assert flagged == [f"group/{names[0]}/api_key: {variable}"], flagged
+        assert variable.startswith("LIBREFOLIO_PLUGIN_GROUP_G1_GUARD_A_")
+        assert undocumented_group_variables(groups, {variable}) == []
+    finally:
+        for name in names:
+            release_group(name)
+
+
+def test_every_variable_of_a_shipped_group_field_is_documented():
+    """1b: over every registered group that is not test-only (vacuous while no group ships)."""
+    from backend.app.services.plugin_settings.groups import all_groups  # noqa: PLC0415 — red on HEAD: import inside the test
+
+    missing = undocumented_group_variables(all_groups(), _documented())
+
+    assert not missing, f"document these variables in {ENV_EXAMPLE.name} (section «Plugins»): {missing}"
+
+
+# =============================================================================
 # 2. ONE OWNER PER VARIABLE
 # =============================================================================
 
@@ -204,7 +244,8 @@ def test_every_variable_of_a_registered_plugin_is_claimed_by_that_plugin():
 
 def test_the_settings_families_their_registries_and_the_declarations_agree():
     """2: one registry per family with rules, naming that family; every registered declaration valid; no refused one in discovery."""
-    assert set(FAMILY_REGISTRIES) == set(FAMILY_RULES)
+    # "group" (G1) is a family of settings with rules and no registry of plugins: the groups have their own (groups/).
+    assert set(FAMILY_REGISTRIES) == set(FAMILY_RULES) - {"group"}
     assert {family: registry.settings_family() for family, registry in FAMILY_REGISTRIES.items()} == {family: family for family in FAMILY_REGISTRIES}
     for family, _code, plugin_class in _registered():
         if plugin_class.settings_fields:
@@ -212,6 +253,16 @@ def test_the_settings_families_their_registries_and_the_declarations_agree():
     refused = [failure for registry in FAMILY_REGISTRIES.values() for failure in registry.get_discovery_errors() if failure.error_type == SettingsDeclarationError.__name__]
     assert not refused, f"plugins refused for their declaration: {refused}"
     assert MockProvider in (plugin for _family, _code, plugin in _registered()) and MockFXProvider in (plugin for _family, _code, plugin in _registered())
+
+
+def test_every_settings_family_is_a_value_of_the_api_family():
+    """2 (project 76, G2): every family of the settings — each registry's, and ``group`` — is a value of the API's
+    ``PluginSettingFamily``, and the API names no other. Else the catalogue fails (a 500) as soon as a plugin of a missing
+    family declares a field or reads a group: an enricher was missing until G2."""
+    from backend.app.schemas.plugin_settings import PluginSettingFamily  # noqa: PLC0415 — beside the check it serves
+
+    assert {family.value for family in PluginSettingFamily} == set(FAMILY_REGISTRIES) | {"group"}
+    print_success("the API's families are the settings' families")
 
 
 # =============================================================================

@@ -68,8 +68,13 @@ AI_EXPORT_PURE_TEST_PATHS = (
 PROVIDER_ERROR_TEST_PATHS = (
     "backend/test_scripts/test_services/test_borsa_italiana_errors.py",
     "backend/test_scripts/test_services/test_fx_parse_errors.py",
+    "backend/test_scripts/test_services/test_fx_bcb.py",
+    "backend/test_scripts/test_services/test_fx_bdi.py",
+    "backend/test_scripts/test_services/test_fx_boc.py",
     "backend/test_scripts/test_services/test_fx_boe_quotes.py",
     "backend/test_scripts/test_services/test_fx_fed_quotes.py",
+    "backend/test_scripts/test_services/test_fx_nbu.py",
+    "backend/test_scripts/test_services/test_fx_norges.py",
     "backend/test_scripts/test_services/test_justetf_errors.py",
     "backend/test_scripts/test_services/test_snb_errors.py",
     "backend/test_scripts/test_services/test_yahoo_finance_errors.py",
@@ -1452,6 +1457,30 @@ def services_bulk_writes_chunked(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "Bulk writes chunked tests", verbose=verbose)
 
 
+def services_bulk_current_values(verbose: bool = False, test_names: list = None) -> bool:
+    """Project 76 C1+C2+C3: the bulk current-price read of asset providers (C1 pure; C2 and C3 on a private SQLite, no server, no network)."""
+    print_section("Services: Bulk Current Values (project 76, C1+C2+C3)")
+    print_info("Testing: schemas/prices.py (FACurrentValueRequest), services/assets/base.py (supports_bulk_current, bulk_current_max_items, get_current_values_bulk), asset_source_providers/mockprov/plugin.py, " "services/assets/bulk_current.py and price_query.get_current_prices_bulk (C2)")
+    print_info(
+        "Tests: the default refuses (NOT_SUPPORTED); class-definition guards (TypeError); the request refuses extra fields and an empty key; mockprov answers per key like get_current_value, omits on command, answers NOT_FOUND per item, refuses the whole call when rate limited, and records every call"
+    )
+    print_info(
+        "C2: one provider call per group and chunk; aligned expiry (every active asset of the provider read, answers cached per asset); the 120 s group stamp (DB fallback without a call, re-read after it or for a new member); single-flight on the group lock; RATE_LIMITED on every requested item with no stamp left; a failed call falls back to the DB with a short stamp; a per-item error falls back alone; today's row only for requested assets"
+    )
+    print_info("C3: the history refresh reads today's current value in one bulk call per group before the history, shares the live read's group and stamp, asks nothing for a past range, fails RATE_LIMITED without asking the history, notes an unstorable value (X-R51)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_bulk_current_values.py", test_names)
+    return run_command(cmd, "Bulk current values tests", verbose=verbose)
+
+
+def services_yahoo_finance_bulk(verbose: bool = False, test_names: list = None) -> bool:
+    """Project 76 C5: Yahoo Finance reads current values in bulk (recorded v7 response; no DB, no server, no network)."""
+    print_section("Services: Yahoo Finance Bulk Current Values (project 76, C5)")
+    print_info("Testing: asset_source_providers/yahoo_finance/plugin.py (get_current_values_bulk, _fetch_v7_quotes, _quote_from_info, _bulk_quote_available)")
+    print_info("Tests: same result as get_current_value on the recorded quotes, exchange-zone dates, one request, absent key for an unreturned symbol, previous-close fallback and NO_DATA, 429 raised once, ISIN resolution, wrong identifier type, capability, same symbol twice")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_yahoo_finance_bulk.py", test_names)
+    return run_command(cmd, "Yahoo Finance bulk tests", verbose=verbose)
+
+
 def services_current_prices_bulk(verbose: bool = False, test_names: list = None) -> bool:
     """R13-SEC9-1/-3/-4 + Y's D1: POST /assets/prices/current (no lane DB, no server, no network)."""
     print_section("Services: Current Prices Bulk (R13-SEC9, Y's D1)")
@@ -2052,6 +2081,14 @@ def services_secret_masking(verbose: bool = False, test_names: list = None) -> b
     print_info("Testing: backend/app/utils/runtime/secret_masking.py and its wiring in logging_config.configure_logging")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_secret_masking.py", test_names)
     return run_command(cmd, "Secret masking tests", verbose=verbose)
+
+
+def services_plugin_settings_groups(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the shared settings groups: declaration, binding without own fields, missing, masking, fingerprint, gate."""
+    print_section("Services: Plugin Settings Groups")
+    print_info("Testing: register_group, validate_plugin_groups, BoundSettings.group, configure_instance, call_provider")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_plugin_settings_groups.py", test_names)
+    return run_command(cmd, "Plugin settings groups tests", verbose=verbose)
 
 
 def services_plugin_settings_guards(verbose: bool = False, test_names: list = None) -> bool:
@@ -3615,6 +3652,16 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "bulk-current-values",
+        services_bulk_current_values,
+        name="Bulk Current Values (project 76, C1+C2+C3+C3b+C4)",
+        desc="The bulk current-price read of asset providers: C1 FACurrentValueRequest, supports_bulk_current / bulk_current_max_items / get_current_values_bulk with their class-definition guards, mockprov's bulk answer; C2 get_current_prices_bulk reading a bulk provider's group in one call (aligned expiry, group stamp, single-flight, rate limit, failure fallback, chunks); C3 the history refresh reads today's value through the same bulk group before the history (one call, shared with the live read, none for a past range, aligned expiry, refused read fails the refresh, unstorable value noted); C3b the midnight rule (the current quote never replaces a stored or fetched history point of a day before today, it only adds a missing one: yesterday's true close survives, a missing yesterday gets the quote, a resume keeps a close only the DB has); C4 a provider's minimum refresh interval of current values (current_min_refresh_seconds, core.current_cache_ttl and its fallbacks, the TTL of every cache writer and of the group stamp, the plan's call count of 2 per fake hour, a bulk provider refused once then served after the pause)",
+        # PURE: schema and class-definition checks, mockprov called directly, and the service on a private SQLite file
+        # swapped for the process engine, a private cache, pauses and group clock; no lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "current-prices-bulk",
         services_current_prices_bulk,
         name="Current Prices Bulk (R13-SEC9)",
@@ -4143,8 +4190,25 @@ Note: No backend server required.
     )
     add_test(cat, "plugin-settings-crypto", services_plugin_settings_crypto, name="Plugin Settings Encryption", desc="AES-256-GCM blob and AAD, key id, subkeys, count and rekey on a sqlite3 copy (savepoint, idempotent, unreadable rows kept), key status (unusable key: totals)", isolation="pure")
     add_test(cat, "plugin-settings-runtime", services_plugin_settings_runtime, name="Plugin Settings Resolution", desc="env > _FILE > row > default, invalid variable unconfigures, unusable key, fingerprints, configure_instance, NOT_CONFIGURED and masking at both boundaries", isolation="pure")
-    add_test(cat, "plugin-settings-service", services_plugin_settings_service, name="Plugin Settings Service", desc="Catalogue and all-or-nothing writes on a private DB: scopes, LOCKED_BY_ENV, managed profile, item rules, log without values, key unavailable, MOCKFX writes", isolation="pure")
+    add_test(
+        cat,
+        "plugin-settings-service",
+        services_plugin_settings_service,
+        name="Plugin Settings Service",
+        desc="Catalogue and all-or-nothing writes on a private DB: scopes, LOCKED_BY_ENV, managed profile, item rules, log without values, key unavailable, MOCKFX writes, G2: shared groups as catalogue entries (used_by, configured through a group) and admin-only writes",
+        isolation="pure",
+    )
     add_test(cat, "secret-masking", services_secret_masking, name="Secret Masking", desc="mask_text with the URL forms, mask_exception through chains and groups, structlog processor and logging filter, the context variable across threads and tasks, the wiring in configure_logging", isolation="pure")
+    # Shared settings groups (project 76, G1). PURE: private SQLite under tmp_path through a private engine, a test instance
+    # key, every variable through monkeypatch; each test registers its own g1_ groups and releases them at teardown.
+    add_test(
+        cat,
+        "plugin-settings-groups",
+        services_plugin_settings_groups,
+        name="Plugin Settings Groups",
+        desc="register_group refusals and variable claims, validate_plugin_groups, binding with no own field (env > row > default), missing as group.key, masking, fingerprint, unbound, pickle, NOT_CONFIGURED, gate",
+        isolation="pure",
+    )
     add_test(cat, "plugin-settings-guards", services_plugin_settings_guards, name="Plugin Settings Guards", desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings", isolation="pure")
     add_test(
         cat,
@@ -4535,7 +4599,7 @@ Note: No backend server required.
         "fx-sync-service",
         services_fx_sync,
         name="FX Sync Orchestration",
-        desc="_is_date_within_sync_range (N83: an old rate is kept too, no 1900-01-01 floor), _process_route/_compute_multi_step",
+        desc="_is_date_within_sync_range (N83: an old rate is kept too, no 1900-01-01 floor; D2: no rate after the sync's end, weekend kept), _process_route/_compute_multi_step",
         exclusive_because="an autouse fixture truncates fx_rates and fx_conversion_routes before every test, so any concurrent unit reading rates or routes loses them mid-test",
     )
     add_test(cat, "provider-registry-misc", services_provider_registry_misc, name="Provider Registry Helpers", desc="auto_discover, register, get_provider_instance, BRIM plugin detection")
@@ -4564,7 +4628,16 @@ Note: No backend server required.
         "provider-errors",
         services_provider_errors,
         name="Provider Error Paths",
-        desc="justETF, Borsa Italiana, Yahoo Finance, SNB, BOE, FED and ECB when the source misbehaves or refuses for too many requests (every client doubled); a value that is no number skips its line only (X-R50, X-R52); FED and BOE read each currency from its series, in the direction the bank quotes it (lane 75)",
+        desc="justETF, Borsa Italiana, Yahoo Finance, SNB, BOE, FED and ECB when the source misbehaves or refuses for too many requests (every client doubled); a value that is no number skips its line only (X-R50, X-R52); FED and BOE read each currency from its series, in the direction the bank quotes it, NORGES divides each series by its unit, NBU keeps every day under its exchangedate, BOC reads one Valet group for every currency, BDI refuses a series not quoted per 1 EUR, BCB checks each row's code and symbol (lane 75)",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "yahoo-finance-bulk",
+        services_yahoo_finance_bulk,
+        name="Yahoo Finance Bulk Current Values (project 76, C5)",
+        desc="Yahoo's current values in one v7 quote request: same value, currency and exchange-zone date as the single read on the recorded response, one request for all symbols, an unreturned symbol answers nothing, previous-close fallback and NO_DATA, a 429 raised once and never retried, ISIN resolved to its symbol, wrong identifier type refused per item, capability flags",
+        # PURE: the recorded v7 response served by a replaced YfData.get_raw_json and a fake yf; no DB, no server, no network.
         isolation="pure",
     )
     add_test(cat, "borsa-italiana-search", services_borsa_italiana_search, name="Borsa Italiana Search", desc="Single-fetch search, IT+EN variants, ISIN direct hit (engine mocked)")

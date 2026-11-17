@@ -7,6 +7,10 @@
  */
 import type {RiskAnalyticResult} from '$lib/features/risk/riskStore.svelte';
 import {singleValue} from '$lib/features/risk/riskTypes';
+import {dayFormatter} from '$lib/features/risk/eligibility';
+
+/** A parameter that is exactly an ISO day: the backend's days travel as `YYYY-MM-DD` (RN-11). */
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 export type RiskResultWarning = NonNullable<RiskAnalyticResult['warnings']>[number];
 
@@ -20,8 +24,12 @@ export type WarningTranslator = (id: string, options?: {values?: Record<string, 
 function interpolationValues(params: unknown): Record<string, InterpolationValue> {
     const values: Record<string, InterpolationValue> = {};
     if (!params || typeof params !== 'object' || Array.isArray(params)) return values;
+    let day: ((isoDay: string) => string) | undefined;
     for (const [name, value] of Object.entries(params as Record<string, unknown>)) {
-        if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') values[name] = value;
+        // A day is shown in the reader's format, as every other day of the risk pages; the
+        // formatter echoes an impossible day as it came. Anything else is not rewritten.
+        if (typeof value === 'string' && ISO_DAY.test(value)) values[name] = (day ??= dayFormatter())(value);
+        else if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') values[name] = value;
         else if (Array.isArray(value)) values[name] = value.map(String).join(', ');
     }
     return values;

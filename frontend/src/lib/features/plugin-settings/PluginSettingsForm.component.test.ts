@@ -67,7 +67,10 @@ import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$t
 
 const fake = vi.hoisted(() => ({
     /** `key`, or `key {name=value, …}` when handed values: what the form chose to say, in no language at all. */
+    /** The keys this test makes «translated» (G3: a heading is a key's translation, else the plugin's name); any other key answers itself. */
+    known: {} as Record<string, string>,
     translate(key: string, options?: {values?: Record<string, unknown>}): string {
+        if (Object.hasOwn(fake.known, key)) return fake.known[key];
         const values = options?.values ?? {};
         const shown = Object.keys(values)
             .sort()
@@ -130,7 +133,7 @@ function field(over: Partial<SettingField> & Pick<SettingField, 'key'>): Setting
 }
 
 function entry(fields: SettingField[], over: Partial<PluginSettingsEntry> = {}): PluginSettingsEntry {
-    return {family: 'asset', plugin_code: 'mockprov', plugin_name: 'Mock provider', icon_url: null, configured: false, fields, ...over};
+    return {family: 'asset', plugin_code: 'mockprov', plugin_name: 'Mock provider', icon_url: null, configured: false, fields, groups: [], used_by: [], name_key: null, ...over};
 }
 
 /** Icons the plugin may publish: a remote URL (a reserved domain, which never resolves) and a path of this instance. */
@@ -274,6 +277,7 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
+    for (const key of Object.keys(fake.known)) delete fake.known[key];
     fake.save.mockReset();
     fake.fetchEntry.mockReset();
     fake.notify.mockReset();
@@ -1044,5 +1048,96 @@ describe('PluginSettingsForm — a tool plugin (family tool, X5-4b)', () => {
         ]);
         expect(fake.fetchEntry).toHaveBeenCalledWith('tool', 'fx_converter');
         expect(notified('pluginSettings.saved')).toStrictEqual([{name: 'pluginSettings.saved', detail: {family: 'tool', plugin_code: 'fx_converter', fields: ['precision', 'workers']}}]);
+    });
+});
+
+// =====================================================================================================================
+// Shared settings groups (project 76, lot G3, contract C). Texts are read as `key {name=value}` (the fake translator).
+describe('PluginSettingsForm — shared settings groups (G3)', () => {
+    const SYSTEM_TOKEN = field({key: 'account_token', secret: true, scope: 'system', required: true, label: 'Account token'});
+    const group = (over: Partial<PluginSettingsEntry> = {}) => entry([SYSTEM_TOKEN], {family: 'group', plugin_code: 'mock', plugin_name: 'Mock account', name_key: null, used_by: [], groups: [], ...over} as Partial<PluginSettingsEntry>);
+    const USERS = [
+        {family: 'asset', plugin_code: 'mockprov', plugin_name: 'Mock provider'},
+        {family: 'fx', plugin_code: 'mockfx', plugin_name: 'Mock FX'},
+    ] as const;
+    const groupForm = () => screen.getByTestId('plugin-settings-form-mock');
+    const rows = () => within(form()).queryAllByTestId('plugin-settings-in-group');
+
+    function mountWith(theEntry: PluginSettingsEntry, extra: {groupNames?: Record<string, string>; onopengroup?: (name: string) => void} = {}) {
+        const onsaved = vi.fn();
+        const utils = render(PluginSettingsForm, {props: {entry: theEntry, onsaved, ...extra}});
+        return {...utils, onsaved};
+    }
+
+    it('PSF-33: the heading is the translation of name_key, and plugin_name when that key has no translation', () => {
+        fake.known['pluginSettings.group.mock.name'] = 'Conto finto';
+        const {unmount} = mountWith(group({name_key: 'pluginSettings.group.mock.name'} as Partial<PluginSettingsEntry>));
+        expect(text(within(groupForm()).getByRole('heading', {level: 4}))).toBe('Conto finto');
+        unmount();
+
+        delete fake.known['pluginSettings.group.mock.name'];
+        mountWith(group({name_key: 'pluginSettings.group.mock.name'} as Partial<PluginSettingsEntry>));
+        expect(text(within(groupForm()).getByRole('heading', {level: 4})), 'no translation: the English name').toBe('Mock account');
+    });
+
+    it('PSF-34: a group keeps data-family group on its root, and a system field is drawn like any other', () => {
+        mountWith(group({used_by: [...USERS]} as Partial<PluginSettingsEntry>));
+
+        expect(groupForm()).toHaveAttribute('data-family', 'group');
+        expect(within(groupForm()).getByTestId('plugin-setting-account_token')).toHaveAttribute('data-scope', 'system');
+    });
+
+    it('PSF-35: a group with users says who reads it: one line, the users’ names joined by «, » in the order of used_by', () => {
+        mountWith(group({used_by: [...USERS]} as Partial<PluginSettingsEntry>));
+
+        const line = within(groupForm()).getAllByTestId('plugin-settings-used-by');
+        expect(line, 'one line, not one per user').toHaveLength(1);
+        expect(text(line[0])).toBe('pluginSettings.group.usedBy {plugins=Mock provider, Mock FX}');
+    });
+
+    it('PSF-36: a group nobody reads has no «used by» line, and a plugin never has one', () => {
+        const {unmount} = mountWith(group({used_by: []} as Partial<PluginSettingsEntry>));
+        expect(within(groupForm()).queryByTestId('plugin-settings-used-by')).toBeNull();
+        unmount();
+
+        mountWith(entry([NICKNAME], {used_by: [...USERS], groups: []} as Partial<PluginSettingsEntry>));
+        expect(within(form()).queryByTestId('plugin-settings-used-by'), 'only a group says who uses it').toBeNull();
+    });
+
+    it('PSF-37: a plugin that reads groups has one «in group» row per name, in order, each with the group’s label from groupNames, else its name', () => {
+        mountWith(entry([NICKNAME], {groups: ['mock', 'crypto_keys']} as Partial<PluginSettingsEntry>), {groupNames: {mock: 'Mock account'}});
+
+        expect(rows().map((row) => row.getAttribute('data-group'))).toEqual(['mock', 'crypto_keys']);
+        expect(rows().map(text)).toEqual(expect.arrayContaining([expect.stringContaining('pluginSettings.group.inGroup {group=Mock account}'), expect.stringContaining('pluginSettings.group.inGroup {group=crypto_keys}')]));
+        expect(text(rows()[0])).toContain('group=Mock account');
+        expect(text(rows()[1]), 'a name groupNames does not know').toContain('group=crypto_keys');
+    });
+
+    it('PSF-38: a plugin without groups has no «in group» row, and a group form has none either', () => {
+        const {unmount} = mountWith(entry([NICKNAME], {groups: []} as Partial<PluginSettingsEntry>));
+        expect(rows()).toEqual([]);
+        unmount();
+
+        mountWith(group({used_by: [...USERS]} as Partial<PluginSettingsEntry>));
+        expect(within(groupForm()).queryAllByTestId('plugin-settings-in-group')).toEqual([]);
+    });
+
+    it('PSF-39: without onopengroup the rows have no «open» button', () => {
+        mountWith(entry([NICKNAME], {groups: ['mock']} as Partial<PluginSettingsEntry>), {groupNames: {mock: 'Mock account'}});
+
+        expect(rows()).toHaveLength(1);
+        expect(within(form()).queryAllByTestId('plugin-settings-open-group')).toEqual([]);
+    });
+
+    it('PSF-40: with onopengroup each row has an «open» button that calls it with that group’s name, and nothing else', async () => {
+        const onopengroup = vi.fn();
+        mountWith(entry([NICKNAME], {groups: ['mock', 'crypto_keys']} as Partial<PluginSettingsEntry>), {onopengroup});
+
+        const [first, second] = rows();
+        await fireEvent.click(within(second).getByTestId('plugin-settings-open-group'));
+        expect(onopengroup.mock.calls).toEqual([['crypto_keys']]);
+        await fireEvent.click(within(first).getByTestId('plugin-settings-open-group'));
+        expect(onopengroup.mock.calls).toEqual([['crypto_keys'], ['mock']]);
+        expect(fake.save, 'opening a group writes nothing').not.toHaveBeenCalled();
     });
 });

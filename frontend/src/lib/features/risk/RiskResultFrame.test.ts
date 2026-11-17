@@ -323,7 +323,7 @@ describe('RiskResultFrame — a resource_limit refusal is worded by the remedy i
     const UNAVAILABLE_KEY = 'risk.states.unavailable';
     const FUTURE_REMEDY = 'future_remedy';
     const REFUSAL_MESSAGE = 'A synthetic backend refusal sentence.';
-    /** The details `simulation.py::_resource_limit` sends for a history longer than the engine carries. */
+    /** The details `resource_limit_error` (`risk/base.py`) sends for a history longer than the engine carries. */
     const PERIOD_DETAILS = {metric: 'observations', actual: 5001, limit: 5000, remedy: 'period'};
 
     type Refusal = {code: 'resource_limit'; message: string; details: Record<string, unknown>};

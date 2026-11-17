@@ -32,6 +32,7 @@
     import {pendingSchedulerRetry} from '$lib/features/settings/schedulerRetry';
     import {getInstanceStorage} from '$lib/features/backup/backupApi';
     import {SETTINGS_FIELD_PARAM} from '$lib/features/settings/settingsPaths';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     // Props
     interface Props {
@@ -640,6 +641,7 @@
                             <ShieldOff size={18} />
                         </div>
                     {/if}
+                    <DocsLink path="admin/settings/" label={$_('settings.docsHelp.global')} icon="book" size={16} testId="global-settings-docs" />
                 </div>
             </div>
             <p class="text-sm text-lf-muted">{$_('settings.globalSettingsDescription')}</p>

@@ -28,8 +28,9 @@
  *      written — what the Dashboard remembers is not this page's business.
  *
  * Unchanged, and pinned again because the boxes are now opened and closed: the box testids and
- * their `data-distance` (`observed`, `assumed`, `modelled`), and the simulation box's beta banner
- * (`scope="simulation"`) and model warning, inside it and nowhere else.
+ * their `data-distance` (`observed`, `assumed`, `modelled`), and the simulation box's model warning,
+ * inside it and nowhere else. The beta banner is gone from every box (RN-06, Q6: the simulation
+ * left beta on 16/11/2026); the model warning stays, because a model stays a model.
  *
  * **The snippets** are raw snippets (`createRawSnippet`), each a `probe-{tool}` element, so what
  * a box holds is visible without mounting the real rungs; a closed tool's snippet must not be on
@@ -43,7 +44,7 @@
  * the product's own helpers reach it. **The user** is a store this file controls: the
  * `currentUser` export of `$lib/stores/app/auth` is replaced, the rest of the module is real.
  *
- * **Handles.** `data-testid`, `data-distance`, `data-scope`, the order of elements in the document
+ * **Handles.** `data-testid`, `data-distance`, the order of elements in the document
  * — which is the contract here, the fixed order of the tools — and the close buttons' accessible
  * names, resolved from the shipped catalogue through the same `$_`. The harness case says the new
  * keys exist, so a key echoed back on both sides cannot pass for a name. No class, no prose.
@@ -234,17 +235,16 @@ async function close(tool: Tool): Promise<void> {
     await fireEvent.click(button);
 }
 
-/** Each open box: its distance, its own snippet inside, and the beta notices only in the simulation's. */
+/** Each open box: its distance, its own snippet inside, the model warning only in the simulation's, and no beta banner anywhere. */
 function expectBoxes(open: readonly Tool[]): void {
     for (const tool of open) {
         const box = screen.getByTestId(BOX(tool));
         expect(box, `the ${tool} box lost its distance from observed data`).toHaveAttribute('data-distance', DISTANCE[tool]);
         expect(within(box).queryByTestId(PROBE(tool)), `the ${tool} box does not hold the ${tool} snippet`).not.toBeNull();
+        expect(within(box).queryByTestId('risk-beta-banner'), `the ${tool} box carries a beta banner: the simulation left beta (Q6), and the other tools never were`).toBeNull();
         if (tool === 'simulation') {
-            expect(within(box).getByTestId('risk-beta-banner'), 'the simulation box lost its beta banner, or the banner its scope').toHaveAttribute('data-scope', 'simulation');
             expect(within(box).queryByTestId('risk-l4-model-warning'), 'the simulation box lost its model warning').not.toBeNull();
         } else {
-            expect(within(box).queryByTestId('risk-beta-banner'), `the ${tool} box carries the simulation's beta banner`).toBeNull();
             expect(within(box).queryByTestId('risk-l4-model-warning'), `the ${tool} box carries the simulation's model warning`).toBeNull();
         }
     }
@@ -253,8 +253,8 @@ function expectBoxes(open: readonly Tool[]): void {
         closed.filter((tool) => screen.queryAllByTestId(PROBE(tool)).length > 0),
         'a closed tool’s snippet is on screen: a closed tool is not mounted at all, not merely hidden',
     ).toEqual([]);
+    expect(screen.queryAllByTestId('risk-beta-banner'), 'a beta banner is on screen: What if…? has none since the simulation left beta (Q6)').toEqual([]);
     if (!open.includes('simulation')) {
-        expect(screen.queryAllByTestId('risk-beta-banner'), 'the beta banner is on screen with the simulation closed: it belongs to the simulation box').toEqual([]);
         expect(screen.queryAllByTestId('risk-l4-model-warning'), 'the model warning is on screen with the simulation closed').toEqual([]);
     }
 }

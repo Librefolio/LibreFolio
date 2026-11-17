@@ -482,7 +482,6 @@ def _prepare_from_inputs(  # noqa: C901 — sequential pipeline stages with earl
     carried_fx_pairs: set[str] = set()
     carried_price_points = 0
     carried_fx_points = 0
-    fresh_quote_points = 0
     for item in active:
         valuation_points = [_valuation_point(item.target_points[point_date], target_currency) for point_date in joint_valuation_dates]
         # TODO(total return): these returns are price-only, so coupons and dividends never enter,
@@ -505,7 +504,7 @@ def _prepare_from_inputs(  # noqa: C901 — sequential pipeline stages with earl
         # the project's staleness threshold: weekends, holidays and an instrument quoted on its
         # own market calendar are ordinary and must not degrade a result on their own
         # (developer's decision of 24/09/2026). The baseline is a reference, not an
-        # observation, so it never counts — the same rule `fresh_quote_points` applies.
+        # observation, so it never counts.
         for index, point in enumerate(valuation_points):
             if index == 0:
                 continue
@@ -515,8 +514,6 @@ def _prepare_from_inputs(  # noqa: C901 — sequential pipeline stages with earl
             if point.is_fx_carried_forward and point.fx_rate_date is not None and is_stale(point.fx_rate_date, point.valuation_date):
                 carried_fx_points += 1
                 carried_fx_pairs.add(f"{point.native_currency}/{point.target_currency}")
-            if not point.is_price_carried_forward:
-                fresh_quote_points += 1
         prepared_series.append(
             PreparedAssetSeries(
                 valuations=AssetValuationSeries(
@@ -544,8 +541,6 @@ def _prepare_from_inputs(  # noqa: C901 — sequential pipeline stages with earl
     )
     coverage_candidates = [point_date for point_date in candidate_quote_dates if point_date != baseline_date]
     calendar_coverage = n_observations / len(coverage_candidates) if coverage_candidates else 0.0
-    fresh_quote_denominator = len(active) * n_observations
-    fresh_quote_coverage = fresh_quote_points / fresh_quote_denominator if fresh_quote_denominator else 0.0
 
     data_quality = DataQualityReport(
         incomplete_valuation_ranges=[DateSpan(start=first, end=last) for first, last in merged_spans((day, day) for day in incomplete_valuation_dates)],
@@ -577,7 +572,6 @@ def _prepare_from_inputs(  # noqa: C901 — sequential pipeline stages with earl
         calendar_days=calendar_days,
         annualization_factor=annualization_factor,
         calendar_coverage=calendar_coverage,
-        fresh_quote_coverage=fresh_quote_coverage,
         data_quality=data_quality,
         fx_fingerprint=fx_content_fingerprint(prepared_series),
         warnings=sorted(warnings),
