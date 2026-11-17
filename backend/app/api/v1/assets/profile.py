@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.api.v1.assets.providers import enforce_probe_limit
 from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import Asset, AssetType, User
 from backend.app.db.session import get_session_generator
@@ -35,12 +36,14 @@ def _read_outcome(outcome: ReadOutcome) -> FAProfileReadOutcome:
 
 
 @profile_router.post("/profile/ask", response_model=FAProfileAskResponse, tags=["FA Profile"])
-async def ask_profile(request: FAProfileAskRequest, session: AsyncSession = Depends(get_session_generator), _current_user: User = Depends(get_current_user)) -> FAProfileAskResponse:
+async def ask_profile(request: FAProfileAskRequest, session: AsyncSession = Depends(get_session_generator), current_user: User = Depends(get_current_user)) -> FAProfileAskResponse:
     """What the enrichers give now, merged voice by voice, without saving (a read younger than 30 minutes is reused).
 
     Either ``asset_id`` (its bindings and type) or ``asset_type`` with ``enrichers`` (an asset not created yet); without
-    ``keys`` every voice («Chiedi tutto»). 404 for an ``asset_id`` that does not exist.
+    ``keys`` every voice («Chiedi tutto»). 404 for an ``asset_id`` that does not exist. Counted on the probe's per-user
+    limit (plan C0); «Aggiorna» (``refresh``) is not: it reads bindings already saved.
     """
+    enforce_probe_limit(current_user.id)
     if request.asset_id is not None:
         asset_type = (await session.execute(select(Asset.asset_type).where(Asset.id == request.asset_id))).scalar_one_or_none()
         if asset_type is None:

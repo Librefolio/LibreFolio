@@ -12,6 +12,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
+from backend.app.api.v1.assets.providers import enforce_probe_limit
 from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import User
 from backend.app.logging_config import get_logger
@@ -80,7 +81,7 @@ async def _recognize_events(request: FAEnricherRecognizeRequest) -> AsyncIterato
 
 
 @enricher_router.post("/enrichers/recognize", tags=["FA Enrichers"])
-async def recognize_enrichers(request: FAEnricherRecognizeRequest, _current_user: User = Depends(get_current_user)) -> StreamingResponse:
+async def recognize_enrichers(request: FAEnricherRecognizeRequest, current_user: User = Depends(get_current_user)) -> StreamingResponse:
     """«Recognize» in cascade from the identifiers known, as Server-Sent Events (plan B4); usable before the asset exists.
 
     Events, one ``data: {json}`` each, with an ``event`` key:
@@ -91,13 +92,18 @@ async def recognize_enrichers(request: FAEnricherRecognizeRequest, _current_user
     - ``done``: ``found_order`` (the enrichers found, as they answered), ``default_order`` (the order the asset's
       bindings would take: degree, then the price provider's enricher, then ``found_order``, then code) and
       ``identifiers`` (every identifier known at the end).
+
+    Counted once on the probe's per-user limit (plan C0), however many enrichers it asks: past it, 429 before any event.
     """
+    enforce_probe_limit(current_user.id)
     return StreamingResponse(_recognize_events(request), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
 
 
 @enricher_router.get("/enrichers/{code}/search", response_model=List[FAEnricherSearchResult], tags=["FA Enrichers"])
-async def search_enricher(code: str, q: str = Query(..., min_length=1, max_length=200), _current_user: User = Depends(get_current_user)) -> List[FAEnricherSearchResult]:
-    """One enricher's search by a word (the E7 window's «search»); 400 for an enricher that does not search."""
+async def search_enricher(code: str, q: str = Query(..., min_length=1, max_length=200), current_user: User = Depends(get_current_user)) -> List[FAEnricherSearchResult]:
+    """One enricher's search by a word (the E7 window's «search»); 400 for an enricher that does not search; counted on the
+    probe's per-user limit (plan C0)."""
+    enforce_probe_limit(current_user.id)
     plugin = _enricher(code)
     if not plugin.supports_search:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"The enricher '{code}' does not search")
@@ -106,8 +112,10 @@ async def search_enricher(code: str, q: str = Query(..., min_length=1, max_lengt
 
 
 @enricher_router.post("/enrichers/{code}/test", response_model=FAEnricherRecognition, tags=["FA Enrichers"])
-async def test_enricher(code: str, request: FAEnricherTestRequest, _current_user: User = Depends(get_current_user)) -> FAEnricherRecognition:
-    """«Recognize» one binding on one enricher (the E7 window's «test»): writes nothing."""
+async def test_enricher(code: str, request: FAEnricherTestRequest, current_user: User = Depends(get_current_user)) -> FAEnricherRecognition:
+    """«Recognize» one binding on one enricher (the E7 window's «test»): writes nothing; counted on the probe's per-user
+    limit (plan C0)."""
+    enforce_probe_limit(current_user.id)
     plugin = _enricher(code)
     extra = {key: value for key, value in request.binding.model_dump().items() if key not in ("identifier_type", "identifier")}
     binding = EnricherBinding(identifier_type=request.binding.identifier_type, identifier=request.binding.identifier, params=extra)

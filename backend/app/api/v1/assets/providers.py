@@ -80,6 +80,24 @@ def probe_limiter() -> SlidingWindowLimiter | None:
 # Read once at import too: a server started with the limit off, or with a value it cannot use, says so in its log.
 probe_limiter()
 
+
+def enforce_probe_limit(user_id: int) -> None:
+    """Count one hit of ``user_id`` on the probe limit in force, or answer 429 ``PROBE_RATE_LIMITED`` with ``Retry-After``.
+
+    One count per user for every route that has a source called with what the user typed: the provider probe and, since
+    plan 68 C0, the enrichers' recognize, test, search and ask. A refused call is not counted.
+    """
+    limiter = probe_limiter()
+    decision = limiter.hit(user_id) if limiter is not None else None
+    if decision is not None and not decision.allowed:
+        seconds = max(1, math.ceil(decision.retry_after))
+        raise HTTPException(
+            status_code=429,
+            detail={"error_code": "PROBE_RATE_LIMITED", "retry_after": seconds, "message": "Too many provider probes: try again later"},
+            headers={"Retry-After": str(seconds)},
+        )
+
+
 provider_router = APIRouter(prefix="/provider", tags=["FA Provider"])
 
 
@@ -264,15 +282,7 @@ async def probe_provider_config(
     At most 30 probes a minute per user (MF-SI2): past it, 429 `PROBE_RATE_LIMITED` with `Retry-After`.
     """.format(ops_list="\n    ".join(f"- `{op.value}`" for op in ProbeOperation))
 
-    limiter = probe_limiter()
-    decision = limiter.hit(current_user.id) if limiter is not None else None
-    if decision is not None and not decision.allowed:
-        seconds = max(1, math.ceil(decision.retry_after))
-        raise HTTPException(
-            status_code=429,
-            detail={"error_code": "PROBE_RATE_LIMITED", "retry_after": seconds, "message": "Too many provider probes: try again later"},
-            headers={"Retry-After": str(seconds)},
-        )
+    enforce_probe_limit(current_user.id)
     try:
         result = await AssetSourceManager.probe_provider_config(
             config=request,
