@@ -165,6 +165,8 @@ class TXValidationCode(StrEnum):
     CHARGE_PARENT_REF_NOT_FOUND = "chargeParentRefNotFound"
     CHARGE_PARENT_TWICE = "chargeParentTwice"
     CHARGE_PARENT_ID_INVALID = "chargeParentIdInvalid"
+    # Lot R4: a parent deleted while it keeps charges, params {id, chargeIds} (the charges left), on the delete.
+    CHARGES_DELETE_INCOMPLETE = "chargesDeleteIncomplete"
 
 
 class TXValidationCodeInfo(StrictModel):

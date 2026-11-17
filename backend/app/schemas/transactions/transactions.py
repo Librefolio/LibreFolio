@@ -567,6 +567,12 @@ class TXUpdateItem(StrictModel):
     # - n > 0  -> link to the given AssetEvent (validated in service layer)
     asset_event_id: Optional[int] = Field(default=None, ge=0, description="Link/unlink to AssetEvent. 0 = unlink (Part 1 sentinel), >0 = link, None = leave unchanged.")
 
+    # Linked charges (project 66), judged by the batch on its final state (services/transactions/charges.py):
+    # - parent_transaction_id: None -> the link does not change; 0 -> unlink; n > 0 -> link to the saved parent n
+    # - parent_ref: link to a parent created in this batch (the ref of a create). Never with parent_transaction_id.
+    parent_transaction_id: Optional[int] = Field(default=None, description="FEE or TAX: link to the saved parent n, 0 = unlink, None = leave unchanged")
+    parent_ref: Optional[str] = Field(default=None, max_length=36, description="FEE or TAX: link to the parent created in this batch with this ref. Never with parent_transaction_id. Empty = none")
+
     @field_validator("tags", mode="before")
     @classmethod
     def _validate_tags(cls, v):
@@ -582,6 +588,10 @@ class TXUpdateItem(StrictModel):
                 "Transaction id must be > 0",
                 {"id": self.id},
             )
+        if self.parent_transaction_id is not None and self.parent_transaction_id < 0:
+            raise PydanticCustomError("chargeParentIdInvalid", "parent_transaction_id must be 0 (unlink) or a transaction id", {"parent_transaction_id": self.parent_transaction_id})
+        if self.parent_ref and self.parent_transaction_id is not None:
+            raise PydanticCustomError("chargeParentTwice", "a charge names its parent once: parent_ref or parent_transaction_id, not both")
         return self
 
     def get_tags_csv(self) -> Optional[str]:

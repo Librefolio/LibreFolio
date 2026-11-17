@@ -418,6 +418,19 @@ class TestAParentWithChargesKeepsAParentType:
         assert params == {"type": "CASH_TRANSFER", "chargeIds": [12, 20, 31]}
         assert isinstance(message, str) and message
 
+    def test_a_leg_of_a_pair_with_charges_is_refused_even_with_a_parent_type(self):
+        """R4/R5 (rule 6 + rule 8, one predicate): a DEPOSIT that is a leg of a pair (``related_transaction_id`` set) cannot
+        keep charges, though DEPOSIT is a parent type. RED until R5: today only the type is read."""
+        parent = _tx(T.DEPOSIT, tx_id=10, related_id=56)
+
+        issue = self._check(parent, [31, 12])
+
+        assert issue is not None, "a paired DEPOSIT with charges must be refused, whatever its type"
+        message, code, params = issue
+        assert code == _code("chargesBlockParentType")
+        assert params == {"type": "DEPOSIT", "chargeIds": [12, 31]}
+        assert isinstance(message, str) and message
+
     def test_no_charges_means_no_issue_for_any_type(self):
         for tx_type in T:
             assert self._check(_tx(tx_type), []) is None, tx_type
