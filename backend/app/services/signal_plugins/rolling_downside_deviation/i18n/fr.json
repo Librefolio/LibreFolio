@@ -1,0 +1,10 @@
+{
+  "signals": {
+    "riskRollingDownsideDeviation": {
+      "name": "Semi-écart glissant",
+      "description": "Volatilité annualisée des rendements sous la cible sur une fenêtre glissante : le dénominateur du Sortino, à lire à côté de la volatilité.",
+      "output": "Semi-écart",
+      "outputDescription": "Écart quadratique moyen sous la cible, annualisé, en points de pourcentage."
+    }
+  }
+}
