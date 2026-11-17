@@ -109,7 +109,7 @@ code grows: when it does, move the code and update this table in the same change
 belongs to a service layer, such as `financial_math/` (developer decision D-P7, 2026-10-12). Its folders group them by
 type: `utils/asset/` (sectors, geographic areas, identifiers, display-name locale), `utils/fx/` (currencies),
 `utils/runtime/` (version, client network address, TTL caches, sliding-window rate limits in `rate_window.py`, pauses
-after a remote's «too many requests» in `cooldown.py`, the causes of an exception and the «reported» mark in
+after a remote's «too many requests» in `cooldown.py`, the minimum interval between two calls of a plugin to its site in `pacing.py`, the causes of an exception and the «reported» mark in
 `errors.py`); `datetime_utils`, `json_utils` and `decimal_utils` stay
 at the root. The truncation to the database precision reads the models, so it lives in `db/precision.py`.
 

@@ -57,7 +57,7 @@
 import {describe, expect, it, vi} from 'vitest';
 import type {Mock} from 'vitest';
 import {get} from 'svelte/store';
-import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {_} from '$lib/i18n';
 import {currentLanguage} from '$lib/stores/app/language';
 import {uiLocale} from '$lib/stores/app/uiLocale';
@@ -215,6 +215,70 @@ describe('ProviderComparisonModal — selection and the apply payload', () => {
         expect(onapply).not.toHaveBeenCalled();
         // open is flipped to false, so ModalBase unmounts the whole dialog.
         await waitFor(() => expect(screen.queryByTestId('comparison-modal')).toBeNull());
+    });
+});
+
+describe('ProviderComparisonModal — the asset profile (plan 68, E10b)', () => {
+    /** A profile voice as the profile window passes it: a voice key, a group of the «Profilo» tab, the source's name. */
+    function profileDiff(field: string, group: {key: string; title: string}, extra: Partial<DiffItem> = {}): DiffItem {
+        return {...stringDiff(field, '0,20 %', '0,22 %'), group, sourceLabel: 'justETF', ...extra};
+    }
+    const FUND = {key: 'fund', title: 'Fund title'};
+    const KEY_FIGURES = {key: 'key_figures', title: 'Key figures title'};
+    const label = (box: HTMLElement) => within(box).getByTestId(/^comparison-(current|provider)-label-/);
+
+    it('takes a title and a description from the caller (the profile: «Confronto con le fonti»), and keeps the defaults without', async () => {
+        await setupI18n();
+        mount([profileDiff('ter', KEY_FIGURES)], {title: 'Compare with the sources', description: 'The sources gave other values.'});
+        await settled();
+        expect(screen.getByTestId('comparison-title')).toHaveTextContent(/^Compare with the sources$/);
+        expect(screen.getByTestId('comparison-intro')).toHaveTextContent(/^The sources gave other values\.$/);
+        cleanup();
+
+        mount([stringDiff('currency', 'USD', 'EUR')]);
+        await settled();
+        expect(screen.getByTestId('comparison-title')).toHaveTextContent(get(_)('assets.comparison.title'));
+        expect(screen.getByTestId('comparison-intro')).toHaveTextContent(get(_)('assets.comparison.description'));
+    });
+
+    it('names the source above its value instead of «provider value», and keeps the default without a name', async () => {
+        await setupI18n();
+        mount([profileDiff('ter', KEY_FIGURES), stringDiff('currency', 'USD', 'EUR')]);
+        await settled();
+
+        expect(label(screen.getByTestId('comparison-provider-ter'))).toHaveTextContent(/^justETF$/);
+        expect(label(screen.getByTestId('comparison-provider-currency'))).toHaveTextContent(get(_)('assets.comparison.providerValue'));
+    });
+
+    it('says what the current value is when the caller names it, and keeps the default without', async () => {
+        await setupI18n();
+        mount([profileDiff('ter', KEY_FIGURES, {currentLabel: 'Yours, pending'}), stringDiff('currency', 'USD', 'EUR')]);
+        await settled();
+
+        expect(label(screen.getByTestId('comparison-current-ter'))).toHaveTextContent(/^Yours, pending$/);
+        expect(label(screen.getByTestId('comparison-current-currency'))).toHaveTextContent(get(_)('assets.comparison.currentValue'));
+    });
+
+    it('groups the profile voices by their group, in the order they come, after the asset sections and before Other', async () => {
+        await setupI18n();
+        mount([profileDiff('fund_provider', FUND), stringDiff('currency', 'USD', 'EUR'), profileDiff('ter', KEY_FIGURES), profileDiff('fund_domicile', FUND), stringDiff('made_up_field', '1', '2')]);
+        await settled();
+
+        expect(sectionOrder()).toEqual(['assets.modal.assetDetails', 'profile:fund', 'profile:key_figures', '__other__']);
+        const fundGroup = document.querySelector<HTMLElement>('[data-testid="comparison-group"][data-section="profile:fund"]');
+        expect(fundGroup).toHaveTextContent('Fund title');
+        expect(card('fund_provider')).toBeInTheDocument();
+        expect(card('fund_domicile')).toBeInTheDocument();
+    });
+
+    it('hands the voice keys back on apply, as any other row', async () => {
+        await setupI18n();
+        const {onapply} = mount([profileDiff('ter', KEY_FIGURES), profileDiff('fund_provider', FUND)]);
+        await settled();
+
+        await fireEvent.click(screen.getByTestId('comparison-apply'));
+
+        expect(lastApply(onapply)?.fields.sort()).toEqual(['fund_provider', 'ter']);
     });
 });
 

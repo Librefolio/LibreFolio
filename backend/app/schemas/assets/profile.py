@@ -79,6 +79,26 @@ class ProfileMapKeys(StrEnum):
     SECTOR = "sector"
 
 
+class ProfileTopic(StrEnum):
+    """What a voice is about, in one short word (plan 68, E7b): the enrichers' window says what each enricher fills by
+    these («costi, struttura, paesi, settori»), not by the voices' names. Declared by each voice of the catalogue; the
+    order of the members is the order the window shows them in."""
+
+    COSTS = "costs"
+    STRUCTURE = "structure"
+    MANAGER = "manager"
+    COUNTRIES = "countries"
+    SECTORS = "sectors"
+    COUPONS = "coupons"
+    MATURITY = "maturity"
+    YIELD = "yield"
+    DURATION = "duration"
+    SIZE = "size"
+    LEGAL_FORM = "legal_form"
+    ISSUER = "issuer"
+    DESCRIPTION = "description"
+
+
 class FAProfileVoice(StrictModel):
     """One voice of the catalogue: its key, the shape of its value and how the «Profilo» tab shows it."""
 
@@ -94,6 +114,7 @@ class FAProfileVoice(StrictModel):
     volatile: bool = Field(False, description="Changes at every read (fund size, yields, duration…): «Ultime variazioni» leaves its source rows out")
     choices: tuple[str, ...] = Field((), description="The codes a choice voice accepts; empty for the others")
     map_keys: Optional[ProfileMapKeys] = Field(None, description="What a map voice's keys are; None for the others")
+    topic: ProfileTopic = Field(..., description="What the voice is about, in one word: the enrichers' window says what an enricher fills by its voices' topics")
 
 
 class FAProfileReadOutcome(StrictModel):

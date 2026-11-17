@@ -37,7 +37,8 @@
         /** Minimum grid item width before another column is added */
         minItemWidth?: string;
         /** Optional visual tone for individual items */
-        itemTone?: (item: T, index: number) => 'default' | 'warning' | 'error';
+        /** 'selected': the item the user has opened, on the focus role (plan 68, E7b3) */
+        itemTone?: (item: T, index: number) => 'default' | 'warning' | 'error' | 'selected';
         /** Snippet to render each item's content (between handle and arrows) */
         children: Snippet<[{item: T; index: number}]>;
     }
@@ -121,9 +122,12 @@
                   ? 'border-lf-danger-line bg-lf-danger-soft'
                   : tone === 'warning'
                     ? 'border-lf-warning-line bg-lf-warning-soft'
-                    : 'border-lf-subtle'}
+                    : tone === 'selected'
+                      ? 'border-lf-focus'
+                      : 'border-lf-subtle'}
                 {dragIndex === index ? 'opacity-50' : ''}
                 {disabled ? 'opacity-60' : ''}"
+            data-tone={tone}
             draggable={!disabled}
             ondragstart={() => handleDragStart(index)}
             ondragover={(e: DragEvent) => handleDragOver(e, index)}

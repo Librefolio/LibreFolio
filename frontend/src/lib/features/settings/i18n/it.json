@@ -491,6 +491,8 @@
       "about": "Quale versione di LibreFolio gira qui, cosa è cambiato e la sua licenza.",
       "users": "Gli account di questa istanza: chi può accedere, chi è amministratore e i link di invito.",
       "security": "Come questa istanza protegge gli accessi e le connessioni: i controlli che esegue e cosa sistemare quando uno fallisce."
-    }
+    },
+    "pluginSystemEnricher": "Arricchitori",
+    "enrichers": "Arricchitori"
   }
 }

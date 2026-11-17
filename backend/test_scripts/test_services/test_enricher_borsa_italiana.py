@@ -114,6 +114,7 @@ import dataclasses
 import importlib
 import importlib.util
 import json
+import threading
 import typing
 from collections.abc import Iterator
 from datetime import date
@@ -142,6 +143,7 @@ from backend.app.services.enrichers.base import (
 from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.plugin_settings.call_limits import CALL_LIMIT_KEYS
 from backend.app.utils.asset.sector import validate_sector
+from backend.app.utils.runtime.pacing import Pacer
 
 PLUGIN_MODULE = "backend.app.services.enricher_providers.borsa_italiana.plugin"
 CODE = "borsa_italiana"
@@ -177,7 +179,7 @@ BOND_VOICES = frozenset(
 )
 STOCK_VOICES = frozenset({"sector", "legal_form"})
 #: C2b: exactly the two fund voices the fund page gives with a unit and a meaning.
-FUND_VOICES = frozenset({"fund_currency", "inception_date"})
+FUND_VOICES = frozenset({"fund_currency", "inception_date", "management_fee"})
 COVERED = {AssetType.BOND: 10, AssetType.STOCK: 20, AssetType.FUND: 10}
 #: C2b: the identifier type of the site's internal fund code, and the recorded fund (Anima Dinamix).
 FUND_CODE_TYPE = "BI_FUND_CODE"
@@ -185,7 +187,7 @@ FUND_CODE = "1FADB716664"
 FUND_ISIN = "IT0005487001"
 FUND_RECORDING = "mutual_fund"
 #: The recorded fund in stored form: «EUR», «14/03/22».
-EXPECTED_FUND = {"fund_currency": "EUR", "inception_date": "2022-03-14"}
+EXPECTED_FUND = {"fund_currency": "EUR", "inception_date": "2022-03-14", "management_fee": "0.004"}
 #: The voices «as of» the reference price date.
 AS_OF_VOICES = frozenset({"yield_gross", "yield_net", "modified_duration", "accrued_interest"})
 #: The reference price date of every bond recording (2026-11-09).
@@ -685,7 +687,7 @@ def test_coverage_and_voices(bi):
     assert BOND_VOICES <= set(CATALOGUE) and len(BOND_VOICES) == 21, "barrier: 21 catalogue voices"
     assert "description" in cls.voices[AssetType.BOND], "C2d: the composed description is a bond voice"
     assert "description" not in cls.voices[AssetType.STOCK], "C2d: a share gets no description"
-    assert cls.voices[AssetType.FUND] == FUND_VOICES, f"C2b: exactly the fund currency and the inception date: {sorted(cls.voices[AssetType.FUND])}"
+    assert cls.voices[AssetType.FUND] == FUND_VOICES, f"C2b, C2e: the fund currency, the inception date and the management fee: {sorted(cls.voices[AssetType.FUND])}"
     assert FUND_VOICES <= set(CATALOGUE), "barrier: catalogue voices"
 
 
@@ -1835,8 +1837,9 @@ def test_read_an_isin_binding_without_a_fund_code_stays_on_the_sheet(plugin, lib
 
 @pytest.mark.parametrize("voice", ["ter", "fund_size", "fund_provider", "description", "sector", "legal_form"])
 def test_fund_voices_not_written(plugin, library, voice):
-    """«Gestione» is the management fee, not the TER; «Patrimonio del fondo» has no unit; no management company is
-    guessed; no fund sentence is approved; risk grade and category have no catalogue voice."""
+    """«Gestione» is the management fee, only a part of the TER (C2e: written as ``management_fee``, never ``ter``);
+    «Patrimonio del fondo» has no unit; no management company is guessed; no fund sentence is approved; risk grade and
+    category have no catalogue voice."""
     library.give_fund(FUND_CODE, _fund())
     values = _read_fund_values(plugin, library, _fund_binding())
     assert voice not in values, f"{voice} is not written for a fund: {values}"
@@ -1866,7 +1869,33 @@ def test_fund_inception_date(plugin, library, text, stored):
 def test_fund_inception_date_absent_when_unparsable(plugin, library, text):
     values = _read_fund_values(plugin, library, _synthetic_fund(library, "1FTESTID0002", caratteristiche=_with_start(text)))
     assert "inception_date" not in values, f"{text!r}: {values}"
-    assert values == {"fund_currency": "EUR"}, "the currency still comes"
+    assert values == {"fund_currency": "EUR", "management_fee": "0.004"}, "the currency and the fee still come"
+
+
+def _with_fee(text: str | None) -> dict[str, str]:
+    """The recorded «Costi» with «Gestione» set to ``text``, or without it (None)."""
+    costs = {key: value for key, value in _fund().costi.items() if key != "Gestione"}
+    return costs if text is None else {**costs, "Gestione": text}
+
+
+@pytest.mark.parametrize(
+    ("text", "stored"),
+    [("0.4", "0.004"), ("0,40", "0.004"), ("1.5", "0.015"), ("2", "0.02"), (" 0.4 ", "0.004"), ("0.4%", "0.004")],
+    ids=["recorded", "comma", "one-and-a-half", "integer", "spaces", "percent-sign"],
+)
+def test_fund_management_fee(plugin, library, text, stored):
+    """C2e (developer, «voce sua»): «Gestione», a percentage per year (the prospectus: «commissione di gestione …
+    0,40% su base annua»), stored as a fraction in ``management_fee``; never the TER."""
+    values = _read_fund_values(plugin, library, _synthetic_fund(library, "1FTESTMF0001", costi=_with_fee(text)))
+    assert values.get("management_fee") == stored, f"{text!r}: {values}"
+    assert "ter" not in values, "the management fee is only a part of the TER: never written as ter"
+
+
+@pytest.mark.parametrize("text", [None, "", "N.D.", "N.A.", "abc", "-0.4"], ids=["missing", "empty", "nd", "na", "text", "negative"])
+def test_fund_management_fee_absent_when_unreadable(plugin, library, text):
+    values = _read_fund_values(plugin, library, _synthetic_fund(library, "1FTESTMF0002", costi=_with_fee(text)))
+    assert "management_fee" not in values, f"{text!r}: {values}"
+    assert values == {"fund_currency": "EUR", "inception_date": "2022-03-14"}, "the other fund voices still come"
 
 
 def test_fund_currency_from_the_page(plugin, library):
@@ -1877,7 +1906,7 @@ def test_fund_currency_from_the_page(plugin, library):
 def test_fund_without_a_currency_has_none(plugin, library):
     """An empty ``valuta`` leaves the voice out, never the price plugin's «EUR» default."""
     values = _read_fund_values(plugin, library, _synthetic_fund(library, "1FTESTCU0002", valuta=""))
-    assert values == {"inception_date": "2022-03-14"}
+    assert values == {"inception_date": "2022-03-14", "management_fee": "0.004"}
 
 
 @pytest.mark.parametrize("error_class", [bis.StrumentoNonTrovato, bis.StrumentoNonRisolto, bis.DatiNonDisponibili])
@@ -1996,3 +2025,58 @@ def test_recognize_a_fund_other_error_raises(plugin, library):
     with pytest.raises(Exception) as raised:
         plugin.recognize(_fund_binding(code))
     assert rate_limited_from_exception(raised.value, CODE) is None, f"not a refusal: {raised.value!r}"
+
+
+# =============================================================================
+# C5: one pace for every call of the plugin, whatever read it comes from
+# =============================================================================
+
+
+class FakePace:
+    """The module's ``_PACER`` replaced by one on a fake clock that only moves when it sleeps: no test ever waits, and
+    the waits are recorded. ``interval`` is the plugin's own."""
+
+    def __init__(self, interval: float) -> None:
+        self.interval = interval
+        self.now = 1000.0
+        self.slept: list[float] = []
+        self._lock = threading.Lock()
+
+    def clock(self) -> float:
+        with self._lock:
+            return self.now
+
+    def sleep(self, seconds: float) -> None:
+        with self._lock:
+            self.slept.append(seconds)
+            self.now += seconds
+
+
+@pytest.fixture(autouse=True)
+def pace(monkeypatch: pytest.MonkeyPatch) -> FakePace:
+    """Every test of this file runs on the fake pace: the module must hold its ``_PACER`` (C5)."""
+    module = importlib.import_module(PLUGIN_MODULE)
+    real = module._PACER
+    assert isinstance(real, Pacer) and real.interval_seconds > 0, "the plugin paces its calls with a module-level Pacer"
+    fake = FakePace(real.interval_seconds)
+    monkeypatch.setattr(module, "_PACER", Pacer(real.interval_seconds, clock=fake.clock, sleep=fake.sleep), raising=True)
+    return fake
+
+
+def test_two_reads_share_one_pace(bi, library, pace):
+    """Two reads, each with its own library session (as two requests at once): the second waits the plugin's interval
+    before its first call, though the library paces only inside one session."""
+    first, second = bi.BorsaItalianaEnricher(), bi.BorsaItalianaEnricher()
+    isin = _give_recording(library, "btp_valore")
+    assert list(first.read([_isin(isin)]))[0].status == EnricherReadStatus.OK
+    assert pace.slept == [], "the first call does not wait"
+    assert list(second.read([_isin(isin)]))[0].status == EnricherReadStatus.OK
+    assert pace.slept == [pace.interval], f"the second read waited the interval: {pace.slept}"
+
+
+def test_search_is_paced_with_the_reads(bi, library, pace, plugin):
+    isin = _give_recording(library, "btp_valore")
+    list(plugin.read([_isin(isin)]))
+    library.answers["btp"] = []
+    plugin.search("btp")
+    assert pace.slept == [pace.interval], f"search and read share the pace: {pace.slept}"

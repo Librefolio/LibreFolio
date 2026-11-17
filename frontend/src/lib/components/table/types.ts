@@ -126,6 +126,8 @@ export interface EditableTextCell {
     placeholder?: string;
     /** Max length */
     maxLength?: number;
+    /** A fixed unit drawn beside the field, inside the cell («%», «years»): plan 68, E10c3 */
+    unit?: string;
     /** Callback when value changes (blur or Enter) */
     onchange: (newValue: string) => void;
 }
@@ -167,6 +169,10 @@ export interface EditableSelectCell {
     value: string;
     /** Available options */
     options: Array<{value: string; label: string}>;
+    /** Text shown while no option is chosen (plan 68, E10c2) */
+    placeholder?: string;
+    /** Stable selector: the select gets `<testId>`, each option `<testId>-option-<value>` (plan 68, E10c2) */
+    testId?: string;
     /** Callback when selection changes */
     onchange: (newValue: string) => void;
 }

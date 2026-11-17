@@ -168,6 +168,15 @@ def utils_cooldown(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Cooldown tests", verbose=verbose)
 
 
+def utils_pacing(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the minimum interval between two calls per key, which every enricher keeps at module level (plan 68, C5)."""
+    print_section("Utils: Pacing")
+    print_info("Testing: backend/app/utils/runtime/pacing.py")
+    print_info("Tests: first call free, a second inside the interval waits what is left, independent keys and pacers, threads spaced (fake clock, no sleeps)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_pacing.py", test_names)
+    return run_command(cmd, "Pacing tests", verbose=verbose)
+
+
 def utils_provider_core_cache(verbose: bool = False, test_names: list = None) -> bool:
     """Test provider core cache & thread isolation infrastructure."""
     print_section("Utils: Provider Core Cache & Thread Isolation")
@@ -699,6 +708,15 @@ Tests for utility modules and helper functions:
         name="Cooldown",
         desc="Cooldowns: an unknown key may call and is not tracked; once a pause is over (its trial taken or not) the n-th refusal in a row waits min(base·2^(n−1), max), a positive finite Retry-After a floor honoured above the max up to the hard max, a jitter of up to 10 % on top and never below the floor, base/max given to a call for that call only, a refusal more than max after the end of the pause starts over, no overflow on any streak; while a pause runs, a refusal or a success of a call already in flight counts nothing and never shortens it, only a Retry-After ending later extends it (to now + floor, no jitter), so a burst of 429s counts one; check counts the pause down, then lets one trial through at a time for trial_seconds; succeeded after the pause forgets and returns the count, released frees the trial and keeps it; a backwards clock never lengthens a wait; snapshot, reset/len, independent keys with None among them, LRU eviction at max_keys, one trial and one counted refusal under concurrent threads; retry_after_seconds reads delta-seconds and HTTP-dates, None otherwise; RateLimitedError combines with a domain exception",
         # PURE: no lane DB, no server, no environment read; an injected fake clock and random source, threads of its own, no sleeps.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pacing",
+        utils_pacing,
+        name="Pacing",
+        desc="Pacer (plan 68, C5): at least interval_seconds between two calls of one key, counted by SlidingWindowLimiter(1, interval): the first call of a key does not wait, a second inside the interval waits what is left, one after it does not; independent keys; two pacers never wait for each other; threads calling at once are spaced by the interval; the interval must be positive",
+        # PURE: no lane DB, no server, no environment read; an injected fake clock and sleep, threads of its own, no real waiting.
         isolation="pure",
     )
     add_test(

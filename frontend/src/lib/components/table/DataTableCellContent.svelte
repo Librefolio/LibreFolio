@@ -132,23 +132,44 @@
             onclick={(e) => e.stopPropagation()}
         />
     {:else if cellContent.type === 'editable-text'}
-        <input
-            type="text"
-            class="cell-editable-text"
-            value={cellContent.value}
-            placeholder={cellContent.placeholder ?? ''}
-            maxlength={cellContent.maxLength}
-            onblur={(e) => cellContent.onchange(e.currentTarget.value)}
-            onkeydown={(e) => {
-                if (e.key === 'Enter') e.currentTarget.blur();
-            }}
-            onclick={(e) => e.stopPropagation()}
-        />
+        {#snippet textInput()}
+            <input
+                type="text"
+                class="cell-editable-text"
+                data-testid="cell-editable-text"
+                value={cellContent.value}
+                placeholder={cellContent.placeholder ?? ''}
+                maxlength={cellContent.maxLength}
+                onblur={(e) => cellContent.onchange(e.currentTarget.value)}
+                onkeydown={(e) => {
+                    if (e.key === 'Enter') e.currentTarget.blur();
+                }}
+                onclick={(e) => e.stopPropagation()}
+            />
+        {/snippet}
+        {#if cellContent.unit}
+            <span class="cell-editable-text-with-unit">
+                {@render textInput()}
+                <span class="cell-editable-text-unit" data-testid="cell-editable-text-unit">{cellContent.unit}</span>
+            </span>
+        {:else}
+            {@render textInput()}
+        {/if}
     {:else if cellContent.type === 'editable-select'}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div class="cell-editable-select-wrapper" onclick={(e) => e.stopPropagation()}>
-            <SimpleSelect value={cellContent.value} options={cellContent.options} compact showChevron={false} dropdownPosition="auto" onchange={(v) => cellContent.onchange(v)} />
+            <SimpleSelect
+                value={cellContent.value}
+                options={cellContent.options}
+                placeholder={cellContent.placeholder}
+                compact
+                showChevron={false}
+                dropdownPosition="auto"
+                testId={cellContent.testId}
+                optionTestId={cellContent.testId ? (option) => `${cellContent.testId}-option-${option.value}` : undefined}
+                onchange={(v) => cellContent.onchange(v)}
+            />
         </div>
     {:else if cellContent.type === 'editable-checkbox'}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -432,6 +453,20 @@
         color: var(--lf-text-primary);
         outline: none;
         transition: border-color 0.15s;
+    }
+
+    /* A fixed unit beside the field (plan 68, E10c3): «0.19 %», «6.8 years» */
+    .cell-editable-text-with-unit {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+    }
+
+    .cell-editable-text-unit {
+        flex-shrink: 0;
+        font-size: 0.8125rem;
+        color: var(--lf-text-muted);
+        white-space: nowrap;
     }
 
     .cell-editable-text:focus {
