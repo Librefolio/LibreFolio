@@ -3435,6 +3435,20 @@ def test_pac_no_op_publishes_no_rounding_top_up() -> None:
     assert any(error["type"] == "too_long" and error["loc"][-1] == "rounding_top_ups" for error in errors), errors
 
 
+def _exposure_after_with_top_ups(solution: JsonObject) -> None:
+    """Lot ZB-b of project 67: the exposure after is on ``W`` plus the rounding top-ups, the cash after counting them as
+    added. As the report publishes it: a category keeps its value on the new base, the cash row is that base less the final
+    invested value."""
+    final = _money_wire_fraction(solution["plan_accounts"]["final_wealth"])
+    base = final + sum((_money_wire_fraction(row["valuation_amount"]) for row in solution["rounding_top_ups"]), Fraction())
+    invested = _money_wire_fraction(solution["accounting"]["final_invested"])
+    for row in solution["exposure_rows"]:
+        if row["final_weight"]["kind"] != "available":
+            continue
+        after = (base - invested) / base if row["kind"] == "cash" else _exact_wire_fraction(row["final_weight"]["value"]) * final / base
+        row["final_weight"] = {"kind": "available", "value": _wire_number(after)}
+
+
 def test_rebalancer_ledger_publishes_its_rounding_top_up() -> None:
     """B3 test 3 (contract §6.5, specifica §15 n. 15): a Rebalancer pool a minor unit short to rounding against the plan is
     published with the top-up that covers it, as in the PAC; without one, the negative pool is refused. The short row is
@@ -3446,6 +3460,9 @@ def test_rebalancer_ledger_publishes_its_rounding_top_up() -> None:
     _reject_because(REBALANCER_PLAN_OUTPUT_ADAPTER, payload, "Rebalancer rounding top-ups must cover exactly the negative ledger balances")
 
     payload["primary_solution"]["rounding_top_ups"] = [{"broker_id": "broker-beta", "currency": "EUR", "amount": "0.01", "rounded_postings": 1, "valuation_amount": _money("0.01")}]
+    # Lot ZB-b: the exposure after counts the top-up as added; left on W alone, it is refused.
+    _reject_because(REBALANCER_PLAN_OUTPUT_ADAPTER, payload, "asset_type exposure cash must be the cash of the accounts, before on F and after on W with the rounding top-ups")
+    _exposure_after_with_top_ups(payload["primary_solution"])
     model, _emitted = _strict_roundtrip(REBALANCER_PLAN_OUTPUT_ADAPTER, payload)
     assert [row["amount"] for row in REBALANCER_PLAN_OUTPUT_ADAPTER.dump_python(model, mode="json")["primary_solution"]["rounding_top_ups"]] == ["0.01"]
 

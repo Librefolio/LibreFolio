@@ -702,6 +702,57 @@ def test_a_plan_of_the_wide_model_the_replay_refuses_is_no_plan_found_never_a_fa
     _roundtrip(result)
 
 
+@pytest.mark.parametrize("two_cells", [pytest.param(False, id="one-cell"), pytest.param(True, id="two-cells")])
+def test_a_wide_plan_that_needs_a_top_up_is_published_with_it(two_cells: bool, monkeypatch) -> None:
+    """Lot ZB-b of project 67, the consultant's case Y (``_reb_small_requests.y_top_up``): one unit of each Asset costs
+    29.99 € exact, all the cash, and posts 30.00 €. The prudent model refuses it, the wide model holds it, and the replay
+    asks a top-up of 0.01 €. The plan is published, not proven, with its top-up. With one cash cell the portfolio has no
+    cash left after the plan: the result must still be built (it raised from the exposure rows), and roundtrip strictly."""
+    from backend.app.services.pac_allocator.planner import plan_rebalancing  # noqa: PLC0415
+    from backend.test_scripts.test_services import _reb_small_requests as reb  # noqa: PLC0415
+
+    compiled = _spy_compile(monkeypatch)
+    result = plan_rebalancing(REBALANCER_TOOL_INPUT_ADAPTER.validate_python(reb.y_top_up(two_cells=two_cells)), solver_time_budget_seconds=10)
+    assert compiled == [False, True], "the prudent model closed infeasible, the wide one was solved"
+    assert (result.result_state, result.proof.kind) == ("ready_incumbent", "not_proven")
+    assert [(row.broker_id, row.currency, row.amount) for row in result.primary_solution.rounding_top_ups] == [(reb.BROKER, "EUR", "0.01")]
+    assert sorted(row.asset_id for row in result.primary_solution.order_rows) == ["asset-b", "asset-c"]
+    _roundtrip(result)
+
+
+_TOP_UP_GRID_PRICES = {"two rounding": (R(1999, 200), R(1999, 200)), "one rounding": (R(1999, 200), R(10))}
+_TOP_UP_GRID_LIMITS = {"max 0": (None, R(0)), "min=max=0": (R(0), R(0)), "min=max=0.01": (R(1, 100), R(1, 100))}
+
+
+@pytest.mark.parametrize("limits", sorted(_TOP_UP_GRID_LIMITS))
+@pytest.mark.parametrize("cents", [2998, 2999, 3000])
+@pytest.mark.parametrize("prices", sorted(_TOP_UP_GRID_PRICES))
+def test_around_case_y_a_request_never_raises_and_its_result_roundtrips(prices: str, cents: int, limits: str) -> None:
+    """Lot ZB-b: around the consultant's case Y (one unit of two Assets, each order with its 5 € fee, spending the cash to
+    the cent), with one or two Assets whose price rounds, the cash a cent below, at, or above the exact spend, and three
+    cash bands. Whatever the engine answers (a plan with or without a top-up or a note, or «impossible»), it never raises,
+    and the result roundtrips strictly. Measured on 17/11: no case raises; at 29.99 € with a 0–0 band the plan carries both
+    a 0.01 € top-up and the note of a limit missed by 0.01 €."""
+    from backend.app.schemas.pac_allocator.preview import REBALANCER_TOOL_OUTPUT_ADAPTER  # noqa: PLC0415
+    from backend.app.services.pac_allocator import planner  # noqa: PLC0415
+
+    price_b, price_c = _TOP_UP_GRID_PRICES[prices]
+    lowest, highest = _TOP_UP_GRID_LIMITS[limits]
+    entry = pac_models.ExactCashEntry(broker_id=cases.BROKER, currency="EUR", minimum=None if lowest is None else pac_models.ExactLimit(kind="amount", value=lowest), maximum=pac_models.ExactLimit(kind="amount", value=highest), weight=R(0))
+    scenario = cases.scenario(
+        "around-y",
+        holdings={"asset:b": R(480), "asset:c": R(480)},
+        cash=R(cents, 100),
+        weights={"asset:b": cases.HALF, "asset:c": cases.HALF},
+        prices={"asset:b": price_b, "asset:c": price_c},
+        whole_units=frozenset({"asset:b", "asset:c"}),
+        cash_entries=(entry,),
+    )
+    result = planner.plan_exact_scenario(scenario, solver_time_budget_seconds=5).result
+    assert result.result_state in {"ready_incumbent", "ready_no_op", "ready_infeasible", "ready_no_incumbent"}
+    assert REBALANCER_TOOL_OUTPUT_ADAPTER.validate_json(REBALANCER_TOOL_OUTPUT_ADAPTER.dump_json(result), strict=True) == result
+
+
 def _fraction(money) -> Fraction:
     from backend.app.schemas.pac_allocator.exact import money_fraction  # noqa: PLC0415
 

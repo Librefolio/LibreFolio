@@ -8,6 +8,7 @@ unless a case says otherwise. Lot B3 of project 67 brings them in.
 
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 JsonObject = dict[str, Any]
@@ -101,6 +102,27 @@ def t5(**fields) -> JsonObject:
 def t6(**fields) -> JsonObject:
     """T6: one Asset at 4 000 EUR a unit, one unit held, cash 6 000, «Faithful» (``λ = 4``); the best plan buys one unit."""
     return request("t6", holdings={"asset-a": "1"}, cash="6000", weights={"asset-a": "1"}, prices={"asset-a": "4000"}, whole_units=frozenset({"asset-a"}), **({"fidelity": FAITHFUL} | fields))
+
+
+def y_top_up(*, two_cells: bool = False) -> JsonObject:
+    """Lot ZB-b of project 67, the consultant's case Y: 29.99 EUR in cash and a cash maximum of 0 EUR (spend everything);
+    two Assets in whole units at 9.995 EUR, each order with its 5 EUR fee. One unit of each costs 29.99 EUR exact and posts
+    30.00 EUR: the prudent model refuses it, the wide model holds it, and the replay asks a top-up of 0.01 EUR.
+
+    ``two_cells`` adds a second Broker, ``broker-two``, with 50 EUR held between 50 and 50: a transfer of a cent would
+    break its band, so the prudent model stays infeasible, and the portfolio keeps cash after the plan."""
+    payload = request("y", holdings={"asset-b": "48", "asset-c": "48"}, cash="29.99", weights={"asset-b": "0.5", "asset-c": "0.5"}, prices={"asset-b": "9.995", "asset-c": "9.995"}, whole_units=frozenset({"asset-b", "asset-c"}))
+    zero = {"kind": "amount", "amount": _money("0")}
+    payload["target_weights"].append({"kind": "cash", "broker_id": BROKER, "currency": "EUR", "weight": "0", "minimum": None, "maximum": zero})
+    if two_cells:
+        second = deepcopy(payload["brokers"][0])
+        second["broker_id"] = "broker-two"
+        second["identity"] = {"kind": "manual_broker", "name": "Broker two"}
+        payload["brokers"].append(second)
+        payload["existing_cash"].append({"cash_id": "cash-two-eur", "broker_id": "broker-two", "available": _money("50"), "selected": _money("50"), "provenance_id": PROVENANCE})
+        fifty = {"kind": "amount", "amount": _money("50")}
+        payload["target_weights"].append({"kind": "cash", "broker_id": "broker-two", "currency": "EUR", "weight": "0", "minimum": fifty, "maximum": fifty})
+    return payload
 
 
 HELD_BROKER = "broker-held"

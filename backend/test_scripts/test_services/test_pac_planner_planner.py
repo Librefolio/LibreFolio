@@ -572,6 +572,41 @@ def test_rounding_top_up_covers_a_candidate_one_minor_unit_short(monkeypatch):
     assert Decimal(valuation["value"]["value"]) == minor
 
 
+def test_a_pac_plan_of_the_wide_model_with_a_top_up_is_published_and_roundtrips(monkeypatch):
+    """Lot ZB-b of project 67 on the PAC: a plan of the wide model that needs a rounding top-up is published, not proven,
+    with its top-up, and survives the PAC's output union strictly. Two seams, both of this file: the prudent model is made
+    infeasible by one row (``test_a_pac_plan_of_the_wide_model_is_published_not_proven_and_roundtrips``), and the wide
+    model's candidate is set to the EUR tie's three units, a minor unit short (the safety net's seam above)."""
+    price, cash, _ = _ROUNDING_TIES["EUR"]
+    request = _validated(_tie_payload("EUR", price, cash))
+    buy_id = exact_decision_id("buy_quantum", _ASSET_ONE_ROUTE_ID)
+    real_compile, real_solve = planner.compile_policy_program, planner.solve_policy_program
+
+    def prudent_infeasible(scenario, view, **kwargs):
+        program = real_compile(scenario, view, **kwargs)
+        if not kwargs.get("outer", False):
+            zero = program.model.addVar(vtype="C", lb=0.0, ub=0.0, name="test_zero")
+            program.model.addCons(zero >= 1, name="test_prudent_infeasible")
+        return program
+
+    def wide_buys_the_tie(program, *args, **kwargs):
+        run = real_solve(program, *args, **kwargs)
+        if not program.outer:
+            return run
+        assert run.candidate is not None, "the wide model must hold a candidate for the seam to tamper with"
+        candidate = replace(run.candidate, decisions=tuple(replace(item, quanta=3) if item.decision_id == buy_id else item for item in run.candidate.decisions))
+        return replace(run, candidate=candidate)
+
+    monkeypatch.setattr(planner, "compile_policy_program", prudent_infeasible)
+    monkeypatch.setattr(planner, "solve_policy_program", wide_buys_the_tie)
+    result = plan_pac_allocation(request, solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+    assert isinstance(result, PacPlannerReadyIncumbentResult)
+    assert result.proof.kind == "not_proven"
+    wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(result, mode="json", by_alias=True)
+    assert [(row["broker_id"], row["currency"]) for row in wire["primary_solution"]["rounding_top_ups"]] == [(_BROKER_ONE_ID, "EUR")]
+    assert PAC_PLAN_OUTPUT_ADAPTER.validate_json(PAC_PLAN_OUTPUT_ADAPTER.dump_json(result), strict=True) == result
+
+
 def _threshold_breach_payload() -> dict:
     """The EUR tie with a EUR 1 fixed fee: SCIP buys 2 units; a third leaves the pool EUR 1.01 short."""
     price, cash, _ = _ROUNDING_TIES["EUR"]

@@ -526,6 +526,39 @@ async def test_rebalancer_compute_plans_to_a_proven_optimum(test_server):
     assert plan == REBALANCER_PLAN_OUTPUT_ADAPTER.dump_python(in_process, mode="json", by_alias=True)
 
 
+def _without_time_limits(plan: dict) -> dict:
+    """``plan`` with the value of every stage's time-limit setting dropped (the only clock-dependent figure it publishes)."""
+    plan = copy.deepcopy(plan)
+    for stage in plan["solver_evidence"]["stages"]:
+        for setting in stage.get("settings", []):
+            if setting.get("name") == "time_budget":
+                setting.pop("value", None)
+    return plan
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("two_cells", [pytest.param(False, id="one-cell"), pytest.param(True, id="two-cells")])
+async def test_rebalancer_compute_publishes_a_wide_plan_with_its_top_up(test_server, two_cells):
+    """Lot ZB-b of project 67: the consultant's case Y through ``POST /tools/compute``. The plan of the wide model needs a
+    top-up of 0.01 EUR and, with one cash cell, leaves no cash: it is published, not proven, with its top-up, exactly as the
+    planner in process."""
+    async with _tool_user() as client:
+        identity = await _served_identity(client, REBALANCER_TOOL_CODE)
+        engine_timeout_ms = (await _served_descriptor(client, REBALANCER_TOOL_CODE))["operations"][0]["engine_timeout_ms"]
+        item = _item(identity, reb.y_top_up(two_cells=two_cells))
+        payload, results = await _compute(client, item)
+
+    result = results[item["correlation_id"]]
+    assert result["status"] == "success", result
+    plan = result["result"]
+    assert (plan["result_state"], plan["proof"]["kind"]) == ("ready_incumbent", "not_proven")
+    assert [(row["broker_id"], row["amount"]) for row in plan["primary_solution"]["rounding_top_ups"]] == [(reb.BROKER, "0.01")]
+    in_process = REBALANCER_PLAN_OUTPUT_ADAPTER.dump_python(plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.y_top_up(two_cells=two_cells)), solver_time_budget_seconds=engine_timeout_ms / 1000), mode="json", by_alias=True)
+    # The wide model is solved with the time the prudent one left, a wall-clock figure each stage publishes among its
+    # settings (``time_budget``). That one value is the run's; everything else, the bounds included, is compared as it is.
+    assert _without_time_limits(plan) == _without_time_limits(in_process)
+
+
 @pytest.mark.asyncio
 async def test_rebalancer_compute_answers_missing_holdings_with_needs_input(test_server):
     """B3 test 14: a Rebalancer request with no holdings is a planning outcome, ``needs_input`` with its code."""
