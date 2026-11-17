@@ -11,7 +11,7 @@ from sqlalchemy.orm.exc import StaleDataError
 from sqlmodel import delete as sql_delete
 from sqlmodel import select
 
-from backend.app.api.plugin_errors import not_configured_error
+from backend.app.api.plugin_errors import not_configured_error, settings_unavailable_error
 from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import FxConversionRoute, User
 from backend.app.db.session import get_session_generator
@@ -121,6 +121,7 @@ async def list_providers(
         for info in result:
             state = readiness[info.code]
             info.configured, info.missing_settings = state.configured, list(state.missing)
+            info.missing_reason, info.invalid_variables = state.reason, list(state.variables)
         return result
     except Exception as e:
         logger.exception(f"Error listing FX providers: {e}")
@@ -198,9 +199,12 @@ async def _refuse_unconfigured_new_providers(routes: List[FXConversionRouteItem]
     if not new:
         return
     states = await plugins_readiness("fx", new, user_id=user_id)
+    if any(states[code].settings_unavailable for code in new):
+        raise settings_unavailable_error()
     for code in new:
-        if not states[code].configured:
-            raise not_configured_error(code, states[code].missing)
+        state = states[code]
+        if not state.configured:
+            raise not_configured_error(code, state.missing, reason=state.reason or "missing_fields", variables=state.variables)
 
 
 @router_providers.post("/routes", response_model=FXCreateRoutesResponse, status_code=201)

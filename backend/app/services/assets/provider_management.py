@@ -145,11 +145,13 @@ async def _refuse_unconfigured_new_providers(assignments: List[FAProviderAssignm
     if not new:
         return
     states = await readiness.plugins_readiness("asset", [item.provider_code for item in new], user_id=user_id)
+    if any(states[item.provider_code].settings_unavailable for item in new):
+        raise AssetSourceError("The plugin settings could not be read", "PLUGIN_SETTINGS_UNAVAILABLE", {})
     for item in new:
         state = states[item.provider_code]
         if not state.configured:
-            missing = list(state.missing)
-            raise AssetSourceError(f"Provider {item.provider_code} is not configured", "NOT_CONFIGURED", {"plugin_code": item.provider_code, "missing": missing})
+            details = {"plugin_code": item.provider_code, "missing": list(state.missing), "reason": state.reason or "missing_fields", "variables": list(state.variables)}
+            raise AssetSourceError(f"Provider {item.provider_code} is not configured", "NOT_CONFIGURED", details)
 
 
 class ProviderManagementOperations:

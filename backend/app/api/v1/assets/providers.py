@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
 
-from backend.app.api.plugin_errors import NOT_CONFIGURED, not_configured_error
+from backend.app.api.plugin_errors import NOT_CONFIGURED, PLUGIN_SETTINGS_UNAVAILABLE, not_configured_error, settings_unavailable_error
 from backend.app.api.v1.auth import get_current_user
 from backend.app.config.plugins import DEFAULT_PROBE_RATE_LIMIT, probe_rate_limit
 from backend.app.db.models import AssetProviderAssignment, User
@@ -166,6 +166,7 @@ async def list_providers(
     for info in result:
         state = readiness[info.code]
         info.configured, info.missing_settings = state.configured, list(state.missing)
+        info.missing_reason, info.invalid_variables = state.reason, list(state.variables)
     return result
 
 
@@ -328,7 +329,9 @@ async def assign_providers_bulk(
         if e.error_code == NOT_CONFIGURED and "plugin_code" in (e.details or {}):
             # N2: the shared refusal of a plugin not configured (422), nothing written (the boundary's own
             # NOT_CONFIGURED carries only ``missing``: it never reaches here, and would be a 500 as any other error)
-            raise not_configured_error(e.details["plugin_code"], e.details["missing"]) from e
+            raise not_configured_error(e.details["plugin_code"], e.details["missing"], reason=e.details.get("reason", "missing_fields"), variables=e.details.get("variables", ())) from e
+        if e.error_code == PLUGIN_SETTINGS_UNAVAILABLE:
+            raise settings_unavailable_error() from e
         if e.error_code == "PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST":
             raise HTTPException(status_code=409, detail={"error_code": e.error_code, "message": e.message, "params": jsonable_encoder(e.details)}) from e
         logger.exception(f"Error in bulk assign providers: {e}")

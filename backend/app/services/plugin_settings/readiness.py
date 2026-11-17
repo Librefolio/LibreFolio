@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sqlalchemy import or_, select
 from sqlalchemy.exc import SQLAlchemyError
@@ -45,6 +45,14 @@ class PluginReadiness:
 
     configured: bool
     missing: tuple[str, ...] = ()
+    #: Why it is not configured (N2b): ``missing_fields`` (a required value to set), or ``invalid_locked_setting`` (a
+    #: field an environment variable locks has an invalid value: it is fixed on the server); None when configured.
+    reason: str | None = field(default=None, compare=False)
+    #: The variables with an invalid value, outside the managed profile (in it the hoster's variables are never named).
+    variables: tuple[str, ...] = field(default=(), compare=False)
+    #: The plugin's rows could not be read (a database error): the answer comes from the environment and the defaults
+    #: only, and a write must not rely on it (N2b: 503). Compared neither: ``configured`` and ``missing`` are the verdict.
+    settings_unavailable: bool = field(default=False, compare=False)
 
 
 #: A plugin that declares nothing, or one its registry does not know: nothing can be missing.
@@ -70,7 +78,7 @@ class _Asked:
     groups: tuple[SettingsGroup, ...]
 
 
-async def _rows(family: str, asked: list[_Asked], user_id: int | None) -> tuple[dict, dict]:
+async def _rows(family: str, asked: list[_Asked], user_id: int | None) -> tuple[dict, dict, bool]:
     """The rows the check needs, in one short session of its own: the instance's of the plugins asked and of their groups,
     and the caller's of the plugins asked. A database error leaves them empty (the environment and the defaults decide),
     and is logged: what the boundary does (``runtime.configure_instance``), so the check and a call still agree."""
@@ -91,10 +99,11 @@ async def _rows(family: str, asked: list[_Asked], user_id: int | None) -> tuple[
                     user.setdefault(row.plugin_code, {})[row.field_key] = stored_value(row)
     except SQLAlchemyError as error:
         logger.warning("Plugin readiness: rows not read, the environment and the defaults only", family=family, error=type(error).__name__)
-    return system, user
+        return system, user, True
+    return system, user, False
 
 
-def _judge(family: str, asked: list[_Asked], system: dict, user: dict, user_id: int | None, managed: bool) -> dict[str, PluginReadiness]:
+def _judge(family: str, asked: list[_Asked], system: dict, user: dict, user_id: int | None, managed: bool, unavailable: bool = False) -> dict[str, PluginReadiness]:  # noqa: PLR0913 — the rows, the caller and the profile
     """The readiness of each plugin asked, from its fields' and its groups' states (no secret decrypted). Synchronous."""
     group_states: dict[str, list[FieldState]] = {}
     answers: dict[str, PluginReadiness] = {}
@@ -108,7 +117,12 @@ def _judge(family: str, asked: list[_Asked], system: dict, user: dict, user_id: 
         if managed:
             hidden = {state.field.key for state in own if state.locked}
             hidden |= {f"{group.name}.{state.field.key}" for group in entry.groups for state in group_states[group.name] if state.locked}
-        answers[entry.code] = PluginReadiness(configured=not every, missing=tuple(key for key in every if key not in hidden))
+        # An invalid value in a variable that locks a field is fixed on the server, whatever else is missing (N2b)
+        invalid = [state.env_variable for state in own if state.locked and state.problem == "invalid_env"]
+        invalid += [state.env_variable for group in entry.groups for state in group_states[group.name] if state.locked and state.problem == "invalid_env"]
+        reason = None if not every else ("invalid_locked_setting" if invalid else "missing_fields")
+        variables = () if managed or not every else tuple(variable for variable in invalid if variable)
+        answers[entry.code] = PluginReadiness(configured=not every, missing=tuple(key for key in every if key not in hidden), reason=reason, variables=variables, settings_unavailable=unavailable)
     return answers
 
 
@@ -125,9 +139,9 @@ async def plugins_readiness(family: str, codes: Sequence[str], *, user_id: int |
         else:
             answers[code] = READY
     if asked:
-        system, user = await _rows(family, asked, user_id)
+        system, user, unavailable = await _rows(family, asked, user_id)
         managed = get_settings().LIBREFOLIO_PROFILE == "managed"
-        answers.update(await asyncio.to_thread(_judge, family, asked, system, user, user_id, managed))
+        answers.update(await asyncio.to_thread(_judge, family, asked, system, user, user_id, managed, unavailable))
     return {code: answers[code] for code in dict.fromkeys(codes)}
 
 
