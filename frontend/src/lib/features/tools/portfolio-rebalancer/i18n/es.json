@@ -150,7 +150,10 @@
             "points": "{value} puntos",
             "beforePoints": "antes: {value} puntos",
             "uninvestedShare": "{value} del total",
-            "transfers": "{count, plural, one {# transferencia} other {# transferencias}}"
+            "transfers": "{count, plural, one {# transferencia} other {# transferencias}}",
+            "deviationItem": "{item}: {weight} frente a {target}",
+            "beforePointsItem": "antes: {value} puntos, {item} al {weight} frente a {target}",
+            "cashItem": "Efectivo {broker} {currency}"
           },
           "header": {
             "score": "Puntuación {value}",
