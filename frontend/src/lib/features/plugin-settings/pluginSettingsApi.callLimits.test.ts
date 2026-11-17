@@ -191,6 +191,22 @@ describe('the core call-limit fields are filtered out until U5', () => {
     });
 });
 
+describe('U4b: an entry that exists only for its usage block is left out too until U5', () => {
+    it('a managed provider whose every limit is hidden (no field, no group, a call_usage) disappears; one that arrived empty without usage stays', async () => {
+        const managedYahoo = {...entry({plugin_code: 'yfinance', plugin_name: 'Yahoo Finance', fields: []}), call_usage: {...USAGE, plugin_code: 'yfinance'}};
+        readAlias().mockResolvedValueOnce(answered({plugins: [managedYahoo, JUSTETF_RAW, ARRIVED_EMPTY]}));
+
+        await expect(fetchPluginSettings()).resolves.toStrictEqual([JUSTETF, ARRIVED_EMPTY]);
+    });
+
+    it('a managed credit-sharing group whose every limit is hidden (no field, a call_usage, its readers) disappears too', async () => {
+        const managedGroup = {...entry({family: 'group', plugin_code: 'coingecko', plugin_name: 'CoinGecko', fields: [], used_by: [{family: 'asset', plugin_code: 'coingecko_price', plugin_name: 'CoinGecko'}]}), call_usage: {...USAGE, family: 'group', plugin_code: 'coingecko'}};
+        readAlias().mockResolvedValueOnce(answered({plugins: [JUSTETF_RAW, managedGroup]}));
+
+        await expect(fetchPluginSettings()).resolves.toStrictEqual([JUSTETF]);
+    });
+});
+
 describe('through the real client, only the transport faked: the generated schema and the filter together', () => {
     let realAdapter: typeof axiosInstance.defaults.adapter;
 

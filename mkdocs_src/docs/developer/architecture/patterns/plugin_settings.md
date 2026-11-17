@@ -919,10 +919,14 @@ the plugin.
 - **In the catalogue**: the entry that owns the count carries `call_usage`. It has the five windows,
   each with `count`, `limit`, `resets_at` and `full`, all from one `now`, and the counts of the whole
   catalogue are read with one SELECT (`call_counter.read_counts_many`). In the managed profile a limit
-  that a variable locks is null, while `full` is still judged on it. If the counts cannot be read,
-  `call_usage` is null with one warning, never an error.
+  that a variable locks is null, while `full` is still judged on it. An entry whose every field the
+  managed profile hides is still listed when it carries `call_usage`, read-only, with no field: the
+  hoster's limits stay invisible, the usage block does not (the same for a credit-sharing group). If
+  the counts cannot be read, `call_usage` is null with one warning, never an error, and such an entry
+  is not listed until they can.
 - **The interface does not show them yet**: the frontend's `pluginSettingsApi` leaves out
-  `CALL_LIMIT_KEYS`, and an entry they alone filled, until U5 brings the «Calls» section.
+  `CALL_LIMIT_KEYS`, an entry they alone filled, and an entry listed only for its usage block, until
+  U5 brings the «Calls» section.
 - **For the tests**: `mockcount` is a test-only asset double that is counted (mockprov's answers),
   with the five fields. Only a suite that owns its limits uses it.
 

@@ -1039,3 +1039,51 @@ async def test_u4_configurations_started_together_share_one_read(db: Db, discove
         providers = await asyncio.gather(*(core.configured_provider("css_scraper") for _ in range(6)))
     assert len(db.asks) == 1, f"{len(db.asks)} sessions for 6 configurations started together"
     assert {provider.settings.get("call_limit_hour") for provider in providers} == {9}
+
+
+# =============================================================================
+# U4b. THE MANAGED PROFILE WITH EVERY LIMIT LOCKED: THE USAGE BLOCK STAYS
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_u4b_a_managed_entry_whose_limits_are_all_locked_keeps_its_usage_block(db: Db, admin: User, discovered: None, monkeypatch: pytest.MonkeyPatch):
+    """The consultant's rule after U4: in the managed profile, yfinance with its five limits locked by the hoster's
+    variables lists no field, yet its entry stays, read-only, with its usage block — every count shown, every limit
+    null, and ``full`` judged on the real limit (here the hour: 3 counted, limit 3)."""
+    monkeypatch.setenv("LIBREFOLIO_PROFILE", "managed")
+    for window, value in zip(WINDOWS, (100, 3, 1000, 5000, 20000), strict=True):
+        monkeypatch.setenv(env_name("asset", "yfinance", f"call_limit_{window}"), str(value))
+    await _count_row(db, "asset", "yfinance", {"minute": 1, "hour": 3, "day": 4, "week": 5, "month": 6})
+
+    entry = _entry(await _catalogue(db, admin, family="asset", plugin_code="yfinance"), "asset", "yfinance")
+
+    assert entry.fields == [], "every limit field hidden in the managed profile"
+    windows = _windows(_usage(entry))
+    assert [window[1] for window in windows] == [1, 3, 4, 5, 6]
+    assert [window[2] for window in windows] == [None] * 5, "no locked value is shown"
+    assert [window[4] for window in windows] == [False, True, False, False, False]
+
+
+@pytest.mark.asyncio
+async def test_u4b_a_managed_credit_sharing_group_whose_limits_are_all_locked_keeps_its_usage_block(db: Db, admin: User, discovered: None, monkeypatch: pytest.MonkeyPatch):
+    """The same rule for the owner of a shared count: a ``shares_credits`` group whose every field (the five limits) the
+    hoster locks stays listed with no field and its usage block; its reader, which has nothing of its own, names no
+    hidden group and so is not listed (N2: no dead link) — the group's block is where its count shows."""
+    register_group(SettingsGroup(name="u4b_locked_group", label="U4b locked", shares_credits=True, fields=()))
+    code = _code("u4b_reader")
+    monkeypatch.setitem(AssetProviderRegistry._get_storage(), code, _reader_class(code, "u4b_locked_group"))
+    monkeypatch.setenv("LIBREFOLIO_PROFILE", "managed")
+    for window, value in zip(WINDOWS, (10, 2, 100, 500, 2000), strict=True):
+        monkeypatch.setenv(env_name("group", "u4b_locked_group", f"call_limit_{window}"), str(value))
+    await _count_row(db, "group", "u4b_locked_group", {"minute": 1, "hour": 2, "day": 2, "week": 2, "month": 2})
+
+    catalogue = await _catalogue(db, admin)
+    group = _entry(catalogue, "group", "u4b_locked_group")
+
+    assert group.fields == [], "every limit field hidden in the managed profile"
+    windows = _windows(_usage(group))
+    assert [window[1] for window in windows] == [1, 2, 2, 2, 2]
+    assert [window[2] for window in windows] == [None] * 5, "no locked value is shown"
+    assert [window[4] for window in windows] == [False, True, False, False, False]
+    assert not [entry for entry in catalogue.plugins if entry.plugin_code == code], "the reader names no hidden group"
