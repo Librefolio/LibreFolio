@@ -890,6 +890,42 @@ class CoinGeckoProvider(AssetSourceProvider):
 
 ---
 
+## 🔢 Call Limits, Fields of the Core {: #call-limits }
+
+Project 76, U4. The instance's limits on the calls a plugin makes to its external service are five
+settings the **core** declares, not the plugin (`services/plugin_settings/call_limits.py`):
+`call_limit_minute`, `call_limit_hour`, `call_limit_day`, `call_limit_week`, `call_limit_month`.
+They are optional system integers with no default and a minimum of 0. Empty means no limit; 0 stops
+the plugin.
+
+- **Who gets them**: whoever owns the count, by the rule of `call_counter.call_owner`.
+  `AbstractPluginRegistry.register` adds the missing keys (`with_call_limits`) to a plugin that
+  reaches an external service (`calls_external_service`) and reads no credit-sharing group, before
+  its declaration is checked and its variables claimed. `register_group` adds them to a group with
+  `shares_credits`. A plugin that reads such a group declares none: one key in both would be refused.
+  Today that means every price and exchange-rate provider but `scheduled_investment` and `MANUAL`.
+- **They are fields like any other**: written by an administrator, stored in
+  `plugin_system_settings`, locked by their variable
+  (`LIBREFOLIO_PLUGIN_<FAMILY>_<CODE>_CALL_LIMIT_<WINDOW>`, documented once by its pattern in
+  `.env.example`), and part of the fingerprint. A changed limit therefore lifts the limit pause in
+  every process (U2b). An invalid variable leaves the plugin `NOT_CONFIGURED`, as for any field.
+- **The readiness and N2 read nothing for them**: `readiness.plugin_may_be_unconfigured` is true only
+  for a group, a required field or a field whose variable is set. A provider whose only fields are the
+  limits is always configured.
+- **One read per operation**: now that every such provider declares fields, `configure_instance`
+  reads the rows at each instance. Inside `runtime.one_binding_per_plugin()`, opened by the live read
+  (`get_current_prices_bulk`) and the refresh (`bulk_refresh_prices`), a plugin's binding is read once
+  and reused. A read of N assets of one provider costs one read of its settings, not N.
+- **In the catalogue**: the entry that owns the count carries `call_usage`. It has the five windows,
+  each with `count`, `limit`, `resets_at` and `full`, all from one `now`, and the counts of the whole
+  catalogue are read with one SELECT (`call_counter.read_counts_many`). In the managed profile a limit
+  that a variable locks is null, while `full` is still judged on it. If the counts cannot be read,
+  `call_usage` is null with one warning, never an error.
+- **The interface does not show them yet**: the frontend's `pluginSettingsApi` leaves out
+  `CALL_LIMIT_KEYS`, and an entry they alone filled, until U5 brings the «Calls» section.
+- **For the tests**: `mockcount` is a test-only asset double that is counted (mockprov's answers),
+  with the five fields. Only a suite that owns its limits uses it.
+
 ## 🧪 Test-Only Plugins {: #test-only }
 
 `test_only = True`, a class attribute (`False` by default), marks a plugin that exists for the tests.
@@ -940,7 +976,8 @@ The test plugin of the BRIM family therefore lives in a test module, never under
 
 ## 🔎 Shipped Plugins with Settings {: #shipped-plugins }
 
-Two plugins shipped with LibreFolio declare a field, a personal `select` each, read in `search()`
+Besides the core's call limits, which every provider that calls out gets ([Call Limits](#call-limits)),
+two plugins shipped with LibreFolio declare a field, a personal `select` each, read in `search()`
 only. Neither is required and both default to `all`, so both plugins are always configured; prices,
 history and metadata never see the field ([Scopes and Families](#scopes)).
 
@@ -1122,7 +1159,7 @@ Residual risks:
 
 ## ✅ Tests {: #tests }
 
-All nine run without a server or the lane's database (`isolation="pure"`):
+All ten run without a server or the lane's database (`isolation="pure"`):
 
 | Selector | Covers |
 |----------|--------|
@@ -1134,6 +1171,7 @@ All nine run without a server or the lane's database (`isolation="pure"`):
 | `./dev.py test services plugin-settings-groups` | The shared groups ([Shared Groups](#groups)): registering and refusing a group, its variables, the checks of `settings_groups` at registration, the binding with no field of the plugin's own (variable, row, default), `missing` as `<group>.<field>` and `NOT_CONFIGURED` at the boundary, the masking of a group secret, the fingerprint (unchanged without groups), the pickle, and the gate: every named group exists, every shipped group is used |
 | `./dev.py test services plugin-readiness` | `plugins_readiness()`: the same answer as `configure_instance(...).settings.missing` for prices and exchange rates (own fields, groups, user fields, variables, a secret under another key), one database session per batch and none for a plugin without settings, never a decryption, the managed profile's locked fields counted but not named; the two provider lists, with one check per request |
 | `./dev.py test services not-configured-writes` | The two writes that refuse a not-configured provider (N2): the asset assignment and the FX routes, the whole request refused before any write, the first item named, `replace=true` leaving the pair as it was, a re-saved assignment and a provider already on the pair passing, the managed profile naming no locked field, one readiness check per request |
+| `./dev.py test services call-limit-settings` | The core's call-limit fields (U4): who gets them at registration, their variables and lock, the fingerprint, the readiness skip, the catalogue's `call_usage` (one read, managed hiding, a database error), `mockcount`, one binding per operation |
 | `./dev.py test services plugin-settings-guards` | Shipped variables documented in `.env.example`, one owner per variable, no alias on a variable LibreFolio reads, AI Export kept away from the settings |
 
 The other units that touch the plugin settings:
