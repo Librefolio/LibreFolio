@@ -89,6 +89,9 @@ _VOICES: tuple[FAProfileVoice, ...] = (
     _voice("fund_domicile", ProfileShape.COUNTRY, groups=_FUND),
     _voice("fund_currency", ProfileShape.CURRENCY, groups=_FUND),
     _voice("inception_date", ProfileShape.DATE, groups=_FUND),
+    # The fund's management fee (C2e, the developer's «voce sua»): only a part of the TER, so a detail of the fund and
+    # never a key figure; a source that gives it never writes it as «ter»
+    _voice("management_fee", ProfileShape.PERCENTAGE, sign=_NON_NEGATIVE, groups=_FUND),
     # The company (its sector is the «sector» map above, one sector at 100 %)
     _voice("industry", ProfileShape.TEXT, groups=_COMPANY),
     _voice("issuer_country", ProfileShape.COUNTRY, groups=_COMPANY),

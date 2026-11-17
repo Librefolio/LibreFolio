@@ -63,7 +63,7 @@ def _v(key, shape, *, sign=None, unit=None, groups=(), key_figure=False, charted
 
 KF = (G.KEY_FIGURES,)
 
-#: The 37 voices of plan §3.6, in the catalogue's order.
+#: The 38 voices of plan §3.6, in the catalogue's order.
 EXPECTED_VOICES: tuple[FAProfileVoice, ...] = (
     _v("geography", S.MAP, groups=(G.CLASSIFICATION,), map_keys=ProfileMapKeys.COUNTRY),
     _v("sector", S.MAP, groups=(G.CLASSIFICATION, G.COMPANY), map_keys=ProfileMapKeys.SECTOR),
@@ -83,6 +83,8 @@ EXPECTED_VOICES: tuple[FAProfileVoice, ...] = (
     _v("fund_domicile", S.COUNTRY, groups=(G.FUND,)),
     _v("fund_currency", S.CURRENCY, groups=(G.FUND,)),
     _v("inception_date", S.DATE, groups=(G.FUND,)),
+    # C2e (developer, «voce sua»): the fund's management fee, only a part of the TER: a detail of the fund, not a key figure
+    _v("management_fee", S.PERCENTAGE, sign=NN, groups=(G.FUND,)),
     _v("industry", S.TEXT, groups=(G.COMPANY,)),
     _v("issuer_country", S.COUNTRY, groups=(G.COMPANY,)),
     _v("coupon_period_rate", S.PERCENTAGE, sign=NN, groups=(G.BOND,)),
@@ -134,9 +136,10 @@ def _keys_of_shape(shape: ProfileShape) -> list[str]:
 
 
 def test_expected_table_is_self_consistent():
-    """Guard on this file's own table: 37 distinct keys, the choice dict covers exactly the choice voices."""
-    assert len(EXPECTED_KEYS) == 37
-    assert len(set(EXPECTED_KEYS)) == 37
+    """Guard on this file's own table: 38 distinct keys (37 of plan §3.6, plus ``management_fee`` of C2e), the choice
+    dict covers exactly the choice voices."""
+    assert len(EXPECTED_KEYS) == 38
+    assert len(set(EXPECTED_KEYS)) == 38
     assert set(CHOICES) == set(_keys_of_shape(S.CHOICE))
 
 
