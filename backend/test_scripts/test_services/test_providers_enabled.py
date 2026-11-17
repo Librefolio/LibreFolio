@@ -76,7 +76,7 @@ from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.assets.search import AssetSearchService
 from backend.app.services.fx import sync as fx_sync
 from backend.app.services.fx.registry import FXProviderRegistry
-from backend.app.services.fx_providers.mockfx.plugin import MockFXProvider
+from backend.app.services.fx_providers.mockfx.plugin import MOCKFX_FIXED_RATE, MockFXProvider
 from backend.app.services.platform import provider_registry
 from backend.app.services.platform.provider_registry import AbstractProviderRegistry
 from backend.app.services.plugin_settings import readiness, runtime, service
@@ -567,7 +567,7 @@ async def _set_routes(session: AsyncSession, *providers: str) -> None:
 @pytest.mark.asyncio
 async def test_x1_the_fx_sync_never_asks_a_switched_off_provider(session: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
     """3: a pair whose first route uses a switched-off provider: that provider is never asked, and the pair answers as
-    with an unknown code in its place (the existing skip of a leg whose provider is absent)."""
+    with an unknown code in its place (since X1b: the route fails and the next one serves the pair, under its name)."""
     calls: list[str] = []
     _put(monkeypatch, FXProviderRegistry, "X1FXA", _fx_clone("X1FXA", calls))
     day = date(2001, 3, 5) + timedelta(days=uuid.uuid4().int % 300)
@@ -732,3 +732,155 @@ def test_x1_leaving_a_switched_off_parametric_provider_still_wipes_its_invented_
 
     assert _wipe_reason("scheduled_investment", "{}", "yfinance", None) == "provider changed"
     assert _wipe_reason("scheduled_investment", '{"a": 1}', "scheduled_investment", '{"a": 2}') == "params changed"
+
+
+# =============================================================================
+# 5. X1b: THE RATES OF A ROUTE ARE ITS OWN PROVIDER'S
+# =============================================================================
+
+
+def _scaled_fx_clone(code: str, factor: Decimal, calls: list[str] | None = None) -> type:
+    """``_fx_clone`` whose every rate is the mock's times ``factor``: two such providers answer different rates."""
+
+    async def fetch_rates(self, date_range, currencies, base_currency=None):
+        if calls is not None:
+            calls.append(code)
+        answered = await MockFXProvider.fetch_rates(self, date_range, currencies, base_currency)
+        return {currency: [(day, base, quote, rate * factor) for day, base, quote, rate in rows] for currency, rows in answered.items()}
+
+    return type(f"X1bFx_{code}", (MockFXProvider,), {"code": property(lambda self: code), "name": property(lambda self: f"X1b {code}"), "test_only": False, "settings_fields": (), "fetch_rates": fetch_rates})
+
+
+async def _stored_sources(session: AsyncSession) -> set[str]:
+    session.expire_all()
+    return {row.source for row in (await session.execute(select(FxRate).where(FxRate.base == "EUR", FxRate.quote == "USD"))).scalars()}
+
+
+async def _stored_rates(session: AsyncSession) -> set[Decimal]:
+    session.expire_all()
+    return {row.rate for row in (await session.execute(select(FxRate).where(FxRate.base == "EUR", FxRate.quote == "USD"))).scalars()}
+
+
+def _window() -> tuple[date, date]:
+    day = date(2001, 3, 5) + timedelta(days=uuid.uuid4().int % 300)
+    return day, day + timedelta(days=1)
+
+
+@pytest.mark.parametrize("absence", ["switched_off", "unknown"])
+@pytest.mark.asyncio
+async def test_x1b_an_absent_first_route_hands_the_pair_to_the_next_route_with_its_own_label(absence: str, session: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
+    """X1b: a route whose provider is absent (switched off by the allow-list, or a code no provider has) fails like a
+    route whose provider fails: the pair goes to the next route, and the rows and ``provider_used`` carry the code of
+    the route that really answered, never the absent one."""
+    calls: list[str] = []
+    _put(monkeypatch, FXProviderRegistry, "X1BOFF", _fx_clone("X1BOFF", calls))
+    absent = "X1BOFF" if absence == "switched_off" else _unique("X1BNOSUCH").upper()
+    if absence == "switched_off":
+        monkeypatch.setenv(FX_VARIABLE, "mockfx")
+    await _set_routes(session, absent, "MOCKFX")
+
+    result = await fx_sync.sync_pairs_bulk(session, ["EUR-USD"], _window())
+
+    (pair,) = result.results
+    assert calls == [], f"barrier: the absent provider is never asked: {calls}"
+    assert pair.status == SyncStatus.OK and pair.provider_used == "MOCKFX", pair
+    assert await _stored_sources(session) == {"MOCKFX"}
+    assert any("Route 1" in error and absent in error for error in pair.errors), f"the first route's failure is said: {pair.errors}"
+
+
+@pytest.mark.asyncio
+async def test_x1b_a_pair_whose_only_route_is_absent_fails_and_writes_nothing(session: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
+    """X1b: with no other route, a pair whose provider is switched off fails (every route failed) and stores no rate,
+    instead of a «partial» result named after the provider that was never asked."""
+    _put(monkeypatch, FXProviderRegistry, "X1BOFF", _fx_clone("X1BOFF"))
+    monkeypatch.setenv(FX_VARIABLE, "mockfx")
+    await _set_routes(session, "X1BOFF")
+
+    result = await fx_sync.sync_pairs_bulk(session, ["EUR-USD"], _window())
+
+    (pair,) = result.results
+    assert pair.status == SyncStatus.FAILED and pair.provider_used is None, pair
+    assert await _stored_sources(session) == set()
+
+
+@pytest.mark.asyncio
+async def test_x1b_two_answering_routes_never_mix_their_rates(session: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
+    """X1b: both routes of a pair are fetched at once; the first route stores its own provider's rates, never the second
+    one's (the legs were keyed without the provider, so the later answer could overwrite the earlier)."""
+    _put(monkeypatch, FXProviderRegistry, "X1BA", _scaled_fx_clone("X1BA", Decimal("1")))
+    _put(monkeypatch, FXProviderRegistry, "X1BB", _scaled_fx_clone("X1BB", Decimal("2")))
+    await _set_routes(session, "X1BA", "X1BB")
+
+    result = await fx_sync.sync_pairs_bulk(session, ["EUR-USD"], _window())
+
+    (pair,) = result.results
+    assert pair.status == SyncStatus.OK and pair.provider_used == "X1BA", pair
+    assert await _stored_sources(session) == {"X1BA"}
+    assert await _stored_rates(session) == {MOCKFX_FIXED_RATE}, "X1BA answers the mock's rate; X1BB's is twice it"
+
+
+def _based_fx_clone(code: str, factor: Decimal, base: str) -> type:
+    """``_scaled_fx_clone`` with ``base`` as its base currency: a chain needs a leg whose base is not EUR."""
+    scaled = _scaled_fx_clone(code, factor)
+    return type(f"X1bFxBase_{code}", (scaled,), {"base_currency": property(lambda self: base), "base_currencies": property(lambda self: [base])})
+
+
+async def _set_chain_routes(session: AsyncSession, *routes: list[tuple[str, str, str]]) -> None:
+    """EUR-USD with the given routes (each a list of ``(from, to, provider)`` steps), priority 1, 2, … in order; the
+    EUR-USD and EUR-CHF rates and routes removed first."""
+    for base, quote in (("EUR", "USD"), ("CHF", "EUR")):
+        await session.execute(delete(FxConversionRoute).where(FxConversionRoute.base == base, FxConversionRoute.quote == quote))
+        await session.execute(delete(FxRate).where(FxRate.base == base, FxRate.quote == quote))
+    for priority, steps in enumerate(routes, start=1):
+        session.add(FxConversionRoute(base="EUR", quote="USD", priority=priority, chain_steps=json.dumps([{"from": f, "to": t, "provider": p} for f, t, p in steps])))
+    await session.commit()
+
+
+async def _stored_eur_usd(session: AsyncSession) -> dict[date, tuple[Decimal, str]]:
+    session.expire_all()
+    return {row.date: (row.rate, row.source) for row in (await session.execute(select(FxRate).where(FxRate.base == "EUR", FxRate.quote == "USD"))).scalars()}
+
+
+CHAIN = [("EUR", "CHF", "X1BA"), ("CHF", "USD", "X1BU")]
+
+
+@pytest.mark.asyncio
+async def test_x1b_a_chain_reads_its_own_providers_even_when_another_pair_fetches_one_of_its_legs(session: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
+    """X1b: a chain EUR→CHF (X1BA) → CHF→USD (X1BU) synced with a pair EUR-CHF served by X1BC, whose CHF/EUR rate is
+    three times X1BA's: the chain stores the same rates as when it is synced alone (its own legs), labelled
+    ``CHAIN:X1BA+X1BU``."""
+    _put(monkeypatch, FXProviderRegistry, "X1BA", _scaled_fx_clone("X1BA", Decimal("1")))
+    _put(monkeypatch, FXProviderRegistry, "X1BC", _scaled_fx_clone("X1BC", Decimal("3")))
+    _put(monkeypatch, FXProviderRegistry, "X1BU", _based_fx_clone("X1BU", Decimal("2"), "USD"))
+    window = _window()
+
+    await _set_chain_routes(session, CHAIN)
+    alone = await fx_sync.sync_pairs_bulk(session, ["EUR-USD"], window)
+    assert alone.results[0].status == SyncStatus.OK and alone.results[0].provider_used == "CHAIN:X1BA+X1BU", alone
+    expected = await _stored_eur_usd(session)
+    assert expected and {source for _rate, source in expected.values()} == {"CHAIN:X1BA+X1BU"}, "barrier: the chain alone stores its rates"
+
+    await _set_chain_routes(session, CHAIN)
+    session.add(FxConversionRoute(base="CHF", quote="EUR", priority=1, chain_steps=json.dumps([{"from": "EUR", "to": "CHF", "provider": "X1BC"}])))
+    await session.commit()
+    together = await fx_sync.sync_pairs_bulk(session, ["EUR-USD", "CHF-EUR"], window)
+
+    assert {result.pair: result.status for result in together.results} == {"EUR-USD": SyncStatus.OK, "CHF-EUR": SyncStatus.OK}, together
+    assert await _stored_eur_usd(session) == expected
+
+
+@pytest.mark.asyncio
+async def test_x1b_a_chain_with_an_absent_step_hands_the_pair_to_the_next_route(session: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
+    """X1b: a chain whose second step's provider is switched off fails as a route; the pair is served by the next route,
+    under that route's name."""
+    _put(monkeypatch, FXProviderRegistry, "X1BA", _scaled_fx_clone("X1BA", Decimal("1")))
+    _put(monkeypatch, FXProviderRegistry, "X1BU", _based_fx_clone("X1BU", Decimal("2"), "USD"))
+    monkeypatch.setenv(FX_VARIABLE, "x1ba,mockfx")
+    await _set_chain_routes(session, CHAIN, [("EUR", "USD", "MOCKFX")])
+
+    result = await fx_sync.sync_pairs_bulk(session, ["EUR-USD"], _window())
+
+    (pair,) = result.results
+    assert pair.status == SyncStatus.OK and pair.provider_used == "MOCKFX", pair
+    assert {source for _rate, source in (await _stored_eur_usd(session)).values()} == {"MOCKFX"}
+    assert any("Route 1" in error and "X1BU" in error for error in pair.errors), pair.errors
