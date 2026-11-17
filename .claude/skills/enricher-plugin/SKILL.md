@@ -35,8 +35,9 @@ the merge of several sources, **not** the scheduler and **not** the cache: those
 4. **The queue and the pause live inside `read`.** The plugin spaces its own calls and handles its own refusals (too
    many requests → the item carries `RATE_LIMITED` and its `retry_after`). The queue also covers two requests arriving
    together, for example an «Aggiorna» while the weekly read runs: the registry builds a new instance per call, so the
-   queue lives at module or class level, never on `self`. ⚠️ The shipped plugins pace only inside one read today (an
-   open gap, reported 17/11/2026): a new plugin follows the rule, not them.
+   pace lives at module level, never on `self`. Use the core's `Pacer` (`backend/app/utils/runtime/pacing.py`): one
+   instance per plugin with its own interval, `_PACER.wait()` right before each call to the site, in `recognize`,
+   `read` and `search` alike.
 5. **Plain blocking calls.** `recognize`, `read`, `search` and `page_url` are ordinary blocking functions: the core runs
    them away from the event loop. Do not make them `async`, do not wrap them in `asyncio.to_thread`.
 6. **`read` yields, one binding at a time.** It receives a list of bindings (and, optionally, the voices wanted) and

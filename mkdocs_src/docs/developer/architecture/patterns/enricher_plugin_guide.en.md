@@ -129,13 +129,14 @@ These four rules are the contract of the family (plan 68). A plugin that breaks 
 
     The registry builds a **new instance for every call** (`get_plugin_instance()` in
     `backend/app/services/platform/provider_registry.py`), so a lock or a «last call» time kept on `self` is never
-    shared between two reads. Keep the queue at module or class level (a `threading.Lock` and the time of the last
-    call, see the [example](#example)). Such a lock covers one process: with several workers, each process paces its
+    shared between two reads. Keep the queue at module level: a `Pacer`, see the [example](#example). Such a lock covers one process: with several workers, each process paces its
     own calls.
 
-    The shipped plugins pace only inside one read today: justETF and Yahoo Finance wait `pause_seconds` between two
-    bindings of the same `read`, and Borsa Italiana opens one library session per `read`, which paces its own
-    requests. Two reads running at once are not paced against each other there.
+    Use the core's `Pacer` (`backend/app/utils/runtime/pacing.py`): one instance at module level, with the interval
+    this plugin picks, and `_PACER.wait()` right before each call to the site — in `recognize`, `read` and `search`
+    alike. It counts with `SlidingWindowLimiter` and sleeps in the worker thread, never on the event loop. justETF
+    (1 s), Yahoo Finance (0.5 s) and Borsa Italiana (1 s) all do so (plan 68, C5); Borsa Italiana's library also paces
+    the requests inside one session.
 
 ---
 
@@ -150,8 +151,8 @@ the event loop, in a worker thread:
 | `read` | `asyncio.to_thread` in `read_bindings()` (`backend/app/services/enrichers/refresh.py`), one thread per enricher, all enrichers at once |
 | `search` | `asyncio.to_thread` in `GET /assets/enrichers/{code}/search` |
 
-So call your library or HTTP client directly, and sleep with `time.sleep()` between calls: you are already in a
-worker thread. Never add `asyncio.to_thread()` inside the plugin.
+So call your library or HTTP client directly, and wait on your module's `Pacer` before each call: you are already in
+a worker thread, so the wait never blocks the event loop. Never add `asyncio.to_thread()` inside the plugin.
 
 ---
 
@@ -398,15 +399,13 @@ The weekly job handles a refusal in two rounds:
 
 ## 💻 Implementation Example {: #example }
 
-A minimal enricher for a fictional fund site, read by ISIN, with a queue shared by every read of the process:
+A minimal enricher for a fictional fund site, read by ISIN, with one pace shared by every read of the process:
 
 ```python
 # backend/app/services/enricher_providers/my_source/plugin.py
 
 from __future__ import annotations
 
-import threading
-import time
 from collections.abc import Iterable, Iterator
 from decimal import Decimal, InvalidOperation
 
@@ -426,6 +425,7 @@ from backend.app.services.enrichers.base import (
 )
 from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.platform.provider_registry import register_provider
+from backend.app.utils.runtime.pacing import Pacer
 
 logger = get_logger(__name__)
 
@@ -436,24 +436,15 @@ _COVERED = frozenset({AssetType.ETF, AssetType.FUND})
 _VOICES = frozenset({"ter", "fund_provider", "distribution_policy"})
 _DISTRIBUTION = {"acc": "accumulating", "dist": "distributing"}
 
-#: Rule 4: the queue of every call of this process, whatever read it comes from. Module level: the registry builds a
-#: new instance for every call, so a lock on self would never be shared.
-_QUEUE = threading.Lock()
-_last_call = 0.0
-PAUSE_SECONDS = 1.0
+#: Rule 4: one pace for every call of this process, whatever read it comes from. Module level: the registry builds a
+#: new instance for every call, so a pacer on self would never be shared.
+_PACER = Pacer(1.0)
 
 
 def _get(isin: str) -> httpx.Response:
-    """One call to the source, after the pause since the previous one (from any read)."""
-    global _last_call
-    with _QUEUE:
-        wait = _last_call + PAUSE_SECONDS - time.monotonic()
-        if wait > 0:
-            time.sleep(wait)
-        try:
-            return httpx.get(_URL.format(isin=isin), timeout=30.0)
-        finally:
-            _last_call = time.monotonic()
+    """One call to the source, at least a second after the previous one (from any read)."""
+    _PACER.wait()
+    return httpx.get(_URL.format(isin=isin), timeout=30.0)
 
 
 def _fraction(percent: object) -> str | None:
