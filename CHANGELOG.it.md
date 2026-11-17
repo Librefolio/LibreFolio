@@ -29,6 +29,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Shock ipotetico: le classi di asset che uno scenario lascia fuori, con shock zero, sono nominate sotto il totale.
 - Un'icona della documentazione a destra di altri pannelli (grafici e posizioni della Dashboard, analisi dei lotti, lista e laboratorio degli asset, dettaglio dell'asset, broker, FX, file e backup, impostazioni) apre la pagina corrispondente del manuale, con una breve spiegazione del pannello nel suo tooltip.
 - Gli amministratori possono tenere attivi solo alcuni provider di prezzi e di cambi su un'istanza (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`): gli altri spariscono da elenchi, ricerca, assegnazioni e impostazioni; le assegnazioni esistenti tengono i prezzi salvati. MANUAL è sempre attivo.
+- Ricerca degli asset: cercando una criptovaluta su Yahoo Finance compare anche il suo ticker in euro (per esempio BTC-EUR accanto a BTC-USD), così si può prezzare direttamente in euro.
 
 ### 🔄 Modifiche
 

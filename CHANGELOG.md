@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hypothetical shock: the asset classes a scenario leaves out, shocked by zero, are named under the total.
 - A documentation icon on the right of more panels (Dashboard charts and positions, lots analysis, assets list and lab, asset detail, brokers, FX, files and backups, settings) opens the matching page of the manual, with a short explanation of the panel in its tooltip.
 - Administrators can keep only some price and exchange-rate providers active on an instance (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`): the others disappear from lists, search, assignments and settings; existing assignments keep their saved prices. MANUAL is always active.
+- Asset search: looking up a cryptocurrency on Yahoo Finance also offers its euro ticker (for example BTC-EUR beside BTC-USD), so it can be priced directly in euros.
 
 ### 🔄 Changed
 

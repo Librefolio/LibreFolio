@@ -29,6 +29,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Shock hipotético: las clases de activos que un escenario deja fuera, con shock cero, se nombran bajo el total.
 - Un icono de documentación a la derecha de más paneles (gráficos y posiciones del Dashboard, análisis de lotes, lista y laboratorio de activos, detalle del activo, brókers, FX, archivos y copias de seguridad, ajustes) abre la página correspondiente del manual, con una breve explicación del panel en su tooltip.
 - Los administradores pueden mantener activos solo algunos proveedores de precios y de tipos de cambio en una instancia (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`): los demás desaparecen de listas, búsqueda, asignaciones y ajustes; las asignaciones existentes conservan sus precios guardados. MANUAL siempre está activo.
+- Búsqueda de activos: al buscar una criptomoneda en Yahoo Finance aparece también su ticker en euros (por ejemplo BTC-EUR junto a BTC-USD), para valorarla directamente en euros.
 
 ### 🔄 Cambios
 

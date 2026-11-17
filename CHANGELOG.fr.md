@@ -29,6 +29,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Choc hypothétique : les classes d'actifs qu'un scénario laisse de côté, avec un choc nul, sont nommées sous le total.
 - Une icône de documentation à droite d'autres panneaux (graphiques et positions du Dashboard, analyse des lots, liste et laboratoire des actifs, détail de l'actif, courtiers, FX, fichiers et sauvegardes, paramètres) ouvre la page correspondante du manuel, avec une courte explication du panneau dans son infobulle.
 - Les administrateurs peuvent ne garder actifs que certains fournisseurs de prix et de taux de change sur une instance (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`) : les autres disparaissent des listes, de la recherche, des affectations et des paramètres ; les affectations existantes gardent leurs prix enregistrés. MANUAL reste toujours actif.
+- Recherche d'actifs : en cherchant une cryptomonnaie sur Yahoo Finance, son ticker en euros apparaît aussi (par exemple BTC-EUR à côté de BTC-USD), pour la valoriser directement en euros.
 
 ### 🔄 Modifié
 
