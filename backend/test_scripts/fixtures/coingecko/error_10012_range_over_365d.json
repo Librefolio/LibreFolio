@@ -1,0 +1,20 @@
+{
+  "recorded": "2026-11-17, coingecko-sdk 5.1.0, Demo key (removed): project 76 P0",
+  "request": {
+    "endpoint": "/coins/bitcoin/market_chart/range",
+    "vs_currency": "eur",
+    "interval": "daily",
+    "from": "1760363937",
+    "to": "1762091937"
+  },
+  "status": 401,
+  "body": {
+    "error": {
+      "status": {
+        "timestamp": "2026-11-17T13:58:57.923+00:00",
+        "error_code": 10012,
+        "error_message": "Your request exceeds the allowed time range. Public API users are limited to querying historical data within the past 365 days. Upgrade to a paid plan to enjoy full historical data access: https://www.coingecko.com/en/api/pricing. "
+      }
+    }
+  }
+}

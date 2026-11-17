@@ -549,6 +549,14 @@ def services_enricher_call_limits(verbose: bool = False, test_names: list = None
     return run_command(cmd, "Enricher call limit tests", verbose=verbose)
 
 
+def services_coingecko_provider(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the CoinGecko provider (project 76, P1): its shared group, its settings and parameters, the SDK's door."""
+    print_section("Services: CoinGecko Provider")
+    print_info("Testing: asset_source_providers/coingecko (plugin, _sdk, _currencies), plugin_settings/groups/coingecko.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_coingecko_provider.py", test_names)
+    return run_command(cmd, "CoinGecko provider tests", verbose=verbose)
+
+
 def services_field_missing_phrase(verbose: bool = False, test_names: list = None) -> bool:
     """Test a settings field's own phrase for the «to configure» window (project 76, N3a2)."""
     print_section("Services: Field Missing Phrase")
@@ -3110,6 +3118,16 @@ Note: No backend server required.
         # runtime, readiness and call_counter engines; call_counter._utc frozen; a private Cooldowns; throwaway registries
         # of the base for the registration rules; the real asset and FX registries read after discovery, test plugins put
         # in their storage with monkeypatch.setitem; u4 groups and claims released at teardown.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "coingecko-provider",
+        services_coingecko_provider,
+        name="CoinGecko Provider",
+        desc="P1: the shared group coingecko (API key secret and required with its missing phrase, plan demo/pro, credits shared, its variables claimed, the five call limits); the provider (calls out, reads the group, refresh interval and preferred currency, no limit of its own); the 45 vs currencies against the recorded list; vs_currency required; the SDK client (no retry, timeout, the plan's root); a 429 leaves at once with Retry-After; the recorded errors 10012/10005/10011 and the others translated; the key in no text; no key, no request",
+        # PURE: the real coingecko-sdk on an httpx.MockTransport, so no socket opens; recorded bodies of the P0 trial; no
+        # database, no server.
         isolation="pure",
     )
     add_test(
