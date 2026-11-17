@@ -368,9 +368,9 @@ ASSET_OVERVIEW = DatasetSpec(
     icon="coins",
     applicability_code="always_applicable",
     applicable_pages=("asset",),
-    required_component_ids=("asset.identity", "asset.market_snapshot", "asset.position_scope", "asset.provenance"),
+    required_component_ids=("asset.identity", "asset.profile", "asset.market_snapshot", "asset.position_scope", "asset.provenance"),
     optional_component_ids=(),
-    section_order=("asset.identity", "asset.market_snapshot", "asset.position_scope", "asset.provenance"),
+    section_order=("asset.identity", "asset.profile", "asset.market_snapshot", "asset.position_scope", "asset.provenance"),
     technical_requirements=(),
     period_semantics=PeriodBehavior.AS_OF,
     supported_detail_levels=ALL_DETAIL_LEVELS,
@@ -717,6 +717,7 @@ ASSET_POSITION_AND_HISTORY = DatasetSpec(
     applicable_pages=("asset",),
     required_component_ids=(
         "asset.identity",
+        "asset.profile",
         "asset.market_snapshot",
         "asset.position_scope",
         "asset.positions_by_broker",
@@ -732,6 +733,7 @@ ASSET_POSITION_AND_HISTORY = DatasetSpec(
     ),
     section_order=(
         "asset.identity",
+        "asset.profile",
         "asset.market_snapshot",
         "asset.position_scope",
         "asset.positions_by_broker",
@@ -760,6 +762,7 @@ ASSET_MARKET_HISTORY = DatasetSpec(
     applicable_pages=("asset",),
     required_component_ids=(
         "asset.identity",
+        "asset.profile",
         "asset.market_snapshot",
         "asset.technical_coverage",
         "asset.ohlc_returns",
@@ -771,6 +774,7 @@ ASSET_MARKET_HISTORY = DatasetSpec(
     optional_component_ids=(),
     section_order=(
         "asset.identity",
+        "asset.profile",
         "asset.market_snapshot",
         "asset.technical_coverage",
         "asset.ohlc_returns",

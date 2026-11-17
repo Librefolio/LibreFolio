@@ -69,6 +69,7 @@ class MockEnricher(EnricherPlugin):
     name = "Mock enricher"
     terms = EnricherTerms.OPEN
     test_only = True
+    calls_external_service = False
     accepted_identifier_types = ("ISIN", "LEI", "TICKER")
     voices = _voices()
     default_priority = {asset_type: None if asset_type in _NOT_COVERED else 100 for asset_type in AssetType}

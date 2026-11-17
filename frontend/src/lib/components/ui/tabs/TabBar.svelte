@@ -8,6 +8,9 @@
         label: string;
         icon?: ComponentType | null;
         badge?: number;
+        /** A signal without a number (plan 68, E2): a small dot after the label, its meaning said to a screen reader and
+         *  on hover. A positive `badge` takes its place: a number says more. */
+        dot?: {label: string};
         testId?: string;
         guideAnchor?: string;
         className?: string;
@@ -201,6 +204,9 @@
                     <span class="text-[10px] px-1.5 py-0.5 bg-lf-warning-soft text-lf-warning-on-soft rounded-full" data-badge={tab.badge} data-testid="tab-badge">
                         {tab.badge}
                     </span>
+                {:else if tab.dot}
+                    <span class="size-2 shrink-0 rounded-full bg-lf-warning" aria-hidden="true" title={tab.dot.label} data-testid="tab-dot"></span>
+                    <span class="sr-only">{tab.dot.label}</span>
                 {/if}
             </button>
         {/each}

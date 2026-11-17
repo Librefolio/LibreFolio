@@ -1641,6 +1641,8 @@ const COMPACT_COMPONENT_VERSIONS: ReadonlyMap<string, ReadonlySet<number>> = new
     ['asset.ohlc_returns', new Set([1, 2])],
     ['fx.rate_ohlc', new Set([1, 2])],
     ['asset.provenance', new Set([1, 2])],
+    // Plan 68 D5: the classification left identity for its own component, asset.profile.
+    ['asset.identity', new Set([1, 2])],
     ['asset.positions_by_broker', new Set([1, 2])],
     ['asset.lot_detail', new Set([1, 2, 3, 4])],
     ['portfolio.fifo_lots', new Set([1, 2, 3])],

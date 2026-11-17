@@ -2,19 +2,18 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import ValidationError
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetProviderAssignment, BrokerUserAccess, PriceHistory
 from backend.app.logging_config import get_logger
-from backend.app.schemas.assets.metadata import FAClassificationParams
 from backend.app.schemas.common import DateRangeModel, OpenDateRangeModel
 from backend.app.schemas.portfolio.data_quality import DataQualityExclusionReason, DataQualityReport
 from backend.app.schemas.portfolio.report import PortfolioReportQuery, PortfolioReportResponse
@@ -24,6 +23,7 @@ from backend.app.schemas.risk.scope import AssetRiskScope, AssetSetRiskScope, Po
 from backend.app.schemas.risk.series import PreparedAssetSeriesSet
 from backend.app.services.assets import price_query
 from backend.app.services.assets.price_query import PriceQueryOperations
+from backend.app.services.assets.profile.store import ProfileStep, read_steps
 from backend.app.services.financial_math.weights import share_of
 from backend.app.services.market_series import prepare_asset_series_set, prepare_asset_series_set_from_readings
 from backend.app.services.portfolio.portfolio_service import PortfolioService
@@ -287,38 +287,52 @@ async def load_never_priced_asset_ids(db: AsyncSession, asset_ids: tuple[int, ..
     return frozenset(result.scalars().all())
 
 
+#: The profile voices the hypothetical stress reads (plan 68, D3): an asset's countries and sectors.
+_EXPOSURE_VOICES = ("geography", "sector")
+
+
+def _exposures(asset_id: int, voice: str, steps: Mapping[str, Sequence[ProfileStep]]) -> tuple[Optional[dict[str, float]], bool]:
+    """The exposures of one voice on the analysis day (its single step), and whether its stored value is unreadable.
+
+    No step, or a value emptied on purpose: no exposure. A value that is not a map of numbers (a row written before a
+    catalogue rule was tightened, handed back as it was stored): no exposure, and the asset's metadata is invalid.
+    """
+    voice_steps = steps.get(voice)
+    if not voice_steps or voice_steps[-1].value is None:
+        return None, False
+    value = voice_steps[-1].value
+    try:
+        return {str(bucket): float(weight) for bucket, weight in value.items()}, False
+    except (AttributeError, TypeError, ValueError) as error:
+        logger.warning("Unreadable asset profile exposure", asset_id=asset_id, voice=voice, exc_info=error)
+        return None, True
+
+
 async def load_asset_classifications(
     db: AsyncSession,
     asset_ids: tuple[int, ...],
+    day: date,
 ) -> dict[int, RiskAssetClassification]:
+    """Each asset's class and its countries and sectors on ``day``, the analysis day (plan 68, D3).
+
+    Countries and sectors come from the asset profile, the step holding ``day``, the first value carried back when the
+    profile starts later (plan I18, «for a date we do not have, the oldest we have»). ``classification_params`` is not
+    read. An asset with no row of a voice has no exposure there.
+    """
     if not asset_ids:
         return {}
-    result = await db.execute(
-        select(
-            Asset.id,
-            Asset.asset_type,
-            Asset.classification_params,
-        ).where(Asset.id.in_(asset_ids))
-    )
+    result = await db.execute(select(Asset.id, Asset.asset_type).where(Asset.id.in_(asset_ids)))
+    steps = await read_steps(db, list(asset_ids), DateRangeModel(start=day), _EXPOSURE_VOICES, carry_back=True)
     classifications: dict[int, RiskAssetClassification] = {}
-    for asset_id, asset_type, raw_classification in result.all():
-        parsed: Optional[FAClassificationParams] = None
-        metadata_error: Optional[str] = None
-        if raw_classification:
-            try:
-                parsed = FAClassificationParams.model_validate_json(raw_classification) if isinstance(raw_classification, str) else FAClassificationParams.model_validate(raw_classification)
-            except (TypeError, ValueError, ValidationError) as exc:
-                metadata_error = "invalid_classification_metadata"
-                logger.exception(
-                    "Invalid asset classification metadata",
-                    asset_id=asset_id,
-                    error=str(exc),
-                )
+    for asset_id, asset_type in result.all():
+        voices = steps.get(int(asset_id), {})
+        sector, sector_unreadable = _exposures(int(asset_id), "sector", voices)
+        geography, geography_unreadable = _exposures(int(asset_id), "geography", voices)
         classifications[int(asset_id)] = RiskAssetClassification(
             asset_class=(asset_type.value if hasattr(asset_type, "value") else str(asset_type)),
-            sector_exposures=({bucket: float(weight) for bucket, weight in parsed.sector_area.distribution.items()} if parsed is not None and parsed.sector_area is not None else None),
-            geography_exposures=({bucket: float(weight) for bucket, weight in parsed.geographic_area.distribution.items()} if parsed is not None and parsed.geographic_area is not None else None),
-            metadata_error=metadata_error,
+            sector_exposures=sector,
+            geography_exposures=geography,
+            metadata_error="invalid_classification_metadata" if sector_unreadable or geography_unreadable else None,
         )
     return classifications
 

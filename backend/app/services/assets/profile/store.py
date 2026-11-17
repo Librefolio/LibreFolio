@@ -306,6 +306,11 @@ async def _first_days(session: AsyncSession, asset_ids: Sequence[int], keys: Seq
     return {asset_id: first for asset_id, first in rows if first is not None}
 
 
+async def first_read_days(session: AsyncSession, asset_ids: Sequence[int], keys: Iterable[str] | None = None) -> dict[int, date]:
+    """The first ``read_on`` of each asset among ``keys`` (all voices when None); an asset with no row is left out."""
+    return await _first_days(session, list(dict.fromkeys(asset_ids)), _checked_keys(keys))
+
+
 def _last_of_each_day(records: Sequence[AssetProfileUpdate]) -> list[AssetProfileUpdate]:
     """One record per voice and day, the last in (``read_on``, ``id``) order: several rows on one day are normal (plan
     §3.7), and ``series_steps.steps_from_rows`` takes one row per day."""
