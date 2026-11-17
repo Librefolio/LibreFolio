@@ -203,6 +203,19 @@ describe('ProfileEditModal — the sources and the units (E10c3)', () => {
     });
 });
 
+describe('ProfileEditModal — narrow screens (E10c4)', () => {
+    /** The developer's rule: the table scrolls sideways, and no column shrinks below what it must show whole. */
+    const minWidth = (column: string) => Number.parseInt(screen.getByTestId(`dt-header-${column}`).style.minWidth, 10);
+
+    it('each column keeps the width its content needs: the badge, a voice name, a date or an amount, value and source', () => {
+        mount();
+        expect(minWidth('state')).toBeGreaterThanOrEqual(120);
+        expect(minWidth('voice')).toBeGreaterThanOrEqual(200);
+        expect(minWidth('value')).toBeGreaterThanOrEqual(220);
+        expect(minWidth('now')).toBeGreaterThanOrEqual(200);
+    });
+});
+
 describe('ProfileEditModal — asking the sources', () => {
     const ANSWER: AskAnswer = {
         voices: {

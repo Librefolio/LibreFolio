@@ -389,11 +389,11 @@
     }
 
     let columns = $derived<ColumnDef<EditRow>[]>([
-        {id: 'state', header: $t('assets.profile.edit.columnStatus'), type: 'text', width: 120, cell: stateCell},
-        {id: 'voice', header: $t('assets.profile.edit.columnVoice'), type: 'text', width: 220, cell: voiceCell},
-        {id: 'value', header: $t('assets.profile.edit.columnNewValue'), type: 'text', width: 220, cell: valueCell},
-        {id: 'now', header: $t('assets.profile.edit.columnNow'), type: 'text', width: 220, cell: nowCell},
-        {id: 'ask', header: '', type: 'text', width: 80, cell: askCell},
+        {id: 'state', header: $t('assets.profile.edit.columnStatus'), type: 'text', width: 130, minWidth: 130, cell: stateCell},
+        {id: 'voice', header: $t('assets.profile.edit.columnVoice'), type: 'text', width: 220, minWidth: 210, cell: voiceCell},
+        {id: 'value', header: $t('assets.profile.edit.columnNewValue'), type: 'text', width: 230, minWidth: 230, cell: valueCell},
+        {id: 'now', header: $t('assets.profile.edit.columnNow'), type: 'text', width: 220, minWidth: 200, cell: nowCell},
+        {id: 'ask', header: '', type: 'text', width: 80, minWidth: 80, cell: askCell},
     ]);
 
     const rowActions: RowAction<EditRow>[] = [
@@ -578,11 +578,12 @@
                     <Search size={16} class="text-lf-muted shrink-0" aria-hidden="true" />
                     <SearchSelect bind:value={searchValue} options={searchOptions} placeholder={$t('assets.profile.edit.searchVoice')} class="flex-1" testId="profile-edit-search" onchange={pickVoice} />
                 </div>
-                <div class="flex gap-2">
+                <!-- On the phone the two buttons take their own row, in equal parts (the developer, round 43) -->
+                <div class="grid auto-cols-fr grid-flow-col gap-2 sm:flex">
                     {#if canAsk}
                         <button
                             type="button"
-                            class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border border-lf-input bg-lf-card text-lf-link hover:bg-lf-hover disabled:opacity-50"
+                            class="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border border-lf-input bg-lf-card text-lf-link hover:bg-lf-hover disabled:opacity-50"
                             disabled={asking !== null}
                             onclick={() => askKeys(null, 'all')}
                             data-testid="profile-edit-ask-all"
@@ -591,7 +592,7 @@
                             {asking ? $t('assets.profile.edit.asking') : $t('assets.profile.edit.askAll')}
                         </button>
                     {/if}
-                    <button type="button" class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border border-lf-input bg-lf-card text-lf-primary hover:bg-lf-hover" onclick={() => addRow(null)} data-testid="profile-edit-add-row">
+                    <button type="button" class="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border border-lf-input bg-lf-card text-lf-primary hover:bg-lf-hover" onclick={() => addRow(null)} data-testid="profile-edit-add-row">
                         <Plus size={15} aria-hidden="true" />
                         {$t('assets.profile.edit.addRow')}
                     </button>
