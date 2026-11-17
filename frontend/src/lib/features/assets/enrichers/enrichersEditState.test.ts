@@ -133,6 +133,11 @@ describe('removing, putting back, reordering', () => {
         expect(state.resultConfig(draft).gleif).toEqual({identifier_type: 'LEI', identifier: 'EEXSPYGY7X8YAH8ZJF49'});
     });
 
+    it('a new enricher is added with the first identifier type it accepts, waiting for the identifier', () => {
+        const draft = state.addEnricher(state.draftFrom({}), 'gleif', null, 'LEI');
+        expect(state.resultConfig(draft).gleif).toEqual({identifier_type: 'LEI', identifier: ''});
+    });
+
     it('a new enricher without a binding is added empty, and its row has an issue until it has one', () => {
         const draft = state.addEnricher(state.draftFrom({}), 'esma');
         const rows = state.chosenRows(draft, context());
@@ -164,6 +169,7 @@ describe('«Non in elenco»', () => {
             ['bonds_only', 'not_covering'],
         ]);
         expect(others[0].binding).toEqual(CONFIG.justetf);
+        expect(others.find((row) => row.code === 'esma')?.canAdd).toBe(false);
         expect(others[1].binding).toEqual({identifier_type: 'LEI', identifier: 'EEXSPYGY7X8YAH8ZJF49'});
     });
 

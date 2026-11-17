@@ -111,7 +111,7 @@ export interface OtherRow {
     binding: EnricherBinding | null;
     recognition: EnricherRecognition | null;
     fills: string[];
-    /** It can be added: not for one that does not cover the type, nor one not configured. */
+    /** It can be added: not one that does not cover the type, nor one not configured, nor one «Riconosci» is still asking. */
     canAdd: boolean;
 }
 
@@ -141,11 +141,11 @@ export function removeEnricher(draft: EnrichersDraft, code: string): EnrichersDr
 
 /**
  * Put an enricher in the list, at the end: with the binding it had (removed and put back), else the one a recognition
- * named, else an empty one to type.
+ * named, else one to type, already on `defaultType` (the first identifier type it accepts).
  */
-export function addEnricher(draft: EnrichersDraft, code: string, recognition?: EnricherRecognition | null): EnrichersDraft {
+export function addEnricher(draft: EnrichersDraft, code: string, recognition?: EnricherRecognition | null, defaultType = ''): EnrichersDraft {
     if (draft.order.includes(code)) return draft;
-    const binding = draft.bindings[code] ?? (recognition ? recognitionBinding(recognition) : {identifier_type: '', identifier: ''});
+    const binding = draft.bindings[code] ?? (recognition ? recognitionBinding(recognition) : {identifier_type: defaultType, identifier: ''});
     return {order: [...draft.order, code], bindings: {...draft.bindings, [code]: binding}};
 }
 
@@ -256,7 +256,7 @@ export function otherRows(draft: EnrichersDraft, context: EnrichersContext): Oth
             const reason = otherReason(info.code, info, draft, context);
             const recognition = context.recognitions[info.code] ?? null;
             const binding = reason === 'removed' ? draft.bindings[info.code] : reason === 'found' && recognition ? recognitionBinding(recognition) : null;
-            return {code: info.code, info, reason, binding, recognition, fills: fillsOf(info, context.assetType), canAdd: reason !== 'not_covering' && reason !== 'not_configured'};
+            return {code: info.code, info, reason, binding, recognition, fills: fillsOf(info, context.assetType), canAdd: reason !== 'not_covering' && reason !== 'not_configured' && reason !== 'searching'};
         });
     return rows.sort((left, right) => OTHER_REASONS.indexOf(left.reason) - OTHER_REASONS.indexOf(right.reason));
 }
