@@ -386,7 +386,11 @@
           "route_priority": "Priorità di Broker e fonti",
           "shortfall": "Liquidità non investita",
           "split_asset_count": "Asset divisi fra più Broker",
-          "turnover": "Turnover"
+          "turnover": "Turnover",
+          "plan_score": "Score",
+          "target_distance": "Distance from the targets",
+          "wealth_loss": "Money lost",
+          "operation_count": "Fewer operations"
         },
         "origin": {
           "copied": "Copiato",
@@ -703,7 +707,9 @@
             "proof": "Prova",
             "reasons": {
               "allocation": {
-                "exact_proof_not_established": "non è stata stabilita una prova esatta"
+                "exact_proof_not_established": "non è stata stabilita una prova esatta",
+                "proof_not_confirmed": "no second search confirmed the proof",
+                "limits_leave_no_rounding_room": "the limits leave no room for rounding"
               },
               "portfolio_rebalancer": {
                 "sell_irreducibility_unresolved": "non è stato stabilito che nessuna vendita possa essere eliminata"
@@ -771,7 +777,8 @@
               "complete": "Il risultato qui sotto resta completo e consultabile.",
               "node": "Il solver si è fermato al limite di nodi con un piano valido. Potrebbe esisterne uno migliore.",
               "stages": "Stadi: {finished} terminati · {unfinished} non terminati · nessun gap certificato.",
-              "time": "Il solver si è fermato al limite di tempo con un piano valido. Potrebbe esisterne uno migliore."
+              "time": "Il solver si è fermato al limite di tempo con un piano valido. Potrebbe esisterne uno migliore.",
+              "solverError": "The solver stopped on a numerical error with a valid plan. A better one may exist."
             },
             "noIncumbent": {
               "body": "Il solver non ha trovato alcun piano prima del limite. Non è una prova che non esista un piano.",

@@ -386,7 +386,11 @@
           "route_priority": "Priorité des courtiers et des sources",
           "shortfall": "Liquidités non investies",
           "split_asset_count": "Actifs répartis sur plusieurs courtiers",
-          "turnover": "Rotation"
+          "turnover": "Rotation",
+          "plan_score": "Score",
+          "target_distance": "Distance from the targets",
+          "wealth_loss": "Money lost",
+          "operation_count": "Fewer operations"
         },
         "origin": {
           "copied": "Copié",
@@ -703,7 +707,9 @@
             "proof": "Preuve",
             "reasons": {
               "allocation": {
-                "exact_proof_not_established": "aucune preuve exacte n’a été établie"
+                "exact_proof_not_established": "aucune preuve exacte n’a été établie",
+                "proof_not_confirmed": "no second search confirmed the proof",
+                "limits_leave_no_rounding_room": "the limits leave no room for rounding"
               },
               "portfolio_rebalancer": {
                 "sell_irreducibility_unresolved": "il n’a pas été établi qu’aucune vente ne peut être supprimée"
@@ -771,7 +777,8 @@
               "complete": "Le résultat ci-dessous reste complet et consultable.",
               "node": "Le solveur s’est arrêté à la limite de nœuds avec un plan valide. Il en existe peut-être un meilleur.",
               "stages": "Étapes : {finished} terminées · {unfinished} non terminées · aucun écart certifié.",
-              "time": "Le solveur s’est arrêté à la limite de temps avec un plan valide. Il en existe peut-être un meilleur."
+              "time": "Le solveur s’est arrêté à la limite de temps avec un plan valide. Il en existe peut-être un meilleur.",
+              "solverError": "The solver stopped on a numerical error with a valid plan. A better one may exist."
             },
             "noIncumbent": {
               "body": "Le solveur n’a trouvé aucun plan avant la limite. Ce n’est pas une preuve qu’aucun plan n’existe.",

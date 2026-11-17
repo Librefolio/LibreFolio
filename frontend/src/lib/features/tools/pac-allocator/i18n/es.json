@@ -386,7 +386,11 @@
           "route_priority": "Prioridad de brókeres y fuentes",
           "shortfall": "Liquidez no invertida",
           "split_asset_count": "Activos repartidos entre brókeres",
-          "turnover": "Rotación"
+          "turnover": "Rotación",
+          "plan_score": "Score",
+          "target_distance": "Distance from the targets",
+          "wealth_loss": "Money lost",
+          "operation_count": "Fewer operations"
         },
         "origin": {
           "copied": "Copiado",
@@ -703,7 +707,9 @@
             "proof": "Prueba",
             "reasons": {
               "allocation": {
-                "exact_proof_not_established": "no se ha establecido una prueba exacta"
+                "exact_proof_not_established": "no se ha establecido una prueba exacta",
+                "proof_not_confirmed": "no second search confirmed the proof",
+                "limits_leave_no_rounding_room": "the limits leave no room for rounding"
               },
               "portfolio_rebalancer": {
                 "sell_irreducibility_unresolved": "no se ha establecido que ninguna venta pueda eliminarse"
@@ -771,7 +777,8 @@
               "complete": "El resultado de abajo sigue completo y consultable.",
               "node": "El solver se detuvo en el límite de nodos con un plan válido. Puede existir uno mejor.",
               "stages": "Etapas: {finished} terminadas · {unfinished} sin terminar · ninguna brecha certificada.",
-              "time": "El solver se detuvo en el límite de tiempo con un plan válido. Puede existir uno mejor."
+              "time": "El solver se detuvo en el límite de tiempo con un plan válido. Puede existir uno mejor.",
+              "solverError": "The solver stopped on a numerical error with a valid plan. A better one may exist."
             },
             "noIncumbent": {
               "body": "El solver no encontró ningún plan antes del límite. No es una prueba de que no exista ningún plan.",

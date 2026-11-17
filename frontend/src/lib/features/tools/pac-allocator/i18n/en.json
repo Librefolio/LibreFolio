@@ -386,7 +386,11 @@
           "route_priority": "Broker and source priority",
           "shortfall": "Uninvested money",
           "split_asset_count": "Assets split across Brokers",
-          "turnover": "Turnover"
+          "turnover": "Turnover",
+          "plan_score": "Score",
+          "target_distance": "Distance from the targets",
+          "wealth_loss": "Money lost",
+          "operation_count": "Fewer operations"
         },
         "origin": {
           "copied": "Copied",
@@ -703,7 +707,9 @@
             "proof": "Proof",
             "reasons": {
               "allocation": {
-                "exact_proof_not_established": "an exact proof was not established"
+                "exact_proof_not_established": "an exact proof was not established",
+                "proof_not_confirmed": "no second search confirmed the proof",
+                "limits_leave_no_rounding_room": "the limits leave no room for rounding"
               },
               "portfolio_rebalancer": {
                 "sell_irreducibility_unresolved": "it was not established that no sale can be removed"
@@ -771,7 +777,8 @@
               "complete": "The result below stays complete and can be consulted.",
               "node": "The solver stopped at the node limit with a valid plan. A better one may exist.",
               "stages": "Stages: {finished} finished · {unfinished} unfinished · no certified gap.",
-              "time": "The solver stopped at the time limit with a valid plan. A better one may exist."
+              "time": "The solver stopped at the time limit with a valid plan. A better one may exist.",
+              "solverError": "The solver stopped on a numerical error with a valid plan. A better one may exist."
             },
             "noIncumbent": {
               "body": "The solver found no plan before the limit. This is not a proof that no plan exists.",
