@@ -7,8 +7,9 @@ What it promises, pinned here with no network:
    ``params_schema``, no settings, not test-only (the registry serves it on a production instance too). It covers the
    ETF family (``ETF`` and every ``ETF_*``) and ``COMMODITY`` (the ETCs) at degree 10, every other type ``None``. It
    declares twelve fund voices for each covered type, and ``legal_form`` too only where an ETC or ETN can sit (``ETF``
-   generic, ``ETF_COMMODITY``, ``ETF_CRYPTO``, ``COMMODITY``; correction C1b-2). ``page_url`` is the English fund page. A pause between two
-   page calls of one ``read``, ``pause_seconds``, is greater than 0 by default (the tests set it to 0, never wait).
+   generic, ``ETF_COMMODITY``, ``ETF_CRYPTO``, ``COMMODITY``; correction C1b-2). ``page_url`` is the English fund page. C5: one
+   module-level ``Pacer`` spaces every call to justetf.com, whatever read, «Riconosci» or search it comes from (the
+   tests replace it with one on a fake clock: no test waits).
 
 2. **Mapping**, each yielded value passed through the real catalogue (``normalize_value``) and compared in its
    **stored** form, never the raw one only:
@@ -64,6 +65,7 @@ from __future__ import annotations
 import copy
 import importlib
 import json
+import threading
 from collections.abc import Iterator
 from datetime import date
 from pathlib import Path
@@ -91,6 +93,7 @@ from backend.app.services.enrichers.refresh import ReadOutcome, merge_voices
 from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.plugin_settings.call_limits import CALL_LIMIT_KEYS
 from backend.app.utils.asset.sector import FinancialSector, validate_sector
+from backend.app.utils.runtime.pacing import Pacer
 
 PLUGIN_MODULE = "backend.app.services.enricher_providers.justetf.plugin"
 CODE = "justetf"
@@ -385,9 +388,7 @@ def library(je: ModuleType, monkeypatch: pytest.MonkeyPatch) -> FakeLibrary:
 
 @pytest.fixture
 def plugin(je: ModuleType, library: FakeLibrary):
-    instance = je.JustETFEnricher()
-    instance.pause_seconds = 0
-    return instance
+    return je.JustETFEnricher()
 
 
 def _isin(isin: str) -> EnricherBinding:
@@ -475,8 +476,9 @@ def test_page_url(plugin):
     assert plugin.page_url(_isin("IE00B4L5Y983")) == _page("IE00B4L5Y983")
 
 
-def test_pause_between_page_calls_is_positive_by_default(je):
-    assert je.JustETFEnricher().pause_seconds > 0
+def test_the_pace_between_page_calls_is_positive(pace):
+    """C5: the module's pace (the ``pace`` fixture checks it is a module-level Pacer) waits more than nothing."""
+    assert pace.interval > 0
 
 
 # =============================================================================
@@ -1010,3 +1012,76 @@ def test_search(plugin, library, query, isins):
         isin = result.binding.identifier
         assert result == EnricherSearchResult(name=NAMES[isin], binding=EnricherBinding("ISIN", isin), asset_type=AssetType.ETF, page_url=_page(isin))
     assert library.calls == [], "search reads the list, never a page"
+
+
+# =============================================================================
+# C5: one pace for every call of the plugin, whatever read it comes from
+# =============================================================================
+
+
+class FakePace:
+    """The module's ``_PACER`` replaced by one on a fake clock that only moves when it sleeps: no test ever waits, and
+    the waits are recorded. ``interval`` is the plugin's own."""
+
+    def __init__(self, interval: float) -> None:
+        self.interval = interval
+        self.now = 1000.0
+        self.slept: list[float] = []
+        self._lock = threading.Lock()
+
+    def clock(self) -> float:
+        with self._lock:
+            return self.now
+
+    def sleep(self, seconds: float) -> None:
+        with self._lock:
+            self.slept.append(seconds)
+            self.now += seconds
+
+
+@pytest.fixture(autouse=True)
+def pace(monkeypatch: pytest.MonkeyPatch) -> FakePace:
+    """Every test of this file runs on the fake pace: the module must hold its ``_PACER`` (C5)."""
+    module = importlib.import_module(PLUGIN_MODULE)
+    real = module._PACER
+    assert isinstance(real, Pacer) and real.interval_seconds > 0, "the plugin paces its calls with a module-level Pacer"
+    fake = FakePace(real.interval_seconds)
+    monkeypatch.setattr(module, "_PACER", Pacer(real.interval_seconds, clock=fake.clock, sleep=fake.sleep), raising=True)
+    return fake
+
+
+def test_two_reads_share_one_pace(je, library, pace):
+    """Two reads, from two instances as the registry builds them («Aggiorna» and the weekly read): the second page call
+    waits the plugin's interval, though it opens its own read."""
+    first, second = je.JustETFEnricher(), je.JustETFEnricher()
+    bindings = [_synthetic(library, "IE00TESTPACE01"), _synthetic(library, "IE00TESTPACE02")]
+    assert list(first.read([bindings[0]]))[0].status == EnricherReadStatus.OK
+    assert pace.slept == [], "the first call does not wait"
+    assert list(second.read([bindings[1]]))[0].status == EnricherReadStatus.OK
+    assert pace.slept == [pace.interval], f"the second read waited the interval: {pace.slept}"
+
+
+def test_recognize_is_paced_with_the_reads(je, library, pace, plugin):
+    binding = _synthetic(library, "IE00TESTPACE03")
+    plugin.recognize(binding)
+    list(plugin.read([binding]))
+    assert pace.slept == [pace.interval], f"recognize and read share the pace: {pace.slept}"
+
+
+def test_concurrent_reads_are_spaced(je, library, pace):
+    """Two reads at once, each in its own worker thread: their page calls are at least the interval apart."""
+    bindings = [_synthetic(library, "IE00TESTPACE04"), _synthetic(library, "IE00TESTPACE05")]
+    start = threading.Barrier(2)
+    results: list[Any] = []
+
+    def worker(binding: EnricherBinding) -> None:
+        start.wait()
+        results.extend(je.JustETFEnricher().read([binding]))
+
+    threads = [threading.Thread(target=worker, args=(binding,)) for binding in bindings]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+    assert len(results) == 2 and all(item.status == EnricherReadStatus.OK for item in results)
+    assert sum(pace.slept) >= pace.interval - 1e-9, f"one of the two waited the interval: {pace.slept}"

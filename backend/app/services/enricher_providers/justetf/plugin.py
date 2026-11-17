@@ -14,7 +14,6 @@ and an ETF is not necessarily UCITS (a Swiss one is not).
 from __future__ import annotations
 
 import re
-import time
 from collections.abc import Iterable, Iterator, Mapping
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -37,6 +36,7 @@ from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.platform.provider_registry import register_provider
 from backend.app.utils.asset.geo import normalize_country_to_iso3
 from backend.app.utils.asset.sector import validate_sector
+from backend.app.utils.runtime.pacing import Pacer
 
 try:
     from justetf_scraping import get_etf_overview, load_overview
@@ -47,6 +47,11 @@ except ImportError:  # pragma: no cover — the library is in the lock; without 
 logger = get_logger(__name__)
 
 PROVIDER_NAME = "justETF"
+
+#: One pace for every call of this plugin to justetf.com, whatever read, «Riconosci» or search it comes from (plan 68, C5;
+#: the round-30 rule: the plugin paces its own calls). Module level: the registry builds a new instance for every call,
+#: so a pacer on ``self`` would never be shared. Per process (``utils/runtime/pacing.py``).
+_PACER = Pacer(1.0)
 #: The error code of a read the library or the site failed (not a refusal for too many requests).
 SOURCE_ERROR = "SOURCE_ERROR"
 _PAGE_URL = "https://www.justetf.com/en/etf-profile.html?isin={isin}"
@@ -240,9 +245,6 @@ class JustETFEnricher(EnricherPlugin):
     voices = {asset_type: _FUND_VOICES if asset_type in _ETC_ETN_TYPES else _FUND_VOICES - {"legal_form"} for asset_type in _COVERED}
     default_priority = {asset_type: _DEGREE if asset_type in _COVERED else None for asset_type in AssetType}
 
-    #: The wait between two pages inside one read: the plugin paces its own calls (plan, round 30).
-    pause_seconds: float = 1.0
-
     def page_url(self, binding: EnricherBinding) -> str | None:
         return _PAGE_URL.format(isin=binding.identifier)
 
@@ -263,6 +265,7 @@ class JustETFEnricher(EnricherPlugin):
     def _overview(isin: str) -> Mapping[str, Any]:
         if get_etf_overview is None:
             raise RuntimeError("justetf-scraping is not installed")
+        _PACER.wait()
         return get_etf_overview(isin, include_gettex=False)
 
     def recognize(self, binding: EnricherBinding) -> EnricherRecognition:
@@ -276,7 +279,6 @@ class JustETFEnricher(EnricherPlugin):
 
     def read(self, bindings: list[EnricherBinding], keys: Iterable[str] | None = None) -> Iterator[EnricherReadItem]:
         refused: float | None | bool = False  # after a refusal, the rest is refused too, with no call
-        called = False
         for index, binding in enumerate(bindings):
             isin = self._isin(binding)
             if isin is None:
@@ -285,9 +287,6 @@ class JustETFEnricher(EnricherPlugin):
             if refused is not False:
                 yield EnricherReadItem(index=index, status=EnricherReadStatus.ERROR, error_code=RATE_LIMITED, retry_after=refused)
                 continue
-            if called and self.pause_seconds > 0:
-                time.sleep(self.pause_seconds)
-            called = True
             try:
                 overview = self._overview(isin)
             except Exception as error:  # noqa: BLE001 — isolation boundary: one fund's failure is that fund's outcome
@@ -309,6 +308,7 @@ class JustETFEnricher(EnricherPlugin):
     def search(self, query: str) -> list[EnricherSearchResult]:
         if load_overview is None:
             raise RuntimeError("justetf-scraping is not installed")
+        _PACER.wait()
         frame = load_overview()
         needle = query.strip().lower()
         if not needle:
