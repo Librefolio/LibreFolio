@@ -10,6 +10,8 @@
  *   - `rebalancer-t4-contribution.json`: T4 with a contribution, a deposit before the purchase;
  *   - `rebalancer-browser.json`: the G5 browser scenario, transfers, a conversion and purchases. The engine stopped at its
  *     time limit there (`time_limit`, not proven): a new run need not give the same plan, so no test reads a literal of it.
+ *   - `rebalancer-y-top-up.json`: the consultant's case Y (lot ZB-b), a plan of the wide model with a 0.01 EUR top-up and
+ *     no cash left.
  * Each request is parsed by the Rebalancer's own codec, as the run does, and each result by its output codec. Every section
  * is opened («Expand all»): the exposures, the ledger and the proof render too. Nothing reads translated text.
  *
@@ -63,6 +65,8 @@ import t5 from './__fixtures__/rebalancer-t5.json';
 import t4 from './__fixtures__/rebalancer-t4.json';
 import t4Deposit from './__fixtures__/rebalancer-t4-contribution.json';
 import browser from './__fixtures__/rebalancer-browser.json';
+import yTopUp from './__fixtures__/rebalancer-y-top-up.json';
+import {formatExactPercent} from '../format';
 import ResultView from './ResultView.svelte';
 
 beforeAll(async () => {
@@ -116,6 +120,7 @@ describe('a ready Rebalancer result renders', () => {
         ['T4, one purchase', t4, 'ready_incumbent'],
         ['T4 with a contribution: a deposit, then the purchase', t4Deposit, 'ready_incumbent'],
         ['the browser scenario: transfers, a conversion, purchases', browser, 'ready_incumbent'],
+        ['a wide plan that needs a top-up and leaves no cash (lot ZB-b, case Y)', yTopUp, 'ready_incumbent'],
     ])('%s', async (_name, fixture, state) => {
         expect(() => mounted(fixture)).not.toThrow();
         const root = screen.getByTestId('rebalancer-planner-result');
@@ -197,5 +202,26 @@ describe('a solver numerical error is a note of its own', () => {
         expect(item!.getAttribute('data-step')).toBe('');
         expect(item!.querySelector('[data-testid="rebalancer-planner-notes-list-goto"]')).toBeNull();
         expect(screen.getByTestId('rebalancer-planner-state').getAttribute('data-state')).toBe('limit');
+    });
+});
+
+/**
+ * Lot ZB-b of project 67, the consultant's case Y (`rebalancer-y-top-up.json`, the engine's answer): a plan of the wide
+ * model spends the cash to the last cent and asks one more for its rounding. The result shows the top-up on its Broker
+ * and Rebalancer's cash item at its posted value, below zero; nothing in the view throws on a negative share.
+ */
+describe('a plan with a rounding top-up', () => {
+    it('shows the top-up on its Broker, and the cash item below zero', () => {
+        mounted(yTopUp);
+        const rows = screen.getAllByTestId('rebalancer-planner-top-up-row');
+        expect(rows.map((row) => row.getAttribute('data-broker'))).toEqual(yTopUp.result.primary_solution.rounding_top_ups.map((row) => row.broker_id));
+        const rowsShown = [...document.querySelectorAll('[data-testid="rebalancer-planner-allocation-table"] tbody tr[data-row-id]')];
+        const cashRows = rowsShown.filter((row) => row.getAttribute('data-row-id')?.startsWith('cash:'));
+        expect(cashRows).toHaveLength(yTopUp.result.primary_solution.cash_rows.length);
+        // The cash item's final share is below zero (−0.01 € on F): the row shows the formatter's own output for it, no NaN.
+        const [item] = yTopUp.result.primary_solution.cash_rows;
+        const shown = cashRows[0].textContent ?? '';
+        expect(shown).toContain(formatExactPercent(item.final_weight as Parameters<typeof formatExactPercent>[0]));
+        expect(shown).not.toContain('NaN');
     });
 });
