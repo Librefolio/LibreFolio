@@ -1,13 +1,13 @@
 {
- "fonte": "justetf",
+ "source": "justetf",
  "asset": "vwce",
- "versione": "justetf-scraping 0.1.0",
- "quando": "2026-11-10T17:06:26",
- "chiamate": {
+ "version": "justetf-scraping 0.1.0",
+ "recorded_at": "2026-11-10T17:06:26",
+ "calls": {
   "get_etf_overview": {
-   "secondi": 0.69,
-   "errore": null,
-   "risposta": {
+   "seconds": 0.69,
+   "error": null,
+   "response": {
     "isin": "IE00BK5BQT80",
     "name": "Vanguard FTSE All-World UCITS ETF (USD) Accumulating",
     "description": "The Vanguard FTSE All-World UCITS ETF (USD) Accumulating seeks to track the FTSE All-World index. The FTSE All-World index tracks stocks from developed and emerging countries worldwide.",

@@ -1,13 +1,13 @@
 {
- "fonte": "justetf",
+ "source": "justetf",
  "asset": "etf_bond",
- "versione": "justetf-scraping 0.1.0",
- "quando": "2026-11-10T17:06:35",
- "chiamate": {
+ "version": "justetf-scraping 0.1.0",
+ "recorded_at": "2026-11-10T17:06:35",
+ "calls": {
   "get_etf_overview": {
-   "secondi": 0.61,
-   "errore": null,
-   "risposta": {
+   "seconds": 0.61,
+   "error": null,
+   "response": {
     "isin": "IE00B3F81409",
     "name": "iShares Core Global Aggregate Bond UCITS ETF USD (Dist)",
     "description": "The iShares Core Global Aggregate Bond UCITS ETF USD (Dist) seeks to track the Bloomberg Global Aggregate Bond index. The Bloomberg Global Aggregate Bond index tracks bonds issued in emerging and developed markets worldwide. Rating: Investment Grade.",

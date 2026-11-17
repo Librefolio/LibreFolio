@@ -5,25 +5,34 @@ What it promises, pinned here with no network:
 
 1. **Declarations**: ``code`` ``justetf``, ``name`` ``justETF``, ``terms`` ``PRICE_SOURCE``, ISIN only, no
    ``params_schema``, no settings, not test-only (the registry serves it on a production instance too). It covers the
-   ETF family (``ETF`` and every ``ETF_*``) and ``COMMODITY`` (the ETCs) at degree 10, every other type ``None``, and
-   declares the same thirteen voices for each covered type. ``page_url`` is the English fund page. A pause between two
+   ETF family (``ETF`` and every ``ETF_*``) and ``COMMODITY`` (the ETCs) at degree 10, every other type ``None``. It
+   declares twelve fund voices for each covered type, and ``legal_form`` too only where an ETC or ETN can sit (``ETF``
+   generic, ``ETF_COMMODITY``, ``ETF_CRYPTO``, ``COMMODITY``; correction C1b-2). ``page_url`` is the English fund page. A pause between two
    page calls of one ``read``, ``pause_seconds``, is greater than 0 by default (the tests set it to 0, never wait).
 
 2. **Mapping**, each yielded value passed through the real catalogue (``normalize_value``) and compared in its
    **stored** form, never the raw one only:
 
-   - from the recorded overviews in ``fixtures/justetf/`` (``swda``, ``vwce``, ``etf_bond``, ``etf_hedged``, ``etc_oro``):
-     every voice the page gives, nothing else (``currency_hedged``, ``top_holdings``, ``listings``, ``holdings_date``
-     are not read; ``source_date`` stays ``None``);
+   - from the recorded overviews in ``fixtures/justetf/`` (``swda``, ``vwce``, ``etf_bond``, ``etf_hedged``, ``etc_gold``):
+     every voice the page gives, nothing else (``currency_hedged``, ``top_holdings``, ``listings`` are not read; the
+     item's ``source_date`` stays ``None``);
+   - **per-voice dates** (correction C1b-1): the sheet's ``holdings_date`` (day/month/year, «30/09/2026» in every
+     recording) is the date of ``geography`` and ``sector`` only, given in the item's ``source_dates``; no other voice
+     is dated, and only the voices the item gives. An empty, missing or unreadable ``holdings_date`` dates nothing and
+     changes no value; a sheet without breakdowns (the gold ETC) has no ``source_dates``. Through ``merge_voices`` the
+     two voices carry that date and the others none;
    - from synthetic overviews, a recording with one field overridden, for what the recordings miss: every replication
      text, an unknown one (absent, one log line), the distribution texts, a domicile name per country and an unknown
      one, the inception date's English months and unreadable dates, ``ter`` ``0.0`` (a value ``0``), ETC / ETN / ETF /
      other legal structures, empty text, an untranslatable country of the breakdown (its weight folded into «Other»,
      one log line: no weight is lost, so the catalogue never refuses the map), justETF's sector names translated by the
      plugin's own table (``_SECTORS``) to the standard sectors, an unknown one passed on and stored as «Other».
+   - **sectors, the generic helper first** (correction C1b-3): a name ``utils/asset/sector.py`` knows is passed on as
+     it is, never through ``_SECTORS``; the table holds only names the helper does not know (a guard), and a table row
+     forced onto a name the helper knows (``monkeypatch``) is not used.
 
 3. **Not found**: an ISIN justETF does not know comes back as an «ETF Screener» sheet with every data field null (the
-   recordings ``enel`` and ``fondo``). Found when any of ``legal_structure``, ``ter``, ``fund_provider``, ``index`` is not
+   recordings ``enel`` and ``mutual_fund``). Found when any of ``legal_structure``, ``ter``, ``fund_provider``, ``index`` is not
    ``None`` (``ter == 0.0`` counts).
 
 4. **recognize**: a non-ISIN binding is not found without a call; otherwise one ``get_etf_overview(isin,
@@ -56,6 +65,7 @@ import copy
 import importlib
 import json
 from collections.abc import Iterator
+from datetime import date
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any
@@ -77,14 +87,16 @@ from backend.app.services.enrichers.base import (
     EnricherSearchResult,
     EnricherTerms,
 )
+from backend.app.services.enrichers.refresh import ReadOutcome, merge_voices
 from backend.app.services.enrichers.registry import EnricherRegistry
+from backend.app.utils.asset.sector import FinancialSector, validate_sector
 
 PLUGIN_MODULE = "backend.app.services.enricher_providers.justetf.plugin"
 CODE = "justetf"
 TEST_MODE_VARIABLE = "LIBREFOLIO_TEST_MODE"
 FIXTURES = Path(__file__).parent / "fixtures" / "justetf"
 
-#: The voices it declares for every covered type.
+#: Every voice it can give: the voices of a covered type where an ETC or ETN can sit.
 VOICES = frozenset(
     {
         "description",
@@ -103,7 +115,14 @@ VOICES = frozenset(
     }
 )
 COVERED = frozenset({AssetType.ETF, AssetType.COMMODITY} | {asset_type for asset_type in AssetType if asset_type.value.startswith("ETF_")})
+#: The covered types where an ETC or ETN can sit: the only ones that declare ``legal_form`` (correction C1b-2), written
+#: out, never derived from a prefix.
+LEGAL_FORM_TYPES = frozenset({AssetType.ETF, AssetType.ETF_COMMODITY, AssetType.ETF_CRYPTO, AssetType.COMMODITY})
+#: The voices of every other covered type: the same twelve, without ``legal_form``.
+FUND_VOICES = VOICES - {"legal_form"}
 DEGREE = 10
+#: The ``holdings_date`` of every recording that has one («30/09/2026»), as a date.
+HOLDINGS_DATE = date(2026, 9, 30)
 
 
 def _page(isin: str) -> str:
@@ -112,7 +131,7 @@ def _page(isin: str) -> str:
 
 def _recorded(name: str) -> dict[str, Any]:
     """The overview dict of a recording, as ``get_etf_overview`` returned it."""
-    return json.loads((FIXTURES / f"{name}.json").read_text(encoding="utf-8"))["chiamate"]["get_etf_overview"]["risposta"]
+    return json.loads((FIXTURES / f"{name}.json").read_text(encoding="utf-8"))["calls"]["get_etf_overview"]["response"]
 
 
 # =============================================================================
@@ -295,7 +314,7 @@ EXPECTED_STORED: dict[str, dict[str, Any]] = {
         "sector": HEDGED_SECTOR,
     },
     # An ETC: legal form etc_etn, no breakdown by country or sector (both lists empty on the page)
-    "etc_oro": {
+    "etc_gold": {
         "ter": "0.0012",
         "fund_size": {"amount": "33660000000", "currency": "EUR"},
         "index_name": "Gold",
@@ -421,14 +440,19 @@ def test_declarations(je):
 
 
 def test_coverage_and_voices(je):
+    """Changed by design in C1b (correction 2): it pinned the thirteen voices for every covered type; ``legal_form`` is
+    now declared only where an ETC or ETN can sit, the other covered types declare the same twelve without it."""
     cls = je.JustETFEnricher
     assert set(cls.default_priority) == set(AssetType), "a degree for every AssetType"
     for asset_type in AssetType:
         expected = DEGREE if asset_type in COVERED else None
         assert cls.default_priority[asset_type] == expected, f"{asset_type.value}: degree {cls.default_priority[asset_type]!r}, expected {expected!r}"
     assert set(cls.voices) == set(COVERED), f"voices for the covered types only: {sorted(t.value for t in cls.voices)}"
-    for asset_type in COVERED:
-        assert cls.voices[asset_type] == VOICES, f"{asset_type.value}: {sorted(cls.voices[asset_type])}"
+    assert LEGAL_FORM_TYPES <= COVERED and COVERED - LEGAL_FORM_TYPES, "barrier: the legal-form types are covered, and some covered types are not among them"
+    assert len(FUND_VOICES) == 12, f"barrier: twelve fund voices: {sorted(FUND_VOICES)}"
+    for asset_type in sorted(COVERED):
+        expected = VOICES if asset_type in LEGAL_FORM_TYPES else FUND_VOICES
+        assert cls.voices[asset_type] == expected, f"{asset_type.value}: {sorted(cls.voices[asset_type])}, expected {sorted(expected)}"
 
 
 def test_registered_and_served_in_production(je, monkeypatch):
@@ -491,16 +515,119 @@ def test_raw_geography_keys_are_iso3_or_other(plugin, library):
 
 
 def test_fields_not_read_change_nothing(plugin, library):
-    """``currency_hedged``, ``top_holdings``, ``listings``, ``holdings_date``: changing them changes no value."""
+    """``currency_hedged``, ``top_holdings``, ``listings``: changing them changes no value. (Changed by design in C1b:
+    ``holdings_date`` left this list, it is now read as the date of geography and sector.)"""
     base = _recorded("swda")
     first = library.give("IE00TESTNR001", {**base, "isin": "IE00TESTNR001"})
     second = library.give(
         "IE00TESTNR002",
-        {**base, "isin": "IE00TESTNR002", "currency_hedged": not base["currency_hedged"], "top_holdings": [], "listings": [], "holdings_date": "01/01/2020"},
+        {**base, "isin": "IE00TESTNR002", "currency_hedged": not base["currency_hedged"], "top_holdings": [], "listings": []},
     )
     items = {item.index: item for item in plugin.read([_isin(first), _isin(second)])}
     assert _stored(dict(items[0].values)) == _stored(dict(items[1].values))
     assert items[0].source_date is None and items[1].source_date is None
+
+
+# =============================================================================
+# 2. Mapping: the date of geography and sector (correction C1b-1)
+# =============================================================================
+
+#: The voices the sheet's ``holdings_date`` dates: the breakdowns, nothing else.
+DATED_VOICES = frozenset({"geography", "sector"})
+_BOTH_DATED = {"geography": HOLDINGS_DATE, "sector": HOLDINGS_DATE}
+
+
+def _source_dates(item: EnricherReadItem) -> dict[str, date]:
+    """The item's per-voice dates. Before C1b the contract has no such field: the test fails here, naming it."""
+    assert hasattr(item, "source_dates"), f"EnricherReadItem has no per-voice source_dates (correction C1b-1): {item}"
+    return dict(item.source_dates)
+
+
+@pytest.mark.parametrize(
+    ("recording", "dates"),
+    [("swda", _BOTH_DATED), ("vwce", _BOTH_DATED), ("etf_bond", _BOTH_DATED), ("etf_hedged", _BOTH_DATED), ("etc_gold", {})],
+)
+def test_recording_dates_geography_and_sector_only(plugin, library, recording, dates):
+    """The four ETFs: geography and sector dated with the sheet's «30/09/2026», no other voice; the gold ETC, with no
+    breakdown (and no holdings date), dates nothing. The item's own ``source_date`` stays None."""
+    overview = _recorded(recording)
+    if dates:
+        assert overview["holdings_date"] == "30/09/2026", f"barrier: the recording's holdings date: {overview.get('holdings_date')!r}"
+    else:
+        assert not overview.get("countries") and not overview.get("sectors"), "barrier: the ETC has no breakdown"
+    item = _read_one(plugin, _isin(library.give(overview["isin"], overview)))
+
+    assert item.status == EnricherReadStatus.OK, item
+    assert item.source_date is None, f"no date for the whole read: {item.source_date}"
+    assert _source_dates(item) == dates, f"{recording}: per-voice dates {_source_dates(item)}, expected {dates}"
+    assert set(dates) <= set(item.values), f"a dated voice is a voice the item gives: {sorted(item.values)}"
+
+
+def test_swda_dates_reach_the_merged_voices(plugin, library):
+    """SWDA's item through ``merge_voices``: geography and sector carry 30/09/2026, TER and every other voice none."""
+    overview = _recorded("swda")
+    isin = library.give(overview["isin"], overview)
+    item = _read_one(plugin, _isin(isin))
+    dates = _source_dates(item)
+    assert dates == _BOTH_DATED, f"barrier: SWDA's per-voice dates: {dates}"
+    outcome = ReadOutcome(owner=0, code=CODE, binding=_isin(isin), status=item.status, values=_stored(dict(item.values)), source_date=item.source_date, source_dates=dates)
+
+    merged = merge_voices([CODE], [outcome])
+
+    assert set(merged) == set(item.values), f"every voice merged: {sorted(merged)}"
+    assert "ter" in merged and merged["ter"].source_date is None, f"TER has no date: {merged.get('ter')}"
+    expected = {key: (HOLDINGS_DATE if key in DATED_VOICES else None) for key in item.values}
+    assert {key: voice.source_date for key, voice in merged.items()} == expected
+
+
+def test_holdings_date_is_read_day_first(plugin, library):
+    """«05/03/2026» is the 5th of March: the recordings' «30/09» cannot tell day-first from month-first."""
+    item = _read_one(plugin, _synthetic(library, "IE00TESTHD001", holdings_date="05/03/2026"))
+    assert item.status == EnricherReadStatus.OK, item
+    assert _source_dates(item) == {"geography": date(2026, 3, 5), "sector": date(2026, 3, 5)}
+
+
+@pytest.mark.parametrize(
+    "holdings_date",
+    ["<missing>", None, "", "   ", "not a date", "31/02/2026", "09/30/2026"],
+    ids=["missing", "none", "empty", "blank", "text", "no-such-day", "month-first"],
+)
+def test_no_readable_holdings_date_dates_nothing_and_changes_nothing(plugin, library, holdings_date):
+    """A missing, empty or unreadable holdings date: no per-voice date, and every value as SWDA's own."""
+    base = _recorded("swda")
+    baseline = library.give("IE00TESTHD002", {**base, "isin": "IE00TESTHD002"})
+    sheet = {**base, "isin": "IE00TESTHD003"}
+    if holdings_date == "<missing>":
+        sheet.pop("holdings_date")
+    else:
+        sheet["holdings_date"] = holdings_date
+    undated = library.give("IE00TESTHD003", sheet)
+
+    items = _by_index(list(plugin.read([_isin(baseline), _isin(undated)])), 2)
+
+    assert items[1].status == EnricherReadStatus.OK, items[1]
+    assert _source_dates(items[1]) == {}, f"{holdings_date!r} dates nothing: {_source_dates(items[1])}"
+    assert items[1].source_date is None
+    assert _stored(dict(items[1].values)) == _stored(dict(items[0].values)), "no value changes"
+
+
+@pytest.mark.parametrize(
+    ("countries", "sectors", "dates"),
+    [
+        (True, False, {"geography": HOLDINGS_DATE}),
+        (False, True, {"sector": HOLDINGS_DATE}),
+        (False, False, {}),
+    ],
+    ids=["countries-only", "sectors-only", "no-breakdown"],
+)
+def test_only_the_breakdowns_the_sheet_gives_are_dated(plugin, library, countries, sectors, dates):
+    """SWDA with its holdings date kept and one or both breakdowns emptied: a voice the item does not give has no date
+    (the gold ETC cannot show this: it has no holdings date either)."""
+    base = _recorded("swda")
+    overrides = {"countries": base["countries"] if countries else [], "sectors": base["sectors"] if sectors else []}
+    item = _read_one(plugin, _synthetic(library, "IE00TESTHD004", **overrides))
+    assert item.status == EnricherReadStatus.OK, item
+    assert _source_dates(item) == dates
 
 
 # =============================================================================
@@ -677,12 +804,37 @@ def test_sector_translation_table(plugin, library, name, sector):
     assert stored["sector"] == {sector: "0.4000", "Technology": "0.6000"}
 
 
+def test_sector_table_holds_only_names_the_helper_does_not_know(je):
+    """Correction C1b-3, a guard (green before C1b too): every key of ``_SECTORS`` is a justETF word the generic helper
+    (``utils/asset/sector.py``) does not know, and every value a standard sector."""
+    known = sorted(key for key in je._SECTORS if validate_sector(key))
+    assert known == [], f"rows of the table the helper already knows: {known}"
+    standard = set(FinancialSector.list_all_with_other())
+    assert all(value in standard for value in je._SECTORS.values()), f"values outside the standard sectors: {je._SECTORS}"
+    assert "non-corporate" not in je._SECTORS, "Non-Corporate is left to the catalogue («Other»)"
+
+
+@pytest.mark.parametrize(("name", "stored"), [("Healthcare", "Health Care"), ("Corporate", "Corporate Bonds")])
+def test_a_name_the_helper_knows_never_goes_through_the_table(je, plugin, library, monkeypatch, name, stored):
+    """The helper is asked first: a name it knows is passed on as it is, even when a (decoy) row of ``_SECTORS`` would
+    translate it; the catalogue then normalises it."""
+    assert validate_sector(name), f"barrier: the helper knows {name!r}"
+    monkeypatch.setitem(je._SECTORS, name.lower(), "Government Bonds")
+    sectors = [{"name": name, "percentage": 40.0}, {"name": "Technology", "percentage": 60.0}]
+
+    item = _read_one(plugin, _synthetic(library, "IE00TESTSE003", sectors=sectors))
+
+    assert item.status == EnricherReadStatus.OK, item
+    assert set(item.values["sector"]) == {name, "Technology"}, f"{name!r} passed on as it is, not through the table: {item.values['sector']}"
+    assert _stored(dict(item.values))["sector"] == {stored: "0.4000", "Technology": "0.6000"}
+
+
 # =============================================================================
 # 3. Not found
 # =============================================================================
 
 
-@pytest.mark.parametrize("recording", ["enel", "fondo"])
+@pytest.mark.parametrize("recording", ["enel", "mutual_fund"])
 def test_empty_sheet_is_not_found(plugin, library, recording):
     overview = _recorded(recording)
     isin = library.give(overview["isin"], overview)

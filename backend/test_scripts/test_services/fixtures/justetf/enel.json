@@ -1,13 +1,13 @@
 {
- "fonte": "justetf",
+ "source": "justetf",
  "asset": "enel",
- "versione": "justetf-scraping 0.1.0",
- "quando": "2026-11-10T17:06:49",
- "chiamate": {
+ "version": "justetf-scraping 0.1.0",
+ "recorded_at": "2026-11-10T17:06:49",
+ "calls": {
   "get_etf_overview": {
-   "secondi": 0.55,
-   "errore": null,
-   "risposta": {
+   "seconds": 0.55,
+   "error": null,
+   "response": {
     "isin": "IT0003128367",
     "name": "ETF Screener",
     "description": null,

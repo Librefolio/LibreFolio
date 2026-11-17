@@ -1,13 +1,13 @@
 {
- "fonte": "justetf",
- "asset": "etc_oro",
- "versione": "justetf-scraping 0.1.0",
- "quando": "2026-11-10T17:06:44",
- "chiamate": {
+ "source": "justetf",
+ "asset": "etc_gold",
+ "version": "justetf-scraping 0.1.0",
+ "recorded_at": "2026-11-10T17:06:44",
+ "calls": {
   "get_etf_overview": {
-   "secondi": 0.46,
-   "errore": null,
-   "risposta": {
+   "seconds": 0.46,
+   "error": null,
+   "response": {
     "isin": "IE00B4ND3602",
     "name": "iShares Physical Gold ETC",
     "description": "The product tracks the spot price of gold in US Dollar.",

@@ -1,13 +1,13 @@
 {
- "fonte": "justetf",
- "asset": "fondo",
- "versione": "justetf-scraping 0.1.0",
- "quando": "2026-11-10T17:06:53",
- "chiamate": {
+ "source": "justetf",
+ "asset": "mutual_fund",
+ "version": "justetf-scraping 0.1.0",
+ "recorded_at": "2026-11-10T17:06:53",
+ "calls": {
   "get_etf_overview": {
-   "secondi": 0.52,
-   "errore": null,
-   "risposta": {
+   "seconds": 0.52,
+   "error": null,
+   "response": {
     "isin": "IT0005487001",
     "name": "ETF Screener",
     "description": null,
