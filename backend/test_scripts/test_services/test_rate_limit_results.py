@@ -47,6 +47,18 @@ The U2 tests put test plugins (mockprov's answers, ``test_only=False``, ``calls_
 the default of their ``call_limit_hour`` field) in the asset registry's storage with ``monkeypatch.setitem``; the
 counter writes to the same private file (``call_counter.get_async_engine`` patched to it too) and its clock is frozen by
 patching ``call_counter._utc``. The window is filled by calling ``call_counter.count_and_check`` directly.
+
+Project 76, lot U3 (``test_u3_…``; the FX boundary itself is pinned in ``test_call_limits_fx.py``): a full call limit of
+an FX provider behaves like a provider's refusal for too many requests through the FX sync —
+
+11. a pair whose first route's provider is at its limit is served by its next route, under that route's own label, with
+    the first route's failure in ``errors``; the limited provider is never called and its count does not move; a sync
+    counts each provider once, whatever the number of pairs it serves;
+12. a pair with that one route ends exactly as a pair whose provider refused itself with the same wait: FAILED,
+    ``RATE_LIMITED``, the exact 870 s; the scheduler's history job counts it deferred, not failed.
+
+The U3 tests hand out test FX plugins (``_AnsweringFX``'s answers, ``test_only=False``, ``calls_external_service=True``,
+an hour limit as the default of their ``call_limit_hour`` field) through ``_hand_out``, on the counter of ``u2_counter``.
 """
 
 from __future__ import annotations
@@ -84,6 +96,7 @@ from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.assets.search import AssetSearchService
 from backend.app.services.fx.base import FXRateLimitedError, FXServiceError
 from backend.app.services.fx.registry import FXProviderRegistry
+from backend.app.services.fx.runtime import configured_fx_provider
 from backend.app.services.fx.sync import _note_provider_failure, _with_fx_refusal, sync_pairs_bulk
 from backend.app.services.fx_providers.mockfx.plugin import MockFXProvider
 from backend.app.services.platform import call_counter, provider_cooldown
@@ -941,5 +954,139 @@ async def test_u2_no_writer_holds_the_database_while_a_provider_is_called(privat
     assert held == [], f"a writer held the database while the provider was called, at: {held}"
 
 
+# =============================================================================
+# 11–12. U3: A FULL FX CALL LIMIT, THROUGH THE SAME PATHS (project 76)
+# =============================================================================
+
+
+def _u3_fx_plugin(label: str, *, hour_limit: int | None = None) -> tuple[str, type]:
+    """A test FX plugin: ``_AnsweringFX``'s answers under a code of its own, counted (``calls_external_service``), an
+    hour limit as its field's default when given. Handed out by ``_hand_out``."""
+    code = f"U3_{label.upper()}_{uuid.uuid4().hex[:8].upper()}"
+    fields = (PluginSettingField(key="call_limit_hour", type=SettingType.INTEGER, scope=SettingScope.SYSTEM, label="Calls per hour (u3)", default=hour_limit, minimum=0),) if hour_limit is not None else ()
+    attributes = {"code": property(lambda self: code), "name": f"U3 {code}", "test_only": False, "calls_external_service": True, "settings_fields": fields, "settings_groups": ()}
+    return code, type(f"U3FX_{code}", (_AnsweringFX,), attributes)
+
+
+class _U3RefusingFX(_AnsweringFX):
+    """An FX provider of the test that refuses for too many requests with the hour's wait (Retry-After 870 s)."""
+
+    @property
+    def code(self) -> str:
+        return "U3_REFUSINGFX"
+
+    async def fetch_rates(self, date_range, currencies, base_currency=None):
+        raise FXRateLimitedError("U3_REFUSINGFX refused for too many requests (testing)", retry_after=U2_HOUR_WAIT)
+
+
+async def _u3_fill_the_hour(code: str, path: str) -> None:
+    """Barrier and setup: the limit reaches a configured instance; one call counted fills the hour."""
+    provider = await configured_fx_provider(code)
+    assert provider is not None and provider.settings.get("call_limit_hour") == 1, "barrier: the hour limit reached the configured instance"
+    await call_counter.count_and_check("fx", code, None, now=U2_NOW)
+    assert _u2_counts(path, "fx", code) == (1,) * 5, "setup: the hour is full"
+
+
+@pytest.mark.asyncio
+async def test_u3_a_sync_counts_each_fx_provider_once(private_db: AsyncEngine, u2_counter: str, monkeypatch: pytest.MonkeyPatch):
+    """U3 11: two pairs served by one counted provider, no limit: one fetch, one count."""
+    code, cls = _u3_fx_plugin("once")
+    fetches = _count(monkeypatch, cls, "fetch_rates")
+    _hand_out(monkeypatch, FXProviderRegistry, {code: cls})
+    await _routes(private_db, {("EUR", "USD"): [[code]], ("EUR", "GBP"): [[code]]})
+
+    results = await _sync(private_db, ["EUR-USD", "EUR-GBP"], (date(1987, 8, 3), date(1987, 8, 4)))
+
+    assert {pair: (result.status, result.provider_used) for pair, result in results.items()} == {"EUR-USD": (SyncStatus.OK, code), "EUR-GBP": (SyncStatus.OK, code)}, "barrier: the provider served both pairs"
+    assert len(fetches) == 1
+    assert _u2_counts(u2_counter, "fx", code) == (1,) * 5, "one count per provider call, not per pair"
+
+
+@pytest.mark.asyncio
+async def test_u3_a_full_fx_limit_sends_the_pair_to_its_next_route(private_db: AsyncEngine, u2_counter: str, cooldowns: Cooldowns, monkeypatch: pytest.MonkeyPatch):
+    """U3 11: the first route's provider has its hour full — the pair is served by the second route under its own label,
+    the first route's failure in ``errors``; the limited provider never called, its count unchanged, no source pause."""
+    print_section("U3 11: FX sync, the first route at its limit")
+    code, cls = _u3_fx_plugin("first", hour_limit=1)
+    fetches = _count(monkeypatch, cls, "fetch_rates")
+    _hand_out(monkeypatch, FXProviderRegistry, {code: cls, ANSWERING_FX: _AnsweringFX})
+    await _routes(private_db, {("EUR", "USD"): [[code], [ANSWERING_FX]]})
+    await _u3_fill_the_hour(code, u2_counter)
+
+    result = (await _sync(private_db, ["EUR-USD"], (date(1987, 8, 10), date(1987, 8, 11))))["EUR-USD"]
+
+    assert (result.status, result.provider_used, result.error_code, result.retry_after) == (SyncStatus.OK, ANSWERING_FX, None, None)
+    assert [error for error in result.errors if error.startswith("Route 1") and code in error], f"the first route's failure is reported: {result.errors}"
+    assert fetches == [], "the full window never calls the provider"
+    assert _u2_counts(u2_counter, "fx", code) == (1,) * 5
+    assert ("fx", code, None) not in _state(cooldowns), "a limit is no source refusal"
+    print_success("served by the next route, the limited provider not called")
+
+
+@pytest.mark.asyncio
+async def test_u3_a_pair_with_only_a_limited_route_ends_like_a_refused_one(private_db: AsyncEngine, u2_counter: str, monkeypatch: pytest.MonkeyPatch):
+    """U3 12: EUR-USD through a provider at its hour limit, EUR-SEK through one that refuses with Retry-After 870 s: the
+    two pairs end the same — FAILED, RATE_LIMITED, 870 s, nothing fetched."""
+    code, cls = _u3_fx_plugin("only", hour_limit=1)
+    fetches = _count(monkeypatch, cls, "fetch_rates")
+    _hand_out(monkeypatch, FXProviderRegistry, {code: cls, "U3_REFUSINGFX": _U3RefusingFX})
+    await _routes(private_db, {("EUR", "USD"): [[code]], ("EUR", "SEK"): [["U3_REFUSINGFX"]]})
+    await _u3_fill_the_hour(code, u2_counter)
+
+    results = await _sync(private_db, ["EUR-USD", "EUR-SEK"], (date(1987, 8, 17), date(1987, 8, 18)))
+
+    def shape(result: FXSyncPairResult) -> tuple:
+        return (result.status, result.error_code, result.retry_after, result.provider_used, result.points_fetched, result.points_changed)
+
+    assert shape(results["EUR-SEK"]) == (SyncStatus.FAILED, "RATE_LIMITED", U2_HOUR_WAIT, None, 0, 0), "barrier: what a refusal gives"
+    assert shape(results["EUR-USD"]) == shape(results["EUR-SEK"]), "a full limit ends the pair like a refusal"
+    assert fetches == []
+    assert _u2_counts(u2_counter, "fx", code) == (1,) * 5
+
+
+@pytest.mark.asyncio
+async def test_u3_the_history_job_defers_an_fx_pair_whose_provider_is_at_its_limit(private_db: AsyncEngine, u2_counter: str, monkeypatch: pytest.MonkeyPatch):
+    """U3 12: the history job on the private database (its only route this test's, no asset): deferred 1, failed 0, ok 0."""
+    code, cls = _u3_fx_plugin("sched", hour_limit=1)
+    fetches = _count(monkeypatch, cls, "fetch_rates")
+    _hand_out(monkeypatch, FXProviderRegistry, {code: cls})
+    await _routes(private_db, {("EUR", "USD"): [[code]]})
+    await _u3_fill_the_hour(code, u2_counter)
+    entries: list = []
+    monkeypatch.setattr(jobs, "append_entry", entries.append)
+    state = SchedulerState()
+
+    await jobs.run_history_sync(state, horizon_days=3)
+
+    job = state.history_sync
+    assert (job.last_items_ok, job.last_items_err, job.last_items_deferred) == (0, 0, 1), f"deferred, not failed: {job}"
+    assert job.retry_at is not None
+    assert fetches == []
+    assert len(entries) == 1, "barrier: the job wrote its log entry (captured)"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
+
+
+@pytest.mark.asyncio
+async def test_u3_no_writer_holds_the_database_while_an_fx_provider_is_called(private_db: AsyncEngine, u2_counter: str, monkeypatch: pytest.MonkeyPatch):
+    """Review (U3): the guard of point 10 for the FX boundary, in series — a sync of two pairs by one counted provider;
+    inside ``fetch_rates`` a connection that never waits takes the write lock: no session of the sync holds it."""
+    code, cls = _u3_fx_plugin("lockprobe")
+    seen: list[bool] = []
+    path = private_db.url.database
+    answer = cls.fetch_rates
+
+    async def probing(self, date_range, currencies, base_currency=None):
+        seen.append(_u2_nobody_writes(path))
+        return await answer(self, date_range, currencies, base_currency)
+
+    monkeypatch.setattr(cls, "fetch_rates", probing)
+    _hand_out(monkeypatch, FXProviderRegistry, {code: cls})
+    await _routes(private_db, {("EUR", "USD"): [[code]], ("EUR", "GBP"): [[code]]})
+
+    results = await _sync(private_db, ["EUR-USD", "EUR-GBP"], (date(1987, 9, 7), date(1987, 9, 8)))
+
+    assert {result.status for result in results.values()} == {SyncStatus.OK}, "barrier: the provider served both pairs"
+    assert seen == [True], f"no writer held the database while the provider was called: {seen}"

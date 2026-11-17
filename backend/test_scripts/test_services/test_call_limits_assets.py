@@ -24,8 +24,8 @@ The contract pinned here:
    pause refuse before the counter; ``calls_external_service`` False is called, never counted; otherwise
    ``call_counter.count_and_check`` counts +1 BEFORE the call leaves, even when the call then fails (another error, a
    timeout, a refusal for too many requests), one count per call.
-5. **A full window** (``CallLimitReached``): the provider function is never called; ``record_refusal("asset", code,
-   scope, <counter's retry_after>)`` pauses it; ``AssetCallLimitError`` (subclass of ``AssetRateLimitedError``,
+5. **A full window** (``CallLimitReached``): the provider function is never called; ``record_limit_pause`` pauses it
+   exactly until the window ends, on the limit's own key (U2b); ``AssetCallLimitError`` (subclass of ``AssetRateLimitedError``,
    ``error_code="RATE_LIMITED"``) leaves with ``retry_after`` = the pause recorded (the counter's own wait when pauses are
    off), ``scope`` = the call's, ``details == {"reason": "call_limit", "window": …, "limit": …}``. The next call meets
    the pause and does not reach the counter. Limit 0 refuses the first call.
@@ -776,3 +776,45 @@ async def test_u2b_a_settings_change_never_lifts_a_source_pause(counter: Counter
     assert not isinstance(paused.value, AssetCallLimitError)
     assert calls.count == 0
     assert counter.counts("asset", code) is None
+
+
+@pytest.mark.asyncio
+async def test_u2b_a_limit_refusal_leaves_the_trial_of_an_expired_source_pause_free(counter: Counter, cooldowns: Cooldowns, clock: FakeClock):
+    """Review (U3): an expired source pause hands its trial to the caller; a refusal by the limit (its running pause, or a
+    full window) is no verdict on the source, so the source's trial is freed."""
+    from backend.app.services.assets.base import AssetCallLimitError
+
+    for held in (True, False):
+        code = _code("trialfree")
+        plugin = _bind(_plugin_class(code, fields=(_limit_field("hour"),))(), {"call_limit_hour": 1})
+        await core.call_provider(plugin, _current(plugin), timeout=10)
+        if held:
+            with pytest.raises(AssetCallLimitError):
+                await core.call_provider(plugin, _current(plugin), timeout=10)
+        record_refusal("asset", code, None, 60.0)
+        clock.now += 61
+        with pytest.raises(AssetCallLimitError):
+            await core.call_provider(plugin, _current(plugin), timeout=10)
+        source = next(state for state in cooldowns.snapshot() if state.key == ("asset", code, None))
+        assert not source.trial_in_flight, f"held={held}: the source's trial is free after a limit refusal"
+
+
+@pytest.mark.asyncio
+async def test_u2b_parallel_calls_after_an_expired_limit_pause_all_reach_the_counter(counter: Counter, cooldowns: Cooldowns, clock: FakeClock, monkeypatch: pytest.MonkeyPatch):
+    """Review (U3): after a limit pause ends with its window, calls made at once (the per-asset reads in ``gather``, a
+    refresh at concurrency 3) all reach the counter, which alone decides: none waits for another's trial."""
+    from backend.app.services.assets.base import AssetCallLimitError
+
+    code = _code("parallel")
+    plugin = _bind(_plugin_class(code, fields=(_limit_field("minute"),))(), {"call_limit_minute": 2})
+    for _ in range(2):
+        await core.call_provider(plugin, _current(plugin), timeout=10)
+    with pytest.raises(AssetCallLimitError):
+        await core.call_provider(plugin, _current(plugin), timeout=10)
+    clock.now += 31
+    later = NOW + timedelta(seconds=31)
+    monkeypatch.setattr(call_counter, "_utc", lambda now=None: (later if now is None else now).astimezone(UTC))
+
+    calls = [_current(plugin), _current(plugin)]
+    await asyncio.gather(*(core.call_provider(plugin, current, timeout=10) for current in calls))
+    assert [current.count for current in calls] == [1, 1], "both reach the counter and are called"

@@ -533,6 +533,14 @@ def services_call_limits_assets(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Asset call limit tests", verbose=verbose)
 
 
+def services_call_limits_fx(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the FX boundary counting and limiting the calls of a plugin to its external service (project 76, U3)."""
+    print_section("Services: FX Call Limits")
+    print_info("Testing: fx/runtime.py (call_fx_provider), fx/base.py (calls_external_service, FXCallLimitError), platform/call_counter.py (call_owner), platform/provider_cooldown.py (the limit pause), fx/catalog.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_call_limits_fx.py", test_names)
+    return run_command(cmd, "FX call limit tests", verbose=verbose)
+
+
 def services_synthetic_yield(verbose: bool = False, test_names: list = None) -> bool:
     """Test synthetic yield calculation for SCHEDULED_YIELD assets."""
     print_section("Services: Synthetic Yield Calculation")
@@ -2901,6 +2909,18 @@ Note: No backend server required.
         # put in the asset registry's storage with monkeypatch.setitem and test groups released at teardown.
         isolation="pure",
     )
+    add_test(
+        cat,
+        "call-limits-fx",
+        services_call_limits_fx,
+        name="FX Call Limits",
+        desc="U3: FXRateProvider.calls_external_service (True; MANUAL, MOCKFX, MOCKFX_FAIL False); call_counter.call_owner(provider, family), core.call_owner equal to it; call_fx_provider counts +1 before the call (failed or refused too), never a bare double, NOT_CONFIGURED, a source pause, a limit pause or a local plugin; a full window never calls the provider, pauses it exactly until the window ends on its own key (never the 429 streak) and raises FXCallLimitError (RATE_LIMITED, details reason/window/limit); a changed fingerprint lifts the limit pause, never a source pause; a count without a verdict frees both trials; a failing counter lets the call go; one group row for the FX plugins of a credit-sharing group; the catalog counts its list and answers a full limit like a refusal",
+        # PURE: no lane DB, no server, no network. The counter (and the plugin settings' reads) on a private SQLite file
+        # under tmp_path built by create_all; call_counter._utc on a test clock; a private Cooldowns on a fake clock; test
+        # FX plugins put in the FX registry's storage with monkeypatch.setitem, test groups released at teardown, and the
+        # catalog cache entries and last known lists of the test's own codes deleted at its end.
+        isolation="pure",
+    )
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation; the accrual golden: every number of the accrual walk pinned (regen: LIBREFOLIO_TEST_REGEN_SI_ACCRUAL_GOLDEN=1)")
     add_test(cat, "synthetic-yield-integration", services_synthetic_yield_integration, name="Synthetic Yield Integration", desc="E2E scenarios (P2P, bond, mixed)")
     add_test(cat, "scheduled-investment-cost-bounds", services_scheduled_investment_cost_bounds, name="Scheduled Investment Cost Bounds", desc="R13-SEC7-2 (N73): late interest in closed form per date, bounded day counts, cache cap, horizon")
@@ -3283,7 +3303,7 @@ Note: No backend server required.
         "rate-limit-results",
         services_rate_limit_results,
         name="Rate-Limit Results",
-        desc="error_code RATE_LIMITED and retry_after on: the live current price (last known price kept, or the error item; no call while paused), the refresh result (FAILED with nothing stored, PARTIAL or OK with what came stored), the FX sync pair (FAILED or PARTIAL through a refused provider, the shortest wait; a fallback-served pair and a plain failure untouched; INFO, no traceback), each probe operation (on the result and in error_details), the search (providers_with_errors, INFO not a traceback, a cached query still answered) and its SSE provider_error event; U2: a full call limit through the same paths (last known price, scheduler deferred, refresh FAILED, search provider with errors, probe RATE_LIMITED), one count per bulk chunk, and the guard that no caller holds a write transaction while a provider is called",
+        desc="error_code RATE_LIMITED and retry_after on: the live current price (last known price kept, or the error item; no call while paused), the refresh result (FAILED with nothing stored, PARTIAL or OK with what came stored), the FX sync pair (FAILED or PARTIAL through a refused provider, the shortest wait; a fallback-served pair and a plain failure untouched; INFO, no traceback), each probe operation (on the result and in error_details), the search (providers_with_errors, INFO not a traceback, a cached query still answered) and its SSE provider_error event; U2: a full call limit through the same paths (last known price, scheduler deferred, refresh FAILED, search provider with errors, probe RATE_LIMITED), one count per bulk chunk, and the guard that no caller holds a write transaction while a provider is called; U3: a full FX call limit through the sync (the next route serves the pair, a lone route ends like a refusal, one count per provider) and the history job (deferred)",
         # PURE: every database is a private file under tmp_path built with create_all and put in place of the process's
         # engine (db.session.async_engine) with monkeypatch; no session on the lane DB, no server. Pauses, MockFX's mode,
         # the registries' hand-outs and the plugin settings variables are monkeypatched per test; identifiers, queries
