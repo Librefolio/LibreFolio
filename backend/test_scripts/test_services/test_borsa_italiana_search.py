@@ -208,7 +208,9 @@ def _fund_rows(languages: tuple[str, ...]) -> list[tuple]:
 
 
 def test_preferred_language_is_one_user_select_of_both_italian_and_english():
-    (declared,) = BorsaItalianaProvider.settings_fields
+    # U4 (project 76): its own field, then the five call limits the core gives a provider that calls out
+    declared, *limits = BorsaItalianaProvider.settings_fields
+    assert [field.key for field in limits] == ["call_limit_minute", "call_limit_hour", "call_limit_day", "call_limit_week", "call_limit_month"]
 
     assert (declared.key, declared.type, declared.scope, declared.secret, declared.required, declared.default) == ("preferred_language", SettingType.SELECT, SettingScope.USER, False, False, "all")
     assert [(option.value, option.label_key) for option in declared.options] == [

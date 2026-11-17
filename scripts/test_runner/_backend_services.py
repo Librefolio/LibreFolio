@@ -541,6 +541,14 @@ def services_call_limits_fx(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "FX call limit tests", verbose=verbose)
 
 
+def services_call_limit_settings(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the call limits as core settings of their owner, and their usage in the catalogue (project 76, U4)."""
+    print_section("Services: Call Limit Settings")
+    print_info("Testing: plugin_settings/call_limits.py, register(), register_group(), readiness.plugin_may_be_unconfigured, catalogue call_usage, call_counter.read_counts_many, mockcount")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_call_limit_settings.py", test_names)
+    return run_command(cmd, "Call limit settings tests", verbose=verbose)
+
+
 def services_synthetic_yield(verbose: bool = False, test_names: list = None) -> bool:
     """Test synthetic yield calculation for SCHEDULED_YIELD assets."""
     print_section("Services: Synthetic Yield Calculation")
@@ -2998,6 +3006,18 @@ Note: No backend server required.
         # catalog cache entries and last known lists of the test's own codes deleted at its end.
         isolation="pure",
     )
+    add_test(
+        cat,
+        "call-limit-settings",
+        services_call_limit_settings,
+        name="Call Limit Settings",
+        desc="U4: the five core call_limit_<window> fields (optional system integers, min 0) handed out at registration to a plugin that calls out and reads no credit-sharing group, and to a credit-sharing group; their variables claimed, a valid one the boundary's limit, an invalid one NOT_CONFIGURED; the limits in the fingerprint; readiness.plugin_may_be_unconfigured (group, required field or a set variable) and READY without the database; the catalogue's call_usage on the owning entry only (five windows, one now, counts read once, a database error → none and one warning, managed hides a locked limit); the test-only counting provider mockcount",
+        # PURE: no lane DB, no server, no network. A private SQLite file under tmp_path built by create_all behind the
+        # runtime, readiness and call_counter engines; call_counter._utc frozen; a private Cooldowns; throwaway registries
+        # of the base for the registration rules; the real asset and FX registries read after discovery, test plugins put
+        # in their storage with monkeypatch.setitem; u4 groups and claims released at teardown.
+        isolation="pure",
+    )
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation; the accrual golden: every number of the accrual walk pinned (regen: LIBREFOLIO_TEST_REGEN_SI_ACCRUAL_GOLDEN=1)")
     add_test(cat, "synthetic-yield-integration", services_synthetic_yield_integration, name="Synthetic Yield Integration", desc="E2E scenarios (P2P, bond, mixed)")
     add_test(cat, "scheduled-investment-cost-bounds", services_scheduled_investment_cost_bounds, name="Scheduled Investment Cost Bounds", desc="R13-SEC7-2 (N73): late interest in closed form per date, bounded day counts, cache cap, horizon")
@@ -4347,7 +4367,7 @@ Note: No backend server required.
         "plugin-readiness",
         services_plugin_readiness,
         name="Plugin Readiness",
-        desc="One readiness check per plugin = the call boundary's rule (rows, variables, unreadable secret, groups, user fields), managed profile hides locked fields, one DB session, provider schemas and the asset and FX lists",
+        desc="One readiness check per plugin = the call boundary's rule (rows, variables, unreadable secret, groups, user fields), managed profile hides locked fields, one DB session, provider schemas and the asset and FX lists; N2b: reason, variables, settings_unavailable",
         isolation="pure",
     )
     # Not configured writes (project 76, N2). PURE: private SQLite under tmp_path handed to the routes and to the readiness check,
@@ -4358,7 +4378,7 @@ Note: No backend server required.
         "not-configured-writes",
         services_not_configured_writes,
         name="Not Configured Writes",
-        desc="POST /assets/provider and POST /fx/providers/routes: a provider newly put to use and not configured refuses the whole request (422 NOT_CONFIGURED, first in request order, nothing written, replace kept), re-save and a provider already on the pair pass, one readiness call per request, managed profile",
+        desc="POST /assets/provider and POST /fx/providers/routes: a provider newly put to use and not configured refuses the whole request (422 NOT_CONFIGURED, first in request order, nothing written, replace kept), re-save and a provider already on the pair pass, one readiness call per request, managed profile; N2b: 503 when the settings cannot be read, reason and variables in the 422",
         isolation="pure",
     )
     add_test(cat, "plugin-settings-guards", services_plugin_settings_guards, name="Plugin Settings Guards", desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings", isolation="pure")

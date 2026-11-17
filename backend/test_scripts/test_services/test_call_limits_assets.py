@@ -98,6 +98,8 @@ MINUTE_WAIT = 30.0
 #: The base pause of the private ``Cooldowns``: a counter's wait shorter than it is floored to it.
 BASE_PAUSE = 60.0
 SCOPE = "api.u2.example"
+#: The test-only asset double that counts its calls (U4, for the limit's API and E2E tests): left out of the flags pin below
+COUNTING_DOUBLE = "mockcount"
 SHIPPED_FLAGS = {"yfinance": True, "justetf": True, "borsa_italiana": True, "css_scraper": True, "scheduled_investment": False, "mockprov": False}
 
 
@@ -274,9 +276,10 @@ def test_u2_the_base_declares_calls_external_service_true():
 
 def test_u2_every_shipped_asset_provider_says_whether_it_calls_out():
     """1: the shipped providers, pinned: the network ones True, the scheduled investment and mockprov False in their own
-    class; every test-only provider of the package False; no shipped provider left out of the pin."""
+    class; every test-only provider of the package False; no shipped provider left out of the pin. ``mockcount`` (U4) is
+    the one test-only double that counts, on purpose: its flag and its fields are pinned in ``test_call_limit_settings.py``."""
     AssetProviderRegistry.auto_discover()
-    shipped = {code: cls for code, cls in AssetProviderRegistry._get_storage().items() if cls.__module__.startswith("backend.app.services.asset_source_providers.")}
+    shipped = {code: cls for code, cls in AssetProviderRegistry._get_storage().items() if cls.__module__.startswith("backend.app.services.asset_source_providers.") and code != COUNTING_DOUBLE}
     assert set(shipped) == set(SHIPPED_FLAGS), f"the shipped asset providers changed: pin the new one's flag here: {sorted(shipped)}"
     flags = {code: getattr(cls, "calls_external_service", "<missing>") for code, cls in shipped.items()}
     assert flags == SHIPPED_FLAGS

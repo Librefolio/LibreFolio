@@ -362,9 +362,11 @@ def test_u3_call_owner_of_an_fx_plugin_reading_a_credit_sharing_group_is_the_gro
     plain = SettingsGroup(name="u3_owner_plain", label="U3 owner plain", fields=(_limit_field("day"),))
     register_group(shared)
     register_group(plain)
-    cls = _fx_class(_code("grouped"), fields=(_limit_field("week"),), groups=("u3_owner_plain", "u3_owner_share"))
+    # U4: a reader of a credit-sharing group declares no limit of its own (the group holds all five; one key in both
+    # would be refused), so the plugin's own limits cannot leak into the owner's
+    cls = _fx_class(_code("grouped"), groups=("u3_owner_plain", "u3_owner_share"))
     validate_plugin_groups(cls, family="fx")  # barrier: an FX plugin may read these groups
-    plugin = _bind(cls(), {"call_limit_week": 9}, {"u3_owner_share": (shared, {"call_limit_minute": 5}), "u3_owner_plain": (plain, {"call_limit_day": 1})})
+    plugin = _bind(cls(), {}, {"u3_owner_share": (shared, {"call_limit_minute": 5}), "u3_owner_plain": (plain, {"call_limit_day": 1})})
     assert plugin.settings.group("u3_owner_share").get("call_limit_minute") == 5, "barrier: the group's value reached the instance"
 
     assert call_counter.call_owner(plugin, "fx") == ("group", "u3_owner_share", call_counter.CallLimits(minute=5))

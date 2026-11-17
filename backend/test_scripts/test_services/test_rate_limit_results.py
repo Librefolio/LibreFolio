@@ -102,6 +102,7 @@ from backend.app.services.fx_providers.mockfx.plugin import MockFXProvider
 from backend.app.services.platform import call_counter, provider_cooldown
 from backend.app.services.platform.scheduler import jobs
 from backend.app.services.platform.scheduler.state import SchedulerState
+from backend.app.services.plugin_settings import runtime as settings_runtime
 from backend.app.services.plugin_settings.fields import PluginSettingField, SettingScope, SettingType, env_name, env_variables
 from backend.app.utils.runtime.cooldown import Cooldowns
 from backend.test_scripts.test_utils import print_section, print_success
@@ -1090,3 +1091,34 @@ async def test_u3_no_writer_holds_the_database_while_an_fx_provider_is_called(pr
 
     assert {result.status for result in results.values()} == {SyncStatus.OK}, "barrier: the provider served both pairs"
     assert seen == [True], f"no writer held the database while the provider was called: {seen}"
+
+
+@pytest.mark.asyncio
+async def test_u4_a_refresh_of_n_assets_reads_one_providers_settings_once(private_db: AsyncEngine, monkeypatch: pytest.MonkeyPatch):
+    """U4, the coordinator's measure: since U4 every provider that calls out declares the core's limit fields, so each
+    ``configured_provider`` reads its rows. The refresh configures one provider per item (``_prepare_refresh_items``): a
+    refresh of 4 assets of ``mockcount`` reads its settings 4 times without the operation's scope (the undecorated
+    function) and ONCE with it (``bulk_refresh_prices``). (The live read configures once per provider already, in its
+    bulk plan.)"""
+    reads: list[str] = []
+    real = settings_runtime.read_plugin_rows
+
+    async def counted(session, family, plugin_code, user_id):
+        reads.append(plugin_code)
+        return await real(session, family, plugin_code, user_id)
+
+    monkeypatch.setattr(settings_runtime, "read_plugin_rows", counted)
+    asset_ids = [await _asset(private_db, provider_code="mockcount") for _ in range(4)]
+    today = date.today()
+    items = [FARefreshItem(asset_id=asset_id, date_range=SyncDateRangeModel(start=today - timedelta(days=2), end=today)) for asset_id in asset_ids]
+
+    async with AsyncSession(private_db, expire_on_commit=False) as session:
+        await RefreshOperations.bulk_refresh_prices.__wrapped__(items, session)
+    without_scope = reads.count("mockcount")
+    reads.clear()
+    async with AsyncSession(private_db, expire_on_commit=False) as session:
+        response = await RefreshOperations.bulk_refresh_prices(items, session)
+
+    assert without_scope >= 4, f"barrier: without the scope each item reads the settings: {without_scope}"
+    assert reads.count("mockcount") == 1, f"{reads.count('mockcount')} reads of mockcount's settings for 4 items (without the scope: {without_scope})"
+    assert len(response.results) == 4
