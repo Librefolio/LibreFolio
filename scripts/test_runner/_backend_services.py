@@ -4409,7 +4409,14 @@ Note: No backend server required.
         desc="POST /assets/provider and POST /fx/providers/routes: a provider newly put to use and not configured refuses the whole request (422 NOT_CONFIGURED, first in request order, nothing written, replace kept), re-save and a provider already on the pair pass, one readiness call per request, managed profile; N2b: 503 when the settings cannot be read, reason and variables in the 422",
         isolation="pure",
     )
-    add_test(cat, "plugin-settings-guards", services_plugin_settings_guards, name="Plugin Settings Guards", desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings", isolation="pure")
+    add_test(
+        cat,
+        "plugin-settings-guards",
+        services_plugin_settings_guards,
+        name="Plugin Settings Guards",
+        desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings; U4c: the «Call limits» block lists exactly the owners of the limits, the five windows and real examples",
+        isolation="pure",
+    )
     add_test(
         cat,
         "platform-readiness",
