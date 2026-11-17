@@ -9,8 +9,9 @@ What it gives:
 - **a bond**: maturity, the coupon (annual and of each period: the annual one computed in ``financial_math`` when the
   page gives only the period's, as for an ordinary BTP), frequency, coupon type, day count, gross and net yield,
   modified duration and accrued interest (these four «as of» the page's reference price date), issuer, issuer type,
-  the issuer's country for a state, minimum lot, outstanding amount, reference price date, payout description, the
-  first day of trading, its country and sector, and the legal form;
+  the issuer's country for a state, minimum lot, outstanding amount (in the denomination currency), reference price
+  date, payout description, its country and sector, and the legal form. Not the first day of trading: a venue's first
+  trading day is not a launch date (a BTP listed years after it was issued);
 - **a share**: its sector and the legal form.
 
 The page comes in the binding's language (``language``, ``en`` or ``it``, as the price provider's): the texts
@@ -87,7 +88,6 @@ _BOND_VOICES = frozenset(
         "outstanding_amount",
         "reference_price_date",
         "payout_description",
-        "inception_date",
         "geography",
         "sector",
         "legal_form",
@@ -187,6 +187,19 @@ def _coupon_rate(sheet: Any, frequency: str | None) -> Decimal | None:
     return _fraction(annual_coupon_rate(sheet.cedola_periodale, frequency))
 
 
+def _outstanding_amount(sheet: Any) -> dict[str, Any] | None:
+    """The amount outstanding in the bond's denomination currency (the trading currency when the page gives no other);
+    none, with one log line, when the two differ: the page does not say which one the amount is in."""
+    if sheet.outstanding is None:
+        return None
+    denomination, trading = _text(sheet.valuta_denominazione), _text(sheet.valuta)
+    if denomination is not None and trading is not None and denomination != trading:
+        logger.warning("Borsa Italiana outstanding amount left out: two currencies", denomination=denomination, trading=trading, isin=str(sheet.isin))
+        return None
+    currency = denomination or trading
+    return {"amount": sheet.outstanding, "currency": currency} if currency is not None else None
+
+
 def bond_voices(sheet: Any) -> dict[str, Any]:
     """The catalogue voices of a bond's sheet, as raw values; a voice the sheet does not give is absent."""
     isin = str(sheet.isin)
@@ -210,10 +223,9 @@ def bond_voices(sheet: Any) -> dict[str, Any]:
         "issuer_type": issuer_type,
         "issuer_country": country,
         "min_lot": sheet.lotto_minimo,
-        "outstanding_amount": {"amount": sheet.outstanding, "currency": sheet.valuta} if sheet.outstanding is not None and sheet.valuta else None,
+        "outstanding_amount": _outstanding_amount(sheet),
         "reference_price_date": sheet.data_prezzo_riferimento,
         "payout_description": _text(sheet.descrizione_payout),
-        "inception_date": sheet.data_primo_giorno,  # the first day of trading: the listing date
         "geography": {country: "1"} if country is not None else None,
         "sector": {sector: "1"} if sector is not None else None,
         "legal_form": "bond",
