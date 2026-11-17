@@ -13,8 +13,11 @@ start of the window its count belongs to (``<window>_since``, epoch seconds) and
   (retrying before it ends is useless), its limit, its count, its end and the seconds until then. A limit of 0 stops
   the plugin: refused before the statement. No limit (None) never refuses.
 - **Its own short transaction**, separate from the caller's session: a boundary may hold one open.
-- **A counter never stops a price.** When the database fails (a lock past ``busy_timeout``, a full disk), the call goes
-  anyway: one warning, and None.
+- **A counter never stops a price.** When the database fails (a full disk, or the write lock held by another writer past
+  the counter's own wait, ``COUNTER_BUSY_TIMEOUT_MS``, 2 s, against the app's 30 s), the call goes anyway, uncounted (a
+  limit may be passed by a little: rare, accepted), and None. The warning is written at most once a minute per plugin.
+  The real rule, which the short wait only backs up: no caller holds a write transaction open while it calls a provider
+  (the boundaries' callers write after the call, or on sessions of their own).
 - **Reading never writes** (``read_counts``, for the settings page): a window older than now's reads 0, no row reads 0.
 
 Every call through a core boundary counts +1 BEFORE it leaves, failed or not (U2, U3; the enrichers in K1).
@@ -22,6 +25,7 @@ Every call through a core boundary counts +1 BEFORE it leaves, failed or not (U2
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -37,6 +41,27 @@ logger = get_logger(__name__)
 
 #: The five windows, shortest first.
 WINDOWS = ("minute", "hour", "day", "week", "month")
+
+#: How long the counter waits for another writer's lock, on its own connection only (the app waits 30 s): past it the
+#: call goes, uncounted. The consultant's decision for U2.
+COUNTER_BUSY_TIMEOUT_MS = 2000
+
+#: The database-failure warning of one plugin is written at most once in this many seconds.
+WARNING_INTERVAL_SECONDS = 60.0
+
+#: The clock of that rule, and the last warning of each (family, plugin_code); module attributes, so a test sets them.
+_monotonic = time.monotonic
+_warned_at: dict[tuple[str, str], float] = {}
+
+
+def _may_warn(family: str, plugin_code: str) -> bool:
+    """Whether the database-failure warning of ``family``/``plugin_code`` is written now: once a minute at most."""
+    now = _monotonic()
+    last = _warned_at.get((family, plugin_code))
+    if last is not None and now - last < WARNING_INTERVAL_SECONDS:
+        return False
+    _warned_at[(family, plugin_code)] = now
+    return True
 
 
 @dataclass(frozen=True)
@@ -138,6 +163,49 @@ def _current(row: PluginCallCounter | None, starts: dict[str, int]) -> CallCount
     return CallCounts(**{window: getattr(row, f"{window}_count") if getattr(row, f"{window}_since") >= starts[window] else 0 for window in WINDOWS})
 
 
+def _upsert(family: str, plugin_code: str, caps: dict[str, int | None], starts: dict[str, int], moment: datetime):
+    """The one statement of a call: insert the row, or count into it unless a limit would pass, returning the counts."""
+    table = PluginCallCounter.__table__
+    after = {window: case((table.c[f"{window}_since"] < starts[window], 1), else_=table.c[f"{window}_count"] + 1) for window in WINDOWS}
+    guard = and_(true(), *(after[window] <= cap for window, cap in caps.items() if cap is not None))
+    values = {"family": family, "plugin_code": plugin_code, "updated_at": moment}
+    update = {"updated_at": moment}
+    for window in WINDOWS:
+        values[f"{window}_since"] = starts[window]
+        values[f"{window}_count"] = 1
+        update[f"{window}_count"] = after[window]
+        update[f"{window}_since"] = func.max(table.c[f"{window}_since"], starts[window])
+    return insert(table).values(**values).on_conflict_do_update(index_elements=["family", "plugin_code"], set_=update, where=guard).returning(*(table.c[f"{window}_count"] for window in WINDOWS))
+
+
+async def _run_statement(statement, family: str, plugin_code: str) -> tuple[tuple | None, object | None]:
+    """Run the statement on a connection of its own, with the counter's short wait; the row read back when it counted
+    nothing (a limit full), in the same transaction."""
+    table = PluginCallCounter.__table__
+    row = None
+    async with get_async_engine().connect() as connection:
+        # The counter's own wait, on this connection only; the connection's own value comes back after it (a pool hands
+        # the connection to other code next)
+        previous = (await connection.exec_driver_sql("PRAGMA busy_timeout")).scalar()
+        await connection.exec_driver_sql(f"PRAGMA busy_timeout={COUNTER_BUSY_TIMEOUT_MS}")
+        await connection.commit()
+        try:
+            counted = (await connection.execute(statement)).first()
+            if counted is None:
+                row = (await connection.execute(select(table).where(table.c.family == family, table.c.plugin_code == plugin_code))).first()
+            await connection.commit()
+        finally:
+            try:
+                await connection.rollback()
+                await connection.exec_driver_sql(f"PRAGMA busy_timeout={int(previous)}")
+                await connection.commit()
+            except BaseException:
+                # Its wait not given back (cancelled, say): never returned to a pool with the counter's 2 s
+                await connection.invalidate()
+                raise
+    return counted, row
+
+
 async def count_and_check(family: str, plugin_code: str, limits: CallLimits | None = None, *, now: datetime | None = None) -> CallCounts | None:
     """Count one call of ``family``/``plugin_code`` and return the counts after it, or raise ``CallLimitReached`` when a
     window is full (nothing counted). None when the database fails: the call goes anyway, and the log says so."""
@@ -152,28 +220,16 @@ async def count_and_check(family: str, plugin_code: str, limits: CallLimits | No
             async with get_async_engine().connect() as connection:
                 row = (await connection.execute(select(table).where(table.c.family == family, table.c.plugin_code == plugin_code))).first()
         except SQLAlchemyError as error:
-            logger.warning("Plugin call counts not read for a stopped plugin: database error, refused anyway", family=family, plugin=plugin_code, error=type(error).__name__)
+            if _may_warn(family, plugin_code):
+                logger.warning("Plugin call counts not read for a stopped plugin: database error, refused anyway", family=family, plugin=plugin_code, error=type(error).__name__)
             row = None
         counts = _current(row, starts)
         raise _refusal(family, plugin_code, [(window, 0, getattr(counts, window)) for window, _cap, _count in stopped], starts, moment)
     try:
-        after = {window: case((table.c[f"{window}_since"] < starts[window], 1), else_=table.c[f"{window}_count"] + 1) for window in WINDOWS}
-        guard = and_(true(), *(after[window] <= cap for window, cap in caps.items() if cap is not None))
-        values = {"family": family, "plugin_code": plugin_code, "updated_at": moment}
-        for window in WINDOWS:
-            values[f"{window}_since"] = starts[window]
-            values[f"{window}_count"] = 1
-        update = {"updated_at": moment}
-        for window in WINDOWS:
-            update[f"{window}_count"] = after[window]
-            update[f"{window}_since"] = func.max(table.c[f"{window}_since"], starts[window])
-        statement = insert(table).values(**values).on_conflict_do_update(index_elements=["family", "plugin_code"], set_=update, where=guard).returning(*(table.c[f"{window}_count"] for window in WINDOWS))
-        async with get_async_engine().begin() as connection:
-            counted = (await connection.execute(statement)).first()
-            if counted is None:
-                row = (await connection.execute(select(table).where(table.c.family == family, table.c.plugin_code == plugin_code))).first()
+        counted, row = await _run_statement(_upsert(family, plugin_code, caps, starts, moment), family, plugin_code)
     except SQLAlchemyError as error:
-        logger.warning("Plugin call not counted: database error, the call goes anyway", family=family, plugin=plugin_code, error=type(error).__name__, exc_info=error)
+        if _may_warn(family, plugin_code):
+            logger.warning("Plugin call not counted: database error, the call goes anyway", family=family, plugin=plugin_code, error=type(error).__name__, exc_info=error)
         return None
     if counted is not None:
         return CallCounts(*counted)
