@@ -6,7 +6,7 @@ from typing import Annotated, Literal, Union
 
 from pydantic import Field, model_validator
 
-from backend.app.schemas.pac_allocator.base import AllocationStrictModel, CurrencyCode, NotProvenReasonCode, PlannerFixedDecimal, PlannerId, PlannerLabel, PlannerLongLabel, PlannerNonNegativeDecimal, PlannerPositiveInteger
+from backend.app.schemas.pac_allocator.base import AllocationStrictModel, CurrencyCode, NotProvenReasonCode, PlannerFixedDecimal, PlannerId, PlannerLabel, PlannerLongLabel, PlannerNonNegativeDecimal, PlannerPositiveDecimal, PlannerPositiveInteger
 from backend.app.schemas.pac_allocator.exact import fixed_fraction
 
 
@@ -190,9 +190,26 @@ class OptimalProvenProof(AllocationStrictModel):
     tie_break_closed: Literal[True]
 
 
+class ProofMargin(AllocationStrictModel):
+    """Lot MG of project 67: how far below the published plan the best plan can still be, by the solver's bounds, in the
+    valuation currency, rounded up to its minor unit (never zero)."""
+
+    amount: PlannerPositiveDecimal
+    currency: CurrencyCode
+
+
 class NotProvenProof(AllocationStrictModel):
     kind: Literal["not_proven"]
     reason_code: NotProvenReasonCode
+    #: The Rebalancer's margin (lot MG): V − the second-highest usable first-stage bound of its runs. None without two usable
+    #: bounds, for a plan of the wide model, and wherever no plan is published.
+    margin: ProofMargin | None = None
+
+    @model_validator(mode="after")
+    def validate_margin(self) -> NotProvenProof:
+        if self.margin is not None and self.reason_code == "allocation.limits_leave_no_rounding_room":
+            raise ValueError("A plan of the wide model carries no margin: its bounds belong to another model")
+        return self
 
 
 class InfeasibilityProvenProof(AllocationStrictModel):

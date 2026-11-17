@@ -4076,13 +4076,13 @@ PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param(
         PAC_PLAN_INPUT_ADAPTER,
         PAC_PLAN_OUTPUT_ADAPTER,
-        "9e54316a83fa2b232fcdd437cf0922f17e81eee21cdf87f36fdc66e86bdd9261",
+        "40cefd05cc85e671327f74a72932ef083a98f1695f5f6b6fd81167cb7720412e",
         id="pac",
     ),
     pytest.param(
         REBALANCER_PLAN_INPUT_ADAPTER,
         REBALANCER_PLAN_OUTPUT_ADAPTER,
-        "586cb2d5202bebbdce42287cd62b8fb779e881d073caf6197ffe7561ba09195d",
+        "3606cca81ee095c7f51e17a772dc504e802f7b86c1cb34e359bfe72450070158",
         id="rebalancer",
     ),
 )
@@ -4674,8 +4674,8 @@ def test_open_canonical_vector_keeps_the_proof_and_reads_as_a_limit() -> None:
 # Lot SEEDS of project 67 moves both: two not-proven reasons in the shared NotProvenReasonCode.
 # The largest deviation's item (X14, project 67) moves the Rebalancer's alone: two references on its score.
 TOOL_SCHEMA_FINGERPRINT_CASES = (
-    pytest.param("pac_allocator", PAC_TOOL_INPUT_ADAPTER, PAC_TOOL_OUTPUT_ADAPTER, "e91c1d2078fbc737b800fc6ae906168c80c8af121ab004c230d207a66a0c0140", id="pac"),
-    pytest.param("portfolio_rebalancer", REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER, "626cc96304282585899b637ca86061daf3743febcc6f45d93cdaa9c2dc6b6293", id="rebalancer"),
+    pytest.param("pac_allocator", PAC_TOOL_INPUT_ADAPTER, PAC_TOOL_OUTPUT_ADAPTER, "3d505ed01a9481999ae44d0de81db4bc6ca2127d871fdf54b73bf0e71138824c", id="pac"),
+    pytest.param("portfolio_rebalancer", REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER, "df1026811263f11b5c63bc91a86631366a2a47fc8ba4c8b24885a671265d33bb", id="rebalancer"),
 )
 
 
@@ -4838,3 +4838,52 @@ def test_rebalancer_exposure_weights_at_a_zero_base() -> None:
     validate([half, half], Fraction(10), "zero_initial_wealth", "before")
     with pytest.raises(ValueError):
         validate([half, initial], Fraction(10), "zero_initial_wealth", "before")
+
+
+# ---------------------------------------------------------------------------- lot MG of project 67: the proof's margin
+
+_BROWSER_RESULT = Path(__file__).resolve().parents[3] / "frontend/src/lib/features/tools/pac-allocator/planner/result/__fixtures__/rebalancer-browser.json"
+
+
+def _not_proven_browser(margin: dict | None) -> dict:
+    """The engine's G5 answer (a proven plan) made not proven, with ``margin`` on its proof."""
+    result = json.loads(_BROWSER_RESULT.read_text())["result"]
+    result["proof"] = {"kind": "not_proven", "reason_code": "allocation.proof_not_confirmed", "margin": margin}
+    return result
+
+
+def test_a_plan_not_proven_carries_its_margin_in_the_valuation_currency() -> None:
+    """Lot MG: «ottimo locale (entro X)». A positive amount in the valuation currency, beside a published plan; none for a
+    plan of the wide model, never zero, never in another currency, never without a plan."""
+    REBALANCER_TOOL_OUTPUT_ADAPTER.validate_python(_not_proven_browser({"amount": "0.14", "currency": "EUR"}))
+    REBALANCER_TOOL_OUTPUT_ADAPTER.validate_python(_not_proven_browser(None))
+    with pytest.raises(ValidationError, match="valuation currency"):
+        REBALANCER_TOOL_OUTPUT_ADAPTER.validate_python(_not_proven_browser({"amount": "0.14", "currency": "USD"}))
+    with pytest.raises(ValidationError):
+        REBALANCER_TOOL_OUTPUT_ADAPTER.validate_python(_not_proven_browser({"amount": "0", "currency": "EUR"}))
+    with pytest.raises(ValidationError, match="wide model"):
+        NotProvenProof.model_validate({"kind": "not_proven", "reason_code": "allocation.limits_leave_no_rounding_room", "margin": {"amount": "0.01", "currency": "EUR"}})
+
+
+def test_a_result_without_a_plan_carries_no_margin() -> None:
+    """A run with no time (T4, 0 s) ends with no plan: a margin there is refused."""
+    from backend.app.services.pac_allocator import planner  # noqa: PLC0415
+    from backend.test_scripts.test_services import _reb_small_cases as cases  # noqa: PLC0415
+
+    result = planner.plan_exact_scenario(cases.t4(), solver_time_budget_seconds=0.0).result
+    assert result.result_state == "ready_no_incumbent", "PREMISE: no plan in no time"
+    data = json.loads(REBALANCER_TOOL_OUTPUT_ADAPTER.dump_json(result))
+    data["proof"]["margin"] = {"amount": "0.01", "currency": "EUR"}
+    with pytest.raises(ValidationError, match="published plan"):
+        REBALANCER_TOOL_OUTPUT_ADAPTER.validate_python(data)
+
+
+def test_the_pac_never_carries_a_margin() -> None:
+    """Lot MG, the consultant's ruling of 17/11: the PAC is one search, one bound, never the second a margin needs. Its
+    contract refuses one, even beside a published plan in the valuation currency."""
+    result = _pac_no_op_result()
+    currency = result["scenario_basis"]["valuation_currency"]
+    PAC_PLAN_OUTPUT_ADAPTER.validate_python(result)
+    result["proof"]["margin"] = {"amount": "0.01", "currency": currency}
+    with pytest.raises(ValidationError, match="PAC"):
+        PAC_PLAN_OUTPUT_ADAPTER.validate_python(result)

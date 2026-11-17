@@ -553,6 +553,17 @@ def _validate_optimal_proof_objectives(
         raise ValueError("Optimal proof witness must close the published canonical tie-break")
 
 
+def _validate_proof_margin(proof: object, solution: object, valuation_currency: str) -> None:
+    """Lot MG of project 67: a margin only beside a published plan, in the valuation currency."""
+    margin = getattr(proof, "margin", None)
+    if margin is None:
+        return
+    if solution is None:
+        raise ValueError("A margin needs a published plan")
+    if margin.currency != valuation_currency:
+        raise ValueError("A margin is in the valuation currency")
+
+
 def _validate_solver_status_proof(
     proof: ReadyPlanProof | RebalancerReadyPlanProof | InfeasibilityProvenProof | None,
     solver_evidence: ReportedFloatingSolverEvidence,
@@ -754,6 +765,9 @@ class _PacReadyResultBase(AllocationStrictModel):
         _validate_solver_units(self.solver_evidence, self.scenario_basis.valuation_currency)
         _validate_optimal_proof_objectives(proof, solution)
         _validate_solver_status_proof(proof, self.solver_evidence)
+        if getattr(proof, "margin", None) is not None:
+            # Lot MG: a margin needs two runs' bounds; the PAC is one search (the consultant's ruling of 17/11).
+            raise ValueError("A PAC plan carries no margin: it is one search")
         if solution is not None:
             _validate_basis_solution(self.scenario_basis, solution)
             _validate_ready_solution(self.catalogs, self.provenance, self.scenario_basis.valuation_currency, solution)
@@ -821,6 +835,7 @@ class _RebalancerReadyResultBase(AllocationStrictModel):
         _validate_solver_units(self.solver_evidence, self.scenario_basis.valuation_currency)
         _validate_optimal_proof_objectives(proof, solution)
         _validate_solver_status_proof(proof, self.solver_evidence, named)
+        _validate_proof_margin(proof, solution, self.scenario_basis.valuation_currency)
         if solution is not None:
             _validate_basis_solution(self.scenario_basis, solution)
             _validate_ready_solution(self.catalogs, self.provenance, self.scenario_basis.valuation_currency, solution)

@@ -346,7 +346,7 @@
           "settings": [
             {
               "name": "time_budget",
-              "value": "3.4818"
+              "value": "3.47301"
             },
             {
               "name": "expr/pow/expandmaxexponent",
@@ -384,7 +384,7 @@
           "settings": [
             {
               "name": "time_budget",
-              "value": "3.4818"
+              "value": "3.47301"
             },
             {
               "name": "expr/pow/expandmaxexponent",
@@ -422,7 +422,7 @@
           "settings": [
             {
               "name": "time_budget",
-              "value": "3.4818"
+              "value": "3.47301"
             },
             {
               "name": "expr/pow/expandmaxexponent",
@@ -441,7 +441,8 @@
     "outcome": "incumbent_found",
     "proof": {
       "kind": "not_proven",
-      "reason_code": "allocation.limits_leave_no_rounding_room"
+      "reason_code": "allocation.limits_leave_no_rounding_room",
+      "margin": null
     },
     "primary_solution": {
       "solution_id": "solution:primary",
