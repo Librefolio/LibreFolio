@@ -11,7 +11,9 @@
       "asset": "Precios",
       "fx": "Tipos de cambio",
       "brim": "Importaciones de brókeres",
-      "tool": "Herramientas"
+      "tool": "Herramientas",
+      "enricher": "Perfil de los activos",
+      "group": "Ajustes compartidos"
     },
     "status": {
       "configured": "Configurado",
@@ -68,6 +70,11 @@
       "conflict": "Estos ajustes cambiaron mientras tanto: se han recargado, guarda de nuevo.",
       "keyUnavailable": "Los secretos no se pueden guardar: la clave de esta instancia no se puede usar (consulta las comprobaciones de la configuración).",
       "saveFailed": "No se pudieron guardar los ajustes."
+    },
+    "group": {
+      "usedBy": "Compartidos por: {plugins}",
+      "inGroup": "Usa también los ajustes compartidos de {group}",
+      "open": "Abrir"
     }
   }
 }
