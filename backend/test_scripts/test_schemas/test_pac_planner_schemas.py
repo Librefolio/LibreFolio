@@ -237,13 +237,44 @@ def _reprice_score(solution: JsonObject, items: list[JsonObject], wealth: Fracti
     if score["distance_weight"] is not None:
         score["plan_score"] = _wire_money(_exact_wire_fraction(score["distance_weight"]) * distance / wealth + loss)
     for side, field in (("before", "largest_deviation_before"), ("final", "largest_deviation_after")):
-        score[field] = _wire_number(max((abs(_exact_wire_fraction(row[f"{side}_weight"]) - _exact_wire_fraction(row["target_weight"])) for row in items), default=Fraction()))
+        deviations = [abs(_exact_wire_fraction(row[f"{side}_weight"]) - _exact_wire_fraction(row["target_weight"])) for row in items]
+        largest = max(deviations, default=Fraction())
+        score[field] = _wire_number(largest)
+        # X14: the first item at the largest deviation, in the published order; none when no item is off its target.
+        score[f"{field}_item"] = None if largest == 0 else _wire_item(items[deviations.index(largest)])
     by_code = {"target_distance": score["target_distance"], "wealth_loss": score["wealth_loss"]["value"]}
     if score["plan_score"] is not None:
         by_code["plan_score"] = score["plan_score"]["value"]
     for stage in solution["objectives"]["stages"]:
         if stage["objective_code"] in by_code:
             stage["value"] = deepcopy(by_code[stage["objective_code"]])
+
+
+def test_the_largest_deviation_names_the_first_item_in_the_published_order_on_a_tie() -> None:
+    """X14: an Asset at 60 % and a cash item at 40 % against 50/50 are ten points off each way, an exact tie. The Asset rows
+    come first in the published order, so the Asset is named; with the cash item ahead, the cash item would be. No item
+    off its target names none."""
+    from types import SimpleNamespace  # noqa: PLC0415
+
+    from backend.app.schemas.pac_allocator.exact import FiniteDecimal  # noqa: PLC0415
+    from backend.app.schemas.pac_allocator.results import _largest_deviation_item  # noqa: PLC0415
+
+    def share(value: str) -> FiniteDecimal:
+        return FiniteDecimal.model_validate(_finite(value))
+
+    asset = SimpleNamespace(asset_id="asset-a", final_weight=share("0.6"), target_weight=share("0.5"))
+    cash = SimpleNamespace(broker_id="broker-alpha", currency="EUR", final_weight=share("0.4"), target_weight=share("0.5"))
+    assert _largest_deviation_item([asset, cash], "final_weight") == ("asset", "asset-a")
+    assert _largest_deviation_item([cash, asset], "final_weight") == ("cash", "broker-alpha", "EUR")
+    on_target = SimpleNamespace(asset_id="asset-a", final_weight=share("0.5"), target_weight=share("0.5"))
+    assert _largest_deviation_item([on_target], "final_weight") is None
+
+
+def _wire_item(row: JsonObject) -> JsonObject:
+    """The wire reference of an Asset row or a cash row of a Rebalancer plan."""
+    if "asset_id" in row:
+        return {"kind": "asset", "asset_id": row["asset_id"]}
+    return {"kind": "cash", "broker_id": row["broker_id"], "currency": row["currency"]}
 
 
 def _pac_request() -> JsonObject:
@@ -4019,6 +4050,7 @@ def test_distinct_deployment_rejects_identity_count_coverage_and_arithmetic_erro
 # allocation.solver_numerical_error, in the shared PlannerIssueCode.
 # Lot ZB (project 67, the developer's decision of 17/11, specification §16.16) moves both: one more closed issue code,
 # allocation.cash_limit_exceeded_by_rounding, and ``completed`` among a ready_no_incumbent's stops.
+# The largest deviation's item (X14, project 67) moves the Rebalancer's alone: two references on its score.
 PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param(
         PAC_PLAN_INPUT_ADAPTER,
@@ -4029,7 +4061,7 @@ PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param(
         REBALANCER_PLAN_INPUT_ADAPTER,
         REBALANCER_PLAN_OUTPUT_ADAPTER,
-        "d5c8a98a6f841a9b381540a2f4778098bc01bc8e78c8bffe3ca7e5ca37a6793c",
+        "7e33a52be42ae1b45310329a078418f397e9f15ad447b4f35a9efdc19e228087",
         id="rebalancer",
     ),
 )
@@ -4441,6 +4473,16 @@ REBALANCER_RESULT_REJECTION_CASES = (
     pytest.param(_medium_mutated(_set(("primary_solution", "score", "plan_score"), _money("2.27"))), "The plan score must equal λ·D/F plus the money lost", id="plan-score"),
     pytest.param(_medium_mutated(_set(("primary_solution", "score", "target_distance"), _finite("168"))), "The target distance must be the squared residuals of the items plus the uninvested squared", id="target-distance"),
     pytest.param(_medium_mutated(_set(("primary_solution", "score", "largest_deviation_after"), _finite("0.04"))), "The largest deviation must be read off the items' weights", id="largest-deviation"),
+    # X14, «which entry»: after the plan asset-c is 5 points off, the furthest; naming another item, an item that is not one of
+    # the distance (a cash cell with no target, the uninvested row has no reference at all), or none, is refused.
+    pytest.param(_medium_mutated(_set(("primary_solution", "score", "largest_deviation_after_item"), {"kind": "asset", "asset_id": "asset-d"})), "The largest deviation must name the first item at it, in the published order", id="largest-deviation-item"),
+    pytest.param(_medium_mutated(_set(("primary_solution", "score", "largest_deviation_after_item"), {"kind": "cash", "broker_id": "broker-alpha", "currency": "USD"})), "The largest deviation must name the first item at it, in the published order", id="largest-deviation-item-not-an-item"),
+    pytest.param(_medium_mutated(_set(("primary_solution", "score", "largest_deviation_after_item"), None)), "The largest deviation names its item exactly when some item is off its target", id="largest-deviation-item-missing"),
+    pytest.param(
+        _medium_mutated(_set(("primary_solution", "score", "largest_deviation_after"), _finite("0"))),
+        "The largest deviation names its item exactly when some item is off its target",
+        id="largest-deviation-zero-with-an-item",
+    ),
     pytest.param(_medium_mutated(_set(("primary_solution", "plan_accounts", "uninvested"), _money("1.42"))), "The uninvested value must be the initial wealth less the final invested value and the cash items with a target", id="uninvested"),
     pytest.param(_medium_mutated(_set(("primary_solution", "objectives", "stages", ("objective_code", "plan_score"), "value"), _finite("2.27"))), "The published objective stages must match the score", id="plan-score-stage"),
     pytest.param(_medium_mutated(_set(("scenario_basis", "initial_wealth"), _money("199"))), "Rebalancer initial wealth must equal current invested plus selected funding", id="basis-initial-wealth"),
@@ -4608,9 +4650,10 @@ def test_open_canonical_vector_keeps_the_proof_and_reads_as_a_limit() -> None:
 # 1.4 still serves one contract 2.0.0). The two fingerprints above stay the ``plan`` contract alone (its own result union).
 # G5-2 of project 67 moves the Rebalancer's alone: its preview gains the «other cash» item (the PAC's preview has no items).
 # Lots SE and ZB of project 67 move both: a closed issue code each; ZB also ``completed`` among a ready_no_incumbent's stops.
+# The largest deviation's item (X14, project 67) moves the Rebalancer's alone: two references on its score.
 TOOL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param("pac_allocator", PAC_TOOL_INPUT_ADAPTER, PAC_TOOL_OUTPUT_ADAPTER, "c0c30a50354fec94fe856227d87ff00f2022fcabc365b6cb92aa17775eadeb75", id="pac"),
-    pytest.param("portfolio_rebalancer", REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER, "ac4238c7497db118243f6452bdd6d2f8cbeff96bdf2e00769af34aa05445315f", id="rebalancer"),
+    pytest.param("portfolio_rebalancer", REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER, "df8c37d48c5010065b483e67682ee21296a8a59bb7d164f2263e5049b8d21ad5", id="rebalancer"),
 )
 
 

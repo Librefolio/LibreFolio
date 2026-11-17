@@ -1390,6 +1390,31 @@ def test_rebalancer_publishes_the_largest_deviation_before_and_after() -> None:
     assert (exact_fraction(score.largest_deviation_before), exact_fraction(score.largest_deviation_after)) == (Fraction(1, 50), Fraction(1, 2_000))
 
 
+def _item(ref) -> tuple | None:
+    """A published item reference as a tuple: ``("asset", id)``, ``("cash", Broker, currency)`` or None."""
+    if ref is None:
+        return None
+    return ("asset", ref.asset_id) if ref.kind == "asset" else ("cash", ref.broker_id, ref.currency)
+
+
+def test_rebalancer_names_the_item_of_the_largest_deviation() -> None:
+    """X14, «which entry» (F4a step 4 of project 67): T4 names B, before (2 points off) and after (1/20 of a point)."""
+    scenario = cases.t4()
+    view, evaluation, run = _rebalancer_plan(scenario)
+    score = RR.build_score(scenario, view, evaluation, run)
+    assert (_item(score.largest_deviation_before_item), _item(score.largest_deviation_after_item)) == (("asset", "asset:b"), ("asset", "asset:b"))
+
+
+def test_a_tie_of_the_largest_deviation_names_the_first_item() -> None:
+    """Two items and no cash: A at 60 % and B at 40 % against 50/50 are ten points off each way, an exact tie. With nothing
+    to invest the plan does nothing, so the tie stays after it. The first item in the published order, A, is named."""
+    scenario = cases.scenario("tie", holdings={"asset:a": R(6000), "asset:b": R(4000)}, cash=R(0), weights={"asset:a": cases.HALF, "asset:b": cases.HALF})
+    view, evaluation, run = _rebalancer_plan(scenario)
+    score = RR.build_score(scenario, view, evaluation, run)
+    assert (exact_fraction(score.largest_deviation_before), exact_fraction(score.largest_deviation_after)) == (Fraction(1, 10), Fraction(1, 10))
+    assert (_item(score.largest_deviation_before_item), _item(score.largest_deviation_after_item)) == (("asset", "asset:a"), ("asset", "asset:a"))
+
+
 @pytest.mark.parametrize("build", [pytest.param(lambda: cases.t6(with_usd=True, target_fidelity=pac_models.ExactTargetFidelity(kind="weighted", distance_weight=R(4))), id="rebalancer-t6-usd"), pytest.param(_coarse_funding_fx_scenario, id="pac-fx")])
 def test_plan_accounts_sum_the_money_lost_to_f_minus_w(build) -> None:
     """The shared accounts type (contract §6.1) read off the exact accounting and costs: the entries, rounding included,

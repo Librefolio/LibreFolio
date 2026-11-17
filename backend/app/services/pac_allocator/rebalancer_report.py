@@ -2,7 +2,7 @@
 
 Like ``planner_report``, this module **computes no economics**: every figure is on the exact evaluation already, or is read
 through the one function that computes it (``evaluation.facts.rebalancer_score`` for ``D`` and ``J``,
-``financial_math.weights.largest_weight_deviation`` for the largest deviation, ``evaluation.economics`` for the value of a
+``financial_math.weights.largest_weight_deviation_at`` for the largest deviation and its item, ``evaluation.economics`` for the value of a
 cash cell). What it adds is the shape of contract §6: the items on ``F`` (Assets, cash items, the uninvested row), the
 transfers between Brokers, the plan accounts, the score and its tie-breaks, the exposure before and after. The rows the PAC
 shares (deposits, conversions, buys, ledger, top-ups, accounting, costs, objectives) come from ``planner_report``.
@@ -15,7 +15,9 @@ from backend.app.schemas.pac_allocator.request import RebalancerCustomFidelityIn
 from backend.app.schemas.pac_allocator.results import RebalancerScenarioBasis
 from backend.app.schemas.pac_allocator.rows import (
     PlannerTransfer,
+    RebalancerAssetItemRef,
     RebalancerAssetPlanRow,
+    RebalancerCashItemRef,
     RebalancerCashItemRow,
     RebalancerExposureCashRow,
     RebalancerExposureCategoryRow,
@@ -25,7 +27,7 @@ from backend.app.schemas.pac_allocator.rows import (
     RebalancerUnavailableWeight,
     RebalancerUninvestedRow,
 )
-from backend.app.services.financial_math.weights import largest_weight_deviation
+from backend.app.services.financial_math.weights import largest_weight_deviation_at
 from backend.app.services.pac_allocator import planner_report as report
 from backend.app.services.pac_allocator.evaluation.economics import final_cash_by_cell, initial_cash_by_cell
 from backend.app.services.pac_allocator.evaluation.facts import rebalancer_score
@@ -284,17 +286,27 @@ def build_score(scenario: ExactPlannerScenario, view: ExactPolicyView, evaluatio
     fidelity = scenario.target_fidelity
     score = rebalancer_score(fidelity, evaluation.assets, evaluation.cash_targets, accounting)
     weighted = fidelity is not None and fidelity.kind == "weighted"
-    before, _final = _cash_values(scenario, evaluation)
+    before, final = _cash_values(scenario, evaluation)
+    # The items of the distance in the order the plan publishes them (X14: the first item at the largest deviation is named):
+    # the Asset rows, then the cash rows with a target (``build_rebalancer_asset_rows``, ``build_cash_item_rows``).
+    targeted = [entry for entry in scenario.cash_entries if entry.weight != 0]
+    refs = [RebalancerAssetItemRef(kind="asset", asset_id=row.asset_id) for row in evaluation.assets]
+    refs += [RebalancerCashItemRef(kind="cash", broker_id=entry.broker_id, currency=entry.currency) for entry in targeted]
     before_items = [(row.current_value, row.target_weight) for row in evaluation.assets]
-    before_items += [(before.get((row.broker_id, row.currency), _ZERO), row.target_weight) for row in evaluation.cash_targets]
-    after_items = [(row.final_value, row.target_weight) for row in evaluation.assets] + [(row.final_value, row.target_weight) for row in evaluation.cash_targets]
+    before_items += [(before.get((entry.broker_id, entry.currency), _ZERO), entry.weight) for entry in targeted]
+    after_items = [(row.final_value, row.target_weight) for row in evaluation.assets]
+    after_items += [(final.get((entry.broker_id, entry.currency), _ZERO), entry.weight) for entry in targeted]
+    before_deviation, before_at = largest_weight_deviation_at(before_items, wealth)
+    after_deviation, after_at = largest_weight_deviation_at(after_items, wealth)
     return RebalancerScoreSummary(
         distance_weight=ratio_to_exact_number(fidelity.distance_weight) if weighted else None,
         target_distance=ratio_to_exact_number(score["target_distance"]),
         distance_per_wealth=ratio_to_money(score["target_distance"] / wealth, currency),
         wealth_loss=ratio_to_money(score["wealth_loss"], currency),
         plan_score=ratio_to_money(score["plan_score"], currency) if weighted else None,
-        largest_deviation_before=ratio_to_exact_number(largest_weight_deviation(before_items, wealth)),
-        largest_deviation_after=ratio_to_exact_number(largest_weight_deviation(after_items, wealth)),
+        largest_deviation_before=ratio_to_exact_number(before_deviation),
+        largest_deviation_after=ratio_to_exact_number(after_deviation),
+        largest_deviation_before_item=None if before_at is None else refs[before_at],
+        largest_deviation_after_item=None if after_at is None else refs[after_at],
         tie_breaks=_tie_break_status(view, solver),
     )
