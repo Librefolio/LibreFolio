@@ -845,6 +845,11 @@ class CoinGeckoProvider(AssetSourceProvider):
   (`contract.qualified_missing()`); a plugin that only reads groups is listed too, with no field of
   its own. A write names a group as it names a plugin (`family: "group"`, `plugin_code: <name>`,
   `scope: "system"`) and follows the same rules, all or nothing with plugin items.
+- **Switched off with its readers** (X1): when the instance's allow-lists
+  (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`) switch off every plugin
+  that reads a group, the group is not served either: no entry, even when named, and a write to it is
+  `UNKNOWN_FIELD` (`service._switched_off_group()`). While one reader is on, it is listed and
+  `used_by` names only the readers that are on.
 - **The test group `mock`** (`groups/mock.py`, `test_only`): a secret `account_token` and a select
   `tier`, nothing required, read by `mockprov`, whose search `lf-group-echo` answers
   `group: tier=…; account_token=set|unset`. Listed only when named, like the test-only plugins, and
