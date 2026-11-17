@@ -20,7 +20,8 @@
  *     new calculation: a number the backend computed, shifted or re-expressed for the chart.
  *   - the trade amount of the transaction form (W5-9, #47, `txTradeAmount.ts`): the amount from the unit price the user
  *     types, or the unit price from the amount, one product or one quotient on exact decimals (developer decision of
- *     25/10/2026: small sums and products are the frontend's own, a route for a multiplication is not).
+ *     25/10/2026: small sums and products are the frontend's own, a route for a multiplication is not); and the total
+ *     of a parent with its linked charges (project 66, F1), one exact sum per currency of the amounts the user types.
  *
  * Each exception must be declared where it lives. The documentation named the four files while the code declared none
  * of them (plan 43, `plan-phase00FinancialMathHome.prompt.md:1494`): this gate was written red against that state, and

@@ -20,7 +20,7 @@
  * The inputs arrive canonical (dot decimal, the comma already normalised by the field).
  */
 import {describe, expect, it} from 'vitest';
-import {AMOUNT_DECIMALS, UNIT_PRICE_DECIMALS, amountFromUnitPrice, calculateTradeValue, driverAfterEdit, rowUnitPrice, unitPriceFromAmount, type TradeAmountDriver, type TradeAmountEdit, type TradeAmountInput} from './txTradeAmount';
+import {AMOUNT_DECIMALS, UNIT_PRICE_DECIMALS, amountFromUnitPrice, calculateTradeValue, driverAfterEdit, rowUnitPrice, tradeTotalWithCharges, unitPriceFromAmount, type CashLine, type TradeAmountDriver, type TradeAmountEdit, type TradeAmountInput} from './txTradeAmount';
 
 const DRIVERS: TradeAmountDriver[] = ['amount', 'unit_price'];
 
@@ -604,6 +604,155 @@ describe('rowUnitPrice — the price a row shows, from its own quantity and cash
                 }
             }
             expect(calculated, 'most of the corpus is inside the limits').toBeGreaterThan(PRICE_PARITY.length * 0.8);
+        });
+    });
+});
+
+// ── Linked charges (66 F1): «Addebito totale» / «Netto incassato», a read-only result line ──────────────────────────────────
+
+describe('tradeTotalWithCharges: the total of a parent and its linked charges, per currency', () => {
+    const eur = (amount: string): CashLine => ({amount, currency: 'EUR'});
+    const usd = (amount: string): CashLine => ({amount, currency: 'USD'});
+
+    describe('cash going out (BUY, WITHDRAWAL): the trade plus the charges', () => {
+        it('a BUY of 100 EUR with a FEE of 5 and a TAX of 2 charges 107', () => {
+            expect(tradeTotalWithCharges('out', eur('100'), [eur('5'), eur('2')])).toEqual([{currency: 'EUR', amount: '107'}]);
+        });
+
+        it('another fee of 1.50 gives 108.5, with no trailing zero', () => {
+            expect(tradeTotalWithCharges('out', eur('100'), [eur('5'), eur('2'), eur('1.50')])).toEqual([{currency: 'EUR', amount: '108.5'}]);
+        });
+
+        it('a charge in another currency stays apart: BUY 100 USD + FEE 5 EUR', () => {
+            expect(tradeTotalWithCharges('out', usd('100'), [eur('5')])).toEqual([
+                {currency: 'USD', amount: '100'},
+                {currency: 'EUR', amount: '5'},
+            ]);
+        });
+    });
+
+    describe('cash coming in (SELL, DIVIDEND, INTEREST, DEPOSIT): the trade minus the charges', () => {
+        it('a SELL of 100 EUR with a FEE of 5 nets 95', () => {
+            expect(tradeTotalWithCharges('in', eur('100'), [eur('5')])).toEqual([{currency: 'EUR', amount: '95'}]);
+        });
+
+        it('charges larger than the trade give a negative net as plain text: SELL 3 with FEE 5 is -2', () => {
+            expect(tradeTotalWithCharges('in', eur('3'), [eur('5')])).toEqual([{currency: 'EUR', amount: '-2'}]);
+        });
+
+        it('a currency only the charges use is subtracted: SELL 100 USD + FEE 5 EUR + TAX 1 USD', () => {
+            expect(tradeTotalWithCharges('in', usd('100'), [eur('5'), usd('1')])).toEqual([
+                {currency: 'USD', amount: '99'},
+                {currency: 'EUR', amount: '-5'},
+            ]);
+        });
+
+        it('a zero trade is fine: only the charges remain', () => {
+            expect(tradeTotalWithCharges('in', eur('0'), [eur('5')])).toEqual([{currency: 'EUR', amount: '-5'}]);
+            expect(tradeTotalWithCharges('out', eur('0'), [eur('5')])).toEqual([{currency: 'EUR', amount: '5'}]);
+        });
+    });
+
+    describe('what the result looks like', () => {
+        it('with no charges it is the trade amount itself, in both directions', () => {
+            expect(tradeTotalWithCharges('out', eur('100'), [])).toEqual([{currency: 'EUR', amount: '100'}]);
+            expect(tradeTotalWithCharges('in', eur('100.50'), [])).toEqual([{currency: 'EUR', amount: '100.5'}]);
+        });
+
+        it('the trade currency comes first, then the others in order of first appearance among the charges', () => {
+            const out = tradeTotalWithCharges('out', {amount: '10', currency: 'CHF'}, [usd('1'), eur('2'), usd('3'), {amount: '4', currency: 'GBP'}]);
+            expect(out).toEqual([
+                {currency: 'CHF', amount: '10'},
+                {currency: 'USD', amount: '4'},
+                {currency: 'EUR', amount: '2'},
+                {currency: 'GBP', amount: '4'},
+            ]);
+        });
+
+        it('one entry per currency, never a sum across currencies', () => {
+            const out = tradeTotalWithCharges('out', eur('100'), [usd('5'), eur('1'), usd('2')]);
+            expect(out?.map((l) => l.currency)).toEqual(['EUR', 'USD']);
+            expect(out?.map((l) => l.amount)).toEqual(['101', '7']);
+        });
+
+        it('a zero result is "0", not "0.00" or "-0"', () => {
+            expect(tradeTotalWithCharges('in', eur('5'), [eur('5')])).toEqual([{currency: 'EUR', amount: '0'}]);
+        });
+    });
+
+    describe('exact decimal arithmetic', () => {
+        it('0.1 + 0.2 is exactly 0.3', () => {
+            expect(tradeTotalWithCharges('out', eur('0.1'), [eur('0.2')])).toEqual([{currency: 'EUR', amount: '0.3'}]);
+        });
+
+        it('6-decimal values are exact: 0.000001 + 0.000002 = 0.000003, with no exponent', () => {
+            expect(tradeTotalWithCharges('out', eur('0.000001'), [eur('0.000002')])).toEqual([{currency: 'EUR', amount: '0.000003'}]);
+            expect(tradeTotalWithCharges('in', eur('0.000003'), [eur('0.000002')])).toEqual([{currency: 'EUR', amount: '0.000001'}]);
+        });
+
+        it('15 significant digits are exact', () => {
+            expect(tradeTotalWithCharges('out', eur('123456789.123456'), [eur('0.000001')])).toEqual([{currency: 'EUR', amount: '123456789.123457'}]);
+            expect(tradeTotalWithCharges('in', eur('999999999999999'), [eur('1')])).toEqual([{currency: 'EUR', amount: '999999999999998'}]);
+        });
+    });
+
+    describe('signs and blanks', () => {
+        it('a leading "-" or "+" is ignored: the sign stored is the type\'s, not the user\'s', () => {
+            expect(tradeTotalWithCharges('out', eur('-100'), [eur('-5'), eur('+2')])).toEqual([{currency: 'EUR', amount: '107'}]);
+            expect(tradeTotalWithCharges('in', eur('+100'), [eur('-5')])).toEqual([{currency: 'EUR', amount: '95'}]);
+        });
+
+        it('a blank charge (a row just added, not typed yet) is skipped, even without a currency', () => {
+            expect(tradeTotalWithCharges('out', eur('100'), [eur(''), eur('   '), {amount: '', currency: null}, eur('5')])).toEqual([{currency: 'EUR', amount: '105'}]);
+        });
+
+        it('a blank charge in a new currency does not add an entry', () => {
+            expect(tradeTotalWithCharges('out', eur('100'), [usd('')])).toEqual([{currency: 'EUR', amount: '100'}]);
+        });
+    });
+
+    describe('nothing to show: null', () => {
+        it('the trade amount is blank', () => {
+            expect(tradeTotalWithCharges('out', eur(''), [eur('5')])).toBeNull();
+            expect(tradeTotalWithCharges('in', eur('  '), [])).toBeNull();
+        });
+
+        it('a locale text is not canonical: a decimal comma or a thousands space → null, never a throw', () => {
+            expect(tradeTotalWithCharges('out', eur('5,5'), [])).toBeNull();
+            expect(tradeTotalWithCharges('out', eur('1 000'), [])).toBeNull();
+            expect(tradeTotalWithCharges('in', eur('100'), [eur('5,5')])).toBeNull();
+            expect(tradeTotalWithCharges('in', eur('100'), [eur('1 000')])).toBeNull();
+        });
+
+        it('the trade amount is not a decimal', () => {
+            expect(tradeTotalWithCharges('out', eur('abc'), [])).toBeNull();
+            expect(tradeTotalWithCharges('out', eur('1e3'), [])).toBeNull();
+        });
+
+        it('a charge amount is not a decimal', () => {
+            expect(tradeTotalWithCharges('out', eur('100'), [eur('abc')])).toBeNull();
+            expect(tradeTotalWithCharges('in', eur('100'), [eur('5'), eur('1.2.3')])).toBeNull();
+        });
+
+        it('an amount has more than 6 decimals', () => {
+            expect(tradeTotalWithCharges('out', eur('0.0000001'), [])).toBeNull();
+            expect(tradeTotalWithCharges('out', eur('100'), [eur('0.0000001')])).toBeNull();
+        });
+
+        it('an amount has more than 15 significant digits', () => {
+            expect(tradeTotalWithCharges('out', eur('1234567890123456'), [])).toBeNull();
+            expect(tradeTotalWithCharges('out', eur('100'), [eur('1234567890.123456')])).toBeNull();
+        });
+
+        it('the trade has no currency', () => {
+            expect(tradeTotalWithCharges('out', {amount: '100', currency: null}, [eur('5')])).toBeNull();
+            expect(tradeTotalWithCharges('out', {amount: '100', currency: undefined}, [])).toBeNull();
+            expect(tradeTotalWithCharges('in', {amount: '100', currency: ''}, [])).toBeNull();
+        });
+
+        it('a charge that counts has no currency', () => {
+            expect(tradeTotalWithCharges('out', eur('100'), [{amount: '5', currency: null}])).toBeNull();
+            expect(tradeTotalWithCharges('in', eur('100'), [eur('5'), {amount: '2', currency: undefined}])).toBeNull();
         });
     });
 });
