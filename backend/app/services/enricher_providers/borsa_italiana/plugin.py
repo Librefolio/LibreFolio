@@ -18,15 +18,20 @@ The page comes in the binding's language (``language``, ``en`` or ``it``, as the
 (frequency, structure, issuer type) are translated from either. A text the plugin does not know leaves its voice empty,
 with one log line; «Plain Vanilla» says only that the bond has no special structure (not fixed or floating: that comes
 from ESMA's CFI code), so it leaves the coupon type empty without a log line. No description: the page's own sentence
-is an advertisement, not prose about the instrument (plan I19); a sentence composed from the data comes later.
+is an advertisement, not prose about the instrument (plan I19): a bond's description is a sentence the plugin composes
+from its stable facts (kind, issuer, coupon type and frequency, maturity) in the binding's language.
 """
 
 from __future__ import annotations
 
+import gettext
 from collections.abc import Iterable, Iterator, Mapping
 from datetime import date
 from decimal import Decimal
+from functools import lru_cache
 from typing import Any
+
+import pycountry
 
 from backend.app.db.models import AssetType
 from backend.app.logging_config import get_logger
@@ -88,6 +93,7 @@ _BOND_VOICES = frozenset(
         "outstanding_amount",
         "reference_price_date",
         "payout_description",
+        "description",
         "geography",
         "sector",
         "legal_form",
@@ -156,6 +162,27 @@ _STATE_ISSUERS = {
     "united kingdom": "GBR",
 }
 _SHEET_ASSET_TYPES = {"obbligazione": AssetType.BOND, "azione": AssetType.STOCK}
+
+# The composed description of a bond (plan I19; wording approved by the consultant): stable facts only, never a price,
+# a yield or the annual coupon, which change and would write a new description at every read.
+_KIND = {
+    "en": {"sovereign": "Government bond", "corporate": "Corporate bond", "supranational": "Supranational bond", None: "Bond"},
+    "it": {"sovereign": "Titolo di Stato", "corporate": "Obbligazione societaria", "supranational": "Obbligazione sovranazionale", None: "Obbligazione"},
+}
+_ISSUER_PART = {"en": "issuer {}", "it": "emittente {}"}
+_COUPON_TYPE_PART = {
+    "en": {"structured": "structured interest rate", "inflation_linked": "inflation-linked"},
+    "it": {"structured": "a tasso strutturato", "inflation_linked": "indicizzato all'inflazione"},
+}
+_FREQUENCY_PART = {
+    "en": {"monthly": "paying monthly", "quarterly": "paying quarterly", "semiannual": "paying semiannually", "annual": "paying annually"},
+    "it": {"monthly": "con cedola mensile", "quarterly": "con cedola trimestrale", "semiannual": "con cedola semestrale", "annual": "con cedola annuale"},
+}
+_MATURITY_PART = {"en": "matures on {}", "it": "scade il {}"}
+_MONTH_NAMES = {
+    "en": ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"),
+    "it": ("gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"),
+}
 
 
 def _text(value: Any) -> str | None:
@@ -233,11 +260,49 @@ def bond_voices(sheet: Any) -> dict[str, Any]:
     return {key: value for key, value in voices.items() if value is not None}
 
 
-def sheet_voices(sheet: Any) -> dict[str, Any]:
-    """The voices of any sheet: a bond's, a share's (its sector and legal form), nothing for another instrument."""
+@lru_cache(maxsize=4)
+def _country_translation(language: str) -> gettext.NullTranslations:
+    return gettext.translation("iso3166-1", pycountry.LOCALES_DIR, languages=[language], fallback=True)
+
+
+def _country_name(iso3: str, language: str) -> str | None:
+    """A country's name in ``language``, from pycountry's offline translations."""
+    country = pycountry.countries.get(alpha_3=iso3)
+    if country is None:
+        return None
+    return country.name if language == "en" else _country_translation(language).gettext(country.name)
+
+
+def _written_date(day: date, language: str) -> str:
+    """«10 October 2028» / «10 ottobre 2028»: the month in words, from a fixed table (never the locale)."""
+    return f"{day.day} {_MONTH_NAMES[language][day.month - 1]} {day.year}"
+
+
+def compose_description(voices: Mapping[str, Any], language: str) -> str:
+    """The sentence that describes a bond from its stable voices, in ``language``: kind, issuer, coupon type and
+    frequency, then its maturity."""
+    country = voices.get("issuer_country")
+    issuer = (_country_name(country, language) if country is not None else None) or voices.get("issuer_name")
+    parts = [
+        _KIND[language].get(voices.get("issuer_type"), _KIND[language][None]),
+        _ISSUER_PART[language].format(issuer) if issuer else None,
+        _COUPON_TYPE_PART[language].get(voices.get("coupon_type")),
+        _FREQUENCY_PART[language].get(voices.get("coupon_frequency")),
+    ]
+    sentence = ", ".join(part for part in parts if part)
+    maturity = voices.get("maturity_date")
+    if maturity is not None:
+        sentence += "; " + _MATURITY_PART[language].format(_written_date(maturity, language))
+    return sentence + "."
+
+
+def sheet_voices(sheet: Any, language: str = _DEFAULT_LANGUAGE) -> dict[str, Any]:
+    """The voices of any sheet, read in ``language``: a bond's (with its composed description), a share's (its sector
+    and legal form), nothing for another instrument."""
     kind = _text(sheet.tipo)
     if kind == "obbligazione":
-        return bond_voices(sheet)
+        voices = bond_voices(sheet)
+        return {**voices, "description": compose_description(voices, language)}
     if kind == "azione":
         return {"legal_form": "share", **({"sector": {sector: "1"}} if (sector := _share_sector(sheet)) is not None else {})}
     return {}
@@ -359,7 +424,7 @@ class BorsaItalianaEnricher(EnricherPlugin):
                 logger.warning("Borsa Italiana read failed", isin=binding.identifier, exc_info=error)
                 yield EnricherReadItem(index=index, status=EnricherReadStatus.ERROR, error_code=SOURCE_ERROR, error_message=type(error).__name__)
                 continue
-            values = sheet_voices(sheet)
+            values = sheet_voices(sheet, _language(binding))
             yield EnricherReadItem(index=index, status=EnricherReadStatus.OK, values=values, source_dates=sheet_source_dates(sheet, values))
 
     def search(self, query: str) -> list[EnricherSearchResult]:
