@@ -208,7 +208,8 @@ DeploymentReasonCode = Literal[
     "allocation.no_additional_buy_feasible",
     "allocation.primary_is_deployment",
 ]
-NotProvenReasonCode = Literal["allocation.exact_proof_not_established"]
+# Lot SEEDS of project 67: a wide model's plan (lot ZB) and a run's own proof no second run confirmed have their own reasons.
+NotProvenReasonCode = Literal["allocation.exact_proof_not_established", "allocation.limits_leave_no_rounding_room", "allocation.proof_not_confirmed"]
 PlannerMessageKey = Annotated[str, StringConstraints(strict=True, min_length=3, max_length=160, pattern=_PLANNER_MESSAGE_KEY)]
 PlannerLabel = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=128), AfterValidator(_unicode_scalar_text)]
 PlannerLongLabel = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=256), AfterValidator(_unicode_scalar_text)]

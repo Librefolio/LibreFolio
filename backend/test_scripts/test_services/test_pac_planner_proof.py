@@ -91,6 +91,13 @@ _PUBLIC_API = (
     "SolverStatusWitnessFacts",
     "UnprovenConclusion",
     "conclude_with_solver",
+    # Lot SEEDS of project 67: the merge of the Rebalancer's seeded runs, which may only downgrade, and its two reasons.
+    "PROOF_NOT_CONFIRMED_REASON",
+    "SeededRunVote",
+    "SeededVerdict",
+    "WIDE_MODEL_REASON",
+    "merge_seeded_runs",
+    "seeded_runs_agree",
 )
 
 # The shape of a real anomaly: the solver's own message for an unexpected status.
@@ -205,13 +212,15 @@ def test_not_proven_reason_is_the_single_phase_one_wire_code() -> None:
 
 def test_public_surface_is_exactly_the_solver_status_api() -> None:
     """`proof.py` exports today's API and nothing more, and
-    `conclude_with_solver` is its only public callable: there is no second
-    road to a proof.
+    `conclude_with_solver` is its only public callable that can conclude a
+    proof: there is no second road to one. The merge of the Rebalancer's
+    seeded runs (lot SEEDS) reads the runs' own conclusions and may only
+    downgrade them; `seeded_runs_agree` compares two values.
     """
     assert sorted(proof.__all__) == sorted(_PUBLIC_API)
     assert all(hasattr(proof, name) for name in proof.__all__)
     public_functions = {name for name, obj in inspect.getmembers(proof, inspect.isfunction) if obj.__module__ == proof.__name__ and not name.startswith("_")}
-    assert public_functions == {"conclude_with_solver"}
+    assert public_functions == {"conclude_with_solver", "merge_seeded_runs", "seeded_runs_agree"}
 
 
 # --------------------------------------------------------------------------

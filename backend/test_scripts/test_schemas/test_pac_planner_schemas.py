@@ -1411,7 +1411,8 @@ NON_ISSUE_REASON_CATALOGUE_CASES = (
     ),
     pytest.param(
         "NotProvenReasonCode",
-        ("allocation.exact_proof_not_established",),
+        # Lot SEEDS of project 67: a wide model's plan, and a run's own proof no second run confirmed.
+        ("allocation.exact_proof_not_established", "allocation.limits_leave_no_rounding_room", "allocation.proof_not_confirmed"),
         ((NotProvenProof, "reason_code"),),
         id="not-proven",
     ),
@@ -1422,6 +1423,8 @@ REASON_ONLY_CODES = (
     "allocation.no_actions_selected",
     "allocation.primary_is_deployment",
     "allocation.exact_proof_not_established",
+    "allocation.limits_leave_no_rounding_room",
+    "allocation.proof_not_confirmed",
 )
 
 
@@ -4067,18 +4070,19 @@ def test_distinct_deployment_rejects_identity_count_coverage_and_arithmetic_erro
 # allocation.solver_numerical_error, in the shared PlannerIssueCode.
 # Lot ZB (project 67, the developer's decision of 17/11, specification §16.16) moves both: one more closed issue code,
 # allocation.cash_limit_exceeded_by_rounding, and ``completed`` among a ready_no_incumbent's stops.
+# Lot SEEDS (project 67) moves both: two not-proven reasons in the shared NotProvenReasonCode.
 # The largest deviation's item (X14, project 67) moves the Rebalancer's alone: two references on its score.
 PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param(
         PAC_PLAN_INPUT_ADAPTER,
         PAC_PLAN_OUTPUT_ADAPTER,
-        "da813730a9280d76fa124f27f583da01b7e3c48f0db95c35d78f36ebf67a9cbf",
+        "9e54316a83fa2b232fcdd437cf0922f17e81eee21cdf87f36fdc66e86bdd9261",
         id="pac",
     ),
     pytest.param(
         REBALANCER_PLAN_INPUT_ADAPTER,
         REBALANCER_PLAN_OUTPUT_ADAPTER,
-        "7e33a52be42ae1b45310329a078418f397e9f15ad447b4f35a9efdc19e228087",
+        "586cb2d5202bebbdce42287cd62b8fb779e881d073caf6197ffe7561ba09195d",
         id="rebalancer",
     ),
 )
@@ -4667,10 +4671,11 @@ def test_open_canonical_vector_keeps_the_proof_and_reads_as_a_limit() -> None:
 # 1.4 still serves one contract 2.0.0). The two fingerprints above stay the ``plan`` contract alone (its own result union).
 # G5-2 of project 67 moves the Rebalancer's alone: its preview gains the «other cash» item (the PAC's preview has no items).
 # Lots SE and ZB of project 67 move both: a closed issue code each; ZB also ``completed`` among a ready_no_incumbent's stops.
+# Lot SEEDS of project 67 moves both: two not-proven reasons in the shared NotProvenReasonCode.
 # The largest deviation's item (X14, project 67) moves the Rebalancer's alone: two references on its score.
 TOOL_SCHEMA_FINGERPRINT_CASES = (
-    pytest.param("pac_allocator", PAC_TOOL_INPUT_ADAPTER, PAC_TOOL_OUTPUT_ADAPTER, "c0c30a50354fec94fe856227d87ff00f2022fcabc365b6cb92aa17775eadeb75", id="pac"),
-    pytest.param("portfolio_rebalancer", REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER, "df8c37d48c5010065b483e67682ee21296a8a59bb7d164f2263e5049b8d21ad5", id="rebalancer"),
+    pytest.param("pac_allocator", PAC_TOOL_INPUT_ADAPTER, PAC_TOOL_OUTPUT_ADAPTER, "e91c1d2078fbc737b800fc6ae906168c80c8af121ab004c230d207a66a0c0140", id="pac"),
+    pytest.param("portfolio_rebalancer", REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER, "626cc96304282585899b637ca86061daf3743febcc6f45d93cdaa9c2dc6b6293", id="rebalancer"),
 )
 
 
