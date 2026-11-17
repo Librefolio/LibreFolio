@@ -113,7 +113,7 @@ const API_KEY: SettingField = {...RAW_API_KEY, value: null, default: null};
 /** What a secret's value must never become: carried anywhere after the narrowing. */
 const LEAKED_SECRET = 'sk-live-5f3a9c0d1e2b';
 
-const JUSTETF: PluginSettingsEntry = {family: 'asset', plugin_code: 'justetf', plugin_name: 'justETF', icon_url: null, configured: true, fields: [CURRENCY]};
+const JUSTETF: PluginSettingsEntry = {family: 'asset', plugin_code: 'justetf', plugin_name: 'justETF', icon_url: null, configured: true, fields: [CURRENCY], name_key: null, used_by: [], groups: []};
 
 /** Icons a plugin may publish: a remote URL (a reserved domain, which never resolves) and a path of this instance. */
 const REMOTE_ICON = 'https://icons.example/justetf.png?v2';
@@ -266,12 +266,12 @@ describe('entryOf — a plugin’s entry as the components trust it', () => {
     });
 
     it.each([null, undefined, 'justetf', 42, []])('narrows %j, which is no entry, to an empty entry of the price sources', (raw) => {
-        expect(entryOf(raw)).toStrictEqual({family: 'asset', plugin_code: '', plugin_name: '', icon_url: null, configured: false, fields: []});
+        expect(entryOf(raw)).toStrictEqual({family: 'asset', plugin_code: '', plugin_name: '', icon_url: null, configured: false, fields: [], name_key: null, used_by: [], groups: []});
     });
 
     it('keeps fx, reads a family it does not know as asset, a name missing as the code, configured only when true, fields that are not a list as none', () => {
-        expect(entryOf({family: 'fx', plugin_code: 'ecb'})).toStrictEqual({family: 'fx', plugin_code: 'ecb', plugin_name: 'ecb', icon_url: null, configured: false, fields: []});
-        expect(entryOf({family: 'crypto', plugin_code: 'x', plugin_name: 'X', configured: 'true', fields: {api_key: {}}})).toStrictEqual({family: 'asset', plugin_code: 'x', plugin_name: 'X', icon_url: null, configured: false, fields: []});
+        expect(entryOf({family: 'fx', plugin_code: 'ecb'})).toStrictEqual({family: 'fx', plugin_code: 'ecb', plugin_name: 'ecb', icon_url: null, configured: false, fields: [], name_key: null, used_by: [], groups: []});
+        expect(entryOf({family: 'crypto', plugin_code: 'x', plugin_name: 'X', configured: 'true', fields: {api_key: {}}})).toStrictEqual({family: 'asset', plugin_code: 'x', plugin_name: 'X', icon_url: null, configured: false, fields: [], name_key: null, used_by: [], groups: []});
     });
 
     it('keeps brim, the family of the import sources (W-BS): it is not read as asset', () => {
@@ -282,6 +282,9 @@ describe('entryOf — a plugin’s entry as the components trust it', () => {
             icon_url: REMOTE_ICON,
             configured: true,
             fields: [CURRENCY],
+            name_key: null,
+            used_by: [],
+            groups: [],
         });
     });
 
@@ -294,6 +297,9 @@ describe('entryOf — a plugin’s entry as the components trust it', () => {
             icon_url: null,
             configured: true,
             fields: [CURRENCY, SYSTEM_TOOL_FIELD],
+            name_key: null,
+            used_by: [],
+            groups: [],
         });
     });
 
@@ -352,7 +358,7 @@ describe('fetchPluginSettings and fetchPluginEntry — GET /settings/plugins', (
     });
 
     it('answers each plugin narrowed, in the order of the answer', async () => {
-        const fx = {family: 'fx', plugin_code: 'ecb', plugin_name: 'ECB', icon_url: null, configured: false, fields: []};
+        const fx = {family: 'fx', plugin_code: 'ecb', plugin_name: 'ECB', icon_url: null, configured: false, fields: [], name_key: null, used_by: [], groups: []};
         readAlias().mockResolvedValueOnce(answered({plugins: [{...JUSTETF, fields: [CURRENCY, {...RAW_API_KEY, value: LEAKED_SECRET}]}, fx]}));
 
         const entries = await fetchPluginSettings();
@@ -636,5 +642,92 @@ describe('through the real client, only the transport faked: what is sent, and w
         await expect(savePluginSettings(ITEMS)).resolves.toStrictEqual({kind: 'failed'});
         await expect(fetchPluginSettings()).rejects.toBeInstanceOf(AxiosError);
         expect(asked()).toEqual(['patch /api/v1/settings/plugins/bulk', 'get /api/v1/settings/plugins']);
+    });
+});
+
+// =====================================================================================================================
+// Shared settings groups (project 76, lot G3, contract A): `enricher` and `group` are families the narrowing keeps, and
+// an entry carries the groups it reads (`groups`), the plugins that read it (`used_by`) and its translation key
+// (`name_key`). The test-only fixtures below are the raw answer, every key written out.
+// =====================================================================================================================
+describe('entryOf and the writes — shared settings groups (G3, contract A)', () => {
+    const USER = {family: 'asset', plugin_code: 'justetf', plugin_name: 'justETF'};
+
+    it.each(['enricher', 'group'] as const)('PSA-01: keeps %s, a family of its own: it is not read as asset', (family) => {
+        expect(entryOf({family, plugin_code: 'x'}).family).toBe(family);
+    });
+
+    it('PSA-02: control — a family it does not know still reads as asset, whatever the new ones', () => {
+        for (const family of ['crypto', 'groups', 'Group', '', 42, null]) expect(entryOf({family, plugin_code: 'x'}).family).toBe('asset');
+    });
+
+    it('PSA-03: groups keeps the names that are text, in order, and drops anything else; not a list, it is none', () => {
+        expect(entryOf({family: 'asset', plugin_code: 'x', groups: ['mock', 'crypto_keys']}).groups).toStrictEqual(['mock', 'crypto_keys']);
+        expect(entryOf({family: 'asset', plugin_code: 'x', groups: ['mock', 3, null, {name: 'a'}, ['b'], 'crypto_keys']}).groups).toStrictEqual(['mock', 'crypto_keys']);
+        for (const raw of [undefined, null, 'mock', 7, {mock: true}]) expect(entryOf({family: 'asset', plugin_code: 'x', groups: raw}).groups, `groups: ${JSON.stringify(raw)}`).toStrictEqual([]);
+        expect(entryOf(null).groups, 'no entry at all').toStrictEqual([]);
+    });
+
+    it('PSA-04: used_by keeps each user of a group as {family, plugin_code, plugin_name}, in order, the family narrowed as the entry’s is', () => {
+        const users = [USER, {family: 'fx', plugin_code: 'ecb', plugin_name: 'ECB'}, {family: 'enricher', plugin_code: 'ident', plugin_name: 'Identifiers'}];
+
+        expect(entryOf({family: 'group', plugin_code: 'mock', plugin_name: 'Mock', used_by: structuredClone(users)}).used_by).toStrictEqual(users);
+    });
+
+    it('PSA-05: used_by drops the malformed items — not an object, no code, a code that is not text, a family it does not know — and a list that is not one is none', () => {
+        const raw = [null, 'justetf', 7, ['asset', 'x'], {family: 'asset'}, {family: 'asset', plugin_code: 7, plugin_name: 'n'}, {family: 'asset', plugin_code: '', plugin_name: 'n'}, {family: 'crypto', plugin_code: 'x', plugin_name: 'X'}, USER];
+
+        expect(entryOf({family: 'group', plugin_code: 'mock', used_by: raw}).used_by).toStrictEqual([USER]);
+        for (const bad of [undefined, null, 'justetf', 7, {justetf: USER}]) expect(entryOf({family: 'group', plugin_code: 'mock', used_by: bad}).used_by, `used_by: ${JSON.stringify(bad)}`).toStrictEqual([]);
+        expect(entryOf(null).used_by, 'no entry at all').toStrictEqual([]);
+    });
+
+    it('PSA-06: name_key is the key when it is text; missing, empty or not text, it is null', () => {
+        expect(entryOf({family: 'group', plugin_code: 'mock', name_key: 'pluginSettings.group.mock.name'}).name_key).toBe('pluginSettings.group.mock.name');
+        for (const bad of [undefined, null, '', 7, {key: 'k'}, ['k']]) expect(entryOf({family: 'group', plugin_code: 'mock', name_key: bad}).name_key, `name_key: ${JSON.stringify(bad)}`).toBeNull();
+        expect(entryOf(null).name_key, 'no entry at all').toBeNull();
+    });
+
+    it('PSA-07: a whole entry of the new shape survives the narrowing as it is, and the empty entry carries the three new keys at their defaults', () => {
+        const group: PluginSettingsEntry = {
+            family: 'group',
+            plugin_code: 'mock',
+            plugin_name: 'Mock account',
+            name_key: 'pluginSettings.group.mock.name',
+            icon_url: null,
+            configured: true,
+            fields: [CURRENCY],
+            used_by: [USER] as PluginSettingsEntry['used_by'],
+            groups: [],
+        } as PluginSettingsEntry;
+        const reader = {...JUSTETF, name_key: null, groups: ['mock'], used_by: []} as PluginSettingsEntry;
+
+        expect(entryOf(structuredClone(group))).toStrictEqual(group);
+        expect(entryOf(structuredClone(reader))).toStrictEqual(reader);
+        expect(entryOf(null)).toStrictEqual({family: 'asset', plugin_code: '', plugin_name: '', name_key: null, icon_url: null, configured: false, fields: [], used_by: [], groups: []});
+    });
+
+    it('PSA-08: fetchPluginEntry asks for a group by family group and its name, and answers its entry, not the plugin of the same code', async () => {
+        const group = {family: 'group', plugin_code: 'mock', plugin_name: 'Mock', name_key: null, icon_url: null, configured: false, fields: [], used_by: [USER], groups: []};
+        const samePlugin = {...group, family: 'asset', plugin_name: 'not this one'};
+        const alias = readAlias().mockResolvedValueOnce(answered({plugins: [samePlugin, group]}));
+
+        const found = await fetchPluginEntry('group', 'mock');
+
+        expect(alias.mock.calls).toStrictEqual([[{queries: {family: 'group', plugin_code: 'mock'}}]]);
+        expect(found?.family).toBe('group');
+        expect(found?.plugin_name).toBe('Mock');
+    });
+
+    it('PSA-09: savePluginSettings sends a group item as given, once, and answers saved', async () => {
+        const items: PluginSettingWriteItem[] = [
+            {family: 'group', plugin_code: 'mock', field_key: 'account_token', scope: 'system', secret_value: LEAKED_SECRET},
+            {family: 'group', plugin_code: 'mock', field_key: 'tier', scope: 'system', value: 'paid'},
+        ];
+        const alias = writeAlias().mockResolvedValueOnce(writeAnswered({results: []}));
+
+        await expect(savePluginSettings(items)).resolves.toStrictEqual({kind: 'saved'});
+
+        expect(alias.mock.calls).toStrictEqual([[{items}]]);
     });
 });

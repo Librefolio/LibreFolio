@@ -92,7 +92,7 @@ function nickname(): SettingField {
 }
 
 function justetf(configured: boolean): PluginSettingsEntry {
-    return {family: 'asset', plugin_code: 'justetf', plugin_name: 'justETF', icon_url: null, configured, fields: [nickname()]};
+    return {family: 'asset', plugin_code: 'justetf', plugin_name: 'justETF', icon_url: null, configured, fields: [nickname()], groups: [], used_by: [], name_key: null};
 }
 
 // --- Helpers ---------------------------------------------------------------------------------------------------------
@@ -310,7 +310,7 @@ describe('PluginSettingsModal — its frame', () => {
     });
 
     it('PSM-10: a tool plugin opens like any other: the read names the family tool, the title its name, the form its own, and a save is written with the family tool', async () => {
-        const tool: PluginSettingsEntry = {family: 'tool', plugin_code: 'fx_converter', plugin_name: 'FX converter', icon_url: null, configured: false, fields: [nickname()]};
+        const tool: PluginSettingsEntry = {family: 'tool', plugin_code: 'fx_converter', plugin_name: 'FX converter', icon_url: null, configured: false, fields: [nickname()], groups: [], used_by: [], name_key: null};
         const fresh: PluginSettingsEntry = {...tool, configured: true, fields: [{...nickname(), value: 'someone', is_set: true, source: 'db'}]};
         fake.fetchEntry.mockResolvedValueOnce(tool).mockResolvedValueOnce(fresh);
         fake.save.mockResolvedValueOnce({kind: 'saved'});
@@ -328,5 +328,164 @@ describe('PluginSettingsModal — its frame', () => {
 
         await waitFor(() => expect(onSaved).toHaveBeenCalledWith(fresh));
         expect(fake.save.mock.calls).toStrictEqual([[[{family: 'tool', plugin_code: 'fx_converter', field_key: 'nickname', scope: 'user', value: 'someone'}]]]);
+    });
+});
+
+// =====================================================================================================================
+// Shared settings groups (project 76, lot G3, contract E): a plugin's «Configure» shows, below its form, the form of
+// each group it reads; opened for a group, the group alone.
+describe('PluginSettingsModal — shared settings groups (G3)', () => {
+    const token = (): SettingField => ({...nickname(), key: 'account_token', scope: 'system'});
+    const mockprov = (over: Partial<PluginSettingsEntry> = {}) => ({family: 'asset', plugin_code: 'mockprov', plugin_name: 'Mock provider', name_key: null, icon_url: null, configured: false, fields: [nickname()], used_by: [], groups: ['mock'], ...over}) as PluginSettingsEntry;
+    const group = (name: string, over: Partial<PluginSettingsEntry> = {}) =>
+        ({family: 'group', plugin_code: name, plugin_name: `Group ${name}`, name_key: null, icon_url: null, configured: false, fields: [token()], used_by: [{family: 'asset', plugin_code: 'mockprov', plugin_name: 'Mock provider'}], groups: [], ...over}) as PluginSettingsEntry;
+
+    /** The API answered by what is asked: a plugin and its groups, whichever order the dialog reads them in. */
+    function serve(entries: PluginSettingsEntry[]): void {
+        fake.fetchEntry.mockImplementation(async (family: string, code: string) => entries.find((entry) => entry.family === family && entry.plugin_code === code) ?? null);
+    }
+
+    const wrappers = () => within(modal()).queryAllByTestId('plugin-settings-modal-group');
+    const wrapperOf = (name: string) => wrappers().find((element) => element.getAttribute('data-group') === name)!;
+    const scrolled = vi.fn();
+    beforeEach(() => {
+        scrolled.mockReset();
+        Element.prototype.scrollIntoView = scrolled;
+    });
+    afterEach(() => {
+        delete (Element.prototype as {scrollIntoView?: unknown}).scrollIntoView;
+    });
+
+    it('PSM-18: «Configure» on a plugin unconfigured for want of a group’s key brings that group’s form into view at once — the first unconfigured group, never a configured one; a configured plugin scrolls nowhere', async () => {
+        serve([mockprov({configured: false, groups: ['crypto_keys', 'mock']}), group('crypto_keys', {configured: true}), group('mock', {configured: false})]);
+        mount({pluginCode: 'mockprov'});
+
+        await waitFor(() => expect(wrappers()).toHaveLength(2));
+        await waitFor(() => expect(scrolled).toHaveBeenCalled());
+        expect(
+            (scrolled.mock.contexts as Element[]).every((element) => wrapperOf('mock').contains(element)),
+            'the unconfigured group, not the configured one',
+        ).toBe(true);
+
+        scrolled.mockReset();
+        cleanup();
+        serve([mockprov({configured: true, groups: ['mock']}), group('mock', {configured: true})]);
+        mount({pluginCode: 'mockprov'});
+        await waitFor(() => expect(wrappers()).toHaveLength(1));
+        expect(scrolled, 'a configured plugin opens at its own form').not.toHaveBeenCalled();
+    });
+
+    it('PSM-11: opened for a plugin, it reads the plugin and then each group it names (family group, that name), and shows each group’s form in a wrapper of its own, below the plugin’s', async () => {
+        serve([mockprov({groups: ['mock', 'crypto_keys']}), group('mock'), group('crypto_keys')]);
+        mount({pluginCode: 'mockprov'});
+
+        await waitFor(() => expect(wrappers()).toHaveLength(2));
+        expect(fake.fetchEntry.mock.calls).toEqual([
+            ['asset', 'mockprov'],
+            ['group', 'mock'],
+            ['group', 'crypto_keys'],
+        ]);
+        expect(
+            wrappers().map((element) => element.getAttribute('data-group')),
+            'in the order the plugin names them',
+        ).toEqual(['mock', 'crypto_keys']);
+        for (const name of ['mock', 'crypto_keys']) {
+            expect(within(wrapperOf(name)).getByTestId(`plugin-settings-form-${name}`)).toHaveAttribute('data-family', 'group');
+            expect(within(wrapperOf(name)).queryByTestId('plugin-settings-form-mockprov'), 'the plugin’s form is not inside a group’s wrapper').toBeNull();
+        }
+        const pluginForm = within(modal()).getByTestId('plugin-settings-form-mockprov');
+        expect(pluginForm.compareDocumentPosition(wrapperOf('mock')) & Node.DOCUMENT_POSITION_FOLLOWING, 'the groups come after the plugin’s form').toBeTruthy();
+        expect(
+            within(pluginForm)
+                .getAllByTestId('plugin-settings-in-group')
+                .map((row) => row.getAttribute('data-group')),
+        ).toEqual(['mock', 'crypto_keys']);
+    });
+
+    it('PSM-12: a plugin that reads no group reads nothing more and shows no group wrapper', async () => {
+        serve([mockprov({groups: []})]);
+        mount({pluginCode: 'mockprov'});
+
+        await loaded();
+        await within(modal()).findByTestId('plugin-settings-form-mockprov');
+        expect(fake.fetchEntry.mock.calls).toEqual([['asset', 'mockprov']]);
+        expect(wrappers()).toEqual([]);
+    });
+
+    it('PSM-13: a group the API does not answer for has no wrapper, and the plugin’s own form is shown all the same', async () => {
+        serve([mockprov({groups: ['mock', 'gone']}), group('mock')]);
+        mount({pluginCode: 'mockprov'});
+
+        await waitFor(() => expect(wrappers().map((element) => element.getAttribute('data-group'))).toEqual(['mock']));
+        expect(within(modal()).getByTestId('plugin-settings-form-mockprov')).toBeInTheDocument();
+    });
+
+    it('PSM-14: the plugin’s «open group» button brings that group’s form into view and moves the focus to its heading', async () => {
+        // A configured plugin: the dialog opens at its own form (PSM-18), so the only scroll is the button's
+        serve([mockprov({configured: true, groups: ['mock', 'crypto_keys']}), group('mock'), group('crypto_keys')]);
+        mount({pluginCode: 'mockprov'});
+        await waitFor(() => expect(wrappers()).toHaveLength(2));
+
+        const row = within(within(modal()).getByTestId('plugin-settings-form-mockprov'))
+            .getAllByTestId('plugin-settings-in-group')
+            .find((element) => element.getAttribute('data-group') === 'crypto_keys')!;
+        await fireEvent.click(within(row).getByTestId('plugin-settings-open-group'));
+
+        await waitFor(() => expect(scrolled).toHaveBeenCalled());
+        expect(
+            (scrolled.mock.contexts as Element[]).every((element) => wrapperOf('crypto_keys').contains(element)),
+            'only that group’s form is scrolled to',
+        ).toBe(true);
+        const heading = within(wrapperOf('crypto_keys')).getByRole('heading', {level: 4});
+        await waitFor(() => expect(document.activeElement).toBe(heading));
+    });
+
+    it('PSM-15: a save in a group’s form is written with the family group, reads the group and the plugin again, and hands the plugin’s fresh state — its configured may have changed — to onSaved', async () => {
+        const freshPlugin = mockprov({configured: true});
+        const freshGroup = group('mock', {configured: true, fields: [{...token(), value: 'someone', is_set: true, source: 'db'}]});
+        serve([mockprov(), group('mock')]);
+        fake.save.mockResolvedValueOnce({kind: 'saved'});
+        const {onSaved} = mount({pluginCode: 'mockprov'});
+        await waitFor(() => expect(wrappers()).toHaveLength(1));
+        serve([freshPlugin, freshGroup]);
+        fake.fetchEntry.mockClear();
+
+        const groupForm = within(wrapperOf('mock')).getByTestId('plugin-settings-form-mock');
+        await fireEvent.input(within(groupForm).getByTestId('plugin-setting-input'), {target: {value: 'someone'}});
+        await fireEvent.click(within(groupForm).getByTestId('plugin-settings-save'));
+
+        await waitFor(() => expect(onSaved).toHaveBeenCalledWith(freshPlugin));
+        expect(fake.save.mock.calls).toStrictEqual([[[{family: 'group', plugin_code: 'mock', field_key: 'account_token', scope: 'system', value: 'someone'}]]]);
+        expect(fake.fetchEntry.mock.calls.map(([family, code]) => `${family}:${code}`).sort(), 'both are read again').toEqual(['asset:mockprov', 'group:mock']);
+        expect(
+            onSaved.mock.calls.every(([entry]) => (entry as PluginSettingsEntry).family !== 'group'),
+            'the caller is told about the plugin, never about a group',
+        ).toBe(true);
+        await waitFor(() => expect(within(modal()).getByTestId('plugin-settings-form-mockprov')).toHaveAttribute('data-configured', 'true'));
+        expect(within(wrapperOf('mock')).getByTestId('plugin-settings-form-mock')).toHaveAttribute('data-configured', 'true');
+    });
+
+    it('PSM-16: opened for a group, it reads that group only and shows its form alone, with no group wrapper', async () => {
+        serve([group('mock', {groups: []})]);
+        mount({family: 'group', pluginCode: 'mock'});
+
+        await within(modal()).findByTestId('plugin-settings-form-mock');
+        await loaded();
+        expect(fake.fetchEntry.mock.calls).toEqual([['group', 'mock']]);
+        expect(wrappers()).toEqual([]);
+        expect(within(modal()).getAllByTestId(/^plugin-settings-form-/)).toHaveLength(1);
+        expect(within(modal()).getByTestId('plugin-settings-form-mock')).toHaveAttribute('data-family', 'group');
+    });
+
+    it('PSM-17: a re-opening reads the groups again, and shows none of the previous plugin’s groups while the new one loads', async () => {
+        serve([mockprov(), group('mock'), justetf(false)]);
+        const {rerender} = mount({pluginCode: 'mockprov'});
+        await waitFor(() => expect(wrappers()).toHaveLength(1));
+
+        await rerender({open: true, family: 'asset', pluginCode: 'justetf'});
+
+        await within(modal()).findByTestId('plugin-settings-form-justetf');
+        expect(wrappers(), 'justETF reads no group').toEqual([]);
+        expect(within(modal()).queryByTestId('plugin-settings-form-mockprov')).toBeNull();
     });
 });
