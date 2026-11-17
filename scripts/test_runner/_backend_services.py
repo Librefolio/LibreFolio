@@ -2051,6 +2051,14 @@ def services_enricher_justetf(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "Enricher justETF tests", verbose=verbose)
 
 
+def services_enricher_borsa_italiana(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Borsa Italiana enricher: declarations, bond and stock sheets to stored forms, language, not found, recognize, read, search (plan 68, lot C2)."""
+    print_section("Services: Enricher Borsa Italiana")
+    print_info("Testing: backend/app/services/enricher_providers/borsa_italiana/plugin.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_borsa_italiana.py", test_names)
+    return run_command(cmd, "Enricher Borsa Italiana tests", verbose=verbose)
+
+
 def services_enricher_refresh(verbose: bool = False, test_names: list = None) -> bool:
     """Test reading the profile from the enrichers: catalogue filter, read cache, merge, ask and refresh (project 68, lot B5a)."""
     print_section("Services: Enricher Refresh")
@@ -3506,7 +3514,7 @@ Note: No backend server required.
         "financial-math",
         services_financial_math,
         name="Financial Math",
-        desc="Average cost, native cash and its first negative day, returns and periods, the ledger control totals: movements, conversions through the FX service, diagnostics; boundaries of the whole layer, the day-count primitives' one home",
+        desc="Average cost, native cash and its first negative day, returns and periods, the ledger control totals: movements, conversions through the FX service, diagnostics; boundaries of the whole layer, the day-count primitives' one home, the annual coupon from the period coupon (COUPONS_PER_YEAR, annual_coupon_rate)",
         # PURE: each module's only I/O is convert_bulk, which every test replaces on its
         # module with a double; the session handed to it is None or a sentinel, or, for the
         # ledger control totals, one on a private SQLite file under tmp_path that no other
@@ -4230,6 +4238,16 @@ Note: No backend server required.
         desc="Plan 68 C1: JustETFEnricher declarations (justetf, PRICE_SOURCE, ISIN, ETF family + COMMODITY at 10, 13 voices (legal_form only where an ETC or ETN can sit), not test-only, pause_seconds > 0); recorded overviews (SWDA, VWCE, bond, hedged, gold ETC) mapped to stored forms through the real catalogue (TER and weights as fractions, fund size millions EUR, replication/distribution/legal-form codes, domicile ISO3, English dates, «Other» kept, sectors helper first then the justETF table, holdings date on countries and sectors); synthetic sheets for every replication text, unknown texts absent and logged, ETC/ETN etc_etn, ETF absent, TER 0; empty «ETF Screener» sheet not found; recognize (non-ISIN no call, 429 raises); read per binding (error isolated, 429 RATE_LIMITED for the rest without a call); search over load_overview",
         isolation="pure",
     )
+    add_test(
+        cat,
+        "enricher-borsa-italiana",
+        services_enricher_borsa_italiana,
+        name="Enricher Borsa Italiana",
+        desc="Plan 68 C2: BorsaItalianaEnricher declarations (borsa_italiana, PRICE_SOURCE, ISIN, BOND at 10 and STOCK at 20, CRYPTO and every other type uncovered, 21 bond voices, sector and legal form for a stock, params language/mic/platform, no import from the price plugin); recorded sheets (BTP Valore, ordinary BTP, BTP Italia, BTP 2072, Austria 2117, EuroTLX corporate; ENEL, ASML, Apple; an ETF) rebuilt with the library's types and mapped to stored forms through the real catalogue (percents as fractions, the missing annual coupon from financial_math, frequency/structure/day count/issuer type tables in EN and IT, Plain Vanilla silent, sovereign issuer country and geography, yields/duration/accrued dated by the reference price date); EN/IT invariance of the MOT bonds; not found; recognize (non-ISIN no call, the library's 403 refusal raised as a rate limit); read per binding (error isolated, refusal RATE_LIMITED for the rest without a call, one Sessione per read); search through cerca; page URL",
+        # PURE: the plugin's library calls (ottieni_scheda, cerca, Sessione) are fakes on the plugin module that fail the
+        # test on any call not offered; no database, no server, no network.
+        isolation="pure",
+    )
     # PURE: every database is a private SQLite file under tmp_path built with create_all; the synthetic enrichers are
     # registered in the process's own EnricherRegistry (removed at teardown with their claims) and the process-wide
     # enricher_read cache is cleared around each test; no server, no network.
@@ -4250,7 +4268,7 @@ Note: No backend server required.
         "enricher-enabled",
         services_enricher_enabled,
         name="Enricher Enabled",
-        desc="Project 68 B2: LIBREFOLIO_ENRICHERS_ENABLED read at every call (enrichers_enabled, X1's parser); EnricherRegistry's gate: an enricher not listed is not found, listed, installed, in the catalogue or any default order, never asked by the cascade; unknown code warned once; no clean-up: a turned-off binding, its state and rows stay, the refresh skips it, the job item stays ok, a PATCH keeps it; the read cache never answers a turned-off or uninstalled enricher (NO_ANSWER), source_value says not installed; a required setting left empty: refresh skips, ask/source_value NOT_CONFIGURED without a call (warm cache too), the API cascade does not ask it, test/search routes 400 NOT_CONFIGURED with the missing keys; a turned-off one 404 like an unknown code; configured, it is used",
+        desc="Project 68 B2: LIBREFOLIO_ENRICHERS_ENABLED read at every call (enrichers_enabled, X1's parser); EnricherRegistry's gate: an enricher not listed is not found, listed, installed, in the catalogue or any default order, never asked by the cascade; unknown code warned once; no clean-up: a turned-off binding, its state and rows stay, the refresh skips it, the job item stays ok, a PATCH keeps it; the read cache never answers a turned-off or uninstalled enricher (NO_ANSWER), source_value says not installed; a required setting left empty: refresh skips, ask/source_value NOT_CONFIGURED without a call (warm cache too), the API cascade does not ask it, test/search routes 422 NOT_CONFIGURED (api/plugin_errors.py) with the missing keys readiness may tell; voices hand over; one skip log line per refresh; a turned-off one 404 like an unknown code; configured, it is used",
         isolation="pure",
     )
     add_test(cat, "plugin-settings-crypto", services_plugin_settings_crypto, name="Plugin Settings Encryption", desc="AES-256-GCM blob and AAD, key id, subkeys, count and rekey on a sqlite3 copy (savepoint, idempotent, unreadable rows kept), key status (unusable key: totals)", isolation="pure")
