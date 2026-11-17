@@ -417,6 +417,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/select/AssetTypeSelect.test.ts",
             "src/lib/components/ui/select/AssetPickerPanel.test.ts",
             "src/lib/components/ui/select/AssetPickerPanel.rows.test.ts",
+            "src/lib/features/signals/components/SignalAssetParamControl.test.ts",
             "src/lib/components/ui/ViewModeToggle.test.ts",
             "src/lib/components/ui/data-editor/DataEditor.test.ts",
             "src/lib/components/ui/data-editor/DataExportModal.test.ts",
