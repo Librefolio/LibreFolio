@@ -294,7 +294,7 @@
                             <span>{text('compute.budget', 'Time allowed')}</span>
                             <HelpTip
                                 label={text('compute.budget', 'Time allowed')}
-                                help={text('compute.budgetHelp', 'The longest the optimizer may search for each objective. When it runs out, the best plan found so far is kept and the result says it is not proven optimal.')}
+                                help={text('compute.budgetHelp', 'The longest the optimizer may search for each objective. When it runs out before the plan is proven, the best plan found so far is kept and marked «Local optimum».')}
                                 testid={testId('kpi-compute-row-help', profile)}
                             />
                         </dt>

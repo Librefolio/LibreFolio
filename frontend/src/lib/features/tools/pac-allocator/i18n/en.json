@@ -613,7 +613,7 @@
               "timeHelp": "The time the backend spent computing the plan. The total also counts the wait in the queue, the start of the worker and the checks on input and output.",
               "total": "total {value}",
               "budget": "Time allowed",
-              "budgetHelp": "The longest the optimizer may search for each objective. When it runs out, the best plan found so far is kept and the result says it is not proven optimal.",
+              "budgetHelp": "The longest the optimizer may search for each objective. When it runs out before the plan is proven, the best plan found so far is kept and marked «Local optimum».",
               "objectives": "Objectives closed",
               "objectivesHelp": "The objectives are optimized one after the other. An objective is closed when the optimizer proved that nothing better exists for it; the others stopped at a limit.",
               "objectivesValue": "{closed} of {total}",
