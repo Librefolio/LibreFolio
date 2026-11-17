@@ -22,7 +22,7 @@ import {_} from '$lib/i18n';
 import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import {formatDay, formatDayRange} from '$lib/utils/core/formatAxisDate';
-import {render, screen, setupI18n} from '$test/component';
+import {fireEvent, render, screen, setupI18n} from '$test/component';
 
 import type {ScopeMoveFigures} from '../moveFigures';
 import HowItMoves from './HowItMoves.svelte';
@@ -54,8 +54,8 @@ const say = (key: string, values: Record<string, string | number> = {}) => get(_
 const norm = (value: string) => value.replace(/\s+/g, ' ').trim();
 const text = (testId: string) => norm(screen.getByTestId(testId).textContent ?? '');
 
-function mount(figures: ScopeMoveFigures | null = FIGURES, scopeValue: number | null = null) {
-    return render(HowItMoves, {props: {figures, scopeValue, currency: 'EUR'}});
+function mount(figures: ScopeMoveFigures | null = FIGURES, scopeValue: number | null = null, perimeterDiffers = true) {
+    return render(HowItMoves, {props: {figures, scopeValue, currency: 'EUR', perimeterDiffers}});
 }
 
 describe('HowItMoves — four green twins', () => {
@@ -179,5 +179,28 @@ describe('HowItMoves — the money on the value the page states', () => {
         setPrivacyEnabled(false);
         flushSync();
         expect(text('risk-move-card-bestDay-caption')).toBe('+€340.00');
+    });
+});
+
+// RN-18b (the developer's «C, ovunque»; the consultant's texts, 17/11/2026): every figure says its perimeter. On a
+// portfolio the swing beside the semi-deviation is the period's, and L3's table is on today's holdings, so their
+// volatilities can differ: the row's tooltip says so. On one asset the two are the same series: the usual help.
+describe('HowItMoves — the semi-deviation says its perimeter', () => {
+    async function tooltipOf(row: string): Promise<string> {
+        await fireEvent.click(screen.getByTestId(`${row}-help`));
+        return norm(screen.getByTestId('tooltip-content').textContent ?? '');
+    }
+
+    it('when L3 measures today’s holdings and the block the period, says so', async () => {
+        mount(FIGURES, null, true);
+
+        expect(text('risk-move-semi-deviation-value')).toBe(say('risk.levels.move.rows.semiDeviationValue', {down: '9.8%', swing: '13.9%'}));
+        expect(await tooltipOf('risk-move-semi-deviation')).toBe(norm(say('risk.levels.move.rows.semiDeviationPerimeter')));
+    });
+
+    it('when both read one series (one asset, a backtest, L3 on the history), keeps the usual help', async () => {
+        mount(FIGURES, null, false);
+
+        expect(await tooltipOf('risk-move-semi-deviation')).toBe(norm(say('risk.assetSet.levels.move.columnHelp.downsideDeviation')));
     });
 });

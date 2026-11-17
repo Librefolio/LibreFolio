@@ -188,3 +188,13 @@ export function moveLead(figures: MoveFigures | null, t: MoveTranslator): string
     if (typeof days === 'number' && days > 0) return t('risk.levels.move.lead.both', {values: {omega, days: t('risk.levels.l1.daysCount', {values: {days}})}});
     return t('risk.levels.move.lead.omega', {values: {omega}});
 }
+
+/**
+ * Whether the semi-deviation's swing and L3's volatility read two different series (RN-18b, the developer's «C,
+ * ovunque» with the consultant's condition: every figure says its perimeter): the block reads L1's historical KPI, L3 its
+ * current-composition KPI when it came back. They differ only on a portfolio whose history is its own — not on one asset
+ * (one series), not on a backtest (the history is today's holdings replayed), not when L3 fell back to the history.
+ */
+export function semiDeviationPerimeterDiffers({oneAsset, backtest, l3Perimeter}: {oneAsset: boolean; backtest: boolean; l3Perimeter: 'current_composition' | 'historical' | null}): boolean {
+    return !oneAsset && !backtest && l3Perimeter === 'current_composition';
+}

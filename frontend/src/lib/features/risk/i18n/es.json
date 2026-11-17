@@ -467,7 +467,7 @@
         },
         "scatter": {
           "title": "Riesgo frente a rentabilidad, activo por activo",
-          "portfolio": "Cartera",
+          "portfolio": "Cartera, composición actual",
           "axisVolatility": "Volatilidad anualizada",
           "axisReturn": "Rentabilidad media anual",
           "line": "Recta riesgo-rentabilidad",
@@ -489,7 +489,8 @@
             "benchmark": "Índice de referencia",
             "heldBenchmark": "Índice de referencia · en cartera, peso {share}"
           },
-          "titleOneAsset": "Riesgo frente a rentabilidad"
+          "titleOneAsset": "Riesgo frente a rentabilidad",
+          "portfolioName": "Cartera"
         },
         "rows": {
           "kpi": "Sortino, Sharpe y volatilidad"
@@ -624,7 +625,8 @@
           "semiDeviation": "Semidesviación",
           "averageDrawdown": "Bajo el máximo, de media",
           "extremeDaysValue": "{value}× una campana",
-          "semiDeviationValue": "a la baja {down} · sobre una oscilación de {swing}"
+          "semiDeviationValue": "a la baja {down} · sobre una oscilación de {swing} en el periodo",
+          "semiDeviationPerimeter": "Medidas sobre la cartera tal como la tuviste en el periodo. La tabla «¿Me están pagando por este riesgo?» mide la composición actual: por eso su volatilidad puede ser distinta."
         },
         "lead": {
           "both": "Por cada 1 perdido en los días malos se ganaron {omega} en los buenos; la mayor subida duró {days}.",

@@ -28,7 +28,7 @@
     import RiskPartialNotice from './RiskPartialNotice.svelte';
     import {selectKpiWave} from './l3Helpers';
     import {resultByCode, resultByInstance, DAILY_VAR_INSTANCE, MONTHLY_VAR_INSTANCE} from '../riskAnalysisHelpers';
-    import {buildMoveFigures, moveLead} from '../moveFigures';
+    import {buildMoveFigures, moveLead, semiDeviationPerimeterDiffers} from '../moveFigures';
     import {formatPercent} from '$lib/utils/core/formatPercent';
 
     /**
@@ -263,6 +263,8 @@
      * came from what actually happened.
      */
     let backtest = $derived(backtestDeclared(historicalResults));
+    // RN-18b: the semi-deviation's swing and L3's volatility differ only when they read two series.
+    let moveSwingDiffers = $derived(semiDeviationPerimeterDiffers({oneAsset, backtest, l3Perimeter: selectKpiWave(currentResults, historicalResults).perimeter}));
 
     /**
      * The benchmark's name, resolved where every other name already is.
@@ -356,7 +358,7 @@
         <!-- RN-18 (Q21 c, Q22 a): the positive twin of L1, the same block on every surface. No health of its own: its answers
              are L1's, and a second amber frame would repeat L1's word for word. -->
         <RiskLevelSection level="move" title={$t('risk.levels.move.title')} lead={moveHeadline} testId="risk-level-move" docsPath="financial-theory/technical-analysis/risk-metrics/">
-            <HowItMoves figures={moveFigures} {scopeValue} currency={targetCurrency} loading={initialLoading} />
+            <HowItMoves figures={moveFigures} {scopeValue} currency={targetCurrency} loading={initialLoading} perimeterDiffers={moveSwingDiffers} />
         </RiskLevelSection>
 
         <!-- One asset (RN-17): nothing to diversify — correlation and risk contribution do not declare the asset scope. -->

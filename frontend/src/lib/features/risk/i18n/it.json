@@ -467,7 +467,7 @@
         },
         "scatter": {
           "title": "Rischio contro rendimento, asset per asset",
-          "portfolio": "Portafoglio",
+          "portfolio": "Portafoglio, composizione di oggi",
           "axisVolatility": "Volatilità annualizzata",
           "axisReturn": "Rendimento medio annuo",
           "line": "Retta rischio-rendimento",
@@ -489,7 +489,8 @@
             "benchmark": "Benchmark",
             "heldBenchmark": "Benchmark · in portafoglio, peso {share}"
           },
-          "titleOneAsset": "Rischio contro rendimento"
+          "titleOneAsset": "Rischio contro rendimento",
+          "portfolioName": "Portafoglio"
         },
         "rows": {
           "kpi": "Sortino, Sharpe e volatilità"
@@ -624,7 +625,8 @@
           "semiDeviation": "Semi-deviazione",
           "averageDrawdown": "Sotto il massimo, in media",
           "extremeDaysValue": "{value}× una campana",
-          "semiDeviationValue": "verso il basso {down} · su un'oscillazione di {swing}"
+          "semiDeviationValue": "verso il basso {down} · su un'oscillazione di {swing} nel periodo",
+          "semiDeviationPerimeter": "Misurate sul portafoglio come l'hai avuto nel periodo. La tabella \"Sto venendo pagato per questo rischio?\" misura la composizione di oggi: per questo la sua volatilità può essere diversa."
         },
         "lead": {
           "both": "Per ogni 1 perso nei giorni cattivi ne ha guadagnati {omega} nei buoni; la salita più grande è durata {days}.",

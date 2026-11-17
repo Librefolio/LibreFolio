@@ -623,3 +623,23 @@ describe('L3RiskAdjusted — on one asset with no benchmark, the asset’s four 
         }
     });
 });
+
+// RN-18b (the consultant's texts, 17/11/2026): L3's Portfolio row says its perimeter — today's holdings — beside the
+// block «How does it move?», which reads the period as lived. Pinned on the shipped English catalogue.
+describe('L3RiskAdjusted — the Portfolio row says its perimeter', () => {
+    it('names the row «Portfolio, today’s holdings» in English, through its own key', () => {
+        mount({historicalResults: [HISTORICAL_KPI], currentResults: [ASSET_RISK_RETURN, CURRENT_KPI], comparisonResult: null} as Props);
+
+        expect(t('risk.levels.l3.scatter.portfolio')).toBe("Portfolio, today's holdings");
+        expect(normalize(within(rowById('ref-portfolio')).getByTestId('risk-l3-row-ref-name').textContent)).toBe(normalize(t('risk.levels.l3.scatter.portfolio')));
+    });
+});
+
+describe('L3RiskAdjusted — the Portfolio row names the perimeter its figures have', () => {
+    it('on the fallback to the historical KPI, the row is the plain «Portfolio», as the title says «on the real history»', () => {
+        mount({historicalResults: [HISTORICAL_KPI], currentResults: [], comparisonResult: null} as Props);
+
+        expect(normalize(within(rowById('ref-portfolio')).getByTestId('risk-l3-row-ref-name').textContent)).toBe(normalize(t('risk.levels.l3.scatter.portfolioName')));
+        expect(t('risk.levels.l3.scatter.portfolioName')).not.toBe(t('risk.levels.l3.scatter.portfolio'));
+    });
+});

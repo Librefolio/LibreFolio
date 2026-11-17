@@ -1,6 +1,7 @@
 <script lang="ts">
     import RiskCardGrid from '$lib/components/ui/display/RiskCardGrid.svelte';
     import RiskMetricCard from '$lib/components/ui/display/RiskMetricCard.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {_ as t} from '$lib/i18n';
     import {formatDay, formatDayRange} from '$lib/utils/core/formatAxisDate';
     import {formatFixed} from '$lib/utils/core/formatFixed';
@@ -32,9 +33,14 @@
         scopeValue?: number | null;
         currency: string;
         loading?: boolean;
+        /**
+         * The block's swing and L3's volatility read two series (`semiDeviationPerimeterDiffers`): the semi-deviation's
+         * tooltip then says the perimeter of each (RN-18b); otherwise it is the usual help.
+         */
+        perimeterDiffers?: boolean;
     }
 
-    let {figures, scopeValue = null, currency, loading = false}: Props = $props();
+    let {figures, scopeValue = null, currency, loading = false, perimeterDiffers = false}: Props = $props();
 
     type Sentiment = 'positive' | 'negative' | 'neutral';
 
@@ -94,11 +100,16 @@
     const SEMI_DEVIATION_DOCS = {docsPath: 'financial-theory/technical-analysis/risk-metrics/sortino-ratio/#downside-deviation'};
 </script>
 
-{#snippet measure(label: string, value: string, testId: string, docsPath?: string, period?: {from: string; to: string}, reason?: string)}
+{#snippet measure(label: string, value: string, testId: string, docsPath?: string, period?: {from: string; to: string}, reason?: string, help?: string)}
     <!-- One detail row, the same as L1's (F8): the label on the left, the value on the right; a text that does not fit scrolls. -->
     <div class="flex items-baseline justify-between gap-2 text-xs" data-testid={testId} data-from={period?.from} data-to={period?.to}>
         <span class="flex min-w-0 flex-1 items-center gap-1">
-            <span use:scrollOnOverflow class="{overflowScrollTextClass} text-lf-muted">{label}</span>
+            {#if help}
+                <!-- RN-18b: the figure's perimeter, said where it is read (the consultant, 17/11/2026). -->
+                <Tooltip text={help} position="top" testId="{testId}-help"><span class="text-lf-muted underline decoration-dotted underline-offset-2">{label}</span></Tooltip>
+            {:else}
+                <span use:scrollOnOverflow class="{overflowScrollTextClass} text-lf-muted">{label}</span>
+            {/if}
             {#if docsPath}
                 <a class="shrink-0 text-lf-muted hover:text-lf-link" href="/mkdocs/{docsPath}" target="_blank" rel="noopener noreferrer" aria-label={label} data-testid="{testId}-docs">&#9432;</a>
             {/if}
@@ -197,7 +208,15 @@
                             {@render measure($t('risk.assetSet.levels.move.columns.positiveShare'), figurePercent(figures.positiveShare), 'risk-move-positive-share')}
                         {/if}
                         {#if figures.downsideDeviation !== null}
-                            {@render measure($t('risk.levels.move.rows.semiDeviation'), semiDeviationText(figures.downsideDeviation, figures.volatility), 'risk-move-semi-deviation', SEMI_DEVIATION_DOCS.docsPath)}
+                            {@render measure(
+                                $t('risk.levels.move.rows.semiDeviation'),
+                                semiDeviationText(figures.downsideDeviation, figures.volatility),
+                                'risk-move-semi-deviation',
+                                SEMI_DEVIATION_DOCS.docsPath,
+                                undefined,
+                                undefined,
+                                perimeterDiffers ? $t('risk.levels.move.rows.semiDeviationPerimeter') : $t('risk.assetSet.levels.move.columnHelp.downsideDeviation'),
+                            )}
                         {/if}
                         {#if figures.averageDrawdown !== null}
                             {@render measure($t('risk.levels.move.rows.averageDrawdown'), figurePercent(figures.averageDrawdown), 'risk-move-average-drawdown')}

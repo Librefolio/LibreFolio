@@ -8,7 +8,7 @@
 import {describe, expect, it} from 'vitest';
 
 import type {RiskAnalyticResult} from '$lib/features/risk/riskStore.svelte';
-import {buildMoveFigures, moveLead} from './moveFigures';
+import {buildMoveFigures, moveLead, semiDeviationPerimeterDiffers} from './moveFigures';
 
 type Payload = Record<string, unknown>;
 
@@ -143,5 +143,20 @@ describe('moveLead — the block’s headline (RN-18)', () => {
     it('says nothing without gains against losses: an invented headline is worse than none', () => {
         expect(moveLead({...base, omega: null, rally: {gain: 0.2, from: '2026-01-01', to: '2026-02-01', days: 31}}, t)).toBe('');
         expect(moveLead(null, t)).toBe('');
+    });
+});
+
+// RN-18b: the semi-deviation's tooltip says its swing can differ from L3's volatility only when the two really read two
+// series — the portfolio as lived (L1's historical KPI) against today's holdings (L3's current-composition KPI).
+describe('semiDeviationPerimeterDiffers', () => {
+    it('is true on a portfolio whose history is its own and whose L3 is on today’s holdings', () => {
+        expect(semiDeviationPerimeterDiffers({oneAsset: false, backtest: false, l3Perimeter: 'current_composition'})).toBe(true);
+    });
+
+    it('is false on one asset, on a backtest (the history is today’s holdings replayed), and when L3 fell back to the history', () => {
+        expect(semiDeviationPerimeterDiffers({oneAsset: true, backtest: false, l3Perimeter: 'current_composition'})).toBe(false);
+        expect(semiDeviationPerimeterDiffers({oneAsset: false, backtest: true, l3Perimeter: 'current_composition'})).toBe(false);
+        expect(semiDeviationPerimeterDiffers({oneAsset: false, backtest: false, l3Perimeter: 'historical'})).toBe(false);
+        expect(semiDeviationPerimeterDiffers({oneAsset: false, backtest: false, l3Perimeter: null})).toBe(false);
     });
 });

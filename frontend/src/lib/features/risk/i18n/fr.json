@@ -467,7 +467,7 @@
         },
         "scatter": {
           "title": "Risque contre rendement, actif par actif",
-          "portfolio": "Portefeuille",
+          "portfolio": "Portefeuille, composition actuelle",
           "axisVolatility": "Volatilité annualisée",
           "axisReturn": "Rendement moyen annuel",
           "line": "Droite risque-rendement",
@@ -489,7 +489,8 @@
             "benchmark": "Référence",
             "heldBenchmark": "Référence · en portefeuille, poids {share}"
           },
-          "titleOneAsset": "Risque contre rendement"
+          "titleOneAsset": "Risque contre rendement",
+          "portfolioName": "Portefeuille"
         },
         "rows": {
           "kpi": "Sortino, Sharpe et volatilité"
@@ -624,7 +625,8 @@
           "semiDeviation": "Semi-écart",
           "averageDrawdown": "Sous le sommet, en moyenne",
           "extremeDaysValue": "{value}× une courbe en cloche",
-          "semiDeviationValue": "à la baisse {down} · sur une oscillation de {swing}"
+          "semiDeviationValue": "à la baisse {down} · sur une oscillation de {swing} sur la période",
+          "semiDeviationPerimeter": "Mesurés sur le portefeuille tel que vous l'avez détenu sur la période. Le tableau « Suis-je payé pour ce risque ? » mesure la composition actuelle : sa volatilité peut donc être différente."
         },
         "lead": {
           "both": "Pour 1 perdu les mauvais jours, {omega} ont été gagnés les bons jours ; la plus forte hausse a duré {days}.",

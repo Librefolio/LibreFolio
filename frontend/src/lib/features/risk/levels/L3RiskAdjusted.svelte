@@ -60,9 +60,10 @@
     }
 
     let {historicalResults, currentResults = [], comparisonResult, benchmarkName = null, assetNames = {}, assetIcons = new Map(), appliedRiskFreePercent = 0, loading = false, tableRef = $bindable(), subjectLabel, oneAsset = false}: Props = $props();
-    let portfolioLabel = $derived(subjectLabel ?? $t('risk.levels.l3.scatter.portfolio'));
-
     let wave = $derived(selectKpiWave(currentResults, historicalResults));
+    // RN-18b: the row names the perimeter its figures have — today's holdings when the current-composition KPI came back,
+    // the plain «Portfolio» when L3 fell back to the history (the title says which).
+    let portfolioLabel = $derived(subjectLabel ?? (wave.perimeter === 'current_composition' ? $t('risk.levels.l3.scatter.portfolio') : $t('risk.levels.l3.scatter.portfolioName')));
     let figures = $derived(buildRiskAdjusted(wave.results, comparisonResult));
     let perimeterLabel = $derived(wave.perimeter === null ? '' : $t(`risk.levels.l3.perimeter.${wave.perimeter}`));
     // The perimeter the cards used to state, now said once, beside the table's title. On one asset neither «asset by

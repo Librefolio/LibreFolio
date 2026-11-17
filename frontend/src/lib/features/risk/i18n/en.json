@@ -467,7 +467,7 @@
         },
         "scatter": {
           "title": "Risk against return, asset by asset",
-          "portfolio": "Portfolio",
+          "portfolio": "Portfolio, today's holdings",
           "axisVolatility": "Annualised volatility",
           "axisReturn": "Average annual return",
           "line": "Risk-return line",
@@ -489,7 +489,8 @@
             "benchmark": "Benchmark",
             "heldBenchmark": "Benchmark · in the portfolio, weight {share}"
           },
-          "titleOneAsset": "Risk against return"
+          "titleOneAsset": "Risk against return",
+          "portfolioName": "Portfolio"
         },
         "rows": {
           "kpi": "Sortino, Sharpe and volatility"
@@ -624,7 +625,8 @@
           "semiDeviation": "Semi-deviation",
           "averageDrawdown": "Below the peak, on average",
           "extremeDaysValue": "{value}× a bell curve",
-          "semiDeviationValue": "{down} downward · out of a {swing} swing"
+          "semiDeviationValue": "{down} downward · out of a {swing} swing over the period",
+          "semiDeviationPerimeter": "Measured on the portfolio as you held it over the period. The \"Am I being paid for this risk?\" table measures today's holdings, so its volatility can differ."
         },
         "lead": {
           "both": "For every 1 lost on the bad days, {omega} were gained on the good ones; the largest rally lasted {days}.",
