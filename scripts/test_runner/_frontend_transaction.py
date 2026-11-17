@@ -198,6 +198,18 @@ def front_tx_split_promote(verbose: bool = False, ui: bool = False, headed: bool
     return _run_playwright("transactions/tx-split-promote.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_charges_view(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Linked charges in the transaction form, read-only (project 66, F2)."""
+    print_section("Frontend TX Linked Charges View Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-charges-view.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_crud_full(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Full CRUD lifecycle E2E tests for transactions."""
     print_section("Frontend TX CRUD Full Lifecycle Tests")
@@ -737,6 +749,7 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "tx-bulk-operations", front_tx_bulk_operations, name="TX Bulk Operations Tests", desc="Mixed commit, reset, picker guard, pair validation, mark delete", tests="transactions/tx-bulk-operations.spec.ts")
     add_test(cat, "tx-edit-save-gate", front_tx_edit_save_gate, name="TX Edit Save Gate Tests", desc="Issue #58: changing the type or the asset of a stored row keeps Apply and Save-all enabled, and the discard question agrees", tests="transactions/tx-edit-save-gate.spec.ts")
     add_test(cat, "tx-split-promote", front_tx_split_promote, name="TX Split & Promote Tests", desc="Split paired, promote standalone, merge modal, guards, non-regression", tests="transactions/tx-split-promote.spec.ts")
+    add_test(cat, "tx-charges-view", front_tx_charges_view, name="TX Linked Charges View Tests", desc="Project 66 F2: a BUY with a FEE and a TAX linked, opened read-only: the section lists the two charges with their notes and the total charged", tests="transactions/tx-charges-view.spec.ts")
     add_test(cat, "tx-crud-full", front_tx_crud_full, name="TX CRUD Full Lifecycle Tests", desc="Full CRUD lifecycle: standalone, paired, split, promote, bulk, suggest, cash sign", tests="transactions/tx-crud-full.spec.ts")
     add_test(cat, "tx-commit-all-types", front_tx_commit_all_types, name="TX Commit All Types Tests", desc="End-to-end commit for every TX type: standalone + paired create, edit, delete", tests="transactions/tx-commit-all-types.spec.ts")
     add_test(cat, "tx-bulk-suggest-ux", front_tx_bulk_suggest_ux, name="TX Bulk Suggest UX Tests", desc="Split badge, type preview, undo split, suggest banner, ActionModal AFTER rows", tests="transactions/tx-bulk-suggest-ux.spec.ts")
