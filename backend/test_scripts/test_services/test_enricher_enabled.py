@@ -54,12 +54,18 @@ are ``MockEnricher`` subclasses registered in the process's ``EnricherRegistry``
 at teardown with their claims; the process-wide ``enricher_read`` cache is cleared around each test. The real
 ``justetf`` enricher is installed: its two library calls (``get_etf_overview``, ``load_overview``) are replaced by a stub
 that records and raises, so no path can reach justetf.com; where a test needs it «not asked», the recorder is the proof.
+The Yahoo enricher (lot C3, code ``yfinance``: STOCK, the ETF family and FUND, ticker only) is guarded the same way once
+its module exists: its ``yf`` is an offline stub whose every use records and raises, and yfinance's own ``Ticker``,
+``Tickers``, ``Search`` and ``download`` do the same. No test here may ask Yahoo (every cascade holds an ISIN, every
+binding is another code's), so a recorded call fails the test at teardown; before C3 the module is absent and only the
+library stubs stand (``test_b2_yahoo_is_guarded_offline`` is the witness, red until C3).
 """
 
 from __future__ import annotations
 
 import asyncio
 import dataclasses
+import importlib
 import json
 import threading
 import uuid
@@ -73,6 +79,8 @@ from typing import Any
 
 import pytest
 import pytest_asyncio
+import yfinance
+import yfinance.exceptions
 from fastapi import HTTPException
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
@@ -180,6 +188,80 @@ def justetf_offline(monkeypatch: pytest.MonkeyPatch) -> NetworkGuard:
     monkeypatch.setattr(justetf_plugin, "get_etf_overview", stub("get_etf_overview"))
     monkeypatch.setattr(justetf_plugin, "load_overview", stub("load_overview"))
     return guard
+
+
+#: The Yahoo enricher's module (lot C3): absent before it, guarded once it exists.
+YAHOO_PLUGIN = "backend.app.services.enricher_providers.yahoo_finance.plugin"
+
+
+@dataclass
+class YahooGuard:
+    """Every use of yfinance that would have reached Yahoo, as ``(what, argument)``; ``installed`` once the enricher's
+    module exists and its ``yf`` is the offline stub."""
+
+    calls: list[tuple[str, Any]] = field(default_factory=list)
+    installed: bool = False
+
+
+class _YahooOffline:
+    """The Yahoo enricher's ``yf``: ``Ticker(symbol)`` gives a ticker whose every attribute records and raises; any other
+    attribute of the module records and raises; ``exceptions`` is yfinance's own."""
+
+    exceptions = yfinance.exceptions
+
+    def __init__(self, guard: YahooGuard, lock: threading.Lock) -> None:
+        self._guard, self._lock = guard, lock
+
+    def _refuse(self, what: str, argument: Any) -> ConnectionError:
+        with self._lock:
+            self._guard.calls.append((what, argument))
+        return ConnectionError(f"b2 test: Yahoo ({what}) must never be reached here")
+
+    def Ticker(self, symbol: Any, *_args: Any, **_kwargs: Any) -> Any:  # noqa: N802 — yfinance's own name
+        offline = self
+
+        class _Ticker:
+            def __getattr__(self, name: str) -> Any:
+                if name.startswith("__"):
+                    raise AttributeError(name)
+                raise offline._refuse(f"Ticker.{name}", symbol)
+
+        return _Ticker()
+
+    def __getattr__(self, name: str) -> Any:
+        if name.startswith("__"):
+            raise AttributeError(name)
+        raise self._refuse(f"yf.{name}", None)
+
+
+@pytest.fixture(autouse=True)
+def yahoo_offline(monkeypatch: pytest.MonkeyPatch) -> Iterator[YahooGuard]:
+    """The Yahoo enricher never reaches its site: its ``yf`` (once the module exists) and yfinance's own entry points
+    record and raise. Nothing here may ask Yahoo: a recorded call fails the test at teardown."""
+    EnricherRegistry.auto_discover()
+    guard = YahooGuard()
+    lock = threading.Lock()
+    offline = _YahooOffline(guard, lock)
+
+    def stub(name: str) -> Callable[..., Any]:
+        def call(*args: Any, **_kwargs: Any) -> Any:
+            raise offline._refuse(f"yfinance.{name}", args[0] if args else None)
+
+        return call
+
+    for name in ("Ticker", "Tickers", "Search", "download"):
+        monkeypatch.setattr(yfinance, name, stub(name), raising=True)
+    try:
+        module = importlib.import_module(YAHOO_PLUGIN)
+    except ModuleNotFoundError as error:
+        # Before C3 the package (or its plugin) does not exist: only the library stubs above stand
+        if error.name not in {YAHOO_PLUGIN, YAHOO_PLUGIN.rsplit(".", 1)[0]}:
+            raise
+    else:
+        monkeypatch.setattr(module, "yf", offline, raising=True)
+        guard.installed = True
+    yield guard
+    assert guard.calls == [], f"b2 test: Yahoo was asked, which no test here may do (an ISIN cascade, other codes' bindings): {guard.calls}"
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -488,6 +570,14 @@ async def test_b2_the_cascade_never_asks_an_enricher_not_listed(monkeypatch: pyt
     assert any(isinstance(event, Recognized) and event.code == "mockenrich" for event in events), f"barrier: mockenrich still answers: {events}"
     assert not any(getattr(event, "code", None) == "justetf" or getattr(event, "source", None) == "justetf" for event in events), events
     assert justetf_offline.calls == [], f"justetf was asked: {justetf_offline.calls}"
+
+
+def test_b2_yahoo_is_guarded_offline(yahoo_offline: YahooGuard) -> None:
+    """Witness of the Yahoo guard, red until C3 (the module is absent): the Yahoo enricher is installed and its ``yf``
+    is this file's offline stub, so the guard of every other test here is not inert."""
+    module = importlib.import_module(YAHOO_PLUGIN)
+    assert yahoo_offline.installed and isinstance(module.yf, _YahooOffline), f"the Yahoo enricher's yf is not the offline stub: {getattr(module, 'yf', None)!r}"
+    assert EnricherRegistry.get_plugin("yfinance") is not None, "the Yahoo enricher is installed"
 
 
 def test_b2_an_unknown_code_is_ignored_and_logged_once(monkeypatch: pytest.MonkeyPatch, captured: _Captured) -> None:

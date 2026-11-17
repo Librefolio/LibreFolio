@@ -1378,6 +1378,16 @@ def services_dust_threshold(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Daily state dust threshold tests", verbose=verbose)
 
 
+def services_classification_from_profile(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that the portfolio engine reads each asset's countries and sectors from the asset profile, per day (project 68, lot D2)."""
+    print_section("Services: Classification From Profile (project 68, D2)")
+    print_info("Testing: backend/app/services/financial_math/portfolio/engine.py (_load_asset_classifications, calculate) over the profile store")
+    print_info("Tests: one ClassificationStep list per voice carried back to date_from, None for an asset without rows (classification_params are not read), Decimal weights, a NULL row; by_geography and by_sector of each day, the change day's segment")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_classification_from_profile.py", test_names)
+    return run_command(cmd, "Classification from profile tests", verbose=verbose)
+
+
 def services_external_cash_leg_pools(verbose: bool = False, test_names: list = None) -> bool:
     """Test that a cash leg crossing the perimeter, or orphan, moves K/R as a DEPOSIT or a WITHDRAWAL (B3, MF-J3)."""
     print_section("Services: External Cash Leg Pools (B3 / MF-J3)")
@@ -2097,6 +2107,22 @@ def services_enricher_justetf(verbose: bool = False, test_names: list = None) ->
     print_info("Testing: backend/app/services/enricher_providers/justetf/plugin.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_justetf.py", test_names)
     return run_command(cmd, "Enricher justETF tests", verbose=verbose)
+
+
+def services_enricher_borsa_italiana(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Borsa Italiana enricher: declarations, bond and stock sheets to stored forms, language, not found, recognize, read, search (plan 68, lot C2)."""
+    print_section("Services: Enricher Borsa Italiana")
+    print_info("Testing: backend/app/services/enricher_providers/borsa_italiana/plugin.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_borsa_italiana.py", test_names)
+    return run_command(cmd, "Enricher Borsa Italiana tests", verbose=verbose)
+
+
+def services_enricher_yahoo(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Yahoo Finance enricher: declarations, info and fund data to stored forms, not found, recognize, read (plan 68, lot C3)."""
+    print_section("Services: Enricher Yahoo Finance")
+    print_info("Testing: backend/app/services/enricher_providers/yahoo_finance/plugin.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_yahoo.py", test_names)
+    return run_command(cmd, "Enricher Yahoo Finance tests", verbose=verbose)
 
 
 def services_enricher_refresh(verbose: bool = False, test_names: list = None) -> bool:
@@ -3620,7 +3646,7 @@ Note: No backend server required.
         "financial-math",
         services_financial_math,
         name="Financial Math",
-        desc="Average cost, native cash and its first negative day, returns and periods, the ledger control totals: movements, conversions through the FX service, diagnostics; boundaries of the whole layer, the day-count primitives' one home",
+        desc="Average cost, native cash and its first negative day, returns and periods, the ledger control totals: movements, conversions through the FX service, diagnostics; boundaries of the whole layer, the day-count primitives' one home, the annual coupon from the period coupon (COUPONS_PER_YEAR, annual_coupon_rate)",
         # PURE: each module's only I/O is convert_bulk, which every test replaces on its
         # module with a double; the session handed to it is None or a sentinel, or, for the
         # ledger control totals, one on a private SQLite file under tmp_path that no other
@@ -3671,6 +3697,18 @@ Note: No backend server required.
         # skips this action so that the file runs once there.
         in_all=False,
         # PURE: DailyStateBuilder over mock transactions; no DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "classification-from-profile",
+        services_classification_from_profile,
+        name="Classification From Profile",
+        desc="Project 68 D2: PortfolioCalculationEngine._load_asset_classifications reads the geography and sector steps of the asset profile (carried back to date_from, Decimal weights, a NULL row as None, an asset without rows None: classification_params are no longer read); calculate gives each day's by_geography and by_sector from them, a change on a quiet day opening a segment",
+        # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
+        # skips this action so that the file runs once there.
+        in_all=False,
+        # PURE: a private SQLite file under tmp_path built with create_all, disposed at teardown; no lane DB, no server, no network.
         isolation="pure",
     )
     add_test(
@@ -4128,7 +4166,7 @@ Note: No backend server required.
         "scheduler-profile-read",
         services_scheduler_profile_read,
         name="Scheduler Profile Read",
-        desc="Project 68 B6: run_profile_read reads the active assets with a non-empty enricher config only; a regular round starts a round (round_started_at), refresh_assets(hold_deferred=True), counts assets ok / err / deferred (a RATE_LIMITED read), retry_at now + the shortest pause; the retry round (retry_at come) reads only what was not read since the round's start (plugin not called, cached values still merged), hold_deferred=False, never sets retry_at again, keeps round_started_at; a regular round after it reads everything; one log entry per run that validates as SchedulerLogEntry; the consultant's two cases (held in round one, written from the first in round two; refused again, written from the second); refresh_assets(hold_deferred) holds only the voices the refused enricher declares for the asset's type whose winner comes after it",
+        desc="Project 68 B6: run_profile_read reads the active assets with a non-empty enricher config only; a regular round starts a round (round_started_at), refresh_assets(hold_deferred=True), counts assets ok / err / deferred (a RATE_LIMITED read), retry_at now + the shortest pause, or 15 minutes when no refused read gave one (B6c); the retry round (retry_at come) reads only what was not read since the round's start (plugin not called, cached values still merged), hold_deferred=False, never sets retry_at again, keeps round_started_at; a regular round after it reads everything; one log entry per run that validates as SchedulerLogEntry; the consultant's two cases (held in round one, written from the first in round two; refused again, written from the second); refresh_assets(hold_deferred) holds only the voices the refused enricher declares for the asset's type whose winner comes after it",
         # PURE: every database is a private SQLite file under tmp_path built with create_all, reached by the job through
         # jobs.get_async_engine / refresh.get_async_engine replaced for the test (a barrier checks the entry names only the
         # file's assets); the job log is under tmp_path; synthetic enrichers registered in the process's own
@@ -4344,6 +4382,26 @@ Note: No backend server required.
         desc="Plan 68 C1: JustETFEnricher declarations (justetf, PRICE_SOURCE, ISIN, ETF family + COMMODITY at 10, 13 voices (legal_form only where an ETC or ETN can sit), not test-only, pause_seconds > 0); recorded overviews (SWDA, VWCE, bond, hedged, gold ETC) mapped to stored forms through the real catalogue (TER and weights as fractions, fund size millions EUR, replication/distribution/legal-form codes, domicile ISO3, English dates, «Other» kept, sectors helper first then the justETF table, holdings date on countries and sectors); synthetic sheets for every replication text, unknown texts absent and logged, ETC/ETN etc_etn, ETF absent, TER 0; empty «ETF Screener» sheet not found; recognize (non-ISIN no call, 429 raises); read per binding (error isolated, 429 RATE_LIMITED for the rest without a call); search over load_overview",
         isolation="pure",
     )
+    add_test(
+        cat,
+        "enricher-borsa-italiana",
+        services_enricher_borsa_italiana,
+        name="Enricher Borsa Italiana",
+        desc="Plan 68 C2: BorsaItalianaEnricher declarations (borsa_italiana, PRICE_SOURCE, ISIN, BOND at 10 and STOCK at 20, CRYPTO and every other type uncovered, 20 bond voices (no inception date; outstanding amount in the denomination currency, absent when two differ), sector and legal form for a stock, params language/mic/platform, no import from the price plugin); recorded sheets (BTP Valore, ordinary BTP, BTP Italia, BTP 2072, Austria 2117, EuroTLX corporate; ENEL, ASML, Apple; an ETF) rebuilt with the library's types and mapped to stored forms through the real catalogue (percents as fractions, the missing annual coupon from financial_math, frequency/structure/day count/issuer type tables in EN and IT, Plain Vanilla silent, sovereign issuer country and geography, yields/duration/accrued dated by the reference price date); EN/IT invariance of the MOT bonds; not found; recognize (non-ISIN no call, the library's 403 refusal raised as a rate limit); read per binding (error isolated, refusal RATE_LIMITED for the rest without a call, one Sessione per read); search through cerca; page URL",
+        # PURE: the plugin's library calls (ottieni_scheda, cerca, Sessione) are fakes on the plugin module that fail the
+        # test on any call not offered; no database, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "enricher-yahoo",
+        services_enricher_yahoo,
+        name="Enricher Yahoo Finance",
+        desc="Plan 68 C3: YahooFinanceEnricher declarations (yfinance, PRICE_SOURCE, TICKER only, STOCK at 10, ETF family and FUND at 20, CRYPTO/COMMODITY/BOND uncovered, share and fund voices, no search, not test-only, pause_seconds > 0, yfinance imported as yf, nothing from the price plugin); recorded info and funds_data (Enel, Apple, ASML, SWDA, VWCE, bond ETF, hedged ETF, gold ETC, Anima fund) mapped by quoteType to stored forms through the real catalogue (share: sector at 100 % when the helper knows it, industry, issuer country ISO3, market cap only in an upper-case ISO currency, business summary; fund: netExpenseRatio percent as a fraction, family, inception epoch as a UTC date, sector weightings through helper then table with unknown keys folded into Other, funds_data only for a fund and only when sector is asked, its failure keeping the info voices); TER and inception cross-checked with justETF's recordings; not found (empty info, no quoteType, Invalid ISIN, nameless EQUITY row); recognize (non-TICKER no call, name, page, no identifiers, refusal raises); read per binding (error SOURCE_ERROR isolated, YFRateLimitError RATE_LIMITED for the rest without a call)",
+        # PURE: the plugin's yf is a fake module on the plugin that fails the test on any symbol or attribute not
+        # offered, and yfinance's own entry points fail too; no database, no server, no network.
+        isolation="pure",
+    )
     # PURE: every database is a private SQLite file under tmp_path built with create_all; the synthetic enrichers are
     # registered in the process's own EnricherRegistry (removed at teardown with their claims) and the process-wide
     # enricher_read cache is cleared around each test; no server, no network.
@@ -4364,7 +4422,7 @@ Note: No backend server required.
         "enricher-enabled",
         services_enricher_enabled,
         name="Enricher Enabled",
-        desc="Project 68 B2: LIBREFOLIO_ENRICHERS_ENABLED read at every call (enrichers_enabled, X1's parser); EnricherRegistry's gate: an enricher not listed is not found, listed, installed, in the catalogue or any default order, never asked by the cascade; unknown code warned once; no clean-up: a turned-off binding, its state and rows stay, the refresh skips it, the job item stays ok, a PATCH keeps it; the read cache never answers a turned-off or uninstalled enricher (NO_ANSWER), source_value says not installed; a required setting left empty: refresh skips, ask/source_value NOT_CONFIGURED without a call (warm cache too), the API cascade does not ask it, test/search routes 400 NOT_CONFIGURED with the missing keys; a turned-off one 404 like an unknown code; configured, it is used",
+        desc="Project 68 B2: LIBREFOLIO_ENRICHERS_ENABLED read at every call (enrichers_enabled, X1's parser); EnricherRegistry's gate: an enricher not listed is not found, listed, installed, in the catalogue or any default order, never asked by the cascade; unknown code warned once; no clean-up: a turned-off binding, its state and rows stay, the refresh skips it, the job item stays ok, a PATCH keeps it; the read cache never answers a turned-off or uninstalled enricher (NO_ANSWER), source_value says not installed; a required setting left empty: refresh skips, ask/source_value NOT_CONFIGURED without a call (warm cache too), the API cascade does not ask it, test/search routes 422 NOT_CONFIGURED (api/plugin_errors.py) with the missing keys readiness may tell; voices hand over; one skip log line per refresh; a turned-off one 404 like an unknown code; configured, it is used",
         isolation="pure",
     )
     add_test(cat, "plugin-settings-crypto", services_plugin_settings_crypto, name="Plugin Settings Encryption", desc="AES-256-GCM blob and AAD, key id, subkeys, count and rekey on a sqlite3 copy (savepoint, idempotent, unreadable rows kept), key status (unusable key: totals)", isolation="pure")

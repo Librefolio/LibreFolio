@@ -9,7 +9,7 @@ Under test, as the contract of B6 states it:
    ``refresh_assets(session, ids, hold_deferred=True)``. The ``JobState``: ``last_items_ok`` the assets read with no
    error and nothing deferred, ``last_items_deferred`` the assets with a ``RATE_LIMITED`` read, ``last_items_err`` the
    rest; ``last_status`` by ``_classify_job_status``; ``retry_at`` now + the shortest ``retry_after`` of the deferred
-   reads; ``round_started_at`` kept.
+   reads, or now + 15 minutes when none of them carries one (lot B6c, below); ``round_started_at`` kept.
 3. **A retry round** (the job runs because ``retry_at`` came): ``refresh_assets(session, ids, read_since=<round
    start>, hold_deferred=False)``. The bindings already read in this round (state ``read_at`` ≥ the round's start, ok
    or not_found) are not read again — their plugin is not called — and their values still join the merge, from the
@@ -22,6 +22,14 @@ Under test, as the contract of B6 states it:
    enricher's read of an asset is ``RATE_LIMITED``, the voices it declares for the asset's type
    (``plugin.voices[asset_type]``) whose merged winner comes AFTER it in the asset's order are not written in that round;
    the others are. With ``hold_deferred=False`` the usual «source down → the next one» applies.
+6. **The default wait** (lot B6c, consultant and coordinator): the real enrichers refuse without a wait, so a round
+   whose deferred reads carry no ``retry_after`` sets ``retry_at`` = now + **15 minutes**, in the state and in the
+   entry. A plugin-given wait still wins: the shortest KNOWN wait decides, even when it is longer than 15 minutes and
+   even beside a refusal without one. Nothing deferred (errors included) → no retry. The cap stays: a retry round
+   refused again, without a wait too, sets no third round, and the held voices are written from the next source. The
+   default lives in the profile-read job only: the shared ``jobs._retry_at`` still answers None without a wait, so the
+   price jobs are unchanged (job-level pin: ``test_scheduler_jobs.py::
+   test_current_price_refresh_with_no_pause_known_leaves_no_retry_at``).
 
 The plan's case «un rifiuto rimanda e il secondo giro salta chi è già letto» is
 ``test_a_refusal_defers_and_the_second_round_skips_what_was_read``; the consultant's two are
@@ -45,6 +53,10 @@ err + deferred is the number of assets); ``error`` on a deferred item; ``voices_
 
 Red until B6: ``jobs.run_profile_read``, ``refresh_assets(hold_deferred=…)``, ``JobState.round_started_at`` and
 ``SchedulerState.profile_read`` do not exist; each case fails at its first call, never at collection.
+
+Red until B6c: the cases of section 6 where no deferred read carries a wait (``retry_at`` is None today). The known-wait,
+nothing-deferred and shared-function cases are green by design: barriers against a default used as a cap, mixed into
+the minimum, applied without a refusal, or moved into ``_retry_at``. The name of the module constant is not pinned.
 """
 
 from __future__ import annotations
@@ -120,8 +132,8 @@ def _config_entry(binding: EnricherBinding) -> dict[str, Any]:
     return {"identifier_type": binding.identifier_type, "identifier": binding.identifier, **dict(binding.params)}
 
 
-def _rate(seconds: float = RETRY_AFTER) -> tuple[str, float]:
-    """A table entry: refused for too many requests, ``retry_after`` ``seconds``."""
+def _rate(seconds: float | None = RETRY_AFTER) -> tuple[str, float | None]:
+    """A table entry: refused for too many requests, ``retry_after`` ``seconds`` (None: the refusal gives no wait)."""
     return (RATE, seconds)
 
 
@@ -729,3 +741,141 @@ async def test_read_since_takes_the_skipped_bindings_values_from_the_cache(engin
     assert second.written == ["ter"], second
     assert _value_and_source(await _rows(engine, asset_id, "ter")) == [(normalize("ter", "0.0022"), a.code)]
     print_success("the cached value joins the merge")
+
+
+# =============================================================================
+# 6. THE DEFAULT WAIT (lot B6c)
+# =============================================================================
+
+#: The wait of a round whose refusals give none: the contract's number, not the module constant's name.
+DEFAULT_WAIT = timedelta(minutes=15)
+
+
+def _assert_retry_in(value: Any, before: datetime, after: datetime, pause: timedelta, what: str) -> None:
+    """``value`` is an aware instant within [before, after] + ``pause``: bracketed by the clock around the run."""
+    moment = _utc(value, what)
+    assert before + pause <= moment <= after + pause, f"{what}: now + {pause} expected, got {moment.isoformat()} (run between {before.isoformat()} and {after.isoformat()})"
+
+
+async def _refused_round(job_env: AsyncEngine, lab, tag: str, waits: Sequence[float | None]) -> tuple[SchedulerState, datetime, datetime]:
+    """One regular round on one asset per wait, each refused by one enricher with that ``retry_after`` (None: no wait).
+    Barrier: every refusal reached the job as such — the asset's state says ``RATE_LIMITED`` with that very wait, and
+    the round counts each asset deferred."""
+    identifiers = [_ident(f"{tag}{index}") for index in range(len(waits))]
+    refuser = lab(f"default_{tag.lower()}", table={identifier: _rate(wait) for identifier, wait in zip(identifiers, waits, strict=True)})
+    assets = []
+    for identifier in identifiers:
+        asset_id, _ = await _asset(job_env, f"default {tag}")
+        await _bind(job_env, asset_id, {refuser.code: _binding(identifier)})
+        assets.append(asset_id)
+    state = SchedulerState()
+
+    before, after = await _run_round(state)
+
+    for asset_id, wait in zip(assets, waits, strict=True):
+        read = (await _state(job_env, asset_id)).get(refuser.code, {})
+        assert (read.get("error_code"), read.get("retry_after")) == (RATE_LIMITED, wait), f"barrier: the refusal of asset {asset_id} reached the job with retry_after {wait}: {read}"
+    assert (state.profile_read.last_status, *_counts(state)) == ("partial", 0, 0, len(waits)), f"barrier: every asset deferred: {state.profile_read}"
+    return state, before, after
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("waits", [pytest.param((None,), id="one-refusal-without-a-wait"), pytest.param((None, None), id="two-refusals-without-a-wait")])
+async def test_a_refusal_without_a_wait_retries_after_the_default_15_minutes(job_env: AsyncEngine, lab, waits: tuple[None, ...]) -> None:
+    """B6c: no deferred read carries a ``retry_after`` (the real enrichers refuse so): ``retry_at`` is now + 15 minutes,
+    in the state and in the entry — not None, which would leave the held voices waiting a week."""
+    print_section("profile_read: a refusal without a wait → the default 15 minutes")
+    state, before, after = await _refused_round(job_env, lab, f"DW{len(waits)}", waits)
+
+    _assert_retry_in(state.profile_read.retry_at, before, after, DEFAULT_WAIT, "state.profile_read.retry_at")
+    (entry,) = _entries()
+    _assert_retry_in(entry.get("retry_at"), before, after, DEFAULT_WAIT, "the entry's retry_at")
+    print_success("retry in 15 minutes")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("waits", "pause"),
+    [
+        pytest.param((3600.0,), timedelta(seconds=3600), id="a-known-wait-longer-than-the-default"),
+        pytest.param((3600.0, None), timedelta(seconds=3600), id="mixed-the-known-wait-longer-than-the-default"),
+        pytest.param((240.0, None), timedelta(seconds=240), id="mixed-the-known-wait-shorter-than-the-default"),
+    ],
+)
+async def test_a_plugin_given_wait_still_wins_over_the_default(job_env: AsyncEngine, lab, waits: tuple[float | None, ...], pause: timedelta) -> None:
+    """B6c, green by design: a plugin-given ``retry_after`` wins. Alone at 3600 s it gives 3600 s (the default is not a
+    cap); beside a refusal without a wait, the shortest KNOWN wait decides, 3600 s or 240 s (the default joins no
+    minimum and does not replace a known wait)."""
+    print_section("profile_read: a known wait wins over the default")
+    state, before, after = await _refused_round(job_env, lab, f"KW{len(waits)}{int(pause.total_seconds())}", waits)
+
+    _assert_retry_in(state.profile_read.retry_at, before, after, pause, "state.profile_read.retry_at")
+    (entry,) = _entries()
+    _assert_retry_in(entry.get("retry_at"), before, after, pause, "the entry's retry_at")
+    print_success("the known wait")
+
+
+@pytest.mark.asyncio
+async def test_errors_without_a_refusal_set_no_retry(job_env: AsyncEngine, lab) -> None:
+    """B6c, green by design: an error that is not a refusal defers nothing, so no default wait — ``retry_at`` stays None.
+    (Nothing read wrong at all: ``test_only_the_active_assets_with_enrichers_are_read``.)"""
+    print_section("profile_read: errors alone set no retry")
+    i_ok, i_err = _ident("EOK"), _ident("EER")
+    a = lab("errors_only", table={i_ok: {"ter": "0.0022"}, i_err: ERROR})
+    ok, _ = await _asset(job_env, "errors ok")
+    broken, _ = await _asset(job_env, "errors err")
+    await _bind(job_env, ok, {a.code: _binding(i_ok)})
+    await _bind(job_env, broken, {a.code: _binding(i_err)})
+    state = SchedulerState()
+
+    await _run_round(state)
+
+    assert (state.profile_read.last_status, *_counts(state)) == ("partial", 1, 1, 0), f"barrier: one ok, one error, nothing deferred: {state.profile_read}"
+    assert state.profile_read.retry_at is None and _entries()[0].get("retry_at") is None, state.profile_read
+    print_success("no retry without a refusal")
+
+
+@pytest.mark.asyncio
+async def test_round_two_refused_again_without_a_wait_sets_no_third_round_and_writes_from_the_second(job_env: AsyncEngine, lab) -> None:
+    """B6c with B6's cap: A, first, refuses without a wait in both rounds. Round one holds ``ter`` and retries in 15
+    minutes; round two (A refused again, no wait) sets no third round — ``retry_at`` None in the state and the entry,
+    no default — keeps the round's start, and writes ``ter`` from B, from its round-one read (B not called again)."""
+    print_section("profile_read: refused again without a wait → no third round")
+    i_a, i_b = _ident("NWA"), _ident("NWB")
+    a = lab("nowait_first", table={i_a: _rate(None)}, voices={AssetType.ETF: frozenset({"ter", "description"})})
+    b = lab("nowait_second", table={i_b: {"ter": "0.0031", "fund_size": FUND_SIZE}}, voices={AssetType.ETF: frozenset({"ter", "fund_size"})})
+    asset_id, _ = await _asset(job_env, "nowait")
+    await _bind(job_env, asset_id, {a.code: _binding(i_a), b.code: _binding(i_b)})
+    state = SchedulerState()
+
+    before, after = await _run_round(state)
+
+    assert (await _state(job_env, asset_id)).get(a.code, {}).get("retry_after", "<missing>") is None, "barrier: A refused without a wait"
+    assert await _rows(job_env, asset_id, "ter") == [], "barrier: round one held the voice"
+    _assert_retry_in(state.profile_read.retry_at, before, after, DEFAULT_WAIT, "round one's retry_at")
+    round_one = state.profile_read
+    b_calls, a_calls = b.reads_of(i_b), a.reads_of(i_a)
+    _retry_has_come(state)
+
+    await _run_round(state)
+
+    assert a.reads_of(i_a) == a_calls + 1 and b.reads_of(i_b) == b_calls, f"round two reads A again, not B: {a.calls} / {b.calls}"
+    job = state.profile_read
+    assert (job.retry_at, job.last_items_deferred, job.round_started_at) == (None, 1, round_one.round_started_at), f"one retry only, the round kept: {job}"
+    assert _entries()[0].get("retry_at") is None, _entries()[0]
+    assert _value_and_source(await _rows(job_env, asset_id, "ter")) == [(normalize("ter", "0.0031"), b.code)], "source down → the next one, in the second round"
+    print_success("no third round; written from the second")
+
+
+def test_the_shared_retry_at_gives_no_default() -> None:
+    """B6c, green by design — barrier on the shared function: ``jobs._retry_at`` still answers None for deferred items
+    without a wait (and for none), so the price jobs keep no retry without a pause; the default lives in
+    ``run_profile_read`` only. Job-level pin: ``test_scheduler_jobs.py::
+    test_current_price_refresh_with_no_pause_known_leaves_no_retry_at``."""
+    from types import SimpleNamespace  # noqa: PLC0415 — test-local
+
+    print_section("jobs._retry_at: no default")
+    refused = SimpleNamespace(error_code=RATE_LIMITED, retry_after=None)
+    assert jobs._retry_at([], NOW) is None
+    assert jobs._retry_at([refused, refused], NOW) is None
+    print_success("the price jobs unchanged")

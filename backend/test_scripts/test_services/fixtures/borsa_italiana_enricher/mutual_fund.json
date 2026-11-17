@@ -1,0 +1,40 @@
+{
+ "source": "borsa_italiana",
+ "asset": "mutual_fund",
+ "version": "borsa-italiana-scraping 0.3.5",
+ "recorded_at": "2026-11-10T17:08:03",
+ "calls": {
+  "ottieni_dati_fondo": {
+   "seconds": 0.31,
+   "error": null,
+   "response": {
+    "codice": "1FADB716664",
+    "nome": "Anima Dinamix",
+    "nav": "5.659",
+    "variazione_percentuale": "-0.75",
+    "valuta": "EUR",
+    "data_nav": "2026-11-06",
+    "url": "https://www.borsaitaliana.it/borsa/fondi/dettaglio/1FADB716664.html",
+    "isin": "IT0005487001",
+    "caratteristiche": {
+     "Classe": "N.A.",
+     "Grado di Rischio": "3",
+     "Categoria Assogestioni": "Fondi Flessibili",
+     "Data di partenza": "14/03/22",
+     "Patrimonio del fondo": "3,3600 al 30/09/26"
+    },
+    "societa_gestione": {},
+    "costi": {
+     "Ingresso (PAC)": "Min: 5,0000 - Max: 5,0000",
+     "Gestione": "0.4",
+     "Rimborso": "0%"
+    }
+   }
+  },
+  "cerca_isin": {
+   "seconds": 2.27,
+   "error": null,
+   "response": []
+  }
+ }
+}

@@ -6,7 +6,8 @@ What it guards. ``PortfolioService.get_report`` (``backend/app/services/portfoli
 shows each asset's own data — the allocation slice by asset carries its name, ``icon_url`` and ``asset_type``, a holding
 its ``asset_name`` — and an edit of those changes none of the four: the developer changed an asset's icon, refreshed, and
 the allocation pie kept the old one for up to 30 minutes. The key now carries an ``asset_fp`` over every asset of the
-scope (id, display_name, icon_url, asset_type, currency, classification_params).
+scope (id, display_name, icon_url, asset_type, currency); the profile's countries and sectors have a fingerprint of their
+own since project 68 D2b (``test_report_cache_profile.py``).
 
 - ``test_nothing_changed_is_the_cached_object`` — the control: the same query twice returns the SAME object (``is``), so
   the cases below prove the key, not a disabled cache.

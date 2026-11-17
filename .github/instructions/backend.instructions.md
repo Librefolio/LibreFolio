@@ -83,7 +83,7 @@ layer — its boundaries, imports and guards — are in `financial-math.instruct
 | Holding value from quantity and price | `services/financial_math/valuation.py` |
 | A trade's unit price on the quote's axis (`unit_price_on_quote_axis`, read by `price_marks.py` for a trade's mark); amount ↔ unit price at a given scale (the transaction form computes its own in the browser since W5-9) | `services/financial_math/trade_amount.py` |
 | The orientation of a stored FX rate (a pair read from source to destination, either way); the unit rates a calculation reads by day, kept as steps and answered on the asked days only (`AskedDayRates`, P3) | `services/financial_math/fx_rates.py` |
-| Day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360), simple interest, daily compounding over a span in closed form | `services/financial_math/interest.py` |
+| Day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360), simple interest, daily compounding over a span in closed form, a bond's annual coupon from its period coupon (`annual_coupon_rate`) | `services/financial_math/interest.py` |
 | Daily price mark of an asset for valuation | `services/financial_math/price_marks.py` |
 | A series as steps (date … through): the value of a day, a window, the steps of the change rows | `services/financial_math/series_steps.py` |
 | Yield on Cost | `services/financial_math/yield_on_cost.py` |

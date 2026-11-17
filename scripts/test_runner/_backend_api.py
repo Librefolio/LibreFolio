@@ -524,6 +524,16 @@ def api_assets_profile_read(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Assets profile read tests", verbose=verbose)
 
 
+def api_assets_profile(verbose: bool = False, test_names: list = None) -> bool:
+    """Run reading and forgetting the asset profile through the routes (project 68, lot D1)."""
+    print_section("Assets Profile (project 68 D1) API Tests")
+    print_info("Testing GET /assets/profile/catalogue, POST /assets/profile/query and DELETE /assets/profile")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_assets_profile.py", test_names)
+    return run_command(cmd, "Assets profile tests", verbose=verbose)
+
+
 def api_assets_validate(verbose: bool = False, test_names: list = None) -> bool:
     """Run POST /assets/validate (dry run of the asset PATCH) tests."""
     print_section("Assets Validate (lane 65 B4) API Tests")
@@ -1538,6 +1548,13 @@ Tests for REST API endpoints (server auto-started):
         api_assets_profile_read,
         name="Assets Profile Read",
         desc="Project 68 B5a: POST /assets/profile/ask with asset_type+enrichers (mockenrich, unique ISIN: ter 0.0022, geography stored form, description, one ok outcome) and with asset_id (same, nothing written), keys restricts, 422 without asset_id or type+enrichers and with both; POST /assets/profile/refresh writes mockenrich rows without user, state ok on GET /assets, a second refresh writes nothing new, a missing asset answers error, MOCK_RATE_LIMITED outcome RATE_LIMITED with retry_after (assets bound on the lane DB, not by a route); B5b: POST /assets with enrichers and a committed PATCH that sets them read the assets in the background (state ok and mockenrich rows within a deadline), never /validate, a refused batch or a PATCH without enrichers (after a marker POST read to ok); profile {from: mockenrich, seen} warns profileSourceChanged on validate and PATCH and writes the row in mockenrich's name",
+    )
+    add_test(
+        api,
+        "assets-profile",
+        api_assets_profile,
+        name="Assets Profile",
+        desc="Project 68 D1: GET /assets/profile/catalogue (every catalogue voice once, in order, every field); POST /assets/profile/query (steps date/through/value/source/update_id in a range, start min, one day; keys restricts, absent is every voice with rows; results in request order, a missing asset answers no voice; as_of aware UTC; unknown voice in keys or changes.key 422 PROFILE_VOICE_UNKNOWN; over MAX_BULK_ITEMS 422 bulk_too_many_items; changes: the panel keeps of a volatile voice the user row and the first source row after it, one voice lists every row, newest first with previous/has_previous, never filtered by the range); DELETE /assets/profile (forget the last row, the previous value holds; a row of another asset 404 PROFILE_UPDATES_NOT_FOUND, a row created after as_of 409 PROFILE_UPDATES_NEWER, all or nothing over the request, as_of required); rows seeded on the lane DB for the test's own assets, no enricher bound",
     )
     add_test(api, "assets-validate", api_assets_validate, name="Assets Validate", desc="POST /assets/validate dry run of the all-or-nothing asset PATCH: never writes, a currency change keeps prices and events, same issues and warnings as PATCH")
     add_test(api, "ohlc-sentinel", api_ohlc_sentinel, name="OHLC Sentinel", desc="F.4 merge on POST /assets/prices (N92): null or absent keeps the stored value, 'clear' empties it, a number writes it; -1, any other text and a close not above 0 refused with 422, nothing written")
