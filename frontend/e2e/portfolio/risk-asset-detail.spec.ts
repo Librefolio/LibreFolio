@@ -481,6 +481,77 @@ test.describe('Asset Detail Risk tab — the levels on one asset (RN-17)', () =>
         await expect(page.getByTestId('asset-detail-risk-panel')).toHaveCount(0);
     });
 
+    /**
+     * RN-18: «How does it move?» is the same block on one asset as on the Dashboard — right after L1, its four cards
+     * filled from the answers L1 already reads (the stub's KPI, 30-day VaR and drawdown summary, all about this asset).
+     * Four cards and no more: on one asset volatility, annual return, Sharpe and Sortino are L3's (the next test).
+     */
+    test('«How does it move?» follows L1 on one asset, with its four cards filled', async ({page}) => {
+        const requests = await installRiskMocks(page);
+        await answerEligibility(page);
+        const subject = await marketSubject(page);
+        const panel = await openAssetRiskTab(page, subject.id);
+
+        // Right after L1; only the level sections publish `data-level` under a `risk-level-*` id.
+        await expect
+            .poll(() => panel.locator('section[data-testid^="risk-level-"][data-level]').evaluateAll((nodes) => nodes.slice(0, 2).map((node) => node.getAttribute('data-level'))), {
+                timeout: 10_000,
+                message: 'the first two levels on the asset are not L1 and «How does it move?»',
+            })
+            .toEqual(['1', 'move']);
+
+        const move = panel.getByTestId('risk-level-move');
+        const cards = move.getByTestId('risk-move-cards');
+        await expect(cards).toBeVisible({timeout: 10_000});
+        await expect(cards.locator('> div > [data-testid^="risk-move-card-"]'), 'the block on one asset is not exactly its four cards').toHaveCount(4);
+        for (const card of ['bestDay', 'bestMonth', 'rally', 'days']) {
+            await expect(move.getByTestId(`risk-move-card-${card}-value`), `the ${card} card carries no figure`).toHaveText(/\d/);
+        }
+        for (const card of ['bestDay', 'bestMonth', 'rally']) {
+            await expect(move.getByTestId(`risk-move-card-${card}`), `the ${card} card is not a gain`).toHaveAttribute('data-sentiment', 'positive');
+        }
+        await expect(move.getByTestId('risk-move-rally-period')).toHaveAttribute('data-from', '2023-12-03');
+        await expect(move.getByTestId('risk-move-rally-period')).toHaveAttribute('data-to', '2024-02-05');
+        await expect(move.getByTestId('risk-move-best-month-period')).toHaveAttribute('data-from', '2024-01-05');
+        await expect(move.getByTestId('risk-move-best-month-period')).toHaveAttribute('data-to', '2024-02-04');
+        await expect(move.getByTestId('risk-move-empty')).toHaveCount(0);
+
+        // The figures are this asset's: the drawdown summary they read was asked about it, on the historical wave.
+        expect(
+            aboutAsset(requests, subject.id)
+                .filter((request) => request.mode === 'historical')
+                .flatMap((request) => request.analytics.map((analytic) => analytic.analytic_code)),
+            'the block read a drawdown summary nobody asked about this asset',
+        ).toContain('drawdown_summary');
+    });
+
+    /**
+     * The consultant's condition on RN-18 (17/11/2026, option A): the block does not repeat volatility, annual return,
+     * Sharpe and Sortino, because on one asset they live in L3's table, in the asset's own row — so that row must stand
+     * with no benchmark chosen. Nothing stored for the user, nothing compared, and the four cells measured.
+     */
+    test('with no benchmark stored, L3’s asset row shows its volatility, annual return, Sortino and Sharpe', async ({page}) => {
+        const requests = await installRiskMocks(page);
+        await answerEligibility(page);
+        const subject = await marketSubject(page);
+        await storeBenchmark(page, null);
+
+        const panel = await openAssetRiskTab(page, subject.id);
+        await expectBaseWaveAbout(panel, requests, subject.id);
+        expect(comparisonIdsFor(requests, subject.id), 'premise: no benchmark is stored, so nothing is compared').toEqual([]);
+
+        const level3 = panel.getByTestId('risk-level-3');
+        const row = level3.locator('tr[data-row-id="ref-portfolio"]');
+        await expect(row, 'the asset’s own row is not drawn without a benchmark').toBeVisible({timeout: 10_000});
+        for (const column of ['volatility', 'expectedReturn', 'sortino', 'sharpe']) {
+            const cell = row.getByTestId(`risk-l3-row-ref-${column}`);
+            await expect(cell, `the asset's ${column} is not measured without a benchmark`).toHaveAttribute('data-measured', 'true');
+            await expect(cell, `the asset's ${column} prints no figure`).toHaveText(/\d/);
+        }
+        // The row is the asset alone: no benchmark row beside it, and the asset never repeated as a holding of itself.
+        await expect(level3.locator('tbody tr[data-row-id]')).toHaveCount(1);
+    });
+
     test('L4 on one asset: the shock offers no asset-class preset and runs a sector one, the replay says one sentence and draws no tornado, the simulation runs', async ({page}) => {
         const requests = await installRiskMocks(page);
         await answerScenarioCatalog(page);

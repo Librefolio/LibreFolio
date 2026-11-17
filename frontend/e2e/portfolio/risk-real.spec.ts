@@ -64,6 +64,9 @@ const MAX_QUOTE_AGE_DAYS = 7;
 /** Level 1's two VaR instances (`riskAnalysisHelpers.ts`), restated: a spec cannot resolve `$lib`. */
 const DAILY_VAR_INSTANCE = 'base-historical-historical_var';
 const MONTHLY_VAR_INSTANCE = 'base-historical-historical_var-monthly';
+/** The KPI and the drawdown summary of the historical wave, which «How does it move?» reads beside the monthly VaR. */
+const KPI_INSTANCE = 'base-historical-historical_kpi';
+const DRAWDOWN_INSTANCE = 'base-historical-drawdown_summary';
 /** The analytics level 1 renders (`RiskLevelsPanel.svelte`, `L1_CODES`). */
 const L1_CODES: readonly string[] = ['historical_var', 'drawdown_summary', 'historical_kpi'];
 
@@ -569,6 +572,54 @@ test.describe('Risk on real data — the engine’s answer, from the wire to the
             // Behind the figures above, the presence barrier.
             await expect(panel.getByTestId('risk-level-4-errors'), 'no step of level 4 failed').toHaveCount(0);
             await expect(replay.getByTestId('risk-replay-nothing')).toHaveCount(0);
+        });
+
+        await test.step('every risk answer the page received passes the generated Zod schemas', () => expectRiskContract(traffic));
+    });
+
+    /**
+     * RN-18 on the real engine: «How does it move?» fills its cards from the answers L1 already reads, so the RN-14
+     * fields the engine sends — the drawdown summary's largest rally, the KPI's Omega and best day, the month VaR's best
+     * window — must reach the screen as the engine said them, for a real portfolio. The mocks cannot prove this: a field
+     * the engine renamed or never filled would leave the mocked specs green and the real cards blank.
+     */
+    test('R4 — «How does it move?» prints the engine’s largest rally, best day and gains against losses', async ({page, request, owned}) => {
+        test.setTimeout(240_000);
+        const holdings = await test.step('seed: a disposable account holds two seeded stocks bought 200 days ago', () => holdSeededStocks(page, request, owned, 'riskmv'));
+        const {panel, traffic} = await test.step('open the Dashboard Risk tab over that period, nothing routed', () => openRiskTab(page, holdings.period));
+        const shown = await shownAnswer(traffic, isHistoricalWave, 'the historical wave on screen');
+
+        const engine = await test.step('the engine answered the KPI and the drawdown summary with the RN-14 fields', () => {
+            const kpi = schemas.RiskKpiOutput.parse(resultOf(shown.answer, KPI_INSTANCE, 'the historical KPI').output);
+            const drawdown = schemas.RiskDrawdownOutput.parse(resultOf(shown.answer, DRAWDOWN_INSTANCE, 'the drawdown summary').output);
+            const {largest_rally: rally, largest_rally_start_date: rallyFrom, largest_rally_end_date: rallyTo} = drawdown;
+            const {omega_ratio: omega, best_realization: bestDay} = kpi;
+            // Two stocks over 200 days of seeded quotes rise and fall: a blank here is the engine's, and the cards
+            // below would be compared with nothing.
+            if (typeof rally !== 'number' || rally <= 0 || !rallyFrom || !rallyTo) throw new Error(`The drawdown summary carries no dated rally: ${JSON.stringify({rally, rallyFrom, rallyTo})}`);
+            if (typeof omega !== 'number' || omega <= 0) throw new Error(`The KPI carries no gains against losses: ${JSON.stringify(omega)}`);
+            if (typeof bestDay !== 'number' || bestDay <= 0) throw new Error(`The KPI carries no best day: ${JSON.stringify(bestDay)}`);
+            test.info().annotations.push({type: 'engine', description: `largest rally ${rally} (${rallyFrom} → ${rallyTo}), omega ${omega}, best day ${bestDay}`});
+            return {rally, rallyFrom, rallyTo, omega, bestDay};
+        });
+
+        const move = panel.getByTestId('risk-level-move');
+        await test.step('the block prints the engine’s figures', async () => {
+            await expect(move.getByTestId('risk-move-cards')).toBeVisible({timeout: FIGURE_TIMEOUT_MS});
+            await expectFigure(move.getByTestId('risk-move-card-rally-value'), engine.rally, 'the largest rally');
+            await expect(move.getByTestId('risk-move-rally-period')).toHaveAttribute('data-from', engine.rallyFrom);
+            await expect(move.getByTestId('risk-move-rally-period')).toHaveAttribute('data-to', engine.rallyTo);
+            await expectFigure(move.getByTestId('risk-move-card-bestDay-value'), engine.bestDay, 'the best day');
+            // Gains against losses is a ratio, printed with two decimals in the interface's language.
+            const days = move.getByTestId('risk-move-card-days-value');
+            await expect(async () => {
+                const text = (await days.textContent({timeout: 5_000})) ?? '';
+                const match = /(\d+)[.,](\d{2})/.exec(text);
+                expect(match, `the days card prints no two-decimal ratio: «${text}»`).not.toBeNull();
+                expect(Math.abs(Number(`${match?.[1]}.${match?.[2]}`) - engine.omega), `the days card reads «${text}», the engine answered ${engine.omega}`).toBeLessThanOrEqual(0.005 + 1e-9);
+            }).toPass({timeout: FIGURE_TIMEOUT_MS});
+            // Behind the figures: the block is drawn, not empty.
+            await expect(move.getByTestId('risk-move-empty')).toHaveCount(0);
         });
 
         await test.step('every risk answer the page received passes the generated Zod schemas', () => expectRiskContract(traffic));

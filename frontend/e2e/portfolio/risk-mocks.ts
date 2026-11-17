@@ -53,6 +53,12 @@ const CATALOG = {
         definition('comparison', 'comparison', ['asset', 'portfolio'], ['historical', 'current_composition'], 'comparison', 20),
         definition('historical_var', 'var_cvar', ['asset', 'portfolio'], ['historical', 'current_composition'], 'historicalVar', 20),
         definition('simulation', 'simulation', ['asset', 'portfolio'], ['current_composition'], 'simulation', 30),
+        // RN-18: «How does it move?» reads the drawdown summary's rally and average drawdown, and on one asset L3's
+        // asset row reads its annual return from `asset_risk_return`. Scopes and modes copied from the plugins'
+        // declarations (`risk_plugins/drawdown_summary/plugin.py`, `risk_plugins/asset_risk_return/plugin.py`): a
+        // catalogue wider than the backend's would let the panel ask what the engine refuses.
+        definition('drawdown_summary', 'drawdown', ['asset', 'portfolio'], ['historical'], 'drawdownSummary', 2),
+        definition('asset_risk_return', 'risk_return', ['asset', 'portfolio'], ['current_composition'], 'assetRiskReturn', 20),
     ],
 };
 
@@ -225,6 +231,43 @@ function matrixAssetIds(request: RiskRequest): number[] {
     return [1, 2];
 }
 
+/**
+ * The RN-14 fields «How does it move?» (RN-18) reads, the same numbers as the Dashboard stub of
+ * `risk-analysis.spec.ts` so the two mocks tell one story. Kept consistent with the rest of each output: the best day
+ * (+3.4%) lies inside the window the underwater series spans, the rally climbs from the max-drawdown trough
+ * (2023-12-03) to the current peak (2024-02-05), 64 calendar days, and the average drawdown is the mean of the six
+ * underwater points below.
+ */
+const MOVE_KPI_FIELDS = {
+    best_realization: 0.034,
+    best_realization_date: '2024-01-15',
+    positive_observation_share: 0.55,
+    mean_positive_return: 0.0072,
+    mean_negative_return: -0.0081,
+    longest_positive_run_observations: 6,
+    longest_positive_run_start_date: '2024-01-08',
+    longest_positive_run_end_date: '2024-01-15',
+    omega_ratio: 1.34,
+    downside_deviation: 0.097,
+    extreme_day_ratio: 1.8,
+};
+const MOVE_BEST_MONTH = {compounded_return: 0.087, start_date: '2024-01-05', end_date: '2024-02-04'};
+const MOVE_UNDERWATER = [
+    {date: '2023-11-14', drawdown: 0},
+    {date: '2023-11-21', drawdown: -0.052},
+    {date: '2023-12-03', drawdown: -0.087},
+    {date: '2024-01-10', drawdown: -0.031},
+    {date: '2024-02-05', drawdown: 0},
+    {date: '2024-03-18', drawdown: -0.032},
+];
+const MOVE_DRAWDOWN_FIELDS = {
+    largest_rally: 0.112,
+    largest_rally_start_date: '2023-12-03',
+    largest_rally_end_date: '2024-02-05',
+    largest_rally_duration_days: 64,
+    average_drawdown: -0.034,
+};
+
 function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options: RiskMockOptions): Record<string, unknown> {
     const base = {
         instance_id: analytic.instance_id,
@@ -258,6 +301,7 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                     max_drawdown_duration_days: 19,
                     sharpe: 1.21,
                     sortino: 1.68,
+                    ...MOVE_KPI_FIELDS,
                 },
             };
         case 'correlation': {
@@ -296,20 +340,86 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                     ],
                 },
             };
-        case 'historical_var':
+        case 'historical_var': {
+            // Two instances travel in one wave, the day and the 30 days, told apart by `horizon_days` as the backend
+            // tells them. The day keeps its original figures byte for byte; the month adds its best window (RN-14),
+            // which «How does it move?» prints as the best 30 days. No bins on either: this stub draws no histogram,
+            // so no green tail either (`risk-analysis.spec.ts` owns that).
+            const longHorizon = Number(analytic.parameters?.horizon_days ?? 1) > 1;
             return {
                 ...base,
                 status: 'ok',
                 output: {
                     kind: 'var_cvar',
                     confidence_level: 0.95,
-                    horizon_days: 1,
-                    horizon_observations: 1,
+                    horizon_days: longHorizon ? 30 : 1,
+                    horizon_observations: longHorizon ? 21 : 1,
                     observations: 60,
-                    value_at_risk: 0.021,
-                    conditional_value_at_risk: 0.031,
+                    value_at_risk: longHorizon ? 0.068 : 0.021,
+                    conditional_value_at_risk: longHorizon ? 0.094 : 0.031,
+                    ...(longHorizon ? {best_horizon: MOVE_BEST_MONTH, gain_threshold: 0.061} : {}),
                 },
             };
+        }
+        case 'drawdown_summary':
+            return {
+                ...base,
+                status: 'ok',
+                output: {
+                    kind: 'drawdown',
+                    current_drawdown: -0.032,
+                    current_peak_date: '2024-02-05',
+                    current_drawdown_duration_days: 41,
+                    underwater_series: MOVE_UNDERWATER,
+                    maximum_drawdown: -0.087,
+                    maximum_drawdown_trough_to_peak_ratio: 0.087 / 0.913,
+                    maximum_drawdown_peak_date: '2023-11-14',
+                    maximum_drawdown_trough_date: '2023-12-03',
+                    maximum_drawdown_recovery_status: 'open',
+                    maximum_drawdown_recovery_date: null,
+                    maximum_drawdown_duration_days: 19,
+                    maximum_drawdown_recovered_ratio: 0.63,
+                    remaining_to_peak_ratio: 0.033,
+                    available_start: '2023-09-01',
+                    available_end: '2024-03-17',
+                    n_observations: 60,
+                    coverage: 0.98,
+                    calculation_basis: 'daily_close',
+                    return_basis: request.scope.kind === 'portfolio' ? 'twrr' : 'price_only',
+                    ...MOVE_DRAWDOWN_FIELDS,
+                },
+            };
+        case 'asset_risk_return': {
+            // One asset answers its own pair at weight 1 (RN-17); a portfolio answers ids 1 and 2 with the weights
+            // and cash share the `risk_contribution` branch states, as one current-composition wave would.
+            if (request.scope.kind === 'asset') {
+                return {
+                    ...base,
+                    status: 'ok',
+                    output: {
+                        kind: 'risk_return',
+                        portfolio_volatility: 0.139,
+                        portfolio_expected_annual_return: 0.128,
+                        cash_weight: 0,
+                        items: [{asset_id: request.scope.asset_id, weight: 1, volatility: 0.139, expected_annual_return: 0.128}],
+                    },
+                };
+            }
+            return {
+                ...base,
+                status: 'ok',
+                output: {
+                    kind: 'risk_return',
+                    portfolio_volatility: 0.118,
+                    portfolio_expected_annual_return: 0.071,
+                    cash_weight: 0.05,
+                    items: [
+                        {asset_id: 1, weight: 0.6, volatility: 0.152, expected_annual_return: 0.094},
+                        {asset_id: 2, weight: 0.35, volatility: 0.087, expected_annual_return: 0.041},
+                    ],
+                },
+            };
+        }
         case 'comparison': {
             const comparisonAssetId = Number(analytic.parameters?.comparison_asset_id ?? 2);
             return {
