@@ -106,6 +106,21 @@
         "years": "anni",
         "per_100_nominal": "per 100 di nominale"
       },
+      "topics": {
+        "costs": "costi",
+        "structure": "struttura",
+        "manager": "società di gestione",
+        "countries": "paesi",
+        "sectors": "settori",
+        "coupons": "cedole",
+        "maturity": "scadenza",
+        "yield": "rendimento",
+        "duration": "duration",
+        "size": "dimensione",
+        "legal_form": "forma giuridica",
+        "issuer": "emittente",
+        "description": "descrizione"
+      },
       "edit": {
         "title": "Dati del profilo",
         "searchVoice": "Cerca un dato e aggiungilo",

@@ -12,7 +12,7 @@ Pure: no database, no server, no network.
     table — what is accepted and its stored form, what is refused.
 (d) The stored form is deterministic (same fact, same form whatever its spelling) and idempotent, also after a JSON
     round trip.
-(e) The labels of the windows (lot E10c2): every voice, choice, group and unit has its label in the four languages, in
+(e) The labels of the windows (lot E10c2; topics, E7b): every voice, choice, group, unit and topic has its label in the four languages, in
     ``frontend/src/lib/features/assets/profile/i18n/``.
 
 Every expectation is driven by the tables of this file, never by iterating ``CATALOGUE``: an empty or partial
@@ -26,7 +26,7 @@ from pathlib import Path
 
 import pytest
 
-from backend.app.schemas.assets.profile import FAProfileVoice, ProfileGroup, ProfileMapKeys, ProfileShape, ProfileSign
+from backend.app.schemas.assets.profile import FAProfileVoice, ProfileGroup, ProfileMapKeys, ProfileShape, ProfileSign, ProfileTopic
 from backend.app.services.assets.profile.catalogue import CATALOGUE, ProfileValueError, get_voice, normalize_value
 
 # ============================================================================
@@ -42,6 +42,50 @@ CHOICES: dict[str, tuple[str, ...]] = {
     "day_count": ("act_act_icma", "act_act_isda", "act_360", "act_365", "30_360"),
     "legal_form": ("share", "bond", "ucits_fund", "non_ucits_fund", "etc_etn", "certificate", "derivative", "crypto", "other"),
     "issuer_type": ("sovereign", "supranational", "corporate", "vehicle"),
+}
+
+#: The topic of every voice (plan 68, E7b: PROF, round 43): what an enricher's row in the enrichers' window says it
+#: fills («costi, struttura, paesi, settori»), a short word for a family of voices. Declared where the voice is born.
+T = ProfileTopic
+TOPICS: dict[str, ProfileTopic] = {
+    "geography": T.COUNTRIES,
+    "sector": T.SECTORS,
+    "description": T.DESCRIPTION,
+    "withholding_tax": T.COSTS,
+    "ter": T.COSTS,
+    "fund_size": T.SIZE,
+    "market_cap": T.SIZE,
+    "yield_gross": T.YIELD,
+    "modified_duration": T.DURATION,
+    "coupon_rate": T.COUPONS,
+    "maturity_date": T.MATURITY,
+    "fund_provider": T.MANAGER,
+    "index_name": T.STRUCTURE,
+    "replication": T.STRUCTURE,
+    "distribution_policy": T.STRUCTURE,
+    "fund_domicile": T.STRUCTURE,
+    "fund_currency": T.STRUCTURE,
+    "inception_date": T.STRUCTURE,
+    "management_fee": T.COSTS,
+    "industry": T.SECTORS,
+    "issuer_country": T.ISSUER,
+    "coupon_period_rate": T.COUPONS,
+    "coupon_frequency": T.COUPONS,
+    "coupon_type": T.COUPONS,
+    "day_count": T.COUPONS,
+    "yield_net": T.YIELD,
+    "accrued_interest": T.COUPONS,
+    "issuer_name": T.ISSUER,
+    "min_lot": T.STRUCTURE,
+    "interest_start_date": T.COUPONS,
+    "loyalty_bonus": T.COUPONS,
+    "coupon_schedule": T.COUPONS,
+    "payout_description": T.MATURITY,
+    "legal_form": T.LEGAL_FORM,
+    "issuer_type": T.ISSUER,
+    "issuer_lei": T.ISSUER,
+    "outstanding_amount": T.SIZE,
+    "reference_price_date": T.YIELD,
 }
 
 S = ProfileShape
@@ -61,6 +105,7 @@ def _v(key, shape, *, sign=None, unit=None, groups=(), key_figure=False, charted
         volatile=volatile,
         choices=CHOICES.get(key, ()),
         map_keys=map_keys,
+        topic=TOPICS[key],
     )
 
 
@@ -776,3 +821,16 @@ def test_every_group_and_unit_has_a_label(language):
     labels = _labels(language)
     assert set(labels["groups"]) == {group.value for group in ProfileGroup} | {"other"}
     assert set(labels["units"]) == {voice.unit for voice in CATALOGUE.values() if voice.unit}
+
+
+def test_every_voice_has_a_topic_and_every_topic_a_voice():
+    """E7b: each voice declares its topic in the catalogue (the table above is the expectation), and no topic is left
+    without a voice."""
+    assert set(TOPICS) == set(EXPECTED_KEYS)
+    assert {voice.topic for voice in CATALOGUE.values()} == set(ProfileTopic)
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_every_topic_has_a_label(language):
+    """The enrichers' window says what each enricher fills in topics: every topic has its label in the four languages."""
+    assert set(_labels(language)["topics"]) == {topic.value for topic in ProfileTopic}

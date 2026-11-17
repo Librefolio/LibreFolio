@@ -106,6 +106,21 @@
         "years": "years",
         "per_100_nominal": "per 100 nominal"
       },
+      "topics": {
+        "costs": "costs",
+        "structure": "structure",
+        "manager": "management company",
+        "countries": "countries",
+        "sectors": "sectors",
+        "coupons": "coupons",
+        "maturity": "maturity",
+        "yield": "yield",
+        "duration": "duration",
+        "size": "size",
+        "legal_form": "legal form",
+        "issuer": "issuer",
+        "description": "description"
+      },
       "edit": {
         "title": "Profile data",
         "searchVoice": "Find a data item and add it",

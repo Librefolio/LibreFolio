@@ -106,6 +106,21 @@
         "years": "ans",
         "per_100_nominal": "pour 100 de nominal"
       },
+      "topics": {
+        "costs": "coûts",
+        "structure": "structure",
+        "manager": "société de gestion",
+        "countries": "pays",
+        "sectors": "secteurs",
+        "coupons": "coupons",
+        "maturity": "échéance",
+        "yield": "rendement",
+        "duration": "duration",
+        "size": "taille",
+        "legal_form": "forme juridique",
+        "issuer": "émetteur",
+        "description": "description"
+      },
       "edit": {
         "title": "Données du profil",
         "searchVoice": "Chercher une donnée et l'ajouter",

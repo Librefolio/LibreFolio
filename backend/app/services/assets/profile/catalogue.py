@@ -26,7 +26,7 @@ import pycountry
 from pydantic import ValidationError
 
 from backend.app.schemas.assets.metadata import FAGeographicArea, FASectorArea
-from backend.app.schemas.assets.profile import FAProfileVoice, ProfileGroup, ProfileMapKeys, ProfileShape, ProfileSign
+from backend.app.schemas.assets.profile import FAProfileVoice, ProfileGroup, ProfileMapKeys, ProfileShape, ProfileSign, ProfileTopic
 from backend.app.schemas.common import check_decimal_exponent, iso_currency_code
 from backend.app.utils.asset.geo import normalize_country_to_iso3
 from backend.app.utils.asset.sector import normalize_sector
@@ -56,6 +56,8 @@ _BOND = (ProfileGroup.BOND,)
 _IDENTITY = (ProfileGroup.IDENTITY,)
 
 _NON_NEGATIVE = ProfileSign.NON_NEGATIVE
+#: Each voice says what it is about (E7b): the enrichers' window names what an enricher fills by these.
+_T = ProfileTopic
 
 
 def _voice(key: str, shape: ProfileShape, **fields: Any) -> FAProfileVoice:
@@ -64,62 +66,64 @@ def _voice(key: str, shape: ProfileShape, **fields: Any) -> FAProfileVoice:
 
 _VOICES: tuple[FAProfileVoice, ...] = (
     # Classification: today's classification_params, moved here (A4 copies them)
-    _voice("geography", ProfileShape.MAP, map_keys=ProfileMapKeys.COUNTRY, groups=_CLASSIFICATION),
-    _voice("sector", ProfileShape.MAP, map_keys=ProfileMapKeys.SECTOR, groups=(ProfileGroup.CLASSIFICATION, ProfileGroup.COMPANY)),
-    _voice("description", ProfileShape.TEXT),
+    _voice("geography", ProfileShape.MAP, topic=_T.COUNTRIES, map_keys=ProfileMapKeys.COUNTRY, groups=_CLASSIFICATION),
+    _voice("sector", ProfileShape.MAP, topic=_T.SECTORS, map_keys=ProfileMapKeys.SECTOR, groups=(ProfileGroup.CLASSIFICATION, ProfileGroup.COMPANY)),
+    _voice("description", ProfileShape.TEXT, topic=_T.DESCRIPTION),
     # Key figures: one card each, a chart of its history unless said otherwise
-    _voice("withholding_tax", ProfileShape.PERCENTAGE, sign=_NON_NEGATIVE, groups=_KEY_FIGURES, key_figure=True),
-    _voice("ter", ProfileShape.PERCENTAGE, sign=_NON_NEGATIVE, groups=_KEY_FIGURES, key_figure=True, charted=True),
-    _voice("fund_size", ProfileShape.AMOUNT, sign=_NON_NEGATIVE, groups=_KEY_FIGURES, key_figure=True, charted=True, volatile=True),
-    _voice("market_cap", ProfileShape.AMOUNT, sign=_NON_NEGATIVE, groups=_KEY_FIGURES, key_figure=True, charted=True, volatile=True),
-    _voice("yield_gross", ProfileShape.PERCENTAGE, sign=ProfileSign.ANY, groups=_KEY_FIGURES, key_figure=True, charted=True, volatile=True),
-    _voice("modified_duration", ProfileShape.NUMBER, sign=_NON_NEGATIVE, unit="years", groups=_KEY_FIGURES, key_figure=True, charted=True, volatile=True),
-    _voice("coupon_rate", ProfileShape.PERCENTAGE, sign=_NON_NEGATIVE, groups=_KEY_FIGURES, key_figure=True, charted=True),
-    _voice("maturity_date", ProfileShape.DATE, groups=_KEY_FIGURES, key_figure=True),
+    _voice("withholding_tax", ProfileShape.PERCENTAGE, topic=_T.COSTS, sign=_NON_NEGATIVE, groups=_KEY_FIGURES, key_figure=True),
+    _voice("ter", ProfileShape.PERCENTAGE, topic=_T.COSTS, sign=_NON_NEGATIVE, groups=_KEY_FIGURES, key_figure=True, charted=True),
+    _voice("fund_size", ProfileShape.AMOUNT, topic=_T.SIZE, sign=_NON_NEGATIVE, groups=_KEY_FIGURES, key_figure=True, charted=True, volatile=True),
+    _voice("market_cap", ProfileShape.AMOUNT, topic=_T.SIZE, sign=_NON_NEGATIVE, groups=_KEY_FIGURES, key_figure=True, charted=True, volatile=True),
+    _voice("yield_gross", ProfileShape.PERCENTAGE, topic=_T.YIELD, sign=ProfileSign.ANY, groups=_KEY_FIGURES, key_figure=True, charted=True, volatile=True),
+    _voice("modified_duration", ProfileShape.NUMBER, topic=_T.DURATION, sign=_NON_NEGATIVE, unit="years", groups=_KEY_FIGURES, key_figure=True, charted=True, volatile=True),
+    _voice("coupon_rate", ProfileShape.PERCENTAGE, topic=_T.COUPONS, sign=_NON_NEGATIVE, groups=_KEY_FIGURES, key_figure=True, charted=True),
+    _voice("maturity_date", ProfileShape.DATE, topic=_T.MATURITY, groups=_KEY_FIGURES, key_figure=True),
     # The fund
-    _voice("fund_provider", ProfileShape.TEXT, groups=_FUND),
-    _voice("index_name", ProfileShape.TEXT, groups=_FUND),
+    _voice("fund_provider", ProfileShape.TEXT, topic=_T.MANAGER, groups=_FUND),
+    _voice("index_name", ProfileShape.TEXT, topic=_T.STRUCTURE, groups=_FUND),
     _voice(
         "replication",
         ProfileShape.CHOICE,
+        topic=_T.STRUCTURE,
         groups=_FUND,
         choices=("physical_full", "physical_sampling", "physical_backed", "synthetic_unfunded_swap", "synthetic_funded_swap"),
     ),
-    _voice("distribution_policy", ProfileShape.CHOICE, groups=_FUND, choices=("accumulating", "distributing")),
-    _voice("fund_domicile", ProfileShape.COUNTRY, groups=_FUND),
-    _voice("fund_currency", ProfileShape.CURRENCY, groups=_FUND),
-    _voice("inception_date", ProfileShape.DATE, groups=_FUND),
+    _voice("distribution_policy", ProfileShape.CHOICE, topic=_T.STRUCTURE, groups=_FUND, choices=("accumulating", "distributing")),
+    _voice("fund_domicile", ProfileShape.COUNTRY, topic=_T.STRUCTURE, groups=_FUND),
+    _voice("fund_currency", ProfileShape.CURRENCY, topic=_T.STRUCTURE, groups=_FUND),
+    _voice("inception_date", ProfileShape.DATE, topic=_T.STRUCTURE, groups=_FUND),
     # The fund's management fee (C2e, the developer's «voce sua»): only a part of the TER, so a detail of the fund and
     # never a key figure; a source that gives it never writes it as «ter»
-    _voice("management_fee", ProfileShape.PERCENTAGE, sign=_NON_NEGATIVE, groups=_FUND),
+    _voice("management_fee", ProfileShape.PERCENTAGE, topic=_T.COSTS, sign=_NON_NEGATIVE, groups=_FUND),
     # The company (its sector is the «sector» map above, one sector at 100 %)
-    _voice("industry", ProfileShape.TEXT, groups=_COMPANY),
-    _voice("issuer_country", ProfileShape.COUNTRY, groups=_COMPANY),
+    _voice("industry", ProfileShape.TEXT, topic=_T.SECTORS, groups=_COMPANY),
+    _voice("issuer_country", ProfileShape.COUNTRY, topic=_T.ISSUER, groups=_COMPANY),
     # The bond
-    _voice("coupon_period_rate", ProfileShape.PERCENTAGE, sign=_NON_NEGATIVE, groups=_BOND),
-    _voice("coupon_frequency", ProfileShape.CHOICE, groups=_BOND, choices=("monthly", "quarterly", "semiannual", "annual", "at_maturity")),
-    _voice("coupon_type", ProfileShape.CHOICE, groups=_BOND, choices=("fixed", "floating", "step_up", "structured", "zero_coupon", "inflation_linked")),
-    _voice("day_count", ProfileShape.CHOICE, groups=_BOND, choices=("act_act_icma", "act_act_isda", "act_360", "act_365", "30_360")),
-    _voice("yield_net", ProfileShape.PERCENTAGE, sign=ProfileSign.ANY, groups=_BOND, volatile=True),
-    _voice("accrued_interest", ProfileShape.NUMBER, sign=ProfileSign.ANY, unit="per_100_nominal", groups=_BOND, volatile=True),
-    _voice("issuer_name", ProfileShape.TEXT, groups=_BOND),
-    _voice("min_lot", ProfileShape.NUMBER, sign=ProfileSign.POSITIVE, groups=_BOND),
-    _voice("interest_start_date", ProfileShape.DATE, groups=_BOND),
-    _voice("loyalty_bonus", ProfileShape.PERCENTAGE, sign=_NON_NEGATIVE, groups=_BOND),
-    _voice("coupon_schedule", ProfileShape.TABLE, sign=_NON_NEGATIVE, groups=_BOND),
-    _voice("payout_description", ProfileShape.TEXT, groups=_BOND),
+    _voice("coupon_period_rate", ProfileShape.PERCENTAGE, topic=_T.COUPONS, sign=_NON_NEGATIVE, groups=_BOND),
+    _voice("coupon_frequency", ProfileShape.CHOICE, topic=_T.COUPONS, groups=_BOND, choices=("monthly", "quarterly", "semiannual", "annual", "at_maturity")),
+    _voice("coupon_type", ProfileShape.CHOICE, topic=_T.COUPONS, groups=_BOND, choices=("fixed", "floating", "step_up", "structured", "zero_coupon", "inflation_linked")),
+    _voice("day_count", ProfileShape.CHOICE, topic=_T.COUPONS, groups=_BOND, choices=("act_act_icma", "act_act_isda", "act_360", "act_365", "30_360")),
+    _voice("yield_net", ProfileShape.PERCENTAGE, topic=_T.YIELD, sign=ProfileSign.ANY, groups=_BOND, volatile=True),
+    _voice("accrued_interest", ProfileShape.NUMBER, topic=_T.COUPONS, sign=ProfileSign.ANY, unit="per_100_nominal", groups=_BOND, volatile=True),
+    _voice("issuer_name", ProfileShape.TEXT, topic=_T.ISSUER, groups=_BOND),
+    _voice("min_lot", ProfileShape.NUMBER, topic=_T.STRUCTURE, sign=ProfileSign.POSITIVE, groups=_BOND),
+    _voice("interest_start_date", ProfileShape.DATE, topic=_T.COUPONS, groups=_BOND),
+    _voice("loyalty_bonus", ProfileShape.PERCENTAGE, topic=_T.COUPONS, sign=_NON_NEGATIVE, groups=_BOND),
+    _voice("coupon_schedule", ProfileShape.TABLE, topic=_T.COUPONS, sign=_NON_NEGATIVE, groups=_BOND),
+    _voice("payout_description", ProfileShape.TEXT, topic=_T.MATURITY, groups=_BOND),
     # Identity: what the instrument is and who issues it, neutral to any country's tax rules
     _voice(
         "legal_form",
         ProfileShape.CHOICE,
+        topic=_T.LEGAL_FORM,
         groups=_IDENTITY,
         choices=("share", "bond", "ucits_fund", "non_ucits_fund", "etc_etn", "certificate", "derivative", "crypto", "other"),
     ),
-    _voice("issuer_type", ProfileShape.CHOICE, groups=_IDENTITY, choices=("sovereign", "supranational", "corporate", "vehicle")),
+    _voice("issuer_type", ProfileShape.CHOICE, topic=_T.ISSUER, groups=_IDENTITY, choices=("sovereign", "supranational", "corporate", "vehicle")),
     # No cell of their own: the cascade of identifiers, and the voices lane 62 asked for
-    _voice("issuer_lei", ProfileShape.TEXT),
-    _voice("outstanding_amount", ProfileShape.AMOUNT, sign=_NON_NEGATIVE),
-    _voice("reference_price_date", ProfileShape.DATE),
+    _voice("issuer_lei", ProfileShape.TEXT, topic=_T.ISSUER),
+    _voice("outstanding_amount", ProfileShape.AMOUNT, topic=_T.SIZE, sign=_NON_NEGATIVE),
+    _voice("reference_price_date", ProfileShape.DATE, topic=_T.YIELD),
 )
 
 #: Every voice of the profile, by key, in the order of plan §3.6.

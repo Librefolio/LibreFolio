@@ -106,6 +106,21 @@
         "years": "años",
         "per_100_nominal": "por 100 de nominal"
       },
+      "topics": {
+        "costs": "costes",
+        "structure": "estructura",
+        "manager": "gestora",
+        "countries": "países",
+        "sectors": "sectores",
+        "coupons": "cupones",
+        "maturity": "vencimiento",
+        "yield": "rentabilidad",
+        "duration": "duración",
+        "size": "tamaño",
+        "legal_form": "forma jurídica",
+        "issuer": "emisor",
+        "description": "descripción"
+      },
       "edit": {
         "title": "Datos del perfil",
         "searchVoice": "Buscar un dato y añadirlo",
