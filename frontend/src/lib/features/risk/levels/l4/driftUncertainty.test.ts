@@ -26,8 +26,8 @@ import {buildDriftUncertainty, type DriftUncertaintyInput, type DriftUncertainty
  *
  * The third group is about silence. The server validator refuses to emit half
  * the pair, so a half arriving here means the payload is not one this build
- * produced — and the generated client would not stop it: `generated.ts:14561`
- * parses both fields as `z.union([z.number(), z.null()]).optional()`, having
+ * produced — and the generated client would not stop it: the generated `RiskSimulationOutput` schema
+ * (`generated.ts`) parses both fields as `z.union([z.number(), z.null()]).optional()`, having
  * dropped the `ge=1` floor and the positive-integer bound the schema declares.
  * On the client these guards are the only ones left standing.
  */

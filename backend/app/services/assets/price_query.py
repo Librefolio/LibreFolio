@@ -43,7 +43,7 @@ from backend.app.schemas.prices import FACurrentPriceItem, FACurrentValue, FAPri
 from backend.app.schemas.provider import (
     FAVolumeKind,
 )
-from backend.app.services.assets import core
+from backend.app.services.assets import bulk_current, core
 from backend.app.services.assets.base import ASSET_HISTORY_MIN_FALLBACK, AssetRateLimitedError, AssetSourceProvider
 from backend.app.services.assets.market_calendar import ensure_market_holidays
 from backend.app.services.assets.observed_prices import ObservedPrices, fill_point, observe, series_points
@@ -54,6 +54,7 @@ from backend.app.services.financial_math.fx_rates import fx_days_back
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.fx.conversion_issues import day_issue, group_fx_issues, split_fx_issues
 from backend.app.services.market_series import mark_market_closed_carries, prepare_asset_series_set
+from backend.app.services.plugin_settings import runtime
 from backend.app.services.signals.execution import SignalPreparedSeriesBundle
 from backend.app.services.signals.sampling import sample_signal_result
 from backend.app.services.signals.service import SignalService
@@ -143,7 +144,7 @@ async def _live_quote_item(asset_id: int, assignment: AssetProviderAssignment, s
     ``(None, None)`` without a configured provider, after a failure, or for a quote no price column keeps: the caller
     then falls back to the last stored price. The quote is served as the price columns keep it
     (``storable_current_value``: truncated like the history, or refused and logged once; X-R40, W-B62), and a quote is
-    cached only once its item is built: the current-value cache (2 minutes, shared with the refresh) never holds one
+    cached only once its item is built: the current-value cache (2 minutes, or the provider's interval, shared with the refresh) never holds one
     that cannot be served.
     """
     provider = await core.configured_provider(assignment.provider_code)
@@ -153,7 +154,7 @@ async def _live_quote_item(asset_id: int, assignment: AssetProviderAssignment, s
     mapped_id_type = AssetSourceProvider.map_input_type_to_identifier_type(assignment.identifier_type)
     source = f"provider:{assignment.provider_code}"
 
-    # Check core cache first (TTL 2min), under the key a refresh uses too: with the provider's parameters
+    # Check core cache first (TTL 2min, or the provider's interval), under the key a refresh uses too: with the provider's parameters
     # and settings (core.asset_cache_key), so that assets with other parameters never share a value (X-R28)
     cache_key = core.asset_cache_key(assignment.provider_code, assignment.identifier, assignment.identifier_type, params, core.settings_cache_part(provider))
     cached_cv, cache_ok = core._asset_current_cache.get(cache_key)
@@ -181,7 +182,7 @@ async def _live_quote_item(asset_id: int, assignment: AssetProviderAssignment, s
             if quote is None:
                 return None, None
             item = _quote_item(asset_id, quote, source)
-            core._asset_current_cache.set(cache_key, quote)
+            core.remember_current_value(provider, cache_key, quote)
             return item, None
     except AssetRateLimitedError as refused:
         # Paused after «too many requests»: no call was made, or the provider refused this one. The
@@ -975,6 +976,7 @@ class PriceQueryOperations:
         return results
 
     @staticmethod
+    @runtime.with_one_binding_per_plugin  # each provider's settings read once for the whole read (U4)
     async def get_current_prices_bulk(  # noqa: C901 — per-asset provider→cache→DB fallback chain
         asset_ids: list[int],
         session: AsyncSession,
@@ -985,7 +987,8 @@ class PriceQueryOperations:
 
         For each asset:
         1. If a provider is assigned → call provider.get_current_value() (parallel, semaphore-limited), served as the
-           price columns keep it: a quote they cannot keep is neither served nor cached (X-R40, W-B62)
+           price columns keep it: a quote they cannot keep is neither served nor cached (X-R40, W-B62). A provider that
+           reads in bulk is called once per group of its assets instead (project 76, ``bulk_current.py``)
         2. Fallback → the latest PriceHistory row whose close reads a number (W-B62)
 
         **Side effect (F.2 + F.3)**: for every successful provider fetch whose
@@ -1030,9 +1033,15 @@ class PriceQueryOperations:
                 return None, None
             return await _live_quote_item(asset_id, assignment, sem)
 
-        # The live quotes in parallel, one per distinct id (R13-SEC9-1: a repeated id is fetched, and written back, once)
+        # The live quotes in parallel, one per distinct id (R13-SEC9-1: a repeated id is fetched, and written back, once).
+        # The assets of a provider that reads in bulk are grouped, one call per group (project 76, bulk_current.py); the
+        # plan is built with the session, the reads run without it (MF-SEC9c); the others keep one call per asset.
         distinct_ids = list(dict.fromkeys(asset_ids))
-        live = dict(zip(distinct_ids, await asyncio.gather(*(_live_one(aid) for aid in distinct_ids)), strict=True))
+        bulk = await bulk_current.prepare_bulk(session, [(aid, assign_map[aid]) for aid in distinct_ids if aid in asset_map and aid in assign_map])
+        per_asset_ids = [aid for aid in distinct_ids if aid not in bulk.asked]
+        bulk_quotes, per_asset_live = await asyncio.gather(bulk.read(sem), asyncio.gather(*(_live_one(aid) for aid in per_asset_ids)))
+        live = {aid: ((_quote_item(aid, quote.quote, f"provider:{assign_map[aid].provider_code}") if quote.quote is not None else None), quote.refusal) for aid, quote in bulk_quotes.items()}
+        live.update(zip(per_asset_ids, per_asset_live, strict=True))
 
         # Fallback: the last known price from the DB, for the assets without a live quote, in one grouped read once the
         # quotes are in (MF-SEC9c). The latest close that reads a number: one the file holds as ±inf reads None, and is

@@ -15,20 +15,24 @@ publishes, never from its source text:
   code>``, the branch of its settings' keys;
 - FX (``FXProviderRegistry``): ``pluginSettings.fx.<provider code>``, the branch of its settings' keys, the code as the
   registry has it (``pluginSettings.fx.ECB``, ``pluginSettings.fx.MOCKFX``);
+- enricher (``EnricherRegistry``, plan 68 B1): ``enrichers.<code>``, the branch of its binding params' keys, and
+  ``pluginSettings.enricher.<code>``, the branch of its settings' keys;
 - signal (``SignalPluginRegistry``, every registered plugin, in the catalogue or not): the parent of
   ``display_name_key``;
 - risk (``RiskAnalyticRegistry``): the parent of ``name_i18n_key``;
 - tool (``ToolPluginRegistry``): exactly the keys ``name_i18n_key`` and ``description_i18n_key``, whose namespace a
   subsystem shares.
 
-The family in a settings branch, ``asset``, ``fx`` or ``brim``, is the one the registry names (``settings_family()``).
+The family in a settings branch, ``asset``, ``fx``, ``brim`` or ``enricher``, is the one the registry names
+(``settings_family()``).
 
 A space is **exclusive** when exactly one plugin has it: ``signals.riskRollingReturn``, the space of two signal
 plugins, is not. The keys a plugin **declares** are those its metadata names: the BRIM ``name`` and, when it has one,
 ``description`` it publishes (``brimPlugins.<code>.name`` and ``.description``), ``display_name_key``,
 ``description_key``, ``name_i18n_key``, ``description_i18n_key``, the outputs', reference levels' and value regions'
-``label_key`` and ``description_key``, the params' ``x-i18n-key`` and ``x-tooltip-key``, and, for an asset or FX
-plugin, its ``settings_fields``: each field's ``label_key`` and ``description_key`` and each option's ``label_key``.
+``label_key`` and ``description_key``, the params' ``x-i18n-key`` and ``x-tooltip-key`` (an enricher's binding params,
+``params_schema``, read off an instance, included), and, for an asset, FX, BRIM or enricher plugin, its
+``settings_fields``: each field's ``label_key`` and ``description_key`` and each option's ``label_key``.
 The settings are read like a definition: the frozen ``PluginSettingField`` and ``SettingOption`` dumped to plain data
 (a tuple a list, an enum its text), through the same walker; ``default`` holds a value, never a key.
 
@@ -41,10 +45,11 @@ What plugins share (a shared space, a key several plugins declare, a key outside
 or to ``base``, where its prefix says. Every message names the key, where it is, and where it belongs.
 
 Each detector first proves on synthetic metadata and trees under ``tmp_path`` what it reports and what it leaves
-alone; then the repository: the metadata the six registries publish against the sources ``i18n_catalog`` reads, with a
-sentinel that fails on a published field named like a key that the collector does not read — in the signal and risk
-definitions, in every asset and FX plugin's settings, and in the attributes of ``PluginSettingField`` and
-``SettingOption`` themselves, before any plugin sets a new one.
+alone; then the repository: the metadata the seven registries publish against the sources ``i18n_catalog`` reads, every
+family publishing at least one plugin (the enrichers' in test mode: ``mockenrich`` is test-only), with a sentinel that
+fails on a published field named like a key that the collector does not read — in the signal and risk definitions, in
+the enrichers' binding params, in every asset, FX, BRIM and enricher plugin's settings, and in the attributes of
+``PluginSettingField`` and ``SettingOption`` themselves, before any plugin sets a new one.
 
 PURE: importing the registries discovers and instantiates the plugins, and the gate reads what they publish; nothing
 runs a plugin. No database, no server, no network; the synthetic trees live under ``tmp_path``.
@@ -65,6 +70,7 @@ import pytest
 
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType
 from backend.app.services.risk.registry import RiskAnalyticRegistry
@@ -80,14 +86,17 @@ FX_FAMILY = "fx_providers"
 SIGNAL_FAMILY = "signal_plugins"
 RISK_FAMILY = "risk_plugins"
 TOOL_FAMILY = "tool_plugins"
-# The families whose plugins have a space: all six, FX plugins through their settings.
-SPACED_FAMILIES = (BRIM_FAMILY, ASSET_FAMILY, FX_FAMILY, SIGNAL_FAMILY, RISK_FAMILY, TOOL_FAMILY)
+ENRICHER_FAMILY = "enricher_providers"
+# The families whose plugins have a space: all seven, FX plugins through their settings.
+SPACED_FAMILIES = (BRIM_FAMILY, ASSET_FAMILY, FX_FAMILY, SIGNAL_FAMILY, RISK_FAMILY, TOOL_FAMILY, ENRICHER_FAMILY)
 BRIM_SPACE = "brimPlugins"
 ASSET_SPACE = "assets.providerParams"
-# The root of the settings branches: pluginSettings.<settings family>.<code>, an asset or FX plugin's.
+# The branch of an enricher's binding params: enrichers.<code>.
+ENRICHER_SPACE = "enrichers"
+# The root of the settings branches: pluginSettings.<settings family>.<code>, an asset, FX, BRIM or enricher plugin's.
 SETTINGS_SPACE = "pluginSettings"
 # The registries whose plugins declare settings, in the order the gate reads them.
-SETTINGS_REGISTRIES = (AssetProviderRegistry, FXProviderRegistry, BRIMProviderRegistry)
+SETTINGS_REGISTRIES = (AssetProviderRegistry, FXProviderRegistry, BRIMProviderRegistry, EnricherRegistry)
 
 # The module discovery loads a plugin folder's code from: backend.app.services.<family>.<folder>.plugin.
 SERVICES_PACKAGE = ("backend", "app", "services")
@@ -367,7 +376,7 @@ def settings_plugin(registry: type, code: str, *areas: Area) -> PluginI18n:
 
 
 def settings_definitions() -> list[tuple[str, object]]:
-    """``(folder, settings dump)`` of every asset, FX and BRIM plugin, with settings or not."""
+    """``(folder, settings dump)`` of every asset, FX, BRIM and enricher plugin, with settings or not."""
     found = []
     for registry in SETTINGS_REGISTRIES:
         for code in registry.list_plugin_codes():
@@ -411,6 +420,33 @@ def fx_plugins() -> list[PluginI18n]:
     return [settings_plugin(FXProviderRegistry, code) for code in FXProviderRegistry.list_plugin_codes()]
 
 
+def enricher_keys(params_schema: object, settings_fields: object) -> tuple[str, ...]:
+    """The keys an enricher declares: its binding params' ``x-i18n-key`` and ``x-tooltip-key``, then its settings' keys."""
+    params, _unread = published_keys(plain(params_schema))
+    settings, _unread = published_keys(plain(settings_fields))
+    return tuple(dict.fromkeys((*params, *settings)))
+
+
+def enricher_param_definitions() -> list[tuple[str, object]]:
+    """``(folder, params dump)`` of every enricher: its ``params_schema``, an instance's property."""
+    found = []
+    for code in EnricherRegistry.list_plugin_codes():
+        plugin_class = EnricherRegistry.get_plugin(code)
+        found.append((plugin_folder(plugin_class.__module__), plain(EnricherRegistry.get_plugin_instance(code).params_schema)))
+    return found
+
+
+def enricher_plugins() -> list[PluginI18n]:
+    """Every enricher: its params' branch ``enrichers.<code>`` and its settings' branch, the keys of both."""
+    found = []
+    for code in EnricherRegistry.list_plugin_codes():
+        plugin_class = EnricherRegistry.get_plugin(code)
+        instance = EnricherRegistry.get_plugin_instance(code)
+        areas = (Area(f"{ENRICHER_SPACE}.{code}"), Area(settings_space(EnricherRegistry, code)))
+        found.append(PluginI18n(plugin_folder(plugin_class.__module__), areas, enricher_keys(instance.params_schema, getattr(plugin_class, "settings_fields", ()))))
+    return found
+
+
 def tool_plugins() -> list[PluginI18n]:
     found = []
     for definition in ToolPluginRegistry.get_snapshot().definitions.values():
@@ -420,10 +456,10 @@ def tool_plugins() -> list[PluginI18n]:
 
 
 def registry_plugins() -> tuple[PluginI18n, ...]:
-    """Every plugin of the six registries, one per folder."""
+    """Every plugin of the seven registries, one per folder."""
     signals = [from_definition(name, dump, "display_name_key") for name, dump in signal_definitions()]
     risks = [from_definition(name, dump, "name_i18n_key") for name, dump in risk_definitions()]
-    return fold([*brim_plugins(), *asset_plugins(), *fx_plugins(), *signals, *risks, *tool_plugins()])
+    return fold([*brim_plugins(), *asset_plugins(), *fx_plugins(), *signals, *risks, *tool_plugins(), *enricher_plugins()])
 
 
 # =============================================================================
@@ -444,6 +480,12 @@ SOURCE_SETTINGS = (
     ),
 )
 RATES_SETTINGS = (PluginSettingField(key="decimals", type=SettingType.INTEGER, scope=SettingScope.SYSTEM, label="Decimals", default=6, label_key="pluginSettings.fx.PROBE_RATES.label.decimals"),)
+# An enricher's binding params (a label and a tooltip key; a default that looks like a key is a value) and its settings.
+ENRICH_PARAMS = [
+    {"key": "mic", "type": "select", "options": ["MTA", "ETF"], "default": "enrichers.probe_enricher.params.notAKey", "x-i18n-key": "enrichers.probe_enricher.params.mic", "x-tooltip-key": "enrichers.probe_enricher.params.micTooltip"},
+    {"key": "platform", "type": "string"},
+]
+ENRICH_SETTINGS = (PluginSettingField(key="language", type=SettingType.STRING, scope=SettingScope.SYSTEM, label="Language", default="en", label_key="pluginSettings.enricher.probe_enricher.label.language"),)
 
 BROKER = PluginI18n("brim_providers/probe_broker", (Area("brimPlugins.probe_broker"),), ("brimPlugins.probe_broker.name", "brimPlugins.probe_broker.description"))
 SOURCE = PluginI18n("asset_source_providers/probe_source", (Area("assets.providerParams.probe_source"), Area("pluginSettings.asset.probe_source")), published_keys(plain(SOURCE_SETTINGS))[0])
@@ -455,7 +497,8 @@ TWIN_A = PluginI18n("signal_plugins/probe_twin_a", (Area("signals.probeTwin"),),
 TWIN_B = PluginI18n("signal_plugins/probe_twin_b", (Area("signals.probeTwin"),), ("signals.probeTwin.name", "signals.probeTwin.output"))
 VAR = PluginI18n("risk_plugins/probe_var", (Area("risk.analytics.probeVar"),), ("risk.analytics.probeVar.name", "risk.analytics.probeVar.description", "risk.params.confidence"))
 TOOL = PluginI18n("tool_plugins/probe_tool", (Area("tools.probeTool.name", exact=True), Area("tools.probeTool.description", exact=True)), ("tools.probeTool.name", "tools.probeTool.description"))
-PLUGINS = (BROKER, SOURCE, RATES, ALPHA, BETA, TWIN_A, TWIN_B, VAR, TOOL)
+ENRICH = PluginI18n("enricher_providers/probe_enricher", (Area("enrichers.probe_enricher"), Area("pluginSettings.enricher.probe_enricher")), enricher_keys(ENRICH_PARAMS, ENRICH_SETTINGS))
+PLUGINS = (BROKER, SOURCE, RATES, ALPHA, BETA, TWIN_A, TWIN_B, VAR, TOOL, ENRICH)
 
 # The subsystems and their prefixes; a subsystem without keys keeps its folder and prefixes.
 PREFIXES = {"charts": ("signals", "chartSettings"), "risk": ("risk",), "tools": ("tools",)}
@@ -480,6 +523,11 @@ HEALTHY = {
     BETA.name: {"signals.probeBeta.name": "Beta"},
     VAR.name: {"risk.analytics.probeVar.name": "VaR", "risk.analytics.probeVar.description": "Value at risk"},
     TOOL.name: {"tools.probeTool.name": "Calculator", "tools.probeTool.description": "Computes"},
+    ENRICH.name: {
+        "enrichers.probe_enricher.params.mic": "Market",
+        "enrichers.probe_enricher.params.micTooltip": "The market the page is read from",
+        "pluginSettings.enricher.probe_enricher.label.language": "Language",
+    },
 }
 
 
@@ -718,7 +766,16 @@ def test_published_keys_names_a_key_attribute_a_settings_declaration_grows():
     assert published_keys(attribute_dump(_PlaceholderField, _HintedOption))[1] == frozenset({"placeholder_key", "hint_key"})
 
 
+def test_an_enricher_declares_its_params_keys_then_its_settings_keys():
+    """An enricher's binding params are read like a definition: ``x-i18n-key`` and ``x-tooltip-key``, never a default;
+    then its settings' keys; a param without a key adds none."""
+    assert enricher_keys(ENRICH_PARAMS, ENRICH_SETTINGS) == ("enrichers.probe_enricher.params.mic", "enrichers.probe_enricher.params.micTooltip", "pluginSettings.enricher.probe_enricher.label.language")
+    assert enricher_keys([], ()) == ()
+    assert published_keys(plain(ENRICH_PARAMS))[1] == frozenset(), "the params hold no key field the collector does not read"
+
+
 def test_a_settings_space_is_the_family_its_registry_names_and_the_code_as_it_is():
+    assert settings_space(EnricherRegistry, "probe_enricher") == "pluginSettings.enricher.probe_enricher"
     assert settings_space(AssetProviderRegistry, "probe_source") == "pluginSettings.asset.probe_source"
     assert settings_space(FXProviderRegistry, "PROBE_RATES") == "pluginSettings.fx.PROBE_RATES"
     assert settings_space(BRIMProviderRegistry, "probe_broker") == "pluginSettings.brim.probe_broker"
@@ -736,6 +793,8 @@ def test_a_space_is_exclusive_only_to_its_one_plugin(tmp_path):
     assert own.exclusive_area(SOURCE, "pluginSettings.asset.probe_source.label.region") == Area("pluginSettings.asset.probe_source")
     assert own.exclusive_area(RATES, "pluginSettings.fx.PROBE_RATES.label.decimals") == Area("pluginSettings.fx.PROBE_RATES")
     assert own.exclusive_area(RATES, "pluginSettings.fx.probe_rates.label.decimals") is None, "the code as the registry has it, case included"
+    assert own.exclusive_area(ENRICH, "enrichers.probe_enricher.params.mic") == Area("enrichers.probe_enricher")
+    assert own.exclusive_area(ENRICH, "pluginSettings.enricher.probe_enricher.label.language") == Area("pluginSettings.enricher.probe_enricher")
     assert ownership(tmp_path, without(TWIN_B.name)).exclusive_area(TWIN_A, "signals.probeTwin.name") == Area("signals.probeTwin")
 
 
@@ -750,7 +809,7 @@ def test_the_healthy_tree_keeps_every_rule(tmp_path):
     none is a breach."""
     own = ownership(build_tree(tmp_path, HEALTHY))
 
-    assert [place(fragment) for fragment in own.fragments()] == [plugin.fragment for plugin in (SOURCE, BROKER, RATES, VAR, ALPHA, BETA, TOOL)]
+    assert [place(fragment) for fragment in own.fragments()] == [plugin.fragment for plugin in (SOURCE, BROKER, ENRICH, RATES, VAR, ALPHA, BETA, TOOL)]
     assert (r1_problems(own), r2_problems(own), r3_problems(own), r4_problems(own)) == ([], [], [], [])
 
 
@@ -777,6 +836,11 @@ def test_the_healthy_tree_keeps_every_rule(tmp_path):
             relocated("pluginSettings.asset.probe_source.option.region.eu", RATES.name),
             f"pluginSettings.asset.probe_source.option.region.eu: in {RATES.fragment}, outside the space of {RATES.name} (pluginSettings.fx.PROBE_RATES.*); expected in {SOURCE.fragment}",
             id="an-asset-settings-key-in-an-fx-fragment",
+        ),
+        pytest.param(
+            relocated("common.enricher", ENRICH.name),
+            f"common.enricher: in {ENRICH.fragment}, outside the space of {ENRICH.name} (enrichers.probe_enricher.*, pluginSettings.enricher.probe_enricher.*); expected in {BASE_PLACE}",
+            id="an-enricher-fragment-key-outside-its-spaces",
         ),
         pytest.param(relocated("signals.probeGhost.name", "signal_plugins/probe_ghost"), f"signals.probeGhost.name: in {PluginI18n('signal_plugins/probe_ghost').fragment}, but no registered plugin is signal_plugins/probe_ghost; expected in {CHARTS}", id="a-folder-no-registry-knows"),
     ],
@@ -816,6 +880,16 @@ def test_r1_refuses_every_key_in_the_fragment_of_a_plugin_without_a_space(tmp_pa
             f"pluginSettings.fx.PROBE_RATES.label.decimals: declared by {RATES.name} in its space (pluginSettings.fx.PROBE_RATES.*), but is in no catalogue; expected in {RATES.fragment}",
             id="an-fx-settings-label-in-no-catalogue",
         ),
+        pytest.param(
+            relocated("enrichers.probe_enricher.params.mic", "base"),
+            f"enrichers.probe_enricher.params.mic: declared by {ENRICH.name} in its space (enrichers.probe_enricher.*), but lives in {BASE_PLACE}; expected in {ENRICH.fragment}",
+            id="an-enricher-param-label-in-base",
+        ),
+        pytest.param(
+            relocated("pluginSettings.enricher.probe_enricher.label.language", None),
+            f"pluginSettings.enricher.probe_enricher.label.language: declared by {ENRICH.name} in its space (pluginSettings.enricher.probe_enricher.*), but is in no catalogue; expected in {ENRICH.fragment}",
+            id="an-enricher-settings-label-in-no-catalogue",
+        ),
     ],
 )
 def test_r2_refuses_a_declared_key_of_an_exclusive_space_outside_its_fragment(tmp_path, layout, problem):
@@ -846,6 +920,12 @@ RATES_BORROWING = PluginI18n(RATES.name, RATES.areas, (*RATES.declared, "pluginS
             f"pluginSettings.asset.probe_source.label.region: in {SOURCE.fragment}, but {RATES.name} declares it too; expected in {BASE_PLACE}, renamed out of pluginSettings.asset.probe_source.*",
             id="a-settings-key-another-plugin-declares",
         ),
+        pytest.param(
+            relocated("pluginSettings.enricher.probe_enricher.label.language", SOURCE.name),
+            PLUGINS,
+            f"pluginSettings.enricher.probe_enricher.label.language: in {SOURCE.fragment}, but it lies in the space of {ENRICH.name} (pluginSettings.enricher.probe_enricher.*); expected in {ENRICH.fragment}",
+            id="an-enricher-settings-key-in-an-asset-fragment",
+        ),
     ],
 )
 def test_r3_refuses_a_fragment_key_another_plugin_claims(tmp_path, layout, plugins, problem):
@@ -869,6 +949,11 @@ def test_r3_refuses_a_fragment_key_another_plugin_claims(tmp_path, layout, plugi
             relocated("pluginSettings.fx.PROBE_RATES.label.decimals", SOURCE.name),
             f"pluginSettings.fx.PROBE_RATES.label.decimals: under pluginSettings.fx.PROBE_RATES.*, the space of {RATES.name} alone, but lives in {SOURCE.fragment}; expected in {RATES.fragment}",
             id="an-fx-settings-key-in-an-asset-fragment",
+        ),
+        pytest.param(
+            relocated("enrichers.probe_enricher.hint", "base"),
+            f"enrichers.probe_enricher.hint: under enrichers.probe_enricher.*, the space of {ENRICH.name} alone, but lives in {BASE_PLACE}; expected in {ENRICH.fragment}",
+            id="an-undeclared-enricher-key-in-base",
         ),
     ],
 )
@@ -947,7 +1032,7 @@ def report(problems: list[str]) -> str:
 def test_every_registry_publishes_its_plugins_each_with_a_space(published):
     families = {plugin.family for plugin in published}
 
-    assert families == set(SPACED_FAMILIES), "a registry published no plugin, or one of a family this gate does not know"
+    assert families == set(SPACED_FAMILIES), f"a registry published no plugin, or one of a family this gate does not know: missing {sorted(set(SPACED_FAMILIES) - families)}, unknown {sorted(families - set(SPACED_FAMILIES))}"
     assert space_problems(published) == []
 
 
@@ -961,11 +1046,12 @@ def test_an_asset_or_fx_plugin_space_holds_its_settings_branch_under_its_registr
     assert spaces["fx_providers/ecb"] == (Area("pluginSettings.fx.ECB"),)
     assert spaces["brim_providers/broker_generic_csv"] == (Area("brimPlugins.broker_generic_csv"), Area("pluginSettings.brim.broker_generic_csv"))
     assert spaces["fx_providers/mockfx"] == (Area("pluginSettings.fx.MOCKFX"), Area("pluginSettings.fx.MOCKFX_FAIL"))
+    assert spaces.get("enricher_providers/mockenrich") == (Area("enrichers.mockenrich"), Area("pluginSettings.enricher.mockenrich")), "an enricher: its params' and its settings' branches"
 
 
 def test_an_asset_or_fx_plugin_declares_exactly_the_keys_of_its_settings(published):
     """Each field's ``label_key`` and ``description_key`` and each option's ``label_key``, read off the classes: the
-    keys the model has each asset and FX plugin declare, no more, no fewer."""
+    keys the model has each asset and FX plugin declare, no more, no fewer; an enricher's binding params' keys besides."""
     declared = {plugin.name: {key for key in plugin.declared if not key.startswith(f"{BRIM_SPACE}.")} for plugin in published}
     expected: dict[str, set[str]] = {}
     for registry in SETTINGS_REGISTRIES:
@@ -974,6 +1060,8 @@ def test_an_asset_or_fx_plugin_declares_exactly_the_keys_of_its_settings(publish
             keys = expected.setdefault(plugin_folder(plugin_class.__module__), set())
             for field in plugin_class.settings_fields:
                 keys.update(key for key in (field.label_key, field.description_key, *(option.label_key for option in field.options)) if key)
+            if registry is EnricherRegistry:
+                keys.update(published_keys(plain(EnricherRegistry.get_plugin_instance(code).params_schema))[0])
 
     assert any(expected.values()), "no asset, FX or BRIM plugin declares a settings key: nothing for the rules to read of the settings"
     assert {folder: declared[folder] for folder in expected} == expected
@@ -984,10 +1072,11 @@ def test_every_brim_plugin_code_is_its_folder(published):
 
 
 def test_the_published_definitions_hold_no_key_field_the_gate_does_not_read():
-    """The signal and risk definitions, every asset and FX plugin's settings, and every attribute of the settings types
-    themselves: a key field the collector does not read is named, a new attribute even before a plugin sets it."""
+    """The signal and risk definitions, the enrichers' binding params, every asset, FX, BRIM and enricher plugin's settings,
+    and every attribute of the settings types themselves: a key field the collector does not read is named, a new
+    attribute even before a plugin sets it."""
     unread: dict[str, set[str]] = defaultdict(set)
-    for name, dump in (*signal_definitions(), *risk_definitions(), *settings_definitions()):
+    for name, dump in (*signal_definitions(), *risk_definitions(), *enricher_param_definitions(), *settings_definitions()):
         unread[name] |= published_keys(dump)[1]
 
     assert {name: sorted(fields) for name, fields in unread.items() if fields} == {}

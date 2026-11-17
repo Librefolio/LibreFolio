@@ -13,7 +13,7 @@
  */
 import type {TestInfo} from '@playwright/test';
 import {type APIRequestContext, expect, type Locator, type Page, test} from './fixtures/playwright';
-import {login, navigateTo, openMobileMenu, setLanguage} from './fixtures/auth-helpers';
+import {login, loginWithForm, navigateTo, openMobileMenu, setLanguage} from './fixtures/auth-helpers';
 import {validateRuns, waitForChart, waitForParseVerdict, waitForSettled} from './fixtures/app-events';
 import {
     attachPageSnapshotOnFailure,
@@ -3063,7 +3063,8 @@ test.describe('Gallery Screenshots', () => {
                         [lang, theme] as [string, string],
                     );
                     const signalledBefore = signalledLogins;
-                    await login(page, TEST_ADMIN);
+                    // Through the form, always: the popup is a signal of the sign-in's own answer, which a reused session never asks for.
+                    await loginWithForm(page, TEST_ADMIN);
                     expect(signalledLogins, 'the sign-in did not go through the intercepted login response').toBeGreaterThan(signalledBefore);
 
                     // The attributes, not visibility: with the popup open the body is scroll-locked and <html>
@@ -7084,7 +7085,7 @@ test.describe('Gallery Screenshots', () => {
                 await expect(box, 'a What if…? tool came back open').toHaveCount(0);
                 await whatIf.getByTestId('risk-l4-add-simulation').click();
                 await expect(box).toBeVisible();
-                await expect(box.locator('[data-testid="risk-beta-banner"][data-scope="simulation"]')).toBeVisible();
+                await expect(box.getByTestId('risk-beta-banner'), 'the simulation left beta (RN-06): its box carries no beta notice').toHaveCount(0);
                 await expect(box.getByTestId('risk-l4-model-warning')).toBeVisible();
 
                 // The five modes, the recommended one chosen; a 365-day horizon, the paths and the seed fixed, so every
@@ -7110,23 +7111,23 @@ test.describe('Gallery Screenshots', () => {
                 await waitForChart(simulation, 30_000);
                 await expect(box.getByTestId('risk-l4-provenance')).toBeVisible();
 
-                // From the top of the step: the box's own header, then the beta notice and the model warning above the modes.
+                // From the top of the step: the box's own header, then the model warning above the modes.
                 //
                 // DESKTOP — coordinator's decision. The page (user/dashboard/risk.md, risk/whatif-simulation) wants the whole
-                // Simulation box in one image: the beta notice and the model warning, the five modes with Reshuffled history
+                // Simulation box in one image: the model warning, the five modes with Reshuffled history
                 // recommended, and after Simulate the cone with the terminal figures and «What this simulation assumed». With a
                 // result the box is about 1,100 px high (1090 measured), which no 720 px screen holds, so this shot gets a screen
                 // exactly as tall as the box plus the frame's margins — measured every combination, because the box's sentences
                 // wrap differently in each language, and logged (📐). The width (1280) and the scale stay the desktop project's,
                 // so the image sits beside the other desktop shots. The four Dashboard Risk blocks follow the same rule. The
-                // mobile project keeps its phone: the top of the step, with its beta notice.
+                // mobile project keeps its phone: the top of the step, with its model warning.
                 if (viewport === 'desktop') {
                     const fit = await fitViewportToBlock(page, box, SIMULATION_FRAME_MARGIN, projectScreen.height);
                     console.log(`  📐 desktop/${lang}/${theme}: Simulation box ${fit.blockHeight} px → screen ${projectScreen.width}×${fit.viewportHeight}`);
                 }
                 await frameFromTop(page, box, SIMULATION_FRAME_MARGIN);
                 await settleShot(page, box, 'the simulation');
-                await expect(box.locator('[data-testid="risk-beta-banner"][data-scope="simulation"]'), 'the beta notice falls outside the shot').toBeInViewport({ratio: 1});
+                await expect(box.getByTestId('risk-l4-model-warning'), 'the model warning falls outside the shot').toBeInViewport({ratio: 1});
                 if (viewport === 'desktop') {
                     await expect(box, 'the Simulation box is not whole in the shot').toBeInViewport({ratio: 1});
                     await expect(box.getByTestId('risk-l4-provenance'), '«What this simulation assumed» falls outside the shot').toBeInViewport({ratio: 1});

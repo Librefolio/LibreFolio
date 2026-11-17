@@ -47,8 +47,9 @@ class PortfolioHolding(StrictModel):
     asset_name: str
     asset_ticker: Optional[str] = None
     asset_type: str
-    broker_id: Optional[int] = Field(None, description="Broker that holds this position")
-    broker_name: Optional[str] = Field(None, description="Broker display name")
+    broker_id: Optional[int] = Field(None, description="Broker that holds this position; None for an asset summed over several brokers (group_by=asset)")
+    broker_name: Optional[str] = Field(None, description="Broker display name; None for an asset summed over several brokers")
+    broker_ids: List[int] = Field(default_factory=list, description="The brokers the row stands for: [broker_id] for a position, every broker holding the asset for a row summed over them (group_by=asset)")
     quantity: SafeDecimal
     wac_per_unit: Optional[SafeDecimal] = Field(None, description="None if FX rate missing")
     current_price: Optional[SafeDecimal] = Field(None, description="Effective current-unit price converted to report currency. None if FX rate missing")
@@ -87,8 +88,9 @@ class AssetPeriodContribution(BaseModel):
     asset_name: str
     asset_ticker: Optional[str] = None
     asset_type: str
-    broker_id: int
-    broker_name: str
+    broker_id: Optional[int] = Field(..., description="Broker of the position; None for an asset summed over several brokers (group_by=asset)")
+    broker_name: Optional[str] = Field(..., description="Broker display name; None for an asset summed over several brokers")
+    broker_ids: List[int] = Field(default_factory=list, description="The brokers the row stands for: [broker_id] for a position, every broker of the asset for a row summed over them (group_by=asset)")
     period_unrealized_delta: Optional[SafeDecimal] = Field(
         None,
         description="Change in unrealized P&L over the period, from the portfolio's own valuation at the two boundaries; an internal transfer that leaves and arrives inside the period splits it between the two brokers at the value on arrival (P22). None when a boundary the position is held at has an unknown unrealized (no rate, incomplete cost)",
@@ -149,8 +151,9 @@ class OtherPeriodEffect(StrictModel):
     code: Optional[OtherPeriodEffectCode] = Field(None, description="Fixed code of the rows a reader recognizes by it, never by `description`: `fx_on_cash` is a broker's exchange result on foreign cash. None for every other row")
     category: str = Field(..., pattern="^(Income|Cost|Other)$")
     period_pnl: SafeDecimal
-    broker_id: Optional[int] = Field(None, description="Nullable when effect is not broker-specific")
-    broker_name: Optional[str] = Field(None, description="Nullable when effect is not broker-specific")
+    broker_id: Optional[int] = Field(None, description="Nullable when effect is not broker-specific, or summed over several brokers (group_by=asset)")
+    broker_name: Optional[str] = Field(None, description="Nullable when effect is not broker-specific, or summed over several brokers (group_by=asset)")
+    broker_ids: List[int] = Field(default_factory=list, description="The brokers the row stands for: [broker_id], every broker of the rows of that kind summed (group_by=asset), or none for an effect of no broker")
 
 
 class PositionsContribution(StrictModel):
@@ -176,9 +179,10 @@ class BrokerBreakdown(StrictModel):
 
 
 class HoldingGroupGainLoss(StrictModel):
-    """Unrealized gain or loss of a group of holdings: one broker's, or one asset type's at one broker."""
+    """Unrealized gain or loss of a group of holdings: one broker's, or one asset type's at one broker; with group_by=asset,
+    one asset type's over every broker (broker_id None)."""
 
-    broker_id: int
+    broker_id: Optional[int] = Field(None, description="The broker of the group; None for an asset type over every broker (group_by=asset)")
     asset_type: Optional[str] = Field(None, description="Asset type of the group, as the holdings report it; None for the broker's whole group")
     gain_loss: Optional[Currency] = Field(None, description="Sum of gain_loss over the group's holdings whose current_value and gain_loss are both known; None when none is")
     gain_loss_percent: Optional[SafeDecimal] = Field(

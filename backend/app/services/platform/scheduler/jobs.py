@@ -1,4 +1,4 @@
-"""Scheduler jobs — current-price refresh and history sync.
+"""Scheduler jobs — current-price refresh, history sync and the weekly profile read (plan 68, B6).
 
 An item a provider's pause refused (``error_code == "RATE_LIMITED"``, whatever its status or value) is deferred:
 neither ok nor failed. The job's state counts it apart and records ``retry_at``, the end of the shortest pause, when
@@ -17,7 +17,7 @@ import structlog
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, AssetProviderAssignment, FxConversionRoute, FxRate, PriceHistory
+from backend.app.db.models import Asset, AssetEnrichers, AssetProviderAssignment, FxConversionRoute, FxRate, PriceHistory
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.refresh import FARefreshItem, SyncStatus
@@ -27,6 +27,7 @@ from backend.app.services.platform.scheduler.joblog import (
     append_entry,
     build_current_price_entry,
     build_history_sync_entry,
+    build_profile_read_entry,
 )
 from backend.app.services.platform.scheduler.state import JobState, SchedulerState
 
@@ -55,12 +56,25 @@ def _is_deferred(item: object) -> bool:
     return getattr(item, "error_code", None) == RATE_LIMITED
 
 
+#: The wait before the profile read's retry round when no refused read said how long (plan 68 B6c): the real sources
+#: refuse without a wait, and without this the voices held for round two would wait a week. Not a setting.
+PROFILE_READ_DEFAULT_RETRY_SECONDS = 15 * 60
+
+
 def _retry_at(deferred: list, now: datetime) -> str | None:
     """When the deferred items may be retried: now plus the shortest pause among those that know theirs."""
     waits = [wait for wait in (getattr(item, "retry_after", None) for item in deferred) if wait is not None]
     if not waits:
         return None
     return (now + timedelta(seconds=min(waits))).isoformat()
+
+
+def _profile_retry_at(deferred: list, now: datetime) -> str | None:
+    """When the profile read's refused reads are retried: the shortest wait a source gave, else
+    ``PROFILE_READ_DEFAULT_RETRY_SECONDS``; None when nothing was refused. The price jobs keep ``_retry_at``."""
+    if not deferred:
+        return None
+    return _retry_at(deferred, now) or (now + timedelta(seconds=PROFILE_READ_DEFAULT_RETRY_SECONDS)).isoformat()
 
 
 def _history_sync_start(today: date, horizon_days: int, last_saved: date | None) -> date:
@@ -284,3 +298,74 @@ async def run_history_sync(state: SchedulerState, horizon_days: int = 14) -> Non
         retry_at=retry_at,
         duration_s=round(duration, 1),
     )
+
+
+def _profile_read_round(previous: JobState, now: datetime) -> tuple[bool, datetime]:
+    """Whether this run is the retry of a round (its ``retry_at`` has come), and when that round started."""
+    retry_at = _parse_iso(previous.retry_at)
+    started = _parse_iso(previous.round_started_at)
+    if retry_at is not None and started is not None and now >= retry_at:
+        return True, started
+    return False, now
+
+
+def _parse_iso(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        moment = datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+    return moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)
+
+
+async def run_profile_read(state: SchedulerState, settings: object = None) -> None:
+    """The weekly read of the asset profiles from their enrichers (plan 68, B6).
+
+    The active assets with enrichers are read and saved (``refresh_assets``). A read refused for too many requests is
+    deferred: the job's ``retry_at`` is the end of the shortest pause, and the voices that enricher declares are held,
+    where it comes before the source that answered, until then. The retry continues the round: the bindings read since
+    the round started are not read again, nothing is held any more, and no further retry is set (one retry at most).
+    """
+    del settings  # the days and times decide when it is due (scheduler.due_profile_read), not what it reads
+    from backend.app.services.enrichers.refresh import refresh_assets  # noqa: PLC0415 — the read module holds a TTL cache: only the scheduler's run needs it
+
+    t_start = time_module.monotonic()
+    now = datetime.now(UTC)
+    is_retry, round_start = _profile_read_round(state.profile_read, now)
+    async with AsyncSession(get_async_engine()) as session:
+        statement = select(Asset.id, Asset.display_name, Asset.icon_url, AssetEnrichers.config).join(AssetEnrichers, Asset.id == AssetEnrichers.asset_id).where(Asset.active == True)  # noqa: E712 — SQLAlchemy expression
+        rows = [row for row in (await session.execute(statement)).all() if _has_bindings(row[3])]
+        asset_names = {row[0]: row[1] for row in rows}
+        asset_icons = {row[0]: row[2] for row in rows}
+        results = await refresh_assets(session, [row[0] for row in rows], read_since=round_start if is_retry else None, hold_deferred=not is_retry) if rows else []
+
+    duration = round(time_module.monotonic() - t_start, 2)
+    entry = build_profile_read_entry(results, asset_names, duration, "ok", asset_icons=asset_icons)
+    summary = entry["summary"]
+    status = _classify_job_status(summary["ok"], len(results), summary["deferred"])
+    deferred_reads = [outcome for result in results for outcome in result.deferred]
+    retry_at = None if is_retry else _profile_retry_at(deferred_reads, now)
+    entry["status"], entry["retry_at"] = status, retry_at
+    state.profile_read = JobState(
+        last_run_at=datetime.now().astimezone().isoformat(),
+        last_duration_s=duration,
+        last_status=status,
+        last_items_ok=summary["ok"],
+        last_items_err=summary["err"],
+        last_error=None,
+        last_items_deferred=summary["deferred"],
+        retry_at=retry_at,
+        round_started_at=round_start.isoformat(),
+    )
+    append_entry(entry)
+    logger.info("Scheduler: profile read", ok=summary["ok"], errors=summary["err"], deferred=summary["deferred"], retry_at=retry_at, retry_round=is_retry, duration_s=duration)
+
+
+def _has_bindings(config: str | None) -> bool:
+    """Whether an ``asset_enrichers.config`` holds at least one binding."""
+    try:
+        value = json.loads(config) if config else {}
+    except ValueError:
+        return False
+    return isinstance(value, dict) and bool(value)

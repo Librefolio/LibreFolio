@@ -152,3 +152,9 @@ him to answer by number. He reads better from a file than from a long chat messa
   child for «CHECKPOINT READY after your final review».
 - 13/11/2026 — A child's red reported as «caught by the -k filter» is checked alone on the lane before committing (it was
   a DB unit, 9/9 alone), never assumed.
+- 13/11/2026 — A child can miss the notification of its own background run too (65UX: run ended 13:28, session idle
+  until 14:18). The heartbeat also checks each idle child's last background log: finished run + idle child → wake it.
+- 16/11/2026 — Even with `source_branch: dev_release2` the app cut a new lane's worktree from `origin` (68 started at `771c25780`): right after `start_session`, check the worktree's HEAD and fast-forward it to the local integration branch before the child writes anything.
+- 17/11/2026 — A lot that changes a route's signature (68 B5b gave two asset routes a `BackgroundTasks`) breaks the tests that call the route body directly, in a suite the merge check did not list (`routes-generic-500`): before the merge check, grep the tests for direct calls of every route whose parameters changed and add their suites.
+- 17/11/2026 — A frontend lot can turn a cross-cutting gate red outside its feature folder (`utils/privacy/moneyRenderSites`, after 70 wave 1): the merge check of any frontend lane runs every `*.gate.test.ts` and `src/lib/utils/privacy`, not only the feature folders.
+- 17/11/2026 — The merge check of a lane that adds or moves a plugin runs every plugin gate (`gate-plugin-i18n-ownership` AND `gate-plugin-layout`): a new test double that imported another plugin passed the i18n gate and reached the integration branch.

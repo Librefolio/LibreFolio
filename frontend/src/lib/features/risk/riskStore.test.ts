@@ -21,9 +21,17 @@ vi.mock('$lib/api', async (importOriginal) => {
 
 import type {AssetEligibilityItem, EligibilityVerdicts} from '$lib/features/risk/eligibility';
 import {buildHistoricalReplayParameters, buildRiskQueryRequest, buildSimulationParameters, canonicalizeScope, type RiskScope} from '$lib/features/risk/riskRequest';
-import {transitionClientSession} from '$lib/stores/app/clientSession';
-import * as portfolioMutation from '$lib/stores/portfolio/portfolioMutation';
-import {notifyPortfolioMutation} from '$lib/stores/portfolio/portfolioMutation';
+
+/*
+ * The session and the mutation channel are bound in `beforeAll`, from the module registry the store is
+ * imported from, never imported statically. A block below resets the registry (`vi.resetModules`); under a
+ * shuffled order it can run first, and the store imported after it listens to a fresh session and a fresh
+ * channel. A static import would keep the old ones: a transition or a mutation sent there reaches nothing,
+ * and four cases fail for a reason that is not theirs (RN-07, `--sequence.shuffle --sequence.seed=3`).
+ */
+let transitionClientSession: typeof import('$lib/stores/app/clientSession').transitionClientSession;
+let portfolioMutation: typeof import('$lib/stores/portfolio/portfolioMutation');
+let notifyPortfolioMutation: typeof import('$lib/stores/portfolio/portfolioMutation').notifyPortfolioMutation;
 
 let fetchRiskCatalog: typeof import('./riskStore.svelte').fetchRiskCatalog;
 let fetchRiskScenarioCatalog: typeof import('./riskStore.svelte').fetchRiskScenarioCatalog;
@@ -56,6 +64,10 @@ describe('riskStore', () => {
         const module = await import('./riskStore.svelte');
         ({fetchRiskCatalog, fetchRiskScenarioCatalog, getRiskQuerySnapshot, hasRiskCapability, invalidateRisk, makeRiskRequestKey, queryRisk} = module);
         store = module as unknown as Record<string, unknown>;
+        // After the store: the registry hands back the very instances the store imported.
+        ({transitionClientSession} = await import('$lib/stores/app/clientSession'));
+        portfolioMutation = await import('$lib/stores/portfolio/portfolioMutation');
+        ({notifyPortfolioMutation} = portfolioMutation);
     });
 
     beforeEach(() => {

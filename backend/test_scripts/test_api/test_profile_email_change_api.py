@@ -71,6 +71,7 @@ RESEND = f"{API_V1_PREFIX}/auth/profile/email-change/resend"
 LOGIN = f"{API_V1_PREFIX}/auth/login"
 ME = f"{API_V1_PREFIX}/auth/me"
 CONFIRM = f"{API_V1_PREFIX}/email/email-change/confirm"
+CHECK = f"{API_V1_PREFIX}/email/email-change/check"
 BASE_URL = "http://test"
 TIMEOUT = 30.0
 
@@ -554,7 +555,7 @@ async def _requested(private: _Private, world: World, user: User) -> str:
 
 @pytest.mark.asyncio
 async def test_a_profile_link_clicked_with_the_accounts_session_completes_the_change(private: _Private, world: World, monkeypatch: pytest.MonkeyPatch) -> None:
-    """PEC-020 — the Profile link clicked in a browser signed in as its account: 200 ``{username}``, the address moved and verified, the emails of a completed change scheduled once with ``by_host=False``."""
+    """PEC-020 — the Profile link clicked in a browser signed in as its account: 200 ``{username, session_kept: true}``, the address moved and verified, the emails of a completed change scheduled once with ``by_host=False``."""
     print_section("PEC-020: the click with the account's session")
     _email_on(monkeypatch)
     user = await _add_user(private.engine)
@@ -564,7 +565,7 @@ async def test_a_profile_link_clicked_with_the_accounts_session_completes_the_ch
         response = await browser.post(CONFIRM, json={"token": token})
 
     assert response.status_code == 200, response.text
-    assert response.json() == {"username": user.username}
+    assert response.json() == {"username": user.username, "session_kept": True}
     row = await _row(private.engine, user.id)
     assert (row.email, row.email_verified_at is not None) == (NEW_EMAIL, True)
     assert (world.changed, world.changed_by_host) == ([(user.id, user.email, NEW_EMAIL)], [False])
@@ -572,8 +573,87 @@ async def test_a_profile_link_clicked_with_the_accounts_session_completes_the_ch
 
 
 @pytest.mark.asyncio
+async def test_the_confirming_session_stays_signed_in_and_only_the_others_end(private: _Private, world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """PEC-020b (lot E1, the developer's test of 13/11/2026) — the link confirmed in browser A, signed in as its account: A
+    stays signed in (the answer sets a new session cookie, ``GET /auth/me`` is 200 with the new address), while browser B, the
+    same account on another device, is signed out (401) — as the Profile says: «the other devices will be signed out»."""
+    print_section("PEC-020b: the confirming session stays, the others end")
+    _email_on(monkeypatch)
+    user = await _add_user(private.engine)
+    token = await _requested(private, world, user)
+
+    async with _signed_in(private, user) as browser_a, _signed_in(private, user) as browser_b:
+        response = await browser_a.post(CONFIRM, json={"token": token})
+        assert response.status_code == 200, response.text
+        assert "session" in response.cookies, "the confirmation sets a new session cookie for the browser that confirmed"
+        assert response.json()["session_kept"] is True
+        me_a = await browser_a.get(ME)
+        me_b = await browser_b.get(ME)
+
+    assert me_a.status_code == 200, f"the confirming browser was signed out: {me_a.text}"
+    assert me_a.json()["user"]["email"] == NEW_EMAIL
+    assert me_b.status_code == 401, "another device of the account is signed out"
+    print_success("A stays signed in with the new address, B is signed out")
+
+
+@pytest.mark.asyncio
+async def test_the_check_tells_the_page_what_to_show_and_changes_nothing(private: _Private, world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """PEC-024 (lots E2, E3) — ``POST /email/email-change/check`` with the link's token, before any click: without a session
+    ``signin``; with another account's ``other_account``; with the account's own ``ready``. None of the
+    answers names the account (no username, no address), and none spends the link: it still confirms afterwards."""
+    print_section("PEC-024: the check of a live link")
+    _email_on(monkeypatch)
+    user, other = await _add_user(private.engine), await _add_user(private.engine)
+    token = await _requested(private, world, user)
+
+    async with _anonymous(private) as anonymous:
+        without = await anonymous.post(CHECK, json={"token": token})
+    async with _signed_in(private, other) as browser:
+        another = await browser.post(CHECK, json={"token": token})
+    async with _signed_in(private, user) as browser:
+        own = await browser.post(CHECK, json={"token": token})
+        again = await browser.post(CHECK, json={"token": token})
+        confirmed = await browser.post(CONFIRM, json={"token": token})
+
+    answers = [response.json() for response in (without, another, own)]
+    assert [response.status_code for response in (without, another, own, again)] == [200, 200, 200, 200], [response.text for response in (without, another, own)]
+    assert answers == [{"status": "signin"}, {"status": "other_account"}, {"status": "ready"}]
+    leaked = [secret for secret in (user.username, user.email, NEW_EMAIL) for response in (without, another, own) if secret.casefold() in response.text.casefold()]
+    assert leaked == [], f"a check names the account: {leaked}"
+    assert confirmed.status_code == 200, f"the checks spent the link: {confirmed.text}"
+    print_success("signin / other_account / ready, nothing named, the link still confirms")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("how", ["cancelled", "consumed", "unknown"])
+async def test_the_check_of_a_dead_link_answers_as_the_click_would(private: _Private, world: World, monkeypatch: pytest.MonkeyPatch, how: str) -> None:
+    """PEC-025 (lot E3) — a link that no longer works is known on opening: the check answers 400 ``TOKEN_INVALID`` with the
+    status the click would get (a cancelled request: ``revoked``), whoever asks, without a session too."""
+    print_section(f"PEC-025: the check of a {how} link")
+    _email_on(monkeypatch)
+    user = await _add_user(private.engine)
+    token = await _requested(private, world, user)
+    if how == "cancelled":
+        async with _signed_in(private, user) as browser:
+            assert (await browser.delete(CANCEL)).status_code == 204
+    elif how == "consumed":
+        async with _signed_in(private, user) as browser:
+            assert (await browser.post(CONFIRM, json={"token": token})).status_code == 200
+    else:
+        token = "not-a-token-of-this-instance"
+
+    async with _anonymous(private) as anonymous:
+        response = await anonymous.post(CHECK, json={"token": token})
+
+    expected = {"cancelled": "revoked", "consumed": "consumed", "unknown": "unknown"}[how]
+    assert response.status_code == 400, response.text
+    assert response.json()["detail"]["error_code"] == "TOKEN_INVALID" and response.json()["detail"]["status"] == expected, response.text
+    print_success(f"400 TOKEN_INVALID {expected}")
+
+
+@pytest.mark.asyncio
 async def test_a_profile_link_without_the_accounts_session_is_403_and_stays_live(private: _Private, world: World, monkeypatch: pytest.MonkeyPatch) -> None:
-    """PEC-021 — D10: the Profile link clicked without a cookie, with a cookie no longer valid (the account's session version raised since) and with another account's cookie: 403 ``EMAIL_CHANGE_SIGN_IN_REQUIRED``, the same body in the three cases, nothing changed, no email scheduled; the link then works with the account's own session."""
+    """PEC-021 — D10: the Profile link clicked without a cookie, with a cookie no longer valid (the account's session version raised since) and with another account's cookie: 403, nothing changed, no email scheduled; the link then works with the account's own session. Without a valid session ``EMAIL_CHANGE_SIGN_IN_REQUIRED``, one body for both; with another account's ``EMAIL_CHANGE_OTHER_ACCOUNT``, whose body names no account: neither the link's username nor an address."""
     print_section("PEC-021: 403 without the account's session")
     _email_on(monkeypatch)
     user, other = await _add_user(private.engine), await _add_user(private.engine)
@@ -590,14 +670,16 @@ async def test_a_profile_link_without_the_accounts_session_is_403_and_stays_live
 
     bodies = [response.json() for response in (without, another, stale)]
     assert [response.status_code for response in (without, another, stale)] == [403, 403, 403], [response.text for response in (without, another, stale)]
-    assert bodies[0]["detail"]["error_code"] == "EMAIL_CHANGE_SIGN_IN_REQUIRED" and bodies.count(bodies[0]) == 3, bodies
+    assert bodies[0]["detail"]["error_code"] == "EMAIL_CHANGE_SIGN_IN_REQUIRED" and bodies[2] == bodies[0], bodies
+    assert bodies[1]["detail"]["error_code"] == "EMAIL_CHANGE_OTHER_ACCOUNT", bodies
+    assert not [secret for secret in (user.username, user.email, NEW_EMAIL) if secret.casefold() in another.text.casefold()], f"the refusal names the account: {another.text}"
     assert ((await _row(private.engine, user.id)).email, world.changed) == (user.email, [])
     assert len(_live(await _links(private.engine, user.id))) == 1, "the link is neither spent nor revoked"
 
     async with _signed_in(private, user) as browser:
         response = await browser.post(CONFIRM, json={"token": token})
     assert response.status_code == 200, response.text
-    print_success("403 three times, one body; then 200 with the account's session")
+    print_success("403 three times (sign in, another account, sign in); then 200 with the account's session")
 
 
 @pytest.mark.asyncio

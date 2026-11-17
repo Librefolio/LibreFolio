@@ -21,12 +21,15 @@ from backend.app.services.risk.analytic_helpers import (
     elapsed_calendar_days,
     require_annualization_factor,
     require_primary_returns,
+    return_shape_fields,
+    return_shape_warnings,
 )
 from backend.app.services.risk.base import RiskAnalytic, RiskComputation, RiskSeriesInputs
 from backend.app.services.risk.metrics import (
     annualized_sharpe,
     annualized_sortino,
     annualized_volatility,
+    return_shape,
     summarize_drawdown,
 )
 from backend.app.services.risk.registry import RiskAnalyticRegistry
@@ -105,7 +108,9 @@ class HistoricalKpiAnalytic(RiskAnalytic):
     """
 
     analytic_code = "historical_kpi"
-    algorithm_version = "2.2.0"
+    # 2.3.0 (RN-14) — the shape of the days: the best day, the share of positive days, the average up and down day,
+    # the longest positive streak, gains against losses (Omega), the semi-deviation and the extreme-day ratio.
+    algorithm_version = "2.3.0"
     name_i18n_key = "risk.analytics.historicalKpi.name"
     description_i18n_key = "risk.analytics.historicalKpi.description"
     output_kind = RiskOutputKind.KPI
@@ -168,8 +173,13 @@ class HistoricalKpiAnalytic(RiskAnalytic):
                     code="worst_realization_undefined",
                     message_i18n_key="risk.warnings.worst_realization_undefined",
                     message="No losing observation in the selected window.",
+                    # Not partial: the series is complete, only made so — the twin of best_realization_undefined (RN-14).
+                    degrades_result=False,
                 )
             )
+
+        shape = return_shape(returns, annualization, annual_target_return=params.target_annual_return)
+        warnings.extend(return_shape_warnings(shape))
 
         return RiskComputation(
             output=RiskKpiOutput(
@@ -190,6 +200,7 @@ class HistoricalKpiAnalytic(RiskAnalytic):
                     confidence_level=params.drawdown_confidence_level,
                 ),
                 ulcer_index=ulcer_index(drawdown.drawdowns),
+                **return_shape_fields(shape, dates),
             ),
             method=_method_for_basis(context.primary_return_basis),
             warnings=tuple(warnings),

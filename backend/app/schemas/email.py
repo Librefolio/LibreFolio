@@ -112,10 +112,23 @@ class EmailChangeConfirmRequest(StrictModel):
     token: str = Field(..., min_length=1, max_length=256, description="The token of the link, read from #token= in the address")
 
 
+class EmailChangeCheckResponse(StrictModel):
+    """POST /email/email-change/check: what the link page shows on opening, read without spending the link (lots E2, E3).
+
+    ``ready``: the click can confirm (a link asked from Profile, with its account signed in here; or the host's link of the
+    instance owner, which needs no session). ``signin``: sign in with the account that asked for the change first.
+    ``other_account``: another account is signed in here. A dead link is the 400 ``TOKEN_INVALID`` of the confirmation.
+    Never names the account."""
+
+    status: Literal["ready", "signin", "other_account"] = Field(..., description="What the page shows before the click")
+
+
 class EmailChangeConfirmResponse(StrictModel):
-    """The address of the account is now the one the link went to; its sessions have ended: it signs in again with the new address."""
+    """The address of the account is now the one the link went to. A link asked from Profile keeps the session that confirmed it
+    (a new session cookie) and ends the others; the owner's link ends every session: it signs in again with the new address."""
 
     username: str = Field(..., description="The username of the account, to fill in the sign-in form")
+    session_kept: bool = Field(..., description="The browser that confirmed is still signed in (a link asked from Profile); false when every session ended (the owner's link)")
 
 
 class EmailVerificationResendRequest(StrictModel):

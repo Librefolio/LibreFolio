@@ -5,11 +5,15 @@ year fraction; simple interest is principal × annual rate × that fraction, and
 day's simple interest over a span, in closed form. The Scheduled Investment provider builds its
 accrual on them: a day's interest is the simple interest of one day, on the principal (SIMPLE) or on the running value
 (COMPOUND), and late interest after maturity uses the same primitives.
+
+A bond's annual coupon from its period coupon (``annual_coupon_rate``) lives here too: the profile enricher of Borsa
+Italiana fills the annual rate this way when the page gives only the coupon of each period (an ordinary BTP).
 """
 
 from __future__ import annotations
 
 import calendar
+from collections.abc import Mapping
 from datetime import date
 from decimal import Decimal, getcontext
 from functools import lru_cache
@@ -227,3 +231,16 @@ def _leap_years_before(year: int) -> int:
     """The leap years from year 1 to ``year − 1``."""
     previous = year - 1
     return previous // 4 - previous // 100 + previous // 400
+
+
+#: How many coupons a year each coupon frequency pays (the codes of the profile catalogue's ``coupon_frequency``); a
+#: coupon paid at maturity has no yearly count.
+COUPONS_PER_YEAR: Mapping[str, int] = {"monthly": 12, "quarterly": 4, "semiannual": 2, "annual": 1}
+
+
+def annual_coupon_rate(period_rate: Decimal, frequency: str) -> Decimal | None:
+    """The annual coupon rate of a bond from the rate of each coupon and how often it pays: ``period_rate`` × the
+    coupons a year of ``frequency`` (a ``COUPONS_PER_YEAR`` code), exact. In the unit of ``period_rate`` (percent or
+    fraction alike). None for a coupon paid at maturity or an unknown frequency."""
+    count = COUPONS_PER_YEAR.get(frequency)
+    return period_rate * count if count is not None else None

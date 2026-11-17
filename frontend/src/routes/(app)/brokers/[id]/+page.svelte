@@ -38,6 +38,7 @@
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {uiLocaleStore} from '$lib/stores/app/uiLocale';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     let {data}: {data: {brokerId: number}} = $props();
 
@@ -168,7 +169,7 @@
     }
 
     const txBulkActions = $derived([
-        {id: 'edit', icon: Pencil, label: () => $_('common.edit'), onClick: editSelectedTx},
+        {id: 'edit', icon: Pencil, label: () => $_('common.edit'), primary: true, onClick: editSelectedTx},
         {id: 'clone', icon: Copy, label: () => $_('transactions.actions.clone'), onClick: cloneSelectedTx},
         {id: 'delete', icon: Trash2, label: () => $_('common.delete'), variant: 'danger' as const, onClick: deleteSelectedTx},
     ]);
@@ -308,7 +309,7 @@
         </div>
         <div class="flex items-center gap-2">
             {#if canEdit && txSelectedRows.length > 0}
-                <DataTableToolbar selectedCount={txSelectedRows.length} bulkActions={txBulkActions} onClearSelection={clearTxSelection} />
+                <DataTableToolbar variant="floating" selectedCount={txSelectedRows.length} bulkActions={txBulkActions} onClearSelection={clearTxSelection} />
             {/if}
             <ColumnVisibilityToggle tableRef={table?.getTableRef()} />
             {#if canEdit}
@@ -329,7 +330,10 @@
     {#if broker}
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-4" data-testid="broker-info-tab">
             <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-4" data-testid="broker-metadata">
-                <h3 class="font-semibold text-lf-secondary mb-3">{$_('brokers.metadata')}</h3>
+                <div class="mb-3 flex items-center justify-between gap-2">
+                    <h3 class="font-semibold text-lf-secondary">{$_('brokers.metadata')}</h3>
+                    <DocsLink path="user/brokers/info/" label={$_('brokers.docsHelp.info')} icon="book" size={16} testId="broker-metadata-docs" />
+                </div>
                 <div class="space-y-2 text-sm">
                     <div class="flex justify-between">
                         <span class="text-lf-muted">{$_('brokers.isActive')}</span>
@@ -363,10 +367,13 @@
             </div>
 
             <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-4" data-testid="broker-sharing-section">
-                <h3 class="font-semibold text-lf-secondary mb-3 flex items-center gap-2">
-                    <Users size={18} class="text-lf-link" />
-                    {$_('brokers.sharing.title')}
-                </h3>
+                <div class="mb-3 flex items-center justify-between gap-2">
+                    <h3 class="font-semibold text-lf-secondary flex items-center gap-2">
+                        <Users size={18} class="text-lf-link" />
+                        {$_('brokers.sharing.title')}
+                    </h3>
+                    <DocsLink path="user/brokers/sharing/" label={$_('brokers.docsHelp.sharing')} icon="book" size={16} testId="broker-sharing-docs" />
+                </div>
                 <BrokerSharingPanel brokerId={broker.id} readOnly={safeString(broker.user_role) !== 'OWNER'} onChanged={handleUpdated} />
             </div>
         </div>

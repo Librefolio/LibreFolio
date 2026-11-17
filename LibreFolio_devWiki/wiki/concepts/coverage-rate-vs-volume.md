@@ -2,6 +2,7 @@
 title: "Reading coverage: rate versus volume"
 category: concept
 date: 2026-08-31
+updated: 2026-11-13
 tags: [testing, coverage, metrics, frontend, backend, method]
 related: [concepts/run-cache-and-campaign-semantics, concepts/test-isolation-classes]
 related_problems: [svelte-template-branches-not-instrumented, coverage-percent-mixed-lines-and-branches, e2e-python-coverage-lost-above-two-workers]
@@ -44,10 +45,35 @@ And the suspicion of "whole untested areas" was measured and found **false**:
 are **inside files that are already covered**: they are the branches the happy
 path does not walk.
 
+## The number to quote (since project 71, 13/11/2026)
+
+Every coverage run writes `.coverage_data/coverage-summary.json`: for each base — backend
+`pytest`, `server` (E2E), `combined`, `financial_math`; frontend `unit`, `e2e`, `combined` —
+**lines and branches apart**, `{covered, total, pct}`, the percentage computed by the runner.
+coverage.py's `TOTAL` and `percent_covered` count lines and branches together, a number that
+is neither (on the E2E server data: 40,29 % «TOTAL» for 47,40 % of lines and 15,33 % of
+branches) — see [[problems/coverage-percent-mixed-lines-and-branches]]. Quote the summary of
+a `--quotable all` run ([[concepts/run-cache-and-campaign-semantics]]), never a partial one.
+
+Two rules came with it:
+
+- **An incomplete run is red; a low number never is.** The runner records what it launched
+  under coverage and checks, at the end, that each piece is on disk and holds data; a
+  missing piece fails the run. There is no floor and no threshold: the numbers are a note
+  (decision D6).
+- **The E2E level counts what runs during the tests.** The collection now reads only the
+  counters of the modules a worker already holds (≈0,6 MB a test instead of ≈25 MB;
+  18,5 s → 0,9 s a test), and a page no longer lingers ~18 s after its test. The
+  background work it did in that time is no longer counted: −0,9 % of E2E lines on
+  `front-fx all`, almost all in the Assets page's second load wave. Counts made before a
+  full navigation are still lost (`window.__coverage__` lives in the document), kept so by
+  decision D11.
+
 ## There is no single number — there are six
 
-The monocart HTML report publishes five and titles itself with the most
-generous:
+*(Measured in the monocart era, before istanbul end to end; the reasoning stands, the
+report that published these five figures does not.)* The monocart HTML report published
+five and titled itself with the most generous:
 
 | metric | value | what it counts |
 |---|---|---|
@@ -120,7 +146,9 @@ useful than showing a delta that would not hold.
 
 | Role | Path |
 |------|------|
-| Coverage CLI and report classification | `scripts/test_runner/_coverage.py` |
+| Coverage CLI and report classification; piece check; summary | `scripts/test_runner/_coverage.py` |
+| E2E collection: light read, counter sum | `frontend/e2e/fixtures/js-coverage-sink.ts`, `frontend/e2e/fixtures/playwright.ts` |
+| Collection stopwatches and compare | `frontend/scripts/js-coverage-probe.mjs` |
 | Python coverage config | `.coveragerc` |
 | JS coverage merge (istanbul) | `frontend/scripts/js-coverage-report.js` |
 | JS instrumentation | `frontend/vite.config.ts`, `frontend/vitest.config.ts` |

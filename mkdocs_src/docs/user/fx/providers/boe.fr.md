@@ -24,4 +24,6 @@ La Bank of England prend en charge environ 15 devises majeures, notamment :
 ## 📝 Notes importantes
 
 - **Format des cotations** : Les taux sont exprimés comme le montant de la devise étrangère pour 1 GBP (ex. : 1 GBP = 1,25 USD). LibreFolio normalise automatiquement cette représentation en arrière-plan.
+- **Licence** : la Banque d'Angleterre publie sa base de données sous la UK Open Government Licence, qui permet la réutilisation libre en citant la source.
+- **Taux de l'euro avant LibreFolio 1.4** : le taux de l'euro provenait d'une mauvaise série de la Banque d'Angleterre (euro contre dollar américain au lieu de contre la livre sterling). Si vous avez utilisé BOE pour l'euro, synchronisez à nouveau ces paires sur toute la période que vous détenez (page FX, période « Tout », « Sync. Tout »).
 - **Jours fériés** : La BOE ne publie pas de taux les jours fériés au Royaume-Uni ou les week-ends.

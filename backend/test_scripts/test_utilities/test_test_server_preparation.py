@@ -633,11 +633,15 @@ class TestSharedServerBuildsBeforeItsDeadline:
         assert (server.proc, server.started_here) == (None, False)
         assert any("918273" in message for message in errors), errors
 
-    def test_the_build_step_gets_the_runner_env_and_only_the_server_the_coverage_wiring(self, monkeypatch):
+    def test_the_build_step_gets_the_runner_env_and_only_the_server_the_coverage_wiring(self, monkeypatch, tmp_path):
         # Under --coverage the backend measures itself, the build must not: it comes out the same either way, and
         # configure_test_runtime imports backend.app.config, which .coveragerc measures.
-        for name in ("COVERAGE_PROCESS_START", "PYTHONPATH"):
+        for name in ("COVERAGE_PROCESS_START", "PYTHONPATH", "COVERAGE_FILE"):
             monkeypatch.delenv(name, raising=False)
+        # The server's parts go to their own folder (project 71): here, never in the repository
+        server_parts = tmp_path / "parts" / "server"
+        monkeypatch.setattr(test_runner_common, "server_coverage_dir", lambda: server_parts)
+        monkeypatch.setattr(test_runner_server._coverage, "LEDGER", test_runner_server._coverage.CoverageLedger())
         server, build_envs, spawn_envs = test_runner_server.SharedTestServer(coverage=True), [], []
 
         def build(*args, **kwargs):
@@ -654,6 +658,8 @@ class TestSharedServerBuildsBeforeItsDeadline:
         assert str(test_runner_common.COVERAGE_SITECUSTOMIZE_DIR) not in build_env.get("PYTHONPATH", "")
         (spawn_env,) = spawn_envs
         assert spawn_env["COVERAGE_PROCESS_START"] == str(test_runner_common.PROJECT_ROOT / ".coveragerc")
+        assert spawn_env["COVERAGE_FILE"] == str(server_parts / ".coverage"), "the server's parts are out of pytest-cov's reach"
+        assert "COVERAGE_FILE" not in build_env
 
 
 # ── Contract 4 — build_server_prerequisites(): the build-only server, in the foreground, its output in order ──

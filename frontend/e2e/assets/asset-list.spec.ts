@@ -21,7 +21,7 @@ import {createOwnedAsset, deleteOwned, jsonFrom, type Owned, type OwnedAsset} fr
 import {uniqueSuffix, uniqueToken} from '../fixtures/unique';
 import {t} from '../fixtures/i18n-data';
 import {daysAgoIso, localIso, todayIso} from '../fixtures/dates';
-import {describeShown, isStoredPoint, overwriteCounts, overwriteWarningSentence, pageLanguage, recordSyncRequests, storedAssetPrices, type SyncPeriod} from '../fixtures/sync-overwrite';
+import {describeShown, isStoredPoint, overwriteCounts, overwriteManualCount, overwriteWarningSentence, pageLanguage, recordSyncRequests, storedAssetPrices, type SyncPeriod} from '../fixtures/sync-overwrite';
 import {chooseTheme} from '../fixtures/galleryFiles';
 import {parkPointer} from '../fixtures/galleryRiskLab';
 import {schemas} from '../../src/lib/api/generated';
@@ -1182,8 +1182,9 @@ test.describe('Assets list — the sync dialog warns before replacing stored pri
         expect(total, 'counted out of every asset the dialog syncs').toBe(Number(await scope.getAttribute('data-item-count')));
         expect(existing, 'some asset the dialog syncs stores a price in the period').toBeGreaterThanOrEqual(1);
         expect(existing, 'only assets the dialog syncs are counted').toBeLessThanOrEqual(total);
-        // One section: the sentence alone — the catalogue's, for these counts, in the page's language.
-        await expect(warning).toHaveText(overwriteWarningSentence(await pageLanguage(page), existing, total));
+        // One section: the sentence alone — the catalogue's, for these counts, in the page's language — and, when some of the
+        // stored prices were entered by hand (other specs enter them in this shared range), the catalogue's second sentence.
+        await expect(warning).toHaveText(overwriteWarningSentence(await pageLanguage(page), existing, total, await overwriteManualCount(warning)));
 
         // Still before the start, and closed from there: the dialog is never started.
         await expect(modal.getByTestId('sync-modal-start')).toBeEnabled();

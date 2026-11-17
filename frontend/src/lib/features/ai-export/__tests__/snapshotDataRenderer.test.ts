@@ -737,6 +737,96 @@ describe('AI Export compact Snapshot Data renderer', () => {
     });
 
     /**
+     * D5 (plan 68): `asset.identity` moves to component version 2 — its payload loses `classification` (description,
+     * countries and sectors are profile voices now) with schema 1 otherwise unchanged — so the renderer must list v2
+     * as compact. The new `asset.profile` v1 renders compactly by the default version set: its flat tables go through
+     * the generic renderer, ratios as percents. No prompt wording is frozen: only the table names and the percent cells.
+     */
+    describe('asset identity v2 and asset profile v1 (D5)', () => {
+        const target = {kind: 'asset', asset_id: 42};
+
+        function identityV2() {
+            return {
+                component_id: 'asset.identity',
+                component_version: 2,
+                schema_id: 'asset.identity',
+                schema_version: 1,
+                payload: {
+                    asset_id: 42,
+                    display_name: 'World Equity ETF',
+                    currency: 'EUR',
+                    asset_type: 'ETF',
+                    quote_base_quantity: 1,
+                    active: true,
+                    identifiers: {isin: 'IE0000000001', ticker: 'WRLD', cusip: null, sedol: null, figi: null, other: []},
+                },
+            };
+        }
+
+        function profileV1() {
+            return {
+                component_id: 'asset.profile',
+                component_version: 1,
+                schema_id: 'asset.profile',
+                schema_version: 1,
+                payload: {
+                    asset_id: 42,
+                    no_profile_data: false,
+                    history_starts_on: '2026-03-02',
+                    source_semantics: 'source semantics placeholder',
+                    percentages: [{voice: 'ter', date: '2026-03-02', through: '2026-03-31', source: 'justetf', value_ratio: '0.0022'}],
+                    amounts: [],
+                    values: [],
+                    weights: [
+                        {voice: 'geography', date: '2026-03-02', through: '2026-03-31', source: 'justetf', key: 'JPN', weight: '0.4000'},
+                        {voice: 'geography', date: '2026-03-02', through: '2026-03-31', source: 'justetf', key: 'USA', weight: '0.6000'},
+                    ],
+                    coupon_schedule: [],
+                    emptied: [],
+                    thinned: [],
+                },
+            };
+        }
+
+        function tableBlock(content: string, name: string): string {
+            const start = content.indexOf(`TABLE ${name}`);
+            expect(start, `TABLE ${name} in the rendering`).toBeGreaterThanOrEqual(0);
+            const next = content.indexOf('\nTABLE ', start + 1);
+            return content.slice(start, next === -1 ? undefined : next);
+        }
+
+        it('renders asset.identity v2 (schema 1, no classification) compactly, with its directory entry', () => {
+            const rendered = renderSnapshotDataText([identityV2()], target).content;
+
+            expect(rendered).toContain('COMPONENT asset.identity');
+            expect(rendered).not.toContain('PAYLOAD YAML FALLBACK');
+            expect(rendered).toContain('ENTITY DIRECTORY');
+            expect(rendered).toContain('|A1|World Equity ETF|WRLD|IE0000000001|');
+        });
+
+        it('still falls back to YAML for asset.identity v3', () => {
+            const rendered = renderSnapshotDataText([{...identityV2(), component_version: 3}], target).content;
+
+            expect(rendered).toContain('PAYLOAD YAML FALLBACK');
+        });
+
+        it('renders asset.profile v1 compactly: percentages and weights as percents', () => {
+            // Rendered alone: the identity part of this lot is the test above, this one is the profile's only.
+            const rendered = renderSnapshotDataText([profileV1()], target).content;
+
+            expect(rendered).toContain('COMPONENT asset.profile');
+            expect(rendered).not.toContain('PAYLOAD YAML FALLBACK');
+            const percentages = tableBlock(rendered, 'percentages');
+            expect(percentages).toContain('value_percent');
+            expect(percentages).toContain('0.22%');
+            const weights = tableBlock(rendered, 'weights');
+            expect(weights).toContain('weight_percent');
+            expect(weights).toContain('60%');
+            expect(weights).toContain('40%');
+        });
+    });
+
+    /**
      * J-17: a holding valued at its book cost (`valuation_source: "ESTIMATED_AT_COST"`) has no price, so its
      * position row exports no `unit_price` (`null`), and `portfolio.positions` / `broker.positions` move to
      * component version 2 with the schema-1 payload shape the generic renderer knows. So each v2 renders

@@ -92,9 +92,11 @@ graph TD
 |--------|---------|-------------|
 | `icon` | `None` | Provider icon URL |
 | `base_currencies` | `[base_currency]` | List of supported bases (single-base for now) |
+| `calls_external_service` | `True` | A class attribute: whether the provider reaches an external service. Each call through `call_fx_provider()` is then counted, and refused with `FXCallLimitError` when an instance limit is full (project 76). `False` for a provider that never fetches, such as `MANUAL` |
 | `description` | Auto-generated | Provider description |
 | `description_i18n` | `{"en": description}` | Multilingual descriptions |
-| `warning_i18n` | `{}` | Data-quality warnings shown in UI (⚠️ triangle on routes) |
+| `warning_i18n` | `{}` | A note shown in UI on the routes that use the provider (its icon follows `warning_level`) |
+| `warning_level` | `"warning"` | How serious `warning_i18n` is: `"warning"` (⚠️, a data limit that can mislead, e.g. SNB's monthly averages) or `"info"` (ℹ️, a fact worth knowing, e.g. FED's weekly release of daily rates) |
 | `docs_url` | Generic providers list | URL to documentation page |
 | `test_currencies` | `["USD","EUR","GBP","JPY","CHF"]` | Currencies that must be available for tests |
 | `multi_unit_currencies` | `set()` | Currencies quoted per 100 units (e.g., JPY, SEK). Plugin must normalize ÷100. |

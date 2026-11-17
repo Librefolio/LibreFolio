@@ -94,6 +94,7 @@ import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/compo
 import {getUserStorageKey} from '$lib/utils/storage';
 import type {ComponentProps} from 'svelte';
 import PositionsPanel from './PositionsPanel.svelte';
+import {makePositionKey} from './positionKey';
 import {growthBrokerColor} from '$lib/theme/chartPalettes';
 import {isDarkTheme} from '$lib/theme/themeMode';
 import type {HistoryPointLike, PositionKey, PositionsSeriesResponse, PositionSeries} from './positionsSeries';
@@ -821,5 +822,69 @@ describe('PositionsPanel — a line wears its asset’s colour (B8)', () => {
     it('a single ticked row keeps the colour it has among all', async () => {
         await tickInOrder(['33-2']);
         expect(colourOfLine('33-2')).toBe(expectedFor(2));
+    });
+});
+
+describe('PositionsPanel — «Globale / Broker» (project 74)', () => {
+    const GROUPED = () =>
+        ({
+            net_worth: {code: 'EUR', amount: '60000'},
+            holdings: [
+                {...holding(11, null), broker_ids: [1, 2], quantity: '20'},
+                {...holding(33, null), broker_ids: [2]},
+            ],
+            holding_groups: [],
+        }) as never;
+
+    it('the switch is not drawn with one broker (or on a broker’s page): the page says it is not available', async () => {
+        await mountPanel();
+        expect(screen.queryByTestId('positions-grouping-toggle')).toBeNull();
+    });
+
+    it('with two brokers or more it is drawn, Broker pressed by default, and a click reports the choice', async () => {
+        const onGroupingChange = vi.fn();
+        await mountPanel({groupingAvailable: true, onGroupingChange});
+        expect(screen.getByTestId('positions-grouping-broker').getAttribute('aria-pressed')).toBe('true');
+        await fireEvent.click(screen.getByTestId('positions-grouping-asset'));
+        expect(onGroupingChange).toHaveBeenCalledExactlyOnceWith('asset');
+    });
+
+    it('in Globale the rows are the grouped question’s: one row per asset, keyed with no broker', async () => {
+        await mountPanel({groupingAvailable: true, grouping: 'asset', groupedSummary: GROUPED(), contribution: CONTRIBUTION()});
+        expect(screen.getByTestId(`dt-row-checkbox-${makePositionKey(11, null)}`)).toBeTruthy();
+        expect(screen.queryByTestId(`dt-row-checkbox-${makePositionKey(11, 1)}`)).toBeNull();
+        // every Globale row is keyed by its asset alone, one broker or several: the Period's rows and the series agree
+        expect(screen.getByTestId(`dt-row-checkbox-${makePositionKey(33, null)}`)).toBeTruthy();
+        expect(screen.queryByTestId(`dt-row-checkbox-${makePositionKey(33, 2)}`)).toBeNull();
+    });
+
+    it('in Globale before the grouped rows land the panel says it is busy, and asks the contribution', async () => {
+        const onRequestContribution = vi.fn();
+        render(PositionsPanel, {props: panelProps({groupingAvailable: true, grouping: 'asset', groupedSummary: null, onRequestContribution})});
+        await waitFor(() => expect(screen.getByTestId('positions-panel').getAttribute('data-busy')).toBe('true'));
+        expect(onRequestContribution).toHaveBeenCalled();
+    });
+
+    it('a ticked row follows the switch: Broker → Globale asks the asset summed over its brokers', async () => {
+        const onRequestPositionsSeries = vi.fn();
+        const view = await mountPanel({groupingAvailable: true, onRequestPositionsSeries, contribution: CONTRIBUTION()});
+        await fireEvent.click(checkbox(makePositionKey(11, 1)));
+        expect(onRequestPositionsSeries).toHaveBeenLastCalledWith([keyOf(11, 1)]);
+        await view.rerender(panelProps({groupingAvailable: true, onRequestPositionsSeries, contribution: CONTRIBUTION(), grouping: 'asset', groupedSummary: GROUPED()}));
+        await waitFor(() => expect(onRequestPositionsSeries).toHaveBeenLastCalledWith([keyOf(11, null)]));
+    });
+
+    it('a ticked asset held at one broker stays ticked across the switch: its Globale row has the key the chart asks', async () => {
+        const onRequestPositionsSeries = vi.fn();
+        const view = await mountPanel({groupingAvailable: true, onRequestPositionsSeries, contribution: CONTRIBUTION()});
+        await fireEvent.click(checkbox(makePositionKey(33, 2)));
+        await view.rerender(panelProps({groupingAvailable: true, onRequestPositionsSeries, contribution: CONTRIBUTION(), grouping: 'asset', groupedSummary: GROUPED()}));
+        await waitFor(() => expect(onRequestPositionsSeries).toHaveBeenLastCalledWith([keyOf(33, null)]));
+        await waitFor(() => expect(checkbox(makePositionKey(33, null)).getAttribute('data-state')).toBe('checked'));
+    });
+
+    it('«see all» is a badge link to the assets, whatever the grouping', async () => {
+        await mountPanel({assetsHref: '/assets?brokers=1'});
+        expect(screen.getByTestId('positions-see-all').getAttribute('href')).toBe('/assets?brokers=1');
     });
 });

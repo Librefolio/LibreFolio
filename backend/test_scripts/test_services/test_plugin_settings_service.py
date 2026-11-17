@@ -17,7 +17,7 @@ doubles ``mockprov`` (asset: four system fields, three user fields, a secret of 
    family's, stripped. A plugin that cannot be instantiated shows its code and no icon; a name that raises is the code,
    the icon read all the same; an icon that raises, or is not a non-blank string, is no icon, the name read all the
    same; a family without a row in ``FAMILY_ICON_ATTRIBUTES`` has no icon, and every family of ``FAMILY_REGISTRIES``
-   has its row.
+   has its row. The enrichers (plan 68, B1) are read through ``EnricherRegistry``, their icon from ``icon``.
 2. **Writes are all or nothing**: every item is checked first; one refused item refuses the write, the refusal lists
    every item with its outcome and nothing is written. A system field needs an administrator (``FORBIDDEN_SCOPE``); a
    field an environment variable sets is ``LOCKED_BY_ENV`` (the derived name, its ``_FILE``, the alias; never a user
@@ -81,6 +81,7 @@ from backend.app.db.models import PluginSystemSetting, PluginUserSetting, User
 from backend.app.schemas.plugin_settings import PluginSettingErrorCode, PluginSettingFamily, PluginSettingsCatalogResponse, PluginSettingsPluginRead, PluginSettingWriteItem, PluginSettingWriteResult
 from backend.app.services.asset_source_providers.mockprov.plugin import MockProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.fx import runtime as fx_runtime
 from backend.app.services.fx_providers.mockfx.plugin import MockFXProvider
 from backend.app.services.platform.instance_key import InstanceKeyError
@@ -88,7 +89,8 @@ from backend.app.services.platform.provider_registry import AbstractProviderRegi
 from backend.app.services.plugin_settings import resolver, runtime, service
 from backend.app.services.plugin_settings.contract import PluginSettingsMixin
 from backend.app.services.plugin_settings.crypto import UnreadableSecretError, decrypt_secret, key_id_of, secret_aad, settings_subkey
-from backend.app.services.plugin_settings.fields import PluginSettingField, SettingScope, SettingType, env_name, env_variables
+from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType, env_name, env_variables
+from backend.app.services.plugin_settings.groups import SettingsGroup, all_groups, register_group, release_group
 from backend.app.services.plugin_settings.service import PluginSettingsKeyUnavailable, PluginSettingsRefused, read_catalogue, write_settings
 from backend.test_scripts.test_services import _brim_settings_lab as brim_lab
 from backend.test_scripts.test_utils import print_section, print_success
@@ -540,6 +542,14 @@ def test_a_family_without_an_icon_attribute_has_no_icon_and_still_its_name():
 def test_the_name_is_provider_name_else_name_else_the_code(plugin_class: type, name: str, icon: str | None):
     """1: ``provider_name``, else ``name``, else the code; a name that raises is the code, and the icon is read all the same."""
     assert service._plugin_identity("asset", plugin_class, STAND_IN_CODE) == (name, icon)
+
+
+def test_the_enricher_family_is_read_through_its_registry_with_its_icon():
+    """1 (plan 68, B1): the catalogue reads the enrichers through ``EnricherRegistry``, and their icon from ``icon``, the
+    attribute ``EnricherPlugin`` declares."""
+    assert service.FAMILY_REGISTRIES.get("enricher") is EnricherRegistry
+    assert service.FAMILY_ICON_ATTRIBUTES.get("enricher") == "icon"
+    assert "enricher" not in service.FAMILIES_WITHOUT_ICON
 
 
 def test_every_settings_family_has_its_icon_attribute():
@@ -997,7 +1007,9 @@ async def test_in_the_managed_profile_configured_counts_a_hidden_field_without_n
         shown = entry.model_dump_json()
         assert [field.key for field in entry.fields] == [key for key in MOCKPROV_KEYS if key != "region"], name
         assert entry.configured is configured, name
-        assert set(entry.model_dump()) == {"family", "plugin_code", "plugin_name", "icon_url", "configured", "fields"}, "the entry has no place for a missing field's name"
+        # Project 76, G2 adds the groups a plugin reads, the plugins a group serves and a group's name key: none of them
+        # names a field, missing or not; U4's call_usage holds counts and limits by window, no field's name either
+        assert set(entry.model_dump()) == {"family", "plugin_code", "plugin_name", "icon_url", "configured", "fields", "groups", "used_by", "name_key", "call_usage"}, "the entry has no place for a missing field's name"
         assert "region" not in shown.lower() and REGION_VARIABLE not in shown and "atlantis" not in shown, f"{name}: the hidden field shows: {shown}"
     print_success(f"region hidden for everyone, configured={configured}, named nowhere")
 
@@ -1286,3 +1298,536 @@ async def test_a_setting_of_a_real_brim_plugin_is_an_unknown_field(engine: Async
 
     assert _outcomes(await _refused(engine, people["admin"], [item])) == [("api_key", False, UNKNOWN)]
     await _assert_nothing_written(engine)
+
+
+# =============================================================================
+# Project 76, G2 — shared groups in the catalogue and in the writes
+# =============================================================================
+#
+# The contract (letters as in the lot's brief):
+#   A. ``PluginSettingFamily.GROUP``; ``PluginSettingsPluginRef``; ``PluginSettingsPluginRead`` gains ``groups``, ``used_by``, ``name_key``.
+#   B. A group is a catalogue entry (``family="group"``, ``plugin_code`` = its name, ``plugin_name`` = its label); a plugin lists the groups it
+#      reads and is ``configured`` only when no field of its own and no required field of its groups is missing; a plugin with groups and no
+#      field of its own is listed.
+#   C. An administrator writes a group's field with ``family="group"``, ``scope="system"``: rows ``plugin_system_settings(family="group")``.
+#   D. The value written reaches the plugins that read the group.
+#
+# Every group of this section is named ``g2_*`` and released at teardown; its plugins live in two throwaway registries (asset and fx).
+
+G2_A, G2_B, G2_LAB = "g2_a", "g2_b", "g2_lab"
+G2_TOKEN_VARIABLE = "LIBREFOLIO_PLUGIN_GROUP_G2_A_TOKEN"
+G2_TIER_VARIABLE = "LIBREFOLIO_PLUGIN_GROUP_G2_A_TIER"
+
+
+class _G2AssetRegistry(AbstractProviderRegistry):
+    @classmethod
+    def _get_provider_folder(cls) -> str:
+        return "plugin_settings_g2_assets"
+
+    @classmethod
+    def settings_family(cls) -> str:
+        return "asset"
+
+
+class _G2FxRegistry(AbstractProviderRegistry):
+    @classmethod
+    def _get_provider_folder(cls) -> str:
+        return "plugin_settings_g2_fx"
+
+    @classmethod
+    def settings_family(cls) -> str:
+        return "fx"
+
+
+def _g2_fields(token_required: bool = True) -> tuple[PluginSettingField, ...]:
+    return (
+        PluginSettingField(key="token", type=SettingType.STRING, scope=SettingScope.SYSTEM, label="Token (g2)", secret=True, required=token_required, min_length=8),
+        PluginSettingField(key="tier", type=SettingType.SELECT, scope=SettingScope.SYSTEM, label="Tier (g2)", default="free", options=(SettingOption("free", "Free"), SettingOption("paid", "Paid"))),
+    )
+
+
+def _g2_group(name: str = G2_A, *, fields: tuple[PluginSettingField, ...] | None = None, **extra: Any):
+    """Register (and return) a group of this section: ``token`` secret required (8+ characters), ``tier`` select with a default."""
+    group = SettingsGroup(name=name, label=f"Group {name}", label_key=f"settings.groups.{name}", fields=_g2_fields() if fields is None else fields, **extra)
+    register_group(group)
+    return group
+
+
+def _g2_plugin(code: str, groups: tuple[str, ...] = (G2_A,), fields: tuple[PluginSettingField, ...] = (), **attributes: Any) -> type:
+    return type(f"G2Plugin_{code}", (PluginSettingsMixin,), {"provider_code": code, "provider_name": f"Plugin {code}", "settings_groups": groups, "settings_fields": fields, **attributes})
+
+
+def _g2_own(key: str = "note", required: bool = False) -> PluginSettingField:
+    return PluginSettingField(key=key, type=SettingType.STRING, scope=SettingScope.SYSTEM, label=f"{key} (g2)", required=required)
+
+
+@pytest.fixture
+def g2(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine):
+    """The service reads the asset and FX families from two registries of this section; the engine of the runtime is the private one.
+
+    Yields ``add(family, plugin_class)``. Every group of this section is released at teardown, after a red too."""
+    registered: dict[str, dict[str, type]] = {"asset": {}, "fx": {}}
+    for family, registry in (("asset", _G2AssetRegistry), ("fx", _G2FxRegistry)):
+        monkeypatch.setattr(registry, "_providers", registered[family])
+        monkeypatch.setattr(registry, "_discovery_done", True)
+        monkeypatch.setitem(service.FAMILY_REGISTRIES, family, registry)
+    monkeypatch.setattr(runtime, "get_async_engine", lambda: engine)
+    for group, field_key in ((G2_A, "token"), (G2_A, "tier"), (G2_B, "token"), (G2_LAB, "token"), (G2_LAB, "tier")):
+        for variable in (env_name("group", group, field_key), env_name("group", group, field_key) + "_FILE"):
+            monkeypatch.delenv(variable, raising=False)
+
+    def add(family: str, plugin_class: type) -> type:
+        registered[family][plugin_class.provider_code] = plugin_class
+        return plugin_class
+
+    yield add
+    for name in [name for name in all_groups() if name.startswith("g2_")]:
+        release_group(name)
+
+
+def _group_item(group: str, key: str, **write: Any) -> PluginSettingWriteItem:
+    return PluginSettingWriteItem(family="group", plugin_code=group, field_key=key, scope="system", **write)
+
+
+async def _group_rows(engine: AsyncEngine, group: str | None = None) -> list[PluginSystemSetting]:
+    system, _user = await _rows(engine)
+    return [row for row in system if row.family == "group" and (group is None or row.plugin_code == group)]
+
+
+async def _entries(engine: AsyncEngine, user: User, **filters: Any) -> list[PluginSettingsPluginRead]:
+    return (await _catalogue(engine, user, **filters)).plugins
+
+
+# -----------------------------------------------------------------------------
+# A. The schema
+# -----------------------------------------------------------------------------
+
+
+def test_g2_the_schema_knows_groups_and_who_uses_them():
+    """A: the family value, the reference of a plugin, and the three new defaults of an entry."""
+    from backend.app.schemas.plugin_settings import PluginSettingsPluginRef  # noqa: PLC0415 — new name: imported here so the older tests still collect
+
+    assert PluginSettingFamily("group").value == "group" and PluginSettingFamily.GROUP == "group"
+    assert set(PluginSettingsPluginRef.model_fields) == {"family", "plugin_code", "plugin_name"}
+    entry = PluginSettingsPluginRead(family="group", plugin_code="g2_a", plugin_name="Group", configured=True, fields=[])
+    assert (entry.groups, entry.used_by, entry.name_key) == ([], [], None)
+    ref = PluginSettingsPluginRef(family="asset", plugin_code="mockprov", plugin_name="Mock")
+    assert PluginSettingsPluginRead(family="group", plugin_code="g2_a", plugin_name="Group", configured=True, fields=[], used_by=[ref]).used_by == [ref]
+
+
+# -----------------------------------------------------------------------------
+# B. The catalogue: the group's entry
+# -----------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_g2_a_group_is_a_catalogue_entry(engine: AsyncEngine, people: dict[str, User], g2):
+    """B: family ``group``, its name as the code, its label as the name, its label key, no icon, its fields as declared, no groups of its own."""
+    group = _g2_group()
+    g2("asset", _g2_plugin("g2_reader"))
+
+    entry = await _entry(engine, people["admin"], G2_A)
+
+    assert (entry.family, entry.plugin_code, entry.plugin_name, entry.name_key, entry.icon_url) == ("group", G2_A, group.label, group.label_key, None)
+    assert [field.key for field in entry.fields] == ["token", "tier"] and entry.groups == []
+    token, tier = _by_key(entry)["token"], _by_key(entry)["tier"]
+    assert (token.secret, token.scope.value, token.required, token.value, token.is_set, token.editable) == (True, "system", True, None, False, True)
+    assert (tier.value, tier.source.value, tier.editable) == ("free", "default", True)
+
+
+@pytest.mark.asyncio
+async def test_g2_used_by_names_the_plugins_of_every_family_that_read_the_group(engine: AsyncEngine, people: dict[str, User], g2):
+    """B: an asset plugin and an FX plugin; the name is the one the plugin's own entry shows; a plugin of another group is not named."""
+    _g2_group()
+    _g2_group(G2_B)
+    g2("asset", _g2_plugin("g2_asset", fields=(_g2_own(),)))
+    g2("fx", _g2_plugin("g2_fx"))
+    g2("asset", _g2_plugin("g2_elsewhere", (G2_B,)))
+
+    entry = await _entry(engine, people["alice"], G2_A)
+    plugin_entry = await _entry(engine, people["alice"], "g2_asset")
+
+    assert {(ref.family.value, ref.plugin_code, ref.plugin_name) for ref in entry.used_by} == {("asset", "g2_asset", plugin_entry.plugin_name), ("fx", "g2_fx", "Plugin g2_fx")}
+    assert len(entry.used_by) == 2
+
+
+@pytest.mark.asyncio
+async def test_g2_the_family_filter_selects_groups_or_leaves_them_out(engine: AsyncEngine, people: dict[str, User], g2):
+    _g2_group()
+    g2("asset", _g2_plugin("g2_reader", fields=(_g2_own(),)))
+
+    groups_only = await _entries(engine, people["admin"], family="group")
+    assets_only = await _entries(engine, people["admin"], family="asset")
+
+    assert G2_A in {entry.plugin_code for entry in groups_only} and {entry.family.value for entry in groups_only} == {"group"}
+    assert "g2_reader" in {entry.plugin_code for entry in assets_only} and "group" not in {entry.family.value for entry in assets_only}
+
+
+@pytest.mark.asyncio
+async def test_g2_plugin_code_filters_a_group_by_its_name(engine: AsyncEngine, people: dict[str, User], g2):
+    _g2_group()
+    _g2_group(G2_B)
+
+    assert [(entry.family.value, entry.plugin_code) for entry in await _entries(engine, people["admin"], plugin_code=G2_B)] == [("group", G2_B)]
+    assert [entry.plugin_code for entry in await _entries(engine, people["admin"], family="group", plugin_code=G2_A)] == [G2_A]
+    assert await _entries(engine, people["admin"], family="asset", plugin_code=G2_A) == []
+
+
+@pytest.mark.asyncio
+async def test_g2_without_a_filter_the_groups_come_after_the_plugins(engine: AsyncEngine, people: dict[str, User], g2):
+    _g2_group()
+    g2("asset", _g2_plugin("g2_reader", fields=(_g2_own(),)))
+
+    families = [entry.family.value for entry in await _entries(engine, people["admin"])]
+
+    assert "group" in families and "asset" in families
+    assert families.index("group") > max(index for index, family in enumerate(families) if family != "group"), f"a plugin after a group: {families}"
+
+
+@pytest.mark.asyncio
+async def test_g2_a_test_only_group_is_listed_only_when_named(engine: AsyncEngine, people: dict[str, User], g2):
+    _g2_group(G2_LAB, test_only=True)
+
+    everything = {entry.plugin_code for entry in await _entries(engine, people["admin"])}
+    in_family = {entry.plugin_code for entry in await _entries(engine, people["admin"], family="group")}
+    named = await _entries(engine, people["admin"], plugin_code=G2_LAB)
+
+    assert G2_LAB not in everything and G2_LAB not in in_family, "a test-only group is hidden, as a test-only plugin is"
+    assert [(entry.family.value, entry.plugin_code) for entry in named] == [("group", G2_LAB)]
+
+
+@pytest.mark.asyncio
+async def test_g2_a_group_is_configured_on_its_own_fields(engine: AsyncEngine, people: dict[str, User], g2):
+    """B: ``token`` is required: the group is not configured until one is set; ``tier`` has a default and needs nothing."""
+    _g2_group()
+    _g2_group(G2_B, fields=_g2_fields(token_required=False))
+
+    assert [(await _entry(engine, people["admin"], name)).configured for name in (G2_A, G2_B)] == [False, True]
+    await _write(engine, people["admin"], [_group_item(G2_A, "token", secret_value=_secret())])
+    assert (await _entry(engine, people["admin"], G2_A)).configured is True
+
+
+@pytest.mark.asyncio
+async def test_g2_a_member_sees_a_group_read_only_and_a_secret_only_as_set(engine: AsyncEngine, people: dict[str, User], g2):
+    _g2_group()
+    secret = _secret()
+    await _write(engine, people["admin"], [_group_item(G2_A, "token", secret_value=secret), _group_item(G2_A, "tier", value="paid")])
+
+    as_member, as_admin = [await _by_key_of(engine, people[name], G2_A) for name in ("alice", "admin")]
+
+    assert (as_member["token"].value, as_member["token"].is_set, as_member["token"].source.value, as_member["token"].editable) == (None, True, "db", False)
+    assert (as_member["tier"].value, as_member["tier"].editable, as_admin["tier"].editable, as_admin["token"].editable) == ("paid", False, True, True)
+    assert secret not in json.dumps((await _catalogue(engine, people["alice"], plugin_code=G2_A)).model_dump(mode="json"))
+
+
+@pytest.mark.asyncio
+async def test_g2_a_group_variable_locks_the_field_and_shows_to_an_administrator_only(engine: AsyncEngine, people: dict[str, User], g2, monkeypatch: pytest.MonkeyPatch):
+    _g2_group()
+    monkeypatch.setenv(G2_TIER_VARIABLE, "paid")
+
+    as_admin, as_member = [await _by_key_of(engine, people[name], G2_A) for name in ("admin", "alice")]
+
+    assert (as_admin["tier"].value, as_admin["tier"].source.value, as_admin["tier"].locked, as_admin["tier"].editable, as_admin["tier"].env_variable) == ("paid", "env", True, False, G2_TIER_VARIABLE)
+    assert (as_member["tier"].locked, as_member["tier"].env_variable) == (True, None)
+
+
+@pytest.mark.asyncio
+async def test_g2_in_the_managed_profile_a_locked_group_field_is_hidden_and_the_group_still_counts_it(engine: AsyncEngine, people: dict[str, User], g2, monkeypatch: pytest.MonkeyPatch):
+    """B: as for a plugin, the hoster's field is absent for the customer; ``configured`` is judged on every field, hidden ones too."""
+    _g2_group()
+    monkeypatch.setenv("LIBREFOLIO_PROFILE", "managed")
+    monkeypatch.setenv(G2_TOKEN_VARIABLE, _secret())
+    assert service._is_managed(), "barrier: the service reads the managed profile"
+
+    entry = await _entry(engine, people["admin"], G2_A)
+
+    assert [field.key for field in entry.fields] == ["tier"] and entry.configured is True
+
+
+@pytest.mark.asyncio
+async def test_g2_a_group_with_every_field_locked_is_not_listed_in_the_managed_profile(engine: AsyncEngine, people: dict[str, User], g2, monkeypatch: pytest.MonkeyPatch):
+    _g2_group()
+    monkeypatch.setenv("LIBREFOLIO_PROFILE", "managed")
+    monkeypatch.setenv(G2_TOKEN_VARIABLE, _secret())
+    assert [entry.plugin_code for entry in await _entries(engine, people["admin"], plugin_code=G2_A)] == [G2_A], "barrier: with one field left the group is listed"
+    monkeypatch.setenv(G2_TIER_VARIABLE, "paid")
+
+    assert await _entries(engine, people["admin"], plugin_code=G2_A) == []
+
+
+@pytest.mark.asyncio
+async def test_g2_in_the_managed_profile_a_plugin_does_not_name_a_group_whose_entry_is_hidden(engine: AsyncEngine, people: dict[str, User], g2, monkeypatch: pytest.MonkeyPatch):
+    """B (decision N2): a group whose every field the environment locks is hidden in the managed profile; a plugin that
+    reads it does not name it either — no trace of what the hoster set, and no link to an entry that is not there. The
+    plugin still counts the group's fields in ``configured``."""
+    _g2_group()
+    g2("asset", _g2_plugin("g2_hidden_reader", (G2_A,), fields=(_g2_own(),)))
+    monkeypatch.setenv("LIBREFOLIO_PROFILE", "managed")
+    monkeypatch.setenv(G2_TOKEN_VARIABLE, _secret())
+    assert (await _entry(engine, people["admin"], "g2_hidden_reader")).groups == [G2_A], "barrier: one group field left visible, the group is named"
+    monkeypatch.setenv(G2_TIER_VARIABLE, "paid")
+
+    entry = await _entry(engine, people["admin"], "g2_hidden_reader")
+    assert entry.groups == [], "a hidden group is not named"
+    assert G2_A not in entry.model_dump_json()
+
+
+# -----------------------------------------------------------------------------
+# B. The catalogue: the plugin's entry
+# -----------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_g2_a_plugin_names_the_groups_it_reads(engine: AsyncEngine, people: dict[str, User], g2):
+    _g2_group()
+    _g2_group(G2_B, fields=_g2_fields(token_required=False))
+    g2("asset", _g2_plugin("g2_two", (G2_A, G2_B), fields=(_g2_own(),)))
+    g2("asset", _g2_plugin("g2_none", (), fields=(_g2_own(),)))
+
+    assert (await _entry(engine, people["alice"], "g2_two")).groups == [G2_A, G2_B]
+    assert (await _entry(engine, people["alice"], "g2_none")).groups == []
+    assert (await _entry(engine, people["alice"], "g2_none")).used_by == []
+
+
+@pytest.mark.asyncio
+async def test_g2_a_plugin_with_groups_and_no_field_of_its_own_is_listed(engine: AsyncEngine, people: dict[str, User], g2):
+    _g2_group()
+    g2("asset", _g2_plugin("g2_only_groups"))
+
+    entry = await _entry(engine, people["alice"], "g2_only_groups")
+
+    assert (entry.fields, entry.groups, entry.family.value) == ([], [G2_A], "asset")
+
+
+@pytest.mark.asyncio
+async def test_g2_a_plugin_is_not_configured_while_a_required_group_field_has_no_value(engine: AsyncEngine, people: dict[str, User], g2):
+    """B: the rule of ``BoundSettings.missing``: own fields all fine, the group's required ``token`` empty → not configured; set → configured."""
+    _g2_group()
+    g2("asset", _g2_plugin("g2_grouped", fields=(_g2_own(),)))
+    g2("asset", _g2_plugin("g2_only_groups"))
+
+    before = [(await _entry(engine, people["alice"], code)).configured for code in ("g2_grouped", "g2_only_groups")]
+    await _write(engine, people["admin"], [_group_item(G2_A, "token", secret_value=_secret())])
+    after = [(await _entry(engine, people["alice"], code)).configured for code in ("g2_grouped", "g2_only_groups")]
+
+    assert before == [False, False] and after == [True, True]
+
+
+@pytest.mark.asyncio
+async def test_g2_a_plugin_missing_a_field_of_its_own_stays_not_configured_with_a_complete_group(engine: AsyncEngine, people: dict[str, User], g2):
+    _g2_group()
+    g2("asset", _g2_plugin("g2_needy", fields=(_g2_own("endpoint", required=True),)))
+    await _write(engine, people["admin"], [_group_item(G2_A, "token", secret_value=_secret())])
+
+    assert (await _entry(engine, people["alice"], "g2_needy")).configured is False
+
+
+@pytest.mark.asyncio
+async def test_g2_a_plugin_counts_a_hidden_group_field_without_naming_it(engine: AsyncEngine, people: dict[str, User], g2, monkeypatch: pytest.MonkeyPatch):
+    """B + 3: managed, the group's token is locked by a valid variable → hidden, but the plugin is configured; an invalid value → not, and no field names it."""
+    _g2_group()
+    g2("asset", _g2_plugin("g2_grouped"))
+    monkeypatch.setenv("LIBREFOLIO_PROFILE", "managed")
+    monkeypatch.setenv(G2_TOKEN_VARIABLE, _secret())
+    good = await _entry(engine, people["alice"], "g2_grouped")
+    monkeypatch.setenv(G2_TOKEN_VARIABLE, "short")
+    bad = await _entry(engine, people["alice"], "g2_grouped")
+
+    assert (good.configured, bad.configured) == (True, False)
+    assert good.fields == bad.fields == []
+
+
+# -----------------------------------------------------------------------------
+# C. The writes
+# -----------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_g2_an_administrator_writes_a_plain_group_field(engine: AsyncEngine, people: dict[str, User], g2):
+    _g2_group()
+
+    written = await _write(engine, people["admin"], [_group_item(G2_A, "tier", value="paid")])
+
+    (row,) = await _group_rows(engine)
+    assert written.success_count == 1 and (written.results[0].family.value, written.results[0].plugin_code) == ("group", G2_A)
+    assert (row.family, row.plugin_code, row.field_key, json.loads(row.value_json), row.secret_ciphertext, row.key_id, row.updated_by_user_id) == ("group", G2_A, "tier", "paid", None, None, people["admin"].id)
+    assert (await _by_key_of(engine, people["alice"], G2_A))["tier"].source.value == "db"
+
+
+async def _by_key_of(engine: AsyncEngine, user: User, code: str) -> dict[str, Any]:
+    return _by_key(await _entry(engine, user, code))
+
+
+@pytest.mark.asyncio
+async def test_g2_an_administrator_writes_a_group_secret_encrypted_and_bound_to_its_row(engine: AsyncEngine, people: dict[str, User], g2, tmp_path: Path):
+    _g2_group()
+    secret = _secret()
+
+    await _write(engine, people["admin"], [_group_item(G2_A, "token", secret_value=secret)])
+
+    (row,) = await _group_rows(engine)
+    subkey = settings_subkey()
+    assert (row.family, row.plugin_code, row.field_key, row.value_json) == ("group", G2_A, "token", None)
+    assert row.key_id == key_id_of(subkey) and row.secret_ciphertext
+    assert decrypt_secret(subkey, secret_aad("group", G2_A, "token", "system", None), row.secret_ciphertext) == secret
+    with pytest.raises(UnreadableSecretError):
+        decrypt_secret(subkey, secret_aad("asset", G2_A, "token", "system", None), row.secret_ciphertext)
+    assert secret not in _database_text(tmp_path / "settings.db")
+
+
+@pytest.mark.asyncio
+async def test_g2_writing_again_updates_the_row_and_clear_deletes_it(engine: AsyncEngine, people: dict[str, User], g2):
+    _g2_group()
+    await _write(engine, people["admin"], [_group_item(G2_A, "tier", value="paid")])
+    await _write(engine, people["admin"], [_group_item(G2_A, "tier", value="free")])
+    (row,) = await _group_rows(engine)
+    assert json.loads(row.value_json) == "free"
+
+    await _write(engine, people["admin"], [_group_item(G2_A, "tier", clear=True)])
+
+    assert await _group_rows(engine) == []
+    assert (await _by_key_of(engine, people["admin"], G2_A))["tier"].source.value == "default"
+
+
+@pytest.mark.asyncio
+async def test_g2_a_member_cannot_write_a_group(engine: AsyncEngine, people: dict[str, User], g2):
+    _g2_group()
+
+    results = await _refused(engine, people["alice"], [_group_item(G2_A, "tier", value="paid")])
+
+    assert _outcomes(results) == [("tier", False, FORBIDDEN)]
+    await _assert_nothing_written(engine)
+
+
+@pytest.mark.asyncio
+async def test_g2_a_group_variable_locks_the_write(engine: AsyncEngine, people: dict[str, User], g2, monkeypatch: pytest.MonkeyPatch):
+    _g2_group()
+    monkeypatch.setenv(G2_TIER_VARIABLE, "free")
+
+    results = await _refused(engine, people["admin"], [_group_item(G2_A, "tier", value="paid")])
+
+    assert _outcomes(results) == [("tier", False, LOCKED)] and G2_TIER_VARIABLE in (results[0].message or "")
+    await _assert_nothing_written(engine)
+
+
+@pytest.mark.asyncio
+async def test_g2_in_the_managed_profile_a_locked_group_field_is_an_unknown_field_even_for_an_administrator(engine: AsyncEngine, people: dict[str, User], g2, monkeypatch: pytest.MonkeyPatch):
+    _g2_group()
+    monkeypatch.setenv("LIBREFOLIO_PROFILE", "managed")
+    monkeypatch.setenv(G2_TIER_VARIABLE, "free")
+
+    assert _outcomes(await _refused(engine, people["admin"], [_group_item(G2_A, "tier", value="paid")])) == [("tier", False, UNKNOWN)]
+    assert (await _write(engine, people["admin"], [_group_item(G2_A, "token", secret_value=_secret())])).success_count == 1, "the unlocked field behaves as usual"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("group", "key", "scope", "write"),
+    [
+        pytest.param("g2_ghost", "tier", "system", {"value": "paid"}, id="unknown-group"),
+        pytest.param(G2_A, "ghost", "system", {"value": "paid"}, id="unknown-field"),
+        pytest.param(G2_A, "tier", "user", {"value": "paid"}, id="user-scope"),
+    ],
+)
+async def test_g2_an_unknown_group_field_or_scope_is_an_unknown_field(engine: AsyncEngine, people: dict[str, User], g2, group: str, key: str, scope: str, write: dict):
+    _g2_group()
+    item = PluginSettingWriteItem(family="group", plugin_code=group, field_key=key, scope=scope, **write)
+
+    for who in ("admin", "alice"):
+        results = await _refused(engine, people[who], [item])
+        assert _outcomes(results) == [(key, False, UNKNOWN)], who
+    await _assert_nothing_written(engine)
+
+
+@pytest.mark.asyncio
+async def test_g2_a_value_the_group_field_refuses_is_invalid_and_never_repeated(engine: AsyncEngine, people: dict[str, User], g2):
+    _g2_group()
+    too_short = "x7"
+
+    results = await _refused(engine, people["admin"], [_group_item(G2_A, "tier", value="gold"), _group_item(G2_A, "token", secret_value=too_short), _group_item(G2_A, "token", value="plain")])
+
+    assert [result.error_code for result in results] == [INVALID, INVALID, INVALID]
+    assert all(too_short not in (result.message or "") for result in results)
+    await _assert_nothing_written(engine)
+
+
+@pytest.mark.asyncio
+async def test_g2_a_test_only_group_is_writable_when_named(engine: AsyncEngine, people: dict[str, User], g2):
+    _g2_group(G2_LAB, test_only=True)
+
+    written = await _write(engine, people["admin"], [_group_item(G2_LAB, "tier", value="paid")])
+
+    assert written.success_count == 1 and [row.plugin_code for row in await _group_rows(engine)] == [G2_LAB]
+
+
+@pytest.mark.asyncio
+async def test_g2_outside_test_mode_a_test_only_group_is_neither_listed_nor_written(engine: AsyncEngine, people: dict[str, User], g2, monkeypatch: pytest.MonkeyPatch):
+    """B, C (X-R44 for groups): outside test mode a test-only group is withheld like a test-only plugin: not listed even
+    when named, and a write naming it is UNKNOWN_FIELD, nothing written. A production instance never shows the ``mock``
+    group nor lets an administrator write it."""
+    _g2_group(G2_LAB, test_only=True)
+    monkeypatch.delenv("LIBREFOLIO_TEST_MODE", raising=False)
+
+    assert await _entries(engine, people["admin"], plugin_code=G2_LAB) == [], "withheld outside test mode, even when named"
+    refused = await _refused(engine, people["admin"], [_group_item(G2_LAB, "tier", value="paid")])
+    assert _outcomes(refused) == [("tier", False, "UNKNOWN_FIELD")]
+    await _assert_nothing_written(engine)
+
+
+@pytest.mark.asyncio
+async def test_g2_a_write_of_a_group_and_a_plugin_is_all_or_nothing(engine: AsyncEngine, people: dict[str, User], g2):
+    _g2_group()
+    g2("asset", _g2_plugin("g2_grouped", fields=(_g2_own(),)))
+    good_group, good_plugin = _group_item(G2_A, "tier", value="paid"), _item("note", "system", code="g2_grouped", value="hello")
+
+    refused = await _refused(engine, people["admin"], [good_group, _item("note", "system", code="g2_grouped", clear=True, value="x")])
+    assert _outcomes(refused) == [("tier", True, None), ("note", False, INVALID)]
+    refused = await _refused(engine, people["admin"], [good_plugin, _group_item(G2_A, "tier", value="gold")])
+    assert _outcomes(refused) == [("note", True, None), ("tier", False, INVALID)]
+    await _assert_nothing_written(engine)
+
+    written = await _write(engine, people["admin"], [good_group, good_plugin])
+    system, _user = await _rows(engine)
+    assert written.success_count == 2 and {(row.family, row.plugin_code, row.field_key) for row in system} == {("group", G2_A, "tier"), ("asset", "g2_grouped", "note")}
+
+
+@pytest.mark.asyncio
+async def test_g2_the_log_of_a_group_write_names_the_group_and_never_a_value(engine: AsyncEngine, people: dict[str, User], g2):
+    _g2_group()
+    secret = _secret()
+
+    with capture_logs() as logs:
+        await _write(engine, people["admin"], [_group_item(G2_A, "tier", value="paid"), _group_item(G2_A, "token", secret_value=secret)])
+        await _write(engine, people["admin"], [_group_item(G2_A, "token", clear=True)])
+
+    lines = [entry["fields"] for entry in logs if entry["event"] == "Plugin settings written"]
+    assert lines == [[f"group/{G2_A}/tier:system:set", f"group/{G2_A}/token:system:set"], [f"group/{G2_A}/token:system:clear"]]
+    assert secret not in json.dumps(logs, default=str)
+
+
+# -----------------------------------------------------------------------------
+# D. The value written reaches the plugins that read the group
+# -----------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_g2_the_value_written_reaches_a_plugin_that_reads_the_group(engine: AsyncEngine, people: dict[str, User], g2):
+    _g2_group()
+    plugin_class = g2("asset", _g2_plugin("g2_reader"))
+    fx_class = g2("fx", _g2_plugin("g2_fx_reader"))
+    secret = _secret()
+
+    unconfigured = plugin_class()
+    await runtime.configure_instance(unconfigured, "asset", user_id=None, plugin_code="g2_reader")
+    assert unconfigured.settings.missing == (f"{G2_A}.token",)
+
+    await _write(engine, people["admin"], [_group_item(G2_A, "token", secret_value=secret), _group_item(G2_A, "tier", value="paid")])
+    configured = plugin_class()
+    await runtime.configure_instance(configured, "asset", user_id=None, plugin_code="g2_reader")
+    other_family = fx_class()
+    await runtime.configure_instance(other_family, "fx", user_id=None, plugin_code="g2_fx_reader")
+
+    for instance in (configured, other_family):
+        group = instance.settings.group(G2_A)
+        assert (group.secret("token"), group.get("tier"), instance.settings.missing) == (secret, "paid", ())
+    assert (await _entry(engine, people["alice"], "g2_reader")).configured is True

@@ -36,6 +36,7 @@ function snapshot(cashBalances: {code: string; amount: string}[] | undefined): P
         acquisitionFunding: undefined,
         allocationHistory: null,
         positionsContribution: null,
+        groupedSummary: null,
         pnlCandles: null,
         appliedCurrency: 'EUR',
         reportLoading: false,

@@ -25,16 +25,16 @@ Accanto alla modalità, il passaggio chiede un **Orizzonte (giorni)** — 365 pe
 La scheda **Rischio e Scenari** della pagina di dettaglio di un asset esegue ancora solo la curva normale, con campionamento Monte Carlo o quasi-Monte Carlo.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="La casella Simulazione di E se…? della Dashboard: l'avviso beta e l'avviso sul modello, le cinque modalità con Storia rimescolata consigliata, orizzonte, percorsi e seme, e dopo Simula le cifre terminali, il cono e Cosa ha assunto questa simulazione" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="La casella Simulazione di E se…? della Dashboard: l'avviso sul modello, le cinque modalità con Storia rimescolata consigliata, orizzonte, percorsi e seme, e dopo Simula le cifre terminali, il cono e Cosa ha assunto questa simulazione" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
-## 🧪 Perché la simulazione è ancora in beta {: #why-beta }
+## 🧪 Cosa la simulazione non fa ancora {: #why-beta }
 
-Ogni altra parte dell'Analisi del rischio è uscita dalla beta. Solo il passaggio di simulazione si apre con un avviso: *La simulazione è ancora in beta. Il suo esito dipende fortemente da quanta storia viene richiesta rispetto all'orizzonte: una finestra breve con un orizzonte lungo può produrre cifre non plausibili.* Sotto di esso, un secondo avviso resta per sempre, perché un modello resta un modello: *Questo è l'unico gradino che è un modello anziché una misurazione. Leggilo come un intervallo di possibilità, non come una previsione.*
+Ciò che la simulazione non fa ancora è leggere abbastanza storia per un orizzonte lungo: il suo esito dipende fortemente da quanta storia viene richiesta rispetto all'orizzonte, e una finestra breve con un orizzonte lungo può produrre cifre non plausibili. In cima al passaggio di simulazione, un avviso resta per sempre, perché un modello resta un modello: *Questo è l'unico gradino che è un modello anziché una misurazione. Leggilo come un intervallo di possibilità, non come una previsione.*
 
-Il difetto dietro il primo avviso è il rapporto tra l'orizzonte $H$, contato in passi, e le $n$ osservazioni della finestra. Un percorso ricampionato di $H$ passi riutilizza ogni osservazione $H/n$ volte in media: da un quarto di storia, un orizzonte di un anno è quel quarto, rimescolato e ripetuto circa quattro volte, e qualunque cosa abbia fatto quel quarto — un rally, un periodo calmo, una discesa — diventa l'anno. La curva normale non ne è immune, perché la sua deriva e la sua volatilità sono quelle della finestra, mantenute invariate per quanto lungo sia l'orizzonte. Richiedere più storia non sempre lo cura: una posizione con una storia breve accorcia la finestra condivisa per tutte (vedi [Qualità dei dati](data-quality.md#alignment-what-missing-data-actually-costs)). Non è ancora applicata alcuna protezione su quel rapporto, e finché non ce ne sarà una, il passaggio resta in beta. L'[incertezza della deriva](#the-drift-is-an-estimate), mostrata accanto a ogni risultato, è quel rapporto all'opera.
+Il difetto è il rapporto tra l'orizzonte $H$, contato in passi, e le $n$ osservazioni della finestra. Un percorso ricampionato di $H$ passi riutilizza ogni osservazione $H/n$ volte in media: da un quarto di storia, un orizzonte di un anno è quel quarto, rimescolato e ripetuto circa quattro volte, e qualunque cosa abbia fatto quel quarto — un rally, un periodo calmo, una discesa — diventa l'anno. La curva normale non ne è immune, perché la sua deriva e la sua volatilità sono quelle della finestra, mantenute invariate per quanto lungo sia l'orizzonte. Richiedere più storia non sempre lo cura: una posizione con una storia breve accorcia la finestra condivisa per tutte (vedi [Qualità dei dati](data-quality.md#alignment-what-missing-data-actually-costs)). Non è ancora applicata alcuna protezione su quel rapporto. L'[incertezza della deriva](#the-drift-is-an-estimate), mostrata accanto a ogni risultato, è quel rapporto all'opera.
 
 ---
 
@@ -184,7 +184,7 @@ $$
 
 e alla mediana $M$ dell'ultimo giorno è dato l'intervallo $\big[(1 + M)/\varphi - 1,\ (1 + M)\,\varphi - 1\big]$: *La deriva proviene da … osservazioni: questo da solo colloca questa mediana tra … e ….* Quando $\varphi$ supera la diffusione del cono stesso, $(1 + P_{95})/(1 + P_{5})$, la riga diventa un avviso ambra: l'incertezza sulla sola deriva è allora più ampia della banda disegnata dalla simulazione.
 
-L'esponente cresce con $H$ e si riduce solo con $\sqrt{n}$: raddoppiare l'orizzonte lo raddoppia, mentre dimezzarlo richiede quattro volte tanta storia. Questo è il [rapporto dietro l'avviso beta](#why-beta), scritto come numero.
+L'esponente cresce con $H$ e si riduce solo con $\sqrt{n}$: raddoppiare l'orizzonte lo raddoppia, mentre dimezzarlo richiede quattro volte tanta storia. Questo è il [rapporto dietro questo limite](#why-beta), scritto come numero.
 
 ---
 

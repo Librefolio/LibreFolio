@@ -9881,6 +9881,28 @@ test.describe('N64 asset detail: a signal result already answered is not asked a
     }
 
     /** How many series the detail chart's ECharts option holds: the main one, the indicators, the event markers. 0 while no chart is mounted. */
+    /**
+     * The names of the series the chart draws now, in order (a series without a name reads as `#<type>`). A count of all the
+     * series is not a measure of one of them: the price line is drawn as many segments, each a series of the asset's name,
+     * and their number changes with what is on screen (N64, 13/11/2026: 34 or 32 «Apple Inc.» segments before the
+     * indicator, 32 with it — the total went from 37 to 36 with the indicator drawn). So a series is found by its name.
+     */
+    async function readSeriesNames(page: Page): Promise<string[]> {
+        return page.evaluate((): string[] => {
+            type ChartHost = HTMLElement & {__lfChart?: {getOption: () => {series?: unknown}}};
+            const root = document.querySelector<HTMLElement>('[data-testid="asset-detail-chart"]');
+            if (!root) return [];
+            const candidates = [root, ...root.querySelectorAll<HTMLElement>('*')];
+            const host = candidates.find((candidate) => typeof (candidate as ChartHost).__lfChart?.getOption === 'function') as ChartHost | undefined;
+            const series = host?.__lfChart?.getOption().series;
+            if (!Array.isArray(series)) return [];
+            return series.map((entry) => {
+                const {name, type} = (entry ?? {}) as {name?: unknown; type?: unknown};
+                return typeof name === 'string' && name ? name : `#${String(type)}`;
+            });
+        });
+    }
+
     async function readSeriesCount(page: Page): Promise<number> {
         return page.evaluate((): number => {
             type ChartHost = HTMLElement & {__lfChart?: {getOption: () => {series?: unknown}}};
@@ -10018,7 +10040,6 @@ test.describe('N64 asset detail: a signal result already answered is not asked a
         await expect(chart, 'the prices are drawn').toHaveAttribute('data-series-state', 'ready', {timeout: 15_000});
         await expectAssetDetailChartCanvas(page);
         await expect(refresh, 'the first load has released the page token').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
-        const seriesWithoutIndicator = await readSeriesCount(page);
 
         // The indicator, added through the signals panel; the answer that brings its series is waited for.
         const signalsToggle = page.getByTestId('asset-detail-signals-toggle');
@@ -10038,14 +10059,21 @@ test.describe('N64 asset detail: a signal result already answered is not asked a
         await expect(family).toHaveAttribute('aria-expanded', 'true');
         const option = page.getByTestId(`signal-tree-option-${INDICATOR.option}`);
         await expect(option).toBeVisible();
+        // Read at the last moment before the indicator, so that whatever the chart draws by then is among these names.
+        const namesWithoutIndicator = new Set(await readSeriesNames(page));
         const indicatorAnswered = page.waitForResponse((response) => asksForSignal(response.request(), INDICATOR.signalCode), {timeout: 15_000});
         indicatorAnswered.catch(() => undefined);
         await option.click();
         expect((await indicatorAnswered).ok(), 'the backend answered the indicator').toBe(true);
         await expect(indicatorCards).toHaveCount(1);
         await expect(indicatorCards.getByTestId('signal-loading')).toHaveCount(0);
-        // Same range as the count above, so the one series more is the indicator's: without it the returns below could not tell it was drawn.
-        await expect.poll(() => readSeriesCount(page), {message: 'the indicator is drawn over the chart', timeout: 10_000}).toBeGreaterThan(seriesWithoutIndicator);
+        // The indicator's series is the one the chart did not draw before it: found by name, since the price line's segments
+        // vary in number and a count of all the series moved without it (36 after 37).
+        const newSeries = async (): Promise<string[]> => (await readSeriesNames(page)).filter((name) => !name.startsWith('#') && !namesWithoutIndicator.has(name));
+        await expect.poll(newSeries, {message: 'the indicator is drawn over the chart: a series by a new name', timeout: 10_000}).not.toEqual([]);
+        const [indicatorSeries] = await newSeries();
+        test.info().annotations.push({type: 'N64 series', description: `before: ${[...namesWithoutIndicator].join(' | ')} — indicator: ${indicatorSeries}`});
+        const indicatorDrawn = async (): Promise<boolean> => (await readSeriesNames(page)).includes(indicatorSeries);
 
         /** A period nothing has answered yet: the click asks the server, with the indicator, and the page is waited on until it is quiet again. */
         const pickPeriodAsked = async (period: Locator): Promise<string> => {
@@ -10057,11 +10085,10 @@ test.describe('N64 asset detail: a signal result already answered is not asked a
             expect((await answered).ok(), 'the backend answered the period with its indicator').toBe(true);
             await expect(refresh, 'the page token of the period change is released').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
             await expect(indicatorCards.getByTestId('signal-loading')).toHaveCount(0);
-            await expect.poll(() => readSeriesCount(page), {message: 'the indicator is drawn over this period', timeout: 10_000}).toBeGreaterThan(seriesWithoutIndicator);
+            await expect.poll(indicatorDrawn, {message: `the indicator (${indicatorSeries}) is drawn over this period`, timeout: 10_000}).toBe(true);
             return start;
         };
         const firstStart = await pickPeriodAsked(firstPeriod);
-        const seriesOfFirstPeriod = await readSeriesCount(page);
         const secondStart = await pickPeriodAsked(secondPeriod);
         expect(secondStart, 'the second period is another range, or the return below proves nothing').not.toBe(firstStart);
 
@@ -10072,7 +10099,7 @@ test.describe('N64 asset detail: a signal result already answered is not asked a
         await expect(startInput, 'the range is the first period again').toHaveValue(firstStart);
         await expect(refresh, 'the page token of the period change is released').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
         await waitForSettled(root, 20_000);
-        await expect.poll(() => readSeriesCount(page), {message: 'the cached period draws its indicator again', timeout: 10_000}).toBe(seriesOfFirstPeriod);
+        await expect.poll(indicatorDrawn, {message: `the cached period draws its indicator (${indicatorSeries}) again`, timeout: 10_000}).toBe(true);
         queries.stop();
 
         expect(

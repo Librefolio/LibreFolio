@@ -8,6 +8,7 @@ Supports both current values and historical OHLC (Open, High, Low, Close) data.
 # Postpones evaluation of type hints to improve imports and performance. Also avoid circular import issues.
 from __future__ import annotations
 
+import importlib
 import math
 import re
 import time as _time_mod
@@ -49,6 +50,7 @@ from backend.app.schemas.assets.metadata import (
 from backend.app.schemas.common import Currency as CurrencyAmount
 from backend.app.schemas.prices import (
     FACurrentValue,
+    FACurrentValueRequest,
     FAHistoricalData,
     FAPricePoint,
 )
@@ -310,6 +312,122 @@ def _exchange_zone(name: str | None) -> ZoneInfo | None:
         return None
 
 
+# ── Current values in bulk (project 76, C5) ──────────────────────────────
+
+
+def _bulk_quote_available() -> bool:
+    """Whether yfinance's request helper for the v7 quote list can be reached (project 76, C5).
+
+    yfinance does not expose the list read: ``.info`` calls it inside, through ``YfData().get_raw_json``. If a release
+    moves or renames that internal, this is False, the provider declares no bulk support, and the core keeps the
+    per-asset path: the bulk read switches itself off instead of failing.
+    """
+    if not YFINANCE_AVAILABLE:
+        return False
+    try:
+        data = importlib.import_module("yfinance.data")
+        const = importlib.import_module("yfinance.const")
+    except ImportError:
+        return False
+    return callable(getattr(getattr(data, "YfData", None), "get_raw_json", None)) and isinstance(getattr(const, "_QUERY1_URL_", None), str)
+
+
+def _fetch_v7_quotes(symbols: list[str]) -> list[dict]:
+    """The v7 quotes of ``symbols``, in ONE request (``/v7/finance/quote?symbols=A,B,…``): the list Yahoo returns,
+    empty when it returns none. Through ``_yf_with_retry``: a refusal for too many requests leaves at once as
+    ``AssetRateLimitedError``, a transient error is retried. The internal helper is the one ``.info`` uses."""
+    data = importlib.import_module("yfinance.data")
+    base_url = importlib.import_module("yfinance.const")._QUERY1_URL_
+    params = {"symbols": ",".join(symbols), "formatted": "false"}
+    answer = _yf_with_retry(lambda: data.YfData().get_raw_json(f"{base_url}/v7/finance/quote?", params=params), label=f"bulk_quote({len(symbols)} symbols)")
+    result = ((answer or {}).get("quoteResponse") or {}).get("result") or []
+    return [quote for quote in result if isinstance(quote, dict)]
+
+
+#: The symbols a v7 quote-list request asked and Yahoo did not return, already logged: once per symbol and process
+_UNRETURNED_SYMBOLS_LOGGED: set[str] = set()
+
+
+def _report_unreturned_symbols(symbols: set[str]) -> None:
+    """Log, once per symbol, a symbol the v7 quote list did not return: its asset is served its last stored price. A
+    delisted ticker, or one Yahoo answers under another symbol (an alias), which the bulk read cannot match while
+    ``.info`` takes the first quote whatever its symbol."""
+    for symbol in sorted(symbols - _UNRETURNED_SYMBOLS_LOGGED):
+        _UNRETURNED_SYMBOLS_LOGGED.add(symbol)
+        logger.warning("Yahoo Finance returned no v7 quote for a symbol: its last stored price is served", symbol=symbol[:32])
+
+
+def _with_euro_twins(results: list[dict]) -> list[dict]:
+    """The search ``results`` with, right after each crypto's dollar row (``X-USD``), its euro twin (``X-EUR``) when Yahoo
+    quotes it in EUR (project 76, Y1): Yahoo's search answers the dollar ticker only. The twins are asked in ONE v7 quote
+    list request. Best effort: nothing asked when no twin is missing or the v7 helper is unavailable, and a failure of
+    the request leaves ``results`` as they were — except a refusal for too many requests, which leaves the search as a
+    refusal on a result's currency does, so the core pauses Yahoo."""
+    present = {row["identifier"] for row in results}
+    twins = {row["identifier"]: row["identifier"][:-4] + "-EUR" for row in results if row.get("type") == "CRYPTO" and row["identifier"].endswith("-USD")}
+    wanted = [twin for twin in twins.values() if twin not in present]
+    if not wanted or not _bulk_quote_available():
+        return results
+    try:
+        quotes = _fetch_v7_quotes(wanted)
+    except AssetRateLimitedError:
+        raise  # the core pauses Yahoo: as a refusal on a result's currency
+    except Exception as error:  # noqa: BLE001 — an extra row only: the search answers without it
+        logger.warning("Yahoo Finance search: the euro tickers of the cryptos not read, the dollar rows answered", symbols=len(wanted), exc_info=error)
+        return results
+    euro = {quote["symbol"]: quote for quote in quotes if isinstance(quote.get("symbol"), str) and quote.get("currency") == "EUR"}
+    completed: list[dict] = []
+    for row in results:
+        completed.append(row)
+        twin = twins.get(row["identifier"])
+        quote = euro.get(twin) if twin is not None and twin not in present else None
+        if quote is not None:
+            name = quote.get("longName") or quote.get("shortName") or twin
+            completed.append({"identifier": twin, "identifier_type": IdentifierType.TICKER, "display_name": name, "currency": "EUR", "type": "CRYPTO"})
+    return completed
+
+
+def _bulk_symbol(item: FACurrentValueRequest) -> str | AssetSourceError:
+    """The Yahoo symbol of one bulk item, or the error that is that item's answer: ``INVALID_IDENTIFIER_TYPE`` for an
+    identifier that is no TICKER or ISIN; an ISIN resolved as ``yf.Ticker(isin)`` resolves it for ``.info`` (one
+    lookup), ``NOT_FOUND`` when it resolves to nothing. A refusal for too many requests leaves at once, for the whole
+    call."""
+    if item.identifier_type not in (IdentifierType.TICKER, IdentifierType.ISIN):
+        return AssetSourceError(f"Yahoo Finance only supports TICKER and ISIN, got {item.identifier_type}", "INVALID_IDENTIFIER_TYPE", {"identifier": item.identifier})
+    symbol: object = item.identifier
+    if item.identifier_type == IdentifierType.ISIN:
+        try:
+            symbol = _yf_with_retry(lambda: yf.Ticker(item.identifier).ticker, label=f"isin_symbol({item.identifier})")
+        except AssetRateLimitedError:
+            raise
+        except Exception as error:  # noqa: BLE001 — an ISIN Yahoo cannot resolve is that asset's answer, not the call's
+            return AssetSourceError(f"No Yahoo Finance symbol for ISIN {item.identifier}: {error}", "NOT_FOUND", {"identifier": item.identifier})
+    if not symbol:
+        return AssetSourceError(f"No Yahoo Finance symbol for {item.identifier}", "NOT_FOUND", {"identifier": item.identifier})
+    return str(symbol)
+
+
+def _quote_from_info(info: dict, identifier: str, source: str) -> FACurrentValue:
+    """A current value from Yahoo's quote fields: THE one mapping of ``get_current_value`` (``.info``) and of the bulk
+    read (a v7 quote), so the two paths always agree.
+
+    The price is ``regularMarketPrice``, else ``currentPrice``, ``previousClose`` or ``regularMarketPreviousClose`` (the
+    v7 quote has only the last); the currency ``currency``, else ``financialCurrency``, else USD; the date
+    ``regularMarketTime`` read in the exchange's timezone (Z-33; UTC when unknown), today without a time. No price:
+    ``AssetSourceError`` ``NO_DATA``.
+    """
+    price = info.get("regularMarketPrice")
+    if price is None:
+        price = info.get("currentPrice") or info.get("previousClose") or info.get("regularMarketPreviousClose")
+    if price is None:
+        raise AssetSourceError(f"No price available for ticker: {identifier}", "NO_DATA", {"identifier": identifier})
+    currency = info.get("currency") or info.get("financialCurrency") or "USD"
+    zone = _exchange_zone(info.get("exchangeTimezoneName"))
+    market_time = info.get("regularMarketTime")
+    as_of_date = _dt.fromtimestamp(market_time, tz=zone or UTC).date() if market_time else date.today()
+    return FACurrentValue(value=Decimal(str(price)), currency=currency, as_of_date=as_of_date, source=source)
+
+
 def _normalize_yahoo_date(index_value) -> date:
     """The calendar date of a Yahoo index value, in its own timezone.
 
@@ -538,6 +656,11 @@ class YahooFinanceProvider(AssetSourceProvider):
     """Yahoo Finance data provider using yfinance library."""
 
     _MIN_SEARCH_CHARS = 2
+    #: Current values in bulk (project 76, C5): one v7 quote-list request for many symbols, while yfinance's internal
+    #: helper is there (``_bulk_quote_available``); otherwise the core keeps one ``.info`` per asset
+    supports_bulk_current = _bulk_quote_available()
+    #: Symbols per request: a URL of a few hundred characters
+    bulk_current_max_items = 50
 
     def __init__(self):
         super().__init__()
@@ -606,14 +729,17 @@ class YahooFinanceProvider(AssetSourceProvider):
 
     @property
     def test_cases(self) -> list[dict]:
-        """Test cases with identifier and provider_params."""
+        """Test cases with identifier and provider_params: a US stock, an ETF in Milan and a crypto in EUR, so the
+        external bulk check (``test_current_values_bulk``) reads three exchanges in one request."""
         return [
             {
                 "identifier": "AAPL",
                 "identifier_type": IdentifierType.TICKER,
                 "provider_params": None,
                 "expected_symbol": "AAPL",
-            }
+            },
+            {"identifier": "SWDA.MI", "identifier_type": IdentifierType.TICKER, "provider_params": None, "expected_symbol": "SWDA.MI"},
+            {"identifier": "BTC-EUR", "identifier_type": IdentifierType.TICKER, "provider_params": None, "expected_symbol": "BTC-EUR"},
         ]
 
     async def get_current_value(
@@ -627,7 +753,7 @@ class YahooFinanceProvider(AssetSourceProvider):
 
         The core runs this method in a dedicated thread with its own event loop,
         so sync yfinance calls are safe here. The core also caches the result
-        (TTL 2min), so we don't need our own cache.
+        (TTL 2min, or the provider's interval), so we don't need our own cache.
 
         Args:
             identifier: Yahoo Finance ticker symbol (e.g., "AAPL", "BTC-USD")
@@ -665,34 +791,10 @@ class YahooFinanceProvider(AssetSourceProvider):
                 label=f"current_value({identifier})",
             )
 
-            price = info.get("regularMarketPrice")
-            if price is None:
-                price = info.get("currentPrice") or info.get("previousClose")
-            if price is None:
-                raise AssetSourceError(
-                    f"No price available for ticker: {identifier}",
-                    "NO_DATA",
-                    {"identifier": identifier},
-                )
-
-            currency = info.get("currency") or info.get("financialCurrency") or "USD"
-
-            # Date from regularMarketTime (Unix timestamp), in the exchange's timezone (Z-33: a session that crosses UTC
-            # midnight, Sydney's or Auckland's, belongs to its local day; UTC when the timezone is unknown), or today
-            zone = _exchange_zone(info.get("exchangeTimezoneName"))
-            rmt = info.get("regularMarketTime")
-            if rmt:
-                as_of_date = _dt.fromtimestamp(rmt, tz=zone or UTC).date()
-            else:
-                as_of_date = date.today()
-
-            result = FACurrentValue(
-                value=Decimal(str(price)),
-                currency=currency,
-                as_of_date=as_of_date,
-                source=self.provider_name,
-            )
-            logger.debug(f"current_value for {identifier}: {price} {currency}")
+            # The one mapping of the quote fields, shared with the bulk read (_quote_from_info): price, currency and the
+            # date in the exchange's timezone (Z-33: a session that crosses UTC midnight belongs to its local day)
+            result = _quote_from_info(info, identifier, self.provider_name)
+            logger.debug(f"current_value for {identifier}: {result.value} {result.currency}")
             return result
 
         except AssetSourceError:
@@ -703,6 +805,43 @@ class YahooFinanceProvider(AssetSourceProvider):
                 "FETCH_ERROR",
                 {"identifier": identifier, "error": str(e)},
             ) from e
+
+    async def get_current_values_bulk(self, items: list[FACurrentValueRequest]) -> dict[str, FACurrentValue | AssetSourceError]:
+        """The current values of many assets in ONE v7 quote-list request (project 76, C5), mapped as ``get_current_value``
+        maps ``.info`` (``_quote_from_info``), so both paths answer the same.
+
+        An item that is no TICKER or ISIN answers ``INVALID_IDENTIFIER_TYPE``. An ISIN is resolved to its symbol as
+        ``yf.Ticker(isin)`` resolves it for ``.info`` (one lookup each); one that resolves to nothing answers
+        ``NOT_FOUND``. A symbol Yahoo does not return gets no answer: the core serves its last stored price. A refusal for
+        too many requests raises for the whole call, never retried; any other failure of the request is ``FETCH_ERROR``.
+        """
+        answer: dict[str, FACurrentValue | AssetSourceError] = {}
+        by_symbol: dict[str, list[FACurrentValueRequest]] = {}
+        for item in items:
+            symbol = _bulk_symbol(item)
+            if isinstance(symbol, AssetSourceError):
+                answer[item.key] = symbol
+            else:
+                by_symbol.setdefault(symbol.upper(), []).append(item)
+        if not by_symbol:
+            return answer
+        try:
+            quotes = _fetch_v7_quotes(list(by_symbol))
+        except AssetSourceError:
+            raise
+        except Exception as error:
+            raise AssetSourceError(f"Failed to fetch current values of {len(by_symbol)} symbols: {error}", "FETCH_ERROR", {"symbols": len(by_symbol)}) from error
+        returned: set[str] = set()
+        for quote in quotes:
+            symbol = str(quote.get("symbol") or "").upper()
+            returned.add(symbol)
+            for item in by_symbol.get(symbol, []):
+                try:
+                    answer[item.key] = _quote_from_info(quote, item.identifier, self.provider_name)
+                except AssetSourceError as error:
+                    answer[item.key] = error
+        _report_unreturned_symbols(set(by_symbol) - returned)
+        return answer
 
     async def get_history_value(
         self,
@@ -884,6 +1023,8 @@ class YahooFinanceProvider(AssetSourceProvider):
                     item["quote_base_suggestion"] = suggestion.model_dump()
                 results.append(item)
 
+            # Project 76, Y1: a crypto's euro ticker beside its dollar one, when Yahoo quotes it
+            results = _with_euro_twins(results)
             logger.debug(f"Search for '{query}': found {len(results)} results")
             return results
 

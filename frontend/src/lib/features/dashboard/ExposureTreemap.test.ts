@@ -325,3 +325,23 @@ describe('ExposureTreemap — type and broker tiles show their holding group’s
         expect(figuresIn(glRows(formatter, typeTileOf(broker, BOND_PRICED.asset_id))), 'bond tile').toEqual([]);
     });
 });
+
+describe('ExposureTreemap — «Globale» (project 74): no broker level', () => {
+    it('the tree starts at the asset types, and a type tile carries the group of every broker', async () => {
+        const holdings = [
+            {asset_id: 7401, asset_name: 'Summed Equity', asset_type: 'STOCK', broker_id: null, broker_name: null, broker_ids: [1, 2], current_value: '3000', nav_weight_percent: '75', gain_loss: '300', gain_loss_percent: '0.1111'},
+            {asset_id: 7402, asset_name: 'Single Bond', asset_type: 'BOND', broker_id: 2, broker_name: 'Two', broker_ids: [2], current_value: '1000', nav_weight_percent: '25', gain_loss: '-10', gain_loss_percent: '-0.0099'},
+        ];
+        const holdingGroups = [
+            {broker_id: null, asset_type: 'STOCK', gain_loss: {code: 'EUR', amount: '300'}, gain_loss_percent: '0.1111'},
+            {broker_id: null, asset_type: 'BOND', gain_loss: {code: 'EUR', amount: '-10'}, gain_loss_percent: '-0.0099'},
+        ];
+        render(ExposureTreemap, {props: {holdings, holdingGroups, displayCurrency: 'EUR', globalView: true} as never});
+        await waitFor(() => expect(lastDraw()).not.toBeNull(), {timeout: 5_000});
+        const {tree} = lastDraw()!;
+        expect(tree.map((tile) => tile._meta?.level)).toEqual(['type', 'type']);
+        expect(tree.flatMap((tile) => tile.children ?? []).map((tile) => tile._meta?.assetId)).toEqual([7401, 7402]);
+        const stock = tree.find((tile) => tile.children?.some((child) => child._meta?.assetId === 7401));
+        expect((stock?._meta as {gl?: number} | undefined)?.gl).toBe(300);
+    });
+});

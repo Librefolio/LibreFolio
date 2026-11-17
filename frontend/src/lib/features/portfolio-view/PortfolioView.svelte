@@ -36,6 +36,8 @@
     import {calendarReturnWindowDays, type CalendarReturnWindowSelection} from '$lib/components/charts/calendarReturnWindow';
     import {rollingAutoPreset} from '$lib/features/dashboard/positionsRolling';
     import {createPortfolioData} from './portfolioData';
+    import type {PositionsGrouping} from './portfolioDataScope';
+    import {getUserStorage, setUserStorage} from '$lib/utils/storage';
     import PortfolioToolbar from './PortfolioToolbar.svelte';
     import PortfolioBanners from './PortfolioBanners.svelte';
     import {PortfolioBannerActions} from './portfolioBannerActions.svelte';
@@ -104,6 +106,11 @@
     // The window of the positions chart's Rolling view (F-2): null until the user picks one, which is the automatic window of the period.
     let rollingSelection = $state<CalendarReturnWindowSelection | null>(null);
 
+    // «Globale / Broker» of the Positions panel (project 74): per user and per device, as the panel's other view choices. Read
+    // here, synchronously, before the first request: it decides what the contribution's question asks.
+    const GROUPING_STORAGE_KEY = 'dashboard-positions-grouping';
+    let storedGrouping = $state<PositionsGrouping>(getUserStorage(GROUPING_STORAGE_KEY, 'broker') === 'asset' ? 'asset' : 'broker');
+
     // The report, the contribution and the candles of the scope on screen, and the way they are asked, are the
     // portfolio data controller's (Y6-7): this page gives it its scope and reads what it shows. A store, so that
     // `$data` is followed by the lazy loaders' wrappers below.
@@ -121,6 +128,7 @@
         onRefreshFailed: () => toasts.error(`${$_('common.refresh')} — ${escapeHtml(portfolioError() ?? $_('common.error'))}`),
         failureMessage: () => $_('common.error'),
         initialLoading: true,
+        grouping: () => grouping,
     });
     const summary = $derived($data.summary);
     const history = $derived($data.history);
@@ -261,6 +269,22 @@
      *  broker's line would be identical to the total and the payload is unneeded. */
     const effectiveBrokerCount = $derived((activeBrokerIds ?? ownedBrokerIds).length);
     const wantsBrokerPnlHistory = $derived(effectiveBrokerCount >= 2);
+
+    /** The «Globale / Broker» switch (project 74): only with two brokers or more, never on a broker's page, where the two coincide. */
+    const groupingAvailable = $derived(!isBrokerScope && effectiveBrokerCount >= 2);
+    const grouping = $derived<PositionsGrouping>(groupingAvailable ? storedGrouping : 'broker');
+    let askedGrouping: PositionsGrouping = untrack(() => grouping);
+    $effect(() => {
+        const next = grouping;
+        if (next === askedGrouping) return;
+        askedGrouping = next;
+        untrack(() => data.groupingChanged());
+    });
+
+    function setGrouping(next: PositionsGrouping) {
+        storedGrouping = next;
+        setUserStorage(GROUPING_STORAGE_KEY, next);
+    }
 
     /** Whether the filter is "active" (some but not all brokers selected). */
     const brokerFilterActive = $derived(selectedBrokerIds.length > 0 && !allBrokersSelected);
@@ -549,6 +573,9 @@
                 {canAsk}
                 {assetsHref}
                 onRequestContribution={canAsk ? () => void pageBusy.join(busy('contribution'), loadContribution) : undefined}
+                {grouping}
+                {groupingAvailable}
+                onGroupingChange={setGrouping}
                 positionsSeries={$positionsSeriesCtl.response}
                 positionsSeriesLoading={$positionsSeriesCtl.loading}
                 positionsSeriesFailed={$positionsSeriesCtl.failed}

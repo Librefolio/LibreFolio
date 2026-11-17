@@ -67,6 +67,7 @@
     import {partitionLotIssues} from './lotDataQualityHelpers';
     import {asArray, asObject, collectInvolvedLotIds, filterVisibleLots, keepSelection, lotIsOpenish, normalizeQuoteBaseQuantity} from './lotsAnalysisHelpers';
     import {waitForStableRect} from './waitForStableRect';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type GanttSegmentSchema = z.infer<typeof schemas.GanttSegmentSchema>;
@@ -574,6 +575,7 @@
                 <button aria-label={$_('brokers.lots.viewAsset')} class="p-1.5 rounded-lg text-lf-muted hover:text-lf-link hover:bg-lf-hover transition-colors" onclick={() => goto(`/assets/${assetId}`)} data-testid="lots-analysis-panel-asset-link" title={$_('brokers.lots.viewAsset')}>
                     <ExternalLink size={16} />
                 </button>
+                <DocsLink path="user/dashboard/positions/" label={$_('brokers.docsHelp.lots')} icon="book" size={16} testId="lots-analysis-docs" />
                 <button class="p-1.5 rounded-lg text-lf-muted hover:text-lf-secondary hover:bg-lf-hover transition-colors" onclick={onClose} data-testid="lots-analysis-panel-close" title={$_('common.close')}>
                     <X size={18} />
                 </button>

@@ -12,17 +12,29 @@ deliberately not part of the run cache, because ``clear_all()`` wipes that file
 and the campaign is precisely what has to survive the wipe that starts it.
 
 Campaign file: scripts/test_runner/.campaign.json (gitignored)
+
+A third record is the run's durations (project 71, step 3.10): what each spec, test, Vitest file and pytest unit took, read
+from the reports the consolidated passes already parse for their verdicts. They are kept for one run in
+``.coverage_data/durations.json``, which the invocation's campaign record names. ``.coverage_data/unit_durations.json``
+(``_scheduler.py``) stays what it is: the history the parallel pass balances its workers on.
 """
 
 from __future__ import annotations
 
 import json
+import subprocess
 import time
 from datetime import datetime
 from pathlib import Path
 
 _CACHE_FILE = Path(__file__).parent / ".run_cache.json"
 _CAMPAIGN_FILE = Path(__file__).parent / ".campaign.json"
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+#: One run's durations, beside the coverage reports.
+DURATIONS_FILE = _PROJECT_ROOT / ".coverage_data" / "durations.json"
+#: The stopwatch lines of the E2E coverage collection (``LF_COV_TIMING=1``), summarised into the durations when present.
+TIMING_DIR = _PROJECT_ROOT / "frontend" / "coverage-js" / "timing"
+_TIMING_PROBE = _PROJECT_ROOT / "frontend" / "scripts" / "js-coverage-probe.mjs"
 
 
 def _load_all() -> dict:
@@ -137,46 +149,52 @@ def _load_campaign() -> dict:
         return {}
 
 
-def campaign_begin(reset: bool) -> None:
-    """Open a campaign, or join the one already running.
+def campaign_begin(reset: bool) -> dict:
+    """Open a campaign, or join the one already running, and return this invocation's start.
 
     ``reset`` is the --fresh-run flag: it starts the clock over. Without it an
     existing campaign is continued, so a --resume adds to the same total
     instead of pretending the earlier invocations never happened.
+
+    The start stays with the invocation (the returned token, handed back to
+    ``campaign_end``), never in the shared file: the file held one slot for "the
+    running invocation", and a second invocation of the same checkout took it
+    and cleared it, so the first ended with no start and recorded nothing.
     """
     data = _load_campaign()
     if reset or not data.get("started_at"):
         data = {"started_at": datetime.now().isoformat(timespec="seconds"), "runs": []}
-    data["current_started_monotonic"] = time.monotonic()
-    data["current_started_at"] = datetime.now().isoformat(timespec="seconds")
-    try:
-        _CAMPAIGN_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False))
-    except OSError:
-        pass
-
-
-def campaign_end(success: bool, label: str, fresh: bool, resumed: bool) -> None:
-    """Close the current invocation and record it in the campaign."""
-    data = _load_campaign()
-    started = data.get("current_started_monotonic")
-    if started is None:
-        return
-    data.setdefault("runs", []).append(
-        {
-            "label": label,
-            "kind": "fresh" if fresh else ("resume" if resumed else "plain"),
-            "started_at": data.get("current_started_at"),
-            "ended_at": datetime.now().isoformat(timespec="seconds"),
-            "seconds": round(max(0.0, time.monotonic() - started), 1),
-            "success": bool(success),
-        }
-    )
+    # The slot of the old format, if a file still carries it: nobody reads it any more.
     data.pop("current_started_monotonic", None)
     data.pop("current_started_at", None)
     try:
         _CAMPAIGN_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False))
     except OSError:
         pass
+    return {"monotonic": time.monotonic(), "started_at": datetime.now().isoformat(timespec="seconds")}
+
+
+def campaign_end(token: dict, success: bool, label: str, fresh: bool, resumed: bool, durations: str | None = None) -> dict:
+    """Close the invocation ``token`` started (``campaign_begin``) and record it in the campaign, with the path of its
+    durations file when it wrote one. Returns the record, for the closing note. The file is read again just before the
+    write, so the invocations that ended meanwhile keep their lines."""
+    run = {
+        "label": label,
+        "kind": "fresh" if fresh else ("resume" if resumed else "plain"),
+        "started_at": token.get("started_at"),
+        "ended_at": datetime.now().isoformat(timespec="seconds"),
+        "seconds": round(max(0.0, time.monotonic() - token["monotonic"]), 1),
+        "success": bool(success),
+    }
+    if durations:
+        run["durations"] = durations
+    data = _load_campaign()
+    data.setdefault("runs", []).append(run)
+    try:
+        _CAMPAIGN_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    except OSError:
+        pass
+    return run
 
 
 def format_duration(seconds: float) -> str:
@@ -191,14 +209,15 @@ def format_duration(seconds: float) -> str:
     return f"{secs}s"
 
 
-def campaign_summary() -> str:
-    """Return the closing note: how long this took, and how long it has taken."""
+def campaign_summary(this_run: dict | None = None) -> str:
+    """Return the closing note: how long this invocation took (``this_run``, the record ``campaign_end`` returned; the
+    last one of the file without it), and how long the campaign has taken."""
     data = _load_campaign()
     runs = data.get("runs") or []
     if not runs:
         return ""
 
-    last = runs[-1]
+    last = this_run or runs[-1]
     machine = sum(float(r.get("seconds") or 0) for r in runs)
     started_at = data.get("started_at")
 
@@ -223,3 +242,76 @@ def campaign_summary() -> str:
             lines.append(f"   \U0001f4c5 Since fresh-run: {format_duration(wall)}  \u2014 opened {since}{suffix}")
 
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Run durations (project 71, step 3.10)
+# ---------------------------------------------------------------------------
+
+
+class RunDurations:
+    """The seconds a run spent, by category: per Playwright spec (with its tests), per Vitest file, per pytest unit.
+
+    Fed by the consolidated passes from the reports they read anyway (``_consolidate.py``, ``_consolidate_backend.py``);
+    emptied when an invocation starts (``_timed_run``) and written when it ends (``write_durations``).
+    """
+
+    def __init__(self) -> None:
+        self.categories: dict[str, dict] = {}
+
+    def reset(self) -> None:
+        self.categories = {}
+
+    def empty(self) -> bool:
+        return not self.categories
+
+    def add(self, category: str, kind: str, unit: str, seconds: float, tests: dict[str, float] | None = None) -> None:
+        """Add ``seconds`` to ``unit`` of ``kind`` (``playwright``, ``vitest``, ``pytest``) in ``category``; a Playwright spec
+        also carries its tests' seconds."""
+        entry = self.categories.setdefault(category, {"seconds": 0.0})
+        bucket = entry.setdefault(kind, {})
+        if kind == "playwright":
+            spec = bucket.setdefault(unit, {"seconds": 0.0, "tests": {}})
+            spec["seconds"] += seconds
+            for title, test_seconds in (tests or {}).items():
+                spec["tests"][title] = spec["tests"].get(title, 0.0) + test_seconds
+        else:
+            bucket[unit] = bucket.get(unit, 0.0) + seconds
+        entry["seconds"] += seconds
+
+
+#: The durations of this process's run.
+DURATIONS = RunDurations()
+
+
+def _rounded(value):
+    """Milliseconds are the reports' resolution: three decimals of a second, no float noise."""
+    if isinstance(value, float):
+        return round(value, 3)
+    if isinstance(value, dict):
+        return {key: _rounded(item) for key, item in value.items()}
+    return value
+
+
+def _coverage_timing() -> dict | None:
+    """The summary of the E2E coverage stopwatches (``js-coverage-probe.mjs timing --json``), or ``None`` without them."""
+    if not TIMING_DIR.is_dir() or not any(TIMING_DIR.glob("*.jsonl")):
+        return None
+    try:
+        result = subprocess.run(["node", str(_TIMING_PROBE), "timing", str(TIMING_DIR), "--json"], capture_output=True, text=True, timeout=120)
+        return json.loads(result.stdout) if result.returncode == 0 else None
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+
+
+def write_durations(with_coverage_timing: bool = False) -> Path | None:
+    """Write ``DURATIONS`` to ``DURATIONS_FILE`` (schema ``lf-durations/1``) and return its path; ``None``, and nothing
+    written, when the run recorded no duration. ``with_coverage_timing`` only for a run under JS coverage: such a run wipes
+    ``coverage-js/`` when it starts, so its stopwatch lines are its own; any other run would summarise a previous run's."""
+    if DURATIONS.empty():
+        return None
+    timing = _coverage_timing() if with_coverage_timing else None
+    data = {"schema": "lf-durations/1", "written_at": datetime.now().isoformat(timespec="seconds"), "categories": _rounded(DURATIONS.categories), "coverage_timing": timing}
+    DURATIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    DURATIONS_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+    return DURATIONS_FILE

@@ -144,6 +144,30 @@ function bucketShares(impacts: unknown): Map<string, number> | null {
 }
 
 /**
+ * The buckets a hypothetical shock left out of the scenario, each once, in order (RN-10, Q14).
+ *
+ * A request may name only some buckets. A held exposure no configured bucket takes is shocked by
+ * zero and applied to none — `unconfigured_zero` on its audit line (`_resolve_bucket` in
+ * `stress/plugin.py`) — so the total speaks as if that part of the scope were immune. These are its
+ * `exposure_bucket_id`s: on an asset-class shock, the classes the scenario does not name.
+ */
+export function unconfiguredBuckets(output: unknown): string[] {
+    if (!output || typeof output !== 'object') return [];
+    const impacts = (output as {impacts?: unknown}).impacts;
+    if (!Array.isArray(impacts)) return [];
+    const buckets = new Set<string>();
+    for (const impact of impacts) {
+        const audit = impact && typeof impact === 'object' ? (impact as {bucket_audit?: unknown}).bucket_audit : undefined;
+        if (!Array.isArray(audit)) continue;
+        for (const line of audit) {
+            const entry = line as {rule?: unknown; exposure_bucket_id?: unknown};
+            if (entry?.rule === 'unconfigured_zero' && typeof entry.exposure_bucket_id === 'string') buckets.add(entry.exposure_bucket_id);
+        }
+    }
+    return [...buckets].sort((left, right) => left.localeCompare(right));
+}
+
+/**
  * The bars of the tornado, worst first.
  *
  * Prefers the **configured buckets** when the scenario had a dimension, because
@@ -198,9 +222,9 @@ export function tornadoRows(output: unknown): TornadoRow[] {
 /**
  * The one error a caller can reason about, whichever shape the wire used.
  *
- * `generated.ts:7662` types the field as `RiskError | Array<RiskError | null>`
- * while the Zod validator at `:14415` only ever admits the single object — the
- * backend declares `Optional[RiskError]` (`schemas/risk.py:1045`). The array
+ * the generated client (`generated.ts`) types the field as `RiskError | Array<RiskError | null>`
+ * while its Zod validator only ever admits the single object — the
+ * backend declares `RiskAnalyticResult.error: Optional[RiskError]` (`schemas/risk/results.py`). The array
  * branch is therefore unreachable today, but casting it away would leave a lie
  * behind if the contract ever widens for real. Normalising costs one line.
  */
@@ -221,7 +245,7 @@ export const REPLAY_BLOCK_WARNING_CODES: readonly string[] = ['historical_replay
 
 /**
  * The order the block lists the reasons in: the order of `RiskHistoricalReplayExclusionReason`
- * (`schemas/risk.py`), with the reader's own exclusion last. A reason this list does not know
+ * (`schemas/risk/vocabulary.py`), with the reader's own exclusion last. A reason this list does not know
  * comes after the known ones, in the order it arrived.
  */
 export const REPLAY_EXCLUSION_REASON_ORDER: readonly string[] = ['no_prices_in_window', 'starts_after_window_start', 'stale_at_window_start', 'stale_at_window_end', 'missing_fx', 'manual_exclusion'];
@@ -267,7 +291,7 @@ function replayAudit(result: RiskAnalyticResult | null | undefined) {
 /**
  * The details of a replay that had nothing left to run, or `null`.
  *
- * `stress.py::_historical` answers `insufficient_history` when every asset is excluded, and lists
+ * `StressAnalytic._historical` answers `insufficient_history` when every asset is excluded, and lists
  * them in `details.excluded_asset_ids`. The same code without that list is another refusal (a
  * window with no observations at all), and stays an error the section discloses.
  */

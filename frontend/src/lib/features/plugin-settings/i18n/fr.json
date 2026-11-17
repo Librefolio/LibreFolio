@@ -11,7 +11,9 @@
       "asset": "Prix",
       "fx": "Taux de change",
       "brim": "Imports des courtiers",
-      "tool": "Outils"
+      "tool": "Outils",
+      "enricher": "Profil des actifs",
+      "group": "Paramètres partagés"
     },
     "status": {
       "configured": "Configuré",
@@ -68,6 +70,11 @@
       "conflict": "Ces paramètres ont changé entre-temps : ils ont été rechargés, enregistrez à nouveau.",
       "keyUnavailable": "Les secrets ne peuvent pas être enregistrés : la clé de cette instance est inutilisable (voir les contrôles de la configuration).",
       "saveFailed": "Impossible d'enregistrer les paramètres."
+    },
+    "group": {
+      "usedBy": "Partagés par : {plugins}",
+      "inGroup": "Utilise aussi les paramètres partagés de {group}",
+      "open": "Ouvrir"
     }
   }
 }

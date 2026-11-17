@@ -8,7 +8,7 @@ from backend.app.schemas.risk.outputs import RiskDrawdownOutput, RiskDrawdownPoi
 from backend.app.schemas.risk.results import RiskWarning
 from backend.app.schemas.risk.vocabulary import RiskDrawdownRecoveryStatus, RiskErrorCode, RiskMode, RiskOutputKind, RiskReturnBasis, RiskScopeKind
 from backend.app.services.platform.provider_registry import register_plugin
-from backend.app.services.risk.analytic_helpers import require_primary_returns
+from backend.app.services.risk.analytic_helpers import rally_and_depth_fields, require_primary_returns
 from backend.app.services.risk.base import RiskAnalytic, RiskComputation, RiskExecutionContext, RiskSeriesInputs, RiskUnavailableError
 from backend.app.services.risk.metrics import drawdown_episodes
 from backend.app.services.risk.registry import RiskAnalyticRegistry
@@ -27,7 +27,8 @@ class DrawdownSummaryAnalytic(RiskAnalytic):
     # 1.2.0 (P19, CP-13a) — numbers unchanged; the payload additionally carries
     # maximum_drawdown_trough_to_peak_ratio, and remaining_to_peak_ratio is null for a total loss,
     # announced by the non-degrading warning total_loss_no_recovery.
-    algorithm_version = "1.2.0"
+    # 1.3.0 (RN-14) — the twins of the episode: the largest rally, dated, and «below the peak, on average» (ADD).
+    algorithm_version = "1.3.0"
     name_i18n_key = "risk.analytics.drawdownSummary.name"
     description_i18n_key = "risk.analytics.drawdownSummary.description"
     output_kind = RiskOutputKind.DRAWDOWN
@@ -89,6 +90,7 @@ class DrawdownSummaryAnalytic(RiskAnalytic):
                 calculation_basis=calculation_basis,
                 return_basis=context.primary_return_basis,
                 underwater_series=underwater_series,
+                **rally_and_depth_fields(returns, report.drawdowns, baseline_date=baseline, dates=dates),
             ),
             method=calculation_basis,
             return_basis=context.primary_return_basis,

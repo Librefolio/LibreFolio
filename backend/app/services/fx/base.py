@@ -12,7 +12,7 @@ Contract of the FX rate providers.
 from abc import ABC, abstractmethod
 from datetime import date
 from decimal import Decimal
-from typing import Literal
+from typing import ClassVar, Literal
 
 from backend.app.services.plugin_settings.contract import PluginSettingsMixin
 from backend.app.utils.runtime.cooldown import RateLimitedError, retry_after_seconds
@@ -46,6 +46,11 @@ class FXRateProvider(PluginSettingsMixin, ABC):
     5. Provider will be auto-discovered on startup
     6. See docs/fx/provider-development.md for details
     """
+
+    #: Whether the provider reaches an external service (project 76, U3): each call through ``call_fx_provider`` is then
+    #: counted, and refused when an instance limit is full (``services/platform/call_counter.py``). False for MANUAL,
+    #: which never fetches, and the test doubles.
+    calls_external_service: ClassVar[bool] = True
 
     @property
     @abstractmethod
@@ -176,6 +181,16 @@ class FXRateProvider(PluginSettingsMixin, ABC):
             Dict[str, str] — e.g. {"en": "...", "it": "...", ...}
         """
         return {}
+
+    @property
+    def warning_level(self) -> Literal["info", "warning"]:
+        """
+        How serious ``warning_i18n`` is: ``"warning"`` (⚠️, a limit of the data that can mislead, e.g. SNB's monthly
+        averages) or ``"info"`` (ℹ️, a fact worth knowing, e.g. FED's daily rates released once a week).
+
+        Default: ``"warning"``.
+        """
+        return "warning"
 
     @property
     def docs_url(self) -> str | None:
@@ -360,6 +375,18 @@ class FXRateLimitedError(FXServiceError, RateLimitedError):
 
     def __init__(self, message: str, *, retry_after: float | None = None, scope: str | None = None):
         RateLimitedError.__init__(self, message, retry_after=retry_after, scope=scope)
+
+
+class FXCallLimitError(FXRateLimitedError):
+    """The instance's call limit of the provider is reached (project 76, U3): the call never left.
+
+    A ``RATE_LIMITED`` refusal like a source's, so the sync handles it the same way (a failed leg, the next route, the
+    pair's ``retry_after``). ``details`` says which limit: ``{"reason": "call_limit", "window": "day", "limit": 500}``.
+    """
+
+    def __init__(self, message: str, *, retry_after: float | None = None, details: dict | None = None):
+        super().__init__(message, retry_after=retry_after)
+        self.details = details or {}
 
 
 def fx_rate_limited_from_response(response: object, provider_code: str) -> FXRateLimitedError | None:

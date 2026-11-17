@@ -92,6 +92,7 @@ export async function getCurrencyGraph(): Promise<CurrencyGraph> {
                 description: p.description ?? '',
                 description_i18n: p.description_i18n ?? {},
                 warning_i18n: p.warning_i18n ?? {},
+                warning_level: p.warning_level ?? 'warning',
                 docs_url: p.docs_url ?? null,
             }));
 

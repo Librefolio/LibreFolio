@@ -159,3 +159,24 @@ describe('L1HowMuchItHurts — one shape for every loss card', () => {
         expect(screen.getByTestId('risk-l1-card-day-technical').textContent).toBe(say('risk.levels.l1.technical.day'));
     });
 });
+
+describe('L1HowMuchItHurts — a fall in money is the same fall on today’s value (RN-11, C8)', () => {
+    // The worst and the current fall are put in money as today's value × the fall: not what was lost then
+    // (a 20 % fall from 100 000 to 80 000 lost 20 000, the card shows 80 000 × 20 % = 16 000). The caption
+    // says so around the amount; the day and the month, today's value × a one-day or one-month loss, do not
+    // need it. Read against the catalogue's own sentence, split at the amount, never against hard-coded words.
+    const AMOUNT = '\u0000';
+
+    it('wraps the worst and the current fall’s amount in the sentence, and leaves the day’s amount alone', () => {
+        render(L1HowMuchItHurts, {props: {historicalResults: RESULTS, currency: 'EUR', scopeValue: 100_000}});
+        const [before, after] = say('risk.levels.l1.sameFallToday', {amount: AMOUNT}).split(AMOUNT);
+        expect(before + after, 'premise: the catalogue has the sentence').not.toBe('risk.levels.l1.sameFallToday');
+
+        for (const card of ['worst', 'current']) {
+            const caption = screen.getByTestId(`risk-l1-card-${card}-caption`).textContent ?? '';
+            expect(caption.startsWith(before) && caption.endsWith(after) && caption.length > before.length + after.length, `the ${card} fall's money does not say it is the same fall on today's value: «${caption}»`).toBe(true);
+        }
+        const day = screen.getByTestId('risk-l1-card-day-caption').textContent ?? '';
+        expect(after !== '' && day.includes(after.trim()), `the day's money carries the sentence it does not need: «${day}»`).toBe(false);
+    });
+});

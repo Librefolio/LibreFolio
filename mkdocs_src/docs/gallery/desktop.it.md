@@ -892,7 +892,7 @@ Un periodo passato reale applicato al portafoglio che detieni oggi: il replay st
 
 ### 🎲 Simulazione
 
-Il passaggio di simulazione E se…? con il suo avviso beta.
+Il passaggio di simulazione E se…? con il suo avviso sul modello.
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="🎲 Simulazione">

@@ -11,7 +11,9 @@
       "asset": "Prices",
       "fx": "Exchange rates",
       "brim": "Broker imports",
-      "tool": "Tools"
+      "tool": "Tools",
+      "enricher": "Asset profile",
+      "group": "Shared settings"
     },
     "status": {
       "configured": "Configured",
@@ -68,6 +70,11 @@
       "conflict": "These settings changed meanwhile: they have been reloaded, save again.",
       "keyUnavailable": "Secrets cannot be saved: this instance's key cannot be used (see the configuration checks).",
       "saveFailed": "The settings could not be saved."
+    },
+    "group": {
+      "usedBy": "Shared by: {plugins}",
+      "inGroup": "Also uses the shared settings of {group}",
+      "open": "Open"
     }
   }
 }

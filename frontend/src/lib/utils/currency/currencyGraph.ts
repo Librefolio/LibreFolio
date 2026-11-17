@@ -47,6 +47,8 @@ export interface ProviderInfo {
     description_i18n?: Record<string, string>;
     /** Multilingual provider warnings/caveats {lang_code: warning}. Empty = no warning. */
     warning_i18n?: Record<string, string>;
+    /** How serious `warning_i18n` is: 'warning' (⚠️, a data limit that can mislead) or 'info' (ℹ️, a fact worth knowing). */
+    warning_level?: 'info' | 'warning';
     /** URL to documentation page for this provider */
     docs_url?: string | null;
 }
@@ -153,6 +155,32 @@ export function findAllPaths(graph: MultiDirectedGraph<Record<string, never>, Ed
     // Same currency — no conversion needed
     if (source === target) return [];
 
+    // Steps from each node to the target, ignoring direction, simple paths and provider uses: a lower bound of what any
+    // valid path needs, so cutting a branch that cannot reach the target within the steps left never drops a path
+    // (lane 75, L2b: with ~180 currencies an unpruned depth-4 walk took 130-200 ms for a pair with one chain).
+    const stepsToTarget = distancesTo(graph, target, maxDepth);
+
+    // Each node's moves, outbound edges first then inbound ones, in the graph's order, keeping only the neighbors that
+    // can still reach the target: built once per node per call (graphology's edge iterators are slow in a hot loop).
+    const movesOf = new Map<string, [neighbor: string, provider: string][]>();
+    function moves(node: string): [string, string][] {
+        let list = movesOf.get(node);
+        if (list === undefined) {
+            list = [];
+            const into = list;
+            // Outbound edges: the NATIVE direction, node → neighbor
+            graph.forEachOutboundEdge(node, (_edgeKey, attrs, _src, tgt) => {
+                if (stepsToTarget.has(tgt)) into.push([tgt, attrs.provider]);
+            });
+            // Inbound edges: the edge is src → node, traversed backwards (node ← src)
+            graph.forEachInboundEdge(node, (_edgeKey, attrs, src) => {
+                if (stepsToTarget.has(src)) into.push([src, attrs.provider]);
+            });
+            movesOf.set(node, list);
+        }
+        return list;
+    }
+
     /**
      * DFS with backtracking.
      *
@@ -171,18 +199,17 @@ export function findAllPaths(graph: MultiDirectedGraph<Record<string, never>, Ed
         // Max depth reached
         if (pathEdges.length >= maxDepth) return;
 
-        /**
-         * Try advancing to a neighbor node via an edge.
-         * Used for both outbound (native) and inbound (reverse) edges.
-         */
-        function tryEdge(neighbor: string, provider: string): void {
+        for (const [neighbor, provider] of moves(currentNode)) {
             // Constraint 1: simple paths only — no revisiting nodes already in the path
             // (target is allowed as the exit condition, it's not in visitedNodes)
-            if (visitedNodes.has(neighbor)) return;
+            if (visitedNodes.has(neighbor)) continue;
+
+            // Pruning: the target is out of reach from this neighbor in the steps left
+            if (pathEdges.length + 1 + stepsToTarget.get(neighbor)! > maxDepth) continue;
 
             // Constraint 2: max 2 uses per provider per path
             const currentUses = providerUseCount.get(provider) ?? 0;
-            if (currentUses >= 2) return;
+            if (currentUses >= 2) continue;
 
             // --- ADVANCE ---
             pathEdges.push({from: currentNode, to: neighbor, provider});
@@ -201,19 +228,6 @@ export function findAllPaths(graph: MultiDirectedGraph<Record<string, never>, Ed
                 providerUseCount.set(provider, currentUses);
             }
         }
-
-        // ── Outbound edges (NATIVE direction: currentNode → neighbor) ──
-        graph.forEachOutboundEdge(currentNode, (_edgeKey, attrs, _src, tgt) => {
-            tryEdge(tgt, attrs.provider);
-        });
-
-        // ── Inbound edges (REVERSE direction: currentNode ← source) ──
-        // The edge in the graph is src→currentNode, but we traverse it backwards.
-        graph.forEachInboundEdge(currentNode, (_edgeKey, attrs, src, _tgt) => {
-            // src = edge origin (e.g. EUR), tgt = currentNode (e.g. USD)
-            // neighbor = src (going towards EUR)
-            tryEdge(src, attrs.provider);
-        });
     }
 
     // Start DFS from source — mark source as visited (can't return to it)
@@ -224,5 +238,27 @@ export function findAllPaths(graph: MultiDirectedGraph<Record<string, never>, Ed
     return validPaths;
 }
 
-// TODO: Web Worker parallelization — profile first, implement only if needed.
-// With ~4 providers × ~25 currencies, DFS completes in <1ms.
+/**
+ * Steps from every node within `maxDepth` of `target` to `target`, edges taken in both directions (a BFS from the
+ * target). A node missing from the map cannot reach the target in `maxDepth` steps.
+ */
+function distancesTo(graph: MultiDirectedGraph<Record<string, never>, EdgeAttributes>, target: string, maxDepth: number): Map<string, number> {
+    const steps = new Map<string, number>([[target, 0]]);
+    let frontier = [target];
+    for (let depth = 1; depth <= maxDepth && frontier.length > 0; depth++) {
+        const next: string[] = [];
+        for (const node of frontier) {
+            graph.forEachNeighbor(node, (neighbor) => {
+                if (!steps.has(neighbor)) {
+                    steps.set(neighbor, depth);
+                    next.push(neighbor);
+                }
+            });
+        }
+        frontier = next;
+    }
+    return steps;
+}
+
+// Measured (lane 75, L2b, synthetic catalogue of ~180 currencies after wave 1): the DFS above runs in a few ms per
+// pair, so no Web Worker. The route picker's own rendering of thousands of chains is a separate matter.

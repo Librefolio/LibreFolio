@@ -372,6 +372,7 @@
       },
       "hintDays": "Escribe 0 para conservar las copias hasta que las elimines.",
       "timing": "Las reglas se aplican en una hora como máximo: tras cada copia de seguridad y en cada arranque, como mucho una vez por hora."
-    }
+    },
+    "docsHelp": "Copias de toda la instancia — base de datos, archivos y ajustes — para descargar, restaurar o mover a otro servidor."
   }
 }

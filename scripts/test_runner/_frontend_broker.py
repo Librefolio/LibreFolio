@@ -4,6 +4,7 @@ import subprocess
 
 from . import _common
 from ._common import PROJECT_ROOT, Colors, _get_category_tests_for_all, _run_test_suite, print_error, print_header, print_section, print_success
+from ._coverage import vitest_env
 from ._frontend_common import _ensure_frontend_build, _ensure_test_users, _run_playwright, reset_setup_scope
 
 
@@ -32,7 +33,7 @@ def front_broker_unit(verbose: bool = False, ui: bool = False, headed: bool = Fa
     print(f"\n{Colors.BLUE}Running: Broker Vitest unit tests{Colors.NC}")
     print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")
     try:
-        result = subprocess.run(cmd, cwd=PROJECT_ROOT / "frontend", text=True)
+        result = subprocess.run(cmd, cwd=PROJECT_ROOT / "frontend", text=True, env=vitest_env("front-broker"))
         if result.returncode == 0:
             print_success("Broker Vitest unit tests - PASSED")
             return True

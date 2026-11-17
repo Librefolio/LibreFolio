@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import json
 import math
+from contextlib import asynccontextmanager
 from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.pool import NullPool
 
+from backend.app.db.base import SQLModel  # every model, for create_all
+from backend.app.db.models import Asset, AssetProfileUpdate, AssetType
 from backend.app.schemas.common import Currency, DateRangeModel, DateSpan
 from backend.app.schemas.portfolio.data_quality import DataQualityExcludedAsset, DataQualityExclusionReason, DataQualityReport, DataQualityStatus, MissingPriceAsset, StalePriceAsset
 from backend.app.schemas.portfolio.history import PortfolioHistoryPoint
@@ -20,6 +26,7 @@ from backend.app.schemas.risk.scope import RiskAnalyticRequest, RiskQueryRequest
 from backend.app.schemas.risk.series import AssetReturnPoint, AssetReturnSeries, AssetValuationPoint, AssetValuationSeries, PreparedAssetSeries, PreparedAssetSeriesSet, RiskFreeReference
 from backend.app.schemas.risk.vocabulary import RiskErrorCode, RiskMode, RiskOutputKind, RiskResultStatus, RiskReturnBasis, RiskScopeKind
 from backend.app.schemas.wac import WACMissingPairInfo
+from backend.app.services.assets.profile.catalogue import normalize_value
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.app.services.risk import replay as risk_replay_module
@@ -151,7 +158,6 @@ def make_prepared_set(
         calendar_days=observations,
         annualization_factor=365,
         calendar_coverage=1,
-        fresh_quote_coverage=1,
         data_quality=DataQualityReport(),
         fx_fingerprint="0" * 64,
     )
@@ -546,7 +552,10 @@ async def test_hypothetical_stress_uses_classification_context_without_partial_s
     async def fake_prepare(_db, **_kwargs):
         return prepared
 
-    async def fake_classifications(_db, _asset_ids):
+    analysis_days: list[date] = []
+
+    async def fake_classifications(_db, _asset_ids, day):
+        analysis_days.append(day)
         return {
             1: RiskAssetClassification(
                 asset_class="ETF",
@@ -599,6 +608,8 @@ async def test_hypothetical_stress_uses_classification_context_without_partial_s
     assert result.output.dimension.value == "sector"
     assert result.output.impacts[0].shock_return == pytest.approx(-0.2)
     assert result.output.impacts[0].metadata_fallback is True
+    # Plan 68 D3: the classifications are read for the day of the analysis, the end of its range
+    assert analysis_days == [date(2026, 1, 21)]
     assert result.metadata.params["bucket_shocks"] == {"Other": -0.2}
     assert result.metadata.n_observations == 0
     assert result.warnings[0].code == "hypothetical_metadata_other_fallback"
@@ -2165,7 +2176,8 @@ async def test_contribution_and_risk_return_name_the_excluded_weight_inside_cash
 
     # The versions that publish `excluded_weight`: a zero must be told apart from a server that predates the field.
     # `asset_risk_return` is at 1.2.0 since k6 (06/10/2026), which adds each point's own Sharpe and Sortino.
-    assert results["contribution"].metadata.algorithm_version == "1.2.0"
+    # `risk_contribution` is at 1.3.0 since RN-15 (16/11/2026): N_eff weighs the priced positions on themselves.
+    assert results["contribution"].metadata.algorithm_version == "1.3.0"
     assert results["risk_return"].metadata.algorithm_version == "1.2.0"
 
 
@@ -2176,7 +2188,9 @@ GOLDEN_REL = 1e-12
 GOLDEN_CONTRIBUTION = {
     "portfolio_volatility": 0.06237752322585717,
     "cash_weight": 0.33333333333333337,
-    "effective_number_of_assets": 3.5999999999999996,
+    # RN-15 (16/11/2026, developer's Q8 a) moved this one on purpose: the weights 0.5 and 1/6 are renormalized on the
+    # measured part (0.75, 0.25), cash out of the denominator — 1 / (0.75² + 0.25²) = 1.6, no longer 3.6.
+    "effective_number_of_assets": 1.6,
     "diversification_ratio": 1.1846014602790187,
     "weight": [0.5, 0.16666666666666666],
     "marginal_contribution": [0.11643684887967204, 0.02495459271612689],
@@ -2207,6 +2221,8 @@ async def test_publishing_the_excluded_weight_moves_no_other_number(monkeypatch)
     assert [item.asset_id for item in contribution.items] == [1, 2]
     for field in ("portfolio_volatility", "cash_weight", "effective_number_of_assets", "diversification_ratio"):
         assert getattr(contribution, field) == pytest.approx(GOLDEN_CONTRIBUTION[field], rel=GOLDEN_REL), field
+    # RN-15: with a holding left out for want of prices and cash in the scope, N_eff counts the priced positions only.
+    assert contribution.effective_number_of_assets <= len(contribution.items)
     for field in ("weight", "marginal_contribution", "component_contribution", "percentage_contribution"):
         assert [getattr(item, field) for item in contribution.items] == pytest.approx(GOLDEN_CONTRIBUTION[field], rel=GOLDEN_REL), field
 
@@ -2740,3 +2756,148 @@ async def test_the_first_twrr_point_is_the_baseline_even_on_a_day_nothing_held_i
     assert list(context.primary_returns) == pytest.approx(returns, rel=1e-12, abs=1e-15)
     assert context.n_observations == 24
     assert context.calendar_days == 32  # Monday 5 January to Friday 6 February
+
+
+# --------------------------------------------------------------------------- #
+# RN-11 (Q14, D383): an analysis that starts later than the period asked for says so.
+#
+# The preparation knows it — `baseline_inside_requested_range` when no complete day lies before
+# the requested start, `short_history:<id>` for each asset with no point before it — and kept it
+# to itself (`PreparedAssetSeriesSet.warnings`, read by nobody). The results built on the prepared
+# series now carry it as two warnings, not degrading: the day the analysis really starts (the
+# analysed range's start) and the assets whose history begins inside the period. A start on a
+# Saturday raises nothing: the Friday before is a complete day before the start. The TWRR readers
+# of a historical portfolio measure another series and do not carry them (out of RN-11).
+# --------------------------------------------------------------------------- #
+
+LATE_START_WARNINGS = ["baseline_inside_requested_range", "short_history:1", "short_history:4"]
+
+
+def test_a_late_start_reaches_the_context_as_two_warnings():
+    prepared = make_prepared_set({1: [0.01, -0.02, 0.015], 4: [0.0, 0.01, -0.01]}).model_copy(update={"warnings": LATE_START_WARNINGS})
+    request = RiskQueryRequest.model_validate(
+        {
+            "scope": {"kind": "asset_set", "asset_ids": [1, 4]},
+            "date_range": {"start": "2025-12-15", "end": prepared.requested_range.end.isoformat()},
+            "target_currency": "EUR",
+            "mode": "historical",
+            "analytics": [{"instance_id": "kpi", "analytic_code": "asset_set_kpi"}],
+        }
+    )
+    context = build_execution_context(request=request, scope_inputs=scope_inputs((1, 4)), prepared=prepared)
+    by_code = {warning.code: warning for warning in context.execution_warnings}
+
+    late = by_code.get("analysis_starts_late")
+    assert late is not None, f"the late start stayed inside the preparation: {sorted(by_code)}"
+    assert late.message_i18n_key == "risk.warnings.analysis_starts_late"
+    assert late.message_params == {"start": prepared.effective_range.start.isoformat()}
+    assert late.details == {"start": prepared.effective_range.start.isoformat(), "requested_start": "2025-12-15"}
+    assert late.degrades_result is False
+
+    short = by_code.get("short_history")
+    assert short is not None, f"the assets with a short history are not named: {sorted(by_code)}"
+    assert short.message_i18n_key == "risk.warnings.short_history"
+    assert short.details["asset_ids"] == [1, 4]
+    assert short.degrades_result is False
+
+
+def test_no_late_start_no_warning():
+    prepared = make_prepared_set({1: [0.01, -0.02, 0.015]})
+    request = RiskQueryRequest.model_validate(
+        {
+            "scope": {"kind": "asset_set", "asset_ids": [1]},
+            "date_range": {"start": prepared.requested_range.start.isoformat(), "end": prepared.requested_range.end.isoformat()},
+            "target_currency": "EUR",
+            "mode": "historical",
+            "analytics": [{"instance_id": "kpi", "analytic_code": "asset_set_kpi"}],
+        }
+    )
+    context = build_execution_context(request=request, scope_inputs=scope_inputs((1,)), prepared=prepared)
+    assert {"analysis_starts_late", "short_history"}.isdisjoint(warning.code for warning in context.execution_warnings)
+
+
+@pytest.mark.asyncio
+async def test_the_twrr_readers_leave_out_the_late_start_of_the_per_asset_series(monkeypatch):
+    """The TWRR of a historical portfolio is another series: the per-asset preparation's start says nothing of it."""
+    results = await query_unpriced_holding(
+        monkeypatch,
+        analytics=[*TWRR_READERS.values(), CORRELATION],
+        prepared=prepared_without(reason=None).model_copy(update={"warnings": ["baseline_inside_requested_range"]}),
+    )
+
+    # Presence barrier: a reader of the per-asset series carries it.
+    assert "analysis_starts_late" in warning_codes(results["correlation"])
+    for instance_id in TWRR_READERS:
+        assert results[instance_id].metadata.return_basis == RiskReturnBasis.TWRR, instance_id
+        assert "analysis_starts_late" not in warning_codes(results[instance_id]), instance_id
+
+
+# =============================================================================
+# Plan 68, D3: the hypothetical stress reads countries and sectors from the asset profile
+# =============================================================================
+
+_D3_DAY = date(2026, 1, 21)
+
+
+@asynccontextmanager
+async def _d3_book(directory):
+    """A private SQLite file with four assets of the test (ids by name), their profile rows written as the store writes
+    them; the engine disposed after."""
+    engine = create_async_engine(f"sqlite+aiosqlite:///{directory / 'd3_risk.sqlite'}", poolclass=NullPool)
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(SQLModel.metadata.create_all)
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            assets = {
+                "changed": Asset(display_name="D3 changed", currency="EUR", asset_type=AssetType.ETF),
+                "later": Asset(display_name="D3 read later", currency="EUR", asset_type=AssetType.ETF),
+                "emptied": Asset(display_name="D3 emptied", currency="EUR", asset_type=AssetType.STOCK),
+                "legacy_column": Asset(display_name="D3 column only", currency="EUR", asset_type=AssetType.STOCK, classification_params='{"geographic_area":{"distribution":{"USA":"1.0"}},"sector_area":{"distribution":{"Energy":"1.0"}}}'),
+                "unreadable": Asset(display_name="D3 unreadable", currency="EUR", asset_type=AssetType.ETF),
+            }
+            session.add_all(assets.values())
+            await session.flush()
+
+            def row(name, key, value, day, *, raw=False):
+                text = value if raw else (None if value is None else json.dumps(normalize_value(key, value)))
+                return AssetProfileUpdate(asset_id=assets[name].id, key=key, value=text, source="justetf", read_on=day)
+
+            session.add_all(
+                [
+                    row("changed", "geography", {"USA": "1"}, date(2025, 6, 1)),
+                    row("changed", "geography", {"USA": "0.6", "JPN": "0.4"}, date(2026, 1, 10)),
+                    row("changed", "geography", {"ITA": "1"}, date(2026, 2, 1)),  # after the day: not read
+                    row("changed", "sector", {"Technology": "1"}, date(2025, 6, 1)),
+                    row("later", "sector", {"Energy": "1"}, date(2026, 3, 1)),  # first row after the day: carried back
+                    row("emptied", "geography", {"USA": "1"}, date(2025, 6, 1)),
+                    row("emptied", "geography", None, date(2026, 1, 5)),
+                    row("unreadable", "sector", "[1, 2]", date(2025, 6, 1), raw=True),
+                ]
+            )
+            await session.commit()
+            yield engine, {name: asset.id for name, asset in assets.items()}
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_d3_classifications_are_the_profile_of_the_analysis_day(tmp_path):
+    async with _d3_book(tmp_path) as (engine, ids):
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            loaded = await risk_scope_module.load_asset_classifications(session, tuple(ids.values()), _D3_DAY)
+
+    assert set(loaded) == set(ids.values()), "every asset asked has a classification"
+    changed = loaded[ids["changed"]]
+    assert changed.asset_class == "ETF"
+    assert changed.geography_exposures == pytest.approx({"USA": 0.6, "JPN": 0.4}), "the step holding the day, not the later one"
+    assert changed.sector_exposures == pytest.approx({"Technology": 1.0})
+    assert changed.metadata_error is None
+    assert loaded[ids["later"]].sector_exposures == pytest.approx({"Energy": 1.0}), "a first row after the day is carried back to it"
+    assert loaded[ids["later"]].geography_exposures is None
+    emptied = loaded[ids["emptied"]]
+    assert emptied.geography_exposures is None and emptied.sector_exposures is None and emptied.metadata_error is None, "emptied on purpose: no exposure"
+    column_only = loaded[ids["legacy_column"]]
+    assert column_only.asset_class == "STOCK"
+    assert column_only.geography_exposures is None and column_only.sector_exposures is None, "classification_params is not read any more"
+    assert loaded[ids["unreadable"]].metadata_error == "invalid_classification_metadata"
+    assert loaded[ids["unreadable"]].sector_exposures is None

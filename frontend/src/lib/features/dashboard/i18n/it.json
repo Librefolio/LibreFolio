@@ -76,7 +76,7 @@
     "costs": "Costi",
     "noPositions": "Nessuna posizione disponibile",
     "noPeriodPnl": "Nessun P&L nel periodo selezionato",
-    "seeAllPositions": "Vedi tutte →",
+    "seeAllPositions": "Vedi tutte",
     "aiExport": "AI Export",
     "periodPnlTooltip": "Guadagno o perdita totale attribuibile solo al periodo selezionato (variazione non realizzata + realizzato + reddito − costi). Può differire dal guadagno totale della posizione.",
     "unrealizedPnlPercent": "P&L %",
@@ -173,6 +173,19 @@
     "allocationNoShares": "Nessuna percentuale da mostrare: le fette sommano zero o meno (per esempio uno scoperto che annulla le posizioni). Gli importi sono elencati qui sotto.",
     "allocationHistoryNoShares": "Nessuna percentuale da mostrare: in questi giorni le fette sommano zero o meno.",
     "pnlDeltaDayTooltip": "Variazione di oggi del P&L totale, e quella variazione in percentuale rispetto al valore del portafoglio di ieri.",
-    "yieldOnCostFxStale": "tasso vecchio: {days} giorni prima"
+    "yieldOnCostFxStale": "tasso vecchio: {days} giorni prima",
+    "groupBy": {
+      "global": "Globale",
+      "broker": "Broker",
+      "globalHint": "Una riga per asset: la somma di tutti i broker che lo detengono",
+      "brokerHint": "Una riga per asset e broker",
+      "label": "Raggruppa le posizioni",
+      "brokerCount": "{count} broker"
+    },
+    "docsHelp": {
+      "growth": "Come si è mosso il valore del portafoglio nel periodo: in denaro, come rendimento o come guadagno e perdita realizzati.",
+      "allocation": "Come è suddiviso il portafoglio — per tipo, settore, paese o asset — oggi, o nel tempo.",
+      "positions": "Cosa possiedi e quanto ha reso ogni posizione nel periodo, raggruppato per asset o per broker, in tabella o in mappa."
+    }
   }
 }

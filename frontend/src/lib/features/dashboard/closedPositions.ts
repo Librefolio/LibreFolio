@@ -17,7 +17,8 @@
  */
 export interface ClosedPositionLike {
     asset_id: number;
-    broker_id?: number | null;
+    /** A broker id, read as a number when it is one; null for an asset summed over several brokers (project 74, «Globale»). */
+    broker_id?: unknown;
     is_fully_sold?: boolean;
     closed_by?: unknown;
     closed_to_broker_id?: unknown;
@@ -35,7 +36,7 @@ export function closedPositionsToList<T extends ClosedPositionLike>(positions: r
     return positions.filter((position) => {
         if (!position.is_fully_sold) return false;
         const movedTo = position.closed_by === 'TRANSFER' && typeof position.closed_to_broker_id === 'number' ? position.closed_to_broker_id : null;
-        if (movedTo === null || movedTo === (position.broker_id ?? null)) return true;
+        if (movedTo === null || movedTo === (typeof position.broker_id === 'number' ? position.broker_id : null)) return true;
         return !held.has(`${position.asset_id}:${movedTo}`);
     });
 }

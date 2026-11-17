@@ -42,11 +42,11 @@ class _GuardSite:
 # A01-A17 are the approved inventory, not source line numbers. Length is itself
 # the contract under test; these are immutable definitions, never shared DB rows.
 _IMPORT_LENGTH_SITES = (
-    _GuardSite("A01-foundation", "components.catalog", "ALL_FOUNDATION_COMPONENTS", "components.registry.ComponentRegistryError", expected_size=67),
-    _GuardSite("A02-real", "components.catalog", "ALL_REAL_COMPONENTS", "components.registry.ComponentRegistryError", expected_size=67),
-    _GuardSite("A03-integrated", "components.catalog", "ALL_COMPONENTS", "components.registry.ComponentRegistryError", expected_size=67),
-    _GuardSite("A04-asset-fx-fragment", "components.asset_fx_registry", "ASSET_FX_COMPONENTS", "components.asset_fx_registry.AssetFxRegistryError", expected_size=26),
-    _GuardSite("A05-asset-ids", "components.asset_fx_registry", "ASSET_REAL_COMPONENT_IDS", "components.asset_fx_registry.AssetFxRegistryError", expected_size=14),
+    _GuardSite("A01-foundation", "components.catalog", "ALL_FOUNDATION_COMPONENTS", "components.registry.ComponentRegistryError", expected_size=68),
+    _GuardSite("A02-real", "components.catalog", "ALL_REAL_COMPONENTS", "components.registry.ComponentRegistryError", expected_size=68),
+    _GuardSite("A03-integrated", "components.catalog", "ALL_COMPONENTS", "components.registry.ComponentRegistryError", expected_size=68),
+    _GuardSite("A04-asset-fx-fragment", "components.asset_fx_registry", "ASSET_FX_COMPONENTS", "components.asset_fx_registry.AssetFxRegistryError", expected_size=27),
+    _GuardSite("A05-asset-ids", "components.asset_fx_registry", "ASSET_REAL_COMPONENT_IDS", "components.asset_fx_registry.AssetFxRegistryError", expected_size=15),
     _GuardSite("A06-fx-ids", "components.asset_fx_registry", "FX_REAL_COMPONENT_IDS", "components.asset_fx_registry.AssetFxRegistryError", expected_size=12),
     _GuardSite("A08-portfolio-broker-fragment", "components.portfolio_broker_registry", "PORTFOLIO_BROKER_COMPONENTS", "components.portfolio_broker_registry.PortfolioBrokerRegistryError", expected_size=41),
     _GuardSite("A09-portfolio-ids", "components.portfolio_broker_registry", "PORTFOLIO_REAL_COMPONENT_IDS", "components.portfolio_broker_registry.PortfolioBrokerRegistryError", expected_size=21),
@@ -165,8 +165,8 @@ def mutate_length(value, fault):
 
 def mutate_union(value, fault):
     asset, fx = value
-    require((len(asset), len(fx)) == (14, 12), "union witness needs healthy tuple lengths")
-    require(len(set(asset) | set(fx)) == 26, "union witness did not start unique")
+    require((len(asset), len(fx)) == (15, 12), "union witness needs healthy tuple lengths")
+    require(len(set(asset) | set(fx)) == 27, "union witness did not start unique")
     asset_first, *asset_rest = asset
     fx_first, *_ = fx
     variants = {
@@ -177,7 +177,7 @@ def mutate_union(value, fault):
     result = variants[fault]
     changed_asset, changed_fx = result
     require((len(changed_asset), len(changed_fx)) == (len(asset), len(fx)), "union mutation changed a length")
-    require(len(set(changed_asset) | set(changed_fx)) == 25, "union mutation must remove exactly one unique ID")
+    require(len(set(changed_asset) | set(changed_fx)) == 26, "union mutation must remove exactly one unique ID")
     if fault != "cross-domain":
         require(not set(changed_asset) & set(changed_fx), "within-domain fault must remain disjoint")
     return result
@@ -349,7 +349,7 @@ def run_fault():
 
 def require_registry_counts(components, datasets, analyses):
     counts = (len(components), len(datasets), len(analyses))
-    require(counts == (67, 40, 11), "healthy registry counts changed: " + repr(counts))
+    require(counts == (68, 40, 11), "healthy registry counts changed: " + repr(counts))
 
 
 def run_healthy():
@@ -377,7 +377,7 @@ def run_healthy():
     # longer imports them, so a blanket optimization ban cannot evade controls.
     importlib.import_module(PREFIX + "temporal.policy")
     importlib.import_module(PREFIX + "dependencies")
-    return {"fragment": fragment_name, "counts": [67, 40, 11]}
+    return {"fragment": fragment_name, "counts": [68, 40, 11]}
 
 
 try:
@@ -443,4 +443,4 @@ class TestFreshImportCompatibility:
     def test_healthy_fragment_and_integrated_registries(self, fragment: str, optimize: int):
         result = _run_child({"kind": "healthy", "fragment": fragment}, optimize)
         assert result["fragment"] == fragment
-        assert result["counts"] == [67, 40, 11]
+        assert result["counts"] == [68, 40, 11]

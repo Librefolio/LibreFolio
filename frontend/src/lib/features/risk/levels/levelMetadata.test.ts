@@ -98,7 +98,7 @@ describe('translateOrRaw', () => {
         expect(translateOrRaw('risk.returnBasis', 'twrr', translate)).toBe('Time-weighted return');
     });
 
-    // `RiskResultFrame:108` builds this same key with no guard, which is the
+    // the return-basis line of `RiskResultFrame` builds this same key with no guard, which is the
     // defect `levelHelpers` records in prose: an unseen value prints its own key.
     // Falling back to the backend token loses the wording and keeps the meaning —
     // the difference between a degraded answer and a broken screen.

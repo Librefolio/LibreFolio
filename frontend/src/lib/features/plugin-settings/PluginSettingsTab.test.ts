@@ -34,6 +34,14 @@ import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 
 const fake = vi.hoisted(() => ({
+    /** `key`, or `key {name=value, …}` when handed values, so that what the tab hands a form (a group's label) is readable. */
+    translate(key: string, options?: {values?: Record<string, unknown>}): string {
+        const values = options?.values ?? {};
+        const shown = Object.keys(values)
+            .sort()
+            .map((name) => `${name}=${String(values[name])}`);
+        return shown.length > 0 ? `${key} {${shown.join(', ')}}` : key;
+    },
     fetchAll: vi.fn(),
     save: vi.fn(),
     fetchEntry: vi.fn(),
@@ -48,13 +56,13 @@ vi.mock('./pluginSettingsApi', async (importOriginal) => ({
 }));
 vi.mock('$lib/i18n', async (importOriginal) => {
     const {readable} = await import('svelte/store');
-    return {...(await importOriginal<typeof import('$lib/i18n')>()), _: readable((key: string) => key)};
+    return {...(await importOriginal<typeof import('$lib/i18n')>()), _: readable(fake.translate)};
 });
 vi.mock('$lib/stores/app/notify.svelte', () => ({notify: fake.notify}));
 
 import PluginSettingsTab from './PluginSettingsTab.svelte';
 import type {PluginSettingsEntry, SettingField, SettingsFamily} from './pluginSettingsApi';
-import {FAMILY_TITLE_KEYS} from './pluginSettingsForm';
+import {FAMILY_TITLE_KEYS, groupFormId} from './pluginSettingsForm';
 
 // --- Fixtures --------------------------------------------------------------------------------------------------------
 
@@ -88,7 +96,7 @@ function nickname(): SettingField {
 }
 
 function plugin(family: SettingsFamily, code: string, over: Partial<PluginSettingsEntry> = {}): PluginSettingsEntry {
-    return {family, plugin_code: code, plugin_name: code, icon_url: null, configured: false, fields: [nickname()], ...over};
+    return {family, plugin_code: code, plugin_name: code, icon_url: null, configured: false, fields: [nickname()], groups: [], used_by: [], name_key: null, ...over};
 }
 
 const JUSTETF = plugin('asset', 'justetf');
@@ -154,7 +162,7 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
-    for (const mock of Object.values(fake)) mock.mockReset();
+    for (const mock of Object.values(fake)) if (typeof mock === 'function' && 'mockReset' in mock) mock.mockReset();
 });
 
 afterEach(() => {
@@ -448,6 +456,165 @@ describe('PluginSettingsTab — the tools (tool)', () => {
         expect(groups(), 'the other plugins untouched, the tool still in its group').toEqual([
             {family: 'fx', plugins: ['ecb']},
             {family: 'tool', plugins: ['fx_converter']},
+        ]);
+    });
+});
+
+// =====================================================================================================================
+// Shared settings groups (project 76, lot G3, contract D): the groups are a section of their own, after the other
+// families; a plugin's «open group» button brings the group's form into view and moves the focus to its heading.
+describe('PluginSettingsTab — shared settings groups (G3)', () => {
+    /** A group entry as the API lists it: system fields only, its users named. */
+    function sharedGroup(name: string, label: string, over: Partial<PluginSettingsEntry> = {}): PluginSettingsEntry {
+        return plugin('group', name, {plugin_name: label, fields: [{...nickname(), key: 'account_token', scope: 'system'}], used_by: [{family: 'asset', plugin_code: 'justetf', plugin_name: 'justETF'}], groups: [], name_key: null, ...over} as Partial<PluginSettingsEntry>);
+    }
+    const ALPHA = sharedGroup('alpha', 'Alpha keys');
+    const BETA = sharedGroup('beta', 'Beta keys');
+    const reader = (...names: string[]) => plugin('asset', 'justetf', {groups: names} as Partial<PluginSettingsEntry>);
+
+    const scrolled = vi.fn();
+    beforeEach(() => {
+        scrolled.mockReset();
+        Element.prototype.scrollIntoView = scrolled;
+    });
+    afterEach(() => {
+        delete (Element.prototype as {scrollIntoView?: unknown}).scrollIntoView;
+    });
+
+    /** The group's form, and the element the tab anchors it at. */
+    const anchor = (name: string) => document.getElementById(groupFormId(name));
+
+    it('PST-19: the groups are a section of their own, the last: family group, titled by its key, one form per group in the answer’s order, whatever the order of the answer', async () => {
+        fake.fetchAll.mockResolvedValueOnce([BETA, TOOL, ALPHA, JUSTETF, ECB]);
+
+        render(PluginSettingsTab);
+
+        await loaded();
+        expect(groups()).toEqual([
+            {family: 'asset', plugins: ['justetf']},
+            {family: 'fx', plugins: ['ecb']},
+            {family: 'tool', plugins: ['fx_converter']},
+            {family: 'group', plugins: ['beta', 'alpha']},
+        ]);
+        expect(familySection('group').querySelector('h3'), 'its title is the family’s key').toHaveTextContent(FAMILY_TITLE_KEYS.group);
+        expect(form('alpha')).toHaveAttribute('data-family', 'group');
+        expect(within(familySection('group')).getAllByTestId('plugin-settings-family-icon')).toHaveLength(1);
+    });
+
+    it('PST-20: with no group in the answer there is no group section, title or icon; with groups only, the section stands alone', async () => {
+        fake.fetchAll.mockResolvedValueOnce([JUSTETF]);
+        const {unmount} = render(PluginSettingsTab);
+        await loaded();
+        expect(screen.queryAllByTestId('plugin-settings-family').map((section) => section.getAttribute('data-family'))).toEqual(['asset']);
+        expect(screen.queryByText(FAMILY_TITLE_KEYS.group)).toBeNull();
+        unmount();
+
+        fake.fetchAll.mockResolvedValueOnce([ALPHA]);
+        render(PluginSettingsTab);
+        await loaded();
+        expect(groups()).toEqual([{family: 'group', plugins: ['alpha']}]);
+        expect(screen.queryByTestId('plugin-settings-empty')).toBeNull();
+    });
+
+    it('PST-21: each group’s form is reachable at the element id plugin-settings-group-<name>, which holds that form and no other', async () => {
+        fake.fetchAll.mockResolvedValueOnce([ALPHA, BETA, JUSTETF]);
+
+        render(PluginSettingsTab);
+
+        await loaded();
+        for (const [name, other] of [
+            ['alpha', 'beta'],
+            ['beta', 'alpha'],
+        ] as const) {
+            const target = anchor(name);
+            expect(target, `an element with the id of ${name}`).not.toBeNull();
+            expect(target!.contains(form(name)), `${name}: the anchor holds its form`).toBe(true);
+            expect(target!.contains(form(other)), `${name}: and not ${other}’s`).toBe(false);
+        }
+        expect(anchor('justetf'), 'only groups are anchored').toBeNull();
+    });
+
+    it('PST-22: a plugin’s form gets the labels of the groups the tab lists: its «in group» row names the group by the group’s own name', async () => {
+        fake.fetchAll.mockResolvedValueOnce([reader('alpha', 'beta'), ALPHA, BETA]);
+
+        render(PluginSettingsTab);
+
+        await loaded();
+        const rows = within(form('justetf')).getAllByTestId('plugin-settings-in-group');
+        expect(rows.map((row) => row.getAttribute('data-group'))).toEqual(['alpha', 'beta']);
+        expect(rows[0].textContent).toContain('group=Alpha keys');
+        expect(rows[1].textContent).toContain('group=Beta keys');
+    });
+
+    it('PST-23: «open» on a group’s row brings that group’s form into view and moves the focus to its heading — the other group untouched', async () => {
+        fake.fetchAll.mockResolvedValueOnce([reader('alpha', 'beta'), ALPHA, BETA]);
+        render(PluginSettingsTab);
+        await loaded();
+
+        const row = within(form('justetf'))
+            .getAllByTestId('plugin-settings-in-group')
+            .find((element) => element.getAttribute('data-group') === 'beta')!;
+        await fireEvent.click(within(row).getByTestId('plugin-settings-open-group'));
+
+        await waitFor(() => expect(scrolled).toHaveBeenCalled());
+        const target = anchor('beta')!;
+        expect(
+            (scrolled.mock.contexts as Element[]).every((element) => target.contains(element)),
+            'only beta’s form is scrolled to',
+        ).toBe(true);
+        const heading = within(form('beta')).getByRole('heading', {level: 4});
+        await waitFor(() => expect(document.activeElement).toBe(heading));
+    });
+
+    it('PST-24: a group the tab does not list gets no «open» button: the row says the group, the button is not there', async () => {
+        fake.fetchAll.mockResolvedValueOnce([reader('alpha', 'hidden'), ALPHA]);
+
+        render(PluginSettingsTab);
+
+        await loaded();
+        const rows = within(form('justetf')).getAllByTestId('plugin-settings-in-group');
+        expect(rows.map((row) => row.getAttribute('data-group'))).toEqual(['alpha', 'hidden']);
+        const opens = rows.map((row) => within(row).queryAllByTestId('plugin-settings-open-group').length);
+        expect(opens, 'alpha: one button; hidden: none').toEqual([1, 0]);
+    });
+
+    it('PST-26: a save in a group’s form reads again the plugins that read it: a reader unconfigured for want of the group’s key turns configured, without reloading the page', async () => {
+        const waiting = {...reader('alpha'), configured: false};
+        const freshGroup: PluginSettingsEntry = {...ALPHA, configured: true, fields: [{...nickname(), key: 'account_token', scope: 'system', value: 'someone', is_set: true, source: 'db'}]};
+        fake.fetchAll.mockResolvedValueOnce([waiting, ALPHA]);
+        fake.save.mockResolvedValueOnce({kind: 'saved'});
+        fake.fetchEntry.mockImplementation(async (family: string, code: string) => (family === 'group' ? freshGroup : code === 'justetf' ? {...waiting, configured: true} : null));
+        render(PluginSettingsTab);
+        await loaded();
+        expect(form('justetf'), 'barrier: the reader waits for the group').toHaveAttribute('data-configured', 'false');
+
+        await fireEvent.input(within(form('alpha')).getByTestId('plugin-setting-input'), {target: {value: 'someone'}});
+        await fireEvent.click(within(form('alpha')).getByTestId('plugin-settings-save'));
+
+        await waitFor(() => expect(fake.fetchEntry).toHaveBeenCalledWith('asset', 'justetf'));
+        await waitFor(() => expect(form('justetf')).toHaveAttribute('data-configured', 'true'));
+        expect(fake.fetchAll, 'no reload of the whole catalogue').toHaveBeenCalledTimes(1);
+        fake.fetchEntry.mockReset();
+    });
+
+    it('PST-25: a save in a group’s form is written with the family group, and the tab shows the fresh state in place of the old one', async () => {
+        const fresh: PluginSettingsEntry = {...ALPHA, configured: true, fields: [{...nickname(), key: 'account_token', scope: 'system', value: 'someone', is_set: true, source: 'db'}]};
+        fake.fetchAll.mockResolvedValueOnce([JUSTETF, ALPHA]);
+        fake.save.mockResolvedValueOnce({kind: 'saved'});
+        fake.fetchEntry.mockResolvedValueOnce(fresh);
+        render(PluginSettingsTab);
+        await loaded();
+
+        const alpha = form('alpha');
+        await fireEvent.input(within(alpha).getByTestId('plugin-setting-input'), {target: {value: 'someone'}});
+        await fireEvent.click(within(alpha).getByTestId('plugin-settings-save'));
+
+        await waitFor(() => expect(fake.fetchEntry).toHaveBeenCalledWith('group', 'alpha'));
+        expect(fake.save.mock.calls).toStrictEqual([[[{family: 'group', plugin_code: 'alpha', field_key: 'account_token', scope: 'system', value: 'someone'}]]]);
+        await waitFor(() => expect(form('alpha')).toHaveAttribute('data-configured', 'true'));
+        expect(groups(), 'the plugin untouched').toEqual([
+            {family: 'asset', plugins: ['justetf']},
+            {family: 'group', plugins: ['alpha']},
         ]);
     });
 });

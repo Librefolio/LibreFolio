@@ -17,11 +17,26 @@ The **Positions** tab shows what you hold, what each position earned in the peri
 
 ## 🎛️ Choosing a view
 
-- **[Portfolio](#holdings) / [Period](#performance)** switches between what you own and what each position earned; **Table / Map** (the two icons) between a table and a chart.
-- **The eye icon** (in Table) shows, hides or reorders the columns; **Reset layout** restores them. **See all →** opens the Assets page.
+- **[Portfolio](#holdings) / [Period](#performance)** switches between what you own and what each position earned; **[Global / Broker](#global-or-broker)** (the globe and the briefcase) between one row per asset and one row per asset and broker; **Table / Map** (the two icons) between a table and a chart. On a phone the three sit on a line of their own, under the title.
+- **The eye icon** (in Table) shows, hides or reorders the columns; **Reset layout** restores them. The **See all** badge opens the Assets page.
 - **To dig into a position**, open its **⋮** menu in a table, or right-click it in any view: **Analyze Lots** opens the [Lots Analysis](#fifo-lots-analysis) below the positions (on the Dashboard as on a broker's page), **View Asset** the asset's page.
 
 LibreFolio remembers your choices.
+
+### 🌐 Global or Broker {: #global-or-broker }
+
+When the same asset sits at two brokers or more, **Broker** (the default) shows a row for each broker, and **Global** one row for the asset. The switch appears only when the Dashboard shows two brokers or more; a broker's page never has it, since there the two views are the same.
+
+A **Global** row is the **sum of its brokers**, never a recalculation as if everything sat at one broker: each broker keeps its own purchase cost, lots and sales.
+
+- **Quantity, Value, P&L, Δ1, income and costs** are added up.
+- **Percentages are worked out from the sums**, never averaged. A position +10 % on 1 000 € at one broker and −10 % on 9 000 € at another is **−8 %** in Global (−800 € on 10 000 €), not 0 %.
+- **PMC** is the total cost over the total quantity; **Yield on Cost** the brokers' income over the total cost (`—` when a broker has none to give); the **Annualized** return is worked out on the sums too.
+- **The Broker column** shows the icons of the brokers that hold the asset; hover them for their names.
+- **In Period**, a sale keeps the cost of the broker that sold: buying 10 at 100 € at one broker and 10 at 200 € at another, then selling 5 at 250 € at the second, realizes +250 €, not the +750 € a single queue would invent. A transfer between two brokers you see moves nothing out of the asset. The **Other Period Effects** of the same kind are added up too, with the icons of their brokers.
+- **The Return of the positions chart** draws one line per asset, the sum of its brokers, instead of a solid and a dashed line on top of each other. Your ticks follow the switch.
+
+LibreFolio remembers the choice on this device, as the columns.
 
 ---
 
@@ -66,7 +81,7 @@ Which of your positions did better than the portfolio, and which worse? On the D
 - **Nothing ticked**: the chart shows the portfolio line only. **Tick a row**, in either table, to add a line for that position, and tick more to compare them.
 - **The legend** under the title has one button per line, named by the asset's name (a name too long for its button scrolls by itself): click it to turn the line off and on. A **flag** marks a position that closed, and a **warning mark** one with a missing price or exchange rate, whose line leaves those days out.
 - **Abs / % / Rolling** switch the view; the buttons are on the chart, top right, drawn as the Assets list draws them: the **line chart** icon for **Abs**, **%** for the percent, the **calendar with arrows** icon for **Rolling** (hover a button to read its name). **Abs** is the position's profit or loss in money, from the start of the period. **%** is its return in *base 100*: every line starts at 100 on the first day of the period, so 112 means +12%. **Rolling** is described below. LibreFolio remembers the view.
-- **Colours** are the asset's: a line wears the colour its asset has in the allocation pie and history beside it, whatever you tick and in whatever order. When two brokers hold the same asset, their lines share the colour and differ by pattern: the first is solid, the other dashed (then dotted, then dash-dotted).
+- **Colours** are the asset's: a line wears the colour its asset has in the allocation pie and history beside it, whatever you tick and in whatever order. When two brokers hold the same asset, their lines share the colour and differ by pattern: the first is solid, the other dashed (then dotted, then dash-dotted); in [Global](#global-or-broker) the asset has one line.
 - **The box that follows the cursor** lists every drawn line on that day; a name too long for the box scrolls by itself.
 - **A closed position's line ends on the day it closed**; hover the legend button for the date.
 - **Up to 50 positions** can be drawn at once.

@@ -10,7 +10,7 @@ import {buildSimulationParameters, type SimulationEditorState} from './riskReque
  * enforced rather than tolerated.
  *
  * `SimulationParams` is `extra="forbid"`, and on top of that
- * `validate_engine_contract` (`backend/app/services/risk_plugins/simulation/plugin.py:141-169`)
+ * `SimulationParams.validate_engine_contract` (`backend/app/services/risk_plugins/simulation/plugin.py`)
  * rules:
  *
  *   |                     | block_bootstrap | gbm                       |
@@ -36,7 +36,7 @@ import {buildSimulationParameters, type SimulationEditorState} from './riskReque
  * `not.toHaveProperty` asks that question.
  *
  * The failure mode is worth stating once: an invalid combination does not come
- * back as a 422. `service.py:141-150` catches the per-analytic `ValidationError`
+ * back as a 422. `RiskService.execute` catches the per-analytic `ValidationError`
  * and continues, so the response is a 200 with the analytic `unavailable` and
  * the simulation rung silently missing. There is no error for a test to catch
  * downstream — the emission is the only place it can be caught.
@@ -140,7 +140,7 @@ describe('buildSimulationParameters — the parametric branch', () => {
 
     it('keeps `regime: none` present rather than omitting it', () => {
         // Absent would also be accepted by the server, which defaults it. Present
-        // is better: `_default_process` (`simulation.py:134-138`) infers the
+        // is better: `SimulationParams._infer_process` infers the
         // engine from whichever fields it finds, so the more the request states
         // outright, the less is inferred on its behalf.
         expect(buildSimulationParameters(state({process: 'gbm'}))).toHaveProperty('regime', 'none');

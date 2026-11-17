@@ -4,19 +4,19 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.app.schemas.risk.outputs import RiskVarCvarBin, RiskVarCvarOutput, RiskWorstHorizonWindow
+from backend.app.schemas.risk.outputs import RiskVarCvarBin, RiskVarCvarOutput
 from backend.app.schemas.risk.vocabulary import RiskErrorCode, RiskMode, RiskOutputKind, RiskScopeKind
 from backend.app.services.financial_math.returns import calendar_days_to_observations
 from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS
 from backend.app.services.platform.provider_registry import register_plugin
-from backend.app.services.risk.analytic_helpers import require_annualization_factor, require_primary_returns
+from backend.app.services.risk.analytic_helpers import dated_horizon_window, require_annualization_factor, require_primary_returns
 from backend.app.services.risk.base import (
     RiskAnalytic,
     RiskComputation,
     RiskSeriesInputs,
     RiskUnavailableError,
 )
-from backend.app.services.risk.metrics import historical_var_cvar, return_distribution_histogram, worst_horizon_window
+from backend.app.services.risk.metrics import best_horizon_window, gain_threshold, historical_var_cvar, return_distribution_histogram, worst_horizon_window
 from backend.app.services.risk.registry import RiskAnalyticRegistry
 
 
@@ -60,7 +60,9 @@ class HistoricalVarAnalytic(RiskAnalytic):
     # 2.0.0 — M2: coherent Acerbi-Tasche tail estimator (published VaR/CVaR move) plus
     # the return histogram of K1. 1.x published the plug-in estimator, which understated
     # CVaR by a measured 0.27 %.
-    algorithm_version = "3.2.0"
+    # 3.3.0 (RN-14) — the best window it lived through (`best_horizon`), the twin of the worst, and the green tail: its
+    # threshold, the mirror of the VaR, pinned with it on the histogram (both tails whole bars). VaR and CVaR do not move.
+    algorithm_version = "3.3.0"
     name_i18n_key = "risk.analytics.historicalVar.name"
     description_i18n_key = "risk.analytics.historicalVar.description"
     output_kind = RiskOutputKind.VAR_CVAR
@@ -96,9 +98,9 @@ class HistoricalVarAnalytic(RiskAnalytic):
         # The bins live in signed-return space while value_at_risk is a positive loss
         # magnitude, so the cut is negated to cross between the two conventions.
         var_bin_edge = -summary.value_at_risk
-        histogram = return_distribution_histogram(summary.horizon_returns, pinned_edge=var_bin_edge)
+        green = gain_threshold(returns, confidence_level=params.confidence_level, horizon_observations=horizon_observations)
+        histogram = return_distribution_histogram(summary.horizon_returns, pinned_edge=var_bin_edge, gain_edge=green)
         return_bins = [RiskVarCvarBin(lower_bound=lower, upper_bound=upper, count=count) for lower, upper, count in zip(histogram.edges[:-1], histogram.edges[1:], histogram.counts, strict=True)]
-        worst = worst_horizon_window(summary.horizon_returns, horizon_observations)
         return RiskComputation(
             output=RiskVarCvarOutput(
                 confidence_level=params.confidence_level,
@@ -109,7 +111,10 @@ class HistoricalVarAnalytic(RiskAnalytic):
                 conditional_value_at_risk=summary.conditional_value_at_risk,
                 return_bins=return_bins,
                 var_bin_edge=var_bin_edge,
-                worst_horizon=None if worst is None else RiskWorstHorizonWindow(compounded_return=worst.compounded_return, start_date=dates[worst.start_index], end_date=dates[worst.end_index]),
+                gain_threshold=green,
+                gain_bin_edge=histogram.gain_edge,
+                worst_horizon=dated_horizon_window(worst_horizon_window(summary.horizon_returns, horizon_observations), dates),
+                best_horizon=dated_horizon_window(best_horizon_window(summary.horizon_returns, horizon_observations), dates),
             ),
             method="historical_simulation_acerbi_tasche",
         )

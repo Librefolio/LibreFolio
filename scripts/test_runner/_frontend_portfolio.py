@@ -4,6 +4,7 @@ import subprocess
 
 from . import _common
 from ._common import Colors, _get_category_tests_for_all, _run_test_suite, print_error, print_section, print_success
+from ._coverage import vitest_env
 from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright, reset_setup_scope
 
 
@@ -187,6 +188,18 @@ def front_portfolio_broker_icons(verbose: bool = False, ui: bool = False, headed
     return _run_playwright("portfolio/broker-icons.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_portfolio_dashboard_grouping(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the «Globale / Broker» switch E2E tests of Dashboard › Positions (project 74)."""
+    print_section("Frontend Portfolio Dashboard Grouping Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("portfolio/dashboard-grouping.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_portfolio_dashboard(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run dashboard chart + view-matrix E2E tests (PositionsPanel 2x2, AllocationPanel)."""
     print_section("Frontend Portfolio Dashboard Tests")
@@ -258,6 +271,7 @@ def front_portfolio_store_unit(verbose: bool = False, ui: bool = False, headed: 
         ],
         cwd="frontend",
         capture_output=not verbose,
+        env=vitest_env("front-portfolio"),
     )
     if result.returncode == 0:
         print_success("Portfolio store Vitest unit tests - PASSED")
@@ -277,6 +291,7 @@ def front_portfolio_risk_benchmark_unit(verbose: bool = False, ui: bool = False,
         ["npx", "vitest", "run", "src/lib/features/risk/riskBenchmarkStore.test.ts"],
         cwd="frontend",
         capture_output=not verbose,
+        env=vitest_env("front-portfolio"),
     )
     if result.returncode == 0:
         print_success("Risk benchmark store Vitest unit tests - PASSED")
@@ -295,6 +310,7 @@ def front_portfolio_risk_unit(verbose: bool = False, ui: bool = False, headed: b
         ["npx", "vitest", "run", "src/lib/features/risk/riskStore.test.ts"],
         cwd="frontend",
         capture_output=not verbose,
+        env=vitest_env("front-portfolio"),
     )
     if result.returncode == 0:
         print_success("Risk store Vitest unit tests - PASSED")
@@ -314,6 +330,7 @@ def front_portfolio_risk_request_unit(verbose: bool = False, ui: bool = False, h
         ["npx", "vitest", "run", "src/lib/features/risk/simulationParameters.test.ts", "src/lib/features/risk/stressBuckets.test.ts"],
         cwd="frontend",
         capture_output=not verbose,
+        env=vitest_env("front-portfolio"),
     )
     if result.returncode == 0:
         print_success("Risk request builder Vitest unit tests - PASSED")
@@ -349,6 +366,7 @@ def front_portfolio_allocation_unit(verbose: bool = False, ui: bool = False, hea
         ],
         cwd="frontend",
         capture_output=not verbose,
+        env=vitest_env("front-portfolio"),
     )
     if result.returncode == 0:
         print_success("Allocation colour hierarchy Vitest unit tests - PASSED")
@@ -381,6 +399,7 @@ def front_portfolio_chart_safety_unit(verbose: bool = False, ui: bool = False, h
         ],
         cwd="frontend",
         capture_output=not verbose,
+        env=vitest_env("front-portfolio"),
     )
     if result.returncode == 0:
         print_success("Chart safety Vitest unit tests - PASSED")
@@ -415,6 +434,7 @@ def front_portfolio_risk_levels_unit(verbose: bool = False, ui: bool = False, he
         ],
         cwd="frontend",
         capture_output=not verbose,
+        env=vitest_env("front-portfolio"),
     )
     if result.returncode == 0:
         print_success("Risk levels Vitest unit tests - PASSED")
@@ -448,6 +468,7 @@ def front_portfolio_risk_levels_component(verbose: bool = False, ui: bool = Fals
         ],
         cwd="frontend",
         capture_output=not verbose,
+        env=vitest_env("front-portfolio"),
     )
     if result.returncode == 0:
         print_success("Risk levels component Vitest tests - PASSED")
@@ -467,6 +488,7 @@ def front_portfolio_risk_frame_component(verbose: bool = False, ui: bool = False
         ["npx", "vitest", "run", "src/lib/features/risk/RiskResultFrame.test.ts"],
         cwd="frontend",
         capture_output=not verbose,
+        env=vitest_env("front-portfolio"),
     )
     if result.returncode == 0:
         print_success("Risk result frame component Vitest tests - PASSED")
@@ -486,6 +508,7 @@ def front_portfolio_risk_controller_unit(verbose: bool = False, ui: bool = False
         ["npx", "vitest", "run", "src/lib/features/risk/riskPanelController.test.ts"],
         cwd="frontend",
         capture_output=not verbose,
+        env=vitest_env("front-portfolio"),
     )
     if result.returncode == 0:
         print_success("Risk panel controller Vitest unit tests - PASSED")
@@ -680,6 +703,15 @@ def populate_registry(registry: dict) -> None:
         name="Negative Cash Allocation",
         desc="Decision 49 on an intercepted report: the type and sector tabs state the overdraft under the pie, signed and in the display currency, masked under privacy with the sign kept; the pie draws no arc for the cash; without the interception no note",
         tests="portfolio/allocation-negative-cash.spec.ts",
+    )
+    add_test(
+        cat,
+        "dashboard-grouping",
+        front_portfolio_dashboard_grouping,
+        name="Dashboard Positions Grouping",
+        desc="Project 74: the «Globale / Broker» switch of Dashboard › Positions — Broker by default, Globale one row per asset (Portfolio and Period), the chart asks the asset summed over its brokers (broker_id null), the choice survives a reload, no switch on a broker's page",
+        prereq="TEST_USER holds an asset at two owned brokers (populate_mock_data.py)",
+        tests="portfolio/dashboard-grouping.spec.ts",
     )
     add_test(cat, "dashboard", front_portfolio_dashboard, name="Dashboard Chart Tests", desc="PositionsPanel 2x2 view matrix (treemap + perf chart), toggle persistence, AllocationPanel now/history, loading state", tests="portfolio/dashboard.spec.ts")
     add_test(

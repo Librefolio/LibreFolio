@@ -8,7 +8,8 @@
 import {isAxiosError} from 'axios';
 import {ApiError, zodiosApi} from '$lib/api';
 
-export type SettingsFamily = 'asset' | 'fx' | 'brim' | 'tool';
+/** The plugin families, and `group`: a shared settings group, the values several plugins read (project 76). */
+export type SettingsFamily = 'asset' | 'fx' | 'brim' | 'tool' | 'enricher' | 'group';
 export type SettingType = 'string' | 'number' | 'integer' | 'boolean' | 'select';
 export type SettingScope = 'user' | 'system';
 /** Where a value comes from: an environment variable of the server, a saved value, the declared default, nowhere. */
@@ -66,6 +67,19 @@ export interface PluginSettingsEntry {
     /** Every required field has a usable value: otherwise the plugin answers its calls with NOT_CONFIGURED. */
     configured: boolean;
     fields: SettingField[];
+    /** The shared groups the plugin reads, by name: their fields are in the groups' own entries (project 76). */
+    groups: string[];
+    /** For a group: the plugins that read it. */
+    used_by: PluginRef[];
+    /** For a group: the i18n key of its name; `plugin_name` is the English fallback. */
+    name_key: string | null;
+}
+
+/** A plugin another entry names: the plugins that read a group. */
+export interface PluginRef {
+    family: SettingsFamily;
+    plugin_code: string;
+    plugin_name: string;
 }
 
 /** One write item: exactly one of `value`, `secret_value`, `clear`. */
@@ -96,7 +110,7 @@ export interface PluginSettingWriteResult {
  */
 export type SaveOutcome = {kind: 'saved'} | {kind: 'refused'; results: PluginSettingWriteResult[]} | {kind: 'conflict'} | {kind: 'keyUnavailable'} | {kind: 'failed'};
 
-const FAMILIES: readonly string[] = ['asset', 'fx', 'brim', 'tool'];
+const FAMILIES: readonly string[] = ['asset', 'fx', 'brim', 'tool', 'enricher', 'group'];
 const TYPES: readonly string[] = ['string', 'number', 'integer', 'boolean', 'select'];
 const SOURCES: readonly string[] = ['env', 'db', 'default', 'none'];
 const PROBLEMS: readonly string[] = ['unreadable', 'invalid_env', 'invalid_stored'];
@@ -157,6 +171,14 @@ export function fieldOf(raw: unknown): SettingField {
     };
 }
 
+/** A plugin named by a group, or null for an item that is not one: no object, no code, a family this module does not know. */
+function refOf(raw: unknown): PluginRef | null {
+    const ref = record(raw);
+    const code = textOrNull(ref.plugin_code);
+    if (code === null || typeof ref.family !== 'string' || !FAMILIES.includes(ref.family)) return null;
+    return {family: ref.family as SettingsFamily, plugin_code: code, plugin_name: textOrNull(ref.plugin_name) ?? code};
+}
+
 export function entryOf(raw: unknown): PluginSettingsEntry {
     const entry = record(raw);
     return {
@@ -166,19 +188,52 @@ export function entryOf(raw: unknown): PluginSettingsEntry {
         icon_url: textOrNull(entry.icon_url),
         configured: entry.configured === true,
         fields: Array.isArray(entry.fields) ? entry.fields.map(fieldOf) : [],
+        groups: Array.isArray(entry.groups) ? entry.groups.filter((name): name is string => typeof name === 'string' && name.length > 0) : [],
+        used_by: Array.isArray(entry.used_by) ? entry.used_by.map(refOf).filter((ref): ref is PluginRef => ref !== null) : [],
+        name_key: textOrNull(entry.name_key),
     };
 }
 
 /**
+ * The core's call-limit fields (project 76, U4), which the server lists on every plugin that calls an external service
+ * and on every group that shares credits. Until U5 brings their own controls they are left out here, so the Plugins tab
+ * and «Configure» show what they showed before.
+ */
+export const CALL_LIMIT_KEYS = ['call_limit_minute', 'call_limit_hour', 'call_limit_day', 'call_limit_week', 'call_limit_month'] as const;
+
+const CALL_LIMIT_KEY_SET: ReadonlySet<string> = new Set(CALL_LIMIT_KEYS);
+
+/**
+ * An entry that the server lists only for its usage block (U4b: in the managed profile, a provider whose every limit the
+ * hoster locks): no field, no group, a `call_usage`. Left out until U5 shows the block.
+ */
+function usageOnly(raw: unknown): boolean {
+    const entry = record(raw);
+    const empty = (value: unknown) => !Array.isArray(value) || value.length === 0;
+    return empty(entry.fields) && empty(entry.groups) && entry.call_usage != null;
+}
+
+/** `entry` without the call-limit fields; null when they were its only content (no field left, no group). */
+function withoutCallLimits(entry: PluginSettingsEntry): PluginSettingsEntry | null {
+    const fields = entry.fields.filter((field) => !CALL_LIMIT_KEY_SET.has(field.key));
+    if (fields.length === entry.fields.length) return entry;
+    return fields.length === 0 && entry.groups.length === 0 ? null : {...entry, fields};
+}
+
+/**
  * The plugins that declare settings, with each field's state for the caller. Without `pluginCode` a test-only plugin
- * is not listed (the API lists one only when named).
+ * is not listed (the API lists one only when named). The call-limit fields are left out until U5 (`CALL_LIMIT_KEYS`).
  */
 export async function fetchPluginSettings(filter: {family?: SettingsFamily; pluginCode?: string} = {}): Promise<PluginSettingsEntry[]> {
     const queries: {family?: SettingsFamily; plugin_code?: string} = {};
     if (filter.family) queries.family = filter.family;
     if (filter.pluginCode) queries.plugin_code = filter.pluginCode;
     const answer = await zodiosApi.get_plugin_settings_api_v1_settings_plugins_get({queries});
-    return (answer.plugins ?? []).map(entryOf);
+    return (answer.plugins ?? [])
+        .filter((raw) => !usageOnly(raw))
+        .map(entryOf)
+        .map(withoutCallLimits)
+        .filter((entry): entry is PluginSettingsEntry => entry !== null);
 }
 
 /** The settings of one plugin for the caller; null when it declares none (or is not one the caller may see). */

@@ -20,8 +20,6 @@
     import {_ as t} from '$lib/i18n';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
 
-    import RiskBetaBanner from '../RiskBetaBanner.svelte';
-
     /**
      * L4 — "what if…?", closed by default.
      *
@@ -42,30 +40,16 @@
      * and keeps everything, as before. A surface with a single tool — Asset Global mounts
      * the replay alone — shows it at once, with no selector and no ×.
      *
-     * Only the last rung is a model. That is the one and only place a beta
-     * warning belongs: putting it on the section would tar the replay, which is
-     * simply what happened, and a warning that is everywhere is read nowhere.
+     * Only the last rung is a model, and that is the one place its warning belongs:
+     * on the section it would tar the replay, which is simply what happened, and a
+     * warning that is everywhere is read nowhere. The amber warning is about
+     * *epistemics* and is permanent, because a model stays a model. The beta banner
+     * that stood above it, about *maturity*, went when the simulation left beta
+     * (RN-06, the developer's answer to Q6 of 16/11/2026).
      *
-     * WHY THE BETA BANNER LIVES HERE, AND ONLY HERE. It used to sit above every
-     * risk surface, which said the whole subsystem was provisional. It is not
-     * any more — L1, L2 and L3 rest on observed facts and have left beta. This
-     * rung has not, and the reason is recorded rather than general: the
-     * simulation answers the *window* rather than the portfolio, because the
-     * bootstrap resamples each observation `horizon / observations` times, so a
-     * short window under a long horizon extrapolates a single quarter across a
-     * year. Asking for more history can silently return the same history, so the
-     * denominator of any ratio guard is inflated and saturable — which is why no
-     * threshold is shipped yet and the rung is still declared beta instead.
-     *
-     * Two notices, not one, and they are not redundant: the banner is about
-     * *maturity* and is the one that gets deleted the day the defect is fixed;
-     * the amber warning below it is about *epistemics* and is permanent, because
-     * a model stays a model. Merging them would turn that future deletion into a
-     * rewrite of prose.
-     *
-     * The banner is drawn inside the simulation's box only, and a box exists only for
-     * a supplied tool: a surface that supplies no simulation snippet cannot inherit the
-     * banner by accident. The scope of the claim is structural.
+     * The warning is drawn inside the simulation's box only, and a box exists only for
+     * a supplied tool: a surface that supplies no simulation snippet cannot inherit it
+     * by accident.
      */
     interface Props {
         /** The three rungs, supplied by the container. */
@@ -148,9 +132,6 @@
                 {/if}
             </div>
             {#if tool === 'simulation'}
-                <div class="mb-2">
-                    <RiskBetaBanner scope="simulation" />
-                </div>
                 <div class="mb-2 flex items-start gap-2 rounded-lg bg-lf-warning-soft px-3 py-2" data-testid="risk-l4-model-warning">
                     <AlertTriangle size={14} class="mt-0.5 shrink-0 text-lf-warning" />
                     <p class="text-xs text-lf-warning-on-soft">{$t('risk.levels.l4.modelWarning')}</p>

@@ -38,6 +38,9 @@ export interface ReportCall {
     options: ReportOptions | undefined;
 }
 
+/** How the Positions panel groups its rows (project 74): one per asset and broker, or one per asset summed over its brokers («Globale»). */
+export type PositionsGrouping = 'broker' | 'asset';
+
 /** Two scopes are the same question when this is equal. An answer of another scope is dropped by comparing it. */
 export function scopeKey(scope: PortfolioScope): string {
     return [scope.brokerIds?.join(',') ?? 'all', scope.start ?? '', scope.end ?? '', scope.currency ?? '', scope.fullShare ? 'whole' : 'share'].join('|');
@@ -63,9 +66,18 @@ export function mainReportCall(scope: PortfolioScope, {wantsBrokerPnlHistory}: {
     });
 }
 
-/** The contribution of the positions: only `positions_contribution` is read, so the heavy series are off. */
-export function contributionCall(scope: PortfolioScope): ReportCall {
-    return call(scope, {includeContribution: true, includeBreakdown: false, includeHistory: false, includeAllocationHistory: false, options: scope.fullShare ? share(scope) : undefined});
+/** The flag goes into the options only in «Globale»: the per-broker questions stay as they have always been. */
+function grouped(scope: PortfolioScope, grouping: PositionsGrouping): ReportOptions | undefined {
+    const options: ReportOptions = {...share(scope), ...(grouping === 'asset' ? {groupByAsset: true} : {})};
+    return Object.keys(options).length > 0 ? options : undefined;
+}
+
+/**
+ * The contribution of the positions: only `positions_contribution` is read, so the heavy series are off. In «Globale»
+ * (project 74) it is asked summed by asset, and its `summary.holdings` are the Portfolio's rows: one question, both views.
+ */
+export function contributionCall(scope: PortfolioScope, grouping: PositionsGrouping = 'broker'): ReportCall {
+    return call(scope, {includeContribution: true, includeBreakdown: false, includeHistory: false, includeAllocationHistory: false, options: grouped(scope, grouping)});
 }
 
 /** The synthetic P&L candles (G1b): lazy, and only `pnl_candles` is read. */
@@ -78,8 +90,8 @@ export function pnlCandlesCall(scope: PortfolioScope): ReportCall {
  * `include_allocation_history` are on by default on the route, so they are asked off explicitly (`fetchReport`'s two
  * trailing booleans). It runs the same engine pass as the main report (FB-14), so the figures agree with it.
  */
-export function lightSummaryCall(scope: PortfolioScope): ReportCall {
-    return call(scope, {includeContribution: false, includeBreakdown: false, includeHistory: false, includeAllocationHistory: false, options: scope.fullShare ? share(scope) : undefined});
+export function lightSummaryCall(scope: PortfolioScope, grouping: PositionsGrouping = 'broker'): ReportCall {
+    return call(scope, {includeContribution: false, includeBreakdown: false, includeHistory: false, includeAllocationHistory: false, options: grouped(scope, grouping)});
 }
 
 /**

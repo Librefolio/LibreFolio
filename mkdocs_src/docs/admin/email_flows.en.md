@@ -610,10 +610,14 @@ flowchart TD
     A["New address saved in Profile,<br>with the current password"] --> B{"Email and LIBREFOLIO_PUBLIC_URL<br>both usable?"}
     B -->|"no"| C["The address changes at once<br>(Email Address Changes, below)"]
     B -->|"yes"| D["Link of 24 hours to the NEW address,<br>notice to the old one"]
-    D --> E{"Click on Confirm,<br>signed in to that account?"}
-    E -->|"no session, or another account"| F["The page asks to sign in:<br>the link is left untouched"]
-    F --> E
-    E -->|"yes"| G["The address changes, verified;<br>the other sessions end"]
+    D --> E{"The link opens: the page checks it,<br>before any click and without spending it"}
+    E -->|"no longer valid"| X["Says why at once,<br>no Confirm button"]
+    E -->|"not signed in"| F["Asks to sign in<br>with the account that asked"]
+    E -->|"another account signed in"| H["Says the link is not that account's;<br>its button signs it out, then the sign-in"]
+    F -->|"signed in, back on the page"| E
+    H -->|"signed in, back on the page"| E
+    E -->|"signed in to that account"| R["The Confirm button"]
+    R -->|"click"| G["The address changes, verified;<br>this browser stays signed in,<br>the other sessions end"]
     classDef ok fill:#2e7d32,stroke:#1b5e20,color:#ffffff
     class G ok
 ```
@@ -622,8 +626,8 @@ flowchart TD
 | --- | --- |
 | **The two emails** | A **confirmation** with the link to the new address, and a **notice** «a change was requested» to the address the account has now, sent after the answer. Both open with a plain «Hello,» and say nothing of the other address; the notice has no link. The confirmation also writes the link out in full under its button, for mail programs that remove links from buttons. |
 | **The link** | 24 hours, once. It is replaced, never accumulated: a new request, a «Send again» or a cancellation leaves only the newest valid; a password change or reset, a deactivation or an administrator's revocation ([Account Links](users.md#account-links)) ends it. |
-| **Who can confirm** | Only the account that asked, signed in. A link opened without that session, or with another account's, asks to sign in and changes nothing; a link that is no longer valid says why to anyone. |
-| **A taken address** | Not reserved while it waits. If another account takes it first, the link stops working, and a «Send again» is refused. |
+| **Who can confirm** | Only the account that asked, signed in. As soon as the link opens, the page checks it without spending it: without that session it asks to sign in; with another account's it says the link is not that account's, never whose; a link that is no longer valid says why to anyone. Only the click on **Confirm** changes anything, so a mail program that opens links by itself confirms nothing. |
+| **A taken address** | Not reserved while it waits. If another account takes it first, the link stops working, and a «Send again» is refused. The page tells this one at the click on **Confirm**: the check on opening does not look at the address. |
 | **Limits** | Per account: 5 confirmation emails an hour, and «Send again» not within 60 seconds of the last one. Per new mailbox: 3 an hour, however the address is written ([Forgotten Passwords](#forgot-password)). Per old mailbox: 3 notices «a change was requested» an hour, apart from the notices of a completed change. And the [hourly limit](email.md) of the instance. Past a limit the request is refused (`429`, with the wait) and nothing is written. |
 | **When the email does not go** | The server's refusal or silence ends the request: the link is revoked and nothing waits (`502`); a spent limit is a `429`. **Never** a fallback to the immediate change: that would skip the check. Emails that did not go count for no limit. |
 | **The owner of a managed instance** | Unchanged: it cannot change its address from Profile, and the host's change is confirmed with a link it receives at the new address, with no session needed ([Email Address Changes](#email-change-notice)). |

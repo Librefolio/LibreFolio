@@ -71,12 +71,13 @@ In the table view each panel is a table with its own pages; resizing, moving or 
 
 Each card has its own buttons; in the table, the **⋮** at the end of a row, or a right-click, opens the same actions:
 
+- **Edit** — in the table, opens the asset's editor right there, with everything the detail page's **Edit** shows, without leaving the list ([Create & Edit](create-edit.md)).
 - **Sync** — downloads the asset's prices for the selected period. It needs a provider, and the table also blocks it for an archived asset.
 - **Reload** — reloads its prices from what LibreFolio has stored.
 - **Merge with…** — folds a duplicate into another asset, which keeps everything ([Create & Edit](create-edit.md)).
 - **Delete** — removes an asset that no transaction uses, with its provider, prices and events (dividends, splits…).
 
-In the table, tick several rows to **Sync**, **Reload** or **Delete** them together.
+In the table, tick several rows to **Edit** ([several at once](create-edit.md#bulk-edit)), **Sync**, **Reload** or **Delete** them together.
 
 ??? warning "🗑️ When an asset cannot be deleted"
 

@@ -191,6 +191,17 @@ def external_justetf_multicurrency(verbose: bool = False, test_names: list = Non
     return run_command(cmd, "JustETF multi-currency tests", verbose=verbose)
 
 
+def external_enrichers(verbose: bool = False, test_names: list = None) -> bool:
+    """Test every real enricher against its source: its test_cases recognized and read, a not-found case, search (plan 68 §C)."""
+    print_section("External: Enrichers Tests")
+    print_info("Testing: every non-test-only enricher of EnricherRegistry (backend/app/services/enricher_providers/)")
+    print_info("Tests: recognize and read of each test case (values declared, stored forms), not found, search")
+    print_info("⚠️  WARNING: Requires internet connection")
+    # -s: the values each read gives are printed, so the log shows what the source answered today
+    cmd = [*_build_pytest_cmd("backend/test_scripts/test_external/test_enrichers.py", test_names or None), "-s"]
+    return run_command(cmd, "Enrichers external tests", verbose=verbose)
+
+
 def external_brim_providers(verbose: bool = False, test_names: list = None, providers: list = None, exclude_providers: list = None) -> bool:
     """Test BRIM providers."""
     print_section("External: BRIM Providers Tests")
@@ -332,6 +343,17 @@ These tests verify external API integrations:
     )
     add_test(cat, "fx-providers", external_fx_providers, name="FX Providers", desc="Test FX rate providers (ECB, FED, BOE, SNB)", prereq="Internet connection", tests="ECB, FED, BOE, SNB API calls")
     add_test(cat, "asset-providers", external_asset_providers, name="Asset Providers", desc="Test asset pricing providers", prereq="Internet connection", tests="yfinance, cssscraper, etc.")
+    # PURE: no database, no server; network calls to each enricher's own source (justETF today), paced by the plugin
+    add_test(
+        cat,
+        "enrichers",
+        external_enrichers,
+        name="Enrichers",
+        desc="Plan 68 §C: every real enricher's test_cases recognized and read (OK, declared voices, every value passing the catalogue; an ETF has ter, fund_provider, distribution_policy), a well-formed unknown identifier not found, a search for MSCI World bound by ISIN; a 429 fails with its reason",
+        prereq="Internet connection",
+        tests="justETF: SWDA (ETF), iShares Physical Gold (COMMODITY), Enel not found, search",
+        isolation="pure",
+    )
     add_test(cat, "justetf-multicurrency", external_justetf_multicurrency, name="JustETF Multi-Currency", desc="Test JustETF provider with EUR/USD/CHF/GBP currencies", prereq="Internet connection", tests="Current price, history, search, params validation")
     add_test(cat, "brim-providers", external_brim_providers, name="BRIM Providers", desc="Test broker report import plugins", prereq="Sample files in test fixtures", tests="Plugin discovery, file parsing, auto-detection")
     add_test(cat, "brim-danske-bank", external_brim_danske_bank, name="BRIM Danske Bank", desc="Test the Danske Bank report-set plugin", prereq="Sample files in test fixtures", tests="Roles, combine (zones, pairing, truth points), parse of the combined file")

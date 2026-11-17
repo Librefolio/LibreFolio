@@ -71,7 +71,13 @@
     "loadFailed": "Impossible de charger les informations de l'actif",
     "pricesLoadFailed": "Impossible de charger les prix",
     "manualChip": "Manuel",
-    "externalLinkHint": "{name} : ouvrir {site} dans un nouvel onglet"
+    "externalLinkHint": "{name} : ouvrir {site} dans un nouvel onglet",
+    "docsHelp": {
+      "header": "Un actif en détail : son graphique de prix et ses signaux, ses mesures, ses événements et sa classification, avec la source de ses prix et vos transactions.",
+      "measures": "Choisissez deux jours sur le graphique et lisez de combien l'actif, et les lignes tracées avec lui, ont changé entre les deux.",
+      "metadata": "Ce qu'est l'actif : sa description, ses secteurs et pays, ses identifiants, et le fournisseur qui donne ses prix.",
+      "dataEditor": "Corrigez et complétez à la main les données de l'actif : ses prix quotidiens et ses événements, comme les dividendes et les divisions."
+    }
   },
   "assets": {
     "create": "Nouvel actif",
@@ -435,8 +441,7 @@
       "selected": "Sélectionnés ({count})",
       "showAll": "Tout afficher",
       "showLess": "Afficher moins",
-      "zoneDetails": "Autres détails",
-      "zoneClassification": "Classification",
+      "zoneDetails": "Détails et classification",
       "zonePrice": "Prix et statut",
       "leave": "Laisser tel quel",
       "leaveDifferent": "Laisser tel quel · valeurs différentes",
@@ -453,7 +458,7 @@
       "continue": "Continuer vers le récapitulatif",
       "blockIndexTitle": "⛔ « Indice » n'accepte pas de transactions",
       "blockIndexBody": "{count, plural, one {# actif sélectionné a déjà des transactions} other {# actifs sélectionnés ont déjà des transactions}} : avec le type Indice, ils ne pourraient plus en avoir. Retirez-les de la modification, ou choisissez un autre type. Rien n'est enregistré tant que le blocage reste.",
-      "blockIndexRow": "{name} — {count, plural, one {# transaction} other {# transactions}}",
+      "blockIndexRow": "{name} : {count, plural, one {# transaction} other {# transactions}}",
       "blockOtherTitle": "⛔ L'enregistrement serait refusé",
       "blockOtherBody": "Rien n'est enregistré tant qu'un blocage reste.",
       "removeBlocked": "{count, plural, one {Retirer cet actif de la modification} other {Retirer ces # de la modification}}",
@@ -477,7 +482,16 @@
       "save": "{count, plural, one {Enregistrer # actif} other {Enregistrer # actifs}}",
       "saveFailedTitle": "⛔ Échec de l'enregistrement : aucun actif n'a été modifié",
       "saveFailedBody": "L'enregistrement est tout ou rien : un actif n'est pas passé, donc rien n'a changé. Le récapitulatif reste ici : retirez l'actif ou revenez en arrière.",
-      "savedToast": "{count, plural, one {# actif mis à jour} other {# actifs mis à jour}} : {fields}"
+      "savedToast": "{count, plural, one {# actif mis à jour} other {# actifs mis à jour}} : {fields}",
+      "saved": "Enregistré",
+      "removeIcon": "Retirer l'icône",
+      "removeUrl": "Retirer l'URL",
+      "toBeRemoved": "À retirer",
+      "urlNone": "aucune URL",
+      "alreadyWithout": "{already} déjà sans"
+    },
+    "docsHelp": {
+      "list": "Tous les actifs que LibreFolio suit, avec la source de leurs prix, leur dernier prix et leur variation. Ouvrez-en un pour son graphique, ses événements et ses données."
     }
   },
   "events": {

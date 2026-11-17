@@ -18,6 +18,7 @@
     import {sameEmail} from '$lib/features/auth/emailCase';
     import ProtectedEmailModal from '$lib/features/settings/ProtectedEmailModal.svelte';
     import PendingEmailChangeBox from '$lib/features/settings/PendingEmailChangeBox.svelte';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     /** The change of address a user waits for, read from the account. The generated type of the field is `PendingEmailChangeRead | null | an array of them` (a quirk of the client generator, as for `whats_new`): only an object with both values counts. */
     function readPendingChange(value: unknown): {email: string; expires_at: string} | null {
@@ -512,6 +513,7 @@
                     <PencilOff size={18} />
                 {/if}
             </button>
+            <DocsLink path="user/settings/profile/" label={$_('settings.docsHelp.profile')} icon="book" size={16} testId="profile-docs" />
         </div>
     </div>
 
@@ -597,7 +599,7 @@
                 <input
                     bind:value={editedUsername}
                     class="px-3 py-2 border border-lf-input rounded-lg bg-lf-field
-                           text-lf-primary hover:border-lf-input-hover text-sm w-full sm:w-auto sm:min-w-[200px] sm:text-right
+                           text-lf-primary hover:border-lf-input-hover text-sm w-full sm:w-72 sm:shrink-0 sm:text-right
                            focus:ring-2 focus:ring-lf-focus focus:border-lf-focus transition-all
                            disabled:opacity-50 disabled:cursor-not-allowed"
                     data-testid="profile-username"
@@ -619,10 +621,17 @@
                     <!-- Action buttons - next to label on mobile, hidden on desktop -->
                     {#if !isLocked && emailModified}
                         <div class="flex items-center space-x-1 sm:hidden">
-                            <button type="button" on:click={() => saveField('email')} disabled={saving || emailNeedsPassword} class="p-1.5 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50" title={$_('common.save')}>
+                            <button
+                                type="button"
+                                on:click={() => saveField('email')}
+                                disabled={saving || emailNeedsPassword}
+                                class="p-1.5 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50"
+                                title={$_('common.save')}
+                                data-testid="profile-email-save"
+                            >
                                 <Save size={14} />
                             </button>
-                            <button type="button" on:click={() => undoField('email')} class="p-1.5 bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors" title={$_('common.undo')}>
+                            <button type="button" on:click={() => undoField('email')} class="p-1.5 bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors" title={$_('common.undo')} data-testid="profile-email-undo">
                                 <Undo size={14} />
                             </button>
                         </div>
@@ -631,17 +640,25 @@
                 <p class="text-xs text-lf-muted mt-1">{$_('settings.emailHint')}</p>
             </div>
 
-            <!-- Right: Actions (desktop only) + Input, and under the input the password a change of address asks for (UA2) -->
+            <!-- Right: Actions (desktop only) + Input, and under the input the password a change of address asks for (UA2). The field is
+                 as wide as that password field (lot E5): the buttons sit beside it, they never take its width -->
             <div class="flex flex-col w-full sm:w-auto sm:items-end gap-3">
                 <div class="flex items-center space-x-3 w-full sm:w-auto">
                     <!-- Action buttons - desktop only -->
                     {#if !isLocked}
                         <div class="hidden sm:flex items-center space-x-1">
                             {#if emailModified}
-                                <button type="button" on:click={() => saveField('email')} disabled={saving || emailNeedsPassword} class="p-1.5 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50" title={$_('common.save')}>
+                                <button
+                                    type="button"
+                                    on:click={() => saveField('email')}
+                                    disabled={saving || emailNeedsPassword}
+                                    class="p-1.5 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50"
+                                    title={$_('common.save')}
+                                    data-testid="profile-email-save"
+                                >
                                     <Save size={14} />
                                 </button>
-                                <button type="button" on:click={() => undoField('email')} class="p-1.5 bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors" title={$_('common.undo')}>
+                                <button type="button" on:click={() => undoField('email')} class="p-1.5 bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors" title={$_('common.undo')} data-testid="profile-email-undo">
                                     <Undo size={14} />
                                 </button>
                             {/if}
@@ -652,7 +669,7 @@
                     <input
                         bind:value={editedEmail}
                         class="px-3 py-2 border border-lf-input rounded-lg bg-lf-field
-                               text-lf-primary hover:border-lf-input-hover text-sm w-full sm:w-auto sm:min-w-[200px] sm:text-right
+                               text-lf-primary hover:border-lf-input-hover text-sm w-full sm:w-72 sm:shrink-0 sm:text-right
                                focus:ring-2 focus:ring-lf-focus focus:border-lf-focus transition-all
                                disabled:opacity-50 disabled:cursor-not-allowed"
                         data-testid="profile-email"

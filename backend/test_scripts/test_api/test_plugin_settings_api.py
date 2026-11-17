@@ -378,13 +378,18 @@ async def test_the_full_catalogue_lists_the_search_preferences_of_justetf_and_bo
     doubles = {code: (await _entry(lane, member, code))["configured"] for code in ("mockprov", "MOCKFX")}
 
     assert response.status_code == 200, response.text
-    entries = {entry["plugin_code"]: entry for entry in response.json()["plugins"]}
+    # By family and code: a source can be a price provider and an enricher under one code (justetf, borsa_italiana),
+    # two entries of the catalogue (plan 68: an enricher has the call-limit fields of U4)
+    entries = {(entry["family"], entry["plugin_code"]): entry for entry in response.json()["plugins"]}
     assert all(type(entry["configured"]) is bool for entry in entries.values()), f"configured must be a boolean: {entries}"
-    assert set(_SEARCH_PREFERENCES) <= set(entries), f"the full catalogue lists {sorted(entries)}"
+    assert {("asset", code) for code in _SEARCH_PREFERENCES} <= set(entries), f"the full catalogue lists {sorted(entries)}"
     for code, (key, options) in _SEARCH_PREFERENCES.items():
-        entry = entries[code]
-        assert (entry["family"], entry["configured"], [field["key"] for field in entry["fields"]]) == ("asset", True, [key]), code
-        (field,) = entry["fields"]
+        entry = entries[("asset", code)]
+        # U4 (project 76): the core's five call-limit fields follow the provider's own, which comes first
+        own = [field for field in entry["fields"] if not field["key"].startswith("call_limit_")]
+        assert (entry["family"], entry["configured"], [field["key"] for field in own]) == ("asset", True, [key]), code
+        assert [field["key"] for field in entry["fields"]][1:] == ["call_limit_minute", "call_limit_hour", "call_limit_day", "call_limit_week", "call_limit_month"], code
+        (field,) = own
         assert (field["type"], field["scope"], field["secret"], field["required"], field["editable"], field["locked"]) == ("select", "user", False, False, True, False), code
         assert (field["source"], field["value"], field["default"], field["is_set"], field["problem"]) == ("default", "all", "all", False, None), code
         assert (field["label_key"], field["description_key"]) == (f"pluginSettings.asset.{code}.label.{key}", f"pluginSettings.asset.{code}.description.{key}")
@@ -402,11 +407,11 @@ async def test_a_member_saves_the_search_preferences_and_clears_them(lane: _Lane
     preferences = [_item("preferred_currency", "user", code="justetf", value="EUR"), _item("preferred_language", "user", code="borsa_italiana", value="en")]
     try:
         written = await _write(lane, member, preferences)
-        saved = {code: (await _fields(lane, member, code))[key] for code, (key, _options) in _SEARCH_PREFERENCES.items()}
+        saved = {code: (await _fields(lane, member, code, family="asset"))[key] for code, (key, _options) in _SEARCH_PREFERENCES.items()}
         refused = await _write(lane, member, [_item("preferred_currency", "user", code="justetf", value="JPY")])
     finally:
         cleared = await _write(lane, member, [_item(item["field_key"], "user", code=item["plugin_code"], clear=True) for item in preferences])
-    restored = {code: (await _fields(lane, member, code))[key] for code, (key, _options) in _SEARCH_PREFERENCES.items()}
+    restored = {code: (await _fields(lane, member, code, family="asset"))[key] for code, (key, _options) in _SEARCH_PREFERENCES.items()}
 
     assert written.status_code == 200 and written.json()["success_count"] == 2, written.text
     assert {code: (field["value"], field["source"], field["is_set"]) for code, field in saved.items()} == {"justetf": ("EUR", "db", True), "borsa_italiana": ("en", "db", True)}
@@ -762,3 +767,152 @@ async def test_an_administrator_writes_and_clears_the_system_fields(lane: _Lane,
     assert {key: echo_after[key] for key in SYSTEM_KEYS} == {"api_key": "unset", "region": "eu", "price_tolerance": "0.5", "verbose": "False"}
     assert lane.shows(secret) == [], "the secret came back in a response"
     print_success("written, read-only for a member, delivered, unlinked from its deleted author, cleared")
+
+
+# =============================================================================
+# 8. SHARED GROUPS (project 76, G2): the test-only group ``mock``, read by mockprov
+# =============================================================================
+#
+# The core ships a test-only group, ``mock`` (an optional secret ``account_token`` of 8+ characters and a select ``tier``, ``free`` by default), and
+# ``mockprov`` reads it (``settings_groups = ("mock",)``): the search ``lf-group-echo`` answers ``group: tier=<tier>; account_token=<set|unset>``.
+# A group is a catalogue entry (``family=group``, ``plugin_code`` = its name, listed only when named, as a test-only plugin is), written by an
+# administrator through the same bulk PATCH. The group's rows are an instance-wide singleton like mockprov's system rows: the same exclusivity
+# (this unit runs alone) and the same restoration, after a red too.
+
+MOCK_GROUP = "mock"
+GROUP_ECHO_QUERY = "lf-group-echo"
+GROUP_KEYS = ("account_token", "tier")
+
+
+async def _group_rows(name: str = MOCK_GROUP) -> list[dict[str, Any]]:
+    async with AsyncSession(_lane_engine()) as session:
+        rows = (await session.execute(select(PluginSystemSetting).where(PluginSystemSetting.family == "group", PluginSystemSetting.plugin_code == name).order_by(PluginSystemSetting.id))).scalars()
+        return [{column: getattr(row, column) for column in _SYSTEM_COLUMNS} for row in rows]
+
+
+@pytest_asyncio.fixture
+async def mock_group_rows_restored(test_server) -> AsyncIterator[list[dict[str, Any]]]:
+    """The rows of the ``mock`` group as found, put back after the test, after a red too."""
+    snapshot = await _group_rows()
+    try:
+        yield snapshot
+    finally:
+        async with AsyncSession(_lane_engine()) as session:
+            await session.execute(delete(PluginSystemSetting).where(PluginSystemSetting.family == "group", PluginSystemSetting.plugin_code == MOCK_GROUP))
+            session.add_all(PluginSystemSetting(**row) for row in snapshot)
+            await session.commit()
+        assert await _group_rows() == snapshot, "Teardown: the mock group's rows were not put back as they were"
+
+
+async def _group_echo(lane: _Lane, account: _Account) -> str:
+    """What mockprov received of the group for ``account``'s search: the display name of its one item."""
+    response = await lane.call("GET", "/assets/provider/search", account=account, params={"q": GROUP_ECHO_QUERY, "providers": "mockprov"})
+    assert response.status_code == 200, response.text
+    echoes = [item["display_name"] for item in response.json()["results"] if item["provider_code"] == "mockprov" and item["identifier"] == "MOCK_GROUP"]
+    assert len(echoes) == 1, f"mockprov must answer the group echo query with one item: {response.text}"
+    return echoes[0]
+
+
+@pytest.mark.asyncio
+async def test_g2_the_mock_group_is_listed_only_when_named_and_says_who_reads_it(lane: _Lane):
+    """8: hidden from the full catalogue and from ``family=group``; named, an entry with its fields, its label and ``used_by`` including mockprov; mockprov lists the group."""
+    from backend.app.services.asset_source_providers.mockprov.plugin import GROUP_ECHO_QUERY as PLUGIN_QUERY  # noqa: PLC0415 — the shipped constant
+
+    member = await lane.member("ps_g2_reader")
+
+    full = await lane.call("GET", CATALOGUE, account=member)
+    groups_only = await lane.call("GET", CATALOGUE, account=member, params={"family": "group"})
+    named = await lane.call("GET", CATALOGUE, account=member, params={"plugin_code": MOCK_GROUP})
+    mockprov = await _entry(lane, member, "mockprov")
+
+    assert PLUGIN_QUERY == GROUP_ECHO_QUERY
+    assert full.status_code == groups_only.status_code == named.status_code == 200
+    assert MOCK_GROUP not in {entry["plugin_code"] for entry in full.json()["plugins"] + groups_only.json()["plugins"]}, "a test-only group is hidden"
+    (entry,) = named.json()["plugins"]
+    assert (entry["family"], entry["plugin_code"], entry["plugin_name"], entry["icon_url"], entry["groups"]) == ("group", MOCK_GROUP, "Mock group (testing)", None, [])
+    assert [field["key"] for field in entry["fields"]] == list(GROUP_KEYS)
+    assert {(ref["family"], ref["plugin_code"]) for ref in entry["used_by"]} >= {("asset", "mockprov")}
+    assert next(ref for ref in entry["used_by"] if ref["plugin_code"] == "mockprov")["plugin_name"] == mockprov["plugin_name"]
+    assert mockprov["groups"] == [MOCK_GROUP] and mockprov["configured"] is True, "the group has no required field: mockprov stays configured"
+
+
+@pytest.mark.asyncio
+async def test_g2_an_administrator_writes_the_mock_group_and_mockprov_receives_it(lane: _Lane, mock_group_rows_restored: list[dict[str, Any]]):
+    """8: PATCH by an administrator, the rows (family ``group``, the token encrypted), a member read-only and refused, the echo of the search, then the clear."""
+    print_section("8: the mock group")
+    writer, member = await lane.admin("ps_g2_writer"), await lane.member("ps_g2_member")
+    secret = _marker()
+
+    refused = await _write(lane, member, [_item("tier", "system", family="group", code=MOCK_GROUP, value="paid")])
+    assert _outcomes(refused) == [("tier", False, "FORBIDDEN_SCOPE")]
+    assert await _group_rows() == mock_group_rows_restored, "the refusal wrote nothing"
+
+    written = await _write(lane, writer, [_item("tier", "system", family="group", code=MOCK_GROUP, value="paid"), _item("account_token", "system", family="group", code=MOCK_GROUP, secret_value=secret)])
+    rows = {row["field_key"]: row for row in await _group_rows()}
+    as_member = await _fields(lane, member, MOCK_GROUP, family="group")
+    echo = await _group_echo(lane, member)
+
+    assert written.status_code == 200 and written.json()["success_count"] == 2, written.text
+    assert {result["family"] for result in written.json()["results"]} == {"group"}
+    assert (rows["tier"]["value_json"], rows["tier"]["updated_by_user_id"]) == (json.dumps("paid"), writer.user_id)
+    assert rows["account_token"]["value_json"] is None and rows["account_token"]["key_id"] and secret.encode() not in rows["account_token"]["secret_ciphertext"]
+    assert (as_member["account_token"]["is_set"], as_member["account_token"]["value"], as_member["account_token"]["editable"]) == (True, None, False)
+    assert (as_member["tier"]["value"], as_member["tier"]["editable"]) == ("paid", False)
+    assert echo == "group: tier=paid; account_token=set"
+
+    cleared = await _write(lane, writer, [_item(key, "system", family="group", code=MOCK_GROUP, clear=True) for key in GROUP_KEYS])
+    echo_after = await _group_echo(lane, member)
+
+    assert cleared.status_code == 200 and cleared.json()["success_count"] == 2, cleared.text
+    assert [row for row in await _group_rows() if row["field_key"] in GROUP_KEYS] == []
+    assert echo_after == "group: tier=free; account_token=unset"
+    assert lane.shows(secret) == [], "the secret came back in a response"
+    print_success("written by an administrator, refused to a member, delivered to mockprov, cleared")
+
+
+@pytest.mark.asyncio
+async def test_g2_a_write_to_an_unknown_group_or_field_is_the_all_or_nothing_refusal(lane: _Lane, mock_group_rows_restored: list[dict[str, Any]]):
+    """8: over HTTP the family ``group`` is the enum's value; an unknown group, an unknown field and the user scope are ``UNKNOWN_FIELD``; nothing is written."""
+    writer = await lane.admin("ps_g2_unknown")
+
+    response = await _write(
+        lane,
+        writer,
+        [
+            _item("tier", "system", family="group", code="no_such_group", value="paid"),
+            _item("no_such_field", "system", family="group", code=MOCK_GROUP, value="paid"),
+            _item("tier", "user", family="group", code=MOCK_GROUP, value="paid"),
+            _item("tier", "system", family="group", code=MOCK_GROUP, value="paid"),
+        ],
+    )
+
+    assert _outcomes(response) == [("tier", False, "UNKNOWN_FIELD"), ("no_such_field", False, "UNKNOWN_FIELD"), ("tier", False, "UNKNOWN_FIELD"), ("tier", True, None)]
+    assert await _group_rows() == mock_group_rows_restored
+
+
+@pytest.mark.asyncio
+async def test_u4_the_catalogue_shows_the_call_usage_of_the_counted_double_and_a_call_raises_it(lane: _Lane):
+    """U4 over HTTP (project 76): ``mockcount``, named, carries ``call_usage`` — the five windows in order, each with its
+    count, a null limit (no limit is written here: the consultant's rule 3 gives mockcount's limits to one spec only),
+    ``resets_at`` in UTC and ``full`` false — and a probe through the boundary raises its counts (by at least one: the
+    lane may count others' calls)."""
+    print_section("U4: call usage over HTTP")
+    member = await lane.member("ps_usage")
+
+    def windows(entry: dict[str, Any]) -> list[dict[str, Any]]:
+        usage = entry["call_usage"]
+        assert usage is not None and (usage["family"], usage["plugin_code"]) == ("asset", "mockcount"), entry
+        return usage["windows"]
+
+    before = windows(await _entry(lane, member, "mockcount"))
+    assert [window["window"] for window in before] == ["minute", "hour", "day", "week", "month"]
+    assert all(window["limit"] is None and window["full"] is False for window in before)
+    assert all(window["resets_at"].endswith(("Z", "+00:00")) for window in before), before
+
+    probe = await lane.call("POST", "/assets/provider/probe", account=member, json={"provider_code": "mockcount", "identifier": "MOCK", "identifier_type": "TICKER", "operations": ["current_price"]})
+    assert probe.status_code == 200, probe.text
+
+    after = windows(await _entry(lane, member, "mockcount"))
+    assert after[4]["count"] >= before[4]["count"] + 1, (before, after)
+    assert after[2]["count"] >= 1
+    print_success("five windows; the probe was counted")

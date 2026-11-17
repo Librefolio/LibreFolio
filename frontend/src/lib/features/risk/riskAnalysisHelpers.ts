@@ -258,7 +258,7 @@ export interface BaseAnalyticsContext {
      * flight — `queryRisk` caches and de-duplicates on the canonical request.
      *
      * 🔑 Clause ⓪ of the asset-set contract asks for *one preparation per
-     * request*, and the backend's half of it is measured: `service.py:170`
+     * request*, and the backend's half of it is measured: `RiskService.execute`
      * prepares the joint series once per request, from the scope, window and
      * currency — never from the analytics list. So sections that ask different
      * questions over the same scope and window still get the same joint calendar,

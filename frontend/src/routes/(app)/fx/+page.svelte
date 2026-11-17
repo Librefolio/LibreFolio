@@ -62,6 +62,7 @@
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import type {FxPairSyncCompleteDetail} from '$lib/services/fxCreationSync';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     // =========================================================================
     // Types
@@ -1430,6 +1431,7 @@
         <div class="flex flex-wrap items-center gap-2 justify-end ml-auto">
             {#if viewMode === 'list' && selectedFxRows.length > 0}
                 <DataTableToolbar
+                    variant="floating"
                     selectedCount={selectedFxRows.length}
                     bulkActions={[
                         {id: 'sync', icon: RotateCw, label: () => $_('common.sync'), onClick: () => handleBulkSyncFx()},
@@ -1448,6 +1450,7 @@
                 <Plus size={16} />
                 {$_('fx.actions.addPair')}
             </button>
+            <DocsLink path="user/fx/" label={$_('fx.docsHelp.list')} icon="book" size={16} testId="fx-docs" />
         </div>
     </div>
 

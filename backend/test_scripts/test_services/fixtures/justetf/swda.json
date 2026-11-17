@@ -1,0 +1,303 @@
+{
+ "source": "justetf",
+ "asset": "swda",
+ "version": "justetf-scraping 0.1.0",
+ "recorded_at": "2026-11-10T17:06:30",
+ "calls": {
+  "get_etf_overview": {
+   "seconds": 0.61,
+   "error": null,
+   "response": {
+    "isin": "IE00B4L5Y983",
+    "name": "iShares Core MSCI World UCITS ETF USD (Acc)",
+    "description": "The iShares Core MSCI World UCITS ETF USD (Acc) seeks to track the MSCI World index. The MSCI World index tracks stocks from 23 developed countries worldwide.",
+    "index": "MSCI World",
+    "investment_focus": "Equity, World",
+    "fund_size_eur": 128202.0,
+    "ter": 0.2,
+    "replication": "Physical(Optimized sampling)",
+    "legal_structure": "ETF",
+    "strategy_risk": null,
+    "sustainability": false,
+    "fund_currency": "USD",
+    "currency_hedged": true,
+    "volatility_1y": null,
+    "inception_date": "25 September 2009",
+    "distribution_policy": "Accumulating",
+    "distribution_frequency": null,
+    "fund_domicile": "Ireland",
+    "fund_provider": "iShares",
+    "top_holdings": [
+     {
+      "name": "NVIDIA Corp.",
+      "percentage": 5.79,
+      "isin": "US67066G1040"
+     },
+     {
+      "name": "Apple",
+      "percentage": 5.39,
+      "isin": "US0378331005"
+     },
+     {
+      "name": "Microsoft Corp",
+      "percentage": 3.99,
+      "isin": "US5949181045"
+     },
+     {
+      "name": "Amazon.com, Inc.",
+      "percentage": 2.66,
+      "isin": "US0231351067"
+     },
+     {
+      "name": "Alphabet, Inc. A",
+      "percentage": 2.23,
+      "isin": "US02079K3059"
+     },
+     {
+      "name": "Meta Platforms",
+      "percentage": 1.76,
+      "isin": "US30303M1027"
+     },
+     {
+      "name": "Alphabet, Inc. C",
+      "percentage": 1.76,
+      "isin": "US02079K1079"
+     },
+     {
+      "name": "Broadcom Inc.",
+      "percentage": 1.75,
+      "isin": "US11135F1012"
+     },
+     {
+      "name": "Micron Technology",
+      "percentage": 1.33,
+      "isin": "US5951121038"
+     },
+     {
+      "name": "Tesla",
+      "percentage": 1.12,
+      "isin": "US88160R1014"
+     }
+    ],
+    "countries": [
+     {
+      "name": "United States",
+      "percentage": 70.81
+     },
+     {
+      "name": "Japan",
+      "percentage": 5.91
+     },
+     {
+      "name": "United Kingdom",
+      "percentage": 3.6
+     },
+     {
+      "name": "Canada",
+      "percentage": 3.24
+     },
+     {
+      "name": "Switzerland",
+      "percentage": 2.47
+     },
+     {
+      "name": "Germany",
+      "percentage": 2.03
+     },
+     {
+      "name": "France",
+      "percentage": 2.01
+     },
+     {
+      "name": "Netherlands",
+      "percentage": 1.69
+     },
+     {
+      "name": "Australia",
+      "percentage": 1.52
+     },
+     {
+      "name": "Ireland",
+      "percentage": 1.09
+     },
+     {
+      "name": "Other",
+      "percentage": 5.63
+     }
+    ],
+    "sectors": [
+     {
+      "name": "Technology",
+      "percentage": 37.77
+     },
+     {
+      "name": "Finance",
+      "percentage": 17.22
+     },
+     {
+      "name": "Industrials",
+      "percentage": 9.32
+     },
+     {
+      "name": "Healthcare",
+      "percentage": 8.95
+     },
+     {
+      "name": "Consumer Non-Cyclicals",
+      "percentage": 8.25
+     },
+     {
+      "name": "Energy",
+      "percentage": 4.06
+     },
+     {
+      "name": "Non-Energy Materials",
+      "percentage": 3.69
+     },
+     {
+      "name": "Consumer Cyclicals",
+      "percentage": 3.64
+     },
+     {
+      "name": "Utilities",
+      "percentage": 2.22
+     },
+     {
+      "name": "Consumer Services",
+      "percentage": 1.71
+     },
+     {
+      "name": "Telecommunication",
+      "percentage": 1.41
+     },
+     {
+      "name": "Business Services",
+      "percentage": 1.34
+     },
+     {
+      "name": "Non-Corporate",
+      "percentage": 0.12
+     },
+     {
+      "name": "Other",
+      "percentage": 0.3
+     }
+    ],
+    "holdings_date": "30/09/2026",
+    "listings": [
+     {
+      "exchange_code": "MUND",
+      "exchange": "gettex",
+      "currency": "EUR",
+      "ticker": "EUNL",
+      "bloomberg": null,
+      "inav_bloomberg": null,
+      "reuters": null,
+      "inav_reuters": null,
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XSTU",
+      "exchange": "Stuttgart Stock Exchange",
+      "currency": "EUR",
+      "ticker": "EUNL",
+      "bloomberg": null,
+      "inav_bloomberg": null,
+      "reuters": null,
+      "inav_reuters": null,
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XMEX",
+      "exchange": "Bolsa Mexicana de Valores",
+      "currency": "MXN",
+      "ticker": null,
+      "bloomberg": "IWDAN MM",
+      "inav_bloomberg": null,
+      "reuters": "IWDAN.MX",
+      "inav_reuters": null,
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XMIL",
+      "exchange": "Borsa Italiana",
+      "currency": "EUR",
+      "ticker": "SWDA",
+      "bloomberg": "SWDA IM",
+      "inav_bloomberg": "INAVIWDE",
+      "reuters": "SWDA.MI",
+      "inav_reuters": "IWDAEUR.DE",
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XAMS",
+      "exchange": "Euronext Amsterdam",
+      "currency": "EUR",
+      "ticker": "IWDA",
+      "bloomberg": "IWDA NA",
+      "inav_bloomberg": "INAVIWDE",
+      "reuters": "IWDA.AS",
+      "inav_reuters": "IWDAEUR.DE",
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XLON",
+      "exchange": "London Stock Exchange",
+      "currency": "GBX",
+      "ticker": "SWDA",
+      "bloomberg": null,
+      "inav_bloomberg": null,
+      "reuters": null,
+      "inav_reuters": null,
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XLON",
+      "exchange": "London Stock Exchange",
+      "currency": "USD",
+      "ticker": "IWDA",
+      "bloomberg": "IWDA LN",
+      "inav_bloomberg": "INAVIWDU",
+      "reuters": "IWAD.L",
+      "inav_reuters": "IWDAUSD.DE",
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XLON",
+      "exchange": "London Stock Exchange",
+      "currency": "GBP",
+      "ticker": "SWDA",
+      "bloomberg": "SWDA LN",
+      "inav_bloomberg": "INAVIWDG",
+      "reuters": "SWDA.L",
+      "inav_reuters": "0TV6INAV.DE",
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XSWX",
+      "exchange": "SIX Swiss Exchange",
+      "currency": "USD",
+      "ticker": "SWDA",
+      "bloomberg": "SWDA SE",
+      "inav_bloomberg": "INAVIWDU",
+      "reuters": "SWDA.S",
+      "inav_reuters": "FX0AINAV.DE",
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XETR",
+      "exchange": "XETRA",
+      "currency": "EUR",
+      "ticker": "EUNL",
+      "bloomberg": "EUNL GY",
+      "inav_bloomberg": "INAVIWDE",
+      "reuters": "EUNL.DE",
+      "inav_reuters": "IWDAEUR.DE",
+      "market_maker": null
+     }
+    ],
+    "gettex": null
+   }
+  }
+ }
+}

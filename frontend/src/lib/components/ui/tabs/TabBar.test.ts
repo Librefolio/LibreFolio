@@ -263,6 +263,46 @@ async function g15DeliverFrames(turns = 4): Promise<void> {
     await tick();
 }
 
+describe('TabBar — the dot, a signal without a number (plan 68, E2)', () => {
+    const DOT_LABEL = 'Dot meaning';
+
+    function dotted(props: {showLabels?: boolean} = {}, extra: Partial<TabItem> = {}) {
+        const tabs: TabItem[] = [
+            {id: 'plain', label: PLAIN_LABEL, testId: 'tab-plain'},
+            {id: 'iconic', label: ICON_LABEL, icon: Shield, testId: 'tab-iconic', dot: {label: DOT_LABEL}, ...extra},
+        ];
+        render(TabBar, {tabs, activeTab: 'plain', ...props});
+        return (testId: string) => screen.getByTestId(testId);
+    }
+
+    it('draws the dot inside its tab, with no number, its meaning said to a screen reader and on hover', () => {
+        const tab = dotted();
+        const dot = within(tab('tab-iconic')).getByTestId('tab-dot');
+        expect(dot).toHaveAttribute('aria-hidden', 'true');
+        expect(dot).toHaveAttribute('title', DOT_LABEL);
+        expect(dot.textContent?.trim()).toBe('');
+        expect(within(tab('tab-iconic')).getByText(DOT_LABEL), 'the meaning, for a screen reader').toBeInTheDocument();
+        expect(within(tab('tab-iconic')).queryByTestId('tab-badge')).toBeNull();
+        expect(within(tab('tab-plain')).queryByTestId('tab-dot'), 'only the tab that asks for it').toBeNull();
+    });
+
+    it('stays when the label is hidden: it is not part of the label', () => {
+        const tab = dotted({showLabels: false});
+        expect(within(tab('tab-iconic')).getByTestId('tab-dot')).toBeInTheDocument();
+    });
+
+    it('gives way to a number: a tab with a positive badge shows the badge, not the dot', () => {
+        const tab = dotted({}, {badge: 3});
+        expect(within(tab('tab-iconic')).getByTestId('tab-badge')).toHaveAttribute('data-badge', '3');
+        expect(within(tab('tab-iconic')).queryByTestId('tab-dot')).toBeNull();
+    });
+
+    it('a badge of zero does not hide the dot', () => {
+        const tab = dotted({}, {badge: 0});
+        expect(within(tab('tab-iconic')).getByTestId('tab-dot')).toBeInTheDocument();
+    });
+});
+
 describe('TabBar — scrollable (G-15: the Settings tab bar clips its last tab)', () => {
     beforeEach(() => {
         geometry = g15Layout();

@@ -43,7 +43,7 @@ export function finite(value: unknown): number | null {
  *
  * `partial` is not an exotic state: the server returns it whenever a degrading
  * warning fired, an asset was excluded for want of a usable series, or the data
- * quality was anything but clean (`service.py:736`). A portfolio with one
+ * quality was anything but clean (`success_result`, `risk/results.py`). A portfolio with one
  * unpriceable holding is `partial`. Refusing it would blank every level for a
  * reader whose answer is merely incomplete — and it would blank L2 exactly in
  * the case L2 exists to explain, since `cash_weight` is where those excluded
@@ -151,7 +151,7 @@ export interface ResultReason {
  * key on screen — and where a code-named key with arguments showed its braces.
  *
  * Note that a `partial` with **no** warnings at all is ordinary, not a bug:
- * `service.py:736` also turns a wave partial for context exclusions, excluded
+ * `success_result` (`risk/results.py`) also turns a wave partial for context exclusions, excluded
  * assets, or data quality — each disclosed by its own surface.
  */
 export function resultReasons(results: ReadonlyArray<RiskAnalyticResult | null | undefined>, translate?: WarningTranslator): ResultReason[] {
@@ -231,7 +231,7 @@ export function resultErrorCodes(results: ReadonlyArray<RiskAnalyticResult | nul
  * ⚠️ `translated === key` is the whole mechanism, and it is not a precaution:
  * `svelte-i18n` returns the key itself when no message exists, so without this
  * comparison an error code the backend gains tomorrow prints `risk.errors.foo`
- * on screen. That is the defect recorded at `RiskResultFrame:108`, which is why
+ * on screen. That is the defect recorded at the return-basis line of `RiskResultFrame`, which is why
  * this is a function with tests rather than three lines inlined in a component.
  *
  * The translator is **passed in** rather than imported. `$t` is a store, and a
@@ -331,7 +331,7 @@ export function lossMagnitude(value: unknown, sign: LossSign): number | null {
 /**
  * One rung of L1's scale of harm.
  *
- * `loss` and `secondaryLoss` are **positive magnitudes** — the sign lives in the
+ * `loss` is a **positive magnitude** — the sign lives in the
  * presentation, not in the datum, because the whole section is about losses and
  * a column of minus signs carries no information.
  */
@@ -340,8 +340,6 @@ export interface HurtRow {
     id: 'day' | 'month' | 'worst';
     /** The headline loss as a positive fraction, e.g. `0.018` for −1,8%. */
     loss: number;
-    /** The quieter companion figure, when the row has one. */
-    secondaryLoss: number | null;
     /** Days the worst fall lasted; only the `worst` row has it. */
     durationDays: number | null;
     /**
@@ -397,14 +395,12 @@ export function buildHurtRows(historicalResults: RiskAnalyticResult[]): HurtRow[
         if (!output) return;
         const cvar = lossMagnitude(output.conditional_value_at_risk, 'positive');
         const value = lossMagnitude(output.value_at_risk, 'positive');
-        // Both are positive magnitudes in the API. The CVaR leads; the VaR is
-        // only worth printing when it actually differs from it.
+        // Both are positive magnitudes in the API. The CVaR leads; the VaR stands in only when the CVaR is absent.
         const loss = cvar ?? value;
         if (loss === null) return;
         rows.push({
             id,
             loss,
-            secondaryLoss: cvar !== null && value !== null && value !== cvar ? value : null,
             durationDays: null,
             requiredRecovery: null,
             ...monthWindow(id, output),
@@ -426,7 +422,6 @@ export function buildHurtRows(historicalResults: RiskAnalyticResult[]): HurtRow[
         rows.push({
             id: 'worst',
             loss,
-            secondaryLoss: null,
             durationDays: summaryDepth !== null ? finite(drawdown?.maximum_drawdown_duration_days) : finite(kpi?.max_drawdown_duration_days),
             // The asymmetry that makes drawdowns expensive (−50% needs +100%), as the backend states it. It belongs to
             // the summary's own depth: none when the depth came from the KPI, nor for a zero fall with nothing to recover.
@@ -511,7 +506,7 @@ export function buildDivergenceRows(contributionResult: RiskAnalyticResult | nul
         if (assetId === null || weight === null || percentage === null) continue;
         // Both arrive as **fractions**. `percentage_contribution` is named for the
         // question it answers, not for its scale: the backend computes it as
-        // `component / portfolio_volatility` (services/risk/metrics.py:487), and
+        // `component / portfolio_volatility` (`risk_contributions_from_covariance`, `services/risk/metrics.py`), and
         // its own API test asserts the items sum to 1,0 — not to 100. Dividing by
         // a hundred here made every contribution a hundredth of itself, so every
         // holding read as a risk *reducer* and the diverging bars pointed the
@@ -560,14 +555,14 @@ export interface Concentration {
      * share of NAV the positions' own weights are small, their squares smaller
      * still, and the index rises **far above the number of holdings** — it can
      * read in double figures over a mere handful of positions. The arithmetic is
-     * right and the parity with AI Export (`broker_concentration_context.py:97`)
+     * right and the parity with AI Export (`concentration_metrics`, `broker_concentration_context.py`)
      * depends on it; the word "count" is what would be wrong. An index promises
      * no maximum, a count does — and a card whose "effective number of assets"
      * plainly exceeds the holdings listed beneath it tells the reader the
      * software is broken.
      *
      * The case is described in shape and not in figures on purpose: the mock
-     * seeds its RNG per `(asset, date)` (`populate_mock_data.py:2162`) while the
+     * seeds its RNG per `(asset, date)` (`populate_price_history`, `populate_mock_data.py`) while the
      * window ends at `date.today()`, so a single date's price is stable forever
      * but **anything integrating over the window moves every day**. A measured
      * aggregate written here would be false tomorrow, and nothing would fail.

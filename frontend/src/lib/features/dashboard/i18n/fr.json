@@ -76,7 +76,7 @@
     "costs": "Coûts",
     "noPositions": "Aucune position disponible",
     "noPeriodPnl": "Aucun P&L dans la période sélectionnée",
-    "seeAllPositions": "Voir tout →",
+    "seeAllPositions": "Voir tout",
     "aiExport": "Export IA",
     "periodPnlTooltip": "Gain ou perte total attribuable uniquement à la période sélectionnée (variation non réalisée + réalisé + revenu − frais). Peut différer du gain total de la position.",
     "unrealizedPnlPercent": "P&L %",
@@ -173,6 +173,19 @@
     "allocationNoShares": "Aucun pourcentage à afficher : les parts totalisent zéro ou moins (par exemple un découvert qui annule vos positions). Les montants sont listés ci-dessous.",
     "allocationHistoryNoShares": "Aucun pourcentage à afficher : ces jours-là, les parts totalisent zéro ou moins.",
     "pnlDeltaDayTooltip": "Variation du jour du P&L total, et cette variation en pourcentage par rapport à la valeur du portefeuille d'hier.",
-    "yieldOnCostFxStale": "taux ancien : {days} jours avant"
+    "yieldOnCostFxStale": "taux ancien : {days} jours avant",
+    "groupBy": {
+      "global": "Global",
+      "broker": "Courtier",
+      "globalHint": "Une ligne par actif : la somme de tous les courtiers qui le détiennent",
+      "brokerHint": "Une ligne par actif et par courtier",
+      "label": "Regrouper les positions",
+      "brokerCount": "{count} courtiers"
+    },
+    "docsHelp": {
+      "growth": "Comment la valeur du portefeuille a évolué sur la période : en argent, en rendement, ou en gains et pertes.",
+      "allocation": "Comment le portefeuille est réparti — par type, secteur, pays ou actif — aujourd'hui, ou dans le temps.",
+      "positions": "Ce que vous détenez et ce que chaque position a rapporté sur la période, par actif ou par courtier, en tableau ou en carte."
+    }
   }
 }

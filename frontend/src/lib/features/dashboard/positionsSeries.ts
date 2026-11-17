@@ -169,6 +169,36 @@ export function selectionKeys(rows: ReadonlyArray<{assetId: number; brokerId: nu
     return keys;
 }
 
+/** A ticked row of the positions tables, as the chart asks for it. */
+export interface SelectedPosition {
+    key: string;
+    assetId: number;
+    brokerId: number | null;
+}
+
+/**
+ * The ticked rows after the «Globale / Broker» switch (project 74), so the user keeps the assets they were looking at.
+ *
+ * To «Globale» (`asset`): each ticked asset once, with no broker — the asset summed over its brokers, the line the
+ * backend gives for `broker_id: null`. To «Broker»: a row with no broker becomes every row of that asset in `brokerRows`
+ * (the per-broker rows on screen, in their order); an asset with none is dropped. Never more than the chart's cap.
+ */
+export function regroupSelection(rows: ReadonlyArray<SelectedPosition>, grouping: 'broker' | 'asset', brokerRows: ReadonlyArray<SelectedPosition>): SelectedPosition[] {
+    const out: SelectedPosition[] = [];
+    const seen = new Set<string>();
+    const push = (entry: SelectedPosition) => {
+        if (seen.has(entry.key) || out.length >= MAX_CHART_POSITIONS) return;
+        seen.add(entry.key);
+        out.push(entry);
+    };
+    for (const row of rows) {
+        if (grouping === 'asset') push({key: makePositionKey(row.assetId, null), assetId: row.assetId, brokerId: null});
+        else if (row.brokerId !== null) push(row);
+        else for (const brokerRow of brokerRows) if (brokerRow.assetId === row.assetId && brokerRow.brokerId !== null) push(brokerRow);
+    }
+    return out;
+}
+
 /**
  * The colour rank of every asset (0 = the first colour): the assets held today, the heaviest first (ties: the lower id),
  * then the ones that left the portfolio, the one closed most recently first (its last day with a positive amount decides, a step's being its `through`;
@@ -178,11 +208,7 @@ export function selectionKeys(rows: ReadonlyArray<{assetId: number; brokerId: nu
  * `assetColorRanks`), so an asset wears one colour in all of them, whatever is ticked and in whatever order. A panel that draws more assets than the pie
  * (the lines of a position sold out in the period) passes them as `extraIds`: they come after every ranked asset, so the ranks the pie reads do not move.
  */
-export function rankAssetsByWeight(
-    today: ReadonlyArray<{id: number | null; amount: number}>,
-    history: ReadonlyArray<{date: string; through?: string; components: ReadonlyArray<{id: number | null; amount: number}>}>,
-    extraIds: ReadonlyArray<number> = [],
-): Map<number, number> {
+export function rankAssetsByWeight(today: ReadonlyArray<{id: number | null; amount: number}>, history: ReadonlyArray<{date: string; through?: string; components: ReadonlyArray<{id: number | null; amount: number}>}>, extraIds: ReadonlyArray<number> = []): Map<number, number> {
     const held = new Map<number, number>();
     for (const slice of today) {
         if (slice.id !== null && slice.id !== undefined && slice.amount > 0) held.set(slice.id, slice.amount);
@@ -215,11 +241,7 @@ interface AssetSliceLike {
  * The ranks of the assets from what the backend sent: today's allocation by asset and, when the history was asked, its points. The one entry
  * point of the Allocation panel and of the positions panel (see `rankAssetsByWeight`).
  */
-export function assetColorRanks(
-    today: ReadonlyArray<AssetSliceLike>,
-    history: ReadonlyArray<{date: string; through?: string; components?: ReadonlyArray<AssetSliceLike>}>,
-    extraIds: ReadonlyArray<number> = [],
-): Map<number, number> {
+export function assetColorRanks(today: ReadonlyArray<AssetSliceLike>, history: ReadonlyArray<{date: string; through?: string; components?: ReadonlyArray<AssetSliceLike>}>, extraIds: ReadonlyArray<number> = []): Map<number, number> {
     const amountOf = (slice: AssetSliceLike | null | undefined): number => parseFloat(slice?.amount ?? '0');
     return rankAssetsByWeight(
         today.map((slice) => ({id: slice?.id ?? null, amount: amountOf(slice)})),

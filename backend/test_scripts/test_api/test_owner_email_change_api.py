@@ -242,7 +242,7 @@ async def _refused(private: _Private, token: str, status: str) -> None:
 
 
 def test_the_route_and_its_models_have_the_agreed_names() -> None:
-    """OWNAPI-001: the route function is ``confirm_owner_email_change`` on ``POST /api/v1/email/email-change/confirm`` (operation id ``confirm_owner_email_change_api_v1_email_email_change_confirm_post``: the client alias the web app uses), with ``EmailChangeConfirmRequest`` / ``EmailChangeConfirmResponse`` (``username``)."""
+    """OWNAPI-001: the route function is ``confirm_owner_email_change`` on ``POST /api/v1/email/email-change/confirm`` (operation id ``confirm_owner_email_change_api_v1_email_email_change_confirm_post``: the client alias the web app uses), with ``EmailChangeConfirmRequest`` / ``EmailChangeConfirmResponse`` (``username``, ``session_kept``)."""
     app = FastAPI()
     app.include_router(email_api.router, prefix=API_V1_PREFIX)
     schema = app.openapi()
@@ -253,13 +253,13 @@ def test_the_route_and_its_models_have_the_agreed_names() -> None:
     assert operation["requestBody"]["content"]["application/json"]["schema"]["$ref"].endswith("/EmailChangeConfirmRequest")
     assert operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/EmailChangeConfirmResponse")
     schemas = schema["components"]["schemas"]
-    assert set(schemas["EmailChangeConfirmResponse"]["properties"]) == {"username"}
+    assert set(schemas["EmailChangeConfirmResponse"]["properties"]) == {"username", "session_kept"}
     assert set(schemas["EmailChangeConfirmRequest"]["properties"]) == {"token"}
 
 
 @pytest.mark.asyncio
 async def test_the_click_changes_the_address_and_ends_the_sessions(private: _Private, notices: Notices) -> None:
-    """OWNAPI-010: a live link: 200 ``{username}``; the owner's address is the token's; verified; ``session_version`` raised and the cookie issued before refused; the password unchanged — the new address signs in, the old one does not —; the link consumed; the owner's other change links and its reset links revoked; the emails of the change scheduled once, with both addresses and ``by_host``; no session needed or set."""
+    """OWNAPI-010: a live link: 200 ``{username, session_kept: false}``; the owner's address is the token's; verified; ``session_version`` raised and the cookie issued before refused; the password unchanged — the new address signs in, the old one does not —; the link consumed; the owner's other change links and its reset links revoked; the emails of the change scheduled once, with both addresses and ``by_host``; no session needed or set."""
     print_section("OWNAPI-010: the click")
     owner = await _owner(private.engine)
     issued = await _link(private.engine, owner)
@@ -274,7 +274,7 @@ async def test_the_click_changes_the_address_and_ends_the_sessions(private: _Pri
         response = await _confirm(private, issued.token)
 
         assert response.status_code == 200, response.text
-        assert response.json() == {"username": OWNER}
+        assert response.json() == {"username": OWNER, "session_kept": False}
         assert "set-cookie" not in response.headers, "the click needs no session and opens none"
         row = await _row(private.engine, owner.id)
         assert row.email == NEW_EMAIL and row.email_verified_at is not None and row.is_instance_owner is True

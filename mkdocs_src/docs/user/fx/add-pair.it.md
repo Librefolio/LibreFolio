@@ -17,7 +17,8 @@ In **Aggiungi Nuova Coppia FX**, scegli la **Valuta Base** e la **Valuta Quotata
 Clicca su **Aggiungi percorso di conversione** per vedere tutti i modi in cui i provider possono produrre questo tasso:
 
 - 🔗 **Conversione diretta (1 passo)** — un provider pubblica la coppia;
-- 🔀 **Conversione a catena** — passa attraverso altre valute, raggruppate per numero di passaggi;
+- 🔀 **Conversione a catena** — passa attraverso altre valute, raggruppate per numero di passaggi; un gruppo grande
+  mostra i primi 200 percorsi e un pulsante **Mostra altre** per gli altri;
 - 🚫 **Non utilizzabili** — provider che non riescono a raggiungere questa coppia.
 
 Filtra con la casella di ricerca (provider, valuta o paese), poi clicca su un percorso per aggiungerlo.

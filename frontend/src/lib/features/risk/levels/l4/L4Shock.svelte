@@ -14,7 +14,7 @@
     import {formatCurrencyAmount, stressImpactDimension} from '../../riskAnalysisHelpers';
     import {geographyGroupNamer, stressBucketLabel} from '../../stressBucketLabel';
     import TornadoChart from './TornadoChart.svelte';
-    import {shockOptions, shockScenario, tornadoRows, type TornadoRow} from './scenarioHelpers';
+    import {shockOptions, shockScenario, tornadoRows, unconfiguredBuckets, type TornadoRow} from './scenarioHelpers';
     import {formatPercent} from '$lib/utils/core/formatPercent';
 
     /**
@@ -68,6 +68,8 @@
     let scopeKind = $derived(singleValue(riskMetadata(result)?.scope) ?? '');
     let showMoney = $derived(showMoneyOverride ?? scopeKind === 'portfolio');
     let rows = $derived(tornadoRows(output));
+    /** The held buckets the scenario left out, shocked by zero (RN-10): named under the total, never left silent. */
+    let unconfigured = $derived(unconfiguredBuckets(output));
     let buckets = $derived(Object.keys(bucketShocks).sort((left, right) => left.localeCompare(right)));
 
     /** Bumped once the country and sector names of the current language have arrived. */
@@ -196,10 +198,16 @@
             })}
         </p>
         <TornadoChart {rows} label={rowLabel} {nameHeader} amount={rowAmount} testId="risk-shock-tornado" />
+        {#if unconfigured.length > 0}
+            <!-- A held class the scenario does not name is shocked by zero: the total counts it as untouched. -->
+            <p class="text-xs text-lf-warning" data-testid="risk-shock-unconfigured" data-buckets={unconfigured.join(',')}>
+                {$t('risk.levels.l4.shockUnconfigured', {values: {names: unconfigured.map((bucket) => bucketName(bucket, answeredDimension)).join(', ')}})}
+            </p>
+        {/if}
         {#if output.classification_coverage != null && output.classification_coverage < 1}
-            <!-- Coverage below one means some holdings had no bucket to fall in.
-                 Unstated, the total would silently speak for less than the whole
-                 portfolio while looking as if it spoke for all of it. -->
+            <!-- Coverage below one means some holdings had no classification data
+                 (`metadata_fallback`): they were counted as "Other" at 100% and are in the
+                 total. The warning in the level's reasons names them. -->
             <p class="text-xs text-lf-warning" data-testid="risk-shock-coverage">
                 {$t('risk.levels.l4.shockCoverage', {values: {percent: formatPercent(output.classification_coverage, {scale: 100, signed: false, digits: 0})}})}
             </p>

@@ -71,7 +71,13 @@
     "loadFailed": "No se pudo cargar la información del activo",
     "pricesLoadFailed": "No se pudieron cargar los precios",
     "manualChip": "Manual",
-    "externalLinkHint": "{name}: abrir {site} en una pestaña nueva"
+    "externalLinkHint": "{name}: abrir {site} en una pestaña nueva",
+    "docsHelp": {
+      "header": "Un activo en detalle: su gráfico de precios y señales, medidas, eventos y clasificación, con la fuente de sus precios y tus transacciones.",
+      "measures": "Elige dos días en el gráfico y lee cuánto cambiaron entre ellos el activo y las líneas dibujadas con él.",
+      "metadata": "Qué es el activo: su descripción, sectores y países, identificadores y el proveedor que da sus precios.",
+      "dataEditor": "Corrige y completa a mano los datos del activo: sus precios diarios y sus eventos, como dividendos y divisiones."
+    }
   },
   "assets": {
     "create": "Nuevo activo",
@@ -435,8 +441,7 @@
       "selected": "Seleccionados ({count})",
       "showAll": "Mostrar todos",
       "showLess": "Mostrar menos",
-      "zoneDetails": "Otros detalles",
-      "zoneClassification": "Clasificación",
+      "zoneDetails": "Detalles y clasificación",
       "zonePrice": "Precio y estado",
       "leave": "Dejar como está",
       "leaveDifferent": "Dejar como está · valores distintos",
@@ -477,7 +482,16 @@
       "save": "{count, plural, one {Guardar # activo} other {Guardar # activos}}",
       "saveFailedTitle": "⛔ Guardado fallido: no se ha modificado ningún activo",
       "saveFailedBody": "El guardado es todo o nada: un activo no pasó, así que no ha cambiado nada. El resumen se queda aquí: quita el activo o vuelve atrás.",
-      "savedToast": "{count, plural, one {# activo actualizado} other {# activos actualizados}}: {fields}"
+      "savedToast": "{count, plural, one {# activo actualizado} other {# activos actualizados}}: {fields}",
+      "saved": "Guardado",
+      "removeIcon": "Quitar el icono",
+      "removeUrl": "Quitar la URL",
+      "toBeRemoved": "Por quitar",
+      "urlNone": "ninguna URL",
+      "alreadyWithout": "{already} ya sin"
+    },
+    "docsHelp": {
+      "list": "Todos los activos que sigue LibreFolio, con la fuente de sus precios, su último precio y su variación. Abre uno para ver su gráfico, eventos y datos."
     }
   },
   "events": {

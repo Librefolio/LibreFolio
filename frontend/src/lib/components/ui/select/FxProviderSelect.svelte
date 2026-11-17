@@ -29,6 +29,10 @@
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
 
+    /** A provider note's level (`warning_level`): a data limit that can mislead, or a fact worth knowing. */
+    type NoteLevel = 'info' | 'warning';
+    const NOTE_SIGN: Record<NoteLevel, string> = {info: 'ℹ️', warning: '⚠️'};
+
     // =========================================================================
     // Types
     // =========================================================================
@@ -41,7 +45,6 @@
         providers: string[];
         stepCount: number;
         isDirect: boolean;
-        searchText: string;
     }
 
     // =========================================================================
@@ -67,8 +70,10 @@
 
     let loading = $state(false);
     let error = $state<string | null>(null);
-    let directRoutes = $state<RouteOption[]>([]);
-    let chainRoutes = $state<RouteOption[]>([]);
+    // Raw, not deep: the routes are only ever replaced whole, and a deep proxy over tens of thousands of routes (a pair
+    // once the wave-1 banks are in) cost seconds at the picker's first read (lane 75, L2b).
+    let directRoutes = $state.raw<RouteOption[]>([]);
+    let chainRoutes = $state.raw<RouteOption[]>([]);
     let unusableProviders = $state<ProviderInfo[]>([]);
     /** A provider came without its currency list (backend could not read it): «no route» would be a guess, not an answer. */
     let providersUnavailable = $state(false);
@@ -80,6 +85,23 @@
     let orderedSelectedKeys = $state<string[]>([]);
     /** Set of expanded chain group step counts */
     let expandedChainGroups = $state<Set<number>>(new Set());
+
+    /**
+     * How many chains an open group draws: the first CHAIN_PAGE in today's order, CHAIN_PAGE more per «show more».
+     * The search always filters every chain. Developer decision «b1» (lane 75, L2d): drawn whole, the 4-step group of a
+     * pair such as NOK→USD (~36 000 chains once the wave-1 banks are in) crashed the browser tab.
+     */
+    const CHAIN_PAGE = 200;
+    /** Chains shown per group after «show more»: every change of the search (cleared included) or of the routes starts over. */
+    let shownChains = $state<Record<number, number>>({});
+
+    function chainLimit(stepCount: number): number {
+        return shownChains[stepCount] ?? CHAIN_PAGE;
+    }
+
+    function showMoreChains(stepCount: number) {
+        shownChains = {...shownChains, [stepCount]: chainLimit(stepCount) + CHAIN_PAGE};
+    }
 
     // =========================================================================
     // Derived
@@ -119,7 +141,8 @@
 
     function matchesSearch(route: RouteOption): boolean {
         if (searchTokens.length === 0) return true;
-        return searchTokens.every((token) => route.searchText.includes(token));
+        const text = searchTextOf(route);
+        return searchTokens.every((token) => text.includes(token));
     }
 
     function matchesProviderSearch(prov: ProviderInfo): boolean {
@@ -215,12 +238,27 @@
         return parts.join(' ').toLowerCase();
     }
 
+    /** Each route's search text, built at the first search, not for every route of every pair (lane 75, L2b: ~60 ms
+     * for the ~37 000 routes of a pair once the wave-1 banks are in). Cleared when the routes are recomputed. */
+    const searchTexts = new Map<string, string>();
+
+    function searchTextOf(route: RouteOption): string {
+        let text = searchTexts.get(route.key);
+        if (text === undefined) {
+            text = buildSearchText(route.chainSteps, getCachedFxProviders());
+            searchTexts.set(route.key, text);
+        }
+        return text;
+    }
+
     async function computeRoutes(base: string, quote: string) {
         loading = true;
         error = null;
         try {
             const paths = await findConversionPaths(base, quote, 4);
             const providers = getCachedFxProviders();
+            searchTexts.clear();
+            shownChains = {};
             const direct: RouteOption[] = [];
             const chain: RouteOption[] = [];
             const usedProviderCodes = new Set<string>();
@@ -229,7 +267,6 @@
                 const provCodes = path.map((s) => s.provider);
                 provCodes.forEach((c) => usedProviderCodes.add(c));
                 const key = path.map((s) => `${s.from}-${s.to}:${s.provider}`).join('|');
-                const searchText = buildSearchText(path, providers);
 
                 if (path.length === 1) {
                     const provInfo = providers.find((p) => p.code === path[0].provider);
@@ -240,7 +277,6 @@
                         providers: provCodes,
                         stepCount: 1,
                         isDirect: true,
-                        searchText,
                     });
                 } else {
                     const intermediates = path.slice(0, -1).map((s) => s.to);
@@ -252,7 +288,6 @@
                         providers: provCodes,
                         stepCount: path.length,
                         isDirect: false,
-                        searchText,
                     });
                 }
             }
@@ -375,7 +410,12 @@
         return prov.warning_i18n[language] ?? prov.warning_i18n['en'] ?? '';
     }
 
-    /** Collect all unique provider warnings for a route (deduplicated). */
+    /** How serious a provider's note is: 'warning' (⚠️) unless the provider marks it 'info' (ℹ️). */
+    function getProviderWarningLevel(code: string): NoteLevel {
+        return providerMap.get(code)?.warning_level === 'info' ? 'info' : 'warning';
+    }
+
+    /** Collect all unique provider notes for a route (deduplicated), each led by its level's sign. */
     function getRouteWarnings(route: RouteOption): string[] {
         const seen = new Set<string>();
         const warnings: string[] = [];
@@ -383,9 +423,16 @@
             if (seen.has(code)) continue;
             seen.add(code);
             const w = getProviderWarning(code);
-            if (w) warnings.push(`${getProviderName(code)}: ${w}`);
+            if (w) warnings.push(`${NOTE_SIGN[getProviderWarningLevel(code)]} ${getProviderName(code)}: ${w}`);
         }
         return warnings;
+    }
+
+    /** The most serious level among the notes of a route's providers; '' when none has a note. */
+    function getRouteWarningLevel(route: RouteOption): NoteLevel | '' {
+        const levels = route.providers.filter((code) => getProviderWarning(code)).map(getProviderWarningLevel);
+        if (levels.length === 0) return '';
+        return levels.includes('warning') ? 'warning' : 'info';
     }
 
     // =========================================================================
@@ -440,6 +487,7 @@
 
     function clearSearch() {
         searchQuery = '';
+        shownChains = {};
     }
 
     function routeKey(route: RouteOption): string {
@@ -465,8 +513,9 @@
     function legendTooltipHtml(prov: ProviderInfo): string {
         const desc = getProviderDescription(prov);
         const warning = getProviderWarning(prov.code);
+        const level = getProviderWarningLevel(prov.code);
         let h = `<strong>${escapeHtml(prov.name)}</strong><br/>${escapeHtml(desc)}`;
-        if (warning) h += `<br/><br/><span class="text-lf-warning-on-inverse">⚠️ ${escapeHtml(warning)}</span>`;
+        if (warning) h += `<br/><br/><span class="${level === 'info' ? 'text-lf-info-on-inverse' : 'text-lf-warning-on-inverse'}">${escapeHtml(NOTE_SIGN[level])} ${escapeHtml(warning)}</span>`;
         return h;
     }
 </script>
@@ -474,6 +523,15 @@
 <!-- ===================================================================== -->
 <!-- COMPONENT TEMPLATE                                                    -->
 <!-- ===================================================================== -->
+
+<!-- A provider note's sign: ℹ️ for a fact worth knowing, ⚠️ for a data limit that can mislead -->
+{#snippet noteIcon(level: NoteLevel | '', size: number)}
+    {#if level === 'info'}
+        <Info {size} class="text-lf-info flex-shrink-0" data-testid="fx-route-note-icon" data-level="info" />
+    {:else}
+        <AlertTriangle {size} class="text-lf-warning flex-shrink-0" data-testid="fx-route-note-icon" data-level="warning" />
+    {/if}
+{/snippet}
 
 {#if loading}
     <div class="flex items-center justify-center gap-2 py-4 text-xs text-lf-muted" data-testid="fx-route-loading">
@@ -490,7 +548,7 @@
         {#if orderedSelected.length > 0}
             <OrderableList items={orderedSelected} keyFn={routeKey} onReorder={handleReorder} {disabled}>
                 {#snippet children({item: route, index})}
-                    <div class="flex items-center gap-2 min-w-0" data-testid="fx-route-selected" data-route-key={route.key} data-priority={index + 1} data-warnings={getRouteWarnings(route).length}>
+                    <div class="flex items-center gap-2 min-w-0" data-testid="fx-route-selected" data-route-key={route.key} data-priority={index + 1} data-warnings={getRouteWarnings(route).length} data-warning-level={getRouteWarningLevel(route)}>
                         <!-- Route visualization -->
                         {#if route.isDirect}
                             {@const step = route.chainSteps[0]}
@@ -548,7 +606,7 @@
                         <!-- Provider warnings triangle -->
                         {#if getRouteWarnings(route).length > 0}
                             <Tooltip html={warningsTooltipHtml(getRouteWarnings(route))} position="top">
-                                <AlertTriangle size={13} class="text-lf-warning" />
+                                {@render noteIcon(getRouteWarningLevel(route), 13)}
                             </Tooltip>
                         {/if}
                         <!-- Remove button -->
@@ -611,7 +669,7 @@
                                         <span class="w-4 h-4 flex items-center justify-center rounded text-[7px] font-bold flex-shrink-0">{getProviderInitials(prov.code)}</span>
                                         <span class="text-[10px] font-semibold text-lf-secondary">{prov.code}</span>
                                         {#if provWarning}
-                                            <AlertTriangle size={10} class="text-lf-warning flex-shrink-0" />
+                                            {@render noteIcon(getProviderWarningLevel(prov.code), 10)}
                                         {/if}
                                     </a>
                                 </Tooltip>
@@ -626,6 +684,7 @@
                     <input
                         type="text"
                         bind:value={searchQuery}
+                        oninput={() => (shownChains = {})}
                         placeholder={$_('fx.route.searchPlaceholder')}
                         class="w-full pl-8 pr-8 py-1.5 text-xs rounded-lg border border-lf-input bg-lf-field text-lf-primary placeholder:text-lf-placeholder hover:border-lf-input-hover focus:ring-1 focus:ring-lf-focus focus:border-lf-focus outline-none transition-colors"
                         data-testid="fx-route-search"
@@ -656,6 +715,7 @@
                                 type="button"
                                 data-testid="fx-route-direct-{route.providers[0]}"
                                 data-warnings={warnings.length}
+                                data-warning-level={getRouteWarningLevel(route)}
                                 class="w-full text-left px-2.5 py-1.5 rounded-lg border transition-all text-xs border-lf-subtle bg-lf-card hover:border-lf-success-line hover:bg-lf-success-soft/50"
                                 onclick={() => addRoute(route)}
                             >
@@ -678,7 +738,7 @@
                                     <span class="font-medium text-lf-secondary text-[11px]">{step.to}</span>
                                     {#if warnings.length > 0}
                                         <Tooltip html={warningsTooltipHtml(warnings)} position="top">
-                                            <AlertTriangle size={11} class="text-lf-warning" />
+                                            {@render noteIcon(getRouteWarningLevel(route), 11)}
                                         </Tooltip>
                                     {/if}
                                     <span class="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded bg-lf-success-soft text-lf-success-on-soft flex-shrink-0">1 step</span>
@@ -717,11 +777,15 @@
 
                         <!-- Collapsible content -->
                         {#if isExpanded}
-                            {#each group.routes as route (route.key)}
+                            {@const limit = chainLimit(group.stepCount)}
+                            {#each group.routes.slice(0, limit) as route (route.key)}
                                 {@const warnings = getRouteWarnings(route)}
                                 <button
                                     type="button"
                                     data-testid="fx-route-chain-{route.stepCount}step-{route.providers.join('-')}"
+                                    data-route-key={route.key}
+                                    data-warnings={warnings.length}
+                                    data-warning-level={getRouteWarningLevel(route)}
                                     class="w-full text-left px-2.5 py-1.5 rounded-lg border transition-all text-xs border-lf-subtle bg-lf-card hover:border-lf-info-line hover:bg-lf-info-soft/50"
                                     onclick={() => addRoute(route)}
                                 >
@@ -754,7 +818,7 @@
                                         </span>
                                         {#if warnings.length > 0}
                                             <Tooltip html={warningsTooltipHtml(warnings)} position="top">
-                                                <AlertTriangle size={11} class="text-lf-warning" />
+                                                {@render noteIcon(getRouteWarningLevel(route), 11)}
                                             </Tooltip>
                                         {/if}
                                         <span class="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded bg-lf-info-soft text-lf-info-on-soft flex-shrink-0 whitespace-nowrap">
@@ -764,6 +828,17 @@
                                     </span>
                                 </button>
                             {/each}
+                            {#if group.routes.length > limit}
+                                <button
+                                    type="button"
+                                    class="w-full px-2.5 py-1.5 rounded-lg border border-dashed border-lf-subtle text-xs text-lf-link hover:bg-lf-hover transition-colors"
+                                    onclick={() => showMoreChains(group.stepCount)}
+                                    data-testid="fx-route-chain-more-{group.stepCount}"
+                                    data-hidden={group.routes.length - limit}
+                                >
+                                    {$_('fx.route.showMore', {values: {count: group.routes.length - limit}})}
+                                </button>
+                            {/if}
                         {/if}
                     </div>
                 {/each}

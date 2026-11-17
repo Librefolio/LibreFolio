@@ -375,6 +375,7 @@ async def get_scheduler_state(
     return {
         "current_price": job_info(state.current_price),
         "history_sync": job_info(state.history_sync),
+        "profile_read": job_info(state.profile_read),
         "server_tz": "UTC",
         "server_now_utc": server_now_utc,
         "scheduler_timezone": scheduler_tz,

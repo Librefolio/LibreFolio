@@ -36,6 +36,7 @@
     import type {ParsedRow} from '$lib/components/ui/data-editor/CsvEditor.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {formatDay} from '$lib/utils/core/formatAxisDate';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     // =========================================================================
     // Props
@@ -571,6 +572,10 @@
                 <span class="emoji-flag">{currencyFlag}</span>
             </div>
         {/if}
+        <!-- One icon for the whole editor, prices and events (RN-13, B1): its title and ✕ belong to the page. -->
+        <div class="flex shrink-0 items-center px-2">
+            <DocsLink path="user/assets/detail/data-editor/" label={$t('assetDetail.docsHelp.dataEditor')} icon="book" size={16} testId="asset-editor-docs" />
+        </div>
     </div>
 
     <!-- Data Editor: Prices -->

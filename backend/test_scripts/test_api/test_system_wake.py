@@ -181,6 +181,9 @@ REAL_RUN_DUE_JOBS = scheduler.run_due_jobs
 #: What the scheduler reaches past its two switches (``scheduler_disabled``, ``instance_blocked``): none of it on a
 #: blocked instance.
 PAST_THE_SWITCHES = ("am_i_leader", "load_scheduler_settings", "load_state", "save_state", "due_current_price", "due_history_sync", "run_current_price_refresh", "run_history_sync")
+#: Lot B6 (project 68): the third job's due function and body, past the switches too; trapped with ``raising=False``,
+#: the names exist once B6 does.
+PAST_THE_SWITCHES_B6 = ("due_profile_read", "run_profile_read")
 
 #: Files that cannot give a token, by what is wrong with them: each builder leaves such a thing at ``path``.
 BROKEN_FILES: dict[str, Callable[[Path], object]] = {
@@ -1358,6 +1361,8 @@ async def test_on_a_blocked_instance_the_real_run_answers_blocked_and_reaches_no
         monkeypatch.setattr(scheduler, name, trap(name, reached))
     # Z-11 (N71): the lock across processes is past the switches too; raising=False, the name exists once Z-11 does.
     monkeypatch.setattr(scheduler, "scheduler_run_lock", trap("scheduler_run_lock", reached), raising=False)
+    for name in PAST_THE_SWITCHES_B6:
+        monkeypatch.setattr(scheduler, name, trap(name, reached), raising=False)
     token, bearer = with_token(monkeypatch)
 
     exchange = await send(app, authorization=bearer, never=[token])
@@ -1399,6 +1404,10 @@ class RunCollaborators:
         monkeypatch.setattr(scheduler, "due_history_sync", lambda now, settings, state: state.history_sync.last_run_at is None)
         monkeypatch.setattr(scheduler, "run_current_price_refresh", self.current_price)
         monkeypatch.setattr(scheduler, "run_history_sync", self.history_sync)
+        # Lot B6: the third job, due until it ran and faked like the other two, so the real one never runs from here;
+        # raising=False: the names exist once B6 does.
+        monkeypatch.setattr(scheduler, "due_profile_read", lambda now, settings, state: state.profile_read.last_run_at is None, raising=False)
+        monkeypatch.setattr(scheduler, "run_profile_read", self.profile_read, raising=False)
         # Z-11 (N71): names the scheduler has only once the lock across processes exists, hence raising=False.
         monkeypatch.setattr(scheduler, "cross_process_lock_available", lambda: lock_available, raising=False)
         monkeypatch.setattr(scheduler, "scheduler_run_lock", self.scheduler_run_lock, raising=False)
@@ -1424,11 +1433,14 @@ class RunCollaborators:
     async def history_sync(self, state: SchedulerState, horizon_days: object = None) -> None:
         state.history_sync = JobState(last_run_at=datetime.now(UTC).isoformat(), last_duration_s=0.5, last_status="ok", last_items_ok=1)
 
+    async def profile_read(self, state: SchedulerState, settings: object = None) -> None:
+        state.profile_read = JobState(last_run_at=datetime.now(UTC).isoformat(), last_duration_s=0.5, last_status="ok", last_items_ok=1)
+
 
 #: A worker whose ``am_i_leader`` answers no, with and without ``fcntl`` (Z-11, N71): whether the lock across processes is
 #: available; then the run's status, its jobs, how often the leader is asked and the lock entered.
 NOT_THE_LEADER = [
-    pytest.param(True, "ok", [("current_price", "ok"), ("history_sync", "ok")], 0, 1, id="cross-process-lock"),
+    pytest.param(True, "ok", [("current_price", "ok"), ("history_sync", "ok"), ("profile_read", "ok")], 0, 1, id="cross-process-lock"),
     pytest.param(False, "not_leader", [], 1, 0, id="fallback-not-the-leader"),
 ]
 

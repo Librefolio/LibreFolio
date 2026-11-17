@@ -18,6 +18,7 @@ from backend.app.schemas.portfolio.summary import AssetPeriodContribution, Other
 from backend.app.services.financial_math.holding_window import closed_position_window, exits_in, oldest_open_lot_date, quantity_moves
 from backend.app.services.financial_math.native_cash import CONVERSION_DUST
 from backend.app.services.financial_math.portfolio import period as period_math
+from backend.app.services.financial_math.portfolio.asset_groups import ContributionFacts, group_by_asset, group_contributions, merge_by_kind
 from backend.app.services.financial_math.portfolio.contributions import (
     annualized_period_return,
     closed_flight_too_short,
@@ -56,6 +57,7 @@ class PortfolioPositionsMixin:
         target_currency_override: str | None = None,
         _precomputed_engine_result=None,
         apply_ownership_share: bool = True,
+        group_by: str = "broker",
     ) -> PositionsContribution:
         """Compute per-asset period P&L contribution for dashboard Performance view.
 
@@ -69,6 +71,10 @@ class PortfolioPositionsMixin:
         Fees/taxes without asset_id go to raw unallocated buckets plus UX-ready
         other_effects rows. Each broker's exchange result on foreign cash is an
         other_effects row of its own ("FX on cash"), ahead of the reconciliation residual.
+
+        group_by="asset" (project 74, «Globale»): one row per asset, the sum of its brokers' rows
+        (``financial_math.portfolio.asset_groups.group_contributions``), and the other effects summed by kind with their
+        brokers; gross gains and losses are those of the rows shown.
         """
         today = date_type.today()
         effective_end = date_to or today
@@ -149,6 +155,8 @@ class PortfolioPositionsMixin:
         # (trade marks, split adjustment, estimate at cost, the boundary day's rate): the rows' unrealized changes add up
         # to the period's ugl_delta. An internal transfer inside the period splits the result between the two brokers.
         contributions: list[AssetPeriodContribution] = []
+        # What each row is made of, by the row's index: the facts an asset summed over its brokers reads (project 74)
+        contribution_facts: list[ContributionFacts] = []
         start_states = {(ps.broker_id, ps.asset_id): ps for ps in engine_result.position_states_start} if date_from is not None else {}
         end_states = {(ps.broker_id, ps.asset_id): ps for ps in engine_result.position_states_end}
         tract_adjustments = transfer_tract_adjustments(engine_result.internal_asset_transfers, date_from, effective_end)
@@ -233,8 +241,8 @@ class PortfolioPositionsMixin:
                 end=effective_end,
                 moved_in=moved_in.get(pos_key) if row_exits == 0 else None,
             )
+            opened, closed = closed_position_window(row_moves)
             if is_fully_sold:
-                opened, closed = closed_position_window(row_moves)
                 closed_annualized = closed_position_annualized(period_pnl, exits_base, opened, closed, date_from)
                 if closed_annualized is not None:
                     period_annualized = closed_annualized
@@ -268,6 +276,32 @@ class PortfolioPositionsMixin:
                     closed_by=closings[pos_key][0] if is_fully_sold and pos_key in closings else None,
                     closed_to_broker_id=closings[pos_key][1] if is_fully_sold and pos_key in closings else None,
                     oldest_open_lot_date=oldest_open_lot_dates.get(pos_key),
+                    broker_ids=[broker_id],
+                )
+            )
+            contribution_facts.append(
+                ContributionFacts(
+                    broker_id=broker_id,
+                    held_at_start=qty_at_start > engine_facts._QUANTITY_DUST_THRESHOLD and start_state is not None,
+                    held_at_end=qty_at_end > engine_facts._QUANTITY_DUST_THRESHOLD,
+                    start_value=start_value,
+                    end_value=end_value,
+                    end_cost=cb_end,
+                    unrealized_delta=unrealized_delta,
+                    realized=realized if realized else None,
+                    income=income if income else None,
+                    fees=fees if fees else None,
+                    period_pnl=period_pnl,
+                    cost_sold=per_cost_sold.get(pos_key, Decimal("0")),
+                    sales=per_sales.get(pos_key, 0),
+                    exits=row_exits,
+                    moved_out_count=moved_out[pos_key][1] if pos_key in moved_out else 0,
+                    is_fully_sold=is_fully_sold,
+                    opened=opened,
+                    closed=closed,
+                    oldest_open_lot=oldest_open_lot_dates.get(pos_key),
+                    closed_by=closings[pos_key][0] if is_fully_sold and pos_key in closings else None,
+                    closed_to_broker_id=closings[pos_key][1] if is_fully_sold and pos_key in closings else None,
                 )
             )
 
@@ -298,6 +332,30 @@ class PortfolioPositionsMixin:
                         end_value=Decimal("0"),
                         is_fully_sold=True,
                         oldest_open_lot_date=oldest_open_lot_dates.get((bid, aid)),
+                        broker_ids=[bid],
+                    )
+                )
+                contribution_facts.append(
+                    ContributionFacts(
+                        broker_id=bid,
+                        held_at_start=False,
+                        held_at_end=False,
+                        start_value=Decimal("0"),
+                        end_value=Decimal("0"),
+                        end_cost=None,
+                        unrealized_delta=None,
+                        realized=None,
+                        income=income if income else None,
+                        fees=fees if fees > 0 else None,
+                        period_pnl=pnl,
+                        cost_sold=Decimal("0"),
+                        sales=0,
+                        exits=0,
+                        moved_out_count=0,
+                        is_fully_sold=True,
+                        opened=None,
+                        closed=None,
+                        oldest_open_lot=oldest_open_lot_dates.get((bid, aid)),
                     )
                 )
 
@@ -406,6 +464,12 @@ class PortfolioPositionsMixin:
                     )
                 )
 
+        for effect in other_effects:
+            effect.broker_ids = [effect.broker_id] if effect.broker_id is not None else []
+        if group_by == "asset":
+            contributions = _contributions_by_asset(contributions, contribution_facts, date_from=date_from, end=effective_end)
+            other_effects = _other_effects_by_kind(other_effects)
+
         gross_gains = sum(c.period_pnl for c in contributions if c.period_pnl and c.period_pnl > 0) or Decimal("0")
         gross_losses = sum(abs(c.period_pnl) for c in contributions if c.period_pnl and c.period_pnl < 0) or Decimal("0")
 
@@ -504,3 +568,59 @@ class PortfolioPositionsMixin:
             series=out,
             missing_fx_pairs=[info.pair for info in missing_pairs],
         )
+
+
+def _contributions_by_asset(rows: list[AssetPeriodContribution], facts: list[ContributionFacts], *, date_from: date_type | None, end: date_type) -> list[AssetPeriodContribution]:
+    """The Performance rows as one per asset, summed over its brokers (project 74, «Globale»).
+
+    ``facts`` holds, at each row's index, what the row was made of. Every row is the asset's, keyed by the asset alone
+    (``broker_id`` None, its brokers in ``broker_ids``), as the holdings and the chart's series are: an asset with one
+    row keeps its figures, one with several gets ``asset_groups.group_contributions``'. Rows keep the order in which each
+    asset first appears.
+    """
+    out: list[AssetPeriodContribution] = []
+    for indexes in group_by_asset(range(len(rows)), lambda index: rows[index].asset_id).values():
+        if len(indexes) == 1:
+            out.append(rows[indexes[0]].model_copy(update={"broker_id": None, "broker_name": None}))
+            continue
+        group = group_contributions([facts[index] for index in indexes], date_from=date_from, end=end)
+        out.append(
+            rows[indexes[0]].model_copy(
+                update={
+                    "broker_id": None,
+                    "broker_name": None,
+                    "broker_ids": group.broker_ids,
+                    "period_unrealized_delta": group.unrealized_delta,
+                    "period_realized_gain_loss": group.realized,
+                    "period_income": group.income,
+                    "period_fees_taxes": group.fees,
+                    "period_pnl": group.period_pnl,
+                    "period_pnl_percent": group.period_pnl_percent,
+                    "period_unrealized_delta_percent": group.unrealized_delta_percent,
+                    "period_realized_gain_loss_percent": group.realized_percent,
+                    "period_income_percent": group.income_percent,
+                    "period_fees_taxes_percent": group.fees_percent,
+                    "annualized_return": group.annualized_return,
+                    "start_value": group.start_value,
+                    "end_value": group.end_value,
+                    "is_fully_sold": group.is_fully_sold,
+                    "closed_by": group.closed_by,
+                    "closed_to_broker_id": group.closed_to_broker_id,
+                    "oldest_open_lot_date": group.oldest_open_lot,
+                }
+            )
+        )
+    return out
+
+
+def _other_effects_by_kind(effects: list[OtherPeriodEffect]) -> list[OtherPeriodEffect]:
+    """The other effects of the period summed by kind (developer, 16/11/2026: «Globale is global»): one row per code,
+    description and category, with the brokers of its rows in ``broker_ids`` and none named (``broker_id`` None), as the
+    positions' rows."""
+    first: dict[tuple, OtherPeriodEffect] = {}
+    for effect in effects:
+        first.setdefault((effect.code, effect.description, effect.category), effect)
+    out: list[OtherPeriodEffect] = []
+    for kind, broker_ids, amount in merge_by_kind(((effect.code, effect.description, effect.category), effect.broker_id, effect.period_pnl) for effect in effects):
+        out.append(first[kind].model_copy(update={"period_pnl": amount, "broker_ids": broker_ids, "broker_id": None, "broker_name": None}))
+    return out

@@ -76,7 +76,7 @@
     "costs": "Costes",
     "noPositions": "Sin posiciones disponibles",
     "noPeriodPnl": "Sin P&L en el período seleccionado",
-    "seeAllPositions": "Ver todo →",
+    "seeAllPositions": "Ver todo",
     "aiExport": "Exportación IA",
     "periodPnlTooltip": "Ganancia o pérdida total atribuible solo al período seleccionado (cambio no realizado + realizado + ingresos − comisiones). Puede diferir de la ganancia total de la posición.",
     "unrealizedPnlPercent": "P&L %",
@@ -173,6 +173,19 @@
     "allocationNoShares": "No hay porcentajes que mostrar: las porciones suman cero o menos (por ejemplo, un descubierto que anula tus posiciones). Los importes se listan debajo.",
     "allocationHistoryNoShares": "No hay porcentajes que mostrar: en estos días las porciones suman cero o menos.",
     "pnlDeltaDayTooltip": "Variación de hoy del P&L total, y esa variación en porcentaje respecto al valor de la cartera de ayer.",
-    "yieldOnCostFxStale": "tasa antigua: {days} días antes"
+    "yieldOnCostFxStale": "tasa antigua: {days} días antes",
+    "groupBy": {
+      "global": "Global",
+      "broker": "Bróker",
+      "globalHint": "Una fila por activo: la suma de todos los brókers que lo tienen",
+      "brokerHint": "Una fila por activo y bróker",
+      "label": "Agrupar las posiciones",
+      "brokerCount": "{count} brókers"
+    },
+    "docsHelp": {
+      "growth": "Cómo se ha movido el valor de la cartera en el período: en dinero, como rentabilidad o como ganancias y pérdidas.",
+      "allocation": "Cómo se reparte la cartera — por tipo, sector, país o activo — hoy, o a lo largo del tiempo.",
+      "positions": "Lo que tienes y lo que rindió cada posición en el período, agrupado por activo o por bróker, en tabla o en mapa."
+    }
   }
 }

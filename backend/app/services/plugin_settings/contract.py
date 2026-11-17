@@ -5,6 +5,7 @@ Every family base that supports settings (``AssetSourceProvider``, ``FXRateProvi
 
 - ``settings_fields``: the fields the plugin declares (``fields.py``), empty by default: a plugin that declares none
   is called exactly as before, with no database read and no key;
+- ``settings_groups``: the shared groups it reads too (``groups/``, project 76): ``self.settings.group(name)``;
 - ``test_only``: a plugin that exists for the tests, never listed to users (catalogue, provider lists, settings), and
   outside test mode not served at all: the registries do not find it (X-R44);
 - ``settings``: the values the core bound to this instance (``runtime.py``), or, on an instance nobody configured,
@@ -22,16 +23,25 @@ from collections.abc import Mapping
 from typing import Any, ClassVar
 
 from backend.app.services.plugin_settings.fields import PluginSettingField, SettingScope
+from backend.app.services.plugin_settings.groups import SettingsGroup, plugin_groups
+
+
+def qualified_missing(own: tuple[str, ...], groups: Mapping[str, tuple[str, ...]]) -> tuple[str, ...]:
+    """The fields that leave a plugin not configured, its groups' included: its own keys, then ``<group>.<field>`` for each
+    group by name (a dot never occurs in a field key). THE one rule of a call (``BoundSettings.missing``) and of the
+    catalogue's ``configured`` (``service.read_catalogue``), so the two never disagree."""
+    return tuple(own) + tuple(f"{name}.{key}" for name in sorted(groups) for key in groups[name])
 
 
 class BoundSettings:
     """The values of one plugin's fields for one use: plain values, secrets, and the required fields left without one.
 
-    ``fingerprint`` identifies the values for the caches that depend on them (``resolver.settings_fingerprint``); it
-    is empty for an instance nobody configured. The ``repr`` names the secret fields and never shows their values.
+    ``fingerprint`` identifies the values for the caches that depend on them (``resolver.settings_fingerprint``, the
+    groups' too); it is empty for an instance nobody configured. The ``repr`` names the secret fields and never shows
+    their values. The values of the shared groups the plugin declares are bound beside its own (``group(name)``).
     """
 
-    __slots__ = ("_fields", "_fingerprint", "_missing", "_secrets", "_values")
+    __slots__ = ("_fields", "_fingerprint", "_groups", "_missing", "_secrets", "_values")
 
     def __init__(  # noqa: PLR0913 — the parts of one binding
         self,
@@ -41,19 +51,21 @@ class BoundSettings:
         missing: tuple[str, ...] = (),
         *,
         fingerprint: str = "",
+        groups: Mapping[str, BoundSettings] | None = None,
     ):
         self._fields = {declared.key: declared for declared in fields}
         self._values = dict(values)
         self._secrets = dict(secrets)
         self._missing = tuple(missing)
         self._fingerprint = fingerprint
+        self._groups = dict(groups or {})
 
     @classmethod
-    def unbound(cls, fields: tuple[PluginSettingField, ...]) -> BoundSettings:
-        """What an instance nobody configured sees: each plain field's default, no secret."""
+    def unbound(cls, fields: tuple[PluginSettingField, ...], groups: tuple[SettingsGroup, ...] = ()) -> BoundSettings:
+        """What an instance nobody configured sees: each plain field's default, no secret; the same for each group."""
         values = {declared.key: declared.default for declared in fields if not declared.secret and declared.default is not None}
         missing = tuple(declared.key for declared in fields if declared.required and declared.key not in values)
-        return cls(fields, values, {}, missing)
+        return cls(fields, values, {}, missing, groups={group.name: cls.unbound(group.fields) for group in groups})
 
     def _declared(self, key: str) -> PluginSettingField:
         declared = self._fields.get(key)
@@ -73,11 +85,20 @@ class BoundSettings:
             raise KeyError(f"{key!r} is not a secret: read it with settings.get()")
         return self._secrets.get(key)
 
+    def group(self, name: str) -> BoundSettings:
+        """The values of the shared group ``name`` the plugin declares (``settings_groups``), read like the plugin's own:
+        ``settings.group("coingecko").secret("api_key")``."""
+        bound = self._groups.get(name)
+        if bound is None:
+            raise KeyError(f"{name!r} is not a declared settings group")
+        return bound
+
     @property
     def missing(self) -> tuple[str, ...]:
         """The fields without a usable value: a required one left without a value, or one whose environment variable is
-        set but invalid. The plugin is not configured while one is left."""
-        return self._missing
+        set but invalid. The plugin is not configured while one is left. A group's field is named ``<group>.<field>``
+        (``coingecko.api_key``): a dot never occurs in a field key."""
+        return qualified_missing(self._missing, {name: bound.missing for name, bound in self._groups.items()})
 
     @property
     def fingerprint(self) -> str:
@@ -85,8 +106,9 @@ class BoundSettings:
         return self._fingerprint
 
     def secret_values(self) -> frozenset[str]:
-        """The secret values bound here: the core masks them in the errors and the logs of a call."""
-        return frozenset(value for value in self._secrets.values() if value)
+        """The secret values bound here, the groups' included: the core masks them in the errors and the logs of a call."""
+        own = frozenset(value for value in self._secrets.values() if value)
+        return own.union(*(bound.secret_values() for bound in self._groups.values()))
 
     @property
     def carries_user_secrets(self) -> bool:
@@ -103,13 +125,16 @@ class BoundSettings:
         return dict(self._values)
 
     def __repr__(self) -> str:
-        return f"BoundSettings(values={self._values!r}, secrets_set={sorted(self._secrets)!r}, missing={list(self._missing)!r})"
+        groups = f", groups={sorted(self._groups)!r}" if self._groups else ""
+        return f"BoundSettings(values={self._values!r}, secrets_set={sorted(self._secrets)!r}, missing={list(self.missing)!r}{groups})"
 
 
 class PluginSettingsMixin:
     """The settings part of a plugin family base."""
 
     settings_fields: ClassVar[tuple[PluginSettingField, ...]] = ()
+    #: The shared settings groups the plugin reads (``groups/``): their names, checked at registration
+    settings_groups: ClassVar[tuple[str, ...]] = ()
     test_only: ClassVar[bool] = False
     _lf_bound_settings: BoundSettings | None = None
 
@@ -117,7 +142,7 @@ class PluginSettingsMixin:
     def settings(self) -> BoundSettings:
         """The values bound to this instance, or the declared defaults when the core bound none."""
         bound = self._lf_bound_settings
-        return bound if bound is not None else BoundSettings.unbound(type(self).settings_fields)
+        return bound if bound is not None else BoundSettings.unbound(type(self).settings_fields, plugin_groups(type(self)))
 
     def bind_settings(self, bound: BoundSettings) -> None:
         """Called by the core on a new instance, before the call: never by a plugin."""

@@ -20,6 +20,7 @@ import {goto} from '$app/navigation';
 import {browser} from '$app/environment';
 import {debug} from '$lib/debug';
 import {loginUrl} from '$lib/utils/internalPath';
+import {isSignOutRequested} from '$lib/stores/app/signOutIntent';
 import {notifyPortfolioMutation} from '$lib/stores/portfolio/portfolioMutation';
 import {priceRefresh} from '$lib/features/price-refresh/priceRefresh';
 import {instanceBlockState, isInstanceAwaitingRestoreError, isInstanceBlockedError, isInstanceRestoreInterruptedError} from '$lib/features/instance/instanceBlockState';
@@ -150,8 +151,10 @@ axiosInstance.interceptors.response.use(
 
         // A 401 means the session is gone: go to the login, carrying the page to come back to.
         // On the root the login is already there, and a failed sign-in answers 401 too; a link page has no session.
+        // After a sign-out the user asked for, the requests still in flight answer 401 too: the sign-out opens the plain
+        // login itself, so they go nowhere.
         if (error.response?.status === 401) {
-            if (browser && window.location.pathname !== '/' && !isLinkPage(window.location.pathname)) {
+            if (browser && window.location.pathname !== '/' && !isLinkPage(window.location.pathname) && !isSignOutRequested()) {
                 debug.log('API', '401 Unauthorized - redirecting to login');
                 goto(loginUrl(window.location.pathname + window.location.search));
             }

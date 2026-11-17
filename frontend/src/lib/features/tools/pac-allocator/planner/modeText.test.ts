@@ -45,7 +45,7 @@ vi.mock('$lib/api', () => ({
 }));
 
 import {isPrivacyEnabled, setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
-import {canonicalInput} from './decimal';
+import {canonicalInput} from '$lib/utils/core/exactDecimal';
 import type {DraftMode, ModeKind} from './draft.svelte';
 import {formatPlannerPlainDecimal, formatPlannerPricePlain, plannerPlainDecimalCount, plannerQuantityCount} from './format';
 import {modeIncrementText, type PlannerTranslate} from './modeText';

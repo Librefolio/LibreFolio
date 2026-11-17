@@ -17,18 +17,20 @@
   top, then the numbers and the table before → after (`AssetBulkSummary.svelte`). A block does not stop the way there;
   it turns «Save» off. «Back» returns to the fields as they were. «Save N assets» sends `PATCH /assets` with the same
   payload, all or nothing: `committed=false` (or a failed call) keeps the modal on the summary with the red banner and
-  the issues; `committed=true` shows the toast and calls `onsaved`, and the owner reloads the list and clears the
-  selection.
+  the issues; `committed=true` shows the toast and calls `onsaved`. The modal then STAYS OPEN on the summary with the green
+  «Saved» check in the footer («Cancel» becomes «Close», «Save» is off) and keeps the summary of what was saved, even when
+  the owner reloads the assets (it never closes the modal and keeps the page selection, so the same assets can be edited
+  again): «Back», or any change, takes the check away.
 
   Published state for the tests: `data-step` on the root, `data-modified` (the count of touched fields),
-  `data-verify` (`idle`, `running`, `done`, `failed`), `data-blocked` (the count of blocking groups), `data-saving`, `data-state`
+  `data-verify` (`idle`, `running`, `done`, `failed`), `data-blocked` (the count of blocking groups), `data-saving`, `data-saved`, `data-state`
   (`leave`, `yes`, `no`) on the three-state controls, `data-modified` and `data-blocked` on each field.
   Svelte 5 runes.
 -->
 <script lang="ts">
     import {untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
-    import {Loader2, Undo, Upload, X} from 'lucide-svelte';
+    import {Ban, Check, Loader2, Trash2, Undo, Upload, X} from 'lucide-svelte';
     import {zodiosApi} from '$lib/api';
     import {notify} from '$lib/stores/app/notify.svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
@@ -39,7 +41,7 @@
     import AssetBulkSummary from './AssetBulkSummary.svelte';
     import {extractErrorMessage} from '$lib/utils/trySave';
     import {assetTypeBadgeClass, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
-    import {FIELD_LABEL_KEYS, buildBulkPatch, hasChanges, summarizeChanges, summarizeCurrent, touchedFields, validateQuoteBase, type BulkAsset, type BulkDraft, type BulkFieldKey, type BulkPatchItem, type ValueCounts} from './assetBulkEdit';
+    import {FIELD_LABEL_KEYS, buildBulkPatch, hasChanges, summarizeChanges, summarizeCurrent, touchedFields, validateQuoteBase, type BulkAsset, type BulkDraft, type BulkFieldKey, type BulkPatchItem, type ChangeSummary, type ValueCounts} from './assetBulkEdit';
     import {affectedIds, hasBlocks, organizeVerify, type VerifyGroup, type VerifyView} from './assetBulkVerify';
     import {patchIssueMessage, type AssetPatchAnswer} from '../assetPatchResult';
 
@@ -65,6 +67,9 @@
     // What the user chose; '' and 'leave' are «Leave as is».
     let iconUrl = $state('');
     let userUrl = $state('');
+    // «Remove» is a choice of its own (U7): the removal and a chosen value never stand together.
+    let clearIcon = $state(false);
+    let clearUserUrl = $state(false);
     let assetType = $state('');
     let quoteBaseInput = $state('');
     let active = $state<Tri>('leave');
@@ -81,6 +86,9 @@
     let verifyToken = 0;
     // «Save N assets»: in flight, and why it did not go through ('' = no refusal to show).
     let saving = $state(false);
+    // The last save went through: the check in the footer and the summary of what was saved, until something changes.
+    let saved = $state(false);
+    let savedSummary = $state<ChangeSummary | null>(null);
     let saveFailure = $state<'' | 'refused' | 'error'>('');
     let saveError = $state('');
 
@@ -92,6 +100,8 @@
     let draft = $derived<BulkDraft>({
         icon_url: iconUrl || null,
         user_url: userUrl,
+        clear_icon: clearIcon,
+        clear_user_url: clearUserUrl,
         asset_type: assetType || null,
         quote_base_quantity: quoteCheck === 'ok' ? Number(quoteBaseInput.trim()) : null,
         active: triValue(active),
@@ -101,6 +111,8 @@
     let current = $derived(summarizeCurrent(selection));
     let touched = $derived(touchedFields(draft));
     let summary = $derived(summarizeChanges(selection, draft));
+    // After a save the owner reloads the assets, which then hold the new values: the summary keeps what was saved.
+    let shownSummary = $derived(saved && savedSummary ? savedSummary : summary);
     // A unit that is typed but not valid keeps «Continue» off: otherwise another touched field would turn it on and the
     // typed unit would be dropped without a word.
     let canContinue = $derived(hasChanges(selection, draft) && (quoteCheck === 'empty' || quoteCheck === 'ok'));
@@ -110,7 +122,6 @@
 
     // The chips follow the whole selection: an asset taken out of the edit stays visible, struck through (mockup v5, 5a).
     let shownSelected = $derived(showAllSelected ? assets : assets.slice(0, CHIPS_SHOWN));
-    let iconFileName = $derived(iconUrl ? decodeURIComponent(iconUrl.split(/[?#]/)[0].split('/').pop() ?? '') : '');
     let urlPlaceholder = $derived(current.user_url.distinct + (current.user_url.empty > 0 ? 1 : 0) > 1 ? $t('assets.bulkEdit.leaveDifferent') : $t('assets.bulkEdit.leave'));
     let typePlaceholder = $derived(current.asset_type.distinct > 1 ? $t('assets.bulkEdit.leaveDifferent') : $t('assets.bulkEdit.leave'));
 
@@ -130,7 +141,7 @@
     let warnedIds = $derived(warningGroups.flatMap((group) => affectedIds(group)));
     let blockedIds = $derived(verify ? verify.blocks.flatMap((group) => affectedIds(group)) : []);
     // «Save» is on only on the summary, with something to save, after a check with no block, and not while saving.
-    let canSave = $derived(step === 'summary' && summary.changing > 0 && verifyRun === 'done' && !(verify && hasBlocks(verify)) && !saving);
+    let canSave = $derived(step === 'summary' && summary.changing > 0 && verifyRun === 'done' && !(verify && hasBlocks(verify)) && !saving && !saved);
 
     function discardVerify() {
         verifyToken++;
@@ -141,6 +152,8 @@
         warningsAccepted = false;
         saveFailure = '';
         saveError = '';
+        saved = false;
+        savedSummary = null;
     }
 
     // Every opening starts clean.
@@ -154,6 +167,8 @@
         step = 'fields';
         iconUrl = '';
         userUrl = '';
+        clearIcon = false;
+        clearUserUrl = false;
         assetType = '';
         quoteBaseInput = '';
         active = 'leave';
@@ -166,9 +181,13 @@
     }
 
     function resetField(field: BulkFieldKey) {
-        if (field === 'icon_url') iconUrl = '';
-        else if (field === 'user_url') userUrl = '';
-        else if (field === 'asset_type') assetType = '';
+        if (field === 'icon_url') {
+            iconUrl = '';
+            clearIcon = false;
+        } else if (field === 'user_url') {
+            userUrl = '';
+            clearUserUrl = false;
+        } else if (field === 'asset_type') assetType = '';
         else if (field === 'quote_base_quantity') quoteBaseInput = '';
         else if (field === 'active') active = 'leave';
         else benchmark = 'leave';
@@ -220,6 +239,8 @@
 
     function handleBack() {
         if (saving) return;
+        saved = false;
+        savedSummary = null;
         step = 'fields';
     }
 
@@ -240,6 +261,9 @@
                     detail: {count: ids.length, fields},
                     toast: {variant: 'success', message: $t('assets.bulkEdit.savedToast', {values: {count: ids.length, fields: fields.map((field) => $t(FIELD_LABEL_KEYS[field])).join(', ')}})},
                 });
+                // The modal stays open: the check says it went through, and the summary stays as it was saved.
+                savedSummary = summary;
+                saved = true;
                 onsaved?.({ids, fields, count: ids.length});
                 return;
             }
@@ -280,8 +304,19 @@
         return code ? $t(`assets.types.${code}`) : '';
     }
 
+    function toggleClearIcon() {
+        clearIcon = !clearIcon;
+        if (clearIcon) iconUrl = '';
+    }
+
+    function toggleClearUserUrl() {
+        clearUserUrl = !clearUserUrl;
+        if (clearUserUrl) userUrl = '';
+    }
+
     function handleIconChange(url: string) {
         iconUrl = url || '';
+        if (iconUrl) clearIcon = false;
         showImagePicker = false;
     }
 
@@ -295,7 +330,7 @@
 </script>
 
 {#snippet fieldHead(field: BulkFieldKey, label: string, forId?: string, labelId?: string)}
-    <div class="mb-1 flex min-h-[26px] flex-wrap items-center gap-1.5">
+    <div class="mb-1 flex min-h-[22px] flex-wrap items-center gap-1.5">
         {#if forId}
             <label for={forId} class="text-sm font-medium text-lf-primary">{label}</label>
         {:else}
@@ -306,11 +341,19 @@
         {/if}
         {#if isModified(field)}
             <span class="rounded px-1.5 py-0.5 text-[10px] font-medium bg-lf-selected text-lf-link" data-testid="asset-bulk-{field}-chip">{$t('assets.bulkEdit.modified')}</span>
-            <button type="button" class="ml-auto rounded-lg bg-lf-panel p-1.5 text-lf-secondary transition-colors hover:bg-lf-neutral" title={$t('common.undo')} aria-label={$t('common.undo')} data-testid="asset-bulk-reset-{field}" onclick={() => resetField(field)}>
+        {/if}
+    </div>
+{/snippet}
+
+<!-- The Undo of a field sits on the row of its control (the slot is kept when nothing is touched, so the controls do not move). -->
+{#snippet undoSlot(field: BulkFieldKey)}
+    <span class="flex h-[30px] w-[30px] shrink-0 items-center justify-center">
+        {#if isModified(field)}
+            <button type="button" class="rounded-lg bg-lf-panel p-1.5 text-lf-secondary transition-colors hover:bg-lf-neutral" title={$t('common.undo')} aria-label={$t('common.undo')} data-testid="asset-bulk-reset-{field}" onclick={() => resetField(field)}>
                 <Undo size={14} />
             </button>
         {/if}
-    </div>
+    </span>
 {/snippet}
 
 {#snippet impactLine(field: BulkFieldKey)}
@@ -323,7 +366,7 @@
     {#if impact}
         <p class="mt-1 text-[11px] text-lf-muted" data-testid="asset-bulk-{field}-impact" data-changing={impact.changing} data-total={impact.total}>
             {$t('assets.bulkEdit.changesFor', {values: {changing: impact.changing, total: impact.total}})}{#if impact.alreadyIds.length > 0 && impact.changing > 0}
-                · {$t('assets.bulkEdit.alreadyHave', {values: {already: impact.alreadyIds.length}})}{/if}
+                · {$t(impact.after === null ? 'assets.bulkEdit.alreadyWithout' : 'assets.bulkEdit.alreadyHave', {values: {already: impact.alreadyIds.length}})}{/if}
         </p>
     {/if}
 {/snippet}
@@ -433,9 +476,9 @@
 {/snippet}
 
 <ModalBase {open} maxWidth="4xl" allowOverflow={true} onRequestClose={handleClose} {zIndex} testId="asset-bulk-edit-modal" labelledBy="asset-bulk-edit-title">
-    <div data-testid="asset-bulk-edit" data-step={step} data-modified={modifiedCount} data-selected={selection.length} data-verify={verifyRun} data-blocked={blockedCount} data-saving={saving}>
+    <div class="flex max-h-[90vh] flex-col" data-testid="asset-bulk-edit" data-step={step} data-modified={modifiedCount} data-selected={selection.length} data-verify={verifyRun} data-blocked={blockedCount} data-saving={saving} data-saved={saved}>
         <!-- Header -->
-        <div class="flex items-start justify-between gap-3 border-b border-lf-subtle px-6 py-4">
+        <div class="flex shrink-0 items-start justify-between gap-3 border-b border-lf-subtle px-6 py-4">
             <div class="min-w-0">
                 <h2 id="asset-bulk-edit-title" class="text-lg font-semibold text-lf-primary" data-testid="asset-bulk-title">{$t(step === 'summary' ? 'assets.bulkEdit.titleSummary' : 'assets.bulkEdit.title', {values: {count: selection.length}})}</h2>
                 <p class="mt-0.5 text-sm text-lf-muted" data-testid="asset-bulk-subtitle">
@@ -461,7 +504,9 @@
         </div>
 
         <!-- Body -->
-        <div class="max-h-[70vh] min-h-0 space-y-5 overflow-y-auto px-6 py-4">
+        <!-- The body scrolls (wheel, touch, keyboard) with the bar hidden: the shared `scrollbar-hidden` of app.css. A scrollable region the keyboard can reach and scroll (tab stop, focus ring). -->
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+        <div class="scrollbar-hidden min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-4 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-lf-focus" role="region" aria-labelledby="asset-bulk-edit-title" tabindex="0" data-testid="asset-bulk-body">
             <!-- Steps -->
             <ol class="flex items-center gap-3 text-xs font-medium" data-testid="asset-bulk-steps">
                 <li class="flex items-center gap-1.5 {step === 'fields' ? 'text-lf-primary' : 'text-lf-muted'}" data-testid="asset-bulk-step-fields" data-active={step === 'fields'}>
@@ -476,7 +521,9 @@
 
             <!-- «Verify now»: the blocks first, the warnings after; nothing at all when the check finds nothing -->
             <div class="space-y-2" data-testid="asset-bulk-verify-banners">
-                {@render verifyBanners()}
+                {#if !saved}
+                    {@render verifyBanners()}
+                {/if}
             </div>
 
             {#if step === 'fields'}
@@ -507,74 +554,96 @@
                     </div>
                 </div>
 
-                <!-- Zone: Other details -->
+                <!-- Zone: Details and classification. One grid: the icon on the left over two rows, User URL and Type stacked on
+                     the right on one column; in every field the label row, then the control (with its Undo), then «Now» under it. -->
                 <section class="rounded-xl border border-lf-subtle bg-lf-card p-4" data-testid="asset-bulk-zone-details">
                     <h3 class="mb-3 text-xs font-semibold uppercase tracking-wider text-lf-muted">{$t('assets.bulkEdit.zoneDetails')}</h3>
-                    <div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
-                        <div data-testid="asset-bulk-field-icon_url" data-modified={isModified('icon_url') ? 'true' : 'false'}>
+                    <div class="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)]">
+                        <div class="sm:row-span-2" data-testid="asset-bulk-field-icon_url" data-modified={isModified('icon_url') ? 'true' : 'false'}>
                             {@render fieldHead('icon_url', $t('common.icon'), undefined, 'asset-bulk-icon-label')}
-                            <p class="text-[11px] text-lf-muted" data-testid="asset-bulk-icon_url-now">
+                            <div class="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    class="group relative flex h-16 w-16 shrink-0 items-center justify-center rounded-full {iconUrl ? '' : 'border-2 border-dashed border-lf-input text-lf-muted hover:border-lf-input-hover'}"
+                                    aria-labelledby="asset-bulk-icon-label"
+                                    title={$t('assets.bulkEdit.iconPick')}
+                                    data-testid="asset-bulk-icon-pick"
+                                    onclick={() => (showImagePicker = true)}
+                                >
+                                    {#if iconUrl}
+                                        <AssetIcon {iconUrl} size="lg" />
+                                        <span class="absolute inset-0 flex items-center justify-center rounded-full bg-lf-overlay opacity-0 transition-opacity group-hover:opacity-100">
+                                            <Upload class="text-lf-on-overlay" size={16} />
+                                        </span>
+                                    {:else if clearIcon}
+                                        <Ban size={20} />
+                                    {:else}
+                                        <Upload size={20} />
+                                    {/if}
+                                </button>
+                                {@render undoSlot('icon_url')}
+                            </div>
+                            {#if current.icon.with > 0}
+                                <button
+                                    type="button"
+                                    class="mt-2 inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors {clearIcon ? 'border-lf-danger-line bg-lf-danger-soft text-lf-danger-on-soft' : 'border-lf-input bg-lf-field text-lf-secondary hover:bg-lf-hover'}"
+                                    aria-pressed={clearIcon}
+                                    data-testid="asset-bulk-icon-remove"
+                                    onclick={toggleClearIcon}
+                                >
+                                    <Trash2 size={12} />
+                                    {$t('assets.bulkEdit.removeIcon')}
+                                </button>
+                            {/if}
+                            <p class="mt-1 text-[11px] text-lf-muted" data-testid="asset-bulk-icon_url-now">
                                 {$t('assets.bulkEdit.now')}
                                 {$t('assets.bulkEdit.nowIcon', {values: {withIcon: current.icon.with, without: current.icon.without}})}
                             </p>
+                            {@render impactLine('icon_url')}
                         </div>
                         <div data-testid="asset-bulk-field-user_url" data-modified={isModified('user_url') ? 'true' : 'false'}>
                             {@render fieldHead('user_url', $t('assets.provider.userUrl'), 'asset-bulk-user-url')}
-                            <p class="text-[11px] text-lf-muted" data-testid="asset-bulk-user_url-now">
+                            <div class="flex items-center gap-2">
+                                <input
+                                    id="asset-bulk-user-url"
+                                    type="text"
+                                    bind:value={userUrl}
+                                    disabled={clearUserUrl}
+                                    placeholder={clearUserUrl ? $t('assets.bulkEdit.toBeRemoved') : urlPlaceholder}
+                                    data-testid="asset-bulk-user-url"
+                                    class="min-w-0 flex-1 rounded-lg border border-lf-input bg-lf-field px-3 py-2 text-sm text-lf-primary placeholder:text-lf-placeholder hover:border-lf-input-hover focus:border-lf-focus focus:outline-none focus:ring-2 focus:ring-lf-focus/50 disabled:cursor-not-allowed disabled:opacity-60"
+                                />
+                                {#if current.user_url.distinct > 0}
+                                    <button
+                                        type="button"
+                                        class="inline-flex shrink-0 items-center gap-1 rounded-lg border px-2.5 py-2 text-xs font-medium transition-colors {clearUserUrl
+                                            ? 'border-lf-danger-line bg-lf-danger-soft text-lf-danger-on-soft'
+                                            : 'border-lf-input bg-lf-field text-lf-secondary hover:bg-lf-hover'}"
+                                        aria-pressed={clearUserUrl}
+                                        data-testid="asset-bulk-user-url-remove"
+                                        onclick={toggleClearUserUrl}
+                                    >
+                                        <Trash2 size={12} />
+                                        {$t('assets.bulkEdit.removeUrl')}
+                                    </button>
+                                {/if}
+                                {@render undoSlot('user_url')}
+                            </div>
+                            <p class="mt-1 text-[11px] text-lf-muted" data-testid="asset-bulk-user_url-now">
                                 {$t('assets.bulkEdit.now')}
                                 {$t('assets.bulkEdit.nowUrl', {values: {distinct: current.user_url.distinct, empty: current.user_url.empty}})}
                             </p>
+                            {@render impactLine('user_url')}
                         </div>
-                        <!-- The icon's circle and the URL field share one centre: the field sits at half the circle's height. -->
-                        <div class="flex w-16 flex-col items-center gap-1">
-                            <button
-                                type="button"
-                                class="group relative flex h-16 w-16 items-center justify-center rounded-full {iconUrl ? '' : 'border-2 border-dashed border-lf-input text-lf-muted hover:border-lf-input-hover'}"
-                                aria-labelledby="asset-bulk-icon-label"
-                                title={$t('assets.bulkEdit.iconPick')}
-                                data-testid="asset-bulk-icon-pick"
-                                onclick={() => (showImagePicker = true)}
-                            >
-                                {#if iconUrl}
-                                    <AssetIcon {iconUrl} size="lg" />
-                                    <span class="absolute inset-0 flex items-center justify-center rounded-full bg-lf-overlay opacity-0 transition-opacity group-hover:opacity-100">
-                                        <Upload class="text-lf-on-overlay" size={16} />
-                                    </span>
-                                {:else}
-                                    <Upload size={20} />
-                                {/if}
-                            </button>
-                            {#if iconFileName}
-                                <span class="max-w-[8rem] truncate text-[10px] text-lf-muted" data-testid="asset-bulk-icon-file">{iconFileName}</span>
-                            {/if}
-                        </div>
-                        <div class="flex h-16 items-center">
-                            <input
-                                id="asset-bulk-user-url"
-                                type="text"
-                                bind:value={userUrl}
-                                placeholder={urlPlaceholder}
-                                data-testid="asset-bulk-user-url"
-                                class="w-full rounded-lg border border-lf-input bg-lf-field px-3 py-2 text-sm text-lf-primary placeholder:text-lf-placeholder hover:border-lf-input-hover focus:border-lf-focus focus:outline-none focus:ring-2 focus:ring-lf-focus/50"
-                            />
-                        </div>
-                    </div>
-                    {@render impactLine('icon_url')}
-                    {@render impactLine('user_url')}
-                </section>
-
-                <!-- Zone: Classification -->
-                <section class="rounded-xl border border-lf-subtle bg-lf-card p-4" data-testid="asset-bulk-zone-classification">
-                    <h3 class="mb-3 text-xs font-semibold uppercase tracking-wider text-lf-muted">{$t('assets.bulkEdit.zoneClassification')}</h3>
-                    <div
-                        class="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,18rem)] sm:items-start {blockedOf('asset_type') > 0 ? 'rounded-lg border border-lf-danger p-2' : ''}"
-                        data-testid="asset-bulk-field-asset_type"
-                        data-modified={isModified('asset_type') ? 'true' : 'false'}
-                        data-blocked={blockedOf('asset_type')}
-                    >
-                        <div>
+                        <div class={blockedOf('asset_type') > 0 ? 'rounded-lg border border-lf-danger p-2' : ''} data-testid="asset-bulk-field-asset_type" data-modified={isModified('asset_type') ? 'true' : 'false'} data-blocked={blockedOf('asset_type')}>
                             {@render fieldHead('asset_type', $t('common.type'), undefined, 'asset-bulk-type-label')}
-                            <p class="flex flex-wrap items-center gap-1 text-[11px] text-lf-muted" data-testid="asset-bulk-asset_type-now">
+                            <div class="flex items-center gap-2">
+                                <div class="min-w-0 flex-1">
+                                    <AssetTypeSelect bind:value={assetType} testId="asset-bulk-type" placeholder={typePlaceholder} />
+                                </div>
+                                {@render undoSlot('asset_type')}
+                            </div>
+                            <p class="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-lf-muted" data-testid="asset-bulk-asset_type-now">
                                 {$t('assets.bulkEdit.now')}
                                 {#each current.asset_type.shown as group (group.value)}
                                     <span class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium {assetTypeBadgeClass(group.value)}" data-testid="asset-bulk-now-type" data-asset-type={group.value}>
@@ -586,9 +655,6 @@
                             </p>
                             {@render impactLine('asset_type')}
                         </div>
-                        <div class="sm:pt-[26px]">
-                            <AssetTypeSelect bind:value={assetType} testId="asset-bulk-type" placeholder={typePlaceholder} />
-                        </div>
                     </div>
                 </section>
 
@@ -598,52 +664,61 @@
                     <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
                         <div data-testid="asset-bulk-field-quote_base_quantity" data-modified={isModified('quote_base_quantity') ? 'true' : 'false'}>
                             {@render fieldHead('quote_base_quantity', $t('assets.modal.quoteBaseQuantity'), 'asset-bulk-quote-base')}
-                            <p class="text-[11px] text-lf-muted" data-testid="asset-bulk-quote_base_quantity-now">
+                            <div class="flex items-center gap-2">
+                                <input
+                                    id="asset-bulk-quote-base"
+                                    type="text"
+                                    inputmode="numeric"
+                                    bind:value={quoteBaseInput}
+                                    placeholder={$t('assets.bulkEdit.leave')}
+                                    aria-invalid={quoteBaseError !== ''}
+                                    data-testid="asset-bulk-quote-base"
+                                    class="min-w-0 flex-1 rounded-lg border bg-lf-field px-3 py-2 text-sm text-lf-primary placeholder:text-lf-placeholder focus:outline-none focus:ring-2 {quoteBaseError
+                                        ? 'border-lf-danger focus:ring-lf-danger/50'
+                                        : 'border-lf-input hover:border-lf-input-hover focus:border-lf-focus focus:ring-lf-focus/50'}"
+                                />
+                                {@render undoSlot('quote_base_quantity')}
+                            </div>
+                            {#if quoteBaseError}
+                                <p class="mt-1 text-[11px] text-lf-danger" data-testid="asset-bulk-quote-base-error">{$t(quoteBaseError)}</p>
+                            {/if}
+                            <p class="mt-1 text-[11px] text-lf-muted" data-testid="asset-bulk-quote_base_quantity-now">
                                 {$t('assets.bulkEdit.now')}
                                 {#each current.quote_base_quantity.shown as group (group.value)}
                                     <span class="text-lf-secondary">{group.value} ×{group.count}</span>{' '}
                                 {/each}
                                 {@render moreCount(current.quote_base_quantity)}
                             </p>
-                            <input
-                                id="asset-bulk-quote-base"
-                                type="text"
-                                inputmode="numeric"
-                                bind:value={quoteBaseInput}
-                                placeholder={$t('assets.bulkEdit.leave')}
-                                aria-invalid={quoteBaseError !== ''}
-                                data-testid="asset-bulk-quote-base"
-                                class="mt-1 w-full rounded-lg border bg-lf-field px-3 py-2 text-sm text-lf-primary placeholder:text-lf-placeholder focus:outline-none focus:ring-2 {quoteBaseError
-                                    ? 'border-lf-danger focus:ring-lf-danger/50'
-                                    : 'border-lf-input hover:border-lf-input-hover focus:border-lf-focus focus:ring-lf-focus/50'}"
-                            />
-                            {#if quoteBaseError}
-                                <p class="mt-1 text-[11px] text-lf-danger" data-testid="asset-bulk-quote-base-error">{$t(quoteBaseError)}</p>
-                            {/if}
                             {@render impactLine('quote_base_quantity')}
                         </div>
                         <div data-testid="asset-bulk-field-active" data-modified={isModified('active') ? 'true' : 'false'}>
                             {@render fieldHead('active', $t('common.active'), undefined, 'asset-bulk-active-label')}
-                            {@render nowFlags('active', current.active)}
-                            <div class="mt-1">{@render triState('active', 'asset-bulk-active-label', active, (next) => (active = next))}</div>
+                            <div class="flex items-center gap-2">
+                                <div class="min-w-0 flex-1">{@render triState('active', 'asset-bulk-active-label', active, (next) => (active = next))}</div>
+                                {@render undoSlot('active')}
+                            </div>
+                            <div class="mt-1">{@render nowFlags('active', current.active)}</div>
                             {@render impactLine('active')}
                         </div>
                         <div data-testid="asset-bulk-field-is_benchmark" data-modified={isModified('is_benchmark') ? 'true' : 'false'}>
                             {@render fieldHead('is_benchmark', $t('assets.modal.benchmark'), undefined, 'asset-bulk-benchmark-label')}
-                            {@render nowFlags('is_benchmark', current.is_benchmark)}
-                            <div class="mt-1">{@render triState('is_benchmark', 'asset-bulk-benchmark-label', benchmark, (next) => (benchmark = next))}</div>
+                            <div class="flex items-center gap-2">
+                                <div class="min-w-0 flex-1">{@render triState('is_benchmark', 'asset-bulk-benchmark-label', benchmark, (next) => (benchmark = next))}</div>
+                                {@render undoSlot('is_benchmark')}
+                            </div>
+                            <div class="mt-1">{@render nowFlags('is_benchmark', current.is_benchmark)}</div>
                             {@render impactLine('is_benchmark')}
                         </div>
                     </div>
                 </section>
             {:else}
-                <AssetBulkSummary {summary} {warnedIds} {blockedIds} />
+                <AssetBulkSummary summary={shownSummary} warnedIds={saved ? [] : warnedIds} blockedIds={saved ? [] : blockedIds} />
             {/if}
         </div>
 
         <!-- Footer -->
         {#if step === 'fields'}
-            <div class="flex flex-wrap items-center justify-between gap-3 border-t border-lf-subtle px-6 py-4" data-testid="asset-bulk-footer-fields">
+            <div class="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-lf-subtle px-6 py-4" data-testid="asset-bulk-footer-fields">
                 <div class="flex items-center gap-2">
                     <button
                         type="button"
@@ -680,13 +755,19 @@
                 </div>
             </div>
         {:else}
-            <div class="flex flex-wrap items-center justify-between gap-3 border-t border-lf-subtle px-6 py-4" data-testid="asset-bulk-footer-summary">
+            <div class="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-lf-subtle px-6 py-4" data-testid="asset-bulk-footer-summary">
                 <button type="button" class="rounded-lg px-3 py-2 text-sm text-lf-secondary transition-colors hover:bg-lf-hover disabled:cursor-not-allowed disabled:opacity-50" disabled={saving} data-testid="asset-bulk-back" onclick={handleBack}>
                     {$t('common.back')}
                 </button>
                 <div class="flex flex-wrap items-center justify-end gap-3">
+                    {#if saved}
+                        <span class="inline-flex items-center gap-1.5 text-sm font-medium text-lf-success" role="status" data-testid="asset-bulk-saved">
+                            <Check size={16} aria-hidden="true" />
+                            {$t('assets.bulkEdit.saved')}
+                        </span>
+                    {/if}
                     <button type="button" class="rounded-lg bg-lf-panel px-4 py-2 text-sm font-medium text-lf-secondary transition-colors hover:bg-lf-neutral disabled:opacity-50" disabled={saving} data-testid="asset-bulk-cancel" onclick={handleClose}>
-                        {$t('common.cancel')}
+                        {saved ? $t('common.close') : $t('common.cancel')}
                     </button>
                     <button
                         type="button"

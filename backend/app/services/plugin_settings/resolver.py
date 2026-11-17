@@ -27,7 +27,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal
@@ -53,6 +53,7 @@ from backend.app.services.plugin_settings.fields import (
     parse_env_value,
     validate_value,
 )
+from backend.app.services.plugin_settings.groups import GROUP_FAMILY, SettingsGroup
 
 logger = get_logger(__name__)
 
@@ -247,16 +248,18 @@ def settings_fingerprint(plain: Mapping[str, Any], secrets: Mapping[str, str]) -
     return hmac.new(subkey, canonical, hashlib.sha256).hexdigest()[:32]
 
 
-def default_settings_fingerprint(fields: tuple[PluginSettingField, ...]) -> str:
+def default_settings_fingerprint(fields: tuple[PluginSettingField, ...], groups: Sequence[SettingsGroup] = ()) -> str:
     """The fingerprint of a plugin whose fields all hold their declared default: what ``build_bound_settings`` gives
-    when no environment variable and no stored row sets anything (a secret has no default, so none is bound).
+    when no environment variable and no stored row sets anything (a secret has no default, so none is bound). With
+    shared groups, their defaults' fingerprints enter it as ``build_bound_settings`` puts them (``grouped_fingerprint``).
 
     It is the baseline of ``settings_changed_since``: the values a result was drawn over when nothing recorded them.
     """
-    return settings_fingerprint({declared.key: declared.default for declared in fields if not declared.secret and declared.default is not None}, {})
+    own = settings_fingerprint({declared.key: declared.default for declared in fields if not declared.secret and declared.default is not None}, {})
+    return _combined_fingerprint(own, {group.name: default_settings_fingerprint(group.fields) for group in groups})
 
 
-def settings_changed_since(saved_fingerprint: str | None, current: BoundSettings | None, fields: tuple[PluginSettingField, ...]) -> bool:
+def settings_changed_since(saved_fingerprint: str | None, current: BoundSettings | None, fields: tuple[PluginSettingField, ...], groups: Sequence[SettingsGroup] = ()) -> bool:
     """Whether the values a plugin would be called with now differ from those a stored result was drawn over (CP12).
 
     The rule that makes a BRIM parse «stale» when an import setting changes (a plugin whose output depends on a setting:
@@ -275,8 +278,23 @@ def settings_changed_since(saved_fingerprint: str | None, current: BoundSettings
     """
     if current is None:
         return False
-    baseline = saved_fingerprint or default_settings_fingerprint(fields)
+    baseline = saved_fingerprint or default_settings_fingerprint(fields, groups)
     return current.fingerprint != baseline
+
+
+def grouped_fingerprint(own: str, groups: Mapping[str, BoundSettings]) -> str:
+    """The fingerprint of a plugin's values together with its groups' (project 76): a plugin without groups keeps its
+    own, byte for byte, so a result stored with it stays current (``settings_changed_since``). The groups' parts are
+    already HMACs when they hold a secret: nothing here lets a guess of one be tested."""
+    return _combined_fingerprint(own, {name: bound.fingerprint for name, bound in groups.items()})
+
+
+def _combined_fingerprint(own: str, group_fingerprints: Mapping[str, str]) -> str:
+    """``own`` alone without groups; else a SHA-256 of it and each group's fingerprint, by name."""
+    if not group_fingerprints:
+        return own
+    parts = [own, *(f"{name}={group_fingerprints[name]}" for name in sorted(group_fingerprints))]
+    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:32]
 
 
 def build_bound_settings(  # noqa: PLR0913 — the arguments of resolve_plugin_fields
@@ -287,14 +305,18 @@ def build_bound_settings(  # noqa: PLR0913 — the arguments of resolve_plugin_f
     user_rows: Mapping[str, StoredValue] | None,
     *,
     user_id: int | None,
+    groups: Sequence[tuple[SettingsGroup, Mapping[str, StoredValue]]] = (),
 ) -> BoundSettings:
     """The values a call receives: plain values, secrets, the fields left without a usable value, the fingerprint.
 
     A field is left without a usable value when it is required and has none, or when its environment variable is set
-    but invalid (never replaced by the default): either way the plugin is not configured. Synchronous like
+    but invalid (never replaced by the default): either way the plugin is not configured. ``groups`` are the shared
+    groups the plugin declares, each with the instance's rows of ``family="group"``: resolved like a plugin of their own
+    (instance values only) and bound beside the plugin's (``BoundSettings.group``). Synchronous like
     ``resolve_plugin_fields``: run it in a worker thread.
     """
     states = resolve_plugin_fields(family, plugin_code, fields, system_rows, user_rows, user_id=user_id, decrypt=True)
     plain = {state.field.key: state.value for state in states if not state.field.secret and state.value is not None}
     secrets = {state.field.key: state.value for state in states if state.field.secret and state.value is not None}
-    return BoundSettings(fields, plain, secrets, missing_field_keys(states), fingerprint=settings_fingerprint(plain, secrets))
+    bound_groups = {group.name: build_bound_settings(GROUP_FAMILY, group.name, group.fields, rows, None, user_id=None) for group, rows in groups}
+    return BoundSettings(fields, plain, secrets, missing_field_keys(states), fingerprint=grouped_fingerprint(settings_fingerprint(plain, secrets), bound_groups), groups=bound_groups)

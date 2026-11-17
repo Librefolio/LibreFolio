@@ -8,7 +8,7 @@ and standardize data exchange between components.
 - common.py: Shared schemas (BackwardFillInfo, DateRangeModel, OldNew, BaseBulkResponse, BaseDeleteResult)
 - assets/: Asset schemas — assets.py (CRUD, patch, merge, provider assignment), metadata.py (distributions,
   classification, metadata refresh), scheduled_investment.py (financial enums, ScheduledInvestment*), events.py (event
-  point, event CRUD)
+  point, event CRUD), profile.py (the asset profile: catalogue voice, value shapes)
 - provider.py: Provider assignment schemas (FA + FX)
 - prices.py: FA price operation schemas (upsert, delete, query)
 - refresh.py: FA refresh + FX sync operational schemas
@@ -134,6 +134,7 @@ if TYPE_CHECKING:
         FABulkDeleteResponse,
         FABulkUpsertResponse,
         FACurrentValue,
+        FACurrentValueRequest,
         FAHistoricalData,
         FAPriceDeleteResult,
         FAPricePoint,
@@ -291,6 +292,7 @@ __all__ = [  # noqa: RUF022 — grouped by domain with section comments; sorting
     "tags_to_csv",
     # Assets (FA prefix)
     "FACurrentValue",
+    "FACurrentValueRequest",
     "FAPricePoint",
     "FAHistoricalData",
     "FAAssetEventPoint",
@@ -542,6 +544,7 @@ _EXPORT_GROUPS = {
         "FABulkDeleteResponse",
         "FABulkUpsertResponse",
         "FACurrentValue",
+        "FACurrentValueRequest",
         "FAHistoricalData",
         "FAPriceDeleteResult",
         "FAPricePoint",

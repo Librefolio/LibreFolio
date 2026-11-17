@@ -39,6 +39,8 @@ vi.mock('$lib/api', async () => {
     return {zodiosApi, schemas, ApiError: class ApiError extends Error {}, axiosInstance: {}};
 });
 
+vi.mock('$lib/components/ui/media/ImagePickerWrapper.svelte', async () => ({default: (await import('$test/ImagePickerStub.svelte')).default}));
+
 import {zodiosApi} from '$lib/api';
 import AssetBulkEditModal from './AssetBulkEditModal.svelte';
 import type {BulkAsset} from './assetBulkEdit';
@@ -75,12 +77,12 @@ const root = () => screen.getByTestId('asset-bulk-edit');
 const cont = () => screen.getByTestId('asset-bulk-continue') as HTMLButtonElement;
 
 describe('AssetBulkEditModal — at rest', () => {
-    it('shows the three zones in order, the selection, and nothing modified', () => {
+    it('shows the two zones in order (details and classification, then price and status), the selection, and nothing modified', () => {
         mount();
         expect(root()).toHaveAttribute('data-step', 'fields');
         expect(root()).toHaveAttribute('data-modified', '0');
         expect(root()).toHaveAttribute('data-selected', '5');
-        const zones = ['asset-bulk-zone-details', 'asset-bulk-zone-classification', 'asset-bulk-zone-price'].map((id) => screen.getByTestId(id));
+        const zones = ['asset-bulk-zone-details', 'asset-bulk-zone-price'].map((id) => screen.getByTestId(id));
         for (let i = 1; i < zones.length; i++) expect(zones[i - 1].compareDocumentPosition(zones[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
         expect(screen.getAllByTestId('asset-bulk-selected-chip')).toHaveLength(4);
         expect(screen.queryByTestId('asset-bulk-reset-all')).toBeNull();
@@ -283,5 +285,100 @@ describe('AssetBulkEditModal — closing and reopening', () => {
 
         expect(screen.getByTestId('asset-bulk-active')).toHaveAttribute('data-state', 'leave');
         expect(root()).toHaveAttribute('data-modified', '0');
+    });
+});
+
+describe('the chosen icon', () => {
+    it('shows no file name or URL under the icon once it is chosen (U2)', async () => {
+        mount();
+        await fireEvent.click(screen.getByTestId('asset-bulk-icon-pick'));
+        await fireEvent.click(screen.getByTestId('stub-icon-pick'));
+        expect(screen.getByTestId('asset-bulk-field-icon_url')).toHaveAttribute('data-modified', 'true');
+        expect(screen.queryByTestId('asset-bulk-icon-file')).toBeNull();
+    });
+});
+
+describe('removing the icon and the personal URL (U7)', () => {
+    const HOLDERS = [asset(1, {icon_url: 'https://example.test/1.png', user_url: 'https://example.test/u1'}), asset(2), asset(3, {icon_url: 'https://example.test/3.png'})];
+
+    it('offers «Remove» only for what at least one selected asset holds', () => {
+        mount({assets: [asset(1), asset(2)]});
+        expect(screen.queryByTestId('asset-bulk-icon-remove')).toBeNull();
+        expect(screen.queryByTestId('asset-bulk-user-url-remove')).toBeNull();
+    });
+
+    it('«Remove icon» is a choice of its own: chip, Undo, «Continue» on, and a null only for the assets that have an icon', async () => {
+        mount({assets: HOLDERS});
+        expect(screen.queryByTestId('asset-bulk-user-url-remove')).toBeInTheDocument();
+        await fireEvent.click(screen.getByTestId('asset-bulk-icon-remove'));
+
+        expect(screen.getByTestId('asset-bulk-icon-remove')).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByTestId('asset-bulk-field-icon_url')).toHaveAttribute('data-modified', 'true');
+        expect(screen.getByTestId('asset-bulk-icon_url-chip')).toBeInTheDocument();
+        expect(screen.getByTestId('asset-bulk-icon_url-impact')).toHaveAttribute('data-changing', '2');
+        expect(cont()).toBeEnabled();
+
+        await fireEvent.click(screen.getByTestId('asset-bulk-verify'));
+        await waitFor(() => expect(validate()).toHaveBeenCalledTimes(1));
+        expect(validate().mock.calls[0][0]).toEqual([
+            {asset_id: 1, icon_url: null},
+            {asset_id: 3, icon_url: null},
+        ]);
+    });
+
+    it('«Remove URL» turns the field off while it stands, and Undo gives it back', async () => {
+        mount({assets: HOLDERS});
+        await fireEvent.click(screen.getByTestId('asset-bulk-user-url-remove'));
+        expect(screen.getByTestId('asset-bulk-user-url')).toBeDisabled();
+        expect(screen.getByTestId('asset-bulk-field-user_url')).toHaveAttribute('data-modified', 'true');
+        expect(root()).toHaveAttribute('data-modified', '1');
+
+        await fireEvent.click(screen.getByTestId('asset-bulk-reset-user_url'));
+        expect(screen.getByTestId('asset-bulk-user-url')).toBeEnabled();
+        expect(screen.getByTestId('asset-bulk-user-url-remove')).toHaveAttribute('aria-pressed', 'false');
+        expect(screen.getByTestId('asset-bulk-field-user_url')).toHaveAttribute('data-modified', 'false');
+        expect(cont()).toBeDisabled();
+    });
+
+    it('choosing an icon after «Remove icon» takes the removal back, and the other way round', async () => {
+        mount({assets: HOLDERS});
+        await fireEvent.click(screen.getByTestId('asset-bulk-icon-remove'));
+        await fireEvent.click(screen.getByTestId('asset-bulk-icon-pick'));
+        await fireEvent.click(screen.getByTestId('stub-icon-pick'));
+        expect(screen.getByTestId('asset-bulk-icon-remove')).toHaveAttribute('aria-pressed', 'false');
+
+        await fireEvent.click(screen.getByTestId('asset-bulk-icon-remove'));
+        expect(screen.getByTestId('asset-bulk-icon-remove')).toHaveAttribute('aria-pressed', 'true');
+        await fireEvent.click(screen.getByTestId('asset-bulk-verify'));
+        await waitFor(() => expect(validate()).toHaveBeenCalledTimes(1));
+        // The removal is what goes out, never the chosen icon as well.
+        expect(validate().mock.calls[0][0]).toEqual([
+            {asset_id: 1, icon_url: null},
+            {asset_id: 3, icon_url: null},
+        ]);
+    });
+
+    it('«Undo all» takes both removals back', async () => {
+        mount({assets: HOLDERS});
+        await fireEvent.click(screen.getByTestId('asset-bulk-icon-remove'));
+        await fireEvent.click(screen.getByTestId('asset-bulk-user-url-remove'));
+        expect(root()).toHaveAttribute('data-modified', '2');
+        await fireEvent.click(screen.getByTestId('asset-bulk-reset-all'));
+        expect(root()).toHaveAttribute('data-modified', '0');
+        expect(screen.getByTestId('asset-bulk-icon-remove')).toHaveAttribute('aria-pressed', 'false');
+    });
+});
+
+describe('the scrolling body (U5)', () => {
+    it('scrolls without a visible scrollbar: the shared utility, still reachable and focusable by keyboard', () => {
+        mount();
+        const body = screen.getByTestId('asset-bulk-body');
+        // `overflow-y-auto` keeps the scroll (wheel, touch, keyboard); `scrollbar-hidden` (app.css) only hides the bar.
+        expect(body).toHaveClass('overflow-y-auto');
+        expect(body).toHaveClass('scrollbar-hidden');
+        // A scrollable area a keyboard user can reach: a region, named by the title, in the tab order.
+        expect(body).toHaveAttribute('tabindex', '0');
+        expect(body).toHaveAttribute('role', 'region');
+        expect(body).toHaveAttribute('aria-labelledby', 'asset-bulk-edit-title');
     });
 });

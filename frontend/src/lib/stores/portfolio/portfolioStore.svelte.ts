@@ -164,7 +164,7 @@ export type PositionsContribution = Extract<NonNullable<RawContrib>, {positions?
 type CacheKey = string;
 
 /** Trailing feature selection of `fetchReport` / `peekReport` (plan §4.1: no more positional booleans). */
-export type ReportOptions = {includeBrokerPnlHistory?: boolean; includePnlCandles?: boolean; includeIncomeHistory?: boolean; includeCostHistory?: boolean; includeDepositHistory?: boolean; includeAcquisitionFunding?: boolean; fullShare?: boolean};
+export type ReportOptions = {includeBrokerPnlHistory?: boolean; includePnlCandles?: boolean; includeIncomeHistory?: boolean; includeCostHistory?: boolean; includeDepositHistory?: boolean; includeAcquisitionFunding?: boolean; fullShare?: boolean; groupByAsset?: boolean};
 
 /** A cached report and the mark it was asked under: asked before the last `invalidate()` = stale. */
 interface ReportEntry {
@@ -224,7 +224,8 @@ function reportKey(
         (options?.includeCostHistory ? '|costhist' : '') +
         (options?.includeDepositHistory ? '|deposithist' : '') +
         (options?.includeAcquisitionFunding ? '|acqfunding' : '') +
-        (options?.fullShare ? '|fullshare' : '')
+        (options?.fullShare ? '|fullshare' : '') +
+        (options?.groupByAsset ? '|byasset' : '')
     );
 }
 
@@ -283,6 +284,8 @@ export function portfolioError(): string | null {
  *   includeIncomeHistory.
  * @param options.fullShare — MF6-3 (D4): count every broker whole instead of the owner's share (the broker
  *   page). Part of the cache key: the dashboard's scaled answer and the broker's whole one never share an entry.
+ * @param options.groupByAsset — Project 74 («Globale»): the holdings and the contribution as one row per asset, summed
+ *   over its brokers (`group_by=asset`). Part of the cache key.
  */
 export async function fetchReport(
     brokerIds?: number[],
@@ -320,6 +323,8 @@ export async function fetchReport(
     };
     // MF6-3 (D4): the brokers counted whole, as an editor sees them. Absent = the owner's share, as every other page.
     if (options?.fullShare) body.apply_ownership_share = false;
+    // Project 74 («Globale»): the positions summed over their brokers. Absent = one row per asset and broker, as always.
+    if (options?.groupByAsset) body.group_by = 'asset';
     if (brokerIds && brokerIds.length > 0) body.broker_ids = brokerIds;
     if (dateFrom || dateTo) {
         body.date_range = {

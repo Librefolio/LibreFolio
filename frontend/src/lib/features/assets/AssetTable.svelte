@@ -8,12 +8,12 @@
 <script lang="ts">
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {goto} from '$app/navigation';
-    import {onMount} from 'svelte';
+    import {onMount, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {deltaPeriodLabel} from '$lib/features/assets/assetPriceDerived';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef} from '$lib/components/table/types';
-    import {Merge, RefreshCw, RotateCw, Trash2} from 'lucide-svelte';
+    import {Merge, Pencil, RefreshCw, RotateCw, Trash2} from 'lucide-svelte';
     import {ensureCurrenciesLoaded, getCurrencyInfo, currencyStoreVersion} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {assetProviderBadgeHtml, assetProvidersVersion, ensureAssetProvidersCached} from '$lib/utils/providerHelpers';
@@ -58,11 +58,17 @@
         dateStart?: string;
         /** Date range end (passed to detail page on row click) */
         dateEnd?: string;
+        /** U10: the row action «Edit» — the owner opens the asset editor, complete, without leaving the list. */
+        onedit?: (asset: AssetRow) => void;
         onsync?: (asset: AssetRow) => void;
         onrefresh?: (asset: AssetRow) => void;
         ondelete?: (asset: AssetRow) => void;
         onmerge?: (asset: AssetRow) => void;
         onselectionchange?: (rows: AssetRow[]) => void;
+        /** Registers this table's DataTable with the owner, under the panel id (`browseSegment`); the owner keeps no `bind:this` of its own. Returns the function that takes this very registration away. */
+        registerTable?: (panelId: string, table: DataTable<AssetRow>) => () => void;
+        /** Changes (by any step) when the owner wants the selection dropped. */
+        clearSelectionToken?: number;
         /** F15 round-2 — stacked usage tables share column layout; this callback
          *  lets the parent mirror live resizes onto the sibling instances. */
         onColumnResize?: (columnId: string, width: number) => void;
@@ -72,7 +78,29 @@
         browseSegment?: AssetPanelId;
     }
 
-    let {data = [], loading = false, visiblePeriods = [], livePriceMap = new Map(), dateStart, dateEnd, onsync, onrefresh, ondelete, onmerge, onselectionchange, onColumnResize, storageKey = 'assetsTable', browseSegment}: Props = $props();
+    let {data = [], loading = false, visiblePeriods = [], livePriceMap = new Map(), dateStart, dateEnd, onedit, onsync, onrefresh, ondelete, onmerge, onselectionchange, registerTable, clearSelectionToken = 0, onColumnResize, storageKey = 'assetsTable', browseSegment}: Props = $props();
+
+    // The owner gets this table's DataTable by callback, not through `bind:this` on a record: that binding was left empty after the
+    // panels re-mounted, and the column menu and the width mirror then had no table to act on.
+    $effect(() => {
+        const table = tableRef;
+        const panelId = browseSegment;
+        if (!panelId || !table) return;
+        // Untracked: the owner's registry is state of its own, which must not become this effect's dependency (it would re-run on every
+        // write, and register again forever). Each registration is taken away by itself, so the order in which panels mount and are
+        // torn down cannot lose another table.
+        const unregister = untrack(() => registerTable?.(panelId, table));
+        return () => untrack(() => unregister?.());
+    });
+
+    // The owner asks for the selection to be dropped by changing the token: this table clears its own DataTable.
+    let seenClearToken = untrack(() => clearSelectionToken);
+    $effect(() => {
+        const token = clearSelectionToken;
+        if (token === seenClearToken) return;
+        seenClearToken = token;
+        tableRef?.clearSelection();
+    });
 
     ensureCurrenciesLoaded($currentLanguage);
     ensureAssetProvidersCached();
@@ -310,6 +338,13 @@
         getRowClass={(row) => (row.active ? '' : 'asset-row-inactive')}
         onSelectionChange={(ids) => onselectionchange?.(data.filter((row) => ids.includes(String(row.id))))}
         rowActions={[
+            {
+                id: 'edit',
+                label: () => $t('common.edit'),
+                icon: Pencil,
+                onClick: (row) => onedit?.(row),
+                testid: 'asset-table-edit-action',
+            },
             {
                 id: 'sync',
                 label: () => $t('common.sync'),

@@ -65,8 +65,9 @@ from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_TH
 from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.app.services.risk import scope as risk_scope_module
 from backend.app.services.risk import service as risk_service_module
+from backend.app.services.risk.acquired import average_drawdown
 from backend.app.services.risk.base import RiskAnalytic, RiskExecutionContext, RiskUnavailableError
-from backend.app.services.risk.metrics import historical_var_cvar
+from backend.app.services.risk.metrics import historical_var_cvar, largest_rally, return_shape, summarize_drawdown, wealth_index
 from backend.app.services.risk.plan import AnalyticPlan
 from backend.app.services.risk.registry import RiskAnalyticRegistry
 from backend.app.services.risk.results import available_observations, build_execution_context
@@ -217,7 +218,6 @@ def make_prepared_set(returns_by_asset: dict[int, list[float]]) -> PreparedAsset
         calendar_days=observations,
         annualization_factor=365.0,
         calendar_coverage=1.0,
-        fresh_quote_coverage=1.0,
         data_quality=DataQualityReport(),
         fx_fingerprint="0" * 64,
     )
@@ -768,9 +768,48 @@ def test_asset_set_kpi_publishes_one_row_per_asset_and_declares_every_omission()
     assert undefined.worst_realization_date is None
 
     warnings_by_code = {warning.code: warning for warning in computation.warnings}
-    assert set(warnings_by_code) == {"sharpe_undefined", "sortino_undefined", "worst_realization_undefined"}
+    # RN-14: the flat gainer also has no down day, no Omega (the Sortino's condition) and no extreme-day ratio.
+    assert set(warnings_by_code) == {
+        "sharpe_undefined",
+        "sortino_undefined",
+        "worst_realization_undefined",
+        "average_loss_undefined",
+        "omega_undefined",
+        "extreme_day_ratio_undefined",
+    }
     for warning in warnings_by_code.values():
         assert warning.details["asset_ids"] == [FLAT_GAINER_ASSET_ID]
+    # A measure the series cannot have does not make the result partial (consultant, 16/11/2026); an undefined Sharpe
+    # or Sortino still does.
+    assert {code for code, warning in warnings_by_code.items() if warning.degrades_result} == {"sharpe_undefined", "sortino_undefined"}
+
+
+def test_asset_set_kpi_publishes_the_shape_of_the_days_of_each_asset():
+    """RN-14: each row is return_shape of its own series, on the joint calendar, the Sortino's target shared."""
+    falling = [-0.001 - 0.0002 * (index % 3) for index in range(OBSERVATIONS)]
+    context = asset_set_context({CHOPPY_ASSET_ID: CHOPPY, STEADY_ASSET_ID: falling})
+    params = AssetSetKpiParams(target_annual_return=0.02)
+    computation = AssetSetKpiAnalytic().compute(params, context)
+    by_asset = {item.asset_id: item for item in computation.output.items}
+    dates = context.prepared_series.joint_return_dates
+
+    assert AssetSetKpiAnalytic.algorithm_version == "1.1.0"
+    shape = return_shape(CHOPPY, context.annualization_factor, annual_target_return=0.02)
+    row = by_asset[CHOPPY_ASSET_ID]
+    assert row.best_realization == shape.best_realization
+    assert row.best_realization_date == dates[shape.best_realization_index]
+    assert row.positive_observation_share == shape.positive_observation_share
+    assert (row.mean_positive_return, row.mean_negative_return) == (shape.mean_positive_return, shape.mean_negative_return)
+    assert row.longest_positive_run_observations == shape.longest_positive_run.length
+    assert (row.longest_positive_run_start_date, row.longest_positive_run_end_date) == (dates[shape.longest_positive_run.start_index], dates[shape.longest_positive_run.end_index])
+    assert (row.omega_ratio, row.downside_deviation, row.extreme_day_ratio) == (shape.omega_ratio, shape.downside_deviation, shape.extreme_day_ratio)
+
+    without_gain = by_asset[STEADY_ASSET_ID]
+    assert (without_gain.best_realization, without_gain.best_realization_date, without_gain.longest_positive_run_observations) == (None, None, None)
+    warning = next(item for item in computation.warnings if item.code == "best_realization_undefined")
+    assert warning.message_i18n_key == "risk.warnings.best_realization_undefined_assets"
+    assert warning.details["asset_ids"] == [STEADY_ASSET_ID]
+    assert warning.degrades_result is False
 
 
 def test_asset_set_var_refuses_the_whole_request_when_the_horizon_eats_the_history():
@@ -946,10 +985,36 @@ def test_asset_set_var_names_each_assets_worst_window_with_its_dates():
         assert item.worst_horizon is not None
         assert item.worst_horizon.compounded_return == pytest.approx(expected_return, rel=1e-12)
         assert (item.worst_horizon.start_date, item.worst_horizon.end_date) == (dates[start], dates[start + horizon - 1])
+        # RN-14: the twin, the best stretch — the earliest of equal windows, as for the worst.
+        best_return, best_start = max(windows, key=lambda window: (window[0], -window[1]))
+        assert item.best_horizon is not None
+        assert item.best_horizon.compounded_return == pytest.approx(best_return, rel=1e-12)
+        assert (item.best_horizon.start_date, item.best_horizon.end_date) == (dates[best_start], dates[best_start + horizon - 1])
 
 
 def test_asset_set_var_calendar_horizon_is_a_new_algorithm_version():
-    assert AssetSetVarAnalytic.algorithm_version == "2.1.0"
+    # 2.2.0 (RN-14): each row adds its best window (`best_horizon`); VaR and CVaR do not move.
+    assert AssetSetVarAnalytic.algorithm_version == "2.2.0"
+
+
+def test_asset_set_drawdown_publishes_each_assets_largest_rally_and_average_drawdown():
+    """RN-14: per asset, the twins of its episode, on the joint calendar (the baseline is the first value)."""
+    context = asset_set_context(
+        {STILL_UNDERWATER_ASSET_ID: STILL_UNDERWATER, RECOVERED_ASSET_ID: RECOVERED},
+        scope_asset_ids=(STILL_UNDERWATER_ASSET_ID, RECOVERED_ASSET_ID),
+    )
+    computation = AssetSetDrawdownAnalytic().compute(AssetSetDrawdownParams(), context)
+    by_asset = {item.asset_id: item for item in computation.output.items}
+    wealth_dates = (context.prepared_series.baseline_date, *context.prepared_series.joint_return_dates)
+
+    assert AssetSetDrawdownAnalytic.algorithm_version == "1.2.0"
+    for asset_id, returns in ((STILL_UNDERWATER_ASSET_ID, STILL_UNDERWATER), (RECOVERED_ASSET_ID, RECOVERED)):
+        rally = largest_rally(wealth_index(returns))
+        item = by_asset[asset_id]
+        assert item.largest_rally == pytest.approx(rally.gain, rel=1e-12)
+        assert (item.largest_rally_start_date, item.largest_rally_end_date) == (wealth_dates[rally.trough_index], wealth_dates[rally.peak_index])
+        assert item.largest_rally_duration_days == (item.largest_rally_end_date - item.largest_rally_start_date).days
+        assert item.average_drawdown == pytest.approx(average_drawdown(summarize_drawdown(returns).drawdowns), rel=1e-12)
 
 
 def test_asset_set_drawdown_states_one_window_once_and_one_episode_per_asset():
@@ -1092,7 +1157,8 @@ def test_asset_set_drawdown_names_every_total_loss_in_one_warning():
 def test_asset_set_drawdown_trough_to_peak_gain_is_a_new_algorithm_version():
     # 1.1.0 (CP-13a, developer's decision P19): every row gains maximum_drawdown_trough_to_peak_ratio, and a total
     # loss publishes remaining_to_peak_ratio as null instead of failing. Every number 1.0.0 published is unchanged.
-    assert AssetSetDrawdownAnalytic.algorithm_version == "1.1.0"
+    # 1.2.0 (RN-14): each row adds its largest rally and its average drawdown.
+    assert AssetSetDrawdownAnalytic.algorithm_version == "1.2.0"
 
 
 # ---------------------------------------------------------------------------

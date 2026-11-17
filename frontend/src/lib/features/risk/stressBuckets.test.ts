@@ -12,7 +12,7 @@ import {buildHypotheticalShockParameters, STRESS_ASSET_CLASSES, uniformAssetClas
  * exposure by `0.0`, tags it `UNCONFIGURED_ZERO` and carries on — a book of
  * commodity ETFs comes out untouched by a crash meant to hit everything, and the
  * number is simply wrong. A bucket that is not an `AssetType` is rejected, but
- * only as far as `_normalize_bucket_shocks`: `service.py` turns the
+ * only as far as `_normalize_bucket_shocks`: `RiskService.execute` turns the
  * `ValidationError` into the stress analytic coming back `unavailable` inside a
  * 200, with no 422 for anyone to catch.
  *

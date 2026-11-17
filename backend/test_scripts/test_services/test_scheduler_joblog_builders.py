@@ -17,6 +17,12 @@ status or value — neither ok nor failed. Each builder marks it ``"deferred": t
 the ``retry_at`` it is given at the top level, None when not given. The shape tests pin
 the zeros and the None of a run with nothing deferred; one case per builder pins a run
 with deferred items.
+
+Lot B6 (project 68): the weekly read of the enrichers writes one entry per run, ``job: "profile_read"``, built by
+``joblog.build_profile_read_entry``; a ``SchedulerLogProfileReadEntry`` joins the ``SchedulerLogEntry`` union, which
+stays discriminated by ``job``. The builder's arguments are not pinned here: ``test_scheduler_profile_read.py`` pins
+the entry the job writes through it. These cases pin the union: a profile-read entry validates into its own model, the
+two entries of before still validate into theirs, and an unknown job is refused.
 """
 
 from __future__ import annotations
@@ -418,3 +424,70 @@ def test_sync_status_must_stay_a_strenum_or_every_summary_counter_silently_zeroe
     assert entry["summary"]["fx_ok"] == 1
     assert _pick(entry["assets"], "asset_id", 61)["status"] == "ok"
     assert _pick(entry["fx"], "pair", "EUR-USD")["status"] == "ok"
+
+
+# ============================================================================
+# Lot B6: the profile-read entry in the SchedulerLogEntry union
+# ============================================================================
+
+#: An entry as the contract of lot B6 shapes it: one item per asset read, ok, error or deferred.
+PROFILE_READ_ENTRY = {
+    "ts": "2026-11-14T03:00:09+00:00",
+    "job": "profile_read",
+    "duration_s": 9.5,
+    "status": "partial",
+    "summary": {"ok": 1, "err": 1, "deferred": 1},
+    "retry_at": "2026-11-14T03:01:00+00:00",
+    "items": [
+        {"asset_id": 51, "name": "Read", "status": "ok", "voices_written": 3, "error": None},
+        {"asset_id": 52, "name": "Broken", "status": "error", "voices_written": 0, "error": "LAB_ERROR"},
+        {"asset_id": 53, "name": "Refused", "status": "deferred", "voices_written": 1, "error": None},
+    ],
+}
+
+
+def _entry_adapter():
+    from pydantic import TypeAdapter  # noqa: PLC0415 — test-local
+
+    from backend.app.schemas.settings import SchedulerLogEntry  # noqa: PLC0415 — read at call: the union under test
+
+    return TypeAdapter(SchedulerLogEntry)
+
+
+def test_the_job_log_has_a_profile_read_builder():
+    """Lot B6: ``joblog.build_profile_read_entry`` exists and is callable (its entry: ``test_scheduler_profile_read.py``)."""
+    assert callable(getattr(joblog, "build_profile_read_entry", None)), "joblog.build_profile_read_entry is missing"
+
+
+def test_a_profile_read_entry_validates_into_its_own_model_and_keeps_every_key():
+    """Lot B6: the union reads a ``job: "profile_read"`` entry as ``SchedulerLogProfileReadEntry``, every key kept."""
+    from backend.app.schemas import settings as settings_schemas  # noqa: PLC0415 — read at call
+
+    model = getattr(settings_schemas, "SchedulerLogProfileReadEntry", None)
+    assert model is not None, "SchedulerLogProfileReadEntry is missing from backend.app.schemas.settings"
+    parsed = _entry_adapter().validate_python(PROFILE_READ_ENTRY)
+
+    assert isinstance(parsed, model), f"the union must pick SchedulerLogProfileReadEntry for job=profile_read, got {type(parsed).__name__}"
+    dumped = parsed.model_dump(mode="json")
+    assert {key: dumped.get(key) for key in ("ts", "job", "duration_s", "status", "summary", "retry_at")} == {key: PROFILE_READ_ENTRY[key] for key in ("ts", "job", "duration_s", "status", "summary", "retry_at")}
+    assert [{key: item.get(key) for key in ("asset_id", "name", "status", "voices_written", "error")} for item in dumped["items"]] == PROFILE_READ_ENTRY["items"]
+
+
+def test_the_entries_of_the_two_price_jobs_still_validate_into_theirs():
+    """Lot B6 guard: a current-price and a history-sync entry, as their builders write them, still validate into their models."""
+    from backend.app.schemas.settings import SchedulerLogCurrentPriceEntry, SchedulerLogHistorySyncEntry  # noqa: PLC0415 — read at call
+
+    adapter = _entry_adapter()
+    price = joblog.build_current_price_entry([FACurrentPriceItem(asset_id=1, value=Decimal("1.5"), currency="EUR")], {1: "Alpha"}, 0.1, "ok")
+    history = joblog.build_history_sync_entry([FARefreshResult(asset_id=2, status=SyncStatus.OK)], [], {2: "Beta"}, 0.2, "ok")
+
+    assert isinstance(adapter.validate_python(json.loads(json.dumps(price, default=str))), SchedulerLogCurrentPriceEntry)
+    assert isinstance(adapter.validate_python(json.loads(json.dumps(history, default=str))), SchedulerLogHistorySyncEntry)
+
+
+def test_an_entry_of_an_unknown_job_is_refused():
+    """Lot B6 guard: the union stays discriminated by ``job``: an unknown job is a validation error."""
+    from pydantic import ValidationError  # noqa: PLC0415 — test-local
+
+    with pytest.raises(ValidationError):
+        _entry_adapter().validate_python({**PROFILE_READ_ENTRY, "job": "notifications"})
