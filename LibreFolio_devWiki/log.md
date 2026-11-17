@@ -4083,3 +4083,8 @@ Project 70, RN-17: the tab mounts the Dashboard's levels on scope `asset`, with 
 plan-prices note; the legacy panel, its helpers, `KpiCard` and 73 i18n keys are deleted, and the sync's `{accepted}`
 reaches the page again. Pages whose source paths pointed at the deleted files are updated.
 Filed: [[features/F-113]], [[problems/risk-stress-buckets-hand-listed]], [[concepts/discard-the-answer-not-the-question]], [[decisions/asset-global-page-shows-no-money]], [[features/F-054]].
+
+## [2026-11-17] file | «How does it move?», the fifth question
+Project 70, RN-18: the levels' block of the positive twins after L1 on every surface and the green tail of the returns
+histogram; a dated line in the thesis decision (a fifth question, the count differs per page) and F-111's history.
+Filed: [[decisions/risk-answers-four-questions]], [[features/F-111]].
