@@ -1338,6 +1338,16 @@ def services_dust_threshold(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Daily state dust threshold tests", verbose=verbose)
 
 
+def services_classification_from_profile(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that the portfolio engine reads each asset's countries and sectors from the asset profile, per day (project 68, lot D2)."""
+    print_section("Services: Classification From Profile (project 68, D2)")
+    print_info("Testing: backend/app/services/financial_math/portfolio/engine.py (_load_asset_classifications, calculate) over the profile store")
+    print_info("Tests: one ClassificationStep list per voice carried back to date_from, None for an asset without rows (classification_params are not read), Decimal weights, a NULL row; by_geography and by_sector of each day, the change day's segment")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_classification_from_profile.py", test_names)
+    return run_command(cmd, "Classification from profile tests", verbose=verbose)
+
+
 def services_external_cash_leg_pools(verbose: bool = False, test_names: list = None) -> bool:
     """Test that a cash leg crossing the perimeter, or orphan, moves K/R as a DEPOSIT or a WITHDRAWAL (B3, MF-J3)."""
     print_section("Services: External Cash Leg Pools (B3 / MF-J3)")
@@ -3573,6 +3583,18 @@ Note: No backend server required.
         # skips this action so that the file runs once there.
         in_all=False,
         # PURE: DailyStateBuilder over mock transactions; no DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "classification-from-profile",
+        services_classification_from_profile,
+        name="Classification From Profile",
+        desc="Project 68 D2: PortfolioCalculationEngine._load_asset_classifications reads the geography and sector steps of the asset profile (carried back to date_from, Decimal weights, a NULL row as None, an asset without rows None: classification_params are no longer read); calculate gives each day's by_geography and by_sector from them, a change on a quiet day opening a segment",
+        # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
+        # skips this action so that the file runs once there.
+        in_all=False,
+        # PURE: a private SQLite file under tmp_path built with create_all, disposed at teardown; no lane DB, no server, no network.
         isolation="pure",
     )
     add_test(
