@@ -20,7 +20,7 @@
  * @module features/assets/profile/profileTabState
  */
 import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
-import {fractionToPercent} from '$lib/utils/core/exactDecimal';
+import {compareDecimal, fractionToPercent} from '$lib/utils/core/exactDecimal';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 import {sectorI18nKey} from '$lib/utils/assetTypes';
 import {valueAt} from '$lib/utils/stepSeries';
@@ -225,9 +225,15 @@ export function formatProfileValue(voice: ProfileVoice, value: unknown, context:
         case 'country':
             return context.countryName(String(value));
         case 'map': {
-            const keys = Object.keys(value as Record<string, unknown>);
-            if (keys.length !== 1) return '';
-            return voice.map_keys === 'country' ? context.countryName(keys[0]) : translate(`sectors.${sectorI18nKey(keys[0])}`);
+            // One key (a share's sector): its label. Several: the three largest, each with its weight in percent.
+            const label = (key: string) => (voice.map_keys === 'country' ? context.countryName(key) : translate(`sectors.${sectorI18nKey(key)}`));
+            const entries = Object.entries(value as Record<string, unknown>).map(([key, weight]) => [key, String(weight)] as const);
+            if (entries.length === 1) return label(entries[0][0]);
+            return [...entries]
+                .sort((left, right) => compareDecimal(right[1], left[1]) ?? 0)
+                .slice(0, 3)
+                .map(([key, weight]) => `${label(key)} ${formatPercent(Number(fractionToPercent(weight) ?? weight), {signed: false, digits: 2, trim: true, locale})}`)
+                .join(', ');
         }
         case 'table': {
             const schedule = value as Array<{from?: string; to?: string}>;

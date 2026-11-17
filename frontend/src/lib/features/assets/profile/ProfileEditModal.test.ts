@@ -15,7 +15,9 @@
  * - the sources are named as sources (E10c3): the comparison window's title and intro, the panels' «ask» button; a
  *   percentage field shows «%» beside it, a number its unit;
  * - in save mode the window sends `PATCH /assets` with `profilePatch`, marks the rows the backend refuses
- *   (`profileValueInvalid`), and hands the changes back only once committed.
+ *   (`profileValueInvalid`), and hands the changes back only once committed;
+ * - a value is written as the «Profilo» tab writes it (`formatProfileValue`): one way to write a profile value in the
+ *   app, so «Adesso» reads as the tab does (a percentage in the interface locale, an amount with its currency).
  */
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import {get} from 'svelte/store';
@@ -24,6 +26,8 @@ import {_} from '$lib/i18n';
 import ProfileEditModal from './ProfileEditModal.svelte';
 import type {ProfileVoice} from './profileStore';
 import type {AskAnswer, PendingChanges} from './profileEditState';
+import {formatProfileValue} from './profileTabState';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 
 function voice(key: string, shape: string, extra: Partial<ProfileVoice> = {}): ProfileVoice {
     return {key, shape, sign: null, unit: null, groups: [], key_figure: false, charted: false, volatile: false, choices: [], map_keys: null, ...extra} as ProfileVoice;
@@ -102,6 +106,23 @@ beforeAll(async () => {
 });
 
 afterEach(() => cleanup());
+
+describe('ProfileEditModal — values written as the tab writes them', () => {
+    const nowText = (id: string) => (row(id)?.querySelector('td[data-column-id="now"]')?.textContent ?? '').replace(/\s+/g, ' ');
+    const asTheTab = (key: string, value: unknown) => formatProfileValue(CATALOGUE.find((entry) => entry.key === key)!, value, {translate: (k) => get(_)(k), locale: uiLocale(), countryName: (iso3) => iso3});
+
+    it('writes «Adesso» of a percentage and of an amount as the tab does', () => {
+        mount({
+            current: {ter: {value: '0.0022', source: 'justetf'}, fund_size: {value: {amount: '55200000000', currency: 'EUR'}, source: 'justetf'}},
+            pending: {
+                ter: {key: 'ter', kind: 'value', value: '0.0019', origin: 'new'},
+                fund_size: {key: 'fund_size', kind: 'value', value: {amount: '56000000000', currency: 'EUR'}, origin: 'new'},
+            },
+        });
+        expect(nowText('ter')).toContain(asTheTab('ter', '0.0022'));
+        expect(nowText('fund_size')).toContain(asTheTab('fund_size', {amount: '55200000000', currency: 'EUR'}).replace(/\s+/g, ' '));
+    });
+});
 
 describe('ProfileEditModal — rows and panels', () => {
     it('shows the pending dry voices as rows and the two maps as panels', () => {

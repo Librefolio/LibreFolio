@@ -197,6 +197,12 @@ describe('a value as the tab writes it', () => {
         expect(tab.formatProfileValue(byKey('sector'), {Technology: '1'}, context)).toBe('Tecnologia');
     });
 
+    it('writes a map of several keys as its three largest, by label, in percent', () => {
+        const text = tab.formatProfileValue(byKey('sector'), {Energy: '0.1', Technology: '0.6', Utilities: '0.05', Financials: '0.25'}, context);
+        expect(text).toBe('Tecnologia 60%, sectors.Financials 25%, sectors.Energy 10%');
+        expect(tab.formatProfileValue(byKey('geography'), {IRL: '0.7', USA: '0.3'}, context)).toBe('Irlanda 70%, USA 30%');
+    });
+
     it('writes nothing for a missing value', () => {
         expect(tab.formatProfileValue(byKey('ter'), null, context)).toBe('');
     });
