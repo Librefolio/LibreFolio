@@ -26,7 +26,7 @@ table      ``[{"from": …, "to": …, "rate": …}]``      rows in order
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from enum import StrEnum
 from typing import Any, Dict, List, Optional
 
@@ -34,7 +34,7 @@ from pydantic import ConfigDict, Field, model_validator
 
 from backend.app.db.models import AssetType
 from backend.app.schemas.assets.enrichers import FAEnricherBinding
-from backend.app.schemas.common import StrictModel
+from backend.app.schemas.common import BaseBulkDeleteResponse, BaseDeleteResult, DateRangeModel, MinStartDateRangeModel, StepSpan, StrictModel
 
 
 class ProfileShape(StrEnum):
@@ -156,3 +156,101 @@ class FAProfileRefreshResponse(StrictModel):
     """``POST /assets/profile/refresh``."""
 
     results: List[FAProfileRefreshResult]
+
+
+# =============================================================================
+# READ, CATALOGUE, FORGET (plan 68, D1)
+# =============================================================================
+
+
+class FAProfileCatalogueResponse(StrictModel):
+    """``GET /assets/profile/catalogue``: every voice of the profile, in the catalogue's order (for the forms)."""
+
+    voices: List[FAProfileVoice]
+
+
+class FAProfileChangesQuery(StrictModel):
+    """Which changes a profile read adds: without ``key`` the «Ultime variazioni» panel (a volatile voice only with the
+    rows written by hand and the source row that replaces one), with ``key`` every row of that voice («Storia del dato»).
+    Never filtered by the read's ``date_range``."""
+
+    key: Optional[str] = Field(None, description="One voice: all its rows. None: the panel, every voice")
+    page: int = Field(0, ge=0, description="The page, 0 first; 20 changes per page, newest first")
+
+
+class FAProfileQueryItem(StrictModel):
+    """One asset of ``POST /assets/profile/query``: its voices (all when ``keys`` is absent) as steps in ``date_range``."""
+
+    asset_id: int
+    keys: Optional[List[str]] = Field(None, description="The voices to read; None for every voice, [] for none (only the changes)")
+    date_range: DateRangeModel | MinStartDateRangeModel = Field(..., description="Two days, one day (end absent), or start `min`: the first day the asset's profile has among the voices asked; nothing stored answers no voice")
+    changes: Optional[FAProfileChangesQuery] = Field(None, description="Add a page of changes; None for none")
+
+
+class FAProfileStepPoint(StepSpan):
+    """One step of a voice: from ``date`` to ``through`` the value is ``value`` (stored form; null: empty on purpose),
+    given by ``source``. ``update_id`` is the row the step starts with."""
+
+    value: Any = None
+    source: str
+    update_id: int
+
+
+class FAProfileChange(StrictModel):
+    """One change: a row of ``asset_profile_updates`` and the voice's value before it."""
+
+    id: int = Field(..., description="The row's id, for «Dimentica»")
+    key: str
+    value: Any = Field(None, description="The new value, stored form; null: emptied on purpose")
+    previous: Any = Field(None, description="The value before it; null with has_previous false for the voice's first row")
+    has_previous: bool
+    source: str = Field(..., description="An enricher's code, user, or legacy")
+    user_id: Optional[int] = Field(None, description="Who wrote a user row; null for the sources and for a deleted user")
+    read_on: date
+    source_date: Optional[date] = None
+    created_at: datetime
+
+
+class FAProfileChangesPage(StrictModel):
+    """One page of changes, newest first."""
+
+    items: List[FAProfileChange]
+    total: int = Field(..., description="How many changes there are in all")
+    page: int
+    page_size: int
+
+
+class FAProfileQueryResult(StrictModel):
+    """The profile of one asset: voice → its steps (a voice with none left out), and the changes when asked."""
+
+    asset_id: int
+    voices: Dict[str, List[FAProfileStepPoint]] = Field(default_factory=dict)
+    changes: Optional[FAProfileChangesPage] = None
+
+
+class FAProfileQueryResponse(StrictModel):
+    """``POST /assets/profile/query``: one result per item, in order. ``as_of`` is the server's time before the read: a
+    «Dimentica» sends it back, and a row written after it is not forgotten."""
+
+    as_of: datetime
+    items: List[FAProfileQueryResult]
+
+
+class FAProfileForgetItem(StrictModel):
+    """One asset of ``DELETE /assets/profile``: the rows to forget, and ``as_of`` of the read the page shows."""
+
+    asset_id: int
+    update_ids: List[int] = Field(..., min_length=1)
+    as_of: datetime = Field(..., description="The as_of of the profile read the page shows; a row written after it is not forgotten")
+
+
+class FAProfileForgetResult(BaseDeleteResult):
+    """The rows forgotten for one asset."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: int
+
+
+class FAProfileForgetResponse(BaseBulkDeleteResponse[FAProfileForgetResult]):
+    """``DELETE /assets/profile``: all or nothing over the whole request."""
