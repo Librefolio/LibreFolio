@@ -21,7 +21,7 @@ import pytest
 from backend.app.config import planner as planner_config
 from backend.app.config.planner import planner_fixed_seeds  # the real reader: the autouse fixture replaces the module's
 from backend.app.services.pac_allocator import planner, seed_runs
-from backend.app.services.pac_allocator.proof import PROOF_NOT_CONFIRMED_REASON, SeededRunVote, merge_seeded_runs, seeded_runs_agree
+from backend.app.services.pac_allocator.proof import PROOF_NOT_CONFIRMED_REASON, SeededRunVote, merge_seeded_runs, seeded_margin, seeded_runs_agree
 from backend.test_scripts.test_services import _reb_small_cases as cases
 
 # ---------------------------------------------------------------------------- the runs
@@ -351,6 +351,91 @@ def test_near_the_target_the_band_widens_the_rule() -> None:
 def test_the_merge_of_three_runs(votes, index, downgrade, state) -> None:
     verdict = merge_seeded_runs(votes)
     assert (verdict.index, verdict.downgrade, verdict.state) == (index, downgrade, state)
+
+
+# ---------------------------------------------------------------------------- MG: the margin of a plan not proven
+
+
+def _run(seed: int, value: Fraction, bound: Fraction | None, *, closed: bool = False, origin: str = "prudent") -> SeededRunVote:
+    return SeededRunVote(seed=seed, origin=origin, closed=closed, value=value, band=BAND, bound=bound)
+
+
+@pytest.mark.parametrize(
+    ("votes", "margin"),
+    [
+        pytest.param([_run(1, V, V, closed=True), _run(2, V, V, closed=True), _run(3, V, V - 1, closed=True)], None, id="proven: no margin"),
+        pytest.param([_run(1, V, V, closed=True), _run(2, V + 1, V - Fraction(1, 2)), _run(3, V + 2, V - Fraction(1, 5))], Fraction(1, 5), id="one closed, two unfinished: the second-highest bound"),
+        pytest.param([_run(1, V, V - Fraction(3, 10)), _run(2, V + 1, V + Fraction(1, 2)), _run(3, V + 2, V - Fraction(2, 5))], Fraction(2, 5), id="a bound above the plan beyond the band is refuted and dropped"),
+        pytest.param([_run(1, V, V - Fraction(3, 10)), _run(2, V + 1, V + Fraction(1, 2)), _run(3, V + 2, None)], None, id="fewer than two usable bounds: no margin"),
+        pytest.param([_run(1, V, V - Fraction(3, 10)), SeededRunVote(seed=2, failed=True), SeededRunVote(seed=3, failed=True)], None, id="two runs with no answer: one bound, no margin"),
+        pytest.param([_run(1, V, V - 1, origin="wide"), _run(2, V + 1, V - 2, origin="wide"), SeededRunVote(seed=3, infeasible=True)], None, id="a plan of the wide model: no margin"),
+        pytest.param([_run(1, V, V + TOLERANCE / 4), _run(2, V + 1, V + TOLERANCE / 8), _run(3, V + 2, None)], -(TOLERANCE / 8), id="bounds above the plan inside the band: a margin at most zero, one minor unit once posted"),
+    ],
+)
+def test_the_margin_is_the_plan_less_the_second_highest_usable_bound(votes, margin) -> None:
+    """Lot MG (the developer's «ottimo locale (entro X)», the consultant's rule of 17/11): the margin of a plan not proven
+    is how far below it the best plan can still be, V − L. L is the second-highest of the runs' first-stage bounds that
+    are usable: not above V beyond the agreement band. A bound counts when two searches say it, as the proof does. Fewer
+    than two usable bounds, a proven plan, or a plan of the wide model: no margin."""
+    assert seeded_margin(votes, merge_seeded_runs(votes)) == margin
+
+
+@pytest.mark.parametrize(
+    ("raw", "scale", "posted"),
+    [
+        pytest.param(Fraction(3, 1000), Fraction(1), Fraction(1, 100), id="0.003 EUR reads 0.01"),
+        pytest.param(Fraction(1, 5), Fraction(1), Fraction(20, 100), id="0.20 stays 0.20"),
+        pytest.param(Fraction(2001, 10000), Fraction(1), Fraction(21, 100), id="rounded up"),
+        pytest.param(Fraction(-1, 10**6), Fraction(1), Fraction(1, 100), id="at most zero reads one minor unit, never 0.00"),
+        pytest.param(Fraction(5000), Fraction(1, 10000), Fraction(50, 100), id="Target first: the distance over F, in euros"),
+    ],
+)
+def test_the_margin_is_posted_up_to_the_minor_unit_never_zero(raw: Fraction, scale: Fraction, posted: Fraction) -> None:
+    assert planner._margin_money(raw, scale, Fraction(1, 100)) == posted
+
+
+def test_a_plan_not_confirmed_publishes_its_margin(monkeypatch) -> None:
+    """Through the planner, three runs of T4 in processes: seed 1 closes; seeds 2 and 3 are made unfinished, with lower
+    bounds of their own. The plan is seed 1's, «not confirmed», and its margin is V − the second-highest bound, in euros."""
+    import dataclasses  # noqa: PLC0415
+
+    real = planner._single_run
+
+    def two_unfinished(scenario, view, issues, checkpoint, budget, product, progress, *, seed=None):
+        outcome = real(scenario, view, issues, checkpoint, budget, product, progress, seed=seed)
+        if seed == 1:
+            return outcome
+        offset = {2: Fraction(1, 2), 3: Fraction(1, 5)}[seed]
+        return dataclasses.replace(outcome, closed=False, bound=outcome.value - offset)
+
+    monkeypatch.setattr(planner, "_single_run", two_unfinished)
+    result = planner.plan_exact_scenario(cases.t4(), solver_time_budget_seconds=5, seeds=(1, 2, 3)).result
+    assert (result.result_state, result.proof.kind, result.proof.reason_code) == ("ready_incumbent", "not_proven", PROOF_NOT_CONFIRMED_REASON)
+    assert (Fraction(result.proof.margin.amount), result.proof.margin.currency) == (Fraction(20, 100), "EUR")
+
+
+def test_the_pac_publishes_no_margin_even_with_a_gap() -> None:
+    """Lot MG, the consultant's ruling of 17/11: the PAC is one search, so it has one bound and never the second the
+    margin needs. A PAC plan stopped at its limit with a positive first-stage gap is «not proven», with no margin; its own
+    gap stays in the stage evidence (EUR², `fixed_l2`)."""
+    from backend.app.schemas.pac_allocator.results import PAC_PLAN_INPUT_ADAPTER  # noqa: PLC0415
+    from backend.app.services.pac_allocator.normalize import normalize_pac_plan  # noqa: PLC0415
+    from backend.test_scripts.test_services import _pac_reference_values as reference  # noqa: PLC0415
+
+    scenario = normalize_pac_plan(PAC_PLAN_INPUT_ADAPTER.validate_python(reference.CASES["m-1x2"]())).normalized
+    stopped = []
+    for budget in (0.01, 0.02, 0.03, 0.05, 0.08):
+        result = planner.plan_exact_scenario(scenario, solver_time_budget_seconds=budget).result
+        first = result.solver_evidence.stages[0]
+        if result.result_state == "ready_incumbent" and result.proof.kind == "not_proven" and first.absolute_gap not in (None, "0"):
+            stopped.append(result)
+    assert stopped, "PREMISE: at some short budget the PAC stops with a plan and a first-stage gap (measured: 0.02 s)"
+    assert all(result.proof.margin is None for result in stopped)
+
+
+def test_a_proven_plan_carries_no_margin() -> None:
+    proven = planner.plan_exact_scenario(cases.t4(), solver_time_budget_seconds=5, seeds=(1, 2, 3)).result
+    assert (proven.proof.kind, getattr(proven.proof, "margin", None)) == ("optimal_proven", None)
 
 
 # ---------------------------------------------------------------------------- the planner, three runs in processes

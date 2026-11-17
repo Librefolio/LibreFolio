@@ -71,7 +71,7 @@ from typing import Literal
 
 from backend.app.config import planner as planner_config
 from backend.app.logging_config import get_logger
-from backend.app.schemas.pac_allocator.evidence import InfeasibilityProvenProof, NotProvenProof, OptimalProvenProof, RebalancerOptimalProvenProof, SolverStatusWitness
+from backend.app.schemas.pac_allocator.evidence import InfeasibilityProvenProof, NotProvenProof, OptimalProvenProof, ProofMargin, RebalancerOptimalProvenProof, SolverStatusWitness
 from backend.app.schemas.pac_allocator.issues import PlannerIssue
 from backend.app.schemas.pac_allocator.request import PacPlannerRequest, RebalancerPlannerRequest
 from backend.app.schemas.pac_allocator.results import (
@@ -113,7 +113,7 @@ from backend.app.services.pac_allocator.models import (
     check_budget,
 )
 from backend.app.services.pac_allocator.normalize import normalize_pac_plan, normalize_rebalancer_plan
-from backend.app.services.pac_allocator.numeric import ExactRatio
+from backend.app.services.pac_allocator.numeric import ExactRatio, post_ceiling
 from backend.app.services.pac_allocator.progress import ProgressReporter, report_phase
 from backend.app.services.pac_allocator.proof import (
     PROOF_NOT_CONFIRMED_REASON,
@@ -125,6 +125,7 @@ from backend.app.services.pac_allocator.proof import (
     UnprovenConclusion,
     conclude_with_solver,
     merge_seeded_runs,
+    seeded_margin,
 )
 from backend.app.services.pac_allocator.seed_runs import fresh_seeds, run_seeds
 from backend.app.services.pac_allocator.solver import DEFAULT_SOLVER_TIME_BUDGET_SECONDS, SolverRunResult, solve_policy_program
@@ -304,7 +305,7 @@ def plan_exact_scenario(
     runs = run_seeds(one_run, seeds=run_seeds_of, time_budget_seconds=budget, checkpoint=checkpoint, progress=progress, start_next_after=_answered_impossible)
     report_phase(progress, "verify")
     check_budget(checkpoint)
-    published = _merged_report(runs)
+    published = _merged_report(runs, scenario)
     report_phase(progress, "report")
     return published
 
@@ -318,6 +319,10 @@ class _RunOutcome:
     closed: bool = False
     value: Fraction | None = None
     band: Fraction = Fraction(0)
+    #: Lot MG: the prudent model's first-stage lower bound (SCIP's dual) in the unit of ``value``, None without one; and the
+    #: stage's scale, SCIP's unit over that one (1 for a score in euros, 1/F for «Target first»).
+    bound: Fraction | None = None
+    scale: Fraction = Fraction(1)
 
 
 class SeededRunsFailedError(RuntimeError):
@@ -341,8 +346,19 @@ def _seeds_for(scenario: ExactPlannerScenario, seeds: tuple[int, ...] | None) ->
     return fresh_seeds() if fixed is None else fixed
 
 
-def _merged_report(runs) -> PlanReport:
-    """Publish the run ``proof.merge_seeded_runs`` chooses, its own «proven» downgraded when no second run confirms it."""
+def _margin_money(margin: Fraction, scale: Fraction, quantum: Fraction) -> Fraction:
+    """Lot MG: a margin in the first stage's unit, in the valuation currency (SCIP's unit: euros for a score, D/F for
+    «Target first»), posted up to the currency's minor unit, never zero: a margin at most zero reads one minor unit."""
+    money = margin * scale
+    if money <= 0:
+        return quantum
+    posted = post_ceiling(ExactRatio(money.numerator, money.denominator), ExactRatio(quantum.numerator, quantum.denominator)).posted
+    return Fraction(posted.numerator, posted.denominator)
+
+
+def _merged_report(runs, scenario: ExactPlannerScenario) -> PlanReport:
+    """Publish the run ``proof.merge_seeded_runs`` chooses, its own «proven» downgraded when no second run confirms it, and a
+    plan not proven with its margin (lot MG) when two runs bound it."""
     votes = []
     for run in runs:
         outcome = run.result
@@ -350,22 +366,31 @@ def _merged_report(runs) -> PlanReport:
             votes.append(SeededRunVote(seed=run.seed, failed=True))
             continue
         infeasible = outcome.report.result.result_state == "ready_infeasible"
-        votes.append(SeededRunVote(seed=run.seed, origin=outcome.origin, closed=outcome.closed, infeasible=infeasible, value=outcome.value, band=outcome.band))
+        votes.append(SeededRunVote(seed=run.seed, origin=outcome.origin, closed=outcome.closed, infeasible=infeasible, value=outcome.value, band=outcome.band, bound=outcome.bound))
     verdict = merge_seeded_runs(votes)
+    margin = seeded_margin(votes, verdict)
     logger.info(
         "Rebalancer seeded runs",
-        runs=[{"seed": vote.seed, "origin": vote.origin, "closed": vote.closed, "infeasible": vote.infeasible, "value": None if vote.value is None else float(vote.value), "seconds": run.seconds, "failure": run.failure} for vote, run in zip(votes, runs, strict=True)],
+        runs=[
+            {"seed": vote.seed, "origin": vote.origin, "closed": vote.closed, "infeasible": vote.infeasible, "value": None if vote.value is None else float(vote.value), "bound": None if vote.bound is None else float(vote.bound), "seconds": run.seconds, "failure": run.failure}
+            for vote, run in zip(votes, runs, strict=True)
+        ],
         state=verdict.state,
         chosen=None if verdict.index is None else votes[verdict.index].seed,
         downgrade=verdict.downgrade,
+        margin=None if margin is None else float(margin),
     )
     if verdict.index is None:
         raise SeededRunsFailedError(f"no run of the Rebalancer could be published ({verdict.state})")
-    chosen = runs[verdict.index].result.report
-    if not verdict.downgrade:
+    outcome = runs[verdict.index].result
+    chosen = outcome.report
+    if not verdict.downgrade and margin is None:
         return chosen
     result = chosen.result
-    proof = NotProvenProof(kind="not_proven", reason_code=PROOF_NOT_CONFIRMED_REASON)
+    reason = PROOF_NOT_CONFIRMED_REASON if verdict.downgrade else result.proof.reason_code
+    quantum = next(item.minor_unit for item in scenario.currency_specs if item.currency == scenario.valuation_currency)
+    money = None if margin is None else _margin_money(margin, outcome.scale, Fraction(quantum.numerator, quantum.denominator))
+    proof = NotProvenProof(kind="not_proven", reason_code=reason, margin=None if money is None else ProofMargin(amount=format(Decimal(money.numerator) / Decimal(money.denominator), "f"), currency=scenario.valuation_currency))
     return PlanReport(result=type(result).model_validate(result.model_dump() | {"proof": proof.model_dump()}), limited_entries=chosen.limited_entries)
 
 
@@ -431,7 +456,8 @@ def _single_run(
     check_budget(checkpoint)
     report_phase(progress, "report")
     published = PlanReport(result=_ready_result(scenario, view, search, evaluation, conclusion, issue_list, top_ups, product))
-    return _RunOutcome(report=published, origin="prudent", closed=isinstance(conclusion, OptimalProvenConclusion), value=_first_stage_value(scenario, view, evaluation), band=_first_stage_band(search))
+    bound, scale = _first_stage_bound(search)
+    return _RunOutcome(report=published, origin="prudent", closed=isinstance(conclusion, OptimalProvenConclusion), value=_first_stage_value(scenario, view, evaluation), band=_first_stage_band(search), bound=bound, scale=scale)
 
 
 def _first_stage_value(scenario: ExactPlannerScenario, view: ExactPolicyView, evaluation: ExactEvaluation) -> Fraction:
@@ -440,6 +466,16 @@ def _first_stage_value(scenario: ExactPlannerScenario, view: ExactPolicyView, ev
     code = _objective_codes(view)[0]
     value = solver_view_objectives(scenario, view, evaluation)[code]
     return Fraction(value.numerator, value.denominator)
+
+
+def _first_stage_bound(search: _Search) -> tuple[Fraction | None, Fraction]:
+    """Lot MG: the first stage's lower bound (SCIP's dual, None when it is not finite) in the unit of
+    ``_first_stage_value``, and the stage's scale."""
+    if not search.solver.stages:
+        return None, Fraction(1)
+    first = search.solver.stages[0]
+    scale = Fraction(first.scale)
+    return (None if first.dual is None else Fraction(first.dual) / scale), scale
 
 
 def _first_stage_band(search: _Search) -> Fraction:

@@ -97,6 +97,7 @@ _PUBLIC_API = (
     "SeededVerdict",
     "WIDE_MODEL_REASON",
     "merge_seeded_runs",
+    "seeded_margin",
     "seeded_runs_agree",
 )
 
@@ -215,12 +216,12 @@ def test_public_surface_is_exactly_the_solver_status_api() -> None:
     `conclude_with_solver` is its only public callable that can conclude a
     proof: there is no second road to one. The merge of the Rebalancer's
     seeded runs (lot SEEDS) reads the runs' own conclusions and may only
-    downgrade them; `seeded_runs_agree` compares two values.
+    downgrade them; `seeded_runs_agree` compares two values; `seeded_margin` reads a plan's margin (lot MG).
     """
     assert sorted(proof.__all__) == sorted(_PUBLIC_API)
     assert all(hasattr(proof, name) for name in proof.__all__)
     public_functions = {name for name, obj in inspect.getmembers(proof, inspect.isfunction) if obj.__module__ == proof.__name__ and not name.startswith("_")}
-    assert public_functions == {"conclude_with_solver", "merge_seeded_runs", "seeded_runs_agree"}
+    assert public_functions == {"conclude_with_solver", "merge_seeded_runs", "seeded_margin", "seeded_runs_agree"}
 
 
 # --------------------------------------------------------------------------

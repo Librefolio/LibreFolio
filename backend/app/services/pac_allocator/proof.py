@@ -70,6 +70,7 @@ __all__ = [
     "UnprovenConclusion",
     "conclude_with_solver",
     "merge_seeded_runs",
+    "seeded_margin",
     "seeded_runs_agree",
 ]
 
@@ -263,6 +264,9 @@ class SeededRunVote:
     infeasible: bool = False
     value: Fraction | None = None
     band: Fraction = Fraction(0)
+    #: Its first stage's lower bound (SCIP's dual) in the unit of ``value``; None when the run has none (no plan, the wide
+    #: model, a bound SCIP did not reach).
+    bound: Fraction | None = None
     failed: bool = False
 
 
@@ -283,6 +287,25 @@ def seeded_runs_agree(a: Fraction, b: Fraction, lowest: Fraction, *, band: Fract
     # The tolerance as the decimal it is written as (1e-6), not as its nearest binary float.
     relative = Fraction(str(BOUND_CHECK_TOLERANCE)) * max(Fraction(1), abs(lowest))
     return abs(a - b) <= Fraction(SEED_AGREEMENT_FACTOR) * (relative + band)
+
+
+def seeded_margin(votes: Sequence[SeededRunVote], verdict: SeededVerdict) -> Fraction | None:
+    """Lot MG of project 67 (the developer's «ottimo locale (entro X)», the consultant's rule of 17/11): how far below the
+    published plan the best plan can still be, in the first stage's unit: V − L.
+
+    V is the published run's value. L is the **second-highest** of the runs' bounds that are usable, not above V beyond the
+    agreement band (a bound above the plan is refuted by the plan itself): a bound counts when two searches say it, as the
+    proof does. None for a proven plan, a plan of the wide model, no plan, or fewer than two usable bounds. The result may
+    be at most zero (bounds just above V, inside the band): the caller posts it as one minor unit.
+    """
+    if verdict.index is None or verdict.state != "plan":
+        return None
+    chosen = votes[verdict.index]
+    if chosen.origin != "prudent" or chosen.value is None or (chosen.closed and not verdict.downgrade):
+        return None
+    value = chosen.value
+    usable = sorted((vote.bound for vote in votes if not vote.failed and vote.bound is not None and (vote.bound <= value or seeded_runs_agree(vote.bound, value, value, band=chosen.band))), reverse=True)
+    return value - usable[1] if len(usable) >= 2 else None
 
 
 def merge_seeded_runs(votes: Sequence[SeededRunVote]) -> SeededVerdict:
