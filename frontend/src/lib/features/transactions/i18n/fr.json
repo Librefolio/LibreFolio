@@ -304,7 +304,8 @@
       "chargeRefDuplicate": "Le nom « {ref} » est donné à plusieurs lignes de cet envoi.",
       "chargeParentRefNotFound": "Aucune ligne de cet envoi ne s'appelle « {parentRef} » : le frais ne peut pas y être lié.",
       "chargeParentTwice": "Un frais désigne sa transaction une seule fois : par la ligne de cet envoi ou par une transaction enregistrée, pas les deux.",
-      "chargeParentIdInvalid": "La transaction à laquelle un frais est lié doit être une transaction enregistrée (un identifiant positif)."
+      "chargeParentIdInvalid": "La transaction à laquelle un frais est lié doit être une transaction enregistrée (un identifiant positif).",
+      "chargesDeleteIncomplete": "Cette transaction a des frais liés : supprimez-les ou déliez-les dans la même modification."
     },
     "pydantic": {
       "greaterThan": "La valeur doit être supérieure à {gt}",

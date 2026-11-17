@@ -304,7 +304,8 @@
       "chargeRefDuplicate": "Il nome '{ref}' è dato a più righe di questo invio.",
       "chargeParentRefNotFound": "Nessuna riga di questo invio si chiama '{parentRef}': la spesa non si può collegare.",
       "chargeParentTwice": "Una spesa indica la sua transazione una volta sola: con la riga di questo invio o con una transazione salvata, non entrambe.",
-      "chargeParentIdInvalid": "La transazione a cui è collegata una spesa deve essere una transazione salvata (un id positivo)."
+      "chargeParentIdInvalid": "La transazione a cui è collegata una spesa deve essere una transazione salvata (un id positivo).",
+      "chargesDeleteIncomplete": "Questa transazione ha spese collegate: eliminale o scollegale nella stessa modifica."
     },
     "pydantic": {
       "greaterThan": "Il valore deve essere maggiore di {gt}",

@@ -304,7 +304,8 @@
       "chargeRefDuplicate": "El nombre '{ref}' se da a más de una fila de este envío.",
       "chargeParentRefNotFound": "Ninguna fila de este envío se llama '{parentRef}': el gasto no se puede enlazar.",
       "chargeParentTwice": "Un gasto indica su transacción una sola vez: por la fila de este envío o por una transacción guardada, no ambas.",
-      "chargeParentIdInvalid": "La transacción a la que está enlazado un gasto debe ser una transacción guardada (un id positivo)."
+      "chargeParentIdInvalid": "La transacción a la que está enlazado un gasto debe ser una transacción guardada (un id positivo).",
+      "chargesDeleteIncomplete": "Esta transacción tiene gastos enlazados: elimínalos o desenlázalos en el mismo cambio."
     },
     "pydantic": {
       "greaterThan": "El valor debe ser mayor que {gt}",
