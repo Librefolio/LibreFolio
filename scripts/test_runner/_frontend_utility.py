@@ -434,6 +434,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/layout/PageBackButton.test.ts",
             "src/lib/components/table/DataTableColumnFilter.test.ts",
             "src/lib/components/table/DataTable.test.ts",
+            "src/lib/components/table/DataTable.dateAmountCells.test.ts",
             "src/lib/components/table/DataTableToolbar.test.ts",
             "src/lib/components/table/DataTable.rowOrder.test.ts",
             "src/lib/components/table/DataTable.navigate.test.ts",

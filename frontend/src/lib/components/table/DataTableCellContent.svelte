@@ -17,6 +17,11 @@
 
     let {cellContent}: {cellContent: CellContent} = $props();
 
+    /** A decimal number written out, as `normalizeDecimalInput` leaves it: what an amount cell hands over. */
+    const DECIMAL_TEXT = /^-?\d+(\.\d+)?$/;
+    /** The amount typed in an `editable-amount` cell is not a number: nothing is handed over until it is. */
+    let amountInvalid = $state(false);
+
     /** Handle image load error — hide image and show fallback */
     function handleImageError(e: Event) {
         const img = e.currentTarget as HTMLImageElement;
@@ -166,6 +171,65 @@
                          {cellContent.value ? 'translate-x-[18px] bg-lf-switch-knob-on' : 'translate-x-[3px] bg-lf-switch-knob-off border border-lf-input'}"
                 ></span>
             </button>
+        </div>
+    {:else if cellContent.type === 'editable-date'}
+        <input
+            type="date"
+            class="cell-editable-date"
+            value={cellContent.value ?? ''}
+            min={cellContent.min}
+            max={cellContent.max}
+            aria-label={cellContent.ariaLabel}
+            data-testid="cell-editable-date"
+            onchange={(e) => cellContent.onchange(e.currentTarget.value === '' ? null : e.currentTarget.value)}
+            onclick={(e) => e.stopPropagation()}
+        />
+    {:else if cellContent.type === 'editable-amount'}
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="cell-editable-amount" onclick={(e) => e.stopPropagation()}>
+            <!-- type="text" + manual normalisation, as editable-number; the amount stays decimal text, never a float -->
+            <input
+                type="text"
+                inputmode="decimal"
+                autocomplete="off"
+                class="cell-editable-number"
+                value={cellContent.amount ?? ''}
+                placeholder={cellContent.placeholder ?? ''}
+                aria-label={cellContent.ariaLabel}
+                aria-invalid={amountInvalid ? 'true' : undefined}
+                data-testid="cell-editable-amount-value"
+                oninput={() => (amountInvalid = false)}
+                onblur={(e) => {
+                    const raw = normalizeDecimalInput(e.currentTarget.value);
+                    if (raw === '') {
+                        cellContent.onchange({amount: null, currency: cellContent.currency});
+                        return;
+                    }
+                    if (!DECIMAL_TEXT.test(raw)) {
+                        amountInvalid = true;
+                        return;
+                    }
+                    e.currentTarget.value = raw;
+                    cellContent.onchange({amount: raw, currency: cellContent.currency});
+                }}
+                onkeydown={(e) => {
+                    if (e.key === 'Enter') e.currentTarget.blur();
+                }}
+            />
+            <div class="cell-editable-amount-currency">
+                <SimpleSelect
+                    value={cellContent.currency ?? ''}
+                    options={cellContent.currencies}
+                    compact
+                    showChevron={false}
+                    dropdownPosition="auto"
+                    ariaLabel={cellContent.currencyAriaLabel}
+                    testId="cell-editable-amount-currency"
+                    optionTestId={(option) => `cell-editable-amount-currency-option-${option.value}`}
+                    onchange={(v) => cellContent.onchange({amount: cellContent.amount, currency: v || null})}
+                />
+            </div>
         </div>
     {:else if cellContent.type === 'html'}
         {#if cellContent.tooltip}
@@ -376,6 +440,41 @@
     .cell-editable-text:focus {
         border-color: var(--lf-focus);
         box-shadow: 0 0 0 1px color-mix(in oklab, var(--lf-focus) 25%, transparent);
+    }
+
+    /* Editable date cell (plan 68, E10a): the look of the text cell */
+    .cell-editable-date {
+        width: 100%;
+        max-width: 160px;
+        padding: 0.25rem 0.375rem;
+        font-size: 0.8125rem;
+        border: 1px solid var(--lf-border-input);
+        border-radius: 4px;
+        background: var(--lf-surface-field);
+        color: var(--lf-text-primary);
+        outline: none;
+        transition: border-color 0.15s;
+    }
+
+    .cell-editable-date:focus {
+        border-color: var(--lf-focus);
+        box-shadow: 0 0 0 1px color-mix(in oklab, var(--lf-focus) 25%, transparent);
+    }
+
+    /* Editable amount cell (plan 68, E10a): the number cell and a currency choice side by side */
+    .cell-editable-amount {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+    }
+
+    .cell-editable-amount .cell-editable-number[aria-invalid='true'] {
+        border-color: var(--lf-danger);
+    }
+
+    .cell-editable-amount-currency {
+        min-width: 5.5rem;
+        position: relative;
     }
 
     .cell-editable-number::placeholder,
