@@ -338,6 +338,25 @@ def test_every_discovered_enricher_keeps_the_contract(monkeypatch):
     print_success(f"{len(codes)} enrichers keep the contract: {codes}")
 
 
+def test_a_real_enricher_reaches_an_external_service_and_a_test_double_does_not(monkeypatch):
+    """``calls_external_service`` (project 76, K1): every call of an enricher that reaches a source is counted at the
+    enrichers' boundary, and refused when an instance limit is full. The base declares it True, as the asset and FX
+    bases do; a test-only enricher computes its answers itself and declares False. A real enricher is one the registry
+    discovers that is not ``test_only``."""
+    print_section("Enricher contract: calls_external_service")
+    _test_mode(monkeypatch)
+    assert getattr(EnricherPlugin, "calls_external_service", None) is True, "the base declares calls_external_service = True"
+    codes = [code for code in EnricherRegistry.list_plugin_codes() if not code.startswith(LAB_PREFIX)]
+    declared = {code: getattr(EnricherRegistry.get_plugin(code), "calls_external_service", None) for code in codes}
+    test_only = {code for code in codes if EnricherRegistry.get_plugin(code).test_only}
+    assert MOCK_CODE in test_only, f"barrier: the test enricher is discovered, found {codes}"
+    assert {"justetf", "borsa_italiana", "yfinance"} <= set(codes) - test_only, f"barrier: the three real enrichers are discovered, found {codes}"
+    assert {code: declared[code] for code in test_only} == dict.fromkeys(test_only, False), f"a test double reaches no service: {declared}"
+    real = set(codes) - test_only
+    assert {code: declared[code] for code in real} == dict.fromkeys(real, True), f"a real enricher reaches its source: {declared}"
+    print_success(f"real {sorted(real)} counted, test doubles {sorted(test_only)} not")
+
+
 # =============================================================================
 # 3. The test enricher
 # =============================================================================
