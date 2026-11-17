@@ -517,6 +517,14 @@ def services_providers_enabled(verbose: bool = False, test_names: list = None) -
     return run_command(cmd, "Providers enabled tests", verbose=verbose)
 
 
+def services_call_counter(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the per-instance call counter of the plugins that call an external service (project 76, U1)."""
+    print_section("Services: Plugin Call Counter")
+    print_info("Testing: window_starts/window_end in UTC, one atomic upsert per call, window resets, limits (refused and not counted, the window ending last named, 0 = stopped), database failure lets the call go, read_counts never writes, two processes on one file")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_call_counter.py", test_names)
+    return run_command(cmd, "Plugin call counter tests", verbose=verbose)
+
+
 def services_synthetic_yield(verbose: bool = False, test_names: list = None) -> bool:
     """Test synthetic yield calculation for SCHEDULED_YIELD assets."""
     print_section("Services: Synthetic Yield Calculation")
@@ -2861,6 +2869,17 @@ Note: No backend server required.
         # PURE: no lane DB, no server, no network. Both variables through monkeypatch in this process; a private SQLite file
         # under tmp_path behind every get_async_engine touched; extra plugins put in the registries' storage with
         # monkeypatch.setitem, or in throwaway subclasses of the real registries; the mocks answer every provider call.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "call-counter",
+        services_call_counter,
+        name="Plugin Call Counter",
+        desc="U1: plugin_call_counters, one row per (family, plugin_code), five UTC calendar windows (minute, hour, day, ISO week, month); count_and_check counts +1 in one atomic upsert, resets the windows that changed, never lowers a start, refuses without counting when a limit is full (CallLimitReached names the full window ending last, resets_at, retry_after; limit 0 refused before the statement), returns None with one warning when the database fails; read_counts reads stale windows as 0 and never writes; two processes on one file lose no update and admit exactly the limit",
+        # PURE: no lane DB, no server, no network. Every database is a private SQLite file under tmp_path built by
+        # create_all, behind call_counter.get_async_engine (patched); the session's engines are tripwires. The two child
+        # processes run a script under tmp_path on that private file only, with the lane's TMPDIR.
         isolation="pure",
     )
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation; the accrual golden: every number of the accrual walk pinned (regen: LIBREFOLIO_TEST_REGEN_SI_ACCRUAL_GOLDEN=1)")
