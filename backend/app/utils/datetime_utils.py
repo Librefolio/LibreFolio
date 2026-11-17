@@ -162,3 +162,14 @@ def parse_ISO_date(v) -> date:
         except ValueError as e:
             raise ValueError(f"Input must be an ISO date string (YYYY-MM-DD). Error: {e}") from e
     raise TypeError(f"Input must be a str, date or datetime, got {type(v)}")
+
+
+def zoneinfo_or_utc(name: str | None) -> "ZoneInfo":  # noqa: F821 — the zoneinfo type, imported in the body
+    """The IANA zone ``name``, or UTC when it is empty or not a zone: the one rule of the scheduler's time zone
+    (``scheduler_timezone``), shared by the scheduler and the profile store (plan 68, B6)."""
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError  # noqa: PLC0415 — a leaf module: zoneinfo only where a zone is read
+
+    try:
+        return ZoneInfo(str(name)) if name else ZoneInfo("UTC")
+    except (ZoneInfoNotFoundError, ValueError):
+        return ZoneInfo("UTC")

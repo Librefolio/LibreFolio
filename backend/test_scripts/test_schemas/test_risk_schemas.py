@@ -21,9 +21,11 @@ from backend.app.schemas.risk.outputs import (
     RiskAssetSetComparisonOutput,
     RiskAssetSetDrawdownItem,
     RiskAssetSetDrawdownOutput,
+    RiskAssetSetKpiItem,
     RiskAssetSetKpiOutput,
     RiskAssetSetReturnItem,
     RiskAssetSetReturnOutput,
+    RiskAssetSetVarCvarItem,
     RiskAssetSetVarCvarOutput,
     RiskComparisonOutput,
     RiskComparisonPoint,
@@ -130,7 +132,6 @@ def test_risk_schemas_serialize_strict_canonical_series():
         calendar_days=1,
         annualization_factor=365.0,
         calendar_coverage=1.0,
-        fresh_quote_coverage=1.0,
         data_quality=DataQualityReport(),
         fx_fingerprint="0" * 64,
     )
@@ -149,6 +150,17 @@ def test_risk_schemas_serialize_strict_canonical_series():
                 "unexpected": True,
             }
         )
+
+
+def test_prepared_series_set_carries_no_fresh_quote_coverage():
+    """RN-08 (Q14): `fresh_quote_coverage` was computed and set, and nobody ever read it.
+
+    `PreparedAssetSeriesSet` is internal — no route answers with it, the generated client never
+    sees it, AI Export does not read it — so the field goes with no API change. Whether a point
+    is a fresh quote stays on every valuation point (`is_price_carried_forward`), and the
+    carried ones that matter are counted in `data_quality`.
+    """
+    assert "fresh_quote_coverage" not in PreparedAssetSeriesSet.model_fields
 
 
 def test_risk_series_rejects_inconsistent_provenance_and_calendars():
@@ -2111,3 +2123,154 @@ def test_var_outputs_require_at_least_one_horizon_observation(model, payload):
         assert [error["loc"] for error in below.value.errors()] == [("horizon_observations",)]
 
     assert model(**{**payload, "horizon_observations": 1}).horizon_observations == 1
+
+
+# =============================================================================
+# RN-14 — the positive measures and the shape of the days, optional on every output that publishes them.
+#
+# Each field is null until its analytic fills it, so an older payload stays valid. The twins keep the sign of their
+# meaning (a best day is a gain, an average down day a loss), and a dated measure carries its dates whole or not at
+# all: a date without its figure, or half a run, is refused. The singular output and the asset-set row carry the same
+# measures, so every case runs on both.
+# =============================================================================
+
+
+def _kpi_output(**overrides):
+    base = {"volatility": 0.2, "max_drawdown": -0.1, "max_drawdown_duration_days": 7}
+    base.update(overrides)
+    return base
+
+
+def _asset_set_kpi_item(**overrides):
+    return _kpi_output(asset_id=7, **overrides)
+
+
+KPI_SHAPES = [
+    pytest.param(RiskKpiOutput, _kpi_output, id="kpi"),
+    pytest.param(RiskAssetSetKpiItem, _asset_set_kpi_item, id="kpi_set_item"),
+]
+
+_RETURN_SHAPE = {
+    "best_realization": 0.031,
+    "best_realization_date": date(2026, 3, 2),
+    "positive_observation_share": 0.54,
+    "mean_positive_return": 0.007,
+    "mean_negative_return": -0.006,
+    "longest_positive_run_observations": 6,
+    "longest_positive_run_start_date": date(2026, 4, 1),
+    "longest_positive_run_end_date": date(2026, 4, 8),
+    "omega_ratio": 1.25,
+    "downside_deviation": 0.098,
+    "extreme_day_ratio": 2.4,
+}
+
+
+@pytest.mark.parametrize(("model", "payload"), KPI_SHAPES)
+def test_the_return_shape_is_optional_and_round_trips(model, payload):
+    assert model(**payload()).omega_ratio is None
+    full = model(**payload(**_RETURN_SHAPE))
+    wire = full.model_dump(mode="json")
+
+    assert model.model_validate(wire) == full
+    assert wire["longest_positive_run_observations"] == 6
+
+
+@pytest.mark.parametrize(("model", "payload"), KPI_SHAPES)
+@pytest.mark.parametrize(
+    "broken",
+    [
+        pytest.param({"best_realization": 0.0}, id="a-best-day-that-did-not-gain"),
+        pytest.param({"mean_positive_return": -0.001}, id="an-up-day-that-lost"),
+        pytest.param({"mean_negative_return": 0.001}, id="a-down-day-that-gained"),
+        pytest.param({"positive_observation_share": 1.2}, id="a-share-above-one"),
+        pytest.param({"omega_ratio": -0.1}, id="a-negative-omega"),
+        pytest.param({"downside_deviation": -0.1}, id="a-negative-semi-deviation"),
+        pytest.param({"extreme_day_ratio": -0.1}, id="a-negative-kurtosis-ratio"),
+        pytest.param({"longest_positive_run_observations": 0}, id="an-empty-run"),
+    ],
+)
+def test_the_return_shape_keeps_the_sign_of_its_meaning(model, payload, broken):
+    with pytest.raises(ValidationError):
+        model(**payload(**{**_RETURN_SHAPE, **broken}))
+
+
+@pytest.mark.parametrize(("model", "payload"), KPI_SHAPES)
+@pytest.mark.parametrize(
+    "broken",
+    [
+        pytest.param({"best_realization": None}, id="a-best-date-without-its-day"),
+        pytest.param({"best_realization_date": None}, id="a-best-day-without-its-date"),
+        pytest.param({"longest_positive_run_end_date": None}, id="half-a-run"),
+        pytest.param({"longest_positive_run_observations": None}, id="run-dates-without-a-length"),
+        pytest.param({"longest_positive_run_end_date": date(2026, 3, 31)}, id="a-run-that-ends-before-it-starts"),
+    ],
+)
+def test_a_dated_measure_carries_its_dates_whole(model, payload, broken):
+    with pytest.raises(ValidationError):
+        model(**payload(**{**_RETURN_SHAPE, **broken}))
+
+
+_RALLY = {
+    "largest_rally": 0.246,
+    "largest_rally_start_date": date(2026, 1, 3),
+    "largest_rally_end_date": date(2026, 1, 7),
+    "largest_rally_duration_days": 4,
+    "average_drawdown": -0.031,
+}
+
+
+@pytest.mark.parametrize(("model", "payload"), DRAWDOWN_EPISODE_SHAPES)
+def test_the_largest_rally_and_the_average_drawdown_are_optional_and_round_trip(model, payload):
+    assert model(**payload()).largest_rally is None
+    full = model(**payload(**_RALLY))
+
+    assert model.model_validate(full.model_dump(mode="json")) == full
+    # No rise is no rally, the twin of no_drawdown: a zero with no dates.
+    flat = model(**payload(largest_rally=0.0, largest_rally_start_date=None, largest_rally_end_date=None, largest_rally_duration_days=0))
+    assert flat.largest_rally == 0.0
+
+
+@pytest.mark.parametrize(("model", "payload"), DRAWDOWN_EPISODE_SHAPES)
+@pytest.mark.parametrize(
+    "broken",
+    [
+        pytest.param({"largest_rally": -0.1}, id="a-falling-rally"),
+        pytest.param({"largest_rally_end_date": None}, id="a-rally-without-its-peak"),
+        pytest.param({"largest_rally_end_date": date(2026, 1, 2)}, id="a-peak-before-its-trough"),
+        pytest.param({"largest_rally": 0.0}, id="no-rally-with-dates"),
+        pytest.param({"largest_rally": None}, id="rally-dates-without-a-rally"),
+        pytest.param({"average_drawdown": 0.01}, id="an-average-drawdown-above-the-peak"),
+    ],
+)
+def test_the_largest_rally_keeps_the_episode_contract(model, payload, broken):
+    with pytest.raises(ValidationError):
+        model(**payload(**{**_RALLY, **broken}))
+
+
+def test_the_best_horizon_is_optional_on_both_var_shapes():
+    window = RiskWorstHorizonWindow(compounded_return=0.061, start_date=date(2026, 5, 4), end_date=date(2026, 6, 2))
+    item = RiskAssetSetVarCvarItem(asset_id=7, value_at_risk=0.02, conditional_value_at_risk=0.03, best_horizon=window)
+
+    assert item.best_horizon == window
+    assert RiskAssetSetVarCvarItem(asset_id=7, value_at_risk=0.02, conditional_value_at_risk=0.03).best_horizon is None
+    assert "best_horizon" in RiskVarCvarOutput.model_fields
+
+
+def _var_output(**overrides):
+    base = {"confidence_level": 0.95, "horizon_days": 1, "horizon_observations": 1, "observations": 250, "value_at_risk": 0.016, "conditional_value_at_risk": 0.022, "var_bin_edge": -0.016}
+    base.update(overrides)
+    return base
+
+
+def test_the_green_tail_threshold_and_its_edge_are_optional_and_never_below_the_var_cut():
+    """RN-14: the mirror of the VaR (a gain, never negative) and the edge its whole bars start on."""
+    assert RiskVarCvarOutput(**_var_output()).gain_threshold is None
+    output = RiskVarCvarOutput(**_var_output(gain_threshold=0.015, gain_bin_edge=0.015))
+    assert RiskVarCvarOutput.model_validate(output.model_dump(mode="json")) == output
+
+    with pytest.raises(ValidationError):
+        RiskVarCvarOutput(**_var_output(gain_threshold=-0.001))
+    with pytest.raises(ValidationError):
+        RiskVarCvarOutput(**_var_output(gain_threshold=0.015, gain_bin_edge=0.012))
+    with pytest.raises(ValidationError):
+        RiskVarCvarOutput(**_var_output(gain_threshold=0.0, gain_bin_edge=-0.02))

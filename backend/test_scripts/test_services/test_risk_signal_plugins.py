@@ -108,7 +108,6 @@ def _prepared_set(
         calendar_days=(dates[-1] - dates[0]).days,
         annualization_factor=(len(dates) - 1) * 365 / (dates[-1] - dates[0]).days,
         calendar_coverage=1.0,
-        fresh_quote_coverage=1.0,
         data_quality=DataQualityReport(),
         fx_fingerprint="0" * 64,
     )

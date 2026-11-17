@@ -29,6 +29,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import ConfigDict, Field, field_validator
 
 from backend.app.db.models import AssetType, IdentifierType
+from backend.app.schemas.assets.enrichers import FAEnricherBinding, check_enricher_codes
 from backend.app.schemas.assets.metadata import FAClassificationParams
 from backend.app.schemas.common import (
     BaseBulkResponse,
@@ -74,6 +75,9 @@ class FAAssetCreateItem(StrictModel):
 
     # Classification metadata (optional)
     classification_params: Optional[FAClassificationParams] = Field(None, description="Asset classification metadata")
+    # The asset profile (plan 68, B3): written in the same transaction as the asset
+    enrichers: Optional[Dict[str, FAEnricherBinding]] = Field(None, description="Enricher code → binding; the order of the keys is the priority")
+    profile: Optional[Dict[str, Any]] = Field(None, description="Profile voice → value written by hand (null: left empty on purpose)")
 
     # Identifier fields (one per IdentifierType) - optional
     identifier_isin: Optional[str] = Field(None, max_length=12, description="ISIN code (12 chars)")
@@ -88,6 +92,12 @@ class FAAssetCreateItem(StrictModel):
     @classmethod
     def normalize_identifier_other(cls, v) -> Optional[List[str]]:
         return normalize_other_identifiers(v)
+
+    @field_validator("enrichers")
+    @classmethod
+    def enricher_codes(cls, v: Optional[Dict[str, FAEnricherBinding]]) -> Optional[Dict[str, FAEnricherBinding]]:
+        """Every key an enricher code, installed or not (plan B2: a binding to an enricher turned off stays)."""
+        return check_enricher_codes(v)
 
     @field_validator("currency")
     @classmethod
@@ -295,6 +305,8 @@ class FAAssetPatchItem(StrictModel):
     icon_url: Optional[str] = Field(None, description="Update icon URL (None = clear)")
     quote_base_quantity: Optional[int] = Field(None, description="Update quote base quantity")
     classification_params: Optional[FAClassificationParams] = Field(None, description="Update classification (None = clear)")
+    enrichers: Optional[Dict[str, FAEnricherBinding]] = Field(None, description="Replace the enricher bindings (code → binding, the order is the priority); null or {} clears them; absent = unchanged")
+    profile: Optional[Dict[str, Any]] = Field(None, description="Profile voices written by hand: a value writes it, null leaves it empty on purpose, an absent voice is untouched")
     active: Optional[bool] = Field(None, description="Update active status")
     is_benchmark: Optional[bool] = Field(None, description="Update benchmark availability")
     user_url: Optional[str] = Field(None, description="Update user-defined URL (None = clear)")
@@ -325,6 +337,12 @@ class FAAssetPatchItem(StrictModel):
     def currency_uppercase(cls, v: Optional[str]) -> Optional[str]:
         """An ISO 4217 alphabetic code, upper-case: never a name or a number (E-18)."""
         return iso_currency_code(v) if v else None
+
+    @field_validator("enrichers")
+    @classmethod
+    def enricher_codes(cls, v: Optional[Dict[str, FAEnricherBinding]]) -> Optional[Dict[str, FAEnricherBinding]]:
+        """Every key an enricher code, installed or not (plan B2: a binding to an enricher turned off stays)."""
+        return check_enricher_codes(v)
 
     @field_validator("quote_base_quantity", mode="before")
     @classmethod
@@ -370,6 +388,8 @@ class FAAssetPatchCode(StrEnum):
     ASSET_NAME_TAKEN = "assetNameTaken"
     ASSET_FAMILY_CHANGE = "assetFamilyChange"
     PATCH_FAILED = "patchFailed"
+    PROFILE_VALUE_INVALID = "profileValueInvalid"
+    PROFILE_SOURCE_CHANGED = "profileSourceChanged"
 
 
 class FAAssetPatchIssue(StrictModel):

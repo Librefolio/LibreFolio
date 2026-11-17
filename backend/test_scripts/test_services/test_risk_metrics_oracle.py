@@ -41,23 +41,35 @@ from backend.app.schemas.risk.outputs import RiskKpiOutput
 from backend.app.schemas.risk.vocabulary import RiskMode, RiskReturnBasis, RiskScopeKind
 from backend.app.schemas.signals.vocabulary import SignalWarningCode
 from backend.app.services.financial_math.returns import calendar_days_to_observations, positive_annualization_factor
+from backend.app.services.risk.acquired import average_drawdown, best_realization, best_realization_index
 from backend.app.services.risk.base import RiskExecutionContext
 from backend.app.services.risk.metrics import (
     ZERO_TOLERANCE,
     ReturnHistogram,
+    annualized_downside_deviation,
     annualized_sharpe,
     annualized_sortino,
     annualized_volatility,
+    best_horizon_window,
     beta,
     compounded_return,
     correlation_matrix,
     covariance_matrix,
     daily_risk_free_rate,
     drawdown_episodes,
+    extreme_day_ratio,
+    gain_threshold,
     historical_var_cvar,
+    horizon_compounded_returns,
+    largest_rally,
+    longest_positive_run,
+    mean_negative_return,
+    mean_positive_return,
+    omega_ratio,
     pairwise_correlation,
     pairwise_correlation_matrix,
     pearson_correlation,
+    positive_observation_share,
     return_distribution_histogram,
     risk_contributions_from_covariance,
     sample_covariance,
@@ -1344,9 +1356,13 @@ def test_the_historical_var_analytic_publishes_contiguous_bins_cut_exactly_on_th
     boundaries = [item.lower_bound for item in bins] + [bins[-1].upper_bound]
     assert min(abs(boundary - output.var_bin_edge) for boundary in boundaries) == 0.0
 
-    # The plugin is a re-packer: bounds and counts are the primitive's, bit for bit.
+    # The plugin is a re-packer: bounds and counts are the primitive's, bit for bit — the grid pinned on both cuts since
+    # RN-14 (the VaR and the green tail's threshold, the mirror of the VaR).
     summary = historical_var_cvar(returns, confidence_level=_CONFIDENCE_LEVEL)
-    histogram = return_distribution_histogram(summary.horizon_returns, pinned_edge=-summary.value_at_risk)
+    green = gain_threshold(returns, confidence_level=_CONFIDENCE_LEVEL)
+    histogram = return_distribution_histogram(summary.horizon_returns, pinned_edge=-summary.value_at_risk, gain_edge=green)
+    assert output.gain_threshold == green
+    assert output.gain_bin_edge == histogram.gain_edge == green
     assert [item.lower_bound for item in bins] == list(histogram.edges[:-1])
     assert [item.upper_bound for item in bins] == list(histogram.edges[1:])
     assert tuple(item.count for item in bins) == histogram.counts
@@ -3775,3 +3791,102 @@ def test_the_rolling_sharpe_path_charges_the_same_trading_day_rate_as_the_scalar
     reverted = [_reverted_calendar_day_rate(annual_rate) * factor / volatility for volatility in volatility_values[window:]]
     assert all(old < new for old, new in zip(reverted, expected, strict=True))
     assert min(expected) > 1e-2
+
+
+# --------------------------------------------------------------------------- #
+# RN-14 — the positive measures and the shape of the days («Le misure, fissate», 12/11/2026).
+#
+# riskfolio, SciPy and NumPy are the oracles. Two conventions differ from the library, and both are pinned here
+# rather than hidden in a tolerance: the semi-deviation is the Sortino's own denominator, over T (LPM p = 2 divides
+# by T − 1); the average drawdown walks the compounded curve of every other drawdown we publish (ADD_Rel, never
+# ADD_Abs, which walks the uncompounded sum).
+# --------------------------------------------------------------------------- #
+
+_TARGET_ANNUAL_RETURN = 0.03
+
+
+def test_omega_matches_the_upper_over_the_lower_first_partial_moment_of_riskfolio():
+    returns = _daily_returns()
+    target = daily_risk_free_rate(_TARGET_ANNUAL_RETURN, _ANNUALIZATION)
+    column = _column(returns)
+    upper = float(rk.LPM(-column, MAR=-target, p=1))
+    lower = float(rk.LPM(column, MAR=target, p=1))
+
+    assert omega_ratio(returns, _ANNUALIZATION, annual_target_return=_TARGET_ANNUAL_RETURN) == pytest.approx(upper / lower, rel=1e-12)
+
+
+def test_the_semi_deviation_is_riskfolio_second_partial_moment_rescaled_from_t_minus_one_to_t():
+    returns = _daily_returns()
+    target = daily_risk_free_rate(_TARGET_ANNUAL_RETURN, _ANNUALIZATION)
+    second_moment = float(rk.LPM(_column(returns), MAR=target, p=2))
+    rescaled = second_moment * math.sqrt((len(returns) - 1) / len(returns)) * math.sqrt(_ANNUALIZATION)
+
+    ours = annualized_downside_deviation(returns, _ANNUALIZATION, annual_target_return=_TARGET_ANNUAL_RETURN)
+    assert ours == pytest.approx(rescaled, rel=1e-12)
+    # The divisor is a real difference, not noise: the published figure is the Sortino's, not the library's.
+    assert ours != pytest.approx(second_moment * math.sqrt(_ANNUALIZATION), rel=1e-6)
+
+
+def test_the_sortino_is_the_annualized_excess_return_over_the_published_semi_deviation():
+    """The card's semi-deviation and the Sortino share one function: Sortino = excess × f / semi-deviation."""
+    returns = _daily_returns()
+    target = daily_risk_free_rate(_TARGET_ANNUAL_RETURN, _ANNUALIZATION)
+    excess = math.fsum(value - target for value in returns) / len(returns)
+    deviation = annualized_downside_deviation(returns, _ANNUALIZATION, annual_target_return=_TARGET_ANNUAL_RETURN)
+
+    assert annualized_sortino(returns, _ANNUALIZATION, annual_target_return=_TARGET_ANNUAL_RETURN) == pytest.approx(excess * _ANNUALIZATION / deviation, rel=1e-12)
+
+
+def test_the_average_drawdown_matches_riskfolio_relative_add_and_not_the_absolute_one():
+    returns = _daily_returns()
+    column = _column(returns)
+    ours = average_drawdown(summarize_drawdown(returns).drawdowns)
+
+    assert ours == pytest.approx(-float(rk.ADD_Rel(column)), rel=1e-12)
+    assert ours != pytest.approx(-float(rk.ADD_Abs(column)), rel=1e-6)
+
+
+def test_the_extreme_day_ratio_is_scipy_pearson_kurtosis_over_three():
+    returns = _daily_returns()
+
+    assert extreme_day_ratio(returns) == pytest.approx(float(scipy_excess_kurtosis(np.asarray(returns), fisher=False)) / 3.0, rel=1e-12)
+
+
+def test_the_best_day_the_up_and_down_days_and_the_positive_share_match_numpy():
+    returns = _daily_returns()
+    array = np.asarray(returns, dtype=float)
+
+    assert best_realization(returns) == float(array.max())
+    assert best_realization_index(returns) == int(np.argmax(array))
+    assert positive_observation_share(returns) == pytest.approx(float(np.mean(array > 0)), rel=1e-12)
+    assert mean_positive_return(returns) == pytest.approx(float(array[array > 0].mean()), rel=1e-12)
+    assert mean_negative_return(returns) == pytest.approx(float(array[array < 0].mean()), rel=1e-12)
+
+
+def test_the_longest_positive_run_matches_a_numpy_run_length_scan():
+    returns = _daily_returns()
+    positive = np.concatenate(([0], (np.asarray(returns) > 0).astype(int), [0]))
+    edges = np.flatnonzero(np.diff(positive))
+    starts, ends = edges[0::2], edges[1::2]
+    lengths = ends - starts
+    longest = int(np.argmax(lengths))
+
+    run = longest_positive_run(returns)
+    assert (run.length, run.start_index, run.end_index) == (int(lengths[longest]), int(starts[longest]), int(ends[longest]) - 1)
+
+
+def test_the_best_thirty_days_and_the_largest_rally_match_numpy():
+    returns = _daily_returns()
+    horizon = calendar_days_to_observations(30, _ANNUALIZATION)
+    windows = horizon_compounded_returns(returns, horizon)
+    best = best_horizon_window(windows, horizon)
+    assert best.compounded_return == float(np.max(windows))
+    assert best.start_index == int(np.argmax(windows))
+
+    wealth = np.asarray(wealth_index(returns))
+    running_low = np.minimum.accumulate(wealth)
+    rise = wealth / running_low - 1.0
+    rally = largest_rally(wealth.tolist())
+    assert rally.gain == pytest.approx(float(rise.max()), rel=1e-12)
+    assert rally.peak_index == int(np.argmax(rise))
+    assert wealth[rally.trough_index] == running_low[rally.peak_index]

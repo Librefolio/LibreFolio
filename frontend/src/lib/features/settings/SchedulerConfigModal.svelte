@@ -1,7 +1,8 @@
 <!--
   SchedulerConfigModal.svelte — Svelte 5
 
-  Modal for configuring scheduler settings: frequency, time slots, days, horizon.
+  Modal for configuring scheduler settings: frequency, time slots, days, horizon,
+  and the weekly profile read's own times and days (plan 68, B6b).
   Times and days are stored in the configured scheduler timezone. The backend
   converts local slots to UTC only when deciding if a job is due.
   Uses ModalBase + InfoBanner. Saves each key individually via PUT.
@@ -13,7 +14,7 @@
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
-    import {Clock, Calendar, Search, Lightbulb, Plus, X, Globe} from 'lucide-svelte';
+    import {Clock, Calendar, Search, Lightbulb, Plus, X, Globe, FileText} from 'lucide-svelte';
 
     import {numericArrows} from '$lib/actions/numericArrows';
     interface Props {
@@ -26,6 +27,9 @@
             times: string;
             days: string;
             horizon: number;
+            /** Profile read times and days; missing → the backend defaults below. */
+            profileTimes?: string;
+            profileDays?: string;
         };
         onsave: () => void;
     }
@@ -55,6 +59,42 @@
 
     const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 
+    // The backend defaults of scheduler_profile_read_times / _days (schemas/settings.py).
+    const PROFILE_DEFAULT_TIMES = '03:00';
+    const PROFILE_DEFAULT_DAYS = 'sat';
+
+    // The profile read's own lists: independent of the history ones.
+    let profileTimeSlots: string[] = $state([]);
+    let profileDays: Record<string, boolean> = $state(parseDays(''));
+    let newProfileTime = $state('');
+
+    function parseSlots(text: string | undefined): string[] {
+        return text ? text.split(',').filter(Boolean) : [];
+    }
+
+    function parseDays(text: string | undefined): Record<string, boolean> {
+        const active = text ? text.split(',').map((d: string) => d.trim().toLowerCase()) : [];
+        return Object.fromEntries(DAY_KEYS.map((d) => [d, active.includes(d)]));
+    }
+
+    /** The list with one more HH:MM slot, kept sorted; a duplicate is swallowed. */
+    function withSlot(list: string[], value: string): string[] {
+        const normalized = value.slice(0, 5); // HH:MM
+        return list.includes(normalized) ? list : [...list, normalized].sort();
+    }
+
+    /** The days with one toggled; the last selected day never switches off. */
+    function withDayToggled(days: Record<string, boolean>, day: string): Record<string, boolean> {
+        const selected = Object.values(days).filter(Boolean).length;
+        if (selected === 1 && days[day]) return days;
+        return {...days, [day]: !days[day]};
+    }
+
+    /** The selected days, comma-joined in week order. */
+    function daysText(days: Record<string, boolean>): string {
+        return DAY_KEYS.filter((d) => days[d]).join(',');
+    }
+
     // Common IANA timezone list
     const TIMEZONES: string[] = (() => {
         try {
@@ -76,11 +116,13 @@
                 frequency = currentValues.frequency;
                 selectedTz = schedulerTimezone || 'UTC';
                 initialTz = selectedTz;
-                timeSlots = currentValues.times ? currentValues.times.split(',').filter(Boolean) : [];
-                const activeDays = currentValues.days ? currentValues.days.split(',').map((d: string) => d.trim().toLowerCase()) : [];
-                selectedDays = Object.fromEntries(DAY_KEYS.map((d) => [d, activeDays.includes(d)]));
+                timeSlots = parseSlots(currentValues.times);
+                selectedDays = parseDays(currentValues.days);
                 horizon = currentValues.horizon;
                 newTime = '';
+                profileTimeSlots = parseSlots(currentValues.profileTimes ?? PROFILE_DEFAULT_TIMES);
+                profileDays = parseDays(currentValues.profileDays ?? PROFILE_DEFAULT_DAYS);
+                newProfileTime = '';
                 error = null;
                 tzSearch = '';
             });
@@ -90,11 +132,22 @@
 
     function addTimeSlot() {
         if (!newTime) return;
-        const normalized = newTime.slice(0, 5); // HH:MM
-        if (!timeSlots.includes(normalized)) {
-            timeSlots = [...timeSlots, normalized].sort();
-        }
+        timeSlots = withSlot(timeSlots, newTime);
         newTime = '';
+    }
+
+    function addProfileTime() {
+        if (!newProfileTime) return;
+        profileTimeSlots = withSlot(profileTimeSlots, newProfileTime);
+        newProfileTime = '';
+    }
+
+    function removeProfileTime(t: string) {
+        profileTimeSlots = profileTimeSlots.filter((s) => s !== t);
+    }
+
+    function toggleProfileDay(day: string) {
+        profileDays = withDayToggled(profileDays, day);
     }
 
     function removeTimeSlot(t: string) {
@@ -107,15 +160,13 @@
     }
 
     function toggleDay(day: string) {
-        // Don't allow unchecking the last selected day
-        const currentSelected = Object.entries(selectedDays).filter(([, v]) => v);
-        if (currentSelected.length === 1 && selectedDays[day]) return;
-        selectedDays = {...selectedDays, [day]: !selectedDays[day]};
+        selectedDays = withDayToggled(selectedDays, day);
     }
 
     let hasAtLeastOneDay = $derived(Object.values(selectedDays).some((v) => v));
     let hasAtLeastOneTime = $derived(timeSlots.length > 0);
-    let canSave = $derived(frequency >= 1 && frequency <= 1440 && hasAtLeastOneTime && hasAtLeastOneDay && horizon >= 1 && horizon <= 365);
+    let profileComplete = $derived(profileTimeSlots.length > 0 && Object.values(profileDays).some((v) => v));
+    let canSave = $derived(frequency >= 1 && frequency <= 1440 && hasAtLeastOneTime && hasAtLeastOneDay && horizon >= 1 && horizon <= 365 && profileComplete);
     let timezoneChanged = $derived(selectedTz !== initialTz);
 
     async function handleSave() {
@@ -126,15 +177,11 @@
         const keysToSave: [string, string][] = [
             ['scheduler_current_price_frequency_minutes', String(frequency)],
             ['scheduler_history_sync_times', timeSlots.join(',')],
-            [
-                'scheduler_history_sync_days',
-                Object.entries(selectedDays)
-                    .filter(([, v]) => v)
-                    .map(([k]) => k)
-                    .join(','),
-            ],
+            ['scheduler_history_sync_days', daysText(selectedDays)],
             ['scheduler_history_sync_horizon_days', String(horizon)],
             ['scheduler_timezone', selectedTz],
+            ['scheduler_profile_read_times', profileTimeSlots.join(',')],
+            ['scheduler_profile_read_days', daysText(profileDays)],
         ];
 
         try {
@@ -182,7 +229,7 @@
     </div>
 
     <!-- Body -->
-    <div class="px-6 py-4 space-y-5">
+    <div class="px-6 py-4 space-y-5 flex-1 min-h-0 overflow-y-auto" data-testid="scheduler-config-body">
         <!-- Server UTC time + Timezone selector -->
         <div class="flex items-center gap-3 text-xs text-lf-muted">
             <span>🕐 Server UTC: <strong>{serverNowUtc || '—'}</strong></span>
@@ -321,6 +368,59 @@
                 <span class="text-sm text-lf-muted">{$_('settings.global.scheduler.horizonSuffix')}</span>
             </div>
             <p class="text-xs text-lf-muted mt-1">{$_('settings.global.scheduler.horizonHint')}</p>
+        </section>
+
+        <!-- Profile Read (plan 68, B6b): its own times and days -->
+        <section data-testid="scheduler-config-profile-read">
+            <h3 class="text-sm font-medium text-lf-secondary flex items-center gap-1.5 mb-2">
+                <FileText size={16} />
+                {$_('settings.global.scheduler.profileReadSection')}
+            </h3>
+            <p class="text-xs text-lf-muted mb-1">{$_('settings.global.scheduler.profileReadTimesLabel')}</p>
+            <div class="flex flex-wrap items-center gap-2">
+                {#each profileTimeSlots as slot}
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm font-mono bg-lf-success-soft text-lf-success-on-soft">
+                        {slot}
+                        <button type="button" class="ml-0.5 hover:text-lf-danger transition-colors" onclick={() => removeProfileTime(slot)} aria-label={$_('settings.global.scheduler.profileReadTimesRemove', {values: {slot}})}>
+                            <X size={14} />
+                        </button>
+                    </span>
+                {/each}
+                <div class="flex items-center gap-1">
+                    <input
+                        type="time"
+                        bind:value={newProfileTime}
+                        class="px-2 py-1 rounded-lg border border-lf-input bg-lf-field text-sm text-lf-primary hover:border-lf-input-hover focus:ring-2 focus:ring-lf-focus/40"
+                        data-testid="scheduler-profile-time-input"
+                        onkeydown={(e) => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                addProfileTime();
+                            }
+                        }}
+                    />
+                    <button type="button" data-testid="scheduler-profile-time-add" class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-sm text-lf-link hover:bg-lf-selected transition-colors disabled:opacity-40" disabled={!newProfileTime} onclick={addProfileTime}>
+                        <Plus size={14} />
+                        {$_('settings.global.scheduler.historyTimesAdd')}
+                    </button>
+                </div>
+            </div>
+            <p class="text-xs text-lf-muted mt-3 mb-1">{$_('settings.global.scheduler.profileReadDaysLabel')}</p>
+            <div class="flex flex-wrap gap-2">
+                {#each DAY_KEYS as day}
+                    <button
+                        type="button"
+                        aria-pressed={profileDays[day]}
+                        aria-label={$_('settings.global.scheduler.profileReadDay', {values: {day: getDayLabel(day)}})}
+                        data-testid="scheduler-profile-day-{day}"
+                        class="px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors {profileDays[day] ? 'bg-lf-checked text-lf-on-checked border-lf-checked' : 'bg-lf-card text-lf-secondary border-lf-input hover:border-lf-focus'}"
+                        onclick={() => toggleProfileDay(day)}
+                    >
+                        {getDayLabel(day)}
+                    </button>
+                {/each}
+            </div>
+            <p class="text-xs text-lf-muted mt-1">{$_('settings.global.scheduler.profileReadHint')}</p>
         </section>
 
         <!-- Tip -->

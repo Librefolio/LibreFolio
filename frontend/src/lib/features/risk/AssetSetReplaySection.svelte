@@ -12,7 +12,7 @@
      * **The reduction is expressed by supplying fewer snippets, not by a
      * variant.** `L4WhatIf` declares all three rungs optional and guards each
      * with an `{#if}`, so a container that hands it one rung gets one rung, with
-     * the same headings, the same `data-distance`, and — because the beta notice
+     * the same headings, the same `data-distance`, and — because the model warning
      * lives inside the simulation branch — no model warning over a replay that
      * is simply what happened. The seam for this page was already cut; a
      * `variant` prop on four components, or a fifth component, would both have
@@ -37,7 +37,7 @@
      * on screen, and this docstring carried the warning until they were fixed.
      * Both are repaired, and the repairs are what this page now relies on:
      *   - the composition total is **withheld**, not degraded. `L4Replay` guards
-     *     it with `{#if output.portfolio_return != null}`, and `stress.py` leaves that
+     *     it with `{#if output.portfolio_return != null}`, and `StressAnalytic._historical` leaves that
      *     null on an unweighted scope — so the sentence does not render at all,
      *     rather than printing a dash that reads like a number which failed to
      *     load. The per-asset bars are the whole answer here.

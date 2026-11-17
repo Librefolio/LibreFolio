@@ -80,7 +80,11 @@
       "manualOnly": "Coppia solo manuale",
       "syncFromProvider": "Sincronizza i tassi dal provider"
     },
-    "loadFailed": "Impossibile caricare le coppie FX"
+    "loadFailed": "Impossibile caricare le coppie FX",
+    "docsHelp": {
+      "list": "Le coppie di valute con cui LibreFolio converte: l'ultimo tasso, la banca centrale che lo pubblica e il percorso usato quando manca una coppia diretta.",
+      "detail": "Una coppia nel tempo: il suo grafico, i segnali che aggiungi, le misure e i tassi che puoi correggere a mano."
+    }
   },
   "fxDetail": {
     "editRates": "Modifica tassi",

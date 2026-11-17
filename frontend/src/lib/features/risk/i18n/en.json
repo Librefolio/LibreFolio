@@ -362,7 +362,17 @@
       "historical_replay_mostly_excluded": "The result describes only part of your portfolio ({covered, number, percent}): the rest is left out of the replay.",
       "assets_excluded_no_price_source": "{count, plural, one {# asset excluded} other {# assets excluded}} from the calculation: no price source is assigned and no price has ever been recorded — {names}.",
       "total_loss_no_recovery": "The value fell to zero: no gain can bring it back to its peak, so the recovery needed is not shown.",
-      "total_loss_no_recovery_assets": "{count, plural, one {# asset fell} other {# assets fell}} to zero: no gain can bring {count, plural, one {it} other {them}} back to the peak, so the recovery needed is not shown — {names}."
+      "total_loss_no_recovery_assets": "{count, plural, one {# asset fell} other {# assets fell}} to zero: no gain can bring {count, plural, one {it} other {them}} back to the peak, so the recovery needed is not shown — {names}.",
+      "analysis_starts_late": "The analysis starts on {start}: before that day, no complete day of prices is available.",
+      "short_history": "{names}: no price before the start of the period, so their history begins inside it.",
+      "best_realization_undefined": "No gaining observation in the period.",
+      "best_realization_undefined_assets": "No gaining observation in the period for {names}.",
+      "average_loss_undefined": "No losing day in the period: there is no average down day.",
+      "average_loss_undefined_assets": "No losing day in the period for {names}: there is no average down day.",
+      "omega_undefined": "Gains against losses is undefined: no day fell below the target return.",
+      "omega_undefined_assets": "Gains against losses is undefined for {names}: no day fell below the target return.",
+      "extreme_day_ratio_undefined": "Extreme days are undefined because the series does not move.",
+      "extreme_day_ratio_undefined_assets": "Extreme days are undefined for {names}: the series does not move."
     },
     "assetDetail": {
       "overviewTab": "Overview",
@@ -401,11 +411,7 @@
     },
     "betaBanner": {
       "title": "Risk Analysis is in beta.",
-      "description": "Calculations, results, and the interface may change before the stable release.",
-      "simulation": {
-        "title": "Simulation is still in beta.",
-        "description": "Its outcome depends heavily on how much history is requested relative to the horizon: a short window with a long horizon can produce implausible figures. Every other level of Risk Analysis has left beta."
-      }
+      "description": "Calculations, results, and the interface may change before the stable release."
     },
     "levels": {
       "l1": {
@@ -452,7 +458,8 @@
         "when": "When",
         "since": "Since",
         "duration": "Duration",
-        "daysCount": "{days, plural, one {# day} other {# days}}"
+        "daysCount": "{days, plural, one {# day} other {# days}}",
+        "sameFallToday": "{amount} · the same fall, on today's value"
       },
       "l2": {
         "title": "Am I as diversified as I think?",
@@ -463,11 +470,9 @@
         "showLess": "Show less",
         "effectiveAssets": {
           "label": "How many independent bets do I really hold?",
-          "aboveCount": "Above the {positions} measured positions: the excess comes from the part not covered ({share}: cash and holdings without prices), and says nothing about the weights",
           "belowCount": "Below the {positions} measured positions: the weights are lopsided, and a few carry the portfolio",
-          "evenCount": "Exactly the {positions} measured positions: even weights and nothing uncovered",
-          "name": "Effective number of positions",
-          "aboveCountNoShare": "Above the {positions} measured positions: the excess comes from the part not covered (cash and holdings without prices), and says nothing about the weights"
+          "evenCount": "Exactly the {positions} measured positions: the weights are even",
+          "name": "Effective number of positions"
         },
         "diversificationRatio": {
           "label": "Did spreading the money achieve anything?",
@@ -589,7 +594,7 @@
         "shockShowDetail": "Show the shock per bucket",
         "shockHideDetail": "Hide the shock per bucket",
         "shockTotal": "This scenario would move the scope by {percent} {amount}",
-        "shockCoverage": "Only {percent} of the scope could be classified, so the total speaks for that part alone.",
+        "shockCoverage": "Only {percent} of the scope has classification data; the rest was counted as \"Other\".",
         "replayPeriod": "Period",
         "replayExcludedResidual": "Left out of the replay: {count, plural, one {# asset} other {# assets}}; {weight} of the value counts as cash at zero return.",
         "replayExcludedOmitted": "Left out of the replay: {count, plural, one {# asset} other {# assets}}; the figures speak for the others.",
@@ -616,7 +621,8 @@
           "contribution": "Contribution",
           "impact": "Impact",
           "bar": "Effect"
-        }
+        },
+        "shockUnconfigured": "Not in this scenario, so shocked by 0: {names}. The total counts them as untouched."
       },
       "backtestNotice": "With a slice active, these figures are rebuilt from today’s composition: they say how it *would* have gone, not how it actually went.",
       "notice": {
@@ -652,6 +658,14 @@
     "benchmark": {
       "measuredHere": "This benchmark is also an asset measured here and cannot be its own yardstick: choose another one for the comparison.",
       "blocked": "Not usable over this period"
+    },
+    "period": {
+      "range": "Period {start} – {end} · in {currency}",
+      "open": "Period from {start} · in {currency}"
+    },
+    "docsHelp": {
+      "header": "How much the portfolio can lose, whether it is diversified, whether the risk is paid and what could happen: the four questions of the Risk tab, on the period shown.",
+      "assetSet": "Pick a few assets and compare them over the period: how much each one lost, what it paid for its risk, which of them move together, and how they would have weathered past crises."
     }
   }
 }

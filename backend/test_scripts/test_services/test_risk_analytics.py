@@ -32,9 +32,11 @@ from backend.app.schemas.risk.vocabulary import (
     RiskStressMethod,
     RiskValueStatus,
 )
+from backend.app.services.financial_math.weights import effective_number_of_positions
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.risk import acquired
 from backend.app.services.risk import base as risk_base
+from backend.app.services.risk.acquired import average_drawdown
 from backend.app.services.risk.analytic_helpers import require_annualization_factor
 from backend.app.services.risk.base import (
     RiskAnalytic,
@@ -51,9 +53,14 @@ from backend.app.services.risk.metrics import (
     beta,
     comparison_summary,
     current_buy_and_hold_returns,
+    gain_threshold,
     historical_var_cvar,
+    largest_rally,
     pearson_correlation,
+    return_distribution_histogram,
+    return_shape,
     summarize_drawdown,
+    wealth_index,
     worst_horizon_window,
 )
 from backend.app.services.risk.quant import models as simulation_models
@@ -195,7 +202,6 @@ def make_prepared_set(
         calendar_days=calendar_days,
         annualization_factor=observations * 365 / calendar_days,
         calendar_coverage=1.0,
-        fresh_quote_coverage=1.0,
         data_quality=DataQualityReport(),
         fx_fingerprint="0" * 64,
     )
@@ -429,8 +435,8 @@ def test_drawdown_summary_requires_primary_history():
 def test_drawdown_summary_trough_to_peak_gain_is_a_new_algorithm_version():
     # 1.2.0 (CP-13a, developer's decision P19): the payload gains maximum_drawdown_trough_to_peak_ratio, and a total
     # loss publishes remaining_to_peak_ratio as null instead of failing the computation. Every number 1.1.0 published
-    # is unchanged.
-    assert DrawdownSummaryAnalytic.algorithm_version == "1.2.0"
+    # is unchanged. 1.3.0 (RN-14): the largest rally and the average drawdown join the payload (tested above).
+    assert DrawdownSummaryAnalytic.algorithm_version == "1.3.0"
 
 
 @pytest.mark.parametrize(
@@ -526,6 +532,29 @@ def test_drawdown_summary_output_serializes_through_discriminated_union():
     assert cells[(1, 2)].value is None
     assert cells[(1, 2)].status == RiskValueStatus.UNDEFINED
     assert any(warning.code == "flat_series" for warning in computation.warnings)
+
+
+def _correlation_context_with_calendar_coverage(calendar_coverage: float) -> RiskExecutionContext:
+    """Two assets on one joint calendar that covers only part of the requested period."""
+    context = make_context({1: [0.01, -0.02, 0.015] * 7, 2: [-0.005, 0.01, 0.02] * 7}, scope_kind=RiskScopeKind.ASSET_SET)
+    prepared = context.prepared_series.model_copy(update={"calendar_coverage": calendar_coverage})
+    return replace(context, prepared_series=prepared, coverage=calendar_coverage)
+
+
+@pytest.mark.parametrize(("min_coverage", "warned"), [(0.6, True), (0.5, False)])
+def test_correlation_min_coverage_reads_the_common_calendar_coverage(min_coverage, warned):
+    """D144: `min_coverage` judges the common calendar, not the pairs.
+
+    Every pair lives on the one joint calendar, so the pairs' own coverage (observations
+    over the calendar's observations) is 1 by construction and the threshold could never
+    bite. The calendar covers 0.577 of the period here: below 0.6 the warning fires, above
+    0.5 it does not, and every cell carries that same coverage instead of 1.
+    """
+    computation = CorrelationAnalytic().compute(CorrelationParams(min_coverage=min_coverage), _correlation_context_with_calendar_coverage(0.577))
+
+    assert any(warning.code == "low_pair_coverage" for warning in computation.warnings) is warned
+    assert [cell.coverage for cell in computation.output.cells] == pytest.approx([0.577] * 4)
+    assert computation.coverage == pytest.approx(0.577)
 
 
 def test_risk_contribution_preserves_negative_pctr_and_additivity():
@@ -2594,6 +2623,17 @@ def test_historical_var_publishes_the_worst_window_it_lived_through_with_its_dat
     assert output.worst_horizon.end_date == context.primary_return_dates[start + horizon_observations - 1]
     # The worst window is at least as bad as the loss the tail estimates: a mean of the worst windows cannot beat the worst.
     assert -output.worst_horizon.compounded_return >= output.conditional_value_at_risk - 1e-12
+    # RN-14: the twin, the best stretch it lived through, found the same way (the earliest of equal windows).
+    windows = []
+    for begin in range(len(VAR_RETURNS) - horizon_observations + 1):
+        wealth = 1.0
+        for value in VAR_RETURNS[begin : begin + horizon_observations]:
+            wealth *= 1.0 + value
+        windows.append((wealth - 1.0, begin))
+    best_return, best_start = max(windows, key=lambda window: (window[0], -window[1]))
+    assert output.best_horizon is not None
+    assert output.best_horizon.compounded_return == pytest.approx(best_return, rel=1e-12)
+    assert (output.best_horizon.start_date, output.best_horizon.end_date) == (context.primary_return_dates[best_start], context.primary_return_dates[best_start + horizon_observations - 1])
 
 
 def test_worst_horizon_window_keeps_the_earliest_of_equal_windows_and_none_for_no_window():
@@ -2610,7 +2650,8 @@ def test_historical_var_sturges_fallback_is_a_new_algorithm_version():
     # histogram's bins with Sturges, where Freedman-Diaconis drew one bar the pin cut in two
     # (pinned in test_risk_metrics_oracle.py, block (f)); VaR and CVaR do not move. 3.0.0 made
     # the horizon calendar days, compounded over the observations they hold (tested above).
-    assert HistoricalVarAnalytic.algorithm_version == "3.2.0"
+    # 3.3.0 (RN-14): the best window it lived through (`best_horizon`), the twin of the worst; VaR and CVaR do not move.
+    assert HistoricalVarAnalytic.algorithm_version == "3.3.0"
 
 
 # ---------------------------------------------------------------------------
@@ -3082,40 +3123,10 @@ def test_worst_realization_is_not_floored_when_every_day_gained():
     assert acquired.worst_realization(returns) == pytest.approx(0.001)
 
 
-def test_effective_number_of_assets_is_the_inverse_herfindahl():
-    weights = [0.5, 0.3, 0.15, 0.05]
-    computed = acquired.effective_number_of_assets(weights)
-
-    assert computed == pytest.approx(2.73972602739726, abs=1e-12)
-    assert computed == pytest.approx(1.0 / sum(weight**2 for weight in weights), abs=1e-12)
-
-    herfindahl_points = sum((weight * 100) ** 2 for weight in weights)
-    assert computed == pytest.approx(10000.0 / herfindahl_points, abs=1e-12)
-
-
-def test_effective_number_of_assets_counts_positions_not_percentages():
-    """Equal weights must return the position count itself, in units of positions."""
-    for count in (1, 4, 10, 37):
-        weights = [1.0 / count] * count
-        assert acquired.effective_number_of_assets(weights) == pytest.approx(count, abs=1e-9)
-
-
-def test_effective_number_of_assets_keeps_cash_in_the_denominator():
-    """Weights that do not sum to one are consumed as given.
-
-    Risk weights are ``position value / net worth``, the same denominator AI
-    Export uses. Renormalizing here would make the product state two different
-    concentrations for one portfolio.
-    """
-    invested = [0.25, 0.25]
-    assert acquired.effective_number_of_assets(invested) == pytest.approx(8.0, abs=1e-9)
-
-    renormalized = [0.5, 0.5]
-    assert acquired.effective_number_of_assets(renormalized) == pytest.approx(2.0, abs=1e-9)
-
-
-def test_effective_number_of_assets_is_none_for_a_fully_liquid_scope():
-    assert acquired.effective_number_of_assets([0.0, 0.0]) is None
+def _effective(weights) -> float | None:
+    """N_eff of plain float weights, through the one home of the formula (RN-15; its own tests: test_financial_math/test_weights.py)."""
+    value = effective_number_of_positions({index: Decimal(weight) for index, weight in enumerate(weights)})
+    return None if value is None else float(value)
 
 
 def test_diversification_ratio_sees_the_correlation_that_asset_count_cannot():
@@ -3134,7 +3145,7 @@ def test_diversification_ratio_sees_the_correlation_that_asset_count_cannot():
         variance = math.fsum(weights[row] * covariance[row][column] * weights[column] for row in range(size) for column in range(size))
         portfolio_volatility = math.sqrt(variance)
 
-        assert acquired.effective_number_of_assets(weights) == pytest.approx(size, abs=1e-9)
+        assert _effective(weights) == pytest.approx(size, abs=1e-9)
         ratios.append(acquired.diversification_ratio(covariance, weights, portfolio_volatility=portfolio_volatility))
 
     assert ratios[0] == pytest.approx(math.sqrt(size), abs=1e-9)
@@ -3181,8 +3192,6 @@ def test_acquired_measures_reject_malformed_input():
         acquired.ulcer_index([0.0])
     with pytest.raises(ValueError):
         acquired.drawdown_at_risk([0.0, -0.1], confidence_level=1.0)
-    with pytest.raises(ValueError):
-        acquired.effective_number_of_assets([0.5, -0.2])
     with pytest.raises(ValueError):
         acquired.diversification_ratio([[0.04]], [0.5, 0.5], portfolio_volatility=0.2)
 
@@ -3386,7 +3395,9 @@ def test_risk_contribution_publishes_concentration_next_to_the_contributions():
 
     assert output.effective_number_of_assets is not None
     assert output.effective_number_of_assets > 0
-    assert output.effective_number_of_assets == pytest.approx(1.0 / math.fsum(weight**2 for weight in weights), abs=1e-12)
+    measured = math.fsum(weights)
+    assert output.effective_number_of_assets == pytest.approx(1.0 / math.fsum((weight / measured) ** 2 for weight in weights), abs=1e-12)
+    assert output.effective_number_of_assets <= len(weights)
     assert output.diversification_ratio is not None
     assert output.diversification_ratio > 0
     # Cauchy-Schwarz: long-only weights cannot diversify below the weighted mean
@@ -3394,15 +3405,10 @@ def test_risk_contribution_publishes_concentration_next_to_the_contributions():
     assert output.diversification_ratio >= 1.0
 
 
-def test_risk_contribution_keeps_cash_in_the_denominator_of_the_effective_count():
-    """The pair of properties that makes the two fields meaningful together.
-
-    Risk weights are ``position value / net worth``, the same denominator AI
-    Export uses for ``nav_weight_percent``. Renormalizing to the invested part
-    would make the product state two different concentrations for one portfolio,
-    so the effective count *must* move when cash enters — while the ratio, being
-    scale-invariant, must not.
-    """
+def test_risk_contribution_leaves_cash_out_of_the_effective_count():
+    """RN-15 (Q8 a, developer 16/11/2026): N_eff is measured on the priced positions alone, their weights renormalized on
+    the measured part, so cash leaves the denominator: the same holdings in the same proportions give the same N_eff,
+    with or without cash. The diversification ratio, scale-invariant, did not move before and does not now."""
     base = make_context(_contribution_returns(), mode=RiskMode.CURRENT_COMPOSITION)
     invested = {1: 0.6, 2: 0.4}
     half_cash = {asset_id: weight * 0.5 for asset_id, weight in invested.items()}
@@ -3410,59 +3416,24 @@ def test_risk_contribution_keeps_cash_in_the_denominator_of_the_effective_count(
     no_cash = RiskContributionAnalytic().compute(RiskContributionParams(), replace(base, weights=invested, cash_weight=0.0)).output
     with_cash = RiskContributionAnalytic().compute(RiskContributionParams(), replace(base, weights=half_cash, cash_weight=0.5)).output
 
-    assert no_cash.cash_weight == pytest.approx(0.0, abs=1e-12)
+    assert RiskContributionAnalytic.algorithm_version == "1.3.0"
     assert with_cash.cash_weight == pytest.approx(0.5, abs=1e-12)
-
-    # Renormalizing the cash-heavy weights to the invested part makes these equal.
-    assert with_cash.effective_number_of_assets != pytest.approx(no_cash.effective_number_of_assets, abs=1e-9)
-    assert with_cash.effective_number_of_assets > no_cash.effective_number_of_assets
-    assert no_cash.effective_number_of_assets == pytest.approx(1.0 / math.fsum(weight**2 for weight in invested.values()), abs=1e-12)
-    assert with_cash.effective_number_of_assets == pytest.approx(1.0 / math.fsum(weight**2 for weight in half_cash.values()), abs=1e-12)
-
-    # Same holdings, same correlation structure: the ratio is the one figure
-    # comparable across portfolios holding different amounts of cash.
+    assert with_cash.effective_number_of_assets == pytest.approx(no_cash.effective_number_of_assets, rel=1e-12)
+    assert no_cash.effective_number_of_assets == pytest.approx(1.0 / (0.6**2 + 0.4**2), rel=1e-12)
     assert with_cash.diversification_ratio == pytest.approx(no_cash.diversification_ratio, abs=1e-12)
-    assert no_cash.diversification_ratio >= 1.0
 
 
-def test_effective_number_of_assets_may_exceed_the_number_of_positions():
-    """The consequence of the cash convention that no range constraint can show.
-
-    ``1 / sum(w^2)`` is bounded above by the position count only when the weights
-    sum to one. Risk weights do not: cash sits in the denominator without ever
-    being a term, so a mostly-liquid portfolio reports an effective count *above*
-    its own number of holdings. The shape below is the one measured end-to-end on
-    the seeded portfolio — two positions weighing 0.2492 and 0.1591 of net worth,
-    the remaining 0.5917 in cash — which reported 11.44 against two holdings.
-
-    This is arithmetic, not a defect, and it is the price of agreeing with AI
-    Export. It is pinned here because nothing else states it: the field is
-    constrained ``gt=0`` only, so capping it at the holding count, renormalizing
-    the weights, or building a caller that assumes ``NEA <= n`` would all pass
-    every other test in this file while changing a ratified decision in silence.
-    """
+def test_the_effective_count_never_exceeds_the_positions_measured():
+    """The shape that once reported 11.44 against two holdings — 0.2492 and 0.1591 of net worth, the rest in cash —
+    now reports the count of its two priced positions, weighed on themselves: at most 2, never «above the count»."""
     weights = {1: 0.24919719587288608, 2: 0.15911534301518165}
-    cash = 1.0 - math.fsum(weights.values())
-    context = replace(
-        make_context(_contribution_returns(), mode=RiskMode.CURRENT_COMPOSITION),
-        weights=weights,
-        cash_weight=cash,
-    )
+    context = replace(make_context(_contribution_returns(), mode=RiskMode.CURRENT_COMPOSITION), weights=weights, cash_weight=1.0 - math.fsum(weights.values()))
 
     output = RiskContributionAnalytic().compute(RiskContributionParams(), context).output
 
-    assert output.effective_number_of_assets == pytest.approx(11.439431068254814, rel=1e-9)
-    assert output.effective_number_of_assets > len(weights)
-
-    # Renormalizing to the invested part is what would restore `NEA <= n`, and is
-    # exactly the change this test exists to make visible.
-    invested_total = math.fsum(weights.values())
-    renormalized = 1.0 / math.fsum((weight / invested_total) ** 2 for weight in weights.values())
-    assert renormalized == pytest.approx(1.9071719886819818, rel=1e-9)
-    assert renormalized <= len(weights)
-
-    # The ratio is unaffected: it is the figure that stays honest under cash.
-    assert output.diversification_ratio >= 1.0
+    measured = math.fsum(weights.values())
+    assert output.effective_number_of_assets == pytest.approx(1.0 / math.fsum((weight / measured) ** 2 for weight in weights.values()), rel=1e-12)
+    assert 1.0 <= output.effective_number_of_assets <= len(weights)
 
 
 def test_historical_kpi_output_survives_the_discriminated_union_round_trip():
@@ -3537,3 +3508,142 @@ def test_a_weighted_payload_without_exclusions_states_a_zero_excluded_weight(ana
 
     assert output.excluded_weight == 0.0
     assert output.cash_weight == pytest.approx(0.25, abs=1e-15)
+
+
+# --------------------------------------------------------------------------- #
+# RN-14 — historical_kpi publishes the shape of the days: the positive twins and «How does it move?».
+# Every figure is the one return_shape computes on the same series and the same Sortino target; every figure that
+# cannot be computed is null with a warning naming why (Q20: «—» with its reason, never a zero).
+# --------------------------------------------------------------------------- #
+
+
+def _rn14_warning_codes(computation) -> set[str]:
+    return {warning.code for warning in computation.warnings}
+
+
+def test_historical_kpi_publishes_the_shape_of_the_days_of_its_series():
+    returns = _kpi_returns()
+    context = make_context({1: returns, 2: returns})
+    params = HistoricalKpiParams(target_annual_return=0.02)
+    output = HistoricalKpiAnalytic().compute(params, context).output
+    shape = return_shape(returns, context.annualization_factor, annual_target_return=0.02)
+    dates = context.primary_return_dates
+
+    assert HistoricalKpiAnalytic.algorithm_version == "2.3.0"
+    assert output.best_realization == shape.best_realization
+    assert output.best_realization_date == dates[shape.best_realization_index]
+    assert output.positive_observation_share == shape.positive_observation_share
+    assert output.mean_positive_return == shape.mean_positive_return
+    assert output.mean_negative_return == shape.mean_negative_return
+    assert output.longest_positive_run_observations == shape.longest_positive_run.length
+    assert output.longest_positive_run_start_date == dates[shape.longest_positive_run.start_index]
+    assert output.longest_positive_run_end_date == dates[shape.longest_positive_run.end_index]
+    assert output.omega_ratio == shape.omega_ratio
+    assert output.downside_deviation == shape.downside_deviation
+    assert output.extreme_day_ratio == shape.extreme_day_ratio
+
+
+def test_historical_kpi_declares_a_window_without_a_gain():
+    falling = [-0.001 - 0.0002 * (index % 3) for index in range(24)]
+    computation = HistoricalKpiAnalytic().compute(HistoricalKpiParams(), make_context({1: falling, 2: falling}))
+    output = computation.output
+
+    assert (output.best_realization, output.best_realization_date, output.mean_positive_return) == (None, None, None)
+    assert output.longest_positive_run_observations is None
+    assert output.positive_observation_share == 0.0
+    assert "best_realization_undefined" in _rn14_warning_codes(computation)
+
+
+def test_historical_kpi_declares_a_window_without_a_loss():
+    computation = HistoricalKpiAnalytic().compute(HistoricalKpiParams(), make_context({1: _all_positive_returns(), 2: _all_positive_returns()}))
+    output = computation.output
+
+    assert output.omega_ratio is None
+    assert output.mean_negative_return is None
+    assert output.downside_deviation == 0.0
+    assert {"omega_undefined", "average_loss_undefined", "sortino_undefined"} <= _rn14_warning_codes(computation)
+
+
+def test_historical_kpi_declares_a_series_that_does_not_move():
+    flat = [0.0] * HistoricalKpiAnalytic.min_observations
+    computation = HistoricalKpiAnalytic().compute(HistoricalKpiParams(), make_context({1: flat, 2: flat}))
+
+    assert computation.output.extreme_day_ratio is None
+    assert "extreme_day_ratio_undefined" in _rn14_warning_codes(computation)
+
+
+def test_historical_kpi_new_warnings_are_translatable_and_silent_on_a_normal_series():
+    returns = _kpi_returns()
+    computation = HistoricalKpiAnalytic().compute(HistoricalKpiParams(), make_context({1: returns, 2: returns}))
+
+    assert not {"best_realization_undefined", "average_loss_undefined", "omega_undefined", "extreme_day_ratio_undefined"} & _rn14_warning_codes(computation)
+    for warning in HistoricalKpiAnalytic().compute(HistoricalKpiParams(), make_context({1: _all_positive_returns(), 2: _all_positive_returns()})).warnings:
+        assert warning.message_i18n_key == f"risk.warnings.{warning.code}"
+
+
+# --------------------------------------------------------------------------- #
+# RN-14 — drawdown_summary publishes the twins of its episode: the largest rally and «below the peak, on average».
+# --------------------------------------------------------------------------- #
+
+_RALLY_RETURNS = [0.01, 0.01, -0.05, -0.04, 0.03, 0.03, 0.03, 0.03, -0.01, 0.005, 0.005, 0.005]
+
+
+def test_drawdown_summary_publishes_the_largest_rally_with_its_dates_and_the_average_drawdown():
+    context = make_context({1: _RALLY_RETURNS, 2: _RALLY_RETURNS})
+    output = DrawdownSummaryAnalytic().compute(DrawdownSummaryParams(), context).output
+    rally = largest_rally(wealth_index(_RALLY_RETURNS))
+    wealth_dates = (context.primary_baseline_date, *context.primary_return_dates)
+
+    assert DrawdownSummaryAnalytic.algorithm_version == "1.3.0"
+    assert rally.gain > 0
+    assert output.largest_rally == pytest.approx(rally.gain, rel=1e-12)
+    assert output.largest_rally_start_date == wealth_dates[rally.trough_index]
+    assert output.largest_rally_end_date == wealth_dates[rally.peak_index]
+    assert output.largest_rally_duration_days == (output.largest_rally_end_date - output.largest_rally_start_date).days
+    assert output.average_drawdown == pytest.approx(average_drawdown(summarize_drawdown(_RALLY_RETURNS).drawdowns), rel=1e-12)
+    assert output.average_drawdown < 0
+
+
+def test_drawdown_summary_reports_no_rally_on_a_series_that_only_fell():
+    falling = [-0.01] * 8
+    output = DrawdownSummaryAnalytic().compute(DrawdownSummaryParams(), make_context({1: falling, 2: falling})).output
+
+    assert (output.largest_rally, output.largest_rally_start_date, output.largest_rally_end_date, output.largest_rally_duration_days) == (0.0, None, None, 0)
+    assert output.average_drawdown < 0
+
+
+def test_historical_var_publishes_the_green_tail_threshold_and_pins_it_on_the_histogram():
+    """RN-14: the mirror of the VaR at the same level and horizon, and both cuts on bar edges (consultant's option A)."""
+    context = var_context(VAR_RETURNS, 252.0)
+    params = HistoricalVarParams(horizon_days=1)
+    output = HistoricalVarAnalytic().compute(params, context).output
+
+    expected = gain_threshold(VAR_RETURNS, confidence_level=params.confidence_level, horizon_observations=1)
+    assert output.gain_threshold == expected
+    histogram = return_distribution_histogram(VAR_RETURNS, pinned_edge=output.var_bin_edge, gain_edge=expected)
+    assert output.gain_bin_edge == histogram.gain_edge
+    edges = {output.return_bins[0].lower_bound, *(item.upper_bound for item in output.return_bins)}
+    assert output.var_bin_edge in edges and output.gain_bin_edge in edges
+
+
+def test_historical_kpi_a_measure_the_series_cannot_have_does_not_make_the_result_partial():
+    """Consultant, 16/11/2026: «partial» says the DATA are incomplete. A series that never lost, or never gained, is
+    complete, only made so: its «—» carries its reason and the result stays OK — the best day and the worst day by the
+    same rule (the positive tail's neutrality). Sharpe and Sortino undefined keep degrading, as before."""
+    falling = [-0.001 - 0.0002 * (index % 3) for index in range(24)]
+    fell = HistoricalKpiAnalytic().compute(HistoricalKpiParams(), make_context({1: falling, 2: falling}))
+    assert "best_realization_undefined" in _rn14_warning_codes(fell)
+    assert not any(warning.degrades_result for warning in fell.warnings)
+
+    rose = HistoricalKpiAnalytic().compute(HistoricalKpiParams(), make_context({1: _all_positive_returns(), 2: _all_positive_returns()}))
+    by_code = {warning.code: warning for warning in rose.warnings}
+    for code in ("worst_realization_undefined", "average_loss_undefined", "omega_undefined"):
+        assert by_code[code].degrades_result is False, code
+    # With the target at zero a series that never lost has no day below it either: the Sortino is undefined, and that
+    # one still degrades — out of this lot.
+    assert by_code["sortino_undefined"].degrades_result is True
+
+    flat = [0.0] * HistoricalKpiAnalytic.min_observations
+    still = {warning.code: warning for warning in HistoricalKpiAnalytic().compute(HistoricalKpiParams(), make_context({1: flat, 2: flat})).warnings}
+    assert still["extreme_day_ratio_undefined"].degrades_result is False
+    assert still["sharpe_undefined"].degrades_result is True

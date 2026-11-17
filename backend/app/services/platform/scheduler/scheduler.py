@@ -31,19 +31,20 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from typing import Literal, get_args
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from zoneinfo import ZoneInfo
 
 import structlog
 
 from backend.app.config import get_data_dir
 from backend.app.config.platform import instance_blocked, scheduler_disabled
 from backend.app.services.platform.instance_backup import retention
-from backend.app.services.platform.scheduler.jobs import run_current_price_refresh, run_history_sync
+from backend.app.services.platform.scheduler.jobs import run_current_price_refresh, run_history_sync, run_profile_read
 from backend.app.services.platform.scheduler.leader import am_i_leader
 from backend.app.services.platform.scheduler.run_lock import LOCK_WAIT_SECONDS, SchedulerRunLockTimeout, cross_process_lock_available, scheduler_run_lock
 from backend.app.services.platform.scheduler.settings import SchedulerSettings, load_scheduler_settings
 from backend.app.services.platform.scheduler.state import JobState, SchedulerState, load_state, save_state
 from backend.app.services.platform.sleep_wake.activity import current_activity
+from backend.app.utils.datetime_utils import zoneinfo_or_utc
 
 logger = structlog.get_logger(__name__)
 
@@ -121,6 +122,8 @@ class _Job:
     run: Callable[[SchedulerState, SchedulerSettings], Awaitable[None]]
     state_of: Callable[[SchedulerState], JobState]
     max_backoff_seconds: Callable[[SchedulerSettings], float]
+    #: Whether a run lights the «Updating prices…» banner (``PRICE_REFRESH``): the price jobs do, the profile read does not
+    price_banner: bool = True
 
 
 def utc_now() -> datetime:
@@ -264,10 +267,7 @@ def price_refresh_progress() -> PriceRefreshProgress:
 
 
 def _scheduler_zoneinfo(tz_name: str) -> ZoneInfo:
-    try:
-        return ZoneInfo(tz_name)
-    except (ZoneInfoNotFoundError, ValueError):
-        return ZoneInfo("UTC")
+    return zoneinfo_or_utc(tz_name)
 
 
 def _as_utc(dt: datetime) -> datetime:
@@ -374,6 +374,34 @@ def due_history_sync(now: datetime, settings: SchedulerSettings, state: Schedule
     return latest is not None and last_dt < latest
 
 
+def _slots_on(day: date, days: list[str], times: list, scheduler_tz: ZoneInfo) -> list[datetime]:
+    """The slots of ``day`` in UTC for those local ``days`` and ``times``; none when ``day`` is not one of them."""
+    if _DAY_CODES[day.weekday()] not in days:
+        return []
+    return [datetime.combine(day, slot, tzinfo=scheduler_tz).astimezone(UTC) for slot in times]
+
+
+def due_profile_read(now: datetime, settings: SchedulerSettings, state: SchedulerState) -> bool:
+    """Check if the weekly profile read is due (plan 68, B6): the retry rules first (``_retry_rule``), then as the history
+    sync but on the profile-read days and times: the latest slot of a configured day, today or in the
+    ``MISSED_SLOT_LOOKBACK_DAYS`` before, is due when it fell after the last run (a slot missed while the server was off is
+    caught up); before any run, or with an unreadable one, only today's slots count."""
+    retry = _retry_rule(state.profile_read, now)
+    if retry is not None:
+        return retry
+    now_utc = _as_utc(now)
+    scheduler_tz = _scheduler_zoneinfo(settings.scheduler_timezone)
+    today = now_utc.astimezone(scheduler_tz).date()
+    last_dt = _parse_last_run(state.profile_read.last_run_at)
+    if last_dt is None:
+        return any(slot <= now_utc for slot in _slots_on(today, settings.profile_read_days, settings.profile_read_times, scheduler_tz))
+    for days_back in range(MISSED_SLOT_LOOKBACK_DAYS + 1):
+        passed = [slot for slot in _slots_on(today - timedelta(days=days_back), settings.profile_read_days, settings.profile_read_times, scheduler_tz) if slot <= now_utc]
+        if passed:
+            return last_dt < max(passed)
+    return False
+
+
 JOBS: tuple[_Job, ...] = (
     _Job(
         "current_price",
@@ -388,6 +416,14 @@ JOBS: tuple[_Job, ...] = (
         lambda state, settings: run_history_sync(state, horizon_days=settings.history_sync_horizon_days),
         lambda state: state.history_sync,
         lambda settings: FAILURE_BACKOFF_MAX_SECONDS,
+    ),
+    _Job(
+        "profile_read",
+        lambda now, settings, state: due_profile_read(now, settings, state),
+        lambda state, settings: run_profile_read(state, settings),
+        lambda state: state.profile_read,
+        lambda settings: FAILURE_BACKOFF_MAX_SECONDS,
+        price_banner=False,
     ),
 )
 JOB_NAMES = tuple(job.name for job in JOBS)
@@ -412,6 +448,8 @@ def _overall_status(outcomes: tuple[JobOutcome, ...]) -> str:
 
 
 async def _run_job(job: _Job, reason: str, state: SchedulerState, settings: SchedulerSettings) -> JobOutcome:
+    if not job.price_banner:
+        return await _run_job_body(job, reason, state, settings)
     PRICE_REFRESH.job_started(job.name)
     outcome: JobOutcome | None = None
     try:

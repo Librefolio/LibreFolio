@@ -390,8 +390,8 @@ current-composition `historical_kpi` and `asset_risk_return` and the on-demand `
   sampling select exists for GBM only (`levels/l4/L4Simulation.svelte:62`), the seed input is hidden on
   QMC (l.64), and `SOBOL_START_INDEX` is fixed at 0 (l.45). The answer shows the terminal mean, the
   probability of loss and the P5–P95 band (l.216-222), the drift-uncertainty note (l.225) and
-  `SimulationProvenance` (l.244). The beta banner and the model warning are drawn in the simulation box
-  only (`L4WhatIf.svelte:156-160`).
+  `SimulationProvenance` (l.244). The model warning is drawn in the simulation box only (`L4WhatIf`);
+  the beta banner went when the simulation left beta (RN-06).
 - **Disclosure.** L4 keeps its own: every degraded status, named per step (`L4_STEP_LABELS`,
   `RiskLevelsPanel.svelte:229`), its reasons (l.239), its errors with discarded runs (l.240) and its
   metadata (l.241). The replay enters through `replaySectionView()` (l.214), so its warnings are read in

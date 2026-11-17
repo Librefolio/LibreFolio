@@ -263,7 +263,7 @@
             {@render suggestionButton()}
         {/if}
         <!-- The sentence is withheld, not degraded, when the scope has no aggregate.
-             `stress.py::_historical` sets `portfolio_return` on every weighted scope —
+             `StressAnalytic._historical` sets `portfolio_return` on every weighted scope —
              0.0 at worst — and leaves it null on the unweighted ones, so this guard
              can never fire on a portfolio. A `—` is right inside a card and wrong
              inside a sentence: a set of assets has no composition return, so the

@@ -24,6 +24,11 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Los tipos de cambio FED cubren también el ringgit malayo (MYR), la rupia de Sri Lanka (LKR) y el bolívar venezolano (VES, desde el 4 de octubre de 2021, la última redenominación).
 - Las rutas que usan FED muestran una nota ℹ️: los tipos FED son diarios, uno por día hábil en EE. UU., pero la Reserva Federal los publica una vez a la semana, los lunes, así que el último tipo FED puede tener hasta unos 10 días. Las notas de los proveedores tienen ahora dos niveles en el selector de ruta: ℹ️ para un dato útil, ⚠️ para un límite de los datos como las medias mensuales del SNB.
 - Nuevos proveedores de tipos de cambio de otros cinco bancos centrales, todos gratuitos y sin clave API: la Banca d'Italia (BDI) y el Banco Central do Brasil (BCB) cubren casi todas las divisas del mundo, en un solo paso hacia el euro y hacia el dólar estadounidense; Norges Bank (NORGES), el Banco Nacional de Ucrania (NBU) y el Bank of Canada (BOC) añaden los tipos oficiales de sus países y fuentes secundarias para muchas otras. Datos BCB: Banco Central do Brasil, PTAX, ODbL.
+- Riesgo: cuando el análisis empieza después del inicio del periodo elegido, porque antes no hay precios, el nivel dice desde qué día y nombra los activos cuyo historial empieza dentro del periodo.
+- Riesgo: el periodo y la moneda en que se miden las cifras se escriben bajo el título y encima de las secciones del laboratorio.
+- Shock hipotético: las clases de activos que un escenario deja fuera, con shock cero, se nombran bajo el total.
+- Un icono de documentación a la derecha de más paneles (gráficos y posiciones del Dashboard, análisis de lotes, lista y laboratorio de activos, detalle del activo, brókers, FX, archivos y copias de seguridad, ajustes) abre la página correspondiente del manual, con una breve explicación del panel en su tooltip.
+- Los administradores pueden mantener activos solo algunos proveedores de precios y de tipos de cambio en una instancia (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`): los demás desaparecen de listas, búsqueda, asignaciones y ajustes; las asignaciones existentes conservan sus precios guardados. MANUAL siempre está activo.
 
 ### 🔄 Cambios
 
@@ -44,6 +49,10 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - La ventana de rutas de un par de divisas se abre más rápido, y un grupo grande de cadenas muestra las primeras 200, con «Mostrar más (n ocultas)» para las demás; la búsqueda sigue mirando todas. Con los nuevos bancos centrales un solo par puede tener decenas de miles de cadenas.
 - Precios en tiempo real con menos peticiones: los proveedores que pueden cotizar muchos activos a la vez ahora se consultan una vez por proveedor en lugar de una por activo; Yahoo Finance lo hace con su lista de cotizaciones. Con 20 activos de Yahoo, una hora de planificador y páginas abiertas cuesta unas decenas de peticiones en lugar de cientos, así que las pausas por «demasiadas peticiones» se vuelven raras. Una sincronización de precios toma el valor de hoy de la misma lectura, como mucho una petición por proveedor; si esa lectura se rechaza, el historial de esa ronda espera a la siguiente.
 - Un proveedor puede mantener válidos sus precios en tiempo real más de dos minutos (para fuentes con un límite de llamadas); el valor por defecto sigue siendo dos minutos.
+- Riesgo, correlación: el umbral de cobertura mínima ahora juzga qué parte del periodo cubre la ventana común de los activos, así que su aviso puede saltar; el tooltip del mapa de calor muestra esa cobertura real en lugar de siempre 100 %.
+- Riesgo: la peor caída y la caída actual en dinero ahora dicen que son la misma caída medida sobre el valor de hoy.
+- Los análisis de riesgo publican nuevas medidas junto a las existentes: el mejor día y los 30 mejores días, la mayor subida, la proporción de días positivos, las ganancias frente a las pérdidas (Omega), la semidesviación, la profundidad media bajo el máximo, los días extremos, el día medio de subida y de bajada y la racha positiva más larga. El VaR, el CVaR y cada cifra ya publicada no cambian. Una serie que nunca ganó, o nunca perdió, ya no se marca como parcial por el mejor o peor día que le falta.
+- El número efectivo de posiciones de la pestaña Riesgo se mide solo sobre las posiciones con precio: el efectivo y las posiciones sin precios ya no lo inflan, así que nunca supera las posiciones medidas.
 
 ### 🐛 Corregido
 
@@ -70,6 +79,10 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Los tipos de cambio FED de 16 divisas se guardaban al revés (JPY, CAD, CHF, SEK, DKK, NOK, CNY, INR, BRL, MXN, ZAR, SGD, HKD, KRW, TWD, THB): 1 JPY aparecía como 158 USD en lugar de 0,0063. Los tipos ya guardados no se modifican. Para corregirlos, abre la página Divisas, elige el periodo «Todo» y usa «Sinc. Todo»: cada par cuya ruta usa FED, también como paso de una cadena (por ejemplo INR → USD → EUR), se descarga de nuevo y se sobrescribe.
 - El proveedor del Bank of England (BOE) no descargaba nada, porque la base de datos del banco cambió su dirección de descarga; vuelve a funcionar. Su tipo del euro también venía de la serie equivocada (euro frente al dólar estadounidense en lugar de frente a la libra esterlina): cada par cuya ruta usa BOE para el euro sigue mal hasta que lo vuelvas a sincronizar de la misma forma (periodo «Todo», «Sinc. Todo»).
 - El cierre de un día pasado ya no se sobrescribe con una cotización en tiempo real: una cotización leída antes de medianoche solo rellena un día que falta. Fuera del horario de mercado, el último día de cotización de un activo conserva además su vela completa (apertura, máximo, mínimo) en lugar del solo precio de cierre.
+- Laboratorio de riesgo: tras una sincronización, el laboratorio vuelve a preguntar qué activos se pueden analizar en el periodo, así que un activo cuyos precios trajo la sincronización pasa a ser seleccionable sin recargar la página.
+- Laboratorio de riesgo: cada sección pregunta una sola vez, al abrirse, qué activos puede analizar, en lugar de dos.
+- La ventana «Configuración del Horario» se desplaza por dentro cuando es más alta que la pantalla, así que «Guardar» ya no queda cortado en una ventana pequeña.
+- Tipos de cambio: cuando un par tiene varias rutas, cada ruta guarda ahora los tipos de su propio proveedor. Antes, un par podía guardar el tipo de otra ruta con el nombre del proveedor de la primera; una nueva sincronización del periodo reescribe las filas.
 
 ### ⚠️ Cambios incompatibles
 

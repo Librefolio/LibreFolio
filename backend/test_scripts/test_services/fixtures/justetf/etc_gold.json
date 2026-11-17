@@ -1,0 +1,128 @@
+{
+ "source": "justetf",
+ "asset": "etc_gold",
+ "version": "justetf-scraping 0.1.0",
+ "recorded_at": "2026-11-10T17:06:44",
+ "calls": {
+  "get_etf_overview": {
+   "seconds": 0.46,
+   "error": null,
+   "response": {
+    "isin": "IE00B4ND3602",
+    "name": "iShares Physical Gold ETC",
+    "description": "The product tracks the spot price of gold in US Dollar.",
+    "index": "Gold",
+    "investment_focus": "Precious Metals, Gold",
+    "fund_size_eur": 33660.0,
+    "ter": 0.12,
+    "replication": "Physical(Physically backed)",
+    "legal_structure": "ETC",
+    "strategy_risk": null,
+    "sustainability": false,
+    "fund_currency": "USD",
+    "currency_hedged": true,
+    "volatility_1y": null,
+    "inception_date": "8 April 2011",
+    "distribution_policy": "Accumulating",
+    "distribution_frequency": null,
+    "fund_domicile": "Ireland",
+    "fund_provider": "iShares",
+    "top_holdings": [],
+    "countries": [],
+    "sectors": [],
+    "holdings_date": null,
+    "listings": [
+     {
+      "exchange_code": "XMIL",
+      "exchange": "Borsa Italiana",
+      "currency": "EUR",
+      "ticker": "SGLN",
+      "bloomberg": null,
+      "inav_bloomberg": null,
+      "reuters": null,
+      "inav_reuters": null,
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XLON",
+      "exchange": "London Stock Exchange",
+      "currency": "GBX",
+      "ticker": "SGLN",
+      "bloomberg": null,
+      "inav_bloomberg": null,
+      "reuters": null,
+      "inav_reuters": null,
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XLON",
+      "exchange": "London Stock Exchange",
+      "currency": "EUR",
+      "ticker": "EGLN",
+      "bloomberg": null,
+      "inav_bloomberg": null,
+      "reuters": null,
+      "inav_reuters": null,
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XLON",
+      "exchange": "London Stock Exchange",
+      "currency": "USD",
+      "ticker": "IGLN",
+      "bloomberg": null,
+      "inav_bloomberg": null,
+      "reuters": null,
+      "inav_reuters": null,
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XPAR",
+      "exchange": "Euronext Paris",
+      "currency": "EUR",
+      "ticker": "SLGN",
+      "bloomberg": null,
+      "inav_bloomberg": null,
+      "reuters": null,
+      "inav_reuters": null,
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XETR",
+      "exchange": "XETRA",
+      "currency": "EUR",
+      "ticker": "PPFB",
+      "bloomberg": null,
+      "inav_bloomberg": null,
+      "reuters": null,
+      "inav_reuters": null,
+      "market_maker": null
+     },
+     {
+      "exchange_code": "MUND",
+      "exchange": "gettex",
+      "currency": "EUR",
+      "ticker": "PPFB",
+      "bloomberg": null,
+      "inav_bloomberg": null,
+      "reuters": null,
+      "inav_reuters": null,
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XSTU",
+      "exchange": "Stuttgart Stock Exchange",
+      "currency": "EUR",
+      "ticker": "PPFB",
+      "bloomberg": null,
+      "inav_bloomberg": null,
+      "reuters": null,
+      "inav_reuters": null,
+      "market_maker": null
+     }
+    ],
+    "gettex": null
+   }
+  }
+ }
+}

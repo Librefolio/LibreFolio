@@ -14,7 +14,7 @@
  * its `title` and its fields' accessible names. What is pinned here:
  *
  *   1. **The rows are named as the legacy panel names them** (`stressBucketLabel`,
- *      `RiskAnalysisPanel.svelte:357-365`): `Other` → common.other; `european_union` →
+ *      `RiskAnalysisPanel.svelte`): `Other` → common.other; `european_union` →
  *      risk.stress.europeanUnion; an asset class → assets.types.<ID>; a sector → its emoji and
  *      sectors.<key> (`sectorI18nKey`); a country → its flag and its name, from the country cache. The
  *      dimension is the answer's (`output.dimension`): the sector and geography answers are put on
@@ -188,7 +188,7 @@ function answeredSectorEmoji(key: string): string {
 // Answers, written the way `risk_plugins/stress/plugin.py::_hypothetical` writes them
 // ---------------------------------------------------------------------------
 
-/** One line of a holding's `bucket_audit`; its contribution is the product `schemas/risk.py` validates. */
+/** One line of a holding's `bucket_audit`; its contribution is the product `RiskStressBucketAudit.validate_resolution` (`schemas/risk/outputs.py`) validates. */
 function slice(exposure_bucket_id: string, exposure: number, candidate_bucket_ids: string[], applied_bucket_id: string | null, bucket_shock: number, rule: ShockSlice['rule']): ShockSlice {
     return {exposure_bucket_id, exposure, candidate_bucket_ids, applied_bucket_id, bucket_shock, shock_contribution: exposure * bucket_shock, rule};
 }
@@ -852,6 +852,42 @@ describe('L4Shock — a bucket nobody holds is not a row (T-SHK, D5)', () => {
         expect(screen.getByTestId('risk-shock-total'), 'the total went with the table: the answer is still an answer').toBeInTheDocument();
 
         expect(screen.queryByTestId(TORNADO), 'a table of 0.0% rows is drawn for buckets nobody holds').toBeNull();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// The classes a scenario leaves out (RN-10, Q14)
+// ---------------------------------------------------------------------------
+//
+// A request may name only some asset classes. A held class it leaves out is shocked by zero and
+// applied to no bucket (`unconfigured_zero` on the holding's audit line, `_resolve_bucket`), so the
+// total speaks as if that holding were immune. The block names those classes, once each, by the
+// name the rows use; with every held class configured it says nothing. Read through `data-buckets`
+// and the labels the rows use, never through the sentence, which is translated.
+
+/** Two classes configured; the portfolio also holds bonds (twice) and crypto, which the request leaves out. */
+const PARTIAL_SHOCKS: Shocks = {STOCK: -0.2, ETF: -0.15};
+const PARTIAL_ANSWER = shockOutput('asset_class', PARTIAL_SHOCKS, [classHolding(121, 0.4, 'STOCK', PARTIAL_SHOCKS), classHolding(122, 0.2, 'BOND', PARTIAL_SHOCKS), classHolding(123, 0.1, 'CRYPTO', PARTIAL_SHOCKS), classHolding(124, 0.1, 'BOND', PARTIAL_SHOCKS)]);
+
+describe('L4Shock — the classes a scenario leaves out are named (RN-10, Q14)', () => {
+    it('names every held class the scenario does not configure, once each, by the name its row would have', async () => {
+        mount(shockResult(PARTIAL_ANSWER));
+        expect(screen.getByTestId('risk-shock-total'), 'barrier: the answer parsed and its total is stated').toBeInTheDocument();
+
+        const note = screen.queryByTestId('risk-shock-unconfigured');
+        expect(note, 'bonds and crypto were shocked by zero because the scenario does not name them, and the block does not say so').not.toBeNull();
+        expect(note, 'the classes left out, once each and in order').toHaveAttribute('data-buckets', 'BOND,CRYPTO');
+        const names = expectedRows('asset_class', ['bucket:BOND', 'bucket:CRYPTO']);
+        await waitFor(() => {
+            for (const name of Object.values(names)) expect(note?.textContent, `a class left out is not named as its row would be: ${name}`).toContain(name);
+        });
+    });
+
+    it('says nothing when the scenario configures every held class', () => {
+        mount(shockResult(RISK_OFF_ANSWER));
+        expect(screen.getByTestId('risk-shock-total'), 'barrier: the answer parsed and its total is stated').toBeInTheDocument();
+
+        expect(screen.queryByTestId('risk-shock-unconfigured'), 'every held class is in «Global risk-off», and the block still lists some as left out').toBeNull();
     });
 });
 

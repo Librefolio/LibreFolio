@@ -90,7 +90,7 @@
  * (`portfolio/risk-analysis.spec.ts`, `portfolio/risk-lab.spec.ts`).
  *
  * ⚠️ Every figure, name and date below is invented; the shapes are the backend's
- * (`stress.py::_historical`, `_replay_exclusion_warning`,
+ * (`StressAnalytic._historical`, `_replay_exclusion_warning`,
  * `service.py::_with_warning_asset_names`).
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
@@ -333,7 +333,7 @@ function omitted(assetId: number, reason: ExclusionReason): ExcludedAsset {
 }
 
 /**
- * An audit as `stress.py` builds it: the total is the sum of the weights, zero when
+ * An audit as `StressAnalytic._historical` builds it: the total is the sum of the weights, zero when
  * there are none. The weights below are binary fractions, so the sum is exact and a
  * `data-weight-total` can be compared as the string it is.
  */
@@ -352,7 +352,7 @@ function audit(excluded: ExcludedAsset[], extra: Partial<Audit> = {}): Audit {
     };
 }
 
-/** One warning per reason, in the engine's own order, named the way `service.py` names them. */
+/** One warning per reason, in the engine's own order, named the way `with_warning_asset_names` (`risk/results.py`) names them. */
 function exclusionWarnings(excluded: readonly ExcludedAsset[]): RiskResultWarning[] {
     return schemas.RiskHistoricalReplayExclusionReason.options.flatMap((reason) => {
         const items = excluded.filter((item) => item.reason === reason);
@@ -401,7 +401,7 @@ function metadata(scope: Scope, replayAudit: Audit, range: ReplayWindow): RiskRe
     };
 }
 
-/** A replay's figures. On a weighted scope a bar is a contribution with its money; on a selection, the bare return with neither — as `stress.py` sends them. */
+/** A replay's figures. On a weighted scope a bar is a contribution with its money; on a selection, the bare return with neither — as `StressAnalytic._historical` sends them. */
 function output(scope: Scope, portfolioReturn: number | null, range: ReplayWindow, impacts: readonly ImpactSpec[]): RiskStressOutput {
     const weighted = scope === 'portfolio';
     return {
@@ -446,7 +446,7 @@ function replayed(scope: Scope, replayAudit: Audit, options: ReplayedOptions = {
     };
 }
 
-/** Nothing left to replay: every asset excluded (`stress.py`, the `if not selected:` branch). No output, as `schemas/risk.py` demands. */
+/** Nothing left to replay: every asset excluded (`StressAnalytic._historical`, the `if not selected:` branch). No output, as `RiskAnalyticResult.validate_status_payload` (`schemas/risk/results.py`) demands. */
 function nothingLeft(details: Record<string, unknown>): RiskAnalyticResult {
     return {instance_id: 'single-stress', analytic_code: 'stress', status: 'unavailable', output: null, error: {code: 'insufficient_history', message: 'No asset in the replay scope covers the replay window', details}};
 }
@@ -1093,7 +1093,7 @@ describe('L4Replay — the composition total', () => {
     });
 
     it('states it when the weighted replay came out flat, instead of reading the 0.0 as "no answer"', () => {
-        // `stress.py` falls back to `portfolio_return = 0.0` rather than to null on a
+        // `StressAnalytic._historical` falls back to `portfolio_return = 0.0` rather than to null on a
         // weighted scope, so a guard written as a truthiness check would hide the one
         // honest sentence the reader is owed here.
         mount('portfolio', replayed('portfolio', audit([]), {portfolioReturn: 0}));
@@ -1167,7 +1167,7 @@ describe('L4Replay — what the replay left out', () => {
         const block = screen.getByTestId('risk-replay-excluded');
         expect(block).toHaveAttribute('data-count', String(exclusions.count));
         expect(block).toHaveAttribute('data-treatment', 'omitted_from_replay');
-        // `stress.py` pins the total to 0.0 on an unweighted scope; published, it would say
+        // `StressAnalytic._historical` pins the total to 0.0 on an unweighted scope; published, it would say
         // "0% of the scope" about assets that were never weighed.
         expect(block, 'a total weight was published for a selection, which carries no weights').not.toHaveAttribute('data-weight-total');
         expectHeader('omitted', exclusions);
@@ -1532,7 +1532,7 @@ describe('L4Replay — the note beside the common period', () => {
 describe('L4Replay — the exclude-and-retry flow is retired', () => {
     it('turns no refusal into a question, not even one shaped like the old blocker', () => {
         // The one payload the retired flow turned into "leave it out and run again": the
-        // shape `stress.py` sent before it excluded on its own. It is the payload that
+        // shape `StressAnalytic._historical` sent before it excluded on its own. It is the payload that
         // proves the flow is gone, because it is the only one that ever summoned it.
         const controller = mount('portfolio', {
             instance_id: 'single-stress',

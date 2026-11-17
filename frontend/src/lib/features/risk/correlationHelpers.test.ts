@@ -70,7 +70,7 @@ function pairTable(entries: ReadonlyArray<readonly [number, number, number]>): (
 }
 
 /**
- * A full N×N payload, diagonal included — the shape `correlation.py` emits.
+ * A full N×N payload, diagonal included — the shape `CorrelationAnalytic` (`correlation/plugin.py`) emits.
  * A pair the table has no value for becomes an `insufficient` cell, which is
  * what the backend sends when two series share too little history.
  */

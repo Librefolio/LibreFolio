@@ -166,7 +166,9 @@
           "last7d": "Ultimi 7 giorni",
           "last30d": "Ultimi 30 giorni",
           "deferred": "Rimandato: fornitore in pausa",
-          "retryAt": "Nuovo tentativo alle {time}"
+          "retryAt": "Nuovo tentativo alle {time}",
+          "profileRead": "Lettura profili",
+          "voicesWritten": "{count, plural, one {# voce del profilo scritta} other {# voci del profilo scritte}}"
         },
         "status": {
           "title": "Stato Scheduler",
@@ -180,7 +182,13 @@
         },
         "timezone": "Fuso orario",
         "timezoneChangeWarning": "Cambiare fuso mantiene invariati questi orari e giorni, ma cambia l'istante effettivo di esecuzione in UTC.",
-        "timezoneHintLocal": "Gli orari e i giorni qui sotto sono interpretati in questo fuso orario."
+        "timezoneHintLocal": "Gli orari e i giorni qui sotto sono interpretati in questo fuso orario.",
+        "profileReadSection": "Lettura dei profili degli asset",
+        "profileReadHint": "Legge il profilo di ogni asset (tipo, emittente, costi, ripartizione) dalle sue fonti di dati, nel fuso dello scheduler. I profili cambiano di rado: una volta a settimana basta.",
+        "profileReadTimesLabel": "Orari di lettura",
+        "profileReadDaysLabel": "Giorni di lettura",
+        "profileReadTimesRemove": "Rimuovi l'orario di lettura dei profili {slot}",
+        "profileReadDay": "Leggi i profili di {day}"
       }
     },
     "devicePixelRatioHint": "Rapporto tra i pixel fisici del dispositivo e i pixel CSS. 1x = schermo standard, 2x+ = schermo Retina/HiDPI.",
@@ -476,6 +484,13 @@
       "rateLimited": "Troppe richieste: riprova tra qualche minuto.",
       "deliveryFailed": "Non è stato possibile inviare l'email: l'indirizzo non è cambiato. Riprova più tardi.",
       "unavailable": "Questa istanza ora non può inviare email: il cambio non può essere confermato."
+    },
+    "docsHelp": {
+      "profile": "Il tuo account: nome, email, avatar e password.",
+      "global": "Le impostazioni dell'intera istanza, scelte da un amministratore: valgono per tutti gli utenti.",
+      "about": "Quale versione di LibreFolio gira qui, cosa è cambiato e la sua licenza.",
+      "users": "Gli account di questa istanza: chi può accedere, chi è amministratore e i link di invito.",
+      "security": "Come questa istanza protegge gli accessi e le connessioni: i controlli che esegue e cosa sistemare quando uno fallisce."
     }
   }
 }

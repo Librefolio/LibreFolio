@@ -45,6 +45,11 @@ real ``run_due_jobs`` over the same fakes, behind a recorder that signals each r
 replaced only through ``monkeypatch`` by an ``Activity`` on a fake clock. Nothing sleeps: every wait is on an event, with
 a bounded timeout.
 
+Lot B6 (project 68): the scheduler gains a third job, ``profile_read`` (the weekly read of the enrichers), which does
+not light the banner: ``_run_job`` calls neither ``job_started`` nor ``job_finished`` for it. ``JOBS`` here stays the
+two price jobs, the ones the banner shows; the fakes also stand in for the third job's due function and body, not due
+unless a case names it in ``fakes.due`` (so the real job never runs from here). SPR-033 and SPR-034 pin it.
+
 Red until the code of Z5 exists: the new names are missing from the module (``AttributeError`` in the autouse fixture,
 so every case errors), then the loop's cases need ``Activity.register_response_header``.
 """
@@ -78,6 +83,8 @@ CATCH_UP = ("startup", "return", "wake")
 SETTLING = ("return", "wake")
 STATES = ("idle", "starting", "running")
 JOBS = ("current_price", "history_sync")
+#: Lot B6: the third job, which the banner never shows.
+PROFILE_READ = "profile_read"
 FIELDS = ("state", "reason", "job", "since", "last_finished_at", "last_refreshed")
 
 #: The longest a test waits for anything: a run, a task.
@@ -161,7 +168,7 @@ class Fakes:
     def __init__(self) -> None:
         self.stored = SchedulerState()
         self.due: set[str] = set(JOBS)
-        self.items_ok: dict[str, int] = {"current_price": 3, "history_sync": 0}
+        self.items_ok: dict[str, int] = {"current_price": 3, "history_sync": 0, PROFILE_READ: 5}
         self.failures: dict[str, BaseException] = {}
         self.settings_failure: BaseException | None = None
         self.job_gates: dict[str, tuple[asyncio.Event, asyncio.Event]] = {}
@@ -180,6 +187,9 @@ class Fakes:
         monkeypatch.setattr(scheduler, "due_history_sync", lambda now, settings, state: "history_sync" in self.due)
         monkeypatch.setattr(scheduler, "run_current_price_refresh", self.run_current_price_refresh)
         monkeypatch.setattr(scheduler, "run_history_sync", self.run_history_sync)
+        # Lot B6: the third job, due only when a case names it; raising=False: the names exist only once B6 does.
+        monkeypatch.setattr(scheduler, "due_profile_read", lambda now, settings, state: PROFILE_READ in self.due, raising=False)
+        monkeypatch.setattr(scheduler, "run_profile_read", self.run_profile_read, raising=False)
         monkeypatch.setattr(scheduler, "settle_clock", self.settle_clock)
         # Z-11 (N71): with fcntl the run takes the lock across processes; stood in for, so that no .scheduler.lock is
         # written in the lane's data directory. raising=False: the name exists only once Z-11 does.
@@ -205,6 +215,9 @@ class Fakes:
 
     async def run_history_sync(self, state: SchedulerState, horizon_days: object = None) -> None:
         await self._job("history_sync", state)
+
+    async def run_profile_read(self, state: SchedulerState, settings: object = None) -> None:
+        await self._job(PROFILE_READ, state)
 
     async def _job(self, name: str, state: SchedulerState) -> None:
         self._record(f"job:{name}")
@@ -1017,3 +1030,45 @@ async def test_the_first_answer_after_a_silence_says_starting_and_one_during_a_j
         after = await client.get(API_ROUTE)
         assert "x-librefolio-price-refresh" not in after.headers, f"after the catch-up: {dict(after.headers)}"
     print_success("starting, running, nothing")
+
+
+# =============================================================================
+# LOT B6: THE WEEKLY READ OF THE ENRICHERS NEVER LIGHTS THE BANNER
+# =============================================================================
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reason", CATCH_UP)
+async def test_a_catch_up_whose_only_job_is_the_profile_read_shows_no_job_and_remembers_nothing(reason: str, fakes: Fakes) -> None:
+    """SPR-033 — lot B6: a catch-up run where only ``profile_read`` is due, writing 5 items: inside it the banner is
+    "starting" with no job — never "running" —, and after the run it is idle with nothing remembered: no
+    ``last_finished_at``, not refreshed (a catch-up remembers only a run in which a price job ran)."""
+    print_section(f"SPR-033: run_due_jobs({reason!r}) with only profile_read due")
+    fakes.due = {PROFILE_READ}
+
+    await _within(scheduler.run_due_jobs(reason), f"run_due_jobs({reason!r})")
+
+    inside = fakes.at(f"job:{PROFILE_READ}")
+    assert len(inside) == 1, f"barrier: the profile read ran once, through run_profile_read: {fakes.seen}"
+    assert [(_view(snapshot), header) for snapshot, header in inside] == [(("starting", reason, None), "starting")]
+    assert _fields(scheduler.PRICE_REFRESH.snapshot()) == IDLE_NEVER
+    print_success("never shown, nothing remembered")
+
+
+@pytest.mark.asyncio
+async def test_beside_the_price_jobs_the_profile_read_runs_dark_and_does_not_count_as_refreshed(fakes: Fakes) -> None:
+    """SPR-034 — lot B6: a "startup" run with the three jobs due, the price jobs updating 0 items and the profile read 5:
+    each price job "running" with its name, the profile read "starting" with no job; the catch-up ends not refreshed —
+    the profile read's items are not prices."""
+    print_section("SPR-034: run_due_jobs('startup') with the three jobs due")
+    fakes.due = {*JOBS, PROFILE_READ}
+    fakes.items_ok = {"current_price": 0, "history_sync": 0, PROFILE_READ: 5}
+
+    await _within(scheduler.run_due_jobs("startup"), "run_due_jobs('startup')")
+
+    for job in JOBS:
+        assert [_view(snapshot) for snapshot, _ in fakes.at(f"job:{job}")] == [("running", "startup", job)]
+    assert [_view(snapshot) for snapshot, _ in fakes.at(f"job:{PROFILE_READ}")] == [("starting", "startup", None)], f"barrier and subject: the profile read ran once, dark: {fakes.seen}"
+    after = scheduler.PRICE_REFRESH.snapshot()
+    assert _view(after) == ("idle", None, None) and after.last_finished_at is not None and after.last_refreshed is False, after
+    print_success("the price jobs shown, the profile read dark")

@@ -260,7 +260,7 @@
                                 {#if row.returnBasis !== null}
                                     <div>
                                         <dt>{$t('risk.metadata.returnBasis')}</dt>
-                                        <!-- Guarded, unlike `RiskResultFrame:108`, which builds this
+                                        <!-- Guarded, unlike the return-basis line of `RiskResultFrame`, which builds this
                                              same key with no fallback: a basis the catalogue has not
                                              seen prints `risk.returnBasis.<value>` there. Here it
                                              degrades to the backend token, which is information. -->

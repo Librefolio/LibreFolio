@@ -1445,6 +1445,18 @@ def services_probe_rate_limit(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "Probe rate-limit tests", verbose=verbose)
 
 
+def services_enricher_rate_limit(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that the enricher routes draw from the probe's per-user limit (plan 68 C0)."""
+    print_section("Services: Enricher Rate Limit")
+    print_info("Testing: api/v1/assets/enrichers.py (recognize_enrichers, test_enricher, search_enricher), api/v1/assets/profile.py (ask_profile, refresh_profile), api/v1/assets/providers.py (probe_limiter)")
+    print_info(
+        "Tests: recognize, test, search and ask count one hit each on probe_limiter() before anything else; past it 429 PROBE_RATE_LIMITED, retry_after = Retry-After = ceil(wait) >= 1, nothing reached, refusal not counted; per user; free again after the window; one count shared with the probe; off at 0; refresh not limited"
+    )
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_rate_limit.py", test_names)
+    return run_command(cmd, "Enricher rate-limit tests", verbose=verbose)
+
+
 def services_quote_base_suggestion(verbose: bool = False, test_names: list = None) -> bool:
     """Z-32 (d): a provider's quote base suggestion (FAQuoteBaseSuggestion) in its search results and in the probe's metadata."""
     print_section("Services: Quote Base Suggestion (Z-32 d)")
@@ -1618,6 +1630,15 @@ def services_asset_profile_double_write(verbose: bool = False, test_names: list 
     print_info("Tests: user rows by the author on create; only the voices a patch touches; null sector, null classification; same value; read_on never before now; dry run and rolled-back batch write nothing")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_profile_double_write.py", test_names)
     return run_command(cmd, "Asset profile double write tests", verbose=verbose)
+
+
+def services_asset_profile_from(verbose: bool = False, test_names: list = None) -> bool:
+    """Run «use the source's value» ({"from": code}) in the profile writes of POST/PATCH /assets (project 68, lot B5b)."""
+    print_section("Services: Asset Profile From")
+    print_info("Testing: AssetCRUDService.create_assets_bulk / patch_assets_bulk with {'from': code} profile values")
+    print_info("Tests: cache hit or read now, the row in the source's name (force, same source no row), the item's new binding, refusals profileValueInvalid, seen and profileSourceChanged, dry run, POST")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_profile_from.py", test_names)
+    return run_command(cmd, "Asset profile from tests", verbose=verbose)
 
 
 def services_asset_profile_merge(verbose: bool = False, test_names: list = None) -> bool:
@@ -1816,6 +1837,14 @@ def services_scheduler_backoff(verbose: bool = False, test_names: list = None) -
     )
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_backoff.py", test_names)
     return run_command(cmd, "Scheduler retry and backoff tests", verbose=verbose)
+
+
+def services_scheduler_profile_read(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the scheduler's third job, the weekly read of the enrichers, and refresh_assets(hold_deferred=…) (project 68, lot B6)."""
+    print_section("Services: Scheduler Profile Read")
+    print_info("Testing: backend/app/services/platform/scheduler/jobs.py (run_profile_read), joblog.py, enrichers/refresh.py (hold_deferred, read_since)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_profile_read.py", test_names)
+    return run_command(cmd, "Scheduler profile read tests", verbose=verbose)
 
 
 def services_scheduler_price_refresh(verbose: bool = False, test_names: list = None) -> bool:
@@ -2028,6 +2057,46 @@ def services_enricher_contracts(verbose: bool = False, test_names: list = None) 
     print_info("Testing: backend/app/services/enrichers/base.py, enrichers/registry.py, enricher_providers/mockenrich/plugin.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_contracts.py", test_names)
     return run_command(cmd, "Enricher contract tests", verbose=verbose)
+
+
+def services_enricher_recognize(verbose: bool = False, test_names: list = None) -> bool:
+    """Test «recognize» in cascade over the enrichers (project 68, lot B4)."""
+    print_section("Services: Enricher Recognize")
+    print_info("Testing: backend/app/services/enrichers/recognize.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_recognize.py", test_names)
+    return run_command(cmd, "Enricher recognize tests", verbose=verbose)
+
+
+def services_enricher_justetf(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the justETF enricher: declarations, mapping to stored forms, not found, recognize, read, search (plan 68, lot C1)."""
+    print_section("Services: Enricher justETF")
+    print_info("Testing: backend/app/services/enricher_providers/justetf/plugin.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_justetf.py", test_names)
+    return run_command(cmd, "Enricher justETF tests", verbose=verbose)
+
+
+def services_enricher_refresh(verbose: bool = False, test_names: list = None) -> bool:
+    """Test reading the profile from the enrichers: catalogue filter, read cache, merge, ask and refresh (project 68, lot B5a)."""
+    print_section("Services: Enricher Refresh")
+    print_info("Testing: backend/app/services/enrichers/refresh.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_refresh.py", test_names)
+    return run_command(cmd, "Enricher refresh tests", verbose=verbose)
+
+
+def services_enricher_enabled(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the enrichers active on the instance: LIBREFOLIO_ENRICHERS_ENABLED and the required settings (project 68, lot B2)."""
+    print_section("Services: Enricher Enabled")
+    print_info("Testing: LIBREFOLIO_ENRICHERS_ENABLED, EnricherRegistry's gate, no clean-up, the read cache after the switch, NOT_CONFIGURED")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_enabled.py", test_names)
+    return run_command(cmd, "Enricher enabled tests", verbose=verbose)
+
+
+def services_enricher_bindings(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the enricher bindings of an asset: config and state, the installed enrichers, their default order (project 68, lot B3)."""
+    print_section("Services: Enricher Bindings")
+    print_info("Testing: backend/app/services/enrichers/bindings.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_bindings.py", test_names)
+    return run_command(cmd, "Enricher bindings tests", verbose=verbose)
 
 
 def services_plugin_settings_crypto(verbose: bool = False, test_names: list = None) -> bool:
@@ -3640,6 +3709,17 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "enricher-rate-limit",
+        services_enricher_rate_limit,
+        name="Enricher Rate Limit",
+        desc="Plan 68 C0: POST /assets/enrichers/recognize, POST /assets/enrichers/{code}/test, GET /assets/enrichers/{code}/search and POST /assets/profile/ask take the probe's per-user limit: one hit per call on probe_limiter() before anything else (recognize: one for all the enrichers it asks, checked before the stream starts); past it 429 PROBE_RATE_LIMITED with an int retry_after >= 1 (the wait rounded up) equal to Retry-After and a message, no registry, enricher or session reached, the refusal not counted (429 before an unknown enricher's 404); another user is not limited; past the window the user calls again; probes and enricher calls share one count (one limiter built by probe_limiter() for both); probe_limiter() None or LIBREFOLIO_PROBE_RATE_LIMIT=0 limits none; POST /assets/profile/refresh is not limited",
+        # PURE: no DB, no server, no network. The route coroutines are called directly; probe_limiter() returns a private
+        # SlidingWindowLimiter on a fake clock (or PROBES_BY_LIMIT starts empty per test), and the registry, the plugins,
+        # the cascade, the profile reads, the manager's probe and the session are recording stubs, all with monkeypatch.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "quote-base-suggestion",
         services_quote_base_suggestion,
         name="Quote Base Suggestion",
@@ -3794,6 +3874,17 @@ Note: No backend server required.
         desc="Project 68 A4: until D7, classification_params sent to create_assets_bulk / patch_assets_bulk (keyword user_id) is also written into the profile in the same transaction: source user, user_id the author, read_on today in scheduler_timezone and never before the voice's now; POST: three rows for description, geography and sector, none without classification; PATCH: only the voices it touches (sector alone: one row, even when the profile's geography differs from the column), sector_area null a NULL row, classification_params null NULL rows for the voices with a value only, the value now (another spelling) no row; the dry run (commit=False) and a batch rolled back on patchFailed write none; a patch that does not touch the classification writes none; a description of spaces counts as empty (no row on POST, an empty row on PATCH)",
         # PURE: every database is a private SQLite file under tmp_path built with create_all; no session on the lane DB,
         # no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "asset-profile-from",
+        services_asset_profile_from,
+        name="Asset Profile From",
+        desc="Project 68 B5b: a profile value {from: code} (optionally seen) on patch_assets_bulk / create_assets_bulk takes that enricher's value of the asset's binding after the item: from the enricher_read cache when it holds the voice (no call), else read now (fills the cache; a cached read of other voices does not answer); the row in the source's name (user_id NULL, the read's source_date), forced over the same value from another source, none when now is that value from that source; the binding the same item sets is used, a code it removes refused; profileValueInvalid on profile.<voice>, whole batch refused, dry run the same: code not bound, enricher not installed, no value for the voice, not found, error, raise, keys other than from/seen; seen in stored form: profileSourceChanged warning {voice, seen, now} only when different, the value read now saved; dry run same warning, nothing written; POST: from with the item's enrichers, a refused one fails its item",
+        # PURE: every database is a private SQLite file under tmp_path built with create_all; the synthetic enrichers are
+        # registered in the process's own EnricherRegistry (removed at teardown with their claims) and the process-wide
+        # enricher_read cache is cleared around each test; no server, no network.
         isolation="pure",
     )
     add_test(
@@ -3978,6 +4069,19 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "scheduler-profile-read",
+        services_scheduler_profile_read,
+        name="Scheduler Profile Read",
+        desc="Project 68 B6: run_profile_read reads the active assets with a non-empty enricher config only; a regular round starts a round (round_started_at), refresh_assets(hold_deferred=True), counts assets ok / err / deferred (a RATE_LIMITED read), retry_at now + the shortest pause; the retry round (retry_at come) reads only what was not read since the round's start (plugin not called, cached values still merged), hold_deferred=False, never sets retry_at again, keeps round_started_at; a regular round after it reads everything; one log entry per run that validates as SchedulerLogEntry; the consultant's two cases (held in round one, written from the first in round two; refused again, written from the second); refresh_assets(hold_deferred) holds only the voices the refused enricher declares for the asset's type whose winner comes after it",
+        # PURE: every database is a private SQLite file under tmp_path built with create_all, reached by the job through
+        # jobs.get_async_engine / refresh.get_async_engine replaced for the test (a barrier checks the entry names only the
+        # file's assets); the job log is under tmp_path; synthetic enrichers registered in the process's own
+        # EnricherRegistry (removed at teardown) and the process-wide enricher_read cache cleared around each test; no
+        # server, no network, no sleep.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "scheduler-jobs",
         services_scheduler_jobs,
         name="Scheduler Job Bodies",
@@ -4152,6 +4256,59 @@ Note: No backend server required.
         services_enricher_contracts,
         name="Enricher Contracts",
         desc="Declarations refused at registration (a degree for every AssetType and no other key, degrees int >= 0 or None, voices catalogue keys of covered types only, terms, identifier types, code), every discovered enricher keeps them, mockenrich recognize/read/page_url/no search/test only",
+        isolation="pure",
+    )
+    # PURE: every database is a private SQLite file under tmp_path built with create_all; the synthetic enrichers are
+    # registered in the process's own EnricherRegistry and removed at teardown with their claims; no server, no network.
+    add_test(
+        cat,
+        "enricher-bindings",
+        services_enricher_bindings,
+        name="Enricher Bindings",
+        desc="Project 68 B3: save_config keeps the order given (row and stored text), {} clears, never touches state (a removed enricher keeps its state entry); update_state sets its codes, never touches config, a read finishing after the user's save keeps the user's config (and the reverse); load_enrichers leaves out assets without a row; installed_enrichers by code; default_order by degree, price provider, found order, code; enrichers_catalogue declarations and a default order for every AssetType",
+        isolation="pure",
+    )
+    # PURE: synthetic enrichers registered in the process's own EnricherRegistry (removed at teardown with their claims)
+    # and passed through plugins=; mockenrich read in test mode set with monkeypatch. No DB, no server, no network.
+    add_test(
+        cat,
+        "enricher-recognize",
+        services_enricher_recognize,
+        name="Enricher Recognize",
+        desc="Project 68 B4: recognize_cascade asks the enrichers covering the type with the first known identifier they accept (request order first); a strong identifier found and not known is learned before the round it starts (once, even from two sources); a different strong one is a conflict that adds and starts nothing; a ticker only reported; found never asked again, not found asked again with a learned identifier; a raising plugin is an error, the others answer; answers in order of arrival (threading.Event holds) and default_order keeps it; mockenrich ISIN → LEI learned",
+        isolation="pure",
+    )
+    # PURE: the plugin module's get_etf_overview and load_overview replaced by fakes (recorded overviews in
+    # fixtures/justetf/, a tiny DataFrame); a call the test did not offer fails it. No DB, no server, no network.
+    add_test(
+        cat,
+        "enricher-justetf",
+        services_enricher_justetf,
+        name="Enricher justETF",
+        desc="Plan 68 C1: JustETFEnricher declarations (justetf, PRICE_SOURCE, ISIN, ETF family + COMMODITY at 10, 13 voices (legal_form only where an ETC or ETN can sit), not test-only, pause_seconds > 0); recorded overviews (SWDA, VWCE, bond, hedged, gold ETC) mapped to stored forms through the real catalogue (TER and weights as fractions, fund size millions EUR, replication/distribution/legal-form codes, domicile ISO3, English dates, «Other» kept, sectors helper first then the justETF table, holdings date on countries and sectors); synthetic sheets for every replication text, unknown texts absent and logged, ETC/ETN etc_etn, ETF absent, TER 0; empty «ETF Screener» sheet not found; recognize (non-ISIN no call, 429 raises); read per binding (error isolated, 429 RATE_LIMITED for the rest without a call); search over load_overview",
+        isolation="pure",
+    )
+    # PURE: every database is a private SQLite file under tmp_path built with create_all; the synthetic enrichers are
+    # registered in the process's own EnricherRegistry (removed at teardown with their claims) and the process-wide
+    # enricher_read cache is cleared around each test; no server, no network.
+    add_test(
+        cat,
+        "enricher-refresh",
+        services_enricher_refresh,
+        name="Enricher Refresh",
+        desc="Project 68 B5a: read_bindings one read call per enricher with its bindings in order, enrichers at once (outcomes in order of arrival), as yielded, unanswered bindings (fewer items, index out of range or twice, raise mid-way) once as error, RATE_LIMITED with retry_after; values in stored form, refused/unknown/None voices dropped and logged; read cache 1800 s keyed on the whole binding (params), ok and not_found kept, error and RATE_LIMITED never, a partial read never answers more, use_cache=False; merge_voices first of the order per voice with its source_date, others, enricher down, not in order ignored; ask_profile config order, cache, keys; refresh_assets source rows and state, different from now, failure isolation, missing asset error, no bindings, not installed skipped, deferred, read_since, config read again when writing (removed, reordered), inactive read; A3 one wrong voice logged, the others written",
+        isolation="pure",
+    )
+    # PURE: no lane DB, no server, no network. The variables through monkeypatch in this process; a private SQLite file
+    # under tmp_path behind every get_async_engine touched (settings, readiness, refresh); the synthetic enrichers are
+    # MockEnricher subclasses registered in the process's own EnricherRegistry (removed at teardown with their claims);
+    # the enricher_read cache is cleared around each test; justetf's library calls are stubs that record and raise.
+    add_test(
+        cat,
+        "enricher-enabled",
+        services_enricher_enabled,
+        name="Enricher Enabled",
+        desc="Project 68 B2: LIBREFOLIO_ENRICHERS_ENABLED read at every call (enrichers_enabled, X1's parser); EnricherRegistry's gate: an enricher not listed is not found, listed, installed, in the catalogue or any default order, never asked by the cascade; unknown code warned once; no clean-up: a turned-off binding, its state and rows stay, the refresh skips it, the job item stays ok, a PATCH keeps it; the read cache never answers a turned-off or uninstalled enricher (NO_ANSWER), source_value says not installed; a required setting left empty: refresh skips, ask/source_value NOT_CONFIGURED without a call (warm cache too), the API cascade does not ask it, test/search routes 400 NOT_CONFIGURED with the missing keys; a turned-off one 404 like an unknown code; configured, it is used",
         isolation="pure",
     )
     add_test(cat, "plugin-settings-crypto", services_plugin_settings_crypto, name="Plugin Settings Encryption", desc="AES-256-GCM blob and AAD, key id, subkeys, count and rekey on a sqlite3 copy (savepoint, idempotent, unreadable rows kept), key status (unusable key: totals)", isolation="pure")

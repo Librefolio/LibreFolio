@@ -143,6 +143,16 @@ def fx_providers_enabled() -> tuple[str, ...] | None:
     return _provider_codes("LIBREFOLIO_FX_PROVIDERS_ENABLED")
 
 
+def enrichers_enabled() -> tuple[str, ...] | None:
+    """``LIBREFOLIO_ENRICHERS_ENABLED``: the enrichers active on this instance (plan 68, B2).
+
+    The same rules as ``asset_providers_enabled``: unset or blank, every enricher; set, only the listed ones exist for
+    the instance (catalogue, recognize, reads, settings). An asset bound to one left out keeps its binding, which the
+    reads skip. A code that no enricher has is ignored, and logged once. Read at every call: no restart.
+    """
+    return _provider_codes("LIBREFOLIO_ENRICHERS_ENABLED")
+
+
 #: Provider probes (``POST /api/v1/assets/provider/probe``) one user may start in a minute (MF-SI2), and the most a
 #: setting may allow.
 DEFAULT_PROBE_RATE_LIMIT = 30

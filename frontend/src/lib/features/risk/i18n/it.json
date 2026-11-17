@@ -362,7 +362,17 @@
       "historical_replay_mostly_excluded": "Il risultato descrive solo una parte del tuo portafoglio ({covered, number, percent}): il resto è escluso dal replay.",
       "assets_excluded_no_price_source": "{count, plural, one {# asset escluso} other {# asset esclusi}} dal calcolo: nessuna fonte di prezzo assegnata e nessun prezzo mai registrato — {names}.",
       "total_loss_no_recovery": "Il valore è sceso a zero: nessun guadagno può riportarlo al picco, quindi il recupero richiesto non è mostrato.",
-      "total_loss_no_recovery_assets": "{count, plural, one {# asset è sceso} other {# asset sono scesi}} a zero: nessun guadagno può {count, plural, one {riportarlo} other {riportarli}} al picco, quindi il recupero richiesto non è mostrato — {names}."
+      "total_loss_no_recovery_assets": "{count, plural, one {# asset è sceso} other {# asset sono scesi}} a zero: nessun guadagno può {count, plural, one {riportarlo} other {riportarli}} al picco, quindi il recupero richiesto non è mostrato — {names}.",
+      "analysis_starts_late": "L'analisi parte dal {start}: prima di quel giorno non c'è un giorno di prezzi completo.",
+      "short_history": "{names}: nessun prezzo prima dell'inizio del periodo, quindi la loro storia comincia al suo interno.",
+      "best_realization_undefined": "Nessuna osservazione in guadagno nel periodo.",
+      "best_realization_undefined_assets": "Nessuna osservazione in guadagno nel periodo per {names}.",
+      "average_loss_undefined": "Nessun giorno in perdita nel periodo: non c'è un giorno medio in discesa.",
+      "average_loss_undefined_assets": "Nessun giorno in perdita nel periodo per {names}: non c'è un giorno medio in discesa.",
+      "omega_undefined": "Guadagni contro perdite non definito: nessun giorno è sceso sotto il rendimento obiettivo.",
+      "omega_undefined_assets": "Guadagni contro perdite non definito per {names}: nessun giorno è sceso sotto il rendimento obiettivo.",
+      "extreme_day_ratio_undefined": "Giorni estremi non definiti perché la serie non si muove.",
+      "extreme_day_ratio_undefined_assets": "Giorni estremi non definiti per {names}: la serie non si muove."
     },
     "assetDetail": {
       "overviewTab": "Panoramica",
@@ -401,11 +411,7 @@
     },
     "betaBanner": {
       "title": "L'Analisi del rischio è in beta.",
-      "description": "Calcoli, risultati e interfaccia possono cambiare prima del rilascio stabile.",
-      "simulation": {
-        "title": "La simulazione è ancora in beta.",
-        "description": "Il suo esito dipende fortemente da quanta storia viene richiesta rispetto all'orizzonte: una finestra corta con un orizzonte lungo può produrre cifre implausibili. Tutti gli altri livelli dell'Analisi del rischio sono usciti dalla beta."
-      }
+      "description": "Calcoli, risultati e interfaccia possono cambiare prima del rilascio stabile."
     },
     "levels": {
       "l1": {
@@ -452,7 +458,8 @@
         "when": "Quando",
         "since": "Dal",
         "duration": "Durata",
-        "daysCount": "{days, plural, one {# giorno} other {# giorni}}"
+        "daysCount": "{days, plural, one {# giorno} other {# giorni}}",
+        "sameFallToday": "{amount} · la stessa caduta, sul valore di oggi"
       },
       "l2": {
         "title": "Sono diversificato come credo?",
@@ -463,11 +470,9 @@
         "showLess": "Mostra meno",
         "effectiveAssets": {
           "label": "Quante scommesse indipendenti ho davvero?",
-          "aboveCount": "Sopra le {positions} posizioni misurate: l'eccesso viene dalla parte non coperta ({share}: liquidità e posizioni senza prezzo), e non dice nulla sui pesi",
           "belowCount": "Sotto le {positions} posizioni misurate: i pesi sono sbilanciati, e poche portano il portafoglio",
-          "evenCount": "Pari alle {positions} posizioni misurate: pesi uniformi e nessuna parte non coperta",
-          "name": "Numero effettivo di posizioni",
-          "aboveCountNoShare": "Sopra le {positions} posizioni misurate: l'eccesso viene dalla parte non coperta (liquidità e posizioni senza prezzo), e non dice nulla sui pesi"
+          "evenCount": "Pari alle {positions} posizioni misurate: i pesi sono uniformi",
+          "name": "Numero effettivo di posizioni"
         },
         "diversificationRatio": {
           "label": "Distribuire il denaro è servito a qualcosa?",
@@ -616,7 +621,8 @@
           "contribution": "Contributo",
           "impact": "Impatto",
           "bar": "Effetto"
-        }
+        },
+        "shockUnconfigured": "Non sono nello scenario, quindi il loro shock è 0: {names}. Il totale li conta come intatti."
       },
       "backtestNotice": "Con una fetta attiva, questi numeri sono ricostruiti sulla composizione di oggi: dicono come *sarebbe* andata, non come è andata davvero.",
       "notice": {
@@ -652,6 +658,14 @@
     "benchmark": {
       "measuredHere": "Questo benchmark è anche un asset misurato qui e non può fare da metro a sé stesso: scegline un altro per il confronto.",
       "blocked": "Non utilizzabili in questo periodo"
+    },
+    "period": {
+      "range": "Periodo {start} – {end} · in {currency}",
+      "open": "Periodo dal {start} · in {currency}"
+    },
+    "docsHelp": {
+      "header": "Quanto può perdere il portafoglio, se è diversificato, se il rischio è pagato e cosa potrebbe succedere: le quattro domande della scheda Rischio, sul periodo indicato.",
+      "assetSet": "Scegli alcuni asset e confrontali nel periodo: quanto ha perso ciascuno, quanto ha reso per il rischio corso, quali si muovono insieme e come avrebbero attraversato le crisi passate."
     }
   }
 }

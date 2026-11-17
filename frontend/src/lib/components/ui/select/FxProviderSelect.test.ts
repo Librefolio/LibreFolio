@@ -378,7 +378,8 @@ describe('FxProviderSelect', () => {
         expect(within(picker).getByTestId('fx-route-direct-ECB')).toHaveAttribute('data-warnings', '0');
     });
 
-    describe('a chain group larger than the picker draws at once (lane 75, L2d, developer decision «b1»)', () => {
+    // Drawing 200–400 chain buttons in jsdom takes a few seconds on a loaded machine: a wider timeout, not a wait.
+    describe('a chain group larger than the picker draws at once (lane 75, L2d, developer decision «b1»)', {timeout: 30_000}, () => {
         /** 250 two-step chains EUR → Z000…Z249 → GBP: more than the 200 a group draws at once. */
         const MANY: ChainStep[][] = Array.from({length: 250}, (_, i) => {
             const via = `Z${String(i).padStart(3, '0')}`;

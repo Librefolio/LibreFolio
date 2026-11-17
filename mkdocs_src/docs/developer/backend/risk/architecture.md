@@ -191,8 +191,9 @@ their data-quality report is the one of the series they actually consumed.
 
 `available_observations()`, in `risk/results.py`, decides what is counted against `min_observations`:
 
-- `correlation` is not gated here: the plugin applies its own per-pair floor and coverage
-  (`min_observations` and `min_coverage` parameters) and marks the cells `insufficient`;
+- `correlation` is not gated here: the plugin applies its own floor (`min_observations`, which
+  marks the cells `insufficient`) and judges the common calendar's coverage against `min_coverage`
+  (the `low_pair_coverage` warning: every pair lives on that one calendar);
 - `risk_contribution`, `portfolio_optimization` and the five `asset_set_*` analytics count the
   prepared set's observations;
 - `stress` is not gated for a hypothetical shock, and counts the replay window's observations for

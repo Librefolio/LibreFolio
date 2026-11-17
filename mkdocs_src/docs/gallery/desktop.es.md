@@ -892,7 +892,7 @@ Un período pasado real aplicado a la cartera que tienes hoy: la repetición his
 
 ### 🎲 Simulación
 
-El paso de simulación ¿Qué pasaría si…? con su aviso de beta.
+El paso de simulación ¿Qué pasaría si…? con su advertencia del modelo.
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="🎲 Simulación">

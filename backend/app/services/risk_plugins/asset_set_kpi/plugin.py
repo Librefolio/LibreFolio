@@ -21,12 +21,16 @@ from backend.app.services.risk.analytic_helpers import (
     joint_elapsed_calendar_days,
     prepared_scope_series,
     require_annualization_factor,
+    return_shape_fields,
+    return_shape_set_warnings,
 )
 from backend.app.services.risk.base import RiskAnalytic, RiskComputation, RiskExecutionContext
 from backend.app.services.risk.metrics import (
+    ReturnShape,
     annualized_sharpe,
     annualized_sortino,
     annualized_volatility,
+    return_shape,
     summarize_drawdown,
 )
 from backend.app.services.risk.registry import RiskAnalyticRegistry
@@ -93,7 +97,8 @@ class AssetSetKpiAnalytic(RiskAnalytic):
     """
 
     analytic_code = "asset_set_kpi"
-    algorithm_version = "1.0.0"
+    # 1.1.0 (RN-14) — each row adds the shape of the days of its asset, as historical_kpi 2.3.0 does for one series.
+    algorithm_version = "1.1.0"
     name_i18n_key = "risk.analytics.assetSetKpi.name"
     description_i18n_key = "risk.analytics.assetSetKpi.description"
     output_kind = RiskOutputKind.KPI_SET
@@ -111,6 +116,7 @@ class AssetSetKpiAnalytic(RiskAnalytic):
         undefined_sortino: list[int] = []
         no_losing_observation: list[int] = []
         items: list[RiskAssetSetKpiItem] = []
+        shapes: dict[int, ReturnShape] = {}
 
         for asset_id, dates, returns in prepared_scope_series(context):
             drawdown = summarize_drawdown(returns, elapsed_units=elapsed_units)
@@ -136,6 +142,9 @@ class AssetSetKpiAnalytic(RiskAnalytic):
                 worst_date = None
                 no_losing_observation.append(asset_id)
 
+            shape = return_shape(returns, annualization, annual_target_return=params.target_annual_return)
+            shapes[asset_id] = shape
+
             items.append(
                 RiskAssetSetKpiItem(
                     asset_id=asset_id,
@@ -155,6 +164,7 @@ class AssetSetKpiAnalytic(RiskAnalytic):
                         confidence_level=params.drawdown_confidence_level,
                     ),
                     ulcer_index=ulcer_index(drawdown.drawdowns),
+                    **return_shape_fields(shape, dates),
                 )
             )
 
@@ -186,8 +196,12 @@ class AssetSetKpiAnalytic(RiskAnalytic):
                     message_i18n_key="risk.warnings.worst_realization_undefined_assets",
                     message="One or more assets had no losing observation in the selected window.",
                     details={"asset_ids": no_losing_observation},
+                    # Not partial: those series are complete, only made so — the twin of best_realization_undefined (RN-14).
+                    degrades_result=False,
                 )
             )
+
+        warnings.extend(return_shape_set_warnings(shapes))
 
         return RiskComputation(
             output=RiskAssetSetKpiOutput(

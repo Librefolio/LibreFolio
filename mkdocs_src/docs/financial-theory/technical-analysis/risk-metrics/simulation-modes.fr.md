@@ -25,16 +25,16 @@ Les quatre premiers tirent des rendements réels de la fenêtre analysée et ne 
 L'onglet **Risque & Scénarios** de la page de détail d'un actif exécute toujours la courbe normale seule, avec un échantillonnage Monte Carlo ou quasi-Monte Carlo.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="La boîte Et si… ? Simulation du Tableau de bord : l'avis de bêta et l'avertissement sur le modèle, les cinq modes avec Historique remélangé recommandé, l'horizon, les trajectoires et la graine, et après Simuler les chiffres terminaux, le cône et Ce que cette simulation a supposé" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="La boîte Et si… ? Simulation du Tableau de bord : l'avertissement sur le modèle, les cinq modes avec Historique remélangé recommandé, l'horizon, les trajectoires et la graine, et après Simuler les chiffres terminaux, le cône et Ce que cette simulation a supposé" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
-## 🧪 Pourquoi la simulation est encore en bêta {: #why-beta }
+## 🧪 Ce que la simulation ne fait pas encore {: #why-beta }
 
-Toutes les autres parties de l'analyse des risques sont sorties de bêta. Seule l'étape de simulation s'ouvre avec un avis : *La simulation est encore en bêta. Son résultat dépend fortement de la quantité d'historique demandée par rapport à l'horizon : une fenêtre courte avec un horizon long peut produire des chiffres invraisemblables.* En dessous, un second avertissement reste définitivement, car un modèle reste un modèle : *C'est le seul barreau qui est un modèle plutôt qu'une mesure. Lisez-le comme une plage de possibilités, non comme une prévision.*
+Ce que la simulation ne fait pas encore, c'est lire assez d'historique pour un horizon long : son résultat dépend fortement de la quantité d'historique demandée par rapport à l'horizon, et une fenêtre courte avec un horizon long peut produire des chiffres invraisemblables. En haut de l'étape de simulation, un avertissement reste définitivement, car un modèle reste un modèle : *C'est le seul barreau qui est un modèle plutôt qu'une mesure. Lisez-le comme une plage de possibilités, non comme une prévision.*
 
-Le défaut derrière le premier avis est le rapport entre l'horizon $H$, compté en pas, et les $n$ observations de la fenêtre. Une trajectoire rééchantillonnée de $H$ pas réutilise chaque observation $H/n$ fois en moyenne : à partir d'un quart d'historique, un horizon d'un an correspond à ce quart, remélangé et répété environ quatre fois, et quoi que ce quart ait fait — un rally, une période calme, une baisse — devient l'année. La courbe normale n'y échappe pas, car sa dérive et sa volatilité sont celles de la fenêtre, reportées telles quelles quelle que soit la longueur de l'horizon. Demander plus d'historique ne guérit pas toujours non plus : une position avec un historique court raccourcit la fenêtre partagée pour toutes (voir [Qualité des données](data-quality.md#alignment-what-missing-data-actually-costs)). Aucun garde-fou sur ce rapport n'est encore appliqué, et tant qu'il n'y en a pas, l'étape reste en bêta. L'[incertitude de la dérive](#the-drift-is-an-estimate), affichée à côté de chaque résultat, est ce rapport à l'œuvre.
+Ce défaut est le rapport entre l'horizon $H$, compté en pas, et les $n$ observations de la fenêtre. Une trajectoire rééchantillonnée de $H$ pas réutilise chaque observation $H/n$ fois en moyenne : à partir d'un quart d'historique, un horizon d'un an correspond à ce quart, remélangé et répété environ quatre fois, et quoi que ce quart ait fait — un rally, une période calme, une baisse — devient l'année. La courbe normale n'y échappe pas, car sa dérive et sa volatilité sont celles de la fenêtre, reportées telles quelles quelle que soit la longueur de l'horizon. Demander plus d'historique ne guérit pas toujours non plus : une position avec un historique court raccourcit la fenêtre partagée pour toutes (voir [Qualité des données](data-quality.md#alignment-what-missing-data-actually-costs)). Aucun garde-fou sur ce rapport n'est encore appliqué. L'[incertitude de la dérive](#the-drift-is-an-estimate), affichée à côté de chaque résultat, est ce rapport à l'œuvre.
 
 ---
 
@@ -184,7 +184,7 @@ $$
 
 et la médiane $M$ du dernier jour reçoit l'intervalle $\big[(1 + M)/\varphi - 1,\ (1 + M)\,\varphi - 1\big]$ : *La dérive provient de … observations : cela seul place cette médiane entre … et ….* Lorsque $\varphi$ dépasse la dispersion du cône lui-même, $(1 + P_{95})/(1 + P_{5})$, la ligne devient un avertissement ambre : l'incertitude sur la dérive seule est alors plus large que la bande tracée par la simulation.
 
-L'exposant croît avec $H$ et ne diminue qu'avec $\sqrt{n}$ : doubler l'horizon le double, tandis que le diviser par deux exige quatre fois plus d'historique. C'est le [rapport derrière l'avis de bêta](#why-beta), écrit sous forme de nombre.
+L'exposant croît avec $H$ et ne diminue qu'avec $\sqrt{n}$ : doubler l'horizon le double, tandis que le diviser par deux exige quatre fois plus d'historique. C'est le [rapport derrière cette limite](#why-beta), écrit sous forme de nombre.
 
 ---
 

@@ -4046,3 +4046,14 @@ run red, `coverage-summary.json` with lines and branches apart, the light E2E re
 campaign timer that now belongs to each invocation, and `durations.json`. Updated the two pages that carried the old
 operational rule and the old way of reading the numbers.
 Filed: [[concepts/run-cache-and-campaign-semantics]], [[concepts/coverage-rate-vs-volume]].
+
+## [2026-11-16] file | The histogram grid pins two cuts: the VaR and the green tail
+Project 70, RN-14: the return distribution gains a green right tail whose threshold is the mirror of the VaR; the
+consultant chose to keep both tails whole bars (option A), with the VaR-only grid as the fall-back. Updated the
+decision page, its title and its index row.
+Filed: [[decisions/histogram-grid-pinned-to-var-cut]].
+
+## [2026-11-17] file | N_eff on the priced positions only
+Project 70, RN-15: the Risk tab's effective number of positions leaves cash and unpriced holdings out of its
+denominator, and its formula has one home in `financial_math/weights.py`. Added the change to the feature's history.
+Filed: [[features/F-111]].

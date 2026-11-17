@@ -151,7 +151,6 @@ def make_prepared_set(
         calendar_days=observations,
         annualization_factor=365,
         calendar_coverage=1,
-        fresh_quote_coverage=1,
         data_quality=DataQualityReport(),
         fx_fingerprint="0" * 64,
     )
@@ -2165,7 +2164,8 @@ async def test_contribution_and_risk_return_name_the_excluded_weight_inside_cash
 
     # The versions that publish `excluded_weight`: a zero must be told apart from a server that predates the field.
     # `asset_risk_return` is at 1.2.0 since k6 (06/10/2026), which adds each point's own Sharpe and Sortino.
-    assert results["contribution"].metadata.algorithm_version == "1.2.0"
+    # `risk_contribution` is at 1.3.0 since RN-15 (16/11/2026): N_eff weighs the priced positions on themselves.
+    assert results["contribution"].metadata.algorithm_version == "1.3.0"
     assert results["risk_return"].metadata.algorithm_version == "1.2.0"
 
 
@@ -2176,7 +2176,9 @@ GOLDEN_REL = 1e-12
 GOLDEN_CONTRIBUTION = {
     "portfolio_volatility": 0.06237752322585717,
     "cash_weight": 0.33333333333333337,
-    "effective_number_of_assets": 3.5999999999999996,
+    # RN-15 (16/11/2026, developer's Q8 a) moved this one on purpose: the weights 0.5 and 1/6 are renormalized on the
+    # measured part (0.75, 0.25), cash out of the denominator — 1 / (0.75² + 0.25²) = 1.6, no longer 3.6.
+    "effective_number_of_assets": 1.6,
     "diversification_ratio": 1.1846014602790187,
     "weight": [0.5, 0.16666666666666666],
     "marginal_contribution": [0.11643684887967204, 0.02495459271612689],
@@ -2207,6 +2209,8 @@ async def test_publishing_the_excluded_weight_moves_no_other_number(monkeypatch)
     assert [item.asset_id for item in contribution.items] == [1, 2]
     for field in ("portfolio_volatility", "cash_weight", "effective_number_of_assets", "diversification_ratio"):
         assert getattr(contribution, field) == pytest.approx(GOLDEN_CONTRIBUTION[field], rel=GOLDEN_REL), field
+    # RN-15: with a holding left out for want of prices and cash in the scope, N_eff counts the priced positions only.
+    assert contribution.effective_number_of_assets <= len(contribution.items)
     for field in ("weight", "marginal_contribution", "component_contribution", "percentage_contribution"):
         assert [getattr(item, field) for item in contribution.items] == pytest.approx(GOLDEN_CONTRIBUTION[field], rel=GOLDEN_REL), field
 
@@ -2740,3 +2744,77 @@ async def test_the_first_twrr_point_is_the_baseline_even_on_a_day_nothing_held_i
     assert list(context.primary_returns) == pytest.approx(returns, rel=1e-12, abs=1e-15)
     assert context.n_observations == 24
     assert context.calendar_days == 32  # Monday 5 January to Friday 6 February
+
+
+# --------------------------------------------------------------------------- #
+# RN-11 (Q14, D383): an analysis that starts later than the period asked for says so.
+#
+# The preparation knows it — `baseline_inside_requested_range` when no complete day lies before
+# the requested start, `short_history:<id>` for each asset with no point before it — and kept it
+# to itself (`PreparedAssetSeriesSet.warnings`, read by nobody). The results built on the prepared
+# series now carry it as two warnings, not degrading: the day the analysis really starts (the
+# analysed range's start) and the assets whose history begins inside the period. A start on a
+# Saturday raises nothing: the Friday before is a complete day before the start. The TWRR readers
+# of a historical portfolio measure another series and do not carry them (out of RN-11).
+# --------------------------------------------------------------------------- #
+
+LATE_START_WARNINGS = ["baseline_inside_requested_range", "short_history:1", "short_history:4"]
+
+
+def test_a_late_start_reaches_the_context_as_two_warnings():
+    prepared = make_prepared_set({1: [0.01, -0.02, 0.015], 4: [0.0, 0.01, -0.01]}).model_copy(update={"warnings": LATE_START_WARNINGS})
+    request = RiskQueryRequest.model_validate(
+        {
+            "scope": {"kind": "asset_set", "asset_ids": [1, 4]},
+            "date_range": {"start": "2025-12-15", "end": prepared.requested_range.end.isoformat()},
+            "target_currency": "EUR",
+            "mode": "historical",
+            "analytics": [{"instance_id": "kpi", "analytic_code": "asset_set_kpi"}],
+        }
+    )
+    context = build_execution_context(request=request, scope_inputs=scope_inputs((1, 4)), prepared=prepared)
+    by_code = {warning.code: warning for warning in context.execution_warnings}
+
+    late = by_code.get("analysis_starts_late")
+    assert late is not None, f"the late start stayed inside the preparation: {sorted(by_code)}"
+    assert late.message_i18n_key == "risk.warnings.analysis_starts_late"
+    assert late.message_params == {"start": prepared.effective_range.start.isoformat()}
+    assert late.details == {"start": prepared.effective_range.start.isoformat(), "requested_start": "2025-12-15"}
+    assert late.degrades_result is False
+
+    short = by_code.get("short_history")
+    assert short is not None, f"the assets with a short history are not named: {sorted(by_code)}"
+    assert short.message_i18n_key == "risk.warnings.short_history"
+    assert short.details["asset_ids"] == [1, 4]
+    assert short.degrades_result is False
+
+
+def test_no_late_start_no_warning():
+    prepared = make_prepared_set({1: [0.01, -0.02, 0.015]})
+    request = RiskQueryRequest.model_validate(
+        {
+            "scope": {"kind": "asset_set", "asset_ids": [1]},
+            "date_range": {"start": prepared.requested_range.start.isoformat(), "end": prepared.requested_range.end.isoformat()},
+            "target_currency": "EUR",
+            "mode": "historical",
+            "analytics": [{"instance_id": "kpi", "analytic_code": "asset_set_kpi"}],
+        }
+    )
+    context = build_execution_context(request=request, scope_inputs=scope_inputs((1,)), prepared=prepared)
+    assert {"analysis_starts_late", "short_history"}.isdisjoint(warning.code for warning in context.execution_warnings)
+
+
+@pytest.mark.asyncio
+async def test_the_twrr_readers_leave_out_the_late_start_of_the_per_asset_series(monkeypatch):
+    """The TWRR of a historical portfolio is another series: the per-asset preparation's start says nothing of it."""
+    results = await query_unpriced_holding(
+        monkeypatch,
+        analytics=[*TWRR_READERS.values(), CORRELATION],
+        prepared=prepared_without(reason=None).model_copy(update={"warnings": ["baseline_inside_requested_range"]}),
+    )
+
+    # Presence barrier: a reader of the per-asset series carries it.
+    assert "analysis_starts_late" in warning_codes(results["correlation"])
+    for instance_id in TWRR_READERS:
+        assert results[instance_id].metadata.return_basis == RiskReturnBasis.TWRR, instance_id
+        assert "analysis_starts_late" not in warning_codes(results[instance_id]), instance_id

@@ -25,16 +25,16 @@ Junto al modo, el paso pide un **Horizonte (días)** — 365 por defecto, como m
 La pestaña **Riesgo y escenarios** de la página de detalle de un activo sigue ejecutando solo la curva normal, con muestreo Monte Carlo o cuasi-Monte Carlo.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="El cuadro de simulación What if…? del panel: el aviso de beta y la advertencia del modelo, los cinco modos con Historial remezclado recomendado, horizonte, trayectorias y semilla, y tras Simular las cifras terminales, el cono y Lo que esta simulación asumió" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="El cuadro de simulación What if…? del panel: la advertencia del modelo, los cinco modos con Historial remezclado recomendado, horizonte, trayectorias y semilla, y tras Simular las cifras terminales, el cono y Lo que esta simulación asumió" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
-## 🧪 Por qué la simulación sigue en beta {: #why-beta }
+## 🧪 Lo que la simulación todavía no hace {: #why-beta }
 
-Todas las demás partes del análisis de riesgos han salido de beta. Solo el paso de simulación se abre con un aviso: *La simulación sigue en beta. Su resultado depende en gran medida de cuánto historial se solicite en relación con el horizonte: una ventana corta con un horizonte largo puede producir cifras inverosímiles.* Debajo, una segunda advertencia permanece para siempre, porque un modelo sigue siendo un modelo: *Este es el único peldaño que es un modelo en lugar de una medición. Léelo como un rango de posibilidades, no como una previsión.*
+Lo que la simulación todavía no hace es leer suficiente historial para un horizonte largo: su resultado depende en gran medida de cuánto historial se solicite en relación con el horizonte, y una ventana corta con un horizonte largo puede producir cifras inverosímiles. En la parte superior del paso de simulación, una advertencia permanece para siempre, porque un modelo sigue siendo un modelo: *Este es el único peldaño que es un modelo en lugar de una medición. Léelo como un rango de posibilidades, no como una previsión.*
 
-El defecto que hay detrás del primer aviso es la relación entre el horizonte $H$, contado en pasos, y las $n$ observaciones de la ventana. Una trayectoria remuestreada de $H$ pasos reutiliza cada observación $H/n$ veces en promedio: a partir de un cuarto de historial, un horizonte de un año es ese cuarto, remezclado y repetido unas cuatro veces, y lo que hizo ese cuarto — un repunte, una racha tranquila, un descenso — se convierte en el año. La curva normal no se libra de ello, porque su deriva y su volatilidad son las de la ventana, arrastradas sin cambios por largo que sea el horizonte. Pedir más historial tampoco lo cura siempre: una posición con un historial corto acorta la ventana compartida para todas ellas (véase [Calidad de datos](data-quality.md#alignment-what-missing-data-actually-costs)). Todavía no se aplica ninguna protección sobre esa relación, y hasta que la haya, el paso permanece en beta. La [incertidumbre de la deriva](#the-drift-is-an-estimate), mostrada junto a cada resultado, es esa relación en acción.
+El defecto es la relación entre el horizonte $H$, contado en pasos, y las $n$ observaciones de la ventana. Una trayectoria remuestreada de $H$ pasos reutiliza cada observación $H/n$ veces en promedio: a partir de un cuarto de historial, un horizonte de un año es ese cuarto, remezclado y repetido unas cuatro veces, y lo que hizo ese cuarto — un repunte, una racha tranquila, un descenso — se convierte en el año. La curva normal no se libra de ello, porque su deriva y su volatilidad son las de la ventana, arrastradas sin cambios por largo que sea el horizonte. Pedir más historial tampoco lo cura siempre: una posición con un historial corto acorta la ventana compartida para todas ellas (véase [Calidad de datos](data-quality.md#alignment-what-missing-data-actually-costs)). Todavía no se aplica ninguna protección sobre esa relación. La [incertidumbre de la deriva](#the-drift-is-an-estimate), mostrada junto a cada resultado, es esa relación en acción.
 
 ---
 
@@ -184,7 +184,7 @@ $$
 
 y a la mediana $M$ del último día se le da el rango $\big[(1 + M)/\varphi - 1,\ (1 + M)\,\varphi - 1\big]$: *La deriva proviene de … observaciones: solo eso sitúa esta mediana entre … y ….* Cuando $\varphi$ supera la dispersión del propio cono, $(1 + P_{95})/(1 + P_{5})$, la línea se convierte en una advertencia ámbar: la incertidumbre sobre la deriva sola es entonces más amplia que la banda que dibujó la simulación.
 
-El exponente crece con $H$ y solo se reduce con $\sqrt{n}$: duplicar el horizonte lo duplica, mientras que reducirlo a la mitad exige cuatro veces más historial. Esa es la [relación que hay detrás del aviso de beta](#why-beta), escrita como un número.
+El exponente crece con $H$ y solo se reduce con $\sqrt{n}$: duplicar el horizonte lo duplica, mientras que reducirlo a la mitad exige cuatro veces más historial. Esa es la [relación que hay detrás de este límite](#why-beta), escrita como un número.
 
 ---
 

@@ -59,6 +59,7 @@
     import type {ColumnDef, FilterValue} from '$lib/components/table/types';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {uiLocaleStore} from '$lib/stores/app/uiLocale';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     type Tab = 'static' | 'brim' | 'backup';
     type PreviewTarget = {source: 'static'; file: UploadedFile} | {source: 'brim'; file: BrimFile};
@@ -816,6 +817,7 @@
             <button class="btn btn-secondary" data-testid="files-refresh-button" data-busy={pageBusy.busy ? 'true' : 'false'} title={$t('common.refresh')} disabled={pageBusy.busy} on:click={() => reloadFiles('files-refresh', {soft: true})}>
                 <RefreshCw size={16} class={pageBusy.busy ? 'animate-spin' : ''} />
             </button>
+            <DocsLink path="user/files/" label={$t('uploads.docsHelp')} icon="book" size={16} testId="files-docs" />
         </div>
     </header>
 

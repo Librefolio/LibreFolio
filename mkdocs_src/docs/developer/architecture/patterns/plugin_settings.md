@@ -750,6 +750,11 @@ What the refusal looks like:
       use*, `providerErrors.NOT_CONFIGURED`), never as a soft ⚠️.
 - **FX providers**: `call_fx_provider()` raises `FXNotConfiguredError`, an `FXServiceError` that
   carries `provider_code` and `missing`, with the same message.
+- **Enrichers** (plan 68, B2, `services/enrichers/usable.py`): the weekly read and «Aggiorna» skip one not
+  configured, its binding and state left as they are; a read through `read_bindings()` (`POST /assets/profile/ask`,
+  a value taken `{"from": …}`) answers it `NOT_CONFIGURED` with the missing keys, before the read cache; **Test** and
+  **Search** answer 400 `{"error_code": "NOT_CONFIGURED", "missing": [...]}`, while one the registry does not serve
+  (switched off, test-only) answers 404; «Recognize» does not ask it.
 
 A field with a default is missing only when its variable is set but invalid.
 
@@ -850,7 +855,8 @@ class CoinGeckoProvider(AssetSourceProvider):
   `plugin_call_counters` (`family="group"`), not each on its own (`core.call_owner()`). A plugin reads at most one
   such group: a second one is refused at registration (`validate_plugin_groups()`).
 - **Switched off with its readers** (X1): when the instance's allow-lists
-  (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`) switch off every plugin
+  (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`,
+  `LIBREFOLIO_ENRICHERS_ENABLED`) switch off every plugin
   that reads a group, the group is not served either: no entry, even when named, and a write to it is
   `UNKNOWN_FIELD` (`service._switched_off_group()`). While one reader is on, it is listed and
   `used_by` names only the readers that are on.
