@@ -4,7 +4,8 @@
       "params": {
         "language": "Idioma de la página",
         "mic": "MIC del mercado",
-        "platform": "Plataforma"
+        "platform": "Plataforma",
+        "codice_fondo": "Código interno del fondo"
       }
     }
   }
