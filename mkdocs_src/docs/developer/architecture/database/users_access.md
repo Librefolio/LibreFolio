@@ -264,6 +264,27 @@ Step 4 of migration `005_release_1_3_0_schema` creates both tables empty: no set
 drops them, and the values and secrets in them are lost. Each direction checks before it acts, so a run that stopped
 half way can be run again.
 
+### 🔢 `PLUGIN_CALL_COUNTER` {: #plugin-call-counter }
+
+Table `plugin_call_counters` (project 76, lot U1): how many calls each plugin that reaches an external service made,
+for the whole instance. One row per `family` and `plugin_code`, the pair its primary key; a shared settings group
+counts under `family` `group` and its name, when its plugins share the account's credits.
+
+- 🗓️ **Five windows aligned in UTC**: minute (`hh:mm:00`), hour, day (00:00), ISO week (Monday 00:00) and month
+  (day 1, 00:00). Each has `<window>_since`, the epoch seconds of the start of the window its count belongs to, and
+  `<window>_count`; all `INTEGER NOT NULL`.
+- 🕒 **`updated_at`** (`NOT NULL`): the last call counted.
+
+`services/platform/call_counter.py` writes it with one statement per call, `INSERT … ON CONFLICT (family, plugin_code)
+DO UPDATE … WHERE … RETURNING`. A window older than now restarts at 1, and a start never moves back. When a limit is
+full, the `WHERE` fails and nothing is written: the call is refused, not counted. One statement is atomic in SQLite and
+takes the file's write lock, so the counts stay exact across workers and processes. `read_counts()` reads without
+writing; a stale window reads 0.
+
+No other index: every statement reaches the row by its primary key. No foreign key (a plugin is code, not a row), no
+`AUTOINCREMENT`. The step `plugin_call_counters` of migration `006_release_1_4_0_schema` creates it empty, and the
+downgrade drops it.
+
 ### 🔑 `BROKER_USER_ACCESS`
 
 The pivot table for the Many-to-Many relationship between Users and Brokers. It stores:
