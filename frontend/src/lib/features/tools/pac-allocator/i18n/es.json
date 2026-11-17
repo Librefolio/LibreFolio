@@ -494,8 +494,11 @@
               "optimalProven": "El solver demostró que no existe un plan mejor, objetivo por objetivo en el orden elegido en Estrategia, y la verificación exacta del plan coincide con sus cifras. La prueba vale dentro del pequeño margen de cálculo del solver, que crece con los importes.",
               "completed": "El solver terminó la búsqueda por sí mismo, sin alcanzar ningún límite.",
               "timeLimit": "El solver alcanzó su límite de tiempo antes de terminar la búsqueda.",
-              "nodeLimit": "El solver alcanzó su límite de nodos, el número de intentos que puede hacer, antes de terminar la búsqueda."
-            }
+              "nodeLimit": "El solver alcanzó su límite de nodos, el número de intentos que puede hacer, antes de terminar la búsqueda.",
+              "margin": "The best possible plan should be at most {margin} better than this one: the solver's own bounds say so, and they are not a proof."
+            },
+            "notProvenWithin": "Local optimum (within {margin})",
+            "noPlanNotProven": "Optimalidad no demostrada"
           },
           "collapseAll": "Contraer todo",
           "detail": {

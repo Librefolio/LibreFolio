@@ -494,8 +494,11 @@
               "optimalProven": "Le solveur a prouvé qu’aucun meilleur plan n’existe, objectif par objectif dans l’ordre choisi dans Stratégie, et la vérification exacte du plan concorde avec ses chiffres. La preuve vaut dans la petite marge de calcul du solveur, qui grandit avec les montants.",
               "completed": "Le solveur a terminé sa recherche de lui-même, sans atteindre de limite.",
               "timeLimit": "Le solveur a atteint sa limite de temps avant de terminer la recherche.",
-              "nodeLimit": "Le solveur a atteint sa limite de nœuds, le nombre de tentatives qu’il peut faire, avant de terminer la recherche."
-            }
+              "nodeLimit": "Le solveur a atteint sa limite de nœuds, le nombre de tentatives qu’il peut faire, avant de terminer la recherche.",
+              "margin": "The best possible plan should be at most {margin} better than this one: the solver's own bounds say so, and they are not a proof."
+            },
+            "notProvenWithin": "Local optimum (within {margin})",
+            "noPlanNotProven": "Optimalité non prouvée"
           },
           "collapseAll": "Tout réduire",
           "detail": {

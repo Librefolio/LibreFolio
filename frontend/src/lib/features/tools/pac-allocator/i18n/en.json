@@ -485,7 +485,7 @@
             "infeasible": "Infeasible with these constraints",
             "noIncumbent": "No plan within the limits",
             "noOperation": "No operation",
-            "notProven": "Optimality not proven",
+            "notProven": "Local optimum",
             "optimalProven": "Proven optimal",
             "planAvailable": "Plan available",
             "help": {
@@ -494,8 +494,11 @@
               "optimalProven": "The solver proved that no better plan exists, objective by objective in the order chosen in Strategy, and the exact check of the plan matches its numbers. The proof holds within the solver's small calculation margin, which grows with the amounts.",
               "completed": "The solver ended its search by itself, without reaching a limit.",
               "timeLimit": "The solver reached its time limit before ending the search.",
-              "nodeLimit": "The solver reached its node limit, the number of attempts it may make, before ending the search."
-            }
+              "nodeLimit": "The solver reached its node limit, the number of attempts it may make, before ending the search.",
+              "margin": "The best possible plan should be at most {margin} better than this one: the solver's own bounds say so, and they are not a proof."
+            },
+            "notProvenWithin": "Local optimum (within {margin})",
+            "noPlanNotProven": "Optimality not proven"
           },
           "collapseAll": "Collapse all",
           "detail": {

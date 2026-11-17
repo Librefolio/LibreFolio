@@ -485,7 +485,7 @@
             "infeasible": "Infattibile con questi vincoli",
             "noIncumbent": "Nessun piano entro i limiti",
             "noOperation": "Nessuna operazione",
-            "notProven": "Ottimalità non dimostrata",
+            "notProven": "Ottimo locale",
             "optimalProven": "Ottimo dimostrato",
             "planAvailable": "Piano disponibile",
             "help": {
@@ -494,8 +494,11 @@
               "optimalProven": "Il solver ha dimostrato che non esiste un piano migliore, obiettivo per obiettivo nell’ordine scelto in Strategia, e il controllo esatto del piano torna con i suoi numeri. La prova vale entro il piccolo margine di calcolo del solver, che cresce con gli importi.",
               "completed": "Il solver ha concluso la ricerca da solo, senza raggiungere un limite.",
               "timeLimit": "Il solver ha raggiunto il limite di tempo prima di concludere la ricerca.",
-              "nodeLimit": "Il solver ha raggiunto il limite di nodi, il numero di tentativi che può fare, prima di concludere la ricerca."
-            }
+              "nodeLimit": "Il solver ha raggiunto il limite di nodi, il numero di tentativi che può fare, prima di concludere la ricerca.",
+              "margin": "Il piano migliore possibile dovrebbe essere al massimo {margin} migliore di questo: lo dicono i limiti del risolutore, che non sono una prova."
+            },
+            "notProvenWithin": "Ottimo locale (entro {margin})",
+            "noPlanNotProven": "Ottimalità non dimostrata"
           },
           "collapseAll": "Comprimi tutto",
           "detail": {
