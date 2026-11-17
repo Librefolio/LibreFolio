@@ -31,6 +31,7 @@ from sqlalchemy import and_, case, func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, FxRate, PriceHistory
+from backend.app.db.precision import usable_fx_rate_bounds
 from backend.app.schemas.common import Currency
 from backend.app.schemas.risk.vocabulary import RiskEligibilityLevel, RiskEligibilityReason, RiskHistoricalReplayExclusionReason
 from backend.app.services.fx.conversion import convert_bulk
@@ -298,10 +299,22 @@ async def load_price_window_facts(
 
 
 async def first_fx_rate_dates(session: AsyncSession, *, currencies: Iterable[str], target_currency: str) -> dict[str, Optional[date]]:
-    """The earliest stored rate of each currency's pair with ``target_currency`` (RN-16b: a holding's first usable day
-    for the simulation is the later of its first price and its first rate). A pair stored either way round counts;
-    None when none is stored — a conversion that only goes through another currency has no such date here."""
-    return {currency: await _first_rate_date(session, currency, target_currency) for currency in sorted(set(currencies)) if currency != target_currency}
+    """The earliest usable stored rate of each currency's pair with ``target_currency`` (RN-16b: a holding's first useful
+    day for the simulation is the later of its first price and its first rate). None when none is stored.
+
+    The same rows the series preparation converts with (RN-16c, the consultant): the direct pair, whichever way round it
+    is stored, and only its usable rates (``usable_fx_rate_bounds``, as ``unit_rate_steps`` reads them). A chain route's
+    sync stores its rates as that direct pair too (``fx/sync.py``, ``_storable_chain_rates``), so a currency reached
+    through a third one has the same rows from the day the chain was computed: this date is the first day the
+    preparation can convert."""
+    smallest_rate, first_refused_rate = usable_fx_rate_bounds()
+    first: dict[str, Optional[date]] = {}
+    for currency in sorted(set(currencies)):
+        if currency == target_currency:
+            continue
+        base, quote = sorted((currency, target_currency))
+        first[currency] = (await session.execute(select(func.min(FxRate.date)).where(FxRate.base == base, FxRate.quote == quote, FxRate.rate >= smallest_rate, FxRate.rate < first_refused_rate))).scalar_one_or_none()
+    return first
 
 
 async def _first_rate_date(session: AsyncSession, currency: str, target_currency: str) -> Optional[date]:

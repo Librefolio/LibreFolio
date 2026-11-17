@@ -2952,6 +2952,25 @@ async def test_a_history_shorter_than_the_horizon_is_said_without_degrading_the_
     assert not [item for item in long_enough.warnings if item.code == "simulation_history_shorter_than_horizon"]
 
 
+@pytest.mark.asyncio
+async def test_the_amber_line_counts_the_history_to_the_end_of_the_window(engine_requests):
+    """RN-16c (the consultant, 17/11/2026): through the plugin's own run, the history is the window's end minus the
+    baseline — the measure the participants were chosen by — not the last observation minus it. The window ends two days
+    after the last observation (a Friday close, a Sunday today); a horizon equal to that history raises no line, one day
+    longer does, counted to the window's end."""
+    context = simulation_context(252.0)
+    dates = context.prepared_series.joint_return_dates
+    end = dates[-1] + timedelta(days=2)
+    context = replace(context, requested_range=DateRangeModel(start=context.prepared_series.baseline_date + timedelta(days=1), end=end))
+    history = (end - context.prepared_series.baseline_date).days
+
+    exactly = await SimulationAnalytic().execute(bootstrap_params(history), context)
+    assert not [item for item in exactly.warnings if item.code == "simulation_history_shorter_than_horizon"]
+    longer = await SimulationAnalytic().execute(bootstrap_params(history + 1), context)
+    (warning,) = [item for item in longer.warnings if item.code == "simulation_history_shorter_than_horizon"]
+    assert warning.message_params == {"horizon_days": history + 1, "history_days": history}
+
+
 @pytest.mark.parametrize("params", [pytest.param(bootstrap_params, id="block-bootstrap"), pytest.param(gbm_params, id="gbm")])
 @pytest.mark.asyncio
 async def test_more_positions_than_the_engine_carries_are_a_resource_limit_that_never_reaches_it(engine_requests, params):

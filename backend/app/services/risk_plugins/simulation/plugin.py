@@ -329,7 +329,7 @@ class SimulationAnalytic(RiskAnalytic):
                 estimation_observations=len(dates) or None,
                 history_truncated=history_truncated,
             ),
-            warnings=self._history_warnings(params.horizon_days, history_baseline, dates),
+            warnings=self._history_warnings(params.horizon_days, history_baseline, dates, end=context.requested_range.end),
             method=self._method_label(params),
             n_observations=observations,
             sampling_method=params.sampling_method,
@@ -370,15 +370,19 @@ class SimulationAnalytic(RiskAnalytic):
         return path_count
 
     @staticmethod
-    def _history_warnings(horizon_days: int, baseline, dates) -> tuple[RiskWarning, ...]:
+    def _history_warnings(horizon_days: int, baseline, dates, *, end=None) -> tuple[RiskWarning, ...]:
         """Q4's amber line, inside c: a projection longer than the history it rests on.
 
         Not degrading (consultant's principle, 16/11/2026): the data are complete, only short — the result stands, the
         line says how far it reaches.
+
+        The history is the window's ``end`` minus the baseline (RN-16c, the consultant): the measure the participants
+        were chosen by (`simulation_participants`) — a holding at rest keeps its last price to the end, the page's rule —
+        so a holding admitted at exactly the horizon raises no line. Without an end, the last observation.
         """
         if baseline is None or not dates:
             return ()
-        history_days = (dates[-1] - baseline).days
+        history_days = ((end or dates[-1]) - baseline).days
         if history_days >= horizon_days:
             return ()
         return (

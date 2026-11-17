@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import math
 import os
-from datetime import date
+from datetime import date, timedelta
 
 import numpy as np
 import pytest
@@ -2112,3 +2112,17 @@ def test_the_output_declares_the_paths_it_ran_against_the_ones_asked_and_its_win
         bootstrap_output(estimation_start=date(2026, 3, 2), estimation_end=date(2022, 1, 3), estimation_observations=10)
     with pytest.raises(ValidationError):
         bootstrap_output(estimation_start=date(2022, 1, 3), estimation_observations=10)
+
+
+def test_the_amber_line_measures_the_history_to_the_end_of_the_window():
+    """RN-16c, point 2 (the consultant, 17/11/2026): the history the simulation used is the window's end minus its
+    baseline — the rule's own measure: a holding at rest keeps its last price, the page's rule — not the last observation
+    minus the baseline. A holding admitted at exactly the horizon, its last quote on a Friday and today a Sunday, raises
+    no amber line."""
+    sunday = date(2026, 11, 15)
+    friday = sunday - timedelta(days=2)
+    baseline = sunday - timedelta(days=365)
+
+    assert SimulationAnalytic._history_warnings(365, baseline, [friday], end=sunday) == ()
+    (amber,) = SimulationAnalytic._history_warnings(365, baseline + timedelta(days=1), [friday], end=sunday)
+    assert amber.message_params == {"horizon_days": 365, "history_days": 364}
