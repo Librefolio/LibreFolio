@@ -28,7 +28,8 @@ The contract pinned here, by the numbers of the brief:
 6. **The usage block** of the catalogue (``call_usage``), only on the entry that owns the count, five windows from ONE
    ``now``, counts read once (``read_counts_many``, one SELECT), a database error → every block None and one warning;
    managed profile: a hidden limit is null, ``full`` still judged on it.
-8. **mockcount**: registered in test mode only, a ``MockProvider`` that calls out, its five core fields, counted.
+8. **mockcount**: registered in test mode only, a double of its own (no other plugin imported, the layout gate's rule
+   (d)) that answers as mockprov does (100 USD every day) and calls out, its five core fields, counted.
 
 (Point 7, the frontend filter, is pinned in ``frontend/src/lib/features/plugin-settings/pluginSettingsApi.callLimits.test.ts``.)
 
@@ -72,7 +73,7 @@ from backend.app.db.models import PluginCallCounter, PluginSystemSetting, User
 from backend.app.schemas.plugin_settings import PluginSettingsPluginRead
 from backend.app.services.asset_source_providers.mockprov.plugin import MockProvider
 from backend.app.services.assets import core
-from backend.app.services.assets.base import AssetRateLimitedError
+from backend.app.services.assets.base import AssetRateLimitedError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.fx import runtime as fx_runtime
 from backend.app.services.fx.registry import FXProviderRegistry
@@ -947,12 +948,14 @@ async def test_u4_in_the_managed_profile_a_hidden_limit_is_null_and_full_is_stil
 
 
 def test_u4_mockcount_is_a_calling_mock_with_the_five_core_fields(discovered: None):
-    """8: registered in test mode, from its own package (``__init__.py`` a docstring only, ``plugin.py``), a
-    ``MockProvider`` subclass, test-only, calling out in its own class, no group, its fields the five core ones."""
+    """8: registered in test mode, from its own package (``__init__.py`` a docstring only, ``plugin.py``), a direct
+    ``AssetSourceProvider`` (a plugin never imports another plugin: no ``MockProvider`` subclass), test-only, calling out
+    in its own class, no group, its fields the five core ones."""
     plugin_class = AssetProviderRegistry.get_plugin("mockcount")
     assert plugin_class is not None, "mockcount is not registered in test mode"
     assert plugin_class.__module__ == MOCKCOUNT_MODULE
-    assert issubclass(plugin_class, MockProvider) and plugin_class is not MockProvider
+    assert plugin_class.__bases__ == (AssetSourceProvider,), f"its own double, no other plugin's class: {plugin_class.__bases__}"
+    assert not issubclass(plugin_class, MockProvider)
     assert getattr(plugin_class, "test_only", False) is True
     assert vars(plugin_class).get("calls_external_service") is True
     assert tuple(plugin_class.settings_groups) == ()

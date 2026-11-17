@@ -934,7 +934,8 @@ the plugin.
 - **The interface does not show them yet**: the frontend's `pluginSettingsApi` leaves out
   `CALL_LIMIT_KEYS`, an entry they alone filled, and an entry listed only for its usage block, until
   U5 brings the «Calls» section.
-- **For the tests**: `mockcount` is a test-only asset double that is counted (mockprov's answers),
+- **For the tests**: `mockcount` is a test-only asset double that is counted (a class of its own, no
+  plugin imports another: 100 USD every day, as mockprov),
   with the five fields. Only a suite that owns its limits uses it.
 
 ## 🧪 Test-Only Plugins {: #test-only }
