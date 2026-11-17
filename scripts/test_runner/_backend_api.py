@@ -504,6 +504,26 @@ def api_assets_patch_fields(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Assets patch fields tests", verbose=verbose)
 
 
+def api_assets_enrichers(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the enrichers and profile of an asset through the asset routes (project 68, lot B3)."""
+    print_section("Assets Enrichers (project 68 B3) API Tests")
+    print_info("Testing GET /assets/enrichers; enrichers and profile on POST/PATCH /assets and POST /assets/validate; enrichers on GET /assets")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_assets_enrichers.py", test_names)
+    return run_command(cmd, "Assets enrichers tests", verbose=verbose)
+
+
+def api_assets_profile_read(verbose: bool = False, test_names: list = None) -> bool:
+    """Run reading the profile from the enrichers through the routes (project 68, lots B5a and B5b)."""
+    print_section("Assets Profile Read (project 68 B5a) API Tests")
+    print_info("Testing POST /assets/profile/ask and POST /assets/profile/refresh with mockenrich")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_assets_profile_read.py", test_names)
+    return run_command(cmd, "Assets profile read tests", verbose=verbose)
+
+
 def api_assets_validate(verbose: bool = False, test_names: list = None) -> bool:
     """Run POST /assets/validate (dry run of the asset PATCH) tests."""
     print_section("Assets Validate (lane 65 B4) API Tests")
@@ -1505,6 +1525,20 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "batch-split-promote", api_batch_split_promote, name="Batch Split/Promote", desc="Split/promote in unified batch + suggest")
     add_test(api, "transactions-wac", api_transactions_wac_inline, name="WAC Cost Basis", desc="WAC inline validate/commit (P16-P28)")
     add_test(api, "assets-patch-fields", api_assets_patch_fields, name="Assets Patch Fields", desc="PATCH /assets field-level updates, all or nothing batches, assetNameTaken; A4: POST/PATCH write classification_params into the profile in the authenticated user's name")
+    add_test(
+        api,
+        "assets-enrichers",
+        api_assets_enrichers,
+        name="Assets Enrichers",
+        desc="Project 68 B3: GET /assets/enrichers (mockenrich, a default order for every type); enrichers on POST/PATCH /assets kept in the order sent with free keys, replaced, cleared by {} or null, absent unchanged, malformed 422, state answered by GET; profile on PATCH (user row by the caller, null empties, absent untouched, invalid value profileValueInvalid on profile.<voice> and nothing saved, the same on validate, profile wins over classification_params, never changes the column) and on POST (user rows, invalid item not created); B4: POST /assets/enrichers/recognize SSE (enricher_result found with the LEI, identifier_learned, done with found_order/default_order/identifiers; unknown ISIN not found; codes restricts; uncovered type; 422 empty identifiers), GET /assets/enrichers/{code}/search (400 no search, 404 unknown), POST /assets/enrichers/{code}/test (mockenrich answer, not found, 404, writes nothing); B5b: the enrichers sent bind codes never installed and the test route's asset is bound on the lane DB, so no background read runs beside the test",
+    )
+    add_test(
+        api,
+        "assets-profile-read",
+        api_assets_profile_read,
+        name="Assets Profile Read",
+        desc="Project 68 B5a: POST /assets/profile/ask with asset_type+enrichers (mockenrich, unique ISIN: ter 0.0022, geography stored form, description, one ok outcome) and with asset_id (same, nothing written), keys restricts, 422 without asset_id or type+enrichers and with both; POST /assets/profile/refresh writes mockenrich rows without user, state ok on GET /assets, a second refresh writes nothing new, a missing asset answers error, MOCK_RATE_LIMITED outcome RATE_LIMITED with retry_after (assets bound on the lane DB, not by a route); B5b: POST /assets with enrichers and a committed PATCH that sets them read the assets in the background (state ok and mockenrich rows within a deadline), never /validate, a refused batch or a PATCH without enrichers (after a marker POST read to ok); profile {from: mockenrich, seen} warns profileSourceChanged on validate and PATCH and writes the row in mockenrich's name",
+    )
     add_test(api, "assets-validate", api_assets_validate, name="Assets Validate", desc="POST /assets/validate dry run of the all-or-nothing asset PATCH: never writes, a currency change keeps prices and events, same issues and warnings as PATCH")
     add_test(api, "ohlc-sentinel", api_ohlc_sentinel, name="OHLC Sentinel", desc="F.4 merge on POST /assets/prices (N92): null or absent keeps the stored value, 'clear' empties it, a number writes it; -1, any other text and a close not above 0 refused with 422, nothing written")
     add_test(api, "current-price-persistence", api_current_price_persistence, name="Current Price Persistence", desc="/current endpoint OHLC upsert")

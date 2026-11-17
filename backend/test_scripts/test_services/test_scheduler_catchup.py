@@ -8,7 +8,7 @@ will go through it on a scheduled wake-up. The contract pinned here:
 (a) The module's constants, read at call time so a test can set them: ``CATCH_UP_AFTER_SECONDS`` 60.0,
     ``CLOCK_SETTLE_SECONDS`` 2.0, ``TICK_SECONDS`` 60.0, ``FIRST_RUN_DELAY_SECONDS`` 5.0, ``MISSED_SLOT_LOOKBACK_DAYS`` 7,
     ``CATCH_UP_LISTENER`` "scheduler-catch-up", ``BUSY_REASON`` "scheduler", ``JOB_NAMES`` ("current_price",
-    "history_sync"). A ``RunReason`` is "startup", "tick", "return" or "wake".
+    "history_sync", "profile_read" — the third since lot B6, never due in this file's World). A ``RunReason`` is "startup", "tick", "return" or "wake".
 (b) ``JobOutcome(name, status, started_at=None, duration_s=None, items_ok=0, items_err=0, error=None, items_deferred=0,
     retry_at=None)`` and ``RunReport(reason, status, started_at, finished_at, jobs=())`` are frozen dataclasses with these
     fields, in this order — the last two of ``JobOutcome`` since lot Z7b, whose values ``test_scheduler_backoff.py``
@@ -132,6 +132,13 @@ from backend.test_scripts.test_utils import print_section, print_success
 REASONS = ("startup", "tick", "return", "wake")
 SETTLING_REASONS = ("return", "wake")
 JOBS = ("current_price", "history_sync")
+#: Lot B6 (project 68): the scheduler's jobs are three, ``profile_read`` (the weekly read of the enrichers) last. This
+#: World runs the two price jobs; the third is never due here (its due function and its body are fakes too, so the real
+#: job never runs), and its outcome closes every report: ``("profile_read", "not_due")``. Its own cases are
+#: ``test_scheduler_loop.py`` and ``test_scheduler_profile_read.py``.
+ALL_JOBS = (*JOBS, "profile_read")
+QUIET = ("profile_read", "not_due")
+QUIET_OUTCOME = scheduler.JobOutcome("profile_read", "not_due")
 #: The literals of the contract, never read from the module under test.
 SCHEDULER_REASON = "scheduler"
 LISTENER_NAME = "scheduler-catch-up"
@@ -161,6 +168,7 @@ ROME = ZoneInfo("Europe/Rome")
 WRITTEN: dict[str, dict[str, Any]] = {
     "current_price": {"last_duration_s": 1.25, "last_status": "ok", "last_items_ok": 7, "last_items_err": 0, "last_error": None},
     "history_sync": {"last_duration_s": 3.5, "last_status": "ok", "last_items_ok": 40, "last_items_err": 0, "last_error": None},
+    "profile_read": {"last_duration_s": 9.5, "last_status": "ok", "last_items_ok": 3, "last_items_err": 0, "last_error": None},
 }
 #: What ``dataclasses.fields`` shows for a field without a default.
 REQUIRED = "<required>"
@@ -340,6 +348,10 @@ class World:
             monkeypatch.setattr(scheduler, name, getattr(self, name))
         monkeypatch.setattr(scheduler, "due_current_price", self._due("current_price"))
         monkeypatch.setattr(scheduler, "due_history_sync", self._due("history_sync"))
+        # Lot B6: the third job is never due in this World, and its body is a fake: the real one never runs here.
+        # raising=False: the names exist only once B6 does.
+        monkeypatch.setattr(scheduler, "due_profile_read", self.due_profile_read, raising=False)
+        monkeypatch.setattr(scheduler, "run_profile_read", self.run_profile_read, raising=False)
         monkeypatch.setattr(scheduler, "utc_now", self.wall)
         # Z-11 (N71): names the module has only once the lock across processes exists, hence raising=False.
         monkeypatch.setattr(scheduler, "cross_process_lock_available", self.cross_process_lock_available, raising=False)
@@ -417,6 +429,13 @@ class World:
 
     async def run_history_sync(self, state: SchedulerState, horizon_days: object = NOT_GIVEN) -> None:
         await self._job("history_sync", state, horizon_days)
+
+    def due_profile_read(self, now: datetime, settings: SchedulerSettings, state: SchedulerState) -> bool:
+        """Lot B6: never due in this World; not on the timeline, so the cases of the two price jobs read as before."""
+        return False
+
+    async def run_profile_read(self, state: SchedulerState, settings: object = None) -> None:
+        await self._job("profile_read", state, None)
 
     async def _job(self, name: str, state: SchedulerState, horizon_days: object) -> None:
         """As a real job does: it writes its ``JobState`` into the state it is given, then returns; or it raises, or it first waits on its gate."""
@@ -773,7 +792,7 @@ def test_the_constants_have_their_values_and_a_reason_is_one_of_four() -> None:
         "MISSED_SLOT_LOOKBACK_DAYS": 7,
         "CATCH_UP_LISTENER": LISTENER_NAME,
         "BUSY_REASON": SCHEDULER_REASON,
-        "JOB_NAMES": JOBS,
+        "JOB_NAMES": ALL_JOBS,
     }
 
     assert {name: getattr(scheduler, name, "<missing>") for name in expected} == expected
@@ -892,7 +911,7 @@ async def test_an_exception_out_of_the_run_closes_its_busy_span_and_frees_the_lo
     assert activity.open_spans[SCHEDULER_REASON] == 0
     world.settings_failure = None
     report = await _within(scheduler.run_due_jobs("tick"), "the next run: is the lock still held?")
-    assert [(outcome.name, outcome.status) for outcome in report.jobs] == [("current_price", "ok"), ("history_sync", "ok")]
+    assert [(outcome.name, outcome.status) for outcome in report.jobs] == [("current_price", "ok"), ("history_sync", "ok"), QUIET]
     print_success("the span closed, the lock free")
 
 
@@ -915,7 +934,7 @@ async def test_return_and_wake_settle_first_and_the_due_checks_read_the_correcte
     assert world.timeline.count(("settle",)) == (1 if settles else 0)
     assert (world.timeline[0] == ("settle",)) is settles, world.timeline
     assert [now for _, now, _, _ in world.due_calls] == [expected_now, expected_now]
-    assert [outcome.started_at for outcome in report.jobs] == [expected_now, expected_now]
+    assert [outcome.started_at for outcome in report.jobs] == [expected_now, expected_now, None]
     print_success("settled first, then the clock read" if settles else "no settle")
 
 
@@ -950,8 +969,8 @@ def _assert_serialised(world: World, past_the_settle: list[tuple[str, ...]], spa
     """B waited at the lock, its span open, while A held it; B loaded the state A had saved, and found nothing due."""
     assert past_the_settle == [], f"run B went past the lock while run A held it: {past_the_settle}"
     assert spans == 2, f"while B waited for the lock, {spans} 'scheduler' span(s) were open instead of A's and B's"
-    assert [(outcome.name, outcome.status) for outcome in first.jobs] == [("current_price", "ok"), ("history_sync", "ok")]
-    assert second.jobs == (scheduler.JobOutcome("current_price", "not_due"), scheduler.JobOutcome("history_sync", "not_due"))
+    assert [(outcome.name, outcome.status) for outcome in first.jobs] == [("current_price", "ok"), ("history_sync", "ok"), QUIET]
+    assert second.jobs == (scheduler.JobOutcome("current_price", "not_due"), scheduler.JobOutcome("history_sync", "not_due"), QUIET_OUTCOME)
     assert (first.status, second.status) == ("ok", "ok")
     loads = [index for index, entry in enumerate(world.timeline) if entry == ("load",)]
     saves = [index for index, entry in enumerate(world.timeline) if entry == ("save",)]
@@ -1073,6 +1092,7 @@ async def test_due_jobs_run_in_order_on_the_loaded_state_each_saved_after_it(wor
     assert report.jobs == (
         scheduler.JobOutcome("current_price", "partial", started_at=WALL_START, duration_s=1.25, items_ok=7, items_err=2, error="QuotaExceeded"),
         scheduler.JobOutcome("history_sync", "ok", started_at=WALL_START, duration_s=3.5, items_ok=40, items_err=0, error=None),
+        QUIET_OUTCOME,
     )
     assert world.stored.history_sync.last_run_at == WALL_START.isoformat()
     _assert_frame(report, "tick")
@@ -1103,7 +1123,7 @@ async def test_a_job_not_due_is_reported_not_due_and_neither_run_nor_saved(world
 
     report = await _within(scheduler.run_due_jobs("tick"), "the run")
 
-    assert [outcome.name for outcome in report.jobs] == list(JOBS)
+    assert [outcome.name for outcome in report.jobs] == list(ALL_JOBS)
     assert [_outcome(report, name) for name in not_due] == [scheduler.JobOutcome(name, "not_due") for name in not_due]
     assert _jobs_and_saves(world) == [entry for name in JOBS if name not in not_due for entry in (("job", name), ("save",))]
     assert report.status == "ok"
@@ -1141,7 +1161,7 @@ async def test_a_job_that_raises_is_an_error_outcome_logged_without_its_message(
     assert (failed.status, failed.error) == ("error", "ProviderExploded")
     assert isinstance(failed.duration_s, float) and failed.duration_s >= 0, failed
     _assert_utc(failed.started_at, "started_at of the failed job")
-    assert [(outcome.name, outcome.status) for outcome in report.jobs if outcome.name != failing] == [(name, "ok") for name in JOBS if name != failing]
+    assert [(outcome.name, outcome.status) for outcome in report.jobs if outcome.name != failing] == [(name, "ok") for name in JOBS if name != failing] + [QUIET]
     assert [entry for entry in world.timeline if entry[0] == "job"] == [("job", name) for name in JOBS]
     assert report.status == "partial"
     assert SECRET not in repr(report)
@@ -1187,7 +1207,7 @@ async def test_both_jobs_raising_still_make_a_report(world: World) -> None:
         report = await _within(scheduler.run_due_jobs("wake"), "the run")
 
     _assert_frame(report, "wake")
-    assert [(outcome.name, outcome.status, outcome.error) for outcome in report.jobs] == [(name, "error", "ProviderExploded") for name in JOBS]
+    assert [(outcome.name, outcome.status, outcome.error) for outcome in report.jobs] == [(name, "error", "ProviderExploded") for name in JOBS] + [(*QUIET, None)]
     assert report.status == "error"
     assert SECRET not in repr(report)
     assert _logged(events, JOB_FAILED, "job") == [(name, "error") for name in JOBS]
@@ -1218,7 +1238,7 @@ async def test_a_cancelled_run_ends_cancelled_closes_its_span_and_frees_the_lock
     assert activity.open_spans[SCHEDULER_REASON] == 0
     del world.gates["current_price"]
     report = await _within(scheduler.run_due_jobs("tick"), "the next run: is the lock still held?")
-    assert [(outcome.name, outcome.status) for outcome in report.jobs] == [("current_price", "ok"), ("history_sync", "ok")]
+    assert [(outcome.name, outcome.status) for outcome in report.jobs] == [("current_price", "ok"), ("history_sync", "ok"), QUIET]
     print_success("cancelled; the span closed; the lock free")
 
 
@@ -1268,7 +1288,7 @@ async def test_the_report_status_follows_the_jobs_that_ran(world: World, first: 
 
     report = await _within(scheduler.run_due_jobs("tick"), "the run")
 
-    assert [(outcome.name, outcome.status) for outcome in report.jobs] == [(name, OUTCOME_OF[how]) for name, how in zip(JOBS, (first, second), strict=True)]
+    assert [(outcome.name, outcome.status) for outcome in report.jobs] == [(name, OUTCOME_OF[how]) for name, how in zip(JOBS, (first, second), strict=True)] + [QUIET]
     assert report.status == status
     print_success(status)
 
@@ -1304,7 +1324,7 @@ async def test_with_the_cross_process_lock_the_leader_is_never_asked_and_the_run
         ("unlock",),
     ], f"the state loaded, the jobs run and saved inside the cross-process lock, entered after the settings: {world.timeline}"
     assert [now for _, now, _, _ in world.due_calls] == [AFTER_THE_WAIT, AFTER_THE_WAIT], f"the clock is read once the lock is held: {world.due_calls}"
-    assert [(outcome.name, outcome.status, outcome.started_at) for outcome in report.jobs] == [(name, "ok", AFTER_THE_WAIT) for name in JOBS]
+    assert [(outcome.name, outcome.status, outcome.started_at) for outcome in report.jobs] == [(name, "ok", AFTER_THE_WAIT) for name in JOBS] + [(*QUIET, None)]
     assert (report.status, world.busy_seen["lock"]) == ("ok", [True]), "the run is ok, and busy while it takes the lock"
     assert SCHEDULER_REASON not in activity.busy_reasons()
     print_success("no leader asked; load, jobs and saves inside the lock; the clock read once it was held")
@@ -1329,7 +1349,7 @@ async def test_a_cross_process_lock_that_cannot_be_taken_stops_the_run_before_th
     assert activity.open_spans[SCHEDULER_REASON] == 0
     world.lock_failure = None
     report = await _within(scheduler.run_due_jobs("tick"), "the next run: is the asyncio lock still held?")
-    assert [(outcome.name, outcome.status) for outcome in report.jobs] == [("current_price", "ok"), ("history_sync", "ok")]
+    assert [(outcome.name, outcome.status) for outcome in report.jobs] == [("current_price", "ok"), ("history_sync", "ok"), QUIET]
     print_success("raised before the state; the next run went through")
 
 
@@ -1388,7 +1408,7 @@ async def test_a_wait_for_the_cross_process_lock_that_reaches_the_deadline_gives
     assert (tracker.counted, tracker.snapshot().state) == (counted, "idle"), f"a catch-up that gave up is finished as any run's, a tick never counted: {tracker.counted}"
     world.lock_failure = None
     following = await _run("tick", "the next run: is the process's lock still held?")
-    assert [(outcome.name, outcome.status) for outcome in following.jobs] == [("current_price", "ok"), ("history_sync", "ok")], following
+    assert [(outcome.name, outcome.status) for outcome in following.jobs] == [("current_price", "ok"), ("history_sync", "ok"), QUIET], following
     print_success(f"not_leader, data_dir, nothing loaded; counted {tracker.counted}; the next run went through")
 
 
@@ -1439,8 +1459,8 @@ async def test_one_deadline_fixed_after_the_settle_bounds_both_waits(world: Worl
         f"A {expected[0]}, B {expected[1]} — not {start + DISTINCT_LIMIT} (B, from before its settle), not {after_the_settle + WAITED_FOR_THE_FIRST + DISTINCT_LIMIT} (B, counted again after its wait for the process's lock); "
         f"the entries {world.lock_calls}; B read the clock {read_by_b} between its settle and the clock's move"
     )
-    assert [(outcome.name, outcome.status) for outcome in first_report.jobs] == [("current_price", "ok"), ("history_sync", "ok")], first_report
-    assert (second_report.status, second_report.jobs) == ("ok", (scheduler.JobOutcome("current_price", "not_due"), scheduler.JobOutcome("history_sync", "not_due"))), second_report
+    assert [(outcome.name, outcome.status) for outcome in first_report.jobs] == [("current_price", "ok"), ("history_sync", "ok"), QUIET], first_report
+    assert (second_report.status, second_report.jobs) == ("ok", (scheduler.JobOutcome("current_price", "not_due"), scheduler.JobOutcome("history_sync", "not_due"), QUIET_OUTCOME)), second_report
     assert tracker.counted == ["started:wake", "finished"], tracker.counted
     print_success(f"A t+{expected[0] - start:.0f}, B t+{expected[1] - start:.0f}: one deadline each, fixed after the settle")
 
@@ -1483,8 +1503,8 @@ async def test_a_run_behind_a_run_of_its_own_process_gives_up_at_the_deadline_an
     assert (first_done, spans) == (False, 1), "the run holding the locks goes on untouched, its span open; the one that gave up closed its own"
     assert (counted, progress) == (["started:wake", "finished"], "idle"), "the catch-up of the run that gave up is finished, as any run's"
     _assert_gave_up(events, "wake", "process", SHORT_LIMIT, waited_at_least=SHORT_LIMIT / 2)
-    assert (first_report.status, [(outcome.name, outcome.status) for outcome in first_report.jobs]) == ("ok", [("current_price", "ok"), ("history_sync", "ok")]), first_report
-    assert third.jobs == (scheduler.JobOutcome("current_price", "not_due"), scheduler.JobOutcome("history_sync", "not_due")), third
+    assert (first_report.status, [(outcome.name, outcome.status) for outcome in first_report.jobs]) == ("ok", [("current_price", "ok"), ("history_sync", "ok"), QUIET]), first_report
+    assert third.jobs == (scheduler.JobOutcome("current_price", "not_due"), scheduler.JobOutcome("history_sync", "not_due"), QUIET_OUTCOME), third
     assert (len(world.lock_calls), SCHEDULER_REASON in activity.busy_reasons(), activity.open_spans[SCHEDULER_REASON]) == ((2 if lock_available else 0), False, 0), world.lock_calls
     print_success("not_leader at the process's lock; the holder went on; the next run went through")
 
@@ -1517,7 +1537,7 @@ async def test_a_run_that_holds_its_locks_runs_its_jobs_to_the_end_past_its_dead
             await _wound_down(run)
 
     assert held_past_the_deadline, "a job held past the run's deadline is never cut short"
-    assert (report.status, [(outcome.name, outcome.status) for outcome in report.jobs]) == ("ok", [("current_price", "ok"), ("history_sync", "ok")]), report
+    assert (report.status, [(outcome.name, outcome.status) for outcome in report.jobs]) == ("ok", [("current_price", "ok"), ("history_sync", "ok"), QUIET]), report
     assert _jobs_and_saves(world) == [("job", "current_price"), ("save",), ("job", "history_sync"), ("save",)], world.timeline
     assert [entry for entry in events if entry.get("event") == GAVE_UP] == [], "a run that holds its locks never gives up"
     assert SCHEDULER_REASON not in activity.busy_reasons()

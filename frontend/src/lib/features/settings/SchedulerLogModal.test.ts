@@ -10,7 +10,7 @@
  * two minutes. Here the log is a fixture, so every shape is one line of setup.
  *
  * The translator is mocked with the identity, so `$_('common.currentPrice')`
- * renders as that key. The strings this file *does* assert literally —
+ * renders as that key (followed by its interpolated values, if any). The strings this file *does* assert literally —
  * `3/3 ✓`, `1m5s`, `(+2)` — are assembled by the component itself out of
  * numbers and punctuation and pass through no translation table; they are the
  * summary format, which is the contract under test.
@@ -30,8 +30,13 @@ import {waitLocale} from 'svelte-i18n';
 import {cleanup, fireEvent, render, screen, waitFor, within} from '$test/component';
 
 // Partial on purpose: `$lib/stores/app/language`, reached through `formatFixed` → `uiLocale`, reads the
-// catalogue constants (`DEFAULT_LOCALE`, `SUPPORTED_LOCALES`, …) from this module. Only the translator is replaced.
-vi.mock('$lib/i18n', async (importOriginal) => ({...(await importOriginal<typeof import('$lib/i18n')>()), _: readable((key: string) => key)}));
+// catalogue constants (`DEFAULT_LOCALE`, `SUPPORTED_LOCALES`, …) from this module. Only the translator is replaced:
+// the identity, followed by the interpolated values when there are any (lot B6b, so a count passed through
+// `{values: {count}}` is assertable; the same shape as SchedulerConfigModal.test.ts).
+vi.mock('$lib/i18n', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('$lib/i18n')>()),
+    _: readable((key: string, opts?: {values?: Record<string, unknown>}) => (opts?.values ? `${key} ${Object.values(opts.values).join(' ')}` : key)),
+}));
 vi.mock('$lib/api', () => ({zodiosApi: {axios: {get: vi.fn()}}}));
 vi.mock('$lib/utils/clipboard', () => ({writeExportToClipboard: vi.fn()}));
 vi.mock('$lib/stores/reference/currencyStore', () => ({
@@ -1130,5 +1135,154 @@ describe('Z7c-2 — a run with nothing deferred renders as before', () => {
         expect(row('current_price'), 'premise: a static header').toHaveAttribute('data-has-detail', 'false');
         expect(summaryOf(row('current_price'))).toBe('0/0 ✓');
         expect(within(row('current_price')).queryByTestId('scheduler-log-retry-at')).toBeNull();
+    });
+});
+
+/**
+ * Lot B6b (plan 68) — the third job, `profile_read`: a weekly read of the asset profiles from their enrichers.
+ *
+ * Its entry (backend `SchedulerLogProfileReadEntry`) has the price run's summary (`ok`, `err`, `deferred`) and items
+ * in `items`, but an item carries a `status` (`ok | error | deferred`) and `voices_written` instead of the price
+ * item's `ok` / `deferred` booleans. So the item table publishes the status itself: every `scheduler-log-item` row
+ * gains `data-status="ok|error|deferred"`, a price row's derived from its booleans (deferred first).
+ *
+ * The header names the job `🪪 log.profileRead`; the summary reads like the price run's (`ok/total ✓ · n ⏸ · n ✗`);
+ * the detail table is headed `log.profileRead`, never `common.currentPrice`; an ok item says how many voices it
+ * wrote through `log.voicesWritten` with `{count}`.
+ */
+function profileRun(over: Entry = {}): Entry {
+    return {
+        ts: '2026-01-17T03:00:00Z',
+        job: 'profile_read',
+        duration_s: 4.5,
+        status: 'partial',
+        summary: {ok: 2, err: 1, deferred: 1},
+        retry_at: null,
+        items: [
+            {asset_id: 1, name: 'Apple', status: 'ok', voices_written: 7, error: null},
+            {asset_id: 2, name: 'Vanguard', status: 'ok', voices_written: 0, error: null},
+            {asset_id: 3, name: 'Bond', status: 'error', voices_written: 0, error: 'enricher timed out'},
+            {asset_id: 4, name: 'Nvidia', status: 'deferred', voices_written: 0, error: 'too many requests'},
+        ],
+        ...over,
+    };
+}
+
+describe('B6b — the profile read job', () => {
+    it('offers profile_read in the job filter, and keeps only its entries', async () => {
+        await mountWith([priceRun(), historyRun(), profileRun()]);
+
+        await chooseFilter('job', 'profile_read');
+
+        expect(rows().map((r) => r.getAttribute('data-job'))).toEqual(['profile_read']);
+    });
+
+    it('names the job in the row header, not by its raw name', async () => {
+        await mountWith([profileRun()]);
+
+        const r = row('profile_read');
+        expect(r, 'premise: the detail is closed, so its heading is not on screen').toHaveAttribute('data-expanded', 'false');
+        expect(r).toHaveTextContent('🪪 settings.global.scheduler.log.profileRead');
+        expect(r).not.toHaveTextContent('profile_read');
+    });
+
+    const summaries: [string, Entry, string][] = [
+        ['ok, deferred and failed items', {summary: {ok: 2, err: 1, deferred: 1}}, '2/4 ✓ · 1 ⏸ · 1 ✗'],
+        ['a clean run', {status: 'ok', summary: {ok: 3, err: 0, deferred: 0}}, '3/3 ✓'],
+        ['failures only beside the ok items', {summary: {ok: 1, err: 2, deferred: 0}}, '1/3 ✓ · 2 ✗'],
+        ['deferred items only beside the ok items', {summary: {ok: 1, err: 0, deferred: 3}}, '1/4 ✓ · 3 ⏸'],
+        ['an empty summary', {summary: {}}, '0/0 ✓'],
+    ];
+
+    it.each(summaries)('summarises %s like a price run', async (_name, over, expected) => {
+        await mountWith([profileRun(over)]);
+
+        expect(summaryOf(row('profile_read'))).toBe(expected);
+    });
+
+    it('heads the detail table with the profile read, not the current price', async () => {
+        await mountWith([profileRun()]);
+
+        const detail = await openDetail('profile_read');
+
+        expect(within(detail).getByRole('heading', {name: /settings\.global\.scheduler\.log\.profileRead/})).toBeInTheDocument();
+        expect(detail).not.toHaveTextContent('common.currentPrice');
+    });
+
+    it('publishes the status of every item on its row', async () => {
+        await mountWith([profileRun()]);
+
+        const detail = await openDetail('profile_read');
+
+        expect(itemRows(detail)).toHaveLength(4);
+        expect(Object.fromEntries(['Apple', 'Vanguard', 'Bond', 'Nvidia'].map((name) => [name, itemRow(detail, name).getAttribute('data-status')]))).toEqual({
+            Apple: 'ok',
+            Vanguard: 'ok',
+            Bond: 'error',
+            Nvidia: 'deferred',
+        });
+    });
+
+    it('shows an ok item as ok, with the number of voices it wrote', async () => {
+        await mountWith([profileRun()]);
+
+        const detail = await openDetail('profile_read');
+
+        const apple = itemRow(detail, 'Apple');
+        expect(apple).toHaveAttribute('data-status', 'ok');
+        expect(apple).toHaveAttribute('data-deferred', 'false');
+        expect(deferredMarks(apple)).toHaveLength(0);
+        expect(apple).toHaveTextContent('settings.global.scheduler.log.voicesWritten 7');
+        // The failure dash of a price item without `ok: true` must not reach a profile item that succeeded.
+        expect(apple).not.toHaveTextContent('—');
+        expect(itemRow(detail, 'Vanguard')).toHaveTextContent('settings.global.scheduler.log.voicesWritten 0');
+    });
+
+    it('marks a deferred item as deferred', async () => {
+        await mountWith([profileRun()]);
+
+        const detail = await openDetail('profile_read');
+
+        const nvidia = itemRow(detail, 'Nvidia');
+        expect(nvidia).toHaveAttribute('data-status', 'deferred');
+        expect(nvidia).toHaveAttribute('data-deferred', 'true');
+        expect(deferredMarks(nvidia)).toHaveLength(1);
+        expect(deferredMarks(detail), 'one deferred item, one mark').toHaveLength(1);
+    });
+
+    it('shows the reason a failed item gave', async () => {
+        await mountWith([profileRun()]);
+
+        const detail = await openDetail('profile_read');
+
+        const bond = itemRow(detail, 'Bond');
+        expect(bond).toHaveAttribute('data-status', 'error');
+        expect(bond).toHaveAttribute('data-deferred', 'false');
+        expect(deferredMarks(bond)).toHaveLength(0);
+        expect(bond).toHaveTextContent('enricher timed out');
+    });
+});
+
+describe('B6b — a price item publishes its status too', () => {
+    it('derives data-status from ok and deferred: a deferred item is deferred even with ok false', async () => {
+        await mountWith([deferredPriceRun()]);
+
+        const detail = await openDetail('current_price');
+
+        expect(Object.fromEntries(['Apple', 'Nvidia', 'Meta', 'Tesla'].map((name) => [name, itemRow(detail, name).getAttribute('data-status')]))).toEqual({
+            Apple: 'ok',
+            Nvidia: 'deferred',
+            Meta: 'deferred',
+            Tesla: 'error',
+        });
+    });
+
+    it('keeps the price table headed by the current price', async () => {
+        await mountWith([priceRun()]);
+
+        const detail = await openDetail('current_price');
+
+        expect(detail).toHaveTextContent('common.currentPrice');
+        expect(detail).not.toHaveTextContent('settings.global.scheduler.log.profileRead');
     });
 });

@@ -1588,6 +1588,15 @@ def services_asset_profile_double_write(verbose: bool = False, test_names: list 
     return run_command(cmd, "Asset profile double write tests", verbose=verbose)
 
 
+def services_asset_profile_from(verbose: bool = False, test_names: list = None) -> bool:
+    """Run «use the source's value» ({"from": code}) in the profile writes of POST/PATCH /assets (project 68, lot B5b)."""
+    print_section("Services: Asset Profile From")
+    print_info("Testing: AssetCRUDService.create_assets_bulk / patch_assets_bulk with {'from': code} profile values")
+    print_info("Tests: cache hit or read now, the row in the source's name (force, same source no row), the item's new binding, refusals profileValueInvalid, seen and profileSourceChanged, dry run, POST")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_profile_from.py", test_names)
+    return run_command(cmd, "Asset profile from tests", verbose=verbose)
+
+
 def services_asset_profile_merge(verbose: bool = False, test_names: list = None) -> bool:
     """Run what merging two assets and deleting an asset do to the asset profile (project 68, lot A5)."""
     print_section("Services: Asset Profile Merge")
@@ -1784,6 +1793,14 @@ def services_scheduler_backoff(verbose: bool = False, test_names: list = None) -
     )
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_backoff.py", test_names)
     return run_command(cmd, "Scheduler retry and backoff tests", verbose=verbose)
+
+
+def services_scheduler_profile_read(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the scheduler's third job, the weekly read of the enrichers, and refresh_assets(hold_deferred=…) (project 68, lot B6)."""
+    print_section("Services: Scheduler Profile Read")
+    print_info("Testing: backend/app/services/platform/scheduler/jobs.py (run_profile_read), joblog.py, enrichers/refresh.py (hold_deferred, read_since)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_profile_read.py", test_names)
+    return run_command(cmd, "Scheduler profile read tests", verbose=verbose)
 
 
 def services_scheduler_price_refresh(verbose: bool = False, test_names: list = None) -> bool:
@@ -1996,6 +2013,30 @@ def services_enricher_contracts(verbose: bool = False, test_names: list = None) 
     print_info("Testing: backend/app/services/enrichers/base.py, enrichers/registry.py, enricher_providers/mockenrich/plugin.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_contracts.py", test_names)
     return run_command(cmd, "Enricher contract tests", verbose=verbose)
+
+
+def services_enricher_recognize(verbose: bool = False, test_names: list = None) -> bool:
+    """Test «recognize» in cascade over the enrichers (project 68, lot B4)."""
+    print_section("Services: Enricher Recognize")
+    print_info("Testing: backend/app/services/enrichers/recognize.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_recognize.py", test_names)
+    return run_command(cmd, "Enricher recognize tests", verbose=verbose)
+
+
+def services_enricher_refresh(verbose: bool = False, test_names: list = None) -> bool:
+    """Test reading the profile from the enrichers: catalogue filter, read cache, merge, ask and refresh (project 68, lot B5a)."""
+    print_section("Services: Enricher Refresh")
+    print_info("Testing: backend/app/services/enrichers/refresh.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_refresh.py", test_names)
+    return run_command(cmd, "Enricher refresh tests", verbose=verbose)
+
+
+def services_enricher_bindings(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the enricher bindings of an asset: config and state, the installed enrichers, their default order (project 68, lot B3)."""
+    print_section("Services: Enricher Bindings")
+    print_info("Testing: backend/app/services/enrichers/bindings.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_bindings.py", test_names)
+    return run_command(cmd, "Enricher bindings tests", verbose=verbose)
 
 
 def services_plugin_settings_crypto(verbose: bool = False, test_names: list = None) -> bool:
@@ -3713,6 +3754,17 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "asset-profile-from",
+        services_asset_profile_from,
+        name="Asset Profile From",
+        desc="Project 68 B5b: a profile value {from: code} (optionally seen) on patch_assets_bulk / create_assets_bulk takes that enricher's value of the asset's binding after the item: from the enricher_read cache when it holds the voice (no call), else read now (fills the cache; a cached read of other voices does not answer); the row in the source's name (user_id NULL, the read's source_date), forced over the same value from another source, none when now is that value from that source; the binding the same item sets is used, a code it removes refused; profileValueInvalid on profile.<voice>, whole batch refused, dry run the same: code not bound, enricher not installed, no value for the voice, not found, error, raise, keys other than from/seen; seen in stored form: profileSourceChanged warning {voice, seen, now} only when different, the value read now saved; dry run same warning, nothing written; POST: from with the item's enrichers, a refused one fails its item",
+        # PURE: every database is a private SQLite file under tmp_path built with create_all; the synthetic enrichers are
+        # registered in the process's own EnricherRegistry (removed at teardown with their claims) and the process-wide
+        # enricher_read cache is cleared around each test; no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "asset-profile-merge",
         services_asset_profile_merge,
         name="Asset Profile Merge",
@@ -3893,6 +3945,19 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "scheduler-profile-read",
+        services_scheduler_profile_read,
+        name="Scheduler Profile Read",
+        desc="Project 68 B6: run_profile_read reads the active assets with a non-empty enricher config only; a regular round starts a round (round_started_at), refresh_assets(hold_deferred=True), counts assets ok / err / deferred (a RATE_LIMITED read), retry_at now + the shortest pause; the retry round (retry_at come) reads only what was not read since the round's start (plugin not called, cached values still merged), hold_deferred=False, never sets retry_at again, keeps round_started_at; a regular round after it reads everything; one log entry per run that validates as SchedulerLogEntry; the consultant's two cases (held in round one, written from the first in round two; refused again, written from the second); refresh_assets(hold_deferred) holds only the voices the refused enricher declares for the asset's type whose winner comes after it",
+        # PURE: every database is a private SQLite file under tmp_path built with create_all, reached by the job through
+        # jobs.get_async_engine / refresh.get_async_engine replaced for the test (a barrier checks the entry names only the
+        # file's assets); the job log is under tmp_path; synthetic enrichers registered in the process's own
+        # EnricherRegistry (removed at teardown) and the process-wide enricher_read cache cleared around each test; no
+        # server, no network, no sleep.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "scheduler-jobs",
         services_scheduler_jobs,
         name="Scheduler Job Bodies",
@@ -4067,6 +4132,37 @@ Note: No backend server required.
         services_enricher_contracts,
         name="Enricher Contracts",
         desc="Declarations refused at registration (a degree for every AssetType and no other key, degrees int >= 0 or None, voices catalogue keys of covered types only, terms, identifier types, code), every discovered enricher keeps them, mockenrich recognize/read/page_url/no search/test only",
+        isolation="pure",
+    )
+    # PURE: every database is a private SQLite file under tmp_path built with create_all; the synthetic enrichers are
+    # registered in the process's own EnricherRegistry and removed at teardown with their claims; no server, no network.
+    add_test(
+        cat,
+        "enricher-bindings",
+        services_enricher_bindings,
+        name="Enricher Bindings",
+        desc="Project 68 B3: save_config keeps the order given (row and stored text), {} clears, never touches state (a removed enricher keeps its state entry); update_state sets its codes, never touches config, a read finishing after the user's save keeps the user's config (and the reverse); load_enrichers leaves out assets without a row; installed_enrichers by code; default_order by degree, price provider, found order, code; enrichers_catalogue declarations and a default order for every AssetType",
+        isolation="pure",
+    )
+    # PURE: synthetic enrichers registered in the process's own EnricherRegistry (removed at teardown with their claims)
+    # and passed through plugins=; mockenrich read in test mode set with monkeypatch. No DB, no server, no network.
+    add_test(
+        cat,
+        "enricher-recognize",
+        services_enricher_recognize,
+        name="Enricher Recognize",
+        desc="Project 68 B4: recognize_cascade asks the enrichers covering the type with the first known identifier they accept (request order first); a strong identifier found and not known is learned before the round it starts (once, even from two sources); a different strong one is a conflict that adds and starts nothing; a ticker only reported; found never asked again, not found asked again with a learned identifier; a raising plugin is an error, the others answer; answers in order of arrival (threading.Event holds) and default_order keeps it; mockenrich ISIN → LEI learned",
+        isolation="pure",
+    )
+    # PURE: every database is a private SQLite file under tmp_path built with create_all; the synthetic enrichers are
+    # registered in the process's own EnricherRegistry (removed at teardown with their claims) and the process-wide
+    # enricher_read cache is cleared around each test; no server, no network.
+    add_test(
+        cat,
+        "enricher-refresh",
+        services_enricher_refresh,
+        name="Enricher Refresh",
+        desc="Project 68 B5a: read_bindings one read call per enricher with its bindings in order, enrichers at once (outcomes in order of arrival), as yielded, unanswered bindings (fewer items, index out of range or twice, raise mid-way) once as error, RATE_LIMITED with retry_after; values in stored form, refused/unknown/None voices dropped and logged; read cache 1800 s keyed on the whole binding (params), ok and not_found kept, error and RATE_LIMITED never, a partial read never answers more, use_cache=False; merge_voices first of the order per voice with its source_date, others, enricher down, not in order ignored; ask_profile config order, cache, keys; refresh_assets source rows and state, different from now, failure isolation, missing asset error, no bindings, not installed skipped, deferred, read_since, config read again when writing (removed, reordered), inactive read; A3 one wrong voice logged, the others written",
         isolation="pure",
     )
     add_test(cat, "plugin-settings-crypto", services_plugin_settings_crypto, name="Plugin Settings Encryption", desc="AES-256-GCM blob and AAD, key id, subkeys, count and rekey on a sqlite3 copy (savepoint, idempotent, unreadable rows kept), key status (unusable key: totals)", isolation="pure")

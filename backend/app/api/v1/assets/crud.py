@@ -2,7 +2,7 @@
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,12 +21,15 @@ from backend.app.schemas.assets.assets import (
     FABulkAssetPatchResponse,
     FAinfoResponse,
 )
+from backend.app.schemas.assets.enrichers import FAAssetEnrichers
 from backend.app.schemas.assets.metadata import (
     FAAssetMetadataResponse,
     FAClassificationParams,
 )
 from backend.app.services.assets.base import AssetSourceError
 from backend.app.services.assets.crud import AssetCRUDService
+from backend.app.services.enrichers.bindings import AssetEnricherRow, load_enrichers
+from backend.app.services.enrichers.refresh import refresh_in_background
 
 logger = get_logger(__name__)
 
@@ -41,6 +44,7 @@ crud_router = APIRouter()
 @crud_router.post("", response_model=FABulkAssetCreateResponse, status_code=201, tags=["FA CRUD"])
 async def create_assets_bulk(
     assets: List[FAAssetCreateItem],
+    background: BackgroundTasks,
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
 ):
@@ -83,7 +87,10 @@ async def create_assets_bulk(
     ```
     """
     try:
-        return await AssetCRUDService.create_assets_bulk(assets, session, user_id=_current_user.id)
+        response = await AssetCRUDService.create_assets_bulk(assets, session, user_id=_current_user.id)
+        # The first read of the created assets that have enrichers, after the answer (plan 68 §3.5)
+        background.add_task(refresh_in_background, [result.asset_id for result, item in zip(response.results, assets, strict=True) if result.success and result.asset_id is not None and item.enrichers], engine=session.bind)
+        return response
     except Exception as e:
         logger.exception(f"Error in bulk asset creation: {e}")
         raise HTTPException(status_code=500, detail="Internal error while creating assets") from e
@@ -124,6 +131,7 @@ async def validate_assets_patch(
 @crud_router.patch("", response_model=FABulkAssetPatchResponse, tags=["FA CRUD"])
 async def patch_assets_bulk(
     assets: List[FAAssetPatchItem],
+    background: BackgroundTasks,
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
 ):
@@ -168,7 +176,11 @@ async def patch_assets_bulk(
     - `updated_fields`: the fields written, old and new (every field sent, even when the value does not change)
     - Per-item success/failure status
     """
-    return await _run_asset_patch(assets, session, commit=True, user_id=_current_user.id)
+    response = await _run_asset_patch(assets, session, commit=True, user_id=_current_user.id)
+    if response.committed:
+        # The enrichers just set are read after the answer (plan 68 §3.5)
+        background.add_task(refresh_in_background, [patch.asset_id for patch in assets if "enrichers" in patch.model_fields_set and patch.enrichers], engine=session.bind)
+    return response
 
 
 @crud_router.get("/query", response_model=List[FAinfoResponse], tags=["FA CRUD"])
@@ -336,6 +348,13 @@ async def merge_assets(
 
 
 # Bulk read endpoint
+def _asset_enrichers(row: AssetEnricherRow | None) -> FAAssetEnrichers | None:
+    """The asset's enrichers as ``GET /assets`` shows them (plan 68, B3); None when it has no row."""
+    if row is None:
+        return None
+    return FAAssetEnrichers(config=row.config, state=row.state, updated_at=row.updated_at)
+
+
 @crud_router.get("", response_model=List[FAAssetMetadataResponse], tags=["FA CRUD"])
 async def read_assets_bulk(
     asset_ids: List[int] = Query(..., description="List of asset IDs to read"),
@@ -421,6 +440,7 @@ async def read_assets_bulk(
         ).where(AssetProviderAssignment.asset_id.in_(asset_ids))
         provider_result = await session.execute(provider_stmt)
         provider_map = {row[0]: row[1] for row in provider_result.fetchall()}
+        enricher_rows = await load_enrichers(session, asset_ids)
 
         responses = []
         for asset_id in asset_ids:
@@ -450,6 +470,7 @@ async def read_assets_bulk(
                     quote_base_quantity=asset.quote_base_quantity,
                     classification_params=classification_params,
                     provider_code=provider_map.get(asset.id),
+                    enrichers=_asset_enrichers(enricher_rows.get(asset.id)),
                 )
             )
 

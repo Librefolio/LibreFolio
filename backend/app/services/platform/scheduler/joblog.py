@@ -214,3 +214,42 @@ def build_history_sync_entry(
         "assets": assets,
         "fx": fx,
     }
+
+
+def _profile_read_item(result: Any, name: str, icon: str | None) -> dict[str, Any]:
+    """One asset of a profile-read entry: ``deferred`` when an enricher refused for too many requests, ``error`` when the
+    asset or one of its reads failed, ``ok`` otherwise."""
+    errors = [outcome for outcome in result.outcomes if getattr(outcome.status, "value", outcome.status) == "error" and outcome.error_code != RATE_LIMITED]
+    if result.deferred:
+        status, error = "deferred", None
+    elif result.error or errors:
+        status, error = "error", result.error or errors[0].error_code or errors[0].error_message or "error"
+    else:
+        status, error = "ok", None
+    item: dict[str, Any] = {"asset_id": result.asset_id, "name": name, "status": status, "voices_written": len(result.written), "error": error}
+    if icon:
+        item["icon_url"] = icon
+    return item
+
+
+def build_profile_read_entry(
+    results: list,
+    asset_names: dict[int, str],
+    duration_s: float,
+    status: str,
+    asset_icons: dict[int, str | None] | None = None,
+    retry_at: str | None = None,
+) -> dict[str, Any]:
+    """Build a JSONL entry for a profile-read run (plan 68, B6): one item per asset read."""
+    icons = asset_icons or {}
+    items = [_profile_read_item(result, asset_names.get(result.asset_id, "?"), icons.get(result.asset_id)) for result in results]
+    counts = {kind: sum(1 for item in items if item["status"] == kind) for kind in ("ok", "error", "deferred")}
+    return {
+        "ts": datetime.now().astimezone().isoformat(),
+        "job": "profile_read",
+        "duration_s": duration_s,
+        "status": status,
+        "summary": {"ok": counts["ok"], "err": counts["error"], "deferred": counts["deferred"]},
+        "retry_at": retry_at,
+        "items": items,
+    }

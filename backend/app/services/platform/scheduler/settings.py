@@ -1,6 +1,6 @@
 """Scheduler settings — read from GlobalSetting table every tick."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, time
 from typing import List
 
@@ -24,6 +24,9 @@ class SchedulerSettings:
     history_sync_days: List[str]  # local day codes ["mon", "tue", ...]
     history_sync_horizon_days: int
     scheduler_timezone: str  # IANA timezone used to decide history-sync due slots
+    # The weekly read of the asset profiles (plan 68, B6): local day codes and times, in scheduler_timezone
+    profile_read_days: List[str] = field(default_factory=lambda: ["sat"])
+    profile_read_times: List[time] = field(default_factory=lambda: [time(3, 0)])
 
 
 def _parse_times(csv: str) -> List[time]:
@@ -74,6 +77,8 @@ async def load_scheduler_settings() -> SchedulerSettings:
         days_csv = await get_setting_value(session, SETTINGS_REGISTRY.global_.SCHEDULER_HISTORY_SYNC_DAYS.key)
         horizon = await get_setting_value(session, SETTINGS_REGISTRY.global_.SCHEDULER_HISTORY_SYNC_HORIZON_DAYS.key)
         tz_name = await get_setting_value(session, SETTINGS_REGISTRY.global_.SCHEDULER_TIMEZONE.key)
+        profile_days_csv = await get_setting_value(session, SETTINGS_REGISTRY.global_.SCHEDULER_PROFILE_READ_DAYS.key)
+        profile_times_csv = await get_setting_value(session, SETTINGS_REGISTRY.global_.SCHEDULER_PROFILE_READ_TIMES.key)
 
     scheduler_tz = str(tz_name) if tz_name else "UTC"
 
@@ -89,4 +94,6 @@ async def load_scheduler_settings() -> SchedulerSettings:
         history_sync_days=_parse_days(str(days_csv)) if days_csv else _parse_days("mon,tue,wed,thu,fri,sat"),
         history_sync_horizon_days=int(horizon) if horizon else 14,
         scheduler_timezone=scheduler_tz,
+        profile_read_days=_parse_days(str(profile_days_csv)) if profile_days_csv else ["sat"],
+        profile_read_times=_parse_times(str(profile_times_csv)) if profile_times_csv else [time(3, 0)],
     )
