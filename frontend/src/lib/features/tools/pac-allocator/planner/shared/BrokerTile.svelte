@@ -10,7 +10,7 @@
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
-    import {compareDecimal} from '../decimal';
+    import {compareDecimal} from '$lib/utils/core/exactDecimal';
     import {formatPlannerPercent} from '../format';
     import type {ScopeBroker} from '../scope';
     import {BADGE, HINT} from '../ui';
