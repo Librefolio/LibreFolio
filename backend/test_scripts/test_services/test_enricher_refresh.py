@@ -29,6 +29,14 @@ Under test, as its module docstring and dataclasses state the contract:
    decides the merge); an inactive asset is read too. Rows and state are read back from another session: proof that
    each asset was committed.
 7. **A3 rule (16/11).** A plugin giving one voice in a wrong format: its other voices are written, that one is logged.
+8. **Per-voice dates (correction C1b-1).** ``EnricherReadItem`` gains ``source_dates`` (voice → date, empty by default):
+   the date of a voice that has one of its own; a voice not in it takes the item's ``source_date``. ``ReadOutcome``
+   keeps it (also from the cache); ``merge_voices`` gives each ``MergedVoice`` the date of its own voice from the
+   winning enricher (``source_dates.get(key, source_date)``), so ``ask_profile``'s voices and the rows of
+   ``refresh_assets`` carry it. The store's rule is unchanged: a second read with the same value and only another
+   per-voice date writes no row. Items with ``source_dates`` are built in the test body, never inside a lab's ``read``:
+   before C1b the constructor refuses the field there, with its name, instead of in a worker thread where the core
+   would turn it into ``NO_ANSWER``.
 
 The synthetic enrichers are classes registered on ``EnricherRegistry`` under ``lab_refresh_*`` codes (removed with their
 claims at teardown). The core resolves them by code and builds a new instance each time, so what a lab answers and the
@@ -50,6 +58,9 @@ enricher on a first refresh); whether ``read_at`` equals ``now`` (only that it i
 the cache (the cache is cleared between two refreshes that count calls); the ``state`` of a binding removed in flight;
 whether an asset without bindings answers ``error``; the TTL running out (no clock tests).
 
+Not pinned (C1b-1): ``source_value`` still answering the item-level date (the task does not name it); whether the core
+drops a per-voice date of a voice the catalogue refused or the plugin did not give.
+
 Red until B5a: every function of ``refresh.py`` raises ``NotImplementedError``; each test fails at its first call, never
 at collection. Two guards are green already: ``READ_CACHE_TTL`` and the signature of ``ask_profile`` (no session).
 """
@@ -58,6 +69,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import dataclasses
 import inspect
 import json
 import re
@@ -1003,3 +1015,131 @@ async def test_one_voice_in_a_wrong_format_is_logged_and_the_others_are_written(
     assert _row_summary(await _rows(engine, asset_id)) == {"description": ("kept", a.code, None, LAB_DATE), "distribution_policy": ("accumulating", a.code, None, LAB_DATE)}, "no ter row"
     assert _logged_together(events, "ter", a.code), f"the refused voice is logged with the enricher's code: {events}"
     print_success("wrong voice logged, the others written")
+
+
+# =============================================================================
+# 8. Per-voice dates (correction C1b-1)
+# =============================================================================
+
+#: A voice's own date, and a second one for the same voice on a later read.
+VOICE_DATE = date(2026, 9, 1)
+LATER_VOICE_DATE = date(2026, 10, 15)
+
+
+def _dated_item(values: Mapping[str, Any], *, source_dates: Mapping[str, date], source_date: date | None = None) -> EnricherReadItem:
+    """An ``ok`` item with per-voice dates (its ``index`` is set when yielded). Called in the test body: before C1b
+    ``EnricherReadItem`` has no ``source_dates`` and the test fails here, naming it."""
+    return EnricherReadItem(index=0, status=EnricherReadStatus.OK, values=dict(values), source_date=source_date, source_dates=dict(source_dates))
+
+
+def _items_script(items: Mapping[str, EnricherReadItem]) -> Script:
+    """Answer each binding with the prebuilt item of its identifier, at its index (``items`` is read at call time: a
+    test may swap an item between two reads)."""
+
+    def script(bindings_read: list[EnricherBinding], keys: frozenset[str] | None) -> Iterator[EnricherReadItem]:  # noqa: ARG001 — the script's signature
+        for index, binding in enumerate(bindings_read):
+            yield dataclasses.replace(items[binding.identifier], index=index)
+
+    return script
+
+
+def _dated_outcome(code: str, values: Mapping[str, Any], *, source_dates: Mapping[str, date], source_date: date | None = None) -> ReadOutcome:
+    return ReadOutcome(owner=1, code=code, binding=_binding(f"MERGE{code.upper()}"), status=EnricherReadStatus.OK, values=dict(values), source_date=source_date, source_dates=dict(source_dates))
+
+
+def test_source_dates_is_empty_by_default() -> None:
+    print_section("per-voice dates (C1b-1)")
+    item = EnricherReadItem(index=0, status=EnricherReadStatus.OK)
+    assert dict(getattr(item, "source_dates", {"<no field>": None})) == {}, "EnricherReadItem.source_dates: empty by default"
+    outcome = ReadOutcome(owner=1, code="x", binding=_binding("DEFAULTS"), status=EnricherReadStatus.OK)
+    assert dict(getattr(outcome, "source_dates", {"<no field>": None})) == {}, "ReadOutcome.source_dates: empty by default"
+
+
+@pytest.mark.parametrize("item_date", [None, LAB_DATE], ids=["no-item-date", "item-date"])
+def test_merge_gives_each_voice_its_own_date_else_the_items(item_date) -> None:
+    """``ter`` dated on its own: it carries that date; ``description`` and ``fund_size`` carry the item's date (None or
+    E)."""
+    outcome = _dated_outcome("first", {"ter": "0.0022", "description": "first", "fund_size": FUND_SIZE}, source_dates={"ter": VOICE_DATE}, source_date=item_date)
+
+    merged = merge_voices(["first"], [outcome])
+
+    assert {key: voice.source_date for key, voice in merged.items()} == {"ter": VOICE_DATE, "description": item_date, "fund_size": item_date}, merged
+
+
+def test_merge_takes_the_date_of_the_winning_enrichers_voice() -> None:
+    """``first`` wins ter with no per-voice date (its item date); ``second`` loses ter (its ter date is not used) and
+    wins fund_size with fund_size's own date."""
+    first = _dated_outcome("first", {"ter": "0.0022"}, source_dates={}, source_date=LAB_DATE)
+    second = _dated_outcome("second", {"ter": "0.0031", "fund_size": FUND_SIZE}, source_dates={"ter": VOICE_DATE, "fund_size": LATER_VOICE_DATE}, source_date=OTHER_DATE)
+
+    merged = merge_voices(["first", "second"], [second, first])
+
+    assert (merged["ter"].source, merged["ter"].source_date) == ("first", LAB_DATE), f"the winner's date, never the loser's per-voice one: {merged['ter']}"
+    assert (merged["fund_size"].source, merged["fund_size"].source_date) == ("second", LATER_VOICE_DATE), merged["fund_size"]
+
+
+@pytest.mark.asyncio
+async def test_read_carries_the_per_voice_dates_and_the_cache_keeps_them(lab) -> None:
+    identifier = _ident("PD")
+    item = _dated_item({"ter": "0.0022", "description": "dated"}, source_dates={"ter": VOICE_DATE}, source_date=LAB_DATE)
+    a = lab("per_voice_read", script=_items_script({identifier: item}))
+    request = ReadRequest(owner=1, code=a.code, binding=_binding(identifier))
+
+    first = _one(await _read([request]), a.code, identifier)
+    second = _one(await _read([request]), a.code, identifier)
+
+    assert first.status == EnricherReadStatus.OK and first.from_cache is False, f"barrier: read now, ok: {first}"
+    assert dict(getattr(first, "source_dates", {})) == {"ter": VOICE_DATE} and first.source_date == LAB_DATE, f"the outcome keeps the per-voice dates: {first}"
+    assert second.from_cache is True and len(a.calls) == 1, f"barrier: the second read is the cache's: {second}"
+    assert dict(getattr(second, "source_dates", {})) == {"ter": VOICE_DATE}, f"the cache keeps them: {second}"
+
+
+@pytest.mark.asyncio
+async def test_ask_answers_each_voice_with_its_own_date(lab) -> None:
+    identifier = _ident("PA")
+    item = _dated_item({"ter": "0.0022", "description": "dated"}, source_dates={"ter": VOICE_DATE})
+    a = lab("per_voice_ask", script=_items_script({identifier: item}))
+
+    result = await asyncio.wait_for(ask_profile(AssetType.ETF, {a.code: _config_entry(_binding(identifier))}), DEADLINE)
+
+    assert {key: voice.source_date for key, voice in result.voices.items()} == {"ter": VOICE_DATE, "description": None}, result.voices
+
+
+@pytest.mark.asyncio
+async def test_refresh_writes_each_row_with_its_voices_date(engine: AsyncEngine, lab) -> None:
+    identifier = _ident("PW")
+    item = _dated_item({"ter": "0.0022", "description": "dated"}, source_dates={"ter": VOICE_DATE}, source_date=LAB_DATE)
+    a = lab("per_voice_write", script=_items_script({identifier: item}))
+    asset_id = await _asset(engine, "per voice write")
+    await _bind(engine, asset_id, {a.code: _binding(identifier)})
+
+    result = _result(await _refresh(engine, [asset_id], now=NOW), asset_id)
+
+    assert sorted(result.written) == ["description", "ter"], result
+    assert _row_summary(await _rows(engine, asset_id)) == {"ter": ("0.0022", a.code, None, VOICE_DATE), "description": ("dated", a.code, None, LAB_DATE)}
+
+
+@pytest.mark.asyncio
+async def test_a_new_per_voice_date_alone_writes_no_row(engine: AsyncEngine, lab) -> None:
+    """The store's rule kept: a second refresh with the same values, ``ter`` now dated another day, writes nothing; the
+    row keeps its first date."""
+    identifier = _ident("PS")
+    items = {identifier: _dated_item({"ter": "0.0022", "description": "same"}, source_dates={"ter": VOICE_DATE})}
+    a = lab("per_voice_same", script=_items_script(items))
+    asset_id = await _asset(engine, "per voice same")
+    await _bind(engine, asset_id, {a.code: _binding(identifier)})
+    first = _result(await _refresh(engine, [asset_id], now=NOW), asset_id)
+    assert sorted(first.written) == ["description", "ter"], f"barrier: the first refresh writes: {first}"
+    before = [row.id for row in await _rows(engine, asset_id)]
+    dates = {key: summary[3] for key, summary in _row_summary(await _rows(engine, asset_id)).items()}
+    assert dates == {"ter": VOICE_DATE, "description": None}, f"barrier: ter written with its own date, description with the item's (None): {dates}"
+    items[identifier] = _dated_item({"ter": "0.0022", "description": "same"}, source_dates={"ter": LATER_VOICE_DATE})
+    clear_cache(CACHE_NAME)
+
+    second = _result(await _refresh(engine, [asset_id], now=NOW + timedelta(hours=1)), asset_id)
+
+    assert len(a.calls) == 2, f"barrier: the second refresh read the plugin again: {a.calls}"
+    assert second.written == [], f"only the per-voice date changed: no row: {second}"
+    assert [row.id for row in await _rows(engine, asset_id)] == before, "no new row"
+    assert _row_summary(await _rows(engine, asset_id))["ter"][3] == VOICE_DATE, "the row keeps its first date"
+    print_success("per-voice dates merged, cached, written; no row for a date alone")
