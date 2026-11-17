@@ -30,13 +30,19 @@ import {beforeEach, describe, expect, it, vi} from 'vitest';
 import type {ComponentProps} from 'svelte';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import type {ChainStep, ProviderInfo} from '$lib/utils/currency/currencyGraph';
-import {findConversionPaths, getCachedFxProviders} from '$lib/stores/currencyGraphStore';
+import {findConversionPaths, getCachedFxProviders, refreshFxProviderReadiness} from '$lib/stores/currencyGraphStore';
 import FxProviderSelect from './FxProviderSelect.svelte';
 
-vi.mock('$lib/stores/currencyGraphStore', () => ({
-    findConversionPaths: vi.fn(),
-    getCachedFxProviders: vi.fn(),
-}));
+vi.mock('$lib/stores/currencyGraphStore', async () => {
+    const {writable} = await import('svelte/store');
+    return {
+        findConversionPaths: vi.fn(),
+        getCachedFxProviders: vi.fn(),
+        // N3c: the readiness is read again after a save, and the picker redraws on the version
+        refreshFxProviderReadiness: vi.fn(async () => undefined),
+        fxProvidersVersion: writable(0),
+    };
+});
 
 const ECB: ProviderInfo = {code: 'ECB', name: 'European Central Bank', base_currency: 'EUR', base_currencies: ['EUR'], target_currencies: ['USD', 'GBP']};
 const FED: ProviderInfo = {code: 'FED', name: 'Federal Reserve', base_currency: 'USD', base_currencies: ['USD'], target_currencies: ['GBP']};
@@ -455,5 +461,92 @@ describe('FxProviderSelect', () => {
             expect(chainButtons(picker)).toHaveLength(200);
             expect(within(picker).getByTestId('fx-route-chain-more-2')).toHaveAttribute('data-hidden', '50');
         });
+    });
+});
+
+// =========================================================================
+// Project 76, N3c — a route through a provider that is not configured is switched off (mock section 1.3)
+// =========================================================================
+
+describe('FxProviderSelect — a route through a provider to configure (76 N3c)', () => {
+    /** FED needs a key: the 2-step chain EUR→USD→GBP goes through it; the direct ECB route does not. */
+    const FED_OFF: ProviderInfo = {...FED, configured: false, missing_settings: ['api_key'], missing_reason: 'missing_fields', invalid_variables: []};
+    const chainRow = (picker: HTMLElement) => picker.querySelector<HTMLElement>(`[data-route-key="${CHAIN_KEY}"]`);
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        graphReturns([DIRECT, CHAIN], [ECB, FED_OFF, BOE, MANUAL]);
+    });
+
+    it('N3c-1: the route is switched off in the picker; a touch asks the parent to explain (onneedssetup) and adds nothing', async () => {
+        await setupI18n();
+        const onneedssetup = vi.fn();
+        const {onSelectionChange} = mount({onneedssetup});
+        await settled();
+        const picker = await openPicker();
+        await fireEvent.click(within(picker).getByTestId('fx-route-chain-toggle-2'));
+
+        const chain = await waitFor(() => {
+            const row = chainRow(picker);
+            if (!row) throw new Error('the chain is not drawn yet');
+            return row;
+        });
+        expect(chain).toHaveAttribute('data-needs-setup', 'true');
+        expect(chain).toHaveAttribute('aria-disabled', 'true');
+        expect(chain).not.toBeDisabled();
+        expect(within(picker).getByTestId('fx-route-direct-ECB')).toHaveAttribute('data-needs-setup', 'false');
+
+        await fireEvent.click(chain);
+
+        expect(onneedssetup).toHaveBeenCalledTimes(1);
+        expect(onneedssetup.mock.calls[0][0]).toMatchObject({code: 'FED', configured: false, missing_reason: 'missing_fields'});
+        expect(onSelectionChange).not.toHaveBeenCalled();
+        expect(chainRow(picker), 'still on offer, switched off').toHaveAttribute('data-needs-setup', 'true');
+    });
+
+    it('N3c-2: a provider the pair already uses in a saved route is never switched off: its routes are added as today', async () => {
+        await setupI18n();
+        const onneedssetup = vi.fn();
+        const {onSelectionChange} = mount({savedProviderCodes: ['FED'], onneedssetup});
+        await settled();
+        const picker = await openPicker();
+        await fireEvent.click(within(picker).getByTestId('fx-route-chain-toggle-2'));
+
+        const chain = await waitFor(() => {
+            const row = chainRow(picker);
+            if (!row) throw new Error('the chain is not drawn yet');
+            return row;
+        });
+        expect(chain).toHaveAttribute('data-needs-setup', 'false');
+        await fireEvent.click(chain);
+        expect(onSelectionChange).toHaveBeenCalledWith([CHAIN]);
+        expect(onneedssetup).not.toHaveBeenCalled();
+    });
+
+    it('N3c-3: a saved route through it stays, with the yellow triangle; a touch on it asks the parent to explain', async () => {
+        await setupI18n();
+        const onneedssetup = vi.fn();
+        mount({selectedRoutes: [DIRECT, CHAIN], savedProviderCodes: ['ECB', 'FED'], onneedssetup});
+        await settled();
+
+        const row = await waitFor(() => selectedRow(CHAIN_KEY));
+        const triangle = within(row).getByTestId('fx-route-needs-setup');
+        expect(triangle.getAttribute('title')).toBeTruthy();
+        expect(within(selectedRow(DIRECT_KEY)).queryByTestId('fx-route-needs-setup'), 'a route through configured providers only has none').toBeNull();
+
+        await fireEvent.click(triangle);
+        expect(onneedssetup.mock.calls[0][0]).toMatchObject({code: 'FED'});
+    });
+
+    it('N3c-4: a list without the readiness fields (an older server) switches nothing off', async () => {
+        await setupI18n();
+        graphReturns([DIRECT, CHAIN]);
+        mount();
+        await settled();
+        const picker = await openPicker();
+        await fireEvent.click(within(picker).getByTestId('fx-route-chain-toggle-2'));
+        await waitFor(() => expect(chainRow(picker)).not.toBeNull());
+        expect(chainRow(picker)).toHaveAttribute('data-needs-setup', 'false');
+        expect(refreshFxProviderReadiness, 'the readiness is read again when the picker opens').toHaveBeenCalled();
     });
 });

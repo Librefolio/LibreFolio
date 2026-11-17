@@ -75,6 +75,21 @@
       "usedBy": "Condivise da: {plugins}",
       "inGroup": "Usa anche le impostazioni condivise di {group}",
       "open": "Apri"
+    },
+    "notConfigured": {
+      "tooltip": "{provider} va configurato",
+      "invalidAdmin": "La variabile d'ambiente {variable} ha un valore non valido: va corretta sul server.",
+      "invalidLimitAdmin": "La variabile d'ambiente {variable} ha un valore non valido (serve un intero ≥ 0, o niente): va corretta sul server. Finché non è corretta, {provider} è fermo.",
+      "invalidMember": "{provider} è fermo: una sua impostazione sul server non è valida. Avvisa l'amministratore.",
+      "managed": "{provider} non è disponibile su questa istanza: la sua configurazione è gestita dal fornitore del servizio. Contatta l'assistenza.",
+      "readOnlyIntro": "Le impostazioni, in sola lettura:",
+      "readOnlyLink": "Impostazioni › Plugin",
+      "missingAdmin": "{provider} va configurato: {count, plural, one {manca} other {mancano}}: {fields}.",
+      "missingMember": "{provider} va configurato: chiedi all'amministratore di impostare {count, plural, one {questa impostazione} other {queste impostazioni}}: {fields}.",
+      "missingAdminGeneric": "{provider} va configurato: manca un'impostazione obbligatoria.",
+      "missingMemberGeneric": "{provider} va configurato: chiedi all'amministratore di impostare le sue impostazioni obbligatorie.",
+      "missingAdminPhrase": "{provider} va configurato: {count, plural, one {manca} other {mancano}} {fields}.",
+      "missingMemberPhrase": "{provider} va configurato: chiedi all'amministratore di impostare {fields}."
     }
   }
 }

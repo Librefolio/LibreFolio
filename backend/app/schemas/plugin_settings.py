@@ -103,6 +103,7 @@ class PluginSettingFieldRead(StrictModel):
     description: str
     label_key: str | None = None
     description_key: str | None = None
+    missing_key: str | None = Field(None, description="i18n key of the field named in a sentence, with its article («the API key»): the «to configure» window's text; the label when null (project 76, N3a2)")
     options: list[PluginSettingOptionRead] = Field(default_factory=list)
     min_length: int | None = None
     max_length: int | None = None

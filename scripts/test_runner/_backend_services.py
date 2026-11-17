@@ -549,6 +549,14 @@ def services_enricher_call_limits(verbose: bool = False, test_names: list = None
     return run_command(cmd, "Enricher call limit tests", verbose=verbose)
 
 
+def services_field_missing_phrase(verbose: bool = False, test_names: list = None) -> bool:
+    """Test a settings field's own phrase for the «to configure» window (project 76, N3a2)."""
+    print_section("Services: Field Missing Phrase")
+    print_info("Testing: plugin_settings/fields.py (PluginSettingField.missing_key), service._field_read")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_field_missing_phrase.py", test_names)
+    return run_command(cmd, "Field missing phrase tests", verbose=verbose)
+
+
 def services_call_limit_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test the call limits as core settings of their owner, and their usage in the catalogue (project 76, U4)."""
     print_section("Services: Call Limit Settings")
@@ -3104,6 +3112,15 @@ Note: No backend server required.
         # in their storage with monkeypatch.setitem; u4 groups and claims released at teardown.
         isolation="pure",
     )
+    add_test(
+        cat,
+        "field-missing-phrase",
+        services_field_missing_phrase,
+        name="Field Missing Phrase",
+        desc="N3a2: PluginSettingField.missing_key (the field named in a sentence, with its article, for the «to configure» window): optional, None by default, a declaration with it validates; the catalogue's field read carries it, None when undeclared",
+        # PURE: no database, no server, no network; the declaration and the read model only.
+        isolation="pure",
+    )
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation; the accrual golden: every number of the accrual walk pinned (regen: LIBREFOLIO_TEST_REGEN_SI_ACCRUAL_GOLDEN=1)")
     add_test(cat, "synthetic-yield-integration", services_synthetic_yield_integration, name="Synthetic Yield Integration", desc="E2E scenarios (P2P, bond, mixed)")
     add_test(cat, "scheduled-investment-cost-bounds", services_scheduled_investment_cost_bounds, name="Scheduled Investment Cost Bounds", desc="R13-SEC7-2 (N73): late interest in closed form per date, bounded day counts, cache cap, horizon")
@@ -4520,7 +4537,14 @@ Note: No backend server required.
         desc="POST /assets/provider and POST /fx/providers/routes: a provider newly put to use and not configured refuses the whole request (422 NOT_CONFIGURED, first in request order, nothing written, replace kept), re-save and a provider already on the pair pass, one readiness call per request, managed profile; N2b: 503 when the settings cannot be read, reason and variables in the 422",
         isolation="pure",
     )
-    add_test(cat, "plugin-settings-guards", services_plugin_settings_guards, name="Plugin Settings Guards", desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings", isolation="pure")
+    add_test(
+        cat,
+        "plugin-settings-guards",
+        services_plugin_settings_guards,
+        name="Plugin Settings Guards",
+        desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings; U4c: the «Call limits» block lists exactly the owners of the limits, the five windows and real examples",
+        isolation="pure",
+    )
     add_test(
         cat,
         "platform-readiness",

@@ -94,6 +94,7 @@ export async function getCurrencyGraph(): Promise<CurrencyGraph> {
                 warning_i18n: p.warning_i18n ?? {},
                 warning_level: p.warning_level ?? 'warning',
                 docs_url: p.docs_url ?? null,
+                ...readinessOf(p),
             }));
 
             // Get all currency codes
@@ -114,6 +115,33 @@ export async function getCurrencyGraph(): Promise<CurrencyGraph> {
     })();
 
     return buildPromise;
+}
+
+/** The readiness fields of one provider of the list (plan 76, N1/N2b); a list without them reads as configured. */
+function readinessOf(p: any): Pick<ProviderInfo, 'configured' | 'missing_settings' | 'missing_reason' | 'invalid_variables'> {
+    return {
+        configured: p.configured !== false,
+        missing_settings: Array.isArray(p.missing_settings) ? p.missing_settings.filter((key: unknown) => typeof key === 'string') : [],
+        missing_reason: typeof p.missing_reason === 'string' ? p.missing_reason : null,
+        invalid_variables: Array.isArray(p.invalid_variables) ? p.invalid_variables.filter((name: unknown) => typeof name === 'string') : [],
+    };
+}
+
+/**
+ * Read the provider list again for the readiness only (plan 76, N3c: a save in «Configure» switches a provider on):
+ * the cached providers' `configured` and its companions are updated in place of the old ones, and
+ * `fxProvidersVersion` moves so the pickers redraw. The graph, built from the currencies, is not rebuilt. A failed read
+ * leaves the cache as it was and never throws.
+ */
+export async function refreshFxProviderReadiness(): Promise<void> {
+    try {
+        const response = (await zodiosApi.list_providers_api_v1_fx_providers_get()) as any[];
+        const fresh = new Map((Array.isArray(response) ? response : []).map((p: any) => [p.code, readinessOf(p)]));
+        cachedFxProviders = cachedFxProviders.map((provider) => (fresh.has(provider.code) ? {...provider, ...fresh.get(provider.code)} : provider));
+        fxProvidersVersion.update((v) => v + 1);
+    } catch {
+        // The API client logs the failed read; the pickers keep the state they had.
+    }
 }
 
 /**

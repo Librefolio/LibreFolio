@@ -51,6 +51,14 @@ export interface ProviderInfo {
     warning_level?: 'info' | 'warning';
     /** URL to documentation page for this provider */
     docs_url?: string | null;
+    /** False when a required setting has no value for the caller (plan 76, N1): every call would answer NOT_CONFIGURED. */
+    configured?: boolean;
+    /** The settings to set, `<group>.<field>` for a shared group's (N1). */
+    missing_settings?: string[];
+    /** Why it is not configured (N2b): `missing_fields` or `invalid_locked_setting`; null when configured. */
+    missing_reason?: string | null;
+    /** The environment variables with an invalid value, outside the managed profile (N2b). */
+    invalid_variables?: string[];
 }
 
 /** Edge attributes stored in the graphology graph. */
