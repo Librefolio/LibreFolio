@@ -111,7 +111,14 @@
         "name": "Par nom",
         "type": "Par type",
         "sector": "Par secteur",
-        "region": "Par zone"
+        "region": "Par zone",
+        "unavailable": {
+          "type": "Aucun type connu pour ces actifs.",
+          "sector": "Aucun secteur connu pour ces actifs.",
+          "region": "Aucune zone connue pour ces actifs.",
+          "loading": "Les détails des actifs sont encore en cours de chargement : cet ordre en a besoin.",
+          "failed": "Les détails des actifs n'ont pas pu être chargés : cet ordre en a besoin. Rechargez la page pour réessayer."
+        }
       },
       "pairs": {
         "correlatedTitle": "Les plus semblables",
@@ -212,7 +219,8 @@
       },
       "exposure": {
         "sector": "Secteur",
-        "region": "Zone"
+        "region": "Zone",
+        "type": "Type"
       },
       "syncSelectionHint": "Synchronise les prix des actifs sélectionnés et les taux de change qui les convertissent",
       "reloadHint": "Recharge toutes les analyses de la sélection",

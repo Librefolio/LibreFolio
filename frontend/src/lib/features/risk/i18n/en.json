@@ -111,7 +111,14 @@
         "name": "By name",
         "type": "By type",
         "sector": "By sector",
-        "region": "By region"
+        "region": "By region",
+        "unavailable": {
+          "type": "No type is known for these assets.",
+          "sector": "No sector is known for these assets.",
+          "region": "No region is known for these assets.",
+          "loading": "The assets' details are still loading: this ordering needs them.",
+          "failed": "The assets' details could not be loaded: this ordering needs them. Reload the page to try again."
+        }
       },
       "pairs": {
         "correlatedTitle": "The most alike",
@@ -212,7 +219,8 @@
       },
       "exposure": {
         "sector": "Sector",
-        "region": "Region"
+        "region": "Region",
+        "type": "Type"
       },
       "syncSelectionHint": "Sync the prices of the selected assets and the exchange rates that convert them",
       "reloadHint": "Reload every analysis of the selection",

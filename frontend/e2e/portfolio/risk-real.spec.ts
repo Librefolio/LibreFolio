@@ -573,4 +573,37 @@ test.describe('Risk on real data — the engine’s answer, from the wire to the
 
         await test.step('every risk answer the page received passes the generated Zod schemas', () => expectRiskContract(traffic));
     });
+
+    /**
+     * RN-20 (Q12): the developer saw two orderings on one page and five on another. On the Dashboard the heatmap used to
+     * drop the type, sector and area orderings whenever the read of the assets' details gave empty maps — in flight, or
+     * after a failure. Now the five are always on screen; this test reads what the **real** read does for a real
+     * portfolio: once the page has settled, no ordering is still waiting for the read or reports it failed, and the type
+     * — every seeded stock has one — orders the matrix.
+     */
+    test('R3 — the Dashboard’s matrix shows all five orderings, and the real read of the assets’ details neither fails nor hangs', async ({page, request, owned}) => {
+        test.setTimeout(240_000);
+        const holdings = await test.step('seed: a disposable account holds two seeded stocks bought 200 days ago', () => holdSeededStocks(page, request, owned, 'riskl2'));
+        const {panel} = await test.step('open the Dashboard Risk tab over that period, nothing routed', () => openRiskTab(page, holdings.period));
+
+        const level2 = panel.getByTestId('risk-level-2');
+        await expect(level2).toBeVisible({timeout: FIGURE_TIMEOUT_MS});
+        if ((await level2.getAttribute('data-open')) !== 'true') await panel.getByTestId('risk-level-2-toggle').click();
+        const matrix = level2.getByTestId('risk-l2-correlation');
+        await expect(matrix.getByTestId('risk-correlation-heatmap')).toBeVisible({timeout: FIGURE_TIMEOUT_MS});
+
+        await test.step('five ordering buttons, in one order', async () => {
+            const modes = ['similarity', 'type', 'sector', 'region', 'name'];
+            await expect(matrix.locator('[data-testid^="risk-correlation-ordering-"]')).toHaveCount(modes.length);
+            for (const mode of modes) await expect(matrix.getByTestId(`risk-correlation-ordering-${mode}`)).toBeVisible();
+        });
+
+        await test.step('the real read answered: the type orders the matrix, and nothing waits for the read or reports it failed', async () => {
+            await expect(matrix.getByTestId('risk-correlation-ordering-type'), 'the seeded stocks have a type: the read of their details did not reach the matrix').not.toHaveAttribute('aria-disabled', 'true', {timeout: FIGURE_TIMEOUT_MS});
+            await expect(matrix.locator('[data-disabled-reason="loading"]'), 'an ordering still waits for the read of the assets’ details').toHaveCount(0);
+            await expect(matrix.locator('[data-disabled-reason="failed"]'), 'the read of the assets’ details failed on real data').toHaveCount(0);
+            const reasons = await matrix.locator('[data-testid^="risk-correlation-ordering-"]').evaluateAll((buttons) => buttons.map((button) => `${button.getAttribute('data-testid')?.replace('risk-correlation-ordering-', '')}=${button.getAttribute('data-disabled-reason') ?? 'available'}`));
+            test.info().annotations.push({type: 'orderings', description: reasons.join(', ')});
+        });
+    });
 });

@@ -4470,17 +4470,19 @@ test.describe('Asset Global risk laboratory', () => {
      * The failure is provoked on a *changed* selection, after a read that
      * succeeded, rather than on a fresh page. A fresh page starts with empty maps,
      * so a failed read that forgot to clear them would pass there unseen; here the
-     * sector and area orderings are on screen when the read fails, and they must
-     * go. The type ordering must stay, because its map never came from that read.
+     * sector and area orderings are available when the read fails, and they must
+     * become unavailable — still on screen since RN-20 (every ordering on every
+     * heatmap), saying the read failed. The type ordering stays available, because
+     * its map never came from that read.
      *
-     * And "by sector" is the ordering in use when it goes. An ordering that is no
-     * longer offered cannot stay in charge behind a row of unpressed buttons: the
-     * matrix falls back to its initial ordering — similarity — presses it and draws
-     * it, the very order it drew for the same assets at the start. The fallback
-     * only stands in: the moment "by sector" is offered again, the user's choice
-     * applies again.
+     * And "by sector" is the ordering in use when it becomes unavailable. An
+     * ordering that cannot order cannot stay in charge behind a row of unpressed
+     * buttons: the matrix falls back to its initial ordering — similarity — presses
+     * it and draws it, the very order it drew for the same assets at the start. The
+     * fallback only stands in: the moment "by sector" is available again, the
+     * user's choice applies again.
      */
-    test("the matrix offers type, sector and area orderings from the assets' stored metadata, and loses only those when the metadata read fails", async ({page}) => {
+    test("the matrix orders by type, sector and area from the assets' stored metadata, and keeps sector and area on screen, unavailable and saying the read failed, when the metadata read fails", async ({page}) => {
         // Four selections, each read and drawn, and the "+" once or twice in one
         // page: more than the default budget, no more than the neighbours' 45 s.
         test.setTimeout(45_000);
@@ -4518,13 +4520,15 @@ test.describe('Asset Global risk laboratory', () => {
         expect(answered?.problem ?? null, 'the planted answer must be one the client accepts, or the maps stay empty for a reason this test did not choose').toBeNull();
         expect(scopeKey(answered?.rowIds ?? []), 'every selected asset must come back with its planted classification').toBe(scopeKey(selection));
 
-        // The two orderings the heatmap always has, then the three the inputs open.
+        // All five orderings, always (RN-20); the three the inputs open become available — visibility alone proves
+        // nothing now, the unavailable ones are on screen too.
         await expect(ordering('similarity')).toBeVisible({timeout: 20_000});
         await expect(ordering('similarity')).toHaveAttribute('aria-pressed', 'true');
         await expect(ordering('name')).toBeVisible();
-        await expect(ordering('type')).toBeVisible();
-        await expect(ordering('sector')).toBeVisible({timeout: 10_000});
-        await expect(ordering('region')).toBeVisible();
+        for (const mode of ['type', 'sector', 'region']) {
+            await expect(ordering(mode)).toBeVisible();
+            await expect(ordering(mode), `"${mode}" never became available: the metadata never reached the matrix`).not.toHaveAttribute('aria-disabled', 'true', {timeout: 10_000});
+        }
         // The composition rows read the same two maps, whatever the ordering.
         await expect(panel.getByTestId('risk-correlation-groups-sector')).toBeVisible();
         await expect(panel.getByTestId('risk-correlation-groups-region')).toBeVisible();
@@ -4554,15 +4558,29 @@ test.describe('Asset Global risk laboratory', () => {
         await expect.poll(() => readAfter(beforeFailure, 'failed', remaining) !== undefined, {timeout: 15_000, message: 'a changed selection must be read again'}).toBe(true);
         await expect.poll(async () => scopeKey(await drawnAssetOrder(page)), {timeout: 20_000, message: 'the heatmap must redraw for the smaller selection'}).toBe(scopeKey(remaining.slice(0, MATRIX_LIMIT)));
 
-        // Presence before absence: the orderings the page supplies are on screen, so
-        // the two missing ones are missing from a rendered heatmap, not from one
-        // that has not drawn yet.
+        // The read failed: the five orderings stay (RN-20); sector and area are offered but unavailable, and say the
+        // read failed — not that no sector exists. The type comes from the chips, not from the read, and stays.
         await expect(ordering('similarity')).toBeVisible();
         await expect(ordering('name')).toBeVisible();
-        await expect(ordering('type')).toBeVisible();
-        await expect(ordering('sector')).toHaveCount(0);
-        await expect(ordering('region')).toHaveCount(0);
-        await expect(panel.getByTestId('risk-correlation-groups')).toHaveCount(0);
+        await expect(ordering('type')).not.toHaveAttribute('aria-disabled', 'true');
+        for (const mode of ['sector', 'region']) {
+            await expect(ordering(mode)).toHaveAttribute('aria-disabled', 'true');
+            await expect(ordering(mode)).toHaveAttribute('data-disabled-reason', 'failed');
+        }
+        await expect(panel.getByTestId('risk-correlation-groups-sector')).toHaveCount(0);
+        await expect(panel.getByTestId('risk-correlation-groups-region')).toHaveCount(0);
+        await expect(panel.getByTestId('risk-correlation-groups-type'), 'the type row reads the chips, which the failed read does not touch').toBeVisible();
+
+        // The reason opens in a real browser, from the keyboard: the greyed button keeps the focus (aria-disabled, not
+        // disabled), and Enter on it is the click that opens its Tooltip. Playwright's own click refuses an aria-disabled
+        // element, which a reader's pointer does not.
+        await ordering('sector').focus();
+        await page.keyboard.press('Enter');
+        await expect(page.getByTestId('tooltip-content'), 'the unavailable ordering does not say why').toBeVisible();
+        // The Tooltip takes an outside click only once it says so (the same barrier its component tests wait on).
+        await expect(page.getByTestId('tooltip-content')).toHaveAttribute('data-dismissable', 'true');
+        await page.mouse.click(2, 2);
+        await expect(page.getByTestId('tooltip-content')).toHaveCount(0);
 
         // 🔴 "By sector" was the ordering in use, and it is no longer offered. The
         // matrix must not keep ordering by it behind a row of unpressed buttons.
@@ -4575,7 +4593,7 @@ test.describe('Asset Global risk laboratory', () => {
         await addThroughPicker(page, [removed]);
         await expect.poll(() => readAfter(beforeReAdd, 'failed', selection) !== undefined, {timeout: 15_000, message: 'the restored selection must be read again'}).toBe(true);
         await expect.poll(async () => scopeKey(await drawnAssetOrder(page)), {timeout: 20_000, message: 'the heatmap must redraw for the restored selection'}).toBe(scopeKey(matrix));
-        await expect(ordering('sector')).toHaveCount(0);
+        await expect(ordering('sector')).toHaveAttribute('aria-disabled', 'true');
         await expectOnlyPressed('similarity', 'the fallback holds while "by sector" stays unavailable');
         await expect.poll(() => drawnAssetOrder(page), {message: 'the fallback must draw the similarity order phase 1 drew for these very assets'}).toEqual(clustered);
 
@@ -4586,8 +4604,8 @@ test.describe('Asset Global risk laboratory', () => {
         await page.getByTestId(`risk-remove-asset-${removed}`).click();
         await expect(page.getByTestId(`risk-selected-asset-${removed}`)).toHaveCount(0);
         await expect.poll(() => readAfter(beforeRecovery, 'planted', remaining) !== undefined, {timeout: 15_000, message: 'a changed selection must be read again'}).toBe(true);
-        await expect(ordering('sector')).toBeVisible({timeout: 10_000});
-        await expectOnlyPressed('sector', 'once "by sector" is offered again, the choice the user made applies again');
+        await expect(ordering('sector')).not.toHaveAttribute('aria-disabled', 'true', {timeout: 10_000});
+        await expectOnlyPressed('sector', 'once "by sector" is available again, the choice the user made applies again');
     });
 
     /**

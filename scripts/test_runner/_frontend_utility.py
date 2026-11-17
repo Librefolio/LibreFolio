@@ -513,6 +513,8 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/risk/AssetSetComparisonLevels.test.ts",
             "src/lib/features/risk/AssetSetCorrelationSection.test.ts",
             "src/lib/features/risk/CorrelationHeatmap.test.ts",
+            "src/lib/features/risk/CorrelationHeatmap.orderings.test.ts",
+            "src/lib/features/risk/matrixMetadata.status.svelte.test.ts",
             "src/lib/features/risk/AssetChip.test.ts",
             "src/lib/features/auth/RegisterCard.test.ts",
             "src/lib/features/auth/RegisterCard.language.test.ts",

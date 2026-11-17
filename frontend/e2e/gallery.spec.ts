@@ -6765,8 +6765,9 @@ test.describe('Gallery Screenshots', () => {
                 await waitForChart(heatmap, 30_000);
                 await expect.poll(async () => idSet(await heatmap.getAttribute('data-asset-order')), {message: 'the matrix does not draw the seeded selection'}).toEqual(selection);
                 await expect(correlation.getByTestId('risk-correlation-ordering-similarity')).toHaveAttribute('aria-pressed', 'true');
-                await expect(correlation.getByTestId('risk-correlation-ordering-sector'), 'the assets metadata never reached the matrix').toBeVisible({timeout: 15_000});
-                await expect(correlation.getByTestId('risk-correlation-ordering-region')).toBeVisible();
+                // RN-20: every ordering is on screen from the start; available is what says the metadata arrived.
+                await expect(correlation.getByTestId('risk-correlation-ordering-sector'), 'the assets metadata never reached the matrix').not.toHaveAttribute('aria-disabled', 'true', {timeout: 15_000});
+                await expect(correlation.getByTestId('risk-correlation-ordering-region')).not.toHaveAttribute('aria-disabled', 'true');
                 await expect(correlation.getByTestId('risk-correlation-groups')).toBeVisible();
                 await expect(correlation.getByTestId('risk-correlation-pairs-correlated').getByTestId(pairTestId(ids.milano, ids.roma)), 'the two loans are not ranked among the most alike').toBeVisible();
                 await expect(correlation.getByTestId('risk-correlation-pairs-offsetting')).toBeVisible();

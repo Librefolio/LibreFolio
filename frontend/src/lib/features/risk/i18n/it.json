@@ -111,7 +111,14 @@
         "name": "Per nome",
         "type": "Per tipo",
         "sector": "Per settore",
-        "region": "Per area"
+        "region": "Per area",
+        "unavailable": {
+          "type": "Nessun tipo noto per questi asset.",
+          "sector": "Nessun settore noto per questi asset.",
+          "region": "Nessuna area nota per questi asset.",
+          "loading": "I dettagli degli asset si stanno ancora caricando: questo ordinamento ne ha bisogno.",
+          "failed": "Non è stato possibile caricare i dettagli degli asset: questo ordinamento ne ha bisogno. Ricarica la pagina per riprovare."
+        }
       },
       "pairs": {
         "correlatedTitle": "I più simili",
@@ -212,7 +219,8 @@
       },
       "exposure": {
         "sector": "Settore",
-        "region": "Area"
+        "region": "Area",
+        "type": "Tipo"
       },
       "syncSelectionHint": "Sincronizza i prezzi degli asset selezionati e i cambi che li convertono",
       "reloadHint": "Ricarica tutte le analisi della selezione",
