@@ -6,7 +6,8 @@ What it promises, pinned here with no network:
 
 1. **Declarations**: ``code`` ``borsa_italiana``, ``name`` ``Borsa Italiana``, ``terms`` ``PRICE_SOURCE``, ISIN only, not
    test-only. ``BOND`` at degree 10, ``STOCK`` at degree 20 (Yahoo, a later lot, leads stocks), every other type ``None``
-   (``CRYPTO`` among them: the recognize API test without ``codes`` relies on it). Twenty-one bond voices; ``sector`` and
+   (``CRYPTO`` among them: the recognize API test without ``codes`` relies on it). Twenty bond voices, never
+   ``inception_date`` (correction C2-fix-1); ``sector`` and
    ``legal_form`` for a stock. Binding params ``language`` (select ``en``/``it``, default ``en``, not required), ``mic``
    and ``platform`` (strings, not required), each with an ``x-i18n-key`` under ``enrichers.borsa_italiana.`` (the texts are
    the implementer's: only keys and defaults are pinned). ``test_cases`` for the external suite. No import from the price
@@ -24,7 +25,12 @@ What it promises, pinned here with no network:
      no special structure: absent, with no log line), day count, issuer type; an unknown text leaves its voice out with
      one log line. A sovereign issuer gives its country and a geography of one country at 100 %, through the plugin's
      own table of issuers; any other issuer gives neither. The sector is «Government Bonds» for a sovereign issuer,
-     «Corporate Bonds» for a corporate one. ``legal_form`` ``bond``. Never the page's advertising ``descrizione``;
+     «Corporate Bonds» for a corporate one. ``legal_form`` ``bond``. Never the page's advertising ``descrizione``.
+     Never ``inception_date`` (correction C2-fix-1): the page's ``data_primo_giorno`` is a venue's first day of
+     trading, not a launch date (BTP 6 % 2031 shows 2008-11-03 on an ISIN of the late-90s series). The outstanding
+     amount is in ``valuta_denominazione`` when the page gives it, else in ``valuta`` (correction C2-fix-2); both given
+     and different: no outstanding amount, one log line naming both currencies. No bond recording gives
+     ``valuta_denominazione`` (only the ETF ``swda`` does), so their stored forms are unchanged by it;
    - a stock (``tipo == "azione"``): ``sector`` (one sector at 100 %) when the sheet gives one the generic helper
      (``utils/asset/sector.py``) knows, passed on as it is; a name it does not know leaves ``sector`` out with one log
      line, never «Other» at 100 % (correction C2b-2); ``legal_form`` ``share``, nothing else;
@@ -133,7 +139,6 @@ BOND_VOICES = frozenset(
         "outstanding_amount",
         "reference_price_date",
         "payout_description",
-        "inception_date",
         "geography",
         "sector",
         "legal_form",
@@ -184,7 +189,6 @@ EXPECTED_BONDS_EN: dict[str, dict[str, Any]] = {
         modified_duration="1.78",
         accrued_interest="0.3913",
         outstanding_amount={"amount": "17190004000", "currency": "EUR"},
-        inception_date="2023-10-10",
     ),
     # an ordinary BTP: no annual coupon on the page, 3.00 semiannual → 6 %; «Plain Vanilla» → no coupon type
     "btp_ord": _italian_bond(
@@ -197,7 +201,6 @@ EXPECTED_BONDS_EN: dict[str, dict[str, Any]] = {
         modified_duration="3.87",
         accrued_interest="0.16575",
         outstanding_amount={"amount": "30762750000", "currency": "EUR"},
-        inception_date="2008-11-03",
     ),
     "btp_italia": _italian_bond(
         maturity_date="2032-06-04",
@@ -210,7 +213,6 @@ EXPECTED_BONDS_EN: dict[str, dict[str, Any]] = {
         modified_duration="3.35",
         accrued_interest="0.80874",
         outstanding_amount={"amount": "2257423000", "currency": "EUR"},
-        inception_date="2025-06-04",
     ),
     # no annual coupon on the page: 1.075 semiannual → 2.15 %, the rate of its name «Btp Tf 2,15% Mz72»
     "btp_2072": _italian_bond(
@@ -223,7 +225,6 @@ EXPECTED_BONDS_EN: dict[str, dict[str, Any]] = {
         modified_duration="21.94",
         accrued_interest="0.42169",
         outstanding_amount={"amount": "6900000000", "currency": "EUR"},
-        inception_date="2021-04-12",
     ),
     "austria_2117": {
         "issuer_name": "REPUBLIC OF AUSTRIA",
@@ -241,11 +242,10 @@ EXPECTED_BONDS_EN: dict[str, dict[str, Any]] = {
             modified_duration="27.9",
             accrued_interest="0.29918",
             outstanding_amount={"amount": "3500000000", "currency": "EUR"},
-            inception_date="2017-09-26",
         ),
     },
     # EuroTLX, English page: «12 Months» (annual), no period coupon, no structure, no day count, no tipologia (so no
-    # issuer type and no sector), a company issuer (no country), no outstanding amount, no first day of trading
+    # issuer type and no sector), a company issuer (no country), no outstanding amount
     "bond_corp": {
         "maturity_date": "2028-04-22",
         "coupon_rate": "0.015",
@@ -556,9 +556,10 @@ def test_coverage_and_voices(bi):
         assert cls.default_priority[asset_type] == expected, f"{asset_type.value}: degree {cls.default_priority[asset_type]!r}, expected {expected!r}"
     assert cls.default_priority[AssetType.CRYPTO] is None, "CRYPTO stays uncovered (the recognize API test without codes relies on it)"
     assert set(cls.voices) == set(COVERED), f"voices for BOND and STOCK only: {sorted(t.value for t in cls.voices)}"
+    assert "inception_date" not in cls.voices[AssetType.BOND], "correction C2-fix-1: the first day of trading is no launch date"
     assert cls.voices[AssetType.BOND] == BOND_VOICES, f"bond voices: {sorted(cls.voices[AssetType.BOND] ^ BOND_VOICES)}"
     assert cls.voices[AssetType.STOCK] == STOCK_VOICES
-    assert BOND_VOICES <= set(CATALOGUE) and len(BOND_VOICES) == 21, "barrier: 21 catalogue voices"
+    assert BOND_VOICES <= set(CATALOGUE) and len(BOND_VOICES) == 20, "barrier: 20 catalogue voices"
     assert "description" not in cls.voices[AssetType.BOND], "no description in this lot"
 
 
@@ -872,6 +873,76 @@ def test_duration_and_accrued_interest_are_not_percents(plugin, library):
 def test_outstanding_amount_in_the_sheet_currency(plugin, library):
     stored = _read_synthetic(plugin, library, "XS00TESTOA001", outstanding=Decimal("500000000"), valuta="USD")
     assert stored["outstanding_amount"] == {"amount": "500000000", "currency": "USD"}
+
+
+# Correction C2-fix-2: the outstanding amount is in the denomination currency (``valuta_denominazione``) when the page
+# gives it, else in the trading currency (``valuta``). Assumed: «denomination only» covers both absent forms of
+# ``valuta``, the empty text (the library types it ``str``) and None.
+
+
+@pytest.mark.parametrize("trading", ["", None], ids=["empty-valuta", "none-valuta"])
+def test_outstanding_amount_in_the_denomination_currency_alone(plugin, library, trading):
+    binding = _synthetic(library, "XS00TESTOA002", outstanding=Decimal("500000000"), valuta=trading, valuta_denominazione="GBP")
+    with capture_logs() as events:
+        item = _read_one(plugin, binding)
+    assert item.status == EnricherReadStatus.OK, f"a sheet with no trading currency is still read: {item}"
+    stored = _stored(item.values)
+    assert stored.get("outstanding_amount") == {"amount": "500000000", "currency": "GBP"}, f"the denomination currency when the trading one is absent: {stored.get('outstanding_amount')!r}"
+    assert _log_lines_naming(events, "GBP") == [], f"nothing to log: {events}"
+
+
+def test_outstanding_amount_both_currencies_equal(plugin, library):
+    """Green today, a guard: both given and equal, the amount in that currency, no log line."""
+    binding = _synthetic(library, "XS00TESTOA003", outstanding=Decimal("500000000"), valuta="GBP", valuta_denominazione="GBP")
+    with capture_logs() as events:
+        item = _read_one(plugin, binding)
+    assert item.status == EnricherReadStatus.OK, item
+    assert _stored(item.values).get("outstanding_amount") == {"amount": "500000000", "currency": "GBP"}
+    assert _log_lines_naming(events, "GBP") == [], f"nothing to log: {events}"
+
+
+def test_outstanding_amount_currencies_differ_is_absent_and_logged_once(plugin, library):
+    """Both given and different: which one the amount is in is unknown, so no outstanding amount, with exactly one log
+    line naming both currencies; the rest of the sheet is still read."""
+    binding = _synthetic(library, "XS00TESTOA004", outstanding=Decimal("500000000"), valuta="CHF", valuta_denominazione="GBP")
+    with capture_logs() as events:
+        item = _read_one(plugin, binding)
+    assert item.status == EnricherReadStatus.OK, item
+    assert "outstanding_amount" not in item.values, f"no outstanding amount when the currencies differ: {item.values.get('outstanding_amount')!r}"
+    naming_either = [event for event in events if "CHF" in repr(event) or "GBP" in repr(event)]
+    assert len(naming_either) == 1, f"exactly one log line about the currencies: {events}"
+    assert "CHF" in repr(naming_either[0]) and "GBP" in repr(naming_either[0]), f"the line names both currencies: {naming_either[0]}"
+    assert _stored(item.values)["maturity_date"] == "2028-10-10", "the other voices stay"
+
+
+@pytest.mark.parametrize(("trading", "denomination"), [("CHF", "GBP"), (None, "GBP"), ("CHF", None)], ids=["differ", "denomination-only", "valuta-only"])
+def test_no_outstanding_amount_is_absent_and_silent(plugin, library, trading, denomination):
+    """Green today, a guard: without an amount there is no voice and nothing to log, also when the currencies differ
+    (an implementation that compares the currencies before looking at the amount would log here)."""
+    binding = _synthetic(library, "XS00TESTOA005", outstanding=None, valuta=trading, valuta_denominazione=denomination)
+    with capture_logs() as events:
+        item = _read_one(plugin, binding)
+    assert item.status == EnricherReadStatus.OK, item
+    assert "outstanding_amount" not in item.values
+    assert [event for event in events if "CHF" in repr(event) or "GBP" in repr(event)] == [], f"nothing to log: {events}"
+
+
+# Correction C2-fix-1: a bond writes no ``inception_date``.
+
+
+@pytest.mark.parametrize("name", BONDS)
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_no_bond_recording_writes_an_inception_date(plugin, library, name, language):
+    item = _read_recording(plugin, library, name, language)
+    assert item.status == EnricherReadStatus.OK, item
+    assert "inception_date" not in item.values, f"{name} {language}: the first day of trading is not a launch date: {item.values.get('inception_date')!r}"
+
+
+@pytest.mark.parametrize("base", ["btp_ord", "bond_corp"])
+def test_a_first_day_of_trading_writes_no_inception_date(plugin, library, base):
+    """Synthetic: whatever ``data_primo_giorno`` says (``bond_corp`` has none recorded), no ``inception_date``."""
+    stored = _read_synthetic(plugin, library, "IT00TESTIN001", base=base, data_primo_giorno=date(2008, 11, 3))
+    assert "inception_date" not in stored, f"{base}: {stored.get('inception_date')!r}"
 
 
 def test_the_given_annual_coupon_wins(plugin, library):
