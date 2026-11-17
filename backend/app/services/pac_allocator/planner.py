@@ -67,7 +67,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
 from fractions import Fraction
+from typing import Literal
 
+from backend.app.config import planner as planner_config
+from backend.app.logging_config import get_logger
 from backend.app.schemas.pac_allocator.evidence import InfeasibilityProvenProof, NotProvenProof, OptimalProvenProof, RebalancerOptimalProvenProof, SolverStatusWitness
 from backend.app.schemas.pac_allocator.issues import PlannerIssue
 from backend.app.schemas.pac_allocator.request import PacPlannerRequest, RebalancerPlannerRequest
@@ -97,6 +100,7 @@ from backend.app.services.pac_allocator.compiler import CompiledProgram, compile
 from backend.app.services.pac_allocator.evaluation.errors import ExactEvaluatorError, ExactReplayRejectedError
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, cash_limit_overshoots, evaluate_do_nothing, evaluate_exact_candidate, rounding_top_ups
 from backend.app.services.pac_allocator.evaluation.limits import LimitEntry, limited_entries
+from backend.app.services.pac_allocator.evaluation.solver_view import solver_view_objectives
 from backend.app.services.pac_allocator.issues import bounds_unsatisfiable_issue, cash_limit_exceeded_by_rounding_issue, solver_numerical_error_issue
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
@@ -112,16 +116,22 @@ from backend.app.services.pac_allocator.normalize import normalize_pac_plan, nor
 from backend.app.services.pac_allocator.numeric import ExactRatio
 from backend.app.services.pac_allocator.progress import ProgressReporter, report_phase
 from backend.app.services.pac_allocator.proof import (
+    PROOF_NOT_CONFIRMED_REASON,
     InfeasibilityProvenConclusion,
     OptimalProvenConclusion,
     PlanConclusion,
+    SeededRunVote,
     SolverStatusWitnessFacts,
     UnprovenConclusion,
     conclude_with_solver,
+    merge_seeded_runs,
 )
+from backend.app.services.pac_allocator.seed_runs import fresh_seeds, run_seeds
 from backend.app.services.pac_allocator.solver import DEFAULT_SOLVER_TIME_BUDGET_SECONDS, SolverRunResult, solve_policy_program
 
 __all__ = ["plan_pac_allocation", "plan_rebalancing"]
+
+logger = get_logger(__name__)
 
 _PRIMARY_SOLUTION_ID = "solution:primary"
 
@@ -219,18 +229,20 @@ def plan_rebalancing(
     checkpoint: Checkpoint | None = None,
     solver_time_budget_seconds: float | None = None,
     progress: ProgressReporter | None = None,
+    seeds: tuple[int, ...] | None = None,
 ) -> RebalancerPlannerResult:
     """Plan a rebalancing and return a wire result: ``plan_pac_allocation``'s body, with the Rebalancer's product.
 
     The same promises: a planning outcome is a result, never an exception; the same two defects of the search propagate;
     ``solver_time_budget_seconds`` is the caller's engine window. The basis publishes the request's fidelity as the request
-    wrote it (a level, a custom ``λ``, «Target first»), which the exact scenario keeps only as ``λ``.
+    wrote it (a level, a custom ``λ``, «Target first»), which the exact scenario keeps only as ``λ``. ``seeds`` fixes the
+    three runs' seeds (lot SEEDS, ``plan_exact_scenario``); None draws them.
     """
     product = _rebalancer_product(request.target_fidelity)
-    return _plan(request, normalize_rebalancer_plan, product, checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds, progress=progress)
+    return _plan(request, normalize_rebalancer_plan, product, checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds, progress=progress, seeds=seeds)
 
 
-def _plan(request, normalize, product: _Product, *, checkpoint: Checkpoint | None, solver_time_budget_seconds: float | None, progress: ProgressReporter | None = None):
+def _plan(request, normalize, product: _Product, *, checkpoint: Checkpoint | None, solver_time_budget_seconds: float | None, progress: ProgressReporter | None = None, seeds: tuple[int, ...] | None = None):
     """The one body of both service functions: normalize, then a failure result or the plan. ``progress`` hears the phases
     (V2, ``progress.py``); a failure stops at ``validate``, the phase it is born in."""
     check_budget(checkpoint)
@@ -242,7 +254,7 @@ def _plan(request, normalize, product: _Product, *, checkpoint: Checkpoint | Non
     if not normalized.ready or normalized.normalized is None:
         return _failure_result(normalized.availability, snapshot, list(normalized.issues), product)
 
-    return plan_exact_scenario(normalized.normalized, issues=tuple(normalized.issues), checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds, product=product, progress=progress).result
+    return plan_exact_scenario(normalized.normalized, issues=tuple(normalized.issues), checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds, product=product, progress=progress, seeds=seeds).result
 
 
 def plan_exact_scenario(
@@ -253,12 +265,13 @@ def plan_exact_scenario(
     solver_time_budget_seconds: float | None = None,
     product: _Product | None = None,
     progress: ProgressReporter | None = None,
+    seeds: tuple[int, ...] | None = None,
 ) -> PlanReport:
-    """Plan an already normalized scenario: search once, replay, publish, and say which limits a «no solution» concerns.
+    """Plan an already normalized scenario: search, replay, publish, and say which limits a «no solution» concerns.
 
     ``plan_pac_allocation`` is this after normalization. It is also the way in for a scenario the request cannot yet build
-    (entry limits, until contract 2.0.0). The solver runs once: whether the limits are the cause of an infeasible model is
-    known without searching again, because without limits doing nothing is always a valid plan (M20), and the
+    (entry limits, until contract 2.0.0). Whether the limits are the cause of an infeasible model is known without searching
+    again, because without limits doing nothing is always a valid plan (M20), and the
     ``SolverInfeasibilityContradictedError`` guard keeps that honest.
 
     Lot ZB of project 67 (specification §16.16): the model is prudent (row 6's reserves, the margins of the limit rows), so
@@ -266,21 +279,110 @@ def plan_exact_scenario(
     accept. Its «infeasible» is published as proven. Its plan is published, not proven, even when the rounding ends a cash
     cell beyond its limit by at most one minor unit per rounded posting, with a note on that cell
     (``allocation.cash_limit_exceeded_by_rounding``); the limit is read once the rounding top-ups are added (lot ZB-c), so
-    a cell the top-up brings back inside its band carries the top-up alone. A plan the replay refuses beyond that is «no plan found», not proven.
+    a cell the top-up brings back inside its band carries the top-up alone. A plan the replay refuses beyond that is «no
+    plan found», not proven.
+
+    Lot SEEDS of project 67 (specification §16.11, §16.16): the Rebalancer plans three times, each run the whole path
+    above with its own seed, in parallel (``seed_runs``), and publishes the run ``proof.merge_seeded_runs`` chooses: the
+    lowest plan, «proven» only when two runs closed on it. ``seeds`` fixes them; None takes the test configuration's or
+    three fresh random ones. One seed, or none (the PAC, which keeps SCIP's own), is one run, as before.
     """
     product = product or (_rebalancer_product(None) if scenario.product == "rebalancer" else _PAC)
     report_phase(progress, "model")
     view = build_exact_policy_view(scenario, purpose="primary")
     check_budget(checkpoint)
+    run_seeds_of = _seeds_for(scenario, seeds)
+    if len(run_seeds_of) < 2:
+        return _single_run(scenario, view, issues, checkpoint, solver_time_budget_seconds, product, progress, seed=run_seeds_of[0] if run_seeds_of else None).report
+    budget = DEFAULT_SOLVER_TIME_BUDGET_SECONDS if solver_time_budget_seconds is None else solver_time_budget_seconds
 
+    def one_run(seed: int, forward: ProgressReporter | None) -> _RunOutcome:
+        return _single_run(scenario, view, issues, None, budget, product, forward, seed=seed)
+
+    runs = run_seeds(one_run, seeds=run_seeds_of, time_budget_seconds=budget, checkpoint=checkpoint, progress=progress)
+    report_phase(progress, "verify")
+    check_budget(checkpoint)
+    published = _merged_report(runs)
+    report_phase(progress, "report")
+    return published
+
+
+@dataclass(frozen=True, slots=True)
+class _RunOutcome:
+    """One run of ``plan_exact_scenario``'s path, and what the merge of the seeded runs reads of it (lot SEEDS)."""
+
+    report: PlanReport
+    origin: Literal["prudent", "wide", "none"] = "none"
+    closed: bool = False
+    value: Fraction | None = None
+    band: Fraction = Fraction(0)
+
+
+class SeededRunsFailedError(RuntimeError):
+    """Lot SEEDS: no run of the Rebalancer's three could be published (all failed, or a single «impossible» stood alone).
+    The Tool reports it as ``execution_failed``; the message names no amounts."""
+
+
+def _seeds_for(scenario: ExactPlannerScenario, seeds: tuple[int, ...] | None) -> tuple[int, ...]:
+    """The runs' seeds: none for the PAC (one run, SCIP's own seed); the caller's, the test configuration's, or three fresh
+    random ones for the Rebalancer."""
+    if scenario.product != "rebalancer":
+        return ()
+    if seeds is not None:
+        return seeds
+    fixed = planner_config.planner_fixed_seeds()
+    return fresh_seeds() if fixed is None else fixed
+
+
+def _merged_report(runs) -> PlanReport:
+    """Publish the run ``proof.merge_seeded_runs`` chooses, its own «proven» downgraded when no second run confirms it."""
+    votes = []
+    for run in runs:
+        outcome = run.result
+        if run.failure is not None or outcome is None:
+            votes.append(SeededRunVote(seed=run.seed, failed=True))
+            continue
+        infeasible = outcome.report.result.result_state == "ready_infeasible"
+        votes.append(SeededRunVote(seed=run.seed, origin=outcome.origin, closed=outcome.closed, infeasible=infeasible, value=outcome.value, band=outcome.band))
+    verdict = merge_seeded_runs(votes)
+    logger.info(
+        "Rebalancer seeded runs",
+        runs=[{"seed": vote.seed, "origin": vote.origin, "closed": vote.closed, "infeasible": vote.infeasible, "value": None if vote.value is None else float(vote.value), "seconds": run.seconds, "failure": run.failure} for vote, run in zip(votes, runs, strict=True)],
+        state=verdict.state,
+        chosen=None if verdict.index is None else votes[verdict.index].seed,
+        downgrade=verdict.downgrade,
+    )
+    if verdict.index is None:
+        raise SeededRunsFailedError(f"no run of the Rebalancer could be published ({verdict.state})")
+    chosen = runs[verdict.index].result.report
+    if not verdict.downgrade:
+        return chosen
+    result = chosen.result
+    proof = NotProvenProof(kind="not_proven", reason_code=PROOF_NOT_CONFIRMED_REASON)
+    return PlanReport(result=type(result).model_validate(result.model_dump() | {"proof": proof.model_dump()}), limited_entries=chosen.limited_entries)
+
+
+def _single_run(
+    scenario: ExactPlannerScenario,
+    view: ExactPolicyView,
+    issues: tuple[PlannerIssue, ...],
+    checkpoint: Checkpoint | None,
+    solver_time_budget_seconds: float | None,
+    product: _Product,
+    progress: ProgressReporter | None,
+    *,
+    seed: int | None = None,
+) -> _RunOutcome:
+    """One run of the path ``plan_exact_scenario`` describes: the prudent model, the wide one if needed, the replay, the
+    result; with ``seed`` set on SCIP and published, or SCIP's own."""
     started = time.monotonic()
-    search = _search(scenario, view, checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds, progress=progress)
+    search = _search(scenario, view, checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds, progress=progress, seed=seed)
     issue_list = list(issues)
     if search.candidate is None and search.solver.outcome == "reported_infeasible":
         # Lot ZB (specification §16.16): the model is prudent, so its «infeasible» says nothing about the request; the wide
         # model's does.
         budget = DEFAULT_SOLVER_TIME_BUDGET_SECONDS if solver_time_budget_seconds is None else solver_time_budget_seconds
-        outer = _search(scenario, view, checkpoint=checkpoint, solver_time_budget_seconds=max(budget - (time.monotonic() - started), budget / 10), progress=progress, outer=True)
+        outer = _search(scenario, view, checkpoint=checkpoint, solver_time_budget_seconds=max(budget - (time.monotonic() - started), budget / 10), progress=progress, outer=True, seed=seed)
         if outer.candidate is not None:
             evaluation = evaluate_exact_candidate(scenario, view, outer.candidate, checkpoint=checkpoint)
             try:
@@ -299,7 +401,8 @@ def plan_exact_scenario(
                 conclusion = _conclude(view, outer, published=outer.candidate)
                 check_budget(checkpoint)
                 report_phase(progress, "report")
-                return PlanReport(result=_ready_result(scenario, view, outer, evaluation, conclusion, issue_list, top_ups, product))
+                published = PlanReport(result=_ready_result(scenario, view, outer, evaluation, conclusion, issue_list, top_ups, product))
+                return _RunOutcome(report=published, origin="wide", value=_first_stage_value(scenario, view, evaluation))
         search = outer
     _note_solver_error(search, issue_list)
 
@@ -307,7 +410,7 @@ def plan_exact_scenario(
         report_phase(progress, "verify")
         result = _no_incumbent_result(scenario, view, search, issue_list, product, progress)
         # Only a proven «no solution» names the limits; a search that ran out of time says nothing about them.
-        return PlanReport(result=result, limited_entries=limited_entries(scenario) if isinstance(result, product.infeasible) else ())
+        return _RunOutcome(report=PlanReport(result=result, limited_entries=limited_entries(scenario) if isinstance(result, product.infeasible) else ()))
 
     # The single non-negotiable hop: nothing is published that exact
     # arithmetic has not re-derived from the candidate itself. Its verdict is
@@ -320,7 +423,25 @@ def plan_exact_scenario(
     conclusion = _conclude(view, search, published=search.candidate)
     check_budget(checkpoint)
     report_phase(progress, "report")
-    return PlanReport(result=_ready_result(scenario, view, search, evaluation, conclusion, issue_list, top_ups, product))
+    published = PlanReport(result=_ready_result(scenario, view, search, evaluation, conclusion, issue_list, top_ups, product))
+    return _RunOutcome(report=published, origin="prudent", closed=isinstance(conclusion, OptimalProvenConclusion), value=_first_stage_value(scenario, view, evaluation), band=_first_stage_band(search))
+
+
+def _first_stage_value(scenario: ExactPlannerScenario, view: ExactPolicyView, evaluation: ExactEvaluation) -> Fraction:
+    """The published plan's first objective, valued exactly as the solver sees it (``evaluation.solver_view``): the number
+    the seeded runs compare (the consultant's definition of 17/11)."""
+    code = _objective_codes(view)[0]
+    value = solver_view_objectives(scenario, view, evaluation)[code]
+    return Fraction(value.numerator, value.denominator)
+
+
+def _first_stage_band(search: _Search) -> Fraction:
+    """How far below the truth SCIP's first-stage value may sit (its quadratic rows), in the unit of
+    ``_first_stage_value``: SCIP minimizes ``scale ×`` the exact value, so its band is divided by the scale."""
+    if search.program is None or not search.program.objective_stages:
+        return Fraction(0)
+    stage = search.program.objective_stages[0]
+    return Fraction(stage.band) / stage.scale
 
 
 def _note_solver_error(search: _Search, issues: list[PlannerIssue]) -> None:
@@ -342,6 +463,7 @@ def _search(
     solver_time_budget_seconds: float | None = None,
     progress: ProgressReporter | None = None,
     outer: bool = False,
+    seed: int | None = None,
 ) -> _Search:
     """Compile the view and run SCIP, the only production search engine (D-X1).
 
@@ -358,6 +480,7 @@ def _search(
         program,
         checkpoint=checkpoint,
         progress=progress,
+        seed=seed,
         **({} if solver_time_budget_seconds is None else {"time_budget_seconds": solver_time_budget_seconds}),
     )
     return _Search(candidate=solver.candidate, solver=solver, program=program)

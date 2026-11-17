@@ -36,6 +36,11 @@ import uvicorn
 from backend.app.config import PROJECT_ROOT, TEST_LANE_HEADER, Settings
 from scripts.cli_base import ensure_test_lane_id
 
+#: The Rebalancer's three run seeds on the test server (lot SEEDS of project 67): ``scripts/cli_base.py`` sets them for the
+#: lane (``LIBREFOLIO_PLANNER_SEEDS``, 11,22,33). An API test that compares the server with the planner in process passes
+#: them to the planner, which in a pytest process otherwise runs once (``conftest.single_planner_run``).
+TEST_SERVER_PLANNER_SEEDS = (11, 22, 33)
+
 # Get settings
 _settings = Settings()
 

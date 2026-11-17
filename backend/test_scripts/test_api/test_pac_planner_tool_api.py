@@ -47,7 +47,7 @@ from backend.app.services.pac_allocator.planner import plan_pac_allocation, plan
 from backend.app.services.pac_allocator.preview import preview_pac_allocation, preview_rebalancing
 from backend.app.services.tool_plugins.pac_allocator.plugin import _log_engine_failure
 from backend.test_scripts.test_db_config import verify_test_database
-from backend.test_scripts.test_server_helper import _TestingServerManager
+from backend.test_scripts.test_server_helper import TEST_SERVER_PLANNER_SEEDS, _TestingServerManager
 from backend.test_scripts.test_services import _reb_small_requests as reb
 
 settings = get_settings()
@@ -522,7 +522,7 @@ async def test_rebalancer_compute_plans_to_a_proven_optimum(test_server):
     assert (plan["result_state"], plan["proof"]["kind"]) == ("ready_incumbent", "optimal_proven")
     (order,) = plan["primary_solution"]["order_rows"]
     assert (order["asset_id"], order["instruction"]["amount"]) == ("asset-b", {"amount": "195", "currency": "EUR"})
-    in_process = plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.t4()), solver_time_budget_seconds=engine_timeout_ms / 1000)
+    in_process = plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.t4()), solver_time_budget_seconds=engine_timeout_ms / 1000, seeds=TEST_SERVER_PLANNER_SEEDS)
     assert plan == REBALANCER_PLAN_OUTPUT_ADAPTER.dump_python(in_process, mode="json", by_alias=True)
 
 
@@ -553,7 +553,7 @@ async def test_rebalancer_compute_publishes_a_wide_plan_with_its_top_up(test_ser
     plan = result["result"]
     assert (plan["result_state"], plan["proof"]["kind"]) == ("ready_incumbent", "not_proven")
     assert [(row["broker_id"], row["amount"]) for row in plan["primary_solution"]["rounding_top_ups"]] == [(reb.BROKER, "0.01")]
-    in_process = REBALANCER_PLAN_OUTPUT_ADAPTER.dump_python(plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.y_top_up(two_cells=two_cells)), solver_time_budget_seconds=engine_timeout_ms / 1000), mode="json", by_alias=True)
+    in_process = REBALANCER_PLAN_OUTPUT_ADAPTER.dump_python(plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.y_top_up(two_cells=two_cells)), solver_time_budget_seconds=engine_timeout_ms / 1000, seeds=TEST_SERVER_PLANNER_SEEDS), mode="json", by_alias=True)
     # The wide model is solved with the time the prudent one left, a wall-clock figure each stage publishes among its
     # settings (``time_budget``). That one value is the run's; everything else, the bounds included, is compared as it is.
     assert _without_time_limits(plan) == _without_time_limits(in_process)
