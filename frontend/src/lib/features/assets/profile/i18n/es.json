@@ -173,6 +173,18 @@
         "scheduleFrom": "Desde",
         "scheduleTo": "Hasta",
         "scheduleRate": "Tipo"
+      },
+      "tab": {
+        "notAvailable": "no disponible",
+        "data": "Datos",
+        "details": "Detalles",
+        "dataAsOf": "datos al {date}",
+        "history": "Historial del dato: {voice}",
+        "loadFailed": "No se pudo leer el perfil del activo",
+        "missing": "Este activo ya no existe",
+        "editData": "Editar los datos",
+        "isin": "ISIN",
+        "ticker": "Ticker"
       }
     }
   }
