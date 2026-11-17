@@ -8,9 +8,13 @@ single-run path: the prudent model, the wide one if needed, the cascade, the rep
 How the runs execute:
 
 * ``processes`` (the default): forked from the caller where the platform has ``fork`` (the Tool's worker is a fresh,
-  single-threaded process per job, so a fork is cheap: 12 ms for three, measured), ``spawn`` elsewhere. The cores are
-  not counted (the consultant's rule of 17/11): three processes side by side, each with the whole limit, which is
-  wall-clock in SCIP, so the wait is the limit at worst on any machine.
+  single-threaded process per job, so a fork is cheap: 12 ms for three, measured), ``spawn`` elsewhere. Three processes
+  side by side, each with the whole limit, which is wall-clock in SCIP. **The second and third run at the lowest
+  priority** (lot SEEDS-b, the consultant's measured mechanism): the published plan is never worse than the first run
+  alone on the same machine with the same limit, however few CPUs it has; with three free CPUs the priority changes
+  nothing. No CPU is counted, so a container's quota needs no reading.
+* **The wait:** once the first run has a result, the others have the limit and a short settle (an unclosed run answers
+  a little after its limit), then they are stopped; while it has none, every run has the limit and the grace.
 * ``in_process``: one after the other, in the caller's process. For tests that read what a run did through a patch.
 
 A run that fails (an exception, a crash, a process that does not come back) is a run with no result: it never fails the
@@ -21,6 +25,7 @@ Cancellation stays with the caller: the checkpoint is checked between waits, nev
 from __future__ import annotations
 
 import multiprocessing
+import os
 import secrets
 import time
 from collections.abc import Callable
@@ -42,6 +47,14 @@ RUN_COUNT = 3
 #: How long past its budget a run may take to come back (the exact replay, the report, the pipe) before it is stopped and
 #: counted as a run with no result.
 _GRACE_SECONDS = 5.0
+
+#: How long past the limit (or past the first run's answer, if later) the others may still answer once the first has one:
+#: an unclosed run answers 0.05–0.17 s after its limit on free CPUs (lot SEEDS measurement), so 0.5 s keeps their vote
+#: there, while low-priority runs starved on one CPU are not waited for through the whole grace.
+_SETTLE_SECONDS = 0.5
+
+#: The priority of the second and third runs: the lowest (``os.nice``), where the platform has one.
+_LOW_PRIORITY = 19
 
 #: SCIP's ``randomization/randomseedshift`` accepts 0 .. INT_MAX.
 _SEED_LIMIT = 2**31 - 1
@@ -102,8 +115,11 @@ def _run_here(task: SeedTask, seed: int, checkpoint: Checkpoint | None, progress
         return SeedRun(seed=seed, failure=type(exc).__name__, seconds=time.monotonic() - started)
 
 
-def _child(task: SeedTask, seed: int, connection: Connection) -> None:
-    """A run in its own process: search progress messages, then one result (or the class of what failed)."""
+def _child(task: SeedTask, seed: int, connection: Connection, low_priority: bool = False) -> None:
+    """A run in its own process: search progress messages, then one result (or the class of what failed). A confirming
+    run lowers its own priority first (never in the caller's process: a lowered priority cannot be raised again)."""
+    if low_priority and hasattr(os, "nice"):
+        os.nice(_LOW_PRIORITY)
 
     def forward(phase: str, step: int | None = None, total: int | None = None) -> None:
         if phase == "search" and step is not None:
@@ -123,15 +139,20 @@ def _child(task: SeedTask, seed: int, connection: Connection) -> None:
 class _Runs:
     """The runs still out, what came back, and the furthest stage reported (``_run_in_processes``)."""
 
-    def __init__(self, progress: ProgressReporter | None) -> None:
+    def __init__(self, progress: ProgressReporter | None, first: int) -> None:
         self.running: dict[Connection, tuple[int, multiprocessing.process.BaseProcess]] = {}
         self.results: dict[int, SeedRun] = {}
         self.progress = progress
         self.furthest = 0
+        self.first = first
+        #: When the first run came back with a result, or None.
+        self.first_answered: float | None = None
 
     def finish(self, connection: Connection, run: SeedRun, *, stop: bool = False) -> None:
         _seed, process = self.running.pop(connection)
         self.results[run.seed] = run
+        if run.seed == self.first and run.failure is None:
+            self.first_answered = time.monotonic()
         connection.close()
         if stop and process.is_alive():
             process.kill()
@@ -156,16 +177,20 @@ class _Runs:
 
 def _run_in_processes(task: SeedTask, seeds: tuple[int, ...], time_budget_seconds: float, checkpoint: Checkpoint | None, progress: ProgressReporter | None) -> tuple[SeedRun, ...]:
     context = multiprocessing.get_context("fork" if "fork" in multiprocessing.get_all_start_methods() else "spawn")
-    runs = _Runs(progress)
-    for seed in seeds:
+    runs = _Runs(progress, first=seeds[0])
+    started = time.monotonic()
+    for index, seed in enumerate(seeds):
         receiver, sender = context.Pipe(duplex=False)
-        process = context.Process(target=_child, args=(task, seed, sender), name=f"planner-seed-{seed}", daemon=True)
+        process = context.Process(target=_child, args=(task, seed, sender, index > 0), name=f"planner-seed-{seed}", daemon=True)
         process.start()
         sender.close()
         runs.running[receiver] = (seed, process)
-    deadline = time.monotonic() + time_budget_seconds + _GRACE_SECONDS
+    limit = started + time_budget_seconds
+    deadline = limit + _GRACE_SECONDS
     try:
         while runs.running and time.monotonic() < deadline:
+            if runs.first_answered is not None:
+                deadline = min(deadline, max(limit, runs.first_answered) + _SETTLE_SECONDS)
             if checkpoint is not None:
                 check_budget(checkpoint)
             for connection in wait(list(runs.running), timeout=max(0.0, min(deadline - time.monotonic(), 0.2))):

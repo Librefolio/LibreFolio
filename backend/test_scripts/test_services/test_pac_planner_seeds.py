@@ -107,32 +107,120 @@ def test_a_cancellation_while_runs_are_out_stops_them_all_and_reaches_the_caller
     assert [process.name for process in multiprocessing.active_children() if process.name.startswith("planner-seed-")] == []
 
 
+def _niceness(seed: int, progress) -> int:
+    return os.nice(0)
+
+
+@pytest.mark.skipif(not hasattr(os, "nice"), reason="a platform without os.nice runs the three at one priority")
+def test_the_second_and_third_runs_run_at_low_priority() -> None:
+    """Lot SEEDS-b (the consultant's measured mechanism): the first run keeps the caller's priority, the other two run at
+    the lowest (`nice` 19), so on a machine with fewer free CPUs than runs the first is never starved by the others."""
+    base = os.nice(0)
+    runs = seed_runs.run_seeds(_niceness, seeds=(5, 6, 7), time_budget_seconds=5)
+    assert [run.result for run in runs] == [base, 19, 19]
+
+
+@pytest.mark.skipif(not hasattr(os, "nice"), reason="no priority to change")
+def test_runs_in_the_caller_s_process_never_change_its_priority() -> None:
+    """A priority lowered in a process cannot be raised again: in process, the runs keep the caller's."""
+    base = os.nice(0)
+    runs = seed_runs.run_seeds(_niceness, seeds=(5, 6, 7), time_budget_seconds=5, mode="in_process")
+    assert [run.result for run in runs] == [base, base, base]
+    assert os.nice(0) == base
+
+
+def test_once_the_first_run_has_answered_the_others_are_stopped_soon_after_the_limit(monkeypatch) -> None:
+    """The others are not waited for through the whole grace: once the first has a result, they have the limit and a short
+    settle, then they are stopped and count as runs with no result."""
+    monkeypatch.setattr(seed_runs, "_GRACE_SECONDS", 30.0)
+
+    def second_never_ends(seed: int, progress) -> int:
+        if seed == 2:
+            time.sleep(60)
+        return seed
+
+    started = time.monotonic()
+    runs = seed_runs.run_seeds(second_never_ends, seeds=(1, 2), time_budget_seconds=0.5)
+    assert time.monotonic() - started < 0.5 + seed_runs._SETTLE_SECONDS + 2.0
+    assert [(run.seed, run.result, run.failure) for run in runs] == [(1, 1, None), (2, None, "RunPastDeadline")]
+
+
+def test_a_run_answering_just_past_the_limit_still_votes(monkeypatch) -> None:
+    """An unclosed run answers a little after its limit (0.05–0.17 s measured on free CPUs): inside the settle, it votes."""
+    monkeypatch.setattr(seed_runs, "_GRACE_SECONDS", 30.0)
+    # A wide settle, so a loaded machine does not decide the test: the late run answers 0.1 s past the limit.
+    monkeypatch.setattr(seed_runs, "_SETTLE_SECONDS", 2.0)
+
+    def second_just_late(seed: int, progress) -> int:
+        if seed == 2:
+            time.sleep(0.6)
+        return seed
+
+    runs = seed_runs.run_seeds(second_just_late, seeds=(1, 2), time_budget_seconds=0.5)
+    assert [(run.seed, run.result, run.failure) for run in runs] == [(1, 1, None), (2, 2, None)]
+
+
+def test_when_the_first_run_fails_the_others_keep_the_whole_grace(monkeypatch) -> None:
+    """With no first answer, the others are what the request has: they are waited for up to the limit and the grace."""
+    monkeypatch.setattr(seed_runs, "_GRACE_SECONDS", 30.0)
+
+    def first_fails(seed: int, progress) -> int:
+        if seed == 1:
+            raise RuntimeError("a run that fails")
+        time.sleep(0.5 + seed_runs._SETTLE_SECONDS + 0.5)
+        return seed
+
+    runs = seed_runs.run_seeds(first_fails, seeds=(1, 2), time_budget_seconds=0.5)
+    assert [(run.seed, run.result, run.failure) for run in runs] == [(1, None, "RuntimeError"), (2, 2, None)]
+
+
 # ---------------------------------------------------------------------------- the merge, as a table
 
 V = Fraction(77600, 100)  # 776 €, about G5's score
-TOLERANCE = 5 * Fraction(1, 10**6) * V  # the agreement rule at that value: 0.00388 €
+TOLERANCE = 2 * Fraction(1, 10**6) * V  # the agreement rule at that value, with no band: 0.00155 €
+BAND = Fraction(1, 10**5)  # the first stage's band of «Balanced», one quadratic row per target (`seeds_band.log`)
 
 
 def _prudent(seed: int, value: Fraction, *, closed: bool = True, band: Fraction = Fraction(0)) -> SeededRunVote:
     return SeededRunVote(seed=seed, origin="prudent", closed=closed, value=value, band=band)
 
 
-def test_two_values_agree_within_five_millionths_of_the_lowest() -> None:
+def test_two_values_agree_within_twice_the_engine_s_whole_band() -> None:
+    """Lot SEEDS-b (the consultant's answer of 17/11): |a − b| ≤ 2 × (1e-6 × max(1, |lowest|) + band). Two plans, each
+    within one band of the same closure, are at most two bands apart; the band is the bound check's relative tolerance plus
+    the first stage's own band."""
+    limit = 2 * (Fraction(1, 10**6) * V + BAND)
+    assert seeded_runs_agree(V + limit, V, V, band=BAND)
+    assert not seeded_runs_agree(V + limit + Fraction(1, 10**9), V, V, band=BAND)
     assert seeded_runs_agree(V + TOLERANCE, V, V)
-    assert not seeded_runs_agree(V + TOLERANCE + Fraction(1, 10**6), V, V)
-    assert seeded_runs_agree(Fraction(3, 10**6), Fraction(0), Fraction(0)), "below one, the rule reads one"
+    assert not seeded_runs_agree(V + TOLERANCE + Fraction(1, 10**9), V, V), "the factor is 2, no longer 5"
+    assert seeded_runs_agree(Fraction(2, 10**6), Fraction(0), Fraction(0)), "below one, the rule reads one"
+    assert not seeded_runs_agree(Fraction(2, 10**6) + Fraction(1, 10**12), Fraction(0), Fraction(0))
 
 
-def test_near_the_target_twice_the_first_stage_band_is_the_rule_when_it_is_wider() -> None:
-    """A portfolio already near its target: the first stage is worth 1 €, five millionths of it (0.000005 €) is narrower
-    than twice the stage's band (its quadratic rows, 0.00001 € each way). Two runs closed within the band agree (the
-    consultant's definition of 17/11: «if 2 × band were larger, use 2 × band»)."""
-    one, band = Fraction(1), Fraction(1, 10**5)
-    assert seeded_runs_agree(one + 2 * band, one, one, band=band)
-    assert not seeded_runs_agree(one + 2 * band + Fraction(1, 10**9), one, one, band=band)
-    assert not seeded_runs_agree(one + 2 * band, one, one), "without the band, the relative rule alone"
-    assert seeded_runs_agree(V + TOLERANCE, V, V, band=band), "far from the target the relative rule stays the wider"
-    verdict = merge_seeded_runs([_prudent(1, one + 2 * band, band=band), _prudent(2, one, band=band), SeededRunVote(seed=3, failed=True)])
+@pytest.mark.parametrize(
+    ("value", "lowest", "band", "agree"),
+    [
+        pytest.param("46075417.2259534", "46075413.8988546", "0.594", True, id="targetfirst s3 and s1, both closed: 7.2e-8"),
+        pytest.param("1125.7829371", "1125.7813537", "0.00001", True, id="cashmax, closed runs over a lower unclosed one: 1.4e-6"),
+        pytest.param("775.8402125", "775.8364441", "0.00001", False, id="G5 seed 3, a different plan: 4.86e-6"),
+    ],
+)
+def test_the_three_measured_gaps_fall_where_the_consultant_put_them(value: str, lowest: str, band: str, agree: bool) -> None:
+    """The lane's exact figures (`seeds_measure2.log`, `seeds_band.log`), with their real bands: the two gaps between runs
+    that closed on the same optimum agree, the different plan 0.0038 € above G5's optimum does not."""
+    assert seeded_runs_agree(Fraction(value), Fraction(lowest), Fraction(lowest), band=Fraction(band)) is agree
+
+
+def test_near_the_target_the_band_widens_the_rule() -> None:
+    """A portfolio already near its target: the first stage is worth 1 €, so the relative part is 1e-6 € and the stage's
+    band (1e-5 €) decides. Two runs closed within twice the whole band agree."""
+    one = Fraction(1)
+    limit = 2 * (Fraction(1, 10**6) + BAND)
+    assert seeded_runs_agree(one + limit, one, one, band=BAND)
+    assert not seeded_runs_agree(one + limit + Fraction(1, 10**9), one, one, band=BAND)
+    assert not seeded_runs_agree(one + limit, one, one), "without the band, the relative rule alone"
+    verdict = merge_seeded_runs([_prudent(1, one + limit, band=BAND), _prudent(2, one, band=BAND), SeededRunVote(seed=3, failed=True)])
     assert (verdict.index, verdict.downgrade) == (1, False)
 
 
@@ -262,3 +350,85 @@ def test_the_pac_stays_one_run_with_scip_s_own_seed() -> None:
 
     scenario = normalize_pac_plan(PAC_PLAN_INPUT_ADAPTER.validate_python(reference.CASES["r-3x3"]())).normalized
     assert planner._seeds_for(scenario, (1, 2, 3)) == ()
+
+
+# ---------------------------------------------------------------------------- through the Tool
+
+
+def _through_the_tool(request: dict) -> dict:
+    """The worker's own execution of a Rebalancer request, in this process, with the real registry definition: the frame
+    the platform sends back."""
+    import json  # noqa: PLC0415
+
+    from backend.app.services.tools import worker as worker_module  # noqa: PLC0415
+    from backend.app.services.tools.registry import ToolPluginRegistry  # noqa: PLC0415
+
+    descriptor = ToolPluginRegistry.get_definition("portfolio_rebalancer").descriptor
+    now = time.monotonic()
+    job = worker_module.ToolWorkerJob(
+        execution_id="seeds-b-" + "0" * 24,
+        tool_code="portfolio_rebalancer",
+        contract_version=descriptor.contract_version,
+        implementation_version=descriptor.implementation_version,
+        schema_fingerprint=descriptor.schema_fingerprint,
+        parameters=json.dumps(request).encode(),
+        soft_deadline=now + 30,
+        hard_deadline=now + 40,
+        max_parameter_bytes=1_000_000,
+        max_result_bytes=10_000_000,
+        max_json_depth=64,
+        engine_timeout_ms=5_000,
+    )
+
+    class NeverCancelled:
+        def is_set(self) -> bool:
+            return False
+
+    return worker_module._execute(job, NeverCancelled(), ToolPluginRegistry)
+
+
+def test_three_failed_runs_reach_the_user_as_a_failure_they_may_retry(monkeypatch) -> None:
+    """Lot SEEDS-b: no run answered (three crashes or three runs past the deadline). Through the Tool's worker, the request
+    ends `execution_failed`, retryable (three processes failing at once is the platform's trouble, not the request's: the
+    user sees «Retry» beside «Edit configuration»), and the failure is logged once with its class, never its amounts."""
+    from backend.test_scripts.test_services import _reb_small_requests as requests  # noqa: PLC0415
+
+    def failing(*args, **kwargs):
+        raise RuntimeError("a run that fails")
+
+    monkeypatch.setattr(planner, "_single_run", failing)
+    monkeypatch.setattr(planner_config, "planner_fixed_seeds", lambda: (1, 2, 3))
+    frame = _through_the_tool(requests.t4())
+    assert (frame["status"], frame["error"]["code"], frame["error"]["retryable"]) == ("error", "execution_failed", True)
+
+
+def test_a_lone_impossible_with_two_failed_runs_is_a_failure_they_may_retry(monkeypatch) -> None:
+    """Lot SEEDS-b, the consultant's corner: one run proves the request impossible and the other two fail. «Impossible,
+    proven» needs two runs, and the contract refuses «no plan» built from an infeasible run
+    (`results._validate_solver_status_proof`), so the request fails, retryable, through the Tool."""
+    from copy import deepcopy  # noqa: PLC0415
+
+    from backend.test_scripts.test_services import _reb_small_requests as requests  # noqa: PLC0415
+
+    # Case Y with its cash held between 0.01 and 0.01 EUR: no plan ends there (the ZB-c grid's «min=max=0.01»).
+    request = requests.y_top_up()
+    entry = request["target_weights"][-1]
+    cent = deepcopy(entry["maximum"])
+    cent["amount"]["amount"] = "0.01"
+    entry["minimum"], entry["maximum"] = cent, deepcopy(cent)
+    real = planner._single_run
+
+    def one_answers(scenario, view, issues, checkpoint, budget, product, progress, *, seed=None):
+        if seed != 1:
+            raise RuntimeError("a run that fails")
+        return real(scenario, view, issues, checkpoint, budget, product, progress, seed=seed)
+
+    monkeypatch.setattr(planner, "_single_run", one_answers)
+    monkeypatch.setattr(planner_config, "planner_fixed_seeds", lambda: (1, 2, 3))
+    # The runs are forked: what seed 1 finds is read here, by planning with it alone once.
+    from backend.app.schemas.pac_allocator.preview import REBALANCER_TOOL_INPUT_ADAPTER  # noqa: PLC0415
+
+    alone = planner.plan_rebalancing(REBALANCER_TOOL_INPUT_ADAPTER.validate_python(request), solver_time_budget_seconds=5, seeds=(1,))
+    assert alone.result_state == "ready_infeasible", "PREMISE: the request is proven impossible by one run"
+    frame = _through_the_tool(request)
+    assert (frame["status"], frame["error"]["code"], frame["error"]["retryable"]) == ("error", "execution_failed", True)

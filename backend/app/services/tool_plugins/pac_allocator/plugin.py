@@ -60,7 +60,7 @@ from backend.app.schemas.tools import (
     ToolOperationPolicy,
     ToolUIDescriptor,
 )
-from backend.app.services.pac_allocator.planner import plan_pac_allocation, plan_rebalancing
+from backend.app.services.pac_allocator.planner import SeededRunsFailedError, plan_pac_allocation, plan_rebalancing
 from backend.app.services.pac_allocator.preview import preview_pac_allocation, preview_rebalancing
 from backend.app.services.pac_allocator.progress import PLANNER_PHASES
 from backend.app.services.platform.provider_registry import register_plugin
@@ -266,6 +266,11 @@ class PacAllocatorTool(ToolPlugin):
             except ToolExecutionError:
                 # A platform code (time or cancellation limit): not a failure of the engine.
                 raise
+            except SeededRunsFailedError as exc:
+                # Lot SEEDS-b of project 67: none of the Rebalancer's three runs answered (they crashed or overran, or a
+                # lone «impossible» the contract cannot publish as «no plan»). The same request may answer on a retry.
+                _log_engine_failure(exc, context.execution_id)
+                raise ToolExecutionError("execution_failed", retryable=True) from exc
             except Exception as exc:
                 _log_engine_failure(exc, context.execution_id)
                 raise

@@ -319,8 +319,9 @@ class _RunOutcome:
 
 
 class SeededRunsFailedError(RuntimeError):
-    """Lot SEEDS: no run of the Rebalancer's three could be published (all failed, or a single «impossible» stood alone).
-    The Tool reports it as ``execution_failed``; the message names no amounts."""
+    """Lot SEEDS: no run of the Rebalancer's three could be published (all failed, or a single «impossible» stood alone:
+    the contract cannot publish an infeasible run as «no plan», lot SEEDS-b). The Tool reports it as ``execution_failed``,
+    retryable; the message names no amounts."""
 
 
 def _seeds_for(scenario: ExactPlannerScenario, seeds: tuple[int, ...] | None) -> tuple[int, ...]:

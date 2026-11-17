@@ -81,10 +81,11 @@ NOT_PROVEN_REASON = "allocation.exact_proof_not_established"
 # proved its plan by itself while no second run closed on the same value.
 WIDE_MODEL_REASON = "allocation.limits_leave_no_rounding_room"
 PROOF_NOT_CONFIRMED_REASON = "allocation.proof_not_confirmed"
-#: Two runs' values are «equal» within this many times the bound check's relative tolerance (the consultant's rule of
-#: 17/11: 5e-6 of the value, 0.39 cent on G5). Fitted in the empty gap between SCIP's own spread among closures (at most
-#: 7e-7 on 364 runs; 1.4e-6 on the lane's battery) and the smallest dip (1.1e-5; 1.15e-3 on the lane's battery).
-SEED_AGREEMENT_FACTOR = 5
+#: Two runs' values are «equal» within this many of the engine's whole band: the bound check's relative tolerance plus the
+#: first stage's band (lot SEEDS-b, the consultant's answer of 17/11). Derived, not fitted: two plans, each within one band
+#: of the same closure, are at most two bands apart. 0.16 cent on G5; it holds SCIP's spread among closures (7.2e-8 and
+#: 1.4e-6 on the lane's battery) and leaves out a different plan 4.86e-6 above G5's optimum, which the earlier factor 5 let in.
+SEED_AGREEMENT_FACTOR = 2
 
 # Module-private construction seal. A witness is the key that unlocks a proven
 # conclusion, so the key may only be cut here. This object never leaves the
@@ -277,12 +278,11 @@ class SeededVerdict:
 
 
 def seeded_runs_agree(a: Fraction, b: Fraction, lowest: Fraction, *, band: Fraction = Fraction(0)) -> bool:
-    """Two runs' values are «equal»: within ``SEED_AGREEMENT_FACTOR`` times the bound check's relative tolerance of the
-    lowest value (one rule for every objective, relative to the value), or within twice the first stage's ``band`` when
-    that is wider (the consultant's definition of 17/11: a first stage worth a few euros, a portfolio near its target)."""
+    """Two runs' values are «equal»: |a − b| ≤ ``SEED_AGREEMENT_FACTOR`` × (the bound check's relative tolerance of the
+    lowest value + the first stage's ``band``), the engine's whole band (lot SEEDS-b)."""
     # The tolerance as the decimal it is written as (1e-6), not as its nearest binary float.
-    relative = Fraction(SEED_AGREEMENT_FACTOR) * Fraction(str(BOUND_CHECK_TOLERANCE)) * max(Fraction(1), abs(lowest))
-    return abs(a - b) <= max(relative, 2 * band)
+    relative = Fraction(str(BOUND_CHECK_TOLERANCE)) * max(Fraction(1), abs(lowest))
+    return abs(a - b) <= Fraction(SEED_AGREEMENT_FACTOR) * (relative + band)
 
 
 def merge_seeded_runs(votes: Sequence[SeededRunVote]) -> SeededVerdict:
