@@ -652,6 +652,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/tools/pac-allocator/planner/steps/TargetsStep.preview.test.ts",
             "src/lib/features/tools/pac-allocator/planner/issues.rebalancer.test.ts",
             "src/lib/features/tools/pac-allocator/planner/issues.solverError.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/issues.cashLimitRounding.test.ts",
             "src/lib/features/tools/pac-allocator/planner/review.rebalancer.test.ts",
             "src/lib/features/tools/pac-allocator/planner/steps/FidelityTable.test.ts",
             "src/lib/features/tools/pac-allocator/planner/steps/RebalancerStrategyStep.test.ts",
