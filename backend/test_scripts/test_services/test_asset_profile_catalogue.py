@@ -12,6 +12,8 @@ Pure: no database, no server, no network.
     table — what is accepted and its stored form, what is refused.
 (d) The stored form is deterministic (same fact, same form whatever its spelling) and idempotent, also after a JSON
     round trip.
+(e) The labels of the windows (lot E10c2): every voice, choice, group and unit has its label in the four languages, in
+    ``frontend/src/lib/features/assets/profile/i18n/``.
 
 Every expectation is driven by the tables of this file, never by iterating ``CATALOGUE``: an empty or partial
 catalogue must turn these tests red, not collect zero cases.
@@ -20,6 +22,7 @@ catalogue must turn these tests red, not collect zero cases.
 import json
 from datetime import date, datetime
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
@@ -733,3 +736,43 @@ def test_idempotent(key, raw):
     round_trip = json.loads(json.dumps(once))
     assert normalize_value(key, round_trip) == once
     assert json.dumps(normalize_value(key, round_trip)) == json.dumps(once)
+
+
+# ============================================================================
+# (e) The labels of the windows (lot E10c2): every voice, choice, group and unit has a label in the four languages
+# ============================================================================
+
+#: The frontend folder that holds the profile's labels (``assets.profile.*``, its ``prefixes.txt``).
+LABELS_DIR = Path(__file__).resolve().parents[3] / "frontend" / "src" / "lib" / "features" / "assets" / "profile" / "i18n"
+LANGUAGES = ("en", "it", "fr", "es")
+
+
+def _labels(language: str) -> dict:
+    return json.loads((LABELS_DIR / f"{language}.json").read_text(encoding="utf-8"))["assets"]["profile"]
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_every_voice_has_a_label(language):
+    """The catalogue drives the expectation here on purpose: a voice added to the backend without its label turns
+    this red (C2e's ``management_fee`` included)."""
+    labels = _labels(language)
+    assert set(labels["voices"]) == set(EXPECTED_KEYS) == set(CATALOGUE), "voices without a label, or labels without a voice"
+    assert all(isinstance(text, str) and text.strip() for text in labels["voices"].values())
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_every_choice_has_a_label(language):
+    labels = _labels(language)["choices"]
+    assert set(labels) == {key for key, voice in CATALOGUE.items() if voice.choices}
+    for key, voice in CATALOGUE.items():
+        if voice.choices:
+            assert set(labels[key]) == set(voice.choices), key
+            assert all(text.strip() for text in labels[key].values()), key
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_every_group_and_unit_has_a_label(language):
+    """The six groups, plus ``other`` for the voices with no group (the LEI, the amount outstanding)."""
+    labels = _labels(language)
+    assert set(labels["groups"]) == {group.value for group in ProfileGroup} | {"other"}
+    assert set(labels["units"]) == {voice.unit for voice in CATALOGUE.values() if voice.unit}

@@ -1,0 +1,161 @@
+{
+  "assets": {
+    "profile": {
+      "voices": {
+        "geography": "Distribución geográfica",
+        "sector": "Distribución sectorial",
+        "description": "Descripción",
+        "withholding_tax": "Retención extranjera",
+        "ter": "Coste anual (TER)",
+        "fund_size": "Tamaño del fondo",
+        "market_cap": "Capitalización bursátil",
+        "yield_gross": "Rentabilidad bruta",
+        "modified_duration": "Duración modificada",
+        "coupon_rate": "Cupón anual",
+        "maturity_date": "Vencimiento",
+        "fund_provider": "Gestora",
+        "index_name": "Índice replicado",
+        "replication": "Replicación",
+        "distribution_policy": "Política de distribución",
+        "fund_domicile": "Domicilio",
+        "fund_currency": "Divisa del fondo",
+        "inception_date": "Fecha de lanzamiento",
+        "management_fee": "Comisión de gestión",
+        "industry": "Industria",
+        "issuer_country": "País del emisor",
+        "coupon_period_rate": "Cupón por periodo",
+        "coupon_frequency": "Frecuencia del cupón",
+        "coupon_type": "Tipo de cupón",
+        "day_count": "Base de cómputo de días",
+        "yield_net": "Rentabilidad neta",
+        "accrued_interest": "Cupón corrido",
+        "issuer_name": "Emisor",
+        "min_lot": "Lote mínimo",
+        "interest_start_date": "Fecha de devengo",
+        "loyalty_bonus": "Prima de fidelidad",
+        "coupon_schedule": "Calendario de cupones",
+        "payout_description": "Condiciones de reembolso",
+        "legal_form": "Forma jurídica",
+        "issuer_type": "Tipo de emisor",
+        "issuer_lei": "LEI del emisor",
+        "outstanding_amount": "Importe en circulación",
+        "reference_price_date": "Fecha del precio de referencia"
+      },
+      "choices": {
+        "replication": {
+          "physical_full": "Física, completa",
+          "physical_sampling": "Física, por muestreo",
+          "physical_backed": "Respaldada físicamente",
+          "synthetic_unfunded_swap": "Sintética, swap no financiado",
+          "synthetic_funded_swap": "Sintética, swap financiado"
+        },
+        "distribution_policy": {
+          "accumulating": "Acumulación",
+          "distributing": "Distribución"
+        },
+        "coupon_frequency": {
+          "monthly": "Mensual",
+          "quarterly": "Trimestral",
+          "semiannual": "Semestral",
+          "annual": "Anual",
+          "at_maturity": "Al vencimiento"
+        },
+        "coupon_type": {
+          "fixed": "Fijo",
+          "floating": "Variable",
+          "step_up": "Escalonado",
+          "structured": "Estructurado",
+          "zero_coupon": "Cupón cero",
+          "inflation_linked": "Ligado a la inflación"
+        },
+        "day_count": {
+          "act_act_icma": "ACT/ACT ICMA",
+          "act_act_isda": "ACT/ACT ISDA",
+          "act_360": "ACT/360",
+          "act_365": "ACT/365",
+          "30_360": "30/360"
+        },
+        "legal_form": {
+          "share": "Acción",
+          "bond": "Bono",
+          "ucits_fund": "Fondo UCITS",
+          "non_ucits_fund": "Fondo no UCITS",
+          "etc_etn": "ETC/ETN",
+          "certificate": "Certificado",
+          "derivative": "Derivado",
+          "crypto": "Criptoactivo",
+          "other": "Otro"
+        },
+        "issuer_type": {
+          "sovereign": "Estado",
+          "supranational": "Supranacional",
+          "corporate": "Empresa",
+          "vehicle": "Vehículo de emisión"
+        }
+      },
+      "groups": {
+        "classification": "Clasificación",
+        "key_figures": "Cifras clave",
+        "fund": "El fondo",
+        "company": "La empresa",
+        "bond": "El bono",
+        "identity": "Identidad",
+        "other": "Otros datos"
+      },
+      "units": {
+        "years": "años",
+        "per_100_nominal": "por 100 de nominal"
+      },
+      "edit": {
+        "title": "Datos del perfil",
+        "searchVoice": "Buscar un dato y añadirlo",
+        "askAll": "Preguntar todo",
+        "addRow": "Añadir fila",
+        "ask": "Preguntar",
+        "asking": "Consultando las fuentes…",
+        "columnStatus": "Estado",
+        "columnVoice": "Dato",
+        "columnNewValue": "Valor nuevo",
+        "columnNow": "Ahora",
+        "chooseVoice": "Elegir un dato",
+        "stateNew": "nuevo",
+        "stateSource": "de la fuente",
+        "stateFile": "del archivo",
+        "stateEmptied": "vacío, a propósito",
+        "leaveEmpty": "Dejar vacío",
+        "writeValue": "Escribir un valor",
+        "validateFailed": "No se pudieron comprobar los valores",
+        "removeRow": "Quitar de la lista",
+        "nowNone": "sin valor",
+        "sourceUser": "escrito por ti",
+        "sourceLegacy": "antes del perfil",
+        "issueNoVoice": "Elige un dato",
+        "issueDuplicate": "Este dato ya está en la lista",
+        "issueEmpty": "Escribe un valor, o elige «Dejar vacío»",
+        "issueNotANumber": "No es un número",
+        "issueNotADate": "No es una fecha",
+        "issueBackend": "El valor no se acepta: {reason}",
+        "valid": "válido",
+        "invalid": "{count, plural, one {# fila por corregir} other {# filas por corregir}}",
+        "keep": "Conservar los cambios",
+        "saveAll": "Guardar todo",
+        "saved": "Datos del perfil guardados",
+        "saveFailed": "No se pudieron guardar los datos del perfil",
+        "sourceChanged": "{voice}: la fuente da ahora {now}, no {seen}; se guardó su valor actual",
+        "askDone": "{filled, plural, =0 {Ningún dato vacío por rellenar} one {# dato vacío rellenado desde la fuente} other {# datos vacíos rellenados desde la fuente}}; {different, plural, =0 {nada diferente} one {# diferente, en la comparación} other {# diferentes, en la comparación}}; {equal, plural, =0 {ninguno igual} one {# igual} other {# iguales}}.",
+        "everythingMatches": "Todo coincide con las fuentes",
+        "noData": "Las fuentes no tienen datos para: {voices}",
+        "noAnswer": "Sin respuesta de las fuentes para: {voices}. Inténtalo más tarde.",
+        "askFailed": "No se pudo consultar a las fuentes",
+        "sourceRowsNote": "Las filas «de la fuente» se guardan a nombre de la fuente, no tuyo; si cambias su valor pasan a ser tuyas. Las respuestas se guardan media hora: volver a preguntar no consulta los sitios.",
+        "panelWrittenByYou": "escrita por ti",
+        "panelFromSource": "{source}, leída ahora",
+        "panelEmpty": "sin datos",
+        "currentPending": "valor actual · tuyo, pendiente",
+        "scheduleFrom": "Desde",
+        "scheduleTo": "Hasta",
+        "scheduleRate": "Tipo"
+      }
+    }
+  }
+}

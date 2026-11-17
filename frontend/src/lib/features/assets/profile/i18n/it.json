@@ -1,0 +1,161 @@
+{
+  "assets": {
+    "profile": {
+      "voices": {
+        "geography": "Distribuzione geografica",
+        "sector": "Distribuzione settoriale",
+        "description": "Descrizione",
+        "withholding_tax": "Ritenuta estera",
+        "ter": "Costo annuo (TER)",
+        "fund_size": "Dimensione del fondo",
+        "market_cap": "Capitalizzazione",
+        "yield_gross": "Rendimento lordo",
+        "modified_duration": "Duration modificata",
+        "coupon_rate": "Cedola annua",
+        "maturity_date": "Scadenza",
+        "fund_provider": "Società di gestione",
+        "index_name": "Indice replicato",
+        "replication": "Replica",
+        "distribution_policy": "Trattamento dei proventi",
+        "fund_domicile": "Domicilio",
+        "fund_currency": "Valuta del fondo",
+        "inception_date": "Data di lancio",
+        "management_fee": "Commissione di gestione",
+        "industry": "Ramo",
+        "issuer_country": "Paese dell'emittente",
+        "coupon_period_rate": "Cedola del periodo",
+        "coupon_frequency": "Frequenza della cedola",
+        "coupon_type": "Tipo di cedola",
+        "day_count": "Calcolo dei giorni",
+        "yield_net": "Rendimento netto",
+        "accrued_interest": "Rateo",
+        "issuer_name": "Emittente",
+        "min_lot": "Lotto minimo",
+        "interest_start_date": "Data di godimento",
+        "loyalty_bonus": "Premio fedeltà",
+        "coupon_schedule": "Piano delle cedole",
+        "payout_description": "Condizioni di rimborso",
+        "legal_form": "Forma",
+        "issuer_type": "Tipo di emittente",
+        "issuer_lei": "LEI dell'emittente",
+        "outstanding_amount": "Ammontare in circolazione",
+        "reference_price_date": "Data del prezzo di riferimento"
+      },
+      "choices": {
+        "replication": {
+          "physical_full": "Fisica, completa",
+          "physical_sampling": "Fisica, a campione",
+          "physical_backed": "Con sottostante fisico",
+          "synthetic_unfunded_swap": "Sintetica, swap non finanziato",
+          "synthetic_funded_swap": "Sintetica, swap finanziato"
+        },
+        "distribution_policy": {
+          "accumulating": "Ad accumulo",
+          "distributing": "A distribuzione"
+        },
+        "coupon_frequency": {
+          "monthly": "Mensile",
+          "quarterly": "Trimestrale",
+          "semiannual": "Semestrale",
+          "annual": "Annuale",
+          "at_maturity": "Alla scadenza"
+        },
+        "coupon_type": {
+          "fixed": "Fissa",
+          "floating": "Variabile",
+          "step_up": "Crescente",
+          "structured": "Strutturata",
+          "zero_coupon": "Zero coupon",
+          "inflation_linked": "Indicizzata all'inflazione"
+        },
+        "day_count": {
+          "act_act_icma": "ACT/ACT ICMA",
+          "act_act_isda": "ACT/ACT ISDA",
+          "act_360": "ACT/360",
+          "act_365": "ACT/365",
+          "30_360": "30/360"
+        },
+        "legal_form": {
+          "share": "Azione",
+          "bond": "Obbligazione",
+          "ucits_fund": "Fondo UCITS",
+          "non_ucits_fund": "Fondo non UCITS",
+          "etc_etn": "ETC/ETN",
+          "certificate": "Certificato",
+          "derivative": "Derivato",
+          "crypto": "Cripto-attività",
+          "other": "Altro"
+        },
+        "issuer_type": {
+          "sovereign": "Stato",
+          "supranational": "Sovranazionale",
+          "corporate": "Società",
+          "vehicle": "Veicolo di emissione"
+        }
+      },
+      "groups": {
+        "classification": "Classificazione",
+        "key_figures": "Numeri chiave",
+        "fund": "Il fondo",
+        "company": "La società",
+        "bond": "L'obbligazione",
+        "identity": "Identità",
+        "other": "Altri dati"
+      },
+      "units": {
+        "years": "anni",
+        "per_100_nominal": "per 100 di nominale"
+      },
+      "edit": {
+        "title": "Dati del profilo",
+        "searchVoice": "Cerca un dato e aggiungilo",
+        "askAll": "Chiedi tutto",
+        "addRow": "Aggiungi riga",
+        "ask": "Chiedi",
+        "asking": "Sto chiedendo alle fonti…",
+        "columnStatus": "Stato",
+        "columnVoice": "Dato",
+        "columnNewValue": "Valore nuovo",
+        "columnNow": "Adesso",
+        "chooseVoice": "Scegli un dato",
+        "stateNew": "nuovo",
+        "stateSource": "dalla fonte",
+        "stateFile": "dal file",
+        "stateEmptied": "vuoto, apposta",
+        "leaveEmpty": "Lascia vuoto",
+        "writeValue": "Scrivi un valore",
+        "validateFailed": "Non è stato possibile controllare i valori",
+        "removeRow": "Togli dall'elenco",
+        "nowNone": "nessun valore",
+        "sourceUser": "scritto da te",
+        "sourceLegacy": "prima del profilo",
+        "issueNoVoice": "Scegli un dato",
+        "issueDuplicate": "Questo dato è già nell'elenco",
+        "issueEmpty": "Scrivi un valore, o scegli «Lascia vuoto»",
+        "issueNotANumber": "Non è un numero",
+        "issueNotADate": "Non è una data",
+        "issueBackend": "Il valore non è accettato: {reason}",
+        "valid": "valido",
+        "invalid": "{count, plural, one {# riga da correggere} other {# righe da correggere}}",
+        "keep": "Tieni le modifiche",
+        "saveAll": "Salva Tutto",
+        "saved": "Dati del profilo salvati",
+        "saveFailed": "Non è stato possibile salvare i dati del profilo",
+        "sourceChanged": "{voice}: la fonte adesso dà {now}, non {seen}; è stato salvato il valore di adesso",
+        "askDone": "{filled, plural, =0 {Nessun dato vuoto da riempire} one {# dato vuoto riempito dalla fonte} other {# dati vuoti riempiti dalla fonte}}; {different, plural, =0 {niente di diverso} one {# diverso, nella finestra del confronto} other {# diversi, nella finestra del confronto}}; {equal, plural, =0 {nessuno uguale} one {# uguale} other {# uguali}}.",
+        "everythingMatches": "Tutto corrisponde alle fonti",
+        "noData": "Le fonti non hanno dati per: {voices}",
+        "noAnswer": "Nessuna risposta dalle fonti per: {voices}. Riprova più tardi.",
+        "askFailed": "Non è stato possibile chiedere alle fonti",
+        "sourceRowsNote": "Le righe «dalla fonte» si salvano a nome della fonte, non tue; se ne cambi il valore diventano tue. Le risposte restano in memoria mezz'ora: chiedere di nuovo non richiama i siti.",
+        "panelWrittenByYou": "scritta da te",
+        "panelFromSource": "{source}, letta adesso",
+        "panelEmpty": "nessun dato",
+        "currentPending": "valore attuale · tuo, in attesa",
+        "scheduleFrom": "Dal",
+        "scheduleTo": "Al",
+        "scheduleRate": "Tasso"
+      }
+    }
+  }
+}
