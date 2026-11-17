@@ -549,6 +549,14 @@ def services_enricher_call_limits(verbose: bool = False, test_names: list = None
     return run_command(cmd, "Enricher call limit tests", verbose=verbose)
 
 
+def services_coingecko_prices(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the CoinGecko provider's prices (project 76, P2): current, in bulk, the daily history, freshness."""
+    print_section("Services: CoinGecko Prices")
+    print_info("Testing: asset_source_providers/coingecko/plugin.py (get_current_value, get_current_values_bulk, get_history_value, current_min_refresh_seconds)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_coingecko_prices.py", test_names)
+    return run_command(cmd, "CoinGecko prices tests", verbose=verbose)
+
+
 def services_coingecko_provider(verbose: bool = False, test_names: list = None) -> bool:
     """Test the CoinGecko provider (project 76, P1): its shared group, its settings and parameters, the SDK's door."""
     print_section("Services: CoinGecko Provider")
@@ -3118,6 +3126,16 @@ Note: No backend server required.
         # runtime, readiness and call_counter engines; call_counter._utc frozen; a private Cooldowns; throwaway registries
         # of the base for the registration rules; the real asset and FX registries read after discovery, test plugins put
         # in their storage with monkeypatch.setitem; u4 groups and claims released at teardown.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "coingecko-prices",
+        services_coingecko_prices,
+        name="CoinGecko Prices",
+        desc="P2: /simple/price with precision=full, the value read as a decimal from the text, the UTC day of last_updated_at, unknown id NOT_FOUND, missing currency NO_DATA; in bulk one request for every item, each under its key, a 429 refuses the whole call; the history from market_chart/range (interval daily): the 00:00 UTC point of D is the close of D-1, a point not at midnight and a day outside the range dropped; the Demo plan's year moves an earlier start; the refresh interval from its setting",
+        # PURE: the real coingecko-sdk on an httpx.MockTransport (the P0 recordings), a test's «today»; no database, no
+        # server.
         isolation="pure",
     )
     add_test(

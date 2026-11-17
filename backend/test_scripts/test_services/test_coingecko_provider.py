@@ -261,6 +261,8 @@ def test_p1_other_failures_have_the_cores_codes(monkeypatch: pytest.MonkeyPatch,
     assert refused.value.error_code == code
     assert len(wire.requests) == 1, "no retry"
     assert KEY not in _texts(refused.value)
+    if code == "PROVIDER_ERROR":
+        assert refused.value.details["detail"] == "CoinGecko HTTP 500", "the interface's text shows the status"
 
 
 def test_p1_the_error_code_is_found_in_all_three_shapes():
