@@ -161,7 +161,42 @@
             "distance": "Distancia/F {value}",
             "distanceHelp": "Lo lejos que acaba la cartera de sus objetivos, en dinero: las diferencias al cuadrado de cada partida sobre toda la cartera. «El objetivo ante todo» la hace lo más pequeña posible, luego el dinero perdido.",
             "moneyLost": "Dinero perdido {value}"
+          },
+          "ledger": {
+            "fields": {
+              "transfer_in": "Transfers in",
+              "transfer_out": "Transfers out"
+            },
+            "help": {
+              "transfer_in": "What arrives in this cash from another Broker of the plan.",
+              "transfer_out": "What leaves this cash for another Broker of the plan.",
+              "funding_in": "The deposits of your contributions into this cash.",
+              "funding_out": "Always 0 in the Rebalancer: money moves between Brokers as transfers, in their own columns.",
+              "alwaysZeroInvestOnly": "Always 0 with «Invest only»: the plan only buys."
+            }
+          },
+          "proof": {
+            "lambda": "λ {value}",
+            "tieBreaks": "Tie-breaks, among the plans as good on the objectives above",
+            "fixedOrder": "a fixed order of Assets and Brokers",
+            "sameData": "A search that ends by itself gives the same plan for the same data; one stopped by the time limit may give another.",
+            "help": {
+              "status": "Whether the solver closed this stage. Finished: it proved the best value. Unfinished: it stopped at the time limit, or, for a tie-break, its plan was set aside because it was no better, in exact arithmetic, on the objectives above. After a stage that stopped, the later ones only searched among plans as good as the one already found, so a gap of 0 there proves nothing."
+            }
+          },
+          "badges": {
+            "help": {
+              "optimalProven": "The solver proved that no plan has a better score (with «Target first»: a smaller distance from the targets, then less money lost), and the exact check of the plan matches its numbers. The tie-breaks after it may have stopped earlier: they only choose among plans just as good. The proof holds within the solver's small calculation margin, which grows with the amounts."
+            }
+          },
+          "states": {
+            "limit": {
+              "tieBreak": "The plan is proven the best on its objective; the limit stopped a tie-break, so an equally good plan may exist."
+            }
           }
+        },
+        "objectives": {
+          "route_priority": "Route priority"
         }
       }
     }
