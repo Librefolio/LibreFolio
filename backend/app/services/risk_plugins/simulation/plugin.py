@@ -193,6 +193,8 @@ class SimulationAnalytic(RiskAnalytic):
     # 5.0.0 (RN-16, developer's Q4 c and Q5 a) — estimated on the simulation's own history (the service prepares it:
     # all the common history, never the page's period), the bootstrap keeping its most recent observations that fit;
     # the path count falls to the largest power of two that fits, never under 1 024; both declared in the output.
+    # RN-16b, in the same 5.0.0 (RN-16 is not released yet): a holding with less history than the horizon is left out,
+    # its weight with the cash, unless none reaches it (developer's Q7 «per ora B», `simulation_participants`).
     algorithm_version = "5.0.0-bootstrap-quantlib-1.43"
     name_i18n_key = "risk.analytics.simulation.name"
     description_i18n_key = "risk.analytics.simulation.description"

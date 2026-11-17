@@ -297,6 +297,13 @@ async def load_price_window_facts(
     return facts
 
 
+async def first_fx_rate_dates(session: AsyncSession, *, currencies: Iterable[str], target_currency: str) -> dict[str, Optional[date]]:
+    """The earliest stored rate of each currency's pair with ``target_currency`` (RN-16b: a holding's first usable day
+    for the simulation is the later of its first price and its first rate). A pair stored either way round counts;
+    None when none is stored — a conversion that only goes through another currency has no such date here."""
+    return {currency: await _first_rate_date(session, currency, target_currency) for currency in sorted(set(currencies)) if currency != target_currency}
+
+
 async def _first_rate_date(session: AsyncSession, currency: str, target_currency: str) -> Optional[date]:
     """The date of the earliest rate stored for the pair of ``currency`` and ``target_currency``, whichever way round it is stored; None when none is."""
     base, quote = sorted((currency, target_currency))

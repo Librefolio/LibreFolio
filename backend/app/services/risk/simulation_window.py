@@ -10,54 +10,131 @@ per-day points over every asset) moves its start forward to the most recent days
 bootstrap's history ceiling then keeps the most recent observations that cross the process boundary (in the plugin).
 The result states the window it was estimated on; `history_truncated` says only the bootstrap's trim — a start moved by
 the price budget (over 27 years of prices at 100 holdings) shows in the window's start date alone.
+
+Who takes part (RN-16b, developer's Q7 «per ora B», 17/11/2026): a holding with less history than the horizon stays out
+— its weight counted as cash, the page naming it — unless none reaches the horizon (:func:`simulation_participants`).
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 from collections.abc import Set as AbstractSet
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.schemas.common import DateRangeModel
+from backend.app.schemas.risk.results import RiskWarning
 from backend.app.schemas.risk.scope import RiskQueryRequest
-from backend.app.schemas.risk.vocabulary import RiskErrorCode
+from backend.app.schemas.risk.vocabulary import RiskErrorCode, RiskHistoricalReplayExclusionTreatment, RiskScopeKind
+from backend.app.services.platform.data_quality_thresholds import REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE
 from backend.app.services.risk.base import RiskExecutionContext, RiskUnavailableError
-from backend.app.services.risk.eligibility import PriceWindowFacts, load_price_window_facts
+from backend.app.services.risk.eligibility import first_fx_rate_dates, load_price_window_facts
 from backend.app.services.risk.results import build_execution_context
 from backend.app.services.risk.scope import ScopeInputs, bounded_range, prepare_asset_series
 from backend.app.utils.date_range_limits import MAX_BULK_ITEM_DAYS
 from backend.app.utils.datetime_utils import latest_range_end
 
 
-def simulation_participants(first_quotes: Mapping[int, date | None]) -> tuple[tuple[int, ...], tuple[int, ...]]:
-    """Which holdings the simulation's history is estimated on, and which it leaves out: the one place that decides.
-
-    Today (RN-16, developer's Q4 c — the consultant's reading, 17/11/2026) every quoted holding takes part, so a holding
-    listed recently shortens the shared history of all of them and the amber line says how short it is; a holding never
-    quoted takes no part (the preparation excludes it, as the page does). Leaving a late starter out — its weight with
-    the cash, as the historical replay does — is a product choice put to the developer; if it is made, it is made here.
-    """
-    quoted = tuple(asset_id for asset_id, first in first_quotes.items() if first is not None)
-    left_out = tuple(asset_id for asset_id, first in first_quotes.items() if first is None)
-    return quoted, left_out
-
-
-def simulation_window(facts: Mapping[int, PriceWindowFacts], *, end: date) -> DateRangeModel | None:
-    """The window the simulation is estimated on, from the facts of its assets; None when none of them takes part.
-
-    It starts the day after the latest first quote among the holdings that take part (:func:`simulation_participants`) —
-    so every one of them has a price on the day before, the baseline the first return is measured from — and no earlier
-    than the price budget allows for this many assets: the most recent days that fit (J-50). It ends at ``end``.
-    """
-    taking_part, _left_out = simulation_participants({asset_id: item.first_quote_ever for asset_id, item in facts.items()})
-    if not taking_part:
+def first_useful_day(first_quote: date | None, first_rate: date | None) -> date | None:
+    """A holding's first day the simulation can use (RN-16b, point 1): the later of its first price and its first rate
+    into the page's currency, when it needs one. None for a holding never quoted."""
+    if first_quote is None:
         return None
-    start = max(facts[asset_id].first_quote_ever for asset_id in taking_part) + timedelta(days=1)
-    budget_days = MAX_BULK_ITEM_DAYS // len(taking_part)
-    start = max(start, end - timedelta(days=budget_days - 2))
+    return first_quote if first_rate is None else max(first_quote, first_rate)
+
+
+@dataclass(frozen=True)
+class SimulationParticipants:
+    """Who the simulation's history is estimated on, who it leaves out for being shorter than the horizon, and who was
+    never quoted (the preparation excludes those, as the page does)."""
+
+    taking_part: tuple[int, ...]
+    short: tuple[int, ...]
+    never_quoted: tuple[int, ...]
+
+
+def simulation_participants(first_days: Mapping[int, date | None], *, horizon_days: int, end: date) -> SimulationParticipants:
+    """Which holdings the simulation's history is estimated on: the one place that decides.
+
+    The developer's answer to Q7, 17/11/2026, «per ora B», in the consultant's rule (RN-16b): a holding takes part when
+    its history — ``end`` minus its first useful day (:func:`first_useful_day`), in calendar days, the measure of the
+    amber «history shorter than the horizon» line — reaches the horizon, the horizon itself included. A shorter one stays
+    out: on a weighted scope its weight counts as cash at zero return (the historical replay's treatment), and the page
+    names it. When no holding reaches the horizon, every quoted one takes part — Q4 c, with its amber line — and so does
+    the only holding of one asset, which is never left out. The horizon decides, so changing it decides again. A holding
+    never quoted takes no part.
+    """
+    quoted = {asset_id: first for asset_id, first in first_days.items() if first is not None}
+    never_quoted = tuple(asset_id for asset_id, first in first_days.items() if first is None)
+    reaching = tuple(asset_id for asset_id, first in quoted.items() if (end - first).days >= horizon_days)
+    if not reaching:
+        return SimulationParticipants(taking_part=tuple(quoted), short=(), never_quoted=never_quoted)
+    return SimulationParticipants(taking_part=reaching, short=tuple(asset_id for asset_id in quoted if asset_id not in reaching), never_quoted=never_quoted)
+
+
+def simulation_window(first_days: Mapping[int, date], *, end: date) -> DateRangeModel | None:
+    """The window the simulation is estimated on, from the first useful days of the holdings that take part; None when
+    none does.
+
+    It starts the day after the latest of those days — so every participant has a price on the day before, the baseline
+    the first return is measured from — and no earlier than the price budget allows for this many assets: the most recent
+    days that fit (J-50). It ends at ``end``.
+    """
+    if not first_days:
+        return None
+    start = max(first_days.values()) + timedelta(days=1)
+    budget_days = MAX_BULK_ITEM_DAYS // len(first_days)
+    # Few holdings have a budget longer than the calendar before ``end`` (one holding: a million days): never earlier.
+    if budget_days - 2 < (end - date.min).days:
+        start = max(start, end - timedelta(days=budget_days - 2))
     return bounded_range(DateRangeModel(start=min(start, end), end=end))
+
+
+def _short_history_warnings(short: tuple[int, ...], first_days: Mapping[int, date | None], *, horizon_days: int, end: date, weights: Mapping[int, float], weighted: bool) -> list[RiskWarning]:
+    """The page names each holding left out (RN-16b), with its history and the horizon, and — past the replay's own
+    threshold — says the simulation describes a minority of the scope. Degrading, as the replay's exclusions are: a part
+    of the scope is not in the projection (its weight is idle cash), unlike a history that is only short."""
+    warnings: list[RiskWarning] = []
+    for asset_id in short:
+        first = first_days[asset_id]
+        history_days = (end - first).days if first is not None else 0
+        warnings.append(
+            RiskWarning(
+                code="simulation_asset_shorter_than_horizon",
+                message=f"Asset {asset_id} has {history_days} days of history, less than the {horizon_days}-day horizon: left out of the simulation, its weight counted as cash.",
+                details={"asset_id": asset_id, "treatment": RiskHistoricalReplayExclusionTreatment.ZERO_RETURN_RESIDUAL.value},
+                message_i18n_key="risk.warnings.simulation_excluded_short_history",
+                message_params={"history_days": history_days, "horizon_days": horizon_days},
+            )
+        )
+    excluded_weight = sum(weights.get(asset_id, 0.0) for asset_id in short)
+    if weighted and excluded_weight > REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE:
+        covered = max(0.0, 1.0 - excluded_weight)
+        warnings.append(
+            RiskWarning(
+                code="simulation_mostly_excluded",
+                message=f"The simulation describes only {covered:.0%} of the portfolio: the rest has less history than the horizon.",
+                details={"excluded_weight_total": excluded_weight, "threshold": REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE},
+                message_i18n_key="risk.warnings.simulation_mostly_excluded",
+                message_params={"covered": round(covered, 4)},
+            )
+        )
+    return warnings
+
+
+def _without_assets(warnings: tuple[RiskWarning, ...], asset_ids: frozenset[int]) -> list[RiskWarning]:
+    """The generic «excluded for insufficient history» warning, without the holdings a dedicated warning already names."""
+    kept: list[RiskWarning] = []
+    for warning in warnings:
+        if warning.code == "assets_excluded" and (warning.details or {}).get("reason") == "insufficient_history":
+            remaining = [asset_id for asset_id in warning.details.get("asset_ids", []) if asset_id not in asset_ids]
+            if not remaining:
+                continue
+            warning = warning.model_copy(update={"details": {**warning.details, "asset_ids": remaining}})
+        kept.append(warning)
+    return kept
 
 
 async def prepare_simulation_context(
@@ -66,9 +143,11 @@ async def prepare_simulation_context(
     request: RiskQueryRequest,
     scope_inputs: ScopeInputs,
     never_priced_asset_ids: frozenset[int],
+    horizon_days: int,
     market_holidays: AbstractSet[date] = frozenset(),
 ) -> RiskExecutionContext:
-    """The execution context of a simulation, rebuilt whole from its own window (weights, cash, exclusions, series)."""
+    """The execution context of a simulation, rebuilt whole from its own window and its own participants (weights, cash,
+    exclusions, series, warnings)."""
     end = latest_range_end()
     facts = await load_price_window_facts(
         db,
@@ -78,22 +157,30 @@ async def prepare_simulation_context(
         target_currency=request.target_currency,
         market_holidays=market_holidays,
     )
-    window = simulation_window(facts, end=end)
+    first_rates = await first_fx_rate_dates(db, currencies={item.currency for item in facts.values() if item.currency}, target_currency=request.target_currency)
+    first_days = {asset_id: first_useful_day(item.first_quote_ever, first_rates.get(item.currency) if item.currency else None) for asset_id, item in facts.items()}
+    chosen = simulation_participants(first_days, horizon_days=horizon_days, end=end)
+    window = simulation_window({asset_id: first_days[asset_id] for asset_id in chosen.taking_part}, end=end)
     if window is None:
         raise RiskUnavailableError(
             "No asset of the scope has a price to estimate the simulation on",
             code=RiskErrorCode.INSUFFICIENT_HISTORY,
         )
+    short = frozenset(chosen.short)
     prepared = await prepare_asset_series(
         db,
-        asset_ids=tuple(sorted(scope_inputs.requested_asset_ids)),
+        asset_ids=tuple(sorted(asset_id for asset_id in scope_inputs.requested_asset_ids if asset_id not in short)),
         date_range=window,
         target_currency=request.target_currency,
         market_holidays=market_holidays,
     )
-    return build_execution_context(
+    context = build_execution_context(
         request=request.model_copy(update={"date_range": window}),
         scope_inputs=scope_inputs,
         prepared=prepared,
         never_priced_asset_ids=never_priced_asset_ids,
     )
+    if not short:
+        return context
+    named = _short_history_warnings(chosen.short, first_days, horizon_days=horizon_days, end=end, weights=scope_inputs.weights, weighted=request.scope.kind == RiskScopeKind.PORTFOLIO)
+    return replace(context, execution_warnings=tuple(_without_assets(tuple(context.execution_warnings), short)) + tuple(named))

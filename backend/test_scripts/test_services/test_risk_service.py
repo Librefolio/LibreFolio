@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -14,13 +15,26 @@ from backend.app.schemas.portfolio.data_quality import DataQualityExcludedAsset,
 from backend.app.schemas.portfolio.history import PortfolioHistoryPoint
 from backend.app.schemas.portfolio.report import PortfolioReportResponse
 from backend.app.schemas.portfolio.summary import PortfolioHolding, PortfolioSummary
-from backend.app.schemas.risk.outputs import RiskKpiOutput
+from backend.app.schemas.risk.outputs import RiskKpiOutput, RiskSimulationBandPoint, RiskSimulationOutput
 from backend.app.schemas.risk.results import RiskAnalyticResult, RiskError, RiskExcludedAsset, RiskWarning
 from backend.app.schemas.risk.scope import RiskAnalyticRequest, RiskQueryRequest
 from backend.app.schemas.risk.series import AssetReturnPoint, AssetReturnSeries, AssetValuationPoint, AssetValuationSeries, PreparedAssetSeries, PreparedAssetSeriesSet, RiskFreeReference
-from backend.app.schemas.risk.vocabulary import RiskErrorCode, RiskMode, RiskOutputKind, RiskResultStatus, RiskReturnBasis, RiskScopeKind
+from backend.app.schemas.risk.vocabulary import (
+    RiskCompositionPolicy,
+    RiskErrorCode,
+    RiskMode,
+    RiskOutputKind,
+    RiskResultStatus,
+    RiskReturnBasis,
+    RiskSamplingStrategy,
+    RiskScopeKind,
+    RiskSimulationCovarianceEstimator,
+    RiskSimulationDriftEstimator,
+    RiskSimulationProcess,
+    RiskSimulationRegime,
+)
 from backend.app.schemas.wac import WACMissingPairInfo
-from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
+from backend.app.services.platform.data_quality_thresholds import REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE, STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.app.services.risk import replay as risk_replay_module
 from backend.app.services.risk import scope as risk_scope_module
@@ -46,7 +60,7 @@ from backend.app.services.risk.scope import (
     scope_reference,
 )
 from backend.app.services.risk.service import RiskService
-from backend.app.services.risk.simulation_window import simulation_participants, simulation_window
+from backend.app.services.risk.simulation_window import first_useful_day, simulation_participants, simulation_window
 from backend.app.services.risk_plugins.simulation.plugin import SimulationAnalytic
 from backend.app.utils.date_range_limits import MAX_BULK_ITEM_DAYS
 from backend.app.utils.datetime_utils import latest_range_end
@@ -2838,26 +2852,36 @@ def _facts(first_quote: date | None) -> PriceWindowFacts:
 
 def test_the_simulation_window_starts_the_day_after_the_latest_first_quote():
     end = date(2026, 11, 17)
-    window = simulation_window({1: _facts(date(2021, 3, 1)), 2: _facts(date(2023, 6, 15)), 3: _facts(None)}, end=end)
+    window = simulation_window({1: date(2021, 3, 1), 2: date(2023, 6, 15)}, end=end)
 
     # The day after: the latest starter has its price on the baseline day the first return is measured from.
     assert (window.start, window.end) == (date(2023, 6, 16), end)
-    assert simulation_window({1: _facts(None)}, end=end) is None
+    assert simulation_window({}, end=end) is None
 
 
 def test_the_simulation_window_keeps_the_most_recent_days_the_price_budget_allows():
     """J-50: one preparation builds at most MAX_BULK_ITEM_DAYS per-day points over every asset — the window starts as
     late as that needs, instead of refusing (the page's refusal names a shorter period, which the simulation has not)."""
     end = date(2026, 11, 17)
-    facts = {asset_id: _facts(date(1990, 1, 2)) for asset_id in range(1, 101)}
+    first_days = {asset_id: date(1990, 1, 2) for asset_id in range(1, 101)}
 
-    window = simulation_window(facts, end=end)
+    window = simulation_window(first_days, end=end)
 
     per_asset = MAX_BULK_ITEM_DAYS // 100
     assert window.end == end
     assert (end - window.start).days + 2 == per_asset
     # Counted as the preparation counts it — from the day before the start, the baseline it loads, to the end.
     assert 100 * ((end - (window.start - timedelta(days=1))).days + 1) <= MAX_BULK_ITEM_DAYS
+
+
+def test_the_simulation_window_of_one_holding_stays_in_the_calendar():
+    """The price budget of one holding is a million days, more than the calendar holds before today: the window keeps
+    the holding's own history instead of computing a start before year 1 (found by RN-16b, on one holding taking part)."""
+    end = date(2026, 11, 17)
+
+    window = simulation_window({1: date(1990, 1, 2)}, end=end)
+
+    assert (window.start, window.end) == (date(1990, 1, 3), end)
 
 
 @pytest.mark.asyncio
@@ -2931,9 +2955,239 @@ async def test_the_simulation_reads_its_own_window_and_the_rest_of_the_request_t
     assert response.items[0].error.message == "captured"
 
 
-def test_every_quoted_holding_takes_part_in_the_simulation_and_only_the_unquoted_stay_out():
-    """The one place that decides who the simulation's history is estimated on (RN-16): today, every quoted holding — a
-    recent listing shortens the shared history of all of them (Q4 c as approved; leaving it out is the developer's call)."""
-    taking_part, left_out = simulation_participants({1: date(2018, 1, 2), 2: date(2026, 9, 1), 3: None})
+# --------------------------------------------------------------------------- #
+# RN-16b (developer's Q7 «per ora B», 17/11/2026; the consultant's rule): a holding with less history than the horizon
+# stays out of the simulation, its weight counted as cash, and the page names it; when none reaches the horizon, all
+# take part (Q4 c's amber line). The one place that decides is `simulation_participants`.
+# --------------------------------------------------------------------------- #
 
-    assert (taking_part, left_out) == ((1, 2), (3,))
+END = date(2026, 11, 17)
+
+
+def test_a_holding_with_less_history_than_the_horizon_stays_out_and_the_others_take_part():
+    first_days = {asset_id: date(2015, 1, 2) for asset_id in range(1, 11)} | {11: date(2026, 9, 15), 12: None}
+
+    chosen = simulation_participants(first_days, horizon_days=365, end=END)
+
+    assert chosen.taking_part == tuple(range(1, 11))
+    assert chosen.short == (11,)
+    assert chosen.never_quoted == (12,)
+
+
+def test_when_no_holding_reaches_the_horizon_every_quoted_one_takes_part():
+    """Point 3: B leaves out only beside holdings that reach the horizon; with none, it is Q4 c with its amber line."""
+    chosen = simulation_participants({1: date(2026, 9, 15), 2: date(2026, 10, 1), 3: None}, horizon_days=365, end=END)
+
+    assert (chosen.taking_part, chosen.short, chosen.never_quoted) == ((1, 2), (), (3,))
+
+
+def test_a_history_as_long_as_the_horizon_takes_part():
+    """Point 2: history ≥ horizon, in calendar days (end − first useful day), the amber line's own measure."""
+    exactly = END - timedelta(days=365)
+    chosen = simulation_participants({1: date(2015, 1, 2), 2: exactly, 3: exactly + timedelta(days=1)}, horizon_days=365, end=END)
+
+    assert chosen.taking_part == (1, 2)
+    assert chosen.short == (3,)
+
+
+def test_a_shorter_horizon_lets_the_late_holding_back_in():
+    """Point 7: the horizon decides, so changing it decides again — a holding listed two months ago is in at 30 days."""
+    first_days = {1: date(2015, 1, 2), 2: date(2026, 9, 15)}
+
+    assert simulation_participants(first_days, horizon_days=365, end=END).short == (2,)
+    assert simulation_participants(first_days, horizon_days=30, end=END).taking_part == (1, 2)
+
+
+def test_one_asset_is_never_left_out():
+    """Point 6: on the Asset Detail the only holding is the scope — short, it takes part (point 3)."""
+    chosen = simulation_participants({7: date(2026, 9, 15)}, horizon_days=365, end=END)
+
+    assert (chosen.taking_part, chosen.short) == ((7,), ())
+
+
+def test_a_holding_s_first_useful_day_is_the_later_of_its_first_price_and_its_first_rate():
+    """Point 1: a price with no rate into the page's currency is not a usable day yet."""
+    assert first_useful_day(date(2010, 1, 4), date(2024, 3, 1)) == date(2024, 3, 1)
+    assert first_useful_day(date(2024, 3, 1), date(2010, 1, 4)) == date(2024, 3, 1)
+    assert first_useful_day(date(2024, 3, 1), None) == date(2024, 3, 1)
+    assert first_useful_day(None, date(2010, 1, 4)) is None
+
+
+def _weighted_scope(weights: dict[int, float]) -> ScopeInputs:
+    return ScopeInputs(
+        requested_asset_ids=tuple(sorted(weights)),
+        weights=weights,
+        asset_values={asset_id: Decimal(str(weight * 100)) for asset_id, weight in weights.items()},
+        cash_weight=0.0,
+        scope_value=Decimal("100"),
+        portfolio_report=None,
+        data_quality=DataQualityReport(),
+        warnings=(),
+        broker_ids=(3,),
+        composition_as_of=END,
+    )
+
+
+#: The windows the simulation's preparation was asked for, by the last `_simulation_context`.
+prepared_windows: list[DateRangeModel] = []
+
+
+async def _simulation_context(monkeypatch, *, weights: dict[int, float], first_quotes: dict[int, date], horizon_days: int = 365, currencies: dict[int, str] | None = None, fx_first: dict[str, date] | None = None):
+    prepared_ids: list[tuple[int, ...]] = []
+    prepared_windows.clear()
+
+    async def fake_facts(_db, **kwargs):
+        return {asset_id: replace(_facts(first_quotes[asset_id]), currency=(currencies or {}).get(asset_id, "EUR")) for asset_id in kwargs["asset_ids"]}
+
+    async def fake_fx(_db, *, currencies, target_currency):
+        return {currency: (fx_first or {}).get(currency) for currency in currencies}
+
+    async def fake_prepare(_db, **kwargs):
+        prepared_ids.append(tuple(kwargs["asset_ids"]))
+        prepared_windows.append(kwargs["date_range"])
+        return make_prepared_set({asset_id: [0.01, -0.005] * 20 for asset_id in kwargs["asset_ids"]}, baseline=date(2025, 1, 2))
+
+    monkeypatch.setattr(risk_simulation_window_module, "load_price_window_facts", fake_facts)
+    monkeypatch.setattr(risk_simulation_window_module, "first_fx_rate_dates", fake_fx)
+    monkeypatch.setattr(risk_simulation_window_module, "prepare_asset_series", fake_prepare)
+    request = RiskQueryRequest.model_validate(
+        {
+            "scope": {"kind": "portfolio", "broker_ids": [3]},
+            "date_range": {"start": "2026-01-02", "end": "2026-01-21"},
+            "target_currency": "EUR",
+            "mode": "current_composition",
+            "composition_policy": "current_buy_and_hold",
+            "analytics": [{"instance_id": "simulation", "analytic_code": "simulation", "parameters": {"horizon_days": horizon_days, "path_count": 256}}],
+        }
+    )
+    context = await risk_simulation_window_module.prepare_simulation_context(EmptyRowsDb(), request=request, scope_inputs=_weighted_scope(weights), never_priced_asset_ids=frozenset(), horizon_days=horizon_days)
+    return context, prepared_ids
+
+
+@pytest.mark.asyncio
+async def test_the_short_holding_is_named_and_its_weight_counts_as_cash(monkeypatch):
+    """Point 5 (weighted scope) and the warnings: left out of the preparation, its weight is cash at zero return — the
+    weights and the cash still add up to one — and one warning names it with its history and the horizon, not the
+    generic «excluded for insufficient history»."""
+    recent = latest_range_end() - timedelta(days=63)
+    context, prepared_ids = await _simulation_context(monkeypatch, weights={1: 0.7, 2: 0.2, 3: 0.1}, first_quotes={1: date(2015, 1, 2), 2: date(2016, 5, 2), 3: recent})
+
+    assert prepared_ids == [(1, 2)]
+    # The window of the holdings that take part: from the day after the later of their first days, not the short one's.
+    assert prepared_windows[0].start == date(2016, 5, 3)
+    assert context.cash_weight == pytest.approx(0.1)
+    # What the plugin reads: the weights of the holdings in the series, and the cash — the left-out weight among it.
+    assert context.scope_asset_ids == (1, 2)
+    assert sum(context.weights[asset_id] for asset_id in context.scope_asset_ids) + context.cash_weight == pytest.approx(1.0)
+    named = [warning for warning in context.execution_warnings if warning.code == "simulation_asset_shorter_than_horizon"]
+    assert [(warning.details["asset_id"], warning.message_params["history_days"], warning.message_params["horizon_days"]) for warning in named] == [(3, 63, 365)]
+    assert named[0].message_i18n_key == "risk.warnings.simulation_excluded_short_history"
+    assert named[0].details["treatment"] == "zero_return_residual"
+    assert all(3 not in (warning.details or {}).get("asset_ids", []) for warning in context.execution_warnings if warning.code == "assets_excluded")
+    assert not any(warning.code == "simulation_mostly_excluded" for warning in context.execution_warnings)
+
+
+@pytest.mark.asyncio
+async def test_past_the_replay_s_threshold_the_simulation_says_it_describes_a_minority(monkeypatch):
+    """The «mostly excluded» line of the replay, on the same constant (REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE), not a second one."""
+    recent = latest_range_end() - timedelta(days=40)
+    context, _ = await _simulation_context(monkeypatch, weights={1: 0.3, 2: 0.7}, first_quotes={1: date(2015, 1, 2), 2: recent})
+
+    (mostly,) = [warning for warning in context.execution_warnings if warning.code == "simulation_mostly_excluded"]
+    assert mostly.details["threshold"] == REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE
+    assert mostly.message_params["covered"] == pytest.approx(0.3)
+
+
+@pytest.mark.asyncio
+async def test_a_rate_that_starts_after_the_price_decides_the_holding_s_history(monkeypatch):
+    """Point 1 end to end: a dollar holding quoted for years, whose dollar–euro rates start two months ago, is short."""
+    recent_rate = latest_range_end() - timedelta(days=60)
+    context, prepared_ids = await _simulation_context(monkeypatch, weights={1: 0.6, 2: 0.4}, first_quotes={1: date(2015, 1, 2), 2: date(2012, 3, 1)}, currencies={1: "EUR", 2: "USD"}, fx_first={"USD": recent_rate})
+
+    assert prepared_ids == [(1,)]
+    assert [warning.details["asset_id"] for warning in context.execution_warnings if warning.code == "simulation_asset_shorter_than_horizon"] == [2]
+
+
+@pytest.mark.asyncio
+async def test_all_short_keeps_every_holding_and_names_none(monkeypatch):
+    recent = latest_range_end() - timedelta(days=40)
+    context, prepared_ids = await _simulation_context(monkeypatch, weights={1: 0.5, 2: 0.5}, first_quotes={1: recent, 2: recent - timedelta(days=5)})
+
+    assert prepared_ids == [(1, 2)]
+    assert not any(warning.code == "simulation_asset_shorter_than_horizon" for warning in context.execution_warnings)
+
+
+@pytest.mark.asyncio
+async def test_the_simulation_s_answer_names_the_holding_it_left_out(monkeypatch):
+    """End to end through the service: the warning reaches the simulation's result, which turns partial, with the
+    holding's name added by `with_warning_asset_names` from its single `asset_id` («#3»: the stub database names no
+    asset), and no generic «excluded» line for it."""
+    recent = latest_range_end() - timedelta(days=63)
+    page = DateRangeModel(start=date(2026, 1, 2), end=date(2026, 1, 21))
+
+    async def fake_scope(_db, **_kwargs):
+        return _weighted_scope({1: 0.7, 2: 0.2, 3: 0.1})
+
+    async def fake_assets(_db, asset_ids):
+        return set(asset_ids)
+
+    async def fake_prepare(_db, **kwargs):
+        return make_prepared_set({asset_id: [0.01, -0.005] * 20 for asset_id in kwargs["asset_ids"]}, baseline=date(2025, 1, 2))
+
+    async def fake_facts(_db, **kwargs):
+        first = {1: date(2015, 1, 2), 2: date(2016, 5, 2), 3: recent}
+        return {asset_id: replace(_facts(first[asset_id]), currency="EUR") for asset_id in kwargs["asset_ids"]}
+
+    async def fake_fx(_db, *, currencies, target_currency):
+        return {}
+
+    async def computed(self, params, context):
+        output = RiskSimulationOutput(
+            process=RiskSimulationProcess.BLOCK_BOOTSTRAP,
+            regime=RiskSimulationRegime.NONE,
+            sampling_method=RiskSamplingStrategy.MC,
+            horizon_days=2,
+            path_count=1024,
+            block_length_days=9,
+            drift_estimator=RiskSimulationDriftEstimator.EMPIRICAL_RESAMPLED,
+            covariance_estimator=RiskSimulationCovarianceEstimator.NOT_ESTIMATED_JOINT_RESAMPLING,
+            aggregation_policy=RiskCompositionPolicy.CURRENT_BUY_AND_HOLD,
+            percentile_bands=[RiskSimulationBandPoint(day=day, p05=-0.01 * day, p50=0.0, p95=0.01 * day) for day in range(3)],
+            terminal_mean_return=0.01,
+            terminal_volatility=0.2,
+            probability_of_loss=0.4,
+        )
+        return RiskComputation(output=output, method="block_bootstrap")
+
+    async def serve_holidays() -> frozenset[date]:
+        return frozenset()
+
+    monkeypatch.setattr(risk_service_module, "load_scope_inputs", fake_scope)
+    monkeypatch.setattr(risk_service_module, "load_existing_asset_ids", fake_assets)
+    monkeypatch.setattr(risk_service_module, "prepare_asset_series", fake_prepare)
+    monkeypatch.setattr(risk_simulation_window_module, "prepare_asset_series", fake_prepare)
+    monkeypatch.setattr(risk_simulation_window_module, "load_price_window_facts", fake_facts)
+    monkeypatch.setattr(risk_simulation_window_module, "first_fx_rate_dates", fake_fx)
+    monkeypatch.setattr(risk_service_module, "ensure_market_holidays", serve_holidays)
+    monkeypatch.setattr(SimulationAnalytic, "execute", computed)
+
+    response = await RiskService(db=EmptyRowsDb()).execute(
+        user_id=7,
+        request=RiskQueryRequest.model_validate(
+            {
+                "scope": {"kind": "portfolio", "broker_ids": [3]},
+                "date_range": {"start": page.start.isoformat(), "end": page.end.isoformat()},
+                "target_currency": "EUR",
+                "mode": "current_composition",
+                "composition_policy": "current_buy_and_hold",
+                "analytics": [{"instance_id": "simulation", "analytic_code": "simulation", "parameters": {"horizon_days": 365, "path_count": 1024}}],
+            }
+        ),
+    )
+
+    (item,) = response.items
+    assert item.status == RiskResultStatus.PARTIAL
+    (named,) = [warning for warning in item.warnings if warning.code == "simulation_asset_shorter_than_horizon"]
+    assert named.message_params["names"] == "#3"
+    assert (named.message_params["history_days"], named.message_params["horizon_days"]) == (63, 365)
+    assert all(3 not in (warning.details or {}).get("asset_ids", []) for warning in item.warnings if warning.code == "assets_excluded")

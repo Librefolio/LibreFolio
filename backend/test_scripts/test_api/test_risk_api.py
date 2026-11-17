@@ -954,6 +954,9 @@ async def test_risk_query_answers_the_asset_detail_s_own_levels_on_one_asset():
                         {"instance_id": "comparison", "analytic_code": "comparison", "parameters": {"comparison_asset_id": reference}},
                         # A replay long before any seeded price: on one asset nothing is left to replay.
                         {"instance_id": "replay", "analytic_code": "stress", "parameters": {"method": "historical_replay", "replay_range": {"start": "2000-01-03", "end": "2000-03-31"}}},
+                        # RN-16b: a simulation on one asset — its only holding is never left out, and its window of one
+                        # holding stays in the calendar (a million-day price budget once started it before year 1).
+                        {"instance_id": "simulation", "analytic_code": "simulation", "parameters": {"horizon_days": 30, "path_count": 1024}},
                     ],
                 },
             )
@@ -973,6 +976,9 @@ async def test_risk_query_answers_the_asset_detail_s_own_levels_on_one_asset():
     # The «nothing left» answer the tab's replay reads (`replayNothingLeft`): refused as insufficient history, the asset
     # listed with its reason and no weight (one asset is an unweighted scope) — never another code, which the tab
     # would show as a plain error.
+    simulation = by_id["simulation"]
+    assert simulation["status"] in {"ok", "partial"} and simulation["output"] is not None, simulation
+    assert not any(warning["code"] == "simulation_asset_shorter_than_horizon" for warning in simulation["warnings"])
     replay = by_id["replay"]
     assert replay["status"] == "unavailable" and replay["error"]["code"] == "insufficient_history", replay
     assert [(item["asset_id"], item["weight"]) for item in replay["error"]["details"]["excluded_assets"]] == [(subject, None)]

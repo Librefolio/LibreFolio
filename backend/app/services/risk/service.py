@@ -174,6 +174,7 @@ class RiskService:
                             request=request,
                             scope_inputs=scope_inputs,
                             never_priced_asset_ids=never_priced_asset_ids,
+                            horizon_days=plan.params.horizon_days,
                             market_holidays=market_holidays,
                         )
                     else:
