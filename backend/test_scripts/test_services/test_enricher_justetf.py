@@ -89,6 +89,7 @@ from backend.app.services.enrichers.base import (
 )
 from backend.app.services.enrichers.refresh import ReadOutcome, merge_voices
 from backend.app.services.enrichers.registry import EnricherRegistry
+from backend.app.services.plugin_settings.call_limits import CALL_LIMIT_KEYS
 from backend.app.utils.asset.sector import FinancialSector, validate_sector
 
 PLUGIN_MODULE = "backend.app.services.enricher_providers.justetf.plugin"
@@ -432,7 +433,9 @@ def test_declarations(je):
     assert cls.name == "justETF"
     assert cls.terms is EnricherTerms.PRICE_SOURCE
     assert cls.accepted_identifier_types == ("ISIN",)
-    assert tuple(cls.settings_fields) == (), "no settings"
+    own = tuple(field.key for field in cls.settings_fields if field.key not in CALL_LIMIT_KEYS)
+    assert own == (), "no settings of its own"
+    assert tuple(field.key for field in cls.settings_fields if field.key in CALL_LIMIT_KEYS) == CALL_LIMIT_KEYS, "it calls a source: the core gives it the five call limits (76 U4)"
     assert not getattr(cls, "test_only", False), "a real enricher, served outside test mode"
     instance = cls()
     assert instance.params_schema == [], "no extra parameters of a binding"

@@ -140,6 +140,7 @@ from backend.app.services.enrichers.base import (
     EnricherTerms,
 )
 from backend.app.services.enrichers.registry import EnricherRegistry
+from backend.app.services.plugin_settings.call_limits import CALL_LIMIT_KEYS
 from backend.app.utils.asset.sector import validate_sector
 
 PLUGIN_MODULE = "backend.app.services.enricher_providers.borsa_italiana.plugin"
@@ -664,6 +665,9 @@ def test_declarations(bi):
     assert cls.terms is EnricherTerms.PRICE_SOURCE
     assert cls.accepted_identifier_types == ("ISIN", FUND_CODE_TYPE), "C2b: the ISIN, and the site's internal fund code"
     assert not getattr(cls, "test_only", False), "a real enricher, served outside test mode"
+    own = tuple(field.key for field in cls.settings_fields if field.key not in CALL_LIMIT_KEYS)
+    assert own == (), "no settings of its own"
+    assert tuple(field.key for field in cls.settings_fields if field.key in CALL_LIMIT_KEYS) == CALL_LIMIT_KEYS, "it calls a source: the core gives it the five call limits (76 U4)"
     assert cls().supports_search is True
 
 
