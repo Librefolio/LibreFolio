@@ -672,6 +672,16 @@ def services_transaction_charge_links(verbose: bool = False, test_names: list = 
     return run_command(cmd, "Transaction charge links tests", verbose=verbose)
 
 
+def services_transaction_charge_edits(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the deletes and updates of linked charges and their parents (project 66, lots R4 and R5)."""
+    print_section("Services: Transaction Charge Edits")
+    print_info("Testing: backend/app/services/transactions/charges.py (link_charges: unlink, relink, deleted parents, touched parents) + the update items")
+    print_info("Tests: a parent deleted with its charges left is refused; deleted with them, or with them unlinked, goes; updates link, unlink and relink; a promoted parent with charges is refused; a broker with linked rows is deleted")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transaction_charge_edits.py", test_names)
+    return run_command(cmd, "Transaction charge edits tests", verbose=verbose)
+
+
 def services_linked_cash_pair(verbose: bool = False, test_names: list = None) -> bool:
     """Test that a batch refuses a linked CASH_TRANSFER or FX_CONVERSION that contradicts its type (W6-7)."""
     print_section("Services: Linked Cash Pair")
@@ -3154,6 +3164,13 @@ Note: No backend server required.
         services_transaction_charge_links,
         name="Transaction Charge Links",
         desc="Project 66 R3: the batch links a charge to the parent it names (parent_ref of a create, parent_transaction_id of a saved row) on the final state, on commit and validate: chargeRefDuplicate, chargeParentRefNotFound, chargeParentTwice, chargeParentIdInvalid, a parent missing, not visible or deleted by the batch is not found, the rules of R2 with parentRef; the messages exist in EN/IT/FR/ES",
+    )
+    add_test(
+        cat,
+        "transaction-charge-edits",
+        services_transaction_charge_edits,
+        name="Transaction Charge Edits",
+        desc="Project 66 R4/R5: a parent deleted while it keeps charges is refused (chargesDeleteIncomplete), with its charges deleted or unlinked in the batch it goes; updates link (parent_transaction_id, parent_ref), unlink (0) and relink; a saved row that keeps charges must stay a parent, not a leg of a pair (chargesBlockParentType); a broker with linked rows is deleted; the message exists in EN/IT/FR/ES",
     )
     add_test(
         cat,

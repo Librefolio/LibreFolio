@@ -346,3 +346,142 @@ async def test_types_expose_charge_role(test_server):
         for code, role in roles.items():
             if code not in charges | parents:
                 assert role is None, f"{code} must have no charge role, got {role}"
+
+
+# ============================================================================
+# R4 / R5: DELETES, LINK AND UNLINK BY UPDATE, PROMOTE, BROKER DELETE
+# ============================================================================
+
+
+async def _post_body(client: httpx.AsyncClient, endpoint: str, body: dict) -> dict:
+    resp = await client.post(f"{API_BASE}/transactions/{endpoint}", json=body, timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("endpoint", ["commit", "validate"])
+async def test_delete_parent_with_charges_is_refused(test_server, endpoint):
+    """deletes=[buy] while its FEE and TAX stay: chargesDeleteIncomplete {id, chargeIds sorted}, nothing written."""
+    print_section(f"charges: delete a parent with charges ({endpoint})")
+    async with httpx.AsyncClient() as client:
+        await _login_new_user(client)
+        broker_id = await _make_broker(client)
+        asset_id = await _make_asset(client)
+        try:
+            buy, fee, tax = await _commit_ok(
+                client,
+                [_buy(broker_id, asset_id, ref="r1"), _charge("FEE", broker_id, asset_id, parent_ref="r1"), _charge("TAX", broker_id, asset_id, parent_ref="r1")],
+            )
+            body = await _post_body(client, endpoint, {"deletes": [buy]})
+            assert body["committed"] is False
+            issues = [i for i in body["issues"] if i["code"] == "chargesDeleteIncomplete"]
+            assert len(issues) == 1, body["issues"]
+            issue = issues[0]
+            assert issue["operation"] == "delete"
+            assert issue["index"] == 0
+            assert issue["params"]["id"] == buy
+            assert issue["params"]["chargeIds"] == sorted([fee, tax])
+            assert {buy, fee, tax} <= await _broker_ids(client, broker_id)
+        finally:
+            await _cleanup(client, [broker_id], [asset_id])
+
+
+@pytest.mark.asyncio
+async def test_delete_parent_and_unlink_charges_in_one_batch(test_server):
+    """deletes=[buy] + updates unlinking both charges (parent_transaction_id 0): buy gone, charges stay, unlinked."""
+    print_section("charges: delete parent, unlink charges")
+    async with httpx.AsyncClient() as client:
+        await _login_new_user(client)
+        broker_id = await _make_broker(client)
+        asset_id = await _make_asset(client)
+        try:
+            buy, fee, tax = await _commit_ok(
+                client,
+                [_buy(broker_id, asset_id, ref="r1"), _charge("FEE", broker_id, asset_id, parent_ref="r1"), _charge("TAX", broker_id, asset_id, parent_ref="r1")],
+            )
+            body = await _post_body(
+                client,
+                "commit",
+                {"deletes": [buy], "updates": [{"id": fee, "parent_transaction_id": 0}, {"id": tax, "parent_transaction_id": 0}]},
+            )
+            assert body["committed"] is True, body["issues"]
+            rows = {tx["id"]: tx for tx in await _list(client, broker_id=broker_id)}
+            assert buy not in rows
+            assert fee in rows and tax in rows
+            assert rows[fee]["parent_transaction_id"] is None
+            assert rows[tax]["parent_transaction_id"] is None
+        finally:
+            await _cleanup(client, [broker_id], [asset_id])
+
+
+@pytest.mark.asyncio
+async def test_update_links_two_saved_charges_to_a_saved_parent(test_server):
+    """Two unlinked saved FEEs linked to a saved BUY by two updates: charges_count 2, parent_ids filter returns them."""
+    print_section("charges: link saved charges by update")
+    async with httpx.AsyncClient() as client:
+        await _login_new_user(client)
+        broker_id = await _make_broker(client)
+        asset_id = await _make_asset(client)
+        try:
+            buy, fee_a, fee_b = await _commit_ok(client, [_buy(broker_id, asset_id), _charge("FEE", broker_id, asset_id), _charge("FEE", broker_id, asset_id)])
+            body = await _post_body(
+                client,
+                "commit",
+                {"updates": [{"id": fee_a, "parent_transaction_id": buy}, {"id": fee_b, "parent_transaction_id": buy}]},
+            )
+            assert body["committed"] is True, body["issues"]
+            rows = await _list(client, ids=[buy])
+            assert [tx["id"] for tx in rows] == [buy]
+            assert rows[0]["charges_count"] == 2
+            linked = await _list(client, parent_ids=[buy])
+            assert {tx["id"] for tx in linked} == {fee_a, fee_b}
+        finally:
+            await _cleanup(client, [broker_id], [asset_id])
+
+
+@pytest.mark.asyncio
+async def test_promote_of_a_deposit_with_charges_is_refused(test_server):
+    """A DEPOSIT with a linked FEE promoted into a CASH_TRANSFER: chargesBlockParentType {type, chargeIds}."""
+    print_section("charges: promote a parent with charges")
+    async with httpx.AsyncClient() as client:
+        await _login_new_user(client)
+        broker_a = await _make_broker(client)
+        broker_b = await _make_broker(client)
+        try:
+            deposit, fee = await _commit_ok(client, [{**_deposit(broker_a), "ref": "d"}, _charge("FEE", broker_a, parent_ref="d")])
+            (withdrawal,) = await _commit_ok(client, [{"broker_id": broker_b, "type": "WITHDRAWAL", "date": TODAY, "cash": {"code": "EUR", "amount": "-500"}}])
+            body = await _post_body(client, "commit", {"promotes": [{"id_a": deposit, "id_b": withdrawal}]})
+            assert body["committed"] is False
+            issues = [i for i in body["issues"] if i["code"] == "chargesBlockParentType"]
+            assert len(issues) == 1, body["issues"]
+            issue = issues[0]
+            assert issue["operation"] == "promote"
+            assert issue["params"]["type"] == "CASH_TRANSFER"
+            assert issue["params"]["chargeIds"] == [fee]
+            rows = {tx["id"]: tx for tx in await _list(client, ids=[deposit, withdrawal, fee])}
+            assert rows[deposit]["type"] == "DEPOSIT"
+            assert rows[deposit]["related_transaction_id"] is None
+        finally:
+            await _cleanup(client, [broker_a, broker_b], [])
+
+
+@pytest.mark.asyncio
+async def test_delete_broker_with_linked_charges(test_server):
+    """Deleting (force) a broker that holds BUY + FEE + TAX linked: success, no 500, its rows are gone."""
+    print_section("charges: delete a broker holding linked charges")
+    async with httpx.AsyncClient() as client:
+        await _login_new_user(client)
+        broker_id = await _make_broker(client)
+        asset_id = await _make_asset(client)
+        try:
+            buy, fee, tax = await _commit_ok(
+                client,
+                [_buy(broker_id, asset_id, ref="r1"), _charge("FEE", broker_id, asset_id, parent_ref="r1"), _charge("TAX", broker_id, asset_id, parent_ref="r1")],
+            )
+            resp = await client.delete(f"{API_BASE}/brokers", params={"ids": [broker_id], "force": True}, timeout=TIMEOUT)
+            assert resp.status_code == 200, resp.text
+            assert resp.json()["total_deleted"] == 1, resp.json()
+            assert await _list(client, ids=[buy, fee, tax]) == []
+        finally:
+            await _cleanup(client, [broker_id], [asset_id])
