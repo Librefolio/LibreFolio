@@ -12,6 +12,7 @@ plugin's (``claim_env_variables``), is refused at registration, like one that fa
 
 from __future__ import annotations
 
+import functools
 import importlib.util
 import sys
 import threading
@@ -106,6 +107,12 @@ class PluginDiscoveryError(PluginRegistryError):
         super().__init__(f"Plugin discovery failed: {details}")
 
 
+@functools.cache
+def _report_unknown_enabled(variable: str, codes: tuple[str, ...]) -> None:
+    """Log, once per process, the codes of an allow-list that no plugin of the registry has (X1)."""
+    logger.warning("Unknown providers in the allow-list", variable=variable, codes=list(codes), consequence="ignored")
+
+
 class AbstractPluginRegistry:
     """Filesystem-discovered class registry with per-subclass isolated state."""
 
@@ -152,8 +159,59 @@ class AbstractPluginRegistry:
         return plugin_class is not None and bool(getattr(plugin_class, "test_only", False)) and not is_test_mode()
 
     @classmethod
+    def _enabled_codes(cls) -> tuple[str, ...] | None:
+        """The instance's allow-list of this registry (project 76, X1): lowercase codes, or None for «every plugin».
+
+        A registry that has one overrides it with its variable (``_enabled_variable``); read at every call.
+        """
+        return None
+
+    @classmethod
+    def _enabled_variable(cls) -> str | None:
+        """The name of the variable behind ``_enabled_codes``, for the log line of an unknown code."""
+        return None
+
+    @classmethod
+    def _always_enabled(cls) -> frozenset[str]:
+        """Lowercase codes an allow-list never switches off (the FX sentinel ``MANUAL``)."""
+        return frozenset()
+
+    @classmethod
+    def _switched_off(cls, code: str) -> bool:
+        """X1: the instance's allow-list is set and does not name ``code`` (case-insensitive).
+
+        A switched-off plugin is treated as absent, as X-R44 treats a test-only one outside test mode: no lookup finds it
+        and no list names it. A listed code that no served plugin of the registry has is logged once.
+        """
+        enabled = cls._enabled_codes()
+        if enabled is None:
+            return False
+        served = {name.lower() for name, plugin_class in cls._get_storage().items() if not cls._withheld(plugin_class)}
+        unknown = tuple(listed for listed in enabled if listed not in served)
+        if unknown:
+            _report_unknown_enabled(cls._enabled_variable() or cls.__name__, unknown)
+        lowered = code.lower()
+        return lowered not in enabled and lowered not in cls._always_enabled()
+
+    @classmethod
+    def _served(cls, code: str, plugin_class: Type | None) -> bool:
+        """Found by a lookup and named by a list: registered, not withheld (X-R44), not switched off (X1)."""
+        return plugin_class is not None and not cls._withheld(plugin_class) and not cls._switched_off(code)
+
+    @classmethod
     def get_plugin(cls, code: str):
-        """Return a registered class by code after auto-discovery; ``None`` for a test-only one outside test mode."""
+        """Return a registered class by code after auto-discovery; ``None`` for a test-only one outside test mode, and
+        for one the instance's allow-list switches off (X1)."""
+        cls.auto_discover()
+        lookup = cls._normalize_lookup_code(code)
+        plugin_class = cls._get_storage().get(lookup)
+        return plugin_class if cls._served(lookup, plugin_class) else None
+
+    @classmethod
+    def registered_plugin(cls, code: str):
+        """The class of ``code`` even when the instance's allow-list switches it off (X1); ``None`` when unknown or
+        withheld (X-R44). Only for a fact about rows already stored, such as the kind of an assignment's provider:
+        never to serve the plugin, which ``get_plugin`` alone does."""
         cls.auto_discover()
         plugin_class = cls._get_storage().get(cls._normalize_lookup_code(code))
         return None if cls._withheld(plugin_class) else plugin_class
@@ -171,9 +229,10 @@ class AbstractPluginRegistry:
 
     @classmethod
     def list_plugin_codes(cls) -> list[str]:
-        """Return all registered codes in registration order, without the test-only ones outside test mode."""
+        """Return all registered codes in registration order, without the test-only ones outside test mode and the ones
+        the instance's allow-list switches off (X1)."""
         cls.auto_discover()
-        return [code for code, plugin_class in cls._get_storage().items() if not cls._withheld(plugin_class)]
+        return [code for code, plugin_class in cls._get_storage().items() if cls._served(code, plugin_class)]
 
     @classmethod
     def auto_discover(cls) -> None:
@@ -392,7 +451,7 @@ class AbstractProviderRegistry(AbstractPluginRegistry):
         providers = []
         cls.auto_discover()
         for code, provider_class in list(cls._providers.items()):
-            if cls._withheld(provider_class):
+            if not cls._served(code, provider_class):
                 continue
             try:
                 instance = provider_class()

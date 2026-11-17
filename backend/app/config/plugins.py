@@ -125,6 +125,24 @@ def asset_providers_order() -> tuple[str, ...] | None:
     return _provider_codes("LIBREFOLIO_ASSET_PROVIDERS_ORDER")
 
 
+def asset_providers_enabled() -> tuple[str, ...] | None:
+    """``LIBREFOLIO_ASSET_PROVIDERS_ENABLED``: the asset providers active on this instance (project 76, X1).
+
+    Comma-separated provider codes, in any case. Unset or blank: None, and every provider is active. Set: only the
+    listed providers exist for the instance (lists, search, settings, assignments, calls); a code that no provider has is
+    ignored, and logged once. Read at every call: no restart.
+    """
+    return _provider_codes("LIBREFOLIO_ASSET_PROVIDERS_ENABLED")
+
+
+def fx_providers_enabled() -> tuple[str, ...] | None:
+    """``LIBREFOLIO_FX_PROVIDERS_ENABLED``: the exchange-rate providers active on this instance (project 76, X1).
+
+    The same rules as ``asset_providers_enabled``. ``MANUAL``, the sentinel of hand-entered rates, is always active.
+    """
+    return _provider_codes("LIBREFOLIO_FX_PROVIDERS_ENABLED")
+
+
 #: Provider probes (``POST /api/v1/assets/provider/probe``) one user may start in a minute (MF-SI2), and the most a
 #: setting may allow.
 DEFAULT_PROBE_RATE_LIMIT = 30

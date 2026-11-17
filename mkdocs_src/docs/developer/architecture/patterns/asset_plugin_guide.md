@@ -198,6 +198,11 @@ overrides:
 - **The instance's overrides**, read at every call (`config/plugins.py`): `LIBREFOLIO_ASSET_PROVIDERS_PREMIUM` makes
   exactly the listed providers premium; `LIBREFOLIO_ASSET_PROVIDERS_ORDER` puts the listed providers first, in its
   order. A code that no provider has is ignored and logged once.
+- **Switched off by the instance** (project 76, X1): with `LIBREFOLIO_ASSET_PROVIDERS_ENABLED` set, a provider it does
+  not list is absent everywhere: the registry finds it nowhere (`AbstractPluginRegistry._switched_off`, beside the
+  test-only rule X-R44), so no list, search, assignment, setting or call reaches it. A new plugin therefore stays off
+  on such an instance until the administrator lists it. Exchange-rate providers have the twin
+  `LIBREFOLIO_FX_PROVIDERS_ENABLED`, which never switches off `MANUAL`.
 
 `GET /assets/provider` shows each provider's effective `tier` and `priority`. The non-streaming search
 (`GET /assets/provider/search`) returns the results in this order; the streaming one sends them as they arrive, and

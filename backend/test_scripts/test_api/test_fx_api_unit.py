@@ -129,7 +129,8 @@ async def test_list_providers_filters_hidden_and_sorts_targets(monkeypatch):
         lambda _code: _DummyProvider(),
     )
 
-    providers = await fx_providers_api.list_providers(providers=["manual", "fed"])
+    # The list is the caller's (plan 76, N1): FED declares no setting, so its readiness needs no database
+    providers = await fx_providers_api.list_providers(providers=["manual", "fed"], _current_user=Mock(id=1))
 
     assert len(providers) == 1
     assert providers[0].code == "FED"
@@ -138,6 +139,7 @@ async def test_list_providers_filters_hidden_and_sorts_targets(monkeypatch):
     assert providers[0].description_i18n == {"it": "Provider finto"}
     assert providers[0].warning_i18n == {"en": "Testing only"}
     assert providers[0].warning_level == "info", "the note's level reaches the client: an info note is no warning (lane 75)"
+    assert (providers[0].configured, providers[0].missing_settings) == (True, []), "a provider without settings is configured"
     print_success("Hidden providers filtered; targets sorted")
 
 
