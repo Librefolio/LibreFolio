@@ -87,7 +87,9 @@
       "missingAdmin": "{provider} needs configuring: {count, plural, one {this setting is missing} other {these settings are missing}}: {fields}.",
       "missingMember": "{provider} needs configuring: ask an administrator to set {count, plural, one {this setting} other {these settings}}: {fields}.",
       "missingAdminGeneric": "{provider} needs configuring: a required setting is missing.",
-      "missingMemberGeneric": "{provider} needs configuring: ask an administrator to set its required settings."
+      "missingMemberGeneric": "{provider} needs configuring: ask an administrator to set its required settings.",
+      "missingAdminPhrase": "{provider} needs configuring: {fields} {count, plural, one {is} other {are}} missing.",
+      "missingMemberPhrase": "{provider} needs configuring: ask an administrator to set {fields}."
     }
   }
 }

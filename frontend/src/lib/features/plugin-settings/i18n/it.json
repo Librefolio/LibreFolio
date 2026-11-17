@@ -87,7 +87,9 @@
       "missingAdmin": "{provider} va configurato: {count, plural, one {manca} other {mancano}}: {fields}.",
       "missingMember": "{provider} va configurato: chiedi all'amministratore di impostare {count, plural, one {questa impostazione} other {queste impostazioni}}: {fields}.",
       "missingAdminGeneric": "{provider} va configurato: manca un'impostazione obbligatoria.",
-      "missingMemberGeneric": "{provider} va configurato: chiedi all'amministratore di impostare le sue impostazioni obbligatorie."
+      "missingMemberGeneric": "{provider} va configurato: chiedi all'amministratore di impostare le sue impostazioni obbligatorie.",
+      "missingAdminPhrase": "{provider} va configurato: {count, plural, one {manca} other {mancano}} {fields}.",
+      "missingMemberPhrase": "{provider} va configurato: chiedi all'amministratore di impostare {fields}."
     }
   }
 }

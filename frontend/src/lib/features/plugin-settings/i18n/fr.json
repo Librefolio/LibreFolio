@@ -87,7 +87,9 @@
       "missingAdmin": "{provider} doit être configuré : {count, plural, one {il manque ce paramètre} other {il manque ces paramètres}} : {fields}.",
       "missingMember": "{provider} doit être configuré : demandez à un administrateur de définir {count, plural, one {ce paramètre} other {ces paramètres}} : {fields}.",
       "missingAdminGeneric": "{provider} doit être configuré : il manque un paramètre obligatoire.",
-      "missingMemberGeneric": "{provider} doit être configuré : demandez à un administrateur de définir ses paramètres obligatoires."
+      "missingMemberGeneric": "{provider} doit être configuré : demandez à un administrateur de définir ses paramètres obligatoires.",
+      "missingAdminPhrase": "{provider} doit être configuré : {fields} {count, plural, one {manque} other {manquent}}.",
+      "missingMemberPhrase": "{provider} doit être configuré : demandez à un administrateur de définir {fields}."
     }
   }
 }

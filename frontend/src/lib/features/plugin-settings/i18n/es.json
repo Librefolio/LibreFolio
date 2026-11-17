@@ -87,7 +87,9 @@
       "missingAdmin": "{provider} debe configurarse: {count, plural, one {falta este ajuste} other {faltan estos ajustes}}: {fields}.",
       "missingMember": "{provider} debe configurarse: pide a un administrador que configure {count, plural, one {este ajuste} other {estos ajustes}}: {fields}.",
       "missingAdminGeneric": "{provider} debe configurarse: falta un ajuste obligatorio.",
-      "missingMemberGeneric": "{provider} debe configurarse: pide a un administrador que configure sus ajustes obligatorios."
+      "missingMemberGeneric": "{provider} debe configurarse: pide a un administrador que configure sus ajustes obligatorios.",
+      "missingAdminPhrase": "{provider} debe configurarse: {count, plural, one {falta} other {faltan}} {fields}.",
+      "missingMemberPhrase": "{provider} debe configurarse: pide a un administrador que configure {fields}."
     }
   }
 }

@@ -355,6 +355,7 @@ under the branch of its settings:
 | `pluginSettings.<family>.<code>.label.<key>` | the field's `label_key` |
 | `pluginSettings.<family>.<code>.description.<key>` | the field's `description_key` |
 | `pluginSettings.<family>.<code>.option.<key>.<value>` | an option's `label_key` |
+| `pluginSettings.<family>.<code>.missing.<key>` | the field's `missing_key`: the field named in a sentence, with its article («la chiave API»), for the «to configure» window (project 76, N3a2); optional |
 
 `<family>` is `asset`, `fx` or `brim`, and `<code>` the code as the registry has it: the `provider_code` of
 an asset provider (`justetf`, `borsa_italiana`), the FX code with its case (`pluginSettings.fx.ECB`).
@@ -1111,8 +1112,10 @@ manual, [Plugin Settings](../../../user/settings/plugins.md); the code is in
   dashed and muted, with an amber «settings» icon (`aria-disabled`, `data-configured="false"`),
   and never searches. A touch opens the common window, `PluginNotConfiguredModal.svelte`, whose
   case `notConfigured.ts` reads from those fields and the viewer's role:
-    - a value to set: an administrator reads the missing fields by their labels (one catalogue
-      read; a key when it cannot be read) and gets **Configure**, which swaps the window for
+    - a value to set: an administrator reads the missing fields (one catalogue read): by the
+      phrase each declares (`missing_key`, N3a2), joined as a list of the language, when every one
+      declares it, «CoinGecko va configurato: manca la chiave API»; otherwise by their labels,
+      «manca: Chiave API»; a key when it cannot be read. The administrator gets **Configure**, which swaps the window for
       `PluginSettingsModal`; another user gets a link to the read-only Settings › Plugins, in a new
       tab so the open form is kept;
     - an invalid environment variable: an administrator reads its name (the consultant's limit text
@@ -1194,7 +1197,7 @@ Residual risks:
 
 ## ✅ Tests {: #tests }
 
-All eleven run without a server or the lane's database (`isolation="pure"`):
+All twelve run without a server or the lane's database (`isolation="pure"`):
 
 | Selector | Covers |
 |----------|--------|
@@ -1207,6 +1210,7 @@ All eleven run without a server or the lane's database (`isolation="pure"`):
 | `./dev.py test services plugin-readiness` | `plugins_readiness()`: the same answer as `configure_instance(...).settings.missing` for prices and exchange rates (own fields, groups, user fields, variables, a secret under another key), one database session per batch and none for a plugin without settings, never a decryption, the managed profile's locked fields counted but not named; the two provider lists, with one check per request |
 | `./dev.py test services not-configured-writes` | The two writes that refuse a not-configured provider (N2): the asset assignment and the FX routes, the whole request refused before any write, the first item named, `replace=true` leaving the pair as it was, a re-saved assignment and a provider already on the pair passing, the managed profile naming no locked field, one readiness check per request |
 | `./dev.py test services call-limit-settings` | The core's call-limit fields (U4): who gets them at registration, their variables and lock, the fingerprint, the readiness skip, the catalogue's `call_usage` (one read, managed hiding, a database error), `mockcount`, one binding per operation |
+| `./dev.py test services field-missing-phrase` | A field's own phrase for the «to configure» window (N3a2): `missing_key` optional, declared and validated, carried by the catalogue's field read |
 | `./dev.py test services enricher-call-limits` | The enrichers' read boundary (K1): one call counted per binding read, before the read; a full window refuses that binding and the rest as `RATE_LIMITED`, never cached; the credit-sharing group's row shared with an asset provider; a failing counter lets the reads go; cached bindings and plugins that call nothing out never counted |
 | `./dev.py test services plugin-settings-guards` | Shipped variables documented in `.env.example`, one owner per variable, no alias on a variable LibreFolio reads, AI Export kept away from the settings; the block «Call limits» lists exactly the families and codes that own the limits, the five windows and real worked examples (U4c) |
 
