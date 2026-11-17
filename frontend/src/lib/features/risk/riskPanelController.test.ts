@@ -1425,6 +1425,8 @@ describe('riskPanelController', () => {
             comparison: ['historical', 'current_composition'],
             stress: ['current_composition'],
             simulation: ['current_composition'],
+            // RN-17 (consultant 17/11, «A»): the asset's own risk/return pair, for L3's row and dot.
+            asset_risk_return: ['current_composition'],
         };
 
         function assetCatalogue(code: string, scopeKind: string, mode: string): boolean {
@@ -1580,7 +1582,7 @@ describe('riskPanelController', () => {
             expectIssuedToday(ASSET_DETAIL_TODAY, "Asset Detail's panel");
         });
 
-        it("pins the levels panel on one asset (RN-17), under the asset's real catalogue: L1's wave and the current KPI, nothing of a basket", async () => {
+        it("pins the levels panel on one asset (RN-17), under the asset's real catalogue: L1's wave, the current KPI and the asset's own risk/return pair, nothing of a basket", async () => {
             capability.only = assetCatalogue;
             await settledController({...defaultInputs(), scope: {kind: 'asset', asset_id: 12}}, {includeDrawdownSummary: true, includeMonthlyVar: true, includeCurrentCompositionRiskReturn: true});
             expectIssuedToday(
@@ -1607,7 +1609,10 @@ describe('riskPanelController', () => {
                             target_currency: 'EUR',
                             mode: 'current_composition',
                             composition_policy: 'current_buy_and_hold',
-                            analytics: [{instance_id: 'base-current_composition-historical_kpi', analytic_code: 'historical_kpi', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0}}],
+                            analytics: [
+                                {instance_id: 'base-current_composition-historical_kpi', analytic_code: 'historical_kpi', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0}},
+                                {instance_id: 'base-current_composition-asset_risk_return', analytic_code: 'asset_risk_return', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0}},
+                            ],
                         },
                         false,
                     ],

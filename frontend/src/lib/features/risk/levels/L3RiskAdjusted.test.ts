@@ -551,6 +551,25 @@ describe('L3RiskAdjusted — the notes under the chart, one idea per line (T10)'
     });
 });
 
+// RN-17 (consultant 17/11, «A»): on one asset `asset_risk_return` answers the asset's own pair, weight 1. The table is
+// the asset and the benchmark — the asset never repeated as a holding — with its annual return, and no weight column.
+const ASSET_RISK_RETURN = result(
+    'base-current_composition-asset_risk_return',
+    'asset_risk_return',
+    {kind: 'risk_return', portfolio_volatility: 0.139, portfolio_expected_annual_return: 0.128, cash_weight: 0, excluded_weight: 0, items: [{asset_id: 1, weight: 1, volatility: 0.139, expected_annual_return: 0.128}]},
+    'current_composition',
+);
+
+describe('L3RiskAdjusted — on one asset, the asset and the benchmark, with the asset’s annual return', () => {
+    it('draws the asset once, with its annual return, the benchmark after it, and no weight column', () => {
+        mount({historicalResults: [HISTORICAL_KPI], currentResults: [ASSET_RISK_RETURN, CURRENT_KPI], comparisonResult: COMPARISON_UNHELD, benchmarkName: BENCHMARK_NAME, subjectLabel: 'Invented ETF', oneAsset: true} as Props);
+
+        expect(drawnOrder(), 'the asset repeated as a holding of itself').toEqual(['ref-portfolio', `ref-${BENCHMARK_ID}`]);
+        expect(cellOf('ref-portfolio', 'expectedReturn')).toHaveTextContent('+12.8%');
+        expect(headerOrder(), 'a weight column on one asset: always 100 %').not.toContain('weight');
+    });
+});
+
 // RN-17: on the Asset Detail the subject of the table is the asset, not a portfolio.
 describe('L3RiskAdjusted — on one asset, the subject row is the asset', () => {
     it('names the subject row with the asset’s name, never «Portfolio», and keeps the benchmark after it', () => {

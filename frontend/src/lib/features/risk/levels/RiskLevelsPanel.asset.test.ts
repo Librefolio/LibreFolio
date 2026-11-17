@@ -80,6 +80,13 @@ describe('RiskLevelsPanel — on one asset, the levels that have meaning on one 
         expect(screen.getByTestId('risk-level-3-title').textContent?.trim()).toBe(t('risk.levels.l3.title'));
     });
 
+    it('draws no sync button of its own on one asset: the Asset Detail toolbar has the page’s one Refresh (Y11)', async () => {
+        mountPanel({kind: 'asset', asset_id: 7} as RiskScope);
+
+        await waitFor(() => expect(screen.getByTestId('risk-levels-panel')).toHaveAttribute('data-catalog', 'ready'));
+        expect(screen.queryByTestId('risk-sync-button')).toBeNull();
+    });
+
     it('keeps «Am I diversified?» on a portfolio: the Dashboard draws what it drew before', async () => {
         mountPanel({kind: 'portfolio'} as RiskScope);
 

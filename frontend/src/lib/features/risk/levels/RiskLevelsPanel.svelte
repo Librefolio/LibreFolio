@@ -327,7 +327,8 @@
 </script>
 
 <div class="space-y-4 text-lf-primary" data-testid="risk-levels-panel" data-scope={scope.kind} data-catalog={controller.catalogState} data-busy={initialLoading ? 'true' : 'false'}>
-    <RiskPanelHeader {controller} {title} {subtitle} {internalSubset} {assetIds} {dateStart} {dateEnd} {targetCurrency} />
+    <!-- One asset: the Asset Detail toolbar holds the page's one Refresh (Y11, decision 48), so the header draws no sync of its own. -->
+    <RiskPanelHeader {controller} {title} {subtitle} {internalSubset} {assetIds} {dateStart} {dateEnd} {targetCurrency} showActions={!oneAsset} />
 
     {#if backtest}
         <p class="rounded-lg border border-lf-warning-line bg-lf-warning-soft px-3 py-2 text-xs text-lf-warning-on-soft" data-testid="risk-backtest-notice">
@@ -370,6 +371,7 @@
             <L3RiskAdjusted
                 bind:tableRef={l3Table}
                 subjectLabel={scope.kind === 'asset' ? assetNames[scope.asset_id] : undefined}
+                {oneAsset}
                 {historicalResults}
                 {currentResults}
                 {assetNames}
@@ -398,10 +400,10 @@
         >
             <L4WhatIf {controller}>
                 {#snippet replay()}
-                    <L4Replay {controller} {assetNames} currency={targetCurrency} {dateStart} {dateEnd} />
+                    <L4Replay {controller} {assetNames} currency={targetCurrency} {dateStart} {dateEnd} {scopeValue} />
                 {/snippet}
                 {#snippet shock()}
-                    <L4Shock {controller} {assetNames} currency={targetCurrency} withoutTypeShock={oneAsset} />
+                    <L4Shock {controller} {assetNames} currency={targetCurrency} withoutTypeShock={oneAsset} {scopeValue} />
                 {/snippet}
                 {#snippet simulation()}
                     <L4Simulation {controller} {dateEnd} />
