@@ -189,7 +189,7 @@
                                 draft,
                                 rows.map((row) => row.code),
                             ))}
-                        itemTone={(row: ChosenRow) => (row.issue ? 'error' : row.availability === 'not_configured' ? 'warning' : 'default')}
+                        itemTone={(row: ChosenRow) => (row.issue ? 'error' : expanded === row.code ? 'selected' : row.availability === 'not_configured' ? 'warning' : 'default')}
                     >
                         {#snippet children({item})}
                             <EnricherChosenRow

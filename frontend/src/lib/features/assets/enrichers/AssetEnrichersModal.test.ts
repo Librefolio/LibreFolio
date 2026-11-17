@@ -192,6 +192,15 @@ describe('AssetEnrichersModal — a row opened', () => {
         expect((await apply(onapply)).yahoo).toEqual({identifier_type: 'TICKER', identifier: 'VWRL.AS'});
     });
 
+    it('the open row is drawn selected (the selection role of the design system), the others are not', async () => {
+        mount();
+        const tone = (code: string) => (chosen(code).closest('[data-tone]') as HTMLElement).dataset.tone;
+        expect(tone('justetf')).toBe('default');
+        await fireEvent.click(screen.getByTestId('enricher-edit-justetf'));
+        expect(tone('justetf')).toBe('selected');
+        expect(tone('yahoo')).toBe('default');
+    });
+
     it('«Testa Configurazione» tests the binding and says what it found and would fill', async () => {
         const {test} = mount();
         test.mockResolvedValue({code: 'justetf', identifier_type: 'ISIN', identifier: 'IE00BK5BQT80', status: 'found', name: 'Vanguard', page_url: null, identifiers: {}, conflicts: {}, error: null});
