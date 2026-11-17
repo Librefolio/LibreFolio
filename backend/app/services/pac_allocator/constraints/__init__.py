@@ -123,7 +123,15 @@ __all__ = [
 ]
 
 
-def compile_hard_constraints(model: Model, scenario: ExactPlannerScenario, facts: ScenarioFacts, variables: CompiledVariables, limits: ResolvedLimits | None = None) -> dict[tuple[str, str], list]:
+def compile_hard_constraints(
+    model: Model,
+    scenario: ExactPlannerScenario,
+    facts: ScenarioFacts,
+    variables: CompiledVariables,
+    limits: ResolvedLimits | None = None,
+    *,
+    outer: bool = False,
+) -> dict[tuple[str, str], list]:
     """Add every real cross-decision / semi-continuous constraint for one
     PAC ``proportional`` ``primary`` scenario. Box bounds are set on the
     variables themselves by ``compiler.py`` before this is called.
@@ -131,16 +139,20 @@ def compile_hard_constraints(model: Model, scenario: ExactPlannerScenario, facts
     ``limits`` are the scenario's V5 limits resolved to amounts (``evaluation.limits.resolve_scenario_limits``): without
     them, or without any limit, the model has no limit row (A3). Returns the posted terms of every cash cell, which the
     Rebalancer's objectives read (B2 of project 67).
+
+    The model is prudent: every plan it holds the replay accepts, not the other way round (row 6's reserves, the margins of
+    the limit rows). ``outer`` writes the wide model, which holds every plan the replay could accept: the one whose
+    «infeasible» is a proof (lot ZB of project 67, specification §16.16).
     """
     add_funding_pool_constraints(model, scenario, facts, variables)
-    # The reserves each Rebalancer cell keeps back (row 6): a cash maximum reads the cell without them (``add_limit_constraints``).
+    # The reserves each Rebalancer cell keeps back (row 6): the rows choose which end of the cell they read (``add_limit_constraints``).
     reserves_by_cell: dict[tuple[str, str], list] = defaultdict(list)
-    cells = add_ledger_balance_constraints(model, scenario, facts, variables, reserves_by_cell)
+    cells = add_ledger_balance_constraints(model, scenario, facts, variables, reserves_by_cell, outer=outer)
     add_order_activation_constraints(model, scenario, facts, variables)
     add_funding_activation_constraints(model, scenario, facts, variables)
     add_fee_epigraph_constraints(model, scenario, facts, variables)
     add_fx_no_relay_constraints(model, scenario, facts, variables)
-    add_limit_constraints(model, scenario, facts, variables, cells, limits, reserves_by_cell)
+    add_limit_constraints(model, scenario, facts, variables, cells, limits, reserves_by_cell, outer=outer)
     add_move_activity_constraints(model, variables)
     return cells
 

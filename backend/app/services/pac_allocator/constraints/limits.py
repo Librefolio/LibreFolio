@@ -52,8 +52,14 @@ def add_limit_constraints(
     cells: dict[tuple[str, str], list[LinearTerm]],
     limits: ResolvedLimits | None,
     reserves_by_cell: dict[tuple[str, str], list[LinearTerm]] | None = None,
+    *,
+    outer: bool = False,
 ) -> None:
     """``ENTRY_VALUE_WITHIN_LIMITS`` for every limited entry, written so that SCIP cannot accept what the replay refuses.
+
+    That model is prudent: sufficient, not necessary, so its «infeasible» says nothing about the request (lot ZB of project
+    67, specification §16.16). ``outer`` writes the wide model's rows, the ones every plan the replay could accept
+    satisfies: no margin, no inward tightening, and a cash cell's reserves on the side that admits.
 
     * An Asset bought on one route depends on one decision: its limits become an integer bound on that variable, computed
       exactly (floor of the maximum, ceil of the minimum). No float, and a plan exactly on the limit stays allowed.
@@ -75,11 +81,11 @@ def add_limit_constraints(
     current = current_value_by_asset(scenario, index)
     for entry, bounds in limits.by_entry.items():
         if entry.kind == "cash":
-            _cash_rows(model, index, facts, cells, zero, entry, bounds, (reserves_by_cell or {}).get((entry.broker_id, entry.currency), []))
+            _cash_rows(model, index, facts, cells, zero, entry, bounds, (reserves_by_cell or {}).get((entry.broker_id, entry.currency), []), outer=outer)
         elif len(buy_routes[entry.asset_id]) == 1:
             _single_route_bounds(model, index, variables, zero, entry, bounds, buy_routes[entry.asset_id][0], current.get(entry.asset_id, ExactRatio(0)))
         else:
-            _float_rows(model, final_value[entry.asset_id], entry, bounds)
+            _float_rows(model, final_value[entry.asset_id], entry, bounds, outer=outer)
 
 
 def _single_route_bounds(model: Model, index, variables: CompiledVariables, zero, entry: LimitEntry, bounds: ResolvedBounds, route: ExactOrderRoute, current: ExactRatio) -> None:
@@ -96,7 +102,7 @@ def _single_route_bounds(model: Model, index, variables: CompiledVariables, zero
     model.chgVarLb(variable, lower)
 
 
-def _cash_rows(model: Model, index, facts: ScenarioFacts, cells, zero, entry: LimitEntry, bounds: ResolvedBounds, reserves: list | None = None) -> None:
+def _cash_rows(model: Model, index, facts: ScenarioFacts, cells, zero, entry: LimitEntry, bounds: ResolvedBounds, reserves: list | None = None, *, outer: bool = False) -> None:
     """A cash cell in whole quanta of its currency, bounds floored or ceiled exactly in those units.
 
     SCIP accepts a row within a tolerance relative to the side it sees, and the cell's constant (its own cash) moves to that
@@ -105,21 +111,32 @@ def _cash_rows(model: Model, index, facts: ScenarioFacts, cells, zero, entry: Li
     the margin of ``ceil(1e-6 · N)`` units is taken on the side SCIP holds once the row is written, not on the bound alone.
 
     The Rebalancer's cell is continuous, each posting less the reserve it keeps for its rounding (row 6): its value is the
-    lowest cash the replay can post. A minimum reads it as it is. A maximum reads the highest cash the replay can post, the
-    cell with its ``reserves`` back in, since a rounding never adds cash. The replay's cash is a whole number of quanta, so
-    a row held within SCIP's tolerance of a whole bound still holds the bound."""
+    lowest cash the replay can post, and with its ``reserves`` back in, the highest. The prudent model holds both ends in
+    the band: a minimum reads the lowest, a maximum the highest. The replay's cash is a whole number of quanta, so a row
+    held within SCIP's tolerance of a whole bound still holds the bound. The wide model (``outer``, lot ZB) asks only what
+    every plan the replay could accept satisfies: a minimum reads the highest, a maximum the lowest, and no margin. Its
+    plan may end the cell beyond the limit by its rounding, at most one minor unit per rounded posting
+    (``evaluator.cash_limit_overshoots``)."""
     quantum = facts.currency_quantum[entry.currency]
     units = sum(cells.get((entry.broker_id, entry.currency), []), zero) / quantum
+    kept = sum(reserves, 0.0) / quantum if reserves else 0.0
     per_unit = to_valuation(index, index.currency_quantum[entry.currency], entry.currency)  # valuation currency of one quantum
     if bounds.maximum is not None:
-        highest = units + sum(reserves, 0.0) / quantum if reserves else units
-        row = model.addCons(highest <= _floor(bounds.maximum / per_unit), name=f"entry_limit_max:{entry.key}")
-        side = model.getRhs(row)
-        model.chgRhs(row, side - _tolerance_margin(side))
+        top = _floor(bounds.maximum / per_unit)
+        if outer:
+            model.addCons(units <= top, name=f"entry_limit_max:{entry.key}")
+        else:
+            row = model.addCons(units + kept <= top, name=f"entry_limit_max:{entry.key}")
+            side = model.getRhs(row)
+            model.chgRhs(row, side - _tolerance_margin(side))
     if bounds.minimum is not None:
-        row = model.addCons(units >= _ceil(bounds.minimum / per_unit), name=f"entry_limit_min:{entry.key}")
-        side = model.getLhs(row)
-        model.chgLhs(row, side + _tolerance_margin(side))
+        bottom = _ceil(bounds.minimum / per_unit)
+        if outer:
+            model.addCons(units + kept >= bottom, name=f"entry_limit_min:{entry.key}")
+        else:
+            row = model.addCons(units >= bottom, name=f"entry_limit_min:{entry.key}")
+            side = model.getLhs(row)
+            model.chgLhs(row, side + _tolerance_margin(side))
 
 
 def _tolerance_margin(side: float) -> int:
@@ -129,11 +146,12 @@ def _tolerance_margin(side: float) -> int:
     return -(-math.ceil(magnitude) // _UNITS_WITH_RELATIVE_SLACK) if magnitude > _UNITS_WITH_RELATIVE_SLACK else 0
 
 
-def _float_rows(model: Model, value: LinearTerm, entry: LimitEntry, bounds: ResolvedBounds) -> None:
-    """An Asset on several routes: a float row tightened inward, see ``add_limit_constraints``."""
+def _float_rows(model: Model, value: LinearTerm, entry: LimitEntry, bounds: ResolvedBounds, *, outer: bool = False) -> None:
+    """An Asset on several routes: a float row tightened inward, see ``add_limit_constraints``; the outer model's is not."""
+    tightening = 0.0 if outer else _FLOAT_TIGHTENING
     if bounds.maximum is not None:
         limit = as_float(bounds.maximum)
-        model.addCons(value <= limit - _FLOAT_TIGHTENING * max(1.0, abs(limit)), name=f"entry_limit_max:{entry.key}")
+        model.addCons(value <= limit - tightening * max(1.0, abs(limit)), name=f"entry_limit_max:{entry.key}")
     if bounds.minimum is not None:
         limit = as_float(bounds.minimum)
-        model.addCons(value >= limit + _FLOAT_TIGHTENING * max(1.0, abs(limit)), name=f"entry_limit_min:{entry.key}")
+        model.addCons(value >= limit + tightening * max(1.0, abs(limit)), name=f"entry_limit_min:{entry.key}")

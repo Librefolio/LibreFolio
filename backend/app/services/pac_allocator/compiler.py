@@ -117,6 +117,9 @@ class CompiledProgram:
     variables: CompiledVariables
     objective_stages: tuple[ObjectiveStage, ...]
     objective_inputs: ObjectiveInputs
+    # Lot ZB of project 67: the wide model, which holds every plan the replay could accept, solved only when the prudent
+    # one closed infeasible (``planner.plan_exact_scenario``).
+    outer: bool = False
 
 
 def _require_supported_scope(scenario: ExactPlannerScenario, view: ExactPolicyView) -> None:
@@ -181,9 +184,12 @@ def _create_variables(model: Model, scenario: ExactPlannerScenario, view: ExactP
     return CompiledVariables(quanta=quanta, buy_active=buy_active, funding_active=funding_active, buy_fee=buy_fee, fx_active=fx_active, pool=create_pool_variables(model, scenario, view))
 
 
-def compile_policy_program(scenario: ExactPlannerScenario, view: ExactPolicyView) -> CompiledProgram:
+def compile_policy_program(scenario: ExactPlannerScenario, view: ExactPolicyView, *, outer: bool = False) -> CompiledProgram:
     """Build one complete SCIP model for ``scenario``/``view``: variables,
     hard constraints, and the ordered objective cascade. Never solves.
+
+    The default model is prudent: the replay accepts every plan it holds. ``outer`` builds the one that holds every plan
+    the replay could accept (lot ZB of project 67), whose «infeasible» alone is a proof.
     """
     _require_supported_scope(scenario, view)
     facts = build_scenario_facts(scenario)
@@ -192,7 +198,7 @@ def compile_policy_program(scenario: ExactPlannerScenario, view: ExactPolicyView
     variables = _create_variables(model, scenario, view)
     # The probe first: V5 resolves shares of the reference, which only the exact do-nothing replay gives (specification §15 n. 17).
     objective_inputs, reference = _probe_objective_inputs(scenario, view)
-    cells = compile_hard_constraints(model, scenario, facts, variables, resolve_scenario_limits(scenario, reference))
+    cells = compile_hard_constraints(model, scenario, facts, variables, resolve_scenario_limits(scenario, reference), outer=outer)
     objective_stages = tuple(build_objective_cascade(model, scenario, facts, variables, objective_inputs, view, cells))
     return CompiledProgram(
         model=model,
@@ -202,4 +208,5 @@ def compile_policy_program(scenario: ExactPlannerScenario, view: ExactPolicyView
         variables=variables,
         objective_stages=objective_stages,
         objective_inputs=objective_inputs,
+        outer=outer,
     )

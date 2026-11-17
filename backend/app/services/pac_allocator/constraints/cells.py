@@ -161,9 +161,16 @@ def add_ledger_balance_constraints(
     facts: ScenarioFacts,
     variables: CompiledVariables,
     reserves_by_cell: dict[tuple[str, str], list[LinearTerm]] | None = None,
+    *,
+    outer: bool = False,
 ) -> dict[tuple[str, str], list[LinearTerm]]:
     """``NO_SHORT_OR_LEVERAGE`` folding in ``FX_SOURCE_CASH``: every
     Broker×currency ledger cell's final spendable balance must stay >= 0.
+
+    The Rebalancer's cell is the lowest cash the replay can post (each posting less its reserve, row 6), so the row is
+    prudent: it may refuse a plan whose rounding would have left the cash at zero. ``outer`` (lot ZB of project 67) writes
+    the row on the highest cash instead, the cell with its reserves back in: the outer model holds every plan the replay
+    could accept, and only its «infeasible» is a proof (``planner.plan_exact_scenario``).
 
     Mirrors ``ledger.reconcile_broker_ledgers``'s
     ``final_spendable = initial_selected + funding_in + fx_credit +
@@ -223,7 +230,8 @@ def add_ledger_balance_constraints(
             cells[(lane.destination_broker_id, lane.currency)].append(moved)
 
     for (broker_id, currency), terms in cells.items():
-        model.addCons(sum(terms) >= 0, name=f"ledger_nonnegative:{broker_id}:{currency}")
+        kept = (reserves_by_cell or {}).get((broker_id, currency), []) if outer else []
+        model.addCons(sum(terms) + sum(kept, 0.0) >= 0, name=f"ledger_nonnegative:{broker_id}:{currency}")
     return cells
 
 
