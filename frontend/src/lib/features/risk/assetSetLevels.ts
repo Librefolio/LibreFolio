@@ -27,6 +27,7 @@ import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBann
 import type {RiskAnalyticResult} from '$lib/features/risk/riskStore.svelte';
 import {riskMetadata, riskOutput, singleValue} from '$lib/features/risk/riskTypes';
 import {utcMs} from '$lib/utils/dateOnly';
+import {datePeriod, finiteOrNull as num, readMoveFigures, type MoveColumn, type MoveFigures} from '$lib/features/risk/moveFigures';
 
 /**
  * What a section of the lab hands its panel, read through `bind:this`, for the one notice above
@@ -137,33 +138,6 @@ function byAsset<T extends {asset_id: number}>(items: readonly T[] | undefined):
 }
 
 /**
- * A finite number, or null — through the house unwrapper.
- *
- * ⚠️ The generated client widens every optional numeric field to
- * `((number | null) | Array<number | null>)`, because that is how the OpenAPI
- * `anyOf` round-trips — so `stats.sharpe` is *typed* as a value or a list of
- * them and will not compile without unwrapping.
- *
- * 📌 The widening is a TypeScript artefact, not a runtime one, and saying
- * otherwise would misdescribe the defence: the emitted **zod** schema for those
- * same fields is `z.union([z.number(), z.null()]).optional()`, which rejects a
- * list outright — so `riskOutput` discards the whole payload before a list could
- * reach here. `CorrelationCell.value` (`correlationHelpers.ts`) records the same disagreement between
- * the two halves of the generated client. What `singleValue` actually earns is
- * the right to read the field without a cast, and a cast is how a future shape
- * change would arrive unannounced.
- */
-function num(value: number | null | undefined | readonly (number | null)[]): number | null {
-    const single = singleValue(value);
-    return typeof single === 'number' && Number.isFinite(single) ? single : null;
-}
-
-/** A pair of ISO dates from the payload, in order, or null: a lone date would point at a stretch nobody stated. */
-function datePeriod(from: string | null | undefined, to: string | null | undefined): {from: string; to: string} | null {
-    return typeof from === 'string' && typeof to === 'string' && from <= to ? {from, to} : null;
-}
-
-/**
  * The display name of an asset, degrading to `#id` rather than to a blank.
  *
  * A blank row label is indistinguishable from a rendering fault; `#7` at least
@@ -173,48 +147,16 @@ function label(assetId: number, names: ReadonlyMap<number, string>): string {
     return names.get(assetId) ?? `#${assetId}`;
 }
 
-/** The columns of «How did each one move?» whose blank can say why (RN-19). */
-export type AssetSetMoveColumn = 'bestDay' | 'omega' | 'meanUp' | 'meanDown' | 'streak' | 'extremeDays';
-
-/** Each column a backend warning code leaves blank, and the warning that says why (Q20: «—» with its reason). */
-const MOVE_BLANK_REASONS: ReadonlyArray<readonly [string, readonly AssetSetMoveColumn[]]> = [
-    ['best_realization_undefined', ['bestDay', 'meanUp', 'streak']],
-    ['average_loss_undefined', ['meanDown']],
-    ['omega_undefined', ['omega']],
-    ['extreme_day_ratio_undefined', ['extremeDays']],
-];
+/** The columns of «How did each one move?» whose blank can say why (RN-19): the figures' own (`moveFigures.ts`). */
+export type AssetSetMoveColumn = MoveColumn;
 
 /**
  * One row of «How did each one move?» (RN-19): the positive twin of the loss table, every figure read from L1°'s own
- * calendar. Fractions as the contract states them; a blank is null.
+ * calendar — the figures of `moveFigures.ts`, the one reading the levels' block shares (RN-18).
  */
-export interface AssetSetMoveRow {
+export interface AssetSetMoveRow extends MoveFigures {
     assetId: number;
     name: string;
-    /** The best single return, and the day of it. */
-    bestDay: number | null;
-    bestDayDate: string | null;
-    /** The best compounded 30-day window the asset lived through: a figure even when it lost (never floored). */
-    bestMonth: {gain: number; from: string; to: string} | null;
-    /** The largest rise from a low to a later high; no rise is a measured 0 with no dates. */
-    rally: {gain: number; from: string | null; to: string | null; days: number | null} | null;
-    /** Gains against losses (Omega). */
-    omega: number | null;
-    /** Share of the days with a gain. */
-    positiveShare: number | null;
-    /** The semi-deviation, annualized. */
-    downsideDeviation: number | null;
-    /** The average up day and down day (c, hidden by default). */
-    meanUp: number | null;
-    meanDown: number | null;
-    /** The longest run of positive days, and when (c, hidden by default). */
-    streak: {days: number; from: string; to: string} | null;
-    /** «Below the peak, on average» (ADD), ≤ 0 (hidden by default; the consultant, 17/11). */
-    averageDrawdown: number | null;
-    /** How much more frequent extreme days are than on the bell curve: the kurtosis over 3 (hidden by default). */
-    extremeDays: number | null;
-    /** The reason of a blank, as the catalogue key of the backend warning that names the asset. */
-    reasons: Partial<Record<AssetSetMoveColumn, string>>;
 }
 
 /** The warning codes that name each asset, from a result's warnings. */
@@ -241,41 +183,11 @@ export function buildAssetSetMoveRows(assetIds: readonly number[], names: Readon
     const falls = byAsset(riskOutput(drawdown, schemas.RiskAssetSetDrawdownOutput)?.items);
     const warned = warnedAssets(kpi);
 
-    return assetIds.map((assetId) => {
-        const shape = shapes.get(assetId);
-        const fall = falls.get(assetId);
-        const best = singleValue(monthly.get(assetId)?.best_horizon);
-        const bestGain = best ? num(best.compounded_return) : null;
-        const bestPeriod = best ? datePeriod(singleValue(best.start_date), singleValue(best.end_date)) : null;
-        const rallyGain = num(fall?.largest_rally);
-        const rallyPeriod = datePeriod(singleValue(fall?.largest_rally_start_date), singleValue(fall?.largest_rally_end_date));
-        const streakDays = num(shape?.longest_positive_run_observations);
-        const streakPeriod = datePeriod(singleValue(shape?.longest_positive_run_start_date), singleValue(shape?.longest_positive_run_end_date));
-        const codes = warned.get(assetId) ?? new Set<string>();
-        const reasons: Partial<Record<AssetSetMoveColumn, string>> = {};
-        for (const [code, columns] of MOVE_BLANK_REASONS) {
-            if (!codes.has(code)) continue;
-            // The singular sentence: the cell speaks of its own asset.
-            for (const column of columns) reasons[column] = `risk.warnings.${code}`;
-        }
-        return {
-            assetId,
-            name: label(assetId, names),
-            bestDay: num(shape?.best_realization),
-            bestDayDate: singleValue(shape?.best_realization_date) ?? null,
-            bestMonth: bestGain !== null && bestPeriod ? {gain: bestGain, ...bestPeriod} : null,
-            rally: rallyGain === null ? null : {gain: rallyGain, from: rallyGain > 0 ? (rallyPeriod?.from ?? null) : null, to: rallyGain > 0 ? (rallyPeriod?.to ?? null) : null, days: num(fall?.largest_rally_duration_days)},
-            omega: num(shape?.omega_ratio),
-            positiveShare: num(shape?.positive_observation_share),
-            downsideDeviation: num(shape?.downside_deviation),
-            meanUp: num(shape?.mean_positive_return),
-            meanDown: num(shape?.mean_negative_return),
-            streak: streakDays !== null && streakPeriod ? {days: streakDays, ...streakPeriod} : null,
-            averageDrawdown: num(fall?.average_drawdown),
-            extremeDays: num(shape?.extreme_day_ratio),
-            reasons,
-        };
-    });
+    return assetIds.map((assetId) => ({
+        assetId,
+        name: label(assetId, names),
+        ...readMoveFigures(shapes.get(assetId), singleValue(monthly.get(assetId)?.best_horizon) ?? null, falls.get(assetId), warned.get(assetId) ?? new Set<string>()),
+    }));
 }
 
 /**
