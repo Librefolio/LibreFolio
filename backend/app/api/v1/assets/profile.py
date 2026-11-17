@@ -46,6 +46,8 @@ from backend.app.utils.datetime_utils import utcnow
 
 profile_router = APIRouter()
 
+#: The ``error`` of a read item whose asset does not exist, as the price read writes it.
+ASSET_NOT_FOUND = "Asset not found"
 #: A voice the catalogue does not list, asked in a read (422).
 PROFILE_VOICE_UNKNOWN = "PROFILE_VOICE_UNKNOWN"
 #: Rows asked to be forgotten that are not rows of that asset (404).
@@ -144,7 +146,8 @@ def _changes_page(page: ProfileChangesPage, number: int, size: int) -> FAProfile
 @profile_router.post("/profile/query", response_model=FAProfileQueryResponse, tags=["FA Profile"])
 async def query_profile(items: List[FAProfileQueryItem], session: AsyncSession = Depends(get_session_generator), _current_user: User = Depends(get_current_user)) -> FAProfileQueryResponse:
     """The voices of each asset as steps in its ``date_range`` (never carried back before the first row), and a page of
-    changes when ``changes`` is given. An asset with no rows, or that does not exist, answers no voice.
+    changes when ``changes`` is given. An asset with no rows answers no voice; one that does not exist answers ``error``
+    «Asset not found» in its item, and the other items are read (D1b).
 
     ``as_of`` is taken before the read: «Dimentica» sends it back, so a row written after it is never forgotten by a page
     that has not shown it. A voice the catalogue does not list is refused (422 ``PROFILE_VOICE_UNKNOWN``) before any read.
@@ -158,8 +161,13 @@ async def query_profile(items: List[FAProfileQueryItem], session: AsyncSession =
     # End the transaction the login check opened: the read below starts after as_of, so it sees every row written before
     await session.commit()
     as_of = utcnow()
+    asked = list(dict.fromkeys(item.asset_id for item in items))
+    existing = set((await session.execute(select(Asset.id).where(Asset.id.in_(asked)))).scalars().all()) if asked else set()
     results: List[FAProfileQueryResult] = []
     for item in items:
+        if item.asset_id not in existing:
+            results.append(FAProfileQueryResult(asset_id=item.asset_id, error=ASSET_NOT_FOUND))
+            continue
         steps = (await read_steps(session, [item.asset_id], item.date_range, item.keys)).get(item.asset_id, {})
         voices = {key: [FAProfileStepPoint(date=step.date, through=step.through, value=step.value, source=step.source, update_id=step.update_id) for step in voice_steps] for key, voice_steps in steps.items()}
         changes = None

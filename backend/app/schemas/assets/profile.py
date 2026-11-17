@@ -221,11 +221,15 @@ class FAProfileChangesPage(StrictModel):
 
 
 class FAProfileQueryResult(StrictModel):
-    """The profile of one asset: voice → its steps (a voice with none left out), and the changes when asked."""
+    """The profile of one asset: voice → its steps (a voice with none left out), and the changes when asked.
+
+    An asset that does not exist answers ``error`` «Asset not found», no voice and no changes (as the price read does);
+    an asset that exists with no rows answers no voice and no error («no profile yet»)."""
 
     asset_id: int
     voices: Dict[str, List[FAProfileStepPoint]] = Field(default_factory=dict)
     changes: Optional[FAProfileChangesPage] = None
+    error: Optional[str] = Field(None, description="«Asset not found» for an asset that does not exist; None otherwise")
 
 
 class FAProfileQueryResponse(StrictModel):
