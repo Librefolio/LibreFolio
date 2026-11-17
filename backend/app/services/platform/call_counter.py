@@ -221,13 +221,15 @@ def _declared_limits(settings: object) -> CallLimits:
 def call_owner(provider: object, family: str) -> tuple[str, str, CallLimits]:
     """Who a call of ``provider`` (a plugin of ``family`` with its settings bound) is counted and limited on: the shared
     group whose credits it spends (``SettingsGroup.shares_credits``), else the plugin itself; and the limits, from that
-    owner's bound settings (project 76, U2/U3). One rule for every family's boundary."""
+    owner's bound settings (project 76, U2/U3). One rule for every family's boundary. The plugin is named by its
+    ``provider_code`` (assets, FX), or by its ``code`` (an enricher, K1)."""
     settings = provider.settings  # type: ignore[attr-defined]
     for name in getattr(type(provider), "settings_groups", ()) or ():
         group = get_group(name)
         if group is not None and group.shares_credits:
             return GROUP_FAMILY, name, _declared_limits(settings.group(name))
-    return family, provider.provider_code, _declared_limits(settings)  # type: ignore[attr-defined]
+    code = getattr(provider, "provider_code", None)
+    return family, code if code is not None else provider.code, _declared_limits(settings)  # type: ignore[attr-defined]
 
 
 async def count_and_check(family: str, plugin_code: str, limits: CallLimits | None = None, *, now: datetime | None = None) -> CallCounts | None:

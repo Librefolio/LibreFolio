@@ -51,6 +51,7 @@ from backend.app.services.enrichers.base import RATE_LIMITED, EnricherBinding, E
 from backend.app.services.enrichers.bindings import load_enrichers, update_state
 from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.enrichers.usable import NOT_CONFIGURED, configured_enricher, usable_codes
+from backend.app.services.platform import call_counter
 from backend.app.utils.datetime_utils import ensure_utc, utcnow
 from backend.app.utils.runtime.cache import get_ttl_cache
 
@@ -192,6 +193,52 @@ def _not_configured(request: ReadRequest, missing: Sequence[str]) -> ReadOutcome
     )
 
 
+def _split_cached(requests: list[ReadRequest], keys: frozenset[str] | None, use_cache: bool) -> tuple[list[ReadOutcome], list[ReadRequest]]:
+    """The outcomes the read cache answers, and the requests left to read."""
+    served: list[ReadOutcome] = []
+    to_read: list[ReadRequest] = []
+    for request in requests:
+        cached = _cached(request.code, request.binding, keys) if use_cache else None
+        if cached is not None:
+            served.append(dataclasses.replace(cached, owner=request.owner, from_cache=True))
+        else:
+            to_read.append(request)
+    return served, to_read
+
+
+def _limit_refused(request: ReadRequest, full: call_counter.CallLimitReached) -> ReadOutcome:
+    """A binding not read because the plugin's call limit is full: a refusal for too many requests, never cached."""
+    return ReadOutcome(
+        owner=request.owner,
+        code=request.code,
+        binding=request.binding,
+        status=EnricherReadStatus.ERROR,
+        error_code=RATE_LIMITED,
+        error_message=f"Enricher {request.code} reached its {full.window} call limit ({full.limit})",
+        retry_after=full.retry_after,
+    )
+
+
+async def _within_call_limit(plugin: EnricherPlugin, requests: list[ReadRequest]) -> tuple[list[ReadRequest], list[ReadOutcome]]:
+    """The bindings a plugin that calls out may read now, and the refusals of the others (project 76, K1).
+
+    One call counted per binding, in request order, before the read, on the plugin's row or on its credit-sharing
+    group's (``call_counter.call_owner``). A full window refuses that binding and every following one; a counter that
+    fails (None) lets them go. A plugin that calls nothing out is never counted.
+    """
+    if not getattr(plugin, "calls_external_service", False):
+        return requests, []
+    family, owner, limits = call_counter.call_owner(plugin, "enricher")
+    for index in range(len(requests)):
+        try:
+            await call_counter.count_and_check(family, owner, limits)
+        except call_counter.CallLimitReached as full:
+            refused = requests[index:]
+            logger.warning("Enricher read refused: instance call limit reached", enricher=plugin.code, owner=f"{family}/{owner}", window=full.window, limit=full.limit, refused=len(refused), retry_after_s=round(full.retry_after, 1))
+            return requests[:index], [_limit_refused(item, full) for item in refused]
+    return requests, []
+
+
 def _drain(plugin: EnricherPlugin, bindings: list[EnricherBinding], keys: frozenset[str] | None, put: Any) -> None:
     """Run one plugin's ``read`` in this worker thread, handing each item to the loop as it comes, then the end."""
     try:
@@ -238,6 +285,8 @@ async def read_bindings(requests: Sequence[ReadRequest], keys: Iterable[str] | N
 
     An enricher the registry does not serve (not installed, turned off) answers «no answer», and one with a required
     setting left empty «not configured», before the read cache: a value read before the switch is not served after it.
+    A plugin that calls an external service has each binding it reads counted first, and a full call limit refuses
+    the rest (``_within_call_limit``); a cached binding is never counted.
     """
     wanted = None if keys is None else frozenset(keys)
     by_code: dict[str, list[ReadRequest]] = {}
@@ -252,13 +301,10 @@ async def read_bindings(requests: Sequence[ReadRequest], keys: Iterable[str] | N
             for request in group:
                 yield _unanswered(request, "no such enricher") if plugin is None else _not_configured(request, missing)
             continue
-        to_read: list[ReadRequest] = []
-        for request in group:
-            cached = _cached(request.code, request.binding, wanted) if use_cache else None
-            if cached is not None:
-                yield dataclasses.replace(cached, owner=request.owner, from_cache=True)
-            else:
-                to_read.append(request)
+        served, to_read = _split_cached(group, wanted, use_cache)
+        to_read, refused = await _within_call_limit(plugin, to_read)
+        for outcome in (*served, *refused):
+            yield outcome
         if to_read:
             pending += len(to_read)
             tasks.append(asyncio.create_task(_read_plugin(plugin, to_read, wanted, out)))
