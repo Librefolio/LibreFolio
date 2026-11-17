@@ -40,6 +40,12 @@ The contract pinned here:
     from ``call_counter.logger`` naming family and plugin, nothing raised.
 13. ``read_counts`` never writes: no row → all zeros (and still no row); a row → its counts, a window whose start is
     older than the current window's reads 0; the row unchanged, ``updated_at`` included.
+14. (U2) The counter's own ``busy_timeout``, ``COUNTER_BUSY_TIMEOUT_MS = 2000``, on its connection only: set at the
+    start of each counter transaction, the connection's previous value restored after it. Another connection holding
+    ``BEGIN IMMEDIATE`` makes ``count_and_check`` return None in about 2 s, not the session listener's 30; a pooled
+    connection reads 30 000 again after a counted, a refused and a timed-out call.
+15. (U2) The database-failure warning is written at most once a minute per (``family``, ``plugin_code``), the limit-0
+    path's included: the clock is ``call_counter._monotonic`` (``time.monotonic``), the memory ``_warned_at`` (a dict).
 
 Isolation: PURE. No lane database, no server, no network: every database is a private SQLite file under ``tmp_path``,
 built by ``SQLModel.metadata.create_all``; ``call_counter.get_async_engine`` is patched to that file's engine, and
@@ -54,6 +60,7 @@ fixture, not the collection) with «red until U1»; fixtures only build and disp
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import importlib
 import inspect
@@ -62,6 +69,7 @@ import os
 import sqlite3
 import subprocess
 import sys
+import time
 from collections.abc import AsyncIterator, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -74,7 +82,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import create_engine, event, select
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
-from sqlalchemy.pool import NullPool
+from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
 from structlog.testing import capture_logs
 
 from backend.app.config import PROJECT_ROOT
@@ -784,22 +792,15 @@ async def test_u1_a_stopped_plugin_stays_stopped_when_the_database_fails(monkeyp
 
 @pytest.mark.asyncio
 async def test_u1_a_write_lock_held_past_the_busy_timeout_lets_the_call_go(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """Review: the plan's own failure, the file's write lock held by another connection beyond ``busy_timeout``: the call
-    goes (None) with one warning, nothing raised, and the row is not touched."""
+    """Review: the plan's own failure, the file's write lock held by another connection beyond the counter's own wait
+    (2 s since U2): the call goes (None) with one warning, nothing raised, and the row is not touched."""
     module = _counter_module()
     path = tmp_path / "locked.db"
     setup = create_async_engine(f"sqlite+aiosqlite:///{path}", poolclass=NullPool)
     async with setup.begin() as connection:
         await connection.run_sync(SQLModel.metadata.create_all)
     await setup.dispose()
-    engine = create_async_engine(f"sqlite+aiosqlite:///{path}", poolclass=NullPool, connect_args={"timeout": 0.2})
-
-    @event.listens_for(engine.sync_engine, "connect")
-    def _short_busy_timeout(dbapi_connection: Any, _record: Any) -> None:
-        # After the session module's listener (busy_timeout=30000 on every SQLite connection): a 0.2 s wait here
-        cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA busy_timeout=200")
-        cursor.close()
+    engine = create_async_engine(f"sqlite+aiosqlite:///{path}", poolclass=NullPool)
 
     monkeypatch.setattr(module, "get_async_engine", lambda: engine, raising=True)
     holder = sqlite3.connect(path, isolation_level=None)
@@ -855,3 +856,205 @@ async def test_u1_read_counts_reads_stale_windows_as_zero_and_never_writes(monke
 
     assert result == _counts(module, *expected), f"read at {when.isoformat()}: {result}, expected {expected}"
     assert _row(private.path, "fx", "SNB") == before, "reading must never write"
+
+
+# =============================================================================
+# 14. U2 — THE COUNTER'S OWN BUSY TIMEOUT
+# =============================================================================
+
+
+async def _built(path: Path) -> None:
+    setup = create_async_engine(f"sqlite+aiosqlite:///{path}", poolclass=NullPool)
+    try:
+        async with setup.begin() as connection:
+            await connection.run_sync(SQLModel.metadata.create_all)
+    finally:
+        await setup.dispose()
+
+
+async def _busy_timeout(engine: AsyncEngine) -> int:
+    async with engine.connect() as connection:
+        return (await connection.exec_driver_sql("PRAGMA busy_timeout")).scalar_one()
+
+
+async def _timed_under_a_held_lock(module: ModuleType, path: Path, code: str) -> tuple[Any, float]:
+    """``count_and_check`` while another connection holds ``BEGIN IMMEDIATE`` on the file: its result and seconds."""
+    holder = sqlite3.connect(path, isolation_level=None)
+    try:
+        holder.execute("BEGIN IMMEDIATE")
+        started = time.monotonic()
+        result = await module.count_and_check("asset", code, module.CallLimits(minute=5), now=NOW)
+        return result, time.monotonic() - started
+    finally:
+        holder.execute("ROLLBACK")
+        holder.close()
+
+
+def test_u2_the_counter_names_its_busy_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    """U2 8: ``COUNTER_BUSY_TIMEOUT_MS == 2000``, the counter's own wait for the file's write lock."""
+    assert getattr(_pure(monkeypatch), "COUNTER_BUSY_TIMEOUT_MS", None) == 2000
+
+
+@pytest.mark.asyncio
+async def test_u2_a_held_write_lock_lets_the_call_go_after_the_counters_two_seconds(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """U2 8a: a plain engine (the session listener's 30 000 ms on every connection, checked): another connection holding
+    ``BEGIN IMMEDIATE`` makes ``count_and_check`` return None after the counter's own ~2 s, not 30; nothing written.
+    Red on HEAD after the full 30 s."""
+    module = _counter_module()
+    path = tmp_path / "busy.db"
+    await _built(path)
+    engine = create_async_engine(f"sqlite+aiosqlite:///{path}", poolclass=NullPool)
+    monkeypatch.setattr(module, "get_async_engine", lambda: engine, raising=True)
+    try:
+        assert await _busy_timeout(engine) == 30000, "barrier: the plain engine carries the session listener's 30 000 ms"
+        with _captured(module):
+            result, elapsed = await _timed_under_a_held_lock(module, path, "u2_busy_plain")
+    finally:
+        await engine.dispose()
+
+    assert result is None, f"a lock held past the counter's timeout lets the call go: {result}"
+    assert 1.5 <= elapsed < 10, f"the counter waits its own ~2 s, not the session's 30: {elapsed:.2f} s"
+    assert _row(path, "asset", "u2_busy_plain") is None
+
+
+@pytest.mark.asyncio
+async def test_u2_the_counter_restores_the_connections_busy_timeout(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """U2 8b: one pooled connection (pool of one, no overflow) serves every use: after a counted call, a refused one and
+    one that timed out on a held lock (in ~2 s), the same connection reads ``busy_timeout`` 30 000 again."""
+    module = _counter_module()
+    path = tmp_path / "pooled.db"
+    await _built(path)
+    engine = create_async_engine(f"sqlite+aiosqlite:///{path}", poolclass=AsyncAdaptedQueuePool, pool_size=1, max_overflow=0)
+    checked_out: list[int] = []
+    event.listen(engine.sync_engine, "checkout", lambda dbapi_connection, _record, _proxy: checked_out.append(id(dbapi_connection)))
+    monkeypatch.setattr(module, "get_async_engine", lambda: engine, raising=True)
+    try:
+        assert await _busy_timeout(engine) == 30000, "barrier: the session listener's 30 000 ms"
+        assert await module.count_and_check("asset", "u2_busy_pooled", module.CallLimits(minute=1), now=NOW) == _counts(module, 1, 1, 1, 1, 1)
+        after_counted = await _busy_timeout(engine)
+        with pytest.raises(module.CallLimitReached):
+            await module.count_and_check("asset", "u2_busy_pooled", module.CallLimits(minute=1), now=NOW)
+        after_refused = await _busy_timeout(engine)
+        with _captured(module):
+            result, elapsed = await _timed_under_a_held_lock(module, path, "u2_busy_pooled_locked")
+        after_locked = await _busy_timeout(engine)
+    finally:
+        await engine.dispose()
+
+    assert result is None
+    assert 1.5 <= elapsed < 10, f"the counter waits its own ~2 s on the pooled connection too: {elapsed:.2f} s"
+    assert (after_counted, after_refused, after_locked) == (30000, 30000, 30000), "the connection's own value is restored after each counter transaction"
+    assert len(set(checked_out)) == 1 and len(checked_out) >= 7, f"barrier: one connection served every use: {checked_out}"
+
+
+@pytest.mark.asyncio
+async def test_u2_a_count_cancelled_while_it_waits_never_returns_the_short_wait_to_the_pool(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Review: a count cancelled while it waits for a held lock (a closed search stream, an outer ``wait_for``) leaves no
+    connection in the pool with the counter's 2 s: the pooled connection reads 30 000 again, or was replaced."""
+    module = _counter_module()
+    path = tmp_path / "cancelled.db"
+    await _built(path)
+    engine = create_async_engine(f"sqlite+aiosqlite:///{path}", poolclass=AsyncAdaptedQueuePool, pool_size=1, max_overflow=0)
+    monkeypatch.setattr(module, "get_async_engine", lambda: engine, raising=True)
+    holder = sqlite3.connect(path, isolation_level=None)
+    try:
+        holder.execute("BEGIN IMMEDIATE")
+        with pytest.raises(TimeoutError):
+            await asyncio.wait_for(module.count_and_check("asset", "u2_cancelled", module.CallLimits(minute=5), now=NOW), timeout=0.3)
+        holder.execute("ROLLBACK")
+        after = await _busy_timeout(engine)
+    finally:
+        holder.close()
+        await engine.dispose()
+    assert after == 30000, f"the pool hands out a connection with the app's wait, not the counter's: {after}"
+
+
+# =============================================================================
+# 15. U2 — THE FAILURE WARNING, AT MOST ONCE A MINUTE PER PAIR
+# =============================================================================
+
+
+class _Monotonic:
+    """``call_counter._monotonic`` in the tests: moves only when the test moves it."""
+
+    def __init__(self) -> None:
+        self.now = 5_000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+@pytest.fixture(autouse=True)
+def forget_failure_warnings() -> Iterator[None]:
+    """The counter's memory of the warnings it wrote (``_warned_at``, a dict) is empty before and after each test; HEAD
+    has none."""
+
+    def clear() -> None:
+        module = sys.modules.get(MODULE)
+        memory = getattr(module, "_warned_at", None) if module is not None else None
+        if isinstance(memory, dict):
+            memory.clear()
+
+    clear()
+    yield
+    clear()
+
+
+def _warned_pairs(events: list[dict[str, Any]], codes: tuple[str, ...]) -> list[str]:
+    """The codes named by each warning, in order."""
+    return [next((code for code in codes if code in repr(event)), "<none>") for event in events if event.get("log_level") == "warning"]
+
+
+@pytest_asyncio.fixture
+async def broken(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[_Monotonic]:
+    """The counter on a file in a missing folder (every statement fails), its warning clock a fake one."""
+    module = _counter_module()
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'missing-folder' / 'counters.db'}", poolclass=NullPool)
+    monkeypatch.setattr(module, "get_async_engine", lambda: engine, raising=True)
+    clock = _Monotonic()
+    monkeypatch.setattr(module, "_monotonic", clock, raising=False)  # red on HEAD as «too many warnings», not here
+    try:
+        yield clock
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_u2_a_failing_pair_warns_once_a_minute_and_another_pair_warns_its_own(broken: _Monotonic) -> None:
+    """U2 9: pair A fails twice within 60 s → one warning; pair B fails → its own warning. Every call still goes (None)."""
+    module = _counter_module()
+    codes = ("u2_warn_a", "u2_warn_b")
+    with _captured(module) as events:
+        first = await module.count_and_check("asset", codes[0], module.CallLimits(minute=5), now=NOW)
+        broken.now += 30
+        second = await module.count_and_check("asset", codes[0], module.CallLimits(minute=5), now=NOW)
+        other = await module.count_and_check("asset", codes[1], module.CallLimits(minute=5), now=NOW)
+
+    assert (first, second, other) == (None, None, None)
+    assert _warned_pairs(events, codes) == ["u2_warn_a", "u2_warn_b"]
+
+
+@pytest.mark.asyncio
+async def test_u2_a_failing_pair_warns_again_after_a_minute(broken: _Monotonic) -> None:
+    """U2 9: A fails at t, t+30 s (silent) and t+61 s (warned again): two warnings."""
+    module = _counter_module()
+    with _captured(module) as events:
+        for step in (0, 30, 31):
+            broken.now += step
+            assert await module.count_and_check("asset", "u2_warn_again", None, now=NOW) is None
+
+    assert _warned_pairs(events, ("u2_warn_again",)) == ["u2_warn_again", "u2_warn_again"]
+
+
+@pytest.mark.asyncio
+async def test_u2_a_stopped_plugin_on_a_failing_database_warns_once_a_minute(broken: _Monotonic) -> None:
+    """U2 9: the limit-0 path's own warning follows the same rule: two refusals within 60 s on a failing database, one
+    warning; both still refused."""
+    module = _counter_module()
+    with _captured(module) as events:
+        for step in (0, 20):
+            broken.now += step
+            with pytest.raises(module.CallLimitReached):
+                await module.count_and_check("asset", "u2_warn_stopped", module.CallLimits(minute=0), now=NOW)
+
+    assert _warned_pairs(events, ("u2_warn_stopped",)) == ["u2_warn_stopped"]

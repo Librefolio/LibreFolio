@@ -525,6 +525,14 @@ def services_call_counter(verbose: bool = False, test_names: list = None) -> boo
     return run_command(cmd, "Plugin call counter tests", verbose=verbose)
 
 
+def services_call_limits_assets(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the asset boundary counting and limiting the calls of a plugin to its external service (project 76, U2)."""
+    print_section("Services: Asset Call Limits")
+    print_info("Testing: assets/core.py (call_provider, call_owner), assets/base.py (calls_external_service, AssetCallLimitError), plugin_settings/groups (shares_credits)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_call_limits_assets.py", test_names)
+    return run_command(cmd, "Asset call limit tests", verbose=verbose)
+
+
 def services_synthetic_yield(verbose: bool = False, test_names: list = None) -> bool:
     """Test synthetic yield calculation for SCHEDULED_YIELD assets."""
     print_section("Services: Synthetic Yield Calculation")
@@ -2876,10 +2884,21 @@ Note: No backend server required.
         "call-counter",
         services_call_counter,
         name="Plugin Call Counter",
-        desc="U1: plugin_call_counters, one row per (family, plugin_code), five UTC calendar windows (minute, hour, day, ISO week, month); count_and_check counts +1 in one atomic upsert, resets the windows that changed, never lowers a start, refuses without counting when a limit is full (CallLimitReached names the full window ending last, resets_at, retry_after; limit 0 refused before the statement), returns None with one warning when the database fails; read_counts reads stale windows as 0 and never writes; two processes on one file lose no update and admit exactly the limit",
+        desc="U1: plugin_call_counters, one row per (family, plugin_code), five UTC calendar windows (minute, hour, day, ISO week, month); count_and_check counts +1 in one atomic upsert, resets the windows that changed, never lowers a start, refuses without counting when a limit is full (CallLimitReached names the full window ending last, resets_at, retry_after; limit 0 refused before the statement), returns None with one warning when the database fails; read_counts reads stale windows as 0 and never writes; two processes on one file lose no update and admit exactly the limit; U2: the counter's own busy_timeout (COUNTER_BUSY_TIMEOUT_MS 2000, the connection's value restored), the failure warning at most once a minute per pair",
         # PURE: no lane DB, no server, no network. Every database is a private SQLite file under tmp_path built by
         # create_all, behind call_counter.get_async_engine (patched); the session's engines are tripwires. The two child
         # processes run a script under tmp_path on that private file only, with the lane's TMPDIR.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "call-limits-assets",
+        services_call_limits_assets,
+        name="Asset Call Limits",
+        desc="U2: AssetSourceProvider.calls_external_service (True; scheduled_investment and mockprov False); SettingsGroup.shares_credits (two refused); core.call_owner (the credit-sharing group, else the plugin; call_limit_<window> fields, 0 kept); call_provider counts +1 before the call (failed, timed out or refused too), never a bare double, NOT_CONFIGURED, a pause or a local plugin; a full window never calls the provider, pauses it with the counter's wait and raises AssetCallLimitError (RATE_LIMITED, details reason/window/limit); a failing counter lets the call go; one group row for the plugins of a credit-sharing group",
+        # PURE: no lane DB, no server, no network. The counter (and the plugin settings' reads) on a private SQLite file
+        # under tmp_path built by create_all; call_counter._utc frozen; a private Cooldowns on a fake clock; test plugins
+        # put in the asset registry's storage with monkeypatch.setitem and test groups released at teardown.
         isolation="pure",
     )
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation; the accrual golden: every number of the accrual walk pinned (regen: LIBREFOLIO_TEST_REGEN_SI_ACCRUAL_GOLDEN=1)")
@@ -3264,7 +3283,7 @@ Note: No backend server required.
         "rate-limit-results",
         services_rate_limit_results,
         name="Rate-Limit Results",
-        desc="error_code RATE_LIMITED and retry_after on: the live current price (last known price kept, or the error item; no call while paused), the refresh result (FAILED with nothing stored, PARTIAL or OK with what came stored), the FX sync pair (FAILED or PARTIAL through a refused provider, the shortest wait; a fallback-served pair and a plain failure untouched; INFO, no traceback), each probe operation (on the result and in error_details), the search (providers_with_errors, INFO not a traceback, a cached query still answered) and its SSE provider_error event",
+        desc="error_code RATE_LIMITED and retry_after on: the live current price (last known price kept, or the error item; no call while paused), the refresh result (FAILED with nothing stored, PARTIAL or OK with what came stored), the FX sync pair (FAILED or PARTIAL through a refused provider, the shortest wait; a fallback-served pair and a plain failure untouched; INFO, no traceback), each probe operation (on the result and in error_details), the search (providers_with_errors, INFO not a traceback, a cached query still answered) and its SSE provider_error event; U2: a full call limit through the same paths (last known price, scheduler deferred, refresh FAILED, search provider with errors, probe RATE_LIMITED), one count per bulk chunk, and the guard that no caller holds a write transaction while a provider is called",
         # PURE: every database is a private file under tmp_path built with create_all and put in place of the process's
         # engine (db.session.async_engine) with monkeypatch; no session on the lane DB, no server. Pauses, MockFX's mode,
         # the registries' hand-outs and the plugin settings variables are monkeypatched per test; identifiers, queries
