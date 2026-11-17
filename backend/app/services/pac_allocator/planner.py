@@ -296,10 +296,12 @@ def plan_exact_scenario(
         return _single_run(scenario, view, issues, checkpoint, solver_time_budget_seconds, product, progress, seed=run_seeds_of[0] if run_seeds_of else None).report
     budget = DEFAULT_SOLVER_TIME_BUDGET_SECONDS if solver_time_budget_seconds is None else solver_time_budget_seconds
 
-    def one_run(seed: int, forward: ProgressReporter | None) -> _RunOutcome:
-        return _single_run(scenario, view, issues, None, budget, product, forward, seed=seed)
+    def one_run(seed: int, forward: ProgressReporter | None, run_budget: float) -> _RunOutcome:
+        # A run started later on a machine with fewer usable CPUs than runs has the time left (lot SEEDS-c).
+        return _single_run(scenario, view, issues, None, run_budget, product, forward, seed=seed)
 
-    runs = run_seeds(one_run, seeds=run_seeds_of, time_budget_seconds=budget, checkpoint=checkpoint, progress=progress)
+    # «Impossible» needs two runs: after one, the next starts even with no time left (lot SEEDS-c).
+    runs = run_seeds(one_run, seeds=run_seeds_of, time_budget_seconds=budget, checkpoint=checkpoint, progress=progress, start_next_after=_answered_impossible)
     report_phase(progress, "verify")
     check_budget(checkpoint)
     published = _merged_report(runs)
@@ -322,6 +324,10 @@ class SeededRunsFailedError(RuntimeError):
     """Lot SEEDS: no run of the Rebalancer's three could be published (all failed, or a single «impossible» stood alone:
     the contract cannot publish an infeasible run as «no plan», lot SEEDS-b). The Tool reports it as ``execution_failed``,
     retryable; the message names no amounts."""
+
+
+def _answered_impossible(outcome: _RunOutcome) -> bool:
+    return outcome.report.result.result_state == "ready_infeasible"
 
 
 def _seeds_for(scenario: ExactPlannerScenario, seeds: tuple[int, ...] | None) -> tuple[int, ...]:

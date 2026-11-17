@@ -27,7 +27,13 @@ from backend.test_scripts.test_services import _reb_small_cases as cases
 # ---------------------------------------------------------------------------- the runs
 
 
-def _echo(seed: int, progress) -> int:
+@pytest.fixture(autouse=True)
+def three_usable_cpus(monkeypatch):
+    """The runs side by side, whatever machine runs the tests: the tests of SEEDS-c's scheduling set 1 or 2 themselves."""
+    monkeypatch.setattr(seed_runs, "usable_cpus", lambda: 3)
+
+
+def _echo(seed: int, progress, budget=None) -> int:
     if progress is not None:
         progress("search", step=1, total=2)
         progress("search", step=2, total=2)
@@ -55,7 +61,7 @@ def test_processes_report_each_search_stage_once() -> None:
 
 
 def test_a_run_that_raises_or_dies_is_a_run_with_no_result() -> None:
-    def unreliable(seed: int, progress) -> int:
+    def unreliable(seed: int, progress, budget=None) -> int:
         if seed == 2:
             raise RuntimeError("a run that fails")
         if seed == 3:
@@ -70,7 +76,7 @@ def test_a_run_past_the_deadline_is_stopped_and_has_no_result(monkeypatch) -> No
     """No wait is unbounded: past the budget and the grace, a run still out is stopped."""
     monkeypatch.setattr(seed_runs, "_GRACE_SECONDS", 0.5)
 
-    def slow(seed: int, progress) -> int:
+    def slow(seed: int, progress, budget=None) -> int:
         if seed == 2:
             time.sleep(60)
         return seed
@@ -96,7 +102,7 @@ def test_a_cancellation_while_runs_are_out_stops_them_all_and_reaches_the_caller
         if calls >= 3:
             raise Cancelled
 
-    def endless(seed: int, progress) -> int:
+    def endless(seed: int, progress, budget=None) -> int:
         time.sleep(60)
         return seed
 
@@ -107,26 +113,16 @@ def test_a_cancellation_while_runs_are_out_stops_them_all_and_reaches_the_caller
     assert [process.name for process in multiprocessing.active_children() if process.name.startswith("planner-seed-")] == []
 
 
-def _niceness(seed: int, progress) -> int:
+def _niceness(seed: int, progress, budget=None) -> int:
     return os.nice(0)
 
 
-@pytest.mark.skipif(not hasattr(os, "nice"), reason="a platform without os.nice runs the three at one priority")
-def test_the_second_and_third_runs_run_at_low_priority() -> None:
-    """Lot SEEDS-b (the consultant's measured mechanism): the first run keeps the caller's priority, the other two run at
-    the lowest (`nice` 19), so on a machine with fewer free CPUs than runs the first is never starved by the others."""
+@pytest.mark.skipif(not hasattr(os, "nice"), reason="no priority to read")
+def test_the_three_runs_run_at_the_caller_s_priority() -> None:
+    """The three runs are equally important (the developer's decision of 17/11): none lowers its priority, whether they
+    run side by side or in turn. SEEDS-b's lower priority for the second and third is gone with SEEDS-c's CPU count."""
     base = os.nice(0)
-    runs = seed_runs.run_seeds(_niceness, seeds=(5, 6, 7), time_budget_seconds=5)
-    assert [run.result for run in runs] == [base, 19, 19]
-
-
-@pytest.mark.skipif(not hasattr(os, "nice"), reason="no priority to change")
-def test_runs_in_the_caller_s_process_never_change_its_priority() -> None:
-    """A priority lowered in a process cannot be raised again: in process, the runs keep the caller's."""
-    base = os.nice(0)
-    runs = seed_runs.run_seeds(_niceness, seeds=(5, 6, 7), time_budget_seconds=5, mode="in_process")
-    assert [run.result for run in runs] == [base, base, base]
-    assert os.nice(0) == base
+    assert [run.result for run in seed_runs.run_seeds(_niceness, seeds=(5, 6, 7), time_budget_seconds=5)] == [base, base, base]
 
 
 def test_once_the_first_run_has_answered_the_others_are_stopped_soon_after_the_limit(monkeypatch) -> None:
@@ -134,7 +130,7 @@ def test_once_the_first_run_has_answered_the_others_are_stopped_soon_after_the_l
     settle, then they are stopped and count as runs with no result."""
     monkeypatch.setattr(seed_runs, "_GRACE_SECONDS", 30.0)
 
-    def second_never_ends(seed: int, progress) -> int:
+    def second_never_ends(seed: int, progress, budget=None) -> int:
         if seed == 2:
             time.sleep(60)
         return seed
@@ -151,7 +147,7 @@ def test_a_run_answering_just_past_the_limit_still_votes(monkeypatch) -> None:
     # A wide settle, so a loaded machine does not decide the test: the late run answers 0.1 s past the limit.
     monkeypatch.setattr(seed_runs, "_SETTLE_SECONDS", 2.0)
 
-    def second_just_late(seed: int, progress) -> int:
+    def second_just_late(seed: int, progress, budget=None) -> int:
         if seed == 2:
             time.sleep(0.6)
         return seed
@@ -164,7 +160,7 @@ def test_when_the_first_run_fails_the_others_keep_the_whole_grace(monkeypatch) -
     """With no first answer, the others are what the request has: they are waited for up to the limit and the grace."""
     monkeypatch.setattr(seed_runs, "_GRACE_SECONDS", 30.0)
 
-    def first_fails(seed: int, progress) -> int:
+    def first_fails(seed: int, progress, budget=None) -> int:
         if seed == 1:
             raise RuntimeError("a run that fails")
         time.sleep(0.5 + seed_runs._SETTLE_SECONDS + 0.5)
@@ -172,6 +168,117 @@ def test_when_the_first_run_fails_the_others_keep_the_whole_grace(monkeypatch) -
 
     runs = seed_runs.run_seeds(first_fails, seeds=(1, 2), time_budget_seconds=0.5)
     assert [(run.seed, run.result, run.failure) for run in runs] == [(1, None, "RuntimeError"), (2, 2, None)]
+
+
+# ---------------------------------------------------------------------------- SEEDS-c: never more runs than usable CPUs
+
+
+def _cgroup_tree(tmp_path, proc: str, files: dict[str, str]):
+    """A fake `/proc/self/cgroup` and `/sys/fs/cgroup`: `files` maps a path under the root to its text."""
+    (tmp_path / "proc").write_text(proc)
+    root = tmp_path / "cgroup"
+    for path, text in files.items():
+        target = root / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text)
+    return tmp_path / "proc", root
+
+
+@pytest.mark.parametrize(
+    ("proc", "files", "affinity", "usable"),
+    [
+        pytest.param("0::/a/b\n", {"a/b/cpu.max": "max 100000\n", "a/cpu.max": "150000 100000\n"}, 16, 1, id="v2-ancestor-1.5-rounds-down"),
+        pytest.param("0::/a/b\n", {"a/b/cpu.max": "200000 100000\n"}, 16, 2, id="v2-quota-2"),
+        pytest.param("0::/a/b\n", {"a/b/cpu.max": "200000 100000\n"}, 1, 1, id="v2-affinity-smaller"),
+        pytest.param("0::/a\n", {"a/cpu.max": "50000 100000\n"}, 16, 1, id="v2-half-a-cpu-is-one"),
+        pytest.param("0::/a\n", {"a/cpu.max": "max 100000\n"}, 16, 16, id="v2-no-quota"),
+        pytest.param("0::/\n", {"cpu.max": "300000 100000\n"}, 16, 3, id="v2-container-root"),
+        pytest.param("0::/a\n", {}, 4, 4, id="no-file"),
+        pytest.param("0::/a\n", {"a/cpu.max": "unreadable\n"}, 4, 4, id="garbage"),
+        pytest.param("4:cpu,cpuacct:/docker/x\n", {"cpu,cpuacct/docker/x/cpu.cfs_quota_us": "300000\n", "cpu,cpuacct/docker/x/cpu.cfs_period_us": "100000\n"}, 16, 3, id="v1-quota-3"),
+        pytest.param("4:cpu,cpuacct:/docker/x\n", {"cpu,cpuacct/docker/x/cpu.cfs_quota_us": "-1\n", "cpu,cpuacct/docker/x/cpu.cfs_period_us": "100000\n"}, 16, 16, id="v1-no-quota"),
+    ],
+)
+def test_usable_cpus_are_the_affinity_or_the_quota_s_whole_cpus(tmp_path, proc: str, files: dict, affinity: int, usable: int) -> None:
+    """Lot SEEDS-c (the consultant's rule of 17/11): the smaller of the affinity's CPUs and the quota's whole CPUs
+    (rounded down), never below 1; every ancestor of the process's cgroup counts; cgroup v2 `cpu.max` and v1
+    `cpu.cfs_quota_us` over `cpu.cfs_period_us`; a file that cannot be read means no quota."""
+    proc_file, root = _cgroup_tree(tmp_path, proc, files)
+    assert seed_runs.cpu_count_usable(proc_cgroup=proc_file, cgroup_root=root, affinity=affinity) == usable
+
+
+def _stamps(seed: int, progress, budget=None):
+    started = time.monotonic()
+    time.sleep(0.3)
+    return (started, time.monotonic(), budget)
+
+
+def test_one_usable_cpu_runs_one_at_a_time_each_with_the_time_left(monkeypatch) -> None:
+    """One usable CPU: the runs go in turn. The first has the whole limit; each later one starts when the previous ends,
+    with the time left."""
+    monkeypatch.setattr(seed_runs, "usable_cpus", lambda: 1)
+    runs = seed_runs.run_seeds(_stamps, seeds=(1, 2, 3), time_budget_seconds=5)
+    (s1, e1, b1), (s2, e2, b2), (s3, _e3, b3) = (run.result for run in runs)
+    assert s2 >= e1 and s3 >= e2, "never two runs at once"
+    assert b1 == 5 and 4 < b3 < b2 < 5, "the first the whole limit, the others the time left"
+
+
+def test_two_usable_cpus_run_two_at_once_the_third_when_one_ends(monkeypatch) -> None:
+    monkeypatch.setattr(seed_runs, "usable_cpus", lambda: 2)
+    runs = seed_runs.run_seeds(_stamps, seeds=(1, 2, 3), time_budget_seconds=5)
+    (s1, e1, _b1), (s2, e2, _b2), (s3, _e3, b3) = (run.result for run in runs)
+    assert s2 < e1 and s1 < e2, "the first two side by side"
+    assert s3 >= min(e1, e2) and b3 < 5
+
+
+def test_with_no_time_left_the_later_runs_do_not_start(monkeypatch) -> None:
+    """Three runs in all only while time is left: a run not started counts as a run with no result."""
+    monkeypatch.setattr(seed_runs, "usable_cpus", lambda: 1)
+
+    def first_takes_it_all(seed: int, progress, budget=None):
+        time.sleep(0.6)
+        return seed
+
+    runs = seed_runs.run_seeds(first_takes_it_all, seeds=(1, 2, 3), time_budget_seconds=0.5)
+    assert [(run.seed, run.result, run.failure) for run in runs] == [(1, 1, None), (2, None, "RunNotStarted"), (3, None, "RunNotStarted")]
+
+
+def test_after_an_impossible_the_next_run_always_starts_with_a_bounded_wait(monkeypatch) -> None:
+    """«Impossible» needs two runs (the consultant's rule of 17/11): once a run has answered it, the next one starts
+    however little time is left, with a short budget of its own and a bounded wait. Once two have said it, no more."""
+    monkeypatch.setattr(seed_runs, "usable_cpus", lambda: 1)
+
+    def late_impossible(seed: int, progress, budget=None):
+        if seed == 1:
+            time.sleep(0.6)
+            return ("impossible", budget)
+        return ("none", budget)
+
+    runs = seed_runs.run_seeds(late_impossible, seeds=(1, 2, 3), time_budget_seconds=0.5, start_next_after=lambda result: result[0] == "impossible")
+    assert runs[0].result == ("impossible", 0.5)
+    assert runs[1].result == ("none", seed_runs._FORCED_RUN_SECONDS), "started with no time left, its own short budget"
+    assert runs[2].failure == "RunNotStarted", "not forced: the second did not answer «impossible»"
+
+    def all_impossible(seed: int, progress, budget=None):
+        time.sleep(0.6)
+        return ("impossible", budget)
+
+    runs = seed_runs.run_seeds(all_impossible, seeds=(1, 2, 3), time_budget_seconds=0.5, start_next_after=lambda result: result[0] == "impossible")
+    assert [run.failure for run in runs] == [None, None, "RunNotStarted"], "two «impossible» agree: the third is not forced"
+
+    def forced_never_ends(seed: int, progress, budget=None):
+        if seed == 1:
+            time.sleep(0.6)
+            return ("impossible", budget)
+        time.sleep(60)
+        return ("none", budget)
+
+    started = time.monotonic()
+    runs = seed_runs.run_seeds(forced_never_ends, seeds=(1, 2, 3), time_budget_seconds=0.5, start_next_after=lambda result: result[0] == "impossible")
+    # A forced run that overruns confirms nothing: the lone «impossible» still needs a second, so the third is forced too.
+    assert time.monotonic() - started < 0.6 + 2 * (seed_runs._FORCED_RUN_SECONDS + seed_runs._SETTLE_SECONDS) + 2.0
+    assert runs[1].failure == "RunPastDeadline"
+    assert runs[2].failure == "RunPastDeadline", "forced in its turn, and stopped at its own bound"
 
 
 # ---------------------------------------------------------------------------- the merge, as a table
@@ -289,6 +396,38 @@ def test_a_proof_no_second_run_confirms_is_downgraded_with_its_reason(monkeypatc
     monkeypatch.setattr(planner, "_single_run", two_fail)
     result = planner.plan_exact_scenario(cases.t4(), solver_time_budget_seconds=5, seeds=(1, 2, 3)).result
     assert (result.result_state, result.proof.kind, result.proof.reason_code) == ("ready_incumbent", "not_proven", PROOF_NOT_CONFIRMED_REASON)
+
+
+def _impossible_y():
+    """Case Y with its cash held between 0.01 and 0.01 EUR: no plan ends there (the ZB-c grid's «min=max=0.01»)."""
+    from backend.app.services.pac_allocator import models as pac_models  # noqa: PLC0415
+
+    R = cases.R
+    entry = pac_models.ExactCashEntry(broker_id=cases.BROKER, currency="EUR", minimum=pac_models.ExactLimit(kind="amount", value=R(1, 100)), maximum=pac_models.ExactLimit(kind="amount", value=R(1, 100)), weight=R(0))
+    return cases.scenario("around-y", holdings={"asset:b": R(480), "asset:c": R(480)}, cash=R(2999, 100), weights={"asset:b": cases.HALF, "asset:c": cases.HALF}, prices={"asset:b": R(1999, 200), "asset:c": R(1999, 200)}, whole_units=frozenset({"asset:b", "asset:c"}), cash_entries=(entry,))
+
+
+@pytest.mark.parametrize("second", ["real", "no-time"])
+def test_one_cpu_a_late_impossible_and_a_second_run_with_almost_no_time_is_never_a_failure(monkeypatch, second: str) -> None:
+    """Lot SEEDS-c, the consultant's test: one usable CPU, the first run answers «impossible» after the limit, so the
+    second starts with almost no time. It confirms («impossible, proven») or stops at its limit («no plan found»): either
+    way the request answers. With a second run given no time at all, exactly «no plan found», from that run."""
+    monkeypatch.setattr(seed_runs, "usable_cpus", lambda: 1)
+    real = planner._single_run
+
+    def late_first(scenario, view, issues, checkpoint, budget, product, progress, *, seed=None):
+        if seed == 1:
+            outcome = real(scenario, view, issues, checkpoint, budget, product, progress, seed=seed)
+            time.sleep(budget + 0.1)
+            return outcome
+        return real(scenario, view, issues, checkpoint, 0.0 if second == "no-time" else budget, product, progress, seed=seed)
+
+    monkeypatch.setattr(planner, "_single_run", late_first)
+    result = planner.plan_exact_scenario(_impossible_y(), solver_time_budget_seconds=0.5, seeds=(1, 2, 3)).result
+    if second == "no-time":
+        assert (result.result_state, result.proof.kind) == ("ready_no_incumbent", "not_proven")
+    else:
+        assert result.result_state in {"ready_infeasible", "ready_no_incumbent"}
 
 
 def test_three_failed_runs_fail_the_request(monkeypatch) -> None:
