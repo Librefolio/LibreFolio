@@ -105,7 +105,20 @@
       },
       "entryModeLabel": "How to read the amount",
       "entryDerivedTotal": "= {value} in total",
-      "entryDerivedUnit": "= {value} {base, plural, =1 {per unit} other {per # units}}"
+      "entryDerivedUnit": "= {value} {base, plural, =1 {per unit} other {per # units}}",
+      "charges": {
+        "title": "Linked charges",
+        "addCharge": "+ {type}",
+        "new": "new",
+        "notePlaceholder": "Note (e.g. Tobin tax)",
+        "unlink": "Unlink",
+        "remove": "Delete",
+        "totalOut": "Total charged",
+        "totalIn": "Net received",
+        "loadError": "The linked charges could not be loaded",
+        "missingAmount": "Enter the amount of this charge",
+        "loading": "Loading the linked charges…"
+      }
     },
     "bulk": {
       "resetRow": "Reset row",

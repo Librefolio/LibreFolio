@@ -105,7 +105,20 @@
       },
       "entryModeLabel": "Cómo leer el número",
       "entryDerivedTotal": "= {value} en total",
-      "entryDerivedUnit": "= {value} {base, plural, =1 {por unidad} other {por # unidades}}"
+      "entryDerivedUnit": "= {value} {base, plural, =1 {por unidad} other {por # unidades}}",
+      "charges": {
+        "title": "Gastos enlazados",
+        "addCharge": "+ {type}",
+        "new": "nuevo",
+        "notePlaceholder": "Nota (p. ej. tasa Tobin)",
+        "unlink": "Desenlazar",
+        "remove": "Eliminar",
+        "totalOut": "Cargo total",
+        "totalIn": "Neto cobrado",
+        "loadError": "No se pudieron cargar los gastos enlazados",
+        "missingAmount": "Introduce el importe de este gasto",
+        "loading": "Cargando los gastos enlazados…"
+      }
     },
     "bulk": {
       "resetRow": "Restablecer fila",

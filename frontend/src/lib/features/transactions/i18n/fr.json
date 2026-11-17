@@ -105,7 +105,20 @@
       },
       "entryModeLabel": "Comment lire le nombre",
       "entryDerivedTotal": "= {value} au total",
-      "entryDerivedUnit": "= {value} {base, plural, =1 {par unité} other {pour # unités}}"
+      "entryDerivedUnit": "= {value} {base, plural, =1 {par unité} other {pour # unités}}",
+      "charges": {
+        "title": "Frais liés",
+        "addCharge": "+ {type}",
+        "new": "nouveau",
+        "notePlaceholder": "Note (ex. taxe Tobin)",
+        "unlink": "Délier",
+        "remove": "Supprimer",
+        "totalOut": "Total débité",
+        "totalIn": "Net encaissé",
+        "loadError": "Les frais liés n'ont pas pu être chargés",
+        "missingAmount": "Saisissez le montant de ce frais",
+        "loading": "Chargement des frais liés…"
+      }
     },
     "bulk": {
       "resetRow": "Réinitialiser la ligne",

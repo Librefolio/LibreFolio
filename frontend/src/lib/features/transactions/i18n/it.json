@@ -105,7 +105,20 @@
       },
       "entryModeLabel": "Come leggere il numero",
       "entryDerivedTotal": "= {value} in totale",
-      "entryDerivedUnit": "= {value} {base, plural, =1 {per unità} other {per # unità}}"
+      "entryDerivedUnit": "= {value} {base, plural, =1 {per unità} other {per # unità}}",
+      "charges": {
+        "title": "Spese collegate",
+        "addCharge": "+ {type}",
+        "new": "nuova",
+        "notePlaceholder": "Nota (es. Tobin tax)",
+        "unlink": "Scollega",
+        "remove": "Elimina",
+        "totalOut": "Addebito totale",
+        "totalIn": "Netto incassato",
+        "loadError": "Non è stato possibile caricare le spese collegate",
+        "missingAmount": "Inserisci l'importo di questa spesa",
+        "loading": "Caricamento delle spese collegate…"
+      }
     },
     "bulk": {
       "resetRow": "Reimposta riga",
