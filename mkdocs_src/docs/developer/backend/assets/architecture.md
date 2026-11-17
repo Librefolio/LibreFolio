@@ -1238,6 +1238,15 @@ pause registry, `backend/app/services/platform/provider_cooldown.py`:
   pause.
 - A test double that is not a plugin (no `PluginSettingsMixin`) has no settings and no pause: it is
   called as it is.
+- **An instance call limit** (project 76, U2): a provider with `calls_external_service` is counted
+  before the call leaves, after the two refusals above and whatever the call then meets, on its own
+  row of `plugin_call_counters` or on the shared group whose credits it spends (`call_owner()`,
+  `services/platform/call_counter.py`). A full limit refuses it without calling: `AssetCallLimitError`,
+  a `RATE_LIMITED` refusal whose `details` name the window and the limit, and the provider is paused
+  as after a source's refusal, so every path below answers it the same way. A count that ends with
+  neither (a cancellation) lets the next caller try. The counter waits at most 2 s for another
+  writer's lock, then lets the call go uncounted; no caller holds a write transaction open while it
+  calls a provider (guard: `services rate-limit-results`).
 
 Each process keeps its own pauses, in memory. They are on by default:
 [Provider Pauses](../../../admin/settings.md), in the admin guide, and `.env.example`

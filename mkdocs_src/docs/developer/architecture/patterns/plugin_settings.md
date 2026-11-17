@@ -845,6 +845,10 @@ class CoinGeckoProvider(AssetSourceProvider):
   (`contract.qualified_missing()`); a plugin that only reads groups is listed too, with no field of
   its own. A write names a group as it names a plugin (`family: "group"`, `plugin_code: <name>`,
   `scope: "system"`) and follows the same rules, all or nothing with plugin items.
+- **Shared credits** (project 76, U2): a group with `shares_credits=True` stands for one account whose credits
+  its plugins spend together (CoinGecko's key): their calls are counted, and limited, on the group's row of
+  `plugin_call_counters` (`family="group"`), not each on its own (`core.call_owner()`). A plugin reads at most one
+  such group: a second one is refused at registration (`validate_plugin_groups()`).
 - **Switched off with its readers** (X1): when the instance's allow-lists
   (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`) switch off every plugin
   that reads a group, the group is not served either: no entry, even when named, and a write to it is

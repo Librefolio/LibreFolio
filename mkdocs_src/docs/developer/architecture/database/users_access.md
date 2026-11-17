@@ -101,6 +101,22 @@ erDiagram
         string key_id "nullable, 32 hex characters"
         datetime updated_at
     }
+
+    PLUGIN_CALL_COUNTER {
+        string family PK "asset, fx, enricher, group"
+        string plugin_code PK "a plugin's code, or a group's name"
+        int minute_since "epoch seconds of the window's start"
+        int minute_count
+        int hour_since
+        int hour_count
+        int day_since
+        int day_count
+        int week_since "Monday 00:00 UTC"
+        int week_count
+        int month_since "day 1, 00:00 UTC"
+        int month_count
+        datetime updated_at
+    }
 ```
 
 ## 📋 Tables
@@ -284,6 +300,12 @@ writing; a stale window reads 0.
 No other index: every statement reaches the row by its primary key. No foreign key (a plugin is code, not a row), no
 `AUTOINCREMENT`. The step `plugin_call_counters` of migration `006_release_1_4_0_schema` creates it empty, and the
 downgrade drops it.
+
+The counter waits at most 2 s for another writer's lock (`COUNTER_BUSY_TIMEOUT_MS`, on its own connection; the app
+waits 30 s), then lets the call go uncounted, with a warning at most once a minute per plugin. In a test process it
+counts on a file of the process's own (`backend/test_scripts/conftest.py`), never on the lane's database. Tests:
+`./dev.py test services call-counter` (the statement, the windows, two processes, the waits),
+`services call-limits-assets` (the asset boundary, project 76 U2), `db migration-006-call-counters` (the step).
 
 ### 🔑 `BROKER_USER_ACCESS`
 
