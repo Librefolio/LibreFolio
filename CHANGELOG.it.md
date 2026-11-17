@@ -57,6 +57,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 ### 🐛 Corretto
 
+- Nel risultato del PAC le barre dell'esposizione disegnano ogni settore nel suo colore: i settori con uno spazio nel nome (Health Care, Real Estate, Consumer Discretionary…) erano disegnati nel grigio di «Non classificato».
 - Uscire mentre una pagina sta ancora caricando riporta sempre alla pagina d'accesso semplice, invece di proporre di tornare a quella pagina.
 - Nel Profilo i campi nome utente ed email sono larghi quanto quello della password, così un indirizzo lungo non viene più tagliato.
 - Caricare un file `.json` non ne perde più il contenuto, e i file con un'estensione insolita o molto lunga vengono salvati in modo sicuro.

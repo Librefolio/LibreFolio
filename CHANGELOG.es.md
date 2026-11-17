@@ -57,6 +57,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 ### 🐛 Corregido
 
+- En el resultado del PAC, las barras de exposición dibujan cada sector con su color: los sectores con un espacio en el nombre (Health Care, Real Estate, Consumer Discretionary…) se dibujaban en el gris de «Sin clasificar».
 - Cerrar sesión mientras una página aún carga lleva siempre a la página de inicio de sesión sencilla, en lugar de proponer volver a esa página.
 - En el Perfil, los campos de nombre de usuario y correo son tan anchos como el de la contraseña, así que una dirección larga ya no se corta.
 - Subir un archivo `.json` ya no pierde su contenido, y los archivos con una extensión inusual o muy larga se guardan de forma segura.

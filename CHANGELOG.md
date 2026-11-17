@@ -57,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixed
 
+- In the PAC result, the exposure bars draw every sector in its own colour: sectors with a space in their name (Health Care, Real Estate, Consumer Discretionary…) were drawn in the grey of «Uncategorised».
 - Signing out while a page is still loading now always returns to the plain sign-in page, instead of offering to come back to that page.
 - In Profile, the username and email fields are as wide as the password field, so a long address is no longer cut.
 - Uploading a `.json` file no longer loses its contents, and files with an unusual or very long extension are stored safely.

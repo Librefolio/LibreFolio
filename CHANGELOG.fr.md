@@ -57,6 +57,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 ### 🐛 Corrections
 
+- Dans le résultat du PAC, les barres d'exposition dessinent chaque secteur dans sa couleur : les secteurs dont le nom contient une espace (Health Care, Real Estate, Consumer Discretionary…) étaient dessinés dans le gris de « Non classé ».
 - Se déconnecter pendant qu'une page charge encore ramène toujours à la page de connexion simple, au lieu de proposer de revenir à cette page.
 - Dans le Profil, les champs nom d'utilisateur et e-mail sont aussi larges que celui du mot de passe : une longue adresse n'est plus coupée.
 - Téléverser un fichier `.json` ne perd plus son contenu, et les fichiers avec une extension inhabituelle ou très longue sont enregistrés en toute sécurité.
