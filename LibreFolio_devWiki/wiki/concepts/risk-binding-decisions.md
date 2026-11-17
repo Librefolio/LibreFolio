@@ -41,6 +41,7 @@ the entry point for whoever resumes Risk after release 1.2 (D382). The full reco
 | D382 | The pause until after 1.2 |
 | D383 | The box of a level's notices is the same everywhere (Dashboard, broker, Lab) |
 | D384 | The broker preset in the Lab asks once |
+| Lab split (02/10/2026), RN-19 (17/11/2026) | In the Lab one row, one window: L1° never asks with the benchmark, and a table that reads analytics of L1° gets its own instances in L1°'s request — the move table's KPI (`base-historical-asset_set_kpi-move`) beside L3°'s. So a request's analytic belongs to a level by its **instance**, not its code |
 | 1.2 CHANGELOG | In the Lab only percentages, and no verdict on the selection as a whole; what cannot be measured shows a dash that says why, never a zero |
 
 > 2026-11-07 lint: D71's open point — whether the colours match across charts — was settled for the Dashboard on
@@ -59,3 +60,4 @@ Checked on the code at `102edada4`: D374 (`RISK_DISCARD_ATTEMPTS = 3` in `riskSt
 | The full decision records | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/04-decisioni-e-questioni-aperte.md` |
 | D374 | `frontend/src/lib/features/risk/riskStore.svelte.ts` |
 | D380, D381 | `backend/app/services/risk/metrics.py` |
+| One row, one window (RN-19) | `frontend/src/lib/features/risk/riskAnalysisHelpers.ts` (`ASSET_SET_MOVE_KPI_INSTANCE`) |

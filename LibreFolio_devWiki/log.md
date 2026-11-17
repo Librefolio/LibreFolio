@@ -4062,3 +4062,8 @@ Filed: [[features/F-111]].
 Project 70, RN-16: the What if…? simulation reads all the holdings' common history, not the page's period, and lowers
 its path count to fit instead of refusing; L4Simulation has its component test. Added to the feature's history.
 Filed: [[features/F-111]].
+
+## [2026-11-17] file | One row, one window in the Lab
+Project 70, RN-19: the Lab's «How did each one move?» table reads its KPI from an instance of its own in L1°'s request,
+so a benchmark never moves it; a request's analytic is attributed to a level by its instance. Added to the binding list.
+Filed: [[concepts/risk-binding-decisions]].

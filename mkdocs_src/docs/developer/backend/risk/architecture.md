@@ -394,6 +394,7 @@ and may move; the request side is the contract: `buildBaseAnalytics()` in
 | | L4 *What if…?* | `stress` (historical replay and hypothetical shock), `simulation` | On demand |
 | Assets, **Correlation** tab (`asset_set`) | Correlation | `correlation` | Historical base wave |
 | | L1° *How much did each of these hurt?* | `asset_set_var` (1-day and 30-day), `asset_set_drawdown` | Historical base wave, never with the benchmark |
+| | *How did each one move?* | `asset_set_kpi` under instance `base-historical-asset_set_kpi-move`; it also reads the 30-day `asset_set_var`'s `best_horizon` and `asset_set_drawdown`'s `largest_rally*` and `average_drawdown` fields | L1°'s historical base wave (same request), never with the benchmark |
 | | L3° *What did each of these pay for its risk?* | `asset_set_kpi`, `asset_set_risk_return`, and `asset_set_comparison` when a benchmark is chosen | Historical base wave |
 | | L4° *What if…?* | `stress`, historical replay only | On demand |
 | Asset Detail (`asset`) | Risk & Scenarios | `historical_kpi`, `historical_var`, `comparison`, `stress`, `simulation` (`process: "gbm"`) | Base wave; the rest on demand |
