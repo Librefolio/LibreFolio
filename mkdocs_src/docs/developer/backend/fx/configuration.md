@@ -376,3 +376,11 @@ error carries the pause decided.
   that another route served (`ok`), and a `skipped` pair, carry neither.
 - **The catalogue** (`GET /fx/providers`) answers with the provider's last known list, as after any
   failure, and asks again 5 minutes later.
+- **An instance call limit** (project 76, U3): a provider with `calls_external_service` (every
+  shipped one but `MANUAL`) is counted before each call, the catalogue's included, on its own row
+  of `plugin_call_counters` or on the shared group whose credits it spends
+  (`call_counter.call_owner(provider, "fx")`). A full limit refuses the call without making it:
+  `FXCallLimitError`, an `FXRateLimitedError` whose `details` name the window and the limit, so the
+  sync answers it as a refusal (a failed leg, the next route, the pair's `retry_after`). The provider
+  is paused exactly until the window ends, on a key of its own that carries the settings
+  fingerprint, as for the asset providers ([Provider Pauses](../assets/architecture.md#provider-pauses)).

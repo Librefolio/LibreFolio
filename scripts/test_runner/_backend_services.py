@@ -517,6 +517,46 @@ def services_providers_enabled(verbose: bool = False, test_names: list = None) -
     return run_command(cmd, "Providers enabled tests", verbose=verbose)
 
 
+def services_call_counter(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the per-instance call counter of the plugins that call an external service (project 76, U1)."""
+    print_section("Services: Plugin Call Counter")
+    print_info("Testing: window_starts/window_end in UTC, one atomic upsert per call, window resets, limits (refused and not counted, the window ending last named, 0 = stopped), database failure lets the call go, read_counts never writes, two processes on one file")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_call_counter.py", test_names)
+    return run_command(cmd, "Plugin call counter tests", verbose=verbose)
+
+
+def services_call_limits_assets(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the asset boundary counting and limiting the calls of a plugin to its external service (project 76, U2)."""
+    print_section("Services: Asset Call Limits")
+    print_info("Testing: assets/core.py (call_provider, call_owner), assets/base.py (calls_external_service, AssetCallLimitError), plugin_settings/groups (shares_credits)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_call_limits_assets.py", test_names)
+    return run_command(cmd, "Asset call limit tests", verbose=verbose)
+
+
+def services_call_limits_fx(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the FX boundary counting and limiting the calls of a plugin to its external service (project 76, U3)."""
+    print_section("Services: FX Call Limits")
+    print_info("Testing: fx/runtime.py (call_fx_provider), fx/base.py (calls_external_service, FXCallLimitError), platform/call_counter.py (call_owner), platform/provider_cooldown.py (the limit pause), fx/catalog.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_call_limits_fx.py", test_names)
+    return run_command(cmd, "FX call limit tests", verbose=verbose)
+
+
+def services_enricher_call_limits(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the enrichers' read boundary counting and limiting the calls of a plugin to its external service (project 76, K1)."""
+    print_section("Services: Enricher Call Limits")
+    print_info("Testing: enrichers/refresh.py (read_bindings), platform/call_counter.py (count_and_check, call_owner)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_call_limits.py", test_names)
+    return run_command(cmd, "Enricher call limit tests", verbose=verbose)
+
+
+def services_call_limit_settings(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the call limits as core settings of their owner, and their usage in the catalogue (project 76, U4)."""
+    print_section("Services: Call Limit Settings")
+    print_info("Testing: plugin_settings/call_limits.py, register(), register_group(), readiness.plugin_may_be_unconfigured, catalogue call_usage, call_counter.read_counts_many, mockcount")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_call_limit_settings.py", test_names)
+    return run_command(cmd, "Call limit settings tests", verbose=verbose)
+
+
 def services_synthetic_yield(verbose: bool = False, test_names: list = None) -> bool:
     """Test synthetic yield calculation for SCHEDULED_YIELD assets."""
     print_section("Services: Synthetic Yield Calculation")
@@ -1499,6 +1539,14 @@ def services_yahoo_finance_bulk(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Yahoo Finance bulk tests", verbose=verbose)
 
 
+def services_yahoo_search_crypto_eur(verbose: bool = False, test_names: list = None) -> bool:
+    """Project 76 Y1: Yahoo's search adds a crypto's euro ticker beside its dollar one (fake yf, replaced v7 wire)."""
+    print_section("Services: Yahoo Search, a Crypto's Euro Ticker (project 76, Y1)")
+    print_info("Testing: asset_source_providers/yahoo_finance/plugin.py (search, _with_euro_twins)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_yahoo_search_crypto_eur.py", test_names)
+    return run_command(cmd, "Yahoo search crypto EUR tests", verbose=verbose)
+
+
 def services_current_prices_bulk(verbose: bool = False, test_names: list = None) -> bool:
     """R13-SEC9-1/-3/-4 + Y's D1: POST /assets/prices/current (no lane DB, no server, no network)."""
     print_section("Services: Current Prices Bulk (R13-SEC9, Y's D1)")
@@ -2147,6 +2195,14 @@ def services_plugin_readiness(verbose: bool = False, test_names: list = None) ->
     print_info("Testing: plugin_settings/readiness.py, FAProviderInfo / FXProviderInfo, GET /assets/provider, GET /fx/providers")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_plugin_readiness.py", test_names)
     return run_command(cmd, "Plugin readiness tests", verbose=verbose)
+
+
+def services_not_configured_writes(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the writes that would put an unconfigured plugin to use: an asset assignment, an FX route (project 76, N2)."""
+    print_section("Services: Not Configured Writes")
+    print_info("Testing: POST /assets/provider and POST /fx/providers/routes refuse a new unconfigured provider (422 NOT_CONFIGURED)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_not_configured_writes.py", test_names)
+    return run_command(cmd, "Not configured writes tests", verbose=verbose)
 
 
 def services_plugin_settings_guards(verbose: bool = False, test_names: list = None) -> bool:
@@ -2958,6 +3014,64 @@ Note: No backend server required.
         # monkeypatch.setitem, or in throwaway subclasses of the real registries; the mocks answer every provider call.
         isolation="pure",
     )
+    add_test(
+        cat,
+        "call-counter",
+        services_call_counter,
+        name="Plugin Call Counter",
+        desc="U1: plugin_call_counters, one row per (family, plugin_code), five UTC calendar windows (minute, hour, day, ISO week, month); count_and_check counts +1 in one atomic upsert, resets the windows that changed, never lowers a start, refuses without counting when a limit is full (CallLimitReached names the full window ending last, resets_at, retry_after; limit 0 refused before the statement), returns None with one warning when the database fails; read_counts reads stale windows as 0 and never writes; two processes on one file lose no update and admit exactly the limit; U2: the counter's own busy_timeout (COUNTER_BUSY_TIMEOUT_MS 2000, the connection's value restored), the failure warning at most once a minute per pair",
+        # PURE: no lane DB, no server, no network. Every database is a private SQLite file under tmp_path built by
+        # create_all, behind call_counter.get_async_engine (patched); the session's engines are tripwires. The two child
+        # processes run a script under tmp_path on that private file only, with the lane's TMPDIR.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "call-limits-assets",
+        services_call_limits_assets,
+        name="Asset Call Limits",
+        desc="U2: AssetSourceProvider.calls_external_service (True; scheduled_investment and mockprov False); SettingsGroup.shares_credits (two refused); core.call_owner (the credit-sharing group, else the plugin; call_limit_<window> fields, 0 kept); call_provider counts +1 before the call (failed, timed out or refused too), never a bare double, NOT_CONFIGURED, a pause or a local plugin; a full window never calls the provider, pauses it with the counter's wait and raises AssetCallLimitError (RATE_LIMITED, details reason/window/limit); a failing counter lets the call go; one group row for the plugins of a credit-sharing group",
+        # PURE: no lane DB, no server, no network. The counter (and the plugin settings' reads) on a private SQLite file
+        # under tmp_path built by create_all; call_counter._utc frozen; a private Cooldowns on a fake clock; test plugins
+        # put in the asset registry's storage with monkeypatch.setitem and test groups released at teardown.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "call-limits-fx",
+        services_call_limits_fx,
+        name="FX Call Limits",
+        desc="U3: FXRateProvider.calls_external_service (True; MANUAL, MOCKFX, MOCKFX_FAIL False); call_counter.call_owner(provider, family), core.call_owner equal to it; call_fx_provider counts +1 before the call (failed or refused too), never a bare double, NOT_CONFIGURED, a source pause, a limit pause or a local plugin; a full window never calls the provider, pauses it exactly until the window ends on its own key (never the 429 streak) and raises FXCallLimitError (RATE_LIMITED, details reason/window/limit); a changed fingerprint lifts the limit pause, never a source pause; a count without a verdict frees both trials; a failing counter lets the call go; one group row for the FX plugins of a credit-sharing group; the catalog counts its list and answers a full limit like a refusal",
+        # PURE: no lane DB, no server, no network. The counter (and the plugin settings' reads) on a private SQLite file
+        # under tmp_path built by create_all; call_counter._utc on a test clock; a private Cooldowns on a fake clock; test
+        # FX plugins put in the FX registry's storage with monkeypatch.setitem, test groups released at teardown, and the
+        # catalog cache entries and last known lists of the test's own codes deleted at its end.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "enricher-call-limits",
+        services_enricher_call_limits,
+        name="Enricher Call Limits",
+        desc="K1: read_bindings counts +1 per binding sent to a real read of a plugin with calls_external_service (never a cached, not-configured or unknown one, never a plugin with the flag False or absent), in request order, before read; a full window (or limit 0) keeps that binding and the following ones from read: RATE_LIMITED with the counter's retry_after and a message naming the call limit, window and limit, never cached; one group row for an enricher and an asset plugin of a credit-sharing group; a failing counter lets the bindings be read",
+        # PURE: no lane DB, no server, no network. The counter and the plugin settings' reads on a private SQLite file
+        # under tmp_path built by create_all; call_counter._utc on a test clock; test enrichers (and one asset plugin)
+        # put in the registries' storage with monkeypatch.setitem, test groups released at teardown, a private Cooldowns,
+        # the enricher_read cache cleared around each test.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "call-limit-settings",
+        services_call_limit_settings,
+        name="Call Limit Settings",
+        desc="U4: the five core call_limit_<window> fields (optional system integers, min 0) handed out at registration to a plugin that calls out and reads no credit-sharing group, and to a credit-sharing group; their variables claimed, a valid one the boundary's limit, an invalid one NOT_CONFIGURED; the limits in the fingerprint; readiness.plugin_may_be_unconfigured (group, required field or a set variable) and READY without the database; the catalogue's call_usage on the owning entry only (five windows, one now, counts read once, a database error → none and one warning, managed hides a locked limit); the test-only counting provider mockcount",
+        # PURE: no lane DB, no server, no network. A private SQLite file under tmp_path built by create_all behind the
+        # runtime, readiness and call_counter engines; call_counter._utc frozen; a private Cooldowns; throwaway registries
+        # of the base for the registration rules; the real asset and FX registries read after discovery, test plugins put
+        # in their storage with monkeypatch.setitem; u4 groups and claims released at teardown.
+        isolation="pure",
+    )
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation; the accrual golden: every number of the accrual walk pinned (regen: LIBREFOLIO_TEST_REGEN_SI_ACCRUAL_GOLDEN=1)")
     add_test(cat, "synthetic-yield-integration", services_synthetic_yield_integration, name="Synthetic Yield Integration", desc="E2E scenarios (P2P, bond, mixed)")
     add_test(cat, "scheduled-investment-cost-bounds", services_scheduled_investment_cost_bounds, name="Scheduled Investment Cost Bounds", desc="R13-SEC7-2 (N73): late interest in closed form per date, bounded day counts, cache cap, horizon")
@@ -3340,7 +3454,7 @@ Note: No backend server required.
         "rate-limit-results",
         services_rate_limit_results,
         name="Rate-Limit Results",
-        desc="error_code RATE_LIMITED and retry_after on: the live current price (last known price kept, or the error item; no call while paused), the refresh result (FAILED with nothing stored, PARTIAL or OK with what came stored), the FX sync pair (FAILED or PARTIAL through a refused provider, the shortest wait; a fallback-served pair and a plain failure untouched; INFO, no traceback), each probe operation (on the result and in error_details), the search (providers_with_errors, INFO not a traceback, a cached query still answered) and its SSE provider_error event",
+        desc="error_code RATE_LIMITED and retry_after on: the live current price (last known price kept, or the error item; no call while paused), the refresh result (FAILED with nothing stored, PARTIAL or OK with what came stored), the FX sync pair (FAILED or PARTIAL through a refused provider, the shortest wait; a fallback-served pair and a plain failure untouched; INFO, no traceback), each probe operation (on the result and in error_details), the search (providers_with_errors, INFO not a traceback, a cached query still answered) and its SSE provider_error event; U2: a full call limit through the same paths (last known price, scheduler deferred, refresh FAILED, search provider with errors, probe RATE_LIMITED), one count per bulk chunk, and the guard that no caller holds a write transaction while a provider is called; U3: a full FX call limit through the sync (the next route serves the pair, a lone route ends like a refusal, one count per provider) and the history job (deferred)",
         # PURE: every database is a private file under tmp_path built with create_all and put in place of the process's
         # engine (db.session.async_engine) with monkeypatch; no session on the lane DB, no server. Pauses, MockFX's mode,
         # the registries' hand-outs and the plugin settings variables are monkeypatched per test; identifiers, queries
@@ -4339,7 +4453,18 @@ Note: No backend server required.
         "plugin-readiness",
         services_plugin_readiness,
         name="Plugin Readiness",
-        desc="One readiness check per plugin = the call boundary's rule (rows, variables, unreadable secret, groups, user fields), managed profile hides locked fields, one DB session, provider schemas and the asset and FX lists",
+        desc="One readiness check per plugin = the call boundary's rule (rows, variables, unreadable secret, groups, user fields), managed profile hides locked fields, one DB session, provider schemas and the asset and FX lists; N2b: reason, variables, settings_unavailable",
+        isolation="pure",
+    )
+    # Not configured writes (project 76, N2). PURE: private SQLite under tmp_path handed to the routes and to the readiness check,
+    # a test instance key, every variable through monkeypatch; the two write routes are called in process, no server, no
+    # network. The real asset and FX registries receive this module's provider classes through monkeypatch (in-process only).
+    add_test(
+        cat,
+        "not-configured-writes",
+        services_not_configured_writes,
+        name="Not Configured Writes",
+        desc="POST /assets/provider and POST /fx/providers/routes: a provider newly put to use and not configured refuses the whole request (422 NOT_CONFIGURED, first in request order, nothing written, replace kept), re-save and a provider already on the pair pass, one readiness call per request, managed profile; N2b: 503 when the settings cannot be read, reason and variables in the 422",
         isolation="pure",
     )
     add_test(cat, "plugin-settings-guards", services_plugin_settings_guards, name="Plugin Settings Guards", desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings", isolation="pure")
@@ -4771,6 +4896,15 @@ Note: No backend server required.
         name="Yahoo Finance Bulk Current Values (project 76, C5)",
         desc="Yahoo's current values in one v7 quote request: same value, currency and exchange-zone date as the single read on the recorded response, one request for all symbols, an unreturned symbol answers nothing, previous-close fallback and NO_DATA, a 429 raised once and never retried, ISIN resolved to its symbol, wrong identifier type refused per item, capability flags",
         # PURE: the recorded v7 response served by a replaced YfData.get_raw_json and a fake yf; no DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "yahoo-search-crypto-eur",
+        services_yahoo_search_crypto_eur,
+        name="Yahoo Search, a Crypto's Euro Ticker (project 76, Y1)",
+        desc="Y1: a crypto's -EUR twin right after its -USD row when Yahoo quotes it in EUR, every twin asked in one v7 request; nothing asked without a crypto, with the twin listed, or without the v7 helper; a twin not returned or not in EUR adds no row; the extra request failing (an error or a 429) leaves the search as it was",
+        # PURE: a fake yf (Search, Ticker) and a replaced YfData.get_raw_json; no DB, no server, no network.
         isolation="pure",
     )
     add_test(cat, "borsa-italiana-search", services_borsa_italiana_search, name="Borsa Italiana Search", desc="Single-fetch search, IT+EN variants, ISIN direct hit (engine mocked)")

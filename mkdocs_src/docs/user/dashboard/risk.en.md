@@ -52,7 +52,7 @@ Owning many holdings is not the same as being diversified. This block shows whic
 
 **Tools shown**
 
-- **How many independent bets do I really hold?** — the effective number of positions: how evenly your money is spread; above the count of positions, the excess comes from the part that is not covered (cash and holdings without prices) → [Concentration](../../financial-theory/technical-analysis/risk-metrics/concentration.md)
+- **How many independent bets do I really hold?** — the effective number of positions: how evenly your money is spread among the positions that have a price — cash and holdings without prices are left out, so it never exceeds their count → [Concentration](../../financial-theory/technical-analysis/risk-metrics/concentration.md)
 - **Did spreading the money achieve anything?** — how much your holdings cushion each other: 1 means no benefit, higher means more, up to about √N for N positions → [Concentration](../../financial-theory/technical-analysis/risk-metrics/concentration.md)
 - **How much of me is not measured here?** — cash, plus holdings without usable prices → [Data Quality](../../financial-theory/technical-analysis/risk-metrics/data-quality.md#excluded-weight)
 - **Weight** and **risk contribution** — each holding's share of your money, and of your risk → [Risk Contribution](../../financial-theory/technical-analysis/risk-metrics/risk-contribution.md)

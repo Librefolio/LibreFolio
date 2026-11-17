@@ -364,7 +364,15 @@
       "total_loss_no_recovery": "El valor cayó a cero: ninguna ganancia puede devolverlo a su máximo, así que no se muestra la recuperación necesaria.",
       "total_loss_no_recovery_assets": "{count, plural, one {# activo cayó} other {# activos cayeron}} a cero: ninguna ganancia puede {count, plural, one {devolverlo a su máximo} other {devolverlos a su máximo}}, así que no se muestra la recuperación necesaria — {names}.",
       "analysis_starts_late": "El análisis empieza el {start}: antes de ese día no hay ningún día de precios completo.",
-      "short_history": "{names}: ningún precio antes del inicio del período, así que su historial empieza dentro de él."
+      "short_history": "{names}: ningún precio antes del inicio del período, así que su historial empieza dentro de él.",
+      "best_realization_undefined": "Ninguna observación con ganancia en el período.",
+      "best_realization_undefined_assets": "Ninguna observación con ganancia en el período para {names}.",
+      "average_loss_undefined": "Ningún día con pérdida en el período: no hay un día medio a la baja.",
+      "average_loss_undefined_assets": "Ningún día con pérdida en el período para {names}: no hay un día medio a la baja.",
+      "omega_undefined": "Ganancias frente a pérdidas no definido: ningún día cayó por debajo del rendimiento objetivo.",
+      "omega_undefined_assets": "Ganancias frente a pérdidas no definido para {names}: ningún día cayó por debajo del rendimiento objetivo.",
+      "extreme_day_ratio_undefined": "Días extremos no definidos porque la serie no se mueve.",
+      "extreme_day_ratio_undefined_assets": "Días extremos no definidos para {names}: la serie no se mueve."
     },
     "assetDetail": {
       "overviewTab": "Resumen",
@@ -462,11 +470,9 @@
         "showLess": "Mostrar menos",
         "effectiveAssets": {
           "label": "¿Cuántas apuestas independientes tengo realmente?",
-          "aboveCount": "Por encima de las {positions} posiciones medidas: el exceso viene de la parte no cubierta ({share}: liquidez y posiciones sin precio), y no dice nada sobre los pesos",
           "belowCount": "Por debajo de las {positions} posiciones medidas: los pesos están desequilibrados, y unas pocas sostienen la cartera",
-          "evenCount": "Exactamente las {positions} posiciones medidas: pesos uniformes y nada sin cubrir",
-          "name": "Número efectivo de posiciones",
-          "aboveCountNoShare": "Por encima de las {positions} posiciones medidas: el exceso viene de la parte no cubierta (liquidez y posiciones sin precio), y no dice nada sobre los pesos"
+          "evenCount": "Exactamente las {positions} posiciones medidas: los pesos son uniformes",
+          "name": "Número efectivo de posiciones"
         },
         "diversificationRatio": {
           "label": "¿Repartir el dinero ha servido de algo?",

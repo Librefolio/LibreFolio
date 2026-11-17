@@ -39,6 +39,7 @@ import pytest
 from backend.app.config import Settings
 from backend.app.services.asset_source_providers.mockprov.plugin import MockProvider
 from backend.app.services.fx_providers.mockfx.plugin import MockFXProvider
+from backend.app.services.plugin_settings.call_limits import CALL_LIMIT_KEYS
 from backend.app.services.plugin_settings.contract import PluginSettingsMixin
 from backend.app.services.plugin_settings.fields import (
     ENV_PREFIX,
@@ -99,8 +100,13 @@ def _variables(plugins: Iterable[Plugin], *, shipped_only: bool = False) -> Iter
 
 
 def undocumented(plugins: Iterable[Plugin], documented: set[str]) -> list[str]:
-    """The variables of the shipped plugins' system fields that ``.env.example`` does not list."""
-    return [f"{family}/{code}/{declared.key}: {variable}" for family, code, declared, variable in _variables(plugins, shipped_only=True) if variable not in documented]
+    """The variables of the shipped plugins' system fields that ``.env.example`` does not list.
+
+    The core's call limits (project 76, U4) are documented once, by their pattern, in the block «Call limits» of
+    ``.env.example`` (option (b), the developer's to confirm): they follow one rule for every plugin. Option (a), one line
+    per variable, is this exemption removed and the lines added.
+    """
+    return [f"{family}/{code}/{declared.key}: {variable}" for family, code, declared, variable in _variables(plugins, shipped_only=True) if variable not in documented and declared.key not in CALL_LIMIT_KEYS]
 
 
 def collisions(plugins: Iterable[Plugin]) -> dict[str, list[str]]:
@@ -418,3 +424,12 @@ def test_nothing_under_ai_export_reaches_the_plugin_settings():
     assert {"backend.app.db.models", "backend.app.services.ai_export._int_validation"} <= imports, "barrier: the scan sees the real imports, absolute and relative"
     assert not found, f"AI Export reaches the plugin settings: {found}"
     print_success(f"{len(files)} modules, none reaches the plugin settings")
+
+
+def test_the_call_limit_variables_are_documented_by_their_pattern():
+    """Project 76, U4, option (b): ``.env.example`` documents the core's call-limit variables by their pattern, with the
+    five windows, the rule of an empty value and of 0, and one example line."""
+    text = ENV_EXAMPLE.read_text(encoding="utf-8")
+    assert "_CALL_LIMIT_<MINUTE|HOUR|DAY|WEEK|MONTH>" in text
+    assert "LIBREFOLIO_PLUGIN_ASSET_YFINANCE_CALL_LIMIT_DAY" in _documented()
+    assert "0: the plugin is stopped" in text

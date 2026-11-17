@@ -447,6 +447,9 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
     Results are cached with 48h TTL.
     """
 
+    #: No external service: its calls are never counted against a limit (project 76, U2)
+    calls_external_service = False
+
     @property
     def provider_code(self) -> str:
         return "scheduled_investment"

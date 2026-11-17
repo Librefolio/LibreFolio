@@ -12,16 +12,17 @@ code, and when one item is refused nothing is written — the answer is a 422 wh
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import AllowInfNan, Field, SecretStr
 
 from backend.app.schemas.common import StrictModel
 
 
+# ``group`` is a shared settings group: the values several plugins read (project 76), listed and written like a plugin
+# of its own. Kept out of the docstring: a multi-line docstring breaks the generated client (lot E2b).
 class PluginSettingFamily(StrEnum):
-    """The plugin families whose plugins may declare settings, and ``group``: a shared settings group, the values several
-    plugins read (project 76), listed and written like a plugin of its own."""
+    """The plugin families whose plugins may declare settings, and group, a shared settings group."""
 
     ASSET = "asset"
     FX = "fx"
@@ -126,6 +127,25 @@ class PluginSettingsPluginRef(StrictModel):
     plugin_name: str
 
 
+class PluginCallWindow(StrictModel):
+    """One window of a plugin's call counter (project 76, U4): its calls now, its limit, when it ends."""
+
+    window: Literal["minute", "hour", "day", "week", "month"] = Field(..., description="The calendar window, UTC")
+    count: int = Field(..., ge=0, description="The calls counted in the window of now (0 when its stored window is older)")
+    limit: int | None = Field(None, description="The instance's limit of the window; null when there is none, or when the managed profile hides it (its variable locks it)")
+    resets_at: datetime = Field(..., description="The end of the window of now, aware UTC: when the count starts again")
+    full: bool = Field(..., description="The window is full (count at its limit): calls are refused until resets_at. Judged on the real limit, a hidden one too")
+
+
+class PluginCallUsage(StrictModel):
+    """The call counter of the entry that owns it (project 76, U4): a plugin that reaches an external service and reads no
+    credit-sharing group, or a group with ``shares_credits``. Read from the database only, never from the source."""
+
+    family: str = Field(..., description="The owner's family: a plugin family, or `group`")
+    plugin_code: str = Field(..., description="The owner: the plugin's code, or the group's name")
+    windows: list[PluginCallWindow] = Field(default_factory=list, description="minute, hour, day, week, month, in that order")
+
+
 class PluginSettingsPluginRead(StrictModel):
     """A plugin and its fields; or a shared settings group (``family="group"``, ``plugin_code`` its name) and its fields."""
 
@@ -141,6 +161,7 @@ class PluginSettingsPluginRead(StrictModel):
     groups: list[str] = Field(default_factory=list, description="The shared settings groups the plugin reads, by name: their fields are listed in the groups' own entries")
     used_by: list[PluginSettingsPluginRef] = Field(default_factory=list, description="For a group: the plugins that read it")
     name_key: str | None = Field(None, description="For a group: the i18n key of its name; plugin_name is the English fallback")
+    call_usage: PluginCallUsage | None = Field(None, description="The calls counted and the limits, on the entry that owns the count (project 76, U4); null elsewhere, and when the counts cannot be read")
 
 
 class PluginSettingsCatalogResponse(StrictModel):

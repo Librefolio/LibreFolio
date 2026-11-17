@@ -156,6 +156,39 @@ def lift_panel_attempt_limit():
         yield
 
 
+@pytest.fixture(scope="session")
+def _process_call_counter_engine(tmp_path_factory):
+    """A SQLite file of this pytest process holding only ``plugin_call_counters`` (project 76, U2), and its engine."""
+    from sqlalchemy import create_engine  # noqa: PLC0415 — the app's modules load after the lane's configuration
+    from sqlalchemy.ext.asyncio import create_async_engine  # noqa: PLC0415
+    from sqlalchemy.pool import NullPool  # noqa: PLC0415
+
+    from backend.app.db.models import PluginCallCounter  # noqa: PLC0415
+
+    path = tmp_path_factory.mktemp("call-counters") / "counters.db"
+    setup = create_engine(f"sqlite:///{path}", poolclass=NullPool)
+    PluginCallCounter.__table__.create(setup)
+    setup.dispose()
+    engine = create_async_engine(f"sqlite+aiosqlite:///{path}", poolclass=NullPool)
+    yield engine
+    engine.sync_engine.dispose()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _private_call_counter(_process_call_counter_engine):
+    """Every asset or FX provider that reaches an external service is counted at the call boundary (project 76, U2): in
+    a test process, on a file of the process's own, never on the lane's shared database, which a «pure» test must not
+    write. For the whole session, so that a module or class fixture that calls a provider in its setup is covered too.
+    The counter's own tests replace this engine, after this fixture, through their monkeypatch.
+    """
+    from backend.app.services.platform import call_counter  # noqa: PLC0415 — the app's modules load after the lane's configuration
+
+    # A MonkeyPatch of its own, for the reason restore_login_limit gives
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(call_counter, "get_async_engine", lambda: _process_call_counter_engine)
+        yield
+
+
 # The aiosqlite leak guard (J-6) is installed here, when this conftest is imported: before any test module of the
 # run, and therefore any aiosqlite connection, exists. Idempotent.
 aiosqlite_guard.install()

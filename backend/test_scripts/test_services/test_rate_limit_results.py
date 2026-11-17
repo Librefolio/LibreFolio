@@ -29,15 +29,47 @@ mockprov or MOCKFX fields is inherited, and the instance key is a test key, so n
 refusals come from mockprov's ``mock_rate_limited`` parameter and ``lf-rate-limited`` query, MockFX's class attributes
 (set with ``monkeypatch``), and test providers handed out by the registries for codes of their own. Identifiers,
 queries and FX date ranges are unique per test, so the process's provider caches never answer for another test.
+
+Project 76, lot U2 (``test_u2_…``, plan 76 §3.5; the boundary itself is pinned in ``test_call_limits_assets.py``): a
+full call limit behaves like a provider that refused for too many requests, through the same paths —
+
+6. live current price, per asset or in bulk: the last stored price, ``RATE_LIMITED`` and the pause recorded (870 s: the
+   hour window of the counter's frozen clock); the scheduler's current-price job counts the asset deferred, not failed;
+   a bulk read counts +1 per chunk call, a per-asset read +1 per asset;
+7. refresh: FAILED with ``RATE_LIMITED`` and the pause, nothing stored, the provider never called;
+8. search: counted, then, the window full, the provider among ``providers_with_errors`` without being called;
+9. probe: counted, then ``RATE_LIMITED`` with the pause on the operation;
+10. guard, green before and after U2: no caller holds a write transaction on the database while a provider is called
+    (a ``sqlite3`` connection with ``busy_timeout=0`` takes ``BEGIN IMMEDIATE`` from inside the provider's function) —
+    live per asset and in bulk, refresh per asset and in bulk, the probe.
+
+The U2 tests put test plugins (mockprov's answers, ``test_only=False``, ``calls_external_service=True``, an hour limit as
+the default of their ``call_limit_hour`` field) in the asset registry's storage with ``monkeypatch.setitem``; the
+counter writes to the same private file (``call_counter.get_async_engine`` patched to it too) and its clock is frozen by
+patching ``call_counter._utc``. The window is filled by calling ``call_counter.count_and_check`` directly.
+
+Project 76, lot U3 (``test_u3_…``; the FX boundary itself is pinned in ``test_call_limits_fx.py``): a full call limit of
+an FX provider behaves like a provider's refusal for too many requests through the FX sync —
+
+11. a pair whose first route's provider is at its limit is served by its next route, under that route's own label, with
+    the first route's failure in ``errors``; the limited provider is never called and its count does not move; a sync
+    counts each provider once, whatever the number of pairs it serves;
+12. a pair with that one route ends exactly as a pair whose provider refused itself with the same wait: FAILED,
+    ``RATE_LIMITED``, the exact 870 s; the scheduler's history job counts it deferred, not failed.
+
+The U3 tests hand out test FX plugins (``_AnsweringFX``'s answers, ``test_only=False``, ``calls_external_service=True``,
+an hour limit as the default of their ``call_limit_hour`` field) through ``_hand_out``, on the counter of ``u2_counter``.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import sqlite3
+import threading
 import uuid
 from collections.abc import AsyncIterator
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
@@ -55,6 +87,7 @@ from backend.app.db.models import Asset, AssetProviderAssignment, AssetType, FxC
 from backend.app.schemas.provider import FAProviderConfigBase, ProbeOperation
 from backend.app.schemas.refresh import FARefreshItem, FARefreshResult, FXSyncPairResult, SyncDateRangeModel, SyncStatus
 from backend.app.services.asset_source_providers.mockprov.plugin import RATE_LIMITED_QUERY, MockProvider
+from backend.app.services.assets import core
 from backend.app.services.assets.base import AssetRateLimitedError, AssetSourceError
 from backend.app.services.assets.price_query import PriceQueryOperations
 from backend.app.services.assets.provider_management import ProviderManagementOperations, _probe_failure_fields
@@ -63,10 +96,14 @@ from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.assets.search import AssetSearchService
 from backend.app.services.fx.base import FXRateLimitedError, FXServiceError
 from backend.app.services.fx.registry import FXProviderRegistry
+from backend.app.services.fx.runtime import configured_fx_provider
 from backend.app.services.fx.sync import _note_provider_failure, _with_fx_refusal, sync_pairs_bulk
 from backend.app.services.fx_providers.mockfx.plugin import MockFXProvider
-from backend.app.services.platform import provider_cooldown
-from backend.app.services.plugin_settings.fields import env_name, env_variables
+from backend.app.services.platform import call_counter, provider_cooldown
+from backend.app.services.platform.scheduler import jobs
+from backend.app.services.platform.scheduler.state import SchedulerState
+from backend.app.services.plugin_settings import runtime as settings_runtime
+from backend.app.services.plugin_settings.fields import PluginSettingField, SettingScope, SettingType, env_name, env_variables
 from backend.app.utils.runtime.cooldown import Cooldowns
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -654,5 +691,434 @@ async def test_the_search_stream_event_of_another_provider_error_keeps_its_own_c
     assert _state(cooldowns) == {}, "an error of the provider's own is no refusal: no pause"
 
 
+# =============================================================================
+# 6–10. U2: A FULL CALL LIMIT, THROUGH THE SAME PATHS (project 76)
+# =============================================================================
+
+#: The counter's frozen clock: the hour window ends in 870 s, longer than the 60 s base pause.
+U2_NOW = datetime(2026, 11, 17, 13, 45, 30, tzinfo=UTC)
+U2_HOUR_WAIT = 870.0
+
+
+def _u2_plugin(monkeypatch: pytest.MonkeyPatch, label: str, *, hour_limit: int | None = None, bulk: bool = True, max_items: int | None = None, base: type = MockProvider) -> tuple[str, type]:
+    """A test plugin in the asset registry's storage for the test: ``base``'s answers under a code of its own, counted
+    (``calls_external_service``), an hour limit as its field's default when given."""
+    code = f"u2_{label}_{uuid.uuid4().hex[:8]}"
+    fields = (PluginSettingField(key="call_limit_hour", type=SettingType.INTEGER, scope=SettingScope.SYSTEM, label="Calls per hour (u2)", default=hour_limit, minimum=0),) if hour_limit is not None else ()
+    attributes = {
+        "provider_code": property(lambda self: code),
+        "provider_name": f"U2 {code}",
+        "test_only": False,
+        "calls_external_service": True,
+        "settings_fields": fields,
+        "settings_groups": (),
+        "supports_bulk_current": bulk,
+    }
+    if max_items is not None:
+        attributes["bulk_current_max_items"] = max_items
+    cls = type(f"U2Plugin_{code}", (base,), attributes)
+    AssetProviderRegistry.auto_discover()
+    monkeypatch.setitem(AssetProviderRegistry._get_storage(), AssetProviderRegistry._normalize_lookup_code(code), cls)
+    return code, cls
+
+
+def _u2_path(engine: AsyncEngine) -> str:
+    return str(engine.url.database)
+
+
+@pytest.fixture
+def u2_counter(private_db: AsyncEngine, monkeypatch: pytest.MonkeyPatch) -> str:
+    """The counter on the test's private file (the services' too), its clock frozen at ``U2_NOW``: the file's path."""
+    real = call_counter._utc
+    monkeypatch.setattr(call_counter, "_utc", lambda now=None: real(U2_NOW if now is None else now))
+    monkeypatch.setattr(call_counter, "get_async_engine", lambda: private_db)
+    return _u2_path(private_db)
+
+
+def _u2_counts(path: str, family: str, code: str) -> tuple[int, ...] | None:
+    connection = sqlite3.connect(path)
+    try:
+        row = connection.execute("SELECT minute_count, hour_count, day_count, week_count, month_count FROM plugin_call_counters WHERE family = ? AND plugin_code = ?", (family, code)).fetchone()
+    finally:
+        connection.close()
+    return tuple(row) if row is not None else None
+
+
+async def _u2_fill_the_hour(code: str, path: str) -> None:
+    """Barrier and setup: the limit reaches a configured instance; one call counted fills the hour."""
+    provider = await core.configured_provider(code)
+    assert provider.settings.get("call_limit_hour") == 1, "barrier: the hour limit reached the configured instance"
+    await call_counter.count_and_check("asset", code, None, now=U2_NOW)
+    assert _u2_counts(path, "asset", code) == (1,) * 5, "setup: the hour is full"
+
+
+@pytest.mark.parametrize(("bulk", "method"), [(True, "get_current_values_bulk"), (False, "get_current_value")], ids=["bulk", "per-asset"])
+@pytest.mark.asyncio
+async def test_u2_a_full_limit_keeps_the_last_stored_price_like_a_refusal(private_db: AsyncEngine, u2_counter: str, cooldowns: Cooldowns, monkeypatch: pytest.MonkeyPatch, bulk: bool, method: str):
+    """U2 6: the hour full — the stored 42.5, ``db:last_known``, RATE_LIMITED, the 870 s pause; the provider never called."""
+    print_section("U2 6: live price, the limit full")
+    code, cls = _u2_plugin(monkeypatch, "live", hour_limit=1, bulk=bulk)
+    calls = _count(monkeypatch, cls, method)
+    asset_id = await _asset(private_db, provider_code=code, last_price=(date(2026, 1, 2), Decimal("42.5")))
+    await _u2_fill_the_hour(code, u2_counter)
+
+    (item,) = await _current_prices(private_db, [asset_id])
+
+    assert (item.value, item.source) == (Decimal("42.5"), "db:last_known")
+    assert (item.error_code, item.retry_after) == ("RATE_LIMITED", U2_HOUR_WAIT)
+    assert calls == [], "the full window never calls the provider"
+    # U2b: the limit pause is exact and on its own key (the settings fingerprint in it), no refusal counted
+    ((key, state),) = _state(cooldowns).items()
+    assert (key[:2], key[2][0], state) == (("asset", code), "call-limit", (0, U2_HOUR_WAIT))
+    assert _u2_counts(u2_counter, "asset", code) == (1,) * 5
+    print_success("last known price, RATE_LIMITED, 870 s, no call")
+
+
+@pytest.mark.asyncio
+async def test_u2_the_scheduler_defers_an_asset_whose_limit_is_full(private_db: AsyncEngine, u2_counter: str, monkeypatch: pytest.MonkeyPatch):
+    """U2 6: the current-price job on the private database (its only asset this test's): deferred 1, failed 0, ok 0."""
+    code, cls = _u2_plugin(monkeypatch, "sched", hour_limit=1)
+    calls = _count(monkeypatch, cls, "get_current_values_bulk")
+    await _asset(private_db, provider_code=code, last_price=(date(2026, 1, 2), Decimal("42.5")))
+    await _u2_fill_the_hour(code, u2_counter)
+    entries: list = []
+    monkeypatch.setattr(jobs, "append_entry", entries.append)
+    state = SchedulerState()
+
+    await jobs.run_current_price_refresh(state)
+
+    job = state.current_price
+    assert (job.last_items_ok, job.last_items_err, job.last_items_deferred) == (0, 0, 1), f"deferred, not failed: {job}"
+    assert job.retry_at is not None
+    assert calls == []
+    assert len(entries) == 1, "barrier: the job wrote its log entry (captured)"
+
+
+@pytest.mark.parametrize(("bulk", "method", "expected"), [(True, "get_current_values_bulk", 2), (False, "get_current_value", 3)], ids=["bulk-two-chunks", "per-asset-three"])
+@pytest.mark.asyncio
+async def test_u2_a_live_read_counts_once_per_provider_call(private_db: AsyncEngine, u2_counter: str, monkeypatch: pytest.MonkeyPatch, bulk: bool, method: str, expected: int):
+    """U2 6: three assets, no limit — a bulk read in chunks of two is two calls, two counts; per asset, three."""
+    code, cls = _u2_plugin(monkeypatch, "chunks", bulk=bulk, max_items=2)
+    calls = _count(monkeypatch, cls, method)
+    asset_ids = [await _asset(private_db, provider_code=code) for _ in range(3)]
+
+    items = await _current_prices(private_db, asset_ids)
+
+    assert {item.source for item in items} == {f"provider:{code}"}, f"barrier: the provider answered every asset: {items}"
+    assert len(calls) == expected
+    assert _u2_counts(u2_counter, "asset", code) == (expected,) * 5, "one count per provider call, not per asset"
+
+
+@pytest.mark.asyncio
+async def test_u2_a_full_limit_fails_the_refresh_like_a_refusal(private_db: AsyncEngine, u2_counter: str, monkeypatch: pytest.MonkeyPatch):
+    """U2 7: the hour full — FAILED, RATE_LIMITED, 870 s, nothing stored, neither the current value nor the history asked."""
+    code, cls = _u2_plugin(monkeypatch, "refresh", hour_limit=1)
+    called = {name: _count(monkeypatch, cls, name) for name in ("get_current_values_bulk", "get_current_value", "get_history_value")}
+    asset_id = await _asset(private_db, provider_code=code)
+    await _u2_fill_the_hour(code, u2_counter)
+    today = date.today()
+
+    result = await _refresh(private_db, asset_id, today - timedelta(days=5), today)
+
+    assert (result.status, result.error_code, result.retry_after) == (SyncStatus.FAILED, "RATE_LIMITED", U2_HOUR_WAIT)
+    assert {name: len(made) for name, made in called.items()} == dict.fromkeys(called, 0)
+    assert await _stored_days(private_db, asset_id) == []
+    assert _u2_counts(u2_counter, "asset", code) == (1,) * 5
+
+
+@pytest.mark.asyncio
+async def test_u2_a_search_counts_and_a_full_limit_reports_the_provider_rate_limited(private_db: AsyncEngine, u2_counter: str, monkeypatch: pytest.MonkeyPatch):
+    """U2 8: hour limit 1 — the first search answers and is counted; the second, another query, finds the window full:
+    the provider in ``providers_with_errors``, not called, no result, no traceback."""
+    code, cls = _u2_plugin(monkeypatch, "search", hour_limit=1)
+    searches = _count(monkeypatch, cls, "search")
+    first_query, second_query = _unique("u2-first"), _unique("u2-second")
+
+    first = await AssetSearchService.search(first_query, provider_codes=[code])
+    with capture_logs() as events:
+        second = await AssetSearchService.search(second_query, provider_codes=[code])
+
+    assert first.providers_with_errors == [] and first.results, "barrier: the provider answered the first query"
+    assert _u2_counts(u2_counter, "asset", code) == (1,) * 5, "the answered search was counted"
+    assert (second.providers_queried, second.providers_with_errors, second.results) == ([code], [code], [])
+    assert searches == [first_query]
+    assert [event for event in events if event.get("log_level") == "error" or event.get("exc_info")] == []
+
+
+@pytest.mark.asyncio
+async def test_u2_the_probe_counts_and_meets_the_limit(private_db: AsyncEngine, u2_counter: str, monkeypatch: pytest.MonkeyPatch):
+    """U2 9: hour limit 1 — the first probe of the current price answers and is counted; the second is RATE_LIMITED with
+    the 870 s pause on the operation and in ``error_details``, the provider not called again."""
+    code, cls = _u2_plugin(monkeypatch, "probe", hour_limit=1)
+    calls = _count(monkeypatch, cls, "get_current_value")
+
+    def config() -> FAProviderConfigBase:
+        return FAProviderConfigBase(provider_code=code, identifier=_unique("U2"), identifier_type="TICKER", provider_params={})
+
+    answered = await ProviderManagementOperations.probe_provider_config(config(), [ProbeOperation.CURRENT_PRICE])
+    refused = await ProviderManagementOperations.probe_provider_config(config(), [ProbeOperation.CURRENT_PRICE])
+
+    assert answered.current_price.success is True, "barrier: the first probe answered"
+    assert _u2_counts(u2_counter, "asset", code) == (1,) * 5
+    op = refused.current_price
+    assert (op.success, op.error_code, op.retry_after, op.error_details) == (False, "RATE_LIMITED", U2_HOUR_WAIT, {"reason": "call_limit", "window": "hour", "limit": 1, "retry_after": U2_HOUR_WAIT})
+    assert len(calls) == 1
+
+
+# -----------------------------------------------------------------------------
+# 10. Guard (green before and after U2): no writer holds the database while a provider is called
+# -----------------------------------------------------------------------------
+
+
+def _u2_nobody_writes(path: str) -> bool:
+    """Whether a new connection that never waits (``busy_timeout=0``) can take the write lock now; released at once."""
+    connection = sqlite3.connect(path, timeout=0, isolation_level=None)
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute("ROLLBACK")
+        return True
+    except sqlite3.OperationalError:
+        return False
+    finally:
+        connection.close()
+
+
+class _U2LockProbe(MockProvider):
+    """mockprov's answers; every operation first checks that no writer holds ``lock_path`` (a class attribute the test
+    sets) and records ``(operation, free)`` in ``seen``."""
+
+    lock_path: str = ""
+    seen: list = []
+    #: The probe's operations run in parallel threads: their own checks take turns, so they never see each other
+    checking = threading.Lock()
+
+    def _check(self, operation: str) -> None:
+        with type(self).checking:
+            type(self).seen.append((operation, _u2_nobody_writes(type(self).lock_path)))
+
+    async def get_current_value(self, identifier, identifier_type, provider_params=None):
+        self._check("current")
+        return await super().get_current_value(identifier, identifier_type, provider_params)
+
+    async def get_current_values_bulk(self, items):
+        self._check("bulk")
+        return await super().get_current_values_bulk(items)
+
+    async def get_history_value(self, identifier, identifier_type, provider_params, start_date, end_date):
+        self._check("history")
+        return await super().get_history_value(identifier, identifier_type, provider_params, start_date, end_date)
+
+    async def fetch_asset_metadata(self, identifier, identifier_type, provider_params=None):
+        self._check("metadata")
+        return await super().fetch_asset_metadata(identifier, identifier_type, provider_params)
+
+
+@pytest.mark.parametrize(
+    ("path", "bulk", "expected"),
+    [
+        pytest.param("live", False, {"current"}, id="live-per-asset"),
+        pytest.param("live", True, {"bulk"}, id="live-bulk"),
+        pytest.param("refresh", False, {"history", "current"}, id="refresh-per-asset"),
+        pytest.param("refresh", True, {"history", "bulk"}, id="refresh-bulk"),
+        pytest.param("probe", False, {"current", "history", "metadata"}, id="probe"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_u2_no_writer_holds_the_database_while_a_provider_is_called(private_db: AsyncEngine, u2_counter: str, monkeypatch: pytest.MonkeyPatch, path: str, bulk: bool, expected: set[str]):
+    """U2 10, a guard green before and after U2: on the one file of the app session and the counter, every provider
+    operation of the path finds the write lock free (a call counted first, on the same file, from U2 on). The provider
+    calls run one at a time, so the only writer the check could meet is a caller holding a transaction across a call."""
+    code, cls = _u2_plugin(monkeypatch, f"lock_{path}", bulk=bulk, base=_U2LockProbe)
+    seen: list = []
+    monkeypatch.setattr(cls, "lock_path", u2_counter)
+    monkeypatch.setattr(cls, "seen", seen)
+    today = date.today()
+
+    if path == "live":
+        asset_ids = [await _asset(private_db, provider_code=code) for _ in range(2)]
+        # One provider call at a time: a neighbour call's own count (a short write of the counter) never overlaps a check
+        async with AsyncSession(private_db, expire_on_commit=False) as session:
+            await PriceQueryOperations.get_current_prices_bulk(asset_ids, session, concurrency=1)
+    elif path == "refresh":
+        asset_id = await _asset(private_db, provider_code=code)
+        result = await _refresh(private_db, asset_id, today - timedelta(days=3), today)
+        assert result.status == SyncStatus.OK, f"barrier: the refresh answered: {result}"
+    else:
+        # One operation per probe: a probe runs its operations in parallel, and the count of one (a short write of the
+        # counter, from U2 on) would overlap the check of another — a neighbour's write, not a transaction held across
+        config = FAProviderConfigBase(provider_code=code, identifier=_unique("U2LOCK"), identifier_type="TICKER", provider_params={})
+        for operation in (ProbeOperation.CURRENT_PRICE, ProbeOperation.HISTORY, ProbeOperation.METADATA):
+            await ProviderManagementOperations.probe_provider_config(config, [operation])
+
+    assert {operation for operation, _free in seen} == expected, f"barrier: the operations of the path reached the provider: {seen}"
+    held = [operation for operation, free in seen if not free]
+    assert held == [], f"a writer held the database while the provider was called, at: {held}"
+
+
+# =============================================================================
+# 11–12. U3: A FULL FX CALL LIMIT, THROUGH THE SAME PATHS (project 76)
+# =============================================================================
+
+
+def _u3_fx_plugin(label: str, *, hour_limit: int | None = None) -> tuple[str, type]:
+    """A test FX plugin: ``_AnsweringFX``'s answers under a code of its own, counted (``calls_external_service``), an
+    hour limit as its field's default when given. Handed out by ``_hand_out``."""
+    code = f"U3_{label.upper()}_{uuid.uuid4().hex[:8].upper()}"
+    fields = (PluginSettingField(key="call_limit_hour", type=SettingType.INTEGER, scope=SettingScope.SYSTEM, label="Calls per hour (u3)", default=hour_limit, minimum=0),) if hour_limit is not None else ()
+    attributes = {"code": property(lambda self: code), "name": f"U3 {code}", "test_only": False, "calls_external_service": True, "settings_fields": fields, "settings_groups": ()}
+    return code, type(f"U3FX_{code}", (_AnsweringFX,), attributes)
+
+
+class _U3RefusingFX(_AnsweringFX):
+    """An FX provider of the test that refuses for too many requests with the hour's wait (Retry-After 870 s)."""
+
+    @property
+    def code(self) -> str:
+        return "U3_REFUSINGFX"
+
+    async def fetch_rates(self, date_range, currencies, base_currency=None):
+        raise FXRateLimitedError("U3_REFUSINGFX refused for too many requests (testing)", retry_after=U2_HOUR_WAIT)
+
+
+async def _u3_fill_the_hour(code: str, path: str) -> None:
+    """Barrier and setup: the limit reaches a configured instance; one call counted fills the hour."""
+    provider = await configured_fx_provider(code)
+    assert provider is not None and provider.settings.get("call_limit_hour") == 1, "barrier: the hour limit reached the configured instance"
+    await call_counter.count_and_check("fx", code, None, now=U2_NOW)
+    assert _u2_counts(path, "fx", code) == (1,) * 5, "setup: the hour is full"
+
+
+@pytest.mark.asyncio
+async def test_u3_a_sync_counts_each_fx_provider_once(private_db: AsyncEngine, u2_counter: str, monkeypatch: pytest.MonkeyPatch):
+    """U3 11: two pairs served by one counted provider, no limit: one fetch, one count."""
+    code, cls = _u3_fx_plugin("once")
+    fetches = _count(monkeypatch, cls, "fetch_rates")
+    _hand_out(monkeypatch, FXProviderRegistry, {code: cls})
+    await _routes(private_db, {("EUR", "USD"): [[code]], ("EUR", "GBP"): [[code]]})
+
+    results = await _sync(private_db, ["EUR-USD", "EUR-GBP"], (date(1987, 8, 3), date(1987, 8, 4)))
+
+    assert {pair: (result.status, result.provider_used) for pair, result in results.items()} == {"EUR-USD": (SyncStatus.OK, code), "EUR-GBP": (SyncStatus.OK, code)}, "barrier: the provider served both pairs"
+    assert len(fetches) == 1
+    assert _u2_counts(u2_counter, "fx", code) == (1,) * 5, "one count per provider call, not per pair"
+
+
+@pytest.mark.asyncio
+async def test_u3_a_full_fx_limit_sends_the_pair_to_its_next_route(private_db: AsyncEngine, u2_counter: str, cooldowns: Cooldowns, monkeypatch: pytest.MonkeyPatch):
+    """U3 11: the first route's provider has its hour full — the pair is served by the second route under its own label,
+    the first route's failure in ``errors``; the limited provider never called, its count unchanged, no source pause."""
+    print_section("U3 11: FX sync, the first route at its limit")
+    code, cls = _u3_fx_plugin("first", hour_limit=1)
+    fetches = _count(monkeypatch, cls, "fetch_rates")
+    _hand_out(monkeypatch, FXProviderRegistry, {code: cls, ANSWERING_FX: _AnsweringFX})
+    await _routes(private_db, {("EUR", "USD"): [[code], [ANSWERING_FX]]})
+    await _u3_fill_the_hour(code, u2_counter)
+
+    result = (await _sync(private_db, ["EUR-USD"], (date(1987, 8, 10), date(1987, 8, 11))))["EUR-USD"]
+
+    assert (result.status, result.provider_used, result.error_code, result.retry_after) == (SyncStatus.OK, ANSWERING_FX, None, None)
+    assert [error for error in result.errors if error.startswith("Route 1") and code in error], f"the first route's failure is reported: {result.errors}"
+    assert fetches == [], "the full window never calls the provider"
+    assert _u2_counts(u2_counter, "fx", code) == (1,) * 5
+    assert ("fx", code, None) not in _state(cooldowns), "a limit is no source refusal"
+    print_success("served by the next route, the limited provider not called")
+
+
+@pytest.mark.asyncio
+async def test_u3_a_pair_with_only_a_limited_route_ends_like_a_refused_one(private_db: AsyncEngine, u2_counter: str, monkeypatch: pytest.MonkeyPatch):
+    """U3 12: EUR-USD through a provider at its hour limit, EUR-SEK through one that refuses with Retry-After 870 s: the
+    two pairs end the same — FAILED, RATE_LIMITED, 870 s, nothing fetched."""
+    code, cls = _u3_fx_plugin("only", hour_limit=1)
+    fetches = _count(monkeypatch, cls, "fetch_rates")
+    _hand_out(monkeypatch, FXProviderRegistry, {code: cls, "U3_REFUSINGFX": _U3RefusingFX})
+    await _routes(private_db, {("EUR", "USD"): [[code]], ("EUR", "SEK"): [["U3_REFUSINGFX"]]})
+    await _u3_fill_the_hour(code, u2_counter)
+
+    results = await _sync(private_db, ["EUR-USD", "EUR-SEK"], (date(1987, 8, 17), date(1987, 8, 18)))
+
+    def shape(result: FXSyncPairResult) -> tuple:
+        return (result.status, result.error_code, result.retry_after, result.provider_used, result.points_fetched, result.points_changed)
+
+    assert shape(results["EUR-SEK"]) == (SyncStatus.FAILED, "RATE_LIMITED", U2_HOUR_WAIT, None, 0, 0), "barrier: what a refusal gives"
+    assert shape(results["EUR-USD"]) == shape(results["EUR-SEK"]), "a full limit ends the pair like a refusal"
+    assert fetches == []
+    assert _u2_counts(u2_counter, "fx", code) == (1,) * 5
+
+
+@pytest.mark.asyncio
+async def test_u3_the_history_job_defers_an_fx_pair_whose_provider_is_at_its_limit(private_db: AsyncEngine, u2_counter: str, monkeypatch: pytest.MonkeyPatch):
+    """U3 12: the history job on the private database (its only route this test's, no asset): deferred 1, failed 0, ok 0."""
+    code, cls = _u3_fx_plugin("sched", hour_limit=1)
+    fetches = _count(monkeypatch, cls, "fetch_rates")
+    _hand_out(monkeypatch, FXProviderRegistry, {code: cls})
+    await _routes(private_db, {("EUR", "USD"): [[code]]})
+    await _u3_fill_the_hour(code, u2_counter)
+    entries: list = []
+    monkeypatch.setattr(jobs, "append_entry", entries.append)
+    state = SchedulerState()
+
+    await jobs.run_history_sync(state, horizon_days=3)
+
+    job = state.history_sync
+    assert (job.last_items_ok, job.last_items_err, job.last_items_deferred) == (0, 0, 1), f"deferred, not failed: {job}"
+    assert job.retry_at is not None
+    assert fetches == []
+    assert len(entries) == 1, "barrier: the job wrote its log entry (captured)"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
+
+
+@pytest.mark.asyncio
+async def test_u3_no_writer_holds_the_database_while_an_fx_provider_is_called(private_db: AsyncEngine, u2_counter: str, monkeypatch: pytest.MonkeyPatch):
+    """Review (U3): the guard of point 10 for the FX boundary, in series — a sync of two pairs by one counted provider;
+    inside ``fetch_rates`` a connection that never waits takes the write lock: no session of the sync holds it."""
+    code, cls = _u3_fx_plugin("lockprobe")
+    seen: list[bool] = []
+    path = private_db.url.database
+    answer = cls.fetch_rates
+
+    async def probing(self, date_range, currencies, base_currency=None):
+        seen.append(_u2_nobody_writes(path))
+        return await answer(self, date_range, currencies, base_currency)
+
+    monkeypatch.setattr(cls, "fetch_rates", probing)
+    _hand_out(monkeypatch, FXProviderRegistry, {code: cls})
+    await _routes(private_db, {("EUR", "USD"): [[code]], ("EUR", "GBP"): [[code]]})
+
+    results = await _sync(private_db, ["EUR-USD", "EUR-GBP"], (date(1987, 9, 7), date(1987, 9, 8)))
+
+    assert {result.status for result in results.values()} == {SyncStatus.OK}, "barrier: the provider served both pairs"
+    assert seen == [True], f"no writer held the database while the provider was called: {seen}"
+
+
+@pytest.mark.asyncio
+async def test_u4_a_refresh_of_n_assets_reads_one_providers_settings_once(private_db: AsyncEngine, monkeypatch: pytest.MonkeyPatch):
+    """U4, the coordinator's measure: since U4 every provider that calls out declares the core's limit fields, so each
+    ``configured_provider`` reads its rows. The refresh configures one provider per item (``_prepare_refresh_items``): a
+    refresh of 4 assets of ``mockcount`` reads its settings 4 times without the operation's scope (the undecorated
+    function) and ONCE with it (``bulk_refresh_prices``). (The live read configures once per provider already, in its
+    bulk plan.)"""
+    reads: list[str] = []
+    real = settings_runtime.read_plugin_rows
+
+    async def counted(session, family, plugin_code, user_id):
+        reads.append(plugin_code)
+        return await real(session, family, plugin_code, user_id)
+
+    monkeypatch.setattr(settings_runtime, "read_plugin_rows", counted)
+    asset_ids = [await _asset(private_db, provider_code="mockcount") for _ in range(4)]
+    today = date.today()
+    items = [FARefreshItem(asset_id=asset_id, date_range=SyncDateRangeModel(start=today - timedelta(days=2), end=today)) for asset_id in asset_ids]
+
+    async with AsyncSession(private_db, expire_on_commit=False) as session:
+        await RefreshOperations.bulk_refresh_prices.__wrapped__(items, session)
+    without_scope = reads.count("mockcount")
+    reads.clear()
+    async with AsyncSession(private_db, expire_on_commit=False) as session:
+        response = await RefreshOperations.bulk_refresh_prices(items, session)
+
+    assert without_scope >= 4, f"barrier: without the scope each item reads the settings: {without_scope}"
+    assert reads.count("mockcount") == 1, f"{reads.count('mockcount')} reads of mockcount's settings for 4 items (without the scope: {without_scope})"
+    assert len(response.results) == 4

@@ -72,6 +72,19 @@ Data only: what ``classification_params`` holds today becomes the first history 
 - Downgrade, before the tables go: each asset's ``classification_params`` is rebuilt from its last row of each voice
   in (``read_on``, ``id``) order — what the profile learned since the upgrade goes back to the column. A voice without
   rows keeps its part; a last row left empty removes it; an asset without rows keeps its column as it was.
+
+plugin_call_counters (project 76, lot U1)
+─────────────────────────────────────────
+How many calls each plugin that reaches an external service made, per calendar window (plan 76, §3.5).
+
+- ``plugin_call_counters``: one row per ``family`` and ``plugin_code`` (a shared group with ``family`` ``group``), the
+  pair its primary key; no other id, no AUTOINCREMENT (outside the census of plan 34), no foreign key: a plugin is code,
+  not a row. Five windows aligned in UTC (minute, hour, day, ISO week, month), each ``<window>_since`` (epoch seconds of
+  the window's start) and ``<window>_count``, all INTEGER NOT NULL; ``updated_at`` DATETIME NOT NULL.
+- One atomic ``INSERT … ON CONFLICT (family, plugin_code) DO UPDATE … WHERE … RETURNING`` per call
+  (``services/platform/call_counter.py``) reaches the row through its primary key: no index beyond it.
+- Starts empty: no call was counted before 1.4.
+- Downgrade: the table is dropped.
 """
 
 import json
@@ -268,15 +281,49 @@ def _downgrade_asset_profile_legacy_copy(conn: sa.engine.Connection) -> None:
         conn.execute(sa.text("UPDATE assets SET classification_params = :params WHERE id = :id"), {"params": rebuilt, "id": asset_id})
 
 
+# ─── step plugin_call_counters (project 76, lot U1) ──────────────────────────────────────────────────────────────────
+
+_CALL_COUNTERS = "plugin_call_counters"
+_CALL_WINDOWS = ("minute", "hour", "day", "week", "month")
+
+
+def _call_counters_table(conn: sa.engine.Connection) -> bool:
+    """Whether ``plugin_call_counters`` exists already."""
+    return conn.execute(sa.text("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = :name"), {"name": _CALL_COUNTERS}).first() is not None
+
+
+def _upgrade_plugin_call_counters(conn: sa.engine.Connection) -> None:
+    """Step ``plugin_call_counters``: create the table, when missing."""
+    if _call_counters_table(conn):
+        return
+    windows = [sa.Column(f"{window}_{part}", sa.Integer(), nullable=False) for window in _CALL_WINDOWS for part in ("since", "count")]
+    op.create_table(
+        _CALL_COUNTERS,
+        sa.Column("family", sa.String(16), nullable=False),
+        sa.Column("plugin_code", sa.String(64), nullable=False),
+        *windows,
+        sa.Column("updated_at", sa.DateTime(), nullable=False),
+        sa.PrimaryKeyConstraint("family", "plugin_code"),
+    )
+
+
+def _downgrade_plugin_call_counters(conn: sa.engine.Connection) -> None:
+    """Step ``plugin_call_counters`` undone: drop the table, when there."""
+    if _call_counters_table(conn):
+        op.drop_table(_CALL_COUNTERS)
+
+
 def upgrade() -> None:
     """The steps of the docstring, one line each."""
     conn = op.get_bind()
     _upgrade_asset_profile(conn)
     _upgrade_asset_profile_legacy_copy(conn)
+    _upgrade_plugin_call_counters(conn)
 
 
 def downgrade() -> None:
     """Back to 1.3, step by step, in the reverse order of ``upgrade``."""
     conn = op.get_bind()
+    _downgrade_plugin_call_counters(conn)
     _downgrade_asset_profile_legacy_copy(conn)
     _downgrade_asset_profile(conn)

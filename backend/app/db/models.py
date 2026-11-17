@@ -155,49 +155,49 @@ class IdentifierType(StrEnum):
     OTHER = "OTHER"
 
 
+# Asset type classification.
+#
+# Usage: Categorize assets by their nature for reporting and analysis.
+#
+# - STOCK: Individual company shares (e.g., Apple, Microsoft)
+# - ETF: Exchange Traded Fund with mixed or unstated content (e.g., balanced, multi-asset)
+# - BOND: Fixed income securities (government or corporate bonds)
+# - CRYPTO: Cryptocurrencies (e.g., Bitcoin, Ethereum)
+# - FUND: Mutual funds or investment funds
+# - HOLD: Assets without automatic market pricing (art, collectibles, unlisted companies)
+# - CROWDFUND: Peer-to-peer or business crowdfunding loans (e.g., Mintos); the residual of its family
+# - COMMODITY: Physical goods and their direct exposures (gold, oil, agricultural)
+# - REAL_ESTATE: Property exposure (REITs, listed real estate vehicles)
+# - INDEX: Market indices and benchmarks (e.g., S&P 500, MSCI World) — no transactions allowed
+# - OTHER: Any other asset type not listed above
+#
+# Subtypes answer a single question: *which base type does this instrument contain?*
+# The second level is therefore not a parallel taxonomy — it is the set of base types.
+# Two families have one, ETF and CROWDFUND; their plain values stay the residual for
+# mixed or unstated content.
+#
+# - ETF_STOCK / ETF_BOND / ETF_COMMODITY / ETF_REAL_ESTATE / ETF_CRYPTO: named after
+#   the base type they hold; plain ETF remains the residual for mixed content.
+# - ETF_MONETARY: money-market funds. The one subtype with **no** base-type counterpart,
+#   because cash itself is an account balance, not an asset that is bought.
+# - CROWDFUND_REAL_ESTATE: crowdfunding loans backed by property projects (e.g., Recrowd).
+#   It contains REAL_ESTATE, but it is shocked in stress scenarios as the loan it is.
+#
+# Impact:
+# - INDEX forbids transactions (rule in ``services/assets/type_rules.py``, enforced by the
+#   transaction batch); every other value is behaviourally inert in the backend.
+# - The family of a type (``ETF_*`` -> ETF, ``CROWDFUND_*`` -> CROWDFUND, any other is its
+#   own) is ``asset_type_family`` in ``services/assets/type_rules.py``; the bulk asset edit
+#   warns when a change crosses families.
+# - Drives portfolio breakdown and allocation analysis, where subtypes roll up to the
+#   base type they contain rather than to their family.
+# - Supplies the `asset_class` buckets of stress scenarios. A type absent from a
+#   scenario's bucket_shocks is shocked by zero **silently**, which is why the enum and
+#   those tables are guarded by a dedicated coverage test.
+# - Selects the icon and the localized label in the UI.
+#
 class AssetType(StrEnum):
-    """
-    Asset type classification.
-
-    Usage: Categorize assets by their nature for reporting and analysis.
-
-    - STOCK: Individual company shares (e.g., Apple, Microsoft)
-    - ETF: Exchange Traded Fund with mixed or unstated content (e.g., balanced, multi-asset)
-    - BOND: Fixed income securities (government or corporate bonds)
-    - CRYPTO: Cryptocurrencies (e.g., Bitcoin, Ethereum)
-    - FUND: Mutual funds or investment funds
-    - HOLD: Assets without automatic market pricing (art, collectibles, unlisted companies)
-    - CROWDFUND: Peer-to-peer or business crowdfunding loans (e.g., Mintos); the residual of its family
-    - COMMODITY: Physical goods and their direct exposures (gold, oil, agricultural)
-    - REAL_ESTATE: Property exposure (REITs, listed real estate vehicles)
-    - INDEX: Market indices and benchmarks (e.g., S&P 500, MSCI World) — no transactions allowed
-    - OTHER: Any other asset type not listed above
-
-    Subtypes answer a single question: *which base type does this instrument contain?*
-    The second level is therefore not a parallel taxonomy — it is the set of base types.
-    Two families have one, ETF and CROWDFUND; their plain values stay the residual for
-    mixed or unstated content.
-
-    - ETF_STOCK / ETF_BOND / ETF_COMMODITY / ETF_REAL_ESTATE / ETF_CRYPTO: named after
-      the base type they hold; plain ETF remains the residual for mixed content.
-    - ETF_MONETARY: money-market funds. The one subtype with **no** base-type counterpart,
-      because cash itself is an account balance, not an asset that is bought.
-    - CROWDFUND_REAL_ESTATE: crowdfunding loans backed by property projects (e.g., Recrowd).
-      It contains REAL_ESTATE, but it is shocked in stress scenarios as the loan it is.
-
-    Impact:
-    - INDEX forbids transactions (rule in ``services/assets/type_rules.py``, enforced by the
-      transaction batch); every other value is behaviourally inert in the backend.
-    - The family of a type (``ETF_*`` -> ETF, ``CROWDFUND_*`` -> CROWDFUND, any other is its
-      own) is ``asset_type_family`` in ``services/assets/type_rules.py``; the bulk asset edit
-      warns when a change crosses families.
-    - Drives portfolio breakdown and allocation analysis, where subtypes roll up to the
-      base type they contain rather than to their family.
-    - Supplies the `asset_class` buckets of stress scenarios. A type absent from a
-      scenario's bucket_shocks is shocked by zero **silently**, which is why the enum and
-      those tables are guarded by a dedicated coverage test.
-    - Selects the icon and the localized label in the UI.
-    """
+    """Asset type classification (the full description is in the comment above the class)."""
 
     STOCK = "STOCK"
     ETF = "ETF"
@@ -635,6 +635,31 @@ class PluginSystemSetting(SQLModel, table=True):
         default=None,
         sa_column=Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
     )
+
+
+class PluginCallCounter(SQLModel, table=True):
+    """How many calls a plugin (or a shared group, ``family="group"``) made to its external service (project 76, U1).
+
+    One row per ``family`` and ``plugin_code``. Five calendar windows aligned in UTC — minute, hour, day, ISO week, month
+    — each with the start of the window its count belongs to (``<window>_since``, epoch seconds) and the count.
+    ``services/platform/call_counter.py`` writes it, one atomic statement per call, and reads it for the settings page.
+    """
+
+    __tablename__ = "plugin_call_counters"
+
+    family: str = Field(sa_column=Column(String(16), primary_key=True, nullable=False))
+    plugin_code: str = Field(sa_column=Column(String(64), primary_key=True, nullable=False))
+    minute_since: int = Field(sa_column=Column(Integer, nullable=False))
+    minute_count: int = Field(sa_column=Column(Integer, nullable=False))
+    hour_since: int = Field(sa_column=Column(Integer, nullable=False))
+    hour_count: int = Field(sa_column=Column(Integer, nullable=False))
+    day_since: int = Field(sa_column=Column(Integer, nullable=False))
+    day_count: int = Field(sa_column=Column(Integer, nullable=False))
+    week_since: int = Field(sa_column=Column(Integer, nullable=False))
+    week_count: int = Field(sa_column=Column(Integer, nullable=False))
+    month_since: int = Field(sa_column=Column(Integer, nullable=False))
+    month_count: int = Field(sa_column=Column(Integer, nullable=False))
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=UtcDateTime, nullable=False)
 
 
 class PluginUserSetting(SQLModel, table=True):

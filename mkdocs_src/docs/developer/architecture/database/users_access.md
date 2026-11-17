@@ -101,6 +101,22 @@ erDiagram
         string key_id "nullable, 32 hex characters"
         datetime updated_at
     }
+
+    PLUGIN_CALL_COUNTER {
+        string family PK "asset, fx, enricher, group"
+        string plugin_code PK "a plugin's code, or a group's name"
+        int minute_since "epoch seconds of the window's start"
+        int minute_count
+        int hour_since
+        int hour_count
+        int day_since
+        int day_count
+        int week_since "Monday 00:00 UTC"
+        int week_count
+        int month_since "day 1, 00:00 UTC"
+        int month_count
+        datetime updated_at
+    }
 ```
 
 ## 📋 Tables
@@ -263,6 +279,33 @@ rows and the cascade. The ids are plain `INTEGER PRIMARY KEY`, without `AUTOINCR
 Step 4 of migration `005_release_1_3_0_schema` creates both tables empty: no setting existed before. The downgrade
 drops them, and the values and secrets in them are lost. Each direction checks before it acts, so a run that stopped
 half way can be run again.
+
+### 🔢 `PLUGIN_CALL_COUNTER` {: #plugin-call-counter }
+
+Table `plugin_call_counters` (project 76, lot U1): how many calls each plugin that reaches an external service made,
+for the whole instance. One row per `family` and `plugin_code`, the pair its primary key; a shared settings group
+counts under `family` `group` and its name, when its plugins share the account's credits.
+
+- 🗓️ **Five windows aligned in UTC**: minute (`hh:mm:00`), hour, day (00:00), ISO week (Monday 00:00) and month
+  (day 1, 00:00). Each has `<window>_since`, the epoch seconds of the start of the window its count belongs to, and
+  `<window>_count`; all `INTEGER NOT NULL`.
+- 🕒 **`updated_at`** (`NOT NULL`): the last call counted.
+
+`services/platform/call_counter.py` writes it with one statement per call, `INSERT … ON CONFLICT (family, plugin_code)
+DO UPDATE … WHERE … RETURNING`. A window older than now restarts at 1, and a start never moves back. When a limit is
+full, the `WHERE` fails and nothing is written: the call is refused, not counted. One statement is atomic in SQLite and
+takes the file's write lock, so the counts stay exact across workers and processes. `read_counts()` reads without
+writing; a stale window reads 0.
+
+No other index: every statement reaches the row by its primary key. No foreign key (a plugin is code, not a row), no
+`AUTOINCREMENT`. The step `plugin_call_counters` of migration `006_release_1_4_0_schema` creates it empty, and the
+downgrade drops it.
+
+The counter waits at most 2 s for another writer's lock (`COUNTER_BUSY_TIMEOUT_MS`, on its own connection; the app
+waits 30 s), then lets the call go uncounted, with a warning at most once a minute per plugin. In a test process it
+counts on a file of the process's own (`backend/test_scripts/conftest.py`), never on the lane's database. Tests:
+`./dev.py test services call-counter` (the statement, the windows, two processes, the waits),
+`services call-limits-assets` (the asset boundary, project 76 U2), `db migration-006-call-counters` (the step).
 
 ### 🔑 `BROKER_USER_ACCESS`
 

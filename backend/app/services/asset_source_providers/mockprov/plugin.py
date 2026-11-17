@@ -102,6 +102,8 @@ class MockProvider(AssetSourceProvider):
     """
 
     test_only = True
+    #: A double with no network: its calls are never counted (project 76, U2)
+    calls_external_service = False
     #: The test-only shared group (``plugin_settings/groups/mock.py``): nothing required, so the mock stays callable without it
     settings_groups = ("mock",)
     supports_bulk_current = True

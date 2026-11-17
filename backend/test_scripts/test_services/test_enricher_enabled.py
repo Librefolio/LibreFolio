@@ -482,7 +482,8 @@ def _assert_not_configured(refused: tuple[int, Any], code: str, missing: list[st
     each missing key (its wording is free)."""
     status_code, detail = refused
     assert status_code == 422, f"the not-configured refusal is the app's coded 422: {refused}"
-    assert isinstance(detail, dict) and set(detail) == {"error_code", "message", "missing"}, detail
+    # Project 76 N2b: the shared body also says why (``reason``) and, outside managed, which variables (``variables``)
+    assert isinstance(detail, dict) and set(detail) == {"error_code", "message", "missing", "reason", "variables"}, detail
     assert detail["error_code"] == "NOT_CONFIGURED", detail
     assert isinstance(detail["missing"], list) and detail["missing"] == missing, detail
     assert isinstance(detail["message"], str) and code in detail["message"], detail
@@ -1124,7 +1125,9 @@ def test_b2b_not_configured_error_is_the_coded_422() -> None:
     error = not_configured_error("b2b_somecode", ("zeta_key", "alpha.token"))
 
     assert isinstance(error, HTTPException) and error.status_code == 422, error
-    assert isinstance(error.detail, dict) and set(error.detail) == {"error_code", "message", "missing"}, error.detail
+    # Project 76 N2b: plus ``reason`` (``missing_fields`` by default) and ``variables`` (none by default)
+    assert isinstance(error.detail, dict) and set(error.detail) == {"error_code", "message", "missing", "reason", "variables"}, error.detail
+    assert (error.detail["reason"], error.detail["variables"]) == ("missing_fields", [])
     assert error.detail["error_code"] == "NOT_CONFIGURED"
     assert error.detail["missing"] == ["zeta_key", "alpha.token"] and type(error.detail["missing"]) is list, "a list, in the order given"
     message = error.detail["message"]

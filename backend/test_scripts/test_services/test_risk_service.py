@@ -2176,7 +2176,8 @@ async def test_contribution_and_risk_return_name_the_excluded_weight_inside_cash
 
     # The versions that publish `excluded_weight`: a zero must be told apart from a server that predates the field.
     # `asset_risk_return` is at 1.2.0 since k6 (06/10/2026), which adds each point's own Sharpe and Sortino.
-    assert results["contribution"].metadata.algorithm_version == "1.2.0"
+    # `risk_contribution` is at 1.3.0 since RN-15 (16/11/2026): N_eff weighs the priced positions on themselves.
+    assert results["contribution"].metadata.algorithm_version == "1.3.0"
     assert results["risk_return"].metadata.algorithm_version == "1.2.0"
 
 
@@ -2187,7 +2188,9 @@ GOLDEN_REL = 1e-12
 GOLDEN_CONTRIBUTION = {
     "portfolio_volatility": 0.06237752322585717,
     "cash_weight": 0.33333333333333337,
-    "effective_number_of_assets": 3.5999999999999996,
+    # RN-15 (16/11/2026, developer's Q8 a) moved this one on purpose: the weights 0.5 and 1/6 are renormalized on the
+    # measured part (0.75, 0.25), cash out of the denominator — 1 / (0.75² + 0.25²) = 1.6, no longer 3.6.
+    "effective_number_of_assets": 1.6,
     "diversification_ratio": 1.1846014602790187,
     "weight": [0.5, 0.16666666666666666],
     "marginal_contribution": [0.11643684887967204, 0.02495459271612689],
@@ -2218,6 +2221,8 @@ async def test_publishing_the_excluded_weight_moves_no_other_number(monkeypatch)
     assert [item.asset_id for item in contribution.items] == [1, 2]
     for field in ("portfolio_volatility", "cash_weight", "effective_number_of_assets", "diversification_ratio"):
         assert getattr(contribution, field) == pytest.approx(GOLDEN_CONTRIBUTION[field], rel=GOLDEN_REL), field
+    # RN-15: with a holding left out for want of prices and cash in the scope, N_eff counts the priced positions only.
+    assert contribution.effective_number_of_assets <= len(contribution.items)
     for field in ("weight", "marginal_contribution", "component_contribution", "percentage_contribution"):
         assert [getattr(item, field) for item in contribution.items] == pytest.approx(GOLDEN_CONTRIBUTION[field], rel=GOLDEN_REL), field
 

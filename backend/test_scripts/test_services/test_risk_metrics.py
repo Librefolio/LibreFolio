@@ -9,23 +9,38 @@ import pytest
 
 from backend.app.services.financial_math.returns import calendar_days_to_observations
 from backend.app.services.risk import metrics as risk_metrics_module
+from backend.app.services.risk.acquired import average_drawdown, best_realization, best_realization_index
 from backend.app.services.risk.metrics import (
+    annualized_downside_deviation,
     annualized_expected_return,
     annualized_sharpe,
     annualized_sortino,
     annualized_volatility,
+    best_horizon_window,
     comparison_summary,
     compounded_return,
     correlation_matrix,
     covariance_matrix,
     current_buy_and_hold_returns,
+    daily_risk_free_rate,
     drawdown_episodes,
+    extreme_day_ratio,
+    gain_threshold,
     historical_var_cvar,
     hypothetical_stress_return,
+    largest_rally,
+    longest_positive_run,
+    mean_negative_return,
+    mean_positive_return,
+    omega_ratio,
     pairwise_correlation,
     period_returns_from_cumulative,
+    positive_observation_share,
+    return_distribution_histogram,
+    return_shape,
     risk_contributions_from_covariance,
     summarize_drawdown,
+    wealth_index,
 )
 
 _BASELINE = date(2026, 1, 1)
@@ -503,3 +518,228 @@ def test_calendar_days_convert_to_the_observations_a_series_holds(calendar_days,
 
     assert converted == observations
     assert isinstance(converted, int)
+
+
+# --------------------------------------------------------------------------- #
+# RN-14 — the positive measures and the shape of the days (domande-RISK.md, «Le misure, fissate», 12/11/2026).
+# Each measure has one definition, shared by the card, the lab column and the future rolling signal: these are hand
+# derivations of that definition; the library oracles are in test_risk_metrics_oracle.py.
+# --------------------------------------------------------------------------- #
+
+_SHAPE_RETURNS = [0.02, -0.01, 0.03, -0.02]
+
+
+def test_the_downside_deviation_is_the_sortino_denominator_annualized_over_t():
+    period = math.sqrt((0.01**2 + 0.02**2) / 4)
+
+    assert annualized_downside_deviation(_SHAPE_RETURNS, 252.0) == pytest.approx(period * math.sqrt(252.0), rel=1e-12)
+    # The Sortino is the annualized excess return over the same deviation: one function, not a copy.
+    excess_mean = math.fsum(_SHAPE_RETURNS) / 4
+    assert annualized_sortino(_SHAPE_RETURNS, 252.0) == pytest.approx(excess_mean * 252.0 / annualized_downside_deviation(_SHAPE_RETURNS, 252.0), rel=1e-12)
+    assert annualized_downside_deviation([0.01, 0.02], 252.0) == 0.0
+
+
+def test_omega_sums_the_gains_over_the_losses_against_the_sortino_threshold():
+    assert omega_ratio(_SHAPE_RETURNS, 252.0) == pytest.approx(0.05 / 0.03, rel=1e-12)
+    # A threshold above zero moves both sums: the same daily target the Sortino charges.
+    target = daily_risk_free_rate(0.05, 252.0)
+    gains = math.fsum(max(value - target, 0.0) for value in _SHAPE_RETURNS)
+    losses = math.fsum(max(target - value, 0.0) for value in _SHAPE_RETURNS)
+    assert omega_ratio(_SHAPE_RETURNS, 252.0, annual_target_return=0.05) == pytest.approx(gains / losses, rel=1e-12)
+
+
+@pytest.mark.parametrize("returns", [[0.01, 0.02], [0.0, 0.0, 0.0], [0.01, 0.0]], ids=["only-gains", "flat", "gains-and-a-flat-day"])
+def test_omega_is_undefined_exactly_when_the_sortino_is(returns):
+    """No day below the threshold: nothing to divide by. One condition, so never a None beside a huge ratio."""
+    assert omega_ratio(returns, 252.0) is None
+    assert annualized_sortino(returns, 252.0) is None
+
+
+def test_a_flat_day_is_not_a_positive_day():
+    assert positive_observation_share([0.01, 0.0, -0.01, 0.02]) == pytest.approx(0.5)
+    assert positive_observation_share([-0.01, 0.0]) == 0.0
+
+
+def test_the_average_up_day_and_down_day_leave_the_flat_days_out():
+    returns = [0.01, 0.0, -0.01, 0.02, -0.03]
+
+    assert mean_positive_return(returns) == pytest.approx(0.015)
+    assert mean_negative_return(returns) == pytest.approx(-0.02)
+    assert mean_positive_return([-0.01, 0.0]) is None
+    assert mean_negative_return([0.01, 0.0]) is None
+
+
+def test_the_longest_positive_run_keeps_the_earliest_of_equal_runs_and_a_flat_day_breaks_it():
+    run = longest_positive_run([0.01, 0.02, -0.01, 0.01, 0.01, 0.0, 0.03])
+
+    assert (run.length, run.start_index, run.end_index) == (2, 0, 1)
+    longer = longest_positive_run([-0.01, 0.01, 0.01, 0.01])
+    assert (longer.length, longer.start_index, longer.end_index) == (3, 1, 3)
+    assert longest_positive_run([-0.01, 0.0]) is None
+
+
+def test_the_extreme_day_ratio_is_the_pearson_kurtosis_over_the_bell_curves_three():
+    # ±1 % alternating: the second moment is 1e-4, the fourth 1e-8, so the kurtosis is exactly 1.
+    assert extreme_day_ratio([0.01, -0.01, 0.01, -0.01]) == pytest.approx(1.0 / 3.0, rel=1e-12)
+    assert extreme_day_ratio([0.01, 0.01, 0.01]) is None
+
+
+def test_the_best_horizon_window_is_the_twin_of_the_worst():
+    window = best_horizon_window([-0.0102, -0.02, 0.03, 0.03], 2)
+
+    assert (window.compounded_return, window.start_index, window.end_index) == (0.03, 2, 3)
+    assert best_horizon_window([], 2) is None
+    with pytest.raises(ValueError):
+        best_horizon_window([0.01], 0)
+
+
+def test_the_largest_rally_climbs_from_the_lowest_point_before_its_peak():
+    rally = largest_rally(wealth_index([-0.5, 1.0, -0.1, 0.5]))
+
+    assert rally.gain == pytest.approx(1.7)
+    assert (rally.trough_index, rally.peak_index) == (1, 4)
+    # From the baseline: index 0 is the value before the first return.
+    from_baseline = largest_rally(wealth_index([0.5, -1.0]))
+    assert from_baseline.gain == pytest.approx(0.5)
+    assert (from_baseline.trough_index, from_baseline.peak_index) == (0, 1)
+
+
+@pytest.mark.parametrize("returns", [[-0.1, -0.1], [-1.0, 0.5], []], ids=["only-falls", "after-a-total-loss", "no-return"])
+def test_no_rise_is_no_rally_a_zero_with_no_dates(returns):
+    """The twin of ``no_drawdown``: nothing to climb from (a value of zero cannot be a trough)."""
+    rally = largest_rally(wealth_index(returns))
+
+    assert (rally.gain, rally.trough_index, rally.peak_index) == (0.0, None, None)
+
+
+def test_the_best_day_is_the_twin_of_the_worst_and_keeps_the_earliest():
+    assert best_realization([-0.01, 0.03, 0.03]) == 0.03
+    assert best_realization_index([-0.01, 0.03, 0.03]) == 1
+    with pytest.raises(ValueError):
+        best_realization([])
+
+
+def test_the_average_drawdown_is_the_mean_of_the_underwater_curve_over_the_returns():
+    # The baseline point (always 0) is in the curve; the divisor is the number of returns, as for the Ulcer index.
+    assert average_drawdown([0.0, -0.1, -0.2, 0.0]) == pytest.approx(-0.1)
+    assert average_drawdown([0.0, 0.0]) == 0.0
+    with pytest.raises(ValueError):
+        average_drawdown([0.0])
+
+
+def test_the_return_shape_bundles_the_same_functions_the_cards_read():
+    returns = [0.01, 0.0, -0.01, 0.02, -0.03, 0.02, 0.02]
+    shape = return_shape(returns, 252.0, annual_target_return=0.02)
+
+    assert shape.best_realization == best_realization(returns)
+    assert shape.best_realization_index == best_realization_index(returns)
+    assert shape.positive_observation_share == positive_observation_share(returns)
+    assert shape.mean_positive_return == mean_positive_return(returns)
+    assert shape.mean_negative_return == mean_negative_return(returns)
+    assert shape.longest_positive_run == longest_positive_run(returns)
+    assert shape.omega_ratio == omega_ratio(returns, 252.0, annual_target_return=0.02)
+    assert shape.downside_deviation == annualized_downside_deviation(returns, 252.0, annual_target_return=0.02)
+    assert shape.extreme_day_ratio == extreme_day_ratio(returns)
+
+
+def test_a_series_without_a_gain_has_no_best_day_in_its_shape():
+    shape = return_shape([-0.01, 0.0, -0.02], 252.0)
+
+    assert (shape.best_realization, shape.best_realization_index, shape.mean_positive_return, shape.longest_positive_run) == (None, None, None, None)
+    assert shape.positive_observation_share == 0.0
+
+
+# --------------------------------------------------------------------------- #
+# RN-14 — the green tail: its threshold is the mirror of the VaR, and the histogram pins both cuts (consultant,
+# 16/11/2026, option A): the bar width becomes the distance between the two cuts over the whole number of bars nearest
+# to the Freedman-Diaconis width, so each tail is a whole number of bars. When that cannot hold — no Freedman-Diaconis
+# width, no threshold above the VaR cut, or a grid past the bar ceiling — the grid is today's, pinned on the VaR alone.
+# --------------------------------------------------------------------------- #
+
+
+def test_the_gain_threshold_is_the_value_at_risk_of_the_mirrored_series():
+    """One estimator for both tails: the same order statistic, read on the other side."""
+    returns = [0.012, -0.004, 0.031, -0.022, 0.007, 0.018, -0.011, 0.026, -0.015, 0.003] * 4
+    # 40 returns at 85 %: a tail of 6, so the 6th best gain — past the four 3.1 % days, the second 2.6 % day.
+    mirrored = historical_var_cvar([-value for value in returns], confidence_level=0.85).value_at_risk
+
+    assert gain_threshold(returns, confidence_level=0.85) == mirrored
+    assert gain_threshold(returns, confidence_level=0.85) == pytest.approx(0.026)
+    # The same zero floor as the VaR: a window with no gain has a threshold of zero, never a loss.
+    assert gain_threshold([-0.01, -0.02, -0.005], confidence_level=0.9) == 0.0
+
+
+def _pin_sample() -> list[float]:
+    return [0.011 * math.sin(index * 0.77) + 0.0004 * (index % 7) - 0.001 for index in range(400)]
+
+
+def test_both_cuts_land_exactly_on_a_bar_edge_of_a_uniform_grid():
+    sample = _pin_sample()
+    var_edge = -historical_var_cvar(sample, confidence_level=0.95).value_at_risk
+    green = gain_threshold(sample, confidence_level=0.95)
+
+    histogram = return_distribution_histogram(sample, pinned_edge=var_edge, gain_edge=green)
+    widths = [upper - lower for lower, upper in zip(histogram.edges, histogram.edges[1:], strict=False)]
+
+    assert var_edge in histogram.edges and green in histogram.edges
+    assert histogram.gain_edge == green
+    assert max(widths) - min(widths) < 1e-12
+    # Between the two cuts sits a whole number of bars, the one nearest to the Freedman-Diaconis width.
+    plain = return_distribution_histogram(sample, pinned_edge=var_edge)
+    plain_width = plain.edges[1] - plain.edges[0]
+    bars_between = round((green - var_edge) / widths[0])
+    assert bars_between == max(1, round((green - var_edge) / plain_width))
+    assert sum(histogram.counts) == len(sample)
+
+
+def test_two_cuts_closer_than_one_bar_still_get_one_bar_between_them():
+    sample = _pin_sample()
+    histogram = return_distribution_histogram(sample, pinned_edge=-0.0004, gain_edge=0.0003)
+
+    assert -0.0004 in histogram.edges and 0.0003 in histogram.edges
+    assert histogram.edges.index(0.0003) - histogram.edges.index(-0.0004) >= 1
+    assert len(histogram.counts) <= 200
+
+
+@pytest.mark.parametrize(
+    ("sample", "var_edge", "green"),
+    [
+        pytest.param([0.0] * 30 + [0.01, -0.01, 0.02], -0.01, 0.01, id="no-freedman-diaconis-width"),
+        pytest.param(_pin_sample(), -0.01, -0.01, id="threshold-not-above-the-var-cut"),
+        pytest.param(_pin_sample(), -0.010, -0.010 + 1e-9, id="one-bar-would-break-the-ceiling"),
+    ],
+)
+def test_the_grid_falls_back_to_the_var_pin_alone_and_names_the_first_bar_of_the_green_tail(sample, var_edge, green):
+    histogram = return_distribution_histogram(sample, pinned_edge=var_edge, gain_edge=green)
+    today = return_distribution_histogram(sample, pinned_edge=var_edge)
+
+    assert histogram.edges == today.edges
+    assert histogram.counts == today.counts
+    # The green tail starts at the first edge at or past its threshold: whole bars only, never half a bar.
+    assert histogram.gain_edge == min(edge for edge in histogram.edges if edge >= green)
+    assert len(histogram.counts) <= 200
+
+
+def test_without_a_gain_edge_the_histogram_is_exactly_today():
+    sample = _pin_sample()
+    histogram = return_distribution_histogram(sample, pinned_edge=-0.01)
+
+    assert histogram.gain_edge is None
+
+
+def test_a_window_without_a_gain_pins_the_green_tail_at_zero_with_no_bar_in_it():
+    """The threshold's zero floor sits above every return: the grid reaches it, and the bars past the data are empty.
+
+    The same picture the VaR's floor already draws on a series of pure gains: what is reported, not a defect.
+    """
+    falling = [-0.001 - 0.004 * abs(math.sin(index * 0.9)) for index in range(120)]
+    var_edge = -historical_var_cvar(falling, confidence_level=0.95).value_at_risk
+    green = gain_threshold(falling, confidence_level=0.95)
+    histogram = return_distribution_histogram(falling, pinned_edge=var_edge, gain_edge=green)
+
+    assert green == 0.0
+    assert histogram.gain_edge == 0.0 and 0.0 in histogram.edges
+    assert histogram.edges[-1] >= 0.0
+    green_bars = [count for lower, count in zip(histogram.edges, histogram.counts, strict=False) if lower >= 0.0]
+    assert sum(green_bars) == 0
+    assert sum(histogram.counts) == len(falling)

@@ -10,6 +10,7 @@ from backend.app.schemas.risk.vocabulary import RiskDrawdownRecoveryStatus, Risk
 from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.risk.analytic_helpers import (
     prepared_scope_series,
+    rally_and_depth_fields,
     require_joint_baseline,
     require_joint_return_dates,
 )
@@ -51,7 +52,8 @@ class AssetSetDrawdownAnalytic(RiskAnalytic):
     # 1.1.0 (P19, CP-13a) — the reported numbers are unchanged; each item additionally carries
     # maximum_drawdown_trough_to_peak_ratio, and remaining_to_peak_ratio is null for a total loss,
     # announced by the non-degrading warning total_loss_no_recovery.
-    algorithm_version = "1.1.0"
+    # 1.2.0 (RN-14) — each row adds the twins of its episode: the largest rally, dated, and the average drawdown (ADD).
+    algorithm_version = "1.2.0"
     name_i18n_key = "risk.analytics.assetSetDrawdown.name"
     description_i18n_key = "risk.analytics.assetSetDrawdown.description"
     output_kind = RiskOutputKind.DRAWDOWN_SET
@@ -98,6 +100,7 @@ class AssetSetDrawdownAnalytic(RiskAnalytic):
                     maximum_drawdown_recovered_ratio=report.maximum_drawdown_recovered_ratio,
                     maximum_drawdown_trough_to_peak_ratio=report.maximum_drawdown_trough_to_peak_ratio,
                     remaining_to_peak_ratio=report.remaining_to_peak_ratio,
+                    **rally_and_depth_fields(returns, report.drawdowns, baseline_date=baseline, dates=dates),
                 )
             )
 

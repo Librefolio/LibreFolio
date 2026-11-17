@@ -203,7 +203,7 @@ describe('L2Diversification — a row follows the room it is given (F-7)', () =>
 
 // D5 (07/11/2026): the two captions that explain a number say what it means, on the figure on screen.
 describe('L2Diversification — what the two ratio cards mean (D5)', () => {
-    /** The developer's case: eight positions, 27.2% not covered (0.07% cash, the rest holdings without prices), N_eff above the count. */
+    /** The developer's case: eight positions, 27.2% not covered (0.07% cash, the rest holdings without prices); N_eff weighs the eight on themselves (RN-15). */
     function contributionWith(output: Record<string, unknown>, positions = 8): RiskAnalyticResult {
         return {
             analytic_code: 'risk_contribution',
@@ -214,7 +214,7 @@ describe('L2Diversification — what the two ratio cards mean (D5)', () => {
                 portfolio_volatility: 0.13,
                 cash_weight: 0.272,
                 excluded_weight: 0.2713,
-                effective_number_of_assets: 9.32,
+                effective_number_of_assets: 5.6,
                 diversification_ratio: 1.29,
                 items: Array.from({length: positions}, (_, index) => ({asset_id: index + 1, weight: 0.09, percentage_contribution: 0.125})),
                 ...output,
@@ -232,24 +232,22 @@ describe('L2Diversification — what the two ratio cards mean (D5)', () => {
         expect(screen.getByTestId('risk-l2-card-effective-assets-technical').textContent).not.toContain('N_eff');
     });
 
-    it('says the excess comes from the part not covered — cash and holdings without prices — with its share, not from cash alone', () => {
+    it('says a few positions carry the portfolio when N_eff is below the count, uncovered part or not (RN-15)', () => {
         mountLevel(contributionWith({}));
 
-        expect(normalize(caption('effective-assets'))).toBe(resolve('risk.levels.l2.effectiveAssets.aboveCount', {positions: '8', share: share(0.272)}));
-        // The case that made the old sentence false: 0.07% of cash, 27.1% of holdings without prices.
-        expect(caption('effective-assets')).toContain(share(0.272));
+        expect(normalize(caption('effective-assets'))).toBe(resolve('risk.levels.l2.effectiveAssets.belowCount', {positions: '8'}));
+        // The uncovered share is no longer part of this sentence: it is not in N_eff's denominator any more.
+        expect(caption('effective-assets')).not.toContain(share(0.272));
     });
 
-    it('says the same without a figure when the payload states no uncovered share', () => {
-        const result = contributionWith({});
-        delete (result.output as Record<string, unknown>).cash_weight;
-        mountLevel(result);
+    it('says the weights are even at the count, even with cash and holdings left out (RN-15)', () => {
+        mountLevel(contributionWith({effective_number_of_assets: 8}));
 
-        expect(normalize(caption('effective-assets'))).toBe(resolve('risk.levels.l2.effectiveAssets.aboveCountNoShare', {positions: '8'}));
+        expect(normalize(caption('effective-assets'))).toBe(resolve('risk.levels.l2.effectiveAssets.evenCount', {positions: '8'}));
     });
 
-    it('says nothing is uncovered when the weights are even and no part is left out', () => {
-        mountLevel(contributionWith({effective_number_of_assets: 8, cash_weight: 0, excluded_weight: 0}));
+    it('reads a count computed a hair below the positions as even weights', () => {
+        mountLevel(contributionWith({effective_number_of_assets: 7.9999999999999}));
 
         expect(normalize(caption('effective-assets'))).toBe(resolve('risk.levels.l2.effectiveAssets.evenCount', {positions: '8'}));
     });

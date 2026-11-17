@@ -29,6 +29,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Choc hypothétique : les classes d'actifs qu'un scénario laisse de côté, avec un choc nul, sont nommées sous le total.
 - Une icône de documentation à droite d'autres panneaux (graphiques et positions du Dashboard, analyse des lots, liste et laboratoire des actifs, détail de l'actif, courtiers, FX, fichiers et sauvegardes, paramètres) ouvre la page correspondante du manuel, avec une courte explication du panneau dans son infobulle.
 - Les administrateurs peuvent ne garder actifs que certains fournisseurs de prix et de taux de change sur une instance (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`) : les autres disparaissent des listes, de la recherche, des affectations et des paramètres ; les affectations existantes gardent leurs prix enregistrés. MANUAL reste toujours actif.
+- Recherche d'actifs : en cherchant une cryptomonnaie sur Yahoo Finance, son ticker en euros apparaît aussi (par exemple BTC-EUR à côté de BTC-USD), pour la valoriser directement en euros.
 
 ### 🔄 Modifié
 
@@ -51,6 +52,8 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Un fournisseur peut garder ses prix en temps réel valables plus de deux minutes (pour les sources avec un quota d'appels) ; la valeur par défaut reste deux minutes.
 - Risque, corrélation : le seuil de couverture minimale juge désormais quelle part de la période couvre la fenêtre commune des actifs, son avertissement peut donc se déclencher ; l'infobulle de la carte de chaleur montre cette couverture réelle au lieu de toujours 100 %.
 - Risque : la pire baisse et la baisse actuelle en argent disent désormais qu'il s'agit de la même baisse mesurée sur la valeur d'aujourd'hui.
+- Les analyses de risque publient de nouvelles mesures à côté des existantes : le meilleur jour et les 30 meilleurs jours, la plus forte hausse, la part de jours positifs, les gains face aux pertes (Omega), la semi-déviation, la profondeur moyenne sous le sommet, les jours extrêmes, le jour moyen de hausse et de baisse et la plus longue série positive. La VaR, la CVaR et chaque chiffre déjà publié ne bougent pas. Une série qui n'a jamais gagné, ou jamais perdu, n'est plus marquée partielle pour son meilleur ou pire jour manquant.
+- Le nombre effectif de positions de l'onglet Risque se mesure sur les seules positions qui ont un prix : les liquidités et les positions sans prix ne le gonflent plus, il ne dépasse donc jamais les positions mesurées.
 
 ### 🐛 Corrections
 

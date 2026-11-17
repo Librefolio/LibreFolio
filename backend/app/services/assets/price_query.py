@@ -54,6 +54,7 @@ from backend.app.services.financial_math.fx_rates import fx_days_back
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.fx.conversion_issues import day_issue, group_fx_issues, split_fx_issues
 from backend.app.services.market_series import mark_market_closed_carries, prepare_asset_series_set
+from backend.app.services.plugin_settings import runtime
 from backend.app.services.signals.execution import SignalPreparedSeriesBundle
 from backend.app.services.signals.sampling import sample_signal_result
 from backend.app.services.signals.service import SignalService
@@ -975,6 +976,7 @@ class PriceQueryOperations:
         return results
 
     @staticmethod
+    @runtime.with_one_binding_per_plugin  # each provider's settings read once for the whole read (U4)
     async def get_current_prices_bulk(  # noqa: C901 — per-asset provider→cache→DB fallback chain
         asset_ids: list[int],
         session: AsyncSession,

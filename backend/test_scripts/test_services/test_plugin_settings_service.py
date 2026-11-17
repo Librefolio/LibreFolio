@@ -1008,8 +1008,8 @@ async def test_in_the_managed_profile_configured_counts_a_hidden_field_without_n
         assert [field.key for field in entry.fields] == [key for key in MOCKPROV_KEYS if key != "region"], name
         assert entry.configured is configured, name
         # Project 76, G2 adds the groups a plugin reads, the plugins a group serves and a group's name key: none of them
-        # names a field, missing or not
-        assert set(entry.model_dump()) == {"family", "plugin_code", "plugin_name", "icon_url", "configured", "fields", "groups", "used_by", "name_key"}, "the entry has no place for a missing field's name"
+        # names a field, missing or not; U4's call_usage holds counts and limits by window, no field's name either
+        assert set(entry.model_dump()) == {"family", "plugin_code", "plugin_name", "icon_url", "configured", "fields", "groups", "used_by", "name_key", "call_usage"}, "the entry has no place for a missing field's name"
         assert "region" not in shown.lower() and REGION_VARIABLE not in shown and "atlantis" not in shown, f"{name}: the hidden field shows: {shown}"
     print_success(f"region hidden for everyone, configured={configured}, named nowhere")
 

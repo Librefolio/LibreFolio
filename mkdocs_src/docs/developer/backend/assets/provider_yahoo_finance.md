@@ -146,6 +146,22 @@ history uses `NO_DATA`, and malformed or unexpected Yahoo responses use `FETCH_E
 - A result whose currency is a minor unit carries a `quote_base_suggestion`: `GBp` gives
   `{"quantity": 100, "quote_currency": "GBp"}`; any other currency, or none, adds no key
   ([Quote Base Suggestion](#quote-base-suggestion)).
+- **A crypto's euro ticker** (project 76, Y1). On Yahoo a coin has one ticker per currency
+  (`BTC-USD`, `BTC-EUR`), and the search answers the dollar one only. `_with_euro_twins()` asks
+  for the `-EUR` twin of every `CRYPTO` result ending in `-USD` whose twin is not already listed,
+  all in **one** v7 quote-list request (`_fetch_v7_quotes`, the one of the bulk read). A twin that
+  Yahoo quotes in `EUR` becomes a row right after its dollar row: `identifier` the twin,
+  `currency` `EUR`, `type` `CRYPTO`, `display_name` the quote's name.
+    - Nothing is asked when no twin is missing, or when the v7 helper is unavailable
+      (`_bulk_quote_available()`).
+    - Best effort: if the request fails, the search answers its dollar rows, with a warning. A
+      refusal for too many requests is the exception: it leaves the whole search as rate limited,
+      as a refusal on a result's currency does, and the core pauses Yahoo.
+    - A transient error is retried by `_yf_with_retry` (up to 4.5 s of waits) before the search
+      answers without the twins.
+    - The twin rows come on top of the 20 results, and the request is one more Yahoo request
+      inside the one counted search call, like the currency reads.
+    - A twin Yahoo does not return, or returns in another currency, adds no row.
 
 ### 📋 Metadata (`fetch_asset_metadata`)
 

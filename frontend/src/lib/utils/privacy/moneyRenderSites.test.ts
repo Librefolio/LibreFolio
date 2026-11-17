@@ -234,6 +234,12 @@ const REGISTRY: Site[] = [
         why: 'A line of the Yield on Cost tooltip naming the conversion a figure used (the currency pair and the date of its rate) and, when the rate is old, how many days before. It matches form B through the pair helper beside the date and the day count; no amount is written, and an FX rate would be public anyway.',
     },
     {
+        file: 'lib/features/risk/AssetSetRiskPanel.svelte',
+        snippet: '`${catalogueKey}|${dateStart}|${dateEnd}|${targetCurrency}|${pricesSyncedGeneration}`',
+        status: 'not-money',
+        why: 'eligibilityQuestion: the key of the eligibility question the Risk Lab is asking (list, period, currency code, accepted syncs), compared with the key the last answer was for. It matches form B because targetCurrency (a currency token) sits beside pricesSyncedGeneration, a counter of accepted syncs that NUMERIC_TOKEN reads as a price; it is never rendered, and no amount is in it.',
+    },
+    {
         file: 'lib/features/transactions/import/pairCellHtml.ts',
         snippet: '`<span class="inline-flex items-center gap-0.5 text-xs text-violet-600 dark:text-violet-400" data-testid="import-tx-pair-rate">${formatCurrencyPairHtml(info.base, info.quote, \'conversion\')}<span class="font-mono">@ ${formatFixed(info.impliedRate, 4)}</span></span>`',
         status: 'not-money',

@@ -14,6 +14,7 @@ from decimal import Decimal
 
 _ZERO = Decimal("0")
 _HUNDRED = Decimal("100")
+_ONE_POSITION_POINTS = Decimal("10000")
 
 
 def share_of(part: Decimal, total: Decimal) -> Decimal | None:
@@ -58,3 +59,23 @@ def concentration(weights_percent: Iterable[Decimal]) -> tuple[Decimal | None, D
     if not weights:
         return None, None
     return max(abs(weight) for weight in weights), sum((weight * weight for weight in weights), _ZERO)
+
+
+def effective_number_of_positions[K](weights: Mapping[K, Decimal]) -> Decimal | None:
+    """N_eff, the equivalent count of equal positions: ``10 000 ÷`` the Herfindahl index of :func:`concentration`, in
+    points, over the weights given **renormalized on their own sum** (RN-15, developer's Q8 a, 16/11/2026).
+
+    The unit is positions: ``0.5, 0.3, 0.15, 0.05`` gives 2.74 — the set behaves like about two and three-quarter
+    equal positions. The weights are re-taken over the part they measure, so what is not among them — cash, a position
+    without a price — is not in the denominator, and N_eff never exceeds the number of weights given. Weights are a
+    long holding's share (value or weight, any scale): a negative one is refused. None without a weight of value.
+    """
+    if any(weight < 0 for weight in weights.values()):
+        raise ValueError("effective number of positions takes non-negative weights")
+    slices = slice_percents(weights)
+    if not slices or any(percent is None for percent in slices.values()):
+        return None
+    _, herfindahl_points = concentration(percent for percent in slices.values() if percent is not None)
+    if herfindahl_points is None or herfindahl_points <= 0:
+        return None
+    return _ONE_POSITION_POINTS / herfindahl_points

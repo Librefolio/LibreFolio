@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hypothetical shock: the asset classes a scenario leaves out, shocked by zero, are named under the total.
 - A documentation icon on the right of more panels (Dashboard charts and positions, lots analysis, assets list and lab, asset detail, brokers, FX, files and backups, settings) opens the matching page of the manual, with a short explanation of the panel in its tooltip.
 - Administrators can keep only some price and exchange-rate providers active on an instance (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`): the others disappear from lists, search, assignments and settings; existing assignments keep their saved prices. MANUAL is always active.
+- Asset search: looking up a cryptocurrency on Yahoo Finance also offers its euro ticker (for example BTC-EUR beside BTC-USD), so it can be priced directly in euros.
 
 ### 🔄 Changed
 
@@ -51,6 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A provider can keep its live prices fresh for longer than two minutes (for sources with a call budget); the default stays two minutes.
 - Risk, correlation: the minimum-coverage threshold now judges how much of the period the assets' common window covers, so its warning can fire; the heatmap tooltip shows that real coverage instead of always 100 %.
 - Risk: the worst and the current fall in money now say they are the same fall measured on today's value.
+- Risk analytics publish new measures beside the existing ones: the best day and the best 30 days, the largest rally, the share of positive days, gains against losses (Omega), the semi-deviation, the average depth below the peak, extreme days, the average up and down day and the longest positive streak. VaR, CVaR and every figure already published do not move. A series that never gained, or never lost, is no longer marked as partial for its missing best or worst day.
+- The effective number of positions on the Risk tab is measured on the holdings with a price alone: cash and holdings without prices no longer inflate it, so it never exceeds the positions measured.
 
 ### 🐛 Fixed
 

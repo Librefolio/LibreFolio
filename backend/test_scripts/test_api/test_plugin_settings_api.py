@@ -383,8 +383,11 @@ async def test_the_full_catalogue_lists_the_search_preferences_of_justetf_and_bo
     assert set(_SEARCH_PREFERENCES) <= set(entries), f"the full catalogue lists {sorted(entries)}"
     for code, (key, options) in _SEARCH_PREFERENCES.items():
         entry = entries[code]
-        assert (entry["family"], entry["configured"], [field["key"] for field in entry["fields"]]) == ("asset", True, [key]), code
-        (field,) = entry["fields"]
+        # U4 (project 76): the core's five call-limit fields follow the provider's own, which comes first
+        own = [field for field in entry["fields"] if not field["key"].startswith("call_limit_")]
+        assert (entry["family"], entry["configured"], [field["key"] for field in own]) == ("asset", True, [key]), code
+        assert [field["key"] for field in entry["fields"]][1:] == ["call_limit_minute", "call_limit_hour", "call_limit_day", "call_limit_week", "call_limit_month"], code
+        (field,) = own
         assert (field["type"], field["scope"], field["secret"], field["required"], field["editable"], field["locked"]) == ("select", "user", False, False, True, False), code
         assert (field["source"], field["value"], field["default"], field["is_set"], field["problem"]) == ("default", "all", "all", False, None), code
         assert (field["label_key"], field["description_key"]) == (f"pluginSettings.asset.{code}.label.{key}", f"pluginSettings.asset.{code}.description.{key}")
@@ -883,3 +886,31 @@ async def test_g2_a_write_to_an_unknown_group_or_field_is_the_all_or_nothing_ref
 
     assert _outcomes(response) == [("tier", False, "UNKNOWN_FIELD"), ("no_such_field", False, "UNKNOWN_FIELD"), ("tier", False, "UNKNOWN_FIELD"), ("tier", True, None)]
     assert await _group_rows() == mock_group_rows_restored
+
+
+@pytest.mark.asyncio
+async def test_u4_the_catalogue_shows_the_call_usage_of_the_counted_double_and_a_call_raises_it(lane: _Lane):
+    """U4 over HTTP (project 76): ``mockcount``, named, carries ``call_usage`` — the five windows in order, each with its
+    count, a null limit (no limit is written here: the consultant's rule 3 gives mockcount's limits to one spec only),
+    ``resets_at`` in UTC and ``full`` false — and a probe through the boundary raises its counts (by at least one: the
+    lane may count others' calls)."""
+    print_section("U4: call usage over HTTP")
+    member = await lane.member("ps_usage")
+
+    def windows(entry: dict[str, Any]) -> list[dict[str, Any]]:
+        usage = entry["call_usage"]
+        assert usage is not None and (usage["family"], usage["plugin_code"]) == ("asset", "mockcount"), entry
+        return usage["windows"]
+
+    before = windows(await _entry(lane, member, "mockcount"))
+    assert [window["window"] for window in before] == ["minute", "hour", "day", "week", "month"]
+    assert all(window["limit"] is None and window["full"] is False for window in before)
+    assert all(window["resets_at"].endswith(("Z", "+00:00")) for window in before), before
+
+    probe = await lane.call("POST", "/assets/provider/probe", account=member, json={"provider_code": "mockcount", "identifier": "MOCK", "identifier_type": "TICKER", "operations": ["current_price"]})
+    assert probe.status_code == 200, probe.text
+
+    after = windows(await _entry(lane, member, "mockcount"))
+    assert after[4]["count"] >= before[4]["count"] + 1, (before, after)
+    assert after[2]["count"] >= 1
+    print_success("five windows; the probe was counted")

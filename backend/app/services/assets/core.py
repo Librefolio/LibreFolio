@@ -40,9 +40,10 @@ from datetime import timedelta
 from typing import Optional
 
 from backend.app.logging_config import get_logger
-from backend.app.services.assets.base import AssetRateLimitedError, AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.base import AssetCallLimitError, AssetRateLimitedError, AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
-from backend.app.services.platform.provider_cooldown import record_no_verdict, record_refusal, record_success, wait_before_call
+from backend.app.services.platform import call_counter
+from backend.app.services.platform.provider_cooldown import limit_pause_left, record_limit_pause, record_no_verdict, record_refusal, record_success, wait_before_call
 from backend.app.services.plugin_settings.contract import PluginSettingsMixin
 from backend.app.services.plugin_settings.runtime import configure_instance
 from backend.app.utils.runtime.cache import get_ttl_cache
@@ -222,6 +223,56 @@ def cooldown_scope_for(provider: AssetSourceProvider, identifier: str, identifie
     return scope if isinstance(scope, str) and scope else None
 
 
+def call_owner(provider: AssetSourceProvider) -> tuple[str, str, call_counter.CallLimits]:
+    """Who a call of ``provider`` is counted and limited on (project 76, U2): ``call_counter.call_owner`` for the asset
+    family — the shared group whose credits it spends, else the provider — with the limits of that owner."""
+    return call_counter.call_owner(provider, "asset")
+
+
+async def _admit_call(provider: AssetSourceProvider, code: str, scope: str | None) -> None:
+    """The refusals before any I/O, in order: a required setting without a value (``NOT_CONFIGURED``), a pause after
+    «too many requests», a full call limit (only for a provider that reaches an external service). None of the first
+    two is counted."""
+    settings = provider.settings
+    if settings.missing:
+        missing = list(settings.missing)
+        raise AssetSourceError(f"Provider {code} is not configured: {', '.join(missing)} missing", "NOT_CONFIGURED", {"missing": missing})
+    wait = wait_before_call("asset", code, scope)
+    if wait > 0:
+        raise AssetRateLimitedError(f"Provider {code} is paused after too many requests: {math.ceil(wait)} s left", retry_after=wait, scope=scope)
+    # A test double with settings that is no AssetSourceProvider declares nothing: never counted, as a bare double
+    if getattr(provider, "calls_external_service", False):
+        try:
+            await _count_call(provider, code, scope)
+        except AssetCallLimitError:
+            # A limit refusal is no verdict on the source: the trial of its expired pause goes to the next caller
+            record_no_verdict("asset", code, scope)
+            raise
+
+
+async def _count_call(provider: AssetSourceProvider, code: str, scope: str | None) -> None:
+    """Count the call before it leaves, whatever it then meets (project 76, U2). A full limit refuses it and pauses the
+    provider exactly until the window ends, on the limit's own key (U2b: never a source's 429 streak), and the caller
+    gets a ``RATE_LIMITED`` refusal that every existing path handles unchanged."""
+    fingerprint = provider.settings.fingerprint
+    left = limit_pause_left("asset", code, fingerprint)
+    if left > 0:
+        raise AssetCallLimitError(f"Provider {code} is paused at its call limit: {math.ceil(left)} s left", retry_after=left, scope=scope, details={"reason": "call_limit"})
+    family, owner, limits = call_owner(provider)
+    try:
+        await call_counter.count_and_check(family, owner, limits)
+    except call_counter.CallLimitReached as full:
+        logger.warning("Provider call refused: instance call limit reached", provider=code, owner=f"{family}/{owner}", window=full.window, limit=full.limit, retry_after_s=round(full.retry_after, 1))
+        # Exactly until the full window ends, on the limit's own key: never a refusal of the source (U2b)
+        paused = record_limit_pause("asset", code, fingerprint, full.retry_after)
+        details = {"reason": "call_limit", "window": full.window, "limit": full.limit}
+        raise AssetCallLimitError(f"Provider {code} reached its {full.window} call limit ({full.limit})", retry_after=paused or full.retry_after, scope=scope, details=details) from full
+    except BaseException:
+        # Neither an answer nor a refusal (cancelled, say): the trial of an expired source pause goes to the next caller
+        record_no_verdict("asset", code, scope)
+        raise
+
+
 async def call_provider[ResultT](provider: AssetSourceProvider, fn: Callable[[], Awaitable[ResultT]], *, timeout: float, scope: str | None = None) -> ResultT:
     """The one boundary of every call to an asset provider.
 
@@ -235,6 +286,11 @@ async def call_provider[ResultT](provider: AssetSourceProvider, fn: Callable[[],
       called: ``AssetRateLimitedError`` at once, ``retry_after`` the seconds of pause left. A refusal the call meets
       (the plugin raises a ``RateLimitedError``) pauses the provider, and the error leaves with ``retry_after`` set to
       the pause decided; an answer ends a pause; any other end frees the trial of an expired pause for the next caller.
+    - A provider that reaches an external service (``calls_external_service``) is counted before the call leaves, on
+      its own row or on the group whose credits it spends (``call_owner``, ``services/platform/call_counter.py``),
+      even when the call then fails. A full instance limit refuses it without calling: ``AssetCallLimitError`` (a
+      ``RATE_LIMITED`` refusal, ``details`` naming the window and the limit), and the provider is paused exactly until
+      the window ends, on the limit's own key (U2b).
     - The provider's secrets are in flight for the call: masked in every line logged meanwhile, here and in the
       provider's thread, and in the exception the call raises, its chain included (``utils/runtime/secret_masking.py``).
       An error that still shows a secret after masking (its text built by a ``__str__`` of its own) is replaced by an
@@ -252,12 +308,7 @@ async def call_provider[ResultT](provider: AssetSourceProvider, fn: Callable[[],
         return await _run_provider_in_thread(fn, timeout=timeout)
     code = provider.provider_code
     settings = provider.settings
-    if settings.missing:
-        missing = list(settings.missing)
-        raise AssetSourceError(f"Provider {code} is not configured: {', '.join(missing)} missing", "NOT_CONFIGURED", {"missing": missing})
-    wait = wait_before_call("asset", code, scope)
-    if wait > 0:
-        raise AssetRateLimitedError(f"Provider {code} is paused after too many requests: {math.ceil(wait)} s left", retry_after=wait, scope=scope)
+    await _admit_call(provider, code, scope)
     secrets = settings.secret_values()
     # A secret the caller chose (a personal field) is in this call: hide whole every text that shows a secret, since
     # masking it in place would tell whether that value occurs beside an instance secret (decision N15).

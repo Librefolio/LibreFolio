@@ -29,6 +29,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Shock ipotetico: le classi di asset che uno scenario lascia fuori, con shock zero, sono nominate sotto il totale.
 - Un'icona della documentazione a destra di altri pannelli (grafici e posizioni della Dashboard, analisi dei lotti, lista e laboratorio degli asset, dettaglio dell'asset, broker, FX, file e backup, impostazioni) apre la pagina corrispondente del manuale, con una breve spiegazione del pannello nel suo tooltip.
 - Gli amministratori possono tenere attivi solo alcuni provider di prezzi e di cambi su un'istanza (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`): gli altri spariscono da elenchi, ricerca, assegnazioni e impostazioni; le assegnazioni esistenti tengono i prezzi salvati. MANUAL è sempre attivo.
+- Ricerca degli asset: cercando una criptovaluta su Yahoo Finance compare anche il suo ticker in euro (per esempio BTC-EUR accanto a BTC-USD), così si può prezzare direttamente in euro.
 
 ### 🔄 Modifiche
 
@@ -51,6 +52,8 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Un provider può tenere validi i prezzi in tempo reale più a lungo di due minuti (per le fonti con un limite di chiamate); il valore predefinito resta due minuti.
 - Rischio, correlazione: la soglia di copertura minima ora giudica quanta parte del periodo copre la finestra comune degli asset, così il suo avviso può scattare; il tooltip della mappa di calore mostra quella copertura reale invece di sempre 100 %.
 - Rischio: il calo peggiore e quello attuale in denaro ora dicono di essere lo stesso calo misurato sul valore di oggi.
+- Le analisi del rischio pubblicano nuove misure accanto a quelle esistenti: il giorno migliore e i 30 giorni migliori, il rialzo più ampio, la quota di giorni positivi, i guadagni contro le perdite (Omega), la semi-deviazione, la profondità media sotto il massimo, i giorni estremi, il giorno medio di rialzo e di ribasso e la serie positiva più lunga. VaR, CVaR e ogni cifra già pubblicata non cambiano. Una serie che non ha mai guadagnato, o mai perso, non è più segnata come parziale per il giorno migliore o peggiore che le manca.
+- Il numero effettivo di posizioni della scheda Rischio si misura solo sulle posizioni con un prezzo: la liquidità e le posizioni senza prezzi non lo gonfiano più, così non supera mai le posizioni misurate.
 
 ### 🐛 Corretto
 
