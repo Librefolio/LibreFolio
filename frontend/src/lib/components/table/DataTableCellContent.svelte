@@ -148,7 +148,17 @@
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div class="cell-editable-select-wrapper" onclick={(e) => e.stopPropagation()}>
-            <SimpleSelect value={cellContent.value} options={cellContent.options} compact showChevron={false} dropdownPosition="auto" onchange={(v) => cellContent.onchange(v)} />
+            <SimpleSelect
+                value={cellContent.value}
+                options={cellContent.options}
+                placeholder={cellContent.placeholder}
+                compact
+                showChevron={false}
+                dropdownPosition="auto"
+                testId={cellContent.testId}
+                optionTestId={cellContent.testId ? (option) => `${cellContent.testId}-option-${option.value}` : undefined}
+                onchange={(v) => cellContent.onchange(v)}
+            />
         </div>
     {:else if cellContent.type === 'editable-checkbox'}
         <!-- svelte-ignore a11y_click_events_have_key_events -->

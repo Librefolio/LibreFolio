@@ -167,6 +167,10 @@ export interface EditableSelectCell {
     value: string;
     /** Available options */
     options: Array<{value: string; label: string}>;
+    /** Text shown while no option is chosen (plan 68, E10c2) */
+    placeholder?: string;
+    /** Stable selector: the select gets `<testId>`, each option `<testId>-option-<value>` (plan 68, E10c2) */
+    testId?: string;
     /** Callback when selection changes */
     onchange: (newValue: string) => void;
 }

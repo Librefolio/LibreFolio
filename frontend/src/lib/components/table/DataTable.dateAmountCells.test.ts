@@ -10,6 +10,9 @@
  *   a float, so 55 173 000 000 or 0.0000001 stay exact. An empty field → `amount: null`; a text that is not a number →
  *   nothing is handed over and the field says it is invalid (`aria-invalid`). The currency is a choice among
  *   `currencies`; picking one hands over the amount as it is with the new currency.
+ * - `editable-select` (E10c2): an optional `placeholder` while nothing is chosen, and an optional `testId` — the select
+ *   is `<testId>`, each option `<testId>-option-<value>` — so a table with many select cells (the profile window's voice
+ *   and value columns) can be driven without reading translated text.
  */
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import {cleanup, fireEvent, render, screen, setupI18n} from '$test/component';
@@ -127,5 +130,29 @@ describe('DataTable — editable-amount', () => {
         await fireEvent.click(screen.getByTestId('cell-editable-amount-currency-option-USD'));
 
         expect(onchange).toHaveBeenLastCalledWith({amount: '10', currency: 'USD'});
+    });
+});
+
+describe('DataTable — editable-select', () => {
+    const OPTIONS = [
+        {value: 'accumulating', label: 'Accumulating'},
+        {value: 'distributing', label: 'Distributing'},
+    ];
+
+    it('names the select and its options after testId, and picks a value', async () => {
+        const onchange = vi.fn();
+        mount({type: 'editable-select', value: '', options: OPTIONS, placeholder: 'Choose one', testId: 'policy', onchange});
+
+        expect(screen.getByTestId('policy-button')).toHaveTextContent('Choose one');
+        await fireEvent.click(screen.getByTestId('policy-button'));
+        await fireEvent.click(screen.getByTestId('policy-option-distributing'));
+
+        expect(onchange).toHaveBeenCalledWith('distributing');
+    });
+
+    it('without a testId the cell keeps its old markup: no test ids', () => {
+        mount({type: 'editable-select', value: 'accumulating', options: OPTIONS, onchange: vi.fn()});
+        expect(document.querySelector('[data-testid^="undefined"]')).toBeNull();
+        expect(screen.queryByTestId('policy-button')).toBeNull();
     });
 });
