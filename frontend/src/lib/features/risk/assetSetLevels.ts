@@ -173,6 +173,111 @@ function label(assetId: number, names: ReadonlyMap<number, string>): string {
     return names.get(assetId) ?? `#${assetId}`;
 }
 
+/** The columns of «How did each one move?» whose blank can say why (RN-19). */
+export type AssetSetMoveColumn = 'bestDay' | 'omega' | 'meanUp' | 'meanDown' | 'streak' | 'extremeDays';
+
+/** Each column a backend warning code leaves blank, and the warning that says why (Q20: «—» with its reason). */
+const MOVE_BLANK_REASONS: ReadonlyArray<readonly [string, readonly AssetSetMoveColumn[]]> = [
+    ['best_realization_undefined', ['bestDay', 'meanUp', 'streak']],
+    ['average_loss_undefined', ['meanDown']],
+    ['omega_undefined', ['omega']],
+    ['extreme_day_ratio_undefined', ['extremeDays']],
+];
+
+/**
+ * One row of «How did each one move?» (RN-19): the positive twin of the loss table, every figure read from L1°'s own
+ * calendar. Fractions as the contract states them; a blank is null.
+ */
+export interface AssetSetMoveRow {
+    assetId: number;
+    name: string;
+    /** The best single return, and the day of it. */
+    bestDay: number | null;
+    bestDayDate: string | null;
+    /** The best compounded 30-day window the asset lived through: a figure even when it lost (never floored). */
+    bestMonth: {gain: number; from: string; to: string} | null;
+    /** The largest rise from a low to a later high; no rise is a measured 0 with no dates. */
+    rally: {gain: number; from: string | null; to: string | null; days: number | null} | null;
+    /** Gains against losses (Omega). */
+    omega: number | null;
+    /** Share of the days with a gain. */
+    positiveShare: number | null;
+    /** The semi-deviation, annualized. */
+    downsideDeviation: number | null;
+    /** The average up day and down day (c, hidden by default). */
+    meanUp: number | null;
+    meanDown: number | null;
+    /** The longest run of positive days, and when (c, hidden by default). */
+    streak: {days: number; from: string; to: string} | null;
+    /** «Below the peak, on average» (ADD), ≤ 0 (hidden by default; the consultant, 17/11). */
+    averageDrawdown: number | null;
+    /** How much more frequent extreme days are than on the bell curve: the kurtosis over 3 (hidden by default). */
+    extremeDays: number | null;
+    /** The reason of a blank, as the catalogue key of the backend warning that names the asset. */
+    reasons: Partial<Record<AssetSetMoveColumn, string>>;
+}
+
+/** The warning codes that name each asset, from a result's warnings. */
+function warnedAssets(result: RiskAnalyticResult | null): Map<number, Set<string>> {
+    const named = new Map<number, Set<string>>();
+    const warnings = (result as {warnings?: unknown} | null)?.warnings;
+    for (const warning of Array.isArray(warnings) ? warnings : []) {
+        const code = typeof warning?.code === 'string' ? warning.code : null;
+        const ids = warning?.details?.asset_ids;
+        if (!code || !Array.isArray(ids)) continue;
+        for (const id of ids) if (typeof id === 'number') named.set(id, (named.get(id) ?? new Set()).add(code));
+    }
+    return named;
+}
+
+/**
+ * Build «How did each one move?» (RN-19): one row per selected asset, in the selection's order. `kpi` is the KPI of
+ * L1°'s request (its own instance), so the shape of the days, the best 30 days (`monthlyVar`'s `best_horizon`) and the
+ * largest rally (`drawdown`) share one calendar.
+ */
+export function buildAssetSetMoveRows(assetIds: readonly number[], names: ReadonlyMap<number, string>, kpi: RiskAnalyticResult | null, monthlyVar: RiskAnalyticResult | null, drawdown: RiskAnalyticResult | null): AssetSetMoveRow[] {
+    const shapes = byAsset(riskOutput(kpi, schemas.RiskAssetSetKpiOutput)?.items);
+    const monthly = byAsset(riskOutput(monthlyVar, schemas.RiskAssetSetVarCvarOutput)?.items);
+    const falls = byAsset(riskOutput(drawdown, schemas.RiskAssetSetDrawdownOutput)?.items);
+    const warned = warnedAssets(kpi);
+
+    return assetIds.map((assetId) => {
+        const shape = shapes.get(assetId);
+        const fall = falls.get(assetId);
+        const best = singleValue(monthly.get(assetId)?.best_horizon);
+        const bestGain = best ? num(best.compounded_return) : null;
+        const bestPeriod = best ? datePeriod(singleValue(best.start_date), singleValue(best.end_date)) : null;
+        const rallyGain = num(fall?.largest_rally);
+        const rallyPeriod = datePeriod(singleValue(fall?.largest_rally_start_date), singleValue(fall?.largest_rally_end_date));
+        const streakDays = num(shape?.longest_positive_run_observations);
+        const streakPeriod = datePeriod(singleValue(shape?.longest_positive_run_start_date), singleValue(shape?.longest_positive_run_end_date));
+        const codes = warned.get(assetId) ?? new Set<string>();
+        const reasons: Partial<Record<AssetSetMoveColumn, string>> = {};
+        for (const [code, columns] of MOVE_BLANK_REASONS) {
+            if (!codes.has(code)) continue;
+            // The singular sentence: the cell speaks of its own asset.
+            for (const column of columns) reasons[column] = `risk.warnings.${code}`;
+        }
+        return {
+            assetId,
+            name: label(assetId, names),
+            bestDay: num(shape?.best_realization),
+            bestDayDate: singleValue(shape?.best_realization_date) ?? null,
+            bestMonth: bestGain !== null && bestPeriod ? {gain: bestGain, ...bestPeriod} : null,
+            rally: rallyGain === null ? null : {gain: rallyGain, from: rallyGain > 0 ? (rallyPeriod?.from ?? null) : null, to: rallyGain > 0 ? (rallyPeriod?.to ?? null) : null, days: num(fall?.largest_rally_duration_days)},
+            omega: num(shape?.omega_ratio),
+            positiveShare: num(shape?.positive_observation_share),
+            downsideDeviation: num(shape?.downside_deviation),
+            meanUp: num(shape?.mean_positive_return),
+            meanDown: num(shape?.mean_negative_return),
+            streak: streakDays !== null && streakPeriod ? {days: streakDays, ...streakPeriod} : null,
+            averageDrawdown: num(fall?.average_drawdown),
+            extremeDays: num(shape?.extreme_day_ratio),
+            reasons,
+        };
+    });
+}
+
 /**
  * Build the L1° table.
  *

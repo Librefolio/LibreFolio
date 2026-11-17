@@ -169,6 +169,36 @@
             "days": "{count, plural, one {# giorno} other {# giorni}}"
           },
           "referenceItself": "Non applicabile: questo asset è il benchmark stesso, e non si confronta con sé stesso."
+        },
+        "move": {
+          "title": "Come si è mosso ciascuno?",
+          "description": "Per ogni asset scelto, i momenti migliori del periodo e com'erano fatti i suoi giorni.",
+          "times": "{value}×",
+          "days": "{days, plural, one {# giorno} other {# giorni}}",
+          "columns": {
+            "bestDay": "Giorno migliore",
+            "bestMonth": "30 giorni migliori",
+            "rally": "Salita più grande",
+            "omega": "Guadagni / perdite",
+            "positiveShare": "Giorni in positivo",
+            "downsideDeviation": "Semi-dev.",
+            "meanUpDown": "Giorno medio ±",
+            "streak": "Serie in positivo",
+            "averageDrawdown": "Sotto il massimo, media",
+            "extremeDays": "Giorni estremi"
+          },
+          "columnHelp": {
+            "bestDay": "La singola giornata migliore del periodo, e quando.",
+            "bestMonth": "I 30 giorni migliori che l'asset ha davvero vissuto, da un giorno all'altro: il gemello del mese storto.",
+            "rally": "La salita più grande da un minimo a un massimo successivo, con quanto è durata: il gemello della peggior discesa.",
+            "omega": "Guadagni contro perdite: per ogni euro perso nei giorni cattivi, quanti ne sono stati guadagnati nei buoni.",
+            "positiveShare": "La quota dei giorni chiusi in guadagno; un giorno esattamente a zero non conta.",
+            "downsideDeviation": "La semi-deviazione: quanto oscilla l'asset verso il basso, su base annua, nell'unità della volatilità.",
+            "meanUpDown": "Il giorno medio in salita e il giorno medio in discesa.",
+            "streak": "La serie più lunga di giorni consecutivi in guadagno, e quando.",
+            "averageDrawdown": "Quanto sotto il suo massimo stava l'asset in un giorno medio del periodo: tutto il tratto sott'acqua, non solo la peggior discesa.",
+            "extremeDays": "Quanto più spesso sono arrivati giorni molto grandi, in su o in giù, di quanto darebbe una curva a campana: 1× è la campana, sopra le code sono più grasse."
+          }
         }
       },
       "legend": {

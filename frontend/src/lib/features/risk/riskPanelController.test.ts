@@ -1530,7 +1530,7 @@ describe('riskPanelController', () => {
             ],
         ];
 
-        it('includeAssetSetLossLevels reaches the request: the bad day, the bad month and the drawdown, and nothing of the benchmark', async () => {
+        it("includeAssetSetLossLevels reaches the request: the bad day, the bad month, the drawdown and the move table's own KPI (RN-19), and nothing of the benchmark", async () => {
             capability.only = assetSetCatalogue;
             await settledController(labInputs(), {includeAssetSetLossLevels: true});
 
@@ -1538,6 +1538,7 @@ describe('riskPanelController', () => {
                 ['base-historical-asset_set_var', {confidence_level: 0.95, horizon_days: 1}],
                 ['base-historical-asset_set_var-monthly', {confidence_level: 0.95, horizon_days: 30}],
                 ['base-historical-asset_set_drawdown', {}],
+                ['base-historical-asset_set_kpi-move', {risk_free_annual_rate: 0, target_annual_return: 0}],
             ]);
         });
 

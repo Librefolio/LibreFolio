@@ -169,6 +169,36 @@
             "days": "{count, plural, one {# day} other {# days}}"
           },
           "referenceItself": "Not applicable: this asset is the benchmark itself, and it is not compared with itself."
+        },
+        "move": {
+          "title": "How did each one move?",
+          "description": "For each selected asset, its best moments over the period and what its days were like.",
+          "times": "{value}×",
+          "days": "{days, plural, one {# day} other {# days}}",
+          "columns": {
+            "bestDay": "Best day",
+            "bestMonth": "Best 30 days",
+            "rally": "Largest rally",
+            "omega": "Gains / losses",
+            "positiveShare": "Positive days",
+            "downsideDeviation": "Semi-dev.",
+            "meanUpDown": "Average day ±",
+            "streak": "Positive streak",
+            "averageDrawdown": "Below peak, avg.",
+            "extremeDays": "Extreme days"
+          },
+          "columnHelp": {
+            "bestDay": "The best single day of the period, and when.",
+            "bestMonth": "The best 30 days the asset really went through, from one day to another: the twin of the bad month.",
+            "rally": "The largest rise from a low to a later high, with how long it took: the twin of the worst fall.",
+            "omega": "Gains against losses: for every euro lost on the bad days, how many were gained on the good ones.",
+            "positiveShare": "The share of the days with a gain; a day at exactly zero does not count.",
+            "downsideDeviation": "The semi-deviation: how much the asset swings on the way down, yearly, in the unit of the volatility.",
+            "meanUpDown": "The average up day and the average down day.",
+            "streak": "The longest run of days in a row with a gain, and when.",
+            "averageDrawdown": "How far below its highest level the asset stood on an average day of the period: the whole underwater stretch, not only the worst fall.",
+            "extremeDays": "How much more often very large days, up or down, came than a bell curve would give: 1× is the bell curve, above it the tails are fatter."
+          }
         }
       },
       "legend": {

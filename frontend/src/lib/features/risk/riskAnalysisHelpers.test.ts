@@ -883,6 +883,8 @@ describe('buildBaseAnalytics', () => {
         const BAD_DAY = ['base-historical-asset_set_var', 'asset_set_var', {confidence_level: 0.95, horizon_days: 1}];
         const BAD_MONTH = ['base-historical-asset_set_var-monthly', 'asset_set_var', {confidence_level: 0.95, horizon_days: 30}];
         const DRAWDOWN = ['base-historical-asset_set_drawdown', 'asset_set_drawdown', {}];
+        /** RN-19: the KPI the «How did each one move?» table reads, on L1°'s calendar — its own instance, as the two VaRs are. */
+        const MOVE_KPI = ['base-historical-asset_set_kpi-move', 'asset_set_kpi', {risk_free_annual_rate: 0.02, target_annual_return: 0}];
         const RISK_RETURN = ['base-historical-asset_set_risk_return', 'asset_set_risk_return', {}];
         const COMPARISON = ['base-historical-asset_set_comparison', 'asset_set_comparison', {comparison_asset_id: BENCHMARK, risk_free_annual_rate: 0.02, target_annual_return: 0}];
 
@@ -902,9 +904,11 @@ describe('buildBaseAnalytics', () => {
         it.each<[string, number | null]>([
             ['without a benchmark', null],
             ['with a benchmark set', BENCHMARK],
-        ])('L1° alone, %s: the bad day, the bad month and the drawdown — never the comparison', (_when, benchmark) => {
+        ])("L1° alone, %s: the bad day, the bad month, the drawdown and the move table's KPI — never the comparison", (_when, benchmark) => {
             const analytics = buildBaseAnalytics('historical', {...ctx(ASSET_SET_CODES), includeAssetSetLossLevels: true, assetSetBenchmarkId: benchmark});
-            expect(wire(analytics), "L1°'s request is not the loss family alone — the VaR over a day and over a calendar month, then the drawdown, and nothing of the benchmark").toEqual([BAD_DAY, BAD_MONTH, DRAWDOWN]);
+            // RN-19: the KPI rides here too, under its own instance, so the move table reads one calendar — L1°'s — and a
+            // benchmark chosen for L3° never moves it.
+            expect(wire(analytics), "L1°'s request is not the loss family and the move table's KPI — the VaR over a day and over a calendar month, the drawdown, the KPI, and nothing of the benchmark").toEqual([BAD_DAY, BAD_MONTH, DRAWDOWN, MOVE_KPI]);
         });
 
         it('L3° alone, without a benchmark: the KPI and the risk/return, and no comparison', () => {

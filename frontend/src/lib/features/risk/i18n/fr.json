@@ -169,6 +169,36 @@
             "days": "{count, plural, one {# jour} other {# jours}}"
           },
           "referenceItself": "Non applicable : cet actif est la référence elle-même, et il ne se compare pas à lui-même."
+        },
+        "move": {
+          "title": "Comment chacun a-t-il bougé ?",
+          "description": "Pour chaque actif choisi, ses meilleurs moments sur la période et à quoi ressemblaient ses jours.",
+          "times": "{value}×",
+          "days": "{days, plural, one {# jour} other {# jours}}",
+          "columns": {
+            "bestDay": "Meilleur jour",
+            "bestMonth": "30 meilleurs jours",
+            "rally": "Plus forte hausse",
+            "omega": "Gains / pertes",
+            "positiveShare": "Jours positifs",
+            "downsideDeviation": "Semi-écart",
+            "meanUpDown": "Jour moyen ±",
+            "streak": "Série positive",
+            "averageDrawdown": "Sous le sommet, moy.",
+            "extremeDays": "Jours extrêmes"
+          },
+          "columnHelp": {
+            "bestDay": "La meilleure journée de la période, et quand.",
+            "bestMonth": "Les 30 meilleurs jours que l'actif a réellement vécus, d'un jour à l'autre : le pendant du mauvais mois.",
+            "rally": "La plus forte hausse d'un creux à un sommet ultérieur, avec sa durée : le pendant de la pire baisse.",
+            "omega": "Gains contre pertes : pour chaque euro perdu les mauvais jours, combien ont été gagnés les bons.",
+            "positiveShare": "La part des jours en gain ; un jour exactement à zéro ne compte pas.",
+            "downsideDeviation": "Le semi-écart : combien l'actif oscille à la baisse, sur un an, dans l'unité de la volatilité.",
+            "meanUpDown": "Le jour moyen en hausse et le jour moyen en baisse.",
+            "streak": "La plus longue série de jours consécutifs en gain, et quand.",
+            "averageDrawdown": "À quelle distance de son plus haut l'actif se trouvait un jour moyen de la période : toute la période sous l'eau, pas seulement la pire baisse.",
+            "extremeDays": "Combien plus souvent sont venus de très grands jours, à la hausse ou à la baisse, qu'une courbe en cloche ne le donnerait : 1× est la cloche, au-dessus les queues sont plus épaisses."
+          }
         }
       },
       "legend": {

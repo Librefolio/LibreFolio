@@ -301,6 +301,13 @@ export const ASSET_SET_DAILY_VAR_INSTANCE = 'base-historical-asset_set_var';
 export const ASSET_SET_MONTHLY_VAR_INSTANCE = 'base-historical-asset_set_var-monthly';
 
 /**
+ * The per-asset KPI the lab's «How did each one move?» table reads (RN-19), in L1°'s request: its best day, Omega and
+ * positive days sit beside the best 30 days and the largest rally of L1°'s own analytics, so the row must come from one
+ * calendar — L1°'s, which no benchmark joins. L3°'s KPI rides with the benchmark and may be measured on a narrower one.
+ */
+export const ASSET_SET_MOVE_KPI_INSTANCE = 'base-historical-asset_set_kpi-move';
+
+/**
  * The base analytics the panel requests for a mode, keeping only those the
  * backend advertises for the current scope:
  * - `historical` → KPI (seeded with the applied risk-free rate), correlation,
@@ -350,6 +357,9 @@ export function buildBaseAnalytics(mode: RiskMode, ctx: BaseAnalyticsContext): R
                 // the singular L1 pays for, for the same reason.
                 add('asset_set_var', {confidence_level: 0.95, horizon_days: MONTHLY_VAR_HORIZON_DAYS}, ASSET_SET_MONTHLY_VAR_INSTANCE);
                 add('asset_set_drawdown');
+                // The move table's KPI, on this calendar (RN-19). When one request carries both levels (the union), the
+                // KPI already in it is on that same calendar and is read instead: the union stays byte for byte.
+                if (!paidLevels) add('asset_set_kpi', {risk_free_annual_rate: ctx.appliedRiskFreePercent / 100, target_annual_return: 0}, ASSET_SET_MOVE_KPI_INSTANCE);
             }
             if (paidLevels) add('asset_set_risk_return');
             // 🔴 The benchmark rides in **this** request, not in one of its own.

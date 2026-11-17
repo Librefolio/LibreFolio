@@ -505,6 +505,8 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/charts/SemiDonutChart.test.ts",
             "src/lib/features/risk/AssetSetLossComparisonSection.test.ts",
             "src/lib/features/risk/AssetSetLossComparisonSection.fonts.test.ts",
+            "src/lib/features/risk/AssetSetMoveComparisonSection.test.ts",
+            "src/lib/features/risk/AssetSetMoveComparisonSection.fonts.test.ts",
             "src/lib/features/risk/AssetSetRiskReturnSection.test.ts",
             "src/lib/components/charts/ScatterChart.test.ts",
             "src/lib/features/risk/AssetSetReplaySection.test.ts",

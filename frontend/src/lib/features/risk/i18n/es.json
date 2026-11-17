@@ -169,6 +169,36 @@
             "days": "{count, plural, one {# día} other {# días}}"
           },
           "referenceItself": "No aplicable: este activo es el propio índice de referencia, y no se compara consigo mismo."
+        },
+        "move": {
+          "title": "¿Cómo se movió cada uno?",
+          "description": "Para cada activo elegido, sus mejores momentos del período y cómo fueron sus días.",
+          "times": "{value}×",
+          "days": "{days, plural, one {# día} other {# días}}",
+          "columns": {
+            "bestDay": "Mejor día",
+            "bestMonth": "30 mejores días",
+            "rally": "Mayor subida",
+            "omega": "Ganancias / pérdidas",
+            "positiveShare": "Días positivos",
+            "downsideDeviation": "Semidesv.",
+            "meanUpDown": "Día medio ±",
+            "streak": "Racha positiva",
+            "averageDrawdown": "Bajo el máximo, media",
+            "extremeDays": "Días extremos"
+          },
+          "columnHelp": {
+            "bestDay": "El mejor día del período, y cuándo.",
+            "bestMonth": "Los 30 mejores días que el activo vivió de verdad, de un día a otro: el gemelo del mes malo.",
+            "rally": "La mayor subida de un mínimo a un máximo posterior, con cuánto duró: el gemelo de la peor caída.",
+            "omega": "Ganancias frente a pérdidas: por cada euro perdido en los días malos, cuántos se ganaron en los buenos.",
+            "positiveShare": "La parte de los días con ganancia; un día exactamente en cero no cuenta.",
+            "downsideDeviation": "La semidesviación: cuánto oscila el activo hacia abajo, en un año, en la unidad de la volatilidad.",
+            "meanUpDown": "El día medio al alza y el día medio a la baja.",
+            "streak": "La racha más larga de días seguidos con ganancia, y cuándo.",
+            "averageDrawdown": "Cuánto por debajo de su máximo estaba el activo en un día medio del período: todo el tramo bajo el agua, no solo la peor caída.",
+            "extremeDays": "Cuánto más a menudo llegaron días muy grandes, al alza o a la baja, de lo que daría una curva de campana: 1× es la campana, por encima las colas son más gruesas."
+          }
         }
       },
       "legend": {
