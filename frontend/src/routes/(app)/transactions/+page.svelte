@@ -4,6 +4,7 @@
     import {goto, replaceState} from '$app/navigation';
     import {page} from '$app/stores';
     import {_} from '$lib/i18n';
+    import {notify} from '$lib/stores/app/notify.svelte';
     import {Plus, Upload, Pencil, Copy, Trash2, RefreshCw, Link2, Unlink} from 'lucide-svelte';
     import PageBackButton from '$lib/components/layout/PageBackButton.svelte';
 
@@ -240,6 +241,8 @@
     let formOpen = $state(false);
     let formMode = $state<'create' | 'edit' | 'view'>('create');
     let formItems = $state<FormModalItems | null>(null);
+    /** Project 66 (F3): the transaction the user came from with «Open», highlighted in the form. */
+    let formHighlightId = $state<number | null>(null);
     let highlightDrivenViewTxId = $state<number | null>(null);
     let lastHighlightParam = $state<string | null>(null);
     let highlightConsumeSeq = 0;
@@ -674,9 +677,26 @@
     }
 
     function handleViewRow(row: TXReadItem) {
+        formHighlightId = null;
         formMode = 'view';
         formItems = resolveFormItemsForView(row, txStoreGet as (id: number) => TXReadItem | undefined, getBrokerRole);
         formOpen = true;
+    }
+
+    /** «Open» in the form (project 66, F3): the same modal shows that transaction, in the same mode, and highlights the
+     *  one the user came from. */
+    async function handleFormOpenTransaction(id: number) {
+        const from = formItems?.[0] && 'id' in formItems[0] ? (formItems[0] as TXReadItem).id : null;
+        const row = findLoadedTransaction(id) ?? (await fetchTransactionById(id));
+        // A late answer: the modal was closed, or it shows another transaction by now.
+        const shown = formItems?.[0] && 'id' in formItems[0] ? (formItems[0] as TXReadItem).id : null;
+        if (!formOpen || shown !== from) return;
+        if (!row) {
+            notify({name: 'tx.form.open.failed', detail: {id}, toast: {variant: 'error', message: $_('transactions.form.openFailed')}});
+            return;
+        }
+        formHighlightId = from;
+        formItems = resolveFormItemsForView(row, txStoreGet as (id: number) => TXReadItem | undefined, getBrokerRole);
     }
 
     function handleFormClose() {
@@ -842,6 +862,8 @@
     canEdit={formCanEdit}
     onClose={handleFormClose}
     onCommitted={handleFormCommitted}
+    onOpenTransaction={handleFormOpenTransaction}
+    highlightTxId={formHighlightId}
     onSwitchToEdit={() => {
         highlightDrivenViewTxId = null;
         formOpen = false;

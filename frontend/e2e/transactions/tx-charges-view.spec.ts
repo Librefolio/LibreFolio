@@ -130,4 +130,79 @@ test.describe('Transaction form — linked charges (view)', () => {
         await expect(total).toHaveAttribute('data-direction', 'out');
         await expect(total.getByTestId('tx-form-charges-total-USD')).toContainText('107');
     });
+
+    // Lot F3: «Apri» both ways, inside the same modal (it never closes in between).
+    test('Open goes from the BUY to its FEE and back, in the same read-only modal', async ({page, request}) => {
+        const marker = `Chg ${uniqueSuffix()}`;
+        await openOwnedAccount(page, request, owned, 'chg');
+        const broker = await createOwnedBroker(page, 'chg', owned.brokerIds);
+        const assetId = await seededAssetId(page, 'ETH-USD');
+
+        await commitCreates(page, [{broker_id: broker.id, type: 'DEPOSIT', date: daysAgoIso(10), cash: {code: 'USD', amount: '1000'}, description: `Deposit ${marker}`}], 'fund the broker');
+
+        const date = daysAgoIso(5);
+        const charged = {broker_id: broker.id, asset_id: assetId, date, quantity: '0'};
+        const body = await jsonFrom<{committed: boolean; issues?: unknown[]; results?: Array<{operation: string; index: number; ids: number[]}>}>(
+            await page.request.post(COMMIT_PATH, {
+                data: {
+                    creates: [
+                        {ref: 'p', broker_id: broker.id, asset_id: assetId, type: 'BUY', date, quantity: '10', cash: {code: 'USD', amount: '-100'}, description: `Buy ${marker}`},
+                        {...charged, parent_ref: 'p', type: 'FEE', cash: {code: 'USD', amount: '-5'}, description: `Tobin ${marker}`},
+                        {...charged, parent_ref: 'p', type: 'TAX', cash: {code: 'USD', amount: '-2'}, description: `Stamp ${marker}`},
+                        {...charged, type: 'FEE', cash: {code: 'USD', amount: '-9'}, description: `Unlinked ${marker}`},
+                    ],
+                },
+            }),
+            'commit the BUY with its linked charges',
+        );
+        expect(body.committed, `rolled back: ${JSON.stringify(body.issues ?? [])}`).toBe(true);
+        const idAt = (index: number): number => {
+            const id = body.results?.find((item) => item.operation === 'create' && item.index === index)?.ids[0];
+            if (typeof id !== 'number') throw new Error(`no id for create #${index}: ${JSON.stringify(body.results)}`);
+            return id;
+        };
+        const [buyId, feeId, taxId, looseId] = [idAt(0), idAt(1), idAt(2), idAt(3)];
+        committedIds = [buyId, feeId, taxId, looseId];
+
+        await navigateTo(page, `/transactions?id_min=${buyId}&id_max=${buyId}`);
+        await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+        const row = txRow(page, buyId);
+        await expect(row).toBeVisible({timeout: 8_000});
+        await row.hover();
+        const kebab = row.getByTestId(`row-actions-tx-${buyId}`);
+        await expect(kebab).toBeVisible({timeout: 2_000});
+        await kebab.click();
+        const viewAction = page.getByTestId('context-menu-action-view');
+        await expect(viewAction).toBeVisible({timeout: 2_000});
+        await viewAction.click();
+
+        const form = page.getByTestId('tx-form-modal');
+        await expect(form).toBeVisible({timeout: 5_000});
+        const charges = form.getByTestId('tx-form-charges');
+        await expect(charges).toBeVisible({timeout: 8_000});
+        await expect(charges.getByTestId('tx-form-charge-row')).toHaveCount(2, {timeout: 8_000});
+        await expect(form.getByTestId('tx-form-save')).toHaveCount(0);
+
+        // BUY -> FEE: the same modal now shows the charge, with its link to the BUY.
+        await charges.getByTestId(`tx-form-charge-open-saved-${feeId}`).click();
+        const parent = form.getByTestId('tx-form-parent');
+        await expect(parent).toBeVisible({timeout: 8_000});
+        await expect(parent).toHaveAttribute('data-parent-id', String(buyId));
+        await expect(parent).toHaveAttribute('data-state', 'ready', {timeout: 8_000});
+        await expect(parent.getByTestId('tx-form-parent-summary')).toContainText(`#${buyId}`);
+        await expect(form.getByTestId('tx-form-charges')).toHaveCount(0);
+        await expect(form).toBeVisible();
+        await expect(form.getByTestId('tx-form-save')).toHaveCount(0);
+
+        // FEE -> BUY: back to the parent, the charge we came from highlighted.
+        await parent.getByTestId('tx-form-parent-open').click();
+        await expect(form.getByTestId('tx-form-charges')).toBeVisible({timeout: 8_000});
+        await expect(form.getByTestId('tx-form-parent')).toHaveCount(0);
+        const feeRow = form.locator(`[data-testid="tx-form-charge-row"][data-charge-id="${feeId}"]`);
+        const taxRow = form.locator(`[data-testid="tx-form-charge-row"][data-charge-id="${taxId}"]`);
+        await expect(feeRow).toHaveAttribute('data-highlighted', 'true', {timeout: 8_000});
+        await expect(taxRow).toHaveAttribute('data-highlighted', 'false');
+        await expect(form).toBeVisible();
+        await expect(form.getByTestId('tx-form-save')).toHaveCount(0);
+    });
 });

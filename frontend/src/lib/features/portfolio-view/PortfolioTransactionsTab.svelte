@@ -17,6 +17,9 @@
     import type {TXReadItem} from '$lib/features/transactions/types';
     import type {FilterValue} from '$lib/components/table/types';
     import {getBrokerRole} from '$lib/stores/reference/brokerStore';
+    import {zodiosApi} from '$lib/api';
+    import {_} from '$lib/i18n';
+    import {notify} from '$lib/stores/app/notify.svelte';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import type {PortfolioTransactions} from './portfolioTransactions.svelte';
 
@@ -52,6 +55,29 @@
     /** Transaction view modal state (opened from a row's double-click). */
     let viewOpen = $state(false);
     let viewItems = $state<FormModalItems | null>(null);
+    /** Project 66 (F3): the transaction the user came from with «Open», highlighted in the form. */
+    let viewHighlightId = $state<number | null>(null);
+
+    /** «Open» in the form (F3): the same modal shows that transaction, read-only, fetched by id. */
+    async function openFromForm(id: number) {
+        const from = viewItems?.[0] && 'id' in viewItems[0] ? (viewItems[0] as TXReadItem).id : null;
+        let row: TXReadItem | undefined;
+        try {
+            const rows = (await zodiosApi.query_transactions_api_v1_transactions_get({queries: {ids: [id]}} as never)) as TXReadItem[];
+            row = (rows ?? []).find((candidate) => candidate.id === id);
+        } catch {
+            row = undefined; // told below: the form stays on the transaction it shows
+        }
+        // A late answer: the modal was closed, or it shows another transaction by now.
+        const shown = viewItems?.[0] && 'id' in viewItems[0] ? (viewItems[0] as TXReadItem).id : null;
+        if (!viewOpen || shown !== from) return;
+        if (!row) {
+            notify({name: 'tx.form.open.failed', detail: {id}, toast: {variant: 'error', message: $_('transactions.form.openFailed')}});
+            return;
+        }
+        viewHighlightId = from;
+        viewItems = resolveFormItemsForView(row, () => undefined, getBrokerRole);
+    }
 </script>
 
 <div class="space-y-4" data-testid={testId}>
@@ -80,6 +106,7 @@
                 onPageChange={(page) => (transactions.currentPage = page)}
                 onPageSizeChange={(size) => transactions.setPageSize(size)}
                 onViewRow={(row) => {
+                    viewHighlightId = null;
                     viewItems = resolveFormItemsForView(row as TXReadItem, () => undefined, getBrokerRole);
                     viewOpen = true;
                 }}
@@ -89,4 +116,4 @@
 </div>
 
 <!-- Transaction view modal — opened from a row's double-click -->
-<TransactionFormModal open={viewOpen} mode="view" items={viewItems} onClose={() => (viewOpen = false)} />
+<TransactionFormModal open={viewOpen} mode="view" items={viewItems} onClose={() => (viewOpen = false)} onOpenTransaction={openFromForm} highlightTxId={viewHighlightId} />
