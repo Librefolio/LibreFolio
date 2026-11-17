@@ -70,7 +70,7 @@ Its order is contractual:
 | 7 | `apply_creates()` | Add and flush valid creates so generated IDs are available |
 | 8 | `apply_promotes()` | Resolve saved or same-batch rows and promote them in place |
 | 9 | `resolve_create_links()` | Resolve unconsumed create correlation groups into reciprocal database links |
-| 9b | `link_charges()` | Resolve the parent each charge names and write its link, on the batch's final state (see [Linked Charges](#linked-charges)) |
+| 9b | `link_charges()` | On the batch's final state: resolve the parent each charge names and write, change or remove its link; refuse a deleted parent that keeps charges and a promoted one (see [Linked Charges](#linked-charges)) |
 | 10 | `compute_wac_and_fx_issues()` | Run create/update auto-WAC; convert missing FX data into issues, and refuse an Auto row whose average of 0 comes from a pool with nothing to average (`autoCostEmptyPool`, `autoCostUnknownPool`, N88: [Nothing to average](wac.md#nothing-to-average)) |
 | 11 | `validate_cost_basis()` | Flush and enforce required cost basis after WAC and promote handling |
 | 12 | `validate_balances()` | Flush and replay end-of-day balances from each broker's earliest affected date |
@@ -478,8 +478,22 @@ the batch, after updates, creates, promotes and pair links:
 
 Date and currency are free. A saved parent on a broker the user cannot view answers like a missing one, with the same
 params, and loading it never adds its broker to the batch's `EDITOR` check. Changing a parent never changes its charges:
-the form sends every change in one batch. A row that has charges and would stop being a parent is refused with its
-charges (`chargesBlockParentType`, `type`, `chargeIds`).
+the form sends every change in one batch.
+
+**Updates.** An update takes `parent_transaction_id` — absent: the link does not change; `0`: unlink, the charge stays
+as a row of its own; `n`: link (or relink) to the saved parent `n` — or `parent_ref`, a parent created in the same batch
+(the form of a new parent that takes an existing charge). Their issues go on the update (`ref_id` the charge).
+
+**The parent's side**, after the links, on the final state:
+
+- A deleted parent that keeps charges — neither deleted nor unlinked or relinked by the same batch — is refused on its
+  delete (`chargesDeleteIncomplete`, `id`, `chargeIds`): the backend never deletes or unlinks a charge by itself, the
+  client puts the user's choice in the batch. A charge is always deleted alone. Deleting a broker deletes its charges
+  with their parents (same broker), and the deferred foreign key holds whatever the order.
+- A saved row a promote turns into a leg of a pair is refused while it keeps charges (`chargesBlockParentType`,
+  `type`, `chargeIds`, on the promote): the promotion of a DEPOSIT or WITHDRAWAL with charges into a cash transfer. It
+  passes when the same batch unlinks them. Only a promote can take the role away: type swaps (BUY↔SELL,
+  DEPOSIT↔WITHDRAWAL, DIVIDEND↔INTEREST) keep a parent a parent, and a split leaves standalone rows.
 
 **Reading.** `TXReadItem` carries `parent_transaction_id` and `charges_count` (how many charges point at the row,
 counted in slices of 500 ids through the partial index `idx_transactions_parent`). `GET /transactions` takes
