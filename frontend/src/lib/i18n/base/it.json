@@ -332,7 +332,8 @@
       "skippedSuffix": "saltato",
       "failedDefault": "fallito",
       "noChanges": "Nessun nuovo dato (già aggiornato)",
-      "manualOnly": "solo manuale"
+      "manualOnly": "solo manuale",
+      "historyStarts": "La fonte ha prezzi solo dal {date}: i giorni prima si caricano a mano con Importa CSV, nell'editor dei prezzi dell'asset."
     }
   },
   "sectors": {
