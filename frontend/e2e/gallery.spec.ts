@@ -6918,7 +6918,7 @@ test.describe('Gallery Screenshots', () => {
             const ids = await resolveLabIds(page);
             const selection = labSelection(ids);
             const guard = await guardReadOnly(page);
-            // No benchmark: L3° measures without a comparison, so the notice counts exactly five measurements.
+            // No benchmark: L3° measures without a comparison, so the notice counts exactly six measurements.
             await seedLabStorage(page, ids.userId, {selection, benchmark: null});
             // INJECTED (galleryRiskLab.ts, injectStalePrice): RE Loan Roma's price 12 days old on every base wave, and the
             // matrix's own answer not back; the eligibility answers about Roma carry the matching stale-end verdict
@@ -6951,12 +6951,19 @@ test.describe('Gallery Screenshots', () => {
                     await expect(panel.getByTestId(`risk-selected-asset-${assetId}`), `asset ${assetId} is not clean over the year: the gallery data went stale`).toHaveAttribute('data-level', 'eligible');
                 }
 
-                // The notice: amber, one cause — the stale price — and the five partial measurements of the two levels.
+                // The notice: amber, one cause — the stale price — and the six partial measurements of the two levels: L1°'s
+                // bad day, bad month, drawdown and, since RN-19, the KPI of «How did each one move?», on L1°'s own calendar;
+                // L3°'s KPI and risk/return. Named, not only counted, so a measurement added or lost says which.
                 const notice = panel.getByTestId('risk-partial-notice');
                 await expect(notice).toBeVisible();
                 await expect(notice).toHaveAttribute('data-tone', 'warning');
                 await expect(notice.getByTestId('risk-partial-reasons')).toHaveAttribute('data-count', '1');
-                await expect(notice.getByTestId('risk-partial-measurements')).toHaveAttribute('data-count', '5');
+                const measurements = notice.getByTestId('risk-partial-measurements');
+                await expect(measurements).toHaveAttribute('data-count', '6');
+                const instances = await measurements.getByTestId('risk-partial-measurement').evaluateAll((chips) => chips.map((chip) => chip.getAttribute('data-instance') ?? '').sort());
+                expect(instances, 'the partial measurements of the two levels').toEqual(
+                    ['base-historical-asset_set_var', 'base-historical-asset_set_var-monthly', 'base-historical-asset_set_drawdown', 'base-historical-asset_set_kpi-move', 'base-historical-asset_set_kpi', 'base-historical-asset_set_risk_return'].sort(),
+                );
                 // Above it the banner, folded as every load opens it; under it the matrix's own banner, naming the measurement
                 // that did not come back, and why. No other section banner, and no period offer, in the shot: the selection's
                 // eligibility answer keeps the engine's suggestion, which over a year of fresh prices is none.
