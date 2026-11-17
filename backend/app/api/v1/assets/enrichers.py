@@ -12,6 +12,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
+from backend.app.api.plugin_errors import not_configured_error
 from backend.app.api.v1.assets.providers import enforce_probe_limit
 from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import User
@@ -20,7 +21,9 @@ from backend.app.schemas.assets.enrichers import FAEnricherBinding, FAEnricherRe
 from backend.app.services.enrichers.base import EnricherBinding, EnricherPlugin
 from backend.app.services.enrichers.bindings import default_order, enrichers_catalogue, installed_enrichers
 from backend.app.services.enrichers.recognize import IdentifierLearned, Recognized, RecognizeStatus, recognize_cascade
-from backend.app.services.enrichers.usable import NOT_CONFIGURED, bind_settings, configured_enricher
+from backend.app.services.enrichers.registry import EnricherRegistry
+from backend.app.services.enrichers.usable import bind_settings, configured_enricher
+from backend.app.services.plugin_settings.readiness import plugins_readiness
 
 logger = get_logger(__name__)
 
@@ -35,12 +38,14 @@ def list_enrichers(_current_user: User = Depends(get_current_user)) -> FAEnriche
 
 async def _enricher(code: str) -> EnricherPlugin:
     """The enricher of ``code`` with its settings bound: 404 when it is not served (not installed, test-only outside
-    test mode, turned off by ``LIBREFOLIO_ENRICHERS_ENABLED``), 400 ``NOT_CONFIGURED`` when a required setting is empty."""
+    test mode, turned off by ``LIBREFOLIO_ENRICHERS_ENABLED``), 422 ``NOT_CONFIGURED`` (``api/plugin_errors.py``) when a
+    required setting is empty, naming the fields a caller may be told."""
     plugin, missing = await configured_enricher(code)
     if plugin is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No enricher '{code}'")
     if missing:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"error_code": NOT_CONFIGURED, "missing": list(missing)})
+        readiness = (await plugins_readiness(EnricherRegistry.settings_family(), [code], user_id=None)).get(code)
+        raise not_configured_error(code, readiness.missing if readiness is not None and not readiness.configured else missing)
     return plugin
 
 
