@@ -90,6 +90,8 @@ class FXProviderInfo(StrictModel):
     warning_level: Literal["info", "warning"] = Field("warning", description="How serious warning_i18n is: 'warning' (⚠️, a data limit that can mislead) or 'info' (ℹ️, a fact worth knowing)")
     icon_url: Optional[str] = Field(None, description="Provider icon URL (hardcoded)")
     docs_url: Optional[str] = Field(None, description="URL to documentation page for this provider")
+    configured: bool = Field(True, description="False when a required setting of the plugin, or of a shared group it reads, has no value for the caller: every call would answer NOT_CONFIGURED (plan 76, N1). The same rule as the call")
+    missing_settings: list[str] = Field(default_factory=list, description="The settings to set, `<group>.<field>` for a shared group's; in the managed profile a field an environment variable locks is never named (decision N2)")
 
 
 # ============================================================================
