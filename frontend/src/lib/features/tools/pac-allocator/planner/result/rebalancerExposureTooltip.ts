@@ -20,8 +20,8 @@ type UnavailableReason = keyof typeof UNAVAILABLE_FALLBACKS;
 /** One row of a bullet chart: a category of the dimension, or the cash (`kind: 'cash'`, always the last). */
 export interface BulletRow {
     id: string;
-    /** The category's own name, for its colour (`chartCategories`): the type code, the sector or the country as the
-     * backend names it, never the encoded id; `UNCATEGORISED_CATEGORY_ID` for the undeclared share; `cash` for the cash. */
+    /** The category's own name, for its colour (`chartCategories`): the type code, the sector or the country, read back
+     * from the planner id (`fromPlannerId`); `UNCATEGORISED_CATEGORY_ID` for the undeclared share; `cash` for the cash. */
     key: string;
     label: string;
     kind: 'category' | 'cash';

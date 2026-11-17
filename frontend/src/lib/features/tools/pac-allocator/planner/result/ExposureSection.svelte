@@ -23,6 +23,7 @@
     import RebalancerExposureBullets from './RebalancerExposureBullets.svelte';
     import {bulletTooltipText, type BulletRow} from './rebalancerExposureTooltip';
     import {getPlannerProfile, testId} from '../profile';
+    import {fromPlannerId} from '../source';
 
     /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
     const profile = getPlannerProfile();
@@ -74,11 +75,12 @@
     const bulletWords = $derived(bulletTooltipText($t));
 
     /** A Rebalancer row for its bullet chart: the colour key is the category's own name (a type code, a sector, a country),
-     * never the encoded id; the cash has none. */
+     * read back from its planner id (`enc:Real_20Estate` is «Real Estate»), never the label, which the user may have
+     * typed; the cash has none. */
     function bulletRow(row: PlannerExposureRow): BulletRow {
         const before: BulletRow['before'] = (row as {before_weight?: BulletRow['before']}).before_weight ?? {kind: 'unavailable', reason: 'not_applicable'};
         if (isCash(row)) return {id: 'cash', key: 'cash', label: label(row), kind: 'cash', before, target: row.target_weight, final: row.final_weight};
-        const key = row.category_id === UNCATEGORISED_CATEGORY_ID ? UNCATEGORISED_CATEGORY_ID : row.dimension === 'asset_type' ? row.category_id : row.label;
+        const key = row.category_id === UNCATEGORISED_CATEGORY_ID ? UNCATEGORISED_CATEGORY_ID : fromPlannerId(row.category_id);
         return {id: row.category_id, key, label: label(row), kind: 'category', before, target: row.target_weight, final: row.final_weight};
     }
 

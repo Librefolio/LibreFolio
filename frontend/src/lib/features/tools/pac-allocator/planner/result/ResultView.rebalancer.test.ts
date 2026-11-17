@@ -67,6 +67,7 @@ import t4Deposit from './__fixtures__/rebalancer-t4-contribution.json';
 import browser from './__fixtures__/rebalancer-browser.json';
 import yTopUp from './__fixtures__/rebalancer-y-top-up.json';
 import {formatExactPercent} from '../format';
+import {categoryColor} from '$lib/theme/chartCategories';
 import ResultView from './ResultView.svelte';
 
 beforeAll(async () => {
@@ -248,6 +249,20 @@ describe('the Rebalancer balances', () => {
  * keeps one entry per published row, the cash included.
  */
 describe('the Rebalancer exposures', () => {
+    it('colour a sector by the name its id carries, whatever its label says', async () => {
+        // A variant of the G5 answer whose sector labels are not the sector names (the fixture file untouched): the colour
+        // must come from the id (`enc:Real_20Estate` is «Real Estate»), never from the label.
+        const relabelled = structuredClone(browser);
+        for (const row of relabelled.result.primary_solution.exposure_rows as {dimension: string; kind: string; label?: string}[]) if (row.dimension === 'sector' && row.kind === 'category') row.label = `Label of ${row.label}`;
+        mounted(relabelled);
+        const section = screen.getAllByTestId('rebalancer-planner-result-section').find((item) => item.getAttribute('data-section') === 'exposures');
+        await fireEvent.click(section?.querySelector('[data-testid="rebalancer-planner-result-section-toggle"]') as HTMLElement);
+        flushSync();
+        await tick();
+        const drawn = new Set(charts.flatMap((chart) => ((chart.options.at(-1) as {series?: {id?: string; data?: {itemStyle?: {color?: string}}[]}[]} | undefined)?.series ?? []).filter((series) => series.id === 'after').flatMap((series) => (series.data ?? []).map((item) => item.itemStyle?.color))));
+        for (const name of ['Real Estate', 'Consumer Discretionary', 'Energy']) expect(drawn, name).toContain(categoryColor('sector', name, false));
+    });
+
     it('are three bullet charts, the legend once, no bars and no maps', async () => {
         mounted(browser);
         const section = screen.getAllByTestId('rebalancer-planner-result-section').find((item) => item.getAttribute('data-section') === 'exposures');
