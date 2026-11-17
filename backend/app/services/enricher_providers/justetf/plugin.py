@@ -36,6 +36,7 @@ from backend.app.services.enrichers.base import (
 from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.platform.provider_registry import register_provider
 from backend.app.utils.asset.geo import normalize_country_to_iso3
+from backend.app.utils.asset.sector import validate_sector
 
 try:
     from justetf_scraping import get_etf_overview, load_overview
@@ -69,6 +70,12 @@ _FUND_VOICES = frozenset(
 )
 #: The ETF family and the ETCs (a commodity held through a note); a degree of 10, before a second source.
 _COVERED = frozenset({AssetType.COMMODITY} | {t for t in AssetType if t == AssetType.ETF or t.value.startswith("ETF_")})
+#: The types an ETC or an ETN may be filed under: only there the plugin declares ``legal_form`` (the declared voices
+#: drive the wait for the second round and what the window says it would fill).
+_ETC_ETN_TYPES = frozenset({AssetType.ETF, AssetType.ETF_COMMODITY, AssetType.ETF_CRYPTO, AssetType.COMMODITY})
+#: The voices dated by the fund's holdings date.
+_HOLDINGS_VOICES = ("geography", "sector")
+_DAY_MONTH_YEAR = re.compile(r"(\d{1,2})/(\d{1,2})/(\d{4})")
 _DEGREE = 10
 
 _REPLICATION = {
@@ -168,9 +175,28 @@ def _geography_key(name: Any, isin: str) -> str | None:
 
 
 def _sector_key(name: Any, isin: str) -> str | None:
-    # justETF's own names first; any other name goes to the catalogue as it is, which knows the standard ones
+    # The generic helper first: a name it knows goes on as it is; the table holds only justETF's own words
     text = _text(name)
-    return _SECTORS.get(text.lower(), text) if text is not None else None
+    if text is None or validate_sector(text):
+        return text
+    return _SECTORS.get(text.lower(), text)
+
+
+def _holdings_date(value: Any) -> date | None:
+    """«30/09/2026» → 2026-09-30; None for anything else."""
+    match = _DAY_MONTH_YEAR.fullmatch(_text(value) or "")
+    if match is None:
+        return None
+    try:
+        return date(int(match.group(3)), int(match.group(2)), int(match.group(1)))
+    except ValueError:
+        return None
+
+
+def overview_source_dates(overview: Mapping[str, Any], voices: Mapping[str, Any]) -> dict[str, date]:
+    """The holdings date of the sheet, on the countries and sectors it gives."""
+    day = _holdings_date(overview.get("holdings_date"))
+    return {key: day for key in _HOLDINGS_VOICES if key in voices} if day is not None else {}
 
 
 def is_found(overview: Mapping[str, Any]) -> bool:
@@ -211,7 +237,7 @@ class JustETFEnricher(EnricherPlugin):
     icon = "https://www.justetf.com/android-chrome-144x144.png?v2"
     terms = EnricherTerms.PRICE_SOURCE
     accepted_identifier_types = ("ISIN",)
-    voices = dict.fromkeys(_COVERED, _FUND_VOICES)
+    voices = {asset_type: _FUND_VOICES if asset_type in _ETC_ETN_TYPES else _FUND_VOICES - {"legal_form"} for asset_type in _COVERED}
     default_priority = {asset_type: _DEGREE if asset_type in _COVERED else None for asset_type in AssetType}
 
     #: The wait between two pages inside one read: the plugin paces its own calls (plan, round 30).
@@ -277,7 +303,8 @@ class JustETFEnricher(EnricherPlugin):
             if not is_found(overview):
                 yield EnricherReadItem(index=index, status=EnricherReadStatus.NOT_FOUND)
             else:
-                yield EnricherReadItem(index=index, status=EnricherReadStatus.OK, values=overview_voices(overview))
+                values = overview_voices(overview)
+                yield EnricherReadItem(index=index, status=EnricherReadStatus.OK, values=values, source_dates=overview_source_dates(overview, values))
 
     def search(self, query: str) -> list[EnricherSearchResult]:
         if load_overview is None:
