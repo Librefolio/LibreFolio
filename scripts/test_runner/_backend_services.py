@@ -509,6 +509,14 @@ def services_provider_policy(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Asset provider policy tests", verbose=verbose)
 
 
+def services_providers_enabled(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the instance allow-lists of the asset and FX providers (project 76, X1)."""
+    print_section("Services: Providers Enabled")
+    print_info("Testing: LIBREFOLIO_ASSET_PROVIDERS_ENABLED / LIBREFOLIO_FX_PROVIDERS_ENABLED, the registry hook, lists, assignments, routes, prices, refresh, FX sync, search, plugin settings and groups")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_providers_enabled.py", test_names)
+    return run_command(cmd, "Providers enabled tests", verbose=verbose)
+
+
 def services_synthetic_yield(verbose: bool = False, test_names: list = None) -> bool:
     """Test synthetic yield calculation for SCHEDULED_YIELD assets."""
     print_section("Services: Synthetic Yield Calculation")
@@ -2842,6 +2850,17 @@ Note: No backend server required.
         desc="F21, where the asset providers stand in the search: LIBREFOLIO_ASSET_PROVIDERS_PREMIUM/ORDER read stripped, lowercased, in order, once each; effective tier and priority (declared, else the variables'; unknown codes dropped and warned once per process); search order premium first, then priority, ties and repeated codes as given (D-X3); search_rank; tier/search_priority checked at class definition; the non-streaming search answers provider by provider in that order",
         # PURE: no lane DB, no server, no network. Both variables are set with monkeypatch in this process; the registry
         # provider_policy sees and core.configured_provider are replaced by stand-ins; each search runs a query of its own.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "providers-enabled",
+        services_providers_enabled,
+        name="Providers Enabled",
+        desc="X1: LIBREFOLIO_ASSET_PROVIDERS_ENABLED / LIBREFOLIO_FX_PROVIDERS_ENABLED read at every call; registry hook (_switched_off, case-insensitive, MANUAL always on, unknown codes warned once); a switched-off provider out of the lists, assignments, routes, search and plugin settings; its existing assignment, refresh and FX route answer as an unknown code; groups served only with a reader on",
+        # PURE: no lane DB, no server, no network. Both variables through monkeypatch in this process; a private SQLite file
+        # under tmp_path behind every get_async_engine touched; extra plugins put in the registries' storage with
+        # monkeypatch.setitem, or in throwaway subclasses of the real registries; the mocks answer every provider call.
         isolation="pure",
     )
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation; the accrual golden: every number of the accrual walk pinned (regen: LIBREFOLIO_TEST_REGEN_SI_ACCRUAL_GOLDEN=1)")
