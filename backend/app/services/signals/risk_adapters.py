@@ -219,6 +219,88 @@ def rolling_annualized_sharpe_values(
     return _assemble_rolling_values(sharpe.to_numpy(), undefined, window, observations)
 
 
+def _window_sums(values: np.ndarray, window: int) -> np.ndarray:
+    """Each full window's sum, computed afresh — aligned to the window's last index, ``NaN`` before the first.
+
+    Not ``rolling().sum()``, which updates its sum incrementally: whether it lands on an exact zero once the last loss
+    leaves the window depends on that update (on the oracle's sample it does). Summing each window anew makes a window
+    without a loss exactly zero by construction, as the scalar path finds it — a residue would put ``NaN`` under a
+    square root, or pass the undefined test and publish an Omega of 1e12.
+    """
+    sums = np.full(values.shape[0], np.nan)
+    sums[window - 1 :] = np.lib.stride_tricks.sliding_window_view(values, window).sum(axis=1)
+    return sums
+
+
+def _shortfalls_below_target(
+    returns: Sequence[float],
+    window: int,
+    annualization_factor: float,
+    annual_target_return: float,
+    *,
+    measure: str,
+) -> tuple[np.ndarray, float, float]:
+    """The returns as an array, the annualization factor and the per-observation target, checked as the scalar path does.
+
+    A window of one is refused with the scalar path's own sentence (``_sortino_inputs`` in ``risk/metrics.py``), so a
+    caller cannot tell the two paths apart.
+    """
+    if window < 2:
+        raise ValueError(f"{measure} requires at least two observations")
+    factor = positive_annualization_factor(annualization_factor)
+    target_daily = daily_risk_free_rate(annual_target_return, factor)
+    return np.asarray(returns, dtype="float64"), factor, target_daily
+
+
+def rolling_annualized_downside_deviation_values(
+    returns: Sequence[float],
+    window: int,
+    annualization_factor: float,
+    *,
+    annual_target_return: float = 0.0,
+    scale: float = 1.0,
+) -> tuple[list[Optional[float]], int]:
+    """The rolling semi-deviation: ``annualized_downside_deviation`` of each window, vectorised (RN-22).
+
+    Over ``T`` and around the Sortino's target, not ``rolling().std()``. Never undefined: a window with no observation
+    below the target has a semi-deviation of zero, a defined answer — only the ratios dividing by it are not.
+    """
+    observations = len(returns)
+    if observations < window:
+        return [None] * (observations + 1), 0
+    values, factor, target_daily = _shortfalls_below_target(returns, window, annualization_factor, annual_target_return, measure="downside deviation")
+    shortfalls = np.minimum(values - target_daily, 0.0)
+    deviation = np.sqrt(_window_sums(shortfalls**2, window) / window) * math.sqrt(factor) * scale
+    return _assemble_rolling_values(deviation, np.zeros(observations, dtype=bool), window, observations)
+
+
+def rolling_omega_values(
+    returns: Sequence[float],
+    window: int,
+    annualization_factor: float,
+    *,
+    annual_target_return: float = 0.0,
+) -> tuple[list[Optional[float]], int]:
+    """The rolling Omega: ``omega_ratio`` of each window, gains over losses around the target, vectorised (RN-22).
+
+    Undefined where the scalar Omega is: a window whose semi-deviation is within ``ZERO_TOLERANCE`` of zero, the test
+    ``_no_downside`` applies to the Sortino and the Omega alike — read on that quantity, never on the resulting
+    ``inf`` or ``NaN``.
+    """
+    observations = len(returns)
+    if observations < window:
+        return [None] * (observations + 1), 0
+    values, _, target_daily = _shortfalls_below_target(returns, window, annualization_factor, annual_target_return, measure="Omega")
+    excess = values - target_daily
+    gains = _window_sums(np.maximum(excess, 0.0), window)
+    losses = _window_sums(np.maximum(-excess, 0.0), window)
+    period_downside_deviation = np.sqrt(_window_sums(np.minimum(excess, 0.0) ** 2, window) / window)
+    undefined = np.abs(period_downside_deviation) <= ZERO_TOLERANCE
+    with np.errstate(divide="ignore", invalid="ignore"):
+        omega = np.where(undefined, np.nan, gains / np.where(undefined, 1.0, losses))
+    return _assemble_rolling_values(omega, undefined, window, observations)
+
+
 def rolling_beta_values(
     primary: Sequence[float],
     comparison: Sequence[float],
@@ -297,9 +379,11 @@ __all__ = [
     "observed_annualization_factor",
     "prepared_comparison_returns",
     "prepared_primary_returns",
+    "rolling_annualized_downside_deviation_values",
     "rolling_annualized_sharpe_values",
     "rolling_annualized_volatility_values",
     "rolling_beta_values",
+    "rolling_omega_values",
     "rolling_pair_values",
     "rolling_single_values",
     "undefined_window_warnings",
