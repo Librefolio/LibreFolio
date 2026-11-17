@@ -103,7 +103,9 @@ class EnricherReadItem:
     """What ``read`` yields for one binding, in any order: ``index`` is its place in the list it was given.
 
     ``values`` maps catalogue keys to raw values (the catalogue turns them into stored forms); a voice the source does
-    not give is absent, never ``None``. ``source_date`` is the day the source says its data are of, when it says one.
+    not give is absent, never ``None``. ``source_date`` is the day the source says its data are of, when it says one;
+    ``source_dates`` the day of a voice that has one of its own (a fund's countries and sectors are «as of» their
+    holdings date): a voice not in it takes ``source_date``.
     A refusal for too many requests is ``ERROR`` with ``error_code`` ``RATE_LIMITED`` and, when known, ``retry_after``
     in seconds: the reads not done yet come back that way, and the core reads them later.
     """
@@ -112,6 +114,7 @@ class EnricherReadItem:
     status: EnricherReadStatus
     values: Mapping[str, Any] = field(default_factory=dict)
     source_date: date | None = None
+    source_dates: Mapping[str, date] = field(default_factory=dict)
     error_code: str | None = None
     error_message: str | None = None
     retry_after: float | None = None

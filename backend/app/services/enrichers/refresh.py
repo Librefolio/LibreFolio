@@ -76,10 +76,16 @@ class ReadOutcome:
     status: EnricherReadStatus
     values: Mapping[str, Any] = field(default_factory=dict)
     source_date: date | None = None
+    #: The day of a voice that has one of its own; a voice not in it takes ``source_date``.
+    source_dates: Mapping[str, date] = field(default_factory=dict)
     error_code: str | None = None
     error_message: str | None = None
     retry_after: float | None = None
     from_cache: bool = False
+
+    def date_of(self, key: str) -> date | None:
+        """The source date of voice ``key``: its own, else the read's."""
+        return self.source_dates.get(key, self.source_date)
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,6 +169,7 @@ def _outcome(request: ReadRequest, item: EnricherReadItem) -> ReadOutcome:
         status=item.status,
         values=values,
         source_date=item.source_date,
+        source_dates={key: day for key, day in item.source_dates.items() if key in values},
         error_code=item.error_code,
         error_message=item.error_message,
         retry_after=item.retry_after,
@@ -255,7 +262,7 @@ def merge_voices(order: Sequence[str], outcomes: Iterable[ReadOutcome]) -> dict[
             if key in merged:
                 merged[key].others[code] = value  # type: ignore[index] — the dict built just below
             else:
-                merged[key] = MergedVoice(value=value, source=code, source_date=outcome.source_date, others={})
+                merged[key] = MergedVoice(value=value, source=code, source_date=outcome.date_of(key), others={})
     return merged
 
 
@@ -408,7 +415,7 @@ async def source_value(code: str, binding: Mapping[str, Any], key: str) -> Sourc
         return f"'{code}' gave no value ({'no answer' if outcome is None else outcome.status.value})"
     if key not in outcome.values:
         return f"'{code}' gives no value for '{key}'"
-    return SourceValue(value=outcome.values[key], source_date=outcome.source_date)
+    return SourceValue(value=outcome.values[key], source_date=outcome.date_of(key))
 
 
 async def refresh_in_background(asset_ids: Sequence[int], *, engine: AsyncEngine | None = None) -> None:
