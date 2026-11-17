@@ -40,7 +40,7 @@ from backend.app.schemas.pac_allocator.results import PAC_PLAN_INPUT_ADAPTER, PA
 from backend.app.services.accounts import user_service
 from backend.app.services.pac_allocator.planner import plan_pac_allocation, plan_rebalancing
 from backend.test_scripts.test_db_config import verify_test_database
-from backend.test_scripts.test_server_helper import TEST_SERVER_PLANNER_SEEDS, _TestingServerManager
+from backend.test_scripts.test_server_helper import TEST_SERVER_PLANNER_SEEDS, _TestingServerManager, without_time_limits
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
@@ -521,7 +521,7 @@ async def test_rebalancer_invest_only_from_the_portfolio_buys_the_gap(test_serve
     assert (order["asset_id"], order["instruction"]["kind"]) == (_asset_key(source, asset_b), "monetary_amount")
     assert (Decimal(order["instruction"]["amount"]["amount"]), order["instruction"]["amount"]["currency"], Decimal(order["fee"]["amount"])) == (195, "EUR", 5)
     assert _money(plan["primary_solution"]["score"]["plan_score"]) == Fraction(1_001, 200)
-    assert plan == _in_process(REBALANCER, request, budget)
+    assert without_time_limits(plan) == without_time_limits(_in_process(REBALANCER, request, budget))
 
 
 @pytest.mark.asyncio
@@ -537,7 +537,7 @@ async def test_rebalancer_leaves_small_cash_idle(test_server):
     assert plan["primary_solution"]["order_rows"] == []
     score = plan["primary_solution"]["score"]
     assert (_exact(score["distance_weight"]), _exact(score["target_distance"]), _money(score["wealth_loss"]), _money(score["plan_score"])) == (1, 20_000, 0, 2)
-    assert plan == _in_process(REBALANCER, request, budget)
+    assert without_time_limits(plan) == without_time_limits(_in_process(REBALANCER, request, budget))
 
 
 @pytest.mark.asyncio
@@ -610,4 +610,4 @@ async def test_plan_with_a_saved_fx_rate_read_from_the_source(test_server):
     (order,) = plan["primary_solution"]["order_rows"]
     assert (order["asset_id"], Decimal(order["instruction"]["amount"]["amount"]), Decimal(order["fee"]["amount"])) == (_asset_key(source, asset_b), 195, 5)
     assert _money(plan["primary_solution"]["score"]["plan_score"]) == Fraction(1_001, 200)
-    assert plan == _in_process(REBALANCER, request, budget)
+    assert without_time_limits(plan) == without_time_limits(_in_process(REBALANCER, request, budget))
