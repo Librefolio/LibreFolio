@@ -68,16 +68,27 @@ async function storedAssets(page: Page, ids: number[]): Promise<StoredAsset[]> {
     });
 }
 
-/** Narrow the list to this test's token, switch to the table, select every row and open the bulk edit. */
-async function openBulkEdit(page: Page, token: string, count: number): Promise<void> {
+/**
+ * Narrow the list to this test's token, switch to the table, and wait until it lists exactly the `count` rows this test
+ * created. The search is debounced (300 ms) and `data-busy` does not cover it, so the settles can return before the
+ * filter lands; when it lands the table re-renders and closes any open row or column menu. The row count is the proof
+ * that it has landed: the token is unique, so every row left is one this test owns.
+ */
+async function openList(page: Page, token: string, count: number): Promise<void> {
     await goToAssetsPage(page);
     await page.getByTestId('assets-search-input').fill(token);
     await waitForSettled(page.getByTestId('assets-page'), 20_000);
     await page.getByTestId('view-mode-list').click();
     await waitForSettled(page.getByTestId('assets-page'), 20_000);
+    await expect(page.locator('[data-testid^="dt-row-checkbox-"]')).toHaveCount(count, {timeout: 10_000});
+    await waitForSettled(page.getByTestId('assets-page'), 20_000);
+}
+
+/** Open the filtered table, select every row and open the bulk edit. */
+async function openBulkEdit(page: Page, token: string, count: number): Promise<void> {
+    await openList(page, token, count);
     // The list is split by usage (own, others, watched): the rows of this test sit in one or two of those tables, and
-    // each table has its own select-all. Wait for all the rows, then select every table that holds some.
-    await expect(page.locator('[data-testid^="dt-row-checkbox-"]')).toHaveCount(count);
+    // each table has its own select-all. Select every table that holds some.
     for (const panel of ['own', 'others', 'analysis']) {
         const table = page.getByTestId(`assets-table-panel-${panel}`);
         if ((await table.locator('[data-testid^="dt-row-checkbox-"]').count()) > 0) await table.getByTestId('dt-select-all').click();
@@ -401,11 +412,7 @@ test.describe('Asset bulk edit', () => {
         const token = uniqueToken(6);
         try {
             const [asset] = await createAssets(page, owned, token, ['A']);
-            await goToAssetsPage(page);
-            await page.getByTestId('assets-search-input').fill(token);
-            await waitForSettled(page.getByTestId('assets-page'), 20_000);
-            await page.getByTestId('view-mode-list').click();
-            await waitForSettled(page.getByTestId('assets-page'), 20_000);
+            await openList(page, token, 1);
 
             await page.getByTestId(`row-actions-${asset.id}`).click();
             await page.getByTestId('asset-table-edit-action').click();
@@ -440,11 +447,7 @@ test.describe('Asset bulk edit', () => {
             const reserved = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--lf-selbar-space').trim());
             try {
                 const assets = await createAssets(page, owned, token, ['A', 'B']);
-                await goToAssetsPage(page);
-                await page.getByTestId('assets-search-input').fill(token);
-                await waitForSettled(page.getByTestId('assets-page'), 20_000);
-                await page.getByTestId('view-mode-list').click();
-                await waitForSettled(page.getByTestId('assets-page'), 20_000);
+                await openList(page, token, 2);
 
                 // No selection, no bar, no room kept at the bottom.
                 await expect(bar).toHaveCount(0);
@@ -495,11 +498,7 @@ test.describe('Asset bulk edit', () => {
         try {
             const assets = await createAssets(page, owned, token, ['A', 'B', 'C']);
             await giveTransactions(page, owned, assets[2].id);
-            await goToAssetsPage(page);
-            await page.getByTestId('assets-search-input').fill(token);
-            await waitForSettled(page.getByTestId('assets-page'), 20_000);
-            await page.getByTestId('view-mode-list').click();
-            await waitForSettled(page.getByTestId('assets-page'), 20_000);
+            await openList(page, token, 3);
             const own = page.getByTestId('assets-table-panel-own');
             const watched = page.getByTestId('assets-table-panel-analysis');
             await expect(own.getByTestId('dt-header-lastPrice')).toHaveCount(1);
