@@ -51,6 +51,7 @@ from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.financial_math.interest import annual_coupon_rate
 from backend.app.services.platform.provider_registry import register_provider
 from backend.app.utils.asset.sector import validate_sector
+from backend.app.utils.runtime.pacing import Pacer
 
 try:
     from borsa_italiana_scraping import Sessione, cerca, ottieni_dati_fondo, ottieni_scheda
@@ -72,6 +73,12 @@ except ImportError:  # pragma: no cover — the library is in the lock; without 
 
 
 logger = get_logger(__name__)
+
+#: One pace for every call of this plugin to borsaitaliana.it, whatever read, «Riconosci» or search it comes from (plan
+#: 68, C5; the round-30 rule: the plugin paces its own calls). The library paces the requests inside one session only;
+#: this paces two reads at once. Module level: the registry builds a new instance for every call, so a pacer on
+#: ``self`` would never be shared. Per process (``utils/runtime/pacing.py``).
+_PACER = Pacer(1.0)
 
 #: The error code of a read the library or the site failed (not a refusal for too many requests).
 SOURCE_ERROR = "SOURCE_ERROR"
@@ -463,12 +470,14 @@ class BorsaItalianaEnricher(EnricherPlugin):
         if ottieni_scheda is None:
             raise RuntimeError("borsa-italiana-scraping is not installed")
         params = binding.params
+        _PACER.wait()
         return ottieni_scheda(binding.identifier, params.get("mic"), _language(binding), sessione=session, platform=params.get("platform"))
 
     @staticmethod
     def _fund(code: str, session: Any = None) -> Any:
         if ottieni_dati_fondo is None:
             raise RuntimeError("borsa-italiana-scraping is not installed")
+        _PACER.wait()
         return ottieni_dati_fondo(code, sessione=session)
 
     def recognize(self, binding: EnricherBinding) -> EnricherRecognition:
@@ -546,6 +555,7 @@ class BorsaItalianaEnricher(EnricherPlugin):
             raise RuntimeError("borsa-italiana-scraping is not installed")
         session = Sessione()
         try:
+            _PACER.wait()
             hits = cerca(query, lingua="it", sessione=session)
         finally:
             session.chiudi()

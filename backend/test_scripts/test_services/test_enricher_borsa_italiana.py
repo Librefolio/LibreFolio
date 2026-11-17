@@ -114,6 +114,7 @@ import dataclasses
 import importlib
 import importlib.util
 import json
+import threading
 import typing
 from collections.abc import Iterator
 from datetime import date
@@ -142,6 +143,7 @@ from backend.app.services.enrichers.base import (
 from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.plugin_settings.call_limits import CALL_LIMIT_KEYS
 from backend.app.utils.asset.sector import validate_sector
+from backend.app.utils.runtime.pacing import Pacer
 
 PLUGIN_MODULE = "backend.app.services.enricher_providers.borsa_italiana.plugin"
 CODE = "borsa_italiana"
@@ -2023,3 +2025,58 @@ def test_recognize_a_fund_other_error_raises(plugin, library):
     with pytest.raises(Exception) as raised:
         plugin.recognize(_fund_binding(code))
     assert rate_limited_from_exception(raised.value, CODE) is None, f"not a refusal: {raised.value!r}"
+
+
+# =============================================================================
+# C5: one pace for every call of the plugin, whatever read it comes from
+# =============================================================================
+
+
+class FakePace:
+    """The module's ``_PACER`` replaced by one on a fake clock that only moves when it sleeps: no test ever waits, and
+    the waits are recorded. ``interval`` is the plugin's own."""
+
+    def __init__(self, interval: float) -> None:
+        self.interval = interval
+        self.now = 1000.0
+        self.slept: list[float] = []
+        self._lock = threading.Lock()
+
+    def clock(self) -> float:
+        with self._lock:
+            return self.now
+
+    def sleep(self, seconds: float) -> None:
+        with self._lock:
+            self.slept.append(seconds)
+            self.now += seconds
+
+
+@pytest.fixture(autouse=True)
+def pace(monkeypatch: pytest.MonkeyPatch) -> FakePace:
+    """Every test of this file runs on the fake pace: the module must hold its ``_PACER`` (C5)."""
+    module = importlib.import_module(PLUGIN_MODULE)
+    real = module._PACER
+    assert isinstance(real, Pacer) and real.interval_seconds > 0, "the plugin paces its calls with a module-level Pacer"
+    fake = FakePace(real.interval_seconds)
+    monkeypatch.setattr(module, "_PACER", Pacer(real.interval_seconds, clock=fake.clock, sleep=fake.sleep), raising=True)
+    return fake
+
+
+def test_two_reads_share_one_pace(bi, library, pace):
+    """Two reads, each with its own library session (as two requests at once): the second waits the plugin's interval
+    before its first call, though the library paces only inside one session."""
+    first, second = bi.BorsaItalianaEnricher(), bi.BorsaItalianaEnricher()
+    isin = _give_recording(library, "btp_valore")
+    assert list(first.read([_isin(isin)]))[0].status == EnricherReadStatus.OK
+    assert pace.slept == [], "the first call does not wait"
+    assert list(second.read([_isin(isin)]))[0].status == EnricherReadStatus.OK
+    assert pace.slept == [pace.interval], f"the second read waited the interval: {pace.slept}"
+
+
+def test_search_is_paced_with_the_reads(bi, library, pace, plugin):
+    isin = _give_recording(library, "btp_valore")
+    list(plugin.read([_isin(isin)]))
+    library.answers["btp"] = []
+    plugin.search("btp")
+    assert pace.slept == [pace.interval], f"search and read share the pace: {pace.slept}"
