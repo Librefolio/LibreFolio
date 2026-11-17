@@ -2038,6 +2038,14 @@ def services_plugin_settings_groups(verbose: bool = False, test_names: list = No
     return run_command(cmd, "Plugin settings groups tests", verbose=verbose)
 
 
+def services_plugin_readiness(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the readiness check of the plugins: the rule of the call boundary, the managed profile, the provider lists."""
+    print_section("Services: Plugin Readiness")
+    print_info("Testing: plugin_settings/readiness.py, FAProviderInfo / FXProviderInfo, GET /assets/provider, GET /fx/providers")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_plugin_readiness.py", test_names)
+    return run_command(cmd, "Plugin readiness tests", verbose=verbose)
+
+
 def services_plugin_settings_guards(verbose: bool = False, test_names: list = None) -> bool:
     """Test the plugin settings guards: variables documented, derived names unique, AI Export never reads them."""
     print_section("Services: Plugin Settings Guards")
@@ -4088,6 +4096,16 @@ Note: No backend server required.
         services_plugin_settings_groups,
         name="Plugin Settings Groups",
         desc="register_group refusals and variable claims, validate_plugin_groups, binding with no own field (env > row > default), missing as group.key, masking, fingerprint, unbound, pickle, NOT_CONFIGURED, gate",
+        isolation="pure",
+    )
+    # Plugin readiness (project 76, N1). PURE: private SQLite under tmp_path through a private engine, a test instance key, every
+    # variable through monkeypatch; the two provider lists are called in process, no server, no network.
+    add_test(
+        cat,
+        "plugin-readiness",
+        services_plugin_readiness,
+        name="Plugin Readiness",
+        desc="One readiness check per plugin = the call boundary's rule (rows, variables, unreadable secret, groups, user fields), managed profile hides locked fields, one DB session, provider schemas and the asset and FX lists",
         isolation="pure",
     )
     add_test(cat, "plugin-settings-guards", services_plugin_settings_guards, name="Plugin Settings Guards", desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings", isolation="pure")
