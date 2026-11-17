@@ -4,7 +4,6 @@ import {login, navigateTo} from '../fixtures/auth-helpers';
 import {expectChartCanvas} from '../fixtures/charts';
 import {t as catalogueText} from '../fixtures/i18n-data';
 import {TEST_USER} from '../fixtures/test-users';
-import {goToAssetsPage} from '../assets/assets-helpers';
 import {schemas} from '../../src/lib/api/generated';
 
 type RiskScope = {kind: 'asset'; asset_id: number} | {kind: 'asset_set'; asset_ids: number[]} | {kind: 'portfolio'; broker_ids?: number[] | null};
@@ -1147,8 +1146,10 @@ function withInjectedStatus(result: Record<string, unknown>, options: RiskMockOp
  *
  * Two pages poll `POST /assets/prices/current`: `/assets` for every listed asset
  * at once, and `/assets/{id}` for its own, each on load and every 30 s — Asset
- * Detail from a second timer too, 5 s in and every minute after. This file reaches
- * both through `openFirstAssetDetail`. Each answered call is a portfolio mutation
+ * Detail from a second timer too, 5 s in and every minute after. This file no
+ * longer visits either (Asset Detail's risk tab lives in `risk-asset-detail.spec.ts`),
+ * but keeps the hold so a test that ever does cannot reach the providers. Each
+ * answered call is a portfolio mutation
  * twice over. The backend asks the live providers and writes today's prices into
  * the shared test database — measured on the test lane on 05/10/2026: one full run
  * of this file made real provider calls (eight live quotes, JustETF's live feeds,
@@ -1163,7 +1164,7 @@ function withInjectedStatus(result: Record<string, unknown>, options: RiskMockOp
  * stale. An unanswered call does nothing at all. Each poller awaits it and, after
  * axios's 30 s timeout, catches the error — silently on Asset Detail, with one
  * non-critical warning on `/assets` — and none of them feeds `data-busy`, so the
- * `data-busy="false"` that `goToAssetsPage` waits for still arrives. The handler
+ * pages' `data-busy="false"` still arrives. The handler
  * calls no route method, so nothing can throw when the context closes.
  *
  * Installed by `installRiskMocks`, so every test in this file holds it. Dashboard
@@ -1300,23 +1301,10 @@ async function installRiskMocks(page: Page, options: RiskMockOptions = {}): Prom
 }
 
 /**
- * Every section of the risk panel is gated on the capability catalog, so an
+ * Every section of the four-level panel is gated on the capability catalog, so an
  * absent section means "unsupported" *or* "not loaded yet". The panel publishes
  * which one via `data-catalog`; wait for it before asserting on any section, or
  * the assertion is really a bet on fetch latency.
- */
-async function waitForRiskCatalog(page: Page): Promise<void> {
-    await expect(page.getByTestId('risk-analysis-panel').first()).toHaveAttribute('data-catalog', 'ready', {timeout: 20_000});
-}
-
-/**
- * The same gate, for the four-level panel that Dashboard and Broker Detail mount.
- *
- * A second helper rather than a widened first one, and deliberately so: Asset
- * Detail still mounts the legacy `risk-analysis-panel`, and a locator matching
- * either testid would report "ready" for whichever panel the page happened to
- * have — including the wrong one. One helper per component keeps the question
- * unambiguous, and leaves `waitForRiskCatalog` untouched for the asset specs.
  *
  * Waits for the capability catalogue, then for the base wave to land. The second
  * half is what makes every section assertion below a statement about the answer
@@ -1430,19 +1418,6 @@ async function reloadBrokerRiskCold(page: Page): Promise<Locator> {
     await page.waitForSelector('html[data-i18n-ready="true"]', {timeout: 15_000});
     await expect(page.getByTestId('broker-risk-tab')).toBeVisible({timeout: 10_000});
     return waitForRiskLevels(page);
-}
-
-async function openFirstAssetDetail(page: Page): Promise<number> {
-    await goToAssetsPage(page);
-    const firstCard = page.getByTestId(/^asset-card-\d+$/).first();
-    await expect(firstCard).toBeVisible({timeout: 8_000});
-    const testId = await firstCard.getAttribute('data-testid');
-    const assetId = Number(testId?.replace('asset-card-', ''));
-    if (!Number.isInteger(assetId) || assetId <= 0) throw new Error('Seeded asset card must expose a numeric data-testid.');
-    await firstCard.click();
-    await expect(page.getByTestId('asset-detail-page')).toBeVisible({timeout: 12_000});
-    await expect(page.getByTestId('asset-detail-tab-overview')).toBeVisible({timeout: 12_000});
-    return assetId;
 }
 
 /** The analytic codes the mocked catalogue advertises for `portfolio` in one mode. */
@@ -2336,126 +2311,6 @@ test.describe('Risk analysis functional integration', () => {
         expect([...new Set(askedScopes)]).toEqual([String(brokerId)]);
     });
 
-    test('asset detail preserves Overview and exposes Risk through its dedicated tab', async ({page}) => {
-        await installRiskMocks(page);
-        await openFirstAssetDetail(page);
-
-        await expect(page.getByTestId('asset-detail-signals-toggle')).toBeVisible({timeout: 8_000});
-        await expect(page.getByTestId('risk-beta-banner')).toHaveCount(0);
-        await expect(page.getByTestId('asset-detail-risk-panel')).toHaveCount(0);
-
-        await page.getByTestId('asset-detail-tab-risk').click();
-        await expect(page).toHaveURL(/[?&]tab=risk(?:&|$)/);
-        await expect(page.getByTestId('asset-detail-risk-panel')).toBeVisible({timeout: 12_000});
-        await expect(page.getByTestId('risk-beta-banner')).toBeVisible();
-        await expect(page.getByTestId('risk-beta-banner')).toHaveCount(1);
-        await expect(page.getByTestId('asset-detail-signals-toggle')).toHaveCount(0);
-
-        await page.getByTestId('asset-risk-configure-signals').click();
-        await expect(page.getByTestId('asset-detail-signals-toggle')).toBeVisible({timeout: 8_000});
-        await expect(page.getByTestId('asset-detail-signals-toggle')).toHaveAttribute('aria-expanded', 'true');
-        await expect(page.getByTestId('asset-detail-risk-panel')).toHaveCount(0);
-    });
-
-    test('asset Risk runs typed scenarios, exposes replay audit and switches simulation view', async ({page}) => {
-        const requests = await installRiskMocks(page);
-        const assetId = await openFirstAssetDetail(page);
-        await page.getByTestId('asset-detail-tab-risk').click();
-        await expect(page.getByTestId('asset-detail-risk-panel')).toBeVisible({timeout: 12_000});
-
-        // The comparison section renders only once the capability catalog has landed:
-        // wait for the panel to say so, rather than for the section to appear — an
-        // absent section is otherwise indistinguishable from an unsupported one.
-        await waitForRiskCatalog(page);
-        await expect(page.getByTestId('risk-comparison-controls')).toBeVisible({timeout: 12_000});
-        await page.getByTestId('risk-comparison-asset-select-trigger').click();
-        const comparisonOption = page.getByTestId(/^search-select-option-\d+$/).first();
-        await expect(comparisonOption).toBeVisible({timeout: 5_000});
-        await comparisonOption.click();
-        await page.getByTestId('risk-comparison-run').click();
-        await expectChartCanvas(page, 'risk-comparison-chart', 8_000);
-
-        const stressBucketInputs = page.getByTestId(/^risk-stress-bucket-input-/);
-        await expect(stressBucketInputs).toHaveCount(1, {timeout: 8_000});
-        await page.getByTestId('risk-stress-show-all').check();
-        await expect.poll(() => stressBucketInputs.count(), {timeout: 8_000}).toBeGreaterThan(1);
-        const stressBucketInput = stressBucketInputs.first();
-        await expect(stressBucketInput).toBeVisible({timeout: 8_000});
-        const stressBucketTestId = await stressBucketInput.getAttribute('data-testid');
-        const stressBucketId = stressBucketTestId?.replace('risk-stress-bucket-input-', '');
-        if (!stressBucketId) throw new Error('Stress bucket input must expose its canonical bucket ID.');
-        await stressBucketInput.fill('-25');
-        await page.getByTestId('risk-stress-run').click();
-        await expect(page.getByTestId('risk-stress-impacts')).toBeVisible({timeout: 8_000});
-        await expect(page.getByTestId('risk-stress-audit')).toBeVisible();
-        await expect(page.getByTestId(`risk-stress-audit-asset-${assetId}`)).toBeVisible();
-
-        await page.getByTestId('risk-replay-proxy-select-trigger').click();
-        const proxyOption = page.getByTestId(/^search-select-option-\d+$/).first();
-        await expect(proxyOption).toBeVisible({timeout: 5_000});
-        const proxyOptionTestId = await proxyOption.getAttribute('data-testid');
-        const proxyAssetId = Number(proxyOptionTestId?.replace('search-select-option-', ''));
-        if (!Number.isInteger(proxyAssetId) || proxyAssetId <= 0) throw new Error('Replay proxy option must expose a numeric asset ID.');
-        await proxyOption.click();
-        await page.getByTestId('risk-replay-run').click();
-        await expect(page.getByTestId('risk-replay-audit')).toBeVisible({timeout: 8_000});
-        await expect(page.getByTestId(`risk-replay-audit-proxy-${assetId}`)).toBeVisible();
-        await expect(page.getByTestId('risk-replay-audit-missing-history-policy')).toBeVisible();
-        await expect(page.getByTestId('risk-replay-audit-composition-policy')).toBeVisible();
-        await expect(page.getByTestId('risk-replay-audit-proxy-series-usage')).toBeVisible();
-
-        const simulationQuery = page.waitForRequest(
-            (request) => {
-                if (request.method() !== 'POST' || !request.url().includes('/api/v1/risk/query')) return false;
-                const body = request.postDataJSON() as RiskRequest;
-                return body.analytics.some((analytic) => analytic.analytic_code === 'simulation');
-            },
-            {timeout: 10_000},
-        );
-        await expect(page.getByTestId('risk-simulation-run')).toBeEnabled();
-        await page.getByTestId('risk-simulation-run').click();
-        await simulationQuery;
-        await expect(page.getByTestId('risk-simulation-chart')).toBeVisible({timeout: 12_000});
-        await expect(page.getByTestId('risk-simulation-assumptions')).toBeVisible();
-        await page.getByTestId('risk-simulation-view-terminal').click();
-        await expect(page.getByTestId('risk-simulation-terminal-distribution')).toBeVisible({timeout: 5_000});
-
-        await expect
-            .poll(
-                () => {
-                    const assetRequests = requests.filter((request) => request.scope.kind === 'asset' && request.scope.asset_id === assetId);
-                    return new Set(assetRequests.flatMap((request) => request.analytics.map((analytic) => analytic.analytic_code)));
-                },
-                {timeout: 15_000},
-            )
-            .toEqual(new Set(['comparison', 'historical_kpi', 'historical_var', 'simulation', 'stress']));
-
-        const hypotheticalRequest = requests.flatMap((request) => request.analytics).find((analytic) => analytic.analytic_code === 'stress' && analytic.parameters?.method === 'hypothetical');
-        expect(hypotheticalRequest?.parameters).toMatchObject({
-            method: 'hypothetical',
-            dimension: 'asset_class',
-            bucket_shocks: {
-                [stressBucketId]: -0.25,
-            },
-        });
-
-        const replayRequest = requests.flatMap((request) => request.analytics).find((analytic) => analytic.analytic_code === 'stress' && analytic.parameters?.method === 'historical_replay');
-        expect(replayRequest?.parameters).toMatchObject({
-            method: 'historical_replay',
-            missing_history_policy: 'manual_proxy_or_exclude',
-            proxy_assets: [{asset_id: assetId, proxy_asset_id: proxyAssetId}],
-            excluded_assets: [],
-        });
-
-        const simulationRequest = requests.flatMap((request) => request.analytics).find((analytic) => analytic.analytic_code === 'simulation');
-        expect(simulationRequest?.parameters).toMatchObject({
-            sampling_method: 'mc',
-            path_count: 8192,
-            random_seed: 123456,
-        });
-        expect(simulationRequest?.parameters).not.toHaveProperty('seed');
-    });
-
     test('level 4 pays for its catalogue once, orders its three rungs and answers both scenarios', async ({page}) => {
         const requests = await installRiskMocks(page);
 
@@ -2513,7 +2368,7 @@ test.describe('Risk analysis functional integration', () => {
         await expect(panel.getByTestId('risk-replay')).toBeVisible();
         await expect(panel.getByTestId('risk-replay-preset')).toBeVisible();
         // One range picker for the replay's period, read inside L4's own replay block —
-        // Asset Detail's risk tab has a replay of its own, with the same testids. Bound
+        // the block, not the page, owns these testids. Bound
         // to the panel's own window rather than frozen at mount: which window it holds
         // is read after the run below, against the question the replay puts on the wire.
         // Its quick ranges sit beside the dates, all but MAX: D376 (05/10/2026) brings them
@@ -2621,8 +2476,7 @@ test.describe('Risk analysis functional integration', () => {
     /**
      * Every handle of the retired exclude-and-retry flow and of the one-line audit (D372):
      * none may come back, in any state of L4's replay. Asserted inside L4's own replay block,
-     * never on the page: Asset Detail's risk tab has a replay of its own, out of F3's scope,
-     * which reuses several of these testids.
+     * never on the page.
      */
     const RETIRED_REPLAY_TEST_IDS = ['risk-replay-blocker', 'risk-replay-exclude', 'risk-replay-exclusions', 'risk-replay-exclusion', 'risk-replay-audit'];
 

@@ -11,11 +11,11 @@
  * keep passing while serving a payload the backend no longer produces, and a
  * stale mock does not fail: it reassures.
  *
- * ⚠️ This module is ADDITIVE for its owner. `risk-asset-detail.spec.ts` is the
- * net that proves Asset Detail was left untouched (D8, D47, D82): whatever it
- * imports may be extended, never removed and never renamed.
+ * ⚠️ This module is ADDITIVE for its owner: `risk-asset-detail.spec.ts` and
+ * `risk-benchmark-shared.spec.ts` import it, so whatever they import may be
+ * extended, never removed and never renamed without moving them too.
  */
-import {expect, type Page} from '../fixtures/playwright';
+import {expect, type Locator, type Page} from '../fixtures/playwright';
 
 import {navigateTo} from '../fixtures/auth-helpers';
 
@@ -515,13 +515,18 @@ export async function installRiskMocks(page: Page, options: RiskMockOptions = {}
 }
 
 /**
- * Every section of the risk panel is gated on the capability catalog, so an
- * absent section means "unsupported" *or* "not loaded yet". The panel publishes
- * which one via `data-catalog`; wait for it before asserting on any section, or
- * the assertion is really a bet on fetch latency.
+ * Every section of the levels panel (`RiskLevelsPanel`, on the Dashboard, Broker
+ * Detail and Asset Detail alike) is gated on the capability catalog, so an absent
+ * section means "unsupported" *or* "not loaded yet". The panel publishes which one
+ * via `data-catalog`; wait for it before asserting on any section, or the assertion
+ * is really a bet on fetch latency. One panel per page: the locator is strict, so a
+ * page that ever mounted two would fail here by name. Returns the panel; a caller
+ * that also needs the base wave waits on its `data-busy="false"`.
  */
-export async function waitForRiskCatalog(page: Page): Promise<void> {
-    await expect(page.getByTestId('risk-analysis-panel').first()).toHaveAttribute('data-catalog', 'ready', {timeout: 20_000});
+export async function waitForRiskCatalog(page: Page): Promise<Locator> {
+    const panel = page.getByTestId('risk-levels-panel');
+    await expect(panel).toHaveAttribute('data-catalog', 'ready', {timeout: 20_000});
+    return panel;
 }
 
 export async function openDashboardRisk(page: Page): Promise<void> {

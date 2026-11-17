@@ -243,7 +243,7 @@ test.describe('Asset Detail Page', () => {
         // panel's first base wave has landed: a forced question still joins one in
         // flight for the same key instead of sending its own, and a first-wave
         // request sent after the wait is armed would pass for the refresh's.
-        await expect(page.getByTestId('asset-detail-risk-panel').getByTestId('risk-analysis-panel'), "premise: the risk panel's first base wave never landed").toHaveAttribute('data-busy', 'false', {timeout: 60_000});
+        await expect(page.getByTestId('asset-detail-risk-panel').getByTestId('asset-risk-tab').getByTestId('risk-levels-panel'), "premise: the risk panel's first base wave never landed").toHaveAttribute('data-busy', 'false', {timeout: 60_000});
         const refreshedRiskRequest = page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/risk/query');
         await toolbar.getByTestId('asset-detail-refresh-btn').click();
         await refreshedRiskRequest;
@@ -7411,18 +7411,18 @@ test.describe('Asset Detail Page', () => {
         await expect(riskTab).toHaveAttribute('aria-selected', 'true');
 
         await expect(page.getByTestId('asset-detail-risk-panel')).toBeVisible();
-        const configureSignals = page.getByTestId('asset-risk-configure-signals');
-        await expect(configureSignals).toBeVisible();
-        await configureSignals.click();
-
+        // Back to Overview through its own tab: the risk tab's «configure signals» shortcut, which also opened the
+        // signals panel, went with the one-number summary (RN-17, Q16-1). Price is restored by its own control below,
+        // and the signals panel — the comparison-asset sync further down drives it — is opened by its own toggle,
+        // asked for its state first: it may already be open.
+        await overviewTab.click();
         await expect(overviewTab).toHaveAttribute('aria-selected', 'true');
-        await expect(chart).toHaveAttribute('data-primary-mode', 'price');
-        await expect(pricePrimary).toHaveAttribute('aria-pressed', 'true');
+        await expect(page.getByTestId('asset-detail-risk-panel')).toHaveCount(0);
         const signalsToggle = page.getByTestId('asset-detail-signals-toggle');
         await expect(signalsToggle).toBeVisible();
+        if ((await signalsToggle.getAttribute('aria-expanded')) !== 'true') await signalsToggle.click();
         await expect(signalsToggle).toHaveAttribute('aria-expanded', 'true');
         await expect(page.getByTestId('asset-detail-signals-panel')).toBeVisible();
-        await expect(signalsToggle).toBeInViewport();
 
         await pricePrimary.click();
         await expect(chart).toHaveAttribute('data-primary-mode', 'price');
