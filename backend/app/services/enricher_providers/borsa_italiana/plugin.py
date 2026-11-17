@@ -25,6 +25,7 @@ from its stable facts (kind, issuer, coupon type and frequency, maturity) in the
 from __future__ import annotations
 
 import gettext
+import re
 from collections.abc import Iterable, Iterator, Mapping
 from datetime import date
 from decimal import Decimal
@@ -52,12 +53,16 @@ from backend.app.services.platform.provider_registry import register_provider
 from backend.app.utils.asset.sector import validate_sector
 
 try:
-    from borsa_italiana_scraping import Sessione, cerca, ottieni_scheda
-    from borsa_italiana_scraping.eccezioni import RateLimitRaggiunto, StrumentoNonTrovato
+    from borsa_italiana_scraping import Sessione, cerca, ottieni_dati_fondo, ottieni_scheda
+    from borsa_italiana_scraping.eccezioni import DatiNonDisponibili, RateLimitRaggiunto, StrumentoNonTrovato
 except ImportError:  # pragma: no cover — the library is in the lock; without it every call answers «error»
     Sessione = None
     cerca = None
+    ottieni_dati_fondo = None
     ottieni_scheda = None
+
+    class DatiNonDisponibili(Exception):  # type: ignore[no-redef]
+        """Stand-in when the library is missing."""
 
     class RateLimitRaggiunto(Exception):  # type: ignore[no-redef]
         """Stand-in when the library is missing."""
@@ -100,6 +105,14 @@ _BOND_VOICES = frozenset(
     }
 )
 _STOCK_VOICES = frozenset({"sector", "legal_form"})
+#: A fund page gives little that is the profile's: its currency and its launch date. Not written: «Gestione» (the
+#: management fee, not the TER), the fund's assets (no unit), the management company (not on the recorded page).
+_FUND_VOICES = frozenset({"fund_currency", "inception_date"})
+#: The identifier type of a fund: Borsa Italiana's internal code (``1FADB716664``), the one its fund page is reached by
+#: (searching by ISIN does not find funds); the price assignment stores it as ``codice_fondo``.
+FUND_CODE = "BI_FUND_CODE"
+_FUND_LAUNCH = "data di partenza"
+_SHORT_DATE = re.compile(r"(\d{1,2})/(\d{1,2})/(\d{2}|\d{4})")
 #: The bond figures the page gives «as of» its reference price date.
 _AS_OF_REFERENCE_PRICE = ("yield_gross", "yield_net", "modified_duration", "accrued_interest")
 
@@ -274,25 +287,36 @@ def _country_name(iso3: str, language: str) -> str | None:
 
 
 def _written_date(day: date, language: str) -> str:
-    """«10 October 2028» / «10 ottobre 2028»: the month in words, from a fixed table (never the locale)."""
-    return f"{day.day} {_MONTH_NAMES[language][day.month - 1]} {day.year}"
+    """«10 October 2028» / «10 ottobre 2028»: the month in words, from a fixed table (never the locale); in Italian the
+    first of the month is «1º» (read «primo»)."""
+    number = "1º" if language == "it" and day.day == 1 else str(day.day)
+    return f"{number} {_MONTH_NAMES[language][day.month - 1]} {day.year}"
 
 
-def compose_description(voices: Mapping[str, Any], language: str) -> str:
+def _maturity_part(day: date, language: str) -> str:
+    """«matures on 1 May 2031» / «scade il 1º maggio 2031», «scade l'8 maggio …»: the article elides before 8 and 11."""
+    if language == "it" and day.day in (8, 11):
+        return f"scade l'{_written_date(day, language)}"
+    return _MATURITY_PART[language].format(_written_date(day, language))
+
+
+def compose_description(voices: Mapping[str, Any], language: str) -> str | None:
     """The sentence that describes a bond from its stable voices, in ``language``: kind, issuer, coupon type and
-    frequency, then its maturity."""
+    frequency, then its maturity. None when nothing beyond the kind is known: «Bond.» says nothing, and a source with
+    nothing to say must not replace the text that was there (plan §12)."""
     country = voices.get("issuer_country")
     issuer = (_country_name(country, language) if country is not None else None) or voices.get("issuer_name")
-    parts = [
-        _KIND[language].get(voices.get("issuer_type"), _KIND[language][None]),
+    facts = [
         _ISSUER_PART[language].format(issuer) if issuer else None,
         _COUPON_TYPE_PART[language].get(voices.get("coupon_type")),
         _FREQUENCY_PART[language].get(voices.get("coupon_frequency")),
     ]
-    sentence = ", ".join(part for part in parts if part)
     maturity = voices.get("maturity_date")
+    if maturity is None and not any(facts):
+        return None
+    sentence = ", ".join(part for part in [_KIND[language].get(voices.get("issuer_type"), _KIND[language][None]), *facts] if part)
     if maturity is not None:
-        sentence += "; " + _MATURITY_PART[language].format(_written_date(maturity, language))
+        sentence += "; " + _maturity_part(maturity, language)
     return sentence + "."
 
 
@@ -302,7 +326,8 @@ def sheet_voices(sheet: Any, language: str = _DEFAULT_LANGUAGE) -> dict[str, Any
     kind = _text(sheet.tipo)
     if kind == "obbligazione":
         voices = bond_voices(sheet)
-        return {**voices, "description": compose_description(voices, language)}
+        description = compose_description(voices, language)
+        return {**voices, "description": description} if description is not None else voices
     if kind == "azione":
         return {"legal_form": "share", **({"sector": {sector: "1"}} if (sector := _share_sector(sheet)) is not None else {})}
     return {}
@@ -313,6 +338,37 @@ def _share_sector(sheet: Any) -> str | None:
     know would be stored as «Other» at 100 %, which says nothing). The helper writes the one log line naming it."""
     sector = _text(sheet.settore)
     return sector if sector is None or validate_sector(sector) else None
+
+
+def _launch_date(value: Any) -> date | None:
+    """«14/03/22» → 2022-03-14 (a two-digit year in this century up to this year, else the last), «14/03/2022» too."""
+    match = _SHORT_DATE.fullmatch(_text(value) or "")
+    if match is None:
+        return None
+    day, month, year = int(match.group(1)), int(match.group(2)), int(match.group(3))
+    if len(match.group(3)) == 2:
+        year += 2000 if year <= date.today().year % 100 else 1900
+    try:
+        return date(year, month, day)
+    except ValueError:
+        return None
+
+
+def fund_voices(fund: Any) -> dict[str, Any]:
+    """The catalogue voices of a fund page: its currency and its launch date («Data di partenza»)."""
+    characteristics = {str(key).strip().lower(): value for key, value in (fund.caratteristiche or {}).items()}
+    voices = {"fund_currency": _text(fund.valuta), "inception_date": _launch_date(characteristics.get(_FUND_LAUNCH))}
+    return {key: value for key, value in voices.items() if value is not None}
+
+
+def _fund_code(binding: EnricherBinding) -> str | None:
+    """The internal fund code a binding reads by: its identifier for a ``BI_FUND_CODE`` binding, its ``codice_fondo``
+    parameter for an ISIN one (the price assignment's shape); None for a sheet."""
+    if binding.identifier_type == FUND_CODE:
+        return _text(binding.identifier)
+    if binding.identifier_type == "ISIN":
+        return _text(binding.params.get("codice_fondo"))
+    return None
 
 
 def sheet_source_dates(sheet: Any, voices: Mapping[str, Any]) -> dict[str, date]:
@@ -334,10 +390,10 @@ class BorsaItalianaEnricher(EnricherPlugin):
     name = "Borsa Italiana"
     icon = "https://www.borsaitaliana.it/media-rwd/assets/images/favicon.ico"
     terms = EnricherTerms.PRICE_SOURCE
-    accepted_identifier_types = ("ISIN",)
-    voices = {AssetType.BOND: _BOND_VOICES, AssetType.STOCK: _STOCK_VOICES}
-    #: Bonds first; for shares Yahoo leads (C3), Borsa Italiana gives the sector of the ones listed in Milan.
-    default_priority = {asset_type: {AssetType.BOND: 10, AssetType.STOCK: 20}.get(asset_type) for asset_type in AssetType}
+    accepted_identifier_types = ("ISIN", FUND_CODE)
+    voices = {AssetType.BOND: _BOND_VOICES, AssetType.STOCK: _STOCK_VOICES, AssetType.FUND: _FUND_VOICES}
+    #: Bonds and funds first; for shares Yahoo leads (C3), Borsa Italiana gives the sector of the ones listed in Milan.
+    default_priority = {asset_type: {AssetType.BOND: 10, AssetType.FUND: 10, AssetType.STOCK: 20}.get(asset_type) for asset_type in AssetType}
 
     @property
     def params_schema(self) -> list[dict]:
@@ -354,6 +410,7 @@ class BorsaItalianaEnricher(EnricherPlugin):
             },
             {"key": "mic", "type": "string", "required": False, "label": "Market MIC", "x-i18n-key": "enrichers.borsa_italiana.params.mic"},
             {"key": "platform", "type": "string", "required": False, "label": "Platform", "x-i18n-key": "enrichers.borsa_italiana.params.platform"},
+            {"key": "codice_fondo", "type": "string", "required": False, "label": "Fund internal code", "x-i18n-key": "enrichers.borsa_italiana.params.codice_fondo"},
         ]
 
     @property
@@ -361,9 +418,14 @@ class BorsaItalianaEnricher(EnricherPlugin):
         return [
             {"binding": {"identifier_type": "ISIN", "identifier": "IT0005565400"}, "asset_type": AssetType.BOND.value},  # BTP Valore Oct 2028
             {"binding": {"identifier_type": "ISIN", "identifier": "IT0003128367"}, "asset_type": AssetType.STOCK.value},  # Enel
+            {"binding": {"identifier_type": FUND_CODE, "identifier": "1FADB716664"}, "asset_type": AssetType.FUND.value},  # Anima Dinamix
         ]
 
     def page_url(self, binding: EnricherBinding) -> str | None:
+        code = _fund_code(binding)
+        if code is not None:
+            # A fund lives on its detail page, by the internal code: the search page does not resolve a fund's ISIN
+            return f"https://www.borsaitaliana.it/borsa/fondi/dettaglio/{code}.html?lang={_language(binding)}"
         url = f"https://www.borsaitaliana.it/borsa/search/scheda.html?code={binding.identifier}&lang={_language(binding)}"
         mic = binding.params.get("mic")
         platform = binding.params.get("platform")
@@ -380,7 +442,16 @@ class BorsaItalianaEnricher(EnricherPlugin):
         params = binding.params
         return ottieni_scheda(binding.identifier, params.get("mic"), _language(binding), sessione=session, platform=params.get("platform"))
 
+    @staticmethod
+    def _fund(code: str, session: Any = None) -> Any:
+        if ottieni_dati_fondo is None:
+            raise RuntimeError("borsa-italiana-scraping is not installed")
+        return ottieni_dati_fondo(code, sessione=session)
+
     def recognize(self, binding: EnricherBinding) -> EnricherRecognition:
+        code = _fund_code(binding)
+        if code is not None:
+            return self._recognize_fund(binding, code)
         if binding.identifier_type != "ISIN":
             return EnricherRecognition(found=False)
         try:
@@ -390,6 +461,17 @@ class BorsaItalianaEnricher(EnricherPlugin):
         except RateLimitRaggiunto as error:
             raise AssetRateLimitedError(f"Borsa Italiana refused for too many requests: {error}") from error
         return EnricherRecognition(found=True, name=_text(sheet.nome), page_url=_text(sheet.url_pagina) or self.page_url(binding))
+
+    def _recognize_fund(self, binding: EnricherBinding, code: str) -> EnricherRecognition:
+        try:
+            fund = self._fund(code)
+        except (StrumentoNonTrovato, DatiNonDisponibili):
+            return EnricherRecognition(found=False)
+        except RateLimitRaggiunto as error:
+            raise AssetRateLimitedError(f"Borsa Italiana refused for too many requests: {error}") from error
+        isin = _text(fund.isin)
+        # The page's ISIN is a strong identifier: the cascade goes on with it to the other enrichers (B4)
+        return EnricherRecognition(found=True, name=_text(fund.nome), page_url=_text(fund.url) or self.page_url(binding), identifiers={"ISIN": isin} if isin else {})
 
     def read(self, bindings: list[EnricherBinding], keys: Iterable[str] | None = None) -> Iterator[EnricherReadItem]:
         # One library session for the whole read: it keeps the site's cookies and paces its own requests; closed
@@ -404,13 +486,22 @@ class BorsaItalianaEnricher(EnricherPlugin):
     def _read_with(self, session: Any, bindings: list[EnricherBinding]) -> Iterator[EnricherReadItem]:
         refused = False
         for index, binding in enumerate(bindings):
-            if binding.identifier_type != "ISIN":
+            code = _fund_code(binding)
+            if code is None and binding.identifier_type != "ISIN":
                 yield EnricherReadItem(index=index, status=EnricherReadStatus.NOT_FOUND)
                 continue
             if refused:
                 yield EnricherReadItem(index=index, status=EnricherReadStatus.ERROR, error_code=RATE_LIMITED)
                 continue
             try:
+                if code is not None:
+                    try:
+                        fund = self._fund(code, session)
+                    except DatiNonDisponibili:  # a fund page without its data: not found, as a missing one
+                        yield EnricherReadItem(index=index, status=EnricherReadStatus.NOT_FOUND)
+                        continue
+                    yield EnricherReadItem(index=index, status=EnricherReadStatus.OK, values=fund_voices(fund))
+                    continue
                 sheet = self._sheet(binding, session)
             except StrumentoNonTrovato:
                 yield EnricherReadItem(index=index, status=EnricherReadStatus.NOT_FOUND)
