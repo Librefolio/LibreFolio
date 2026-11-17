@@ -114,6 +114,9 @@
         /** Asset name, used by the inline identifier chooser. */
         assetName?: string;
         zIndex?: number;
+        /** The window's title and the line under it (`description`; `intro` is a Svelte mount option); the provider's defaults when absent (the profile names the sources, E10c3). */
+        title?: string;
+        description?: string;
         /**
          * Applied fields, plus the resolved identifier decisions.
          * `resolutions` is keyed by field name and only carries `identifier_*` rows.
@@ -122,7 +125,7 @@
         oncancel?: () => void;
     }
 
-    let {open = $bindable(false), differences = [], assetName = '', zIndex = 70, onapply, oncancel}: Props = $props();
+    let {open = $bindable(false), differences = [], assetName = '', zIndex = 70, title, description, onapply, oncancel}: Props = $props();
 
     // =========================================================================
     // State — local copy for checkbox management
@@ -312,8 +315,8 @@
 <ModalBase {open} maxWidth="2xl" onRequestClose={handleCancel} {zIndex} testId="comparison-modal">
     <!-- Header -->
     <div class="flex items-center justify-between px-6 py-4 border-b border-lf-subtle">
-        <h2 class="text-lg font-semibold text-lf-primary">
-            {$t('assets.comparison.title')}
+        <h2 class="text-lg font-semibold text-lf-primary" data-testid="comparison-title">
+            {title ?? $t('assets.comparison.title')}
         </h2>
         <button type="button" onclick={handleCancel} class="text-lf-muted hover:text-lf-secondary transition-colors">
             <X size={20} />
@@ -322,8 +325,8 @@
 
     <!-- Body -->
     <div class="px-6 py-4 space-y-3 max-h-[60vh] overflow-y-auto" data-testid="comparison-body" data-selected-count={selectedCount} data-total-count={totalCount}>
-        <p class="text-sm text-lf-secondary">
-            {$t('assets.comparison.description')}
+        <p class="text-sm text-lf-secondary" data-testid="comparison-intro">
+            {description ?? $t('assets.comparison.description')}
         </p>
 
         <!-- Grouped items — uniform card layout for all types -->

@@ -57,7 +57,7 @@
 import {describe, expect, it, vi} from 'vitest';
 import type {Mock} from 'vitest';
 import {get} from 'svelte/store';
-import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {_} from '$lib/i18n';
 import {currentLanguage} from '$lib/stores/app/language';
 import {uiLocale} from '$lib/stores/app/uiLocale';
@@ -226,6 +226,20 @@ describe('ProviderComparisonModal — the asset profile (plan 68, E10b)', () => 
     const FUND = {key: 'fund', title: 'Fund title'};
     const KEY_FIGURES = {key: 'key_figures', title: 'Key figures title'};
     const label = (box: HTMLElement) => within(box).getByTestId(/^comparison-(current|provider)-label-/);
+
+    it('takes a title and a description from the caller (the profile: «Confronto con le fonti»), and keeps the defaults without', async () => {
+        await setupI18n();
+        mount([profileDiff('ter', KEY_FIGURES)], {title: 'Compare with the sources', description: 'The sources gave other values.'});
+        await settled();
+        expect(screen.getByTestId('comparison-title')).toHaveTextContent(/^Compare with the sources$/);
+        expect(screen.getByTestId('comparison-intro')).toHaveTextContent(/^The sources gave other values\.$/);
+        cleanup();
+
+        mount([stringDiff('currency', 'USD', 'EUR')]);
+        await settled();
+        expect(screen.getByTestId('comparison-title')).toHaveTextContent(get(_)('assets.comparison.title'));
+        expect(screen.getByTestId('comparison-intro')).toHaveTextContent(get(_)('assets.comparison.description'));
+    });
 
     it('names the source above its value instead of «provider value», and keeps the default without a name', async () => {
         await setupI18n();
