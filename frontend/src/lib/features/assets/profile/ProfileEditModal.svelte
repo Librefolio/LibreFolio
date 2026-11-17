@@ -370,8 +370,9 @@
         }
         if (voice.shape === 'currency') return {type: 'editable-select', value: row.input, options: currencyOptions, placeholder: $t('common.select'), testId: `profile-row-value-${row.id}`, onchange: setInput};
         if (voice.shape === 'country') return {type: 'editable-select', value: row.input, options: countryOptions, placeholder: $t('common.select'), testId: `profile-row-value-${row.id}`, onchange: setInput};
-        const placeholder = voice.shape === 'percentage' ? '%' : voice.unit ? $t(`assets.profile.units.${voice.unit}`) : '';
-        return {type: 'editable-text', value: row.input, placeholder, onchange: setInput};
+        // The unit beside the field (E10c3): «0.19» alone reads as 19 % on a TER
+        const unit = voice.shape === 'percentage' ? '%' : voice.unit ? $t(`assets.profile.units.${voice.unit}`) : undefined;
+        return {type: 'editable-text', value: row.input, unit, onchange: setInput};
     }
 
     function nowCell(row: EditRow): CellContent {
@@ -648,6 +649,7 @@
                             hasProvider={canAsk}
                             askingProvider={asking === voice.key}
                             onAskProvider={() => askKeys([voice.key], voice.key)}
+                            askLabel={$t('assets.profile.edit.askSource')}
                             zIndex={zIndex + 5}
                         />
                     </section>
@@ -708,4 +710,13 @@
     </div>
 </ModalBase>
 
-<ProviderComparisonModal bind:open={comparisonOpen} differences={diffItems} {assetName} zIndex={zIndex + 10} onapply={(fields) => applyComparison(fields)} oncancel={() => (differences = [])} />
+<ProviderComparisonModal
+    bind:open={comparisonOpen}
+    differences={diffItems}
+    {assetName}
+    zIndex={zIndex + 10}
+    title={$t('assets.profile.edit.comparisonTitle')}
+    description={$t('assets.profile.edit.comparisonDescription')}
+    onapply={(fields) => applyComparison(fields)}
+    oncancel={() => (differences = [])}
+/>

@@ -12,11 +12,15 @@
  * - «Chiedi tutto» asks without keys; an empty voice is filled «dalla fonte», an equal one shows nothing, a different
  *   one opens the comparison window grouped and named, and the differences chosen become «dalla fonte»;
  * - «Chiedi» on a row asks for its voice only;
+ * - the sources are named as sources (E10c3): the comparison window's title and intro, the panels' «ask» button; a
+ *   percentage field shows «%» beside it, a number its unit;
  * - in save mode the window sends `PATCH /assets` with `profilePatch`, marks the rows the backend refuses
  *   (`profileValueInvalid`), and hands the changes back only once committed.
  */
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
+import {get} from 'svelte/store';
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
+import {_} from '$lib/i18n';
 import ProfileEditModal from './ProfileEditModal.svelte';
 import type {ProfileVoice} from './profileStore';
 import type {AskAnswer, PendingChanges} from './profileEditState';
@@ -169,6 +173,33 @@ describe('ProfileEditModal — rows and panels', () => {
         const {onkeep, validate} = mount({assetId: null, askTarget: {asset_type: 'ETF', enrichers: {}}});
         await keep(onkeep);
         expect(validate).not.toHaveBeenCalled();
+    });
+});
+
+describe('ProfileEditModal — the sources and the units (E10c3)', () => {
+    it('a percentage field shows «%» beside it, a number its unit', async () => {
+        mount({catalogue: [...CATALOGUE, voice('modified_duration', 'number', {unit: 'years', groups: ['key_figures']})]});
+        const id = await addRowWithVoice('ter');
+        const unit = (rowId: string) => row(rowId)?.querySelector('[data-testid="cell-editable-text-unit"]');
+        expect(unit(id)).toHaveTextContent(/^%$/);
+        expect(unit('fund_provider')).toBeNull();
+        await fireEvent.click(screen.getByTestId('profile-edit-add-row'));
+        await fireEvent.click(screen.getByTestId('profile-row-voice-row-2-button'));
+        await fireEvent.click(screen.getByTestId('profile-row-voice-row-2-option-modified_duration'));
+        expect(unit('row-2')).toHaveTextContent(get(_)('assets.profile.units.years'));
+    });
+
+    it('the panels ask «the source», not «the provider»', () => {
+        mount();
+        expect(screen.getByTestId('distribution-ask-provider-sector')).toHaveAttribute('title', get(_)('assets.profile.edit.askSource'));
+    });
+
+    it('the comparison window is «compare with the sources»', async () => {
+        const {ask} = mount();
+        ask.mockResolvedValue({voices: {ter: {value: '0.0019', source: 'justetf'}}, outcomes: [{code: 'justetf', status: 'ok'}]});
+        await fireEvent.click(screen.getByTestId('profile-edit-ask-all'));
+        await waitFor(() => expect(screen.getByTestId('comparison-title')).toHaveTextContent(get(_)('assets.profile.edit.comparisonTitle')));
+        expect(screen.getByTestId('comparison-intro')).toHaveTextContent(get(_)('assets.profile.edit.comparisonDescription'));
     });
 });
 
