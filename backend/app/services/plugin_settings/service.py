@@ -168,10 +168,32 @@ def _groups(family: str | None, plugin_code: str | None) -> list[SettingsGroup]:
     for name, group in sorted(all_groups().items()):
         if plugin_code is not None and name != plugin_code:
             continue
-        if (group.test_only and plugin_code is None) or is_withheld(group):
+        if (group.test_only and plugin_code is None) or is_withheld(group) or _switched_off_group(group):
             continue
         groups.append(group)
     return groups
+
+
+def _switched_off_group(group: SettingsGroup) -> bool:
+    """X1: the instance's allow-lists switch off every plugin that reads ``group``. Such a group is not served, as its
+    plugins are not: no entry, and a write to it is ``UNKNOWN_FIELD`` (no trace, as decision N2).
+
+    False without any allow-list, and while one plugin that reads it is served (any family); true only when at least one
+    reader is switched off by a list. A group no plugin reads (a test's) stays as it is.
+    """
+    listing = [registry for registry in FAMILY_REGISTRIES.values() if registry._enabled_codes() is not None]  # noqa: SLF001 — the registries' own allow-list
+    if not listing:
+        return False
+    for registry in FAMILY_REGISTRIES.values():
+        for code in registry.list_plugin_codes():
+            if group.name in (getattr(registry.get_plugin(code), "settings_groups", ()) or ()):
+                return False
+    for registry in listing:
+        registry.auto_discover()
+        for code, plugin_class in registry._get_storage().items():  # noqa: SLF001 — every registered plugin, the switched-off ones included
+            if not registry._withheld(plugin_class) and group.name in (getattr(plugin_class, "settings_groups", ()) or ()) and registry._switched_off(code):  # noqa: SLF001 — see above
+                return True
+    return False
 
 
 def _group_users(group: SettingsGroup) -> list[PluginSettingsPluginRef]:
@@ -313,7 +335,7 @@ def _declared_fields(family: str, plugin_code: str) -> tuple[PluginSettingField,
     when there is no such plugin or group. A test-only one is found when named, as a write always names it."""
     if family == GROUP_FAMILY:
         group = served_group(plugin_code)
-        return group.fields if group is not None else None
+        return group.fields if group is not None and not _switched_off_group(group) else None
     plugin = _find_plugin(family, plugin_code)
     return plugin.fields if plugin is not None else None
 

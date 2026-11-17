@@ -35,6 +35,7 @@ from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.assets.provider_policy import provider_priority, provider_tier
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.assets.search import AssetSearchService
+from backend.app.services.plugin_settings.readiness import plugins_readiness
 from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
 
 logger = get_logger(__name__)
@@ -113,7 +114,8 @@ async def list_providers(
 ):
     """List all available asset pricing providers.
 
-    Optionally filter by provider codes (comma-separated).
+    Optionally filter by provider codes (comma-separated). ``configured`` and ``missing_settings`` are the caller's: one
+    readiness check for the whole list (plan 76, N1).
     """
     result = []
     filter_codes = None
@@ -159,6 +161,10 @@ async def list_providers(
                 )
             )
 
+    readiness = await plugins_readiness("asset", [info.code for info in result], user_id=_current_user.id)
+    for info in result:
+        state = readiness[info.code]
+        info.configured, info.missing_settings = state.configured, list(state.missing)
     return result
 
 

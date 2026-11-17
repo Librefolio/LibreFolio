@@ -323,6 +323,9 @@ This ensures resilience to individual provider outages and supports currency pai
     - `invalid_rate`: any other `ValueError` of the item (*Rate N: Validation error: …*);
     - `internal_error`: an unexpected error, logged (*FX rate upsert failed*) and never echoed;
       `errors` says *Rate N: Failed: internal error*.
+- **Each route reads its own provider.** The legs are kept per provider (`leg_rates` keyed
+  `(base, quote, provider, date)`, X1b): the routes of a pair are fetched at once, and a route
+  computes and stores only the rates of the providers its steps name, under their name.
 - **Counters.** `points_fetched` counts the rates computed for the pair in the range, the skipped
   ones left out; `points_changed` counts the new dates plus the dates whose value changed, compared
   at storage precision (`_count_actual_changes()`, which reads the stored rate through
@@ -330,8 +333,9 @@ This ensures resilience to individual provider outages and supports currency pai
   compares as a change, and the upsert overwrites it; before, a stored inf or `1e60` made the
   comparison raise and the pair's sync fail. `ensure_rates_multi_source()` compares the same way.
 - **Empty is not a failure.** The next route is tried only when a leg of the current one fails,
-  its wait for the legs times out (120 s) or its computation raises; a rate the column cannot keep
-  does none of these. A route that answers with no rate in the range ends the pair as `partial`:
+  has no provider to fetch it (*Route N: provider not available — …*: a code no provider has, a
+  provider the allow-list `LIBREFOLIO_FX_PROVIDERS_ENABLED` switches off, X1b), its wait for the legs
+  times out (120 s) or its computation raises; a rate the column cannot keep does none of these. A route that answers with no rate in the range ends the pair as `partial`:
   the next route is not tried. A single-step route whose every rate in the range was skipped says
   so in its `message`, *Provider P returned no rate the database can keep for B/Q in start–end:*
   followed by the limits; a chain keeps its *Chain … produced no complete rates* message, and the

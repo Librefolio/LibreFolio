@@ -28,6 +28,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Risque : la période et la devise sur lesquelles les chiffres sont mesurés sont écrites sous le titre et au-dessus des sections du laboratoire.
 - Choc hypothétique : les classes d'actifs qu'un scénario laisse de côté, avec un choc nul, sont nommées sous le total.
 - Une icône de documentation à droite d'autres panneaux (graphiques et positions du Dashboard, analyse des lots, liste et laboratoire des actifs, détail de l'actif, courtiers, FX, fichiers et sauvegardes, paramètres) ouvre la page correspondante du manuel, avec une courte explication du panneau dans son infobulle.
+- Les administrateurs peuvent ne garder actifs que certains fournisseurs de prix et de taux de change sur une instance (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`) : les autres disparaissent des listes, de la recherche, des affectations et des paramètres ; les affectations existantes gardent leurs prix enregistrés. MANUAL reste toujours actif.
 
 ### 🔄 Modifié
 
@@ -79,6 +80,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Laboratoire du risque : après une synchronisation, le laboratoire redemande quels actifs peuvent être analysés sur la période ; un actif dont la synchronisation a apporté les prix devient sélectionnable sans recharger la page.
 - Laboratoire du risque : chaque section demande une seule fois, à l'ouverture, quels actifs elle peut analyser, au lieu de deux.
 - La fenêtre «Configuration du Planning» défile à l'intérieur quand elle est plus haute que l'écran : «Enregistrer» n'est plus coupé sur une petite fenêtre.
+- Taux de change : quand une paire a plusieurs routes, chaque route enregistre désormais les taux de son propre fournisseur. Auparavant, une paire pouvait enregistrer le taux d'une autre route sous le nom du fournisseur de la première ; une nouvelle synchronisation de la période réécrit les lignes.
 
 ### ⚠️ Changements incompatibles
 

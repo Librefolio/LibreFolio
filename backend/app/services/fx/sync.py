@@ -62,9 +62,10 @@ def _collect_leg_rates(
     leg_rates: dict[tuple, Decimal],
     leg_unusable: dict[tuple[str, str, str], list[date]],
 ) -> None:
-    """A provider's observations into ``leg_rates``, normalized (alphabetical pair, the rate inverted when needed). One
-    that is not a finite rate above 0, or whose inverse overflows or underflows to 0 (X-R50), goes into ``leg_unusable``
-    instead: skipped, and said by the pairs whose route uses the leg (X-R38)."""
+    """A provider's observations into ``leg_rates``, normalized (alphabetical pair, the rate inverted when needed) and
+    keyed by the provider too (X1b): two routes of a pair are fetched at once, and each reads its own provider's rates
+    only. One that is not a finite rate above 0, or whose inverse overflows or underflows to 0 (X-R50), goes into
+    ``leg_unusable`` instead: skipped, and said by the pairs whose route uses the leg (X-R38)."""
     for _currency, observations in rates_by_currency.items():
         for obs_date, obs_base, obs_quote, rate in observations:
             normalized = normalize_storable_rate(obs_base, obs_quote, rate)
@@ -72,13 +73,20 @@ def _collect_leg_rates(
                 leg_unusable.setdefault((min(obs_base, obs_quote), max(obs_base, obs_quote), provider_code), []).append(obs_date)
                 continue
             norm_base, norm_quote, norm_rate = normalized
-            leg_rates[(norm_base, norm_quote, obs_date)] = norm_rate
+            leg_rates[(norm_base, norm_quote, provider_code, obs_date)] = norm_rate
+
+
+def _route_legs(steps: list[dict], leg_rates: dict[tuple, Decimal]) -> dict[tuple, Decimal]:
+    """The rates of the route's own legs, each from the provider its step names, keyed ``(base, quote, date)`` as
+    ``compute_chain_rate`` reads them (X1b): never another route's provider's answer for the same pair."""
+    wanted = {(min(step["from"], step["to"]), max(step["from"], step["to"]), step["provider"]) for step in steps}
+    return {(base, quote, day): rate for (base, quote, provider, day), rate in leg_rates.items() if (base, quote, provider) in wanted}
 
 
 def _storable_chain_rates(route, steps: list[dict], leg_rates: dict[tuple, Decimal], dates: list[date]) -> tuple[list[tuple[date, str, str, Decimal]], list[date]]:
     """Each date's chain rate, normalized and truncated to what ``fx_rates.rate`` keeps, and the dates skipped (X-R38): a
     leg present but unusable, or a chain rate the column cannot keep (``1E+20``, or 0 once truncated). A date a leg lacks
-    is ``compute_chain_rate``'s strict date matching, not a skip."""
+    is ``compute_chain_rate``'s strict date matching, not a skip. ``leg_rates`` is the route's own (``_route_legs``)."""
     computed: list[tuple[date, str, str, Decimal]] = []
     unusable: list[date] = []
     for d in dates:
@@ -525,7 +533,7 @@ async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurre
     pair_routes_map: dict[str, list[FxConversionRoute]] = {}  # pair_slug → [route1, route2, ...]
     provider_legs: dict[str, set[str]] = {}  # provider_code → {target_currencies}
     leg_events: dict[tuple[str, str, str], asyncio.Event] = {}  # (norm_base, norm_quote, provider) → Event
-    leg_rates: dict[tuple, Decimal] = {}  # (norm_base, norm_quote, date) → rate
+    leg_rates: dict[tuple, Decimal] = {}  # (norm_base, norm_quote, provider, date) → rate (X1b: keyed by provider)
     leg_errors: dict[tuple[str, str, str], str] = {}  # (norm_base, norm_quote, provider) → error msg
     leg_unusable: dict[tuple[str, str, str], list[date]] = {}  # (norm_base, norm_quote, provider) → dates not normalizable (X-R38)
     provider_refusals: dict[str, float | None] = {}  # PROVIDER CODE (upper) → retry_after: paused or refused for too many requests
@@ -668,6 +676,7 @@ async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurre
                 # Wait for all leg events of THIS route
                 my_events = []
                 my_leg_keys = []
+                missing_legs: list[str] = []
                 for step in steps:
                     fc, tc = step["from"], step["to"]
                     prov = step["provider"]
@@ -677,12 +686,22 @@ async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurre
                     norm_q = max(fc, tc)
                     leg_key = (norm_b, norm_q, prov)
                     if leg_key in leg_events:
-                        my_events.append(leg_events[leg_key].wait())
+                        my_events.append(leg_events[leg_key])
                         my_leg_keys.append(leg_key)
+                    else:
+                        missing_legs.append(f"{fc}-{tc}({prov})")
+
+                # X1b: a leg nobody fetches (its provider is absent: switched off, or a code no provider has; or it
+                # cannot serve the leg) fails the route as a failing provider does: the next route, with its own label
+                if missing_legs:
+                    err_msg = f"Route {route_idx + 1}: provider not available — {', '.join(missing_legs)}"
+                    fallback_errors.append(err_msg)
+                    logger.warning(f"Pair {pair_slug}: {err_msg}, trying next route...")
+                    continue  # Try next route
 
                 if my_events:
                     try:
-                        await asyncio.wait_for(asyncio.gather(*my_events), timeout=120.0)
+                        await asyncio.wait_for(asyncio.gather(*(event.wait() for event in my_events)), timeout=120.0)
                     except TimeoutError:
                         err_msg = f"Route {route_idx + 1}: timeout waiting for legs (120s)"
                         fallback_errors.append(err_msg)
@@ -756,8 +775,8 @@ async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurre
         computed_rates = []
         unusable = _unusable_leg_dates([step])
         for key, rate in leg_rates.items():
-            if key[0] == norm_b and key[1] == norm_q:
-                d = key[2]
+            if key[0] == norm_b and key[1] == norm_q and key[2] == provider_code:
+                d = key[3]
                 if _is_date_within_sync_range(d, start_date, end_date):
                     # What fx_rates.rate keeps; a rate it cannot keep is skipped, never stored (X-R38)
                     stored = storable_fx_rate(rate)
@@ -836,10 +855,11 @@ async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurre
         step_provider_codes = [s["provider"] for s in steps]
         source = "CHAIN:" + "+".join(step_provider_codes)
 
-        # Collect all dates from leg_rates
-        all_dates = sorted({key[2] for key in leg_rates.keys() if _is_date_within_sync_range(key[2], start_date, end_date)})
+        # The dates of the route's own legs (X1b: never another provider's answer for the same pair)
+        own_legs = _route_legs(steps, leg_rates)
+        all_dates = sorted({key[2] for key in own_legs if _is_date_within_sync_range(key[2], start_date, end_date)})
 
-        computed_rates, unusable = _storable_chain_rates(route, steps, leg_rates, all_dates)
+        computed_rates, unusable = _storable_chain_rates(route, steps, own_legs, all_dates)
         _warn_unusable_rates(pair_slug, source, _unusable_leg_dates(steps) + unusable)
 
         if computed_rates:
@@ -882,7 +902,7 @@ async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurre
             norm_q = max(fc, tc)
             leg_key_prefix = (norm_b, norm_q)
             # Count dates this leg has in the requested range
-            leg_date_count = sum(1 for key in leg_rates.keys() if key[0] == leg_key_prefix[0] and key[1] == leg_key_prefix[1] and _is_date_within_sync_range(key[2], start_date, end_date))
+            leg_date_count = sum(1 for key in leg_rates if key[0] == leg_key_prefix[0] and key[1] == leg_key_prefix[1] and key[2] == prov and _is_date_within_sync_range(key[3], start_date, end_date))
             # Check if this leg had errors
             leg_err_key = (norm_b, norm_q, prov)
             leg_error = leg_errors.get(leg_err_key)

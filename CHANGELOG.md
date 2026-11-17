@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Risk: the period and the currency the figures are measured on are written under the title, and above the lab's sections.
 - Hypothetical shock: the asset classes a scenario leaves out, shocked by zero, are named under the total.
 - A documentation icon on the right of more panels (Dashboard charts and positions, lots analysis, assets list and lab, asset detail, brokers, FX, files and backups, settings) opens the matching page of the manual, with a short explanation of the panel in its tooltip.
+- Administrators can keep only some price and exchange-rate providers active on an instance (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`): the others disappear from lists, search, assignments and settings; existing assignments keep their saved prices. MANUAL is always active.
 
 ### 🔄 Changed
 
@@ -79,6 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Risk lab: after a sync, the lab asks again which assets can be analysed over the period, so an asset whose prices the sync brought in becomes selectable without reloading the page.
 - Risk lab: each section asks once when the lab opens about the assets it can analyse, instead of twice.
 - The «Schedule Configuration» window scrolls inside when it is taller than the screen, so «Save» is never cut off on a small window.
+- Exchange rates: when a pair has several routes, each route now saves the rates of its own provider. Before, a pair could save another route's rate under the first route's provider name; a new sync of the period rewrites the rows.
 
 ### ⚠️ Breaking changes
 

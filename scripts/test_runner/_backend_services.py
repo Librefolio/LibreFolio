@@ -509,6 +509,14 @@ def services_provider_policy(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Asset provider policy tests", verbose=verbose)
 
 
+def services_providers_enabled(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the instance allow-lists of the asset and FX providers (project 76, X1)."""
+    print_section("Services: Providers Enabled")
+    print_info("Testing: LIBREFOLIO_ASSET_PROVIDERS_ENABLED / LIBREFOLIO_FX_PROVIDERS_ENABLED, the registry hook, lists, assignments, routes, prices, refresh, FX sync, search, plugin settings and groups")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_providers_enabled.py", test_names)
+    return run_command(cmd, "Providers enabled tests", verbose=verbose)
+
+
 def services_synthetic_yield(verbose: bool = False, test_names: list = None) -> bool:
     """Test synthetic yield calculation for SCHEDULED_YIELD assets."""
     print_section("Services: Synthetic Yield Calculation")
@@ -2099,6 +2107,14 @@ def services_plugin_settings_groups(verbose: bool = False, test_names: list = No
     return run_command(cmd, "Plugin settings groups tests", verbose=verbose)
 
 
+def services_plugin_readiness(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the readiness check of the plugins: the rule of the call boundary, the managed profile, the provider lists."""
+    print_section("Services: Plugin Readiness")
+    print_info("Testing: plugin_settings/readiness.py, FAProviderInfo / FXProviderInfo, GET /assets/provider, GET /fx/providers")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_plugin_readiness.py", test_names)
+    return run_command(cmd, "Plugin readiness tests", verbose=verbose)
+
+
 def services_plugin_settings_guards(verbose: bool = False, test_names: list = None) -> bool:
     """Test the plugin settings guards: variables documented, derived names unique, AI Export never reads them."""
     print_section("Services: Plugin Settings Guards")
@@ -2895,6 +2911,17 @@ Note: No backend server required.
         desc="F21, where the asset providers stand in the search: LIBREFOLIO_ASSET_PROVIDERS_PREMIUM/ORDER read stripped, lowercased, in order, once each; effective tier and priority (declared, else the variables'; unknown codes dropped and warned once per process); search order premium first, then priority, ties and repeated codes as given (D-X3); search_rank; tier/search_priority checked at class definition; the non-streaming search answers provider by provider in that order",
         # PURE: no lane DB, no server, no network. Both variables are set with monkeypatch in this process; the registry
         # provider_policy sees and core.configured_provider are replaced by stand-ins; each search runs a query of its own.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "providers-enabled",
+        services_providers_enabled,
+        name="Providers Enabled",
+        desc="X1: LIBREFOLIO_ASSET_PROVIDERS_ENABLED / LIBREFOLIO_FX_PROVIDERS_ENABLED read at every call; registry hook (_switched_off, case-insensitive, MANUAL always on, unknown codes warned once); a switched-off provider out of the lists, assignments, routes, search and plugin settings; its existing assignment, refresh and FX route answer as an unknown code; groups served only with a reader on",
+        # PURE: no lane DB, no server, no network. Both variables through monkeypatch in this process; a private SQLite file
+        # under tmp_path behind every get_async_engine touched; extra plugins put in the registries' storage with
+        # monkeypatch.setitem, or in throwaway subclasses of the real registries; the mocks answer every provider call.
         isolation="pure",
     )
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation; the accrual golden: every number of the accrual walk pinned (regen: LIBREFOLIO_TEST_REGEN_SI_ACCRUAL_GOLDEN=1)")
@@ -4225,6 +4252,16 @@ Note: No backend server required.
         services_plugin_settings_groups,
         name="Plugin Settings Groups",
         desc="register_group refusals and variable claims, validate_plugin_groups, binding with no own field (env > row > default), missing as group.key, masking, fingerprint, unbound, pickle, NOT_CONFIGURED, gate",
+        isolation="pure",
+    )
+    # Plugin readiness (project 76, N1). PURE: private SQLite under tmp_path through a private engine, a test instance key, every
+    # variable through monkeypatch; the two provider lists are called in process, no server, no network.
+    add_test(
+        cat,
+        "plugin-readiness",
+        services_plugin_readiness,
+        name="Plugin Readiness",
+        desc="One readiness check per plugin = the call boundary's rule (rows, variables, unreadable secret, groups, user fields), managed profile hides locked fields, one DB session, provider schemas and the asset and FX lists",
         isolation="pure",
     )
     add_test(cat, "plugin-settings-guards", services_plugin_settings_guards, name="Plugin Settings Guards", desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings", isolation="pure")
