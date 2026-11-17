@@ -191,6 +191,8 @@ _TAIL_MINIMUM_SECONDS = 0.05
 # weight, each evaluated in float, so its band widens by one tolerance per
 # term. Integral stages are compared exactly against the rounded bounds.
 _BOUND_CHECK_TOLERANCE = 1e-6
+#: The bound check's relative tolerance, public for the merge of the Rebalancer's seeded runs (``proof.seeded_runs_agree``).
+BOUND_CHECK_TOLERANCE = _BOUND_CHECK_TOLERANCE
 
 
 @dataclass(frozen=True, slots=True)
@@ -379,7 +381,7 @@ def _unfinished_report(stage: ObjectiveStage, ordinal: int, scope: Literal["glob
     )
 
 
-def _apply_engine_settings(model: Model, time_budget_seconds: float, node_limit: int | None, *, product: str = "pac") -> list[SolverSetting]:
+def _apply_engine_settings(model: Model, time_budget_seconds: float, node_limit: int | None, *, product: str = "pac", seed: int | None = None) -> list[SolverSetting]:
     """Apply the settings that survive the whole run, and report only those.
 
     ``limits/time`` is deliberately **not** listed here: it is re-armed before
@@ -402,6 +404,10 @@ def _apply_engine_settings(model: Model, time_budget_seconds: float, node_limit:
     if product == "rebalancer":
         model.setParam("expr/pow/expandmaxexponent", 1)
         settings.append(SolverSetting(name="expr/pow/expandmaxexponent", value="1"))
+    if seed is not None:
+        # Lot SEEDS of project 67: one of the Rebalancer's runs, its seed on record so the run can be replayed.
+        model.setParam("randomization/randomseedshift", seed)
+        settings.append(SolverSetting(name="randomization/randomseedshift", value=str(seed)))
     return settings
 
 
@@ -412,8 +418,12 @@ def solve_policy_program(
     node_limit: int | None = None,
     checkpoint: Checkpoint | None = None,
     progress: ProgressReporter | None = None,
+    seed: int | None = None,
 ) -> SolverRunResult:
     """Run the lexicographic cascade over ``program`` and return a candidate.
+
+    ``seed`` sets SCIP's ``randomization/randomseedshift`` and publishes it among the settings (lot SEEDS of project 67);
+    None leaves SCIP's own, as the PAC does.
 
     The returned candidate is a *proposal*: it has not been checked in exact
     arithmetic and must be replayed through ``evaluate_exact_candidate``
@@ -424,7 +434,7 @@ def solve_policy_program(
     raises ``SolverStageError`` (lot CR of project 67).
     """
     model = program.model
-    settings = _apply_engine_settings(model, time_budget_seconds, node_limit, product=program.scenario.product)
+    settings = _apply_engine_settings(model, time_budget_seconds, node_limit, product=program.scenario.product, seed=seed)
     tolerances = _read_tolerances(model)
     started = time.monotonic()
 
