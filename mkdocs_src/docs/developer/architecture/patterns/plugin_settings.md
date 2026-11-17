@@ -975,6 +975,20 @@ manual, [Plugin Settings](../../../user/settings/plugins.md); the code is in
   `fetchPluginEntry()` and hands the fresh entry to its parent; a refusal marks each refused field
   with its `error_code`. A save that succeeds raises no toast, only the app event
   `pluginSettings.saved`; a refusal or a failure raises one. The events name fields, never a value.
+- **Shared groups (project 76, G3).** The groups ([Shared Groups](#groups)) are a section of
+  their own, **Shared settings** (`group`, icon `Share2`), after every family; each group's form
+  carries its translated name (`name_key`, `entryTitle()`), a line *Shared by* naming the plugins
+  that read it (`used_by`), and sits at the element id `groupFormId(name)`. A plugin that reads a
+  group shows a row *Also uses the shared settings of …* per group, with **Open**, which brings the
+  group's form into view and moves the focus to its heading (only for a group the page shows: the
+  test-only `mock` is never in the tab). A group's save reads again each plugin of the tab that reads
+  it, so its «configured» follows without a reload. The family of the enrichers (`enricher`, icon `IdCard`,
+  **Asset profile**) has its row too, for the first enricher that declares a field.
+- **Configure on a plugin with groups** shows, below the plugin's form, one form per group it reads
+  (`plugin-settings-modal-group`, each read with `fetchPluginEntry('group', name)`): «Configure» from
+  the search row or the provider panel thus shows the key where it is missing: a plugin unconfigured
+  while one of its groups is not opens with that group in view (the first unconfigured one). A group's
+  save reads the plugin again and hands it to the parent, so its «configured» follows.
 - **Secrets are never kept in the page.** The input is `autocomplete="new-password"`; what was typed
   is sent once, as `secret_value`, and dropped after the save whatever its outcome. A saved secret
   shows *Set on* with its `updated_at`, then **Replace** or **Clear**.
@@ -1092,7 +1106,7 @@ The other units that touch the plugin settings:
 | `./dev.py test services tool-settings-lifecycle` | Real spawn workers: the plugin sees the value the parent delivered, the defaults when none, the values of its own tool code, never another caller's; an unconfigured Tool starts no worker while its sibling runs. It starts processes, so it is exclusive like `tools-lifecycle` |
 | `./dev.py test services plugin-secrets-check` | The startup check of the stored secrets ([Plugin Secrets Check](../security.md#plugin-secrets-check)): `ok` without an unreadable `system` secret, otherwise an `error` that counts them alone; nothing logged and no key file generated without a stored secret; a check that cannot run is a warning, never an exception |
 | `./dev.py test front-utility core-unit` | `pluginSettingsForm.test.ts` (the rules without the DOM, `FAMILY_ICONS` included) and `pluginSettingsApi.test.ts` (the narrowing of the answers, `icon_url` included, and every outcome of a save through the real client, only the transport faked) |
-| `./dev.py test front-utility component-unit` | `PluginSettingsForm.component.test.ts` (PSF-01…30, the plugin's icon and its fallback in PSF-26…30), `PluginSettingsTab.test.ts` (PST-01…09, the families' icons in PST-07…09) and `PluginSettingsModal.test.ts` (PSM-01…09); **Configure**, the badge, the search's row and the 👑 legend in `ProviderAssignmentSection.test.ts` and `AssetSearchAutocomplete.test.ts` |
+| `./dev.py test front-utility component-unit` | `PluginSettingsForm.component.test.ts` (PSF-01…40, the plugin's icon and its fallback in PSF-26…30, the shared groups in PSF-33…40), `PluginSettingsTab.test.ts` (PST-01…26, the families' icons in PST-07…09, the shared groups in PST-19…26) and `PluginSettingsModal.test.ts` (PSM-01…18, the shared groups in PSM-11…18); **Configure**, the badge, the search's row and the 👑 legend in `ProviderAssignmentSection.test.ts` and `AssetSearchAutocomplete.test.ts` |
 | `./dev.py test front-utility plugin-settings` | End to end, on desktop (`frontend/e2e/settings/plugin-settings.spec.ts`): the tab as a member and as an administrator, **Configure** on `mockprov` from an asset's edit dialog, the search's row and the 👑 legend on a simulated stream ([Front-Utility Tests](../../test-walkthrough/front-utility.md#plugin-settings)) |
 
 ---
