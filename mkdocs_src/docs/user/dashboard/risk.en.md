@@ -55,7 +55,7 @@ The other side of *How much can it hurt?*: the best moments of the period, and w
 - **The largest rally** — the largest rise from a low to a later high, when it began and ended, and how long it lasted: the twin of *The worst fall*. Under it, the **Positive streak**: the longest run of days in a row with a gain
 - **What the days were like** — **gains against losses** (Omega): for every 1 lost on the bad days, how many were gained on the good ones (*1.25×* means 1.25 gained for every 1 lost; a bad day is one below the Sortino's target, 0 here). Under it:
     - **Positive days** — the share of the days with a gain; a day at exactly zero does not count
-    - **Semi-deviation** — how much the portfolio swings on the way down, on a yearly basis, written beside the whole swing it is part of: *9.8% downward · out of a 13.9% swing* means the falls weigh less than the rises. Both come from the same days as the cards → [Downside Deviation](../../financial-theory/technical-analysis/risk-metrics/sortino-ratio.md#downside-deviation)
+    - **Semi-deviation** — how much the portfolio swings on the way down, on a yearly basis, written beside the whole swing it is part of: *9.8% downward · out of a 13.9% swing over the period* means the falls weigh less than the rises. Both come from the same days as the cards → [Downside Deviation](../../financial-theory/technical-analysis/risk-metrics/sortino-ratio.md#downside-deviation)
     - **Below the peak, on average** — how far below its highest level the portfolio stood on an average day: the whole time spent under a peak, not only the worst fall
     - **Extreme days** — how much more often very large days, up or down, came than a bell curve would give: *1×* is the bell curve, above it the tails are fatter
 
@@ -64,7 +64,7 @@ The other side of *How much can it hurt?*: the best moments of the period, and w
 - **The amount** beside the best day, the thirty good days and the largest rally is that gain applied to your net worth today; the largest rally says so, as the worst fall does.
 - **A dash says why**: a period with no gaining day has no best day, no average up day and no streak; one with no losing day has no gains against losses; the line under the figure gives the reason.
 - **A rally of 0.0%**, with no dates, means the portfolio never rose from a low in the period: a measured zero, not a missing figure.
-- **Volatility, annual return, Sharpe and Sortino** are not repeated here: they are in the table of *Am I being paid for this risk?*, measured on the portfolio as you hold it today, while this block reads the period as you lived it; the swing beside the semi-deviation can therefore differ from that table's volatility.
+- **Volatility, annual return, Sharpe and Sortino** are not repeated here: they are in the table of *Am I being paid for this risk?*, measured on the portfolio as you hold it today, while this block reads the period as you lived it; the swing beside the semi-deviation can therefore differ from that table's volatility, and the semi-deviation's tooltip says so. On an asset's page the two are the same series.
 
 ---
 
@@ -115,7 +115,7 @@ Risk is worth taking only if it pays. This block sets the return of your portfol
 - **Choose a benchmark** in **Compared with** — a tracker of a broad world index is the most meaningful. It applies to every Risk page, and adds the **Beta** and **Correlation** columns.
 - **Above the dashed line**, a dot was better paid for its risk than the benchmark — or, with no benchmark, than your portfolio.
 - **Click** a column title to sort the table, or a row to find its dot in the chart.
-- **The Portfolio row** replays today's holdings, at today's weights, over the period — the title says *on the current composition* — so it is not the history of your trades. Returns come from prices only, without dividends or coupons for now.
+- **The Portfolio row** (*Portfolio, today's holdings*) replays today's holdings, at today's weights, over the period — the title says *on the current composition* — so it is not the history of your trades. Returns come from prices only, without dividends or coupons for now.
 
 ---
 
