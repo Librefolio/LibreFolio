@@ -1,0 +1,263 @@
+{
+ "source": "yahoo",
+ "asset": "mutual_fund",
+ "version": "yfinance 1.7.0",
+ "recorded_at": "2026-11-10T17:09:12",
+ "calls": {
+  "info_from_isin": {
+   "seconds": 0.59,
+   "error": null,
+   "response": {
+    "address3": "Corso Garibaldi, 99",
+    "phone": "+39 2 771201",
+    "executiveTeam": [],
+    "maxAge": 86400,
+    "priceHint": 2,
+    "previousClose": 5.702,
+    "regularMarketPreviousClose": 5.702,
+    "yield": 0.0,
+    "ytdReturn": 4.13012,
+    "totalAssets": 3359946,
+    "fiftyTwoWeekLow": 5.356,
+    "fiftyTwoWeekHigh": 5.751,
+    "fulldayPrice": 5.659,
+    "fulldayChange": -0.04300022,
+    "fulldayChangePercent": -0.75412524,
+    "fiftyDayAverage": 5.67056,
+    "twoHundredDayAverage": 5.61948,
+    "currency": "EUR",
+    "tradeable": false,
+    "morningStarOverallRating": 2,
+    "morningStarRiskRating": 2,
+    "beta3Year": 0.83,
+    "fundInceptionDate": 1647216000,
+    "annualHoldingsTurnover": 0.5504,
+    "quoteType": "MUTUALFUND",
+    "symbol": "0P0001OS3T.F",
+    "language": "en-US",
+    "region": "US",
+    "typeDisp": "Fund",
+    "quoteSourceName": "Delayed Quote",
+    "triggerable": false,
+    "customPriceAlertConfidence": "NONE",
+    "corporateActions": [],
+    "regularMarketTime": 1793998800,
+    "exchange": "FRA",
+    "exchangeTimezoneName": "Europe/Berlin",
+    "exchangeTimezoneShortName": "CET",
+    "gmtOffSetMilliseconds": 3600000,
+    "market": "dr_market",
+    "esgPopulated": false,
+    "marketState": "REGULAR",
+    "hasPrePostMarketData": false,
+    "firstTradeDateMilliseconds": 1647241200000,
+    "regularMarketChange": -0.04300022,
+    "regularMarketChangePercent": -0.75412524,
+    "regularMarketPrice": 5.659,
+    "fullExchangeName": "Frankfurt",
+    "fiftyTwoWeekLowChange": 0.30299997,
+    "fiftyTwoWeekLowChangePercent": 0.056572065,
+    "fiftyTwoWeekRange": "5.356 - 5.751",
+    "fiftyTwoWeekHighChange": -0.09200001,
+    "fiftyTwoWeekHighChangePercent": -0.01599722,
+    "fiftyTwoWeekChangePercent": 3.3985019,
+    "dividendYield": 0.0,
+    "trailingThreeMonthReturns": 0.49383,
+    "netAssets": 3359946.0,
+    "fiftyDayAverageChange": -0.011559963,
+    "fiftyDayAverageChangePercent": -0.002038593,
+    "twoHundredDayAverageChange": 0.039519787,
+    "twoHundredDayAverageChangePercent": 0.007032641,
+    "sourceInterval": 15,
+    "exchangeDataDelayedBy": 15,
+    "cryptoTradeable": false,
+    "shortName": "0P0001OS3T.F",
+    "longName": "Anima Dinamix",
+    "trailingPegRatio": null
+   }
+  },
+  "search_isin": {
+   "seconds": 0.25,
+   "error": null,
+   "response": [
+    {
+     "symbol": "0P0001OS3T.F",
+     "exchange": "FRA",
+     "exchDisp": "Frankfurt",
+     "quoteType": "MUTUALFUND",
+     "typeDisp": "Fund",
+     "shortname": "0P0001OS3T.F",
+     "longname": "Anima Dinamix",
+     "sector": null,
+     "industry": null
+    }
+   ]
+  },
+  "info_ticker:0P0001OS3T.F": {
+   "seconds": 0.17,
+   "error": null,
+   "response": {
+    "address3": "Corso Garibaldi, 99",
+    "phone": "+39 2 771201",
+    "executiveTeam": [],
+    "maxAge": 86400,
+    "priceHint": 2,
+    "previousClose": 5.702,
+    "regularMarketPreviousClose": 5.702,
+    "yield": 0.0,
+    "ytdReturn": 4.13012,
+    "totalAssets": 3359946,
+    "fiftyTwoWeekLow": 5.356,
+    "fiftyTwoWeekHigh": 5.751,
+    "fulldayPrice": 5.659,
+    "fulldayChange": -0.04300022,
+    "fulldayChangePercent": -0.75412524,
+    "fiftyDayAverage": 5.67056,
+    "twoHundredDayAverage": 5.61948,
+    "currency": "EUR",
+    "tradeable": false,
+    "morningStarOverallRating": 2,
+    "morningStarRiskRating": 2,
+    "beta3Year": 0.83,
+    "fundInceptionDate": 1647216000,
+    "annualHoldingsTurnover": 0.5504,
+    "quoteType": "MUTUALFUND",
+    "symbol": "0P0001OS3T.F",
+    "language": "en-US",
+    "region": "US",
+    "typeDisp": "Fund",
+    "quoteSourceName": "Delayed Quote",
+    "triggerable": false,
+    "customPriceAlertConfidence": "NONE",
+    "hasPrePostMarketData": false,
+    "firstTradeDateMilliseconds": 1647241200000,
+    "regularMarketChange": -0.04300022,
+    "regularMarketChangePercent": -0.75412524,
+    "regularMarketPrice": 5.659,
+    "fullExchangeName": "Frankfurt",
+    "shortName": "0P0001OS3T.F",
+    "longName": "Anima Dinamix",
+    "fiftyTwoWeekLowChange": 0.30299997,
+    "fiftyTwoWeekLowChangePercent": 0.056572065,
+    "fiftyTwoWeekRange": "5.356 - 5.751",
+    "fiftyTwoWeekHighChange": -0.09200001,
+    "fiftyTwoWeekHighChangePercent": -0.01599722,
+    "fiftyTwoWeekChangePercent": 3.3985019,
+    "dividendYield": 0.0,
+    "trailingThreeMonthReturns": 0.49383,
+    "netAssets": 3359946.0,
+    "fiftyDayAverageChange": -0.011559963,
+    "fiftyDayAverageChangePercent": -0.002038593,
+    "twoHundredDayAverageChange": 0.039519787,
+    "twoHundredDayAverageChangePercent": 0.007032641,
+    "sourceInterval": 15,
+    "exchangeDataDelayedBy": 15,
+    "cryptoTradeable": false,
+    "corporateActions": [],
+    "regularMarketTime": 1793998800,
+    "exchange": "FRA",
+    "exchangeTimezoneName": "Europe/Berlin",
+    "exchangeTimezoneShortName": "CET",
+    "gmtOffSetMilliseconds": 3600000,
+    "market": "dr_market",
+    "esgPopulated": false,
+    "marketState": "REGULAR",
+    "trailingPegRatio": null
+   }
+  },
+  "funds_data:0P0001OS3T.F": {
+   "seconds": 0.08,
+   "error": null,
+   "response": {
+    "description": "",
+    "fund_overview": {
+     "categoryName": null,
+     "family": "Anima Sgr S.p.A",
+     "legalType": null
+    },
+    "fund_operations": [
+     {
+      "Attributes": "Annual Report Expense Ratio",
+      "0P0001OS3T.F": null,
+      "Category Average": null
+     },
+     {
+      "Attributes": "Annual Holdings Turnover",
+      "0P0001OS3T.F": null,
+      "Category Average": null
+     },
+     {
+      "Attributes": "Total Net Assets",
+      "0P0001OS3T.F": null,
+      "Category Average": null
+     }
+    ],
+    "asset_classes": {
+     "cashPosition": null,
+     "stockPosition": null,
+     "bondPosition": null,
+     "preferredPosition": null,
+     "convertiblePosition": null,
+     "otherPosition": null
+    },
+    "top_holdings": [],
+    "equity_holdings": [
+     {
+      "Average": "Price/Earnings",
+      "0P0001OS3T.F": 0.0,
+      "Category Average": null
+     },
+     {
+      "Average": "Price/Book",
+      "0P0001OS3T.F": 0.0,
+      "Category Average": null
+     },
+     {
+      "Average": "Price/Sales",
+      "0P0001OS3T.F": 0.0,
+      "Category Average": null
+     },
+     {
+      "Average": "Price/Cashflow",
+      "0P0001OS3T.F": 0.0,
+      "Category Average": null
+     },
+     {
+      "Average": "Median Market Cap",
+      "0P0001OS3T.F": 0.0,
+      "Category Average": null
+     },
+     {
+      "Average": "3 Year Earnings Growth",
+      "0P0001OS3T.F": 0.0,
+      "Category Average": null
+     }
+    ],
+    "bond_holdings": [
+     {
+      "Average": "Duration",
+      "0P0001OS3T.F": null,
+      "Category Average": null
+     },
+     {
+      "Average": "Maturity",
+      "0P0001OS3T.F": null,
+      "Category Average": null
+     },
+     {
+      "Average": "Credit Quality",
+      "0P0001OS3T.F": null,
+      "Category Average": null
+     }
+    ],
+    "bond_ratings": {},
+    "sector_weightings": {}
+   }
+  },
+  "isin_of_ticker:0P0001OS3T.F": {
+   "seconds": 0.59,
+   "error": null,
+   "response": "-"
+  }
+ }
+}

@@ -1,0 +1,383 @@
+{
+ "source": "yahoo",
+ "asset": "vwce",
+ "version": "yfinance 1.7.0",
+ "recorded_at": "2026-11-10T17:06:26",
+ "calls": {
+  "info_from_isin": {
+   "seconds": 0.87,
+   "error": null,
+   "response": {
+    "phone": "+353 1 6123226",
+    "executiveTeam": [],
+    "maxAge": 86400,
+    "priceHint": 2,
+    "previousClose": 187.54,
+    "open": 188.7,
+    "dayLow": 186.76,
+    "dayHigh": 188.98,
+    "regularMarketPreviousClose": 187.54,
+    "regularMarketOpen": 188.7,
+    "regularMarketDayLow": 186.76,
+    "regularMarketDayHigh": 188.98,
+    "trailingPE": 19.917912,
+    "volume": 194353,
+    "regularMarketVolume": 194353,
+    "averageVolume": 259104,
+    "averageVolume10days": 387250,
+    "averageDailyVolume10Day": 387250,
+    "bid": 186.96,
+    "ask": 186.98,
+    "yield": 0.0,
+    "totalAssets": 88843730944,
+    "fiftyTwoWeekLow": 140.22,
+    "fiftyTwoWeekHigh": 202.3,
+    "allTimeHigh": 202.3,
+    "allTimeLow": 58.08852,
+    "fulldayPrice": 186.86,
+    "fulldayChange": -0.6799927,
+    "fulldayChangePercent": -0.36258543,
+    "fiftyDayAverage": 191.9704,
+    "twoHundredDayAverage": 184.8137,
+    "navPrice": 187.377,
+    "currency": "USD",
+    "tradeable": false,
+    "ytdReturn": 11.06401,
+    "beta3Year": 1.0,
+    "fundFamily": "Vanguard Group (Ireland) Limited",
+    "fundInceptionDate": 1563840000,
+    "legalType": "Exchange Traded Fund",
+    "threeYearAverageReturn": 0.1963921,
+    "fiveYearAverageReturn": 0.092969395,
+    "quoteType": "ETF",
+    "symbol": "VWRA.L",
+    "language": "en-US",
+    "region": "US",
+    "typeDisp": "ETF",
+    "quoteSourceName": "Delayed Quote",
+    "triggerable": false,
+    "customPriceAlertConfidence": "LOW",
+    "shortName": "VANGUARD FUNDS PLC VANGUARD FTS",
+    "longName": "Vanguard FTSE All-World UCITS ETF USD Accumulation",
+    "cryptoTradeable": false,
+    "exchange": "LSE",
+    "messageBoardId": "finmb_215299893",
+    "exchangeTimezoneName": "Europe/London",
+    "exchangeTimezoneShortName": "GMT",
+    "market": "gb_market",
+    "marketState": "REGULAR",
+    "hasPrePostMarketData": false,
+    "firstTradeDateMilliseconds": 1563865200000,
+    "regularMarketChange": -0.6799927,
+    "regularMarketChangePercent": -0.36258543,
+    "regularMarketPrice": 186.86,
+    "regularMarketDayRange": "186.76 - 188.98",
+    "fullExchangeName": "LSE",
+    "averageDailyVolume3Month": 259104,
+    "fiftyTwoWeekLowChange": 46.64,
+    "fiftyTwoWeekLowChangePercent": 0.33262017,
+    "fiftyTwoWeekRange": "140.22 - 202.3",
+    "fiftyTwoWeekHighChange": -15.440002,
+    "fiftyTwoWeekHighChangePercent": -0.0763223,
+    "fiftyTwoWeekChangePercent": 11.564541,
+    "dividendYield": 0.0,
+    "trailingThreeMonthReturns": -0.18687,
+    "trailingThreeMonthNavReturns": -0.18687,
+    "netAssets": 88843731000.0,
+    "epsTrailingTwelveMonths": 9.381506,
+    "fiftyDayAverageChange": -5.1103973,
+    "fiftyDayAverageChangePercent": -0.026620757,
+    "twoHundredDayAverageChange": 2.0462952,
+    "twoHundredDayAverageChangePercent": 0.011072204,
+    "sourceInterval": 15,
+    "exchangeDataDelayedBy": 15,
+    "corporateActions": [],
+    "regularMarketTime": 1794325885,
+    "gmtOffSetMilliseconds": 0,
+    "esgPopulated": false,
+    "trailingPegRatio": null
+   }
+  },
+  "search_isin": {
+   "seconds": 0.18,
+   "error": null,
+   "response": [
+    {
+     "symbol": "VWRA.L",
+     "exchange": "LSE",
+     "exchDisp": "London",
+     "quoteType": "ETF",
+     "typeDisp": "ETF",
+     "shortname": "VANGUARD FUNDS PLC VANGUARD FTS",
+     "longname": "Vanguard FTSE All-World UCITS ETF USD Accumulation",
+     "sector": null,
+     "industry": null
+    },
+    {
+     "symbol": "IE00BK5BQT80.SG",
+     "exchange": "STU",
+     "exchDisp": "Stuttgart",
+     "quoteType": "MUTUALFUND",
+     "typeDisp": "Fund",
+     "shortname": "Vanguard FTSE All-World UCITS E",
+     "longname": null,
+     "sector": null,
+     "industry": null
+    }
+   ]
+  },
+  "info_ticker:VWRA.L": {
+   "seconds": 0.14,
+   "error": null,
+   "response": {
+    "phone": "+353 1 6123226",
+    "executiveTeam": [],
+    "maxAge": 86400,
+    "priceHint": 2,
+    "previousClose": 187.54,
+    "open": 188.7,
+    "dayLow": 186.76,
+    "dayHigh": 188.98,
+    "regularMarketPreviousClose": 187.54,
+    "regularMarketOpen": 188.7,
+    "regularMarketDayLow": 186.76,
+    "regularMarketDayHigh": 188.98,
+    "trailingPE": 19.917912,
+    "volume": 194353,
+    "regularMarketVolume": 194353,
+    "averageVolume": 259104,
+    "averageVolume10days": 387250,
+    "averageDailyVolume10Day": 387250,
+    "bid": 186.96,
+    "ask": 186.98,
+    "yield": 0.0,
+    "totalAssets": 88843730944,
+    "fiftyTwoWeekLow": 140.22,
+    "fiftyTwoWeekHigh": 202.3,
+    "allTimeHigh": 202.3,
+    "allTimeLow": 58.08852,
+    "fulldayPrice": 186.86,
+    "fulldayChange": -0.6799927,
+    "fulldayChangePercent": -0.36258543,
+    "fiftyDayAverage": 191.9704,
+    "twoHundredDayAverage": 184.8137,
+    "navPrice": 187.377,
+    "currency": "USD",
+    "tradeable": false,
+    "ytdReturn": 11.06401,
+    "beta3Year": 1.0,
+    "fundFamily": "Vanguard Group (Ireland) Limited",
+    "fundInceptionDate": 1563840000,
+    "legalType": "Exchange Traded Fund",
+    "threeYearAverageReturn": 0.1963921,
+    "fiveYearAverageReturn": 0.092969395,
+    "quoteType": "ETF",
+    "symbol": "VWRA.L",
+    "language": "en-US",
+    "region": "US",
+    "typeDisp": "ETF",
+    "quoteSourceName": "Delayed Quote",
+    "triggerable": false,
+    "customPriceAlertConfidence": "LOW",
+    "regularMarketChange": -0.6799927,
+    "regularMarketChangePercent": -0.36258543,
+    "regularMarketPrice": 186.86,
+    "regularMarketDayRange": "186.76 - 188.98",
+    "fullExchangeName": "LSE",
+    "averageDailyVolume3Month": 259104,
+    "fiftyTwoWeekLowChange": 46.64,
+    "fiftyTwoWeekLowChangePercent": 0.33262017,
+    "fiftyTwoWeekRange": "140.22 - 202.3",
+    "fiftyTwoWeekHighChange": -15.440002,
+    "fiftyTwoWeekHighChangePercent": -0.0763223,
+    "fiftyTwoWeekChangePercent": 11.564541,
+    "dividendYield": 0.0,
+    "trailingThreeMonthReturns": -0.18687,
+    "trailingThreeMonthNavReturns": -0.18687,
+    "netAssets": 88843731000.0,
+    "epsTrailingTwelveMonths": 9.381506,
+    "fiftyDayAverageChange": -5.1103973,
+    "fiftyDayAverageChangePercent": -0.026620757,
+    "twoHundredDayAverageChange": 2.0462952,
+    "twoHundredDayAverageChangePercent": 0.011072204,
+    "sourceInterval": 15,
+    "exchangeDataDelayedBy": 15,
+    "cryptoTradeable": false,
+    "marketState": "REGULAR",
+    "corporateActions": [],
+    "regularMarketTime": 1794325885,
+    "exchange": "LSE",
+    "messageBoardId": "finmb_215299893",
+    "exchangeTimezoneName": "Europe/London",
+    "exchangeTimezoneShortName": "GMT",
+    "gmtOffSetMilliseconds": 0,
+    "market": "gb_market",
+    "esgPopulated": false,
+    "hasPrePostMarketData": false,
+    "firstTradeDateMilliseconds": 1563865200000,
+    "shortName": "VANGUARD FUNDS PLC VANGUARD FTS",
+    "longName": "Vanguard FTSE All-World UCITS ETF USD Accumulation",
+    "trailingPegRatio": null
+   }
+  },
+  "funds_data:VWRA.L": {
+   "seconds": 0.08,
+   "error": null,
+   "response": {
+    "description": "",
+    "fund_overview": {
+     "categoryName": null,
+     "family": "Vanguard Group (Ireland) Limited",
+     "legalType": "Exchange Traded Fund"
+    },
+    "fund_operations": [
+     {
+      "Attributes": "Annual Report Expense Ratio",
+      "VWRA.L": null,
+      "Category Average": null
+     },
+     {
+      "Attributes": "Annual Holdings Turnover",
+      "VWRA.L": 0.07,
+      "Category Average": null
+     },
+     {
+      "Attributes": "Total Net Assets",
+      "VWRA.L": 252442.27,
+      "Category Average": 252442.27
+     }
+    ],
+    "asset_classes": {
+     "cashPosition": 0.0,
+     "stockPosition": 0.9994,
+     "bondPosition": 0.0,
+     "preferredPosition": 0.00029999999,
+     "convertiblePosition": 0.0,
+     "otherPosition": 0.00029999999
+    },
+    "top_holdings": [
+     {
+      "Symbol": "NVDA",
+      "Name": "NVIDIA Corp",
+      "Holding Percent": 0.050283
+     },
+     {
+      "Symbol": "AAPL",
+      "Name": "Apple Inc",
+      "Holding Percent": 0.045436703
+     },
+     {
+      "Symbol": "MSFT",
+      "Name": "Microsoft Corp",
+      "Holding Percent": 0.0359618
+     },
+     {
+      "Symbol": "AMZN",
+      "Name": "Amazon.com Inc",
+      "Holding Percent": 0.022807
+     },
+     {
+      "Symbol": "GOOGL",
+      "Name": "Alphabet Inc Class A",
+      "Holding Percent": 0.0192134
+     },
+     {
+      "Symbol": "2330.TW",
+      "Name": "Taiwan Semiconductor Manufacturing Co Ltd",
+      "Holding Percent": 0.017896399
+     },
+     {
+      "Symbol": "AVGO",
+      "Name": "Broadcom Inc",
+      "Holding Percent": 0.0154211
+     },
+     {
+      "Symbol": "META",
+      "Name": "Meta Platforms Inc Class A",
+      "Holding Percent": 0.0150444
+     },
+     {
+      "Symbol": "GOOG",
+      "Name": "Alphabet Inc Class C",
+      "Holding Percent": 0.014992599
+     },
+     {
+      "Symbol": "MU",
+      "Name": "Micron Technology Inc",
+      "Holding Percent": 0.0113361
+     }
+    ],
+    "equity_holdings": [
+     {
+      "Average": "Price/Earnings",
+      "VWRA.L": 0.04893,
+      "Category Average": null
+     },
+     {
+      "Average": "Price/Book",
+      "VWRA.L": 0.29192,
+      "Category Average": null
+     },
+     {
+      "Average": "Price/Sales",
+      "VWRA.L": 0.38018,
+      "Category Average": null
+     },
+     {
+      "Average": "Price/Cashflow",
+      "VWRA.L": 0.06534,
+      "Category Average": null
+     },
+     {
+      "Average": "Median Market Cap",
+      "VWRA.L": null,
+      "Category Average": null
+     },
+     {
+      "Average": "3 Year Earnings Growth",
+      "VWRA.L": null,
+      "Category Average": null
+     }
+    ],
+    "bond_holdings": [
+     {
+      "Average": "Duration",
+      "VWRA.L": null,
+      "Category Average": null
+     },
+     {
+      "Average": "Maturity",
+      "VWRA.L": null,
+      "Category Average": null
+     },
+     {
+      "Average": "Credit Quality",
+      "VWRA.L": null,
+      "Category Average": null
+     }
+    ],
+    "bond_ratings": {
+     "us_government": 0.0
+    },
+    "sector_weightings": {
+     "realestate": 0.0166,
+     "consumer_cyclical": 0.083100006,
+     "basic_materials": 0.0353,
+     "consumer_defensive": 0.044299997,
+     "technology": 0.33470002,
+     "communication_services": 0.0796,
+     "financial_services": 0.1601,
+     "utilities": 0.0225,
+     "industrials": 0.1014,
+     "energy": 0.0395,
+     "healthcare": 0.0829
+    }
+   }
+  },
+  "isin_of_ticker:VWRA.L": {
+   "seconds": 0.78,
+   "error": null,
+   "response": "-"
+  }
+ }
+}
