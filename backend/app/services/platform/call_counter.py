@@ -29,7 +29,7 @@ import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import and_, case, func, select, true
+from sqlalchemy import and_, case, func, select, true, tuple_
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -263,6 +263,20 @@ async def count_and_check(family: str, plugin_code: str, limits: CallLimits | No
         logger.warning("Plugin call refused by the counter without a full window: the call goes anyway", family=family, plugin=plugin_code)
         return None
     raise _refusal(family, plugin_code, full, starts, moment)
+
+
+async def read_counts_many(pairs: list[tuple[str, str]], *, now: datetime | None = None) -> dict[tuple[str, str], CallCounts]:
+    """The counts of the windows of now of every ``(family, plugin_code)`` asked, in ONE select, without writing (the
+    settings catalogue, U4): a stale window reads 0, a pair without a row all 0. A database error is raised."""
+    starts = window_starts(_utc(now))
+    table = PluginCallCounter.__table__
+    wanted = list(dict.fromkeys(pairs))
+    if not wanted:
+        return {}
+    async with get_async_engine().connect() as connection:
+        rows = (await connection.execute(select(table).where(tuple_(table.c.family, table.c.plugin_code).in_(wanted)))).all()
+    found = {(row.family, row.plugin_code): row for row in rows}
+    return {pair: _current(found.get(pair), starts) for pair in wanted}
 
 
 async def read_counts(family: str, plugin_code: str, *, now: datetime | None = None) -> CallCounts:
