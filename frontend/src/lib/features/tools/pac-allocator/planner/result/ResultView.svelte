@@ -155,15 +155,17 @@
             {/if}
             <ResultSection
                 id="exposures"
-                title={title('exposures', 'Exposures – ideal vs actual')}
-                help={$t(`${KEY}.exposures.help`, {
-                    default: 'How the Assets spread by country, type and sector, according to their declared exposures: the ideal distribution follows your target shares, the actual one the shares at the end of the plan. The charts do not change the plan.',
-                })}
+                title={profile.text === 'rebalancer' ? $t('tools.portfolioRebalancer.planner.result.exposure.title') : title('exposures', 'Exposures – ideal vs actual')}
+                help={profile.text === 'rebalancer'
+                    ? $t('tools.portfolioRebalancer.planner.result.exposure.help')
+                    : $t(`${KEY}.exposures.help`, {
+                          default: 'How the Assets spread by country, type and sector, according to their declared exposures: the ideal distribution follows your target shares, the actual one the shares at the end of the plan. The charts do not change the plan.',
+                      })}
                 open={open.has('exposures')}
                 ontoggle={toggle}
             >
-                <!-- The Rebalancer's «Cash» rows have no category (F4a step 8 draws them in its own chart); the PAC has none. -->
-                <ExposureSection rows={solution.exposure_rows.filter((row) => (row as {kind?: string}).kind !== 'cash')} />
+                <!-- The Rebalancer's «Cash» rows are the last row of each bullet chart (F4a step 8); the PAC has none. -->
+                <ExposureSection rows={solution.exposure_rows} />
             </ResultSection>
             <ResultSection id="ledger" title={title('ledger', 'Balances per Broker and currency')} open={open.has('ledger')} ontoggle={toggle}>
                 <LedgerTable rows={solution.ledger_rows} accounting={solution.accounting} {names} {digits} {draft} />

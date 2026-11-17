@@ -241,3 +241,24 @@ describe('the Rebalancer balances', () => {
         for (const field of ['transfer_in', 'transfer_out']) expect(ledger.querySelectorAll(`[data-testid="rebalancer-planner-ledger-${field}"]`)).toHaveLength(rows.length);
     });
 });
+
+/**
+ * F4a of project 67, step 8: the Rebalancer's exposures are bullet charts in the three dimensions — types, sectors, then
+ * the countries — with their legend once above them; the PAC's bars and maps are not drawn here. The accessible list
+ * keeps one entry per published row, the cash included.
+ */
+describe('the Rebalancer exposures', () => {
+    it('are three bullet charts, the legend once, no bars and no maps', async () => {
+        mounted(browser);
+        const section = screen.getAllByTestId('rebalancer-planner-result-section').find((item) => item.getAttribute('data-section') === 'exposures');
+        await fireEvent.click(section?.querySelector('[data-testid="rebalancer-planner-result-section-toggle"]') as HTMLElement);
+        flushSync();
+        await tick();
+        const exposures = screen.getByTestId('rebalancer-planner-exposures');
+        const dimensions = [...exposures.querySelectorAll('[data-testid="rebalancer-planner-exposures-dimension"]')];
+        expect(dimensions.map((dimension) => dimension.querySelector('[data-chart="exposure-bullets"]')?.getAttribute('data-dimension'))).toEqual(['asset_type', 'sector', 'geography']);
+        expect(exposures.querySelectorAll('[data-role="legend"]')).toHaveLength(1);
+        expect(exposures.querySelectorAll('[data-testid="rebalancer-planner-exposures-bars"], [data-testid^="rebalancer-planner-exposures-map"]')).toHaveLength(0);
+        expect(exposures.querySelectorAll('[data-testid="rebalancer-planner-exposures-row"]')).toHaveLength(browser.result.primary_solution.exposure_rows.length);
+    });
+});
