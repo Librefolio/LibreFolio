@@ -2059,6 +2059,14 @@ def services_enricher_borsa_italiana(verbose: bool = False, test_names: list = N
     return run_command(cmd, "Enricher Borsa Italiana tests", verbose=verbose)
 
 
+def services_enricher_yahoo(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Yahoo Finance enricher: declarations, info and fund data to stored forms, not found, recognize, read (plan 68, lot C3)."""
+    print_section("Services: Enricher Yahoo Finance")
+    print_info("Testing: backend/app/services/enricher_providers/yahoo_finance/plugin.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_yahoo.py", test_names)
+    return run_command(cmd, "Enricher Yahoo Finance tests", verbose=verbose)
+
+
 def services_enricher_refresh(verbose: bool = False, test_names: list = None) -> bool:
     """Test reading the profile from the enrichers: catalogue filter, read cache, merge, ask and refresh (project 68, lot B5a)."""
     print_section("Services: Enricher Refresh")
@@ -4246,6 +4254,16 @@ Note: No backend server required.
         desc="Plan 68 C2: BorsaItalianaEnricher declarations (borsa_italiana, PRICE_SOURCE, ISIN, BOND at 10 and STOCK at 20, CRYPTO and every other type uncovered, 20 bond voices (no inception date; outstanding amount in the denomination currency, absent when two differ), sector and legal form for a stock, params language/mic/platform, no import from the price plugin); recorded sheets (BTP Valore, ordinary BTP, BTP Italia, BTP 2072, Austria 2117, EuroTLX corporate; ENEL, ASML, Apple; an ETF) rebuilt with the library's types and mapped to stored forms through the real catalogue (percents as fractions, the missing annual coupon from financial_math, frequency/structure/day count/issuer type tables in EN and IT, Plain Vanilla silent, sovereign issuer country and geography, yields/duration/accrued dated by the reference price date); EN/IT invariance of the MOT bonds; not found; recognize (non-ISIN no call, the library's 403 refusal raised as a rate limit); read per binding (error isolated, refusal RATE_LIMITED for the rest without a call, one Sessione per read); search through cerca; page URL",
         # PURE: the plugin's library calls (ottieni_scheda, cerca, Sessione) are fakes on the plugin module that fail the
         # test on any call not offered; no database, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "enricher-yahoo",
+        services_enricher_yahoo,
+        name="Enricher Yahoo Finance",
+        desc="Plan 68 C3: YahooFinanceEnricher declarations (yfinance, PRICE_SOURCE, TICKER only, STOCK at 10, ETF family and FUND at 20, CRYPTO/COMMODITY/BOND uncovered, share and fund voices, no search, not test-only, pause_seconds > 0, yfinance imported as yf, nothing from the price plugin); recorded info and funds_data (Enel, Apple, ASML, SWDA, VWCE, bond ETF, hedged ETF, gold ETC, Anima fund) mapped by quoteType to stored forms through the real catalogue (share: sector at 100 % when the helper knows it, industry, issuer country ISO3, market cap only in an upper-case ISO currency, business summary; fund: netExpenseRatio percent as a fraction, family, inception epoch as a UTC date, sector weightings through helper then table with unknown keys folded into Other, funds_data only for a fund and only when sector is asked, its failure keeping the info voices); TER and inception cross-checked with justETF's recordings; not found (empty info, no quoteType, Invalid ISIN, nameless EQUITY row); recognize (non-TICKER no call, name, page, no identifiers, refusal raises); read per binding (error SOURCE_ERROR isolated, YFRateLimitError RATE_LIMITED for the rest without a call)",
+        # PURE: the plugin's yf is a fake module on the plugin that fails the test on any symbol or attribute not
+        # offered, and yfinance's own entry points fail too; no database, no server, no network.
         isolation="pure",
     )
     # PURE: every database is a private SQLite file under tmp_path built with create_all; the synthetic enrichers are
