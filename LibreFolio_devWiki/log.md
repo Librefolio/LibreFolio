@@ -4077,3 +4077,9 @@ Filed: [[domains/signals]].
 Project 70, RN-20: the correlation heatmap keeps its five orderings on screen, the unavailable ones saying why, and
 gains a type badge row. Added to the feature's history.
 Filed: [[features/F-111]].
+
+## [2026-11-17] file | The Asset Detail's risk tab is the levels panel on one asset
+Project 70, RN-17: the tab mounts the Dashboard's levels on scope `asset`, with the money on your position and the
+plan-prices note; the legacy panel, its helpers, `KpiCard` and 73 i18n keys are deleted, and the sync's `{accepted}`
+reaches the page again. Pages whose source paths pointed at the deleted files are updated.
+Filed: [[features/F-113]], [[problems/risk-stress-buckets-hand-listed]], [[concepts/discard-the-answer-not-the-question]], [[decisions/asset-global-page-shows-no-money]], [[features/F-054]].

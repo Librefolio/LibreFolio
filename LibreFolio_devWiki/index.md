@@ -47,7 +47,7 @@
 | [[features/F-110]] | Risk engine — risk analytics as plugins over prepared return series, the quant libraries in spawned processes | Calculations | documented |
 | [[features/F-111]] | Risk tab of the Dashboard and broker pages — four progressive levels; only the simulation rung stays beta | Dashboard | documented |
 | [[features/F-112]] | Risk Lab of Asset Global — correlation, losses, risk–return against a benchmark, replay | Dashboard | documented |
-| [[features/F-113]] | Risk tab of Asset Detail — the legacy panel, still beta, to be rebuilt after 1.2 | Dashboard | implemented |
+| [[features/F-113]] | Risk tab of Asset Detail — the levels panel on one asset (RN-17, 1.4); the legacy panel deleted | Dashboard | implemented |
 | [[features/F-114]] | Benchmark assets — a switch that offers an asset as a comparison benchmark (`2ff8207e1`) | Assets | implemented |
 | [[features/F-109]] | In-app changelog — the bundled CHANGELOG in a modal; each release in the UI language when translated, English with a label otherwise | Layout & Settings | documented |
 | [[features/F-107]] | PAC allocator — a purchase planner in broker increments: SCIP searches, an exact Decimal replay certifies, a fixed-reference L2 first | Calculations | documented |

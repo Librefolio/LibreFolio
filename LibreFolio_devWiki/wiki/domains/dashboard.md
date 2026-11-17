@@ -49,7 +49,7 @@ are surfaced via `DataQualityBanner`, reading the now-populated `data_quality` f
 | [[F-100]] | Yield on Cost (YOC) per position | fullstack | display — trailing-year income per eligible unit in the positions | documented |
 | [[F-111]] | Risk tab of the Dashboard and broker pages (L1–L4) | frontend | display — four progressive risk questions; the simulation rung stays beta | documented |
 | [[F-112]] | Risk Lab of Asset Global | frontend | display — compares a selection of assets | documented |
-| [[F-113]] | Risk tab of Asset Detail (legacy, beta) | frontend | display — one asset's risk; to be rebuilt after 1.2 | implemented |
+| [[F-113]] | Risk tab of Asset Detail (the levels on one asset) | frontend | display — one asset's risk, money on your position (RN-17, 1.4) | implemented |
 
 ## Architecture at a glance
 
