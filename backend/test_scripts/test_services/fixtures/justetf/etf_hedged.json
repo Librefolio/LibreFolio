@@ -1,0 +1,270 @@
+{
+ "fonte": "justetf",
+ "asset": "etf_hedged",
+ "versione": "justetf-scraping 0.1.0",
+ "quando": "2026-11-10T17:06:39",
+ "chiamate": {
+  "get_etf_overview": {
+   "secondi": 0.58,
+   "errore": null,
+   "risposta": {
+    "isin": "IE00B441G979",
+    "name": "iShares MSCI World EUR Hedged UCITS ETF (Acc)",
+    "description": "The iShares MSCI World EUR Hedged UCITS ETF (Acc) seeks to track the MSCI World (EUR Hedged) index. The MSCI World (EUR Hedged) index tracks stocks from 23 developed countries worldwide. Currency hedged to Euro (EUR).",
+    "index": "MSCI World (EUR Hedged)",
+    "investment_focus": "Equity, World",
+    "fund_size_eur": 5213.0,
+    "ter": 0.55,
+    "replication": "Physical(Optimized sampling)",
+    "legal_structure": "ETF",
+    "strategy_risk": null,
+    "sustainability": false,
+    "fund_currency": "EUR",
+    "currency_hedged": true,
+    "volatility_1y": null,
+    "inception_date": "30 September 2010",
+    "distribution_policy": "Accumulating",
+    "distribution_frequency": null,
+    "fund_domicile": "Ireland",
+    "fund_provider": "iShares",
+    "top_holdings": [
+     {
+      "name": "NVIDIA Corp.",
+      "percentage": 5.75,
+      "isin": "US67066G1040"
+     },
+     {
+      "name": "Apple",
+      "percentage": 5.35,
+      "isin": "US0378331005"
+     },
+     {
+      "name": "Microsoft Corp",
+      "percentage": 3.96,
+      "isin": "US5949181045"
+     },
+     {
+      "name": "Amazon.com, Inc.",
+      "percentage": 2.64,
+      "isin": "US0231351067"
+     },
+     {
+      "name": "Alphabet, Inc. A",
+      "percentage": 2.21,
+      "isin": "US02079K3059"
+     },
+     {
+      "name": "Alphabet, Inc. C",
+      "percentage": 1.74,
+      "isin": "US02079K1079"
+     },
+     {
+      "name": "Meta Platforms",
+      "percentage": 1.74,
+      "isin": "US30303M1027"
+     },
+     {
+      "name": "Broadcom Inc.",
+      "percentage": 1.74,
+      "isin": "US11135F1012"
+     },
+     {
+      "name": "Micron Technology",
+      "percentage": 1.32,
+      "isin": "US5951121038"
+     },
+     {
+      "name": "Tesla",
+      "percentage": 1.11,
+      "isin": "US88160R1014"
+     }
+    ],
+    "countries": [
+     {
+      "name": "United States",
+      "percentage": 70.32
+     },
+     {
+      "name": "Japan",
+      "percentage": 5.86
+     },
+     {
+      "name": "United Kingdom",
+      "percentage": 3.59
+     },
+     {
+      "name": "Canada",
+      "percentage": 3.22
+     },
+     {
+      "name": "Switzerland",
+      "percentage": 2.47
+     },
+     {
+      "name": "Germany",
+      "percentage": 2.01
+     },
+     {
+      "name": "France",
+      "percentage": 1.97
+     },
+     {
+      "name": "Netherlands",
+      "percentage": 1.68
+     },
+     {
+      "name": "Australia",
+      "percentage": 1.52
+     },
+     {
+      "name": "Ireland",
+      "percentage": 1.29
+     },
+     {
+      "name": "Other",
+      "percentage": 6.07
+     }
+    ],
+    "sectors": [
+     {
+      "name": "Technology",
+      "percentage": 37.52
+     },
+     {
+      "name": "Finance",
+      "percentage": 17.09
+     },
+     {
+      "name": "Industrials",
+      "percentage": 9.25
+     },
+     {
+      "name": "Healthcare",
+      "percentage": 8.89
+     },
+     {
+      "name": "Consumer Non-Cyclicals",
+      "percentage": 8.21
+     },
+     {
+      "name": "Energy",
+      "percentage": 4.02
+     },
+     {
+      "name": "Non-Energy Materials",
+      "percentage": 3.68
+     },
+     {
+      "name": "Consumer Cyclicals",
+      "percentage": 3.59
+     },
+     {
+      "name": "Utilities",
+      "percentage": 2.23
+     },
+     {
+      "name": "Consumer Services",
+      "percentage": 1.67
+     },
+     {
+      "name": "Telecommunication",
+      "percentage": 1.4
+     },
+     {
+      "name": "Business Services",
+      "percentage": 1.33
+     },
+     {
+      "name": "Non-Corporate",
+      "percentage": 0.32
+     },
+     {
+      "name": "Other",
+      "percentage": 0.8
+     }
+    ],
+    "holdings_date": "30/09/2026",
+    "listings": [
+     {
+      "exchange_code": "MUND",
+      "exchange": "gettex",
+      "currency": "EUR",
+      "ticker": "IBCH",
+      "bloomberg": null,
+      "inav_bloomberg": null,
+      "reuters": null,
+      "inav_reuters": null,
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XSTU",
+      "exchange": "Stuttgart Stock Exchange",
+      "currency": "EUR",
+      "ticker": "IBCH",
+      "bloomberg": null,
+      "inav_bloomberg": null,
+      "reuters": null,
+      "inav_reuters": null,
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XMIL",
+      "exchange": "Borsa Italiana",
+      "currency": "EUR",
+      "ticker": "IWDE",
+      "bloomberg": "IWDE IM",
+      "inav_bloomberg": "INAVWDEE",
+      "reuters": "IWDE.MI",
+      "inav_reuters": "IWDEEINAV.DE",
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XAMS",
+      "exchange": "Euronext Amsterdam",
+      "currency": "EUR",
+      "ticker": "IWDE",
+      "bloomberg": "IWDE NA",
+      "inav_bloomberg": "INAVWDEE",
+      "reuters": "IWDE.AS",
+      "inav_reuters": "IWDEEINAV.DE",
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XLON",
+      "exchange": "London Stock Exchange",
+      "currency": "EUR",
+      "ticker": "IWDE",
+      "bloomberg": "IWDE LN",
+      "inav_bloomberg": "INAVWDEE",
+      "reuters": "IWDE.L",
+      "inav_reuters": "IWDEEINAV.DE",
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XSWX",
+      "exchange": "SIX Swiss Exchange",
+      "currency": "EUR",
+      "ticker": "IWDE",
+      "bloomberg": "IWDE SE",
+      "inav_bloomberg": "INAVWDEE",
+      "reuters": "IWDE.S",
+      "inav_reuters": "IWDEEINAV.DE",
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XETR",
+      "exchange": "XETRA",
+      "currency": "EUR",
+      "ticker": "IBCH",
+      "bloomberg": "IBCH GY",
+      "inav_bloomberg": "INAVWDEE",
+      "reuters": "IBCH.DE",
+      "inav_reuters": "IWDEEINAV.DE",
+      "market_maker": null
+     }
+    ],
+    "gettex": null
+   }
+  }
+ }
+}

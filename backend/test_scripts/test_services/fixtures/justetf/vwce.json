@@ -1,0 +1,300 @@
+{
+ "fonte": "justetf",
+ "asset": "vwce",
+ "versione": "justetf-scraping 0.1.0",
+ "quando": "2026-11-10T17:06:26",
+ "chiamate": {
+  "get_etf_overview": {
+   "secondi": 0.69,
+   "errore": null,
+   "risposta": {
+    "isin": "IE00BK5BQT80",
+    "name": "Vanguard FTSE All-World UCITS ETF (USD) Accumulating",
+    "description": "The Vanguard FTSE All-World UCITS ETF (USD) Accumulating seeks to track the FTSE All-World index. The FTSE All-World index tracks stocks from developed and emerging countries worldwide.",
+    "index": "FTSE All-World",
+    "investment_focus": "Equity, World",
+    "fund_size_eur": 55173.0,
+    "ter": 0.14,
+    "replication": "Physical(Optimized sampling)",
+    "legal_structure": "ETF",
+    "strategy_risk": null,
+    "sustainability": false,
+    "fund_currency": "USD",
+    "currency_hedged": true,
+    "volatility_1y": null,
+    "inception_date": "23 July 2019",
+    "distribution_policy": "Accumulating",
+    "distribution_frequency": null,
+    "fund_domicile": "Ireland",
+    "fund_provider": "Vanguard",
+    "top_holdings": [
+     {
+      "name": "NVIDIA Corp.",
+      "percentage": 5.01,
+      "isin": "US67066G1040"
+     },
+     {
+      "name": "Apple",
+      "percentage": 4.52,
+      "isin": "US0378331005"
+     },
+     {
+      "name": "Microsoft Corp",
+      "percentage": 3.58,
+      "isin": "US5949181045"
+     },
+     {
+      "name": "Amazon.com, Inc.",
+      "percentage": 2.27,
+      "isin": "US0231351067"
+     },
+     {
+      "name": "Alphabet, Inc. A",
+      "percentage": 1.91,
+      "isin": "US02079K3059"
+     },
+     {
+      "name": "Taiwan Semiconductor Manufacturing Co., Ltd.",
+      "percentage": 1.78,
+      "isin": "TW0002330008"
+     },
+     {
+      "name": "Broadcom Inc.",
+      "percentage": 1.54,
+      "isin": "US11135F1012"
+     },
+     {
+      "name": "Meta Platforms",
+      "percentage": 1.5,
+      "isin": "US30303M1027"
+     },
+     {
+      "name": "Alphabet, Inc. C",
+      "percentage": 1.49,
+      "isin": "US02079K1079"
+     },
+     {
+      "name": "Micron Technology",
+      "percentage": 1.13,
+      "isin": "US5951121038"
+     }
+    ],
+    "countries": [
+     {
+      "name": "United States",
+      "percentage": 60.33
+     },
+     {
+      "name": "Japan",
+      "percentage": 6.04
+     },
+     {
+      "name": "Taiwan",
+      "percentage": 3.53
+     },
+     {
+      "name": "United Kingdom",
+      "percentage": 3.16
+     },
+     {
+      "name": "Canada",
+      "percentage": 2.84
+     },
+     {
+      "name": "South Korea",
+      "percentage": 2.6
+     },
+     {
+      "name": "China",
+      "percentage": 2.44
+     },
+     {
+      "name": "Switzerland",
+      "percentage": 2.18
+     },
+     {
+      "name": "Germany",
+      "percentage": 1.75
+     },
+     {
+      "name": "France",
+      "percentage": 1.74
+     },
+     {
+      "name": "Australia",
+      "percentage": 1.5
+     },
+     {
+      "name": "India",
+      "percentage": 1.5
+     },
+     {
+      "name": "Netherlands",
+      "percentage": 1.46
+     },
+     {
+      "name": "Other",
+      "percentage": 8.93
+     }
+    ],
+    "sectors": [
+     {
+      "name": "Technology",
+      "percentage": 38.27
+     },
+     {
+      "name": "Finance",
+      "percentage": 17.87
+     },
+     {
+      "name": "Industrials",
+      "percentage": 8.98
+     },
+     {
+      "name": "Healthcare",
+      "percentage": 8.04
+     },
+     {
+      "name": "Consumer Non-Cyclicals",
+      "percentage": 7.88
+     },
+     {
+      "name": "Non-Energy Materials",
+      "percentage": 4.25
+     },
+     {
+      "name": "Energy",
+      "percentage": 3.94
+     },
+     {
+      "name": "Consumer Cyclicals",
+      "percentage": 3.72
+     },
+     {
+      "name": "Utilities",
+      "percentage": 2.24
+     },
+     {
+      "name": "Consumer Services",
+      "percentage": 1.65
+     },
+     {
+      "name": "Telecommunication",
+      "percentage": 1.42
+     },
+     {
+      "name": "Business Services",
+      "percentage": 1.2
+     },
+     {
+      "name": "Other",
+      "percentage": 0.54
+     }
+    ],
+    "holdings_date": "30/09/2026",
+    "listings": [
+     {
+      "exchange_code": "MUND",
+      "exchange": "gettex",
+      "currency": "EUR",
+      "ticker": "VWCE",
+      "bloomberg": null,
+      "inav_bloomberg": null,
+      "reuters": null,
+      "inav_reuters": null,
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XSTU",
+      "exchange": "Stuttgart Stock Exchange",
+      "currency": "EUR",
+      "ticker": "VWCE",
+      "bloomberg": null,
+      "inav_bloomberg": null,
+      "reuters": null,
+      "inav_reuters": null,
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XMIL",
+      "exchange": "Borsa Italiana",
+      "currency": "EUR",
+      "ticker": "VWCE",
+      "bloomberg": null,
+      "inav_bloomberg": "IVWRAEUR",
+      "reuters": null,
+      "inav_reuters": null,
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XFRA",
+      "exchange": "Frankfurt Stock Exchange",
+      "currency": "EUR",
+      "ticker": null,
+      "bloomberg": null,
+      "inav_bloomberg": "IVWRAEUR",
+      "reuters": null,
+      "inav_reuters": null,
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XAMS",
+      "exchange": "Euronext Amsterdam",
+      "currency": "EUR",
+      "ticker": "VWCE",
+      "bloomberg": "VWCE NA",
+      "inav_bloomberg": "IVWRAEUR",
+      "reuters": "VWCE.AS",
+      "inav_reuters": null,
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XLON",
+      "exchange": "London Stock Exchange",
+      "currency": "USD",
+      "ticker": "VWRA",
+      "bloomberg": "VWRA LN",
+      "inav_bloomberg": "IVWRAUSD",
+      "reuters": "VWRA.L",
+      "inav_reuters": null,
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XLON",
+      "exchange": "London Stock Exchange",
+      "currency": "GBP",
+      "ticker": "VWRP",
+      "bloomberg": "VWRP LN",
+      "inav_bloomberg": "IVWRAGBP",
+      "reuters": "VWRP.L",
+      "inav_reuters": null,
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XSWX",
+      "exchange": "SIX Swiss Exchange",
+      "currency": "CHF",
+      "ticker": "VWRA",
+      "bloomberg": "VWRA SW",
+      "inav_bloomberg": "IVWRACHF",
+      "reuters": "VWRA.S",
+      "inav_reuters": null,
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XETR",
+      "exchange": "XETRA",
+      "currency": "EUR",
+      "ticker": "VWCE",
+      "bloomberg": "VWCE GY",
+      "inav_bloomberg": "IVWRAEUR",
+      "reuters": "VWCE.DE",
+      "inav_reuters": null,
+      "market_maker": null
+     }
+    ],
+    "gettex": null
+   }
+  }
+ }
+}

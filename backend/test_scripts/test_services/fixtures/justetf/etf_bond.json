@@ -1,0 +1,287 @@
+{
+ "fonte": "justetf",
+ "asset": "etf_bond",
+ "versione": "justetf-scraping 0.1.0",
+ "quando": "2026-11-10T17:06:35",
+ "chiamate": {
+  "get_etf_overview": {
+   "secondi": 0.61,
+   "errore": null,
+   "risposta": {
+    "isin": "IE00B3F81409",
+    "name": "iShares Core Global Aggregate Bond UCITS ETF USD (Dist)",
+    "description": "The iShares Core Global Aggregate Bond UCITS ETF USD (Dist) seeks to track the Bloomberg Global Aggregate Bond index. The Bloomberg Global Aggregate Bond index tracks bonds issued in emerging and developed markets worldwide. Rating: Investment Grade.",
+    "index": "Bloomberg Global Aggregate Bond",
+    "investment_focus": "Bonds, World, Aggregate, All maturities",
+    "fund_size_eur": 2468.0,
+    "ter": 0.1,
+    "replication": "Physical(Sampling)",
+    "legal_structure": "ETF",
+    "strategy_risk": null,
+    "sustainability": false,
+    "fund_currency": "USD",
+    "currency_hedged": true,
+    "volatility_1y": null,
+    "inception_date": "21 November 2017",
+    "distribution_policy": "Distributing",
+    "distribution_frequency": "Semi annually",
+    "fund_domicile": "Ireland",
+    "fund_provider": "iShares",
+    "top_holdings": [
+     {
+      "name": "INSL CASH",
+      "percentage": 2.29,
+      "isin": "IE00BK8MB266"
+     },
+     {
+      "name": "China, TB 1.61% 15feb2035, CNY",
+      "percentage": 0.96,
+      "isin": "CND10008WR28"
+     },
+     {
+      "name": "China, Bonds 1.49% 25dec2031, CNY",
+      "percentage": 0.51,
+      "isin": "CND10008QSP8"
+     },
+     {
+      "name": "China, Bonds 1.45% 25feb2028, CNY",
+      "percentage": 0.43,
+      "isin": "CND10008YMK6"
+     },
+     {
+      "name": "China, Bonds 2.68% 21may2030, CNY",
+      "percentage": 0.37,
+      "isin": "CND100036Q75"
+     },
+     {
+      "name": "China, Bonds 2.28% 25mar2031, CNY",
+      "percentage": 0.37,
+      "isin": "CND10007NT77"
+     },
+     {
+      "name": "China, Bonds 2.18% 25aug2033, CNY",
+      "percentage": 0.31,
+      "isin": "CND10006VQZ5"
+     },
+     {
+      "name": "China, Bonds 3.19% 15apr2053, CNY",
+      "percentage": 0.28,
+      "isin": "CND100069PK9"
+     },
+     {
+      "name": "China, Bonds 2.62% 15apr2028, CNY",
+      "percentage": 0.26,
+      "isin": "CND100069PL7"
+     },
+     {
+      "name": "China, Bonds 2.35% 25feb2034, CNY",
+      "percentage": 0.24,
+      "isin": "CND10007LB61"
+     }
+    ],
+    "countries": [
+     {
+      "name": "United States",
+      "percentage": 28.8
+     },
+     {
+      "name": "China",
+      "percentage": 11.31
+     },
+     {
+      "name": "Japan",
+      "percentage": 8.07
+     },
+     {
+      "name": "France",
+      "percentage": 4.97
+     },
+     {
+      "name": "Germany",
+      "percentage": 4.44
+     },
+     {
+      "name": "United Kingdom",
+      "percentage": 4.19
+     },
+     {
+      "name": "Canada",
+      "percentage": 3.47
+     },
+     {
+      "name": "Italy",
+      "percentage": 2.96
+     },
+     {
+      "name": "Ireland",
+      "percentage": 2.72
+     },
+     {
+      "name": "Spain",
+      "percentage": 2.12
+     },
+     {
+      "name": "Belgium",
+      "percentage": 1.8
+     },
+     {
+      "name": "Australia",
+      "percentage": 1.64
+     },
+     {
+      "name": "South Korea",
+      "percentage": 1.33
+     },
+     {
+      "name": "Netherlands",
+      "percentage": 1.2
+     },
+     {
+      "name": "Other",
+      "percentage": 20.98
+     }
+    ],
+    "sectors": [
+     {
+      "name": "Sovereign",
+      "percentage": 54.76
+     },
+     {
+      "name": "Finance",
+      "percentage": 18.48
+     },
+     {
+      "name": "Non-Corporate",
+      "percentage": 2.4
+     },
+     {
+      "name": "Municipal",
+      "percentage": 2.08
+     },
+     {
+      "name": "Utilities",
+      "percentage": 2.07
+     },
+     {
+      "name": "Industrials",
+      "percentage": 1.72
+     },
+     {
+      "name": "Technology",
+      "percentage": 1.19
+     },
+     {
+      "name": "Healthcare",
+      "percentage": 1.15
+     },
+     {
+      "name": "Energy",
+      "percentage": 1.15
+     },
+     {
+      "name": "Consumer Non-Cyclicals",
+      "percentage": 1.09
+     },
+     {
+      "name": "Telecommunication",
+      "percentage": 0.95
+     },
+     {
+      "name": "Consumer Cyclicals",
+      "percentage": 0.79
+     },
+     {
+      "name": "Non-Energy Materials",
+      "percentage": 0.57
+     },
+     {
+      "name": "Government Agencies",
+      "percentage": 0.5
+     },
+     {
+      "name": "Consumer Services",
+      "percentage": 0.33
+     },
+     {
+      "name": "Business Services",
+      "percentage": 0.29
+     },
+     {
+      "name": "Other",
+      "percentage": 11.29
+     }
+    ],
+    "holdings_date": "30/09/2026",
+    "listings": [
+     {
+      "exchange_code": "MUND",
+      "exchange": "gettex",
+      "currency": "EUR",
+      "ticker": "EUNU",
+      "bloomberg": null,
+      "inav_bloomberg": null,
+      "reuters": null,
+      "inav_reuters": null,
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XSTU",
+      "exchange": "Stuttgart Stock Exchange",
+      "currency": "EUR",
+      "ticker": "EUNU",
+      "bloomberg": null,
+      "inav_bloomberg": null,
+      "reuters": null,
+      "inav_reuters": null,
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XLON",
+      "exchange": "London Stock Exchange",
+      "currency": "USD",
+      "ticker": "AGGG",
+      "bloomberg": "AGGG LN",
+      "inav_bloomberg": "INAVAGGU",
+      "reuters": "AGGG.L",
+      "inav_reuters": "0Q6UINAV.DE",
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XLON",
+      "exchange": "London Stock Exchange",
+      "currency": "GBP",
+      "ticker": "SAGG",
+      "bloomberg": "SAGG LN",
+      "inav_bloomberg": "INAVAGGG",
+      "reuters": "SAGG.LN",
+      "inav_reuters": "0Q6SINAV.DE",
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XSWX",
+      "exchange": "SIX Swiss Exchange",
+      "currency": "USD",
+      "ticker": "AGGG",
+      "bloomberg": "AGGG SE",
+      "inav_bloomberg": "INAVAGGU",
+      "reuters": "AGGG.S",
+      "inav_reuters": "0Q6UINAV.DE",
+      "market_maker": null
+     },
+     {
+      "exchange_code": "XETR",
+      "exchange": "XETRA",
+      "currency": "EUR",
+      "ticker": "EUNU",
+      "bloomberg": "EUNU GY",
+      "inav_bloomberg": "INAVAGGE",
+      "reuters": "EUNU.DE",
+      "inav_reuters": "4QCDEUR=INAV",
+      "market_maker": null
+     }
+    ],
+    "gettex": null
+   }
+  }
+ }
+}
