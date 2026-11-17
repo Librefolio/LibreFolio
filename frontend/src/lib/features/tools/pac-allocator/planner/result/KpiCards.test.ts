@@ -27,6 +27,7 @@ import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import ProfileHarness from '../../__tests__/ProfileHarness.svelte';
 import {catalogCurrencyDigits, formatExactMoneyPlain, formatExactPercent, formatExactPoints} from '../format';
+import {resultNames} from './model';
 import {REBALANCER_PLANNER_PROFILE} from '../profile';
 import type {PlannerReadyResult} from '../types';
 import browser from './__fixtures__/rebalancer-browser.json';
@@ -118,6 +119,38 @@ describe('the Rebalancer key figures', () => {
         expect(chip('uninvested', 'share')).toContain(formatExactPercent(solution.uninvested_row.final_weight));
         expect(value('orders')).toBe(String(solution.order_rows.length));
         expect(chip('orders', 'transfers')).toContain(String(solution.transfers.length));
+    });
+
+    it('the largest gap names its item, after and before, with its share and its target (X14: published references)', () => {
+        // On the G5 answer the engine names the EUR cash of broker:1 before the plan and asset:6 after it. The tile reads the
+        // two references and the rows they point to: no gap is computed here.
+        const result = structuredClone(browser.result) as Json;
+        const solution = mounted(result);
+        const names = resultNames(result as unknown as PlannerReadyResult);
+        const before = solution.score.largest_deviation_before_item;
+        const after = solution.score.largest_deviation_after_item;
+        expect([before.kind, after.kind], 'PREMISE: a cash item before, an Asset after').toEqual(['cash', 'asset']);
+        const assetRow = solution.asset_rows.find((row: Json) => row.asset_id === after.asset_id);
+        const cashRow = solution.cash_rows.find((row: Json) => row.broker_id === before.broker_id && row.currency === before.currency);
+        const afterChip = chip('largest_deviation', 'after_item');
+        expect(afterChip).toContain(names.asset(after.asset_id));
+        expect(afterChip).toContain(formatExactPercent(assetRow.final_weight));
+        expect(afterChip).toContain(formatExactPercent(assetRow.target_weight));
+        const beforeChip = chip('largest_deviation', 'before');
+        expect(beforeChip).toContain(formatExactPoints(solution.score.largest_deviation_before));
+        expect(beforeChip).toContain(names.broker(before.broker_id));
+        expect(beforeChip).toContain(before.currency);
+        expect(beforeChip).toContain(formatExactPercent(cashRow.before_weight));
+        expect(beforeChip).toContain(formatExactPercent(cashRow.target_weight));
+    });
+
+    it('with no item off its target the gap names none', () => {
+        const result = structuredClone(browser.result) as Json;
+        result.primary_solution.score.largest_deviation_after_item = null;
+        result.primary_solution.score.largest_deviation_before_item = null;
+        const solution = mounted(result);
+        expect(chip('largest_deviation', 'after_item')).toBeNull();
+        expect(chip('largest_deviation', 'before')).toContain(formatExactPoints(solution.score.largest_deviation_before));
     });
 
     it('a plan with nothing to do still shows every figure', () => {

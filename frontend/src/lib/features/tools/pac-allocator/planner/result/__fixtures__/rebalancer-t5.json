@@ -994,6 +994,14 @@
           "kind": "finite_decimal",
           "value": "0.01"
         },
+        "largest_deviation_before_item": {
+          "kind": "asset",
+          "asset_id": "asset-b"
+        },
+        "largest_deviation_after_item": {
+          "kind": "asset",
+          "asset_id": "asset-b"
+        },
         "tie_breaks": [
           {
             "objective_code": "operation_count",

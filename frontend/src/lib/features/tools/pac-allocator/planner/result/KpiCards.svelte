@@ -6,8 +6,9 @@
 
   The Rebalancer (F4a of project 67, step 4; contract §6.1, X14) has its own six tiles, chosen by the Tool's profile:
   «Worth today» (`F`), «Worth after» (`W`), «Money lost» (`F − W`, from the score) with its published entries, «Largest gap
-  from target» after and before (points), «Uninvested», «Orders». Every one is a published field: none is a sum, a
-  difference or a maximum of others.
+  from target» after and before (points) with the item each one names (X14: the score's references, and the share and target
+  of the row they point to), «Uninvested», «Orders». Every one is a published field: none is a sum, a difference or a
+  maximum of others.
 -->
 <script lang="ts">
     import {t} from '$lib/i18n';
@@ -16,7 +17,7 @@
     import {formatExactMoneyPlain, formatExactPercent, formatExactPoints, formatObjectiveValue, type CurrencyDigits} from '../format';
     import type {PlannerCosts, PlannerExactMoney, PlannerReadyResult, PlannerSolution, RebalancerSolution} from '../types';
     import {BADGE, CARD, HINT, SECTION_TITLE} from '../ui';
-    import {exactSign, objectiveStage} from './model';
+    import {exactSign, objectiveStage, resultNames} from './model';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {getPlannerProfile, testId} from '../profile';
 
@@ -70,6 +71,35 @@
         {field: 'rounding', key: `${RESULT_KEY}.ledger.fields.rounding_delta`, fallback: 'Rounding'},
     ] as const;
 
+    /** The item a largest gap names (X14), its row and its label; a reference the rows do not hold names nothing. */
+    function deviationItem(rebalancer: RebalancerSolution, ref: RebalancerSolution['score']['largest_deviation_after_item']) {
+        if (!ref) return null;
+        const names = resultNames(result);
+        if (ref.kind === 'asset') {
+            const row = rebalancer.asset_rows.find((item) => item.asset_id === ref.asset_id);
+            return row ? {row, label: names.asset(ref.asset_id)} : null;
+        }
+        const row = rebalancer.cash_rows.find((item) => item.broker_id === ref.broker_id && item.currency === ref.currency);
+        return row ? {row, label: $t(`${R}.cashItem`, {values: {broker: names.broker(ref.broker_id), currency: ref.currency}})} : null;
+    }
+
+    function deviationChips(rebalancer: RebalancerSolution): Chip[] {
+        const score = rebalancer.score;
+        const points = formatExactPoints(score.largest_deviation_before);
+        const after = deviationItem(rebalancer, score.largest_deviation_after_item);
+        const before = deviationItem(rebalancer, score.largest_deviation_before_item);
+        const chips: Chip[] = [];
+        if (after) {
+            chips.push({id: 'after_item', label: $t(`${R}.deviationItem`, {values: {item: after.label, weight: formatExactPercent(after.row.final_weight), target: formatExactPercent(after.row.target_weight)}}), tone: 'neutral'});
+        }
+        chips.push({
+            id: 'before',
+            label: before ? $t(`${R}.beforePointsItem`, {values: {value: points, item: before.label, weight: formatExactPercent(before.row.before_weight), target: formatExactPercent(before.row.target_weight)}}) : $t(`${R}.beforePoints`, {values: {value: points}}),
+            tone: 'neutral',
+        });
+        return chips;
+    }
+
     function rebalancerTiles(rebalancer: RebalancerSolution): Tile[] {
         const accounts = rebalancer.plan_accounts;
         const score = rebalancer.score;
@@ -88,7 +118,7 @@
             tile('value_today', 'valueToday', money(accounts.initial_wealth), [part('assets', $t(`${R}.partsAssets`), rebalancer.accounting.current_invested), part('cash', $t(`${R}.partsCash`), rebalancer.accounting.selected_funding)]),
             tile('value_after', 'valueAfter', money(accounts.final_wealth), [{id: 'held', label: $t(`${R}.valueAfterHeld`, {values: held}), tone: 'neutral'}]),
             tile('money_lost', 'moneyLost', money(score.wealth_loss), losses.length > 0 ? losses : [{id: 'none', label: $t(`${R}.noLoss`), tone: 'success'}]),
-            tile('largest_deviation', 'largestDeviation', $t(`${R}.points`, {values: {value: formatExactPoints(score.largest_deviation_after)}}), [{id: 'before', label: $t(`${R}.beforePoints`, {values: {value: formatExactPoints(score.largest_deviation_before)}}), tone: 'neutral'}]),
+            tile('largest_deviation', 'largestDeviation', $t(`${R}.points`, {values: {value: formatExactPoints(score.largest_deviation_after)}}), deviationChips(rebalancer)),
             {
                 kpi: 'uninvested',
                 label: $t('tools.portfolioRebalancer.planner.result.allocation.uninvested'),

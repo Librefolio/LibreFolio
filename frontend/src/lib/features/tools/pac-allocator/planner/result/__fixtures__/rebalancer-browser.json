@@ -3403,6 +3403,15 @@
           "display_scale": 18,
           "display_authority": "non_authoritative"
         },
+        "largest_deviation_before_item": {
+          "kind": "cash",
+          "broker_id": "broker:1",
+          "currency": "EUR"
+        },
+        "largest_deviation_after_item": {
+          "kind": "asset",
+          "asset_id": "asset:6"
+        },
         "tie_breaks": [
           {
             "objective_code": "operation_count",
