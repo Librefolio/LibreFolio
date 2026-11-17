@@ -41,7 +41,31 @@ export const OBJECTIVE_FALLBACKS: Readonly<Record<string, string>> = {
     active_order_rows: 'Number of orders',
     incremental_order_rows: 'Additional orders',
     route_priority: 'Broker and source priority',
+    plan_score: 'Score',
+    target_distance: 'Distance from the targets',
+    wealth_loss: 'Money lost',
+    operation_count: 'Fewer operations',
 };
+
+/**
+ * The Rebalancer's tie-breaks (B2 and D4 of project 67): the stages after its objective, which only choose among plans no
+ * worse on the objectives above, then a fixed order of Assets and Brokers. The engine publishes them as stages like the
+ * objective, without a flag, so the codes are named here. The PAC's cascade has none: each of its stages is an objective.
+ */
+export const REBALANCER_TIE_BREAKS: readonly string[] = ['operation_count', 'route_priority'];
+
+export function isTieBreak(code: string, text: 'pac' | 'rebalancer'): boolean {
+    return text === 'rebalancer' && REBALANCER_TIE_BREAKS.includes(code);
+}
+
+/** The Rebalancer's names that differ from the PAC's: it has no cash sources, so its priority is the routes' alone. */
+const REBALANCER_OBJECTIVE_NAMES: Readonly<Record<string, string>> = {route_priority: 'Route priority'};
+
+/** An objective's name: its catalogue key, and its English default. */
+export function objectiveNameKey(code: string, text: 'pac' | 'rebalancer'): {key: string; fallback: string} {
+    if (text === 'rebalancer' && code in REBALANCER_OBJECTIVE_NAMES) return {key: `tools.portfolioRebalancer.planner.objectives.${code}`, fallback: REBALANCER_OBJECTIVE_NAMES[code]};
+    return {key: `tools.pacAllocator.planner.objectives.${code}`, fallback: OBJECTIVE_FALLBACKS[code] ?? code};
+}
 
 /** The one-line explanation of each objective (`objectiveHelp.<code>`), in Strategy. */
 export const OBJECTIVE_HELP_FALLBACKS: Readonly<Record<string, string>> = {

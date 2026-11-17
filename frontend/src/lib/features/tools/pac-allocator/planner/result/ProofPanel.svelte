@@ -11,12 +11,12 @@
     import type {ColumnDef} from '$lib/components/table/types';
     import ToolExecutionMetrics from '$lib/features/tools/components/ToolExecutionMetrics.svelte';
     import type {ToolBatchMetrics, ToolItemMetrics} from '$lib/features/tools/contracts';
-    import {formatObjectiveValue, formatPlannerPlainDecimal, type CurrencyDigits} from '../format';
-    import {OBJECTIVE_FALLBACKS, OBJECTIVE_HELP_FALLBACKS, OBJECTIVE_TIPS} from '../policies';
-    import type {PlannerReadyResult} from '../types';
+    import {exactDisplay, formatExactMoneyPlain, formatObjectiveValue, formatPlannerPlainDecimal, type CurrencyDigits} from '../format';
+    import {isTieBreak, OBJECTIVE_HELP_FALLBACKS, OBJECTIVE_TIPS, objectiveNameKey} from '../policies';
+    import type {PlannerReadyResult, RebalancerSolution} from '../types';
     import {HINT, ICON_BUBBLE, TILE, TILE_LABEL} from '../ui';
     import BackendTimingBar from './BackendTimingBar.svelte';
-    import {resultBadges} from './model';
+    import {proofStatusHelpKey, resultBadges} from './model';
     import ResultBadgeTip from './ResultBadgeTip.svelte';
     import ResultCell, {type ResultCellContent} from './ResultCell.svelte';
     import {withHelpCues} from '../shared/columnHelp';
@@ -41,8 +41,12 @@
     const KEY = 'tools.pacAllocator.planner.result.proof';
     const STATUS_FALLBACKS = {finished: 'finished', unfinished: 'unfinished', infeasible: 'infeasible'} as const;
     const STATUS_VARIANTS = {finished: 'success', unfinished: 'warning', infeasible: 'error'} as const;
+    const STATUS_HELP_FALLBACKS = {
+        pac: 'Whether the solver closed this stage. Finished: it proved the best value. Unfinished: it stopped at a limit. After a stage that stopped, the later ones only searched among plans as good as the one already found, so a gap of 0 there proves nothing.',
+        rebalancer:
+            'Whether the solver closed this stage. Finished: it proved the best value. Unfinished: it stopped at the time limit, or, for a tie-break, its plan was set aside because it was no better, in exact arithmetic, on the objectives above. After a stage that stopped, the later ones only searched among plans as good as the one already found, so a gap of 0 there proves nothing.',
+    } as const;
     const HELP_FALLBACKS = {
-        status: 'Whether the solver closed this stage. Finished: it proved the best value. Unfinished: it stopped at a limit. After a stage that stopped, the later ones only searched among plans as good as the one already found, so a gap of 0 there proves nothing.',
         primal: 'The value of the best plan the solver found for this stage.',
         dual: 'The bound the solver proved for this stage: none of the plans it searched can do better. From the second stage on, it searched only among plans as good as the chosen one on the stages above.',
         absoluteGap: 'Distance between the two values. A gap of 0 proves the best value only when the stage is finished.',
@@ -54,16 +58,29 @@
 
     const proof = $derived(result.proof);
     const solver = $derived(result.solver_evidence);
-    const badges = $derived(resultBadges(result));
+    const badges = $derived(resultBadges(result, profile.text));
     const outcomeBadges = $derived(badges.filter((badge) => badge.id === 'availability' || badge.id === 'validation'));
     const proofBadge = $derived(badges.find((badge) => badge.id === 'proof'));
     const stopBadge = $derived(badges.find((badge) => badge.id === 'stop'));
     const objectives = $derived('primary_solution' in result ? result.primary_solution.objectives : null);
+    /** The objective cards: the Rebalancer's objective (the score, or the distance and the money lost), its tie-breaks named
+     * below them (F4a of project 67, step 6); every stage of the PAC's cascade. */
+    const objectiveCards = $derived(objectives ? objectives.stages.filter((stage) => !isTieBreak(stage.objective_code, profile.text)) : []);
+    const tieBreaks = $derived(objectives ? objectives.stages.filter((stage) => isTieBreak(stage.objective_code, profile.text)) : []);
+    /** The Rebalancer's score and its parts (contract §6.6), on the score's card. */
+    const score = $derived(profile.text === 'rebalancer' && 'primary_solution' in result ? (result.primary_solution as unknown as RebalancerSolution).score : null);
+    const scoreMoney = (value: Parameters<typeof formatExactMoneyPlain>[0]) => formatExactMoneyPlain(value, {digits});
+    /** The objectives the solver closed at the optimum: the witness, without the Rebalancer's tie-breaks. */
+    const closedObjectives = $derived(proof.kind === 'optimal_proven' ? proof.witness.objective_codes.filter((code) => !isTieBreak(code, profile.text)).length : 0);
+    const R = 'tools.portfolioRebalancer.planner.result';
     const stages = $derived(solver.stages);
     const engines = $derived([...new Set(stages.map((stage) => [stage.engine, stage.version].join(' ')))]);
     const scopes = $derived([...new Set(stages.map((stage) => stage.scope))]);
 
-    const objectiveName = (code: string) => $t(`${PLANNER_KEY}.objectives.${code}`, {default: OBJECTIVE_FALLBACKS[code] ?? code});
+    const objectiveName = (code: string) => {
+        const name = objectiveNameKey(code, profile.text);
+        return $t(name.key, {default: name.fallback});
+    };
     const cell = (content: ResultCellContent) => ({type: 'custom' as const, component: ResultCell, props: {cell: content}});
     const help = (key: keyof typeof HELP_FALLBACKS) => () => $t(`${KEY}.help.${key}`, {default: HELP_FALLBACKS[key]});
     // On a phone (the table's own 768 px breakpoint) the stages table follows the Review step's scheme (Y-9): each column is fluid down to a
@@ -119,7 +136,7 @@
             {
                 id: 'status',
                 header: () => $t(`${KEY}.status`, {default: 'Status'}),
-                headerTooltip: help('status'),
+                headerTooltip: () => $t(proofStatusHelpKey(profile.text), {default: STATUS_HELP_FALLBACKS[profile.text]}),
                 type: 'text',
                 sortable: false,
                 filterable: false,
@@ -178,15 +195,15 @@
                 <div class="flex flex-wrap gap-1.5"><ResultBadgeTip badge={proofBadge} /></div>
             {/if}
             {#if proof.kind === 'optimal_proven'}
-                <p class={HINT} data-testid={testId('proof-witness', profile)}>
+                <p class={HINT} data-testid={testId('proof-witness', profile)} data-closed={closedObjectives}>
                     {$t(`${KEY}.solverWitness`, {
                         default: '{objectives, plural, one {# objective of the cascade} other {# objectives of the cascade}} closed at the optimum by the solver',
-                        values: {objectives: proof.witness.objective_codes.length},
+                        values: {objectives: closedObjectives},
                     })}
                 </p>
             {:else if proof.kind === 'not_proven'}
                 <!-- Not proven: either a stage is still open, or every stage closed but the final exact check contradicted the solver's bounds; the badge help says which. -->
-                <p class="{HINT} first-letter:uppercase" data-testid={testId('proof-reason', profile)}>
+                <p class="{HINT} first-letter:uppercase" data-testid={testId('proof-reason', profile)} data-reason={proof.reason_code}>
                     {$t(`tools.pacAllocator.planner.result.proof.reasons.${proof.reason_code}`, {default: 'an exact proof was not established'})}
                 </p>
             {/if}
@@ -206,7 +223,7 @@
             <p class="font-medium text-lf-primary">{$t(`${KEY}.exactObjectives`, {default: 'Exact objective values (backend, Decimal)'})}</p>
             <!-- R11.10: one card per objective, in cascade order, with the «?» of Strategy. -->
             <ol class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {#each objectives.stages as stage (stage.objective_code)}
+                {#each objectiveCards as stage (stage.objective_code)}
                     {@const tip = objectiveHelp(stage.objective_code)}
                     <li class="{TILE} flex items-start gap-3" data-testid={testId('objective', profile)} data-objective={stage.objective_code}>
                         <span class="{ICON_BUBBLE} text-xs font-semibold" aria-hidden="true">{stage.ordinal}</span>
@@ -220,16 +237,36 @@
                             <p class="mt-1 break-words text-lg font-semibold tabular-nums text-lf-primary" data-testid={testId('objective-value', profile)}>
                                 {formatObjectiveValue(stage.value, stage.unit, digits)}
                             </p>
+                            {#if score && stage.objective_code === 'plan_score' && score.distance_weight && score.distance_per_wealth}
+                                <!-- The score's three parts: J = λ × distance/F + money lost (contract §6.6), each a published field. -->
+                                <ul class="{HINT} mt-1 space-y-0.5 tabular-nums">
+                                    <li data-part="distance_weight">{$t(`${R}.proof.lambda`, {default: 'λ {value}', values: {value: formatPlannerPlainDecimal(exactDisplay(score.distance_weight).text)}})}</li>
+                                    <li data-part="distance_per_wealth">{$t(`${R}.header.distance`, {default: 'Distance/F {value}', values: {value: scoreMoney(score.distance_per_wealth)}})}</li>
+                                    <li data-part="wealth_loss">{$t(`${R}.header.moneyLost`, {default: 'Money lost {value}', values: {value: scoreMoney(score.wealth_loss)}})}</li>
+                                </ul>
+                            {/if}
                         </div>
                     </li>
                 {/each}
             </ol>
-            <p class={HINT} data-testid={testId('proof-tie-break', profile)}>
-                <span class="font-medium">{$t(`${PLANNER_KEY}.strategy.tieBreakTitle`, {default: 'Final tie-break'})}</span> ·
-                {$t(`${PLANNER_KEY}.strategy.tieBreak`, {
-                    default: 'If a tie is still left, a fixed order of Assets and Brokers decides. A search that ends by itself always gives the same plan for the same data; one stopped by a time or node limit may give a different plan.',
-                })}
-            </p>
+            <!-- The Rebalancer's tie-breaks, named in the cascade's order, then the fixed order (B2, D4); the PAC's sentence. -->
+            <svelte:element this={profile.text === 'rebalancer' ? 'div' : 'p'} class={profile.text === 'rebalancer' ? `${HINT} space-y-1` : HINT} data-testid={testId('proof-tie-break', profile)}>
+                {#if profile.text === 'rebalancer'}
+                    <p><span class="font-medium">{$t(`${R}.proof.tieBreaks`, {default: 'Tie-breaks, among the plans as good on the objectives above'})}</span></p>
+                    <ol class="list-inside list-decimal">
+                        {#each tieBreaks as stage (stage.objective_code)}
+                            <li data-objective={stage.objective_code}>{objectiveName(stage.objective_code)}</li>
+                        {/each}
+                        <li data-objective="fixed_order">{$t(`${R}.proof.fixedOrder`, {default: 'a fixed order of Assets and Brokers'})}</li>
+                    </ol>
+                    <p>{$t(`${R}.proof.sameData`, {default: 'A search that ends by itself gives the same plan for the same data; one stopped by the time limit may give another.'})}</p>
+                {:else}
+                    <span class="font-medium">{$t(`${PLANNER_KEY}.strategy.tieBreakTitle`, {default: 'Final tie-break'})}</span> ·
+                    {$t(`${PLANNER_KEY}.strategy.tieBreak`, {
+                        default: 'If a tie is still left, a fixed order of Assets and Brokers decides. A search that ends by itself always gives the same plan for the same data; one stopped by a time or node limit may give a different plan.',
+                    })}
+                {/if}
+            </svelte:element>
         </div>
     {/if}
 
