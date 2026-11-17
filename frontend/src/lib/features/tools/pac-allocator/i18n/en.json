@@ -305,7 +305,8 @@
             "bound_min_above_max": "The minimum is higher than the maximum.",
             "bounds_min_sum_exceeds_reference": "The minimums add up to more than the money the plan can reach.",
             "bounds_unsatisfiable": "No plan meets the minimums and maximums set here.",
-            "solver_numerical_error": "The solver hit a numerical error while refining the plan: the best plan found so far is shown. It is valid and can be carried out; only its optimality is not proven."
+            "solver_numerical_error": "The solver hit a numerical error while refining the plan: the best plan found so far is shown. It is valid and can be carried out; only its optimality is not proven.",
+            "cash_limit_exceeded_by_rounding": "The plan ends this cash entry beyond its limit by {exceeded_by}, because every amount is rounded to the cent. The planner could not hold the plan exactly inside a band this narrow."
           },
           "pac_allocator": {
             "initial_holding_forbidden": "This Tool does not accept existing holdings.",
@@ -773,7 +774,8 @@
             "noIncumbent": {
               "body": "The solver found no plan before the limit. This is not a proof that no plan exists.",
               "tips": "To reduce the search: fewer Assets or routes, tighter caps, larger steps.",
-              "title": "No plan within the limits"
+              "title": "No plan within the limits",
+              "completedBody": "The search ended without a plan that can be carried out within these limits. This is not a proof that no plan exists."
             },
             "noOp": {
               "body": "With {amount} no purchase meets the constraints: the plan is to do nothing.",

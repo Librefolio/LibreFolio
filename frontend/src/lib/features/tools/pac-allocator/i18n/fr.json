@@ -305,7 +305,8 @@
             "bound_min_above_max": "Le minimum est supérieur au maximum.",
             "bounds_min_sum_exceeds_reference": "Les minimums totalisent plus que l’argent que le plan peut atteindre.",
             "bounds_unsatisfiable": "Aucun plan ne respecte les minimums et maximums fixés ici.",
-            "solver_numerical_error": "Le solveur a rencontré une erreur numérique en affinant le plan : le meilleur plan trouvé jusqu'ici est affiché. Il est valide et exécutable ; seule son optimalité n'est pas prouvée."
+            "solver_numerical_error": "Le solveur a rencontré une erreur numérique en affinant le plan : le meilleur plan trouvé jusqu'ici est affiché. Il est valide et exécutable ; seule son optimalité n'est pas prouvée.",
+            "cash_limit_exceeded_by_rounding": "The plan ends this cash entry beyond its limit by {exceeded_by}, because every amount is rounded to the cent. The planner could not hold the plan exactly inside a band this narrow."
           },
           "pac_allocator": {
             "initial_holding_forbidden": "Cet outil n’accepte pas de positions existantes.",
@@ -773,7 +774,8 @@
             "noIncumbent": {
               "body": "Le solveur n’a trouvé aucun plan avant la limite. Ce n’est pas une preuve qu’aucun plan n’existe.",
               "tips": "Pour réduire la recherche : moins d’actifs ou de routes, des plafonds plus serrés, des pas plus grands.",
-              "title": "Aucun plan dans les limites"
+              "title": "Aucun plan dans les limites",
+              "completedBody": "The search ended without a plan that can be carried out within these limits. This is not a proof that no plan exists."
             },
             "noOp": {
               "body": "Avec {amount}, aucun achat ne respecte les contraintes : le plan consiste à ne rien faire.",
