@@ -44,7 +44,7 @@
  * and its two load failures fell back to English sentences; the FX page read `fxDetail.assetFallback` twice;
  * `assetDetail.notFound`, `loadFailed` and `pricesLoadFailed` were in no catalogue.
  *
- * The catalogues are read like `riskGlossary.test.ts` reads them: the four generated ones (`src/lib/i18n/<lang>.json`,
+ * The catalogues are read like `catalogIcuLocale.test.ts` reads them: the four generated ones (`src/lib/i18n/<lang>.json`,
  * built from their sources by Vitest's global setup), typed on the app's locale list.
  *
  * Registered in `front_utility_unit` (`scripts/test_runner/_frontend_utility.py`, action `core-unit`), next to

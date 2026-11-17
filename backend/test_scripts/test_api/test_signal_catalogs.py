@@ -38,6 +38,8 @@ ASSET_CODES = {
     "MFI",
     "RISK_DRAWDOWN",
     "RISK_ROLLING_BETA",
+    "RISK_ROLLING_DOWNSIDE_DEVIATION",
+    "RISK_ROLLING_OMEGA",
     "RISK_ROLLING_SHARPE",
     "RISK_ROLLING_VOLATILITY",
     # Developer's decision 29 (CP-10a): ONE Rolling Return, measured in calendar days. The
@@ -231,5 +233,5 @@ async def test_catalog_handlers_have_no_db_or_history_dependency():
 
     asset = await list_asset_signal_catalog(_current_user=object())
     fx = await list_fx_signal_catalog(_current_user=object())
-    assert len(asset.items) == 22
+    assert len(asset.items) == 24  # RN-22: the rolling semi-deviation and the rolling Omega
     assert len(fx.items) == 10  # Z-29fx: the calendar rolling return joined the FX catalog

@@ -8,7 +8,7 @@
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
 
-    import {formatCurrencyAmount} from '../riskAnalysisHelpers';
+    import {amountOnValue, formatCurrencyAmount} from '../riskAnalysisHelpers';
     import {buildCurrentDrawdown, buildHurtRows} from './levelHelpers';
     import {buildReturnHistogram, buildTailMeasures, buildUnderwater, gainPercent, lossAmount, lossPercent} from './l1/l1Helpers';
     import ReturnHistogram from './l1/ReturnHistogram.svelte';
@@ -78,8 +78,8 @@
 
     /** The money a loss fraction costs at the current scope value; a zero loss carries no minus. */
     function lossMoney(fraction: number): string {
-        if (!showMoney || scopeValue == null) return '';
-        return lossAmount(scopeValue * fraction, (value) => formatCurrencyAmount(value, currency));
+        const amount = showMoney ? amountOnValue(fraction, scopeValue) : null;
+        return amount === null ? '' : lossAmount(amount, (value) => formatCurrencyAmount(value, currency));
     }
 
     /**
@@ -112,7 +112,7 @@
     /**
      * The card's subtitle, what the parentheses of the title used to say (F8): which part of the distribution, and the measure's name.
      * The worst fall's is built from two catalogue names — «lived through» and the glossary's own «maximum drawdown» — so the measure
-     * keeps the one name `riskGlossary.test.ts` holds everywhere.
+     * keeps one name (D8; since RN-17 c the legacy KPI card that named it a second time is gone).
      */
     function subtitle(id: 'day' | 'month' | 'worst'): string {
         return id === 'worst' ? `${$t('risk.levels.l1.technical.lived')} · ${$t('risk.levels.l1.technical.worst')}` : $t(`risk.levels.l1.technical.${id}`);

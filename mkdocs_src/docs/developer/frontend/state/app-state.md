@@ -466,7 +466,7 @@ found — because "no unregistered site" is also true of a scanner that reads no
 `./dev.py test front-utility core-unit`.
 
 A line that matches `SAFE_CALL` — it names a D8 primitive, a currency-code formatter or the risk
-helpers' `formatCurrencyAmount` / `formatScopedCurrencyAmount`, or calls `maskable(` or
+helpers' `formatCurrencyAmount`, or calls `maskable(` or
 `maskFormattedNumber(` — is not scanned for Form B. The skip is **line-granular**: a masked call on
 a line also hides an unmasked fallback written on the same line. Entry to `SAFE_CALL` has a price:
 the name must be an export pinned by unit tests that would break if its masking were removed.

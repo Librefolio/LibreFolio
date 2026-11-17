@@ -76,7 +76,7 @@ flowchart TB
 | `signals/validation.py` | Normalize a plugin's output (`NaN` becomes a missing value, infinity an error), check its series count and metadata against `output_specs` and its dates against the input, rewrite an availability as unavailable or partial, and build a failure's details. |
 | `signals/annotations.py` | Derive line crossovers and threshold crossings from extended canonical data, and attach them, with their warnings, to the target results (`attach_annotations`). |
 | `signals/series.py` | Provide the pure helpers that planning and execution use: the calendar days loaded per warm-up session (`SESSION_WARMUP_DAY_MULTIPLIER`), quote-day selection (`is_quote_day()`), field and date coverage (`SignalInputCoverage`), the input segment the data policy allows, event filtering, the availability decision and its warnings, and the check and slice of the visible output. |
-| `signals/risk_adapters.py` | Provide the helpers the prepared-series risk plugins share: read the prepared returns and the annualization factor from the execution context, compute rolling volatility, Sharpe, and beta with vectorised pandas passes (the loop versions stay as the reference that `test_risk_metrics_oracle.py` checks them against), warn about mathematically undefined windows (`undefined_metric_window`), and build a line or area output from its `SignalOutputSpec`. |
+| `signals/risk_adapters.py` | Provide the helpers the prepared-series risk plugins share: read the prepared returns and the annualization factor from the execution context, compute rolling volatility, Sharpe, beta, semi-deviation and Omega with vectorised passes (the last two sum each window afresh, so a window without a loss is an exact zero by construction) (the loop versions stay as the reference that `test_risk_metrics_oracle.py` checks them against), warn about mathematically undefined windows (`undefined_metric_window`), and build a line or area output from its `SignalOutputSpec`. |
 | Chart Asset/FX adapters | Load chart-domain data, perform currency conversion, and map it into neutral points. |
 | AI Export runtime/components | Compose selected datasets, share request-scoped resources, and call the same `SignalService` for curated technical components. |
 
@@ -324,15 +324,15 @@ and documentation links without a signal-specific UI implementation.
 
 `catalog_visible` (inherited `True`) decides whether the plugin appears in that catalog:
 `SignalPluginRegistry.list_definitions()` skips a plugin that sets it to `False`, so no
-selector offers it, while a request naming its code still runs. None of the 22 registered
+selector offers it, while a request naming its code still runs. None of the 24 registered
 plugins sets it today. `calendar_rolling_return` (`ASSET_CALENDAR_ROLLING_RETURN`) is in the
 catalog like the others, as the **Rolling Return** of the Risk group, and the asset chart also
 requests it by its code for its **Rolling Return** mode (see
 [Chart internals](../../frontend/components/charts.md#asset-detail-prices-and-rolling-return)).
-The Asset catalog, `GET /api/v1/assets/prices/signals`, lists the 22 plugins whose
+The Asset catalog, `GET /api/v1/assets/prices/signals`, lists the 24 plugins whose
 `compatible_domains` include `ASSET`, which is all of them; the FX catalog,
-`GET /api/v1/fx/currencies/signals`, lists the 9 close-only ones that also declare `FX`: EMA,
-SMA, KAMA, MACD, PPO, ROC, RSI, Stochastic RSI and Bollinger Bands.
+`GET /api/v1/fx/currencies/signals`, lists the 10 that also declare `FX`: the 9 close-only EMA,
+SMA, KAMA, MACD, PPO, ROC, RSI, Stochastic RSI and Bollinger Bands, and the calendar Rolling Return.
 `test_signal_plugin_matrix.py` pins both sets.
 
 `aggregation_profile` says which point stands for a bucket when an output is reduced to one point
@@ -718,8 +718,9 @@ a new plugin lands in the `charts` subsystem, which owns the `signals` prefix.
 Keys outside the plugin's space stay in the `charts` subsystem, where `add` puts them by itself:
 the parameter captions and tooltips named by `x-i18n-key` and `x-tooltip-key`
 (`chartSettings.params.*`, `chartSettings.tooltips.*`), the units (`signals.units.*`), and the
-keys several plugins share — `signals.reference.zero`, and `signals.tooltips.riskWindow`, the
-window tooltip of Rolling Volatility, Sharpe and Beta. A tooltip inside the plugin's space belongs
+keys several plugins share — `signals.reference.zero`; `signals.tooltips.riskWindow`, the
+window tooltip of Rolling Volatility, Sharpe, Semi-deviation, Omega and Beta; and the target return of Semi-deviation and
+Omega (`chartSettings.params.targetAnnualReturn`, `signals.tooltips.targetAnnualReturn`). A tooltip inside the plugin's space belongs
 to its fragment like any other key: `calendar_rolling_return` keeps
 `signals.riskRollingReturn.windowTooltip` there. `./dev.py test utils gate-plugin-i18n-ownership`
 keeps every key the plugin declares in its space — `display_name_key`, `description_key`, and the
@@ -754,7 +755,7 @@ declares `"x-suffix": "sessions"` and the shared tooltip
 (EMA, MACD/PPO, and Stochastic RSI keep dedicated tooltip keys). A window over the
 prepared return series counts its return observations, one per quote day with a return, and
 declares `"x-suffix": "observations"` with the shared tooltip `signals.tooltips.riskWindow`:
-the `window` of Rolling Volatility, Sharpe and Beta. A calendar window declares
+the `window` of Rolling Volatility, Sharpe, Semi-deviation, Omega and Beta. A calendar window declares
 `"x-suffix": "days"`: the `window_days` of `calendar_rolling_return`, with its own tooltip
 `signals.riskRollingReturn.windowTooltip`.
 `SignalParamControl.svelte` renders the suffix through the i18n key

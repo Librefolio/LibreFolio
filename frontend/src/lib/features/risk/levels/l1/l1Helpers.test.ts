@@ -167,6 +167,42 @@ describe('buildReturnHistogram', () => {
     });
 });
 
+// RN-18 (Q21: the positive tail, «every chart that shows the losses' tail shows the gains' too»): the green bars are the
+// whole bars from `gain_bin_edge` up, the grid edge the backend pins on the gain threshold (RN-14); the threshold and
+// its share come from the answer, never a literal.
+describe('buildReturnHistogram — the green tail (RN-18)', () => {
+    function gainVar(bins: Record<string, unknown>[], edge: number | null, gain: {threshold: number | null; edge: number | null}, confidence = 0.95): RiskAnalyticResult {
+        return ok('historical_var', {kind: 'var_cvar', confidence_level: confidence, return_bins: bins, var_bin_edge: edge, gain_threshold: gain.threshold, gain_bin_edge: gain.edge}, DAILY_VAR_INSTANCE);
+    }
+    const BINS = [bin(-0.03, -0.02, 2), bin(-0.02, -0.01, 9), bin(-0.01, 0, 20), bin(0, 0.015, 22), bin(0.015, 0.025, 6), bin(0.025, 0.035, 1)];
+
+    it('marks the whole bars from the gain edge up, and says the threshold and the share of the best days', () => {
+        const histogram = buildReturnHistogram([gainVar(BINS, -0.02, {threshold: 0.015, edge: 0.015})]);
+        expect(histogram?.bins.map((entry) => entry.aboveGain)).toEqual([false, false, false, false, true, true]);
+        expect(histogram?.gain).toEqual({threshold: 1.5, share: expect.closeTo(0.05, 12)});
+    });
+
+    it('takes the share from the answer’s confidence, never a literal 5%', () => {
+        const histogram = buildReturnHistogram([gainVar(BINS, -0.02, {threshold: 0.015, edge: 0.015}, 0.99)]);
+        expect(histogram?.gain?.share).toBeCloseTo(0.01, 12);
+    });
+
+    it('gives a bar that holds the VaR cut to the VaR, never to the gain', () => {
+        // A series of pure gains: the VaR floors at zero and the gain edge can sit on the same edge.
+        const histogram = buildReturnHistogram([gainVar([bin(0, 0.01, 12), bin(0.01, 0.02, 3)], 0, {threshold: 0, edge: 0})]);
+        expect(histogram?.bins.map((entry) => [entry.holdsCut, entry.aboveGain])).toEqual([
+            [true, false],
+            [false, true],
+        ]);
+    });
+
+    it('has no green line without a gain: a threshold of zero or none published', () => {
+        expect(buildReturnHistogram([gainVar(BINS, -0.02, {threshold: 0, edge: 0.035})])?.gain).toBeNull();
+        expect(buildReturnHistogram([gainVar(BINS, -0.02, {threshold: null, edge: null})])?.gain).toBeNull();
+        expect(buildReturnHistogram([gainVar(BINS, -0.02, {threshold: null, edge: null})])?.bins.every((entry) => !entry.aboveGain)).toBe(true);
+    });
+});
+
 describe('buildTailMeasures', () => {
     it('leaves the worst day absent when the producer refused to publish one', () => {
         // Every day in the window gained. A zero here would claim a loss that
@@ -804,5 +840,43 @@ describe('D381 wiring gate — the L1 components', () => {
 
     it.each([PANEL_FILE, HISTOGRAM_FILE])('%s builds no minus sign of its own', (file) => {
         expect(minusLiterals(componentSource(file)), `${file}: a U+2212 in a literal is a sign that did not come from l1Helpers`).toEqual([]);
+    });
+});
+
+/* ------------------------------------------- RN-18: a signed amount --- */
+
+/**
+ * RN-18 — «How does it move?» puts money beside figures that can go either way: the best day and the largest rally
+ * are gains, the best 30 days can be a loss. `signedAmount(amount, format)` is `lossAmount`'s twin: it formats the
+ * MAGNITUDE and puts «+» before a gain and U+2212 before a loss, only when the cents the caption prints are not zero;
+ * the sign is decided on the number, never on the (possibly masked) text.
+ */
+function signedAmount(amount: number, format: AmountFormatter): string {
+    const helper = l1Exports.signedAmount;
+    expect(typeof helper, 'l1Helpers exports no signedAmount(): the move cards would sign their money by hand').toBe('function');
+    return (helper as (amount: number, format: AmountFormatter) => string)(amount, format);
+}
+
+describe('signedAmount — money that can rise or fall (RN-18)', () => {
+    it.each(
+        rows([
+            {value: 421.6, expected: '+421.60 EUR'},
+            {value: -12.3, expected: '−12.30 EUR'},
+            {value: 0, expected: '0.00 EUR'},
+            {value: 0.004, expected: '0.00 EUR'},
+            {value: -0.004, expected: '0.00 EUR'},
+        ]),
+    )('words $shown as $expected', ({value, expected}) => {
+        expect(signedAmount(value, currencyLike)).toBe(expected);
+    });
+
+    it('decides the sign on the number, because a masked amount has no digits to read', () => {
+        expect(signedAmount(421.6, masked)).toBe(`+${MASK}`);
+        expect(signedAmount(-12.3, masked)).toBe(`${MINUS}${MASK}`);
+        expect(signedAmount(0.004, masked)).toBe(MASK);
+    });
+
+    it('leaves an amount that is not a number to the formatter, unsigned', () => {
+        for (const amount of NON_FINITE) expect(signedAmount(amount, currencyLike), `signedAmount(${amount})`).toBe(PLACEHOLDER);
     });
 });

@@ -1,0 +1,10 @@
+{
+  "signals": {
+    "riskRollingDownsideDeviation": {
+      "name": "Semi-deviazione mobile",
+      "description": "Volatilità annualizzata dei rendimenti sotto l'obiettivo su una finestra mobile: il denominatore del Sortino, da leggere accanto alla volatilità.",
+      "output": "Semi-deviazione",
+      "outputDescription": "Scarto quadratico medio sotto l'obiettivo, annualizzato, in punti percentuali."
+    }
+  }
+}

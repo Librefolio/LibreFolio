@@ -2500,6 +2500,17 @@ def test_a_window_of_one_refuses_a_dispersion_statistic_on_both_paths():
             lambda: _loop_beta(returns, comparison, 1),
             lambda: rolling_beta_values(returns, comparison, 1),
         ),
+        # RN-22: the semi-deviation and the Omega refuse a window of one with the scalar path's own sentence.
+        (
+            "semi-deviation",
+            lambda: _loop_downside_deviation(returns, 1, _ANNUALIZATION),
+            lambda: risk_adapters_module.rolling_annualized_downside_deviation_values(returns, 1, _ANNUALIZATION, scale=100.0),
+        ),
+        (
+            "omega",
+            lambda: _loop_omega(returns, 1, _ANNUALIZATION),
+            lambda: risk_adapters_module.rolling_omega_values(returns, 1, _ANNUALIZATION),
+        ),
     ):
         with pytest.raises(ValueError, match="at least two observations") as loop_error:
             loop_call()
@@ -2528,6 +2539,8 @@ def test_the_vectorised_rolling_helpers_refuse_a_bad_annualization_factor_as_the
     for label, loop_call, vectorised_call in (
         ("annualized volatility", lambda: _loop_annualized_volatility(returns, 5, factor, scale=100.0), lambda: rolling_annualized_volatility_values(returns, 5, factor, scale=100.0)),
         ("annualized sharpe", lambda: _loop_annualized_sharpe(returns, 5, factor), lambda: rolling_annualized_sharpe_values(returns, 5, factor)),
+        ("semi-deviation", lambda: _loop_downside_deviation(returns, 5, factor), lambda: risk_adapters_module.rolling_annualized_downside_deviation_values(returns, 5, factor, scale=100.0)),
+        ("omega", lambda: _loop_omega(returns, 5, factor), lambda: risk_adapters_module.rolling_omega_values(returns, 5, factor)),
     ):
         with pytest.raises(ValueError) as loop_error:
             loop_call()
@@ -2541,6 +2554,8 @@ def test_the_vectorised_rolling_helpers_refuse_a_bad_annualization_factor_as_the
     [
         pytest.param("annualized volatility", lambda returns, factor: rolling_annualized_volatility_values(returns, 5, factor, scale=100.0), id="volatility"),
         pytest.param("annualized sharpe", lambda returns, factor: rolling_annualized_sharpe_values(returns, 5, factor), id="sharpe"),
+        pytest.param("semi-deviation", lambda returns, factor: risk_adapters_module.rolling_annualized_downside_deviation_values(returns, 5, factor, scale=100.0), id="semi-deviation"),
+        pytest.param("omega", lambda returns, factor: risk_adapters_module.rolling_omega_values(returns, 5, factor), id="omega"),
     ],
 )
 def test_the_vectorised_rolling_helpers_read_the_annualization_rule_of_the_house(monkeypatch, label, call):
@@ -3890,3 +3905,88 @@ def test_the_best_thirty_days_and_the_largest_rally_match_numpy():
     assert rally.gain == pytest.approx(float(rise.max()), rel=1e-12)
     assert rally.peak_index == int(np.argmax(rise))
     assert wealth[rally.trough_index] == running_low[rally.peak_index]
+
+
+# --------------------------------------------------------------------------- #
+# RN-22: the rolling semi-deviation and the rolling Omega, against the one home
+# --------------------------------------------------------------------------- #
+#
+# The two new risk signals publish, window by window, exactly what `risk/metrics.py` answers for that window:
+# `annualized_downside_deviation` (×100, the volatility's scale, so the two lines share one axis) and `omega_ratio`,
+# both around the Sortino's target. The vectorised helpers in `risk_adapters.py` are judged by the reference loop
+# (`rolling_single_values` over the scalar functions), as the three migrated helpers are above.
+
+_RN22_TARGETS = (0.0, 0.03)
+
+
+def _loop_downside_deviation(returns: Sequence[float], window: int, factor: float, *, target: float = 0.0) -> tuple[list[float | None], int]:
+    """The rolling semi-deviation as the scalar definition gives it, window by window, on the volatility's scale."""
+    return rolling_single_values(returns, window, lambda sample: annualized_downside_deviation(sample, factor, annual_target_return=target) * 100.0)
+
+
+def _loop_omega(returns: Sequence[float], window: int, factor: float, *, target: float = 0.0) -> tuple[list[float | None], int]:
+    """The rolling Omega as the scalar definition gives it: undefined where the window has no observation below the target."""
+    return rolling_single_values(returns, window, lambda sample: omega_ratio(sample, factor, annual_target_return=target))
+
+
+def _losses_then_a_long_gaining_run(window: int) -> list[float]:
+    """Losses and gains, then more than ``window`` observations above the target, then losses again.
+
+    The trap a rolling sum could fall in: once the last loss slides out of the window, an incrementally updated sum of
+    losses could keep a residue instead of an exact zero — a negative one would put NaN under a square root, a positive
+    one would pass the tolerance and publish an Omega of 1e12 (pandas' own sum lands on zero here, measured 17/11; the
+    helpers sum each window anew so it never depends on that). Every window wholly inside the gaining run must be
+    undefined, exactly as the loop says.
+    """
+    generator = np.random.default_rng(2207)
+    head = [float(value) for value in generator.normal(0.0004, 0.013, 60)]
+    gaining = [float(abs(value)) + 0.0005 for value in generator.normal(0.0, 0.009, window + 25)]
+    tail = [float(value) for value in generator.normal(-0.0002, 0.012, 40)]
+    return head + gaining + tail
+
+
+@pytest.mark.parametrize("target", _RN22_TARGETS)
+@pytest.mark.parametrize("seed", _ROLLING_SEEDS)
+@pytest.mark.parametrize("window", _ROLLING_WINDOWS)
+def test_the_vectorised_rolling_semi_deviation_reproduces_the_one_home_window_by_window(window, seed, target):
+    """Over T and around the target — not ``rolling().std()``: a zero is an answer, never undefined."""
+    returns = _rolling_sample(seed)
+    vectorised = risk_adapters_module.rolling_annualized_downside_deviation_values(returns, window, _ANNUALIZATION, annual_target_return=target, scale=100.0)
+
+    _assert_rolling_paths_agree(vectorised, _loop_downside_deviation(returns, window, _ANNUALIZATION, target=target), observations=len(returns), label=f"semi-deviation, window={window}, seed={seed}, target={target}")
+    assert vectorised[1] == 0
+
+
+@pytest.mark.parametrize("target", _RN22_TARGETS)
+@pytest.mark.parametrize("seed", _ROLLING_SEEDS)
+@pytest.mark.parametrize("window", _ROLLING_WINDOWS)
+def test_the_vectorised_rolling_omega_reproduces_the_one_home_window_by_window(window, seed, target):
+    """Gains over losses around the target, window by window, undefined exactly where the scalar Omega is."""
+    returns = _rolling_sample(seed)
+    loop = _loop_omega(returns, window, _ANNUALIZATION, target=target)
+
+    _assert_rolling_paths_agree(risk_adapters_module.rolling_omega_values(returns, window, _ANNUALIZATION, annual_target_return=target), loop, observations=len(returns), label=f"omega, window={window}, seed={seed}, target={target}")
+
+
+@pytest.mark.parametrize("window", (7, 20, 30))
+def test_the_rolling_omega_is_undefined_in_every_window_of_a_gaining_run_and_never_publishes_a_residue(window):
+    """The windows wholly inside a run with no loss are undefined — counted to the unit — and nothing infinite or huge leaks."""
+    returns = _losses_then_a_long_gaining_run(window)
+    loop = _loop_omega(returns, window, _ANNUALIZATION)
+    run_windows = (window + 25) - window + 1
+
+    assert loop[1] >= run_windows, "premise: the gaining run holds its windows, each undefined by the scalar Omega"
+    vectorised = risk_adapters_module.rolling_omega_values(returns, window, _ANNUALIZATION)
+    _assert_rolling_paths_agree(vectorised, loop, observations=len(returns), label=f"omega, gaining run, window={window}")
+    assert max(value for value in vectorised[0] if value is not None) < 1e6, "a residue of the losses' rolling sum published a huge Omega"
+
+
+@pytest.mark.parametrize("window", (7, 20, 30))
+def test_the_rolling_semi_deviation_is_a_measured_zero_in_a_gaining_run_never_a_nan(window):
+    """No observation below the target: the semi-deviation is 0 — a defined value — and the sum's residue is no NaN."""
+    returns = _losses_then_a_long_gaining_run(window)
+    vectorised = risk_adapters_module.rolling_annualized_downside_deviation_values(returns, window, _ANNUALIZATION, scale=100.0)
+
+    _assert_rolling_paths_agree(vectorised, _loop_downside_deviation(returns, window, _ANNUALIZATION), observations=len(returns), label=f"semi-deviation, gaining run, window={window}")
+    start = 60 + window  # the first window wholly inside the gaining run ends here (index in the values, baseline included)
+    assert vectorised[0][start] == 0.0

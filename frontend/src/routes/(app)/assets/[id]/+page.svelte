@@ -45,7 +45,7 @@
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
-    import AssetRiskScenariosView from '$lib/features/risk/AssetRiskScenariosView.svelte';
+    import AssetRiskTab from '$lib/features/risk/AssetRiskTab.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {
@@ -717,11 +717,6 @@
     let signalDefinitionsByType = $derived(new Map(signalDefinitions.map((definition) => [definition.type, definition])));
 
     let backendOverlaySignals: RenderedSignal[] = $derived(renderBackendResults(signals, signalInstanceResults, signalDefinitionsByType, lineData, viewMode, (key) => $t(key)));
-
-    let rollingRiskSignals = $derived.by(() => {
-        const riskConfigIds = new Set(signals.filter((config) => signalDefinitionsByType.get(config.signalType)?.indicatorGroup === 'risk').map((config) => config.id));
-        return backendOverlaySignals.filter((signal) => riskConfigIds.has(signal.id.split(':')[0]));
-    });
 
     // Overlay signals: the saved local signals, drawn by the one renderer with the page's data (Y-42), then the backend results.
     // A comparison reads the series its load wrote into its config; an asset that is gone is named by the signal's own
@@ -2356,14 +2351,6 @@
         activeTab = tabId as AssetDetailTabId;
         void goto(buildTabUrlFromLocation(window.location.href, tabId === 'overview' ? null : tabId), {replaceState: true, noScroll: true});
     }
-
-    async function openSignalConfiguration(): Promise<void> {
-        setPrimaryMode('price');
-        handleAssetDetailTabChange('overview');
-        showSignals = true;
-        await tick();
-        document.querySelector('[data-testid="asset-detail-signals-toggle"]')?.scrollIntoView({behavior: 'smooth', block: 'start'});
-    }
 </script>
 
 <div
@@ -2921,19 +2908,7 @@
         {/if}
     {:else if assetInfo && displayCurrency}
         <div data-testid="asset-detail-risk-panel">
-            <AssetRiskScenariosView
-                assetId={data.assetId}
-                {dateStart}
-                {dateEnd}
-                targetCurrency={displayCurrency}
-                assetClass={assetInfo.asset_type}
-                sectorExposure={sectorDistribution}
-                geographyExposure={geographicDistribution}
-                {rollingRiskSignals}
-                refreshVersion={riskRefreshVersion}
-                onconfigure={openSignalConfiguration}
-                onsynced={handlePageSyncComplete}
-            />
+            <AssetRiskTab assetId={data.assetId} assetType={assetInfo.asset_type} parametricPrices={isParametric} {dateStart} {dateEnd} targetCurrency={displayCurrency} refreshVersion={riskRefreshVersion} onsynced={handlePageSyncComplete} />
         </div>
     {:else}
         <div class="flex min-h-48 items-center justify-center" data-testid="asset-detail-risk-loading">

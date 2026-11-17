@@ -515,6 +515,26 @@ class RiskSimulationOutput(StrictModel):
         None,
         description="Sample size the drift was estimated from, so the factor can be read as a consequence rather than a verdict.",
     )
+    # RN-16 (developer's Q5 a): `path_count` is the count the simulation ran, the largest power of two that fits when
+    # the request did not; this is the one asked for.
+    requested_path_count: Optional[PositiveInt] = Field(None, description="The path count asked for; `path_count` is the one run, lower when the request did not fit the budget.")
+    # RN-16 (developer's Q4 c): the history the simulation was estimated on — its own, never the page's period.
+    estimation_start: Optional[date] = Field(None, description="Date of the first return the simulation was estimated on.")
+    estimation_end: Optional[date] = Field(None, description="Date of the last return the simulation was estimated on: where the cone starts.")
+    estimation_observations: Optional[PositiveInt] = Field(None, description="Number of returns the simulation was estimated on.")
+    history_truncated: bool = Field(False, description="True when a longer common history existed and only its most recent observations fit the budget.")
+
+    @model_validator(mode="after")
+    def validate_estimation_window(self) -> RiskSimulationOutput:
+        """The paths run are never more than the ones asked; the window comes whole, start before end."""
+        if self.requested_path_count is not None and self.path_count > self.requested_path_count:
+            raise ValueError("path_count cannot exceed requested_path_count")
+        window = (self.estimation_start, self.estimation_end, self.estimation_observations)
+        if any(value is None for value in window) and any(value is not None for value in window):
+            raise ValueError("the estimation window carries its start, its end and its observations, or none of them")
+        if self.estimation_start is not None and self.estimation_end is not None and self.estimation_end < self.estimation_start:
+            raise ValueError("estimation_end must not precede estimation_start")
+        return self
 
     @model_validator(mode="after")
     def validate_drift_uncertainty_disclosure(self) -> RiskSimulationOutput:
