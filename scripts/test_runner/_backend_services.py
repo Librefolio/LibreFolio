@@ -2035,6 +2035,14 @@ def services_enricher_recognize(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Enricher recognize tests", verbose=verbose)
 
 
+def services_enricher_justetf(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the justETF enricher: declarations, mapping to stored forms, not found, recognize, read, search (plan 68, lot C1)."""
+    print_section("Services: Enricher justETF")
+    print_info("Testing: backend/app/services/enricher_providers/justetf/plugin.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_justetf.py", test_names)
+    return run_command(cmd, "Enricher justETF tests", verbose=verbose)
+
+
 def services_enricher_refresh(verbose: bool = False, test_names: list = None) -> bool:
     """Test reading the profile from the enrichers: catalogue filter, read cache, merge, ask and refresh (project 68, lot B5a)."""
     print_section("Services: Enricher Refresh")
@@ -4175,6 +4183,16 @@ Note: No backend server required.
         services_enricher_recognize,
         name="Enricher Recognize",
         desc="Project 68 B4: recognize_cascade asks the enrichers covering the type with the first known identifier they accept (request order first); a strong identifier found and not known is learned before the round it starts (once, even from two sources); a different strong one is a conflict that adds and starts nothing; a ticker only reported; found never asked again, not found asked again with a learned identifier; a raising plugin is an error, the others answer; answers in order of arrival (threading.Event holds) and default_order keeps it; mockenrich ISIN → LEI learned",
+        isolation="pure",
+    )
+    # PURE: the plugin module's get_etf_overview and load_overview replaced by fakes (recorded overviews in
+    # fixtures/justetf/, a tiny DataFrame); a call the test did not offer fails it. No DB, no server, no network.
+    add_test(
+        cat,
+        "enricher-justetf",
+        services_enricher_justetf,
+        name="Enricher justETF",
+        desc="Plan 68 C1: JustETFEnricher declarations (justetf, PRICE_SOURCE, ISIN, ETF family + COMMODITY at 10, 13 voices, not test-only, pause_seconds > 0); recorded overviews (SWDA, VWCE, bond, hedged, gold ETC) mapped to stored forms through the real catalogue (TER and weights as fractions, fund size millions EUR, replication/distribution/legal-form codes, domicile ISO3, English dates, «Other» kept); synthetic sheets for every replication text, unknown texts absent and logged, ETC/ETN etc_etn, ETF absent, TER 0; empty «ETF Screener» sheet not found; recognize (non-ISIN no call, 429 raises); read per binding (error isolated, 429 RATE_LIMITED for the rest without a call); search over load_overview",
         isolation="pure",
     )
     # PURE: every database is a private SQLite file under tmp_path built with create_all; the synthetic enrichers are
