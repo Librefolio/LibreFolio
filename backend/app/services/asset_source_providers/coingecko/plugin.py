@@ -10,18 +10,28 @@ plan's API root, the errors translated, the key never in a message.
 **An asset** is priced by its CoinGecko id (``bitcoin``, ``pepe``: the assignment's identifier) in the currency of
 ``vs_currency`` (``provider_params``), which must be the asset's currency: one of ``VS_CURRENCIES``.
 
-Lot P1 is the skeleton: identity, settings, parameters, the client. The prices are lot P2, search and metadata P3.
+**Prices** (lot P2). A current price is ``/simple/price`` with ``precision=full``, the many assets of a refresh in ONE
+request (``supports_bulk_current``); the value is read as a decimal from the response's text, never through a float.
+The history is ``/coins/{id}/market_chart/range`` with ``interval=daily``: CoinGecko's point at 00:00 UTC of day D is
+the close of day D−1, and a point at another time (a «now» point) is dropped. The Demo plan gives the last 365 days only
+(10012 beyond): a start before today − 364 is moved there, logged, so the request never meets the refusal.
+
+Search and metadata are lot P3.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from datetime import date
+import json
+import re
+from collections.abc import Callable, Iterable
+from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from typing import Any, Dict, TypeVar
 
 from backend.app.db import IdentifierType
 from backend.app.db.models import ProviderInputType
-from backend.app.schemas.prices import FACurrentValue, FAHistoricalData
+from backend.app.logging_config import get_logger
+from backend.app.schemas.prices import FACurrentValue, FACurrentValueRequest, FAHistoricalData, FAPricePoint
 from backend.app.services.asset_source_providers.coingecko import _sdk
 from backend.app.services.asset_source_providers.coingecko._currencies import DEFAULT_VS_CURRENCY, VS_CURRENCIES
 from backend.app.services.assets.base import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
@@ -31,6 +41,48 @@ from backend.app.services.plugin_settings.fields import PluginSettingField, Sett
 from backend.app.services.plugin_settings.groups.coingecko import COINGECKO_GROUP_NAME, PLAN_DEMO
 
 T = TypeVar("T")
+logger = get_logger(__name__)
+
+#: The days of history the Demo plan answers: today and the 364 before (CoinGecko's 10012 beyond).
+DEMO_HISTORY_DAYS = 365
+#: The first day CoinGecko has prices for (bitcoin, 28 April 2013): the start of a history from «min» on a paid plan.
+COINGECKO_FIRST_DAY = date(2013, 4, 28)
+_DAY_MS = 86_400_000
+#: The margin past each edge of a history request, in seconds (the midnight and range filters drop what it adds).
+_EDGE_SECONDS = 3600
+
+
+def _utc_today() -> date:
+    """Today in UTC, CoinGecko's calendar (a seam for the tests)."""
+    return datetime.now(UTC).date()
+
+
+def _midnight(day: date) -> int:
+    """00:00 UTC of ``day``, in Unix seconds."""
+    return int(datetime(day.year, day.month, day.day, tzinfo=UTC).timestamp())
+
+
+def _decimal_json(text: str) -> Any:
+    """A response's JSON with its decimals as ``Decimal``: the digits CoinGecko wrote, never a float's."""
+    return json.loads(text, parse_float=Decimal)
+
+
+#: What a CoinGecko id looks like («bitcoin», «usd-coin», «pepe»): letters, digits, dots, dashes and underscores, never a
+#: path or a query. Anything else is no coin of CoinGecko's and asks nothing.
+_COIN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+
+
+def _coin_id(identifier: str) -> str:
+    """``identifier`` as a CoinGecko id, or NOT_FOUND without a request."""
+    coin = (identifier or "").strip()
+    if not _COIN_ID.fullmatch(coin) or ".." in coin:
+        raise AssetSourceError("Not a CoinGecko coin id", "NOT_FOUND", {"identifier": coin[:64]})
+    return coin
+
+
+def _unique(values: Iterable[str]) -> list[str]:
+    return list(dict.fromkeys(values))
+
 
 #: How often a current price may be asked again, in minutes (the plan, §4.1): the Demo plan's credits decide.
 REFRESH_MINUTES: tuple[str, ...] = ("10", "15", "30", "60", "120", "240")
@@ -72,6 +124,10 @@ class CoinGeckoProvider(AssetSourceProvider):
 
     #: The tests' door to the SDK: an ``httpx.Client`` on a fake transport, so no request leaves. Never set in the app.
     _http_client: Any = None
+
+    #: The many assets of a refresh in one ``/simple/price`` request: one credit for all of them.
+    supports_bulk_current = True
+    bulk_current_max_items = 100
 
     @property
     def provider_code(self) -> str:
@@ -115,7 +171,9 @@ class CoinGeckoProvider(AssetSourceProvider):
 
     @property
     def test_cases(self) -> list[dict]:
-        # The generic provider tests reach the network: CoinGecko needs a key there, which they do not have (lot P2)
+        # None: the generic provider tests (``test_external/test_asset_providers.py``) call a bare instance, which has no
+        # key, and the brief allows no call to the real CoinGecko outside the P0 trial. Its prices are pinned on the P0
+        # recordings instead (``test_services/test_coingecko_prices.py``).
         return []
 
     @property
@@ -154,8 +212,107 @@ class CoinGeckoProvider(AssetSourceProvider):
     # Prices (lot P2)
     # =========================================================================
 
+    @property
+    def current_min_refresh_seconds(self) -> float | None:
+        """The setting ``current_refresh_minutes``, in seconds: the account's credits decide (no I/O: a bound value)."""
+        try:
+            return float(self.settings.get("current_refresh_minutes")) * 60
+        except (TypeError, ValueError):
+            return None
+
+    @property
+    def supports_history(self) -> bool:
+        return True
+
+    def _vs_currency(self, provider_params: Dict | None) -> str:
+        """The asset's currency, as ``validate_params`` accepts it, in upper case."""
+        self.validate_params(provider_params)
+        return str((provider_params or {})["vs_currency"]).strip().upper()
+
+    def _prices(self, ids: list[str], currencies: list[str]) -> dict:
+        """``/simple/price`` for ``ids`` in ``currencies``: one request, its body with decimals."""
+        raw = self._call(
+            lambda client: client.simple.price.with_raw_response.get(
+                ids=",".join(ids),
+                vs_currencies=",".join(currency.lower() for currency in currencies),
+                include_last_updated_at=True,
+                precision="full",
+            )
+        )
+        body = _decimal_json(raw.http_response.text)
+        return body if isinstance(body, dict) else {}
+
+    def _quote(self, body: dict, identifier: str, currency: str) -> FACurrentValue:
+        """One coin's price in ``currency`` out of a ``/simple/price`` body; NOT_FOUND for an unknown id, NO_DATA for
+        a coin without that currency."""
+        coin = body.get(identifier)
+        if not isinstance(coin, dict):
+            raise AssetSourceError("CoinGecko does not know this coin", "NOT_FOUND", {"identifier": identifier})
+        value = coin.get(currency.lower())
+        if value is None:
+            raise AssetSourceError("CoinGecko has no price of this coin in this currency", "NO_DATA", {"identifier": identifier, "currency": currency})
+        updated = coin.get("last_updated_at")
+        as_of = datetime.fromtimestamp(int(updated), UTC).date() if isinstance(updated, int | Decimal) else _utc_today()
+        return FACurrentValue(value=value, currency=currency, as_of_date=as_of, source=self.provider_name)
+
     async def get_current_value(self, identifier: str, identifier_type: IdentifierType, provider_params: Dict | None = None) -> FACurrentValue:
-        raise AssetSourceError("CoinGecko's current price comes with lot P2", "NOT_IMPLEMENTED")
+        coin = _coin_id(identifier)
+        currency = self._vs_currency(provider_params)
+        return self._quote(self._prices([coin], [currency]), coin, currency)
+
+    async def get_current_values_bulk(self, items: list[FACurrentValueRequest]) -> dict[str, FACurrentValue | AssetSourceError]:
+        """Every item in ONE ``/simple/price`` request (each id and currency once); each answered under its key, an
+        item's own error (bad parameters, an unknown coin) for that item only. A refusal refuses the whole call."""
+        answers: dict[str, FACurrentValue | AssetSourceError] = {}
+        wanted: list[tuple[FACurrentValueRequest, str, str]] = []
+        for item in items:
+            try:
+                wanted.append((item, _coin_id(item.identifier), self._vs_currency(item.provider_params)))
+            except AssetSourceError as error:
+                answers[item.key] = error
+        if not wanted:
+            return answers
+        body = self._prices(_unique(coin for _, coin, _ in wanted), _unique(currency for _, _, currency in wanted))
+        for item, coin, currency in wanted:
+            try:
+                answers[item.key] = self._quote(body, coin, currency)
+            except AssetSourceError as error:
+                answers[item.key] = error
+        return answers
 
     async def get_history_value(self, identifier: str, identifier_type: IdentifierType, provider_params: Dict | None, start_date: AssetHistoryStartDate, end_date: date) -> FAHistoricalData:
-        raise AssetSourceError("CoinGecko's history comes with lot P2", "NOT_IMPLEMENTED")
+        """The daily closes from ``start_date`` to ``end_date``: CoinGecko's point at 00:00 UTC of D is the close of D−1."""
+        coin = _coin_id(identifier)
+        currency = self._vs_currency(provider_params)
+        plan = self.settings.group(COINGECKO_GROUP_NAME).get("plan") or PLAN_DEMO
+        start = COINGECKO_FIRST_DAY if start_date == "min" else start_date
+        if plan == PLAN_DEMO:
+            floor = _utc_today() - timedelta(days=DEMO_HISTORY_DAYS - 1)
+            if start < floor:
+                logger.info("CoinGecko's Demo plan gives one year of history: the start moves to its first day", identifier=coin, asked=str(start), first_day=str(floor))
+                start = floor
+        if start > end_date:
+            return FAHistoricalData(prices=[], events=[], currency=currency, source=self.provider_name)
+        raw = self._call(
+            lambda client: client.coins.market_chart.with_raw_response.get_range(
+                coin,
+                vs_currency=currency.lower(),
+                # One hour past each edge's midnight: those two points come whether CoinGecko's ends are inclusive or not
+                from_=str(_midnight(start + timedelta(days=1)) - _EDGE_SECONDS),
+                to=str(_midnight(end_date + timedelta(days=1)) + _EDGE_SECONDS),
+                interval="daily",
+                precision="full",
+            )
+        )
+        body = _decimal_json(raw.http_response.text)
+        points: dict[date, FAPricePoint] = {}
+        for entry in (body.get("prices") if isinstance(body, dict) else None) or []:
+            if not isinstance(entry, list) or len(entry) < 2 or entry[1] is None:
+                continue
+            stamp = int(entry[0])
+            if stamp % _DAY_MS:
+                continue  # not a midnight: the price «now», no day's close
+            day = datetime.fromtimestamp(stamp // 1000, UTC).date() - timedelta(days=1)
+            if start <= day <= end_date:
+                points[day] = FAPricePoint(date=day, close=entry[1], currency=currency)
+        return FAHistoricalData(prices=[points[day] for day in sorted(points)], events=[], currency=currency, source=self.provider_name)

@@ -89,7 +89,8 @@ def translate(error: Exception, *, secret: str | None) -> Exception:
             return AssetSourceError("This CoinGecko request needs a paid plan", PLAN_REQUIRED, details)
         if error.status_code in (401, 403):
             return AssetSourceError("CoinGecko refused the API key", INVALID_API_KEY, details)
-        return AssetSourceError(f"CoinGecko answered with HTTP {error.status_code}", PROVIDER_ERROR, details)
+        # ``detail`` is what the interface's PROVIDER_ERROR text shows: the status, never the response's own words
+        return AssetSourceError(f"CoinGecko answered with HTTP {error.status_code}", PROVIDER_ERROR, {**details, "detail": f"CoinGecko HTTP {error.status_code}"})
     return _scrubbed(error, secret)
 
 
