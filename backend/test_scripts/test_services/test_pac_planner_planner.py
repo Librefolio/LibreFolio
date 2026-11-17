@@ -2272,6 +2272,30 @@ def test_planner_solves_once_and_checks_a_prudent_infeasible_once_on_the_wide_mo
     assert [program.outer for program in calls] == [False]
 
 
+def test_a_pac_plan_of_the_wide_model_is_published_not_proven_and_roundtrips(monkeypatch):
+    """Lot ZB of project 67 on the PAC: when the prudent model closes infeasible, the PAC's plan of the wide model is
+    published, not proven, and the result survives the PAC's output union strictly. The prudent model is made infeasible
+    here by one row, so the wide one (the same scenario, with no margin) holds the plan the PAC would have published."""
+    real_compile = planner.compile_policy_program
+    compiled = []
+
+    def prudent_infeasible(scenario, view, **kwargs):
+        program = real_compile(scenario, view, **kwargs)
+        compiled.append(kwargs.get("outer", False))
+        if not kwargs.get("outer", False):
+            zero = program.model.addVar(vtype="C", lb=0.0, ub=0.0, name="test_zero")
+            program.model.addCons(zero >= 1, name="test_prudent_infeasible")
+        return program
+
+    monkeypatch.setattr(planner, "compile_policy_program", prudent_infeasible)
+    scenario = normalize_pac_plan(_validated(_incumbent_payload())).normalized
+    result = planner.plan_exact_scenario(scenario, solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS).result
+    assert compiled == [False, True]
+    assert isinstance(result, (PacPlannerReadyIncumbentResult, PacPlannerReadyNoOpResult))
+    assert result.proof.kind == "not_proven"
+    assert PAC_PLAN_OUTPUT_ADAPTER.validate_json(PAC_PLAN_OUTPUT_ADAPTER.dump_json(result), strict=True) == result
+
+
 def test_a_limit_a_thousandth_under_a_reachable_value_never_makes_the_run_fail():
     """A3 fix: an Asset in USD bought by amount (FX 1.085) and an EUR maximum less than a thousandth under a value the plan can
     reach. SCIP's relative row tolerance would let it buy the overshooting cents and the replay would raise
