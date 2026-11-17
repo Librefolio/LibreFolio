@@ -804,7 +804,7 @@ def api_plugin_settings(verbose: bool = False, test_names: list[str] | None = No
     """Run the plugin settings API tests: catalogue, all-or-nothing writes, write-only secrets, isolation, delivery."""
     print_section("Plugin Settings API Tests")
     print_info("Testing GET /settings/plugins and PATCH /settings/plugins/bulk with the test double mockprov (MOCKFX read-only)")
-    print_info("Tests: catalogue and roles, write-only secrets, 422 with every item, no input echo, isolation, delivery to the plugin, CASCADE and SET NULL")
+    print_info("Tests: catalogue and roles, write-only secrets, 422 with every item, no input echo, isolation, delivery to the plugin, CASCADE and SET NULL, G2: the shared group mock (entry, used_by, write, echo)")
     print_info("Note: Server will be automatically started and stopped by test")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_plugin_settings_api.py", test_names)
@@ -1598,9 +1598,9 @@ Tests for REST API endpoints (server auto-started):
         "plugin-settings",
         api_plugin_settings,
         name="Plugin Settings API",
-        desc="Catalogue and roles, write-only secrets, all-or-nothing 422 with every item, no input echo in FastAPI's 422, user isolation, delivery to mockprov, CASCADE and SET NULL",
+        desc="Catalogue and roles, write-only secrets, all-or-nothing 422 with every item, no input echo in FastAPI's 422, user isolation, delivery to mockprov, CASCADE and SET NULL, the shared test-only group mock (catalogue entry, used_by, admin write, delivery via lf-group-echo)",
         # The user fields are written by accounts the module registers and deletes; the system fields are not scopable.
-        exclusive_because="writes and clears the instance-wide plugin settings of mockprov, whose values make the fingerprint in the cache keys of every mockprov call: a concurrent unit would see its mockprov values change and miss its cache entries mid-test",
+        exclusive_because="writes and clears the instance-wide plugin settings of mockprov and of the shared group mock, whose values make the fingerprint in the cache keys of every mockprov call: a concurrent unit would see its mockprov values change and miss its cache entries mid-test",
     )
     add_test(
         api,

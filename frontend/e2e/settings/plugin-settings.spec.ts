@@ -558,6 +558,43 @@ test.describe('«Configure» on mockprov, from the asset dialog', () => {
 });
 
 // =============================================================================
+// 2b. «Configure» shows the shared settings group the plugin reads (project 76, lot G3)
+// =============================================================================
+
+test.describe('«Configure» on mockprov — its shared settings group', () => {
+    test('the dialog shows the `mock` group form below mockprov’s, and mockprov’s form has the «in group» row for it', async ({page, owned}) => {
+        await login(page, TEST_USER);
+        const assetId = await mockprovAsset(page, owned, TEST_USER);
+
+        const {modal, form} = await openMockprovConfigure(page, assetId);
+
+        // The group the plugin reads (the test-only `mock`, listed only when named) is shown where the key would be missing.
+        const wrapper = modal.locator('[data-testid="plugin-settings-modal-group"][data-group="mock"]');
+        await expect(wrapper, 'the dialog loads and draws the group mockprov names').toBeVisible({timeout: 10_000});
+        const groupForm = wrapper.getByTestId('plugin-settings-form-mock');
+        await expect(groupForm).toBeVisible();
+        await expect(groupForm).toHaveAttribute('data-family', 'group');
+        await expect(setting(groupForm, 'tier'), 'the group declares its own fields').toBeVisible();
+        await expect(modal.getByTestId('plugin-settings-modal-group'), 'only the group mockprov reads').toHaveCount(1);
+
+        const row = form.locator('[data-testid="plugin-settings-in-group"][data-group="mock"]');
+        await expect(row, 'mockprov’s form says it reads the group').toBeVisible();
+        await expect(row.getByTestId('plugin-settings-open-group'), 'the group is in this dialog: a button brings it into view').toBeVisible();
+        await row.getByTestId('plugin-settings-open-group').click();
+        await expect(groupForm.getByRole('heading', {level: 4}), 'the focus moves to the group’s heading').toBeFocused();
+    });
+
+    test('Settings › Plugins never lists the test-only `mock` group, and mockprov’s form is not there either', async ({page}) => {
+        await login(page, TEST_USER);
+        const tab = await openPluginsTab(page);
+
+        await expect(tab.getByTestId(`plugin-settings-form-${MOCKPROV}`)).toHaveCount(0);
+        await expect(tab.locator('[data-testid="plugin-settings-family"][data-family="group"]'), 'the group is listed only when named').toHaveCount(0);
+        await expect(tab.getByTestId('plugin-settings-form-mock')).toHaveCount(0);
+    });
+});
+
+// =============================================================================
 // 4. Search: a provider to configure, and the 👑 legend
 // =============================================================================
 

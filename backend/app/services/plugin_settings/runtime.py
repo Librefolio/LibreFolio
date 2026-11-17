@@ -29,6 +29,7 @@ from backend.app.db.session import get_async_engine
 from backend.app.logging_config import get_logger
 from backend.app.services.plugin_settings.contract import BoundSettings, PluginSettingsMixin
 from backend.app.services.plugin_settings.fields import SettingScope
+from backend.app.services.plugin_settings.groups import GROUP_FAMILY, plugin_groups
 from backend.app.services.plugin_settings.resolver import StoredValue, build_bound_settings
 
 if TYPE_CHECKING:
@@ -52,6 +53,17 @@ async def read_plugin_rows(session: AsyncSession, family: str, plugin_code: str,
     return system_rows, {row.field_key: stored_value(row) for row in user.scalars()}
 
 
+async def read_group_rows(session: AsyncSession, names: list[str]) -> dict[str, dict[str, StoredValue]]:
+    """The instance's rows of the shared groups ``names`` (``family="group"``), by group and field key: one statement."""
+    if not names:
+        return {}
+    result = await session.execute(select(PluginSystemSetting).where(PluginSystemSetting.family == GROUP_FAMILY, PluginSystemSetting.plugin_code.in_(names)))
+    rows: dict[str, dict[str, StoredValue]] = {name: {} for name in names}
+    for row in result.scalars():
+        rows.setdefault(row.plugin_code, {})[row.field_key] = stored_value(row)
+    return rows
+
+
 async def bound_settings_for(registry: type[AbstractProviderRegistry], plugin_code: str, *, user_id: int | None = None) -> BoundSettings | None:
     """The values of the plugin ``plugin_code`` of ``registry``'s family for one use, or ``None`` when it declares no field.
 
@@ -62,7 +74,7 @@ async def bound_settings_for(registry: type[AbstractProviderRegistry], plugin_co
     """
     family = registry.settings_family()
     plugin_class = registry.get_plugin(plugin_code)
-    if family is None or plugin_class is None or not getattr(plugin_class, "settings_fields", ()):
+    if family is None or plugin_class is None or not (getattr(plugin_class, "settings_fields", ()) or plugin_groups(plugin_class)):
         return None
     instance = plugin_class()
     await configure_instance(instance, family, user_id=user_id, plugin_code=plugin_code)
@@ -75,11 +87,13 @@ async def configure_instance[PluginT: PluginSettingsMixin](instance: PluginT, fa
     ``plugin_code`` names the plugin the values are stored under; when omitted it is the instance's ``provider_code`` (asset and FX
     providers, BRIM plugins). A Tool has no such attribute: its settings are keyed by the tool code, which the caller passes.
 
-    An object that declares no field — a plugin without settings, or a test double that is not a plugin — is returned
-    as it is, as the family boundaries let it through.
+    An object that declares no field and no group — a plugin without settings, or a test double that is not a plugin —
+    is returned as it is, as the family boundaries let it through. The shared groups it declares (``settings_groups``)
+    are bound beside its own fields, from the instance's rows of ``family="group"`` (project 76).
     """
     fields = getattr(type(instance), "settings_fields", ())
-    if not fields:
+    groups = plugin_groups(type(instance))
+    if not fields and not groups:
         return instance
     if plugin_code is None:
         plugin_code = instance.provider_code  # type: ignore[attr-defined] — asset and FX providers both have it
@@ -87,14 +101,18 @@ async def configure_instance[PluginT: PluginSettingsMixin](instance: PluginT, fa
     wants_user = user_id is not None and any(declared.scope is SettingScope.USER for declared in fields)
     system_rows: dict[str, StoredValue] = {}
     user_rows: dict[str, StoredValue] | None = {} if user_id is not None else None
-    if wants_system or wants_user:
+    group_rows: dict[str, dict[str, StoredValue]] = {}
+    if wants_system or wants_user or groups:
         try:
             async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
-                system_rows, user_rows = await read_plugin_rows(session, family, plugin_code, user_id if wants_user else None)
+                if wants_system or wants_user:
+                    system_rows, user_rows = await read_plugin_rows(session, family, plugin_code, user_id if wants_user else None)
+                group_rows = await read_group_rows(session, [group.name for group in groups])
             if user_id is not None and user_rows is None:
                 user_rows = {}
         except SQLAlchemyError as error:
             logger.warning("Plugin settings not read: database error, the environment and the defaults only", family=family, plugin=plugin_code, error=type(error).__name__)
-    bound = await asyncio.to_thread(build_bound_settings, family, plugin_code, fields, system_rows, user_rows, user_id=user_id)
+    paired = [(group, group_rows.get(group.name, {})) for group in groups]
+    bound = await asyncio.to_thread(build_bound_settings, family, plugin_code, fields, system_rows, user_rows, user_id=user_id, groups=paired)
     instance.bind_settings(bound)
     return instance

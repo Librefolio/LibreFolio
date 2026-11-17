@@ -36,7 +36,8 @@ Paths are relative to `backend/`.
 | `app/services/plugin_settings/fields.py` | `PluginSettingField` and `SettingOption`, the rules of each family (`FAMILY_RULES`), the checks of a declaration and of a value, the variables of a field (`env_name()`, `env_variables()`) and their single owner (`claim_env_variables()`) |
 | `app/services/plugin_settings/contract.py` | `PluginSettingsMixin`, inherited by the family bases, and `BoundSettings`, the values bound to one instance |
 | `app/services/plugin_settings/resolver.py` | The value each field takes (variable, saved row, default), its problems, the fields that leave a plugin not configured (`missing_field_keys()`, one rule for a call and for the catalogue), and the fingerprint of the cache keys |
-| `app/services/plugin_settings/runtime.py` | `configure_instance()`: reads the plugin's rows and binds the values to a new instance; `bound_settings_for()`: the values of a plugin that cannot be bound where it is created, as the `BoundSettings` to hand over (`None` when it declares no field) |
+| `app/services/plugin_settings/groups/__init__.py` | The shared settings groups ([Shared Groups](#groups)): `SettingsGroup`, `register_group()`, `validate_plugin_groups()` (checked at registration), `plugin_groups()` |
+| `app/services/plugin_settings/runtime.py` | `configure_instance()`: reads the plugin's rows, and its groups' (`read_group_rows()`), and binds the values to a new instance; `bound_settings_for()`: the values of a plugin that cannot be bound where it is created, as the `BoundSettings` to hand over (`None` when it declares no field) |
 | `app/services/plugin_settings/crypto.py` | The encryption of the secret values, and `plugin_secrets_key_status()` |
 | `app/services/plugin_settings/service.py` | The catalogue (`configured` and the plugin's icon included) and the all-or-nothing writes behind the API |
 | `app/api/v1/plugin_settings.py`, `app/schemas/plugin_settings.py` | The two endpoints and their schemas |
@@ -414,6 +415,8 @@ What a family may declare (`FAMILY_RULES` in `fields.py`):
 | `fx` | ❌ | ✅ | A sync serves every user: an FX provider receives the instance's values only |
 | `brim` | ✅ | ✅ | A parse runs for the user who imports: a personal value reaches it, and so does the instance's. Prepared: no shipped plugin declares a field yet |
 | `tool` | ✅ | ❌ | A Tool is computed on behalf of the user who asks, so a personal value reaches it; it calls no external source, so there is nothing to keep secret. Prepared: no shipped Tool declares a field yet ([A Field in a Tool Plugin](#tool-field)) |
+| `enricher` | ❌ | ✅ | An enricher reads the profile every user of the instance shares, in the weekly job too: only the instance's values reach it, as for FX |
+| `group` | ❌ | ✅ | A [shared group](#groups), not a family of plugins: one value for the whole instance that several plugins read, such as one source's key |
 
 No other family supports settings: the signal and risk registries refuse a plugin that declares them.
 
@@ -778,6 +781,72 @@ users with the same values do.
 
 ---
 
+## 🤝 Shared Groups {: #groups }
+
+Some values belong to a source, not to one plugin: one CoinGecko key serves the price plugin and the
+profile enricher. Without a group each plugin would declare its own `api_key` (two values, two
+variables, the credits of one account seen twice), and a plugin may not read another plugin's
+settings. So the core declares a **group** once (project 76, G1), in
+`app/services/plugin_settings/groups/`, one module per group, and the plugins that need it name it:
+
+```python
+# backend/app/services/plugin_settings/groups/coingecko.py (P1, an example)
+register_group(SettingsGroup(
+    name="coingecko",
+    label="CoinGecko",
+    fields=(
+        PluginSettingField(key="api_key", type=SettingType.STRING, scope=SettingScope.SYSTEM, secret=True, required=True, label="API key"),
+    ),
+))
+
+# a plugin
+class CoinGeckoProvider(AssetSourceProvider):
+    settings_groups = ("coingecko",)
+
+    async def get_current_value(self, identifier, identifier_type, provider_params=None):
+        key = self.settings.group("coingecko").secret("api_key")
+        ...
+```
+
+- **System fields only**, in this first version (`FAMILY_RULES["group"]`): one value for the whole
+  instance, written by an administrator or set by the environment. Secrets are allowed.
+- **Stored** in `plugin_system_settings` with `family="group"` and `plugin_code=<name>`; no
+  migration. A secret is bound to its row as for any plugin (`secret_aad("group", name, …)`).
+- **Variables**: `LIBREFOLIO_PLUGIN_GROUP_<NAME>_<FIELD>`, owned by the group in the variable
+  registry, so no plugin can read one too.
+- **Checked at registration** (`validate_plugin_groups()`, beside `validate_declaration()`): a
+  tuple of names of registered groups, each once; no group field with the key of one of the
+  plugin's own fields; a group holding a secret only in a family whose plugins may hold secrets.
+  The group modules import nothing but `fields.py`, so they register before the plugins that use
+  them.
+- **Bound beside the plugin's own values** by `configure_instance()` and `bound_settings_for()`,
+  even for a plugin with no field of its own: `self.settings.group(name)` reads them like the
+  plugin's. Their secrets are in `secret_values()`, so the boundaries mask them; their fingerprint
+  enters the plugin's (`grouped_fingerprint()`; a plugin without groups keeps its own, byte for
+  byte, so a stored BRIM parse stays current); a required group field without a value leaves every
+  plugin that uses the group not configured, named `<group>.<field>` in `missing`
+  (`coingecko.api_key`): the boundaries answer [NOT_CONFIGURED](#not-configured).
+- **In the catalogue and the writes** (G2), a group is an entry of its own: `family="group"`,
+  `plugin_code` its name, `plugin_name` its label (`name_key` its i18n key), its fields as any
+  plugin's (system: written by an administrator, read-only for the others, a secret only as set or
+  unset, locked by its variable, hidden when locked in the managed profile), `configured` judged on
+  its fields, and `used_by`, the plugins that read it. A plugin's entry lists the groups it reads in
+  `groups`, and its `configured` counts their fields with the same rule as a call
+  (`contract.qualified_missing()`); a plugin that only reads groups is listed too, with no field of
+  its own. A write names a group as it names a plugin (`family: "group"`, `plugin_code: <name>`,
+  `scope: "system"`) and follows the same rules, all or nothing with plugin items.
+- **The test group `mock`** (`groups/mock.py`, `test_only`): a secret `account_token` and a select
+  `tier`, nothing required, read by `mockprov`, whose search `lf-group-echo` answers
+  `group: tier=…; account_token=set|unset`. Listed only when named, like the test-only plugins, and
+  withheld outside test mode (`groups.is_withheld()`, X-R44): a production instance neither lists
+  nor writes it, although the group registers in every process.
+- **Managed profile.** A group whose every field the environment locks has no entry, and the
+  plugins that read it do not name it in `groups` (decision N2: no trace of what the hoster set);
+  their `configured` still counts its fields.
+- **Its tab in the interface** comes with G3.
+
+---
+
 ## 🧪 Test-Only Plugins {: #test-only }
 
 `test_only = True`, a class attribute (`False` by default), marks a plugin that exists for the tests.
@@ -850,8 +919,8 @@ sees: [Search Preferences](../../../user/settings/plugins.md#search-preferences)
 
 | Endpoint | Caller | What it does |
 |----------|--------|--------------|
-| `GET /api/v1/settings/plugins` | Any signed-in user | Every plugin that declares settings, with `configured` (see [NOT_CONFIGURED](#not-configured)), its `icon_url` (the icon its family's provider list publishes: the `get_icon` property of a price provider, `icon` of an exchange-rate provider, `icon_url` of an import plugin; null without one) and each field as the caller sees it: its declaration (type, scope, labels and i18n keys, bounds, options, default) and its state (`value` for a plain field, `is_set`, `source`: `env`, `db`, `default` or `none`, `locked`, `editable`, `problem`, `updated_at`; `env_variable` for administrators). Filters: `family`, `plugin_code`. |
-| `PATCH /api/v1/settings/plugins/bulk` | Any signed-in user; `system` fields need an administrator | Writes 1 to 100 items, all or nothing. Each item names `family`, `plugin_code`, `field_key` and `scope`, and gives exactly one of `value` (a plain field), `secret_value` (a secret field) and `clear: true` (deletes the saved value, so the default applies again). |
+| `GET /api/v1/settings/plugins` | Any signed-in user | Every plugin that declares settings, with `configured` (see [NOT_CONFIGURED](#not-configured)), its `icon_url` (the icon its family's provider list publishes: the `get_icon` property of a price provider, `icon` of an exchange-rate provider, `icon_url` of an import plugin; null without one) and each field as the caller sees it: its declaration (type, scope, labels and i18n keys, bounds, options, default) and its state (`value` for a plain field, `is_set`, `source`: `env`, `db`, `default` or `none`, `locked`, `editable`, `problem`, `updated_at`; `env_variable` for administrators). Filters: `family`, `plugin_code`. The plugins come first, then the shared groups (`family: "group"`, with `used_by`); a plugin lists the groups it reads in `groups` ([Shared Groups](#groups)). |
+| `PATCH /api/v1/settings/plugins/bulk` | Any signed-in user; `system` fields need an administrator | Writes 1 to 100 items, all or nothing. Each item names `family`, `plugin_code`, `field_key` and `scope` (a shared group: `family: "group"`, `plugin_code` its name, `scope: "system"`), and gives exactly one of `value` (a plain field), `secret_value` (a secret field) and `clear: true` (deletes the saved value, so the default applies again). |
 
 A write checks every item before writing anything, then writes them all in one transaction:
 
@@ -906,6 +975,20 @@ manual, [Plugin Settings](../../../user/settings/plugins.md); the code is in
   `fetchPluginEntry()` and hands the fresh entry to its parent; a refusal marks each refused field
   with its `error_code`. A save that succeeds raises no toast, only the app event
   `pluginSettings.saved`; a refusal or a failure raises one. The events name fields, never a value.
+- **Shared groups (project 76, G3).** The groups ([Shared Groups](#groups)) are a section of
+  their own, **Shared settings** (`group`, icon `Share2`), after every family; each group's form
+  carries its translated name (`name_key`, `entryTitle()`), a line *Shared by* naming the plugins
+  that read it (`used_by`), and sits at the element id `groupFormId(name)`. A plugin that reads a
+  group shows a row *Also uses the shared settings of …* per group, with **Open**, which brings the
+  group's form into view and moves the focus to its heading (only for a group the page shows: the
+  test-only `mock` is never in the tab). A group's save reads again each plugin of the tab that reads
+  it, so its «configured» follows without a reload. The family of the enrichers (`enricher`, icon `IdCard`,
+  **Asset profile**) has its row too, for the first enricher that declares a field.
+- **Configure on a plugin with groups** shows, below the plugin's form, one form per group it reads
+  (`plugin-settings-modal-group`, each read with `fetchPluginEntry('group', name)`): «Configure» from
+  the search row or the provider panel thus shows the key where it is missing: a plugin unconfigured
+  while one of its groups is not opens with that group in view (the first unconfigured one). A group's
+  save reads the plugin again and hands it to the parent, so its «configured» follows.
 - **Secrets are never kept in the page.** The input is `autocomplete="new-password"`; what was typed
   is sent once, as `secret_value`, and dropped after the save whatever its outcome. A saved secret
   shows *Set on* with its `updated_at`, then **Replace** or **Clear**.
@@ -996,7 +1079,7 @@ Residual risks:
 
 ## ✅ Tests {: #tests }
 
-All six run without a server or the lane's database (`isolation="pure"`):
+All seven run without a server or the lane's database (`isolation="pure"`):
 
 | Selector | Covers |
 |----------|--------|
@@ -1005,6 +1088,7 @@ All six run without a server or the lane's database (`isolation="pure"`):
 | `./dev.py test services plugin-settings-runtime` | Resolution and locking, fingerprints, `configure_instance()`, `NOT_CONFIGURED` and masking at both boundaries; `missing_field_keys()`, the same for a call and for the catalogue; `PROVIDER_ERROR` and its `details["detail"]`; a secret the caller chose, the errors hidden whole so that a wrong guess and the right one raise the same error; `public_asset_url()`, in the probe too; the search's `providers_not_configured` and the stream's `provider_error` event |
 | `./dev.py test services plugin-settings-service` | The catalogue, `configured` and each plugin's icon included (an icon that cannot be read, or an empty one, is null; a name that cannot be read falls back to the code), and the all-or-nothing writes |
 | `./dev.py test services secret-masking` | Masking in exceptions and log lines, across threads and tasks; overlapping or touching occurrences masked as one, against the overlap attack of the security review; `whole` |
+| `./dev.py test services plugin-settings-groups` | The shared groups ([Shared Groups](#groups)): registering and refusing a group, its variables, the checks of `settings_groups` at registration, the binding with no field of the plugin's own (variable, row, default), `missing` as `<group>.<field>` and `NOT_CONFIGURED` at the boundary, the masking of a group secret, the fingerprint (unchanged without groups), the pickle, and the gate: every named group exists, every shipped group is used |
 | `./dev.py test services plugin-settings-guards` | Shipped variables documented in `.env.example`, one owner per variable, no alias on a variable LibreFolio reads, AI Export kept away from the settings |
 
 The other units that touch the plugin settings:
@@ -1022,7 +1106,7 @@ The other units that touch the plugin settings:
 | `./dev.py test services tool-settings-lifecycle` | Real spawn workers: the plugin sees the value the parent delivered, the defaults when none, the values of its own tool code, never another caller's; an unconfigured Tool starts no worker while its sibling runs. It starts processes, so it is exclusive like `tools-lifecycle` |
 | `./dev.py test services plugin-secrets-check` | The startup check of the stored secrets ([Plugin Secrets Check](../security.md#plugin-secrets-check)): `ok` without an unreadable `system` secret, otherwise an `error` that counts them alone; nothing logged and no key file generated without a stored secret; a check that cannot run is a warning, never an exception |
 | `./dev.py test front-utility core-unit` | `pluginSettingsForm.test.ts` (the rules without the DOM, `FAMILY_ICONS` included) and `pluginSettingsApi.test.ts` (the narrowing of the answers, `icon_url` included, and every outcome of a save through the real client, only the transport faked) |
-| `./dev.py test front-utility component-unit` | `PluginSettingsForm.component.test.ts` (PSF-01…30, the plugin's icon and its fallback in PSF-26…30), `PluginSettingsTab.test.ts` (PST-01…09, the families' icons in PST-07…09) and `PluginSettingsModal.test.ts` (PSM-01…09); **Configure**, the badge, the search's row and the 👑 legend in `ProviderAssignmentSection.test.ts` and `AssetSearchAutocomplete.test.ts` |
+| `./dev.py test front-utility component-unit` | `PluginSettingsForm.component.test.ts` (PSF-01…40, the plugin's icon and its fallback in PSF-26…30, the shared groups in PSF-33…40), `PluginSettingsTab.test.ts` (PST-01…26, the families' icons in PST-07…09, the shared groups in PST-19…26) and `PluginSettingsModal.test.ts` (PSM-01…18, the shared groups in PSM-11…18); **Configure**, the badge, the search's row and the 👑 legend in `ProviderAssignmentSection.test.ts` and `AssetSearchAutocomplete.test.ts` |
 | `./dev.py test front-utility plugin-settings` | End to end, on desktop (`frontend/e2e/settings/plugin-settings.spec.ts`): the tab as a member and as an administrator, **Configure** on `mockprov` from an asset's edit dialog, the search's row and the 👑 legend on a simulated stream ([Front-Utility Tests](../../test-walkthrough/front-utility.md#plugin-settings)) |
 
 ---

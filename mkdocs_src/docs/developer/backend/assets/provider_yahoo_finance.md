@@ -60,6 +60,15 @@ request per refresh interval instead of 20 `ticker.info` calls (each of which ma
 - **Missing and wrong items.** A symbol Yahoo does not return gets no answer (the core serves the
   last stored price); a quote without any price answers `NO_DATA`; an identifier type other than
   TICKER or ISIN answers `INVALID_IDENTIFIER_TYPE`. The other items are still answered.
+- **Matched by symbol (a known limit).** The bulk read matches each v7 quote to its assets by the
+  symbol Yahoo returns. `ticker.info` takes the first quote whatever its symbol, so a ticker Yahoo
+  answers under another symbol (an alias, a renamed listing) is priced by `.info` but not by the
+  bulk read: that asset is served its last stored price, and the symbol is logged once per
+  process («Yahoo Finance returned no v7 quote for a symbol»). The fix is to assign the symbol Yahoo
+  now uses.
+- **Checked against the real Yahoo** by `test_current_values_bulk` in the external suite
+  (`./dev.py test external asset-providers --providers yfinance`): one bulk call on the provider's
+  test cases (a US stock, an ETF in Milan, a crypto in EUR) against the single reads.
 - **Errors.** A «too many requests» refusal raises `AssetRateLimitedError` for the whole call, never
   retried (the core pauses the provider); any other failure of the request is `FETCH_ERROR`.
 - **An internal of yfinance.** yfinance exposes no list read: the plugin calls the helper `.info`

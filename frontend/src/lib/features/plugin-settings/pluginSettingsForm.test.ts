@@ -34,7 +34,7 @@
  * function must leave what it is given as it was: a mutation throws instead of passing.
  */
 import {describe, expect, it, vi} from 'vitest';
-import {ChartColumn, Coins} from 'lucide-svelte';
+import {ChartColumn, Coins, IdCard, Share2} from 'lucide-svelte';
 import en from '$lib/i18n/en.json';
 import itCatalogue from '$lib/i18n/it.json';
 import fr from '$lib/i18n/fr.json';
@@ -47,12 +47,14 @@ import {
     draftOf,
     draftProblems,
     EMPTY_FORM,
+    entryTitle,
     FAMILY_ICONS,
     FAMILY_ORDER,
     FAMILY_TITLE_KEYS,
     fieldDescription,
     fieldLabel,
     groupByFamily,
+    groupFormId,
     optionLabel,
     own,
     PROBLEM_KEYS,
@@ -104,7 +106,7 @@ function field(over: Partial<SettingField> & Pick<SettingField, 'key'>): Setting
 }
 
 function entry(fields: SettingField[], over: Partial<PluginSettingsEntry> = {}): PluginSettingsEntry {
-    return {family: 'asset', plugin_code: 'mockprov', plugin_name: 'Mock provider', icon_url: null, configured: true, fields, ...over};
+    return {family: 'asset', plugin_code: 'mockprov', plugin_name: 'Mock provider', icon_url: null, configured: true, fields, groups: [], used_by: [], name_key: null, ...over};
 }
 
 const REGION_OPTIONS: SettingOption[] = [
@@ -162,13 +164,15 @@ describe('groupByFamily — the groups of the Plugins tab', () => {
         expect(groupByFamily([])).toStrictEqual([]);
     });
 
-    it('names the four families, asset first and the tools last, each with a whole key for its title', () => {
-        expect(FAMILY_ORDER).toEqual(['asset', 'fx', 'brim', 'tool']);
+    it('names the six families, asset first and the groups last, each with a whole key for its title', () => {
+        expect(FAMILY_ORDER).toEqual(['asset', 'fx', 'brim', 'tool', 'enricher', 'group']);
         expect(FAMILY_TITLE_KEYS).toStrictEqual({
             asset: 'pluginSettings.families.asset',
             fx: 'pluginSettings.families.fx',
             brim: 'pluginSettings.families.brim',
             tool: 'pluginSettings.families.tool',
+            enricher: 'pluginSettings.families.enricher',
+            group: 'pluginSettings.families.group',
         });
     });
 
@@ -196,7 +200,9 @@ describe('groupByFamily — the groups of the Plugins tab', () => {
 
         expect(groupByFamily([TOOL, JUSTETF]).map((group) => group.family)).toEqual(['asset', 'tool']);
         expect(groupByFamily([IMPORTER, TOOL]).map((group) => group.family)).toEqual(['brim', 'tool']);
-        expect(groupByFamily([TOOL, IMPORTER, ECB, JUSTETF]).map((group) => group.family)).toEqual([...FAMILY_ORDER]);
+        const ENRICHER = entry([], {family: 'enricher', plugin_code: 'ident'});
+        const SHARED = entry([], {family: 'group', plugin_code: 'mock'});
+        expect(groupByFamily([SHARED, TOOL, ENRICHER, IMPORTER, ECB, JUSTETF]).map((group) => group.family)).toEqual([...FAMILY_ORDER]);
     });
 
     it('puts the import sources after the exchange-rate sources and the price sources, whatever the order of the answer', () => {
@@ -747,5 +753,89 @@ describe('the family titles read in the four languages (X5-4b: tool joins asset,
         const title = familyTitle(CATALOGUES[lang], 'tool');
         expect(title, `${lang}: pluginSettings.families.tool`).toBeTypeOf('string');
         expect((title as string).trim()).not.toBe('');
+    });
+});
+
+// --- Shared settings groups (project 76, lot G3, contract B) ---------------------------------------------------------
+
+describe('shared settings groups — the family order, titles, icons, the heading and the anchor (G3, contract B)', () => {
+    const JUSTETF = entry([], {plugin_code: 'justetf'});
+    const ECB = entry([], {family: 'fx', plugin_code: 'ecb'});
+    const TOOL = entry([], {family: 'tool', plugin_code: 'fx_converter'});
+    const ENRICHER = entry([], {family: 'enricher', plugin_code: 'ident'});
+    const MOCK_GROUP = entry([], {family: 'group', plugin_code: 'mock', plugin_name: 'Mock account'});
+    const OTHER_GROUP = entry([], {family: 'group', plugin_code: 'crypto_keys', plugin_name: 'Crypto keys'});
+
+    it('PSF-G01: FAMILY_ORDER is asset, fx, brim, tool, enricher, group: the groups last', () => {
+        expect(FAMILY_ORDER).toEqual(['asset', 'fx', 'brim', 'tool', 'enricher', 'group']);
+    });
+
+    it('PSF-G02: the enricher and group titles are whole keys under pluginSettings.families', () => {
+        expect(FAMILY_TITLE_KEYS.enricher).toBe('pluginSettings.families.enricher');
+        expect(FAMILY_TITLE_KEYS.group).toBe('pluginSettings.families.group');
+    });
+
+    it('PSF-G03: the enricher family draws lucide’s IdCard and the groups Share2, neither the same as another family’s', () => {
+        expect(IdCard, 'premise: lucide exports IdCard').toBeTypeOf('function');
+        expect(Share2, 'premise: lucide exports Share2').toBeTypeOf('function');
+        expect(FAMILY_ICONS.enricher).toBe(IdCard);
+        expect(FAMILY_ICONS.group).toBe(Share2);
+        expect(new Set(Object.values(FAMILY_ICONS)).size, 'one icon per family, none repeated').toBe(FAMILY_ORDER.length);
+    });
+
+    it('PSF-G04: groupByFamily puts the groups after everything else, whatever the order of the answer, each in the answer’s order; no group, no section', () => {
+        expect(groupByFamily(frozen([MOCK_GROUP, TOOL, OTHER_GROUP, ENRICHER, ECB, JUSTETF]))).toStrictEqual([
+            {family: 'asset', entries: [JUSTETF]},
+            {family: 'fx', entries: [ECB]},
+            {family: 'tool', entries: [TOOL]},
+            {family: 'enricher', entries: [ENRICHER]},
+            {family: 'group', entries: [MOCK_GROUP, OTHER_GROUP]},
+        ]);
+        expect(
+            groupByFamily([JUSTETF]).map((group) => group.family),
+            'no group in the answer: no group section',
+        ).toEqual(['asset']);
+        expect(groupByFamily([OTHER_GROUP])).toStrictEqual([{family: 'group', entries: [OTHER_GROUP]}]);
+    });
+
+    it('PSF-G05: entryTitle is the translation of name_key, plugin_name when the key has no translation (the key echoed, or empty)', () => {
+        const named = entry([], {family: 'group', plugin_code: 'mock', plugin_name: 'Mock account', name_key: 'pluginSettings.group.mock.name'});
+
+        expect(entryTitle(named, translatorOf({'pluginSettings.group.mock.name': 'Conto finto'}))).toBe('Conto finto');
+        expect(entryTitle(named, translatorOf()), 'the key answered with itself is no translation').toBe('Mock account');
+        expect(entryTitle(named, translatorOf({'pluginSettings.group.mock.name': ''})), 'an empty translation is none').toBe('Mock account');
+    });
+
+    it('PSF-G06: entryTitle without a name_key is plugin_name, and asks the translator for nothing', () => {
+        const translate = translatorOf({'pluginSettings.group.mock.name': 'Conto finto'});
+
+        expect(entryTitle(entry([], {plugin_name: 'justETF', name_key: null}), translate)).toBe('justETF');
+        expect(entryTitle(entry([], {plugin_name: 'justETF'}), translate), 'a key that is not there at all').toBe('justETF');
+        expect(translate).not.toHaveBeenCalled();
+    });
+
+    it('PSF-G07: groupFormId is plugin-settings-group-<name>, one per group, none the same as another', () => {
+        expect(groupFormId('mock')).toBe('plugin-settings-group-mock');
+        expect(groupFormId('crypto_keys')).toBe('plugin-settings-group-crypto_keys');
+        expect(groupFormId('mock')).not.toBe(groupFormId('crypto_keys'));
+    });
+
+    it.each(Object.keys({en, it: itCatalogue, fr, es}))('PSF-G08 %s: the five new keys are written (families.enricher, families.group, group.usedBy, group.inGroup, group.open), none empty', (lang) => {
+        const catalogue = ({en, it: itCatalogue, fr, es} as Record<string, unknown>)[lang] as {pluginSettings?: {families?: Record<string, unknown>; group?: Record<string, unknown>}};
+        const written = [
+            ['families.enricher', catalogue.pluginSettings?.families?.enricher],
+            ['families.group', catalogue.pluginSettings?.families?.group],
+            ['group.usedBy', catalogue.pluginSettings?.group?.usedBy],
+            ['group.inGroup', catalogue.pluginSettings?.group?.inGroup],
+            ['group.open', catalogue.pluginSettings?.group?.open],
+        ] as const;
+
+        for (const [key, text] of written) {
+            expect(text, `${lang}: pluginSettings.${key}`).toBeTypeOf('string');
+            expect((text as string).trim(), `${lang}: pluginSettings.${key} is not empty`).not.toBe('');
+        }
+        // The placeholders the components pass: the sentence must have somewhere to put them.
+        expect(catalogue.pluginSettings?.group?.usedBy, `${lang}: usedBy takes {plugins}`).toContain('{plugins}');
+        expect(catalogue.pluginSettings?.group?.inGroup, `${lang}: inGroup takes {group}`).toContain('{group}');
     });
 });
