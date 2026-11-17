@@ -23,9 +23,10 @@ module is imported (one module per group, beside this one), before the plugins t
 from __future__ import annotations
 
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from backend.app.config import is_test_mode
+from backend.app.services.plugin_settings.call_limits import with_call_limits
 from backend.app.services.plugin_settings.fields import (
     FAMILY_RULES,
     FIELD_KEY,
@@ -78,6 +79,9 @@ def register_group(group: SettingsGroup) -> None:
         raise SettingsDeclarationError(f"group {group.name!r}: a name is lowercase letters, digits and _, a letter first")
     if not isinstance(group.label, str) or not group.label.strip():
         raise SettingsDeclarationError(f"group {group.name!r}: an English label is required")
+    if group.shares_credits and isinstance(group.fields, tuple):
+        # Its readers spend one account's credits: the core's call limits are the group's (project 76, U4)
+        group = replace(group, fields=with_call_limits(group.fields))
     try:
         validate_declaration(group.fields, family=GROUP_FAMILY)
         claim_env_variables(GROUP_FAMILY, group.name, group.fields)
