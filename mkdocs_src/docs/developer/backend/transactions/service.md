@@ -18,6 +18,7 @@ Transaction batch execution is split across these source modules, in `backend/ap
 | `backend/app/services/transactions/batch_edits.py` | Deletes, splits, updates, and the check of updated linked pairs |
 | `backend/app/services/transactions/batch_creates.py` | Creates, promotes, and the links between the legs of new pairs |
 | `backend/app/services/transactions/batch_costs.py` | WAC and FX issues, and the required cost basis |
+| `backend/app/services/transactions/charges.py` | Linked charges (project 66): the one module that reads and writes `parent_transaction_id` — the rules of a link, the batch stage `link_charges()`, the charges of some parents, the list filters `parent_ids` and `without_parent` |
 
 The former 637-line `execute_batch()` C901 hotspot has been decomposed. The public
 orchestrator is now approximately 50 source lines and makes the execution order
@@ -69,6 +70,7 @@ Its order is contractual:
 | 7 | `apply_creates()` | Add and flush valid creates so generated IDs are available |
 | 8 | `apply_promotes()` | Resolve saved or same-batch rows and promote them in place |
 | 9 | `resolve_create_links()` | Resolve unconsumed create correlation groups into reciprocal database links |
+| 9b | `link_charges()` | On the batch's final state: resolve the parent each charge names and write, change or remove its link; refuse a deleted parent that keeps charges and a promoted one (see [Linked Charges](#linked-charges)) |
 | 10 | `compute_wac_and_fx_issues()` | Run create/update auto-WAC; convert missing FX data into issues, and refuse an Auto row whose average of 0 comes from a pool with nothing to average (`autoCostEmptyPool`, `autoCostUnknownPool`, N88: [Nothing to average](wac.md#nothing-to-average)) |
 | 11 | `validate_cost_basis()` | Flush and enforce required cost basis after WAC and promote handling |
 | 12 | `validate_balances()` | Flush and replay end-of-day balances from each broker's earliest affected date |
@@ -405,7 +407,12 @@ transactions. A create request uses `link_uuid` only as transient correlation:
 `Transaction` has no persisted `link_uuid` column. The durable relationship is
 `A.related_transaction_id = B.id` and `B.related_transaction_id = A.id`.
 
-`_validate_linked_pair()` requires equal pair types (`pairTypeMismatch`), distinct
+`_validate_linked_pair()` requires equal pair types (`pairTypeMismatch`) and a type
+that is a pair: `requires_link` in `TX_TYPE_METADATA`, that is `TRANSFER`,
+`FX_CONVERSION` or `CASH_TRANSFER`. Two `ADJUSTMENT`s answer `pairAdjustmentNotAllowed`;
+two rows of any other type (two `FEE`s, two `BUY`s) answer `pairTypeNotLinkable`
+(param `type`). A `link_uuid` that a `promotes[]` item consumes never reaches this rule.
+It also requires distinct
 brokers for `TRANSFER` and `CASH_TRANSFER` (`pairSameBroker`), and one broker for
 both legs of an `FX_CONVERSION` (`pairBrokerMismatch`, params `brokerA`/`brokerB`).
 A `TRANSFER` pair must also move one asset
@@ -434,6 +441,64 @@ that really changes the `date` of a leg of a stored pair (`warn_inverted_updated
 on the first update that changed one, `ref_id` its id), on the final dates of both legs: one
 warning per pair, none when both legs move to a normal order. A pair already stored in the
 wrong order is never judged again, and an update carrying the stored date changes nothing.
+
+---
+
+## 💸 Linked Charges {: #linked-charges }
+
+A FEE or a TAX (a *charge*) can point at the transaction it belongs to, its *parent*, through
+`transactions.parent_transaction_id` (project 66, issue #25). The link is one-way — the parent does not point back —
+and has nothing to do with `related_transaction_id`, which stays the link of the three pairs. Which types are charges
+and which are parents is `charge_role` in `TX_TYPE_METADATA` (`charge_types()`, `charge_parent_types()`): FEE and TAX;
+BUY, SELL, DIVIDEND, INTEREST, DEPOSIT and WITHDRAWAL. The two lists share no type, so a chain cannot exist.
+
+Everything about the link lives in `services/transactions/charges.py`.
+
+**Naming the parent in a batch.** A create carries `ref`, a name of its row inside the batch (any type), and a charge
+names its parent with `parent_ref` (a create of the same batch) or `parent_transaction_id` (a saved row), never both
+(`chargeParentTwice`; a non-positive id is `chargeParentIdInvalid`). An empty string is no name, and `ref` never
+matches a `link_uuid`. The backend resolves the names after the rows are inserted, like `link_uuid`, so `/validate`
+resolves them too; the ids it inserted never reach the client, so a refusal names the charge by its row and the parent
+by `parentRef`. A `ref` given to two creates is refused on the second (`chargeRefDuplicate`); a `parent_ref` no created
+row carries is `chargeParentRefNotFound`.
+
+**The rules** (`charge_link_issue()`, first violation in this order), judged by `link_charges()` on the final state of
+the batch, after updates, creates, promotes and pair links:
+
+| Rule | Code | Params |
+|------|------|--------|
+| the charge is a FEE or a TAX | `chargeNotACharge` | `type` |
+| the charge is not a leg of a pair (`related_transaction_id` set) | `chargeRowIsPaired` | `role: "charge"` |
+| the parent exists, the batch does not delete it, and the user can view its broker | `chargeParentNotFound` | `parentId` |
+| the parent is one of the six parent types | `chargeParentTypeNotAllowed` | `type` |
+| the parent is not a leg of a pair | `chargeRowIsPaired` | `role: "parent"` |
+| same broker | `chargeBrokerMismatch` | `brokerId`, `parentBrokerId` |
+| a charge without an asset is not linked to a parent with one (decision D6b: clone it) | `chargeAssetMissing` | `parentAssetId` |
+| same asset, or none when the parent has none | `chargeAssetMismatch` | `assetId`, `parentAssetId` |
+
+Date and currency are free. A saved parent on a broker the user cannot view answers like a missing one, with the same
+params, and loading it never adds its broker to the batch's `EDITOR` check. Changing a parent never changes its charges:
+the form sends every change in one batch.
+
+**Updates.** An update takes `parent_transaction_id` — absent: the link does not change; `0`: unlink, the charge stays
+as a row of its own; `n`: link (or relink) to the saved parent `n` — or `parent_ref`, a parent created in the same batch
+(the form of a new parent that takes an existing charge). Their issues go on the update (`ref_id` the charge).
+
+**The parent's side**, after the links, on the final state:
+
+- A deleted parent that keeps charges — neither deleted nor unlinked or relinked by the same batch — is refused on its
+  delete (`chargesDeleteIncomplete`, `id`, `chargeIds`): the backend never deletes or unlinks a charge by itself, the
+  client puts the user's choice in the batch. A charge is always deleted alone. Deleting a broker deletes its charges
+  with their parents (same broker), and the deferred foreign key holds whatever the order.
+- A saved row a promote turns into a leg of a pair is refused while it keeps charges (`chargesBlockParentType`,
+  `type`, `chargeIds`, on the promote): the promotion of a DEPOSIT or WITHDRAWAL with charges into a cash transfer. It
+  passes when the same batch unlinks them. Only a promote can take the role away: type swaps (BUY↔SELL,
+  DEPOSIT↔WITHDRAWAL, DIVIDEND↔INTEREST) keep a parent a parent, and a split leaves standalone rows.
+
+**Reading.** `TXReadItem` carries `parent_transaction_id` and `charges_count` (how many charges point at the row,
+counted in slices of 500 ids through the partial index `idx_transactions_parent`). `GET /transactions` takes
+`parent_ids` (the charges of those parents) and `without_parent` (the charges a parent could take: a FEE or a TAX with
+no parent and not a leg of a pair), both combined with the other filters and ignored with `ids`.
 
 ---
 

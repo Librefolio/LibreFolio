@@ -291,7 +291,21 @@
       "pairArrivalBeforeDeparture": "L'arrivo ({arrivalDate}) è datato prima della partenza ({departureDate}). È stato salvato come inserito: controlla le due date.",
       "pairCurrencyMismatch": "I due lati di un bonifico devono essere nella stessa valuta (trovate {currencyA} e {currencyB}). Per cambiare valuta usa un cambio valuta",
       "pairAmountMismatch": "Un bonifico deve far uscire da un broker ed entrare nell'altro lo stesso importo (trovati {amountA} e {amountB})",
-      "pairCurrencySame": "I due lati di un cambio valuta devono essere in valute diverse (entrambi sono in {currency})"
+      "pairCurrencySame": "I due lati di un cambio valuta devono essere in valute diverse (entrambi sono in {currency})",
+      "pairTypeNotLinkable": "Le righe {type} non si possono collegare in coppia: solo Trasferimento Asset, Cambio valuta e Giroconto sono coppie.",
+      "chargeNotACharge": "Solo una Commissione o un'Imposta si può collegare a una transazione (questa è {type}).",
+      "chargeRowIsPaired": "Un lato di una coppia collegata non può avere spese collegate né esserlo: prima dividi la coppia.",
+      "chargeParentNotFound": "La transazione a cui è collegata questa spesa non esiste.",
+      "chargeParentTypeNotAllowed": "Una spesa si collega solo a un Acquisto, Vendita, Dividendo, Interesse, Deposito o Prelievo (non a {type}).",
+      "chargeBrokerMismatch": "Una spesa collegata deve stare sullo stesso broker della sua transazione.",
+      "chargeAssetMissing": "Questa spesa non ha asset e la sua transazione sì: clona la spesa con quell'asset e collega la copia.",
+      "chargeAssetMismatch": "Una spesa collegata deve avere lo stesso asset della sua transazione (o nessuno, se la transazione non ne ha).",
+      "chargesBlockParentType": "Questa transazione ha spese collegate, e un {type} non può averne: prima scollegale.",
+      "chargeRefDuplicate": "Il nome '{ref}' è dato a più righe di questo invio.",
+      "chargeParentRefNotFound": "Nessuna riga di questo invio si chiama '{parentRef}': la spesa non si può collegare.",
+      "chargeParentTwice": "Una spesa indica la sua transazione una volta sola: con la riga di questo invio o con una transazione salvata, non entrambe.",
+      "chargeParentIdInvalid": "La transazione a cui è collegata una spesa deve essere una transazione salvata (un id positivo).",
+      "chargesDeleteIncomplete": "Questa transazione ha spese collegate: eliminale o scollegale nella stessa modifica."
     },
     "pydantic": {
       "greaterThan": "Il valore deve essere maggiore di {gt}",

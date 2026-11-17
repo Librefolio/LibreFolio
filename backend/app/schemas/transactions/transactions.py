@@ -241,8 +241,13 @@ class TXCreateItem(StrictModel):
     link_uuid: Optional[str] = Field(
         default=None,
         max_length=36,
-        description="Temporary UUID to link paired transactions (TRANSFER, FX_CONVERSION)",
+        description="Temporary UUID that links the two legs of a pair (TRANSFER, FX_CONVERSION, CASH_TRANSFER) or names a create for promotes[]",
     )
+
+    # Linked charges (project 66): batch-local names, resolved by the backend after the rows are inserted (not persisted).
+    ref: Optional[str] = Field(default=None, max_length=36, description="A name of this row inside this batch, any type, that a charge of the same batch can name as parent_ref. Empty = none")
+    parent_ref: Optional[str] = Field(default=None, max_length=36, description="FEE or TAX: the ref of its parent transaction created in this batch. Never with parent_transaction_id. Empty = none")
+    parent_transaction_id: Optional[int] = Field(default=None, description="FEE or TAX: the id of its saved parent transaction. Never with parent_ref")
 
     tags: Optional[List[str]] = Field(default=None, description="List of tags for filtering/grouping")
     description: Optional[str] = Field(default=None, max_length=500, description="Transaction notes")
@@ -295,6 +300,12 @@ class TXCreateItem(StrictModel):
             errors.append(PydanticCustomError("assetIdInvalid", "asset_id must be > 0 when provided", {"asset_id": self.asset_id}))
         if self.asset_event_id is not None and self.asset_event_id <= 0:
             errors.append(PydanticCustomError("assetEventIdInvalid", "asset_event_id must be > 0 when provided", {"asset_event_id": self.asset_event_id}))
+        # Linked charges (project 66): a parent is named once, by a name of the batch or by the id of a saved row. The
+        # link itself is judged by the batch on its final state (services/transactions/charges.py).
+        if self.parent_transaction_id is not None and self.parent_transaction_id <= 0:
+            errors.append(PydanticCustomError("chargeParentIdInvalid", "parent_transaction_id must be > 0 when provided", {"parent_transaction_id": self.parent_transaction_id}))
+        if self.parent_ref and self.parent_transaction_id is not None:
+            errors.append(PydanticCustomError("chargeParentTwice", "a charge names its parent once: parent_ref or parent_transaction_id, not both"))
 
         # Rule 1: TRANSFER, FX_CONVERSION, and CASH_TRANSFER require link_uuid
         if self.type in (TransactionType.TRANSFER, TransactionType.FX_CONVERSION, TransactionType.CASH_TRANSFER):
@@ -429,6 +440,11 @@ class TXReadItem(StrictModel):
     # the user has no access to the partner transaction itself.
     partner_broker_id: Optional[int] = None
 
+    # Linked charges (project 66): the parent a FEE or TAX belongs to (one-way), and how many charges point at this row
+    # (populated by the service layer; 0 when none).
+    parent_transaction_id: Optional[int] = None
+    charges_count: int = 0
+
     tags: Optional[List[str]] = None
     description: Optional[str] = None
 
@@ -480,6 +496,7 @@ class TXReadItem(StrictModel):
             quantity=tx.quantity,
             cash=cash,
             related_transaction_id=tx.related_transaction_id,
+            parent_transaction_id=tx.parent_transaction_id,
             tags=tags,
             description=tx.description,
             cost_basis_override=cost_basis,
@@ -550,6 +567,12 @@ class TXUpdateItem(StrictModel):
     # - n > 0  -> link to the given AssetEvent (validated in service layer)
     asset_event_id: Optional[int] = Field(default=None, ge=0, description="Link/unlink to AssetEvent. 0 = unlink (Part 1 sentinel), >0 = link, None = leave unchanged.")
 
+    # Linked charges (project 66), judged by the batch on its final state (services/transactions/charges.py):
+    # - parent_transaction_id: None -> the link does not change; 0 -> unlink; n > 0 -> link to the saved parent n
+    # - parent_ref: link to a parent created in this batch (the ref of a create). Never with parent_transaction_id.
+    parent_transaction_id: Optional[int] = Field(default=None, description="FEE or TAX: link to the saved parent n, 0 = unlink, None = leave unchanged")
+    parent_ref: Optional[str] = Field(default=None, max_length=36, description="FEE or TAX: link to the parent created in this batch with this ref. Never with parent_transaction_id. Empty = none")
+
     @field_validator("tags", mode="before")
     @classmethod
     def _validate_tags(cls, v):
@@ -565,6 +588,10 @@ class TXUpdateItem(StrictModel):
                 "Transaction id must be > 0",
                 {"id": self.id},
             )
+        if self.parent_transaction_id is not None and self.parent_transaction_id < 0:
+            raise PydanticCustomError("chargeParentIdInvalid", "parent_transaction_id must be 0 (unlink) or a transaction id", {"parent_transaction_id": self.parent_transaction_id})
+        if self.parent_ref and self.parent_transaction_id is not None:
+            raise PydanticCustomError("chargeParentTwice", "a charge names its parent once: parent_ref or parent_transaction_id, not both")
         return self
 
     def get_tags_csv(self) -> Optional[str]:
@@ -605,6 +632,10 @@ class TXQueryParams(StrictModel):
     amount_abs_max: Optional[SafeDecimal] = Field(default=None, description="ABS(amount) <= N")
     only_unlinked: bool = Field(default=False, description="related_transaction_id IS NULL")
     exclude_ids: Optional[List[int]] = Field(default=None, description="Transaction.id NOT IN (...)")
+
+    # Linked charges (project 66). Composable with the other filters; ignored when `ids` is set.
+    parent_ids: Optional[List[int]] = Field(default=None, description="Only the charges linked to these parent transactions")
+    without_parent: bool = Field(default=False, description="Only the charges (FEE, TAX) linked to no parent and not a leg of a pair")
 
     limit: Optional[int] = Field(default=None, ge=1, le=10000, description="Max results (None = no limit)")
     offset: int = Field(default=0, ge=0, description="Offset for pagination")

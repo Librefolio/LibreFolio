@@ -521,6 +521,8 @@ async def test_get_transactions_with_date_range_and_abs_amount_filters(monkeypat
         amount_abs_max=Decimal("250"),
         only_unlinked=False,
         exclude_ids=None,
+        parent_ids=None,
+        without_parent=False,
         asset_event_id=None,
         session=object(),
         current_user=SimpleNamespace(id=7),
@@ -572,6 +574,8 @@ async def test_get_transactions_with_date_start_only_and_unlinked_exclusion(monk
         amount_abs_max=None,
         only_unlinked=True,
         exclude_ids=[101, 102],
+        parent_ids=[201, 202],
+        without_parent=True,
         asset_event_id=None,
         session=object(),
         current_user=SimpleNamespace(id=9),
@@ -584,6 +588,9 @@ async def test_get_transactions_with_date_start_only_and_unlinked_exclusion(monk
     assert captured["params"].date_range.end is None
     assert captured["params"].only_unlinked is True
     assert captured["params"].exclude_ids == [101, 102]
+    # Linked charges (project 66 R3): the two filters reach TXQueryParams.
+    assert captured["params"].parent_ids == [201, 202]
+    assert captured["params"].without_parent is True
     assert captured["params"].limit == 10
     assert captured["params"].offset == 4
 
