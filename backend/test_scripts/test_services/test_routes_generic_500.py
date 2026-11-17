@@ -25,11 +25,12 @@ The cure's contract, pinned here:
    the price history, the first statement in the merge's ``try`` (``_LookupsThenFailing``).
 
 The way in: the ROUTE BODY, called directly with its arguments as FastAPI hands them — a body model, ids, a user stand-in
-with an ``id``, a session double (``_Session``). On each site's path the awaited call that fails is replaced for the test
-(``monkeypatch``) by ``_Failing``, which counts its calls and raises: the route's service (a method of
-``AssetSourceManager`` or ``AssetCRUDService``, or a function the route's module imported: ``configured_fx_provider``,
-``sync_pairs_bulk``), or the session's ``execute`` where the route reads through the session itself
-(``get_provider_assignments``, ``read_assets_bulk``, ``list_routes``, ``create_routes_bulk``, ``delete_routes_bulk``). It
+with an ``id``, a session double (``_Session``), an empty ``BackgroundTasks`` where the route takes one (``POST`` and
+``PATCH /assets``, plan 68: never run, the failure comes before any task is added). On each site's path the awaited
+call that fails is replaced for the test (``monkeypatch``) by ``_Failing``, which counts its calls and raises: the
+route's service (a method of ``AssetSourceManager`` or ``AssetCRUDService``, or a function the route's module imported:
+``configured_fx_provider``, ``sync_pairs_bulk``), or the session's ``execute`` where the route reads through the session
+itself (``get_provider_assignments``, ``read_assets_bulk``, ``list_routes``, ``create_routes_bulk``, ``delete_routes_bulk``). It
 raises ``RuntimeError(LEAK)``; at the three fallbacks for an ``AssetSourceError`` of a code the route does not answer by
 itself (``assign_providers_bulk``, ``remove_providers_bulk``, ``upsert_events_bulk``), an ``AssetSourceError`` with
 ``LEAK`` as its message and ``UNKNOWN_CODE`` as its code. The module's ``logger`` is a ``_RecordingLogger``, which keeps
@@ -66,7 +67,7 @@ from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import pytest
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 
 from backend.app.api.v1.assets import crud as crud_routes
 from backend.app.api.v1.assets import events as event_routes
@@ -219,8 +220,8 @@ ASSIGN = _Site(asset_provider_routes, lambda session: asset_provider_routes.assi
 REMOVE = _Site(asset_provider_routes, lambda session: asset_provider_routes.remove_providers_bulk(asset_ids=[1, 2], session=session, _current_user=USER), AssetSourceManager, "bulk_remove_providers")
 ASSIGNMENTS = _Site(asset_provider_routes, lambda session: asset_provider_routes.get_provider_assignments(asset_ids=[1, 2], session=session, _current_user=USER))
 # api/v1/assets/crud.py
-CREATE_ASSETS = _Site(crud_routes, lambda session: crud_routes.create_assets_bulk(assets=[FAAssetCreateItem(display_name="X-R74 asset", currency="EUR")], session=session, _current_user=USER), AssetCRUDService, "create_assets_bulk")
-PATCH_ASSETS = _Site(crud_routes, lambda session: crud_routes.patch_assets_bulk(assets=[FAAssetPatchItem(asset_id=1, display_name="X-R74 asset")], session=session, _current_user=USER), AssetCRUDService, "patch_assets_bulk")
+CREATE_ASSETS = _Site(crud_routes, lambda session: crud_routes.create_assets_bulk(assets=[FAAssetCreateItem(display_name="X-R74 asset", currency="EUR")], background=BackgroundTasks(), session=session, _current_user=USER), AssetCRUDService, "create_assets_bulk")
+PATCH_ASSETS = _Site(crud_routes, lambda session: crud_routes.patch_assets_bulk(assets=[FAAssetPatchItem(asset_id=1, display_name="X-R74 asset")], background=BackgroundTasks(), session=session, _current_user=USER), AssetCRUDService, "patch_assets_bulk")
 VALIDATE_ASSETS = _Site(crud_routes, lambda session: crud_routes.validate_assets_patch(assets=[FAAssetPatchItem(asset_id=1, display_name="X-R74 asset")], session=session, _current_user=USER), AssetCRUDService, "patch_assets_bulk")
 QUERY_ASSETS = _Site(crud_routes, _list_assets, AssetCRUDService, "list_assets")
 DELETE_ASSETS = _Site(crud_routes, lambda session: crud_routes.delete_assets_bulk(asset_ids=[1, 2], session=session, _current_user=USER), AssetCRUDService, "delete_assets_bulk")
