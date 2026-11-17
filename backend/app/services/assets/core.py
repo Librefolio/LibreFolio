@@ -43,7 +43,7 @@ from backend.app.logging_config import get_logger
 from backend.app.services.assets.base import AssetCallLimitError, AssetRateLimitedError, AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.platform import call_counter
-from backend.app.services.platform.provider_cooldown import record_no_verdict, record_refusal, record_success, wait_before_call
+from backend.app.services.platform.provider_cooldown import clear_limit_pause, limit_pause_left, record_limit_pause, record_no_verdict, record_refusal, record_success, release_limit_trial, wait_before_call
 from backend.app.services.plugin_settings.contract import PluginSettingsMixin
 from backend.app.services.plugin_settings.groups import GROUP_FAMILY, get_group
 from backend.app.services.plugin_settings.runtime import configure_instance
@@ -265,18 +265,25 @@ async def _admit_call(provider: AssetSourceProvider, code: str, scope: str | Non
 async def _count_call(provider: AssetSourceProvider, code: str, scope: str | None) -> None:
     """Count the call before it leaves, whatever it then meets (project 76, U2). A full limit refuses it and pauses the
     provider like a source's «too many requests», so every existing path handles it unchanged."""
+    fingerprint = provider.settings.fingerprint
+    left = limit_pause_left("asset", code, fingerprint)
+    if left > 0:
+        raise AssetCallLimitError(f"Provider {code} is paused at its call limit: {math.ceil(left)} s left", retry_after=left, scope=scope, details={"reason": "call_limit"})
     family, owner, limits = call_owner(provider)
     try:
         await call_counter.count_and_check(family, owner, limits)
     except call_counter.CallLimitReached as full:
         logger.warning("Provider call refused: instance call limit reached", provider=code, owner=f"{family}/{owner}", window=full.window, limit=full.limit, retry_after_s=round(full.retry_after, 1))
-        paused = record_refusal("asset", code, scope, full.retry_after)
+        # Exactly until the full window ends, on the limit's own key: never a refusal of the source (U2b)
+        paused = record_limit_pause("asset", code, fingerprint, full.retry_after)
         details = {"reason": "call_limit", "window": full.window, "limit": full.limit}
         raise AssetCallLimitError(f"Provider {code} reached its {full.window} call limit ({full.limit})", retry_after=paused or full.retry_after, scope=scope, details=details) from full
     except BaseException:
-        # Neither an answer nor a refusal (cancelled, say): the trial of an expired pause goes to the next caller
+        # Neither an answer nor a refusal (cancelled, say): the trials of expired pauses go to the next caller
+        release_limit_trial("asset", code, fingerprint)
         record_no_verdict("asset", code, scope)
         raise
+    clear_limit_pause("asset", code, fingerprint)
 
 
 async def call_provider[ResultT](provider: AssetSourceProvider, fn: Callable[[], Awaitable[ResultT]], *, timeout: float, scope: str | None = None) -> ResultT:

@@ -67,6 +67,42 @@ def record_refusal(domain: str, provider: str, scope: str | None = None, retry_a
     return wait
 
 
+def _limit_key(domain: str, provider: str, fingerprint: str) -> tuple:
+    """The key of a call-limit pause (project 76, U2b): never a source's key, and the settings fingerprint in it, so a
+    changed limit (a new fingerprint) is no longer held by the old pause, in every process."""
+    return (domain, provider, ("call-limit", fingerprint))
+
+
+def limit_pause_left(domain: str, provider: str, fingerprint: str) -> float:
+    """0 when ``provider`` with these settings may reach its call counter now; else the seconds of its call-limit pause
+    left. When the pause ends one caller at a time gets 0, the trial, as for a source pause."""
+    if not _settings().enabled:
+        return 0.0
+    return PROVIDER_COOLDOWNS.check(_limit_key(domain, provider, fingerprint))
+
+
+def record_limit_pause(domain: str, provider: str, fingerprint: str, seconds: float) -> float:
+    """A call limit of ``provider`` is full until ``seconds`` from now: pause it exactly that long (at most 24 h), never
+    as a refusal (no base, no doubling, no streak). The pause in seconds, 0 with the pauses off."""
+    if not _settings().enabled:
+        return 0.0
+    wait = PROVIDER_COOLDOWNS.hold(_limit_key(domain, provider, fingerprint), seconds)
+    logger.info("Provider paused: instance call limit full", domain=domain, provider=provider, wait_s=round(wait, 1))
+    return wait
+
+
+def clear_limit_pause(domain: str, provider: str, fingerprint: str) -> None:
+    """The counter admitted a call of ``provider``: its expired call-limit pause, if any, is over."""
+    if _settings().enabled:
+        PROVIDER_COOLDOWNS.succeeded(_limit_key(domain, provider, fingerprint))
+
+
+def release_limit_trial(domain: str, provider: str, fingerprint: str) -> None:
+    """A count that ended with no verdict (cancelled): the trial of an expired call-limit pause goes to the next caller."""
+    if _settings().enabled:
+        PROVIDER_COOLDOWNS.released(_limit_key(domain, provider, fingerprint))
+
+
 def record_success(domain: str, provider: str, scope: str | None = None) -> None:
     """``provider`` answered: its pause, if any, is over."""
     if not _settings().enabled:
