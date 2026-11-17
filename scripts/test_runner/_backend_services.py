@@ -557,6 +557,14 @@ def services_coingecko_prices(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "CoinGecko prices tests", verbose=verbose)
 
 
+def services_refresh_history_starts(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the first day a source has prices for, in the refresh's outcome (project 76, P2b)."""
+    print_section("Services: Refresh History Starts")
+    print_info("Testing: assets/refresh.py (FARefreshResult.history_starts), schemas/prices.py, coingecko/plugin.py (Demo vs Pro)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_refresh_history_starts.py", test_names)
+    return run_command(cmd, "Refresh history starts tests", verbose=verbose)
+
+
 def services_coingecko_provider(verbose: bool = False, test_names: list = None) -> bool:
     """Test the CoinGecko provider (project 76, P1): its shared group, its settings and parameters, the SDK's door."""
     print_section("Services: CoinGecko Provider")
@@ -3136,6 +3144,16 @@ Note: No backend server required.
         desc="P2: /simple/price with precision=full, the value read as a decimal from the text, the UTC day of last_updated_at, unknown id NOT_FOUND, missing currency NO_DATA; in bulk one request for every item, each under its key, a 429 refuses the whole call; the history from market_chart/range (interval daily): the 00:00 UTC point of D is the close of D-1, a point not at midnight and a day outside the range dropped; the Demo plan's year moves an earlier start; the refresh interval from its setting",
         # PURE: the real coingecko-sdk on an httpx.MockTransport (the P0 recordings), a test's «today»; no database, no
         # server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "refresh-history-starts",
+        services_refresh_history_starts,
+        name="Refresh History Starts",
+        desc="P2b: a source that gives no price before a day says so (FAHistoricalData.history_starts); the refresh copies it into FARefreshResult only when the range asked started earlier (a min start counts), with the status the prices decide; a range inside the window, or a provider that says none, gives none; CoinGecko says it on the Demo plan (today - 364), never on Pro",
+        # PURE: a private SQLite file behind the session, mockprov wrapped to say a first day, CoinGecko on an
+        # httpx.MockTransport; no shared database, no server.
         isolation="pure",
     )
     add_test(
