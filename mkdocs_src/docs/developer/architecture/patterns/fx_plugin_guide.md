@@ -92,6 +92,7 @@ graph TD
 |--------|---------|-------------|
 | `icon` | `None` | Provider icon URL |
 | `base_currencies` | `[base_currency]` | List of supported bases (single-base for now) |
+| `calls_external_service` | `True` | A class attribute: whether the provider reaches an external service. Each call through `call_fx_provider()` is then counted, and refused with `FXCallLimitError` when an instance limit is full (project 76). `False` for a provider that never fetches, such as `MANUAL` |
 | `description` | Auto-generated | Provider description |
 | `description_i18n` | `{"en": description}` | Multilingual descriptions |
 | `warning_i18n` | `{}` | A note shown in UI on the routes that use the provider (its icon follows `warning_level`) |
