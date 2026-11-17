@@ -32,7 +32,7 @@ from backend.app.services.fx.catalog import get_supported_currencies_status
 from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.fx.runtime import configured_fx_provider
 from backend.app.services.fx_providers.manual.plugin import MANUAL_PRIORITY
-from backend.app.services.plugin_settings.readiness import plugin_declares_settings, plugins_readiness
+from backend.app.services.plugin_settings.readiness import plugin_may_be_unconfigured, plugins_readiness
 
 logger = get_logger(__name__)
 
@@ -183,7 +183,7 @@ async def _refuse_unconfigured_new_providers(routes: List[FXConversionRouteItem]
     not asked (an unknown code keeps its per-item error); a provider a stored route of the pair already uses passes. A
     provider that declares no setting is always configured: when the request names none that does, nothing is read."""
     asked = {step.provider.upper() for route_item in routes for step in route_item.chain_steps}
-    if not any(code in available and plugin_declares_settings(FXProviderRegistry.get_plugin(code)) for code in asked):
+    if not any(code in available and plugin_may_be_unconfigured("fx", code, FXProviderRegistry.get_plugin(code)) for code in asked):
         return
     pairs = {(min(r.base.upper(), r.quote.upper()), max(r.base.upper(), r.quote.upper())) for r in routes}
     stored: dict[tuple[str, str], set[str]] = {pair: set() for pair in pairs}

@@ -28,10 +28,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import get_settings
+from backend.app.config.plugins import plugin_setting_env_origin
 from backend.app.db.models import PluginSystemSetting, PluginUserSetting
 from backend.app.db.session import get_async_engine
 from backend.app.logging_config import get_logger
 from backend.app.services.plugin_settings.contract import qualified_missing
+from backend.app.services.plugin_settings.fields import env_variables
 from backend.app.services.plugin_settings.groups import GROUP_FAMILY, SettingsGroup, plugin_groups
 from backend.app.services.plugin_settings.resolver import FieldState, StoredValue, missing_field_keys, resolve_plugin_fields
 from backend.app.services.plugin_settings.runtime import stored_value
@@ -66,9 +68,19 @@ def _registry(family: str):
     return FAMILY_REGISTRIES.get(family)
 
 
-def plugin_declares_settings(plugin_class: type | None) -> bool:
-    """Whether ``plugin_class`` declares a field or a shared group: one that declares neither is always configured."""
-    return plugin_class is not None and bool(getattr(plugin_class, "settings_fields", ()) or plugin_groups(plugin_class))
+def plugin_may_be_unconfigured(family: str, code: str, plugin_class: type | None) -> bool:
+    """Whether ``plugin_class`` (``code`` of ``family``) can be not configured, so that its rows must be read: it reads a
+    shared group, declares a required field, or a field whose environment variable is set (an invalid value leaves it
+    missing). A plugin whose fields are all optional and unset by the environment (the core's call limits alone, U4) is
+    always configured: no database to read."""
+    if plugin_class is None:
+        return False
+    if plugin_groups(plugin_class):
+        return True
+    fields = getattr(plugin_class, "settings_fields", ())
+    if any(field.required for field in fields):
+        return True
+    return any(plugin_setting_env_origin(variable) is not None for field in fields for variable in env_variables(family, code, field))
 
 
 @dataclass(frozen=True)
@@ -134,7 +146,7 @@ async def plugins_readiness(family: str, codes: Sequence[str], *, user_id: int |
     asked: list[_Asked] = []
     for code in dict.fromkeys(codes):
         plugin_class = registry.get_plugin(code) if registry is not None else None
-        if plugin_declares_settings(plugin_class):
+        if plugin_may_be_unconfigured(family, code, plugin_class):
             asked.append(_Asked(code, getattr(plugin_class, "settings_fields", ()), plugin_groups(plugin_class)))
         else:
             answers[code] = READY

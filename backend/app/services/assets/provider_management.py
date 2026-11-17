@@ -137,7 +137,7 @@ async def _refuse_unconfigured_new_providers(assignments: List[FAProviderAssignm
     provider its asset has already passes: existing assignments stay as they are (no clean-up). A provider that declares
     no setting is always configured: when the request names none that does, nothing is read.
     """
-    if not any(readiness.plugin_declares_settings(AssetProviderRegistry.get_plugin(item.provider_code)) for item in assignments):
+    if not any(readiness.plugin_may_be_unconfigured("asset", item.provider_code, AssetProviderRegistry.get_plugin(item.provider_code)) for item in assignments):
         return
     rows = await session.execute(select(AssetProviderAssignment.asset_id, AssetProviderAssignment.provider_code).where(AssetProviderAssignment.asset_id.in_([a.asset_id for a in assignments])))
     stored = dict(rows.all())
