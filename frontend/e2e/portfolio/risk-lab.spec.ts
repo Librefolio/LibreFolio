@@ -3724,7 +3724,7 @@ async function plantAssetMetadata(page: Page): Promise<{reads: MetadataRead[]; f
                     reads.push({assetIds, answer: 'planted', rowIds: [], problem: `the lane answered the real read with ${response.status()}`});
                     return;
                 }
-                const body = (await response.json()) as {as_of: string; items: Array<Record<string, unknown>>};
+                const body = (await response.json()) as {as_of: string; items: Array<{asset_id: number} & Record<string, unknown>>};
                 const ranked = [...new Set(assetIds)].sort((left, right) => left - right);
                 const day = asked[0]?.date_range?.start ?? new Date().toISOString().slice(0, 10);
                 const step = (value: Record<string, string>) => [{date: day, through: day, value: {...value}, source: 'user', update_id: 1, opened_on: day, source_date: null}];
