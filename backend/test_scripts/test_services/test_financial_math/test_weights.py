@@ -459,22 +459,47 @@ class TestMFC2Divergence:
         assert all(value is None for value in percents.values()), f"expected None for every slice, got {percents}"
 
 
+def _largest(items, total):
+    """The deviation alone, as ``largest_weight_deviation_at`` gives it (None without a share)."""
+    found = _weights().largest_weight_deviation_at(items, total)
+    return None if found is None else found[0]
+
+
 class TestLargestWeightDeviation:
-    """``largest_weight_deviation(items, total)``: ``max |value / total − target|`` over the items, in the caller's number type
-    (X14 of project 67: the Rebalancer's largest deviation from the target, before and after the plan)."""
+    """``largest_weight_deviation_at(items, total)[0]``: ``max |value / total − target|`` over the items, in the caller's
+    number type (X14 of project 67: the Rebalancer's largest deviation from the target, before and after the plan)."""
 
     def test_t4_before_and_after_in_exact_ratios(self) -> None:
         # T4 (specifica §11): F = 10 000, targets 50/50; before B is 4 800 (2 points off), after 4 995 (1/20 of a point).
         total = R(10_000)
-        assert _weights().largest_weight_deviation([(R(5_000), R(1, 2)), (R(4_800), R(1, 2))], total) == R(1, 50)
-        assert _weights().largest_weight_deviation([(R(5_000), R(1, 2)), (R(4_995), R(1, 2))], total) == R(1, 2_000)
+        assert _largest([(R(5_000), R(1, 2)), (R(4_800), R(1, 2))], total) == R(1, 50)
+        assert _largest([(R(5_000), R(1, 2)), (R(4_995), R(1, 2))], total) == R(1, 2_000)
 
     def test_decimal_and_signs(self) -> None:
-        assert _weights().largest_weight_deviation([(Decimal("30"), Decimal("0.1")), (Decimal("70"), Decimal("0.9"))], Decimal("100")) == Decimal("0.2")
+        assert _largest([(Decimal("30"), Decimal("0.1")), (Decimal("70"), Decimal("0.9"))], Decimal("100")) == Decimal("0.2")
         # A cash item may end below zero (a top-up): the distance is still a magnitude.
-        assert _weights().largest_weight_deviation([(Decimal("-1"), Decimal("0"))], Decimal("100")) == Decimal("0.01")
+        assert _largest([(Decimal("-1"), Decimal("0"))], Decimal("100")) == Decimal("0.01")
 
     def test_no_items_and_no_total(self) -> None:
-        assert _weights().largest_weight_deviation([], Decimal("100")) == Decimal("0")
-        assert _weights().largest_weight_deviation([(Decimal("1"), Decimal("0"))], Decimal("0")) is None
-        assert _weights().largest_weight_deviation([(Decimal("1"), Decimal("0"))], Decimal("-5")) is None
+        assert _largest([], Decimal("100")) == Decimal("0")
+        assert _largest([(Decimal("1"), Decimal("0"))], Decimal("0")) is None
+        assert _largest([(Decimal("1"), Decimal("0"))], Decimal("-5")) is None
+
+
+class TestLargestWeightDeviationAt:
+    """``largest_weight_deviation_at(items, total)``: the largest deviation and the position of the item that reaches it,
+    the first one on a tie, none when no item is off its target (the Rebalancer's «which entry», X14 of project 67)."""
+
+    def test_t4_names_b_before_and_after(self) -> None:
+        total = R(10_000)
+        assert _weights().largest_weight_deviation_at([(R(5_000), R(1, 2)), (R(4_800), R(1, 2))], total) == (R(1, 50), 1)
+        assert _weights().largest_weight_deviation_at([(R(5_000), R(1, 2)), (R(4_995), R(1, 2))], total) == (R(1, 2_000), 1)
+
+    def test_a_tie_names_the_first_item(self) -> None:
+        # Two items and nothing uninvested: 60 % against 50 % and 40 % against 50 %, the same ten points each way.
+        assert _weights().largest_weight_deviation_at([(Decimal("60"), Decimal("0.5")), (Decimal("40"), Decimal("0.5"))], Decimal("100")) == (Decimal("0.1"), 0)
+
+    def test_no_item_off_its_target_names_none(self) -> None:
+        assert _weights().largest_weight_deviation_at([(Decimal("50"), Decimal("0.5")), (Decimal("50"), Decimal("0.5"))], Decimal("100")) == (Decimal("0"), None)
+        assert _weights().largest_weight_deviation_at([], Decimal("100")) == (Decimal("0"), None)
+        assert _weights().largest_weight_deviation_at([(Decimal("1"), Decimal("0"))], Decimal("0")) is None

@@ -184,6 +184,24 @@ def _largest_deviation(rows: list, weight: str) -> Fraction:
     return max((abs(exact_fraction(getattr(row, weight)) - exact_fraction(row.target_weight)) for row in rows), default=Fraction())
 
 
+def _largest_deviation_item(rows: list, weight: str) -> tuple | None:
+    """The item the largest deviation names (X14): the first row, in the published order, at the largest
+    ``|weight − target|``; None when no row is off its target. As a tuple, to compare with a published reference."""
+    largest, named = Fraction(), None
+    for row in rows:
+        deviation = abs(exact_fraction(getattr(row, weight)) - exact_fraction(row.target_weight))
+        if deviation > largest:
+            largest, named = deviation, _item_key(row)
+    return named
+
+
+def _item_key(item) -> tuple:
+    """An Asset or cash item, a row or a reference, as ``("asset", id)`` or ``("cash", Broker, currency)``."""
+    if getattr(item, "kind", None) == "asset" or hasattr(item, "asset_id"):
+        return ("asset", item.asset_id)
+    return ("cash", item.broker_id, item.currency)
+
+
 def _validate_rebalancer_items(solution: RebalancerPlanSolution) -> None:
     """The items of a Rebalancer plan on ``F`` (contract §6.2) and the score read off them (specifica §6).
 
@@ -241,6 +259,9 @@ def _validate_rebalancer_score(solution: RebalancerPlanSolution, items: list, we
         raise ValueError("The score's money lost must equal the initial less the final wealth")
     if (exact_fraction(score.largest_deviation_before), exact_fraction(score.largest_deviation_after)) != (_largest_deviation(items, "before_weight"), _largest_deviation(items, "final_weight")):
         raise ValueError("The largest deviation must be read off the items' weights")
+    named = tuple(None if ref is None else _item_key(ref) for ref in (score.largest_deviation_before_item, score.largest_deviation_after_item))
+    if named != (_largest_deviation_item(items, "before_weight"), _largest_deviation_item(items, "final_weight")):
+        raise ValueError("The largest deviation must name the first item at it, in the published order")
     published = {stage.objective_code: exact_fraction(stage.value) for stage in solution.objectives.stages}
     expected = {"target_distance": distance, "wealth_loss": money_fraction(score.wealth_loss)}
     if score.plan_score is not None:

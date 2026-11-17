@@ -653,6 +653,25 @@ class RebalancerTieBreakStage(AllocationStrictModel):
     status: Literal["closed", "unfinished", "rejected"]
 
 
+class RebalancerAssetItemRef(AllocationStrictModel):
+    """An Asset item of the Rebalancer's distance (an Asset row of the plan)."""
+
+    kind: Literal["asset"]
+    asset_id: PlannerId
+
+
+class RebalancerCashItemRef(AllocationStrictModel):
+    """A cash item of the Rebalancer's distance: a Broker's cash in one currency with a target weight (a cash row of the
+    plan that has a target)."""
+
+    kind: Literal["cash"]
+    broker_id: PlannerId
+    currency: CurrencyCode
+
+
+type RebalancerItemRef = Annotated[Union[RebalancerAssetItemRef, RebalancerCashItemRef], Field(discriminator="kind")]
+
+
 class RebalancerScoreSummary(AllocationStrictModel):
     """The Rebalancer's score (specifica §6, contract §6.1, §6.6), from the exact values of the published plan.
 
@@ -660,7 +679,9 @@ class RebalancerScoreSummary(AllocationStrictModel):
     the valuation currency squared. ``distance_per_wealth`` is ``D / F``. ``wealth_loss`` is ``F − W``. ``distance_weight`` is ``λ`` and
     ``plan_score`` is ``J = λ·D/F + (F − W)``, both null under «Target first». The largest deviation is the largest
     ``|weight − target weight|`` over the Asset rows and the cash items with a target, as a share of one, before and after the
-    plan."""
+    plan; ``largest_deviation_before_item`` and ``…_after_item`` name the item that reaches it (X14, «which entry»): the
+    first one in the published order (the Asset rows, then the cash rows with a target) on a tie, null when no item is off
+    its target."""
 
     distance_weight: ExactNumber | None
     target_distance: ExactNumber
@@ -669,6 +690,8 @@ class RebalancerScoreSummary(AllocationStrictModel):
     plan_score: ExactMoney | None
     largest_deviation_before: ExactNumber
     largest_deviation_after: ExactNumber
+    largest_deviation_before_item: RebalancerItemRef | None
+    largest_deviation_after_item: RebalancerItemRef | None
     tie_breaks: list[RebalancerTieBreakStage]
 
     @model_validator(mode="after")
@@ -681,6 +704,9 @@ class RebalancerScoreSummary(AllocationStrictModel):
             raise ValueError("The target distance cannot be negative")
         if any(not 0 <= exact_fraction(value) <= 1 for value in (self.largest_deviation_before, self.largest_deviation_after)):
             raise ValueError("A deviation of weights is between zero and one")
+        for value, item in ((self.largest_deviation_before, self.largest_deviation_before_item), (self.largest_deviation_after, self.largest_deviation_after_item)):
+            if (item is None) != (exact_fraction(value) == 0):
+                raise ValueError("The largest deviation names its item exactly when some item is off its target")
         if self.plan_score is not None and self.distance_weight is not None:
             expected = exact_fraction(self.distance_weight) * money_fraction(self.distance_per_wealth) + money_fraction(self.wealth_loss)
             if money_fraction(self.plan_score) != expected:
