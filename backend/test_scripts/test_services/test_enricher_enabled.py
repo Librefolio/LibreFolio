@@ -22,9 +22,26 @@ The contract pinned here:
    ``read_bindings`` binds each served enricher's settings (``configure_instance(instance, "enricher",
    plugin_code=code)``) before reading, and a not-configured one answers each request ``ERROR`` / ``NOT_CONFIGURED``
    (no cache, no plugin call); the API's cascade (``_recognize_events``) does not ask it; ``test_enricher`` and
-   ``search_enricher`` answer 400 ``{"error_code": "NOT_CONFIGURED", "missing": [<keys>]}`` for it and 404, as for an
-   unknown code, for a turned-off one. Positive control: with the required value set (its environment variable), the
-   same enricher is used.
+   ``search_enricher`` answer the app's coded 422 for it (section 7) and 404, as for an unknown code, for a turned-off
+   one. Positive control: with the required value set (its environment variable), the same enricher is used.
+
+Lot B2b (small corrections, consultant and coordinator):
+
+5. **Voices hand over.** A switched-off or not-configured enricher is absent like a source that is down: with ``{A, B}``
+   bound (A first) and A «now», switching A off writes nothing by itself; the next ``refresh_assets`` makes B's value
+   «now» (one row, source B), A's rows stay, the ``config`` (A then B) is unchanged; A back on, the next read makes A
+   «now» again, a row only where the value differs from now. Guards (green on HEAD, see each docstring).
+6. **One log line per refresh call** naming the bound enrichers it skipped (not served or not configured): one event for
+   the whole call, its ``enrichers`` field the codes sorted and unique; none when nothing is skipped.
+7. **The not-configured refusal is the app's coded 422.** ``backend/app/api/plugin_errors.py``
+   ``not_configured_error(plugin_code, missing) -> HTTPException``: 422, ``detail == {"error_code": "NOT_CONFIGURED",
+   "message": <names the plugin and each missing key>, "missing": [<keys, as given>]}``. The test and search routes
+   raise it with ``plugins_readiness(...).missing`` (what a caller may be told: in the managed profile a field an
+   environment variable locks is left out).
+
+B2b, red on HEAD 3e720ad61: ``api/plugin_errors.py`` does not exist, the test and search routes answer 400 with two
+keys (and, in the managed profile, name a field a variable locks), and ``refresh_assets`` logs no line naming what it
+skipped; sections 5 and the «no line» case are guards.
 
 Red on HEAD 786d541e8: ``enrichers_enabled`` and the registry override do not exist, the read cache is looked up before
 the plugin, and nothing binds an enricher's settings. Every test imports a missing name in its body or reaches the
@@ -42,10 +59,12 @@ that records and raises, so no path can reach justetf.com; where a test needs it
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import threading
 import uuid
 from collections.abc import AsyncIterator, Callable, Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -65,6 +84,8 @@ from backend.app.db.models import Asset, AssetProfileUpdate, AssetType, User
 from backend.app.schemas.assets.assets import FAAssetPatchItem
 from backend.app.schemas.assets.enrichers import FAEnricherBinding, FAEnricherRecognizeRequest, FAEnricherTestRequest
 from backend.app.services.assets.crud import AssetCRUDService
+from backend.app.services.assets.profile.catalogue import normalize_value
+from backend.app.services.assets.profile.store import current_rows
 from backend.app.services.enricher_providers.mockenrich.plugin import READ_VALUES, MockEnricher
 from backend.app.services.enrichers import bindings, recognize, refresh
 from backend.app.services.enrichers.base import EnricherBinding, EnricherReadStatus, EnricherSearchResult
@@ -75,7 +96,7 @@ from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.platform import provider_registry
 from backend.app.services.platform.scheduler.joblog import _profile_read_item
 from backend.app.services.plugin_settings import readiness, runtime
-from backend.app.services.plugin_settings.fields import PluginSettingField, SettingScope, SettingType, env_name, release_env_variables
+from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType, env_name, release_env_variables
 from backend.app.services.plugin_settings.readiness import PluginReadiness, plugins_readiness
 from backend.app.utils.runtime.cache import clear_cache
 
@@ -198,21 +219,26 @@ class Fake:
 
 @pytest.fixture
 def fake() -> Iterator[Callable[..., Fake]]:
-    """``fake(tag, keyed=…)`` registers a MockEnricher subclass under a unique ``b2_<tag>_…`` code: it answers as the
-    mock (any ISIN found, the mock's values), searches (one result), and records each ``read`` (the identifiers and the
-    value of its key it saw), ``recognize`` and ``search``. ``keyed``: one required SYSTEM field, ``api_key``. Removed
-    from the registry, with its claims, at teardown."""
+    """``fake(tag, keyed=…, ter=…, fields=…)`` registers a MockEnricher subclass under a unique ``b2_<tag>_…`` code: it
+    answers as the mock (any ISIN found, the mock's values), searches (one result), and records each ``read`` (the
+    identifiers and the value of its key it saw), ``recognize`` and ``search``. ``keyed``: one required SYSTEM field,
+    ``api_key``; ``fields``: these settings fields instead; ``ter``: the raw TER its reads give instead of the mock's.
+    Removed from the registry, with its claims, at teardown."""
     made: list[Fake] = []
 
-    def register(tag: str, *, keyed: bool = False) -> Fake:
+    def register(tag: str, *, keyed: bool = False, ter: str | None = None, fields: tuple[PluginSettingField, ...] | None = None) -> Fake:
         code = f"{CODE_PREFIX}{tag}_{uuid.uuid4().hex[:8]}"
         handle = Fake(code=code)
         lock = threading.Lock()
+        declared = fields if fields is not None else ((KEY_FIELD,) if keyed else ())
 
         def read(self, bindings_read, keys=None):
             with lock:
-                handle.reads.append(([binding.identifier for binding in bindings_read], self.settings.get(KEY) if keyed else None))
-            yield from MockEnricher.read(self, bindings_read, keys)
+                handle.reads.append(([binding.identifier for binding in bindings_read], self.settings.get(KEY) if KEY in {setting.key for setting in declared} else None))
+            for item in MockEnricher.read(self, bindings_read, keys):
+                if ter is not None and item.status is EnricherReadStatus.OK:
+                    item = dataclasses.replace(item, values={**item.values, "ter": ter})
+                yield item
 
         def recognize_one(self, binding):
             with lock:
@@ -228,7 +254,7 @@ def fake() -> Iterator[Callable[..., Fake]]:
         attributes: dict[str, Any] = {
             "code": code,
             "name": f"B2 {tag} (testing)",
-            "settings_fields": (KEY_FIELD,) if keyed else (),
+            "settings_fields": declared,
             "read": read,
             "recognize": recognize_one,
             "search": search,
@@ -367,6 +393,18 @@ async def _route_refusal(call: Callable[[], Any]) -> tuple[int, Any]:
     with pytest.raises(HTTPException) as refused:
         await asyncio.wait_for(call(), DEADLINE)
     return refused.value.status_code, refused.value.detail
+
+
+def _assert_not_configured(refused: tuple[int, Any], code: str, missing: list[str]) -> None:
+    """The coded 422 of section 7: exactly ``error_code``, ``message`` and ``missing``; the message names the plugin and
+    each missing key (its wording is free)."""
+    status_code, detail = refused
+    assert status_code == 422, f"the not-configured refusal is the app's coded 422: {refused}"
+    assert isinstance(detail, dict) and set(detail) == {"error_code", "message", "missing"}, detail
+    assert detail["error_code"] == "NOT_CONFIGURED", detail
+    assert isinstance(detail["missing"], list) and detail["missing"] == missing, detail
+    assert isinstance(detail["message"], str) and code in detail["message"], detail
+    assert all(key in detail["message"] for key in missing), detail
 
 
 def _test_request(identifier: str) -> FAEnricherTestRequest:
@@ -731,14 +769,15 @@ async def test_b2_the_api_cascade_does_not_ask_a_not_configured_enricher(fake: C
 
 @pytest.mark.asyncio
 async def test_b2_the_test_route_refuses_a_not_configured_enricher(routes: Any, fake: Callable[..., Fake], monkeypatch: pytest.MonkeyPatch) -> None:
-    """4: ``POST /assets/enrichers/{code}/test`` on the keyed enricher without its key: 400 ``NOT_CONFIGURED`` with the
-    missing keys, no call; configured, it answers «found»."""
+    """4 and 7: ``POST /assets/enrichers/{code}/test`` on the keyed enricher without its key: the coded 422
+    ``NOT_CONFIGURED`` naming it and the missing key, no call; configured, it answers «found». Changed by B2b (was 400
+    with ``error_code`` and ``missing`` only)."""
     keyed = fake("keyed", keyed=True)
     await _not_configured_barrier(keyed)
 
     refused = await _route_refusal(lambda: routes.test_enricher(keyed.code, _test_request(_ident("KT")), USER))
 
-    assert refused == (400, {"error_code": "NOT_CONFIGURED", "missing": [KEY]}), refused
+    _assert_not_configured(refused, keyed.code, [KEY])
     assert keyed.recognized == []
     monkeypatch.setenv(keyed.variable, KEY_VALUE)
     answer = await asyncio.wait_for(routes.test_enricher(keyed.code, _test_request(_ident("KT")), USER), DEADLINE)
@@ -747,15 +786,16 @@ async def test_b2_the_test_route_refuses_a_not_configured_enricher(routes: Any, 
 
 @pytest.mark.asyncio
 async def test_b2_the_search_route_refuses_a_not_configured_enricher(routes: Any, fake: Callable[..., Fake], monkeypatch: pytest.MonkeyPatch) -> None:
-    """4: ``GET /assets/enrichers/{code}/search`` on the keyed enricher without its key: 400 ``NOT_CONFIGURED`` with
-    the missing keys, no call; configured, it searches."""
+    """4 and 7: ``GET /assets/enrichers/{code}/search`` on the keyed enricher without its key: the coded 422
+    ``NOT_CONFIGURED`` naming it and the missing key, no call; configured, it searches. Changed by B2b (was 400 with
+    ``error_code`` and ``missing`` only)."""
     keyed = fake("keyed", keyed=True)
     await _not_configured_barrier(keyed)
     query = f"b2 search {uuid.uuid4().hex[:8]}"
 
     refused = await _route_refusal(lambda: routes.search_enricher(keyed.code, query, USER))
 
-    assert refused == (400, {"error_code": "NOT_CONFIGURED", "missing": [KEY]}), refused
+    _assert_not_configured(refused, keyed.code, [KEY])
     assert keyed.searched == []
     monkeypatch.setenv(keyed.variable, KEY_VALUE)
     results = await asyncio.wait_for(routes.search_enricher(keyed.code, query, USER), DEADLINE)
@@ -811,3 +851,223 @@ def test_b2_recognize_module_reads_the_installed_enrichers() -> None:
     """Barrier of the cascade tests: ``recognize_cascade`` with ``plugins=None`` reads ``installed_enrichers`` from the
     bindings module (so the registry's gate reaches it). Guard: green on HEAD."""
     assert recognize.installed_enrichers is bindings.installed_enrichers
+
+
+# =============================================================================
+# 5. VOICES HAND OVER (B2b)
+# =============================================================================
+
+#: The raw TER each of the two enrichers of the hand-over gives: different, so the source of «now» is visible.
+TER_A = "0.0012"
+TER_B = "0.0047"
+
+
+async def _now(engine: AsyncEngine, asset_id: int, key: str) -> tuple[str, Any] | None:
+    """«Now» of one voice as ``(source, value in stored form)``, from the store's own reader."""
+    async with AsyncSession(engine) as session:
+        row = (await current_rows(session, asset_id, [key])).get(key)
+    return None if row is None else (row.source, row.value)
+
+
+def _sources_of(rows: list[tuple[int, str, str]], key: str) -> list[str]:
+    """The sources of the rows of one voice, in the order they were written (``_profile_rows`` is by id)."""
+    return [source for _id, voice, source in rows if voice == key]
+
+
+@pytest.mark.parametrize("absence", ["switched_off", "not_configured"])
+@pytest.mark.asyncio
+async def test_b2b_a_missing_enricher_hands_its_voices_over_and_takes_them_back(absence: str, engine: AsyncEngine, fake: Callable[..., Fake], monkeypatch: pytest.MonkeyPatch) -> None:
+    """5: ``{A, B}`` bound (A first), both give ``ter`` with different values, A read first: «now» is A's. A switched off
+    (or its required key removed): nothing is written by the switch; the next refresh makes B's value «now» (one row,
+    source B), A's rows stay, the ``config`` (A then B) is unchanged, and a voice both give alike makes no row. A back:
+    the next read makes A «now» again (one row), and a further read writes nothing. Guard: green on HEAD 3e720ad61."""
+    keyed = absence == "not_configured"
+    a = fake("ha", keyed=keyed, ter=TER_A)
+    b = fake("hb", ter=TER_B)
+    if keyed:
+        monkeypatch.setenv(a.variable, KEY_VALUE)
+    ter_a, ter_b = normalize_value("ter", TER_A), normalize_value("ter", TER_B)
+    assert ter_a != ter_b, "barrier: the two TERs differ in stored form"
+    asset_id = await _asset(engine, f"hand over {absence}", {a.code: _entry(_ident("HA")), b.code: _entry(_ident("HB"))})
+    config_before = await _config(engine, asset_id)
+    assert list(config_before) == [a.code, b.code], "barrier: the user's order is A then B"
+
+    first = await _refresh(engine, asset_id, NOW)
+    assert {outcome.code: outcome.status for outcome in first.outcomes} == {a.code: EnricherReadStatus.OK, b.code: EnricherReadStatus.OK}, f"barrier: both read: {first}"
+    assert await _now(engine, asset_id, "ter") == (a.code, ter_a), "barrier: A, first of the order, is «now»"
+    rows_first, state_first = await _profile_rows(engine, asset_id), await _state(engine, asset_id)
+    assert _sources_of(rows_first, "ter") == [a.code] and _sources_of(rows_first, "distribution_policy") == [a.code], f"barrier: A wrote the voices: {rows_first}"
+
+    if keyed:
+        monkeypatch.delenv(a.variable)
+        await _not_configured_barrier(a)
+    else:
+        monkeypatch.setenv(VARIABLE, f"mockenrich,{b.code}")
+        assert EnricherRegistry.get_plugin(a.code) is None and EnricherRegistry.get_plugin(b.code) is not None, "barrier: A off, B on"
+    assert (await _profile_rows(engine, asset_id), await _state(engine, asset_id), await _config(engine, asset_id)) == (rows_first, state_first, config_before), "the switch alone writes nothing"
+
+    handed = await _refresh(engine, asset_id, LATER)
+
+    assert [outcome.code for outcome in handed.outcomes] == [b.code], f"A is absent like a source that is down: {handed.outcomes}"
+    assert await _now(engine, asset_id, "ter") == (b.code, ter_b), "B's value is «now»"
+    rows_handed = await _profile_rows(engine, asset_id)
+    assert _sources_of(rows_handed, "ter") == [a.code, b.code], f"one row, source B: {rows_handed}"
+    assert set(rows_first) <= set(rows_handed), "A's rows are still there"
+    assert _sources_of(rows_handed, "distribution_policy") == [a.code], "a voice B gives alike makes no row"
+    assert list((await _config(engine, asset_id)).items()) == list(config_before.items()), "the user's dictionary is unchanged, A then B"
+    assert (await _state(engine, asset_id))[a.code] == state_first[a.code], "A's state is as it was"
+
+    if keyed:
+        monkeypatch.setenv(a.variable, KEY_VALUE)
+    else:
+        monkeypatch.delenv(VARIABLE)
+    back = await _refresh(engine, asset_id, LATER + timedelta(days=1))
+
+    assert {outcome.code for outcome in back.outcomes} == {a.code, b.code}, f"barrier: A read again: {back.outcomes}"
+    assert await _now(engine, asset_id, "ter") == (a.code, ter_a), "A is «now» again"
+    rows_back = await _profile_rows(engine, asset_id)
+    assert _sources_of(rows_back, "ter") == [a.code, b.code, a.code], f"one row, source A: {rows_back}"
+    assert _sources_of(rows_back, "distribution_policy") == [a.code]
+
+    await _refresh(engine, asset_id, LATER + timedelta(days=2))
+    assert _sources_of(await _profile_rows(engine, asset_id), "ter") == [a.code, b.code, a.code], "A already «now»: no row"
+    assert list((await _config(engine, asset_id)).items()) == list(config_before.items())
+
+
+# =============================================================================
+# 6. ONE LOG LINE PER REFRESH CALL NAMING THE SKIPPED ENRICHERS (B2b)
+# =============================================================================
+
+REFRESH_CANARY = "enrichers enabled test: the capture reaches the refresh module's logger"
+
+
+async def _refresh_many(engine: AsyncEngine, asset_ids: list[int], now: datetime) -> list[AssetRefreshResult]:
+    """One ``refresh_assets`` call over every asset given."""
+
+    async def run() -> list[AssetRefreshResult]:
+        async with AsyncSession(engine) as session:
+            return await refresh_assets(session, asset_ids, now=now)
+
+    results = await asyncio.wait_for(run(), DEADLINE)
+    assert sorted(result.asset_id for result in results) == sorted(asset_ids), f"barrier: one result per asset: {results}"
+    return results
+
+
+def _skip_lines(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The lines naming the skipped enrichers: those with an ``enrichers`` field (message and level are free)."""
+    return [event for event in events if "enrichers" in event]
+
+
+@contextmanager
+def _refresh_logs() -> Iterator[list[dict[str, Any]]]:
+    """The structlog events of the block, behind a barrier: a canary logged through ``refresh``'s own logger is there."""
+    with capture_logs() as events:
+        refresh.logger.info(REFRESH_CANARY)
+        yield events
+    assert any(event.get("event") == REFRESH_CANARY for event in events), f"barrier: refresh's logger does not reach capture_logs: {events}"
+
+
+@pytest.mark.asyncio
+async def test_b2b_one_line_names_every_enricher_the_call_skipped(engine: AsyncEngine, fake: Callable[..., Fake], monkeypatch: pytest.MonkeyPatch) -> None:
+    """6: one call over three assets: two bound to a switched-off enricher, one to a not-configured one, all three to an
+    enricher on. Exactly one line for the call, its ``enrichers`` the two skipped codes, sorted, each once."""
+    on, off, keyed = fake("lon"), fake("loff"), fake("lkey", keyed=True)
+    await _not_configured_barrier(keyed)
+    monkeypatch.setenv(VARIABLE, f"{on.code},{keyed.code}")
+    assert EnricherRegistry.get_plugin(off.code) is None and EnricherRegistry.get_plugin(keyed.code) is not None, "barrier: off is off, keyed is served"
+    assets = [
+        await _asset(engine, "log off 1", {off.code: _entry(_ident("L1")), on.code: _entry(_ident("O1"))}),
+        await _asset(engine, "log off 2", {off.code: _entry(_ident("L2")), on.code: _entry(_ident("O2"))}),
+        await _asset(engine, "log keyed", {keyed.code: _entry(_ident("L3")), on.code: _entry(_ident("O3"))}),
+    ]
+
+    with _refresh_logs() as events:
+        results = await _refresh_many(engine, assets, NOW)
+
+    assert len(on.identifiers_read()) == 3 and all(set(result.written) == MOCK_VOICES for result in results), f"barrier: the enricher on is read for every asset: {results}"
+    assert off.reads == [] and keyed.reads == [], "barrier: the two are skipped"
+    lines = _skip_lines(events)
+    assert len(lines) == 1, f"one line for the whole call, not one per asset: {lines}"
+    assert lines[0]["enrichers"] == sorted([off.code, keyed.code]), lines[0]
+
+
+@pytest.mark.asyncio
+async def test_b2b_one_line_per_call_names_a_code_bound_twice_once(engine: AsyncEngine, fake: Callable[..., Fake], monkeypatch: pytest.MonkeyPatch) -> None:
+    """6: two assets bound to the same switched-off enricher: one line, the code once; a second call logs its own line
+    (one per call, not once per process)."""
+    on, off = fake("lon"), fake("loff")
+    monkeypatch.setenv(VARIABLE, on.code)
+    assets = [await _asset(engine, f"log twice {n}", {off.code: _entry(_ident(f"T{n}")), on.code: _entry(_ident(f"U{n}"))}) for n in (1, 2)]
+
+    for now in (NOW, LATER):
+        with _refresh_logs() as events:
+            await _refresh_many(engine, assets, now)
+        lines = _skip_lines(events)
+        assert [line.get("enrichers") for line in lines] == [[off.code]], f"call at {now}: one line, the code once: {lines}"
+    assert off.reads == []
+
+
+@pytest.mark.asyncio
+async def test_b2b_no_line_when_nothing_is_skipped(engine: AsyncEngine, fake: Callable[..., Fake]) -> None:
+    """6: every bound enricher served and configured: the call writes and logs no line naming skipped enrichers. Guard:
+    green on HEAD (nothing logs it yet); with the canary and the write it is not vacuous."""
+    on = fake("lon")
+    asset_id = await _asset(engine, "log none", {on.code: _entry(_ident("N1")), "mockenrich": _entry(_ident("N2"))})
+
+    with _refresh_logs() as events:
+        results = await _refresh_many(engine, [asset_id], NOW)
+
+    assert set(results[0].written) == MOCK_VOICES and {outcome.code for outcome in results[0].outcomes} == {on.code, "mockenrich"}, f"barrier: both read: {results}"
+    assert _skip_lines(events) == [], events
+
+
+# =============================================================================
+# 7. THE NOT-CONFIGURED REFUSAL IS THE APP'S CODED 422 (B2b)
+# =============================================================================
+
+
+def test_b2b_not_configured_error_is_the_coded_422() -> None:
+    """7: ``not_configured_error(code, missing)``: an ``HTTPException`` 422 whose detail has exactly ``error_code``
+    (``NOT_CONFIGURED``), ``message`` (names the plugin and each key) and ``missing`` (a list, in the order given)."""
+    from backend.app.api.plugin_errors import not_configured_error
+
+    error = not_configured_error("b2b_somecode", ("zeta_key", "alpha.token"))
+
+    assert isinstance(error, HTTPException) and error.status_code == 422, error
+    assert isinstance(error.detail, dict) and set(error.detail) == {"error_code", "message", "missing"}, error.detail
+    assert error.detail["error_code"] == "NOT_CONFIGURED"
+    assert error.detail["missing"] == ["zeta_key", "alpha.token"] and type(error.detail["missing"]) is list, "a list, in the order given"
+    message = error.detail["message"]
+    assert isinstance(message, str) and all(part in message for part in ("b2b_somecode", "zeta_key", "alpha.token")), message
+    assert not_configured_error("b2b_other", ["only_key"]).detail["missing"] == ["only_key"], "a list in, the same list out"
+
+
+#: A setting a variable locks with an invalid value: the plugin is not configured, and in the managed profile the
+#: customer is not told about it (decision N2).
+LOCKED_KEY = "hoster_region"
+LOCKED_FIELD = PluginSettingField(key=LOCKED_KEY, type=SettingType.SELECT, scope=SettingScope.SYSTEM, label="Region (b2b test)", default="eu", options=(SettingOption("eu", "EU"), SettingOption("us", "US")))
+
+
+@pytest.mark.parametrize("route", ["test", "search"])
+@pytest.mark.parametrize(("profile", "told"), [("managed", [KEY]), ("selfhosted", [KEY, LOCKED_KEY])])
+@pytest.mark.asyncio
+async def test_b2b_the_routes_tell_what_readiness_may_tell(profile: str, told: list[str], route: str, routes: Any, fake: Callable[..., Fake], monkeypatch: pytest.MonkeyPatch) -> None:
+    """7: ``missing`` is ``plugins_readiness(...).missing``: an enricher whose key is empty and whose region a variable
+    locks with an invalid value. Managed: the coded 422 names the key only (the locked field is neither in ``missing``
+    nor in the message); self-hosted: both. Nothing called."""
+    keyed = fake("mgd", fields=(KEY_FIELD, LOCKED_FIELD))
+    monkeypatch.setenv(env_name(FAMILY, keyed.code, LOCKED_KEY), "zz")
+    monkeypatch.setenv("LIBREFOLIO_PROFILE", profile)
+    readiness_now = await plugins_readiness(FAMILY, [keyed.code], user_id=None)
+    assert readiness_now == {keyed.code: PluginReadiness(False, tuple(told))}, f"barrier: what a caller may be told: {readiness_now}"
+    query = f"b2b managed {uuid.uuid4().hex[:8]}"
+
+    if route == "test":
+        refused = await _route_refusal(lambda: routes.test_enricher(keyed.code, _test_request(_ident("MG")), USER))
+    else:
+        refused = await _route_refusal(lambda: routes.search_enricher(keyed.code, query, USER))
+
+    _assert_not_configured(refused, keyed.code, told)
+    if LOCKED_KEY not in told:
+        assert LOCKED_KEY not in refused[1]["message"], f"the locked field is not told: {refused}"
+    assert keyed.recognized == [] and keyed.searched == []
