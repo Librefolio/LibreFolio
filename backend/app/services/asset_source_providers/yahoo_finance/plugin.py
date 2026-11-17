@@ -357,6 +357,36 @@ def _report_unreturned_symbols(symbols: set[str]) -> None:
         logger.warning("Yahoo Finance returned no v7 quote for a symbol: its last stored price is served", symbol=symbol[:32])
 
 
+def _with_euro_twins(results: list[dict]) -> list[dict]:
+    """The search ``results`` with, right after each crypto's dollar row (``X-USD``), its euro twin (``X-EUR``) when Yahoo
+    quotes it in EUR (project 76, Y1): Yahoo's search answers the dollar ticker only. The twins are asked in ONE v7 quote
+    list request. Best effort: nothing asked when no twin is missing or the v7 helper is unavailable, and a failure of
+    the request leaves ``results`` as they were — except a refusal for too many requests, which leaves the search as a
+    refusal on a result's currency does, so the core pauses Yahoo."""
+    present = {row["identifier"] for row in results}
+    twins = {row["identifier"]: row["identifier"][:-4] + "-EUR" for row in results if row.get("type") == "CRYPTO" and row["identifier"].endswith("-USD")}
+    wanted = [twin for twin in twins.values() if twin not in present]
+    if not wanted or not _bulk_quote_available():
+        return results
+    try:
+        quotes = _fetch_v7_quotes(wanted)
+    except AssetRateLimitedError:
+        raise  # the core pauses Yahoo: as a refusal on a result's currency
+    except Exception as error:  # noqa: BLE001 — an extra row only: the search answers without it
+        logger.warning("Yahoo Finance search: the euro tickers of the cryptos not read, the dollar rows answered", symbols=len(wanted), exc_info=error)
+        return results
+    euro = {quote["symbol"]: quote for quote in quotes if isinstance(quote.get("symbol"), str) and quote.get("currency") == "EUR"}
+    completed: list[dict] = []
+    for row in results:
+        completed.append(row)
+        twin = twins.get(row["identifier"])
+        quote = euro.get(twin) if twin is not None and twin not in present else None
+        if quote is not None:
+            name = quote.get("longName") or quote.get("shortName") or twin
+            completed.append({"identifier": twin, "identifier_type": IdentifierType.TICKER, "display_name": name, "currency": "EUR", "type": "CRYPTO"})
+    return completed
+
+
 def _bulk_symbol(item: FACurrentValueRequest) -> str | AssetSourceError:
     """The Yahoo symbol of one bulk item, or the error that is that item's answer: ``INVALID_IDENTIFIER_TYPE`` for an
     identifier that is no TICKER or ISIN; an ISIN resolved as ``yf.Ticker(isin)`` resolves it for ``.info`` (one
@@ -993,6 +1023,8 @@ class YahooFinanceProvider(AssetSourceProvider):
                     item["quote_base_suggestion"] = suggestion.model_dump()
                 results.append(item)
 
+            # Project 76, Y1: a crypto's euro ticker beside its dollar one, when Yahoo quotes it
+            results = _with_euro_twins(results)
             logger.debug(f"Search for '{query}': found {len(results)} results")
             return results
 
