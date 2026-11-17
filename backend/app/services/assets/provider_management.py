@@ -48,6 +48,7 @@ from backend.app.services.assets.base import (
 from backend.app.services.assets.event_links import events_with_linked_transactions
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.assets.split_guard import adjustments_count, splits_with_costless_adjustments
+from backend.app.services.plugin_settings import readiness
 from backend.app.utils.runtime.cooldown import RateLimitedError
 
 logger = structlog.get_logger(__name__)
@@ -127,6 +128,32 @@ def _probe_failure_fields(error: Exception) -> dict:
     }
 
 
+async def _refuse_unconfigured_new_providers(assignments: List[FAProviderAssignmentItem], session: AsyncSession, user_id: Optional[int]) -> None:
+    """Project 76, N2: an item that puts a provider newly to use on its asset (no stored assignment, or one naming another
+    provider) while that provider is not configured refuses the whole request, before any write: ``AssetSourceError``
+    ``NOT_CONFIGURED`` naming the first such item, in request order, with what the caller may be told is missing.
+
+    One readiness check for the request (``readiness.plugins_readiness``, the boundary's rule). An item that re-saves the
+    provider its asset has already passes: existing assignments stay as they are (no clean-up). A provider that declares
+    no setting is always configured: when the request names none that does, nothing is read.
+    """
+    if not any(readiness.plugin_may_be_unconfigured("asset", item.provider_code, AssetProviderRegistry.get_plugin(item.provider_code)) for item in assignments):
+        return
+    rows = await session.execute(select(AssetProviderAssignment.asset_id, AssetProviderAssignment.provider_code).where(AssetProviderAssignment.asset_id.in_([a.asset_id for a in assignments])))
+    stored = dict(rows.all())
+    new = [item for item in assignments if stored.get(item.asset_id) != item.provider_code]
+    if not new:
+        return
+    states = await readiness.plugins_readiness("asset", [item.provider_code for item in new], user_id=user_id)
+    if any(states[item.provider_code].settings_unavailable for item in new):
+        raise AssetSourceError("The plugin settings could not be read", "PLUGIN_SETTINGS_UNAVAILABLE", {})
+    for item in new:
+        state = states[item.provider_code]
+        if not state.configured:
+            details = {"plugin_code": item.provider_code, "missing": list(state.missing), "reason": state.reason or "missing_fields", "variables": list(state.variables)}
+            raise AssetSourceError(f"Provider {item.provider_code} is not configured", "NOT_CONFIGURED", details)
+
+
 class ProviderManagementOperations:
     """Provider assignment and probe operations."""
 
@@ -150,6 +177,8 @@ class ProviderManagementOperations:
             List of FAProviderAssignmentResult
 
         Raises:
+            AssetSourceError(code="NOT_CONFIGURED"): N2 — an item puts newly to use a provider that is not configured
+                (``details`` = ``plugin_code`` and ``missing``). Checked before anything else: nothing is written.
             AssetSourceError(code="PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST"): X-R49 — an item would wipe a parametric
                 provider's events while a SPLIT among them has incoming adjustments without a purchase cost (the rule of
                 P-10: they would become acquisitions of unknown cost). ``details`` = ``asset_id``, ``item_index`` and
@@ -159,6 +188,7 @@ class ProviderManagementOperations:
         """
         if not assignments:
             return []
+        await _refuse_unconfigured_new_providers(assignments, session, current_user_id)
 
         results = []
         asset_ids = [a.asset_id for a in assignments]

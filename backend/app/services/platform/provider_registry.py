@@ -22,8 +22,9 @@ from typing import Dict, List, Type
 
 from backend.app.config import PROJECT_ROOT, is_test_mode
 from backend.app.logging_config import get_logger
-from backend.app.services.plugin_settings.fields import SettingsDeclarationError, claim_env_variables, validate_declaration
-from backend.app.services.plugin_settings.groups import validate_plugin_groups
+from backend.app.services.plugin_settings.call_limits import with_call_limits
+from backend.app.services.plugin_settings.fields import PluginSettingField, SettingsDeclarationError, claim_env_variables, validate_declaration
+from backend.app.services.plugin_settings.groups import get_group, validate_plugin_groups
 
 logger = get_logger(__name__)
 
@@ -131,6 +132,7 @@ class AbstractPluginRegistry:
     def register(cls, plugin_class: Type) -> None:
         """Validate and register one plugin class."""
         cls._validate_plugin_class(plugin_class)
+        cls._give_call_limits(plugin_class)
         cls._validate_settings_declaration(plugin_class)
         code = cls._get_registration_code(plugin_class)
         if not isinstance(code, str) or not code.strip():
@@ -148,6 +150,24 @@ class AbstractPluginRegistry:
                 raise DuplicatePluginCodeError(f"Duplicate plugin code '{code}' in {existing.__module__}.{existing.__qualname__} and {plugin_class.__module__}.{plugin_class.__qualname__}")
         cls._claim_settings_variables(plugin_class, code)
         storage[code] = plugin_class
+
+    @classmethod
+    def _give_call_limits(cls, plugin_class: Type) -> None:
+        """The core's call-limit fields for a plugin that owns its count (project 76, U4): one that reaches an external
+        service and reads no credit-sharing group (whose limits are the group's), in a family that holds settings. The
+        missing keys only, set on the class itself, before its declaration is checked and its variables claimed. A
+        declaration that is not a tuple is left as it is, for the check to refuse."""
+        if cls.settings_family() is None or not getattr(plugin_class, "calls_external_service", False):
+            return
+        fields = getattr(plugin_class, "settings_fields", ())
+        names = getattr(plugin_class, "settings_groups", ()) or ()
+        if not isinstance(fields, tuple) or not isinstance(names, tuple) or not all(isinstance(field, PluginSettingField) for field in fields):
+            return
+        if any(isinstance(name, str) and (group := get_group(name)) is not None and group.shares_credits for name in names):
+            return
+        completed = with_call_limits(fields)
+        if completed != fields:
+            plugin_class.settings_fields = completed
 
     @classmethod
     def _withheld(cls, plugin_class: Type | None) -> bool:

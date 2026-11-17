@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import delete, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import get_settings
@@ -37,6 +37,8 @@ from backend.app.config.plugins import plugin_setting_env_origin
 from backend.app.db.models import PluginSystemSetting, PluginUserSetting, User
 from backend.app.logging_config import get_logger
 from backend.app.schemas.plugin_settings import (
+    PluginCallUsage,
+    PluginCallWindow,
     PluginSettingErrorCode,
     PluginSettingFieldRead,
     PluginSettingOptionRead,
@@ -51,8 +53,10 @@ from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.fx.registry import FXProviderRegistry
+from backend.app.services.platform import call_counter
 from backend.app.services.platform.instance_key import InstanceKeyError
 from backend.app.services.platform.provider_registry import AbstractProviderRegistry
+from backend.app.services.plugin_settings.call_limits import CALL_LIMIT_KEYS
 from backend.app.services.plugin_settings.contract import qualified_missing
 from backend.app.services.plugin_settings.crypto import encrypt_secret, key_id_of, secret_aad, settings_subkey
 from backend.app.services.plugin_settings.fields import PluginSettingField, SettingScope, SettingType, SettingValueError, env_variables, validate_value
@@ -271,6 +275,38 @@ def _resolve_catalogue(plugins: list[_Plugin], groups: list[SettingsGroup], syst
     return plugin_states, group_states
 
 
+def _owns_count(plugin: _Plugin) -> bool:
+    """Whether the plugin's calls are counted on its own row (project 76, U4): it reaches an external service and reads no
+    credit-sharing group (``call_counter.call_owner``'s rule)."""
+    return bool(getattr(plugin.plugin_class, "calls_external_service", False)) and not any(group.shares_credits for group in plugin.groups)
+
+
+def _usage(family: str, code: str, states: list[FieldState], counts: call_counter.CallCounts, now: Any, managed: bool) -> PluginCallUsage:
+    """The usage block of an owner: each window's count, its limit (hidden in the managed profile when its variable locks
+    it), the end of the window of ``now``, and whether it is full (on the real limit)."""
+    limits = {state.field.key: state for state in states if state.field.key in CALL_LIMIT_KEYS}
+    starts = call_counter.window_starts(now)
+    windows = []
+    for window in call_counter.WINDOWS:
+        state = limits.get(f"call_limit_{window}")
+        limit = state.value if state is not None and isinstance(state.value, int) and not isinstance(state.value, bool) else None
+        count = getattr(counts, window)
+        shown = None if (state is not None and managed and state.locked) else limit
+        windows.append(PluginCallWindow(window=window, count=count, limit=shown, resets_at=call_counter.window_end(window, starts[window]), full=limit is not None and count >= limit))
+    return PluginCallUsage(family=family, plugin_code=code, windows=windows)
+
+
+async def _read_owner_counts(owners: list[tuple[str, str]], now: Any) -> dict[tuple[str, str], call_counter.CallCounts] | None:
+    """The counts of every owner in one read; None when the counter table cannot be read (one warning, never a 500)."""
+    if not owners:
+        return {}
+    try:
+        return await call_counter.read_counts_many(owners, now=now)
+    except SQLAlchemyError as error:
+        logger.warning("Plugin call counts not read for the settings catalogue: the usage blocks are left out", owners=len(owners), error=type(error).__name__)
+        return None
+
+
 async def read_catalogue(session: AsyncSession, user: User, *, family: str | None = None, plugin_code: str | None = None) -> PluginSettingsCatalogResponse:
     """The plugins that declare settings, then the shared groups (project 76), and the state of each field for ``user``.
 
@@ -285,20 +321,27 @@ async def read_catalogue(session: AsyncSession, user: User, *, family: str | Non
     system, own = await _rows_by_plugin(session, user.id)
     plugin_states, group_states = await asyncio.to_thread(_resolve_catalogue, plugins, groups, system, own, user.id)
     managed = _is_managed()
+    # The call usage of the entries that own a count (U4): one now, one read for the whole catalogue
+    now = call_counter._utc(None)
+    owners = [(plugin.family, plugin.code) for plugin in plugins if _owns_count(plugin)] + [(GROUP_FAMILY, group.name) for group in groups if group.shares_credits]
+    counts = await _read_owner_counts(owners, now)
     entries = []
     for plugin, states in zip(plugins, plugin_states, strict=True):
         fields = [_field_read(state, is_admin=user.is_superuser) for state in states if not (managed and state.locked)]
         read = [group.name for group in plugin.groups]
         # A group the managed profile hides whole (every field locked) is not named either: no trace, no dead link (N2)
         names = [name for name in read if not (managed and all(state.locked for state in group_states[name]))]
-        if fields or names:
+        usage = _usage(plugin.family, plugin.code, states, counts[(plugin.family, plugin.code)], now, managed) if counts is not None and (plugin.family, plugin.code) in counts else None
+        # U4b: an owner whose every field the managed profile hides keeps its entry, read-only, for its usage block
+        if fields or names or usage is not None:
             # Judged on every field, the hidden ones and the groups' too: a yes or no, which names none of them (decision N2).
             configured = not qualified_missing(missing_field_keys(states), {name: missing_field_keys(group_states[name]) for name in read})
-            entries.append(PluginSettingsPluginRead(family=plugin.family, plugin_code=plugin.code, plugin_name=plugin.name, icon_url=plugin.icon_url, configured=configured, fields=fields, groups=names))
+            entries.append(PluginSettingsPluginRead(family=plugin.family, plugin_code=plugin.code, plugin_name=plugin.name, icon_url=plugin.icon_url, configured=configured, fields=fields, groups=names, call_usage=usage))
     for group in groups:
         states = group_states[group.name]
         fields = [_field_read(state, is_admin=user.is_superuser) for state in states if not (managed and state.locked)]
-        if fields:
+        group_usage = _usage(GROUP_FAMILY, group.name, states, counts[(GROUP_FAMILY, group.name)], now, managed) if counts is not None and (GROUP_FAMILY, group.name) in counts else None
+        if fields or group_usage is not None:
             entries.append(
                 PluginSettingsPluginRead(
                     family=GROUP_FAMILY,
@@ -309,6 +352,7 @@ async def read_catalogue(session: AsyncSession, user: User, *, family: str | Non
                     configured=not missing_field_keys(states),
                     fields=fields,
                     used_by=_group_users(group),
+                    call_usage=group_usage,
                 )
             )
     return PluginSettingsCatalogResponse(plugins=entries)

@@ -39,6 +39,7 @@ from backend.app.services.assets.base import (
 )
 from backend.app.services.assets.event_store import EventStoreOperations
 from backend.app.services.assets.price_store import PriceStoreOperations, _unstorable_provider_point, storable_current_value, unstorable_quote_reason
+from backend.app.services.plugin_settings import runtime
 from backend.app.utils.date_range_limits import latest_stored_date, range_span_floor
 from backend.app.utils.datetime_utils import utcnow
 
@@ -812,6 +813,7 @@ class RefreshOperations:
     """Provider-driven asset price refresh operations."""
 
     @staticmethod
+    @runtime.with_one_binding_per_plugin  # each provider's settings read once for the whole refresh (U4)
     async def bulk_refresh_prices(
         requests: List[FARefreshItem],
         session: AsyncSession,

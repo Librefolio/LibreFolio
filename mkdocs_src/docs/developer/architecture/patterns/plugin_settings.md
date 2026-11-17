@@ -734,6 +734,24 @@ current key. The same rule serves both sides:
   provider lists use it, one check per request: `GET /api/v1/assets/provider` and
   `GET /api/v1/fx/providers` give each provider `configured` and `missing_settings`.
   It shares the catalogue's divergence below: a blob the key id vouches for counts as set.
+- **Before a write** (project 76, N2): `POST /api/v1/assets/provider` and `POST /api/v1/fx/providers/routes`
+  refuse a request that puts a not-configured provider newly to use, an asset's new or changed provider
+  or a step provider new for its pair, with the shared 422 of `api/plugin_errors.not_configured_error`
+  (`error_code: "NOT_CONFIGURED"`, `message`, `missing`, the same body as the enrichers'), before any
+  write and for the whole request. One readiness check per request. An assignment that re-saves its
+  asset's provider, and a provider a stored route of the pair already uses, pass: nothing that exists
+  is cleaned up, and its calls answer `NOT_CONFIGURED` at the boundary as before.
+- **Why, and when the rows cannot be read** (N2b): `PluginReadiness` also says `reason`,
+  `missing_fields` (a value to set) or `invalid_locked_setting` (a variable that locks a field has an
+  invalid value, fixed on the server), and, outside the managed profile, the `variables` concerned;
+  the 422 body carries both, and the two provider lists give them per provider (`missing_reason`,
+  `invalid_variables`), so the interface knows the case before any write. When the readiness cannot read the rows (a database error) it answers from
+  the environment and the defaults, as the boundary does, with `settings_unavailable`: the two writes
+  then refuse with **503 `PLUGIN_SETTINGS_UNAVAILABLE`** (`api/plugin_errors.settings_unavailable_error`),
+  nothing written, retry. The call boundary does not change.
+- **One divergence, accepted** (the consultant, after N2): the readiness never decrypts, so a stored
+  secret whose `key_id` is the current key's counts as set even if it does not decrypt (see the note
+  below). A write then passes, and the call answers `NOT_CONFIGURED` at the boundary.
 
 What the refusal looks like:
 
@@ -850,6 +868,10 @@ class CoinGeckoProvider(AssetSourceProvider):
   (`contract.qualified_missing()`); a plugin that only reads groups is listed too, with no field of
   its own. A write names a group as it names a plugin (`family: "group"`, `plugin_code: <name>`,
   `scope: "system"`) and follows the same rules, all or nothing with plugin items.
+- **Shared credits** (project 76, U2): a group with `shares_credits=True` stands for one account whose credits
+  its plugins spend together (CoinGecko's key): their calls are counted, and limited, on the group's row of
+  `plugin_call_counters` (`family="group"`), not each on its own (`core.call_owner()`). A plugin reads at most one
+  such group: a second one is refused at registration (`validate_plugin_groups()`).
 - **Switched off with its readers** (X1): when the instance's allow-lists
   (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`,
   `LIBREFOLIO_ENRICHERS_ENABLED`) switch off every plugin
@@ -867,6 +889,53 @@ class CoinGeckoProvider(AssetSourceProvider):
 - **Its tab in the interface** comes with G3.
 
 ---
+
+## 🔢 Call Limits, Fields of the Core {: #call-limits }
+
+Project 76, U4. The instance's limits on the calls a plugin makes to its external service are five
+settings the **core** declares, not the plugin (`services/plugin_settings/call_limits.py`):
+`call_limit_minute`, `call_limit_hour`, `call_limit_day`, `call_limit_week`, `call_limit_month`.
+They are optional system integers with no default and a minimum of 0. Empty means no limit; 0 stops
+the plugin.
+
+- **Who gets them**: whoever owns the count, by the rule of `call_counter.call_owner`.
+  `AbstractPluginRegistry.register` adds the missing keys (`with_call_limits`) to a plugin that
+  reaches an external service (`calls_external_service`) and reads no credit-sharing group, before
+  its declaration is checked and its variables claimed. `register_group` adds them to a group with
+  `shares_credits`. A plugin that reads such a group declares none: one key in both would be refused.
+  Today that means every price and exchange-rate provider but `scheduled_investment` and `MANUAL`.
+- **They are fields like any other**: written by an administrator, stored in
+  `plugin_system_settings`, locked by their variable
+  (`LIBREFOLIO_PLUGIN_<FAMILY>_<CODE>_CALL_LIMIT_<WINDOW>`, documented once by its pattern in
+  `.env.example`), and part of the fingerprint. A changed limit therefore lifts the limit pause in
+  every process (U2b). An invalid variable leaves the plugin `NOT_CONFIGURED`, as for any field.
+- **The enrichers count too** (K1): `enrichers/refresh.read_bindings` counts one call per binding it
+  hands to the plugin's `read`, in request order and before the read, on the owner `call_owner(plugin,
+  "enricher")` names (`("enricher", code)`, or the credit-sharing group's row, shared with the price
+  providers that read it). A full window refuses that binding and the following ones as `RATE_LIMITED`
+  with the counter's `retry_after`, never cached; a binding served from the read cache is not counted,
+  and a counter that fails lets the reads go. Only an enricher whose class says `calls_external_service`
+  is counted: the shipped justETF enricher does not say it yet (lane 68's `EnricherPlugin`).
+- **The readiness and N2 read nothing for them**: `readiness.plugin_may_be_unconfigured` is true only
+  for a group, a required field or a field whose variable is set. A provider whose only fields are the
+  limits is always configured.
+- **One read per operation**: now that every such provider declares fields, `configure_instance`
+  reads the rows at each instance. Inside `runtime.one_binding_per_plugin()`, opened by the live read
+  (`get_current_prices_bulk`) and the refresh (`bulk_refresh_prices`), a plugin's binding is read once
+  and reused. A read of N assets of one provider costs one read of its settings, not N.
+- **In the catalogue**: the entry that owns the count carries `call_usage`. It has the five windows,
+  each with `count`, `limit`, `resets_at` and `full`, all from one `now`, and the counts of the whole
+  catalogue are read with one SELECT (`call_counter.read_counts_many`). In the managed profile a limit
+  that a variable locks is null, while `full` is still judged on it. An entry whose every field the
+  managed profile hides is still listed when it carries `call_usage`, read-only, with no field: the
+  hoster's limits stay invisible, the usage block does not (the same for a credit-sharing group). If
+  the counts cannot be read, `call_usage` is null with one warning, never an error, and such an entry
+  is not listed until they can.
+- **The interface does not show them yet**: the frontend's `pluginSettingsApi` leaves out
+  `CALL_LIMIT_KEYS`, an entry they alone filled, and an entry listed only for its usage block, until
+  U5 brings the «Calls» section.
+- **For the tests**: `mockcount` is a test-only asset double that is counted (mockprov's answers),
+  with the five fields. Only a suite that owns its limits uses it.
 
 ## 🧪 Test-Only Plugins {: #test-only }
 
@@ -918,7 +987,8 @@ The test plugin of the BRIM family therefore lives in a test module, never under
 
 ## 🔎 Shipped Plugins with Settings {: #shipped-plugins }
 
-Two plugins shipped with LibreFolio declare a field, a personal `select` each, read in `search()`
+Besides the core's call limits, which every provider that calls out gets ([Call Limits](#call-limits)),
+two plugins shipped with LibreFolio declare a field, a personal `select` each, read in `search()`
 only. Neither is required and both default to `all`, so both plugins are always configured; prices,
 history and metadata never see the field ([Scopes and Families](#scopes)).
 
@@ -1100,7 +1170,7 @@ Residual risks:
 
 ## ✅ Tests {: #tests }
 
-All eight run without a server or the lane's database (`isolation="pure"`):
+All eleven run without a server or the lane's database (`isolation="pure"`):
 
 | Selector | Covers |
 |----------|--------|
@@ -1111,6 +1181,9 @@ All eight run without a server or the lane's database (`isolation="pure"`):
 | `./dev.py test services secret-masking` | Masking in exceptions and log lines, across threads and tasks; overlapping or touching occurrences masked as one, against the overlap attack of the security review; `whole` |
 | `./dev.py test services plugin-settings-groups` | The shared groups ([Shared Groups](#groups)): registering and refusing a group, its variables, the checks of `settings_groups` at registration, the binding with no field of the plugin's own (variable, row, default), `missing` as `<group>.<field>` and `NOT_CONFIGURED` at the boundary, the masking of a group secret, the fingerprint (unchanged without groups), the pickle, and the gate: every named group exists, every shipped group is used |
 | `./dev.py test services plugin-readiness` | `plugins_readiness()`: the same answer as `configure_instance(...).settings.missing` for prices and exchange rates (own fields, groups, user fields, variables, a secret under another key), one database session per batch and none for a plugin without settings, never a decryption, the managed profile's locked fields counted but not named; the two provider lists, with one check per request |
+| `./dev.py test services not-configured-writes` | The two writes that refuse a not-configured provider (N2): the asset assignment and the FX routes, the whole request refused before any write, the first item named, `replace=true` leaving the pair as it was, a re-saved assignment and a provider already on the pair passing, the managed profile naming no locked field, one readiness check per request |
+| `./dev.py test services call-limit-settings` | The core's call-limit fields (U4): who gets them at registration, their variables and lock, the fingerprint, the readiness skip, the catalogue's `call_usage` (one read, managed hiding, a database error), `mockcount`, one binding per operation |
+| `./dev.py test services enricher-call-limits` | The enrichers' read boundary (K1): one call counted per binding read, before the read; a full window refuses that binding and the rest as `RATE_LIMITED`, never cached; the credit-sharing group's row shared with an asset provider; a failing counter lets the reads go; cached bindings and plugins that call nothing out never counted |
 | `./dev.py test services plugin-settings-guards` | Shipped variables documented in `.env.example`, one owner per variable, no alias on a variable LibreFolio reads, AI Export kept away from the settings |
 
 The other units that touch the plugin settings:

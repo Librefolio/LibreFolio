@@ -60,7 +60,7 @@ from backend.app.services.plugin_settings import resolver, runtime, service
 from backend.app.services.plugin_settings.contract import PluginSettingsMixin
 from backend.app.services.plugin_settings.crypto import encrypt_secret, key_id_of, secret_aad, settings_subkey
 from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType, env_name
-from backend.app.services.plugin_settings.groups import SettingsGroup, all_groups, register_group, release_group
+from backend.app.services.plugin_settings.groups import GROUP_FAMILY, SettingsGroup, all_groups, plugin_groups, register_group, release_group
 from backend.test_scripts.test_utils import print_section, print_success
 
 KEY_A = "LibreFolio-plugin-readiness-test-key-A-0123456789"
@@ -404,7 +404,8 @@ def test_n1_plugin_readiness_is_a_frozen_value():
     ready = PluginReadiness(True, ())
 
     assert ready == PluginReadiness(configured=True, missing=()) and ready != PluginReadiness(False, ("api_key",))
-    assert [field.name for field in dataclasses.fields(PluginReadiness)] == ["configured", "missing"]
+    # N2b adds why, which variables, and whether the rows could be read: details, outside the comparison
+    assert [field.name for field in dataclasses.fields(PluginReadiness)] == ["configured", "missing", "reason", "variables", "settings_unavailable"]
     with pytest.raises(dataclasses.FrozenInstanceError):
         ready.configured = False  # type: ignore[misc]
 
@@ -669,3 +670,250 @@ async def test_n1_the_fx_provider_list_says_what_each_provider_lacks(engine, peo
     assert (after["N1FXPLAIN"].configured, after["N1FXPLAIN"].missing_settings) == (True, [])
     assert len(readiness_spy.calls) == 1
     print_success("fx list: false/[api_key] then true/[]")
+
+
+# =============================================================================
+# N2b. READINESS SAYS WHY, AND WHEN IT COULD NOT READ
+# =============================================================================
+#
+# Contract (lot N2b): ``PluginReadiness`` gains ``reason`` (None when configured, else ``"missing_fields"`` or
+# ``"invalid_locked_setting"``), ``variables`` (default ``()``) and ``settings_unavailable`` (default False).
+# - a missing field whose state is locked by a variable with ``problem == "invalid_env"`` is an invalid locked setting;
+#   one such field among the missing makes the reason ``invalid_locked_setting``, else ``missing_fields``;
+# - outside the managed profile it is named in ``missing`` and its variable (``FieldState.env_variable``) is in
+#   ``variables``; in the managed profile ``missing`` leaves it out (as N1) and ``variables`` is ``()``;
+# - when ``_rows`` cannot read (``SQLAlchemyError``), every entry it judged carries ``settings_unavailable=True``.
+# The new attributes are read one by one: whether they take part in ``==`` is the implementation's choice.
+# Red on HEAD c4cf8ae36: ``PluginReadiness`` has no ``reason`` / ``variables`` / ``settings_unavailable``.
+
+#: A missing ``_FILE`` path: the group's token variable is set but cannot give its value (``invalid_env``).
+GROUP_TOKEN_FILE_VARIABLE = GROUP_TOKEN_VARIABLE + "_FILE"
+
+
+def _why(answer: Any) -> tuple[Any, Any, Any]:
+    """The three N2b attributes of an answer (AttributeError on HEAD: the red names the missing attribute)."""
+    return answer.reason, answer.variables, answer.settings_unavailable
+
+
+def _states(family: str, code: str, fields: tuple) -> list[resolver.FieldState]:
+    """The barrier's view of one plugin's (or group's) fields from the environment alone, no row, no secret decrypted."""
+    return resolver.resolve_plugin_fields(family, code, fields, {}, None, user_id=None, decrypt=False)
+
+
+@pytest.mark.asyncio
+async def test_n2b_a_plain_missing_field_says_missing_fields(engine, lab):
+    """N2b 1: a required key nobody set → ``reason == "missing_fields"``, ``variables == ()``, the DB was read."""
+    from backend.app.services.plugin_settings.readiness import plugins_readiness
+
+    print_section("N2b 1: reason of a plain missing field")
+    lab("asset", _plugin("n1_plain_missing", (KEY_FIELD,)))
+
+    answer = (await plugins_readiness("asset", ["n1_plain_missing"], user_id=None))["n1_plain_missing"]
+
+    assert (answer.configured, answer.missing) == (False, ("api_key",)), "barrier: as N1"
+    assert _why(answer) == ("missing_fields", (), False)
+    print_success("missing_fields, no variable")
+
+
+async def _invalid_own_region(ctx: _Ctx) -> tuple[str, str]:
+    """The plugin's own optional ``region`` locked by its variable with a value outside its options."""
+    variable = env_name("asset", ctx.code, "region")
+    ctx.mp.setenv(variable, "zz")
+    return "region", variable
+
+
+async def _invalid_group_token(ctx: _Ctx) -> tuple[str, str]:
+    """The group's required ``token`` locked by its ``_FILE`` variable naming a file that does not exist."""
+    ctx.mp.setenv(GROUP_TOKEN_FILE_VARIABLE, str(Path(ctx.engine.url.database).parent / "no-such-dir" / "token.txt"))
+    return f"{GROUP}.token", GROUP_TOKEN_VARIABLE
+
+
+# (fields, groups, setup) — each locks ONE field with an invalid variable and leaves nothing else missing
+_INVALID_LOCKED = [
+    pytest.param((REGION_FIELD,), (), _invalid_own_region, id="own-field"),
+    pytest.param((), (GROUP,), _invalid_group_token, id="group-field"),
+]
+
+
+def _barrier_invalid_locked(code: str, fields: tuple, groups: tuple, key: str, variable: str) -> None:
+    """HEAD-true facts: the field the setup locked resolves ``locked``, ``invalid_env``, from ``variable``."""
+    if "." in key:
+        group_name, field_key = key.split(".", 1)
+        (group,) = [group for group in plugin_groups(_plugin(code, fields, groups)) if group.name == group_name]
+        states = _states(GROUP_FAMILY, group_name, group.fields)
+    else:
+        field_key = key
+        states = _states("asset", code, fields)
+    (state,) = [state for state in states if state.field.key == field_key]
+    assert (state.locked, state.problem, state.env_variable) == (True, "invalid_env", variable), f"barrier: {state}"
+
+
+@pytest.mark.parametrize(("fields", "groups", "setup"), _INVALID_LOCKED)
+@pytest.mark.asyncio
+async def test_n2b_an_invalid_locked_setting_outside_managed_is_named_with_its_variable(fields, groups, setup, engine, people, lab, monkeypatch):
+    """N2b 1: self-hosted, a field locked by an invalid variable → not configured, the field in ``missing`` (its key,
+    ``<group>.<field>`` for a group's), its variable in ``variables``, ``reason == "invalid_locked_setting"``."""
+    from backend.app.services.plugin_settings.readiness import plugins_readiness
+
+    print_section("N2b 1: invalid locked setting, self-hosted")
+    _register_group()
+    code = "n1_invalid_locked"
+    lab("asset", _plugin(code, fields, groups))
+    key, variable = await setup(_Ctx(engine, monkeypatch, people, code))
+    _barrier_invalid_locked(code, fields, groups, key, variable)
+
+    answer = (await plugins_readiness("asset", [code], user_id=None))[code]
+
+    assert (answer.configured, answer.missing) == (False, (key,)), "barrier: N1 already names it outside managed"
+    assert _why(answer) == ("invalid_locked_setting", (variable,), False)
+    print_success(f"{key}: invalid_locked_setting via {variable}")
+
+
+@pytest.mark.parametrize(("fields", "groups", "setup"), _INVALID_LOCKED)
+@pytest.mark.asyncio
+async def test_n2b_an_invalid_locked_setting_in_managed_keeps_the_reason_but_not_the_name(fields, groups, setup, engine, people, lab, monkeypatch):
+    """N2b 1 (decision N2): managed, the same state → ``missing`` without the field (as N1), ``variables == ()``, and the
+    reason is still ``invalid_locked_setting``: the hoster must fix it on the server."""
+    from backend.app.services.plugin_settings.readiness import plugins_readiness
+
+    print_section("N2b 1: invalid locked setting, managed")
+    _register_group()
+    code = "n1_invalid_locked_managed"
+    lab("asset", _plugin(code, fields, groups))
+    monkeypatch.setenv("LIBREFOLIO_PROFILE", "managed")
+    assert service._is_managed(), "barrier: the service reads the managed profile"
+    key, variable = await setup(_Ctx(engine, monkeypatch, people, code))
+    _barrier_invalid_locked(code, fields, groups, key, variable)
+
+    answer = (await plugins_readiness("asset", [code], user_id=None))[code]
+
+    assert (answer.configured, answer.missing) == (False, ()), "barrier: N1 hides a locked field in managed"
+    assert _why(answer) == ("invalid_locked_setting", (), False)
+
+
+@pytest.mark.parametrize(("profile", "told", "variables"), [("selfhosted", ("endpoint", "region"), True), ("managed", ("endpoint",), False)])
+@pytest.mark.asyncio
+async def test_n2b_one_invalid_locked_among_plain_missing_fields_decides_the_reason(profile, told, variables, engine, lab, monkeypatch):
+    """N2b 1: a plain required field unset AND a field locked by an invalid variable → ``invalid_locked_setting`` (it
+    must be fixed on the server whatever else is missing); ``variables`` names only the locked one, outside managed."""
+    from backend.app.services.plugin_settings.readiness import plugins_readiness
+
+    code = "n1_mixed"
+    lab("asset", _plugin(code, (ENDPOINT_FIELD, REGION_FIELD)))
+    monkeypatch.setenv("LIBREFOLIO_PROFILE", profile)
+    variable = env_name("asset", code, "region")
+    monkeypatch.setenv(variable, "zz")
+    _barrier_invalid_locked(code, (ENDPOINT_FIELD, REGION_FIELD), (), "region", variable)
+
+    answer = (await plugins_readiness("asset", [code], user_id=None))[code]
+
+    assert (answer.configured, answer.missing) == (False, told), "barrier: as N1"
+    assert _why(answer) == ("invalid_locked_setting", (variable,) if variables else (), False)
+
+
+@pytest.mark.asyncio
+async def test_n2b_a_valid_locked_field_beside_a_plain_missing_one_says_missing_fields(engine, lab, monkeypatch):
+    """N2b 1 (guard on the rule): a variable that locks a field with a VALID value is not an invalid locked setting:
+    the reason of a plugin that still lacks its plain required field is ``missing_fields``, ``variables == ()``."""
+    from backend.app.services.plugin_settings.readiness import plugins_readiness
+
+    code = "n1_valid_locked"
+    lab("asset", _plugin(code, (ENDPOINT_FIELD, REGION_FIELD)))
+    monkeypatch.setenv(env_name("asset", code, "region"), "us")
+
+    answer = (await plugins_readiness("asset", [code], user_id=None))[code]
+
+    assert (answer.configured, answer.missing) == (False, ("endpoint",)), "barrier: only the endpoint is missing"
+    assert _why(answer) == ("missing_fields", (), False)
+
+
+@pytest.mark.asyncio
+async def test_n2b_a_configured_plugin_has_no_reason(engine, lab, monkeypatch):
+    """N2b 1: configured (a key by a row, a key by its variable, a plugin that declares nothing, an unknown code) →
+    ``reason is None``, ``variables == ()``, ``settings_unavailable is False`` (the DB was readable: never always-True)."""
+    from backend.app.services.plugin_settings.readiness import plugins_readiness
+
+    lab("asset", _plugin("n1_by_row", (KEY_FIELD,)))
+    lab("asset", _plugin("n1_by_env", (KEY_FIELD,)))
+    lab("asset", _plugin("n1_nothing"))
+    await _store(engine, _secret_row("asset", "n1_by_row", "api_key", "a-secret-value"))
+    monkeypatch.setenv(env_name("asset", "n1_by_env", "api_key"), "a-secret-value")
+    codes = ["n1_by_row", "n1_by_env", "n1_nothing", "n1_unknown"]
+
+    answers = await plugins_readiness("asset", codes, user_id=None)
+
+    assert all(answers[code].configured and answers[code].missing == () for code in codes), f"barrier: all configured {answers}"
+    assert {code: _why(answers[code]) for code in codes} == dict.fromkeys(codes, (None, (), False))
+
+
+@pytest.mark.asyncio
+async def test_n2b_a_database_error_marks_the_entries_that_needed_it(tmp_path, lab, monkeypatch):
+    """N2b 2: the rows cannot be read (an engine on a file in a missing folder, as N1's DB-error test) → every entry
+    judged with the DB (a key only a row could give, a key set by its variable) carries ``settings_unavailable=True``,
+    its judgement unchanged (N1's fallback: environment and defaults); a plugin that declares nothing, answered without
+    the DB, keeps False."""
+    from backend.app.services.plugin_settings import readiness
+    from backend.app.services.plugin_settings.readiness import plugins_readiness
+
+    print_section("N2b 2: readiness with the database failing")
+    broken = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'no-such-dir' / 'x.db'}", poolclass=NullPool)
+    monkeypatch.setattr(runtime, "get_async_engine", lambda: broken)
+    monkeypatch.setattr(readiness, "get_async_engine", lambda: broken)
+    lab("asset", _plugin("n1_rowkey", (KEY_FIELD,)))
+    lab("asset", _plugin("n1_envkey", (KEY_FIELD,)))
+    lab("asset", _plugin("n1_plain"))
+    monkeypatch.setenv(env_name("asset", "n1_envkey", "api_key"), "a-key-from-the-environment")
+    try:
+        answers = await plugins_readiness("asset", ["n1_rowkey", "n1_envkey", "n1_plain"], user_id=None)
+
+        assert (answers["n1_rowkey"].configured, answers["n1_rowkey"].missing) == (False, ("api_key",)), "barrier: N1's fallback"
+        assert (answers["n1_envkey"].configured, answers["n1_envkey"].missing) == (True, ()), "barrier: N1's fallback"
+        assert (answers["n1_plain"].configured, answers["n1_plain"].missing) == (True, ())
+        assert {code: answer.settings_unavailable for code, answer in answers.items()} == {"n1_rowkey": True, "n1_envkey": True, "n1_plain": False}
+        assert answers["n1_rowkey"].reason == "missing_fields" and answers["n1_envkey"].reason is None
+        print_success("settings_unavailable on the two that needed the DB, not on the settingless one")
+    finally:
+        await broken.dispose()
+
+
+def test_n2b_the_new_fields_have_their_defaults():
+    """N2b 1-2: ``variables`` defaults to ``()`` and ``settings_unavailable`` to False; the value stays frozen."""
+    from backend.app.services.plugin_settings.readiness import PluginReadiness
+
+    names = [field.name for field in dataclasses.fields(PluginReadiness)]
+    assert {"configured", "missing", "reason", "variables", "settings_unavailable"} <= set(names), names
+    ready = PluginReadiness(configured=True, missing=(), reason=None)
+    assert (ready.variables, ready.settings_unavailable) == ((), False)
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        ready.settings_unavailable = True  # type: ignore[misc]
+
+
+@pytest.mark.asyncio
+async def test_n2b_the_provider_lists_say_why_and_which_variable(engine, people, engine_calls, readiness_spy, monkeypatch):
+    """N2b, for N3's window from the lists (no 422 to read there): each provider says ``missing_reason`` (None when
+    configured, ``missing_fields``, ``invalid_locked_setting``) and, outside managed, ``invalid_variables``; the FX list
+    the same."""
+    from backend.app.api.v1.assets.providers import list_providers as asset_list
+    from backend.app.api.v1.fx.providers import list_providers as fx_list
+
+    AssetProviderRegistry.auto_discover()
+    storage = AssetProviderRegistry._get_storage()
+    for code, plugin_class in (("n2b_key", _asset_plugin("n2b_key", (KEY_FIELD,))), ("n2b_region", _asset_plugin("n2b_region", (REGION_FIELD,))), ("n2b_plain", _asset_plugin("n2b_plain"))):
+        monkeypatch.setitem(storage, AssetProviderRegistry._normalize_lookup_code(code), plugin_class)
+    variable = env_name("asset", "n2b_region", "region")
+    monkeypatch.setenv(variable, "zz")
+    caller = people["alice"]
+
+    listed = {item.code: item for item in await asset_list(providers="n2b_key,n2b_region,n2b_plain", _current_user=caller)}
+    assert (listed["n2b_key"].missing_reason, listed["n2b_key"].invalid_variables) == ("missing_fields", [])
+    assert (listed["n2b_region"].configured, listed["n2b_region"].missing_reason, listed["n2b_region"].invalid_variables) == (False, "invalid_locked_setting", [variable])
+    assert (listed["n2b_plain"].missing_reason, listed["n2b_plain"].invalid_variables) == (None, [])
+
+    monkeypatch.setenv("LIBREFOLIO_PROFILE", "managed")
+    managed = {item.code: item for item in await asset_list(providers="n2b_region", _current_user=caller)}
+    assert (managed["n2b_region"].missing_reason, managed["n2b_region"].invalid_variables) == ("invalid_locked_setting", [])
+
+    FXProviderRegistry.auto_discover()
+    monkeypatch.setitem(FXProviderRegistry._get_storage(), "N2BFX", _fx_plugin("N2BFX", (KEY_FIELD,)))
+    fx = {item.code: item for item in await fx_list(providers=["N2BFX"], _current_user=caller)}
+    assert (fx["N2BFX"].configured, fx["N2BFX"].missing_reason, fx["N2BFX"].invalid_variables) == (False, "missing_fields", [])

@@ -195,15 +195,45 @@ export function entryOf(raw: unknown): PluginSettingsEntry {
 }
 
 /**
+ * The core's call-limit fields (project 76, U4), which the server lists on every plugin that calls an external service
+ * and on every group that shares credits. Until U5 brings their own controls they are left out here, so the Plugins tab
+ * and «Configure» show what they showed before.
+ */
+export const CALL_LIMIT_KEYS = ['call_limit_minute', 'call_limit_hour', 'call_limit_day', 'call_limit_week', 'call_limit_month'] as const;
+
+const CALL_LIMIT_KEY_SET: ReadonlySet<string> = new Set(CALL_LIMIT_KEYS);
+
+/**
+ * An entry that the server lists only for its usage block (U4b: in the managed profile, a provider whose every limit the
+ * hoster locks): no field, no group, a `call_usage`. Left out until U5 shows the block.
+ */
+function usageOnly(raw: unknown): boolean {
+    const entry = record(raw);
+    const empty = (value: unknown) => !Array.isArray(value) || value.length === 0;
+    return empty(entry.fields) && empty(entry.groups) && entry.call_usage != null;
+}
+
+/** `entry` without the call-limit fields; null when they were its only content (no field left, no group). */
+function withoutCallLimits(entry: PluginSettingsEntry): PluginSettingsEntry | null {
+    const fields = entry.fields.filter((field) => !CALL_LIMIT_KEY_SET.has(field.key));
+    if (fields.length === entry.fields.length) return entry;
+    return fields.length === 0 && entry.groups.length === 0 ? null : {...entry, fields};
+}
+
+/**
  * The plugins that declare settings, with each field's state for the caller. Without `pluginCode` a test-only plugin
- * is not listed (the API lists one only when named).
+ * is not listed (the API lists one only when named). The call-limit fields are left out until U5 (`CALL_LIMIT_KEYS`).
  */
 export async function fetchPluginSettings(filter: {family?: SettingsFamily; pluginCode?: string} = {}): Promise<PluginSettingsEntry[]> {
     const queries: {family?: SettingsFamily; plugin_code?: string} = {};
     if (filter.family) queries.family = filter.family;
     if (filter.pluginCode) queries.plugin_code = filter.pluginCode;
     const answer = await zodiosApi.get_plugin_settings_api_v1_settings_plugins_get({queries});
-    return (answer.plugins ?? []).map(entryOf);
+    return (answer.plugins ?? [])
+        .filter((raw) => !usageOnly(raw))
+        .map(entryOf)
+        .map(withoutCallLimits)
+        .filter((entry): entry is PluginSettingsEntry => entry !== null);
 }
 
 /** The settings of one plugin for the caller; null when it declares none (or is not one the caller may see). */

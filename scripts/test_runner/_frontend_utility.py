@@ -292,6 +292,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/settings/registrationMode.test.ts",
             "src/lib/features/plugin-settings/pluginSettingsForm.test.ts",
             "src/lib/features/plugin-settings/pluginSettingsApi.test.ts",
+            "src/lib/features/plugin-settings/pluginSettingsApi.callLimits.test.ts",
             "src/lib/features/settings/users/linkShare.test.ts",
             "src/lib/features/settings/users/addressProbe.test.ts",
             "src/lib/features/security/cspNotice.test.ts",

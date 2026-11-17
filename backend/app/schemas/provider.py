@@ -175,6 +175,8 @@ class FAProviderInfo(StrictModel):
     provider_help_url: Optional[str] = Field(None, description="URL to provider documentation")
     configured: bool = Field(True, description="False when a required setting of the plugin, or of a shared group it reads, has no value for the caller: every call would answer NOT_CONFIGURED (plan 76, N1). The same rule as the call")
     missing_settings: list[str] = Field(default_factory=list, description="The settings to set, `<group>.<field>` for a shared group's; in the managed profile a field an environment variable locks is never named (decision N2)")
+    missing_reason: Optional[str] = Field(None, description="Why it is not configured (N2b): `missing_fields` (a value to set) or `invalid_locked_setting` (an environment variable that locks a field has an invalid value: it is fixed on the server); null when configured")
+    invalid_variables: list[str] = Field(default_factory=list, description="The environment variables with an invalid value, outside the managed profile; empty otherwise")
     supports_meaningful_volume: bool = Field(
         False,
         description=(
