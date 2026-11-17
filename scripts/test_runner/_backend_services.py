@@ -541,6 +541,14 @@ def services_call_limits_fx(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "FX call limit tests", verbose=verbose)
 
 
+def services_enricher_call_limits(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the enrichers' read boundary counting and limiting the calls of a plugin to its external service (project 76, K1)."""
+    print_section("Services: Enricher Call Limits")
+    print_info("Testing: enrichers/refresh.py (read_bindings), platform/call_counter.py (count_and_check, call_owner)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_call_limits.py", test_names)
+    return run_command(cmd, "Enricher call limit tests", verbose=verbose)
+
+
 def services_call_limit_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test the call limits as core settings of their owner, and their usage in the catalogue (project 76, U4)."""
     print_section("Services: Call Limit Settings")
@@ -3004,6 +3012,18 @@ Note: No backend server required.
         # under tmp_path built by create_all; call_counter._utc on a test clock; a private Cooldowns on a fake clock; test
         # FX plugins put in the FX registry's storage with monkeypatch.setitem, test groups released at teardown, and the
         # catalog cache entries and last known lists of the test's own codes deleted at its end.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "enricher-call-limits",
+        services_enricher_call_limits,
+        name="Enricher Call Limits",
+        desc="K1: read_bindings counts +1 per binding sent to a real read of a plugin with calls_external_service (never a cached, not-configured or unknown one, never a plugin with the flag False or absent), in request order, before read; a full window (or limit 0) keeps that binding and the following ones from read: RATE_LIMITED with the counter's retry_after and a message naming the call limit, window and limit, never cached; one group row for an enricher and an asset plugin of a credit-sharing group; a failing counter lets the bindings be read",
+        # PURE: no lane DB, no server, no network. The counter and the plugin settings' reads on a private SQLite file
+        # under tmp_path built by create_all; call_counter._utc on a test clock; test enrichers (and one asset plugin)
+        # put in the registries' storage with monkeypatch.setitem, test groups released at teardown, a private Cooldowns,
+        # the enricher_read cache cleared around each test.
         isolation="pure",
     )
     add_test(
