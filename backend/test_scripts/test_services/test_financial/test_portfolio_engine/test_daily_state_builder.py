@@ -8,6 +8,7 @@ from decimal import Decimal
 from unittest.mock import MagicMock
 
 from backend.app.db.models import TransactionType
+from backend.app.services.financial_math.portfolio import daily_state as daily_state_module
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder
 from backend.app.services.financial_math.portfolio.models import ClassificationResult, ClassifiedTransaction, InTransitInterval, SplitRecord, UnrealizedSplit, ValuationSource
@@ -1658,3 +1659,63 @@ class TestClassificationResultHelper:
         result._needed_paired_ids = {11, 22}
 
         assert result.get_needed_paired_ids() == {11, 22}
+
+
+class TestClassificationSteps:
+    """Project 68, lot D2: ``asset_classifications`` holds, per asset, each voice's ``ClassificationStep`` list.
+
+    One position of 10 units at 50 (500) over three days, nothing happening on the third: geography all USA on the first
+    two days, half USA and half Japan from the third; sector one step. The full contract is pinned in
+    ``test_financial_math/test_asset_allocation.py`` (section 4). Red by absence until D2: ``ClassificationStep`` is read
+    inside the test (``AttributeError``), so this module still collects.
+    """
+
+    @staticmethod
+    def _step(first: str, through: str, weights: dict[str, str] | None):
+        return daily_state_module.ClassificationStep(
+            date=date.fromisoformat(first),
+            through=date.fromisoformat(through),
+            weights=None if weights is None else {key: Decimal(value) for key, value in weights.items()},
+        )
+
+    @staticmethod
+    def _result(classifications: dict):
+        txs = [
+            _ctxn(_tx(id=1, dt="2025-01-01", type="DEPOSIT", amount="1000")),
+            _ctxn(_tx(id=2, dt="2025-01-01", type="BUY", amount="-500", quantity="10", asset_id=100)),
+        ]
+        return _builder(
+            classified_txs=txs,
+            price_map={100: [(date(2025, 1, 1), Decimal("50"), "EUR")]},
+            quote_base_map={100: None},
+            asset_types={100: "ETF"},
+            asset_classifications=classifications,
+            date_from=date(2025, 1, 1),
+            date_to=date(2025, 1, 3),
+        ).build()
+
+    def test_the_weights_of_each_day_and_a_segment_on_the_change_day(self):
+        baseline = self._result({100: None})
+        assert [segment.start for segment in baseline.daily_states.segments] == [date(2025, 1, 1)], "precondition: the third day is quiet"
+        result = self._result(
+            {
+                100: {
+                    "geography": [self._step("2025-01-01", "2025-01-02", {"USA": "1.0000"}), self._step("2025-01-03", "2025-01-03", {"USA": "0.5000", "JPN": "0.5000"})],
+                    "sector": [self._step("2025-01-01", "2025-01-03", {"Technology": "1.0000"})],
+                }
+            }
+        )
+        states = result.daily_states
+        for day in (date(2025, 1, 1), date(2025, 1, 2)):
+            assert states.state_on(day).by_geography == {"USA": Decimal("500")}, f"{day}"
+        assert states.state_on(date(2025, 1, 3)).by_geography == {"USA": Decimal("250"), "JPN": Decimal("250")}
+        for day in (date(2025, 1, 1), date(2025, 1, 2), date(2025, 1, 3)):
+            assert states.state_on(day).by_sector == {"Technology": Decimal("500"), "Liquidity": Decimal("500")}, f"{day}"
+        assert [segment.start for segment in states.segments] == [date(2025, 1, 1), date(2025, 1, 3)], "the change day opens a segment"
+
+    def test_an_asset_without_steps_is_unknown(self):
+        """Guard (green before D2 too): None, or absent from the mapping, puts the whole value in Unknown."""
+        for classifications in ({100: None}, {}):
+            state = self._result(classifications).daily_states.state_on(date(2025, 1, 2))
+            assert state.by_geography == {"Unknown": Decimal("500")}
+            assert state.by_sector == {"Unknown": Decimal("500"), "Liquidity": Decimal("500")}

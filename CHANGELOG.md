@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Added
 
+- Transactions API (issue #25): a FEE or a TAX can be linked to the transaction it belongs to (a Buy, Sell, Dividend, Interest, Deposit or Withdrawal of the same broker and asset). `POST /api/v1/transactions/validate` and `/commit` take `ref`, `parent_ref` and `parent_transaction_id` on creates, and `parent_transaction_id` (0 to unlink) or `parent_ref` on updates; `GET /api/v1/transactions` returns `parent_transaction_id` and `charges_count` and takes the filters `parent_ids` and `without_parent`; `GET /api/v1/transactions/types` gives each type its `charge_role`. A transaction with linked charges is deleted only together with them, or with them unlinked, in the same batch. The forms come in the next steps.
 - Trade Republic: imports the new «Transaction export» CSV (profile › Account statements › Transaction export), also when re-saved by Excel: buys and sells of funds, stocks and crypto with their fee and tax, interest with its withholding tax, stamp duty, tax refunds as interest, dividends and transfers. The importer is no longer in beta, and its guide shows how to download the file. Rows of another account, such as a child's account, are left out with a note: export that account from its own login. Thanks to [valeriomicacchi-cpu](https://github.com/valeriomicacchi-cpu) for the real export behind it.
 - Edit several assets at once: select them in the Assets table and use «Edit selected» to change the type, benchmark, active state, units per single price, icon or personal URL of all of them. «Validate now» shows what blocks the save (an asset with transactions cannot become an Index) and what deserves a look (a type moving to another family, such as crowdfunding → ETF), and a summary shows every change before the save, which is all or nothing.
 - Lots analysis in FIFO and LIFO: the lots panel computes both methods in one request and switches between them with a selector in its header (FIFO first, not saved). The lots you picked stay picked; which lot a sale closes, and the figures that follow from it, change with the method. The theory pages explain the Italian rule (LIFO in the self-declared regime, average cost in the managed one) and the limits of the calculation.
@@ -29,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hypothetical shock: the asset classes a scenario leaves out, shocked by zero, are named under the total.
 - A documentation icon on the right of more panels (Dashboard charts and positions, lots analysis, assets list and lab, asset detail, brokers, FX, files and backups, settings) opens the matching page of the manual, with a short explanation of the panel in its tooltip.
 - Administrators can keep only some price and exchange-rate providers active on an instance (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`): the others disappear from lists, search, assignments and settings; existing assignments keep their saved prices. MANUAL is always active.
+- Asset search: looking up a cryptocurrency on Yahoo Finance also offers its euro ticker (for example BTC-EUR beside BTC-USD), so it can be priced directly in euros.
 
 ### 🔄 Changed
 
@@ -56,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixed
 
+- In the PAC result, the exposure bars draw every sector in its own colour: sectors with a space in their name (Health Care, Real Estate, Consumer Discretionary…) were drawn in the grey of «Uncategorised».
 - Signing out while a page is still loading now always returns to the plain sign-in page, instead of offering to come back to that page.
 - In Profile, the username and email fields are as wide as the password field, so a long address is no longer cut.
 - Uploading a `.json` file no longer loses its contents, and files with an unusual or very long extension are stored safely.
@@ -89,6 +92,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Missing exchange rates are no longer reported as text in `errors` by the price query, event query and conversion endpoints: they come in a new `fx_issues` list of `{code, from_currency, to_currency, first_date, last_date, count}`, in the direction of the conversion.
 - `PATCH /api/v1/assets` is all or nothing: if any item has an issue, nothing is saved. The response gains `committed`, `issues` and `warnings` (codes `assetNotFound`, `indexWithTransactions`, `assetNameTaken`, `patchFailed`; warning `assetFamilyChange`). A name already used by another asset is reported as `assetNameTaken` instead of a generic failure. The new `POST /api/v1/assets/validate` runs the same checks and never saves.
 - `POST /api/v1/portfolio/lots/analysis` answers in a new shape: the parts no matching method changes (`asset_id`, `target_currency`, `quote_base_quantity`, `range`, `calculation_metadata`, `market_price_history`, `broker_wac_history`, `cumulative_wac_history`) stay at the top; everything read from the lot replay (`calculation_status`, `data_quality`, `lots`, `gantt_segments`, `custody_history`, `lot_events`, the value, return, price and performance histories, `income_events`, `economic_allocation_groups`, the orphans) moves under `methods.FIFO` / `methods.LIFO`. The request takes `matching_methods` (default `["FIFO"]`).
+- AI Export: the `asset.identity` component moves to version 2 and no longer carries the asset's classification (countries and sectors); a new component, `asset.profile`, carries the asset's profile data with the date of each value, wherever `asset.identity` is exported. A prompt or tool that read the classification from `asset.identity` now reads it from `asset.profile`. The countries and sectors you set in 1.3 count from the asset's first day in LibreFolio (its creation, first price or first transaction), so an export of a past period still carries them.
 
 ## [1.3.0] - 2026-11-10
 

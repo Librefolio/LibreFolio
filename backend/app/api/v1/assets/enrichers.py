@@ -31,9 +31,18 @@ enricher_router = APIRouter()
 
 
 @enricher_router.get("/enrichers", response_model=FAEnrichersCatalogue, tags=["FA Enrichers"])
-def list_enrichers(_current_user: User = Depends(get_current_user)) -> FAEnrichersCatalogue:
-    """The installed enrichers with what each declares, and per asset type their default order (degree, then code)."""
-    return enrichers_catalogue()
+async def list_enrichers(_current_user: User = Depends(get_current_user)) -> FAEnrichersCatalogue:
+    """The installed enrichers with what each declares, and per asset type their default order (degree, then code).
+
+    Each says whether it is configured, and what is missing, with the readiness the calls use (no user: an enricher's
+    settings are the instance's), so the window and the call agree (plan 68, E7)."""
+    catalogue = enrichers_catalogue()
+    readiness = await plugins_readiness(EnricherRegistry.settings_family(), [info.code for info in catalogue.enrichers], user_id=None)
+    for info in catalogue.enrichers:
+        state = readiness.get(info.code)
+        if state is not None:
+            info.configured, info.missing_settings = state.configured, list(state.missing)
+    return catalogue
 
 
 async def _enricher(code: str) -> EnricherPlugin:

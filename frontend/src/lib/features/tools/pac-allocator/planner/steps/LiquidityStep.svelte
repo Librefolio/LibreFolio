@@ -5,7 +5,7 @@
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
     import ExactDecimalInput from '$lib/components/ui/input/ExactDecimalInput.svelte';
     import {CopyFlow} from '../copyFlow.svelte';
-    import {canonicalInput, compareDecimal, decimalSign} from '../decimal';
+    import {canonicalInput, compareDecimal, decimalSign} from '$lib/utils/core/exactDecimal';
     import {selectionExceedsAvailable, type DraftCash, type PlannerDraft, type RemovalImpact} from '../draft.svelte';
     import {cldrCurrencyStep, formatPlannerMoneyPlain, formatPlannerPercent} from '../format';
     import {BUTTON_DANGER, BUTTON_SECONDARY, CHOICE_CARD, HINT, ICON_BUBBLE, INPUT, LABEL, NOTICE, TITLE_INPUT} from '../ui';

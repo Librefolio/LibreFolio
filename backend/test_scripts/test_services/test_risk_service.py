@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import json
 import math
+from contextlib import asynccontextmanager
 from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.pool import NullPool
 
+from backend.app.db.base import SQLModel  # every model, for create_all
+from backend.app.db.models import Asset, AssetProfileUpdate, AssetType
 from backend.app.schemas.common import Currency, DateRangeModel, DateSpan
 from backend.app.schemas.portfolio.data_quality import DataQualityExcludedAsset, DataQualityExclusionReason, DataQualityReport, DataQualityStatus, MissingPriceAsset, StalePriceAsset
 from backend.app.schemas.portfolio.history import PortfolioHistoryPoint
@@ -20,6 +26,7 @@ from backend.app.schemas.risk.scope import RiskAnalyticRequest, RiskQueryRequest
 from backend.app.schemas.risk.series import AssetReturnPoint, AssetReturnSeries, AssetValuationPoint, AssetValuationSeries, PreparedAssetSeries, PreparedAssetSeriesSet, RiskFreeReference
 from backend.app.schemas.risk.vocabulary import RiskErrorCode, RiskMode, RiskOutputKind, RiskResultStatus, RiskReturnBasis, RiskScopeKind
 from backend.app.schemas.wac import WACMissingPairInfo
+from backend.app.services.assets.profile.catalogue import normalize_value
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.app.services.risk import replay as risk_replay_module
@@ -545,7 +552,10 @@ async def test_hypothetical_stress_uses_classification_context_without_partial_s
     async def fake_prepare(_db, **_kwargs):
         return prepared
 
-    async def fake_classifications(_db, _asset_ids):
+    analysis_days: list[date] = []
+
+    async def fake_classifications(_db, _asset_ids, day):
+        analysis_days.append(day)
         return {
             1: RiskAssetClassification(
                 asset_class="ETF",
@@ -598,6 +608,8 @@ async def test_hypothetical_stress_uses_classification_context_without_partial_s
     assert result.output.dimension.value == "sector"
     assert result.output.impacts[0].shock_return == pytest.approx(-0.2)
     assert result.output.impacts[0].metadata_fallback is True
+    # Plan 68 D3: the classifications are read for the day of the analysis, the end of its range
+    assert analysis_days == [date(2026, 1, 21)]
     assert result.metadata.params["bucket_shocks"] == {"Other": -0.2}
     assert result.metadata.n_observations == 0
     assert result.warnings[0].code == "hypothetical_metadata_other_fallback"
@@ -2818,3 +2830,74 @@ async def test_the_twrr_readers_leave_out_the_late_start_of_the_per_asset_series
     for instance_id in TWRR_READERS:
         assert results[instance_id].metadata.return_basis == RiskReturnBasis.TWRR, instance_id
         assert "analysis_starts_late" not in warning_codes(results[instance_id]), instance_id
+
+
+# =============================================================================
+# Plan 68, D3: the hypothetical stress reads countries and sectors from the asset profile
+# =============================================================================
+
+_D3_DAY = date(2026, 1, 21)
+
+
+@asynccontextmanager
+async def _d3_book(directory):
+    """A private SQLite file with four assets of the test (ids by name), their profile rows written as the store writes
+    them; the engine disposed after."""
+    engine = create_async_engine(f"sqlite+aiosqlite:///{directory / 'd3_risk.sqlite'}", poolclass=NullPool)
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(SQLModel.metadata.create_all)
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            assets = {
+                "changed": Asset(display_name="D3 changed", currency="EUR", asset_type=AssetType.ETF),
+                "later": Asset(display_name="D3 read later", currency="EUR", asset_type=AssetType.ETF),
+                "emptied": Asset(display_name="D3 emptied", currency="EUR", asset_type=AssetType.STOCK),
+                "legacy_column": Asset(display_name="D3 column only", currency="EUR", asset_type=AssetType.STOCK, classification_params='{"geographic_area":{"distribution":{"USA":"1.0"}},"sector_area":{"distribution":{"Energy":"1.0"}}}'),
+                "unreadable": Asset(display_name="D3 unreadable", currency="EUR", asset_type=AssetType.ETF),
+            }
+            session.add_all(assets.values())
+            await session.flush()
+
+            def row(name, key, value, day, *, raw=False):
+                text = value if raw else (None if value is None else json.dumps(normalize_value(key, value)))
+                return AssetProfileUpdate(asset_id=assets[name].id, key=key, value=text, source="justetf", read_on=day)
+
+            session.add_all(
+                [
+                    row("changed", "geography", {"USA": "1"}, date(2025, 6, 1)),
+                    row("changed", "geography", {"USA": "0.6", "JPN": "0.4"}, date(2026, 1, 10)),
+                    row("changed", "geography", {"ITA": "1"}, date(2026, 2, 1)),  # after the day: not read
+                    row("changed", "sector", {"Technology": "1"}, date(2025, 6, 1)),
+                    row("later", "sector", {"Energy": "1"}, date(2026, 3, 1)),  # first row after the day: carried back
+                    row("emptied", "geography", {"USA": "1"}, date(2025, 6, 1)),
+                    row("emptied", "geography", None, date(2026, 1, 5)),
+                    row("unreadable", "sector", "[1, 2]", date(2025, 6, 1), raw=True),
+                ]
+            )
+            await session.commit()
+            yield engine, {name: asset.id for name, asset in assets.items()}
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_d3_classifications_are_the_profile_of_the_analysis_day(tmp_path):
+    async with _d3_book(tmp_path) as (engine, ids):
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            loaded = await risk_scope_module.load_asset_classifications(session, tuple(ids.values()), _D3_DAY)
+
+    assert set(loaded) == set(ids.values()), "every asset asked has a classification"
+    changed = loaded[ids["changed"]]
+    assert changed.asset_class == "ETF"
+    assert changed.geography_exposures == pytest.approx({"USA": 0.6, "JPN": 0.4}), "the step holding the day, not the later one"
+    assert changed.sector_exposures == pytest.approx({"Technology": 1.0})
+    assert changed.metadata_error is None
+    assert loaded[ids["later"]].sector_exposures == pytest.approx({"Energy": 1.0}), "a first row after the day is carried back to it"
+    assert loaded[ids["later"]].geography_exposures is None
+    emptied = loaded[ids["emptied"]]
+    assert emptied.geography_exposures is None and emptied.sector_exposures is None and emptied.metadata_error is None, "emptied on purpose: no exposure"
+    column_only = loaded[ids["legacy_column"]]
+    assert column_only.asset_class == "STOCK"
+    assert column_only.geography_exposures is None and column_only.sector_exposures is None, "classification_params is not read any more"
+    assert loaded[ids["unreadable"]].metadata_error == "invalid_classification_metadata"
+    assert loaded[ids["unreadable"]].sector_exposures is None

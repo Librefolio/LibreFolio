@@ -1,23 +1,44 @@
-"""Asset classifications for the planner source: the saved sector, geography and type distributions, parsed without modification, or a placeholder with an issue."""
+"""Asset classifications for the planner source: the type, and the sector and geography distributions of the asset profile
+on the planner's day (plan 68, D4), parsed without modification, or a placeholder with an issue."""
 
 from __future__ import annotations
 
-import json
 import re
+from collections.abc import Iterable, Mapping
+from datetime import date
 from decimal import Decimal
+from typing import Any
 
 import pycountry
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset
+from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.portfolio.planner_source import PortfolioPlannerSourceClassification, PortfolioPlannerSourceIssue
+from backend.app.services.assets.profile.store import read_steps
 from backend.app.services.pac_allocator.source.keys import MARKET_PROVENANCE_ID, asset_key, classification_key, field_issue, text_param
 from backend.app.utils.asset.sector import FinancialSector
 
 _KNOWN_SECTORS = frozenset(sector.value for sector in FinancialSector)
-# The metadata writers store Pydantic JSON, where a Decimal weight is plain decimal text ("0.6000").
+# The profile stores a weight as plain decimal text ("0.6000", catalogue.normalize_value).
 _SAVED_WEIGHT_TEXT = re.compile(r"[0-9]+(?:\.[0-9]+)?")
-# The catch-all geographic key the writers keep as it is (utils.asset.geo.normalize_country_keys).
+# The catch-all geographic key the profile keeps as it is (utils.asset.geo.normalize_country_keys).
 _GEOGRAPHY_OTHER = "Other"
+
+
+#: The profile voices the planner reads, by dimension (plan 68, D4).
+_PROFILE_VOICES = ("sector", "geography")
+
+
+async def load_profile_classifications(session: AsyncSession, asset_ids: Iterable[int], day: date) -> dict[int, dict[str, Any]]:
+    """Each asset's sector and geography on ``day``, the planner's day (plan 68, D4): voice → the stored value of the step
+    holding it, the first value carried back when the profile starts later; ``None`` for a voice emptied on purpose. An
+    asset with no row is left out; ``classification_params`` is not read."""
+    ids = sorted(set(asset_ids))
+    if not ids:
+        return {}
+    steps = await read_steps(session, ids, DateRangeModel(start=day), _PROFILE_VOICES, carry_back=True)
+    return {asset_id: {voice: voice_steps[-1].value for voice, voice_steps in voices.items() if voice_steps} for asset_id, voices in steps.items()}
 
 
 def _classification_placeholder(
@@ -40,9 +61,7 @@ def _parse_saved_distribution(  # noqa: C901 — direct validation keeps persist
     *,
     dimension: str,
 ) -> list[tuple[str, Decimal]] | None:
-    if not isinstance(value, dict):
-        return None
-    distribution = value.get("distribution")
+    distribution = value
     if not isinstance(distribution, dict) or not distribution:
         return None
 
@@ -72,8 +91,11 @@ def _parse_saved_distribution(  # noqa: C901 — direct validation keeps persist
 def build_planner_classifications(  # noqa: C901 — missing/invalid dimension outcomes stay explicit
     candidate_assets: list[Asset],
     *,
+    profile: Mapping[int, Mapping[str, Any]],
     issues: list[PortfolioPlannerSourceIssue],
 ) -> list[PortfolioPlannerSourceClassification]:
+    """The classification rows of the candidate assets: the type, and the sector and geography of ``profile`` (asset id →
+    voice → stored value, ``load_profile_classifications``), each a placeholder with an issue when missing or invalid."""
     rows: list[PortfolioPlannerSourceClassification] = []
     for asset in candidate_assets:
         if asset.id is None:
@@ -106,55 +128,10 @@ def build_planner_classifications(  # noqa: C901 — missing/invalid dimension o
                 )
             )
 
-        if not asset.classification_params:
-            for dimension in ("sector", "geography"):
-                rows.append(_classification_placeholder(asset.id, dimension))
-                issues.append(
-                    field_issue(
-                        code=f"allocation.classification_{dimension}_missing",
-                        kind="missing",
-                        severity="warning",
-                        section="classifications",
-                        entity_kind="asset",
-                        entity_id=asset_ref,
-                        field=dimension,
-                    )
-                )
-            continue
-
-        try:
-            metadata = json.loads(
-                asset.classification_params,
-                parse_float=Decimal,
-                parse_int=Decimal,
-            )
-        except (json.JSONDecodeError, TypeError, ValueError):
-            metadata = None
-        if not isinstance(metadata, dict):
-            rows.extend(
-                [
-                    _classification_placeholder(asset.id, "sector"),
-                    _classification_placeholder(asset.id, "geography"),
-                ]
-            )
-            issues.append(
-                field_issue(
-                    code="allocation.classification_invalid",
-                    kind="invalid",
-                    severity="warning",
-                    section="classifications",
-                    entity_kind="asset",
-                    entity_id=asset_ref,
-                    field="classification_params",
-                )
-            )
-            continue
-
-        for dimension, metadata_key in (
-            ("sector", "sector_area"),
-            ("geography", "geographic_area"),
-        ):
-            if metadata_key not in metadata or metadata[metadata_key] is None:
+        voices = profile.get(asset.id) or {}
+        for dimension in _PROFILE_VOICES:
+            if voices.get(dimension) is None:
+                # No row of the voice, or emptied on purpose: the asset has no such distribution on the planner's day
                 rows.append(_classification_placeholder(asset.id, dimension))
                 issues.append(
                     field_issue(
@@ -169,7 +146,7 @@ def build_planner_classifications(  # noqa: C901 — missing/invalid dimension o
                 )
                 continue
             distribution = _parse_saved_distribution(
-                metadata[metadata_key],
+                voices[dimension],
                 dimension=dimension,
             )
             if distribution is None:

@@ -40,6 +40,7 @@ from backend.app.schemas.common import (
     iso_currency_code,
 )
 from backend.app.utils.asset.identifier import normalize_other_identifiers
+from backend.app.utils.json_utils import ensure_json_safe
 
 
 # ============================================================================
@@ -98,6 +99,12 @@ class FAAssetCreateItem(StrictModel):
     def enricher_codes(cls, v: Optional[Dict[str, FAEnricherBinding]]) -> Optional[Dict[str, FAEnricherBinding]]:
         """Every key an enricher code, installed or not (plan B2: a binding to an enricher turned off stays)."""
         return check_enricher_codes(v)
+
+    @field_validator("profile", mode="before")
+    @classmethod
+    def profile_json_safe(cls, v: Any) -> Any:
+        """Free-form JSON (H-32): no number that is not finite, anywhere inside; the error names the path, never the value."""
+        return ensure_json_safe(v, "profile")
 
     @field_validator("currency")
     @classmethod
@@ -343,6 +350,12 @@ class FAAssetPatchItem(StrictModel):
     def enricher_codes(cls, v: Optional[Dict[str, FAEnricherBinding]]) -> Optional[Dict[str, FAEnricherBinding]]:
         """Every key an enricher code, installed or not (plan B2: a binding to an enricher turned off stays)."""
         return check_enricher_codes(v)
+
+    @field_validator("profile", mode="before")
+    @classmethod
+    def profile_json_safe(cls, v: Any) -> Any:
+        """Free-form JSON (H-32): no number that is not finite, anywhere inside; the error names the path, never the value."""
+        return ensure_json_safe(v, "profile")
 
     @field_validator("quote_base_quantity", mode="before")
     @classmethod

@@ -2,7 +2,7 @@
  * TD-1: the colours of the PAC's exposure bars, «ideal vs actual» (R9.8).
  *
  * - **The actual weight** is drawn in the colour of its row's category, the one the dashboard gives it (GR1).
- *   - A sector by its key.
+ *   - A sector by its name: its id is a planner id (`enc:` for a name with a space), read back with `fromPlannerId`.
  *   - An Asset type by its family. A subtype takes a shade of the family, ranked as in the pie's outer ring (GR4):
  *     the generic member keeps the family's colour, the others take `familyShade` by rank of ideal weight, largest
  *     first, ties by id, and never the family's own colour.
@@ -19,6 +19,7 @@ import {familyShade, type ShadePoles} from '$lib/theme/chartShades';
 import {PAC_EXPOSURE_COLORS} from '$lib/theme/chartTheme';
 import {themed} from '$lib/theme/themePair';
 import {assetTypeFamily} from '$lib/utils/assetTypes';
+import {fromPlannerId} from '../source';
 import {compareExact, UNCATEGORISED_CATEGORY_ID, type WeightRow} from './model';
 
 /**
@@ -38,7 +39,8 @@ const UNCLASSIFIED_KEY = 'Unknown';
  * `asset_type` reads the types' table, any other the sectors'.
  */
 export function actualColours(rows: readonly WeightRow[], dimension: string, dark: boolean, poles: ShadePoles): string[] {
-    if (dimension !== 'asset_type') return rows.map((row) => categoryColor('sector', row.id === UNCATEGORISED_CATEGORY_ID ? UNCLASSIFIED_KEY : row.id, dark));
+    // A sector's id is a planner id: «Health Care» travels as `enc:Health_20Care`, so its colour is looked up by its name.
+    if (dimension !== 'asset_type') return rows.map((row) => categoryColor('sector', row.id === UNCATEGORISED_CATEGORY_ID ? UNCLASSIFIED_KEY : fromPlannerId(row.id), dark));
 
     const ranks = subtypeRanks(rows);
     return rows.map((row) => {

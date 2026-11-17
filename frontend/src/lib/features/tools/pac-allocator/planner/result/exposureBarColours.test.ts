@@ -51,6 +51,7 @@ import {themed} from '$lib/theme/themePair';
 import {ASSET_TYPE_FAMILY} from '$lib/utils/assetTypes';
 import type {PacExactNumber} from '../types';
 import {actualColours, idealColour} from './exposureBarColours';
+import {toPlannerId} from '../source';
 import {compareExact, UNCATEGORISED_CATEGORY_ID, type WeightRow} from './model';
 
 afterEach(() => {
@@ -109,6 +110,15 @@ describe('actualColours — a sector reads its own colour, in the order of the r
         expect(new Set(expected).size, 'barrier: four distinct colours, so the order is seen').toBe(4);
 
         expect(actualColours(rows, 'sector', dark, poles(dark))).toEqual(expected);
+    });
+});
+
+describe('actualColours — a sector whose name has a space keeps its colour (the PAC bars, a fix of 17/11/2026)', () => {
+    it.each(THEMES)('%s: every sector of the table, encoded as the request sends it, is drawn in its own colour', (_theme, dark) => {
+        const names = [...CATEGORY_KEYS.sector];
+        const rows = names.map((name) => row(toPlannerId(name) as string, decimal('0.1')));
+        expect(rows.filter((item) => item.id.startsWith('enc:')).length, 'PREMISE: the table has sectors whose name the request encodes').toBeGreaterThan(0);
+        expect(actualColours(rows, 'sector', dark, poles(dark))).toEqual(names.map((name) => categoryColor('sector', name, dark)));
     });
 });
 

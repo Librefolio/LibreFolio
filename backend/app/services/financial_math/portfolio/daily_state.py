@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import bisect
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date as date_type
 from datetime import timedelta
@@ -45,10 +45,50 @@ from backend.app.services.financial_math.portfolio.models import (
     ValuationSource,
 )
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, ResolvedMark
+from backend.app.services.financial_math.series_steps import value_at
 from backend.app.services.financial_math.valuation import compute_holding_value
 from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD, STALE_PRICE_THRESHOLD_DAYS, first_stale_day, is_stale
 
 logger = structlog.get_logger(__name__)
+
+#: The profile voices of an asset's countries and sectors (plan 68, D2), the two dimensions of the allocation it splits.
+GEOGRAPHY_VOICE = "geography"
+SECTOR_VOICE = "sector"
+#: The bucket of a value with no country or sector: no profile, a voice emptied on purpose, or the country «Other».
+_UNKNOWN = "Unknown"
+
+
+@dataclass(frozen=True, slots=True)
+class ClassificationStep:
+    """One stretch of an asset's countries or sectors (plan 68, D2): from ``date`` to ``through``, both included, the
+    value splits by ``weights`` (key → fraction, summing to 1). ``None``: the voice emptied on purpose, read as unknown."""
+
+    date: date_type
+    through: date_type
+    weights: Mapping[str, Decimal] | None
+
+
+#: An asset's classification: voice (``GEOGRAPHY_VOICE``, ``SECTOR_VOICE``) → its steps, in ascending order.
+AssetClassification = Mapping[str, Sequence[ClassificationStep]]
+
+
+def _weights_on(steps: Sequence[ClassificationStep], day: date_type) -> Mapping[str, Decimal] | None:
+    """The weights of ``day``: the step holding it; before the first step the first (the replay starts before the range
+    the steps were read for, plan I18), after the last the last."""
+    step = value_at(steps, day)
+    if step is None:
+        step = steps[0] if day < steps[0].date else steps[-1]
+    return step.weights
+
+
+def _classification_change_days(classifications: Mapping[int, AssetClassification | None]) -> set[date_type]:
+    """The first day of every step whose weights differ from the step before it, for any asset and voice: the days the
+    allocation changes with nothing else moving. A step that only changes source (same weights) is not one."""
+    days: set[date_type] = set()
+    for voices in classifications.values():
+        for steps in (voices or {}).values():
+            days.update(step.date for previous, step in zip(steps, steps[1:], strict=False) if step.weights != previous.weights)
+    return days
 
 
 def _is_held(qty: Decimal) -> bool:
@@ -276,7 +316,7 @@ class DailyStateBuilder:
         price_map: dict[int, list[tuple[date_type, Decimal, str]]],
         quote_base_map: dict[int, int | None],
         fx_rate_map: dict[tuple[str, str, date_type], Decimal],
-        asset_classifications: dict[int, dict | None],
+        asset_classifications: Mapping[int, AssetClassification | None],
         asset_types: dict[int, str],
         asset_currencies: dict[int, str],
         average_costs: Mapping[tuple[int, int], AverageCost],
@@ -609,7 +649,7 @@ class DailyStateBuilder:
                     market_value += valuation.market_value
                     market_value_by_broker[position_broker_id] += valuation.market_value
                     by_asset[asset_id] = by_asset.get(asset_id, zero) + valuation.market_value
-                    self._distribute_allocation(asset_id, valuation.market_value, by_type, by_sector, by_geo)
+                    self._distribute_allocation(asset_id, current, valuation.market_value, by_type, by_sector, by_geo)
                     if self.compute_candles:
                         has_ohlc = valuation.market_value_open is not None and valuation.market_value_high is not None and valuation.market_value_low is not None
                         candle_open_sum += valuation.market_value_open if has_ohlc else valuation.market_value
@@ -1029,8 +1069,8 @@ class DailyStateBuilder:
         A movement (cash, position, external or internal flow); a rate change of a held foreign currency (its cash is
         revalued) or of a rate the day reads for its securities or its cash in transit; an in-transit boundary; a market
         quote (it sets the day's mark and restarts the price's age); the day a carried price turns stale (only when no
-        newer observation of its mark comes first); the day a rate read for the securities turns stale; a split; the
-        first replayed day, date_from and the period's start.
+        newer observation of its mark comes first); the day a rate read for the securities turns stale; a split; the day
+        an asset's countries or sectors change (plan 68, D2); the first replayed day, date_from and the period's start.
         """
         start, end = self._replay_from, self.date_to
         dirty_days = {day for day in movement_days if day >= start}
@@ -1046,6 +1086,7 @@ class DailyStateBuilder:
         dirty_days.update(day for day in self._stale_turn_days() if start <= day <= end)
         for history in self.split_history.values():
             dirty_days.update(split.date for split in history if start <= split.date <= end)
+        dirty_days.update(day for day in _classification_change_days(self.asset_classifications) if start <= day <= end)
         dirty_days.add(start)
         for day in (self.date_from, self.period_start):
             if start <= day <= end:
@@ -1575,40 +1616,25 @@ class DailyStateBuilder:
     def _distribute_allocation(
         self,
         asset_id: int,
+        day: date_type,
         mv: Decimal,
         by_type: dict[str, Decimal],
         by_sector: dict[str, Decimal],
         by_geo: dict[str, Decimal],
     ) -> None:
-        """Distribute market value into allocation buckets."""
+        """Distribute market value into allocation buckets, with the countries and sectors the asset's profile has on
+        ``day`` (plan 68, D2). No profile, a voice absent or emptied on purpose: the whole value is unknown in that
+        dimension; the country «Other» (a source's «rest of the world») is unknown too."""
         asset_type = self.asset_types.get(asset_id, "Unknown")
         by_type[asset_type] = by_type.get(asset_type, Decimal("0")) + mv
 
-        cp = self.asset_classifications.get(asset_id)
-        if cp and isinstance(cp, dict):
-            sector_area = cp.get("sector_area")
-            if sector_area and isinstance(sector_area, dict):
-                dist = sector_area.get("distribution", {})
-                if dist:
-                    for sector, weight in dist.items():
-                        by_sector[sector] = by_sector.get(sector, Decimal("0")) + mv * Decimal(str(weight))
-                else:
-                    by_sector["Unknown"] = by_sector.get("Unknown", Decimal("0")) + mv
-            else:
-                by_sector["Unknown"] = by_sector.get("Unknown", Decimal("0")) + mv
-
-            geo_area = cp.get("geographic_area")
-            if geo_area and isinstance(geo_area, dict):
-                dist = geo_area.get("distribution", {})
-                if dist:
-                    for country, weight in dist.items():
-                        # "Other" is a provider placeholder for "rest of world" — merge into Unknown
-                        bucket = "Unknown" if country == "Other" else country
-                        by_geo[bucket] = by_geo.get(bucket, Decimal("0")) + mv * Decimal(str(weight))
-                else:
-                    by_geo["Unknown"] = by_geo.get("Unknown", Decimal("0")) + mv
-            else:
-                by_geo["Unknown"] = by_geo.get("Unknown", Decimal("0")) + mv
-        else:
-            by_sector["Unknown"] = by_sector.get("Unknown", Decimal("0")) + mv
-            by_geo["Unknown"] = by_geo.get("Unknown", Decimal("0")) + mv
+        voices = self.asset_classifications.get(asset_id) or {}
+        for voice, bucket in ((SECTOR_VOICE, by_sector), (GEOGRAPHY_VOICE, by_geo)):
+            steps = voices.get(voice)
+            weights = _weights_on(steps, day) if steps else None
+            if not weights:
+                bucket[_UNKNOWN] = bucket.get(_UNKNOWN, Decimal("0")) + mv
+                continue
+            for name, weight in weights.items():
+                key = _UNKNOWN if voice == GEOGRAPHY_VOICE and name == "Other" else name
+                bucket[key] = bucket.get(key, Decimal("0")) + mv * weight

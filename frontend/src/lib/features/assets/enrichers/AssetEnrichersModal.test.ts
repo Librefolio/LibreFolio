@@ -1,0 +1,261 @@
+// @vitest-environment jsdom
+/**
+ * AssetEnrichersModal (plan 68, E7b2): the «Arricchitori dell'asset» window, standalone (E8 opens it from the asset
+ * window and saves what it hands back with the asset).
+ *
+ * Pinned through the contract (what `onapply` hands back, the calls made, the states the rows publish), never through
+ * translated text:
+ * - an untouched window hands back the same config, a binding to an enricher the instance does not serve included;
+ * - the rows publish their position, whether the instance can use them, their last read and what they fill (topics);
+ * - a not configured enricher is drawn off with «Configura»;
+ * - removing a row moves it to «Non in elenco» as «removed by you», «+» puts it back at the end with its binding;
+ * - a row opens: «Cerca su …» searches that enricher, a result fills type and identifier; «Testa Configurazione» tests
+ *   the binding and says found (and what it would fill), not found, not configured;
+ * - a row without an identifier blocks «Usa questi arricchitori».
+ */
+import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
+import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import AssetEnrichersModal from './AssetEnrichersModal.svelte';
+import type {EnricherBinding, EnricherInfo} from './enrichersEditState';
+import type {ProfileVoice} from '$lib/features/assets/profile/profileStore';
+import type {PluginSettingsEntry} from '$lib/features/plugin-settings/pluginSettingsApi';
+
+function info(code: string, extra: Partial<EnricherInfo> = {}): EnricherInfo {
+    return {
+        code,
+        name: `${code} name`,
+        icon: null,
+        help_url: null,
+        terms: 'open',
+        accepted_identifier_types: ['ISIN'],
+        params_schema: [],
+        supports_search: false,
+        voices: {ETF: ['ter', 'geography']},
+        default_priority: {ETF: 10},
+        configured: true,
+        missing_settings: [],
+        ...extra,
+    } as EnricherInfo;
+}
+
+const CATALOGUE: EnricherInfo[] = [
+    info('justetf', {voices: {ETF: ['ter', 'replication', 'geography', 'sector', 'fund_size']}}),
+    info('yahoo', {accepted_identifier_types: ['TICKER', 'ISIN'], supports_search: true, voices: {ETF: ['fund_provider', 'sector']}, default_priority: {ETF: 20}}),
+    info('keyed', {configured: false, missing_settings: ['api_key']}),
+    info('esma', {voices: {ETF: ['legal_form']}, default_priority: {ETF: 40}}),
+    info('borsa_italiana', {
+        voices: {ETF: ['fund_currency']},
+        default_priority: {ETF: 30},
+        params_schema: [
+            {key: 'language', type: 'select', options: ['en', 'it'], default: 'it', label: 'Language'},
+            {key: 'mic', type: 'string', label: 'Market MIC'},
+        ],
+    }),
+];
+
+const PROFILE: ProfileVoice[] = [
+    {key: 'ter', topic: 'costs'},
+    {key: 'replication', topic: 'structure'},
+    {key: 'geography', topic: 'countries'},
+    {key: 'sector', topic: 'sectors'},
+    {key: 'fund_size', topic: 'size'},
+    {key: 'fund_provider', topic: 'manager'},
+    {key: 'legal_form', topic: 'legal_form'},
+] as unknown as ProfileVoice[];
+
+const CONFIG: Record<string, EnricherBinding> = {
+    justetf: {identifier_type: 'ISIN', identifier: 'IE00BK5BQT80'},
+    switched_off: {identifier_type: 'ISIN', identifier: 'IE00BK5BQT80'},
+    yahoo: {identifier_type: 'TICKER', identifier: 'VWRA.L'},
+};
+
+const STATE = {
+    justetf: {read_at: '2026-11-08T03:00:00+00:00', status: 'ok', error_code: null},
+    yahoo: {read_at: '2026-11-08T03:00:00+00:00', status: 'not_found', error_code: null},
+};
+
+function mount(extra: Record<string, unknown> = {}) {
+    const onapply = vi.fn();
+    const oncancel = vi.fn();
+    const search = vi.fn().mockResolvedValue([]);
+    const test = vi.fn();
+    // Whether the caller may see an enricher's settings (`GET /settings/plugins`): by default it may
+    const loadSettings = vi.fn(async (code: string) => ({plugin_code: code, plugin_name: code, configured: false}) as unknown as PluginSettingsEntry);
+    render(AssetEnrichersModal, {
+        open: true,
+        asset: {name: 'Vanguard FTSE All-World', assetType: 'ETF', identifiers: {ISIN: 'IE00BK5BQT80'}},
+        config: CONFIG,
+        readState: STATE,
+        catalogue: CATALOGUE,
+        profileCatalogue: PROFILE,
+        onapply,
+        oncancel,
+        search,
+        test,
+        loadSettings,
+        ...extra,
+    });
+    return {onapply, oncancel, search, test, loadSettings};
+}
+
+const chosen = (code: string) => screen.getByTestId(`enricher-row-${code}`);
+const other = (code: string) => screen.getByTestId(`enricher-other-${code}`);
+
+async function apply(onapply: ReturnType<typeof vi.fn>): Promise<Record<string, EnricherBinding>> {
+    await fireEvent.click(screen.getByTestId('enrichers-apply'));
+    expect(onapply).toHaveBeenCalledTimes(1);
+    return onapply.mock.calls[0][0] as Record<string, EnricherBinding>;
+}
+
+beforeAll(async () => {
+    await setupI18n();
+});
+
+afterEach(() => cleanup());
+
+describe('AssetEnrichersModal — the list', () => {
+    it('an untouched window hands back the same config, the binding the instance does not serve included', async () => {
+        const {onapply} = mount();
+        const config = await apply(onapply);
+        expect(Object.keys(config)).toEqual(['justetf', 'switched_off', 'yahoo']);
+        expect(config).toEqual(CONFIG);
+    });
+
+    it('the rows say their position, whether they can be used, their last read and their topics', () => {
+        mount();
+        expect(chosen('justetf').dataset).toMatchObject({position: '1', availability: 'ok', lastRead: 'ok'});
+        expect(chosen('switched_off').dataset).toMatchObject({position: '2', availability: 'off'});
+        expect(chosen('switched_off').dataset.lastRead).toBeUndefined();
+        expect(chosen('yahoo').dataset).toMatchObject({position: '3', lastRead: 'not_found'});
+        expect(screen.getByTestId('enricher-topics-justetf').dataset).toMatchObject({topics: 'costs,structure,countries,sectors', more: '1'});
+    });
+
+    it('a not configured enricher is drawn off, with «Configura» when the caller may see its settings', async () => {
+        mount({config: {keyed: {identifier_type: 'ISIN', identifier: 'X'}}});
+        expect(chosen('keyed').dataset.availability).toBe('not_configured');
+        expect(await within(chosen('keyed')).findByTestId('enricher-configure-keyed')).toBeInTheDocument();
+    });
+
+    it('no «Configura» when the caller may not see the settings (as the price providers, N3)', async () => {
+        const loadSettings = vi.fn(async (): Promise<PluginSettingsEntry | null> => null);
+        mount({config: {keyed: {identifier_type: 'ISIN', identifier: 'X'}}, loadSettings});
+        await waitFor(() => expect(loadSettings).toHaveBeenCalledWith('keyed'));
+        expect(within(chosen('keyed')).queryByTestId('enricher-configure-keyed')).toBeNull();
+        expect(chosen('keyed').dataset.availability).toBe('not_configured');
+    });
+
+    it('an enricher added from «Non in elenco» takes the first identifier type it accepts: the identifier alone unblocks', async () => {
+        const {onapply} = mount();
+        await fireEvent.click(screen.getByTestId('enricher-add-esma'));
+        await fireEvent.change(screen.getByTestId('enricher-identifier-esma'), {target: {value: 'IE00BK5BQT80'}});
+        expect(chosen('esma').dataset.issue).toBeUndefined();
+        expect((await apply(onapply)).esma).toEqual({identifier_type: 'ISIN', identifier: 'IE00BK5BQT80'});
+    });
+
+    it('a removed row goes to «Non in elenco» as removed by you, and «+» puts it back at the end with its binding', async () => {
+        const {onapply} = mount();
+        await fireEvent.click(screen.getByTestId('enricher-remove-justetf'));
+        expect(screen.queryByTestId('enricher-row-justetf')).toBeNull();
+        expect(other('justetf').dataset.reason).toBe('removed');
+        await fireEvent.click(screen.getByTestId('enricher-add-justetf'));
+        const config = await apply(onapply);
+        expect(Object.keys(config)).toEqual(['switched_off', 'yahoo', 'justetf']);
+        expect(config.justetf).toEqual(CONFIG.justetf);
+    });
+
+    it('«Non in elenco» lists the others with their reason; one that cannot be added has no «+»', () => {
+        mount();
+        expect(other('keyed').dataset.reason).toBe('not_configured');
+        expect(screen.queryByTestId('enricher-add-keyed')).toBeNull();
+        expect(other('esma').dataset.reason).toBe('new');
+    });
+
+    it('a row without an identifier blocks «Usa questi arricchitori»', async () => {
+        mount();
+        await fireEvent.click(screen.getByTestId('enricher-add-esma'));
+        expect(chosen('esma').dataset.issue).toBe('no_identifier');
+        expect(screen.getByTestId('enrichers-apply')).toBeDisabled();
+    });
+});
+
+describe('AssetEnrichersModal — a row opened', () => {
+    it('«Cerca su …» searches that enricher, and a result fills type and identifier', async () => {
+        const {search, onapply} = mount();
+        search.mockResolvedValue([{name: 'Vanguard FTSE All-World USD Acc', binding: {identifier_type: 'TICKER', identifier: 'VWRL.AS'}, asset_type: 'ETF', page_url: null}]);
+        await fireEvent.click(screen.getByTestId('enricher-edit-yahoo'));
+        const query = screen.getByTestId('enricher-search-yahoo') as HTMLInputElement;
+        await fireEvent.input(query, {target: {value: 'IE00BK5BQT80'}});
+        await fireEvent.keyDown(query, {key: 'Enter'});
+        expect(search).toHaveBeenCalledWith('yahoo', 'IE00BK5BQT80');
+        await fireEvent.click(await screen.findByTestId('enricher-result-yahoo-0'));
+        expect((screen.getByTestId('enricher-identifier-yahoo') as HTMLInputElement).value).toBe('VWRL.AS');
+        expect((await apply(onapply)).yahoo).toEqual({identifier_type: 'TICKER', identifier: 'VWRL.AS'});
+    });
+
+    it('the open row is drawn selected (the selection role of the design system), the others are not', async () => {
+        mount();
+        const tone = (code: string) => (chosen(code).closest('[data-tone]') as HTMLElement).dataset.tone;
+        expect(tone('justetf')).toBe('default');
+        await fireEvent.click(screen.getByTestId('enricher-edit-justetf'));
+        expect(tone('justetf')).toBe('selected');
+        expect(tone('yahoo')).toBe('default');
+    });
+
+    it('«Testa Configurazione» tests the binding and says what it found and would fill', async () => {
+        const {test} = mount();
+        test.mockResolvedValue({code: 'justetf', identifier_type: 'ISIN', identifier: 'IE00BK5BQT80', status: 'found', name: 'Vanguard', page_url: null, identifiers: {}, conflicts: {}, error: null});
+        await fireEvent.click(screen.getByTestId('enricher-edit-justetf'));
+        await fireEvent.click(screen.getByTestId('enricher-test-justetf'));
+        expect(test).toHaveBeenCalledWith('justetf', CONFIG.justetf);
+        await waitFor(() => expect(screen.getByTestId('enricher-test-result-justetf').dataset.status).toBe('found'));
+    });
+
+    it('a test refused because the enricher is not configured says so', async () => {
+        const {test} = mount();
+        test.mockRejectedValue({status: 422, data: {detail: {error_code: 'NOT_CONFIGURED', missing: ['api_key']}}});
+        await fireEvent.click(screen.getByTestId('enricher-edit-justetf'));
+        await fireEvent.click(screen.getByTestId('enricher-test-justetf'));
+        await waitFor(() => expect(screen.getByTestId('enricher-test-result-justetf').dataset.status).toBe('not_configured'));
+    });
+
+    it('typing the identifier by hand changes the binding', async () => {
+        const {onapply} = mount();
+        await fireEvent.click(screen.getByTestId('enricher-edit-justetf'));
+        const input = screen.getByTestId('enricher-identifier-justetf') as HTMLInputElement;
+        // The field commits on «change» (blur or Enter), as the browser fires it
+        await fireEvent.change(input, {target: {value: 'IE00B3RBWM25'}});
+        expect((await apply(onapply)).justetf).toEqual({identifier_type: 'ISIN', identifier: 'IE00B3RBWM25'});
+    });
+});
+
+describe("AssetEnrichersModal — the plugin's parameters", () => {
+    const BI = {borsa_italiana: {identifier_type: 'ISIN', identifier: 'IT0005565400'}};
+
+    it('a parameter typed goes in the binding; emptied, it leaves it; a select left alone writes nothing', async () => {
+        const {onapply} = mount({config: BI});
+        await fireEvent.click(screen.getByTestId('enricher-edit-borsa_italiana'));
+        const mic = screen.getByTestId('enricher-param-borsa_italiana-mic') as HTMLInputElement;
+        await fireEvent.change(mic, {target: {value: 'ETFP'}});
+        await fireEvent.change(mic, {target: {value: 'MTAA'}});
+        expect((await apply(onapply)).borsa_italiana).toEqual({identifier_type: 'ISIN', identifier: 'IT0005565400', mic: 'MTAA'});
+    });
+
+    it('emptying a parameter removes it from the binding', async () => {
+        const {onapply} = mount({config: {borsa_italiana: {...BI.borsa_italiana, mic: 'ETFP'}}});
+        await fireEvent.click(screen.getByTestId('enricher-edit-borsa_italiana'));
+        await fireEvent.change(screen.getByTestId('enricher-param-borsa_italiana-mic'), {target: {value: ''}});
+        expect((await apply(onapply)).borsa_italiana).toEqual(BI.borsa_italiana);
+    });
+});
+
+describe('AssetEnrichersModal — a search refused', () => {
+    it('too many searches says so, not a generic failure', async () => {
+        const {search} = mount();
+        search.mockRejectedValue({status: 429, data: {detail: {error_code: 'RATE_LIMITED'}}});
+        await fireEvent.click(screen.getByTestId('enricher-edit-yahoo'));
+        const query = screen.getByTestId('enricher-search-yahoo') as HTMLInputElement;
+        await fireEvent.input(query, {target: {value: 'IE00BK5BQT80'}});
+        await fireEvent.keyDown(query, {key: 'Enter'});
+        await waitFor(() => expect(screen.getByTestId('enricher-search-refused-yahoo').dataset.status).toBe('rate_limited'));
+    });
+});

@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import AssetEvent, Transaction, TransactionType
 from backend.app.schemas.transactions.batch import TXValidationCode
-from backend.app.schemas.transactions.type_metadata import cost_basis_required
+from backend.app.schemas.transactions.type_metadata import TX_TYPE_METADATA, cost_basis_required
 
 
 class TransactionValidationMixin:
@@ -45,6 +45,9 @@ class TransactionValidationMixin:
         - Both items must share the same `type` (no mixing e.g. TRANSFER + SELL).
         - Two ADJUSTMENTs cannot be linked (the developer's decision, 22/10/2026: protect the entry of data): a move of units
           between brokers is a TRANSFER. Pairs of ADJUSTMENTs already stored are never judged or changed.
+        - Only a type whose ``requires_link`` is True in ``TX_TYPE_METADATA`` (TRANSFER, FX_CONVERSION, CASH_TRANSFER) is
+          a pair: two FEEs or two BUYs under one ``link_uuid`` are refused with ``pairTypeNotLinkable`` (F-1, lane 66
+          R0). A ``link_uuid`` a ``promotes[]`` item consumes never reaches this rule: the promote judges those rows.
         - TRANSFER requires distinct brokers (same-broker TRANSFER is a no-op), one
           asset, and exactly opposite quantities: what leaves one broker arrives at
           the other, no unit is created or lost.
@@ -71,6 +74,12 @@ class TransactionValidationMixin:
             return (
                 "two Adjustments cannot be linked: use an Asset Transfer to move units between brokers",
                 "pairAdjustmentNotAllowed",
+                {"type": a.type.value},
+            )
+        if not TX_TYPE_METADATA[a.type].requires_link:
+            return (
+                f"{a.type.value} rows cannot be linked as a pair: only an Asset Transfer, a Currency Exchange and a Cash Transfer are pairs",
+                "pairTypeNotLinkable",
                 {"type": a.type.value},
             )
         if a.type == TransactionType.TRANSFER and a.broker_id == b.broker_id:

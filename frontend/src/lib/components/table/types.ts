@@ -126,6 +126,8 @@ export interface EditableTextCell {
     placeholder?: string;
     /** Max length */
     maxLength?: number;
+    /** A fixed unit drawn beside the field, inside the cell («%», «years»): plan 68, E10c3 */
+    unit?: string;
     /** Callback when value changes (blur or Enter) */
     onchange: (newValue: string) => void;
 }
@@ -167,6 +169,10 @@ export interface EditableSelectCell {
     value: string;
     /** Available options */
     options: Array<{value: string; label: string}>;
+    /** Text shown while no option is chosen (plan 68, E10c2) */
+    placeholder?: string;
+    /** Stable selector: the select gets `<testId>`, each option `<testId>-option-<value>` (plan 68, E10c2) */
+    testId?: string;
     /** Callback when selection changes */
     onchange: (newValue: string) => void;
 }
@@ -186,9 +192,43 @@ export interface EditableCheckboxCell {
 }
 
 /**
+ * Editable date cell (plan 68, E10a) — the app's `SingleDatePicker` (typed or picked from its calendar, in the app's
+ * language; never a native date input). The value is an ISO date (`yyyy-mm-dd`); future dates are allowed. Used by the
+ * asset profile (maturity, inception date…).
+ */
+export interface EditableDateCell {
+    type: 'editable-date';
+    /** Current value, ISO `yyyy-mm-dd` (null = empty) */
+    value: string | null;
+    /** Callback with the date chosen, or null when the field is cleared */
+    onchange: (newValue: string | null) => void;
+}
+
+/**
+ * Editable amount cell (plan 68, E10a) — a decimal number and its currency, side by side. The number is typed as text
+ * and handed over as decimal TEXT (`"55173000000"`, `"0.0000001"`), never a float, so an amount stays exact.
+ */
+export interface EditableAmountCell {
+    type: 'editable-amount';
+    /** Current amount as decimal text (null = empty) */
+    amount: string | null;
+    /** Current currency code (null = none chosen) */
+    currency: string | null;
+    /** The currencies offered */
+    currencies: Array<{value: string; label: string}>;
+    /** Placeholder of the number when empty */
+    placeholder?: string;
+    /** Accessible names of the number and of the currency choice */
+    ariaLabel?: string;
+    currencyAriaLabel?: string;
+    /** Callback on blur, Enter or a currency picked: the amount (null when emptied) and the currency */
+    onchange: (newValue: {amount: string | null; currency: string | null}) => void;
+}
+
+/**
  * All possible cell content types
  */
-export type CellContent = SimpleCellContent | IconTextCell | BadgeCell | DateCell | SizeCell | LinkCell | CustomCell | ImageCell | EditableNumberCell | EditableTextCell | HtmlCell | EditableSelectCell | EditableCheckboxCell;
+export type CellContent = SimpleCellContent | IconTextCell | BadgeCell | DateCell | SizeCell | LinkCell | CustomCell | ImageCell | EditableNumberCell | EditableTextCell | HtmlCell | EditableSelectCell | EditableCheckboxCell | EditableDateCell | EditableAmountCell;
 
 // ============ Column Definition Types ============
 

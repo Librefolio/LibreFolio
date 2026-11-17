@@ -31,7 +31,8 @@ from backend.app.services.enrichers.base import RATE_LIMITED, EnricherBinding, E
 from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.test_scripts.test_utils import print_info, print_success
 
-#: The voices an ETF's read must give, whichever enricher reads it.
+#: The voices an ETF's read must give, among those its enricher declares for the type: justETF declares all three,
+#: Yahoo (C3) ``ter`` and ``fund_provider`` only (it never gives a distribution policy).
 ETF_REQUIRED_VOICES = frozenset({"ter", "fund_provider", "distribution_policy"})
 #: Per enricher code, bindings its source does not know (well formed, so the «not found» path of the source is
 #: exercised, not the plugin's own refusal of a malformed identifier).
@@ -147,7 +148,7 @@ def test_read_gives_declared_voices_in_stored_form(code: str, index: int):
             refused[key] = f"{value!r}: {exc.reason}"
     assert not refused, f"{code}: {binding.identifier}: values the catalogue refuses: {refused}"
     if asset_type == AssetType.ETF:
-        missing = sorted(ETF_REQUIRED_VOICES - set(stored))
+        missing = sorted((ETF_REQUIRED_VOICES & declared) - set(stored))
         assert not missing, f"{code}: {binding.identifier}: an ETF read without {missing}"
 
     print_info(f"{code}: {binding.identifier} ({asset_type.value}) read {len(stored)} voices, source_date={item.source_date}")

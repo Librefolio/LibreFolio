@@ -15,7 +15,7 @@
     import {AddedAssetFacts} from '../assetRead.svelte';
     import {CategoryLabels} from '../categoryLabels.svelte';
     import {draftAssetFromInfo, domainAssetKey, isIndexAssetClass, setPriceManual} from '../copies';
-    import {compareDecimal} from '../decimal';
+    import {compareDecimal} from '$lib/utils/core/exactDecimal';
     import {EXPOSURE_DIMENSIONS, type DraftAsset, type DraftExposure, type ExposureDimension, type PlannerDraft, type RemovalImpact} from '../draft.svelte';
     import {formatPlannerDate, formatPlannerPercentUnits, formatPlannerPlainDecimal, formatPlannerPricePlain, plannerPlainDecimalCount} from '../format';
     import {DIMENSION_FALLBACKS} from '../labels';

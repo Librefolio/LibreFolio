@@ -19,9 +19,10 @@ from pydantic import AllowInfNan, Field, SecretStr
 from backend.app.schemas.common import StrictModel
 
 
+# ``group`` is a shared settings group: the values several plugins read (project 76), listed and written like a plugin
+# of its own. Kept out of the docstring: a multi-line docstring breaks the generated client (lot E2b).
 class PluginSettingFamily(StrEnum):
-    """The plugin families whose plugins may declare settings, and ``group``: a shared settings group, the values several
-    plugins read (project 76), listed and written like a plugin of its own."""
+    """The plugin families whose plugins may declare settings, and group, a shared settings group."""
 
     ASSET = "asset"
     FX = "fx"

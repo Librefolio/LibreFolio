@@ -786,9 +786,10 @@ class TestPortfolioBrokerFragmentSanity:
 
 
 class TestComponentRegistryConstruction:
-    def test_merged_registry_has_67_components(self):
+    def test_merged_registry_has_68_components(self):
         registry = build_portfolio_broker_component_registry()
-        assert len(registry) == 67
+        # D5 (plan 68): asset.profile is the 68th component (before D5: 67)
+        assert len(registry) == 68
 
     def test_pb_component_ids_resolve_to_real_specs(self):
         registry = build_portfolio_broker_component_registry()
@@ -1571,7 +1572,8 @@ class TestImportCycleSafety:
         )
         result = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, timeout=60)
         assert result.returncode == 0, f"fresh-process registry construction failed:\nstdout={result.stdout}\nstderr={result.stderr}"
-        assert result.stdout.strip() == "67 40 11"
+        # D5 (plan 68): asset.profile is the 68th component (before D5: "67 40 11")
+        assert result.stdout.strip() == "68 40 11"
 
 
 # =============================================================================

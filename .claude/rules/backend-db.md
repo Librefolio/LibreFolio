@@ -26,7 +26,7 @@ exactly. **Table names are plural** — a lookup for `asset` or `transaction` fi
 | `Broker` | `brokers` | name, description, portal_url, icon_url, default_import_plugin, allow_cash_overdraft, allow_asset_shorting, is_active, opened_at |
 | `BrokerUserAccess` | `broker_user_access` | broker_id, user_id, role, share_percentage |
 | `Asset` | `assets` | display_name, currency, asset_type, **is_benchmark**, classification_params (JSON), quote_base_quantity, active, user_url, identifier_* (one column per `IdentifierType`) |
-| `Transaction` | `transactions` | broker_id, asset_id, type, date, quantity, **amount**, currency, related_transaction_id, tags, cost_basis_override, cost_basis_currency, asset_event_id |
+| `Transaction` | `transactions` | broker_id, asset_id, type, date, quantity, **amount**, currency, related_transaction_id (pairs), parent_transaction_id (a FEE or TAX to its parent, one-way), tags, cost_basis_override, cost_basis_currency, asset_event_id |
 | `PriceHistory` | `price_history` | asset_id, date, open, high, low, close, volume, adjusted_close, currency, source_plugin_key, fetched_at |
 | `AssetEvent` | `asset_events` | asset_id, date, type, value, currency, provider_assignment_id, notes |
 | `FxRate` | `fx_rates` | base, quote, date, rate, **source** |

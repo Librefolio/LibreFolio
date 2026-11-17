@@ -56,12 +56,25 @@ def _is_deferred(item: object) -> bool:
     return getattr(item, "error_code", None) == RATE_LIMITED
 
 
+#: The wait before the profile read's retry round when no refused read said how long (plan 68 B6c): the real sources
+#: refuse without a wait, and without this the voices held for round two would wait a week. Not a setting.
+PROFILE_READ_DEFAULT_RETRY_SECONDS = 15 * 60
+
+
 def _retry_at(deferred: list, now: datetime) -> str | None:
     """When the deferred items may be retried: now plus the shortest pause among those that know theirs."""
     waits = [wait for wait in (getattr(item, "retry_after", None) for item in deferred) if wait is not None]
     if not waits:
         return None
     return (now + timedelta(seconds=min(waits))).isoformat()
+
+
+def _profile_retry_at(deferred: list, now: datetime) -> str | None:
+    """When the profile read's refused reads are retried: the shortest wait a source gave, else
+    ``PROFILE_READ_DEFAULT_RETRY_SECONDS``; None when nothing was refused. The price jobs keep ``_retry_at``."""
+    if not deferred:
+        return None
+    return _retry_at(deferred, now) or (now + timedelta(seconds=PROFILE_READ_DEFAULT_RETRY_SECONDS)).isoformat()
 
 
 def _history_sync_start(today: date, horizon_days: int, last_saved: date | None) -> date:
@@ -332,7 +345,7 @@ async def run_profile_read(state: SchedulerState, settings: object = None) -> No
     summary = entry["summary"]
     status = _classify_job_status(summary["ok"], len(results), summary["deferred"])
     deferred_reads = [outcome for result in results for outcome in result.deferred]
-    retry_at = None if is_retry else _retry_at(deferred_reads, now)
+    retry_at = None if is_retry else _profile_retry_at(deferred_reads, now)
     entry["status"], entry["retry_at"] = status, retry_at
     state.profile_read = JobState(
         last_run_at=datetime.now().astimezone().isoformat(),

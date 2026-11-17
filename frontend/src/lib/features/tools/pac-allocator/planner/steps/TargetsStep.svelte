@@ -6,7 +6,7 @@
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import type {ColumnDef, RowAction} from '$lib/components/table/types';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
-    import {canonicalInput, compareDecimal, decimalSign, rebalanceControlPercentages, remainingControlPercentage, sumControlPercentages} from '../decimal';
+    import {canonicalInput, compareDecimal, decimalSign, rebalanceControlPercentages, remainingControlPercentage, sumControlPercentages} from '$lib/utils/core/exactDecimal';
     import type {DraftAsset, PlannerDraft} from '../draft.svelte';
     import {formatPlannerPercentUnits} from '../format';
     import {BUTTON_SECONDARY, NOTICE} from '../ui';

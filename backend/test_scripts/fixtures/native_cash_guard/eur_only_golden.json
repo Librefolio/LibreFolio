@@ -3973,6 +3973,9 @@
       "other_effects": [
         {
           "broker_id": "B",
+          "broker_ids": [
+            "B"
+          ],
           "broker_name": "B",
           "category": "Income",
           "code": null,
@@ -3981,6 +3984,9 @@
         },
         {
           "broker_id": "C",
+          "broker_ids": [
+            "C"
+          ],
           "broker_name": "C",
           "category": "Cost",
           "code": null,
@@ -3989,6 +3995,7 @@
         },
         {
           "broker_id": null,
+          "broker_ids": [],
           "broker_name": null,
           "category": "Other",
           "code": null,
@@ -4004,6 +4011,9 @@
           "asset_ticker": "EQ-ticker",
           "asset_type": "STOCK",
           "broker_id": "A",
+          "broker_ids": [
+            "A"
+          ],
           "broker_name": "A",
           "closed_by": null,
           "closed_to_broker_id": null,
@@ -4029,6 +4039,9 @@
           "asset_ticker": "IDX-ticker",
           "asset_type": "ETF",
           "broker_id": "A",
+          "broker_ids": [
+            "A"
+          ],
           "broker_name": "A",
           "closed_by": null,
           "closed_to_broker_id": null,
@@ -4054,6 +4067,9 @@
           "asset_ticker": "MAN-ticker",
           "asset_type": "HOLD",
           "broker_id": "B",
+          "broker_ids": [
+            "B"
+          ],
           "broker_name": "B",
           "closed_by": null,
           "closed_to_broker_id": null,
@@ -4079,6 +4095,9 @@
           "asset_ticker": "EQ-ticker",
           "asset_type": "STOCK",
           "broker_id": "B",
+          "broker_ids": [
+            "B"
+          ],
           "broker_name": "B",
           "closed_by": null,
           "closed_to_broker_id": null,
@@ -6456,6 +6475,7 @@
         "broker_ids": null,
         "computed_date_from": "2091-01-01",
         "computed_date_to": "2091-01-25",
+        "group_by": "broker",
         "included_features": [
           "summary",
           "history",
@@ -6815,6 +6835,9 @@
         "other_effects": [
           {
             "broker_id": "B",
+            "broker_ids": [
+              "B"
+            ],
             "broker_name": "B",
             "category": "Income",
             "code": null,
@@ -6823,6 +6846,9 @@
           },
           {
             "broker_id": "C",
+            "broker_ids": [
+              "C"
+            ],
             "broker_name": "C",
             "category": "Cost",
             "code": null,
@@ -6831,6 +6857,7 @@
           },
           {
             "broker_id": null,
+            "broker_ids": [],
             "broker_name": null,
             "category": "Other",
             "code": null,
@@ -6846,6 +6873,9 @@
             "asset_ticker": "EQ-ticker",
             "asset_type": "STOCK",
             "broker_id": "A",
+            "broker_ids": [
+              "A"
+            ],
             "broker_name": "A",
             "closed_by": null,
             "closed_to_broker_id": null,
@@ -6871,6 +6901,9 @@
             "asset_ticker": "IDX-ticker",
             "asset_type": "ETF",
             "broker_id": "A",
+            "broker_ids": [
+              "A"
+            ],
             "broker_name": "A",
             "closed_by": null,
             "closed_to_broker_id": null,
@@ -6896,6 +6929,9 @@
             "asset_ticker": "MAN-ticker",
             "asset_type": "HOLD",
             "broker_id": "B",
+            "broker_ids": [
+              "B"
+            ],
             "broker_name": "B",
             "closed_by": null,
             "closed_to_broker_id": null,
@@ -6921,6 +6957,9 @@
             "asset_ticker": "EQ-ticker",
             "asset_type": "STOCK",
             "broker_id": "B",
+            "broker_ids": [
+              "B"
+            ],
             "broker_name": "B",
             "closed_by": null,
             "closed_to_broker_id": null,
@@ -7265,6 +7304,9 @@
             "asset_ticker": "EQ-ticker",
             "asset_type": "STOCK",
             "broker_id": "A",
+            "broker_ids": [
+              "A"
+            ],
             "broker_name": "A",
             "current_price": "131.07",
             "current_value": "524.28000000",
@@ -7314,6 +7356,9 @@
             "asset_ticker": "IDX-ticker",
             "asset_type": "ETF",
             "broker_id": "A",
+            "broker_ids": [
+              "A"
+            ],
             "broker_name": "A",
             "current_price": "9.913198263386396526772793053",
             "current_value": "991.3198263386396526772793053",
@@ -7360,6 +7405,9 @@
             "asset_ticker": "MAN-ticker",
             "asset_type": "HOLD",
             "broker_id": "B",
+            "broker_ids": [
+              "B"
+            ],
             "broker_name": "B",
             "current_price": "100.1",
             "current_value": "250.2500000",
@@ -7406,6 +7454,9 @@
             "asset_ticker": "EQ-ticker",
             "asset_type": "STOCK",
             "broker_id": "B",
+            "broker_ids": [
+              "B"
+            ],
             "broker_name": "B",
             "current_price": "131.07",
             "current_value": "131.07000000",
@@ -7887,6 +7938,9 @@
           "asset_ticker": "EQ-ticker",
           "asset_type": "STOCK",
           "broker_id": "A",
+          "broker_ids": [
+            "A"
+          ],
           "broker_name": "A",
           "current_price": "131.07",
           "current_value": "524.28000000",
@@ -7936,6 +7990,9 @@
           "asset_ticker": "IDX-ticker",
           "asset_type": "ETF",
           "broker_id": "A",
+          "broker_ids": [
+            "A"
+          ],
           "broker_name": "A",
           "current_price": "9.913198263386396526772793053",
           "current_value": "991.3198263386396526772793053",
@@ -7982,6 +8039,9 @@
           "asset_ticker": "MAN-ticker",
           "asset_type": "HOLD",
           "broker_id": "B",
+          "broker_ids": [
+            "B"
+          ],
           "broker_name": "B",
           "current_price": "100.1",
           "current_value": "250.2500000",
@@ -8028,6 +8088,9 @@
           "asset_ticker": "EQ-ticker",
           "asset_type": "STOCK",
           "broker_id": "B",
+          "broker_ids": [
+            "B"
+          ],
           "broker_name": "B",
           "current_price": "131.07",
           "current_value": "131.07000000",
@@ -9662,6 +9725,7 @@
       "other_effects": [
         {
           "broker_id": null,
+          "broker_ids": [],
           "broker_name": null,
           "category": "Other",
           "code": null,
@@ -9677,6 +9741,9 @@
           "asset_ticker": "EQ-ticker",
           "asset_type": "STOCK",
           "broker_id": "A",
+          "broker_ids": [
+            "A"
+          ],
           "broker_name": "A",
           "closed_by": null,
           "closed_to_broker_id": null,
@@ -9702,6 +9769,9 @@
           "asset_ticker": "IDX-ticker",
           "asset_type": "ETF",
           "broker_id": "A",
+          "broker_ids": [
+            "A"
+          ],
           "broker_name": "A",
           "closed_by": null,
           "closed_to_broker_id": null,
@@ -9727,6 +9797,9 @@
           "asset_ticker": "MAN-ticker",
           "asset_type": "HOLD",
           "broker_id": "B",
+          "broker_ids": [
+            "B"
+          ],
           "broker_name": "B",
           "closed_by": null,
           "closed_to_broker_id": null,
@@ -10606,6 +10679,7 @@
         "broker_ids": null,
         "computed_date_from": "2091-01-01",
         "computed_date_to": "2091-01-14",
+        "group_by": "broker",
         "included_features": [
           "summary",
           "history",
@@ -10710,6 +10784,7 @@
         "other_effects": [
           {
             "broker_id": null,
+            "broker_ids": [],
             "broker_name": null,
             "category": "Other",
             "code": null,
@@ -10725,6 +10800,9 @@
             "asset_ticker": "EQ-ticker",
             "asset_type": "STOCK",
             "broker_id": "A",
+            "broker_ids": [
+              "A"
+            ],
             "broker_name": "A",
             "closed_by": null,
             "closed_to_broker_id": null,
@@ -10750,6 +10828,9 @@
             "asset_ticker": "IDX-ticker",
             "asset_type": "ETF",
             "broker_id": "A",
+            "broker_ids": [
+              "A"
+            ],
             "broker_name": "A",
             "closed_by": null,
             "closed_to_broker_id": null,
@@ -10775,6 +10856,9 @@
             "asset_ticker": "MAN-ticker",
             "asset_type": "HOLD",
             "broker_id": "B",
+            "broker_ids": [
+              "B"
+            ],
             "broker_name": "B",
             "closed_by": null,
             "closed_to_broker_id": null,
@@ -11112,6 +11196,9 @@
             "asset_ticker": "EQ-ticker",
             "asset_type": "STOCK",
             "broker_id": "A",
+            "broker_ids": [
+              "A"
+            ],
             "broker_name": "A",
             "current_price": "130.20",
             "current_value": "520.80000000",
@@ -11161,6 +11248,9 @@
             "asset_ticker": "IDX-ticker",
             "asset_type": "ETF",
             "broker_id": "A",
+            "broker_ids": [
+              "A"
+            ],
             "broker_name": "A",
             "current_price": "9.271963143224390173452145406",
             "current_value": "927.1963143224390173452145406",
@@ -11207,6 +11297,9 @@
             "asset_ticker": "MAN-ticker",
             "asset_type": "HOLD",
             "broker_id": "B",
+            "broker_ids": [
+              "B"
+            ],
             "broker_name": "B",
             "current_price": "100.1",
             "current_value": "250.2500000",
@@ -11688,6 +11781,9 @@
           "asset_ticker": "EQ-ticker",
           "asset_type": "STOCK",
           "broker_id": "A",
+          "broker_ids": [
+            "A"
+          ],
           "broker_name": "A",
           "current_price": "130.20",
           "current_value": "520.80000000",
@@ -11737,6 +11833,9 @@
           "asset_ticker": "IDX-ticker",
           "asset_type": "ETF",
           "broker_id": "A",
+          "broker_ids": [
+            "A"
+          ],
           "broker_name": "A",
           "current_price": "9.271963143224390173452145406",
           "current_value": "927.1963143224390173452145406",
@@ -11783,6 +11882,9 @@
           "asset_ticker": "MAN-ticker",
           "asset_type": "HOLD",
           "broker_id": "B",
+          "broker_ids": [
+            "B"
+          ],
           "broker_name": "B",
           "current_price": "100.1",
           "current_value": "250.2500000",

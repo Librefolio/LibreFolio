@@ -213,6 +213,7 @@ async def test_get_enrichers_lists_mockenrich_and_a_default_order_for_every_type
     assert mock["accepted_identifier_types"] == list(MockEnricher.accepted_identifier_types), mock
     assert mock["voices"]["ETF"] == sorted(MockEnricher.voices[AssetType.ETF]), f"the ETF voices as a sorted list: {mock['voices']}"
     assert set(mock["default_priority"]) == {asset_type.value for asset_type in AssetType}, f"a degree for every type: {mock['default_priority']}"
+    assert (mock["configured"], mock["missing_settings"]) == (True, []), f"E7: the mock has no settings, it is configured: {mock}"
     assert mock["default_priority"]["ETF"] == 100 and mock["default_priority"]["INDEX"] is None, mock["default_priority"]
     assert set(body["default_order"]) == {asset_type.value for asset_type in AssetType}, f"a default order for every type: {sorted(body['default_order'])}"
     assert MOCK_CODE in body["default_order"]["ETF"] and MOCK_CODE not in body["default_order"]["INDEX"], body["default_order"]

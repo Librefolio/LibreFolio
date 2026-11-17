@@ -8,7 +8,7 @@ import hashlib
 import json
 import threading
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date as date_type
 from decimal import Decimal
@@ -18,7 +18,9 @@ import structlog
 from sqlalchemy import and_, func, or_, select
 
 from backend.app.db.models import Asset, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, Transaction, TransactionType
+from backend.app.schemas.common import DateRangeModel
 from backend.app.services.accounts.settings_service import get_effective_base_currency
+from backend.app.services.assets.profile.store import read_steps, rows_fingerprint
 from backend.app.services.financial_math.average_cost import (
     compute_average_costs,
 )
@@ -26,7 +28,7 @@ from backend.app.services.financial_math.fx_rates import AskedDayRates
 from backend.app.services.financial_math.native_cash import broker_shares as counted_broker_shares
 from backend.app.services.financial_math.native_cash import cash_movement_from_transaction, compute_native_cash
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
-from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
+from backend.app.services.financial_math.portfolio.daily_state import GEOGRAPHY_VOICE, SECTOR_VOICE, AssetClassification, ClassificationStep, DailyStateBuilder
 from backend.app.services.financial_math.portfolio.derived_views import build_cost_positions
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, DailyStates, InTransitInterval, InvalidSplitEvent, PortfolioCalculationResult, SplitHistory, SplitRecord
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, build_asset_price_series
@@ -40,6 +42,9 @@ logger = structlog.get_logger(__name__)
 
 # Portfolio engine blob cache: stores PortfolioCalculationResult keyed by
 # (user, brokers, currency, fingerprints). Range-aware: can be sliced or extended.
+#: The profile voices the engine reads (plan 68, D2): an asset's countries and sectors.
+CLASSIFICATION_VOICES = (GEOGRAPHY_VOICE, SECTOR_VOICE)
+
 _portfolio_blob_cache = get_ttl_cache("portfolio_blob", maxsize=30, ttl=86400)  # 24h
 
 # J-45 (R13-SEC7-1b): the daily replay is pure CPU and long on a wide range, so it runs here, off the event loop, and
@@ -341,6 +346,9 @@ class PortfolioCalculationEngine:
             tuple(sorted(split_linked_tx_ids)),
             tuple(sorted((record.event_id, record.asset_id, record.date.isoformat(), str(record.ratio)) for record in split_records_by_event_id.values())),
         )
+        # The held assets' countries and sectors (plan 68, D2): a read of an enricher, a hand edit or a «Dimentica» moves
+        # the allocation without moving any other fingerprint
+        classification_fingerprint = await rows_fingerprint(self.db, held_asset_ids, CLASSIFICATION_VOICES)
 
         # Blob key: independent of date range (blob stores its own range).
         # The access fingerprint (role + share per broker) MUST be part of the
@@ -357,6 +365,7 @@ class PortfolioCalculationEngine:
             price_fingerprint,
             fx_fingerprint,
             split_fingerprint,
+            classification_fingerprint,
             include_candles,
             include_acquisition_funding,
             # #48: the position frames are in the result only when asked
@@ -435,6 +444,22 @@ class PortfolioCalculationEngine:
             if _IN_FLIGHT.get(flight_key) is flight:
                 del _IN_FLIGHT[flight_key]
 
+    async def _load_asset_classifications(self, asset_ids: Iterable[int], date_from: date_type, date_to: date_type) -> dict[int, AssetClassification | None]:
+        """Each asset's countries and sectors from its profile, as steps from ``date_from`` to ``date_to`` (plan 68, D2).
+
+        The first value is carried back to ``date_from`` (plan I18: «for a date we do not have, the oldest we have»); a
+        voice emptied on purpose is a step with no weights. An asset with no row of either voice maps to ``None``: its
+        value is unknown in both dimensions. ``classification_params`` is not read.
+        """
+        ids = sorted(set(asset_ids))
+        if not ids:
+            return {}
+        steps = await read_steps(self.db, ids, DateRangeModel(start=date_from, end=date_to), CLASSIFICATION_VOICES, carry_back=True)
+        loaded: dict[int, AssetClassification | None] = dict.fromkeys(ids)
+        for asset_id, voices in steps.items():
+            loaded[asset_id] = {voice: [ClassificationStep(date=step.date, through=step.through, weights=None if step.value is None else {key: Decimal(weight).normalize() for key, weight in step.value.items()}) for step in voice_steps] for voice, voice_steps in voices.items()}
+        return loaded
+
     async def _compute_uncached(  # noqa: C901 — steps 6–12 of calculate, moved unchanged (MF-J45b)
         self,
         *,
@@ -484,18 +509,9 @@ class PortfolioCalculationEngine:
         for a in assets_list:
             asset_currencies[a.id] = a.currency or target_currency
 
-        # ── 9. Preload asset classification + types ──
-        asset_classifications: dict[int, dict | None] = {}
-        asset_types: dict[int, str] = {}
-        for a in assets_list:
-            asset_types[a.id] = a.asset_type.value if a.asset_type else "Unknown"
-            if a.classification_params:
-                try:
-                    asset_classifications[a.id] = json.loads(a.classification_params)
-                except Exception:
-                    asset_classifications[a.id] = None
-            else:
-                asset_classifications[a.id] = None
+        # ── 9. Preload asset types, and countries and sectors from the profile, per day (plan 68, D2) ──
+        asset_types: dict[int, str] = {a.id: a.asset_type.value if a.asset_type else "Unknown" for a in assets_list}
+        asset_classifications = await self._load_asset_classifications([a.id for a in assets_list], actual_from, actual_to)
 
         # ── 10. Preload FX rates ──
         fx_rate_map = await self._preload_fx_rates(

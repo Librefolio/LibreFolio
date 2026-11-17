@@ -306,6 +306,11 @@ async def _first_days(session: AsyncSession, asset_ids: Sequence[int], keys: Seq
     return {asset_id: first for asset_id, first in rows if first is not None}
 
 
+async def first_read_days(session: AsyncSession, asset_ids: Sequence[int], keys: Iterable[str] | None = None) -> dict[int, date]:
+    """The first ``read_on`` of each asset among ``keys`` (all voices when None); an asset with no row is left out."""
+    return await _first_days(session, list(dict.fromkeys(asset_ids)), _checked_keys(keys))
+
+
 def _last_of_each_day(records: Sequence[AssetProfileUpdate]) -> list[AssetProfileUpdate]:
     """One record per voice and day, the last in (``read_on``, ``id``) order: several rows on one day are normal (plan
     §3.7), and ``series_steps.steps_from_rows`` takes one row per day."""
@@ -373,6 +378,19 @@ def _asset_steps(records: Sequence[AssetProfileUpdate], start: date, end: date, 
 
 def _step(record: AssetProfileUpdate, first: date, through: date) -> ProfileStep:
     return ProfileStep(date=first, through=through, value=_value(record), source=record.source, update_id=record.id)
+
+
+async def rows_fingerprint(session: AsyncSession, asset_ids: Iterable[int], keys: Iterable[str]) -> tuple[int, int, datetime | None]:
+    """What a cache of a reader of ``keys`` for ``asset_ids`` keys on: the rows' count, the sum of their ids and the
+    latest ``created_at``. A new row moves all three; a forgotten one moves the count; an id given again after a forget
+    (no AUTOINCREMENT, A2) moves ``created_at``."""
+    ids = sorted(set(asset_ids))
+    if not ids:
+        return (0, 0, None)
+    statement = select(func.count(AssetProfileUpdate.id), func.coalesce(func.sum(AssetProfileUpdate.id), 0), func.max(AssetProfileUpdate.created_at))
+    statement = statement.where(AssetProfileUpdate.asset_id.in_(ids), AssetProfileUpdate.key.in_(_checked_keys(keys) or []))
+    count, total, latest = (await session.execute(statement)).one()
+    return (int(count), int(total), latest)
 
 
 # =============================================================================

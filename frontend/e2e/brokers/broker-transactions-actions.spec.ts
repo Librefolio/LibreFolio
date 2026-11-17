@@ -284,8 +284,9 @@ test.describe('Broker Transactions tab — who can edit gets the selection bar a
         // The bar sits in the commands row of the tab, next to Import and New transaction, and counts one.
         await expect(bar(page)).toBeVisible({timeout: UI_TIMEOUT});
         await expect(bar(page)).toHaveAttribute('data-selected-count', '1');
-        // Exactly the three actions, in this order: no Link-as-pair on this page.
-        const ids = bar(page).locator('[data-testid^="toolbar-action-"]');
+        // Exactly the three actions, in this order: no Link-as-pair on this page. Buttons only: each action also holds
+        // its label, `toolbar-action-<id>-label`, which the same prefix would count.
+        const ids = bar(page).locator('button[data-testid^="toolbar-action-"]');
         await expect(ids).toHaveCount(3);
         await expect(ids.nth(0)).toHaveAttribute('data-testid', 'toolbar-action-edit');
         await expect(ids.nth(1)).toHaveAttribute('data-testid', 'toolbar-action-clone');

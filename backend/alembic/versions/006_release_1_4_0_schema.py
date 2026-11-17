@@ -60,8 +60,12 @@ Data only: what ``classification_params`` holds today becomes the first history 
 
 - For every asset, ``short_description`` (a non-empty text), ``geographic_area`` and ``sector_area`` become rows of
   ``asset_profile_updates`` for the voices ``description``, ``geography`` and ``sector``: ``source`` ``legacy``, no
-  author, ``read_on`` the day of the upgrade in the scheduler's time zone (the ``scheduler_timezone`` setting, UTC when
-  it is missing or not valid). A map holds its weights as decimal strings, without the ``{"distribution": …}`` envelope.
+  author, ``read_on`` the asset's first day (A4b, the consultant's decision of round 43): the earliest of the day of its
+  ``created_at``, its first ``price_history`` day and its first ``transactions`` day — imported prices and back-dated
+  transactions often go back years before ``created_at`` —; with neither, the day of ``created_at``. 1.3 held these
+  values as true on every day (identity v1 showed them in every window, the engine used them for every day): the
+  profile keeps that, and the rows say where they came from (``legacy``). Never the day of the upgrade: an export of a
+  window that ends before it would lose them. A map holds its weights as decimal strings, without the ``{"distribution": …}`` envelope.
 - The JSON is read with Decimals (``parse_float=Decimal``): weights written as numbers (the test data) and as strings
   (the app) copy alike. The copy does not translate country or sector names: the profile store reads every row back
   through its catalogue, so a row keeps the spelling the column had and still reads as the catalogue's stored form.
@@ -85,6 +89,31 @@ How many calls each plugin that reaches an external service made, per calendar w
   (``services/platform/call_counter.py``) reaches the row through its primary key: no index beyond it.
 - Starts empty: no call was counted before 1.4.
 - Downgrade: the table is dropped.
+
+charge_links (project 66, lot R1)
+─────────────────────────────────
+A FEE or a TAX can say which transaction it belongs to (issue #25, plan 66, «Il dato»).
+
+- ``transactions.parent_transaction_id``: INTEGER, NULL, a foreign key to ``transactions (id)`` with no action,
+  ``DEFERRABLE INITIALLY DEFERRED`` like ``related_transaction_id``: checked at commit, so a batch that deletes a parent
+  and its charges does not depend on their order, and a charge that points at a row gone cannot be saved. The charge
+  points at its parent; the parent knows nothing. ``related_transaction_id`` stays the link of the three pairs, untouched.
+- Added with a plain ``ALTER TABLE ADD COLUMN`` and a column-level ``REFERENCES``: SQLite drops a column that carries
+  its own ``REFERENCES``, not one named in a table-level ``FOREIGN KEY``. Every existing row gets NULL: no charge is
+  linked by the upgrade (no clean-up of stored data).
+- One partial index, ``idx_transactions_parent (parent_transaction_id) WHERE parent_transaction_id IS NOT NULL``: only
+  linked charges are in it, a handful of rows next to the whole ledger. The charges of some parents (the list, the
+  delete check, the lot engine; ``services/transactions/charges.py``, from lot R2), and SQLite's own foreign-key check
+  when any transaction is deleted, search it (SQLite 3.53)::
+
+    SELECT id FROM transactions WHERE parent_transaction_id IN (?, ?)
+    → SEARCH transactions USING COVERING INDEX idx_transactions_parent (parent_transaction_id=?)
+
+    DELETE FROM transactions WHERE id = ?   (foreign_keys=ON: the check for children of the deleted row)
+    → EXPLAIN shows an OpenRead on the rootpage of idx_transactions_parent; 2 000 deletes in 200 000 rows take
+      0.01 s with it (as with a full index) and 11.8 s without any index
+
+- Downgrade: the index, then the column.
 """
 
 import json
@@ -92,7 +121,6 @@ import logging
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Sequence, Union
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import sqlalchemy as sa
 from alembic import op
@@ -171,14 +199,19 @@ _LEGACY_SUM_TOLERANCE = Decimal("0.01")
 _legacy_log = logging.getLogger("alembic.runtime.migration")
 
 
-def _legacy_today(conn: sa.engine.Connection) -> date:
-    """The day of the upgrade in the scheduler's time zone (``scheduler_timezone``; UTC when unset or not valid)."""
-    name = conn.execute(sa.text("SELECT value FROM global_settings WHERE key = 'scheduler_timezone'")).scalar()
-    try:
-        zone = ZoneInfo(str(name)) if name else ZoneInfo("UTC")
-    except (ZoneInfoNotFoundError, ValueError):
-        zone = ZoneInfo("UTC")
-    return datetime.now(UTC).astimezone(zone).date()
+def _legacy_first_days(conn: sa.engine.Connection) -> dict[int, date]:
+    """Each classified asset's first day: the earliest of the day of its ``created_at``, its first price and its first
+    transaction (the two subqueries search their ``(asset_id, date)`` indexes); the day of ``created_at`` alone without
+    either. ISO date texts compare as dates."""
+    statement = sa.text("""
+        SELECT a.id,
+               min(date(a.created_at),
+                   coalesce((SELECT min(p.date) FROM price_history p WHERE p.asset_id = a.id), '9999-12-31'),
+                   coalesce((SELECT min(t.date) FROM transactions t WHERE t.asset_id = a.id), '9999-12-31'))
+        FROM assets a
+        WHERE a.classification_params IS NOT NULL
+        """)
+    return {asset_id: date.fromisoformat(str(day)[:10]) for asset_id, day in conn.execute(statement)}
 
 
 def _legacy_distribution(asset_id: int, part: str, block: object) -> dict[str, str] | None:
@@ -229,13 +262,13 @@ def _legacy_values(asset_id: int, text: str | None) -> dict[str, str]:
 def _upgrade_asset_profile_legacy_copy(conn: sa.engine.Connection) -> None:
     """Step ``asset_profile_legacy_copy``: each asset's description, countries and sectors become ``legacy`` rows."""
     already = {(row[0], row[1]) for row in conn.execute(sa.text(f"SELECT DISTINCT asset_id, key FROM {_PROFILE_UPDATES} WHERE source = :legacy"), {"legacy": _LEGACY})}
-    read_on = _legacy_today(conn)
+    first_days = _legacy_first_days(conn)
     created_at = datetime.now(UTC).replace(tzinfo=None)
     rows = []
     for asset_id, text in conn.execute(sa.text("SELECT id, classification_params FROM assets WHERE classification_params IS NOT NULL ORDER BY id")):
         for voice, value in _legacy_values(asset_id, text).items():
             if (asset_id, voice) not in already:
-                rows.append({"asset_id": asset_id, "key": voice, "value": value, "source": _LEGACY, "read_on": read_on, "created_at": created_at})
+                rows.append({"asset_id": asset_id, "key": voice, "value": value, "source": _LEGACY, "read_on": first_days[asset_id], "created_at": created_at})
     if rows:
         updates = sa.table(
             _PROFILE_UPDATES,
@@ -313,17 +346,40 @@ def _downgrade_plugin_call_counters(conn: sa.engine.Connection) -> None:
         op.drop_table(_CALL_COUNTERS)
 
 
+# ─── step charge_links (project 66, lot R1) ──────────────────────────────────────────────────────────────────────────
+
+_TRANSACTIONS = "transactions"
+_PARENT_COLUMN = "parent_transaction_id"
+_PARENT_INDEX = "idx_transactions_parent"
+
+
+def _upgrade_charge_links(conn: sa.engine.Connection) -> None:
+    """Step ``charge_links``: add ``transactions.parent_transaction_id`` and its partial index, those missing."""
+    if _PARENT_COLUMN not in _columns(conn, _TRANSACTIONS):
+        conn.execute(sa.text(f"ALTER TABLE {_TRANSACTIONS} ADD COLUMN {_PARENT_COLUMN} INTEGER REFERENCES {_TRANSACTIONS} (id) DEFERRABLE INITIALLY DEFERRED"))
+    conn.execute(sa.text(f"CREATE INDEX IF NOT EXISTS {_PARENT_INDEX} ON {_TRANSACTIONS} ({_PARENT_COLUMN}) WHERE {_PARENT_COLUMN} IS NOT NULL"))
+
+
+def _downgrade_charge_links(conn: sa.engine.Connection) -> None:
+    """Step ``charge_links`` undone: drop the index, then the column, those still there."""
+    conn.execute(sa.text(f"DROP INDEX IF EXISTS {_PARENT_INDEX}"))
+    if _PARENT_COLUMN in _columns(conn, _TRANSACTIONS):
+        conn.execute(sa.text(f"ALTER TABLE {_TRANSACTIONS} DROP COLUMN {_PARENT_COLUMN}"))
+
+
 def upgrade() -> None:
     """The steps of the docstring, one line each."""
     conn = op.get_bind()
     _upgrade_asset_profile(conn)
     _upgrade_asset_profile_legacy_copy(conn)
     _upgrade_plugin_call_counters(conn)
+    _upgrade_charge_links(conn)
 
 
 def downgrade() -> None:
     """Back to 1.3, step by step, in the reverse order of ``upgrade``."""
     conn = op.get_bind()
+    _downgrade_charge_links(conn)
     _downgrade_plugin_call_counters(conn)
     _downgrade_asset_profile_legacy_copy(conn)
     _downgrade_asset_profile(conn)

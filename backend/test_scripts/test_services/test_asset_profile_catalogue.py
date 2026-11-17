@@ -12,6 +12,8 @@ Pure: no database, no server, no network.
     table — what is accepted and its stored form, what is refused.
 (d) The stored form is deterministic (same fact, same form whatever its spelling) and idempotent, also after a JSON
     round trip.
+(e) The labels of the windows (lot E10c2; topics, E7b): every voice, choice, group, unit and topic has its label in the four languages, in
+    ``frontend/src/lib/features/assets/profile/i18n/``.
 
 Every expectation is driven by the tables of this file, never by iterating ``CATALOGUE``: an empty or partial
 catalogue must turn these tests red, not collect zero cases.
@@ -20,10 +22,11 @@ catalogue must turn these tests red, not collect zero cases.
 import json
 from datetime import date, datetime
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
-from backend.app.schemas.assets.profile import FAProfileVoice, ProfileGroup, ProfileMapKeys, ProfileShape, ProfileSign
+from backend.app.schemas.assets.profile import FAProfileVoice, ProfileGroup, ProfileMapKeys, ProfileShape, ProfileSign, ProfileTopic
 from backend.app.services.assets.profile.catalogue import CATALOGUE, ProfileValueError, get_voice, normalize_value
 
 # ============================================================================
@@ -39,6 +42,50 @@ CHOICES: dict[str, tuple[str, ...]] = {
     "day_count": ("act_act_icma", "act_act_isda", "act_360", "act_365", "30_360"),
     "legal_form": ("share", "bond", "ucits_fund", "non_ucits_fund", "etc_etn", "certificate", "derivative", "crypto", "other"),
     "issuer_type": ("sovereign", "supranational", "corporate", "vehicle"),
+}
+
+#: The topic of every voice (plan 68, E7b: PROF, round 43): what an enricher's row in the enrichers' window says it
+#: fills («costi, struttura, paesi, settori»), a short word for a family of voices. Declared where the voice is born.
+T = ProfileTopic
+TOPICS: dict[str, ProfileTopic] = {
+    "geography": T.COUNTRIES,
+    "sector": T.SECTORS,
+    "description": T.DESCRIPTION,
+    "withholding_tax": T.COSTS,
+    "ter": T.COSTS,
+    "fund_size": T.SIZE,
+    "market_cap": T.SIZE,
+    "yield_gross": T.YIELD,
+    "modified_duration": T.DURATION,
+    "coupon_rate": T.COUPONS,
+    "maturity_date": T.MATURITY,
+    "fund_provider": T.MANAGER,
+    "index_name": T.STRUCTURE,
+    "replication": T.STRUCTURE,
+    "distribution_policy": T.STRUCTURE,
+    "fund_domicile": T.STRUCTURE,
+    "fund_currency": T.STRUCTURE,
+    "inception_date": T.STRUCTURE,
+    "management_fee": T.COSTS,
+    "industry": T.SECTORS,
+    "issuer_country": T.ISSUER,
+    "coupon_period_rate": T.COUPONS,
+    "coupon_frequency": T.COUPONS,
+    "coupon_type": T.COUPONS,
+    "day_count": T.COUPONS,
+    "yield_net": T.YIELD,
+    "accrued_interest": T.COUPONS,
+    "issuer_name": T.ISSUER,
+    "min_lot": T.STRUCTURE,
+    "interest_start_date": T.COUPONS,
+    "loyalty_bonus": T.COUPONS,
+    "coupon_schedule": T.COUPONS,
+    "payout_description": T.COUPONS,
+    "legal_form": T.LEGAL_FORM,
+    "issuer_type": T.ISSUER,
+    "issuer_lei": T.ISSUER,
+    "outstanding_amount": T.SIZE,
+    "reference_price_date": T.YIELD,
 }
 
 S = ProfileShape
@@ -58,12 +105,13 @@ def _v(key, shape, *, sign=None, unit=None, groups=(), key_figure=False, charted
         volatile=volatile,
         choices=CHOICES.get(key, ()),
         map_keys=map_keys,
+        topic=TOPICS[key],
     )
 
 
 KF = (G.KEY_FIGURES,)
 
-#: The 37 voices of plan §3.6, in the catalogue's order.
+#: The 38 voices of plan §3.6, in the catalogue's order.
 EXPECTED_VOICES: tuple[FAProfileVoice, ...] = (
     _v("geography", S.MAP, groups=(G.CLASSIFICATION,), map_keys=ProfileMapKeys.COUNTRY),
     _v("sector", S.MAP, groups=(G.CLASSIFICATION, G.COMPANY), map_keys=ProfileMapKeys.SECTOR),
@@ -83,6 +131,8 @@ EXPECTED_VOICES: tuple[FAProfileVoice, ...] = (
     _v("fund_domicile", S.COUNTRY, groups=(G.FUND,)),
     _v("fund_currency", S.CURRENCY, groups=(G.FUND,)),
     _v("inception_date", S.DATE, groups=(G.FUND,)),
+    # C2e (developer, «voce sua»): the fund's management fee, only a part of the TER: a detail of the fund, not a key figure
+    _v("management_fee", S.PERCENTAGE, sign=NN, groups=(G.FUND,)),
     _v("industry", S.TEXT, groups=(G.COMPANY,)),
     _v("issuer_country", S.COUNTRY, groups=(G.COMPANY,)),
     _v("coupon_period_rate", S.PERCENTAGE, sign=NN, groups=(G.BOND,)),
@@ -134,9 +184,10 @@ def _keys_of_shape(shape: ProfileShape) -> list[str]:
 
 
 def test_expected_table_is_self_consistent():
-    """Guard on this file's own table: 37 distinct keys, the choice dict covers exactly the choice voices."""
-    assert len(EXPECTED_KEYS) == 37
-    assert len(set(EXPECTED_KEYS)) == 37
+    """Guard on this file's own table: 38 distinct keys (37 of plan §3.6, plus ``management_fee`` of C2e), the choice
+    dict covers exactly the choice voices."""
+    assert len(EXPECTED_KEYS) == 38
+    assert len(set(EXPECTED_KEYS)) == 38
     assert set(CHOICES) == set(_keys_of_shape(S.CHOICE))
 
 
@@ -730,3 +781,56 @@ def test_idempotent(key, raw):
     round_trip = json.loads(json.dumps(once))
     assert normalize_value(key, round_trip) == once
     assert json.dumps(normalize_value(key, round_trip)) == json.dumps(once)
+
+
+# ============================================================================
+# (e) The labels of the windows (lot E10c2): every voice, choice, group and unit has a label in the four languages
+# ============================================================================
+
+#: The frontend folder that holds the profile's labels (``assets.profile.*``, its ``prefixes.txt``).
+LABELS_DIR = Path(__file__).resolve().parents[3] / "frontend" / "src" / "lib" / "features" / "assets" / "profile" / "i18n"
+LANGUAGES = ("en", "it", "fr", "es")
+
+
+def _labels(language: str) -> dict:
+    return json.loads((LABELS_DIR / f"{language}.json").read_text(encoding="utf-8"))["assets"]["profile"]
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_every_voice_has_a_label(language):
+    """The catalogue drives the expectation here on purpose: a voice added to the backend without its label turns
+    this red (C2e's ``management_fee`` included)."""
+    labels = _labels(language)
+    assert set(labels["voices"]) == set(EXPECTED_KEYS) == set(CATALOGUE), "voices without a label, or labels without a voice"
+    assert all(isinstance(text, str) and text.strip() for text in labels["voices"].values())
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_every_choice_has_a_label(language):
+    labels = _labels(language)["choices"]
+    assert set(labels) == {key for key, voice in CATALOGUE.items() if voice.choices}
+    for key, voice in CATALOGUE.items():
+        if voice.choices:
+            assert set(labels[key]) == set(voice.choices), key
+            assert all(text.strip() for text in labels[key].values()), key
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_every_group_and_unit_has_a_label(language):
+    """The six groups, plus ``other`` for the voices with no group (the LEI, the amount outstanding)."""
+    labels = _labels(language)
+    assert set(labels["groups"]) == {group.value for group in ProfileGroup} | {"other"}
+    assert set(labels["units"]) == {voice.unit for voice in CATALOGUE.values() if voice.unit}
+
+
+def test_every_voice_has_a_topic_and_every_topic_a_voice():
+    """E7b: each voice declares its topic in the catalogue (the table above is the expectation), and no topic is left
+    without a voice."""
+    assert set(TOPICS) == set(EXPECTED_KEYS)
+    assert {voice.topic for voice in CATALOGUE.values()} == set(ProfileTopic)
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_every_topic_has_a_label(language):
+    """The enrichers' window says what each enricher fills in topics: every topic has its label in the four languages."""
+    assert set(_labels(language)["topics"]) == {topic.value for topic in ProfileTopic}

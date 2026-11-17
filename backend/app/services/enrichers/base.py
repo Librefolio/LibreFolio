@@ -133,6 +133,10 @@ class EnricherPlugin(PluginSettingsMixin, ABC):
     voices: ClassVar[Mapping[AssetType, frozenset[str]]]
     #: A degree for every ``AssetType``, lower first; ``None`` for a type it does not cover.
     default_priority: ClassVar[Mapping[AssetType, int | None]]
+    #: Whether the enricher reaches an external service (project 76, K1), as the asset and FX bases declare it: each
+    #: binding it reads is then counted at the enrichers' boundary, and refused when an instance limit is full. False for
+    #: an enricher that computes its answers itself, with no network (the test doubles): never counted.
+    calls_external_service: ClassVar[bool] = True
 
     @property
     def params_schema(self) -> list[dict]:

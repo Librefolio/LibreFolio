@@ -11,6 +11,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 ### ✨ Aggiunto
 
+- API delle transazioni (issue #25): una FEE o una TAX si può collegare alla transazione a cui appartiene (un Buy, Sell, Dividend, Interest, Deposit o Withdrawal dello stesso broker e asset). `POST /api/v1/transactions/validate` e `/commit` accettano `ref`, `parent_ref` e `parent_transaction_id` nelle creazioni, e `parent_transaction_id` (0 per scollegare) o `parent_ref` nelle modifiche; `GET /api/v1/transactions` restituisce `parent_transaction_id` e `charges_count` e accetta i filtri `parent_ids` e `without_parent`; `GET /api/v1/transactions/types` dà a ogni tipo il suo `charge_role`. Una transazione con spese collegate si cancella solo insieme a loro, o con loro scollegate, nello stesso batch. I form arrivano nei prossimi passi.
 - Trade Republic: importa il nuovo CSV «Esportazione transazioni» (profilo › Estratti conto › Esportazione transazioni), anche quando è stato risalvato da Excel: acquisti e vendite di fondi, azioni e crypto con commissioni e imposte, interessi con la ritenuta, imposta di bollo, rimborsi d'imposta come interessi, dividendi e bonifici. L'importatore non è più in beta, e la sua guida mostra come scaricare il file. Le righe di un altro conto, come quello di un figlio, restano fuori con una nota: quel conto va esportato dal suo accesso. Grazie a [valeriomicacchi-cpu](https://github.com/valeriomicacchi-cpu) per l'esportazione reale su cui si basa.
 - Modifica di più asset insieme: selezionali nella tabella Asset e usa «Modifica selezionati» per cambiare a tutti il tipo, il benchmark, lo stato attivo, le unità per singolo prezzo, l'icona o l'URL personale. «Verifica ora» mostra cosa blocca il salvataggio (un asset con transazioni non può diventare un Indice) e cosa merita un'occhiata (un tipo che passa a un'altra famiglia, come crowdfunding → ETF), e un riepilogo mostra ogni modifica prima del salvataggio, che è tutto o niente.
 - Analisi dei lotti in FIFO e in LIFO: il pannello dei lotti calcola i due metodi in una sola richiesta e passa dall'uno all'altro con un selettore nell'intestazione (FIFO all'apertura, non salvato). I lotti selezionati restano selezionati; cambiano col metodo il lotto chiuso da una vendita e le cifre che ne seguono. Le pagine di teoria spiegano la regola italiana (LIFO nel regime dichiarativo, costo medio nell'amministrato) e i limiti del calcolo.
@@ -29,6 +30,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Shock ipotetico: le classi di asset che uno scenario lascia fuori, con shock zero, sono nominate sotto il totale.
 - Un'icona della documentazione a destra di altri pannelli (grafici e posizioni della Dashboard, analisi dei lotti, lista e laboratorio degli asset, dettaglio dell'asset, broker, FX, file e backup, impostazioni) apre la pagina corrispondente del manuale, con una breve spiegazione del pannello nel suo tooltip.
 - Gli amministratori possono tenere attivi solo alcuni provider di prezzi e di cambi su un'istanza (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`): gli altri spariscono da elenchi, ricerca, assegnazioni e impostazioni; le assegnazioni esistenti tengono i prezzi salvati. MANUAL è sempre attivo.
+- Ricerca degli asset: cercando una criptovaluta su Yahoo Finance compare anche il suo ticker in euro (per esempio BTC-EUR accanto a BTC-USD), così si può prezzare direttamente in euro.
 
 ### 🔄 Modifiche
 
@@ -56,6 +58,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 ### 🐛 Corretto
 
+- Nel risultato del PAC le barre dell'esposizione disegnano ogni settore nel suo colore: i settori con uno spazio nel nome (Health Care, Real Estate, Consumer Discretionary…) erano disegnati nel grigio di «Non classificato».
 - Uscire mentre una pagina sta ancora caricando riporta sempre alla pagina d'accesso semplice, invece di proporre di tornare a quella pagina.
 - Nel Profilo i campi nome utente ed email sono larghi quanto quello della password, così un indirizzo lungo non viene più tagliato.
 - Caricare un file `.json` non ne perde più il contenuto, e i file con un'estensione insolita o molto lunga vengono salvati in modo sicuro.
@@ -89,6 +92,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Gli endpoint della query dei prezzi, della query degli eventi e della conversione non riportano più i cambi mancanti come testo in `errors`: arrivano in una nuova lista `fx_issues` di `{code, from_currency, to_currency, first_date, last_date, count}`, nel verso della conversione.
 - `PATCH /api/v1/assets` salva tutto o niente: se un elemento ha un problema, non si salva nulla. La risposta aggiunge `committed`, `issues` e `warnings` (codici `assetNotFound`, `indexWithTransactions`, `assetNameTaken`, `patchFailed`; avviso `assetFamilyChange`). Un nome già usato da un altro asset è segnalato come `assetNameTaken` invece che come errore generico. Il nuovo `POST /api/v1/assets/validate` fa gli stessi controlli e non salva mai.
 - `POST /api/v1/portfolio/lots/analysis` risponde con una forma nuova: le parti che non dipendono dal metodo di abbinamento (`asset_id`, `target_currency`, `quote_base_quantity`, `range`, `calculation_metadata`, `market_price_history`, `broker_wac_history`, `cumulative_wac_history`) restano in cima; tutto ciò che viene dal replay dei lotti (`calculation_status`, `data_quality`, `lots`, `gantt_segments`, `custody_history`, `lot_events`, le storie di valore, rendimento, prezzo e performance, `income_events`, `economic_allocation_groups`, gli orfani) passa sotto `methods.FIFO` / `methods.LIFO`. La richiesta accetta `matching_methods` (predefinito `["FIFO"]`).
+- AI Export: il componente `asset.identity` passa alla versione 2 e non porta più la classificazione dell'asset (paesi e settori); un componente nuovo, `asset.profile`, porta i dati del profilo dell'asset con la data di ogni valore, dovunque si esporta `asset.identity`. Un prompt o uno strumento che leggeva la classificazione da `asset.identity` ora la legge da `asset.profile`. I paesi e i settori impostati nella 1.3 valgono dal primo giorno dell'asset in LibreFolio (creazione, primo prezzo o prima transazione), così l'export di un periodo passato li riporta ancora.
 
 ## [1.3.0] - 2026-11-10
 
