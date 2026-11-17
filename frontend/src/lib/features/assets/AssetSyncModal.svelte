@@ -67,6 +67,7 @@
                     updated_count: ar.updated_count,
                     events_fetched: ar.events_fetched,
                     events_changed: ar.events_changed,
+                    history_starts: ar.history_starts,
                 }) satisfies SyncResult,
         );
     }
