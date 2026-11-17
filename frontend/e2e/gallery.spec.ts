@@ -6349,19 +6349,15 @@ test.describe('Gallery Screenshots', () => {
 
                     await openGalleryAsset(page, GALLERY_ASSET);
 
-                    // The classification (metadata) panel open. Its toggle publishes no aria-expanded: the panel is rendered only
-                    // while it is open, so the panel says whether a click is needed, and that it took.
-                    const metadataToggle = page.getByTestId('asset-detail-metadata-toggle');
-                    const metadataPanel = page.getByTestId('asset-detail-metadata-panel');
-                    await expect(metadataToggle).toBeVisible({timeout: 15_000});
-                    if (!(await metadataPanel.isVisible())) await metadataToggle.click();
-                    await expect(metadataPanel, 'the classification panel is open').toBeVisible();
-                    // Its map and pie come with the classification, after the panel: drawn, every one (Apple has both).
-                    await chartsDrawn(metadataPanel, 'the classification panel');
-                    // Framed from the top of the page, the panel 8 px under the screen's edge — or as near as the page's end
-                    // allows: the bare scroll into view it replaces depended on where the page stood, and on the charts' arrival
-                    // (plan 56, class B).
-                    await frameTarget(page, metadataPanel, `${viewport}/${lang}/${theme}/assets/detail-classification`);
+                    // The «Profilo» tab (plan 68, E3E4b), which took the place of the metadata panel: its read published,
+                    // then its classification, whose map and pie are drawn, every one (Apple has both).
+                    await page.getByTestId('asset-detail-tab-profile').click();
+                    await expect(page.getByTestId('asset-profile-tab')).toHaveAttribute('data-status', 'ready', {timeout: 15_000});
+                    const classification = page.getByTestId('profile-classification');
+                    await chartsDrawn(classification, 'the classification of the Profile tab');
+                    // Framed from the top of the page, the classification 8 px under the screen's edge — or as near as the
+                    // page's end allows (plan 56, class B).
+                    await frameTarget(page, classification, `${viewport}/${lang}/${theme}/assets/detail-classification`);
                     await screenshot(page, viewport, lang, theme, 'assets', 'detail-classification');
                 }
             }

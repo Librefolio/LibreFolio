@@ -395,8 +395,8 @@
           "description": "Abre el editor de datos para revisar los precios manuales y los eventos que afectan a la serie del activo."
         },
         "metadata": {
-          "title": "Identificadores y metadatos",
-          "description": "Amplía los metadatos para revisar identificadores, clasificación, divisa y configuración del proveedor."
+          "title": "Perfil",
+          "description": "Abre Perfil para ver qué es el activo: sus países y sectores, su descripción, sus cifras clave y sus detalles."
         },
         "risk": {
           "title": "Escenarios de riesgo",

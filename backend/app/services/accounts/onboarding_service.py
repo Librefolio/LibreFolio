@@ -41,7 +41,7 @@ ONBOARDING_FLOW_VERSIONS: Mapping[OnboardingFlow, int] = {
     OnboardingFlow.FX_DETAIL_GUIDE: 1,
     OnboardingFlow.ASSET_PAGE_GUIDE: 1,
     OnboardingFlow.ASSET_GUIDE: 1,
-    OnboardingFlow.ASSET_DETAIL_GUIDE: 1,
+    OnboardingFlow.ASSET_DETAIL_GUIDE: 2,  # 2: the metadata step points at the «Profilo» tab (plan 68, E3E4b)
     OnboardingFlow.TOOLS_PAGE_GUIDE: 1,
 }
 

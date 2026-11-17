@@ -495,8 +495,9 @@
             allowedModalDepth: 0,
             pointer: 'cursor',
         },
+        // The step keeps its id (stored in the users' progress); since plan 68 E3E4b it points at the «Profilo» tab
         'asset.detail.metadata': {
-            anchorId: 'asset.detail.metadata',
+            anchorId: 'asset.detail.profile',
             titleKey: 'onboarding.assetDetailGuide.steps.metadata.title',
             descriptionKey: 'onboarding.assetDetailGuide.steps.metadata.description',
             hostRoute: '/assets/',

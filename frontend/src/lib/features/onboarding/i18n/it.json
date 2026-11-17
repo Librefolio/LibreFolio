@@ -395,8 +395,8 @@
           "description": "Apri l’editor dati per controllare prezzi manuali ed eventi che influenzano la serie dell’asset."
         },
         "metadata": {
-          "title": "Identificatori e metadati",
-          "description": "Espandi i metadati per controllare identificatori, classificazione, valuta e configurazione provider."
+          "title": "Profilo",
+          "description": "Apri Profilo per vedere cos'è l'asset: paesi e settori, descrizione, numeri chiave e dettagli."
         },
         "risk": {
           "title": "Scenari di rischio",

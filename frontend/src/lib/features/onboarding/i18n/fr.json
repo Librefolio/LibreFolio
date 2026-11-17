@@ -395,8 +395,8 @@
           "description": "Ouvrez l’éditeur de données pour vérifier les prix manuels et les événements qui influencent la série de l’actif."
         },
         "metadata": {
-          "title": "Identifiants et métadonnées",
-          "description": "Développez les métadonnées pour examiner les identifiants, la classification, la devise et la configuration du fournisseur."
+          "title": "Profil",
+          "description": "Ouvrez Profil pour voir ce qu'est l'actif : ses pays et secteurs, sa description, ses chiffres clés et ses détails."
         },
         "risk": {
           "title": "Scénarios de risque",
