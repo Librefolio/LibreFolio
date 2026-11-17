@@ -11,11 +11,14 @@
  *   it off is the instance's choice, not the user's order (plan B2). One not configured is drawn off with «Configure».
  * - **«Non in elenco»** holds every other enricher of the catalogue, with its reason.
  * - **The last read** of a row comes from the asset's `state`, by code: a row removed and put back finds its own.
+ * - **What an enricher fills** is said in topics («costi, struttura, paesi, settori»): each voice of the catalogue
+ *   declares its topic, and the backend's order of the topics is the order shown (`topicsOf`, E7b).
  *
  * @module features/assets/enrichers/enrichersEditState
  */
 import type {z} from 'zod';
-import type {schemas} from '$lib/api';
+import {schemas} from '$lib/api/generated';
+import type {ProfileVoice} from '$lib/features/assets/profile/profileStore';
 
 // =============================================================================
 // Types
@@ -256,4 +259,19 @@ export function otherRows(draft: EnrichersDraft, context: EnrichersContext): Oth
             return {code: info.code, info, reason, binding, recognition, fills: fillsOf(info, context.assetType), canAdd: reason !== 'not_covering' && reason !== 'not_configured'};
         });
     return rows.sort((left, right) => OTHER_REASONS.indexOf(left.reason) - OTHER_REASONS.indexOf(right.reason));
+}
+
+// =============================================================================
+// What an enricher fills, in topics
+// =============================================================================
+
+/** The order the topics are shown in: the backend's (`ProfileTopic`), never a second list here. */
+const TOPIC_ORDER: readonly string[] = schemas.ProfileTopic.options;
+
+/** The topics of the voices an enricher fills: each once, in `TOPIC_ORDER`, at most `max`, and how many more. */
+export function topicsOf(voiceKeys: string[], catalogue: Pick<ProfileVoice, 'key' | 'topic'>[], max = 4): {topics: string[]; more: number} {
+    const topicOf = new Map(catalogue.map((voice) => [voice.key, voice.topic as string]));
+    const found = new Set(voiceKeys.map((key) => topicOf.get(key)).filter((topic): topic is string => topic !== undefined));
+    const ordered = TOPIC_ORDER.filter((topic) => found.has(topic));
+    return {topics: ordered.slice(0, max), more: Math.max(0, ordered.length - max)};
 }

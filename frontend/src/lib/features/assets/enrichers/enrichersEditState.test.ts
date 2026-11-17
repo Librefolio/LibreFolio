@@ -209,3 +209,27 @@ describe('a binding', () => {
 function recognition(code: string, status: string, name: string | null = null, binding: {identifier_type: string; identifier: string} = {identifier_type: 'ISIN', identifier: 'IE00BK5BQT80'}): EnricherRecognition {
     return {code, status, name, page_url: null, identifiers: {}, conflicts: {}, error: null, ...binding} as EnricherRecognition;
 }
+
+describe('what an enricher fills, in topics (E7b)', () => {
+    /** A catalogue slice: each voice declares its topic (`GET /assets/profile/catalogue`). */
+    const VOICES = [
+        {key: 'geography', topic: 'countries'},
+        {key: 'sector', topic: 'sectors'},
+        {key: 'description', topic: 'description'},
+        {key: 'ter', topic: 'costs'},
+        {key: 'management_fee', topic: 'costs'},
+        {key: 'fund_size', topic: 'size'},
+        {key: 'replication', topic: 'structure'},
+        {key: 'fund_domicile', topic: 'structure'},
+    ] as unknown as Parameters<typeof state.topicsOf>[1];
+
+    it('names the topics of its voices once, in the order the window shows them, at most four and how many more', () => {
+        const fills = ['geography', 'sector', 'description', 'ter', 'management_fee', 'fund_size', 'replication', 'fund_domicile'];
+        expect(state.topicsOf(fills, VOICES)).toEqual({topics: ['costs', 'structure', 'countries', 'sectors'], more: 2});
+    });
+
+    it('fewer than four: all of them, none more; a voice the catalogue does not list is skipped', () => {
+        expect(state.topicsOf(['sector', 'not_a_voice', 'ter'], VOICES)).toEqual({topics: ['costs', 'sectors'], more: 0});
+        expect(state.topicsOf([], VOICES)).toEqual({topics: [], more: 0});
+    });
+});
