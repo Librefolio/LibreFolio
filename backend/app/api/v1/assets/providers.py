@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
 
+from backend.app.api.plugin_errors import NOT_CONFIGURED, not_configured_error
 from backend.app.api.v1.auth import get_current_user
 from backend.app.config.plugins import DEFAULT_PROBE_RATE_LIMIT, probe_rate_limit
 from backend.app.db.models import AssetProviderAssignment, User
@@ -311,7 +312,9 @@ async def assign_providers_bulk(
 ):
     """Bulk assign providers to assets (PRIMARY bulk endpoint).
 
-    Refused, nothing written: 409 ``detail = {"error_code", "message", "params"}`` with
+    Refused, nothing written: 422 ``NOT_CONFIGURED`` (``api/plugin_errors.not_configured_error``: ``error_code``,
+    ``message``, ``missing``) when an item puts newly to use a provider that is not configured (project 76, N2; an item
+    re-saving its asset's provider passes); 409 ``detail = {"error_code", "message", "params"}`` with
     ``PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST`` (X-R49) when an item would wipe a parametric provider's events while
     a SPLIT among them has linked incoming adjustments without a purchase cost; ``params`` holds ``asset_id``,
     ``item_index`` and ``splits`` (``event_id``, ``date``, ``transaction_ids`` — only those the caller can see — and
@@ -322,6 +325,10 @@ async def assign_providers_bulk(
         success_count = sum(1 for r in results if r.success)
         return FABulkAssignResponse(results=results, success_count=success_count)
     except AssetSourceError as e:
+        if e.error_code == NOT_CONFIGURED and "plugin_code" in (e.details or {}):
+            # N2: the shared refusal of a plugin not configured (422), nothing written (the boundary's own
+            # NOT_CONFIGURED carries only ``missing``: it never reaches here, and would be a 500 as any other error)
+            raise not_configured_error(e.details["plugin_code"], e.details["missing"]) from e
         if e.error_code == "PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST":
             raise HTTPException(status_code=409, detail={"error_code": e.error_code, "message": e.message, "params": jsonable_encoder(e.details)}) from e
         logger.exception(f"Error in bulk assign providers: {e}")

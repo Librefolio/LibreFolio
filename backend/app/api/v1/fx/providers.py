@@ -11,6 +11,7 @@ from sqlalchemy.orm.exc import StaleDataError
 from sqlmodel import delete as sql_delete
 from sqlmodel import select
 
+from backend.app.api.plugin_errors import not_configured_error
 from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import FxConversionRoute, User
 from backend.app.db.session import get_session_generator
@@ -31,7 +32,7 @@ from backend.app.services.fx.catalog import get_supported_currencies_status
 from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.fx.runtime import configured_fx_provider
 from backend.app.services.fx_providers.manual.plugin import MANUAL_PRIORITY
-from backend.app.services.plugin_settings.readiness import plugins_readiness
+from backend.app.services.plugin_settings.readiness import plugin_declares_settings, plugins_readiness
 
 logger = get_logger(__name__)
 
@@ -174,6 +175,34 @@ async def list_routes(session: AsyncSession = Depends(get_session_generator), _c
         raise HTTPException(status_code=500, detail="Internal error while listing conversion routes") from e
 
 
+async def _refuse_unconfigured_new_providers(routes: List[FXConversionRouteItem], available: set[str], session: AsyncSession, user_id: int) -> None:
+    """Project 76, N2: a step provider new for its pair (no stored route of the pair, normalized alphabetically, names it)
+    and not configured refuses the whole request with the shared 422 (``not_configured_error``), before any write:
+    the first in route order, then step order. One readiness check for the request. MANUAL and the unknown codes are
+    not asked (an unknown code keeps its per-item error); a provider a stored route of the pair already uses passes. A
+    provider that declares no setting is always configured: when the request names none that does, nothing is read."""
+    asked = {step.provider.upper() for route_item in routes for step in route_item.chain_steps}
+    if not any(code in available and plugin_declares_settings(FXProviderRegistry.get_plugin(code)) for code in asked):
+        return
+    pairs = {(min(r.base.upper(), r.quote.upper()), max(r.base.upper(), r.quote.upper())) for r in routes}
+    stored: dict[tuple[str, str], set[str]] = {pair: set() for pair in pairs}
+    for route in (await session.execute(select(FxConversionRoute).where(tuple_(FxConversionRoute.base, FxConversionRoute.quote).in_(list(pairs))))).scalars().all():
+        stored[(route.base, route.quote)].update(step["provider"] for step in json.loads(route.chain_steps))
+    new: list[str] = []
+    for route_item in routes:
+        pair = (min(route_item.base.upper(), route_item.quote.upper()), max(route_item.base.upper(), route_item.quote.upper()))
+        for step in route_item.chain_steps:
+            code = step.provider.upper()
+            if code != "MANUAL" and code in available and code not in stored[pair] and code not in new:
+                new.append(code)
+    if not new:
+        return
+    states = await plugins_readiness("fx", new, user_id=user_id)
+    for code in new:
+        if not states[code].configured:
+            raise not_configured_error(code, states[code].missing)
+
+
 @router_providers.post("/routes", response_model=FXCreateRoutesResponse, status_code=201)
 async def create_routes_bulk(  # noqa: C901 — flat bulk upsert loop, per-item validation
     routes: List[FXConversionRouteItem],
@@ -218,6 +247,7 @@ async def create_routes_bulk(  # noqa: C901 — flat bulk upsert loop, per-item 
 
     try:
         available_providers = {p["code"] for p in FXProviderRegistry.list_providers()}
+        await _refuse_unconfigured_new_providers(routes, available_providers, session, _current_user.id)
 
         for route_item in routes:
             chain_steps_json = json.dumps([{"from": s.from_currency, "to": s.to_currency, "provider": s.provider} for s in route_item.chain_steps])

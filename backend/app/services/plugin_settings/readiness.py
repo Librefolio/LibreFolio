@@ -58,6 +58,11 @@ def _registry(family: str):
     return FAMILY_REGISTRIES.get(family)
 
 
+def plugin_declares_settings(plugin_class: type | None) -> bool:
+    """Whether ``plugin_class`` declares a field or a shared group: one that declares neither is always configured."""
+    return plugin_class is not None and bool(getattr(plugin_class, "settings_fields", ()) or plugin_groups(plugin_class))
+
+
 @dataclass(frozen=True)
 class _Asked:
     code: str
@@ -115,10 +120,8 @@ async def plugins_readiness(family: str, codes: Sequence[str], *, user_id: int |
     asked: list[_Asked] = []
     for code in dict.fromkeys(codes):
         plugin_class = registry.get_plugin(code) if registry is not None else None
-        fields = getattr(plugin_class, "settings_fields", ()) if plugin_class is not None else ()
-        groups = plugin_groups(plugin_class) if plugin_class is not None else ()
-        if fields or groups:
-            asked.append(_Asked(code, fields, groups))
+        if plugin_declares_settings(plugin_class):
+            asked.append(_Asked(code, getattr(plugin_class, "settings_fields", ()), plugin_groups(plugin_class)))
         else:
             answers[code] = READY
     if asked:
