@@ -11,7 +11,7 @@
     import type {PlannerAccounting, PlannerLedgerRow} from '../types';
     import {BUTTON_LINK, HINT} from '../ui';
     import ResultCell, {type ResultCellContent} from './ResultCell.svelte';
-    import {LEDGER_FIELDS, LEDGER_PAC_ZERO_FIELDS, ledgerColumns, ledgerFields, type LedgerField, type ResultNames} from './model';
+    import {ledgerColumns, ledgerFieldList, ledgerFields, ledgerHelpKey, ledgerLabelKey, type LedgerField, type ResultNames} from './model';
     import {withHelpCues} from '../shared/columnHelp';
     import TableColumns from '../shared/TableColumns.svelte';
     import {getPlannerProfile, storageKey, testId} from '../profile';
@@ -45,7 +45,10 @@
         rounding_delta: 'Rounding',
         final_spendable: 'Left available',
         final_physical: 'Physical balance',
+        transfer_in: 'Transfers in',
+        transfer_out: 'Transfers out',
     };
+    /** The English default of each help key `ledgerHelpKey` chooses, by its last segment. */
     const HELP_FALLBACKS: Record<string, string> = {
         initial_selected: 'The cash of this Broker in this currency that you made available to the plan.',
         funding_in: 'What the plan brings into this cash: deposits, transfers, and this cash itself when the orders here use it.',
@@ -58,6 +61,19 @@
         final_spendable: 'What stays in this cash at the end of the plan.',
         final_physical: 'What is left available plus the taxes you set aside.',
         alwaysZero: 'Always 0 in a PAC: it only buys.',
+        alwaysZeroInvestOnly: 'Always 0 with «Invest only»: the plan only buys.',
+        transfer_in: 'What arrives in this cash from another Broker of the plan.',
+        transfer_out: 'What leaves this cash for another Broker of the plan.',
+    };
+    /** The Rebalancer's own help for the funding columns: its deposits, and nothing going out as funding. */
+    const REBALANCER_HELP_FALLBACKS: Record<string, string> = {
+        funding_in: 'The deposits of your contributions into this cash.',
+        funding_out: 'Always 0 in the Rebalancer: money moves between Brokers as transfers, in their own columns.',
+    };
+    const fields = ledgerFieldList(profile.text);
+    const helpDefault = (key: string) => {
+        const last = key.slice(key.lastIndexOf('.') + 1);
+        return (key.startsWith('tools.portfolioRebalancer.') ? REBALANCER_HELP_FALLBACKS[last] : undefined) ?? HELP_FALLBACKS[last];
     };
 
     let showAll = $state(false);
@@ -65,10 +81,9 @@
     const data = $derived(ledgerColumns(rows));
     // R11.8: every column stays in the table, so the column button lists them all. The silent ones
     // start hidden and «show more» only changes that default: a choice made in the button wins.
-    const speaking = $derived(new Set(ledgerFields(rows, false)));
-    const hidden = $derived(LEDGER_FIELDS.length - speaking.size);
+    const speaking = $derived(new Set(ledgerFields(rows, false, fields)));
+    const hidden = $derived(fields.length - speaking.size);
     const cell = (content: ResultCellContent) => ({type: 'custom' as const, component: ResultCell, props: {cell: content}});
-    const helpKey = (field: LedgerField) => (LEDGER_PAC_ZERO_FIELDS.has(field) ? 'alwaysZero' : field);
 
     const columns = $derived.by((): ColumnDef<PlannerLedgerRow>[] =>
         withHelpCues<PlannerLedgerRow>([
@@ -82,12 +97,12 @@
                 minWidth: 180,
                 cell: (row) => cell({type: 'broker', brokerId: row.broker_id, label: names.broker(row.broker_id), broker: draft.broker(row.broker_id) ?? null, currency: row.currency, testid: testId('ledger-row', profile)}),
             },
-            ...LEDGER_FIELDS.map(
+            ...fields.map(
                 (field): ColumnDef<PlannerLedgerRow> => ({
                     id: field,
                     hiddenByDefault: !showAll && !speaking.has(field),
-                    header: () => $t(`${KEY}.fields.${field}`, {default: FALLBACKS[field]}),
-                    headerTooltip: () => $t(`${KEY}.help.${helpKey(field)}`, {default: HELP_FALLBACKS[helpKey(field)]}),
+                    header: () => $t(ledgerLabelKey(field), {default: FALLBACKS[field]}),
+                    headerTooltip: () => $t(ledgerHelpKey(field, profile.text), {default: helpDefault(ledgerHelpKey(field, profile.text))}),
                     type: 'number',
                     sortable: false,
                     filterable: false,

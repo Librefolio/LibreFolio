@@ -57,7 +57,7 @@ vi.mock('$lib/api', () => ({
 
 import en from '$lib/i18n/en.json';
 import type {PlannerExactNumber, PlannerLedgerRow, PlannerProof, PlannerReadyResult} from '../types';
-import {allocationRows, hasPlanSteps, LEDGER_FIELDS, ledgerFields, limitedEntries, notesBesideLimitsBanner, planSteps, resultBadges, type LimitedEntry, type ResultBadge} from './model';
+import {allocationRows, hasPlanSteps, LEDGER_FIELDS, ledgerFieldList, ledgerFields, ledgerHelpKey, ledgerLabelKey, limitedEntries, notesBesideLimitsBanner, planSteps, proofStatusHelpKey, resultBadges, type LimitedEntry, type ResultBadge} from './model';
 import type {RebalancerSolution} from '../types';
 import browser from './__fixtures__/rebalancer-browser.json';
 import type {PlannerResolvedRequest} from '../types';
@@ -304,5 +304,83 @@ describe('allocationRows — before, target and after (F4a step 3)', () => {
     it('the PAC has its Assets only', () => {
         const rows = allocationRows({asset_rows: solution.asset_rows});
         expect(rows.map((row) => row.kind)).toEqual(solution.asset_rows.map(() => 'asset'));
+    });
+});
+
+/**
+ * The balances' columns per Tool (F4a of project 67, step 5; contract §6.5). The Rebalancer moves money between Brokers as
+ * transfers, published as `transfer_in` and `transfer_out`; the PAC never does, and keeps its fourteen columns, four of them
+ * «always 0 in a PAC». The keys are tested, never the texts.
+ */
+describe('the ledger columns per Tool (F4a step 5)', () => {
+    const PAC_SHARED = 'tools.pacAllocator.planner.result.ledger';
+    const REBALANCER = 'tools.portfolioRebalancer.planner.result.ledger';
+
+    it('PAC ledger still marks four columns as always zero, and has no transfer column', () => {
+        expect(ledgerFieldList('pac')).toEqual([...LEDGER_FIELDS]);
+        expect(ledgerFieldList('pac')).not.toEqual(expect.arrayContaining(['transfer_in']));
+        const alwaysZero = ledgerFieldList('pac').filter((field) => ledgerHelpKey(field, 'pac') === `${PAC_SHARED}.help.alwaysZero`);
+        expect(alwaysZero).toEqual(['gross_sell_credit', 'sell_fees', 'broker_withheld_tax', 'self_reserved_tax']);
+        expect(ledgerHelpKey('funding_in', 'pac')).toBe(`${PAC_SHARED}.help.funding_in`);
+        expect(ledgerLabelKey('funding_in')).toBe(`${PAC_SHARED}.fields.funding_in`);
+    });
+
+    it('the Rebalancer has the transfer columns after the funding ones, in the order of the ledger identity', () => {
+        const fields = ledgerFieldList('rebalancer');
+        expect(fields.slice(0, 5)).toEqual(['initial_selected', 'funding_in', 'funding_out', 'transfer_in', 'transfer_out']);
+        expect(fields.filter((field) => !field.startsWith('transfer_'))).toEqual([...LEDGER_FIELDS]);
+        expect(ledgerLabelKey('transfer_in')).toBe(`${REBALANCER}.fields.transfer_in`);
+        expect(ledgerLabelKey('transfer_out')).toBe(`${REBALANCER}.fields.transfer_out`);
+    });
+
+    it('the Rebalancer help: deposits, no funding out, its transfers, sales at 0 with «Invest only»; never the PAC note', () => {
+        const help = Object.fromEntries(ledgerFieldList('rebalancer').map((field) => [field, ledgerHelpKey(field, 'rebalancer')]));
+        expect(Object.values(help)).not.toContain(`${PAC_SHARED}.help.alwaysZero`);
+        expect(help.funding_in).toBe(`${REBALANCER}.help.funding_in`);
+        expect(help.funding_out).toBe(`${REBALANCER}.help.funding_out`);
+        expect(help.transfer_in).toBe(`${REBALANCER}.help.transfer_in`);
+        expect(help.transfer_out).toBe(`${REBALANCER}.help.transfer_out`);
+        for (const field of ['gross_sell_credit', 'sell_fees', 'broker_withheld_tax', 'self_reserved_tax']) expect(help[field]).toBe(`${REBALANCER}.help.alwaysZeroInvestOnly`);
+        expect(help.buy_debit).toBe(`${PAC_SHARED}.help.buy_debit`);
+    });
+
+    it('every name and help the two Tools may read is in the catalogue', () => {
+        for (const text of ['pac', 'rebalancer'] as const)
+            for (const field of ledgerFieldList(text)) {
+                expect(catalogueMessage(ledgerLabelKey(field)), ledgerLabelKey(field)).toBeTypeOf('string');
+                expect(catalogueMessage(ledgerHelpKey(field, text)), ledgerHelpKey(field, text)).toBeTypeOf('string');
+            }
+    });
+
+    it("on the engine's G5 answer the transfer columns speak", () => {
+        const rows = (browser.result.primary_solution as unknown as RebalancerSolution).ledger_rows;
+        expect(ledgerFields(rows, false, ledgerFieldList('rebalancer'))).toEqual(expect.arrayContaining(['transfer_in', 'transfer_out']));
+        expect(ledgerFields(rows, true, ledgerFieldList('rebalancer'))).toEqual(ledgerFieldList('rebalancer'));
+    });
+});
+
+/**
+ * F4a of project 67, step 6 (the D4 follow-up): a Rebalancer tie-break can be unfinished without any limit, its plan set
+ * aside by the exact comparison; its «Status» help says so. The PAC keeps its own (its cascade has no such stage).
+ */
+describe('the «Status» help of the solver stages', () => {
+    it("is the Rebalancer's own, and the PAC keeps the shared one", () => {
+        expect(proofStatusHelpKey('rebalancer')).toBe('tools.portfolioRebalancer.planner.result.proof.help.status');
+        expect(proofStatusHelpKey('pac')).toBe('tools.pacAllocator.planner.result.proof.help.status');
+    });
+});
+
+/**
+ * F4a of project 67, step 7: the Rebalancer's «Proven optimal» badge says what is proven, its objective (the score, or
+ * the distance then the money lost), not «objective by objective in the order chosen in Strategy»: its tie-breaks may
+ * stop earlier, and they only choose among plans as good. Every other help is shared; the PAC keeps its own.
+ */
+describe('resultBadges — the Rebalancer proof badge', () => {
+    const proven: ProofCase = {proof: 'optimal_proven', outcome: 'incumbent_found', stop_reason: 'time_limit', help: '', why: ''};
+    it('names the objective it proves, the tie-breaks apart', () => {
+        const help = badgeById(resultBadges(readyResult(proven), 'rebalancer'), 'proof').help;
+        expect(help.key).toBe('tools.portfolioRebalancer.planner.result.badges.help.optimalProven');
+        expect(catalogueMessage(help.key), 'the key is in the catalogue').toBeTypeOf('string');
+        expect(badgeById(resultBadges(readyResult(proven)), 'proof').help.key, 'the PAC keeps its own').toBe('tools.pacAllocator.planner.result.badges.help.optimalProven');
     });
 });

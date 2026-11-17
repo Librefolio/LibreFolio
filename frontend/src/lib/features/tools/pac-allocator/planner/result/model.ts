@@ -60,6 +60,10 @@ const NOT_PROVEN_REASON_HELP: Record<string, BadgeHelp> = {
         fallback: 'The limits leave no room for rounding, so the plan was found counting the rounding in its favour. It respects the limits once any top-up shown is added, but it is not proven to be the best.',
     },
 };
+/** The Rebalancer's proven optimum: its objective, the tie-breaks apart (F4a of project 67, step 7). */
+const REBALANCER_OPTIMAL_PROVEN =
+    "The solver proved that no plan has a better score (with «Target first»: a smaller distance from the targets, then less money lost), and the exact check of the plan matches its numbers. The tie-breaks after it may have stopped earlier: they only choose among plans just as good. The proof holds within the solver's small calculation margin, which grows with the amounts.";
+
 /** Lot ZB of project 67: a search that ended, with no limit, without a plan the exact check accepts. */
 export const NO_PLAN_COMPLETED = 'The search ended without a plan that can be carried out within these limits. This is not a proof that no plan exists.';
 const NO_INCUMBENT_COMPLETED_HELP: BadgeHelp = {key: 'tools.pacAllocator.planner.result.states.noIncumbent.completedBody', fallback: NO_PLAN_COMPLETED};
@@ -73,8 +77,11 @@ export function isReady(result: PlannerResult): result is PlannerReadyResult {
     return result.availability === 'ready';
 }
 
-/** Four fields, four badges: availability, outcome, proof, stop reason (C1). "Completed" never means optimal. */
-export function resultBadges(result: PlannerReadyResult): ResultBadge[] {
+/**
+ * Four fields, four badges: availability, outcome, proof, stop reason (C1). "Completed" never means optimal. `text` is the
+ * Tool's (F4a of project 67, step 7): the Rebalancer's proof names its objective, not the Strategy's order.
+ */
+export function resultBadges(result: PlannerReadyResult, text: 'pac' | 'rebalancer' = 'pac'): ResultBadge[] {
     const badges: ResultBadge[] = [];
     const verified = 'primary_solution' in result && result.primary_solution.validation === 'decimal_verified';
     switch (result.outcome) {
@@ -127,10 +134,16 @@ export function resultBadges(result: PlannerReadyResult): ResultBadge[] {
                 key: 'tools.pacAllocator.planner.result.badges.optimalProven',
                 fallback: 'Proven optimal',
                 tone: 'success',
-                help: {
-                    key: 'tools.pacAllocator.planner.result.badges.help.optimalProven',
-                    fallback: "The solver proved that no better plan exists, objective by objective in the order chosen in Strategy, and the exact check of the plan matches its numbers. The proof holds within the solver's small calculation margin, which grows with the amounts.",
-                },
+                help:
+                    text === 'rebalancer'
+                        ? {
+                              key: 'tools.portfolioRebalancer.planner.result.badges.help.optimalProven',
+                              fallback: REBALANCER_OPTIMAL_PROVEN,
+                          }
+                        : {
+                              key: 'tools.pacAllocator.planner.result.badges.help.optimalProven',
+                              fallback: "The solver proved that no better plan exists, objective by objective in the order chosen in Strategy, and the exact check of the plan matches its numbers. The proof holds within the solver's small calculation margin, which grows with the amounts.",
+                          },
             });
             break;
         case 'not_proven':
@@ -445,13 +458,61 @@ export function allocationRows<A extends {asset_id: string}>(solution: {asset_ro
 
 // -- ledger, transposed (one column per Broker × currency) ----------------------------
 
-/** Every balance column, in the order of the ledger identity (`schemas/pac_allocator/rows.py`, `PlannerLedgerRow`). */
+/** The PAC's balance columns, in the order of the ledger identity (`schemas/pac_allocator/rows.py`, `PlannerLedgerRow`). */
 export const LEDGER_FIELDS = ['initial_selected', 'funding_in', 'funding_out', 'fx_debit', 'fx_credit', 'gross_sell_credit', 'buy_debit', 'buy_fees', 'sell_fees', 'broker_withheld_tax', 'self_reserved_tax', 'rounding_delta', 'final_spendable', 'final_physical'] as const;
 
-export type LedgerField = (typeof LEDGER_FIELDS)[number];
+/**
+ * The Rebalancer's: the PAC's and its transfers between Brokers, after the funding (F4a of project 67, step 5; contract
+ * §6.5). A PAC never posts a transfer, so its table keeps its fourteen columns.
+ */
+export const REBALANCER_LEDGER_FIELDS = [
+    'initial_selected',
+    'funding_in',
+    'funding_out',
+    'transfer_in',
+    'transfer_out',
+    'fx_debit',
+    'fx_credit',
+    'gross_sell_credit',
+    'buy_debit',
+    'buy_fees',
+    'sell_fees',
+    'broker_withheld_tax',
+    'self_reserved_tax',
+    'rounding_delta',
+    'final_spendable',
+    'final_physical',
+] as const;
+
+export type LedgerField = (typeof REBALANCER_LEDGER_FIELDS)[number];
+
+/** The balance columns of a Tool's table. */
+export function ledgerFieldList(text: 'pac' | 'rebalancer'): readonly LedgerField[] {
+    return text === 'rebalancer' ? REBALANCER_LEDGER_FIELDS : LEDGER_FIELDS;
+}
 
 /** Always 0 in a PAC, which only buys and sets no tax aside. */
 export const LEDGER_PAC_ZERO_FIELDS: ReadonlySet<LedgerField> = new Set(['gross_sell_credit', 'sell_fees', 'broker_withheld_tax', 'self_reserved_tax']);
+
+const LEDGER_KEY = 'tools.pacAllocator.planner.result.ledger';
+const REBALANCER_LEDGER_KEY = 'tools.portfolioRebalancer.planner.result.ledger';
+
+/** The column's name: the transfers are the Rebalancer's own, every other name is shared. */
+export function ledgerLabelKey(field: LedgerField): string {
+    return field === 'transfer_in' || field === 'transfer_out' ? `${REBALANCER_LEDGER_KEY}.fields.${field}` : `${LEDGER_KEY}.fields.${field}`;
+}
+
+/**
+ * The column's help. The PAC's sale and tax columns are «always 0 in a PAC». The Rebalancer's funding is its deposits (it
+ * declares no funding route, so nothing goes out as funding: money moves between Brokers as transfers), and with «Invest
+ * only», the one strategy until C1, its sale and tax columns are 0 too. Every other help is shared.
+ */
+export function ledgerHelpKey(field: LedgerField, text: 'pac' | 'rebalancer'): string {
+    if (text === 'pac') return LEDGER_PAC_ZERO_FIELDS.has(field) ? `${LEDGER_KEY}.help.alwaysZero` : `${LEDGER_KEY}.help.${field}`;
+    if (LEDGER_PAC_ZERO_FIELDS.has(field)) return `${REBALANCER_LEDGER_KEY}.help.alwaysZeroInvestOnly`;
+    if (field === 'funding_in' || field === 'funding_out' || field === 'transfer_in' || field === 'transfer_out') return `${REBALANCER_LEDGER_KEY}.help.${field}`;
+    return `${LEDGER_KEY}.help.${field}`;
+}
 
 /** Always shown: where each cash starts and where it ends. */
 const LEDGER_ANCHORS: ReadonlySet<LedgerField> = new Set(['initial_selected', 'final_spendable']);
@@ -463,9 +524,18 @@ function ledgerFieldSpeaks(rows: readonly PlannerLedgerRow[], field: LedgerField
     return rows.some((row) => decimalSign(row[field]) !== 0);
 }
 
-/** R9.8: the balance columns to show; `all` brings back the silent ones. */
-export function ledgerFields(rows: readonly PlannerLedgerRow[], all: boolean): LedgerField[] {
-    return LEDGER_FIELDS.filter((field) => all || LEDGER_ANCHORS.has(field) || ledgerFieldSpeaks(rows, field));
+/**
+ * The help on the «Status» of the solver's stages. The Rebalancer's names one more reason a stage is unfinished: a
+ * tie-break whose plan was set aside because it was no better, in exact arithmetic, on the objectives above (D4 of
+ * project 67). The PAC's cascade has no such stage.
+ */
+export function proofStatusHelpKey(text: 'pac' | 'rebalancer'): string {
+    return text === 'rebalancer' ? 'tools.portfolioRebalancer.planner.result.proof.help.status' : 'tools.pacAllocator.planner.result.proof.help.status';
+}
+
+/** R9.8: the balance columns to show, of a Tool's `fields` (the PAC's by default); `all` brings back the silent ones. */
+export function ledgerFields(rows: readonly PlannerLedgerRow[], all: boolean, fields: readonly LedgerField[] = LEDGER_FIELDS): LedgerField[] {
+    return fields.filter((field) => all || LEDGER_ANCHORS.has(field) || ledgerFieldSpeaks(rows, field));
 }
 
 export function ledgerColumns(rows: readonly PlannerLedgerRow[]): PlannerLedgerRow[] {

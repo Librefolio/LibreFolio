@@ -225,3 +225,19 @@ describe('a plan with a rounding top-up', () => {
         expect(shown).not.toContain('NaN');
     });
 });
+
+/**
+ * F4a of project 67, step 5: the balances carry the transfers between Brokers as their own columns. On the engine's G5
+ * answer Broker 1 receives what Broker 2 sends: each column shows a cell per row, the published amounts.
+ */
+describe('the Rebalancer balances', () => {
+    it('show the transfers in and out, one cell per Broker and currency', async () => {
+        mounted(browser);
+        const section = screen.getAllByTestId('rebalancer-planner-result-section').find((item) => item.getAttribute('data-section') === 'ledger');
+        await fireEvent.click(section?.querySelector('[data-testid="rebalancer-planner-result-section-toggle"]') as HTMLElement);
+        flushSync();
+        const ledger = screen.getByTestId('rebalancer-planner-ledger');
+        const rows = browser.result.primary_solution.ledger_rows;
+        for (const field of ['transfer_in', 'transfer_out']) expect(ledger.querySelectorAll(`[data-testid="rebalancer-planner-ledger-${field}"]`)).toHaveLength(rows.length);
+    });
+});
