@@ -17,11 +17,13 @@ Test Suite: the enrichers and the profile of an asset through the asset routes (
    created.
 5. B4, ``POST /assets/enrichers/recognize`` (Server-Sent Events, each ``data: {json}`` with an ``event`` key): with an
    ISIN and ``codes: ["mockenrich"]``, one ``enricher_result`` found with ``lei_of(isin)``, one ``identifier_learned``
-   LEI from mockenrich, and last ``done`` with ``found_order``, ``default_order`` (the enrichers covering the type) and
-   every identifier known. An ``UNKNOWN…`` ISIN is not found and teaches nothing; ``codes`` leaving mockenrich out
+   LEI from mockenrich, and last ``done`` with ``found_order``, ``default_order`` (the catalogue's order of the type,
+   restricted to the codes asked, in that order) and every identifier known. An ``UNKNOWN…`` ISIN is not found and
+   teaches nothing; ``codes`` leaving mockenrich out
    asks nothing (assumed: a code not installed is ignored); a type mockenrich does not cover asks nothing; empty
-   ``identifiers`` is a 422; without ``codes`` mockenrich is asked too (only its events read). Every other recognize
-   names ``codes``: an enricher of a later lot is never reached over the network with a fake ISIN.
+   ``identifiers`` is a 422; without ``codes`` mockenrich is asked too (only its events read), on CRYPTO, a type no
+   real enricher covers. Every other recognize names ``codes``: a real enricher is never reached over the network with
+   a fake ISIN.
 6. B4, ``GET /assets/enrichers/{code}/search``: mockenrich does not search → 400 with a detail; unknown code → 404.
    ``POST /assets/enrichers/{code}/test``: mockenrich's answer for the binding (found, name, page, the LEI; not found
    for ``UNKNOWN…``); unknown code → 404; an asset of the test bound to the same binding is unchanged after it.
@@ -616,7 +618,9 @@ async def test_recognize_streams_mockenrich_found_its_learned_lei_and_done(test_
     done = events[-1]
     assert done["found_order"] == [MOCK_CODE], f"found_order: {done}"
     assert done["identifiers"] == {"ISIN": isin, "LEI": lei_of(isin)}, f"every identifier known at the end: {done}"
-    assert MOCK_CODE in done["default_order"] and sorted(done["default_order"]) == sorted(etf_order), f"default_order: the enrichers covering ETF: {done['default_order']} vs {etf_order}"
+    # The route restricts default_order to the enrichers asked (codes): the catalogue's ETF order, the codes asked only
+    asked_order = [code for code in etf_order if code in {MOCK_CODE}]
+    assert MOCK_CODE in done["default_order"] and done["default_order"] == asked_order, f"default_order: the catalogue's ETF order {etf_order} restricted to the codes asked: {done['default_order']} vs {asked_order}"
     print_success("found, LEI learned, done")
 
 
@@ -638,14 +642,16 @@ async def test_recognize_an_unknown_isin_is_not_found_and_teaches_nothing(test_s
 @pytest.mark.asyncio
 async def test_recognize_without_codes_asks_every_installed_enricher(test_server):
     """No ``codes``: every installed enricher covering the type is asked, mockenrich among them. Only mockenrich's events
-    are read. Today mockenrich is the only enricher installed: the lot that adds a real one must make sure this test
-    never reaches its source over the network (a test mode of its own, or ``codes`` here)."""
+    are read. The type is CRYPTO, which mockenrich covers and the real enrichers do not (justETF covers the ETF family
+    and COMMODITY; Borsa Italiana, Yahoo and ESMA leave CRYPTO out in their plans): with no ``codes`` the server asks
+    every installed enricher covering the type, so an ETF here would send the fake ISIN to justetf.com. A real enricher
+    that comes to cover CRYPTO must move this test to another type only mockenrich covers."""
     from backend.app.services.enricher_providers.mockenrich.plugin import lei_of  # noqa: PLC0415 — the plugin's own rule, read in the test body
 
     isin = _fake_isin()
     async with httpx.AsyncClient() as client:
         await _login(client)
-        events = await _recognize(client, {"asset_type": "ETF", "identifiers": {"ISIN": isin}})
+        events = await _recognize(client, {"asset_type": "CRYPTO", "identifiers": {"ISIN": isin}})
 
     assert [(result["identifier"], result["status"]) for result in _results(events, MOCK_CODE)] == [(isin, "found")], f"mockenrich is asked and finds the ISIN: {events}"
     assert ("LEI", lei_of(isin), MOCK_CODE) in {(event["identifier_type"], event["identifier"], event["source"]) for event in _learned_events(events)}, f"the LEI learned from mockenrich: {events}"
@@ -676,7 +682,8 @@ async def test_recognize_asks_only_the_enrichers_covering_the_type(test_server):
         index_order = await _catalogue_order(client, "INDEX")
 
     assert _results(events, MOCK_CODE) == [], f"mockenrich does not cover INDEX: {events}"
-    assert events[-1]["found_order"] == [] and sorted(events[-1]["default_order"]) == sorted(index_order), f"done: {events[-1]}"
+    asked_order = [code for code in index_order if code in {MOCK_CODE}]
+    assert events[-1]["found_order"] == [] and events[-1]["default_order"] == asked_order, f"done: the catalogue's INDEX order {index_order} restricted to the codes asked {asked_order}: {events[-1]}"
 
 
 @pytest.mark.asyncio
