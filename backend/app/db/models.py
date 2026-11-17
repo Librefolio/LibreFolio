@@ -637,6 +637,31 @@ class PluginSystemSetting(SQLModel, table=True):
     )
 
 
+class PluginCallCounter(SQLModel, table=True):
+    """How many calls a plugin (or a shared group, ``family="group"``) made to its external service (project 76, U1).
+
+    One row per ``family`` and ``plugin_code``. Five calendar windows aligned in UTC — minute, hour, day, ISO week, month
+    — each with the start of the window its count belongs to (``<window>_since``, epoch seconds) and the count.
+    ``services/platform/call_counter.py`` writes it, one atomic statement per call, and reads it for the settings page.
+    """
+
+    __tablename__ = "plugin_call_counters"
+
+    family: str = Field(sa_column=Column(String(16), primary_key=True, nullable=False))
+    plugin_code: str = Field(sa_column=Column(String(64), primary_key=True, nullable=False))
+    minute_since: int = Field(sa_column=Column(Integer, nullable=False))
+    minute_count: int = Field(sa_column=Column(Integer, nullable=False))
+    hour_since: int = Field(sa_column=Column(Integer, nullable=False))
+    hour_count: int = Field(sa_column=Column(Integer, nullable=False))
+    day_since: int = Field(sa_column=Column(Integer, nullable=False))
+    day_count: int = Field(sa_column=Column(Integer, nullable=False))
+    week_since: int = Field(sa_column=Column(Integer, nullable=False))
+    week_count: int = Field(sa_column=Column(Integer, nullable=False))
+    month_since: int = Field(sa_column=Column(Integer, nullable=False))
+    month_count: int = Field(sa_column=Column(Integer, nullable=False))
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=UtcDateTime, nullable=False)
+
+
 class PluginUserSetting(SQLModel, table=True):
     """A plugin setting of one user (``scope = user``): a preference, or a personal secret, written by that user only.
 
