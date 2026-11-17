@@ -610,3 +610,16 @@ describe('L3RiskAdjusted — on one asset, in the asset’s words', () => {
         expect(normalize(screen.getByTestId('risk-l3-scatter-line').textContent)).toBe(normalize(t('risk.levels.l3.scatter.notes.line')));
     });
 });
+
+// RN-18 (the consultant, 17/11/2026, option A): on the Asset Detail, volatility, annual return, Sharpe and Sortino live
+// only in L3's asset row — «How does it move?» does not repeat them — so the row must stand without a benchmark chosen.
+describe('L3RiskAdjusted — on one asset with no benchmark, the asset’s four figures', () => {
+    it('draws the asset’s row with its volatility, annual return, Sortino and Sharpe, and no benchmark row', () => {
+        mount({historicalResults: [HISTORICAL_KPI], currentResults: [ASSET_RISK_RETURN, CURRENT_KPI], comparisonResult: null, subjectLabel: 'Invented ETF', oneAsset: true} as Props);
+
+        expect(drawnOrder()).toEqual(['ref-portfolio']);
+        for (const column of ['volatility', 'expectedReturn', 'sortino', 'sharpe']) {
+            expect(cellOf('ref-portfolio', column).textContent?.trim(), `the asset's ${column} is not drawn without a benchmark`).toMatch(/\d/);
+        }
+    });
+});

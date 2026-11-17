@@ -12,6 +12,7 @@
     import {withWholeBroker} from '../riskRequest';
 
     import L1HowMuchItHurts from './L1HowMuchItHurts.svelte';
+    import HowItMoves from './HowItMoves.svelte';
     import L2Diversification from './L2Diversification.svelte';
     import L3Benchmark from './L3Benchmark.svelte';
     import L3RiskAdjusted from './L3RiskAdjusted.svelte';
@@ -26,7 +27,8 @@
     import {levelErrorHealth, partialNotice} from './partialNotice';
     import RiskPartialNotice from './RiskPartialNotice.svelte';
     import {selectKpiWave} from './l3Helpers';
-    import {resultByCode, DAILY_VAR_INSTANCE, MONTHLY_VAR_INSTANCE} from '../riskAnalysisHelpers';
+    import {resultByCode, resultByInstance, DAILY_VAR_INSTANCE, MONTHLY_VAR_INSTANCE} from '../riskAnalysisHelpers';
+    import {buildMoveFigures, moveLead} from '../moveFigures';
     import {formatPercent} from '$lib/utils/core/formatPercent';
 
     /**
@@ -137,6 +139,10 @@
     const L1_LABELS = {[DAILY_VAR_INSTANCE]: 'risk.levels.l1.rows.day', [MONTHLY_VAR_INSTANCE]: 'risk.levels.l1.rows.month'};
 
     let l1Results = $derived(historicalResults.filter((result) => L1_CODES.includes(result.analytic_code)));
+    // «How does it move?» (RN-18) reads L1's own answers — the KPI, the 30-day VaR's best window, the drawdown summary —
+    // and asks nothing of its own; so it declares nothing either: what failed is said once, in L1's frame.
+    let moveFigures = $derived(buildMoveFigures(resultByCode(historicalResults, 'historical_kpi'), resultByInstance(historicalResults, MONTHLY_VAR_INSTANCE), resultByCode(historicalResults, 'drawdown_summary')));
+    let moveHeadline = $derived(moveLead(moveFigures, $t));
     // L3 declares what it draws (F2b): the benchmark comparison, the KPI of the wave
     // `L3RiskAdjusted` picks — the current composition's when it came back, through
     // the same `selectKpiWave` — and the current composition's risk/return scatter.
@@ -345,6 +351,12 @@
              frame places the icon — beside the toggle on L4, which is collapsible. -->
         <RiskLevelSection level={1} title={$t('risk.levels.l1.title')} testId="risk-level-1" docsPath="financial-theory/technical-analysis/risk-metrics/" health={levelErrorHealth(l1Health)} errorCodes={l1Errors} metadata={l1Metadata}>
             <L1HowMuchItHurts {historicalResults} {scopeValue} currency={targetCurrency} loading={initialLoading} />
+        </RiskLevelSection>
+
+        <!-- RN-18 (Q21 c, Q22 a): the positive twin of L1, the same block on every surface. No health of its own: its answers
+             are L1's, and a second amber frame would repeat L1's word for word. -->
+        <RiskLevelSection level="move" title={$t('risk.levels.move.title')} lead={moveHeadline} testId="risk-level-move" docsPath="financial-theory/technical-analysis/risk-metrics/">
+            <HowItMoves figures={moveFigures} {scopeValue} currency={targetCurrency} loading={initialLoading} />
         </RiskLevelSection>
 
         <!-- One asset (RN-17): nothing to diversify — correlation and risk contribution do not declare the asset scope. -->

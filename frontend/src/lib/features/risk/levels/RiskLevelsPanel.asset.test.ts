@@ -108,6 +108,18 @@ describe('RiskLevelsPanel — on one asset, the levels that have meaning on one 
         open.mockRestore();
     });
 
+    // RN-18 (Q22 a): «How does it move?» is one block on every surface, right after «How much can it hurt?».
+    it('draws «How does it move?» right after «How much can it hurt?», on one asset and on a portfolio', async () => {
+        for (const scope of [{kind: 'asset', asset_id: 7}, {kind: 'portfolio'}] as RiskScope[]) {
+            const view = mountPanel(scope);
+            await waitFor(() => expect(screen.getByTestId('risk-levels-panel')).toHaveAttribute('data-catalog', 'ready'));
+            const order = [...screen.getByTestId('risk-levels-panel').querySelectorAll('[data-level]')].map((section) => section.getAttribute('data-level'));
+            expect(order.slice(0, 2), `${scope.kind}: the block is not second`).toEqual(['1', 'move']);
+            expect(screen.getByTestId('risk-level-move')).toBeInTheDocument();
+            view.unmount();
+        }
+    });
+
     it('keeps «Am I diversified?» on a portfolio: the Dashboard draws what it drew before', async () => {
         mountPanel({kind: 'portfolio'} as RiskScope);
 
