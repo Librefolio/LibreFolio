@@ -32,7 +32,7 @@
     import {ensureCurrenciesLoaded, getAllCurrencies} from '$lib/stores/reference/currencyStore';
     import {ensureCountriesLoaded, getAllCountries} from '$lib/stores/reference/countryStore';
     import {currentLanguage} from '$lib/stores/app/language';
-    import {fractionToPercent} from '$lib/features/tools/pac-allocator/planner/decimal';
+    import {fractionToPercent} from '$lib/utils/core/exactDecimal';
     import ProviderComparisonModal from '../ProviderComparisonModal.svelte';
     import type {DiffItem} from '../ProviderComparisonModal.svelte';
     import {patchIssueMessage, type AssetPatchAnswer, type AssetPatchIssue} from '../assetPatchResult';

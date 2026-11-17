@@ -19,7 +19,7 @@
  *
  * @module features/assets/profile/profileEditState
  */
-import {canonicalDecimal, canonicalInput, compareDecimal, fractionToPercent, percentToFraction} from '$lib/features/tools/pac-allocator/planner/decimal';
+import {canonicalDecimal, canonicalInput, compareDecimal, fractionToPercent, percentToFraction} from '$lib/utils/core/exactDecimal';
 import type {ProfileVoice} from './profileStore';
 
 // =============================================================================
