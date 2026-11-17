@@ -455,6 +455,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/transactions/EventReconciliationModal.test.ts",
             "src/lib/features/assets/AssetDataEditorSection.test.ts",
             "src/lib/features/assets/ProviderComparisonModal.test.ts",
+            "src/lib/features/assets/profile/ProfileEditModal.test.ts",
             "src/lib/features/assets/CellDateRange.test.ts",
             "src/lib/features/assets/ProviderAssignmentSection.test.ts",
             "src/lib/features/assets/providerProbeState.test.ts",
