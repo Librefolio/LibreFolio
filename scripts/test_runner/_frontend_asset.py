@@ -296,6 +296,18 @@ def front_asset_live_pause(verbose: bool = False, ui: bool = False, headed: bool
     return _run_playwright("assets/asset-live-pause.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_asset_provider_not_configured(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the «Search online» not-configured provider E2E (project 76, N3a), on both projects."""
+    print_section("Frontend Asset Search — Provider Not Configured Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("assets/asset-provider-not-configured.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
+
+
 def front_asset_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all Asset tests (unit + E2E)."""
     if _common.nothing_left_to_run("front-asset"):
@@ -414,6 +426,14 @@ def populate_registry(registry: dict) -> None:
         name="Asset Live Updates Pause",
         desc="Live prices pause when the tab is hidden or after 2 minutes without input and resume at once; list every 60 s, detail one request every 30 s, none on a past range (Z1, F26); on a failing endpoint the detail's requests come 60, 120, 240, 480, 600 and 600 s apart, and an answer with every asset RATE_LIMITED holds the list's next request until its retry_after, counted from the answer (Z7c); «today» is the user's calendar day (Z-3): at 21:00 in New York (01:00 UTC the next day) a range ending today polls on both pages and the detail's summary shows the quote, at 00:30 in Rome (22:30 UTC the day before) a range that ended yesterday polls on neither",
         tests="assets/asset-live-pause.spec.ts",
+    )
+    add_test(
+        cat,
+        "asset-provider-not-configured",
+        front_asset_provider_not_configured,
+        name="Asset Search Provider Not Configured",
+        desc="Project 76 N3a, desktop and mobile: a provider the list says is not configured (justETF, patched in the page's own route; the search stream simulated) gets a switched-off chip, kept in its place and never named in a search; a touch opens the common window — a member sees the read-only settings link and no Configure, an administrator's Configure opens the plugin's settings (closed, nothing saved), the managed profile has no button and closes on Escape",
+        tests="assets/asset-provider-not-configured.spec.ts",
     )
     add_test(cat, "all", front_asset_all, test_names=False, name="All Asset Tests", desc="Run all Asset tests (unit + E2E)")
     registry["front-asset"] = cat

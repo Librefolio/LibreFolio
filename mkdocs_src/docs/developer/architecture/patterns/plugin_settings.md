@@ -1047,6 +1047,7 @@ manual, [Plugin Settings](../../../user/settings/plugins.md); the code is in
 | `PluginSettingsForm.svelte` | One plugin's form: its icon (`icon_url`, or a neutral `Puzzle` when it has none or the image does not load) and name, a control per field type, saved all or nothing |
 | `PluginSettingsTab.svelte` | The **Plugins** tab of Settings |
 | `PluginSettingsModal.svelte` | **Configure**: the same form for one plugin, in a dialog |
+| `PluginNotConfiguredModal.svelte`, `notConfigured.ts` | The common window of a provider that is not configured, and its case (project 76, N3) |
 
 - **The tab.** The `plugins` entry of `SETTINGS_TABS` (label `pluginSettings.tab.label`, icon
   `Puzzle`, order 25, visible to everyone; `?tab=plugins` opens it: see
@@ -1102,6 +1103,26 @@ manual, [Plugin Settings](../../../user/settings/plugins.md); the code is in
       top of the results, *{provider} must be configured before it can search*
       (`assets.search.notConfigured`), with **Configure**; a save starts the search again. When a
       result's `display_name` contains 👑, a legend closes the list (`assets.search.crownLegend`).
+      That row is now the safety net (a key removed while the page was open): before any search,
+      a provider the list says is not configured is switched off, below.
+- **A provider that is not configured is switched off** (project 76, N3). The provider lists say,
+  for the caller, `configured`, `missing_settings`, `missing_reason` and `invalid_variables`
+  ([NOT_CONFIGURED](#not-configured)). In the search, such a provider's chip keeps its place but is
+  dashed and muted, with an amber «settings» icon (`aria-disabled`, `data-configured="false"`),
+  and never searches. A touch opens the common window, `PluginNotConfiguredModal.svelte`, whose
+  case `notConfigured.ts` reads from those fields and the viewer's role:
+    - a value to set: an administrator reads the missing fields by their labels (one catalogue
+      read; a key when it cannot be read) and gets **Configure**, which swaps the window for
+      `PluginSettingsModal`; another user gets a link to the read-only Settings › Plugins, in a new
+      tab so the open form is kept;
+    - an invalid environment variable: an administrator reads its name (the consultant's limit text
+      for a call-limit variable), another user that the provider is stopped; no **Configure**, the
+      field is locked;
+    - the managed profile, which never names a variable: «not available on this instance», no
+      button.
+
+  A save in **Configure** reads the list again: the chip lights up, selected, and a typed search
+  runs again. Texts: `pluginSettings.notConfigured.*`.
 - **Texts.** The interface's own are in the `pluginSettings` subsystem of the catalogue
   (`frontend/src/lib/features/plugin-settings/i18n/`), the two search texts in `assets.search`, and the probe's
   `providerErrors.NOT_CONFIGURED` and `providerErrors.PROVIDER_ERROR` in the `assets` subsystem. A
@@ -1203,8 +1224,8 @@ The other units that touch the plugin settings:
 | `./dev.py test services tool-settings-runtime` | The Tool values on a private database: `configure_instance(plugin_code=…)`, `bound_settings_for_batch()` (instance and user values, per tool code, one read per code, none for a Tool without fields), the catalogue by tool code, and the writes of a Tool (scopes, bounds, variable lock, all or nothing). Pure |
 | `./dev.py test services tool-settings-lifecycle` | Real spawn workers: the plugin sees the value the parent delivered, the defaults when none, the values of its own tool code, never another caller's; an unconfigured Tool starts no worker while its sibling runs. It starts processes, so it is exclusive like `tools-lifecycle` |
 | `./dev.py test services plugin-secrets-check` | The startup check of the stored secrets ([Plugin Secrets Check](../security.md#plugin-secrets-check)): `ok` without an unreadable `system` secret, otherwise an `error` that counts them alone; nothing logged and no key file generated without a stored secret; a check that cannot run is a warning, never an exception |
-| `./dev.py test front-utility core-unit` | `pluginSettingsForm.test.ts` (the rules without the DOM, `FAMILY_ICONS` included) and `pluginSettingsApi.test.ts` (the narrowing of the answers, `icon_url` included, and every outcome of a save through the real client, only the transport faked) |
-| `./dev.py test front-utility component-unit` | `PluginSettingsForm.component.test.ts` (PSF-01…40, the plugin's icon and its fallback in PSF-26…30, the shared groups in PSF-33…40), `PluginSettingsTab.test.ts` (PST-01…26, the families' icons in PST-07…09, the shared groups in PST-19…26) and `PluginSettingsModal.test.ts` (PSM-01…18, the shared groups in PSM-11…18); **Configure**, the badge, the search's row and the 👑 legend in `ProviderAssignmentSection.test.ts` and `AssetSearchAutocomplete.test.ts` |
+| `./dev.py test front-utility core-unit` | `pluginSettingsForm.test.ts` (the rules without the DOM, `FAMILY_ICONS` included) and `pluginSettingsApi.test.ts` (the narrowing of the answers, `icon_url` included, and every outcome of a save through the real client, only the transport faked), `notConfigured.test.ts` (the case of the «to configure» window, N3) |
+| `./dev.py test front-utility component-unit` | `PluginSettingsForm.component.test.ts` (PSF-01…40, the plugin's icon and its fallback in PSF-26…30, the shared groups in PSF-33…40), `PluginSettingsTab.test.ts` (PST-01…26, the families' icons in PST-07…09, the shared groups in PST-19…26) and `PluginSettingsModal.test.ts` (PSM-01…18, the shared groups in PSM-11…18), `PluginNotConfiguredModal.test.ts` (the window's cases, N3); **Configure**, the badge, the search's row, the switched-off chip (N3-1…5) and the 👑 legend in `ProviderAssignmentSection.test.ts` and `AssetSearchAutocomplete.test.ts` |
 | `./dev.py test front-utility plugin-settings` | End to end, on desktop (`frontend/e2e/settings/plugin-settings.spec.ts`): the tab as a member and as an administrator, **Configure** on `mockprov` from an asset's edit dialog, the search's row and the 👑 legend on a simulated stream ([Front-Utility Tests](../../test-walkthrough/front-utility.md#plugin-settings)) |
 
 ---
