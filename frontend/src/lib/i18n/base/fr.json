@@ -333,7 +333,8 @@
       "failedDefault": "échec",
       "noChanges": "Aucune nouvelle donnée (déjà à jour)",
       "manualOnly": "manuel seulement",
-      "historyStarts": "La source n'a des prix qu'à partir du {date} : les jours précédents se chargent à la main avec Importer CSV, dans l'éditeur des prix de l'actif."
+      "historyStarts": "La source n'a des prix qu'à partir du {date} : les jours précédents se chargent à la main avec Importer CSV, dans l'éditeur des prix de l'actif.",
+      "historyStartsMany": "{count, plural, one {# actif} other {# actifs}} : la source n'a des prix qu'à partir d'un jour plus récent. Les jours précédents se chargent à la main avec Importer CSV, dans l'éditeur des prix de chaque actif."
     }
   },
   "sectors": {

@@ -250,7 +250,13 @@
       "identifier": "Identifier",
       "identifierType": "Identifier Type",
       "lastFetch": "Last Fetch",
-      "neverFetched": "Never fetched"
+      "neverFetched": "Never fetched",
+      "inputType": {
+        "PROVIDER_ID": "Provider ID"
+      },
+      "inputTypePlaceholder": {
+        "PROVIDER_ID": "e.g. bitcoin"
+      }
     },
     "schedule": {
       "title": "Interest Schedule",

@@ -250,7 +250,13 @@
       "identifier": "Identifiant",
       "identifierType": "Type d'Identifiant",
       "lastFetch": "Derniere mise a jour",
-      "neverFetched": "Jamais execute"
+      "neverFetched": "Jamais execute",
+      "inputType": {
+        "PROVIDER_ID": "ID du fournisseur"
+      },
+      "inputTypePlaceholder": {
+        "PROVIDER_ID": "ex. bitcoin"
+      }
     },
     "schedule": {
       "title": "Calendrier d'intérêts",

@@ -333,7 +333,8 @@
       "failedDefault": "failed",
       "noChanges": "No new data (already up to date)",
       "manualOnly": "manual only",
-      "historyStarts": "The source has prices only from {date}: load the days before by hand with Import CSV, in the asset's price editor."
+      "historyStarts": "The source has prices only from {date}: load the days before by hand with Import CSV, in the asset's price editor.",
+      "historyStartsMany": "{count, plural, one {# asset} other {# assets}}: the source has prices only from a later day. Load the days before by hand with Import CSV, in each asset's price editor."
     }
   },
   "sectors": {

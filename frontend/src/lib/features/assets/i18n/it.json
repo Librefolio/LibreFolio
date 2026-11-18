@@ -250,7 +250,13 @@
       "identifier": "Identificativo",
       "identifierType": "Tipo Identificativo",
       "lastFetch": "Ultimo Fetch",
-      "neverFetched": "Mai eseguito"
+      "neverFetched": "Mai eseguito",
+      "inputType": {
+        "PROVIDER_ID": "ID del provider"
+      },
+      "inputTypePlaceholder": {
+        "PROVIDER_ID": "es. bitcoin"
+      }
     },
     "schedule": {
       "title": "Piano Interessi",

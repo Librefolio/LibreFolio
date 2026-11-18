@@ -333,7 +333,8 @@
       "failedDefault": "fallido",
       "noChanges": "Sin datos nuevos (ya actualizado)",
       "manualOnly": "solo manual",
-      "historyStarts": "La fuente solo tiene precios desde el {date}: los días anteriores se cargan a mano con Importar CSV, en el editor de precios del activo."
+      "historyStarts": "La fuente solo tiene precios desde el {date}: los días anteriores se cargan a mano con Importar CSV, en el editor de precios del activo.",
+      "historyStartsMany": "{count, plural, one {# activo} other {# activos}}: la fuente solo tiene precios desde un día más reciente. Los días anteriores se cargan a mano con Importar CSV, en el editor de precios de cada activo."
     }
   },
   "sectors": {
