@@ -82,9 +82,12 @@ vi.mock('$lib/api', () => ({
     },
     ApiError: class ApiError extends Error {},
 }));
-vi.mock('$lib/utils/providerHelpers', () => ({
+vi.mock('$lib/utils/providerHelpers', async () => ({
     ensureAssetProvidersCached: vi.fn(() => Promise.resolve()),
     getAssetProviderIconUrl: vi.fn(() => null),
+    // The plugin card's attribution line (76 P4): no provider here asks for one
+    assetProvidersVersion: (await import('svelte/store')).writable(0),
+    getAssetProviderAttribution: vi.fn(() => null),
 }));
 // P20: the instance as the component reads it, set per case before the mount. By default a self-hosted instance whose
 // configuration has loaded, with no support address: the one that falls back to a public GitHub issue (N61).
