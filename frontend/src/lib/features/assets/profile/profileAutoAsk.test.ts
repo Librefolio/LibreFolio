@@ -52,6 +52,29 @@ describe('profileAutoAsk', () => {
         expect(onanswer).toHaveBeenCalledOnce();
     });
 
+    it('waits out a refusal for too many requests and asks again by itself (PROF, E8c)', async () => {
+        vi.useFakeTimers();
+        try {
+            const {ask, calls} = deferredAsk();
+            const onanswer = vi.fn();
+            const state = createProfileAutoAsk(ask, onanswer);
+            state.start(REQUEST);
+            calls[0].reject({response: {status: 429, data: {detail: {error_code: 'PROBE_RATE_LIMITED', retry_after: 20}}}});
+            await vi.advanceTimersByTimeAsync(19_000);
+            expect(state.status).toBe('refused');
+            expect(ask).toHaveBeenCalledOnce();
+            await vi.advanceTimersByTimeAsync(1_000);
+            expect(ask).toHaveBeenCalledTimes(2);
+            expect(ask.mock.calls[1][0]).toEqual(REQUEST);
+            calls[1].resolve(ANSWER);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(state.status).toBe('done');
+            expect(onanswer).toHaveBeenCalledWith(ANSWER);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it('says a refusal for too many requests with its wait, and another failure, as states', async () => {
         const {ask, calls} = deferredAsk();
         const state = createProfileAutoAsk(ask, vi.fn());
