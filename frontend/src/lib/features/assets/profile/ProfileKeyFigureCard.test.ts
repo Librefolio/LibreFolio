@@ -92,4 +92,14 @@ describe('ProfileKeyFigureCard', () => {
         render(ProfileKeyFigureCard, {props: {card: card({state: 'unavailable', step: null}), text: '', onhistory: vi.fn()}});
         expect(screen.queryByTestId('profile-key-figure-ter-history')).toBeNull();
     });
+
+    it('says «confermato il …, non aggiornato» when it is given that line, and publishes it (D1d)', () => {
+        const {unmount} = render(ProfileKeyFigureCard, {props: {card: card(), text: '0,19%', staleText: 'Confirmed on 18/09/2026, not up to date'}});
+        expect(screen.getByTestId('profile-key-figure-ter')).toHaveAttribute('data-stale', 'true');
+        expect(screen.getByTestId('profile-key-figure-ter-stale')).toHaveTextContent('Confirmed on 18/09/2026, not up to date');
+        unmount();
+        render(ProfileKeyFigureCard, {props: {card: card(), text: '0,19%'}});
+        expect(screen.getByTestId('profile-key-figure-ter')).toHaveAttribute('data-stale', 'false');
+        expect(screen.queryByTestId('profile-key-figure-ter-stale')).toBeNull();
+    });
 });
