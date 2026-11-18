@@ -165,12 +165,24 @@ class AssetProfileThinnedVoice(AssetComponentModel):
     changes_in_window: int
 
 
+class AssetProfileFreshnessRow(AssetComponentModel):
+    """How fresh «now» is for a voice that changes at every read, when its last step in the window holds «now» (plan 68,
+    D1d):
+    ``confirmed_on`` the day it was last confirmed (its source last gave it; else the day it was read or written by
+    hand), ``stale`` that day is more than 30 days ago («non aggiornato»)."""
+
+    voice: str
+    confirmed_on: Date
+    stale: bool
+
+
 class AssetProfilePayload(AssetComponentModel):
     """`asset.profile` payload (plan 68, D5): the asset's profile voices as facts, one row per step in the period.
 
     Steps hold from ``date`` to ``through`` (both included), never carried back before the first row: a window before
     ``history_starts_on`` has no row. ``no_profile_data`` says the asset has no profile row at all. One table per shape
-    of value; a voice the asset has no row of is absent.
+    of value; a voice the asset has no row of is absent. ``freshness`` (D1d): for the volatile voices whose last step
+    holds «now», when it was last confirmed and whether that is stale; none for a window that ends before «now» was read.
     """
 
     asset_id: int
@@ -184,6 +196,7 @@ class AssetProfilePayload(AssetComponentModel):
     coupon_schedule: tuple[AssetProfileCouponRow, ...] = ()
     emptied: tuple[AssetProfileEmptiedRow, ...] = ()
     thinned: tuple[AssetProfileThinnedVoice, ...] = ()
+    freshness: tuple[AssetProfileFreshnessRow, ...] = ()
 
 
 # =============================================================================
