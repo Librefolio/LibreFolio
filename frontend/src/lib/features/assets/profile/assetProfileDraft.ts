@@ -13,13 +13,14 @@
  *   (the comparison window is the user's own «Chiedi»); a later answer replaces the fills the user did not touch;
  * - **a fill whose source left the list** is dropped: the creation would refuse the whole asset;
  * - **the user's own changes** (the automatic fills untouched are not: they must not ask to discard anything);
- * - **whether the changes block the save**: a value the window would refuse (a broker file's prefill can be wrong).
+ * - **whether the changes block the save**: a value the window would refuse (a broker file's prefill can be wrong);
+ * - **«Adesso» in edit mode**: each voice's value today and who gave it, from a one-day read of the profile.
  *
  * @module features/assets/profile/assetProfileDraft
  */
 import type {EnricherBinding} from '../enrichers/enrichersEditState';
 import {compareAsk, rowFromPending, rowIssues, voicePlace, type AskAnswer, type CurrentVoice, type PendingChanges, type PendingVoice} from './profileEditState';
-import type {ProfileVoice} from './profileStore';
+import type {ProfileVoice, ProfileVoices} from './profileStore';
 
 /** What the «Dati del profilo» row shows: how many changes wait, and their voices in the catalogue's order. */
 export function profileRowSummary(pending: PendingChanges, catalogue: readonly ProfileVoice[]): {count: number; keys: string[]} {
@@ -81,4 +82,18 @@ export function profileBlocksSave(pending: PendingChanges, catalogue: readonly P
             return voice && voicePlace(voice) === 'row' ? [rowFromPending(change, voice)] : [];
         });
     return Object.keys(rowIssues(rows, voices)).length > 0;
+}
+
+/**
+ * «Adesso» of an asset that exists: each voice's value today and who gave it, from a one-day read of the profile
+ * (`readAssetProfile(id, {start: today})`); the last step when the read holds several. A voice emptied on purpose is
+ * `null`; a voice without a step is left out.
+ */
+export function currentFromRead(voices: ProfileVoices): Record<string, CurrentVoice> {
+    const current: Record<string, CurrentVoice> = {};
+    for (const [key, steps] of Object.entries(voices)) {
+        const last = steps[steps.length - 1];
+        if (last) current[key] = {value: last.value ?? null, source: last.source};
+    }
+    return current;
 }

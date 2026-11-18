@@ -17,7 +17,7 @@
 import {describe, expect, it} from 'vitest';
 import * as draft from './assetProfileDraft';
 import type {AskAnswer, PendingChanges, PendingVoice} from './profileEditState';
-import type {ProfileVoice} from './profileStore';
+import type {ProfileStep, ProfileVoice} from './profileStore';
 
 function voice(key: string, shape: string, extra: Partial<ProfileVoice> = {}): ProfileVoice {
     return {key, shape, sign: null, unit: null, groups: [], key_figure: false, charted: false, volatile: false, choices: [], map_keys: null, topic: 'structure', ...extra} as ProfileVoice;
@@ -109,5 +109,24 @@ describe('a pending change the window would refuse', () => {
 
     it('does not judge a voice the catalogue does not list, nor a fill or an emptied voice', () => {
         expect(draft.profileBlocksSave({unknown_voice: typed('unknown_voice', 'x'), fund_provider: fill('fund_provider', 'Vanguard'), ter: {key: 'ter', kind: 'emptied', origin: 'new'}}, CATALOGUE)).toBe(false);
+    });
+});
+
+describe('«Adesso» in edit mode (E8b2)', () => {
+    const step = (value: unknown, source: string, date = '2026-11-18'): ProfileStep => ({date, through: date, value, source, update_id: 1, opened_on: date, source_date: null}) as ProfileStep;
+
+    it("is each voice's step of today: its value and who gave it, an emptied voice as null", () => {
+        expect(
+            draft.currentFromRead({
+                ter: [step('0.0019', 'justetf')],
+                fund_provider: [step('Vanguard', 'user')],
+                withholding_tax: [step(null, 'user')],
+            }),
+        ).toEqual({ter: {value: '0.0019', source: 'justetf'}, fund_provider: {value: 'Vanguard', source: 'user'}, withholding_tax: {value: null, source: 'user'}});
+    });
+
+    it('takes the last step when the read holds several, and leaves out a voice without one', () => {
+        expect(draft.currentFromRead({ter: [step('0.0022', 'legacy', '2026-11-01'), step('0.0019', 'justetf')], sector: []})).toEqual({ter: {value: '0.0019', source: 'justetf'}});
+        expect(draft.currentFromRead({})).toEqual({});
     });
 });
