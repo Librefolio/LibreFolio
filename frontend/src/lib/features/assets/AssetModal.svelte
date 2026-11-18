@@ -23,7 +23,7 @@
     import AssetModalDetails from './AssetModalDetails.svelte';
     import AssetEnrichersModal from './enrichers/AssetEnrichersModal.svelte';
     import {createEnricherRecognitionState} from './enrichers/enricherRecognition.svelte';
-    import type {EnricherBinding, EnricherInfo, EnricherReadState} from './enrichers/enrichersEditState';
+    import type {EnricherBinding, EnricherInfo, EnricherReadState, EnrichersBanner} from './enrichers/enrichersEditState';
     import {invalidateAssetProfile, loadProfileCatalogue, readAssetProfile, type ProfileVoice} from './profile/profileStore';
     import AssetModalProfileRow from './profile/AssetModalProfileRow.svelte';
     import ProfileEditModal from './profile/ProfileEditModal.svelte';
@@ -529,16 +529,19 @@
     let enrichersSearching = $derived(recognition.status === 'running' ? enricherCatalogue.filter((info) => info.default_priority?.[assetType as keyof typeof info.default_priority] != null && !recognition.recognitions[info.code]).map((info) => info.code) : []);
 
     /** The line under the header: what «Riconosci» found. Only at creation, once it has run. */
-    let enrichersBanner = $derived.by((): {state: 'running' | 'found' | 'none' | 'refused' | 'error'; text: string} | null => {
+    let enrichersBanner = $derived.by((): EnrichersBanner | null => {
         if (editMode) return null;
-        if (recognition.status === 'running') return {state: 'running', text: $t('assets.modal.enrichersSearching')};
-        if (recognition.status === 'refused') return {state: 'refused', text: $t('assets.modal.enrichersRefused')};
-        if (recognition.status === 'error') return {state: 'error', text: $t('assets.modal.enrichersError')};
+        if (recognition.status === 'running') return {state: 'running', text: $t('assets.modal.enrichersSearching'), reading: 'none', readingText: null};
+        if (recognition.status === 'refused') return {state: 'refused', text: $t('assets.modal.enrichersRefused'), reading: 'none', readingText: null};
+        if (recognition.status === 'error') return {state: 'error', text: $t('assets.modal.enrichersError'), reading: 'none', readingText: null};
         if (recognition.status !== 'done') return null;
         const codes = Object.keys(enrichersConfig);
-        if (!codes.length) return {state: 'none', text: $t('assets.modal.enrichersNone')};
+        if (!codes.length) return {state: 'none', text: $t('assets.modal.enrichersNone'), reading: 'none', readingText: null};
         const names = codes.map((code) => enricherCatalogue.find((info) => info.code === code)?.name ?? recognition.recognitions[code]?.name ?? code).join(', ');
-        return {state: 'found', text: $t('assets.modal.enrichersFound', {values: {count: codes.length, names}})};
+        // What the automatic «Chiedi» is doing with them (E9b2, the mock's «I loro dati si stanno leggendo adesso»)
+        const reading = autoAsk.status === 'running' ? 'running' : autoAsk.status === 'refused' ? 'waiting' : 'none';
+        const readingText = reading === 'running' ? $t('assets.modal.enrichersReading') : reading === 'waiting' ? $t('assets.modal.enrichersReadingWaiting') : null;
+        return {state: 'found', text: $t('assets.modal.enrichersFound', {values: {count: codes.length, names}}), reading, readingText};
     });
 
     // =========================================================================

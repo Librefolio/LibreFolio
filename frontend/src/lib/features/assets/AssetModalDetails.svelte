@@ -11,6 +11,7 @@
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
     import {ExternalLink, Info, Layers, Loader2, RefreshCw, Upload} from 'lucide-svelte';
+    import type {EnrichersBanner} from './enrichers/enrichersEditState';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {AssetTypeSelect, CurrencySearchSelect} from '$lib/components/ui/select';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
@@ -45,7 +46,7 @@
         /** How many enrichers the asset has (plan 68, E8a). */
         enricherCount?: number;
         /** What «Riconosci» found, said under the header; null when it did not run. */
-        enrichersBanner?: {state: 'running' | 'found' | 'none' | 'refused' | 'error'; text: string} | null;
+        enrichersBanner?: EnrichersBanner | null;
         /** Opens the enrichers' window over this one; without it, no button. */
         onenrichers?: () => void;
     }
@@ -130,11 +131,12 @@
         {/if}
     </div>
     {#if enrichersBanner}
-        <div data-testid="asset-modal-enrichers-banner" data-state={enrichersBanner.state}>
+        <div data-testid="asset-modal-enrichers-banner" data-state={enrichersBanner.state} data-reading={enrichersBanner.reading}>
             <InfoBanner variant={enrichersBanner.state === 'refused' || enrichersBanner.state === 'error' ? 'warning' : 'info'}>
                 <p class="flex flex-wrap items-center gap-x-2">
-                    {#if enrichersBanner.state === 'running'}<Loader2 size={12} class="animate-spin" />{/if}
+                    {#if enrichersBanner.state === 'running' || enrichersBanner.reading === 'running'}<Loader2 size={12} class="animate-spin" />{/if}
                     <span>{enrichersBanner.text}</span>
+                    {#if enrichersBanner.readingText}<span data-testid="asset-modal-enrichers-reading">{enrichersBanner.readingText}</span>{/if}
                     {#if onenrichers && enrichersBanner.state !== 'running'}
                         <button type="button" class="font-medium underline focus-visible:outline-2 focus-visible:outline-lf-focus rounded" data-testid="asset-modal-enrichers-review" onclick={onenrichers}>{$t('assets.modal.enrichersReview')}</button>
                     {/if}

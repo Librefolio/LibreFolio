@@ -271,3 +271,30 @@ describe('the description and the classification are the profile’s (E9)', () =
         expect(screen.queryByTestId('distribution-editor-geographic')).toBeNull();
     });
 });
+
+describe('the enrichers’ banner says the automatic «Chiedi» is reading (E9b2)', () => {
+    const banner = () => screen.getByTestId('asset-modal-enrichers-banner');
+
+    it('reads «running» while the answer is awaited, «none» once it is in', async () => {
+        let answer: (value: unknown) => void = () => undefined;
+        askFn().mockReturnValue(new Promise((resolve) => (answer = resolve)));
+        render(AssetModal, {open: true, editMode: false, prefillData: PREFILL, initialNoProvider: true, oncreated: vi.fn()});
+        await waitFor(() => expect(calls).toHaveLength(1));
+        await settle(calls[0], [found('justetf'), done(['justetf'])]);
+        await waitFor(() => expect(askFn()).toHaveBeenCalledOnce());
+        await waitFor(() => expect(banner()).toHaveAttribute('data-state', 'found'));
+        expect(banner()).toHaveAttribute('data-reading', 'running');
+
+        answer({voices: {fund_provider: {value: 'Vanguard', source: 'justetf'}}, outcomes: [{code: 'justetf', status: 'ok'}]});
+        await waitFor(() => expect(banner()).toHaveAttribute('data-reading', 'none'));
+        await waitFor(() => expect(row()).toHaveAttribute('data-count', '1'));
+    });
+
+    it('reads «waiting» while the automatic «Chiedi» waits out a 429 to ask again', async () => {
+        askFn().mockRejectedValue({response: {status: 429, data: {detail: {retry_after: 60}}}});
+        render(AssetModal, {open: true, editMode: false, prefillData: PREFILL, initialNoProvider: true, oncreated: vi.fn()});
+        await waitFor(() => expect(calls).toHaveLength(1));
+        await settle(calls[0], [found('justetf'), done(['justetf'])]);
+        await waitFor(() => expect(banner()).toHaveAttribute('data-reading', 'waiting'));
+    });
+});
