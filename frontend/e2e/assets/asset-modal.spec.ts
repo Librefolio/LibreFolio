@@ -369,15 +369,17 @@ test.describe('NR — Sector dropdown emoji (Bug E)', () => {
         await goToAssetsPage(page);
         await openCreateAssetModal(page);
 
-        // Expand "More Info" section to reveal classification editors
-        await page.getByTestId('asset-modal-more-info').click();
-        await expect(page.getByTestId('distribution-editor-sector')).toBeVisible({timeout: 3000});
+        // The sectors are the profile's (plan 68, E9): their editor is a panel of the profile window
+        await page.getByTestId('asset-modal-profile-row').click();
+        const profileWindow = page.getByTestId('profile-edit-modal');
+        await expect(profileWindow).toBeVisible({timeout: 10_000});
+        const sectorEditor = profileWindow.getByTestId('distribution-editor-sector');
+        await expect(sectorEditor).toBeVisible({timeout: 10_000});
 
         // Add a sector entry to make the SectorSearchSelect appear
-        await page.getByTestId('distribution-add-sector').click();
+        await sectorEditor.getByTestId('distribution-add-sector').click();
 
         // The sector cell in the new row is a SectorSearchSelect combobox
-        const sectorEditor = page.getByTestId('distribution-editor-sector');
         const combobox = sectorEditor.getByRole('combobox').first();
         await expect(combobox).toBeVisible({timeout: 3000});
 
@@ -398,8 +400,7 @@ test.describe('NR — Sector dropdown emoji (Bug E)', () => {
         const trimmed = firstOptionText.trim();
         const firstCodePoint = trimmed.codePointAt(0) ?? 0;
         expect(firstCodePoint).toBeGreaterThan(127); // Not a plain ASCII character
-
-        await page.getByTestId('asset-modal-cancel').click();
+        // Nothing was kept nor saved: the open listbox and the two windows go with the page
     });
 });
 

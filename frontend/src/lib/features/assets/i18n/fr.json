@@ -234,7 +234,16 @@
         "removeTitle": "Retirer le fournisseur ?",
         "removeMessage": "Retirer le fournisseur supprime {what}. {unlinked} Les prix déjà enregistrés sont conservés, ainsi que les événements manuels. Cette action est irréversible. Continuer ?",
         "removeConfirm": "Retirer le fournisseur"
-      }
+      },
+      "enrichersButton": "Enrichisseurs",
+      "enrichersFound": "{count, plural, one {# enrichisseur trouvé} other {# enrichisseurs trouvés}} : {names}. Ils seront enregistrés avec l'actif.",
+      "enrichersSearching": "Recherche des enrichisseurs qui connaissent cet actif…",
+      "enrichersNone": "Aucun enrichisseur ne connaît cet actif.",
+      "enrichersRefused": "Trop de demandes aux sources : en attente, la recherche reprend d'elle-même dans un instant.",
+      "enrichersError": "Impossible de rechercher les enrichisseurs : choisissez-les à la main.",
+      "enrichersReview": "Vérifier ou modifier",
+      "enrichersReading": "Leurs données sont en cours de lecture.",
+      "enrichersReadingWaiting": "Trop de demandes : leurs données seront lues d'elles-mêmes dans un instant."
     },
     "provider": {
       "assignment": "Attribution du Fournisseur",
@@ -375,8 +384,7 @@
       "currentValue": "Valeur actuelle",
       "providerValue": "Valeur du fournisseur",
       "applySelected": "Appliquer la selection ({count}/{total})",
-      "allMatch": "Toutes les donnees correspondent au fournisseur",
-      "noDistributionData": "Le fournisseur n'a pas de données pour : {fields}"
+      "allMatch": "Toutes les donnees correspondent au fournisseur"
     },
     "distribution": {
       "total": "Total",

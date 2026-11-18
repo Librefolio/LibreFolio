@@ -66,6 +66,17 @@ export interface EnrichersContext {
 }
 
 /** Whether the instance can use a chosen enricher. */
+/**
+ * The line under the asset window's header: what «Riconosci» found (`state`, `text`) and, once it found some, what the
+ * automatic «Chiedi» is doing with them (`reading`: asking now, or waiting out a 429; plan 68 E9b2).
+ */
+export interface EnrichersBanner {
+    state: 'running' | 'found' | 'none' | 'refused' | 'error';
+    text: string;
+    reading: 'running' | 'waiting' | 'none';
+    readingText: string | null;
+}
+
 export type Availability = 'ok' | 'not_configured' | 'off';
 
 /** What is wrong with a binding. */

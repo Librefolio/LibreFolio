@@ -6634,7 +6634,7 @@ test.describe('Gallery Screenshots', () => {
                     expect(mock.probes.slice(probesBefore).sort(), 'the pick did not probe the provider as expected').toEqual(['current_price+history', 'metadata']);
                     // DESKTOP — coordinator's decision, provisional: the simulation shot's rule (see 'risk what-if simulation on
                     // the dashboard' and «Screens taller than the desktop's» in galleryRiskLab.ts). The dialog's body is capped at
-                    // 60% of the screen and its three rows are taller than that: the shot gets a screen tall enough for the body to
+                    // 60% of the screen and its rows can be taller than that: the shot gets a screen tall enough for the body to
                     // stop scrolling, width (1280) and scale unchanged, measured and logged (📐) every combination. The mobile
                     // project keeps its phone, the body scrolled to the identifier and Type rows. Reverting the decision is
                     // deleting this line.
@@ -6676,23 +6676,23 @@ test.describe('Gallery Screenshots', () => {
                     await expect(page.getByTestId('asset-detail-header')).toBeVisible({timeout: 10_000});
 
                     // Open the edit modal — the button stays disabled until asset info
-                    // and classification have loaded, so waiting for enabled is the gate.
+                    // and the asset's enrichers have loaded, so waiting for enabled is the gate.
                     const editBtn = page.getByTestId('asset-detail-edit-btn');
                     await expect(editBtn).toBeEnabled({timeout: 10_000});
                     await editBtn.click();
                     await expect(page.getByTestId('asset-modal-form')).toBeVisible({timeout: 5_000});
 
-                    // Expand More Info (Identifiers + Classification area)
-                    const moreInfo = page.getByTestId('asset-modal-more-info');
-                    if ((await moreInfo.getAttribute('data-expanded')) !== 'true') {
-                        await moreInfo.click();
-                    }
-
-                    await expect(page.getByTestId('distribution-editor-sector')).toBeVisible({timeout: 5_000});
-                    await expect(page.getByTestId('distribution-editor-geographic')).toBeVisible({timeout: 5_000});
+                    // The sectors and the countries are the profile's (plan 68, E9): their editors are the panels of the
+                    // profile window, opened over the asset window by the «Dati del profilo» row. «Adesso» (the profile of
+                    // today) fills them once read.
+                    await page.getByTestId('asset-modal-profile-row').click();
+                    const profileWindow = page.getByTestId('profile-edit-modal');
+                    await expect(profileWindow).toBeVisible({timeout: 10_000});
+                    await expect(profileWindow.getByTestId('distribution-editor-sector')).toBeVisible({timeout: 5_000});
+                    await expect(profileWindow.getByTestId('distribution-editor-geographic')).toBeVisible({timeout: 5_000});
                     // Populated distributions sum to 100% → both totals are in the valid state (data-state, not a colour)
-                    const sectorTotal = page.getByTestId('distribution-total-sector');
-                    const geoTotal = page.getByTestId('distribution-total-geographic');
+                    const sectorTotal = profileWindow.getByTestId('distribution-total-sector');
+                    const geoTotal = profileWindow.getByTestId('distribution-total-geographic');
                     await expect(sectorTotal).toHaveAttribute('data-state', 'valid', {timeout: 5_000});
                     await expect(geoTotal).toHaveAttribute('data-state', 'valid', {timeout: 5_000});
                     await freezeAnimations(page);
@@ -6701,12 +6701,15 @@ test.describe('Gallery Screenshots', () => {
                     await page.waitForTimeout(200);
                     await screenshot(page, viewport, lang, theme, 'assets', 'distribution-editor-sector');
 
-                    await page.getByTestId('distribution-editor-geographic').scrollIntoViewIfNeeded();
+                    await profileWindow.getByTestId('distribution-editor-geographic').scrollIntoViewIfNeeded();
                     await page.waitForTimeout(200);
                     await screenshot(page, viewport, lang, theme, 'assets', 'distribution-editor-geographic');
 
-                    await page.keyboard.press('Escape');
-                    await page.waitForTimeout(200);
+                    // The profile window, then the asset window: nothing kept, nothing saved
+                    await profileWindow.getByTestId('profile-edit-cancel').click();
+                    await expect(profileWindow).toBeHidden({timeout: 5_000});
+                    await page.getByTestId('asset-modal-cancel').click();
+                    await expect(page.getByTestId('asset-modal-form')).toBeHidden({timeout: 5_000});
                 }
             }
         });

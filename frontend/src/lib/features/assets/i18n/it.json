@@ -234,7 +234,16 @@
         "removeTitle": "Togliere il provider?",
         "removeMessage": "Togliere il provider cancella {what}. {unlinked} I prezzi già salvati restano, come gli eventi manuali. L'operazione non è reversibile. Continuare?",
         "removeConfirm": "Togli provider"
-      }
+      },
+      "enrichersButton": "Arricchitori",
+      "enrichersFound": "{count, plural, one {# arricchitore trovato} other {# arricchitori trovati}}: {names}. Verranno salvati con l'asset.",
+      "enrichersSearching": "Cerco gli arricchitori che conoscono l'asset…",
+      "enrichersNone": "Nessun arricchitore conosce questo asset.",
+      "enrichersRefused": "Troppe richieste alle fonti: in attesa, la ricerca riparte da sola fra poco.",
+      "enrichersError": "Non è stato possibile cercare gli arricchitori: sceglili a mano.",
+      "enrichersReview": "Controlla o cambia",
+      "enrichersReading": "I loro dati si stanno leggendo adesso.",
+      "enrichersReadingWaiting": "Troppe richieste: i loro dati si leggeranno da soli fra poco."
     },
     "provider": {
       "assignment": "Assegnazione Provider",
@@ -375,8 +384,7 @@
       "currentValue": "Valore Attuale",
       "providerValue": "Valore Provider",
       "applySelected": "Applica Selezionati ({count}/{total})",
-      "allMatch": "Tutti i dati corrispondono al provider",
-      "noDistributionData": "Il provider non ha dati per: {fields}"
+      "allMatch": "Tutti i dati corrispondono al provider"
     },
     "distribution": {
       "total": "Totale",

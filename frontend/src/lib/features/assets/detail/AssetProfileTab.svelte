@@ -9,10 +9,8 @@
   - It publishes its loading (`data-busy`, `aria-busy`) and its outcome (`data-status`: loading, ready, failed, missing).
   - What goes where comes from the catalogue (`profileTabState`); the parts are `ProfileClassification`,
     `ProfileKeyFigureCard` and `ProfileDetails`.
-  - Seams for the lots after it: `onedit` («Modifica i dati», E8), `onhistory` (the history of a voice, E6). Without
-    them, no button.
-
-  Not mounted by the page yet: the page's wiring comes with lane 70 in dev (coordinator, 17/11/2026).
+  - Seams: `onedit` («Modifica i dati»: the page opens `AssetProfileEditor`, the profile window in save mode, E9b2),
+    `onhistory` (the history of a voice, E6). Without them, no button.
 
   Pattern: Svelte 5 Runes, Tailwind CSS 4, colour roles only.
 -->

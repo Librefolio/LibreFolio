@@ -2,11 +2,11 @@ import type {ComponentProps} from 'svelte';
 import {zodiosApi} from '$lib/api';
 import {safeNumber, safeScalar, safeString} from '$lib/types/common';
 import type AssetModal from './AssetModal.svelte';
-import {normalizeDistribution} from './assetPayload';
+import type {EnricherBinding, EnricherReadState} from './enrichers/enrichersEditState';
 
 export type AssetEditData = NonNullable<ComponentProps<typeof AssetModal>['editData']>;
 
-/** List summaries omit classification; an edit needs all three authoritative reads. */
+/** An edit needs all three authoritative reads (the description, the sectors and the countries are the profile's, plan 68 E9). */
 export async function loadAssetEditData(assetId: number): Promise<AssetEditData> {
     const [assets, metadata, assignments] = await Promise.all([
         zodiosApi.list_assets_api_v1_assets_query_get({queries: {}}),
@@ -15,13 +15,10 @@ export async function loadAssetEditData(assetId: number): Promise<AssetEditData>
     ]);
     const asset = assets.find((item) => item.id === assetId);
     const detail = metadata.find((item) => item.asset_id === assetId);
-    if (!asset || !detail || detail.classification_params === undefined) {
+    if (!asset || !detail) {
         throw new Error('Complete asset metadata could not be loaded.');
     }
     const assignment = assignments.find((item) => item.asset_id === assetId);
-    const classification = safeScalar(detail.classification_params);
-    const sector = safeScalar(classification?.sector_area);
-    const geographic = safeScalar(classification?.geographic_area);
 
     return {
         id: asset.id,
@@ -32,13 +29,6 @@ export async function loadAssetEditData(assetId: number): Promise<AssetEditData>
         quote_base_quantity: safeNumber(asset.quote_base_quantity),
         active: asset.active,
         is_benchmark: asset.is_benchmark,
-        classification_params: classification
-            ? {
-                  short_description: safeString(classification.short_description),
-                  sector_area: sector ? {distribution: normalizeDistribution(sector.distribution)} : null,
-                  geographic_area: geographic ? {distribution: normalizeDistribution(geographic.distribution)} : null,
-              }
-            : null,
         identifier_isin: safeString(asset.identifier_isin),
         identifier_ticker: safeString(asset.identifier_ticker),
         identifier_cusip: safeString(asset.identifier_cusip),
@@ -52,5 +42,7 @@ export async function loadAssetEditData(assetId: number): Promise<AssetEditData>
         provider_params: safeScalar(assignment?.provider_params),
         provider_user_url: safeString(asset.user_url) ?? '',
         provider_url: safeString(assignment?.provider_url),
+        // The asset's enrichers (plan 68, E8a): the asset window shows the list and sends it only when changed
+        enrichers: detail.enrichers ? {config: (safeScalar(detail.enrichers)?.config ?? {}) as Record<string, EnricherBinding>, state: (safeScalar(detail.enrichers)?.state ?? {}) as Record<string, EnricherReadState>} : null,
     };
 }
