@@ -1,6 +1,6 @@
 ---
 name: asset-plugin
-description: "Use this skill when creating, extending, or reviewing a LibreFolio asset source provider (backend/app/services/asset_source_providers/) — a plugin that prices one data source (current value, history) and optionally searches, enriches metadata, or resolves URLs. Explains the high-level spirit of an asset provider plugin and points to the developer guide for up-to-date technical details."
+description: "Use this skill when creating, extending, or reviewing a LibreFolio asset source provider (backend/app/services/asset_source_providers/) — a plugin that prices one data source (current value, history) and optionally searches, fetches its metadata (type, currency, name, identifiers), or resolves URLs. Explains the high-level spirit of an asset provider plugin and points to the developer guide for up-to-date technical details."
 ---
 
 # 🧩 Asset Provider Plugin Skill
@@ -13,7 +13,7 @@ description: "Use this skill when creating, extending, or reviewing a LibreFolio
 
 An asset provider plugin teaches LibreFolio to **price one data source**: fetch an asset's
 **current value** and its **historical values**, and — optionally — **search** for it,
-**enrich its metadata**, and **resolve it from a URL**. It lives in
+**fetch its metadata** (type, currency, name, identifiers), and **resolve it from a URL**. It lives in
 `backend/app/services/asset_source_providers/<name>/` (one folder per source: `plugin.py` holds
 the code, `i18n/` its own UI texts), extends `AssetSourceProvider`, and is auto-discovered via
 `@register_provider(AssetProviderRegistry)`.
@@ -56,6 +56,11 @@ engine — those live in the core.
 8. **`resolve_url` is the inverse of `get_asset_url`.** Opt in via `resolvable_url_domains`;
    open the URL, extract it, and return the **same shape `search` returns** (a single item, or
    the full canonical set) — or `None`. Never raise; off-domain / unrecognised → `None`.
+9. **Metadata is the asset's identity, never its profile.** `fetch_asset_metadata` gives the
+   type, currency, name and identifiers. The description, the countries, the sectors and every
+   other descriptive figure (TER, coupons, maturity…) are the asset's **profile**, read by an
+   **enricher** (skill `enricher-plugin`); `classification_params` stays unset. A source that
+   has both writes two plugins, one in each family, with no import between them.
 
 ## 🛠️ Rough shape of the work
 
