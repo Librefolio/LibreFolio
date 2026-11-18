@@ -39,6 +39,7 @@ All provider calls go through `_run_provider_in_thread()` in `assets/core.py` �
 | **borsa_italiana** | `borsa_italiana/plugin.py` | ISIN (IT0003128367) | None | ✅ |
 | **cssscraper** | `css_scraper/plugin.py` | Web page URL | `{current_css_selector, currency, decimal_format?}` | ❌ |
 | **scheduled_investment** | `scheduled_investment/plugin.py` | asset_id | `FAScheduledInvestmentSchedule` | ❌ |
+| **coingecko** | `coingecko/plugin.py` | CoinGecko id (bitcoin), `PROVIDER_ID` | `{vs_currency}` | ✅ (needs the `coingecko` group's API key) |
 | **mockprov** | `mockprov/plugin.py` | any | None | ✅ (testing only, hidden from UI) |
 
 ## Adding a New Provider
