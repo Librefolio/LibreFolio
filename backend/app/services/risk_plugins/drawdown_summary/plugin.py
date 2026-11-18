@@ -13,6 +13,15 @@ from backend.app.services.risk.base import RiskAnalytic, RiskComputation, RiskEx
 from backend.app.services.risk.metrics import drawdown_episodes
 from backend.app.services.risk.registry import RiskAnalyticRegistry
 
+#: The label of the series the drawdown was measured on. A sliced portfolio in historical mode reads today's weights
+#: replayed over past returns (`risk/results.py`, Q-C1): neither one asset's closes nor the portfolio's TWRR, so it is
+#: named as `historical_kpi` names it. An asset's closes keep `price_only_close`, the label AI Export reads.
+_CALCULATION_BASIS: dict[RiskReturnBasis | None, str] = {
+    RiskReturnBasis.TWRR: "historical_twrr",
+    RiskReturnBasis.CURRENT_COMPOSITION_BACKTEST: "current_composition_backtest",
+    RiskReturnBasis.PRICE_ONLY: "price_only_close",
+}
+
 
 class DrawdownSummaryParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -54,7 +63,7 @@ class DrawdownSummaryAnalytic(RiskAnalytic):
             dates=dates,
             baseline_date=baseline,
         )
-        calculation_basis = "historical_twrr" if context.primary_return_basis == RiskReturnBasis.TWRR else "price_only_close"
+        calculation_basis = _CALCULATION_BASIS.get(context.primary_return_basis, "price_only_close")
         # ``report.drawdowns`` spans (baseline, *dates); the baseline entry is always
         # 0.0 by construction, so the dated series drops it, as RiskComparisonPoint does.
         underwater_series = [RiskDrawdownPoint(date=observed, drawdown=min(0.0, value)) for observed, value in zip(dates, report.drawdowns[1:], strict=True)]

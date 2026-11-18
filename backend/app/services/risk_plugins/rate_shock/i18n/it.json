@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "rateShock": {
+        "name": "Tassi in salita o in discesa",
+        "description": "Il prezzo di un asset con uno spostamento parallelo del suo rendimento, dalla duration modificata letta nel suo profilo: una stima al primo ordine, −duration × lo spostamento."
+      }
+    }
+  }
+}

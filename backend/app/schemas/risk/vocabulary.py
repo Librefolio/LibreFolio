@@ -65,6 +65,8 @@ class RiskOutputKind(StrEnum):
     DRAWDOWN_SET = "drawdown_set"
     RISK_RETURN_SET = "risk_return_set"
     COMPARISON_SET = "comparison_set"
+    # RN-25: one asset's price under a parallel move of its yield, from the modified duration of its profile.
+    RATE_SHOCK = "rate_shock"
 
 
 class RiskDrawdownRecoveryStatus(StrEnum):

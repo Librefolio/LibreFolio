@@ -277,6 +277,8 @@ def test_registry_discovers_all_deterministic_analytics():
         "historical_kpi",
         "historical_var",
         "portfolio_optimization",
+        # RN-25: one asset's price under a move of its yield, from the profile's modified duration.
+        "rate_shock",
         "risk_contribution",
         "simulation",
         "stress",
@@ -421,6 +423,20 @@ def test_drawdown_summary_broker_filtered_portfolio_reuses_twrr_path():
     # P19, on the portfolio TWRR: the trough is 0.96 * 0.98 of the peak, and the episode is still open.
     assert output.maximum_drawdown_trough_to_peak_ratio == pytest.approx(-output.maximum_drawdown / (1.0 + output.maximum_drawdown))
     assert output.maximum_drawdown_trough_to_peak_ratio == pytest.approx(1.0 / (0.96 * 0.98) - 1.0)
+
+
+def test_drawdown_summary_labels_a_current_composition_backtest_as_one():
+    # A sliced portfolio in historical mode reads today's weights replayed over past returns (Q-C1, `risk/results.py`):
+    # neither a price series nor the portfolio's TWRR. The label names that series, as historical_kpi's method does,
+    # never «price_only_close», which says one asset's closes.
+    returns = [0.01, -0.04, -0.02, 0.03]
+    context = replace(make_context({1: returns, 2: returns}), primary_return_basis=RiskReturnBasis.CURRENT_COMPOSITION_BACKTEST)
+    computation = DrawdownSummaryAnalytic().compute(DrawdownSummaryParams(), context)
+    output = computation.output
+    assert output.return_basis == RiskReturnBasis.CURRENT_COMPOSITION_BACKTEST
+    assert output.calculation_basis == "current_composition_backtest"
+    assert computation.method == "current_composition_backtest"
+    assert computation.return_basis == RiskReturnBasis.CURRENT_COMPOSITION_BACKTEST
 
 
 def test_drawdown_summary_requires_primary_history():

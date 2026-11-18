@@ -1,13 +1,16 @@
 <script lang="ts" module>
     import type {OnDemandAnalysis} from '$lib/features/risk/riskPanelController.svelte';
 
-    export type L4Tool = 'replay' | 'shock' | 'simulation';
+    export type L4Tool = 'replay' | 'shock' | 'rates' | 'simulation';
 
     /** The one order the tools ever appear in: observed → assumed → modelled, whatever the order they were added in. */
-    export const L4_TOOLS: readonly L4Tool[] = ['replay', 'shock', 'simulation'];
+    export const L4_TOOLS: readonly L4Tool[] = ['replay', 'shock', 'rates', 'simulation'];
 
-    /** The on-demand analysis each tool asks for: closing the tool drops that answer (D377). */
-    export const L4_TOOL_ANALYSIS = {replay: 'replay', shock: 'stress', simulation: 'simulation'} as const satisfies Record<L4Tool, OnDemandAnalysis>;
+    /**
+     * The on-demand analysis each tool asks for: closing the tool drops that answer (D377). The rates scenario of an
+     * asset (RN-25) asks none: its answer rides in the base wave, so closing it forgets nothing.
+     */
+    export const L4_TOOL_ANALYSIS = {replay: 'replay', shock: 'stress', simulation: 'simulation'} as const satisfies Partial<Record<L4Tool, OnDemandAnalysis>>;
 
     /** Per user, in this browser: the same set for the Dashboard and for a broker's page (D376). */
     export const L4_TOOLS_STORAGE_KEY = 'risk.l4.openTools';
@@ -56,17 +59,21 @@
         replay?: Snippet;
         shock?: Snippet;
         simulation?: Snippet;
+        /** The rates scenario of one asset (RN-25): supplied only where the asset's profile holds a duration. */
+        rates?: Snippet;
+        /** A note under the tools, the page's own (RN-25: a bond whose profile has no duration says so here). */
+        notes?: Snippet;
         /** Drops the answer of a tool the reader closes (D377). A surface with one tool has no ×, and needs none. */
         controller?: {resetAnalysis: (analysis: OnDemandAnalysis) => void};
     }
 
-    let {replay, shock, simulation, controller}: Props = $props();
+    let {replay, shock, simulation, rates, notes, controller}: Props = $props();
 
-    const TITLE_KEYS: Record<L4Tool, string> = {replay: 'risk.levels.l4.replay', shock: 'risk.levels.l4.shock', simulation: 'risk.levels.l4.simulation'};
-    const HINT_KEYS: Record<L4Tool, string> = {replay: 'risk.levels.l4.replayHint', shock: 'risk.levels.l4.shockHint', simulation: 'risk.levels.l4.simulationHint'};
-    const DISTANCE: Record<L4Tool, string> = {replay: 'observed', shock: 'assumed', simulation: 'modelled'};
+    const TITLE_KEYS: Record<L4Tool, string> = {replay: 'risk.levels.l4.replay', shock: 'risk.levels.l4.shock', rates: 'risk.levels.l4.rates', simulation: 'risk.levels.l4.simulation'};
+    const HINT_KEYS: Record<L4Tool, string> = {replay: 'risk.levels.l4.replayHint', shock: 'risk.levels.l4.shockHint', rates: 'risk.levels.l4.ratesHint', simulation: 'risk.levels.l4.simulationHint'};
+    const DISTANCE: Record<L4Tool, string> = {replay: 'observed', shock: 'assumed', rates: 'assumed', simulation: 'modelled'};
 
-    let snippets = $derived<Record<L4Tool, Snippet | undefined>>({replay, shock, simulation});
+    let snippets = $derived<Record<L4Tool, Snippet | undefined>>({replay, shock, rates, simulation});
     let supplied = $derived(L4_TOOLS.filter((tool) => snippets[tool] !== undefined));
     /** Only a surface with a choice has a selector, and only it remembers one. */
     let selectable = $derived(supplied.length > 1);
@@ -80,9 +87,12 @@
         }
     }
 
-    // Read once, when the section mounts: collapsing L4 unmounts it, so reopening reads the set again.
-    let openTools = $state<L4Tool[]>(untrack(() => (selectable ? storedTools(supplied) : [])));
-    let shown = $derived(selectable ? openTools : supplied);
+    // Read once, when the section mounts: collapsing L4 unmounts it, so reopening reads the set again. Read against every
+    // tool, not only the ones supplied now: the rates tool arrives with the base wave (RN-25), after the mount, and a
+    // reader who left it open finds it open. A tool kept open but not supplied (no answer yet, a stock, a bond without a
+    // duration) is not drawn: never an empty box.
+    let openTools = $state<L4Tool[]>(untrack(() => (selectable ? storedTools(L4_TOOLS) : [])));
+    let shown = $derived(selectable ? openTools.filter((tool) => supplied.includes(tool)) : supplied);
     let addable = $derived(selectable ? supplied.filter((tool) => !openTools.includes(tool)) : []);
 
     function remember(next: L4Tool[]): void {
@@ -96,14 +106,15 @@
 
     function close(tool: L4Tool): void {
         remember(openTools.filter((candidate) => candidate !== tool));
-        controller?.resetAnalysis(L4_TOOL_ANALYSIS[tool]);
+        const analysis = (L4_TOOL_ANALYSIS as Partial<Record<L4Tool, OnDemandAnalysis>>)[tool];
+        if (analysis) controller?.resetAnalysis(analysis);
     }
 </script>
 
 <div class="space-y-3" data-testid="risk-l4">
     {#if addable.length > 0}
         <div class="space-y-2" data-testid="risk-l4-tools">
-            {#if openTools.length === 0}
+            {#if shown.length === 0}
                 <p class="text-xs text-lf-muted" data-testid="risk-l4-empty">{$t('risk.levels.l4.tools.empty')}</p>
             {/if}
             <div class="flex flex-wrap items-center gap-2">
@@ -140,4 +151,8 @@
             {@render snippets[tool]?.()}
         </div>
     {/each}
+
+    {#if notes}
+        <div data-testid="risk-l4-notes">{@render notes()}</div>
+    {/if}
 </div>
