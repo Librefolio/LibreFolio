@@ -1278,8 +1278,12 @@ class TestIdentityV2AndProfileSpecs:
             "coupon_schedule",
             "emptied",
             "thinned",
+            "freshness",
         }
         assert set(thinned_model.model_fields) == {"voice", "changes_in_window"}
+        freshness_model = getattr(asset_payloads, "AssetProfileFreshnessRow", None)
+        assert freshness_model is not None, "asset_payloads.AssetProfileFreshnessRow is missing (D1d)"
+        assert set(freshness_model.model_fields) == {"voice", "confirmed_on", "stale"}
         with pytest.raises(ValidationError):
             thinned_model.model_validate({"voice": "ter", "changes_in_window": 2, "extra": 1})
 

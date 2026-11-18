@@ -824,6 +824,18 @@ describe('AI Export compact Snapshot Data renderer', () => {
             expect(weights).toContain('60%');
             expect(weights).toContain('40%');
         });
+
+        it('renders the freshness of asset.profile v1 (D1d) as its own table, compactly', () => {
+            const section = profileV1();
+            const payload = {...section.payload, freshness: [{voice: 'yield_gross', confirmed_on: '2026-09-18', stale: true}]};
+            const rendered = renderSnapshotDataText([{...section, payload}], target).content;
+
+            expect(rendered).not.toContain('PAYLOAD YAML FALLBACK');
+            const freshness = tableBlock(rendered, 'freshness');
+            expect(freshness).toContain('yield_gross');
+            expect(freshness).toContain('2026-09-18');
+            expect(freshness).toContain('true');
+        });
     });
 
     /**
