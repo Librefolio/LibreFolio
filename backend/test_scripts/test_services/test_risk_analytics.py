@@ -277,6 +277,8 @@ def test_registry_discovers_all_deterministic_analytics():
         "historical_kpi",
         "historical_var",
         "portfolio_optimization",
+        # RN-25: one asset's price under a move of its yield, from the profile's modified duration.
+        "rate_shock",
         "risk_contribution",
         "simulation",
         "stress",

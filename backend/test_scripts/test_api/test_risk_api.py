@@ -145,6 +145,8 @@ async def test_risk_catalog_requires_auth_and_lists_plugins():
             "historical_kpi",
             "historical_var",
             "portfolio_optimization",
+            # RN-25: one asset's price under a move of its yield, from the profile's modified duration.
+            "rate_shock",
             "risk_contribution",
             "simulation",
             "stress",
