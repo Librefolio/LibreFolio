@@ -361,11 +361,9 @@
     let allConfiguredFxSlugs: string[] = $state([]);
     let allAssets: Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null; currency?: string; is_benchmark?: boolean}> = $state([]);
 
-    // Classification data (read with the asset's enrichers, for the «Profilo» dot)
-    let sectorDistribution: Record<string, number> | null = $state(null);
-    let geographicDistribution: Record<string, number> | null = $state(null);
-    let shortDescription: string | null = $state(null);
-    let classificationLoaded = $state(false);
+    // The asset's enrichers, read once: the «Profilo» dot and the asset window's list. The description, the sectors and
+    // the countries are the profile's (plan 68, E9): the asset window reads them from there
+    let enrichersLoaded = $state(false);
 
     // AI export (page toolbar) — dropdown open/position handled internally by AiExportMenu
     let assetAiExportCompatibility = $state<AiExportCatalogCompatibilityResult>(DISABLED_AI_EXPORT_COMPATIBILITY);
@@ -1122,10 +1120,7 @@
         comparisonEvents = new Map();
         live.resetPrice();
         seriesRangeDeltaRefresh++;
-        sectorDistribution = null;
-        geographicDistribution = null;
-        shortDescription = null;
-        classificationLoaded = false;
+        enrichersLoaded = false;
         assetEnricherCount = null;
         assetEnrichers = null;
         providerIconUrl = null;
@@ -1139,7 +1134,7 @@
         }
         // Classification and enrichers: always read, the «Profilo» tab's dot needs the enrichers of an asset without
         // classification too (plan 68, E3)
-        await loadClassificationData();
+        await loadAssetEnrichers();
         // Load comparison asset data after initial data is ready
         await maybeLoadComparison();
         await loadSignalFxPairs();
@@ -1603,7 +1598,7 @@
         }
     }
 
-    async function loadClassificationData() {
+    async function loadAssetEnrichers() {
         try {
             const response = await zodiosApi.read_assets_bulk_api_v1_assets_get({
                 queries: {asset_ids: [data.assetId]},
@@ -1612,24 +1607,10 @@
             // The asset's enrichers (its bindings, plan 68 B3): the «Profilo» tab's dot, and the asset window's list (E8a)
             assetEnrichers = items.length > 0 && items[0].enrichers ? {config: items[0].enrichers.config ?? {}, state: items[0].enrichers.state ?? {}} : null;
             assetEnricherCount = items.length > 0 ? Object.keys(items[0].enrichers?.config ?? {}).length : null;
-            if (items.length > 0 && items[0].classification_params) {
-                const cp = items[0].classification_params;
-                sectorDistribution = cp.sector_area?.distribution ?? null;
-                geographicDistribution = cp.geographic_area?.distribution ?? null;
-                shortDescription = cp.short_description ?? null;
-            } else {
-                // No classification data — reset to null (prevents stale data from previous asset)
-                sectorDistribution = null;
-                geographicDistribution = null;
-                shortDescription = null;
-            }
         } catch (e) {
-            console.error('Failed to load classification data:', e);
-            sectorDistribution = null;
-            geographicDistribution = null;
-            shortDescription = null;
+            console.error('Failed to load the asset enrichers:', e);
         } finally {
-            classificationLoaded = true;
+            enrichersLoaded = true;
         }
     }
 
@@ -1851,7 +1832,7 @@
         // edit button must stay disabled for the whole reload, not just from the moment the
         // classification fetch starts. Otherwise reopening the modal right after a save
         // prefills it with the pre-save values.
-        classificationLoaded = false;
+        enrichersLoaded = false;
         await Promise.all([loadAssetInfo(), loadProviderAssignment()]);
         // Update provider icon if changed
         if (assetInfo?.provider_code) {
@@ -1859,7 +1840,7 @@
         }
         // Reload classification data if metadata is available (always refresh after sync)
         // Always read: the enrichers count for the «Profilo» tab's dot (plan 68, E3); no classification resets the three
-        await loadClassificationData();
+        await loadAssetEnrichers();
     }
 
     // Page sync modal state
@@ -2346,18 +2327,6 @@
 
     function buildEditData() {
         if (!assetInfo) return null;
-        // Build classification_params from loaded data. `short_description` is
-        // included here (bug-fix 2026-04-22): without it the edit modal opens
-        // with an empty "Description" textarea even though the DB has a value,
-        // because the modal reads `data.classification_params.short_description`.
-        const hasClassification = sectorDistribution || geographicDistribution || shortDescription;
-        const classification_params = hasClassification
-            ? {
-                  short_description: shortDescription ?? null,
-                  sector_area: sectorDistribution ? {distribution: sectorDistribution} : null,
-                  geographic_area: geographicDistribution ? {distribution: geographicDistribution} : null,
-              }
-            : null;
         return {
             id: assetInfo.id,
             display_name: assetInfo.display_name,
@@ -2367,7 +2336,6 @@
             quote_base_quantity: assetInfo.quote_base_quantity ?? 1,
             active: assetInfo.active,
             is_benchmark: assetInfo.is_benchmark,
-            classification_params,
             identifier_isin: assetInfo.identifier_isin,
             identifier_ticker: assetInfo.identifier_ticker,
             identifier_cusip: assetInfo.identifier_cusip,
@@ -2475,7 +2443,7 @@
                 aiExportDisabled={assetAiExportCatalogLoading || assetAiExportCatalogFailed || !assetInfo}
                 onaiexportprepare={handleAssetAiExport}
                 onaiexportcopied={handleAssetAiExportCopied}
-                editDisabled={!assetInfo || !classificationLoaded}
+                editDisabled={!assetInfo || !enrichersLoaded}
                 onedit={() => {
                     editDataForModal = buildEditData();
                     editModalOpen = true;
