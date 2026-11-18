@@ -48,10 +48,9 @@ test.describe('Asset enrichers from the asset window (plan 68, E8a)', () => {
             await expect(identifier).toBeVisible();
             if ((await identifier.inputValue()) !== isin) await identifier.fill(isin);
             await expect(identifier).toHaveValue(isin);
-            // The field commits on `change`, when it lets the focus go: the window is valid only then
-            await identifier.blur();
+            // The field commits at every key (E7c): the button is usable right after typing, without letting the field go
             const apply = window.getByTestId('enrichers-apply');
-            await expect(apply, 'the binding is not valid: the identifier was not committed').toBeEnabled();
+            await expect(apply, 'the binding is not valid right after typing the identifier').toBeEnabled();
             await apply.click();
             await expect(window).toBeHidden();
             await expect(button).toHaveAttribute('data-count', '1');
