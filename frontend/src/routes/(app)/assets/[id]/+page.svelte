@@ -39,6 +39,7 @@
     import AssetDetailMeasuresSection from '$lib/features/assets/detail/AssetDetailMeasuresSection.svelte';
     import AssetDetailHeader from '$lib/features/assets/detail/AssetDetailHeader.svelte';
     import AssetProfileTab from '$lib/features/assets/detail/AssetProfileTab.svelte';
+    import AssetProfileEditor from '$lib/features/assets/detail/AssetProfileEditor.svelte';
     import {invalidateAssetProfile} from '$lib/features/assets/profile/profileStore';
     import AssetDetailToolbarActions from '$lib/features/assets/detail/AssetDetailToolbarActions.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
@@ -187,6 +188,8 @@
     let assetEnrichers = $state<{config: Record<string, any>; state: Record<string, any>} | null>(null);
     /** Bumped after anything that writes the profile: the «Profilo» tab reads again. */
     let profileRefreshKey = $state(0);
+    /** «Modifica i dati» of the «Profilo» tab (plan 68, E9b2): the profile window in save mode. */
+    let profileEditOpen = $state(false);
     // The dots (plan 68, E3): «Panoramica» without a price provider, «Profilo» without an enricher — both once known.
     let assetDetailTabs = $derived([
         {id: 'overview', label: $t('risk.assetDetail.overviewTab'), icon: ChartLine, testId: 'asset-detail-tab-overview', dot: providerAssignmentLoaded && providerAssignment === null ? {label: $t('risk.assetDetail.overviewNoPriceProvider')} : undefined},
@@ -2895,7 +2898,16 @@
         </AssetDetailMeasuresSection>
     {:else if activeTab === 'profile'}
         {#if assetInfo}
-            <AssetProfileTab assetId={data.assetId} period={{start: dateStart, end: dateEnd, all: activePreset === 'MAX'}} isin={assetInfo.identifier_isin ?? null} ticker={assetInfo.identifier_ticker ?? null} {otherIdentifiers} refreshKey={profileRefreshKey} />
+            <AssetProfileTab
+                assetId={data.assetId}
+                period={{start: dateStart, end: dateEnd, all: activePreset === 'MAX'}}
+                isin={assetInfo.identifier_isin ?? null}
+                ticker={assetInfo.identifier_ticker ?? null}
+                {otherIdentifiers}
+                refreshKey={profileRefreshKey}
+                onedit={() => (profileEditOpen = true)}
+            />
+            <AssetProfileEditor bind:open={profileEditOpen} assetId={data.assetId} assetName={assetInfo.display_name} onsaved={() => (profileRefreshKey += 1)} />
         {:else}
             <div class="flex min-h-48 items-center justify-center" data-testid="asset-detail-profile-loading">
                 <RefreshCw size={24} class="animate-spin text-lf-link" />
