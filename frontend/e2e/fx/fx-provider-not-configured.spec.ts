@@ -232,6 +232,13 @@ const test = base.extend<{owned: Array<readonly [string, string]>}>({
 });
 
 test.describe('FX pair dialog — a provider that is not configured', () => {
+    // The provider list is read again while the dialog mounts: a read still in flight when the test ends would make its
+    // route.fetch() fail after the test, an error outside any test that leaves the next one not run (FB7c triage).
+    // Detached here with ignoreErrors, the handler is dropped instead of awaited.
+    test.afterEach(async ({page}) => {
+        await page.unrouteAll({behavior: 'ignoreErrors'});
+    });
+
     test('a new pair: the route through it is switched off, a touch opens the window and adds nothing', async ({page}) => {
         const simulation = await patchProviderList(page);
         await login(page, TEST_USER);

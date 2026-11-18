@@ -94,8 +94,10 @@
             "demo": "Demo (free)",
             "pro": "Pro (paid)"
           }
-        }
-      }
+        },
+        "callsNote": "CoinGecko's month may start again on another day: this is LibreFolio's count."
+      },
+      "countsOn": "Its calls count on {group}: the counter and the limits are there."
     },
     "notConfigured": {
       "tooltip": "{provider} needs configuring",
@@ -111,6 +113,39 @@
       "missingMemberGeneric": "{provider} needs configuring: ask an administrator to set its required settings.",
       "missingAdminPhrase": "{provider} needs configuring: {fields} {count, plural, one {is} other {are}} missing.",
       "missingMemberPhrase": "{provider} needs configuring: ask an administrator to set {fields}."
+    },
+    "calls": {
+      "title": "Calls",
+      "window": {
+        "minute": "Minute",
+        "hour": "Hour",
+        "day": "Day",
+        "week": "Week",
+        "month": "Month"
+      },
+      "noLimit": "No limit",
+      "noLimitInline": "no limit",
+      "limitOf": "Limit — {window}",
+      "utcNote": "Calendar windows in UTC: the day starts again at 00:00 UTC, the week on Monday, the month on the 1st. Counts read when the page loads.",
+      "full": {
+        "minute": "Per-minute limit reached: {count} of {limit}. Resumes at {time} UTC.",
+        "hour": "Hourly limit reached: {count} of {limit}. Resumes at {time} UTC.",
+        "day": "Daily limit reached: {count} of {limit}. Resumes on {date} at {time} UTC.",
+        "week": "Weekly limit reached: {count} of {limit}. Resumes on {date} at {time} UTC.",
+        "month": "Monthly limit reached: {count} of {limit}. Resumes on {date} at {time} UTC."
+      },
+      "stopped": {
+        "minute": "Stopped: the per-minute limit is 0, no call goes out until an administrator changes it.",
+        "hour": "Stopped: the hourly limit is 0, no call goes out until an administrator changes it.",
+        "day": "Stopped: the daily limit is 0, no call goes out until an administrator changes it.",
+        "week": "Stopped: the weekly limit is 0, no call goes out until an administrator changes it.",
+        "month": "Stopped: the monthly limit is 0, no call goes out until an administrator changes it."
+      },
+      "managedFull": "Instance limit reached: resumes on {date} at {time} UTC.",
+      "managedFullAt": "Instance limit reached: resumes at {time} UTC.",
+      "adminOnly": "Only an administrator can change the limits.",
+      "invalid": "invalid value",
+      "invalidBy": "{variable}: invalid value"
     }
   }
 }

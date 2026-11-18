@@ -94,8 +94,10 @@
             "demo": "Demo (gratuito)",
             "pro": "Pro (de pago)"
           }
-        }
-      }
+        },
+        "callsNote": "El mes de CoinGecko puede empezar otro día: este es el recuento de LibreFolio."
+      },
+      "countsOn": "Sus llamadas cuentan en {group}: el contador y los límites están allí."
     },
     "notConfigured": {
       "tooltip": "{provider} debe configurarse",
@@ -111,6 +113,39 @@
       "missingMemberGeneric": "{provider} debe configurarse: pide a un administrador que configure sus ajustes obligatorios.",
       "missingAdminPhrase": "{provider} debe configurarse: {count, plural, one {falta} other {faltan}} {fields}.",
       "missingMemberPhrase": "{provider} debe configurarse: pide a un administrador que configure {fields}."
+    },
+    "calls": {
+      "title": "Llamadas",
+      "window": {
+        "minute": "Minuto",
+        "hour": "Hora",
+        "day": "Día",
+        "week": "Semana",
+        "month": "Mes"
+      },
+      "noLimit": "Sin límite",
+      "noLimitInline": "sin límite",
+      "limitOf": "Límite — {window}",
+      "utcNote": "Ventanas de calendario en UTC: el día empieza de nuevo a las 00:00 UTC, la semana el lunes, el mes el día 1. Recuentos leídos al cargar la página.",
+      "full": {
+        "minute": "Límite por minuto alcanzado: {count} de {limit}. Se reanuda a las {time} UTC.",
+        "hour": "Límite por hora alcanzado: {count} de {limit}. Se reanuda a las {time} UTC.",
+        "day": "Límite diario alcanzado: {count} de {limit}. Se reanuda el {date} a las {time} UTC.",
+        "week": "Límite semanal alcanzado: {count} de {limit}. Se reanuda el {date} a las {time} UTC.",
+        "month": "Límite mensual alcanzado: {count} de {limit}. Se reanuda el {date} a las {time} UTC."
+      },
+      "stopped": {
+        "minute": "Detenido: el límite por minuto es 0, no sale ninguna llamada hasta que un administrador lo cambie.",
+        "hour": "Detenido: el límite por hora es 0, no sale ninguna llamada hasta que un administrador lo cambie.",
+        "day": "Detenido: el límite diario es 0, no sale ninguna llamada hasta que un administrador lo cambie.",
+        "week": "Detenido: el límite semanal es 0, no sale ninguna llamada hasta que un administrador lo cambie.",
+        "month": "Detenido: el límite mensual es 0, no sale ninguna llamada hasta que un administrador lo cambie."
+      },
+      "managedFull": "Límite de la instancia alcanzado: se reanuda el {date} a las {time} UTC.",
+      "managedFullAt": "Límite de la instancia alcanzado: se reanuda a las {time} UTC.",
+      "adminOnly": "Solo un administrador puede cambiar los límites.",
+      "invalid": "valor no válido",
+      "invalidBy": "{variable}: valor no válido"
     }
   }
 }

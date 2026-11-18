@@ -157,6 +157,7 @@ async def list_providers(
                     params_schema=schema_fields,
                     accepted_identifier_types=[t.value for t in instance.accepted_identifier_types],
                     provider_help_url=instance.provider_help_url,
+                    attribution=instance.attribution,
                     supports_meaningful_volume=instance.supports_meaningful_volume,
                     volume_kind=instance.volume_kind,
                 )

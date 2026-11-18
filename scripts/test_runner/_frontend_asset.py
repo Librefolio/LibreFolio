@@ -308,6 +308,18 @@ def front_asset_provider_not_configured(verbose: bool = False, ui: bool = False,
     return _run_playwright("assets/asset-provider-not-configured.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
 
 
+def front_asset_provider_attribution(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the provider attribution line E2E («Powered by CoinGecko», project 76, P4), on both projects."""
+    print_section("Frontend Asset — Provider Attribution Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("assets/provider-attribution.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
+
+
 def front_asset_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all Asset tests (unit + E2E)."""
     if _common.nothing_left_to_run("front-asset"):
@@ -434,6 +446,14 @@ def populate_registry(registry: dict) -> None:
         name="Asset Search Provider Not Configured",
         desc="Project 76 N3a/N3b, desktop and mobile: a provider the list says is not configured (justETF, patched in the page's own route; the search stream simulated) gets a switched-off chip, kept in its place and never named in a search; a touch opens the common window — a member sees the read-only settings link and no Configure, an administrator's Configure opens the plugin's settings (closed, nothing saved), the managed profile has no button and closes on Escape; in the provider select its option is switched off and choosing it opens the window without changing the selection, unless it is the provider saved on the asset (own asset, cleaned up), whose Configure carries the warning",
         tests="assets/asset-provider-not-configured.spec.ts",
+    )
+    add_test(
+        cat,
+        "provider-attribution",
+        front_asset_provider_attribution,
+        name="Asset Provider Attribution",
+        desc="Project 76 P4, desktop and mobile: a price provider's attribution line («Powered by CoinGecko»), once per provider, linked in a new tab, at least 10 px — absent on the Assets list, the Dashboard positions and an asset's detail with the real provider list (no asset uses CoinGecko on the test backend); drawn with one yfinance link when the page's own read of the list gives yfinance a synthetic attribution; on Settings › Plugins (administrator) CoinGecko's asset card carries its real line, justETF's card and CoinGecko's settings group none",
+        tests="assets/provider-attribution.spec.ts",
     )
     add_test(cat, "all", front_asset_all, test_names=False, name="All Asset Tests", desc="Run all Asset tests (unit + E2E)")
     registry["front-asset"] = cat
