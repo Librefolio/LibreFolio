@@ -220,6 +220,8 @@ class FixtureInput(BaseModel):
         "progress_flood",
         "log",
         "log_flood",
+        "raise",
+        "raise_reported",
     ]
     text: str = "private"
     size: int = Field(default=2_048, strict=True, le=1_000_000)
@@ -357,6 +359,19 @@ def _write_fixture_log_lines(scenario: str, context: ToolExecutionContext) -> No
             log.info("Flood line", index=index)
 
 
+def _raise_fixture_failure(scenario: str) -> None:
+    """The failure scenarios (H-60 follow-up of lot LOGS): a plugin failure nobody logged, and one the plugin logged itself
+    before re-raising it, as the PAC's ``_log_engine_failure`` does. The message is private: it must never be logged."""
+    if scenario == "raise":
+        raise _PrivateFixtureFailure("PRIVATE engine failure on 1234.56 EUR")
+    if scenario == "raise_reported":
+        try:
+            raise _PrivateFixtureFailure("PRIVATE engine failure on 1234.56 EUR")
+        except _PrivateFixtureFailure:
+            get_logger("tools.fixture").error("Fixture engine failure", error_type="_PrivateFixtureFailure")
+            raise
+
+
 @register_plugin(FixtureRegistry)
 class FixturePlugin(ToolPlugin):
     contract_version = "1.0.0"
@@ -425,6 +440,7 @@ class FixturePlugin(ToolPlugin):
 
         _report_fixture_progress(parameters.scenario, context)
         _write_fixture_log_lines(parameters.scenario, context)
+        _raise_fixture_failure(parameters.scenario)
 
         # These two probes must start from a valid, genuinely constructed model.
         text = "private" if parameters.scenario in ("unicode", "invalid_output") else parameters.text

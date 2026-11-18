@@ -3139,7 +3139,15 @@ def test_execute_puts_the_job_secrets_in_flight(monkeypatch):
 
     monkeypatch.setattr(worker_module, "secrets_in_flight", recording)
     monkeypatch.setattr(FixturePlugin, "bind_settings", lambda self, bound: None, raising=False)
-    item = _item("secrets", "echo")
+    frame = worker_module._execute(_in_process_job("echo", settings=_Settings()), SimpleNamespace(is_set=lambda: False), FixtureRegistry)
+
+    assert frame["status"] == "success", frame
+    assert seen == [frozenset({"K3Y"})]
+
+
+def _in_process_job(scenario: str, *, parameters: dict | None = None, **changes) -> ToolWorkerJob:
+    """A worker job for the fixture Tool, for the worker's ``_execute`` run in this process."""
+    item = _item("in-process", scenario)
     now = time.monotonic()
     job = ToolWorkerJob(
         execution_id=uuid4().hex,
@@ -3147,15 +3155,92 @@ def test_execute_puts_the_job_secrets_in_flight(monkeypatch):
         contract_version=item.contract_version,
         implementation_version=item.implementation_version,
         schema_fingerprint=item.schema_fingerprint,
-        parameters=encode_json(item.parameters),
+        parameters=encode_json(parameters if parameters is not None else item.parameters),
         soft_deadline=now + 50,
         hard_deadline=now + 60,
         max_parameter_bytes=1_048_576,
         max_result_bytes=1_048_576,
         max_json_depth=32,
-        settings=_Settings(),
     )
-    frame = worker_module._execute(job, SimpleNamespace(is_set=lambda: False), FixtureRegistry)
+    return replace(job, **changes) if changes else job
 
-    assert frame["status"] == "success", frame
-    assert seen == [frozenset({"K3Y"})]
+
+def _failure_lines(scenario: str, **changes) -> tuple[dict, list[dict]]:
+    """The worker run in this process on ``scenario``: its result frame, and its «Tool plugin failed» lines."""
+    with capture_logs() as lines:
+        frame = worker_module._execute(_in_process_job(scenario, **changes), SimpleNamespace(is_set=lambda: False), FixtureRegistry)
+    return frame, [line for line in lines if line["event"] == worker_module.PLUGIN_FAILURE_EVENT]
+
+
+# ---------------------------------------------------------------------------
+# A plugin failure keeps its cause (H-60 follow-up of lot LOGS): one line, the class and the code site, never the message
+# ---------------------------------------------------------------------------
+
+
+def test_worker_logs_a_plugin_failure_once_by_class_and_site():
+    """A plugin that raises: the item fails with its code, and the worker writes one line naming the Tool, the phase, the
+    exception's class and where it was raised, never its message, which can carry the user's amounts."""
+    frame, failures = _failure_lines("raise")
+
+    assert frame["status"] == "error" and frame["error"]["code"] == "execution_failed"
+    (line,) = failures
+    assert line["log_level"] == "error"
+    assert line["tool_code"] == FIXTURE_TOOL_CODE and line["phase"] == "compute"
+    assert line["error_type"] == "_PrivateFixtureFailure"
+    assert line["where"].startswith("backend/test_scripts/test_services/_tools_executor_fixtures.py:")
+    assert "PRIVATE" not in repr(line) and "1234.56" not in repr(line)
+
+
+def test_worker_does_not_log_again_a_failure_the_plugin_logged():
+    """A plugin that logged its own failure before re-raising it (the PAC's ``_log_engine_failure``): the «reported» mark
+    tells the worker, which writes nothing more. One line per failure."""
+    with capture_logs() as lines:
+        frame = worker_module._execute(_in_process_job("raise_reported"), SimpleNamespace(is_set=lambda: False), FixtureRegistry)
+
+    assert frame["status"] == "error" and frame["error"]["code"] == "execution_failed"
+    assert [line["event"] for line in lines if line["event"] in ("Fixture engine failure", worker_module.PLUGIN_FAILURE_EVENT)] == ["Fixture engine failure"]
+
+
+def test_worker_logs_an_invalid_output_without_its_text():
+    """A result its output contract refuses is a plugin's bug: one line, the phase and the class, never the refused text."""
+    frame, failures = _failure_lines("invalid_output")
+
+    assert frame["status"] == "error" and frame["error"]["code"] == "invalid_output"
+    (line,) = failures
+    assert line["phase"] == "output" and line["error_type"] == "ValidationError"
+    assert "PRIVATE_OUTPUT_REJECTED" not in repr(line)
+
+
+def test_worker_does_not_log_invalid_parameters():
+    """Parameters the input contract refuses are the caller's, answered with their own details: no failure line."""
+    frame, failures = _failure_lines("echo", parameters={"operation": "exercise", "scenario": "not-a-scenario"})
+
+    assert frame["status"] == "error" and frame["error"]["code"] == "invalid_parameters"
+    assert failures == []
+
+
+@pytest.mark.asyncio
+async def test_worker_failure_line_reaches_the_parent_log(runtime):
+    """A real child: the failure line is written after compute returned, and still reaches the parent's log, with the item's
+    execution id: the channel stays open for log lines until the result frame."""
+    result, lines = await _run_with_logs(runtime, "raise")
+
+    assert result.status == "error" and result.error.code == "execution_failed"
+    errors = [line for line in lines if line.get("log_level") in {"error", "critical"}]
+    (line,) = errors  # one line for the failure: the parent writes none of its own
+    assert line.get("worker") == "tool" and line["event"] == worker_module.PLUGIN_FAILURE_EVENT, errors
+    assert line["error_type"] == "_PrivateFixtureFailure" and line["phase"] == "compute"
+    assert line["execution_id"] and "PRIVATE" not in repr(lines)
+
+
+@pytest.mark.asyncio
+async def test_worker_does_not_log_again_in_a_child_a_failure_the_plugin_logged(runtime):
+    """A real child: a failure the plugin logged inside its ``except`` and re-raised (as the PAC does) is marked «reported»
+    under the child's own logging, so the parent's log holds the plugin's line only, never the worker's second one."""
+    result, lines = await _run_with_logs(runtime, "raise_reported")
+
+    assert result.status == "error" and result.error.code == "execution_failed"
+    errors = [line for line in lines if line.get("log_level") in {"error", "critical"}]
+    (line,) = errors
+    assert line.get("worker") == "tool" and line["event"] == "Fixture engine failure", errors
+    assert "PRIVATE" not in repr(lines)

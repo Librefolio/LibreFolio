@@ -15,12 +15,13 @@ from typing import Protocol
 import psutil
 from pydantic import BaseModel, ValidationError
 
-from backend.app.logging_config import configure_child_logging
+from backend.app.logging_config import configure_child_logging, get_logger
 from backend.app.schemas.tools import ToolError, ToolErrorCode, ToolItemMetrics
 from backend.app.services.plugin_settings.contract import BoundSettings
 from backend.app.services.tools.base import ToolExecutionContext, ToolExecutionError
 from backend.app.services.tools.registry import ToolDefinition, ToolPluginRegistry
 from backend.app.services.tools.wire import decode_json, encode_json, encode_log_frame, encode_progress_frame, plain_json_object, validation_error
+from backend.app.utils.runtime.errors import code_site, is_reported
 from backend.app.utils.runtime.secret_masking import secrets_in_flight
 
 
@@ -70,12 +71,17 @@ _LOG_LINE_CUTS = (4_000, 1_000)
 #: The line that counts the log lines a child did not send.
 DROPPED_LOG_LINES_EVENT = "Tool worker log lines dropped"
 
+#: The line of a plugin failure nobody logged (H-60 follow-up of lot LOGS): the class and the code site, never the message.
+PLUGIN_FAILURE_EVENT = "Tool plugin failed"
+
+logger = get_logger(__name__)
+
 
 class PipeProgressReporter:
     """The child's channel to its parent (lot V1 of project 67; log lines since lot LOGS): small frames on the response pipe,
     between ``ready`` and the result. It never blocks for long, never raises: a malformed call is dropped, past its cap it
-    stops, a broken pipe is swallowed, and once closed (compute returned) it sends nothing, so a stray thread cannot split
-    the result frame. It writes progress and log frames only: no raw frame reaches the pipe through it, and one lock serialises
+    stops, a broken pipe is swallowed. Progress frames stop when compute returns (``close_progress``); log lines go on until
+    ``close``, just before the result frame, and after it nothing is sent, so a stray thread cannot split the result frame. It writes progress and log frames only: no raw frame reaches the pipe through it, and one lock serialises
     both. It sends only from the process that made it: a process forked from the worker (a seeded run of the Rebalancer)
     inherits it and must never write on the same pipe. The parent checks every frame again: shape, phase, level, its own caps."""
 
@@ -87,6 +93,7 @@ class PipeProgressReporter:
         self._log_sent = 0
         self._log_dropped = 0
         self._closed = False
+        self._progress_closed = False
         self._pid = os.getpid()
 
     def report(self, phase: str, step: int | None = None, total: int | None = None) -> None:
@@ -116,10 +123,16 @@ class PipeProgressReporter:
         if os.getpid() != self._pid:
             return
         with self._lock:
-            if self._closed or self._sent >= CHILD_PROGRESS_FRAME_CAP:
+            if self._closed or self._progress_closed or self._sent >= CHILD_PROGRESS_FRAME_CAP:
                 return
             self._sent += 1
             self._write(payload)
+
+    def close_progress(self) -> None:
+        """Compute returned: no more progress frames. Log lines still go until ``close``, so that a failure the worker
+        handles after compute keeps its line (H-60 follow-up of lot LOGS)."""
+        with self._lock:
+            self._progress_closed = True
 
     def _write(self, payload: bytes) -> None:
         """Under the lock: one frame on the pipe."""
@@ -289,7 +302,7 @@ def _execute_job(job: ToolWorkerJob, cancellation: CancellationSignal, registry_
         finally:
             metrics["compute_ms"] = _elapsed_ms(started)
             if progress is not None:
-                progress.close()
+                progress.close_progress()
         context.checkpoint()
         if not isinstance(result, BaseModel):
             raise ToolExecutionError("invalid_output")
@@ -318,12 +331,25 @@ def _execute_job(job: ToolWorkerJob, cancellation: CancellationSignal, registry_
             "metrics": ToolItemMetrics.model_validate(metrics).model_dump(mode="json"),
         }
     except ValidationError as exc:
+        if phase != "input":
+            # Past the input, a refused model is the plugin's: its cause is kept, the refused values are not.
+            _log_plugin_failure(job, phase, exc)
         return _failure_frame(job, validation_error(exc, code=_error_code_for_phase(phase)), metrics)
     except ToolExecutionError as exc:
         return _failure_frame(job, ToolError(code=exc.code, retryable=exc.retryable), metrics)
-    except Exception:
-        # A packaged plugin failure becomes a code, not an exception/input disclosure.
+    except Exception as exc:  # an isolation boundary: a packaged plugin failure becomes a code, logged by class and site
+        _log_plugin_failure(job, phase, exc)
         return _failure_frame(job, ToolError(code=_error_code_for_phase(phase), retryable=False), metrics)
+
+
+def _log_plugin_failure(job: ToolWorkerJob, phase: str, error: Exception) -> None:
+    """One line for a plugin failure the log does not have yet (H-60 follow-up of lot LOGS): the Tool, the phase, the
+    exception's class and where it was raised (``code_site``), never its message, arguments or locals, which can carry the
+    user's amounts. A failure the plugin logged itself (the «reported» mark, as the PAC's ``_log_engine_failure`` leaves
+    it) gets no second line."""
+    if is_reported(error):
+        return
+    logger.error(PLUGIN_FAILURE_EVENT, tool_code=job.tool_code, phase=phase, error_type=type(error).__qualname__, **code_site(error))
 
 
 def execute_tool_job(
