@@ -47,9 +47,6 @@ is ever needed it has to be taken from the job budget.
 > constraints. Do not treat this number as validated.
 """
 
-import traceback
-from pathlib import Path
-
 from pydantic import BaseModel
 
 from backend.app.logging_config import get_logger
@@ -71,15 +68,11 @@ from backend.app.services.tools.base import (
     ToolService,
 )
 from backend.app.services.tools.registry import ToolPluginRegistry
+from backend.app.utils.runtime.errors import code_site
 
 logger = get_logger(__name__)
 
 _PLAN_RESULT_BYTES = 512 * 1024
-
-# LibreFolio's own code, told apart from libraries in a failure site; paths are
-# shown from the repository root, library files by name only.
-_BACKEND_ROOT = Path(__file__).resolve().parents[4]
-_REPO_ROOT = _BACKEND_ROOT.parent
 
 # Time reserved *after* the solver returns, for the exact replay and the report.
 # Re-measured on 2026-10-06 (step S5 of
@@ -122,12 +115,6 @@ _OPERATION_POLICIES = (
 )
 
 
-def _frame_text(frame: traceback.FrameSummary) -> str:
-    path = Path(frame.filename).resolve()
-    shown = path.relative_to(_REPO_ROOT).as_posix() if path.is_relative_to(_BACKEND_ROOT) else path.name
-    return f"{shown}:{frame.lineno}:{frame.name}"
-
-
 def _log_engine_failure(exc: Exception, execution_id: str) -> None:
     """Tell the administrator where the engine failed, and nothing else.
 
@@ -142,17 +129,7 @@ def _log_engine_failure(exc: Exception, execution_id: str) -> None:
     The worker sends its lines to the server, which writes them in
     ``librefolio.log`` with the request's id (lot LOGS of project 67).
     """
-    frames = traceback.extract_tb(exc.__traceback__)
-    own = [frame for frame in frames if Path(frame.filename).resolve().is_relative_to(_BACKEND_ROOT)]
-    site: dict[str, str | list[str]] = {}
-    if own:
-        site["where"] = _frame_text(own[-1])
-        callers = [_frame_text(frame) for frame in reversed(own[-3:-1])]
-        if callers:
-            site["callers"] = callers
-    if frames and (not own or own[-1] is not frames[-1]):
-        site["raised_in"] = _frame_text(frames[-1])
-    logger.error("PAC planner engine failure", error_type=type(exc).__qualname__, execution_id=execution_id, **site)
+    logger.error("PAC planner engine failure", error_type=type(exc).__qualname__, execution_id=execution_id, **code_site(exc))
 
 
 @register_plugin(ToolPluginRegistry)
