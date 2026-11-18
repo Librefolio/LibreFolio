@@ -27,6 +27,7 @@ import re
 from collections.abc import Callable, Iterable
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 from typing import Any, Dict, TypeVar
 
 from backend.app.db import AssetType, IdentifierType
@@ -53,6 +54,10 @@ COINGECKO_FIRST_DAY = date(2013, 4, 28)
 _DAY_MS = 86_400_000
 #: The margin past each edge of a history request, in seconds (the midnight and range filters drop what it adds).
 _EDGE_SECONDS = 3600
+
+
+#: CoinGecko's logo in the asset family's static folder, served by the app (P1b): no browser asks coingecko.com for it.
+ICON_FILE = Path(__file__).resolve().parents[1] / "static" / "coingecko.png"
 
 
 def _utc_today() -> date:
@@ -143,6 +148,11 @@ class CoinGeckoProvider(AssetSourceProvider):
     @property
     def provider_name(self) -> str:
         return "CoinGecko"
+
+    @property
+    def get_icon(self) -> str | None:
+        # The bundled logo once the file is there; until then no icon, the default (P1b)
+        return self.generate_static_url(ICON_FILE.name) if ICON_FILE.is_file() else None
 
     @property
     def provider_help_url(self) -> str:
