@@ -145,6 +145,11 @@ class CoinGeckoProvider(AssetSourceProvider):
         return "CoinGecko"
 
     @property
+    def provider_help_url(self) -> str:
+        # Its page in the user guide (P6): the key, the year of history, the credits, the attribution
+        return "/mkdocs/user/assets/providers/coingecko/"
+
+    @property
     def attribution(self) -> FAProviderAttribution:
         # CoinGecko's terms: every price shown with «Powered by CoinGecko», prominent, linked to its site (P4)
         return FAProviderAttribution(text="Powered by CoinGecko", url="https://www.coingecko.com/")

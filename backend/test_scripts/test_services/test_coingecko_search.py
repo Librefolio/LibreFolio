@@ -246,6 +246,12 @@ def test_p3_the_assets_page(identifier: str, expected: str | None):
     assert CoinGeckoProvider().get_asset_url(identifier, IdentifierType.OTHER) == expected
 
 
+def test_p6_the_help_link_opens_the_user_page():
+    """P6: the provider's help link, beside it where a user picks a source, opens its page in the user guide (the
+    contract test checks the page exists)."""
+    assert CoinGeckoProvider().provider_help_url == "/mkdocs/user/assets/providers/coingecko/"
+
+
 # =============================================================================
 # 5. SEARCH IS ON; WITHOUT A KEY IT ASKS NOTHING
 # =============================================================================
