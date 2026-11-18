@@ -38,6 +38,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 ### 🔄 Modifié
 
+- Le PAC et les expositions de l'allocation comptent les secteurs d'un actif même quand une partie de sa répartition n'est pas un secteur connu : cette partie apparaît comme Autre, au lieu d'envoyer tout l'actif dans Non classé.
 - L'actif de comparaison des signaux du backend (Rolling Beta) et le champ actif du formulaire des transactions utilisent désormais le même panneau d'actifs que le sélecteur du benchmark : recherche par nom et codes, filtres par type et devise, groupes selon qui détient l'actif. Le formulaire garde **Nouvel actif**.
 - La simulation est estimée sur tout l'historique que vos positions ont en commun, jusqu'à aujourd'hui, et non plus sur la période choisie sur la page : le résultat dit la longueur de cet historique et de quand à quand, et changer la période laisse la simulation à l'écran. Un historique plus long que ce que le calcul peut porter garde ses observations les plus récentes, et le dit. Une position cotée depuis moins longtemps que l'horizon reste hors de l'estimation — son poids compte comme liquidités — et la page la nomme (`shorter_than_horizon` dans les exclusions du résultat).
 - Une simulation trop grande pour le nombre de trajectoires demandé tourne avec moins de trajectoires — la plus grande puissance de deux qui tient, au moins 1 024 — et dit combien, au lieu de refuser : avec les valeurs par défaut, cela lève l'ancienne limite de 66 positions.

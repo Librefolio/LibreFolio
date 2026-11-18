@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 
+- The PAC and the allocation exposures count an asset's sectors even when part of its split is not a known sector: that part shows as Other, instead of the whole asset going to Uncategorised.
 - The comparison asset of the backend signals (Rolling Beta) and the asset field of the transaction form now use the same asset panel as the benchmark picker: search by name and codes, type and currency filters, groups by who holds the asset. The form keeps **New asset**.
 - The simulation is estimated on all the history your holdings share, up to today, and no longer on the period chosen on the page: the result says how long that history is and from when to when, and changing the period leaves the simulation on screen. A history longer than the calculation can carry keeps its most recent observations, and says so. A holding listed more recently than the horizon stays out of the estimate — its weight counts as cash — and the page names it (`shorter_than_horizon` in the result's exclusions).
 - A simulation too large for the requested number of paths runs with fewer — the largest power of two that fits, at least 1 024 — and says how many, instead of refusing: at the defaults this lifts the old limit of 66 holdings.

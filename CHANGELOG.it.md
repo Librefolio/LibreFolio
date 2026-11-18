@@ -38,6 +38,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 ### 🔄 Modifiche
 
+- Il PAC e le esposizioni dell'allocazione contano i settori di un asset anche quando una parte della sua ripartizione non è un settore noto: quella parte compare come Altro, invece di mandare tutto l'asset in Non classificato.
 - L'asset di confronto dei segnali del backend (Rolling Beta) e il campo asset del form delle transazioni ora usano lo stesso pannello degli asset del selettore del benchmark: ricerca per nome e codici, filtri per tipo e valuta, gruppi per chi possiede l'asset. Il form tiene **Nuovo asset**.
 - La simulazione si stima su tutta la storia che le tue posizioni hanno in comune, fino a oggi, e non più sul periodo scelto nella pagina: il risultato dice quanto è lunga quella storia e da quando a quando, e cambiare il periodo lascia la simulazione a schermo. Una storia più lunga di quanto il calcolo può portare tiene le osservazioni più recenti, e lo dice. Una posizione quotata da meno tempo dell'orizzonte resta fuori dalla stima — il suo peso conta come liquidità — e la pagina la nomina (`shorter_than_horizon` fra le esclusioni del risultato).
 - Una simulazione troppo grande per il numero di percorsi chiesto gira con meno percorsi — la più grande potenza di due che ci sta, almeno 1 024 — e dice quanti, invece di rifiutare: con i valori predefiniti questo toglie il vecchio limite di 66 posizioni.
