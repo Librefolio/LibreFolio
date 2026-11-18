@@ -188,6 +188,9 @@
         "dataSince": "dal {date}",
         "beforeProfile": "valore di prima del profilo",
         "companySector": "Settore"
+      },
+      "row": {
+        "pending": "{count, plural, one {# modifica in attesa} other {# modifiche in attesa}}"
       }
     }
   }
