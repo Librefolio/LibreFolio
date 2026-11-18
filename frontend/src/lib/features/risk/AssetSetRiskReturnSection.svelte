@@ -54,6 +54,7 @@
     import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import type {RiskAnalyticResult} from '$lib/features/risk/riskStore.svelte';
+    import {usedRiskFreeRate} from './riskFreeRate';
 
     import {assetSetCalculationWindow, buildAssetSetBenchmarkPoint, buildAssetSetChartPoints, buildAssetSetPaidRows, calendarLengthText, withBenchmarkRow, type AssetSetPaidRow} from './assetSetLevels';
     import {dayFormatter} from './eligibility';
@@ -129,13 +130,11 @@
     let rows = $derived(withBenchmarkRow(assetRows, benchmarkApplies ? benchmarkPoint : null));
 
     /**
-     * The lab charges every ratio against a zero risk-free rate (it has no control to set
-     * one: `appliedRiskFreePercent: 0` in its controllers, and the comparison's Sharpe is
-     * charged the same), so the line through the benchmark starts there too. Passed
-     * explicitly rather than left to the chart's default, so it stays right if the lab
-     * ever gains a rate.
+     * The line through the benchmark starts at the rate its answers were charged (RN-21: the reader's risk-free rate,
+     * echoed by the engine), the comparison's first, then the KPI's; 0 when neither names one. Never the field's value:
+     * between a change and the new answers, the two differ.
      */
-    const LAB_RISK_FREE_RATE = 0;
+    let lineRate = $derived(usedRiskFreeRate(comparison) ?? usedRiskFreeRate(kpi) ?? 0);
 
     let hasAnyFigure = $derived(assetRows.some((row) => row.volatility !== null || row.expectedReturn !== null));
 
@@ -189,7 +188,7 @@
             {rows}
             {points}
             capabilities={{ratios: true, benchmark: benchmarkApplies}}
-            riskFreeRate={LAB_RISK_FREE_RATE}
+            riskFreeRate={lineRate}
             {assetIcons}
             testIdPrefix="risk-asset-set-l3"
             storageKey="risk-asset-set-l3"
