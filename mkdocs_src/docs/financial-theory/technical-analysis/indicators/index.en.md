@@ -87,7 +87,7 @@ Risk indicators turn the price series itself into a rolling risk read-out. They 
 | **Rolling Volatility** | How dispersed are recent returns? | Close | [📖](../risk-metrics/volatility.md) |
 | **Rolling Sharpe Ratio** | Is excess return paying for its risk? | Close | [📖](../risk-metrics/sharpe-ratio.md) |
 | **Rolling Semi-deviation** | How large are recent falls below a target? | Close | [📖](../risk-metrics/sortino-ratio.md#downside-deviation) |
-| **Rolling Gains / Losses (Omega)** | Did recent gains outweigh recent losses? | Close | [📖](../risk-metrics/sortino-ratio.md) |
+| **Rolling Gains / Losses (Omega)** | Did recent gains outweigh recent losses? | Close | [📖](../risk-metrics/omega-ratio.md#rolling-signal) |
 | **Rolling Beta** | How sensitive is the asset to a comparison asset? | Close + comparison asset | [📖](../risk-metrics/beta-active-return.md) |
 
 ➡️ [Risk metrics overview](../risk-metrics/index.md)
