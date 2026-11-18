@@ -104,6 +104,11 @@ Metrics belong to the platform envelope: measured queue/startup/compute/output/
 execution/cleanup and item/batch elapsed durations. Missing observations remain null.
 Do not add timing fields to a numerical result or sum parallel job times into latency.
 
+Lines logged in `compute()` (`get_logger(__name__)`) reach the server's log through the
+worker's pipe, at the server's level, with `execution_id` and `request_id`: at most 200
+per job, secrets masked. Log identifiers, counts, timings and states; never the parameters
+or personal data. Details: the developer page, «Log lines from the worker».
+
 ## Typed client and custom UI
 
 After an authorized API/schema change, use the existing `./dev.py api sync` pipeline.
