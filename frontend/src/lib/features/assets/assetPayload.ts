@@ -1,12 +1,12 @@
 /**
  * assetPayload — pure builders shared by the AssetModal create/edit save paths.
  *
- * Both `saveCreate` and `saveEdit` normalise the quote-base quantity the same way
- * and assemble `classification_params` from the same three inputs; only the
- * empty-case sentinel differs (create omits the field, edit sends `null`). Pulling
- * the two out makes those branches unit-testable and keeps the two save paths from
- * drifting apart. The request items themselves (create, patch, provider assignment)
- * are built here too, from a plain copy of the form (`AssetFormFields`).
+ * Both `saveCreate` and `saveEdit` normalise the quote-base quantity the same way; pulling it out keeps the two save
+ * paths from drifting apart. The request items themselves (create, patch, provider assignment) are built here too, from
+ * a plain copy of the form (`AssetFormFields`).
+ *
+ * The description, the sectors and the countries are the profile's (plan 68, E9): they leave as `profile`, never as
+ * `classification_params`.
  *
  * @module features/assets/assetPayload
  */
@@ -26,34 +26,6 @@ export function normalizeDistribution(values: Record<string, string | number>): 
     );
 }
 
-/** The classification payload sub-object, each part present only when non-empty. */
-export interface ClassificationParams {
-    short_description?: string;
-    sector_area?: {distribution: Distribution};
-    geographic_area?: {distribution: Distribution};
-}
-
-export interface ClassificationPatch {
-    short_description?: string | null;
-    sector_area?: {distribution: Distribution} | null;
-    geographic_area?: {distribution: Distribution} | null;
-}
-
-export function sameDistribution(left: Distribution = {}, right: Distribution = {}): boolean {
-    const keys = Object.keys(left);
-    return keys.length === Object.keys(right).length && keys.every((key) => Object.hasOwn(right, key) && left[key] === right[key]);
-}
-
-/** Omission preserves untouched metadata; null expresses a deliberate clear. */
-export function buildClassificationPatch(previous: ClassificationParams | undefined, current: ClassificationParams | undefined): ClassificationPatch | null | undefined {
-    const patch: ClassificationPatch = {};
-    if ((previous?.short_description ?? null) !== (current?.short_description ?? null)) patch.short_description = current?.short_description ?? null;
-    if (!sameDistribution(previous?.sector_area?.distribution, current?.sector_area?.distribution)) patch.sector_area = current?.sector_area ?? null;
-    if (!sameDistribution(previous?.geographic_area?.distribution, current?.geographic_area?.distribution)) patch.geographic_area = current?.geographic_area ?? null;
-    if (Object.keys(patch).length === 0) return undefined;
-    return current === undefined ? null : patch;
-}
-
 /**
  * The quote-base quantity sent to the API: at least 1. A falsy value (0, NaN) or a
  * non-positive number collapses to 1; any other value passes through unchanged.
@@ -62,20 +34,6 @@ export function buildClassificationPatch(previous: ClassificationParams | undefi
  */
 export function normalizeQuoteBaseQuantity(qbq: number): number {
     return !qbq || qbq <= 0 ? 1 : qbq;
-}
-
-/**
- * Assemble `classification_params` from the three editor inputs, including each
- * part only when it carries content. Returns `undefined` when nothing is set, so
- * the create path can omit the field entirely and the edit path can map it to
- * `null` with `?? null`.
- */
-export function buildClassificationParams(shortDescription: string, sectorDistribution: Distribution, geographicDistribution: Distribution): ClassificationParams | undefined {
-    const params: ClassificationParams = {};
-    if (shortDescription) params.short_description = shortDescription;
-    if (Object.keys(sectorDistribution).length > 0) params.sector_area = {distribution: sectorDistribution};
-    if (Object.keys(geographicDistribution).length > 0) params.geographic_area = {distribution: geographicDistribution};
-    return Object.keys(params).length > 0 ? params : undefined;
 }
 
 /** The form values the save requests are built from. */
@@ -89,9 +47,6 @@ export interface AssetFormFields {
     isBenchmark: boolean;
     /** The provider page the user linked (`user_url`). */
     userUrl: string;
-    shortDescription: string;
-    sectorDistribution: Distribution;
-    geographicDistribution: Distribution;
     identifierRows: IdentifierRow[];
     /** The asset's enrichers (plan 68, E8a): code → binding, the order of the keys is the priority. */
     enrichers: Record<string, EnricherBinding>;
@@ -112,8 +67,7 @@ export function sameEnrichers(left: Record<string, EnricherBinding>, right: Reco
 }
 
 /**
- * The item of the create request. An empty icon, user URL or classification is omitted; the identifier columns come
- * from the rows.
+ * The item of the create request. An empty icon or user URL is omitted; the identifier columns come from the rows.
  */
 export function buildCreateItem(form: AssetFormFields) {
     return {
@@ -125,7 +79,6 @@ export function buildCreateItem(form: AssetFormFields) {
         active: form.active,
         is_benchmark: form.isBenchmark,
         user_url: form.userUrl || undefined,
-        classification_params: buildClassificationParams(form.shortDescription, form.sectorDistribution, form.geographicDistribution),
         ...identifierRowsToColumns(form.identifierRows),
         ...(Object.keys(form.enrichers).length > 0 ? {enrichers: form.enrichers} : {}),
         ...profileOf(form),
@@ -135,12 +88,10 @@ export function buildCreateItem(form: AssetFormFields) {
 /**
  * The item of the edit request. Unlike the create item, an empty user URL or identifier column is sent as `null` (a
  * deliberate clear) and the icon as it is; the OTHER identifiers always go as the whole list, `[]` when no row is left,
- * because the backend reads `null` there as "leave unchanged"; `classification_params` is present only when it differs
- * from the one the modal opened with (see `buildClassificationPatch`); `enrichers` likewise, only when the list or its
- * order differs from the one the modal opened with (absent means unchanged, `{}` clears them).
+ * because the backend reads `null` there as "leave unchanged"; `enrichers` is present only when the list or its order
+ * differs from the one the modal opened with (absent means unchanged, `{}` clears them).
  */
-export function buildPatchItem(assetId: number, form: AssetFormFields, initialClassification: ClassificationParams | undefined, initialEnrichers: Record<string, EnricherBinding> = {}) {
-    const classificationPatch = buildClassificationPatch(initialClassification, buildClassificationParams(form.shortDescription, form.sectorDistribution, form.geographicDistribution));
+export function buildPatchItem(assetId: number, form: AssetFormFields, initialEnrichers: Record<string, EnricherBinding> = {}) {
     const idCols = identifierRowsToColumns(form.identifierRows);
     return {
         asset_id: assetId,
@@ -152,7 +103,6 @@ export function buildPatchItem(assetId: number, form: AssetFormFields, initialCl
         active: form.active,
         is_benchmark: form.isBenchmark,
         user_url: form.userUrl || null,
-        ...(classificationPatch !== undefined ? {classification_params: classificationPatch} : {}),
         identifier_isin: idCols.identifier_isin || null,
         identifier_ticker: idCols.identifier_ticker || null,
         identifier_cusip: idCols.identifier_cusip || null,

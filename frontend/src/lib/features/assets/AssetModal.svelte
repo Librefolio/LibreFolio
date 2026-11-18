@@ -28,7 +28,7 @@
     import AssetModalProfileRow from './profile/AssetModalProfileRow.svelte';
     import ProfileEditModal from './profile/ProfileEditModal.svelte';
     import {createProfileAutoAsk} from './profile/profileAutoAsk.svelte';
-    import {autoAskRequest, currentFromRead, mergeAutoFills, profileBlocksSave, profileRowSummary, userChanges, withoutFillsOutside} from './profile/assetProfileDraft';
+    import {autoAskRequest, currentFromRead, descriptionShown, mergeAutoFills, profileBlocksSave, profileRowSummary, userChanges, withDescription, withoutFillsOutside} from './profile/assetProfileDraft';
     import {profilePatch, type AskAnswer, type CurrentVoice, type PendingChanges, type PendingVoice} from './profile/profileEditState';
     import {todayIso} from '$lib/utils/dateOnly';
     import AssetModalFooter from './AssetModalFooter.svelte';
@@ -42,7 +42,6 @@
     import type {DiffItem} from './ProviderComparisonModal.svelte';
     import type {IdentifierChoice} from './IdentifierPrimaryChooser.svelte';
     import AssetCurrencyChangeModal from './AssetCurrencyChangeModal.svelte';
-    import DistributionEditor from '$lib/components/ui/input/DistributionEditor.svelte';
     import {getIndexColor} from '$lib/utils/colors';
     import ImagePickerWrapper from '$lib/components/ui/media/ImagePickerWrapper.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
@@ -60,7 +59,7 @@
     import {searchResultAssetType, searchResultAssignmentType, searchResultIdentifier, searchResultProviderParams} from './assetSearchSelection';
     import {compareMetadata, type ComparisonAction, type ComparisonScope, type ComparisonSnapshot} from './assetMetadataComparison';
     import {hasSomethingToLose, loadCurrencyChangeImpact, type CurrencyChangeImpact} from './currencyImpact';
-    import {buildClassificationParams, buildCreateItem, buildPatchItem, buildProviderAssignItem, type AssetFormFields, type ClassificationParams, type ProviderAssignment} from './assetPayload';
+    import {buildCreateItem, buildPatchItem, buildProviderAssignItem, type AssetFormFields, type ProviderAssignment} from './assetPayload';
     import {isQuoteBaseQuantityInvalid, quoteBaseQuantityErrorKey, defaultQuoteBaseQuantity, proposeQuoteBase, quoteBaseNote, computeHasProvider, computeProviderDirty, groupImportNotices, type QuoteBaseSource, type QuoteBaseSuggestion} from './assetFormState';
     import {ensureAssetProvidersCached, getAssetProviderAcceptedTypes, getAssetProviderName, getAssetProviderParamKeys, isParametricProvider} from '$lib/utils/providerHelpers';
     import type {AssetCreateSyncResult} from '$lib/utils/sync/syncHelpers';
@@ -83,11 +82,6 @@
         quote_base_quantity?: number | null;
         active?: boolean;
         is_benchmark?: boolean;
-        classification_params?: {
-            short_description?: string | null;
-            sector_area?: {distribution: Record<string, number>} | null;
-            geographic_area?: {distribution: Record<string, number>} | null;
-        } | null;
         // Identifiers
         identifier_isin?: string | null;
         identifier_ticker?: string | null;
@@ -243,15 +237,6 @@
     let identifierRows: IdentifierRow[] = $state([]);
     /** Codes that arrived from `prefillData` (i.e. from the imported reports), upper-cased. */
     let prefilledIdentifiers = $state<Set<string>>(new Set());
-
-    // Classification
-    let shortDescription = $state('');
-    // True while shortDescription holds a BRIM-import prefill (identified-names block) that
-    // was auto-populated, not typed by the user. Lets provider enrichment merge over it
-    // instead of routing to the diff modal. Cleared on manual edit or provider autofill.
-    let descriptionFromPrefill = $state(false);
-    let sectorDistribution: Record<string, number> = $state({});
-    let geographicDistribution: Record<string, number> = $state({});
 
     // Provider
     let providerCode = $state('');
@@ -411,7 +396,6 @@
 
     // Dirty tracking — snapshot of initial form to detect unsaved changes
     let initialSnapshot = $state('');
-    let initialClassification: ClassificationParams | undefined;
 
     // Duplicate name detection
     let duplicateAssetName: string | null = $state(null);
@@ -565,7 +549,7 @@
     let profilePending = $state<PendingChanges>({});
     /** The automatic fills now in place: a later answer replaces those the user did not touch. */
     let profileAuto = $state<Record<string, PendingVoice>>({});
-    /** «Adesso» of an asset that exists: its profile of today, read when the window first opens. */
+    /** «Adesso» of an asset that exists: its profile of today, read when the asset window opens in edit mode. */
     let profileCurrent = $state<Record<string, CurrentVoice>>({});
     let profileVoices = $state<ProfileVoice[]>([]);
     let profileModalOpen = $state(false);
@@ -597,18 +581,22 @@
         profileCurrentAsked = false;
     }
 
+    /** «Adesso» of the asset being edited: its profile of today, once per opening (the description field shows it). */
+    function loadProfileCurrent() {
+        const id = editMode ? editData?.id : undefined;
+        if (!id || profileCurrentAsked) return;
+        profileCurrentAsked = true;
+        void readAssetProfile(id, {start: todayIso()}).then(
+            (read) => {
+                if (read.kind === 'found' && editData?.id === id) profileCurrent = currentFromRead(read.voices);
+            },
+            () => (profileCurrentAsked = false),
+        );
+    }
+
     function openProfile() {
         loadProfileVoices();
-        const id = editMode ? editData?.id : undefined;
-        if (id && !profileCurrentAsked) {
-            profileCurrentAsked = true;
-            void readAssetProfile(id, {start: todayIso()}).then(
-                (read) => {
-                    if (read.kind === 'found' && editData?.id === id) profileCurrent = currentFromRead(read.voices);
-                },
-                () => (profileCurrentAsked = false),
-            );
-        }
+        loadProfileCurrent();
         profileModalOpen = true;
     }
 
@@ -632,6 +620,8 @@
     });
 
     let profileSummary = $derived(profileRowSummary(profilePending, profileVoices));
+    /** The description field: a view of the profile's description, the one waiting else «Adesso»'s (E9). */
+    let descriptionValue = $derived(descriptionShown(profilePending, profileCurrent));
     /** A value the profile window would refuse blocks the save. */
     let profileBlocked = $derived(profileBlocksSave(profilePending, profileVoices));
     let enricherNames = $derived(Object.fromEntries(enricherCatalogue.map((info) => [info.code, info.name])));
@@ -652,9 +642,6 @@
             isBenchmark,
             providerUserUrl,
             JSON.stringify(identifierRows.map((r) => [r.type, r.value])),
-            shortDescription,
-            JSON.stringify(sectorDistribution),
-            JSON.stringify(geographicDistribution),
             providerCode,
             providerIdentifier,
             providerIdentifierType,
@@ -730,7 +717,8 @@
                 resetEnrichers(editMode && editData ? (editData.enrichers ?? null) : null, editMode);
                 resetProfile();
                 initialSnapshot = buildFormSnapshot();
-                initialClassification = $state.snapshot(buildClassificationParams(shortDescription, sectorDistribution, geographicDistribution));
+                // The description field shows «Adesso»'s description: the profile of today is read at once in edit mode
+                if (editMode && editData) loadProfileCurrent();
             });
         } else {
             untrack(() => {
@@ -752,13 +740,7 @@
         active = data.active !== false;
         isBenchmark = data.is_benchmark === true;
         identifierRows = columnsToIdentifierRows(data);
-        // Classification
-        const cp = data.classification_params;
-        shortDescription = cp?.short_description ?? '';
-        descriptionFromPrefill = false;
         prefilledIdentifiers = new Set();
-        sectorDistribution = cp?.sector_area?.distribution ?? {};
-        geographicDistribution = cp?.geographic_area?.distribution ?? {};
         // Provider
         providerCode = data.provider_code ?? '';
         providerIdentifier = data.provider_identifier ?? '';
@@ -802,10 +784,6 @@
         isBenchmark = false;
         identifierRows = [];
         prefilledIdentifiers = new Set();
-        shortDescription = '';
-        descriptionFromPrefill = false;
-        sectorDistribution = {};
-        geographicDistribution = {};
         providerCode = '';
         providerIdentifier = '';
         providerIdentifierType = 'TICKER';
@@ -834,10 +812,6 @@
         if (data.asset_type) assetType = data.asset_type;
         // A base the import gives stays; else the type's default (Z-32 d: 100 for a bond)
         quoteBaseQuantity = data.quote_base_quantity && data.quote_base_quantity > 0 ? data.quote_base_quantity : defaultQuoteBaseQuantity(assetType);
-        if (data.classification_params?.short_description) {
-            shortDescription = data.classification_params.short_description;
-            descriptionFromPrefill = true;
-        }
         // Build identifier rows from prefilled columns (handles OTHER as a JSON list)
         const rows = columnsToIdentifierRows(data as AssetData);
         if (rows.length > 0) {
@@ -1401,9 +1375,6 @@
             active,
             isBenchmark,
             userUrl: providerUserUrl,
-            shortDescription,
-            sectorDistribution,
-            geographicDistribution,
             identifierRows,
             enrichers: $state.snapshot(enrichersConfig),
             profile: profilePatch(withoutFillsOutside($state.snapshot(profilePending) as PendingChanges, enrichersConfig)),
@@ -1513,8 +1484,8 @@
             }
         }
 
-        // Step 1: Patch asset (classification_params only when it changed since the modal opened)
-        const patchItem = buildPatchItem(assetId, formFields(), initialClassification, initialEnrichers);
+        // Step 1: Patch asset (the profile's changes ride along as `profile`)
+        const patchItem = buildPatchItem(assetId, formFields(), initialEnrichers);
         const patchPayload = [patchItem];
 
         // N68 — a currency change is never refused, but the PATCH that makes it deletes, in the same call, the asset's prices and
@@ -1724,7 +1695,7 @@
                 bind:quoteBaseQuantity
                 quoteBaseSuggestion={visibleQuoteBaseHint}
                 bind:providerUserUrl
-                bind:shortDescription
+                description={descriptionValue}
                 {currency}
                 {iconUrl}
                 {hasProvider}
@@ -1740,16 +1711,13 @@
                     currencyUserSet = true;
                     markManualField('currency');
                 }}
-                ondescriptionedit={() => {
-                    descriptionFromPrefill = false;
-                    markManualField('short_description');
-                }}
+                ondescriptioninput={(text) => (profilePending = withDescription(profilePending, profileCurrent, text))}
                 enricherCount={Object.keys(enrichersConfig).length}
                 {enrichersBanner}
                 onenrichers={tourPreview ? undefined : openEnrichers}
             />
 
-            <!-- More Info (collapsible — Identifiers + Classification) -->
+            <!-- More Info (collapsible — Identifiers) -->
             <div class="border border-lf-subtle rounded-lg" use:guideAnchor={'asset.provider'} data-testid="asset-tour-provider">
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <div
@@ -1781,19 +1749,6 @@
                 {#if moreInfoExpanded}
                     <div class="px-4 py-3 space-y-4 border-t border-lf-subtle">
                         <AssetModalIdentifiers bind:rows={identifierRows} bind:selectedIds={identifierSelectedIds} {hasProvider} {askingProvider} onmanualedit={markManualField} onaskprovider={() => handleAskProviderSection('identifiers')} onbulkdelete={handleIdentifierBulkDelete} />
-
-                        <!-- Sub-section: Classification -->
-                        <div class="space-y-3">
-                            <div class="text-[10px] font-semibold text-lf-muted uppercase tracking-wider">
-                                {$t('common.classification')}
-                            </div>
-
-                            <!-- Sector Distribution -->
-                            <DistributionEditor kind="sector" bind:value={sectorDistribution} onchange={() => markManualField('sector_area')} zIndex={zIndex + 20} />
-
-                            <!-- Geographic Distribution -->
-                            <DistributionEditor kind="geographic" bind:value={geographicDistribution} onchange={() => markManualField('geographic_area')} zIndex={zIndex + 20} />
-                        </div>
                     </div>
                 {/if}
             </div>

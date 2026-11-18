@@ -1,7 +1,8 @@
 <!--
   AssetModalDetails — the identity of the asset in AssetModal: icon, name, type, quote base quantity, currency, the
   user's URL and the short description. The fields are bound to the modal's state; edits are reported back so the
-  modal can track what the user changed by hand.
+  modal can track what the user changed by hand. The description is the profile's (plan 68, E9): the field shows the
+  value it is given and reports what the user types (`ondescriptioninput`), the modal keeps it as a pending change.
   Beside «Chiedi al Provider», «Arricchitori» (plan 68, E8a) with the count of the enrichers chosen (`data-count`), and
   under the header the line that says what «Riconosci» found (`data-state`: running, found, none, refused, error), with
   «Controlla o cambia». «Arricchitori» is never off: from the import wizard the window opens without a price provider.
@@ -24,7 +25,8 @@
         /** The provider's suggestion behind the quote base (Z-32 d), shown under the field; null for none. */
         quoteBaseSuggestion?: {provider: string; currency: string | null; quantity: number} | null;
         providerUserUrl: string;
-        shortDescription: string;
+        /** The description shown: the profile's, the one waiting else «Adesso»'s. */
+        description: string;
         currency: string;
         iconUrl: string | null;
         hasProvider: boolean;
@@ -38,7 +40,8 @@
         onaskprovider: () => void;
         onpickicon: () => void;
         oncurrencychange: (currency: string) => void;
-        ondescriptionedit: () => void;
+        /** What the user typed in the description. */
+        ondescriptioninput: (text: string) => void;
         /** How many enrichers the asset has (plan 68, E8a). */
         enricherCount?: number;
         /** What «Riconosci» found, said under the header; null when it did not run. */
@@ -52,7 +55,7 @@
         assetType = $bindable(),
         quoteBaseQuantity = $bindable(),
         providerUserUrl = $bindable(),
-        shortDescription = $bindable(),
+        description,
         currency,
         iconUrl,
         hasProvider,
@@ -65,7 +68,7 @@
         onaskprovider,
         onpickicon,
         oncurrencychange,
-        ondescriptionedit,
+        ondescriptioninput,
         enricherCount = 0,
         enrichersBanner = null,
         onenrichers,
@@ -298,8 +301,8 @@
     <textarea
         id="asset-description"
         data-testid="asset-modal-description"
-        bind:value={shortDescription}
-        oninput={ondescriptionedit}
+        value={description}
+        oninput={(event) => ondescriptioninput(event.currentTarget.value)}
         rows={2}
         placeholder={$t('assets.modal.descriptionPlaceholder')}
         class="w-full px-3 py-2 text-sm border border-lf-input hover:border-lf-input-hover rounded-lg
