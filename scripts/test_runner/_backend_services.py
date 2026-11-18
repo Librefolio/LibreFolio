@@ -557,6 +557,14 @@ def services_coingecko_prices(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "CoinGecko prices tests", verbose=verbose)
 
 
+def services_coingecko_search(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the CoinGecko provider's search, metadata and page, and the PROVIDER_ID input type (project 76, P3)."""
+    print_section("Services: CoinGecko Search")
+    print_info("Testing: asset_source_providers/coingecko/plugin.py (search, fetch_asset_metadata, get_asset_url), db/models.py ProviderInputType.PROVIDER_ID, assets/base.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_coingecko_search.py", test_names)
+    return run_command(cmd, "CoinGecko search tests", verbose=verbose)
+
+
 def services_refresh_history_starts(verbose: bool = False, test_names: list = None) -> bool:
     """Test the first day a source has prices for, in the refresh's outcome (project 76, P2b)."""
     print_section("Services: Refresh History Starts")
@@ -3144,6 +3152,16 @@ Note: No backend server required.
         desc="P2: /simple/price with precision=full, the value read as a decimal from the text, the UTC day of last_updated_at, unknown id NOT_FOUND, missing currency NO_DATA; in bulk one request for every item, each under its key, a 429 refuses the whole call; the history from market_chart/range (interval daily): the 00:00 UTC point of D is the close of D-1, a point not at midnight and a day outside the range dropped; the Demo plan's year moves an earlier start; the refresh interval from its setting",
         # PURE: the real coingecko-sdk on an httpx.MockTransport (the P0 recordings), a test's «today»; no database, no
         # server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "coingecko-search",
+        services_coingecko_search,
+        name="CoinGecko Search",
+        desc="P3: the id travels as PROVIDER_ID, reaching the plugin as OTHER (the reverse map unchanged); search asks /search, coins only by market cap rank (no rank last, in order), rows OTHER, Name (SYMBOL), CRYPTO, the preferred currency as currency and vs_currency, a blank query asks nothing; metadata from /coins/{id} with the P0 flags: name, CRYPTO, logo, the symbol as ticker (left out when too long), coingecko:<id> among the other identifiers; the page; search on, NOT_CONFIGURED without a key; the real path: PROVIDER_ID saved and kept, OTHER received, prices stored, a service search counted on the group",
+        # PURE: the real coingecko-sdk on an httpx.MockTransport (the P0 recordings); private SQLite files behind the
+        # settings, the counter and the session; no shared database, no server.
         isolation="pure",
     )
     add_test(
