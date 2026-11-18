@@ -1,18 +1,17 @@
 /**
- * pluginSettingsApi — the core call-limit fields are filtered out until their interface lands (project 76, lot U4; U5
- * brings the limits' own controls).
+ * pluginSettingsApi — the core call-limit fields and the call usage, as the «Calls» block reads them (project 76, U4
+ * then U5).
  *
  * From U4 the server lists five core fields, `call_limit_minute` … `call_limit_month`, on every plugin that calls an
- * external service and on every group that shares credits — yfinance, the central banks and the others that list no
- * field today included. Until U5 the Plugins tab and «Configure» must show exactly what they show today, so the API layer:
- *   - exports `CALL_LIMIT_KEYS`, the five keys in window order;
- *   - drops, in `fetchPluginSettings` and `fetchPluginEntry`, every field whose key is one of them;
- *   - then drops an entry the filter left with no field and no group (a plugin or a group whose only fields were the
- *     limits): `fetchPluginEntry` answers null for it, as it does today for a plugin that declares nothing. An entry
- *     that arrives with no field at all is not the filter's business and stays as it is (the existing
- *     `pluginSettingsApi.test.ts` keeps such an `fx` entry, and a group entry with `fields: []`);
- *   - ignores the catalogue's new `call_usage` block (pinned: the narrowed entry has no `call_usage` key, so every
- *     existing `toStrictEqual` stays as it is); the generated schema lets it through without breaking the parse.
+ * external service and on every group that shares credits, and a `call_usage` block on the entry that owns the count.
+ * U4 filtered both out; from U5 the API layer:
+ *   - exports `CALL_LIMIT_KEYS`, the five keys in window order, and `CALL_WINDOWS`, the five windows;
+ *   - keeps the limit fields in `fields`, after the plugin's own (in the server's order), in window order: the form's
+ *     draft, problems and write go through them as through any field;
+ *   - keeps every entry, one whose only fields are the limits and one listed only for its usage block (U4b, the
+ *     managed profile) included;
+ *   - maps `call_usage` into the entry, its windows checked and put in window order; no block (or a null one, or one
+ *     that is not a block) leaves no `call_usage` key, so an entry without usage is exactly what it was before U4.
  *
  * Mocks: the read alias is spied on the real generated client (`spyOnApi`), as in `pluginSettingsApi.test.ts`; the
  * last block fakes only the transport (`axiosInstance.defaults.adapter`) to go through the generated schema.
@@ -95,14 +94,9 @@ const YFINANCE = entry({plugin_code: 'yfinance', plugin_name: 'Yahoo Finance', f
 const ECB = entry({family: 'fx', plugin_code: 'ECB', plugin_name: 'European Central Bank', fields: LIMITS});
 /** justETF from U4: its own field first, then the five. */
 const JUSTETF_RAW = entry({plugin_code: 'justetf', plugin_name: 'justETF', fields: [CURRENCY, ...LIMITS]});
-const JUSTETF = entry({plugin_code: 'justetf', plugin_name: 'justETF', fields: [CURRENCY]});
 /** A credit-sharing group whose only fields are the limits, and one with a field of its own. */
 const LIMITS_ONLY_GROUP = entry({family: 'group', plugin_code: 'coingecko', plugin_name: 'CoinGecko', fields: LIMITS, used_by: [{family: 'asset', plugin_code: 'coingecko_price', plugin_name: 'CoinGecko'}]});
 const TIER_GROUP_RAW = entry({family: 'group', plugin_code: 'mock_share', plugin_name: 'Mock share', fields: [TIER, ...LIMITS]});
-const TIER_GROUP = entry({family: 'group', plugin_code: 'mock_share', plugin_name: 'Mock share', fields: [TIER]});
-/** A plugin that calls out and reads a plain group: the filter empties its fields, its group keeps it listed. */
-const PLAIN_GROUP_READER_RAW = entry({plugin_code: 'reader', plugin_name: 'Reader', fields: LIMITS, groups: ['mock']});
-const PLAIN_GROUP_READER = entry({plugin_code: 'reader', plugin_name: 'Reader', fields: [], groups: ['mock']});
 /** An entry that arrives with no field and no group: not the filter's business. */
 const ARRIVED_EMPTY = entry({family: 'fx', plugin_code: 'ecb_legacy', plugin_name: 'ECB', configured: false});
 
@@ -113,102 +107,133 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
-describe('the core call-limit fields are filtered out until U5', () => {
-    it('CALL_LIMIT_KEYS names the five keys, in window order', () => {
-        const exported = (pluginSettingsApi as unknown as Record<string, unknown>).CALL_LIMIT_KEYS;
-
-        expect(exported, 'pluginSettingsApi exports no CALL_LIMIT_KEYS').toBeDefined();
-        expect([...(exported as readonly string[])]).toStrictEqual(KEYS);
+describe('U5: the core call-limit fields are kept, grouped after the plugin’s own', () => {
+    it('CALL_LIMIT_KEYS names the five keys, in window order; CALL_WINDOWS the five windows', () => {
+        expect([...pluginSettingsApi.CALL_LIMIT_KEYS]).toStrictEqual(KEYS);
+        expect([...pluginSettingsApi.CALL_WINDOWS]).toStrictEqual([...WINDOWS]);
     });
 
-    it('an entry with only the five core fields disappears; its neighbours stay, in order, an entry that arrived empty included', async () => {
+    it('an entry with only the five core fields is listed, its fields the five in window order', async () => {
         readAlias().mockResolvedValueOnce(answered({plugins: [YFINANCE, JUSTETF_RAW, ECB, ARRIVED_EMPTY]}));
 
-        await expect(fetchPluginSettings()).resolves.toStrictEqual([JUSTETF, ARRIVED_EMPTY]);
+        const entries = await fetchPluginSettings();
+
+        expect(entries.map((listed) => listed.plugin_code)).toStrictEqual(['yfinance', 'justetf', 'ECB', 'ecb_legacy']);
+        expect(entries[0]).toStrictEqual(YFINANCE);
+        expect(entries[3]).toStrictEqual(ARRIVED_EMPTY);
     });
 
-    it('an entry with fields of its own keeps only its own, in order', async () => {
+    it('an entry with fields of its own keeps them first, then the five limits', async () => {
         readAlias().mockResolvedValueOnce(answered({plugins: [JUSTETF_RAW]}));
 
         const [only] = await fetchPluginSettings();
 
-        expect(only.fields.map((field) => field.key)).toStrictEqual(['preferred_currency']);
-        expect(only).toStrictEqual(JUSTETF);
+        expect(only.fields.map((field) => field.key)).toStrictEqual(['preferred_currency', ...KEYS]);
+        expect(only).toStrictEqual(JUSTETF_RAW);
     });
 
-    it('a limit field stands out wherever the server put it among the own fields', async () => {
-        const shuffled = entry({plugin_code: 'justetf', plugin_name: 'justETF', fields: [LIMITS[1], CURRENCY, LIMITS[0], TIER, ...LIMITS.slice(2)]});
+    it('limit fields wherever the server put them come out grouped at the end, in window order; the own fields keep their order', async () => {
+        const shuffled = entry({plugin_code: 'justetf', plugin_name: 'justETF', fields: [LIMITS[4], CURRENCY, LIMITS[0], TIER, LIMITS[2], LIMITS[1], LIMITS[3]]});
         readAlias().mockResolvedValueOnce(answered({plugins: [shuffled]}));
 
         const [only] = await fetchPluginSettings();
 
-        expect(only.fields.map((field) => field.key)).toStrictEqual(['preferred_currency', 'tier']);
+        expect(only.fields.map((field) => field.key)).toStrictEqual(['preferred_currency', 'tier', ...KEYS]);
     });
 
-    it('a group entry: the limits-only group is dropped, a group with a field of its own keeps it', async () => {
+    it('a group whose only fields are the limits is listed, as is one with a field of its own', async () => {
         readAlias().mockResolvedValueOnce(answered({plugins: [LIMITS_ONLY_GROUP, TIER_GROUP_RAW]}));
 
-        await expect(fetchPluginSettings()).resolves.toStrictEqual([TIER_GROUP]);
+        await expect(fetchPluginSettings()).resolves.toStrictEqual([LIMITS_ONLY_GROUP, TIER_GROUP_RAW]);
     });
 
-    it('a plugin the filter empties stays listed while it reads a group', async () => {
-        readAlias().mockResolvedValueOnce(answered({plugins: [PLAIN_GROUP_READER_RAW, YFINANCE]}));
-
-        await expect(fetchPluginSettings()).resolves.toStrictEqual([PLAIN_GROUP_READER]);
-    });
-
-    it('fetchPluginEntry answers null for a plugin whose only fields are the limits, as for one that declares nothing', async () => {
+    it('fetchPluginEntry answers a plugin whose only fields are the limits', async () => {
         readAlias().mockResolvedValueOnce(answered({plugins: [YFINANCE]}));
 
-        await expect(fetchPluginEntry('asset', 'yfinance')).resolves.toBeNull();
+        await expect(fetchPluginEntry('asset', 'yfinance')).resolves.toStrictEqual(YFINANCE);
     });
 
-    it('fetchPluginEntry answers null for a group whose only fields are the limits', async () => {
+    it('fetchPluginEntry answers a group whose only fields are the limits', async () => {
         readAlias().mockResolvedValueOnce(answered({plugins: [LIMITS_ONLY_GROUP]}));
 
-        await expect(fetchPluginEntry('group', 'coingecko')).resolves.toBeNull();
+        await expect(fetchPluginEntry('group', 'coingecko')).resolves.toStrictEqual(LIMITS_ONLY_GROUP);
+    });
+});
+
+describe('U5: the call_usage block is mapped into the entry', () => {
+    it('a usage block comes through, its windows as the server sent them', async () => {
+        readAlias().mockResolvedValueOnce(answered({plugins: [{...JUSTETF_RAW, call_usage: USAGE}]}));
+
+        const [only] = await fetchPluginSettings();
+
+        expect(only.call_usage).toStrictEqual(USAGE);
     });
 
-    it('fetchPluginEntry answers a plugin with fields of its own, its limits dropped', async () => {
-        readAlias().mockResolvedValueOnce(answered({plugins: [JUSTETF_RAW]}));
+    it('no usage block, or a null one: the entry has no call_usage key, as before U4', async () => {
+        readAlias().mockResolvedValueOnce(answered({plugins: [JUSTETF_RAW, {...ARRIVED_EMPTY, call_usage: null}]}));
 
-        await expect(fetchPluginEntry('asset', 'justetf')).resolves.toStrictEqual(JUSTETF);
+        const entries = await fetchPluginSettings();
+
+        expect(entries).toStrictEqual([JUSTETF_RAW, ARRIVED_EMPTY]);
+        expect(entries.every((narrowed) => !('call_usage' in narrowed))).toBe(true);
     });
 
-    it('the call_usage block is ignored: the entry narrows to exactly what it was before U4', async () => {
+    it('the windows are put in window order; an unknown window, a repeated one, a negative or missing count, a missing end are left out', async () => {
+        const [minute, hour, day, week, month] = USAGE.windows;
+        const messy = {
+            family: 'asset',
+            plugin_code: 'justetf',
+            windows: [month, {...day, window: 'year'}, minute, {...hour, count: -1}, week, {...week, count: 99}, {...day, resets_at: null}, {...day, count: 'many'}, null, day],
+        };
+        readAlias().mockResolvedValueOnce(answered({plugins: [{...JUSTETF_RAW, call_usage: messy}]}));
+
+        const [only] = await fetchPluginSettings();
+
+        expect(only.call_usage?.windows).toStrictEqual([minute, day, week, month]);
+    });
+
+    it('a limit that is not a non-negative integer reads as none; full is true only when the server says true', async () => {
+        const [minute] = USAGE.windows;
+        readAlias().mockResolvedValueOnce(answered({plugins: [{...JUSTETF_RAW, call_usage: {...USAGE, windows: [{...minute, limit: 'ten', full: 'true'}]}}]}));
+
+        const [only] = await fetchPluginSettings();
+
+        expect(only.call_usage?.windows).toStrictEqual([{...minute, limit: null, full: false}]);
+    });
+
+    it('a block that is no object, or has no window list, is no block', async () => {
         readAlias().mockResolvedValueOnce(
             answered({
                 plugins: [
-                    {...JUSTETF_RAW, call_usage: USAGE},
-                    {...ARRIVED_EMPTY, call_usage: null},
+                    {...JUSTETF_RAW, call_usage: 'full'},
+                    {...YFINANCE, call_usage: {family: 'asset', plugin_code: 'yfinance'}},
                 ],
             }),
         );
 
         const entries = await fetchPluginSettings();
 
-        expect(entries).toStrictEqual([JUSTETF, ARRIVED_EMPTY]);
         expect(entries.every((narrowed) => !('call_usage' in narrowed))).toBe(true);
     });
 });
 
-describe('U4b: an entry that exists only for its usage block is left out too until U5', () => {
-    it('a managed provider whose every limit is hidden (no field, no group, a call_usage) disappears; one that arrived empty without usage stays', async () => {
+describe('U5: an entry that exists only for its usage block is listed', () => {
+    it('a managed provider whose every limit is hidden (no field, no group, a call_usage) is listed with its usage', async () => {
         const managedYahoo = {...entry({plugin_code: 'yfinance', plugin_name: 'Yahoo Finance', fields: []}), call_usage: {...USAGE, plugin_code: 'yfinance'}};
         readAlias().mockResolvedValueOnce(answered({plugins: [managedYahoo, JUSTETF_RAW, ARRIVED_EMPTY]}));
 
-        await expect(fetchPluginSettings()).resolves.toStrictEqual([JUSTETF, ARRIVED_EMPTY]);
+        await expect(fetchPluginSettings()).resolves.toStrictEqual([managedYahoo, JUSTETF_RAW, ARRIVED_EMPTY]);
     });
 
-    it('a managed credit-sharing group whose every limit is hidden (no field, a call_usage, its readers) disappears too', async () => {
+    it('a managed credit-sharing group whose every limit is hidden (no field, a call_usage, its readers) is listed too', async () => {
         const managedGroup = {...entry({family: 'group', plugin_code: 'coingecko', plugin_name: 'CoinGecko', fields: [], used_by: [{family: 'asset', plugin_code: 'coingecko_price', plugin_name: 'CoinGecko'}]}), call_usage: {...USAGE, family: 'group', plugin_code: 'coingecko'}};
         readAlias().mockResolvedValueOnce(answered({plugins: [JUSTETF_RAW, managedGroup]}));
 
-        await expect(fetchPluginSettings()).resolves.toStrictEqual([JUSTETF]);
+        await expect(fetchPluginSettings()).resolves.toStrictEqual([JUSTETF_RAW, managedGroup]);
     });
 });
 
-describe('through the real client, only the transport faked: the generated schema and the filter together', () => {
+describe('through the real client, only the transport faked: the generated schema and the mapping together', () => {
     let realAdapter: typeof axiosInstance.defaults.adapter;
 
     beforeEach(() => {
@@ -224,7 +249,7 @@ describe('through the real client, only the transport faked: the generated schem
         axiosInstance.defaults.adapter = adapter;
     }
 
-    it('a catalogue with limit fields and a call_usage block parses, and comes back filtered, without the block', async () => {
+    it('a catalogue with limit fields and a call_usage block parses, and comes back whole, the block included', async () => {
         serverAnswers({
             plugins: [
                 {...YFINANCE, call_usage: {...USAGE, plugin_code: 'yfinance'}},
@@ -232,6 +257,9 @@ describe('through the real client, only the transport faked: the generated schem
             ],
         });
 
-        await expect(fetchPluginSettings()).resolves.toStrictEqual([JUSTETF]);
+        await expect(fetchPluginSettings()).resolves.toStrictEqual([
+            {...YFINANCE, call_usage: {...USAGE, plugin_code: 'yfinance'}},
+            {...JUSTETF_RAW, call_usage: USAGE},
+        ]);
     });
 });
