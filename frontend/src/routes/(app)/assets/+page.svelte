@@ -13,7 +13,7 @@
      *
      * Svelte 5 runes throughout.
      */
-    import {onDestroy, onMount, tick} from 'svelte';
+    import {onDestroy, onMount, tick, untrack} from 'svelte';
     import {onPricesCaughtUp} from '$lib/features/price-refresh/onPricesCaughtUp';
     import {goto} from '$app/navigation';
     import {page} from '$app/stores';
@@ -65,6 +65,9 @@
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import AssetSetRiskPanel from '$lib/features/risk/AssetSetRiskPanel.svelte';
+    import {assetListRiskKey, loadAssetListRisk, type AssetListRiskFigures, type AssetListRiskQuery} from '$lib/features/risk/assetListRisk';
+    import {riskFreeRate} from '$lib/features/risk/riskFreeRateStore.svelte';
+    import {fetchRiskCatalog, markRiskStale} from '$lib/features/risk/riskStore.svelte';
     import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
     import {todayIso} from '$lib/utils/dateOnly';
@@ -698,11 +701,15 @@
      * has any price data yet. The earliest date of an asset is the first day of its fill (`base`):
      * on a sampled series its first point is the end of the first bucket (Z-29b).
      */
-    /** An asset's prices changed (a sync, a refresh, a merge): the daily cache and the cards' sampled one forget it. */
+    /**
+     * An asset's prices changed (a sync, a refresh, a merge): the daily cache and the cards' sampled one forget it, and the risk columns
+     * ask again (RN-23; one load per batch of calls, the effect runs once).
+     */
     function invalidateAssetPrices(assetId: number) {
         invalidateAssetPriceStore(assetId);
         reducedPrices.invalidateAsset(assetId);
         targetSampleLoader.reset();
+        refreshRiskColumns();
     }
 
     /** The first day of a card's series on screen: its fill's first day, else its first point. */
@@ -782,8 +789,86 @@
         onPricesCaughtUp(async () => {
             if (fxPairSlugs.length > 0) void loadFxRateData();
             await fetchAllPriceData(true);
+            refreshRiskColumns();
         }),
     );
+
+    // =========================================================================
+    // RN-23 — the risk columns of the table: each asset measured alone, over the page's period, in its currency, at the reader's
+    // risk-free rate (`assetListRisk.ts`): the same figure as that asset's Risk tab with the same settings.
+    // =========================================================================
+    let riskFigures = $state<Map<number, AssetListRiskFigures>>(new Map());
+    /** `idle` outside the table, `loading` while the current question is asked, `ready` once it is answered: `data-risk-columns`. */
+    let riskColumnsState = $state<'idle' | 'loading' | 'ready'>('idle');
+    /** Bumped after a sync or a price catch-up: the same question is asked again (its answers were marked stale). */
+    let riskRefresh = $state(0);
+    /** The question in flight; a row of an older one never lands. Not reactive: only the loader reads it. */
+    let riskQuestion = '';
+    /** The period, currency and rate the figures on screen answer (`assetListRiskKey`). */
+    let shownRiskQuestion = '';
+    let riskQuery = $derived<AssetListRiskQuery | null>(isMaxPending || !$defaultDisplayCurrency ? null : {start: dateStart, end: dateEnd, currency: $defaultDisplayCurrency, riskFreePercent: riskFreeRate.percent});
+    // A text, not the array: `assets` changes identity at every price load, and the list of ids only when the list does.
+    let riskAssetKey = $derived(
+        assets
+            .map((asset) => asset.id)
+            .sort((left, right) => left - right)
+            .join(','),
+    );
+
+    function refreshRiskColumns(): void {
+        markRiskStale();
+        riskRefresh += 1;
+    }
+
+    async function loadRiskColumns(query: AssetListRiskQuery, assetIds: number[], refresh: number): Promise<void> {
+        const question = `${assetListRiskKey(query)} [${assetIds.join(',')}] #${refresh}`;
+        const sameFigures = shownRiskQuestion === assetListRiskKey(query);
+        riskQuestion = question;
+        shownRiskQuestion = assetListRiskKey(query);
+        // Another period, currency or rate: the old figures are another question's, gone at once. A new list or a refresh keeps them
+        // on screen until each row's new answer lands.
+        if (!sameFigures) riskFigures = new Map();
+        riskColumnsState = 'loading';
+        try {
+            const catalog = await fetchRiskCatalog();
+            if (riskQuestion !== question) return;
+            await loadAssetListRisk(assetIds, query, catalog, {
+                stillWanted: () => riskQuestion === question,
+                onRow: (assetId, figures) => {
+                    riskFigures = new Map(riskFigures).set(assetId, figures);
+                },
+            });
+        } catch {
+            // The catalogue could not be read: the cells stay «…» until the next question; the API client logged the failure (H-60).
+        } finally {
+            if (riskQuestion === question) riskColumnsState = 'ready';
+        }
+    }
+
+    // Only the table shows them: the card grid asks nothing, and a question in flight stops when the table goes.
+    $effect(() => {
+        const query = riskQuery;
+        const assetKey = riskAssetKey;
+        const refresh = riskRefresh;
+        if (viewMode !== 'list') {
+            untrack(() => {
+                riskQuestion = '';
+                riskColumnsState = 'idle';
+            });
+            return;
+        }
+        if (!query || assetKey === '') {
+            // «All» still resolving its first day, or no asset: no question, and no figures of an older one left on screen.
+            untrack(() => {
+                riskQuestion = '';
+                shownRiskQuestion = '';
+                riskFigures = new Map();
+                riskColumnsState = 'idle';
+            });
+            return;
+        }
+        untrack(() => void loadRiskColumns(query, assetKey.split(',').map(Number), refresh));
+    });
 
     /** The Δ columns of every listed asset up to the end of the range, and each card's Δ over the range, from the backend (X-R53, X-R59). */
     async function loadPeriodChanges(silent = false) {
@@ -1856,10 +1941,10 @@
      * whether what it is looking at is final.
      */
     // The cards' rolling returns are a load wave too (Y-40): `data-busy` holds until they are in.
-    let busy = $derived(loading || assetEditLoading || periodChangesLoading || assets.some((a) => a.loadingPrices) || [...calendarByCard.values()].some((entry) => entry.own.state === 'loading'));
+    let busy = $derived(loading || assetEditLoading || periodChangesLoading || riskColumnsState === 'loading' || assets.some((a) => a.loadingPrices) || [...calendarByCard.values()].some((entry) => entry.own.state === 'loading'));
 </script>
 
-<div class="space-y-6 text-lf-primary" aria-busy={busy} data-busy={busy ? 'true' : 'false'} data-live-updates={liveUpdatesState} data-testid="assets-page">
+<div class="space-y-6 text-lf-primary" aria-busy={busy} data-busy={busy ? 'true' : 'false'} data-live-updates={liveUpdatesState} data-risk-columns={riskColumnsState} data-testid="assets-page">
     <!-- Header: Title left, ViewModeToggle + Add Asset right. Round 14.1 bugfix: `lg:` is a
          VIEWPORT breakpoint (1024px) — wraps unconditionally below that width regardless of
          whether the actual header row has room. Plain `flex-wrap` reacts to the row's OWN
@@ -2438,6 +2523,7 @@
                             loading={false}
                             {visiblePeriods}
                             {livePriceMap}
+                            {riskFigures}
                             dateStart={urlDateStart}
                             dateEnd={urlDateEnd}
                             storageKey="assetsTable-{panel.id}"
