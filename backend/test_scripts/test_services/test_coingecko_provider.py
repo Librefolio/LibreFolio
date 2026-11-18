@@ -408,3 +408,39 @@ async def test_p1_an_invalid_plan_in_its_variable_is_an_invalid_locked_setting(p
     assert answer.configured is False
     assert answer.reason == "invalid_locked_setting"
     assert PLAN_VARIABLE in answer.variables
+
+
+# =============================================================================
+# P1b. THE ICON, BUNDLED WITH THE PLUGIN
+# =============================================================================
+#
+# The logo is a file of the asset family's static folder, served by the app (`/api/v1/uploads/plugin/asset/…`): no
+# browser asks coingecko.com for it, so no user's address reaches CoinGecko. Until the file is there the provider has
+# no icon, as before P1b, and says nothing about it.
+
+
+def test_p1b_without_the_file_the_provider_has_no_icon_and_logs_nothing(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture):
+    from backend.app.services.asset_source_providers.coingecko import plugin as coingecko_plugin  # noqa: PLC0415 — the module whose path is replaced
+
+    monkeypatch.setattr(coingecko_plugin, "ICON_FILE", tmp_path / "coingecko.png")
+    caplog.set_level("DEBUG", logger=coingecko_plugin.__name__)
+
+    assert CoinGeckoProvider().get_icon is None
+    assert not [record for record in caplog.records if record.name == coingecko_plugin.__name__], "a missing icon is the default, not news"
+
+
+def test_p1b_with_the_file_the_icon_is_the_apps_own_url(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    from backend.app.services.asset_source_providers.coingecko import plugin as coingecko_plugin  # noqa: PLC0415 — the module whose path is replaced
+
+    icon = tmp_path / "coingecko.png"
+    icon.write_bytes(b"\x89PNG\r\n\x1a\n")
+    monkeypatch.setattr(coingecko_plugin, "ICON_FILE", icon)
+
+    assert CoinGeckoProvider().get_icon == "/api/v1/uploads/plugin/asset/coingecko.png"
+
+
+def test_p1b_the_icon_file_is_the_one_the_static_route_serves_for_that_url():
+    from backend.app.api.v1.uploads import plugin_static_file  # noqa: PLC0415 — the route's own resolution
+    from backend.app.services.asset_source_providers.coingecko import plugin as coingecko_plugin  # noqa: PLC0415 — its path, unpatched
+
+    assert plugin_static_file("asset", "coingecko.png") == coingecko_plugin.ICON_FILE.resolve()
