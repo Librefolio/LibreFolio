@@ -251,7 +251,13 @@
       "userUrl": "URL Utente",
       "providerUrl": "URL Provider",
       "identifier": "Identificativo",
-      "identifierType": "Tipo Identificativo"
+      "identifierType": "Tipo Identificativo",
+      "inputType": {
+        "PROVIDER_ID": "ID del provider"
+      },
+      "inputTypePlaceholder": {
+        "PROVIDER_ID": "es. bitcoin"
+      }
     },
     "schedule": {
       "title": "Piano Interessi",
@@ -540,6 +546,9 @@
     "PROVIDER_ERROR": "Il provider ha restituito un errore: {detail}",
     "PROBE_RATE_LIMITED": "Troppe verifiche: riprova alle {time}",
     "PROBE_RATE_LIMITED_DAY": "Troppe verifiche: riprova il {time}",
-    "PROBE_RATE_LIMITED_NO_TIME": "Troppe verifiche: riprova tra un minuto"
+    "PROBE_RATE_LIMITED_NO_TIME": "Troppe verifiche: riprova tra un minuto",
+    "PLAN_REQUIRED": "Questa richiesta richiede un piano a pagamento del provider.",
+    "WRONG_PLAN": "La chiave del provider non corrisponde al piano impostato (Demo o Pro): controlla il piano in Impostazioni › Plugin.",
+    "INVALID_API_KEY": "Il provider ha rifiutato la chiave API: controllala in Impostazioni › Plugin."
   }
 }

@@ -501,6 +501,17 @@ describe('PageSyncModal — asset rows', () => {
         expect(within(row).getByTitle('justetf')).toHaveTextContent('justetf');
     });
 
+    it('carries the first day the source has prices for into the row (76 P2b)', async () => {
+        assetsRespond({asset_id: 1, status: 'ok', points_fetched: 12, points_changed: 3, history_starts: '2025-11-18'}, {asset_id: 2, status: 'ok', points_fetched: 4, points_changed: 4});
+        mount({assets: [asset(1), asset(2)], fxPairs: []});
+
+        await startSync();
+        await settled();
+
+        expect(within(rowOf('1')).getByTestId('sync-row-history-starts')).toHaveAttribute('data-date', '2025-11-18');
+        expect(within(rowOf('2')).queryByTestId('sync-row-history-starts')).toBeNull();
+    });
+
     it('falls back to the asset-type icon when the asset has none of its own', async () => {
         assetsRespond({asset_id: 1, status: 'ok', points_fetched: 1, points_changed: 1}, {asset_id: 2, status: 'ok', points_fetched: 1, points_changed: 1});
         mount({assets: [asset(1, {icon_url: '/icons/acme.png'}), asset(2, {asset_type: 'ETF'})], fxPairs: []});

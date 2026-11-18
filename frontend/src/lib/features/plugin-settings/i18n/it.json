@@ -74,7 +74,28 @@
     "group": {
       "usedBy": "Condivise da: {plugins}",
       "inGroup": "Usa anche le impostazioni condivise di {group}",
-      "open": "Apri"
+      "open": "Apri",
+      "coingecko": {
+        "name": "CoinGecko",
+        "label": {
+          "api_key": "Chiave API",
+          "plan": "Piano"
+        },
+        "about": "L'account CoinGecko condiviso dai plugin CoinGecko: la sua chiave API e il suo piano.",
+        "description": {
+          "api_key": "La chiave di un account CoinGecko. Basta una chiave Demo gratuita.",
+          "plan": "Il piano della chiave: una chiave Demo risponde sull'API pubblica, una a pagamento sull'API Pro."
+        },
+        "missing": {
+          "api_key": "la chiave API"
+        },
+        "option": {
+          "plan": {
+            "demo": "Demo (gratuito)",
+            "pro": "Pro (a pagamento)"
+          }
+        }
+      }
     },
     "notConfigured": {
       "tooltip": "{provider} va configurato",

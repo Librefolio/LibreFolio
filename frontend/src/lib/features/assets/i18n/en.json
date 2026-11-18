@@ -251,7 +251,13 @@
       "userUrl": "User URL",
       "providerUrl": "Provider URL",
       "identifier": "Identifier",
-      "identifierType": "Identifier Type"
+      "identifierType": "Identifier Type",
+      "inputType": {
+        "PROVIDER_ID": "Provider ID"
+      },
+      "inputTypePlaceholder": {
+        "PROVIDER_ID": "e.g. bitcoin"
+      }
     },
     "schedule": {
       "title": "Interest Schedule",
@@ -540,6 +546,9 @@
     "PROVIDER_ERROR": "The provider failed: {detail}",
     "PROBE_RATE_LIMITED": "Too many checks: try again at {time}",
     "PROBE_RATE_LIMITED_DAY": "Too many checks: try again on {time}",
-    "PROBE_RATE_LIMITED_NO_TIME": "Too many checks: try again in a minute"
+    "PROBE_RATE_LIMITED_NO_TIME": "Too many checks: try again in a minute",
+    "PLAN_REQUIRED": "This request needs a paid plan of the provider.",
+    "WRONG_PLAN": "The provider's key does not match the plan set for it (Demo or Pro): check the plan in Settings › Plugins.",
+    "INVALID_API_KEY": "The provider refused the API key: check it in Settings › Plugins."
   }
 }

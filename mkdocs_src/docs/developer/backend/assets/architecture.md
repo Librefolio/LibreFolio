@@ -239,6 +239,19 @@ value either, the item failed with *No price data available from provider*), and
 low or volume of exactly `-1` was stored as an erased value.
 {: #discarded-provider-days }
 
+A source may have no prices before some day: CoinGecko's Demo plan answers the last 365 days
+only. Its `get_history_value()` then says so in `FAHistoricalData.history_starts`, the first
+day it has prices for (project 76, P2b). The refresh copies that day into the asset's
+`FARefreshResult.history_starts` **only when the range asked started earlier**, a `"min"`
+start included (so a `resume` of an asset with no price yet, as after its creation); a range
+inside the source's window, or a provider that sets no day, leaves it `null`. It is no error:
+the status is the one the prices decide, and a range wholly before that day, which brings
+nothing, is `failed` and still carries it (the fetch hands it to the persist step beside its
+error). The interface adds one translated line to the sync row and to the sync toasts
+(`prices.sync.historyStarts`), whatever the status: the days before are loaded by hand, with
+*Import CSV* in the asset's price editor.
+{: #history-starts }
+
 `bulk_upsert_prices()` writes `open`, `high`, `low` and `close` through
 `truncate_priceHistory()` (`backend/app/db/precision.py`): 12 decimal places, then 15
 significant digits, both rounded down — what a `RealDecimal(24, 12)` column reads back (see

@@ -132,7 +132,7 @@ async function simulate(page: Page, readiness: Readiness): Promise<Simulation> {
  * Sign in, open «Add Asset» and return its search block once the patched list has landed: the switched-off chip is drawn,
  * and a configured chip is drawn selected beside it (the presence barrier for every absence asserted after).
  */
-async function openSearch(page: Page, account: {username: string; password: string}, readiness: Readiness): Promise<{simulation: Simulation; search: Locator; chip: Locator}> {
+async function openSearch(page: Page, account: NonNullable<Parameters<typeof login>[1]>, readiness: Readiness): Promise<{simulation: Simulation; search: Locator; chip: Locator}> {
     await login(page, account);
     const simulation = await simulate(page, readiness);
     await goToAssetsPage(page);

@@ -1,0 +1,369 @@
+{
+  "recorded": "2026-11-17, coingecko-sdk 5.1.0, Demo key (removed): project 76 P0",
+  "request": {
+    "endpoint": "/search",
+    "query": "pepe"
+  },
+  "status": 200,
+  "body": {
+    "coins": [
+      {
+        "id": "pepe",
+        "name": "Pepe",
+        "api_symbol": "pepe",
+        "symbol": "PEPE",
+        "market_cap_rank": 50,
+        "thumb": "https://coin-images.coingecko.com/coins/images/29850/thumb/pepe-token.jpeg",
+        "large": "https://coin-images.coingecko.com/coins/images/29850/large/pepe-token.jpeg"
+      },
+      {
+        "id": "ape-and-pepe",
+        "name": "Ape and Pepe",
+        "api_symbol": "ape-and-pepe",
+        "symbol": "APEPE",
+        "market_cap_rank": 139,
+        "thumb": "https://coin-images.coingecko.com/coins/images/39614/thumb/APEPE_200.png",
+        "large": "https://coin-images.coingecko.com/coins/images/39614/large/APEPE_200.png"
+      },
+      {
+        "id": "pepecoin-2",
+        "name": "PepeCoin",
+        "api_symbol": "pepecoin-2",
+        "symbol": "PEPECOIN",
+        "market_cap_rank": 1272,
+        "thumb": "https://coin-images.coingecko.com/coins/images/30219/thumb/pepecoin-icon_200x200.png",
+        "large": "https://coin-images.coingecko.com/coins/images/30219/large/pepecoin-icon_200x200.png"
+      },
+      {
+        "id": "pepecoin-network",
+        "name": "Pepecoin",
+        "api_symbol": "pepecoin-network",
+        "symbol": "PEP",
+        "market_cap_rank": 1437,
+        "thumb": "https://coin-images.coingecko.com/coins/images/36520/thumb/Pepecoin_onWhite_IconOnly-RGB__Converted_200x200.png",
+        "large": "https://coin-images.coingecko.com/coins/images/36520/large/Pepecoin_onWhite_IconOnly-RGB__Converted_200x200.png"
+      },
+      {
+        "id": "pepecat-2",
+        "name": "PEPECAT",
+        "api_symbol": "pepecat-2",
+        "symbol": "PEPECAT",
+        "market_cap_rank": 1586,
+        "thumb": "https://coin-images.coingecko.com/coins/images/52185/thumb/pepecat.png",
+        "large": "https://coin-images.coingecko.com/coins/images/52185/large/pepecat.png"
+      },
+      {
+        "id": "pepefork",
+        "name": "PepeFork",
+        "api_symbol": "pepefork",
+        "symbol": "PORK",
+        "market_cap_rank": 1614,
+        "thumb": "https://coin-images.coingecko.com/coins/images/34913/thumb/pork.png",
+        "large": "https://coin-images.coingecko.com/coins/images/34913/large/pork.png"
+      },
+      {
+        "id": "purple-pepe",
+        "name": "PURPLE PEPE",
+        "api_symbol": "purple-pepe",
+        "symbol": "PURPE",
+        "market_cap_rank": 1776,
+        "thumb": "https://coin-images.coingecko.com/coins/images/38962/thumb/IMG_3953.jpeg",
+        "large": "https://coin-images.coingecko.com/coins/images/38962/large/IMG_3953.jpeg"
+      },
+      {
+        "id": "based-pepe",
+        "name": "Based Pepe",
+        "api_symbol": "based-pepe",
+        "symbol": "PEPE",
+        "market_cap_rank": 2239,
+        "thumb": "https://coin-images.coingecko.com/coins/images/39763/thumb/based_pepe_transparent.png",
+        "large": "https://coin-images.coingecko.com/coins/images/39763/large/based_pepe_transparent.png"
+      },
+      {
+        "id": "pepeontron",
+        "name": "PePeonTron",
+        "api_symbol": "pepeontron",
+        "symbol": "PEPEONTRON",
+        "market_cap_rank": 3035,
+        "thumb": "https://coin-images.coingecko.com/coins/images/66637/thumb/1000000740.jpg",
+        "large": "https://coin-images.coingecko.com/coins/images/66637/large/1000000740.jpg"
+      },
+      {
+        "id": "wall-street-pepe",
+        "name": "Wall Street Pepe",
+        "api_symbol": "wall-street-pepe",
+        "symbol": "WEPE",
+        "market_cap_rank": 3037,
+        "thumb": "https://coin-images.coingecko.com/coins/images/54457/thumb/Wepe_Logo_200x200.png",
+        "large": "https://coin-images.coingecko.com/coins/images/54457/large/Wepe_Logo_200x200.png"
+      },
+      {
+        "id": "pepes-dog",
+        "name": "Pepes Dog",
+        "api_symbol": "pepes-dog",
+        "symbol": "ZEUS",
+        "market_cap_rank": 3136,
+        "thumb": "https://coin-images.coingecko.com/coins/images/56021/thumb/Pepes_Dog.jpg",
+        "large": "https://coin-images.coingecko.com/coins/images/56021/large/Pepes_Dog.jpg"
+      },
+      {
+        "id": "doge-pepe-4",
+        "name": "Doge Pepe",
+        "api_symbol": "doge-pepe-4",
+        "symbol": "DOPE",
+        "market_cap_rank": 3431,
+        "thumb": "https://coin-images.coingecko.com/coins/images/102179605/thumb/dope_logo.png",
+        "large": "https://coin-images.coingecko.com/coins/images/102179605/large/dope_logo.png"
+      },
+      {
+        "id": "pepecash-3",
+        "name": "PEPECASH",
+        "api_symbol": "pepecash-3",
+        "symbol": "PECH",
+        "market_cap_rank": 3467,
+        "thumb": "https://coin-images.coingecko.com/coins/images/67446/thumb/pechlogo200x200.png",
+        "large": "https://coin-images.coingecko.com/coins/images/67446/large/pechlogo200x200.png"
+      },
+      {
+        "id": "pepe-sol",
+        "name": "Pepe on SOL",
+        "api_symbol": "pepe-sol",
+        "symbol": "PEPE",
+        "market_cap_rank": 3545,
+        "thumb": "https://coin-images.coingecko.com/coins/images/38218/thumb/photo_5949643725443547660_m_%283%29.jpg",
+        "large": "https://coin-images.coingecko.com/coins/images/38218/large/photo_5949643725443547660_m_%283%29.jpg"
+      },
+      {
+        "id": "the-toad-pepe",
+        "name": "The Toad Pepe",
+        "api_symbol": "the-toad-pepe",
+        "symbol": "TOAD",
+        "market_cap_rank": 3564,
+        "thumb": "https://coin-images.coingecko.com/coins/images/102175460/thumb/2d6kj21foqb3982ba85mr71cf04r.",
+        "large": "https://coin-images.coingecko.com/coins/images/102175460/large/2d6kj21foqb3982ba85mr71cf04r."
+      },
+      {
+        "id": "mind-of-pepe",
+        "name": "Mind of Pepe",
+        "api_symbol": "mind-of-pepe",
+        "symbol": "MIND",
+        "market_cap_rank": 3624,
+        "thumb": "https://coin-images.coingecko.com/coins/images/66261/thumb/IMG_8248.jpeg",
+        "large": "https://coin-images.coingecko.com/coins/images/66261/large/IMG_8248.jpeg"
+      },
+      {
+        "id": "skull-of-pepe-token",
+        "name": "Skull of Pepe Token",
+        "api_symbol": "skull-of-pepe-token",
+        "symbol": "SKOP",
+        "market_cap_rank": 3673,
+        "thumb": "https://coin-images.coingecko.com/coins/images/38342/thumb/skop.jpeg",
+        "large": "https://coin-images.coingecko.com/coins/images/38342/large/skop.jpeg"
+      },
+      {
+        "id": "pepecoin-on-solana",
+        "name": "PepeCoin on Solana",
+        "api_symbol": "pepecoin-on-solana",
+        "symbol": "PEPE",
+        "market_cap_rank": 3728,
+        "thumb": "https://coin-images.coingecko.com/coins/images/35507/thumb/pepeonsol200x200.png",
+        "large": "https://coin-images.coingecko.com/coins/images/35507/large/pepeonsol200x200.png"
+      },
+      {
+        "id": "pepe-unchained-2",
+        "name": "Pepe Unchained",
+        "api_symbol": "pepe-unchained-2",
+        "symbol": "PEPU",
+        "market_cap_rank": 4022,
+        "thumb": "https://coin-images.coingecko.com/coins/images/66717/thumb/pepu.jpg",
+        "large": "https://coin-images.coingecko.com/coins/images/66717/large/pepu.jpg"
+      },
+      {
+        "id": "pumpkin-pepe",
+        "name": "Pumpkin Pepe",
+        "api_symbol": "pumpkin-pepe",
+        "symbol": "PUMPE",
+        "market_cap_rank": 4254,
+        "thumb": "https://coin-images.coingecko.com/coins/images/102179078/thumb/pumpe.jpg",
+        "large": "https://coin-images.coingecko.com/coins/images/102179078/large/pumpe.jpg"
+      },
+      {
+        "id": "baby-pepe-3",
+        "name": "Baby Pepe",
+        "api_symbol": "baby-pepe-3",
+        "symbol": "BABYPEPE",
+        "market_cap_rank": 4339,
+        "thumb": "https://coin-images.coingecko.com/coins/images/38672/thumb/NEW_BABYPEPE_LOGO.jpg",
+        "large": "https://coin-images.coingecko.com/coins/images/38672/large/NEW_BABYPEPE_LOGO.jpg"
+      },
+      {
+        "id": "history-of-pepe",
+        "name": "History of Pepe",
+        "api_symbol": "history-of-pepe",
+        "symbol": "HOPE",
+        "market_cap_rank": 4386,
+        "thumb": "https://coin-images.coingecko.com/coins/images/38014/thumb/Hope1.png",
+        "large": "https://coin-images.coingecko.com/coins/images/38014/large/Hope1.png"
+      },
+      {
+        "id": "young-peezy-aka-pepe",
+        "name": "Young Peezy AKA Pepe",
+        "api_symbol": "young-peezy-aka-pepe",
+        "symbol": "PEEZY",
+        "market_cap_rank": 4661,
+        "thumb": "https://coin-images.coingecko.com/coins/images/36649/thumb/1_-_PFP_-_200x200_CMC_CG_MM_CB.png",
+        "large": "https://coin-images.coingecko.com/coins/images/36649/large/1_-_PFP_-_200x200_CMC_CG_MM_CB.png"
+      },
+      {
+        "id": "mcpepe-s",
+        "name": "McPepe's",
+        "api_symbol": "mcpepe-s",
+        "symbol": "PEPES",
+        "market_cap_rank": 4686,
+        "thumb": "https://coin-images.coingecko.com/coins/images/29265/thumb/pepes-logo_%282%29.png",
+        "large": "https://coin-images.coingecko.com/coins/images/29265/large/pepes-logo_%282%29.png"
+      },
+      {
+        "id": "pepe-2-0",
+        "name": "Pepe 2.0",
+        "api_symbol": "pepe-2-0",
+        "symbol": "PEPE2.0",
+        "market_cap_rank": 4719,
+        "thumb": "https://coin-images.coingecko.com/coins/images/30853/thumb/PEPE_2.0.png",
+        "large": "https://coin-images.coingecko.com/coins/images/30853/large/PEPE_2.0.png"
+      }
+    ],
+    "rwas": [],
+    "exchanges": [],
+    "icos": [],
+    "categories": [],
+    "nfts": [
+      {
+        "id": "opepen-edition",
+        "name": "Opepen Edition",
+        "symbol": "OPEPEN",
+        "thumb": "https://coin-images.coingecko.com/nft_contracts/images/2540/thumb/opepen.jpeg"
+      },
+      {
+        "id": "rarepepe-by-matt-furie",
+        "name": "RarePepe by Matt Furie",
+        "symbol": "MFRP",
+        "thumb": "missing_thumb.png"
+      },
+      {
+        "id": "pepe-pet-poby",
+        "name": "PEPE PET POBY",
+        "symbol": "PPP",
+        "thumb": "https://coin-images.coingecko.com/nft_contracts/images/4598/thumb/pepe-pet-poby.png"
+      },
+      {
+        "id": "clay-pepes",
+        "name": "Clay Pepes",
+        "symbol": "CLAY-PEPES",
+        "thumb": "https://coin-images.coingecko.com/nft_contracts/images/3350/thumb/clay-pepes.jpg"
+      },
+      {
+        "id": "pepenals",
+        "name": "PepeNals",
+        "symbol": "PEPENALS",
+        "thumb": "https://coin-images.coingecko.com/nft_contracts/images/4169/thumb/pepenals.png"
+      },
+      {
+        "id": "rareapepeyachtclub",
+        "name": "Rare Apepe YC",
+        "symbol": "RAYC",
+        "thumb": "https://coin-images.coingecko.com/nft_contracts/images/1296/thumb/unnamed.jpg"
+      },
+      {
+        "id": "pepedrive-ii",
+        "name": "PepeDrive II",
+        "symbol": "PD2",
+        "thumb": "https://coin-images.coingecko.com/nft_contracts/images/15366/thumb/pepedrive-ii.png"
+      },
+      {
+        "id": "sproto-pepes",
+        "name": "Sproto Pepes",
+        "symbol": "SP",
+        "thumb": "https://coin-images.coingecko.com/nft_contracts/images/3426/thumb/sproto-pepes.png"
+      },
+      {
+        "id": "kekspace-coal-pepe",
+        "name": "Kekspace: Coal Pepe",
+        "symbol": "PEPECOIN",
+        "thumb": "missing_thumb.png"
+      },
+      {
+        "id": "opepenhood",
+        "name": "Opepenhood",
+        "symbol": "OPEPENHOOD",
+        "thumb": "https://coin-images.coingecko.com/nft_contracts/images/102126360/thumb/opepenhood."
+      },
+      {
+        "id": "pepe-card-packs",
+        "name": "Pepe Card Packs",
+        "symbol": "PCP",
+        "thumb": "https://coin-images.coingecko.com/nft_contracts/images/102126283/thumb/pepe-card-packs.jpg"
+      },
+      {
+        "id": "fine-pepes",
+        "name": "Fine Pepes",
+        "symbol": "FINE_PEPES",
+        "thumb": "https://coin-images.coingecko.com/nft_contracts/images/25987/thumb/fine-pepes.jpg"
+      },
+      {
+        "id": "blastin-pepes",
+        "name": "Blastin Pepes",
+        "symbol": "BPEPE",
+        "thumb": "https://coin-images.coingecko.com/nft_contracts/images/4474/thumb/blastin-pepes.jpg"
+      },
+      {
+        "id": "avapepes",
+        "name": "Avapepes",
+        "symbol": "AVAPEPE",
+        "thumb": "https://coin-images.coingecko.com/nft_contracts/images/1489/thumb/avapepes.png"
+      },
+      {
+        "id": "punkapepen-orig",
+        "name": "PunkApepen",
+        "symbol": "PAPP",
+        "thumb": "https://coin-images.coingecko.com/nft_contracts/images/4633/thumb/punkapepen.png"
+      },
+      {
+        "id": "pumpfun-pepe",
+        "name": "Pumpfun Pepe",
+        "symbol": "PFP",
+        "thumb": "https://coin-images.coingecko.com/nft_contracts/images/26133/thumb/pumpfun-pepe.png"
+      },
+      {
+        "id": "lo-fi-pepe",
+        "name": "LO-FI PEPE",
+        "symbol": "LOFI",
+        "thumb": "https://coin-images.coingecko.com/nft_contracts/images/3208/thumb/lo-fi-pepe.gif"
+      },
+      {
+        "id": "pepe-pee-pee-redeployed",
+        "name": "Pepe",
+        "symbol": "PEPE",
+        "thumb": "https://coin-images.coingecko.com/nft_contracts/images/3192/thumb/pepe-pee-pee-redeployed.png"
+      },
+      {
+        "id": "cacio-e-pepe",
+        "name": "Cacio E Pepe",
+        "symbol": "PEPE",
+        "thumb": "https://coin-images.coingecko.com/nft_contracts/images/1413/thumb/cacio-e-pepe.png"
+      },
+      {
+        "id": "abstract-pepes",
+        "name": "Abstract Pepes",
+        "symbol": "ABSTRACT_PEPES",
+        "thumb": "https://coin-images.coingecko.com/nft_contracts/images/15484/thumb/abstract-pepes.jpg"
+      },
+      {
+        "id": "ai-fly-pepe",
+        "name": "Ai Fly Pepe",
+        "symbol": "AFP",
+        "thumb": "https://coin-images.coingecko.com/nft_contracts/images/15635/thumb/ai-fly-pepe.png"
+      }
+    ]
+  }
+}

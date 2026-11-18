@@ -879,6 +879,14 @@ class CoinGeckoProvider(AssetSourceProvider):
   that reads a group, the group is not served either: no entry, even when named, and a write to it is
   `UNKNOWN_FIELD` (`service._switched_off_group()`). While one reader is on, it is listed and
   `used_by` names only the readers that are on.
+- **The group `coingecko`** (`groups/coingecko.py`, project 76 P1): one CoinGecko account, read by
+  the CoinGecko price provider (and, later, an enricher of the same source). A secret `api_key`,
+  **required** (with its own phrase for the «to configure» window, `missing_key`), and a select
+  `plan`, `demo` (default) or `pro`, which picks the API root. `shares_credits`: the readers' calls
+  count, and are limited, on the group, which got the five call-limit fields. Its texts are in the
+  `pluginSettings` subsystem, under `pluginSettings.group.coingecko` (the description under `about`,
+  as `description` holds the fields' descriptions). Until a key is set, every reader is «to
+  configure».
 - **The test group `mock`** (`groups/mock.py`, `test_only`): a secret `account_token` and a select
   `tier`, nothing required, read by `mockprov`, whose search `lf-group-echo` answers
   `group: tier=…; account_token=set|unset`. Listed only when named, like the test-only plugins, and
@@ -992,8 +1000,9 @@ The test plugin of the BRIM family therefore lives in a test module, never under
 ## 🔎 Shipped Plugins with Settings {: #shipped-plugins }
 
 Besides the core's call limits, which every provider that calls out gets ([Call Limits](#call-limits)),
-two plugins shipped with LibreFolio declare a field, a personal `select` each, read in `search()`
-only. Neither is required and both default to `all`, so both plugins are always configured; prices,
+and the CoinGecko provider, which reads the group `coingecko` (above) and declares a refresh interval
+and a preferred currency of its own (project 76; its page comes with lot P5), two plugins shipped with
+LibreFolio declare a field, a personal `select` each, read in `search()` only. Neither is required and both default to `all`, so both plugins are always configured; prices,
 history and metadata never see the field ([Scopes and Families](#scopes)).
 
 | Plugin | Field | Options | What `search()` does with it |

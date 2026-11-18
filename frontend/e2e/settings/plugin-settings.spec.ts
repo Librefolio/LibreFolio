@@ -588,9 +588,11 @@ test.describe('«Configure» on mockprov — its shared settings group', () => {
         await login(page, TEST_USER);
         const tab = await openPluginsTab(page);
 
+        // A shipped group is listed (project 76, P1: `coingecko`): the barrier that the groups' section is drawn
+        const groups = tab.locator('[data-testid="plugin-settings-family"][data-family="group"]');
+        await expect(groups.getByTestId('plugin-settings-form-coingecko'), 'barrier: a shipped group is listed').toBeVisible({timeout: 10_000});
         await expect(tab.getByTestId(`plugin-settings-form-${MOCKPROV}`)).toHaveCount(0);
-        await expect(tab.locator('[data-testid="plugin-settings-family"][data-family="group"]'), 'the group is listed only when named').toHaveCount(0);
-        await expect(tab.getByTestId('plugin-settings-form-mock')).toHaveCount(0);
+        await expect(tab.getByTestId('plugin-settings-form-mock'), 'the test-only group is listed only when named').toHaveCount(0);
     });
 });
 
