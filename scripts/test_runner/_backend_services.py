@@ -1738,6 +1738,15 @@ def services_asset_profile_store(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "Asset profile store tests", verbose=verbose)
 
 
+def services_asset_profile_freshness(verbose: bool = False, test_names: list = None) -> bool:
+    """Run «now» not up to date for the volatile voices of the asset profile (project 68, lot D1d)."""
+    print_section("Services: Asset Profile Freshness")
+    print_info("Testing: backend/app/services/assets/profile/freshness.py")
+    print_info("Tests: the last confirmation from the enrichers' state, the 30 days, by hand and old states count from the row, the voices that never age, the scheduler's zone, the signal only on a step reaching today")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_profile_freshness.py", test_names)
+    return run_command(cmd, "Asset profile freshness tests", verbose=verbose)
+
+
 def services_asset_profile_double_write(verbose: bool = False, test_names: list = None) -> bool:
     """Run the double write of classification_params into the asset profile by POST/PATCH /assets (project 68, lot A4)."""
     print_section("Services: Asset Profile Double Write")
@@ -4118,6 +4127,15 @@ Note: No backend server required.
         desc="Project 68 A3: profile_today is the date in scheduler_timezone (UTC when not set or not a zone); current_rows is each voice's last row in (read_on, id) order; write_values writes only when the stored form differs from now whoever wrote either (spelling, map key order and rounding, a row with non-canonical JSON text: the same value), force_source writes the source's row unless now is that value from that source, None is a NULL row only over a value, writes of one call apply in order, one refused value or unknown voice raises ProfileValueError and writes nothing, read_on never before now's, user_id only on user rows, source_date stored, two connections writing the same new value make one row (write lock before the comparison); read_steps: one step per stretch, carry_back per voice, min per asset among the voices asked, nothing for no rows or a first row after end, one day without end, the last row of a day holds it, same value and source merge, keys None all voices, an unknown key refused, value_at and points_between on the steps; forget_updates: now and steps follow, all or nothing (ProfileUpdatesNotFound, ProfileUpdatesNewer), the count; recent_changes newest first 20 a page with total and the value before, the panel hides a volatile voice's source rows but those by hand and the first after one",
         # PURE: every database is a private SQLite file under tmp_path built with create_all (two engines on it for the
         # lock case); no session on the lane DB, no server; every day and moment passed in.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "asset-profile-freshness",
+        services_asset_profile_freshness,
+        name="Asset Profile Freshness",
+        desc="Project 68 D1d: a volatile voice's «now» is stale when its last confirmation is more than 30 days old (31 stale, 30 and 29 not); the confirmation is the confirmed moment of the source that wrote now, in the scheduler's zone, never before the row's read_on; by hand, a source without the voice, another source, an old state: the row's read_on; the now row is the last; TER and maps never answer; reaching_today only on a last step reaching today",
+        # PURE: every database is a private SQLite file under tmp_path built with create_all; every day passed in.
         isolation="pure",
     )
     add_test(

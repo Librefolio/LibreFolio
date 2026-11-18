@@ -80,6 +80,7 @@ from sqlalchemy.pool import NullPool
 
 from backend.app.db.base import SQLModel  # imports every model, and backend.app.db.session with its PRAGMA listener
 from backend.app.db.models import Asset, AssetProfileUpdate, AssetType
+from backend.app.services.assets.profile import freshness, store
 from backend.app.services.assets.profile.catalogue import normalize_value
 from backend.app.services.enrichers import bindings, refresh
 from backend.app.services.enrichers.base import RATE_LIMITED, EnricherBinding, EnricherPlugin, EnricherReadItem, EnricherReadStatus, EnricherRecognition, EnricherTerms
@@ -879,3 +880,32 @@ def test_the_shared_retry_at_gives_no_default() -> None:
     assert jobs._retry_at([], NOW) is None
     assert jobs._retry_at([refused, refused], NOW) is None
     print_success("the price jobs unchanged")
+
+
+@pytest.mark.asyncio
+async def test_a_voice_held_for_the_retry_is_still_confirmed_by_the_source_that_gave_it(engine: AsyncEngine, lab) -> None:
+    """D1d. Order A, B; A declares ``fund_size``, B gives it, the same value as «now» (B's row of 40 days ago). Round one:
+    A refused, ``fund_size`` held. The retry: A answers without ``fund_size``, B is not read again (its value from the
+    cache). No row is written, and B's confirmation of ``fund_size`` is the round's: the voice is not stale."""
+    i_a, i_b = _ident("CA"), _ident("CB")
+    a = lab("confirm_held_a", table={i_a: _rate()}, voices={AssetType.ETF: frozenset({"fund_size"})})
+    b = lab("confirm_held_b", table={i_b: {"fund_size": FUND_SIZE}}, voices={AssetType.ETF: frozenset({"fund_size"})})
+    asset_id, _ = await _asset(engine, "confirm held")
+    await _bind(engine, asset_id, {a.code: _binding(i_a), b.code: _binding(i_b)})
+    earlier = NOW - timedelta(days=40)
+    first = _result(await _refresh(engine, [asset_id], now=earlier, hold_deferred=False), asset_id)
+    assert first.written == ["fund_size"], f"barrier: B's row of forty days ago: {first}"
+    clear_cache(CACHE_NAME)
+
+    held = _result(await _refresh(engine, [asset_id], now=NOW, hold_deferred=True), asset_id)
+    assert held.written == [] and [outcome.code for outcome in held.deferred] == [a.code], f"barrier: round one holds fund_size: {held}"
+    a.table[i_a] = {}
+    retry = _result(await _refresh(engine, [asset_id], now=NOW + timedelta(minutes=15), read_since=NOW), asset_id)
+    assert retry.written == [] and b.reads_of(i_b) == 2, f"barrier: the retry reads A only and writes nothing: {retry} / {b.calls}"
+
+    confirmed = (await _state(engine, asset_id)).get(b.code, {}).get("confirmed", {})
+    assert datetime.fromisoformat(confirmed.get("fund_size", "1970-01-01T00:00:00+00:00")) >= NOW, f"B gave fund_size this round: {confirmed}"
+    async with AsyncSession(engine) as session:
+        today = await store.profile_today(session, NOW)
+        result = (await freshness.voice_freshness(session, [asset_id], today=today)).get(asset_id, {})
+    assert result["fund_size"].stale is False and result["fund_size"].confirmed_on == today, result
