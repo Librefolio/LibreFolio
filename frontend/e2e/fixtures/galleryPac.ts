@@ -897,16 +897,18 @@ const UNCATEGORISED_EXPOSURE = 'allocation.uncategorised';
  *   under the maps, which cannot place it.
  * - Asset type: Apple and Microsoft are stocks (the seed's `asset_type`) and the Manual Asset an ETF, as a new one is until
  *   another type is picked (AssetEditor.svelte, `emptyManual`): nothing is left undeclared.
- * - Sector: «Uncategorised» alone, which the section folds into one line (result/model.ts, `onlyUncategorised`). The seed splits
- *   Apple into Technology and Services and Microsoft into Technology and Cloud; Services and Cloud are not sectors LibreFolio
- *   knows (FinancialSector), so the planner's source rejects both splits whole (pac_allocator/source/classifications.py,
- *   `allocation.classification_invalid`) and the draft holds no sector at all.
+ * - Sector: Other and Technology, then «Uncategorised» for the Manual Asset, which declares none. The seed splits Apple into
+ *   Technology and Services and Microsoft into Technology and Cloud; since plan 68 the planner reads the asset profile (D4),
+ *   which stores a map in the catalogue's form: a sector LibreFolio does not know (FinancialSector) is stored as «Other»
+ *   (catalogue.normalize_value), so Apple is Technology 85 % + Other 15 % and Microsoft Technology 70 % + Other 30 %, both valid.
+ *   Before, the planner read the raw `classification_params` and rejected both splits whole; the draft held no sector and the
+ *   section folded it into one line. PROF's decision (18/11/2026): the gallery shows the sectors as the app now reads them.
  */
-const PAC_EXPOSURE_ROWS = {geography: [SEEDED_COUNTRY, UNCATEGORISED_EXPOSURE], asset_type: ['ETF', 'STOCK']} as const;
+const PAC_EXPOSURE_ROWS = {geography: [SEEDED_COUNTRY, UNCATEGORISED_EXPOSURE], asset_type: ['ETF', 'STOCK'], sector: ['Other', 'Technology', UNCATEGORISED_EXPOSURE]} as const;
 
 /**
  * `tools/pac-result-exposures`: «Exposures – ideal vs actual» — the two world maps, target shares and shares after the plan, the
- * bars by Asset type, and the sector folded into its one line ({@link PAC_EXPOSURE_ROWS} says why). The section starts closed
+ * bars by Asset type and by sector ({@link PAC_EXPOSURE_ROWS} says which). The section starts closed
  * (ResultView.svelte, `OPEN_BY_DEFAULT`) and renders its body only while open (ResultSection.svelte): it is opened from its title
  * and the outcome asserted, so a lost click fails here instead of shooting the closed section; {@link closePacExposures} closes it
  * after the shot. The body is then waited for on what it publishes: the three dimensions, each folded or not, with their rows; the
@@ -941,8 +943,7 @@ export async function framePacExposures(page: Page, viewport: 'desktop' | 'mobil
     const sectors = dimension('sector');
     await expect(geography, 'the plan has no declared country').toHaveAttribute('data-folded', 'false');
     await expect(types, 'the plan has no declared Asset type').toHaveAttribute('data-folded', 'false');
-    await expect(sectors, 'the sectors are no longer all «Uncategorised»: the draft holds a sector now (populate_mock_data.py) — see PAC_EXPOSURE_ROWS').toHaveAttribute('data-folded', 'true');
-    await expect(sectors.getByTestId('pac-planner-exposures-show')).toBeVisible();
+    await expect(sectors, 'the plan has no declared sector: the draft lost the sectors of Apple and Microsoft (populate_mock_data.py) — see PAC_EXPOSURE_ROWS').toHaveAttribute('data-folded', 'false');
     // The accessible list under each chart carries its rows by category id, in the order the chart draws them.
     const rowIds = (block: Locator) =>
         block
@@ -951,6 +952,7 @@ export async function framePacExposures(page: Page, viewport: 'desktop' | 'mobil
             .evaluateAll((rows) => rows.map((row) => row.getAttribute('data-id')));
     await expect.poll(() => rowIds(geography), {message: 'the countries of the plan are not those of the draft: check populate_mock_data.py'}).toEqual(PAC_EXPOSURE_ROWS.geography);
     await expect.poll(() => rowIds(types), {message: 'the Asset types of the plan are not those of the draft: check populate_mock_data.py'}).toEqual(PAC_EXPOSURE_ROWS.asset_type);
+    await expect.poll(() => rowIds(sectors), {message: 'the sectors of the plan are not those of the draft: check populate_mock_data.py'}).toEqual(PAC_EXPOSURE_ROWS.sector);
 
     // The maps are drawn once the world map is read (once per page); a file that fails leaves the list of weights in their place.
     const maps = geography.getByTestId('pac-planner-exposures-maps');
@@ -962,6 +964,7 @@ export async function framePacExposures(page: Page, viewport: 'desktop' | 'mobil
     // The undeclared share, which no map can place, listed under them.
     await expect(maps.getByTestId('pac-planner-exposures-off-map')).toBeVisible();
     await expect(types.getByTestId('pac-planner-exposures-bars'), 'the bars by Asset type are not drawn').toHaveAttribute('data-chart-ready', 'true', {timeout: DRAW_TIMEOUT});
+    await expect(sectors.getByTestId('pac-planner-exposures-bars'), 'the bars by sector are not drawn').toHaveAttribute('data-chart-ready', 'true', {timeout: DRAW_TIMEOUT});
 
     if (viewport === 'desktop') {
         await framePacBlock(page, {first: section, last: section});
@@ -969,7 +972,7 @@ export async function framePacExposures(page: Page, viewport: 'desktop' | 'mobil
     }
     await framePacBlock(page, {first: section, last: exposures, keep: 'bottom'});
     await expect(types, 'the bars by Asset type are not whole in the shot').toBeInViewport({ratio: 1});
-    await expect(sectors, 'the sector line is not whole in the shot').toBeInViewport({ratio: 1});
+    await expect(sectors, 'the bars by sector are not whole in the shot').toBeInViewport({ratio: 1});
     return section;
 }
 

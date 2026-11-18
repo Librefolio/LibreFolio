@@ -4,6 +4,7 @@ import type {BackendSignalResult} from '../backendTypes';
 import {backendSignalSchemas} from '../backendTypes';
 import type {SignalConfig, SignalDefinition} from '../ChartSignal';
 import {buildBackendSignalRequestPlan} from '../requestBuilder';
+import {riskFreeRate} from '$lib/features/risk/riskFreeRateStore.svelte';
 import {mapSignalInstanceResults, SignalResultState} from '../resultMapper';
 
 function config(id: string, signalType: string, params: Record<string, unknown> = {}): SignalConfig {
@@ -111,6 +112,28 @@ describe('backend signal request/result mapping', () => {
 
         expect(plan.requests).toEqual([]);
         expect(plan.unavailableConfigs).toEqual([beta]);
+    });
+
+    // RN-21 (the consultant, 17/11/2026): a parameter bound to the reader's risk-free rate goes with the shared value, as
+    // an annual fraction; a value the chart once saved in the browser is left where it is and no longer read.
+    it('fills a risk-free rate parameter from the shared value, over a saved one', () => {
+        const sharpeDefinition: SignalDefinition = {
+            ...backendDefinition,
+            type: 'risk-rolling-sharpe',
+            backendSignalCode: 'RISK_ROLLING_SHARPE',
+            paramDescriptors: [{key: 'risk_free_annual_rate', label: 'Risk-free rate', type: 'number', control: 'risk_free_rate', default: 0}],
+        };
+        const saved = config('sharpe-a', 'risk-rolling-sharpe', {window: 90, risk_free_annual_rate: 0.04});
+        try {
+            riskFreeRate.set(2.5);
+            expect(buildBackendSignalRequestPlan([saved], [sharpeDefinition]).requests[0].params).toEqual({window: 90, risk_free_annual_rate: 0.025});
+            expect(saved.params.risk_free_annual_rate, 'the saved value is left where it is').toBe(0.04);
+
+            riskFreeRate.set(0);
+            expect(buildBackendSignalRequestPlan([config('sharpe-b', 'risk-rolling-sharpe', {window: 90})], [sharpeDefinition]).requests[0].params).toEqual({window: 90, risk_free_annual_rate: 0});
+        } finally {
+            riskFreeRate.set(0);
+        }
     });
 
     it('maps mixed local/backend/unavailable configs in input order', () => {

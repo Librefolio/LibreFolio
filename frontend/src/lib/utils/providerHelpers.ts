@@ -102,6 +102,8 @@ export function fxPairHtml(slug: string, options: FxPairHtmlOptions = {}): strin
 let assetProviderIcons: Map<string, string | null> = new Map();
 let assetProviderNames: Map<string, string> = new Map();
 let assetProviderKinds: Map<string, string> = new Map();
+let assetProviderAcceptedTypes: Map<string, string[]> = new Map();
+let assetProviderParamKeys: Map<string, string[]> = new Map();
 let assetProvidersFetched = false;
 let assetProvidersFetchPromise: Promise<void> | null = null;
 
@@ -126,6 +128,8 @@ export async function ensureAssetProvidersCached(): Promise<void> {
                 assetProviderNames.set(p.code, p.name ?? p.code);
                 // kind is optional on the schema (defaults to "online_scraper" BE-side)
                 assetProviderKinds.set(p.code, p.kind ?? 'online_scraper');
+                assetProviderAcceptedTypes.set(p.code, Array.isArray(p.accepted_identifier_types) ? [...p.accepted_identifier_types] : []);
+                assetProviderParamKeys.set(p.code, Array.isArray(p.params_schema) ? p.params_schema.map((field: {key?: unknown}) => String(field?.key ?? '')).filter(Boolean) : []);
             }
         } catch {
             // Fail silently — icon lookup will just return null
@@ -146,6 +150,22 @@ export function getAssetProviderIconUrl(code: string): string | null {
 /** Get asset provider display name from the asset provider cache. */
 export function getAssetProviderName(code: string): string {
     return assetProviderNames.get(code) ?? code;
+}
+
+/**
+ * The input types an asset provider accepts, first the one it prefers (project 76, P3); empty when unknown. Requires
+ * `ensureAssetProvidersCached()`.
+ */
+export function getAssetProviderAcceptedTypes(code: string | null | undefined): string[] {
+    return code ? (assetProviderAcceptedTypes.get(code) ?? []) : [];
+}
+
+/**
+ * The keys of an asset provider's params schema (project 76, P3), or null when the provider is not cached. Requires
+ * `ensureAssetProvidersCached()`.
+ */
+export function getAssetProviderParamKeys(code: string | null | undefined): string[] | null {
+    return code ? (assetProviderParamKeys.get(code) ?? null) : null;
 }
 
 /**

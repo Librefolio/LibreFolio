@@ -79,7 +79,7 @@ const WIDTH_TOLERANCE_PX = 1;
 
 /** Left to right as rendered today: the two switches, then Cancel and Save. */
 const FOOTER_CONTROLS = ['asset-active-toggle', 'asset-benchmark-toggle', 'asset-modal-cancel', 'asset-modal-save'] as const;
-const DETAIL_TABS = ['asset-detail-tab-overview', 'asset-detail-tab-risk'] as const;
+const DETAIL_TABS = ['asset-detail-tab-overview', 'asset-detail-tab-profile', 'asset-detail-tab-risk'] as const;
 
 type Mode = 'create' | 'edit';
 const MODES: readonly Mode[] = ['create', 'edit'];
@@ -446,7 +446,7 @@ test.describe('Asset detail tabs at phone width — never an empty tab (item 7)'
         });
     }
 
-    test(`${DESKTOP.width}×${DESKTOP.height} (control): both tab labels are visible`, async ({page, owned}) => {
+    test(`${DESKTOP.width}×${DESKTOP.height} (control): every tab label is visible`, async ({page, owned}) => {
         const assetId = await createOwnedAsset(page, owned, 'E2E desktop tabs');
         await page.setViewportSize(DESKTOP);
         await goToAssetDetailPage(page, String(assetId));

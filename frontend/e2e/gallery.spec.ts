@@ -3748,11 +3748,9 @@ test.describe('Gallery Screenshots', () => {
                     // The product offers the promote for the pair (promoteMatch)
                     const promoteBtn = page.getByTestId('toolbar-action-promote');
                     await expect(promoteBtn, `the product offers no promote for #${withdrawal.id} and #${deposit.id}`).toBeVisible({timeout: 5_000});
-                    // The shot has the promote button's tooltip over the dialog's title, as a user has it. The button sits in a
-                    // Tooltip, which pins its tooltip on a click (Tooltip.svelte, toggle) and closes a pinned one on a click
-                    // outside it — never one inside the dialog: ModalBase stops its clicks — or 30 s after the pointer left.
-                    // Real behaviour, so the shot keeps it, declared (pinnedTooltip), instead of faking a click to hide it; it is
-                    // on the designer's list. None on screen before the click, one after: the one in the shot is the promote's.
+                    // The page's selection bar is the floating one (DataTableToolbar, variant="floating", since 13/11): its buttons
+                    // carry a visible label, `title` and `aria-label`, and sit in no Tooltip, so a click pins none. None on screen
+                    // before the click, none after: nothing covers the dialog's title in the shot.
                     const tooltip = page.getByTestId('tooltip-content');
                     await expect(tooltip, 'no tooltip is on screen before the promote is clicked').toHaveCount(0);
                     await promoteBtn.click();
@@ -3760,11 +3758,9 @@ test.describe('Gallery Screenshots', () => {
                     // which also has data-testid="promote-merge-modal"
                     const mergeModal = page.locator('[data-testid="promote-merge-modal"][role="dialog"]');
                     await expect(mergeModal, 'the pair diverges, so the product asks to merge it').toBeVisible({timeout: 5_000});
-                    await expect(tooltip, "the click pinned the promote button's tooltip, and no other tooltip is on screen").toHaveCount(1);
+                    await expect(tooltip, 'the floating bar pins no tooltip on a click, and no other tooltip is on screen').toHaveCount(0);
                     await freezeAnimations(page);
-                    await screenshot(page, viewport, lang, theme, 'transactions', 'promote-merge-modal', {pinnedTooltip: true});
-                    // Nothing pins it again without a click: there now, so there in the picture.
-                    await expect(tooltip, 'the pinned tooltip has closed: it closes 30 s after the pointer leaves the button, so the shot may have been taken without it').toHaveCount(1);
+                    await screenshot(page, viewport, lang, theme, 'transactions', 'promote-merge-modal');
                     // Nothing is committed: the dialog is cancelled, and the next combination starts from a new load
                     await page.keyboard.press('Escape');
                 }
@@ -6349,19 +6345,15 @@ test.describe('Gallery Screenshots', () => {
 
                     await openGalleryAsset(page, GALLERY_ASSET);
 
-                    // The classification (metadata) panel open. Its toggle publishes no aria-expanded: the panel is rendered only
-                    // while it is open, so the panel says whether a click is needed, and that it took.
-                    const metadataToggle = page.getByTestId('asset-detail-metadata-toggle');
-                    const metadataPanel = page.getByTestId('asset-detail-metadata-panel');
-                    await expect(metadataToggle).toBeVisible({timeout: 15_000});
-                    if (!(await metadataPanel.isVisible())) await metadataToggle.click();
-                    await expect(metadataPanel, 'the classification panel is open').toBeVisible();
-                    // Its map and pie come with the classification, after the panel: drawn, every one (Apple has both).
-                    await chartsDrawn(metadataPanel, 'the classification panel');
-                    // Framed from the top of the page, the panel 8 px under the screen's edge — or as near as the page's end
-                    // allows: the bare scroll into view it replaces depended on where the page stood, and on the charts' arrival
-                    // (plan 56, class B).
-                    await frameTarget(page, metadataPanel, `${viewport}/${lang}/${theme}/assets/detail-classification`);
+                    // The «Profilo» tab (plan 68, E3E4b), which took the place of the metadata panel: its read published,
+                    // then its classification, whose map and pie are drawn, every one (Apple has both).
+                    await page.getByTestId('asset-detail-tab-profile').click();
+                    await expect(page.getByTestId('asset-profile-tab')).toHaveAttribute('data-status', 'ready', {timeout: 15_000});
+                    const classification = page.getByTestId('profile-classification');
+                    await chartsDrawn(classification, 'the classification of the Profile tab');
+                    // Framed from the top of the page, the classification 8 px under the screen's edge — or as near as the
+                    // page's end allows (plan 56, class B).
+                    await frameTarget(page, classification, `${viewport}/${lang}/${theme}/assets/detail-classification`);
                     await screenshot(page, viewport, lang, theme, 'assets', 'detail-classification');
                 }
             }
@@ -6922,7 +6914,7 @@ test.describe('Gallery Screenshots', () => {
             const ids = await resolveLabIds(page);
             const selection = labSelection(ids);
             const guard = await guardReadOnly(page);
-            // No benchmark: L3° measures without a comparison, so the notice counts exactly five measurements.
+            // No benchmark: L3° measures without a comparison, so the notice counts exactly six measurements.
             await seedLabStorage(page, ids.userId, {selection, benchmark: null});
             // INJECTED (galleryRiskLab.ts, injectStalePrice): RE Loan Roma's price 12 days old on every base wave, and the
             // matrix's own answer not back; the eligibility answers about Roma carry the matching stale-end verdict
@@ -6955,12 +6947,19 @@ test.describe('Gallery Screenshots', () => {
                     await expect(panel.getByTestId(`risk-selected-asset-${assetId}`), `asset ${assetId} is not clean over the year: the gallery data went stale`).toHaveAttribute('data-level', 'eligible');
                 }
 
-                // The notice: amber, one cause — the stale price — and the five partial measurements of the two levels.
+                // The notice: amber, one cause — the stale price — and the six partial measurements of the two levels: L1°'s
+                // bad day, bad month, drawdown and, since RN-19, the KPI of «How did each one move?», on L1°'s own calendar;
+                // L3°'s KPI and risk/return. Named, not only counted, so a measurement added or lost says which.
                 const notice = panel.getByTestId('risk-partial-notice');
                 await expect(notice).toBeVisible();
                 await expect(notice).toHaveAttribute('data-tone', 'warning');
                 await expect(notice.getByTestId('risk-partial-reasons')).toHaveAttribute('data-count', '1');
-                await expect(notice.getByTestId('risk-partial-measurements')).toHaveAttribute('data-count', '5');
+                const measurements = notice.getByTestId('risk-partial-measurements');
+                await expect(measurements).toHaveAttribute('data-count', '6');
+                const instances = await measurements.getByTestId('risk-partial-measurement').evaluateAll((chips) => chips.map((chip) => chip.getAttribute('data-instance') ?? '').sort());
+                expect(instances, 'the partial measurements of the two levels').toEqual(
+                    ['base-historical-asset_set_var', 'base-historical-asset_set_var-monthly', 'base-historical-asset_set_drawdown', 'base-historical-asset_set_kpi-move', 'base-historical-asset_set_kpi', 'base-historical-asset_set_risk_return'].sort(),
+                );
                 // Above it the banner, folded as every load opens it; under it the matrix's own banner, naming the measurement
                 // that did not come back, and why. No other section banner, and no period offer, in the shot: the selection's
                 // eligibility answer keeps the engine's suggestion, which over a year of fresh prices is none.

@@ -32,7 +32,7 @@ Click two points of the chart to read the change between them.
 
 ### 🗂️ [Classification](classification.md)
 
-The sector and country breakdown, in the **Metadata & Classification** panel.
+The sector and country breakdown, at the top of the **Profile** tab, with the asset's description, key figures and details.
 
 ### 📅 [Events](events.md)
 
@@ -48,6 +48,8 @@ An x-ray of this one asset, drawn with the same blocks as the Dashboard's [Risk 
 - 📈 **[How Does It Move?](../../dashboard/risk.md#how-does-it-move)** — the green twins: the best day, thirty good days, the largest rally, and what its days were like.
 - ⚖️ **Compared with a Reference** — the asset's volatility, annual return, Sortino and Sharpe, and the same against a benchmark you choose, as in [Am I Being Paid for This Risk?](../../dashboard/risk.md#being-paid). The asset's own row is there even with no benchmark chosen; the benchmark is the one shared with the Dashboard, and the asset itself cannot be its own reference.
 - 🔮 **[What If…?](../../dashboard/risk.md#what-if)** — a past crisis replayed on the asset, said in one sentence; a shock by sector or region; a simulation.
+
+The **risk-free rate** under the period line is the one of the Dashboard and of every risk page: changing it here changes it there → [Risk tab](../../dashboard/risk.md#good-to-know).
 
 What differs from the Dashboard:
 

@@ -25,7 +25,7 @@ function noteOf(source: QuoteBaseSource): string {
 }
 
 /** The caller's labels. `description` is not 'Description' on purpose: the row once showed that English literal in every language (X-R11). */
-const LABELS: ComparisonLabels = {name: 'Name', type: 'Type', currency: 'Currency', description: 'Desc', sector: 'Sector', geographic: 'Geo', quoteBase: 'QuoteBase', quoteBaseNote: noteOf};
+const LABELS: ComparisonLabels = {name: 'Name', type: 'Type', currency: 'Currency', icon: 'Icon', description: 'Desc', sector: 'Sector', geographic: 'Geo', quoteBase: 'QuoteBase', quoteBaseNote: noteOf};
 
 /** `manuallyChanged` for a request during which the user edited exactly `fields`. */
 const editedDuring = (fields: string[]) => (field: string) => fields.includes(field);
@@ -38,6 +38,7 @@ function snapshot(overrides: Partial<ComparisonSnapshot> = {}): ComparisonSnapsh
         assetType: '',
         currency: '',
         currencyUserSet: false,
+        iconUrl: '',
         quoteBaseQuantity: 1,
         shortDescription: '',
         descriptionFromPrefill: false,
@@ -263,6 +264,35 @@ describe('compareMetadata — a string field', () => {
             actions: [],
             differences: [{field: 'display_name', label: 'Name', type: 'string', currentValue: 'Apple', providerValue: 'Apple Inc.', selected: true}],
         });
+    });
+});
+
+// Project 76, P3 (the consultant's answer): the provider's logo is a field like the others, for every provider. An empty
+// icon is filled; a different one is a choice, never overwritten in silence — not even when only the case differs, since
+// a URL's path is case-sensitive.
+describe('compareMetadata — the icon', () => {
+    const LOGO = 'https://coin-images.coingecko.com/coins/images/1/large/bitcoin.png';
+
+    it('fills an empty icon', () => {
+        expect(forField(compare({icon_url: LOGO}), 'icon_url')).toEqual({actions: [{kind: 'fill', field: 'icon_url', value: LOGO}], differences: []});
+    });
+
+    it('agrees with the same icon', () => {
+        expect(forField(compare({icon_url: LOGO}, {form: {iconUrl: LOGO}}), 'icon_url')).toEqual({actions: [{kind: 'agree', field: 'icon_url'}], differences: []});
+    });
+
+    it.each<[string, string]>([
+        ['another icon', 'https://example.org/my-icon.png'],
+        ['the same address in another case', LOGO.toUpperCase()],
+    ])('asks about %s, with its label', (_label, current) => {
+        expect(forField(compare({icon_url: LOGO}, {form: {iconUrl: current}}), 'icon_url')).toEqual({
+            actions: [],
+            differences: [{field: 'icon_url', label: 'Icon', type: 'string', currentValue: current, providerValue: LOGO, selected: true}],
+        });
+    });
+
+    it('is compared in the scope «all» only', () => {
+        expect(forField(compare({icon_url: LOGO}, {scope: 'identifiers'}), 'icon_url')).toEqual(NOTHING);
     });
 });
 

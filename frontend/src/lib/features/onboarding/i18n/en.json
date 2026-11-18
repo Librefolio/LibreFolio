@@ -395,8 +395,8 @@
           "description": "Open the data editor to review manual prices and the events that affect the asset series."
         },
         "metadata": {
-          "title": "Identifiers and metadata",
-          "description": "Expand metadata to inspect identifiers, classification, currency, and provider configuration."
+          "title": "Profile",
+          "description": "Open Profile to see what the asset is: its countries and sectors, its description, its key figures and its details."
         },
         "risk": {
           "title": "Risk scenarios",

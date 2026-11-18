@@ -30,6 +30,7 @@
     import {resultByCode, resultByInstance, DAILY_VAR_INSTANCE, MONTHLY_VAR_INSTANCE} from '../riskAnalysisHelpers';
     import {buildMoveFigures, moveLead, semiDeviationPerimeterDiffers} from '../moveFigures';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {riskFreeRate} from '../riskFreeRateStore.svelte';
 
     /**
      * The four levels of risk, as one component.
@@ -81,9 +82,9 @@
 
     let {scope, dateStart, dateEnd, targetCurrency, title = '', subtitle = '', wholeBroker = false, internalSubset = false, scopeValue = null, assetIds = [], refreshVersion = 0, onsynced}: Props = $props();
 
-    // The risk-free rate the KPI wave is seeded with. Held here rather than in
-    // the controller because it is a user-facing setting, not a fetch concern.
-    let appliedRiskFreePercent = $state(0);
+    // The reader's risk-free rate (RN-21): one value for every risk page, read from its store. A change is a new
+    // question: the controller's signature carries it, so the answers that read it are asked again.
+    let appliedRiskFreePercent = $derived(riskFreeRate.percent);
 
     const controller = createRiskPanelController(() => ({scope: withWholeBroker(scope, wholeBroker), dateStart, dateEnd, targetCurrency, appliedRiskFreePercent, refreshVersion}), {
         onsynced: (detail) => onsynced?.(detail),
@@ -383,19 +384,7 @@
             actions={l3Table ? l3Actions : undefined}
         >
             <L3Benchmark {controller} subjectAssetId={scope.kind === 'asset' ? scope.asset_id : null} riskFreePercent={appliedRiskFreePercent} period={{start: dateStart, end: dateEnd}} currency={targetCurrency} />
-            <L3RiskAdjusted
-                bind:tableRef={l3Table}
-                subjectLabel={scope.kind === 'asset' ? assetNames[scope.asset_id] : undefined}
-                {oneAsset}
-                {historicalResults}
-                {currentResults}
-                {assetNames}
-                {assetIcons}
-                {appliedRiskFreePercent}
-                comparisonResult={controller.comparisonResult}
-                {benchmarkName}
-                loading={initialLoading}
-            />
+            <L3RiskAdjusted bind:tableRef={l3Table} subjectLabel={scope.kind === 'asset' ? assetNames[scope.asset_id] : undefined} {oneAsset} {historicalResults} {currentResults} {assetNames} {assetIcons} comparisonResult={controller.comparisonResult} {benchmarkName} loading={initialLoading} />
         </RiskLevelSection>
 
         <!-- Closed until asked for, and the scenario catalogue is fetched on that

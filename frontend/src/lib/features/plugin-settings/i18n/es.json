@@ -74,7 +74,43 @@
     "group": {
       "usedBy": "Compartidos por: {plugins}",
       "inGroup": "Usa también los ajustes compartidos de {group}",
-      "open": "Abrir"
+      "open": "Abrir",
+      "coingecko": {
+        "name": "CoinGecko",
+        "label": {
+          "api_key": "Clave API",
+          "plan": "Plan"
+        },
+        "about": "La cuenta de CoinGecko que comparten los plugins de CoinGecko: su clave API y su plan.",
+        "description": {
+          "api_key": "La clave de una cuenta de CoinGecko. Basta una clave Demo gratuita.",
+          "plan": "El plan de la clave: una clave Demo responde en la API pública, una de pago en la API Pro."
+        },
+        "missing": {
+          "api_key": "la clave API"
+        },
+        "option": {
+          "plan": {
+            "demo": "Demo (gratuito)",
+            "pro": "Pro (de pago)"
+          }
+        }
+      }
+    },
+    "notConfigured": {
+      "tooltip": "{provider} debe configurarse",
+      "invalidAdmin": "La variable de entorno {variable} tiene un valor no válido: hay que corregirla en el servidor.",
+      "invalidLimitAdmin": "La variable de entorno {variable} tiene un valor no válido (hace falta un entero ≥ 0, o nada): hay que corregirla en el servidor. Hasta que se corrija, {provider} está detenido.",
+      "invalidMember": "{provider} está detenido: uno de sus ajustes en el servidor no es válido. Avisa al administrador.",
+      "managed": "{provider} no está disponible en esta instancia: su configuración la gestiona el proveedor del servicio. Contacta con el soporte.",
+      "readOnlyIntro": "La configuración, solo lectura:",
+      "readOnlyLink": "Ajustes › Plugins",
+      "missingAdmin": "{provider} debe configurarse: {count, plural, one {falta este ajuste} other {faltan estos ajustes}}: {fields}.",
+      "missingMember": "{provider} debe configurarse: pide a un administrador que configure {count, plural, one {este ajuste} other {estos ajustes}}: {fields}.",
+      "missingAdminGeneric": "{provider} debe configurarse: falta un ajuste obligatorio.",
+      "missingMemberGeneric": "{provider} debe configurarse: pide a un administrador que configure sus ajustes obligatorios.",
+      "missingAdminPhrase": "{provider} debe configurarse: {count, plural, one {falta} other {faltan}} {fields}.",
+      "missingMemberPhrase": "{provider} debe configurarse: pide a un administrador que configure {fields}."
     }
   }
 }

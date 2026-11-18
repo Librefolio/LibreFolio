@@ -46,6 +46,7 @@ function limitField(window: (typeof WINDOWS)[number], value: number | null = nul
         description: 'The most calls the instance lets through in this window',
         label_key: null,
         description_key: null,
+        missing_key: null,
         options: [],
         min_length: null,
         max_length: null,

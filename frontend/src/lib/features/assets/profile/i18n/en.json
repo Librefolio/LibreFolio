@@ -173,6 +173,21 @@
         "scheduleFrom": "From",
         "scheduleTo": "To",
         "scheduleRate": "Rate"
+      },
+      "tab": {
+        "notAvailable": "not available",
+        "data": "Data",
+        "details": "Details",
+        "dataAsOf": "data as of {date}",
+        "history": "History of {voice}",
+        "loadFailed": "The asset's profile could not be read",
+        "missing": "This asset no longer exists",
+        "editData": "Edit data",
+        "isin": "ISIN",
+        "ticker": "Ticker",
+        "dataSince": "from {date}",
+        "beforeProfile": "value from before the profile",
+        "companySector": "Sector"
       }
     }
   }

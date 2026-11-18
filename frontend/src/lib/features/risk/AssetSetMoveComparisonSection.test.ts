@@ -398,6 +398,14 @@ describe('AssetSetMoveComparisonSection — the headers explain', () => {
         const help = await screen.findByRole('tooltip');
         expect(normalize(help.textContent)).toBe(normalize(get(_)(`risk.assetSet.levels.move.columnHelp.${column}`)));
     });
+    // RN-21 (the consultant, 17/11/2026): Omega and the semi-deviation count from the risk-free rate the KPI was charged.
+    it.each(['omega', 'downsideDeviation'] as const)('%s: with a rate, its help counts from it', async (column) => {
+        mount({kpi: {...KPI, metadata: {risk_free: {annual_rate: 0.025, source: 'analytic_param', currency: 'EUR'}}} as unknown as RiskAnalyticResult});
+
+        await fireEvent.click(screen.getByTestId(`dt-sort-${column}`));
+        const help = await screen.findByRole('tooltip');
+        expect(normalize(help.textContent)).toBe(normalize(get(_)(`risk.assetSet.levels.move.columnHelp.${column}WithRate`)));
+    });
 });
 
 describe('AssetSetMoveComparisonSection — the states', () => {

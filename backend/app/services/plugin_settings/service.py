@@ -247,6 +247,7 @@ def _field_read(state: FieldState, *, is_admin: bool) -> PluginSettingFieldRead:
         description=declared.description,
         label_key=declared.label_key,
         description_key=declared.description_key,
+        missing_key=declared.missing_key,
         options=[PluginSettingOptionRead(value=option.value, label=option.label, label_key=option.label_key) for option in declared.options],
         min_length=declared.effective_min_length if textual else None,
         max_length=declared.effective_max_length if textual else None,

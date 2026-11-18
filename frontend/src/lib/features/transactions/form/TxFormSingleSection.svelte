@@ -6,7 +6,7 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
+    import TxFormAssetField from '$lib/features/transactions/form/TxFormAssetField.svelte';
     import BrokerSearchSelect from '$lib/components/ui/select/BrokerSearchSelect.svelte';
     import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
@@ -335,16 +335,7 @@
                 >{$t('common.asset')}{rule.assetField === 'required' ? ' *' : ''}{#if rule.assetField === 'optional'}
                     <span class="text-lf-muted italic">({$t('common.optional')})</span>{/if}</span
             >
-            <TxCellMark cell="asset" marks={markedCells}
-                ><AssetSelect
-                    bind:value={draft.asset_id}
-                    disabled={isReadonly || rowSaved}
-                    onchange={setAsset}
-                    testid="tx-form-asset"
-                    createLabel={isReadonly || rowSaved ? undefined : $t('assets.create') || 'New asset'}
-                    onCreateNew={isReadonly || rowSaved ? undefined : () => (createAssetOpen = true)}
-                /></TxCellMark
-            >
+            <TxCellMark cell="asset" marks={markedCells}><TxFormAssetField value={draft.asset_id} disabled={isReadonly || rowSaved} onchange={setAsset} onCreateNew={isReadonly || rowSaved ? undefined : () => (createAssetOpen = true)} /></TxCellMark>
         </div>
     {/if}
 

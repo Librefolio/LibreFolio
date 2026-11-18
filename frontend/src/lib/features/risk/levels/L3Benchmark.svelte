@@ -4,6 +4,7 @@
     import type {RiskBenchmarkState} from '$lib/features/risk/riskBenchmarkStore.svelte';
 
     import BenchmarkSelect from '../BenchmarkSelect.svelte';
+    import {riskFreeParameters} from '../riskFreeRate';
 
     /**
      * The one benchmark L3 measures against, on every page at once.
@@ -135,9 +136,9 @@
         // guard is here and not only in the effect: nothing but a confirmed choice is asked.
         //
         // The two rates are `historical_kpi`'s (`riskAnalysisHelpers`), so the benchmark's Sharpe
-        // and Sortino stand beside the portfolio's on one footing. They are two because Sortino
-        // measures against a target return (the MAR), not against the risk-free rate.
-        await controller.runGuarded('comparison', () => (benchmarkState !== 'set' || selected === null || isSubject ? null : {code: 'comparison', mode: 'current_composition', parameters: {comparison_asset_id: selected, risk_free_annual_rate: riskFreePercent / 100, target_annual_return: 0}}));
+        // and Sortino stand beside the portfolio's on one footing: two parameters, one value, the
+        // reader's risk-free rate (RN-21, Q9 bis: one threshold for every «excess» measure).
+        await controller.runGuarded('comparison', () => (benchmarkState !== 'set' || selected === null || isSubject ? null : {code: 'comparison', mode: 'current_composition', parameters: {comparison_asset_id: selected, ...riskFreeParameters(riskFreePercent)}}));
     }
 
     /**

@@ -413,14 +413,30 @@ test.describe('Asset Detail Page', () => {
     });
 
     // ========================================================================
-    // Test 8: Metadata/classification panel toggle
+    // Test 8: the «Profilo» tab (plan 68, E3E4b) — it took the place of the metadata panel
     // ========================================================================
-    test('classification panel toggles', async ({page}) => {
+    test('the Profile tab shows the classification, the description, the key figures and the details', async ({page}) => {
         await goToSeededAssetDetail(page);
-        const toggle = page.getByTestId('asset-detail-metadata-toggle');
-        await expect(toggle).toBeVisible();
-        await toggle.click();
-        await expect(page.getByTestId('asset-detail-metadata-panel')).toBeVisible();
+        // The old foldable panel is gone from the overview
+        await expect(page.getByTestId('asset-detail-metadata-toggle')).toHaveCount(0);
+
+        await page.getByTestId('asset-detail-tab-profile').click();
+        await expect(page, 'the tab is in the address, so a reload keeps it').toHaveURL(/[?&]tab=profile(?:&|$)/);
+        const tab = page.getByTestId('asset-profile-tab');
+        // The tab publishes its read: wait for it, never for the parts to appear
+        await expect(tab).toHaveAttribute('data-status', 'ready', {timeout: 15_000});
+        await expect(tab).toHaveAttribute('data-busy', 'false');
+
+        // Apple is seeded with a 1.3 classification (USA; Technology and Services) and a description: the 006 copy dates
+        // them on its first day, so the period of the page holds them
+        await expect(page.getByTestId('profile-classification-geography')).toHaveAttribute('data-state', 'value');
+        await expect(page.getByTestId('profile-classification-sector')).toHaveAttribute('data-state', 'value');
+        await expect(page.getByTestId('profile-classification-as-of')).toHaveAttribute('data-kind', /^(legacy|source_date|opened_on)$/);
+        await expect(page.getByTestId('asset-profile-description')).toHaveAttribute('data-state', 'value');
+        await expect(page.getByTestId('profile-detail-ticker')).toHaveAttribute('data-state', 'value');
+        // Every key figure of the catalogue has its card, with a value or not
+        await expect(page.getByTestId('profile-key-figure-ter')).toBeVisible();
+        await expect(page.getByTestId('profile-key-figure-maturity_date')).toBeVisible();
     });
 
     // ========================================================================

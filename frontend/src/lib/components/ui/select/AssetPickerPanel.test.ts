@@ -36,13 +36,13 @@
  *  - The lab's «+» comes in as a raw snippet (`createRawSnippet`), and the bound value as accessors
  *    over a `reactiveBox`, for the reasons `TreeSelect.test.ts` gives.
  */
-import {beforeAll, describe, expect, expectTypeOf, it, vi} from 'vitest';
+import {afterEach, beforeAll, beforeEach, describe, expect, expectTypeOf, it, vi} from 'vitest';
 import {createRawSnippet} from 'svelte';
 import {existsSync, readdirSync, readFileSync} from 'node:fs';
 import {dirname, join, relative, resolve, sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
-import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {reactiveBox} from '$test/runes.svelte';
 import type {EligibilityView} from '$lib/features/risk/eligibility';
 import type {AssetInfo} from '$lib/stores/reference/assetStore';
@@ -950,6 +950,8 @@ interface SingleMount {
     searchText?: (candidate: PickerAsset) => string;
     loading?: boolean;
     disabled?: boolean;
+    createLabel?: string;
+    onCreateNew?: () => void;
 }
 
 function mountSingle({value = null, ...options}: SingleMount = {}) {
@@ -1528,6 +1530,92 @@ describe('AssetPickerPanel, mode="single": SearchSelect’s drop-in', () => {
             expect(textOf(marquee)).toBe('QRY · Quarry Resources');
             expect(marquee).toHaveAttribute('title', textOf(marquee));
         });
+    });
+});
+
+// ─── Single mode's optional create action (RN-12) ────────────────────────────────────────────
+
+// The transaction form keeps its «New asset» when its field moves onto the panel (the consultant, 17/11/2026: A1
+// replaces a picker, it removes no flow). The action is `AssetSelect`'s pair, `createLabel` with `onCreateNew`: without
+// both, nothing is drawn, so the benchmark picker, the lab and the signals' comparison asset stay as they are.
+describe('AssetPickerPanel, mode="single": the optional create action', () => {
+    const CREATE_LABEL = 'probe: create an asset';
+    const createAction = (): HTMLElement | null => within(singleRoot()).queryByTestId(`${SINGLE}-create-new`);
+
+    it('draws no action without the pair, nor with the label alone', async () => {
+        mountSingle();
+        await openSingle();
+        expect(createAction()).toBeNull();
+        cleanup();
+
+        mountSingle({createLabel: CREATE_LABEL});
+        await openSingle();
+        expect(createAction()).toBeNull();
+    });
+
+    it('with the pair, shows the label at the foot of the open list, and a press closes the list and asks once, choosing nothing', async () => {
+        const onCreateNew = vi.fn();
+        const {onchange, bound} = mountSingle({value: 21, createLabel: CREATE_LABEL, onCreateNew});
+        await openSingle();
+
+        const action = createAction();
+        expect(action).not.toBeNull();
+        expect(textOf(action!)).toBe(CREATE_LABEL);
+
+        await fireEvent.click(action!);
+
+        expect(onCreateNew).toHaveBeenCalledOnce();
+        expect(onchange).not.toHaveBeenCalled();
+        expect(bound.value).toBe(21);
+        expectSingleClosed();
+    });
+});
+
+// ─── Single mode: reopening right after a close, as SearchSelect (RN-12) ─────────────────────
+
+// The 200 ms guard exists for the ghost click that follows a tap; a mouse or keyboard close never blocks the next
+// opening (`SearchSelect.reopen.test.ts`, §16.4). The panel armed it on every close, so the transaction form, which
+// picks one asset after another, found the list shut. Time is the subject: the clock is frozen, and only the test moves it.
+describe('AssetPickerPanel, mode="single": reopening right after a close', () => {
+    const T0 = Date.UTC(2026, 10, 17, 8, 0, 0);
+
+    beforeEach(() => {
+        vi.useFakeTimers({toFake: ['Date']});
+        vi.setSystemTime(T0);
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    async function press(target: HTMLElement, device: 'mouse' | 'touch'): Promise<void> {
+        await fireEvent.pointerDown(target, {pointerType: device});
+        await fireEvent.click(target);
+    }
+
+    it('mouse: a click on the trigger at the very instant of a mouse choice opens the list again', async () => {
+        mountSingle();
+        await openSingle();
+        await press(choice(21), 'mouse');
+        expectSingleClosed();
+
+        await press(singleTrigger(), 'mouse');
+
+        expect(singleTrigger()).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('touch: the ghost click right after a tap choice is ignored, a tap after the window opens the list', async () => {
+        mountSingle();
+        await openSingle();
+        await press(choice(21), 'touch');
+        expectSingleClosed();
+
+        await fireEvent.click(singleTrigger());
+        expect(singleTrigger(), 'the ghost click at +0 ms').toHaveAttribute('aria-expanded', 'false');
+
+        vi.setSystemTime(T0 + 250);
+        await press(singleTrigger(), 'touch');
+        expect(singleTrigger()).toHaveAttribute('aria-expanded', 'true');
     });
 });
 

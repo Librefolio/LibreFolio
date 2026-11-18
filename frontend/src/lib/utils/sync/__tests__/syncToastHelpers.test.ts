@@ -20,7 +20,8 @@
  * tests supply isolated currency metadata; provider-chain parsing stays real.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {buildAssetSyncToast, buildFxSyncToast} from '../syncToastHelpers';
+import {buildAssetSyncToast, buildFxSyncToast, historyStartsNote, historyStartsSummary} from '../syncToastHelpers';
+import {formatDay} from '$lib/utils/core/formatAxisDate';
 import {formatElapsed, formatTime} from '../syncHelpers';
 import {fxPairHtml, parseProviderChain, type FxPairHtmlOptions} from '$lib/utils/providerHelpers';
 import * as currencyStore from '$lib/stores/reference/currencyStore';
@@ -133,6 +134,47 @@ describe('buildAssetSyncToast', () => {
         it('treats an unrecognised status as a failure', () => {
             // Anything the four known branches do not claim is not a success.
             expect(buildAssetSyncToast({status: 'something-new'}, 'ACME', tr).variant).toBe('error');
+        });
+    });
+
+    // Project 76, P2b: the source has no prices before a day, and the range asked started earlier.
+    describe('the first day the source has prices for', () => {
+        const spy = () => vi.fn((key: string, opts?: {values?: Record<string, string>}) => `[[translation:${key}|${opts?.values?.date ?? ''}]]`);
+
+        it('adds its line, with the day formatted, and keeps the variant the prices decide', () => {
+            const t = spy();
+            const toast = buildAssetSyncToast({status: 'ok', points_fetched: 364, points_changed: 364, history_starts: '2025-11-18'}, 'BTC', t);
+            expect(toast.variant).toBe('success');
+            expect(toast.message.split('\n').at(-1)).toBe(`[[translation:prices.sync.historyStarts|${formatDay('2025-11-18')}]]`);
+        });
+
+        it('adds it to a partial outcome too', () => {
+            const toast = buildAssetSyncToast({status: 'partial', points_fetched: 3, points_changed: 3, history_starts: '2025-11-18'}, 'BTC', spy());
+            expect(toast.variant).toBe('warning');
+            expect(toast.message).toContain('prices.sync.historyStarts');
+        });
+
+        it('adds it to a failure too: a range wholly before that day brings nothing, and the line says why', () => {
+            const toast = buildAssetSyncToast({status: 'failed', errors: ['No price data available from provider'], history_starts: '2025-11-18'}, 'BTC', spy());
+            expect(toast.variant).toBe('error');
+            expect(toast.message).toContain('prices.sync.historyStarts');
+        });
+
+        it('leaves the line out when the caller sums it up for many assets', () => {
+            const toast = buildAssetSyncToast({status: 'ok', points_fetched: 3, points_changed: 3, history_starts: '2025-11-18'}, 'BTC', spy(), {historyNote: false});
+            expect(toast.message).not.toContain('prices.sync.historyStarts');
+        });
+
+        it('sums many assets up in one line, with their count (the consultant, 18/11)', () => {
+            const t = vi.fn((key: string, opts?: {values?: Record<string, number>}) => `[[${key}|${opts?.values?.count ?? ''}]]`);
+            expect(historyStartsSummary([{history_starts: '2025-11-18'}, {history_starts: null}, {history_starts: '2025-11-18'}], t)).toBe('[[prices.sync.historyStartsMany|2]]');
+            expect(historyStartsSummary([{history_starts: null}, {}], t)).toBe('');
+        });
+
+        it('says nothing when the outcome has no first day', () => {
+            const toast = buildAssetSyncToast({status: 'ok', points_fetched: 3, points_changed: 3, history_starts: null}, 'BTC', spy());
+            expect(toast.message).not.toContain('prices.sync.historyStarts');
+            expect(historyStartsNote({}, spy())).toBe('');
         });
     });
 });

@@ -41,7 +41,7 @@ export interface SignalParamDescriptor {
      */
     type: 'number' | 'boolean' | 'string' | 'select';
     /** Optional backend-declared semantic control overriding the primitive type. */
-    control?: 'comparison_asset';
+    control?: 'comparison_asset' | 'risk_free_rate';
     /** Default value for new instances */
     default: unknown;
     /** Whether the backend schema requires this parameter. */

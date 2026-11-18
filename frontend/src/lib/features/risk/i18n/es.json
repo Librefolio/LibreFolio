@@ -37,7 +37,8 @@
           "units": "O años, meses y días: 2a3m5d",
           "sum": "Un año cuenta 365 días, un mes 30"
         }
-      }
+      },
+      "riskFreeRateHint": "La última rentabilidad de las Letras del Tesoro a 12 meses."
     },
     "title": "Riesgo",
     "dashboardTitle": "Riesgo de la cartera",
@@ -154,7 +155,9 @@
             "sortino": "Cuánta rentabilidad media anual por cada unidad de oscilación a la baja: solo cuentan las caídas, no las subidas.",
             "sharpe": "Cuánta rentabilidad media anual por cada unidad de volatilidad: la recompensa por el riesgo asumido, subidas y caídas por igual.",
             "beta": "Cuánto se movió el activo cuando se movía el índice de referencia: 1 significa lo mismo, 2 el doble, 0 con independencia de él.",
-            "correlation": "Cuánto se movieron juntos el activo y el índice de referencia, de −1 (siempre opuestos) a +1 (siempre juntos)."
+            "correlation": "Cuánto se movieron juntos el activo y el índice de referencia, de −1 (siempre opuestos) a +1 (siempre juntos).",
+            "sharpeWithRate": "Cuánta rentabilidad media anual por encima de la tasa libre de riesgo por cada unidad de volatilidad: la recompensa por el riesgo asumido, subidas y caídas por igual.",
+            "sortinoWithRate": "Cuánta rentabilidad media anual por encima de la tasa libre de riesgo por cada unidad de oscilación por debajo de esa tasa: solo cuentan las caídas bajo la tasa, no las subidas."
           },
           "axisReturn": "Rentabilidad media anual",
           "period": {
@@ -194,7 +197,9 @@
             "meanUpDown": "El día medio al alza y el día medio a la baja.",
             "streak": "La racha más larga de días seguidos con ganancia, y cuándo.",
             "averageDrawdown": "Cuánto por debajo de su máximo estaba el activo en un día medio del período: todo el tramo bajo el agua, no solo la peor caída.",
-            "extremeDays": "Cuánto más a menudo llegaron días muy grandes, al alza o a la baja, de lo que daría una curva de campana: 1× es la campana, por encima las colas son más gruesas."
+            "extremeDays": "Cuánto más a menudo llegaron días muy grandes, al alza o a la baja, de lo que daría una curva de campana: 1× es la campana, por encima las colas son más gruesas.",
+            "omegaWithRate": "Ganancias frente a pérdidas: por cada euro perdido por debajo de la tasa libre de riesgo, cuántos se ganaron por encima.",
+            "downsideDeviationWithRate": "La semidesviación: cuánto oscila el activo por debajo de la tasa libre de riesgo, en un año, en la unidad de la volatilidad."
           }
         }
       },
@@ -368,7 +373,10 @@
       "overviewTab": "Resumen",
       "riskScenariosTab": "Riesgo y escenarios",
       "positionNote": "Los importes son sobre tu posición de hoy: {amount}.",
-      "planPrices": "Precios del plan, no del mercado: aquí la volatilidad y el VaR solo dicen lo regular que es el plan."
+      "planPrices": "Precios del plan, no del mercado: aquí la volatilidad y el VaR solo dicen lo regular que es el plan.",
+      "profileTab": "Perfil",
+      "profileNoEnrichers": "Ningún enriquecedor configurado",
+      "overviewNoPriceProvider": "Ningún proveedor de precios"
     },
     "levels": {
       "l1": {
@@ -626,11 +634,15 @@
           "averageDrawdown": "Bajo el máximo, de media",
           "extremeDaysValue": "{value}× una campana",
           "semiDeviationValue": "a la baja {down} · sobre una oscilación de {swing} en el periodo",
-          "semiDeviationPerimeter": "Medidas sobre la cartera tal como la tuviste en el periodo. La tabla «¿Me están pagando por este riesgo?» mide la composición actual: por eso su volatilidad puede ser distinta."
+          "semiDeviationPerimeter": "Medidas sobre la cartera tal como la tuviste en el periodo. La tabla «¿Me están pagando por este riesgo?» mide la composición actual: por eso su volatilidad puede ser distinta.",
+          "semiDeviationValueWithRate": "por debajo de la tasa {down} · sobre una oscilación de {swing} en el periodo",
+          "semiDeviationBelowRate": "La semidesviación solo cuenta los días por debajo de la tasa libre de riesgo."
         },
         "lead": {
           "both": "Por cada 1 perdido en los días malos se ganaron {omega} en los buenos; la mayor subida duró {days}.",
-          "omega": "Por cada 1 perdido en los días malos se ganaron {omega} en los buenos."
+          "omega": "Por cada 1 perdido en los días malos se ganaron {omega} en los buenos.",
+          "omegaWithRate": "Contando desde la tasa libre de riesgo ({rate} al año): por cada 1 perdido por debajo, {omega} ganados por encima.",
+          "bothWithRate": "Contando desde la tasa libre de riesgo ({rate} al año): por cada 1 perdido por debajo, {omega} ganados por encima; la mayor subida duró {days}."
         }
       }
     },

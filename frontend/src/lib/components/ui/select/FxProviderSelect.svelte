@@ -17,11 +17,16 @@
   - Currency flag emojis on route items
   - OrderableList for selected route priority (drag & drop)
   - MANUAL provider is never shown (backend-only sentinel)
+  - A route through a provider that is not configured is switched off (project 76, N3c): dashed, an amber «settings»
+    icon in place of +, reachable; a touch asks the parent to explain (`onneedssetup`), it never adds the route. A
+    provider the pair's saved routes already use (`savedProviderCodes`) is never switched off, and a selected route
+    through a provider that is not configured shows a yellow triangle that asks the same.
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
-    import {AlertTriangle, ArrowLeftRight, Check, ChevronDown, ChevronUp, Info, Link, Loader2, Plus, Search, Trash2, X} from 'lucide-svelte';
-    import {findConversionPaths, getCachedFxProviders} from '$lib/stores/currencyGraphStore';
+    import {AlertTriangle, ArrowLeftRight, Check, ChevronDown, ChevronUp, Info, Link, Loader2, Plus, Search, SlidersHorizontal, Trash2, X} from 'lucide-svelte';
+    import {findConversionPaths, fxProvidersVersion, getCachedFxProviders, refreshFxProviderReadiness} from '$lib/stores/currencyGraphStore';
+    import {untrack} from 'svelte';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import type {ChainStep, ProviderInfo} from '$lib/utils/currency/currencyGraph';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
@@ -60,9 +65,49 @@
         disabled?: boolean;
         /** Slugs of already-configured FX pairs (e.g. ["EUR-USD","GBP-USD"]) for sorting */
         configuredPairSlugs?: string[];
+        /**
+         * The providers the pair's saved routes already use (project 76, N3c): never switched off, even when not
+         * configured — the backend accepts a provider already on the pair (N2). Empty for a new pair.
+         */
+        savedProviderCodes?: string[];
+        /** A provider that is not configured was touched (a switched-off route, a triangle): the parent says why. */
+        onneedssetup?: (provider: ProviderInfo) => void;
     }
 
-    let {baseCurrency = '', quoteCurrency = '', selectedRoutes = $bindable([]), onSelectionChange, language = 'en', disabled = false, configuredPairSlugs = []}: Props = $props();
+    let {baseCurrency = '', quoteCurrency = '', selectedRoutes = $bindable([]), onSelectionChange, language = 'en', disabled = false, configuredPairSlugs = [], savedProviderCodes = [], onneedssetup}: Props = $props();
+
+    // N3c: the readiness of the cached providers is read again when the picker mounts (a key saved elsewhere since)
+    $effect(() => {
+        untrack(() => void refreshFxProviderReadiness());
+    });
+
+    /** The providers that are not configured, by code (their list entry says so): read again when the cache moves. */
+    let unconfigured = $derived.by(() => {
+        void $fxProvidersVersion;
+        return new Map(
+            getCachedFxProviders()
+                .filter((p) => p.configured === false)
+                .map((p) => [p.code, p]),
+        );
+    });
+    /** Of those, the ones whose routes are switched off: not already on the pair. */
+    let blocked = $derived(new Set([...unconfigured.keys()].filter((code) => !savedProviderCodes.includes(code))));
+
+    /** The first provider of a route that switches it off, or undefined. */
+    function blockedBy(route: RouteOption): ProviderInfo | undefined {
+        const code = route.providers.find((c) => blocked.has(c));
+        return code === undefined ? undefined : unconfigured.get(code);
+    }
+
+    /** The first provider of a route that is not configured (switched off or not), or undefined. */
+    function unconfiguredOf(route: RouteOption): ProviderInfo | undefined {
+        const code = route.providers.find((c) => unconfigured.has(c));
+        return code === undefined ? undefined : unconfigured.get(code);
+    }
+
+    function setupHint(provider: ProviderInfo): string {
+        return $_('pluginSettings.notConfigured.tooltip', {values: {provider: provider.name}});
+    }
 
     // =========================================================================
     // State
@@ -603,6 +648,13 @@
                         <span class="text-[10px] font-mono px-1.5 py-0.5 rounded flex-shrink-0 ml-auto priority-badge" style={getPriorityBadgeStyle(index)}>
                             #{index + 1}
                         </span>
+                        <!-- N3c: a provider of this saved route is not configured: the yellow triangle says why -->
+                        {#if unconfiguredOf(route)}
+                            {@const needs = unconfiguredOf(route)!}
+                            <button type="button" class="p-0.5 rounded-md text-lf-warning hover:bg-lf-warning-soft flex-shrink-0" data-testid="fx-route-needs-setup" data-provider={needs.code} title={setupHint(needs)} aria-label={setupHint(needs)} onclick={() => onneedssetup?.(needs)}>
+                                <AlertTriangle size={13} />
+                            </button>
+                        {/if}
                         <!-- Provider warnings triangle -->
                         {#if getRouteWarnings(route).length > 0}
                             <Tooltip html={warningsTooltipHtml(getRouteWarnings(route))} position="top">
@@ -711,16 +763,25 @@
                             {@const iconUrl = getFxProviderIconUrl(step.provider)}
                             {@const provColor = getProviderColor(step.provider)}
                             {@const warnings = getRouteWarnings(route)}
+                            {@const off = blockedBy(route)}
                             <button
                                 type="button"
                                 data-testid="fx-route-direct-{route.providers[0]}"
+                                data-route-key={route.key}
+                                data-needs-setup={off ? 'true' : 'false'}
+                                aria-disabled={off ? 'true' : undefined}
+                                title={off ? setupHint(off) : undefined}
                                 data-warnings={warnings.length}
                                 data-warning-level={getRouteWarningLevel(route)}
-                                class="w-full text-left px-2.5 py-1.5 rounded-lg border transition-all text-xs border-lf-subtle bg-lf-card hover:border-lf-success-line hover:bg-lf-success-soft/50"
-                                onclick={() => addRoute(route)}
+                                class="w-full text-left px-2.5 py-1.5 rounded-lg border transition-all text-xs {off ? 'border-dashed border-lf-input bg-lf-card text-lf-muted' : 'border-lf-subtle bg-lf-card hover:border-lf-success-line hover:bg-lf-success-soft/50'}"
+                                onclick={() => (off ? onneedssetup?.(off) : addRoute(route))}
                             >
-                                <span class="flex items-center gap-1.5">
-                                    <Plus size={12} class="text-lf-success flex-shrink-0" />
+                                <span class="flex items-center gap-1.5 {off ? 'grayscale' : ''}">
+                                    {#if off}
+                                        <SlidersHorizontal size={12} class="text-lf-warning flex-shrink-0" />
+                                    {:else}
+                                        <Plus size={12} class="text-lf-success flex-shrink-0" />
+                                    {/if}
                                     <span class="text-sm emoji-flag">{fromInfo.flag_emoji}</span>
                                     <span class="font-medium text-lf-secondary text-[11px]">{step.from}</span>
                                     <Tooltip html={providerTooltipHtml(step.provider)} position="top">
@@ -780,17 +841,25 @@
                             {@const limit = chainLimit(group.stepCount)}
                             {#each group.routes.slice(0, limit) as route (route.key)}
                                 {@const warnings = getRouteWarnings(route)}
+                                {@const off = blockedBy(route)}
                                 <button
                                     type="button"
                                     data-testid="fx-route-chain-{route.stepCount}step-{route.providers.join('-')}"
                                     data-route-key={route.key}
+                                    data-needs-setup={off ? 'true' : 'false'}
+                                    aria-disabled={off ? 'true' : undefined}
+                                    title={off ? setupHint(off) : undefined}
                                     data-warnings={warnings.length}
                                     data-warning-level={getRouteWarningLevel(route)}
-                                    class="w-full text-left px-2.5 py-1.5 rounded-lg border transition-all text-xs border-lf-subtle bg-lf-card hover:border-lf-info-line hover:bg-lf-info-soft/50"
-                                    onclick={() => addRoute(route)}
+                                    class="w-full text-left px-2.5 py-1.5 rounded-lg border transition-all text-xs {off ? 'border-dashed border-lf-input bg-lf-card text-lf-muted' : 'border-lf-subtle bg-lf-card hover:border-lf-info-line hover:bg-lf-info-soft/50'}"
+                                    onclick={() => (off ? onneedssetup?.(off) : addRoute(route))}
                                 >
-                                    <span class="flex items-center gap-1.5">
-                                        <Plus size={12} class="text-lf-info flex-shrink-0" />
+                                    <span class="flex items-center gap-1.5 {off ? 'grayscale' : ''}">
+                                        {#if off}
+                                            <SlidersHorizontal size={12} class="text-lf-warning flex-shrink-0" />
+                                        {:else}
+                                            <Plus size={12} class="text-lf-info flex-shrink-0" />
+                                        {/if}
                                         <span class="flex items-center gap-0.5 flex-wrap flex-1 min-w-0">
                                             {#each route.chainSteps as step, i}
                                                 {@const fromInfo = getCurrencyInfo(step.from)}

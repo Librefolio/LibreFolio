@@ -28,6 +28,57 @@ where:
 
 ---
 
+## 🏦 The Risk-Free Rate {: #risk-free-rate }
+
+Since release 1.4 the reader sets **one fixed annual rate**, in the field under the period line of every risk page. It is 0% until it is set. The value is kept in the browser, per account, and travels with each request: the backend stores nothing.
+
+### 🎯 One Threshold for Every Excess Measure {: #one-threshold }
+
+The same value is used everywhere a measure asks "above what?":
+
+| Measure | Role of the rate | Engine parameter |
+|---|---|---|
+| [Sharpe ratio](#formula) | $R_f$, subtracted from every return | `risk_free_annual_rate` |
+| [Sortino ratio](sortino-ratio.md) | The threshold of the numerator and of the downside deviation | `target_annual_return` |
+| [Gains against losses (Omega)](omega-ratio.md) | The cut between gains and shortfalls | `target_annual_return` |
+| Semi-deviation ([downside deviation](sortino-ratio.md#downside-deviation)) | The level below which a return counts as a shortfall | `target_annual_return` |
+
+The engine still declares the two parameters separately; the app fills both from the one rate, so a Sharpe and the Sortino beside it never charge two different rates. The three rolling signals of the asset chart that take a rate — **Rolling Sharpe Ratio**, **Rolling Semi-deviation** and **Rolling Gains / Losses (Omega)** — read the same value: their rate parameter is declared with `x-control: "risk_free_rate"`, so the chart shows the reader's rate in place of a field.
+
+The analytics that take the rate — `historical_kpi`, `asset_set_kpi`, `comparison`, `asset_set_comparison` and `asset_risk_return` — echo the rate they were charged in `metadata.risk_free.annual_rate`. What a page writes as "the rate used" is read from there, not from the field: between a change and the new answer the two differ.
+
+### 📏 Why a Short Rate, Not a Long Bond {: #why-a-short-rate }
+
+The rate the ratio needs is the return of an investment with **no** risk over the measurement period. The closest observable is the yield of a **short** government bill — for instance the latest yield of a 12-month Treasury bill, or the equivalent bill of the currency the analysis is measured in.
+
+A 10-year government bond yield is not a substitute:
+
+- **It pays a term premium.** Holding a long bond exposes the investor to interest-rate risk: its price falls when yields rise. Its yield includes a compensation for that risk, so it is already a risky return, not a risk-free one.
+- **For a single country it carries credit risk.** The yield of one issuer's long bond includes a premium for the chance that the issuer does not pay, which a short bill of a highly rated issuer carries far less of.
+- **It usually sits above short rates.** With an upward-sloping yield curve — the usual shape, though not the only one — the long yield exceeds the bill yield, and using it raises the charge on every return.
+
+The effect on the ratio is direct. The Sharpe ratio falls by approximately the difference of the two rates divided by the annual volatility:
+
+$$
+\Delta S \approx -\frac{\Delta R_f}{\sigma_p}
+$$
+
+!!! example "A one-point difference in the rate"
+
+    An asset with an annual volatility of 14%, measured with a rate of 3.5% instead of 2.5%:
+
+    $$
+    \Delta S \approx -\frac{0.035 - 0.025}{0.14} \approx -0.07
+    $$
+
+    The asset did not change; its Sharpe ratio dropped by about 0.07 because the bar it is measured against was raised by a premium that is not risk-free. (The compounding-aware conversion above gives $-0.069$.)
+
+!!! warning "One constant over the whole window"
+
+    The rate is a single fixed annual figure applied to every day of the period, not a historical series of rates. Over a window that spans different rate regimes — years near zero followed by years of high rates — it is an approximation, and the reading of the ratio inherits it. Set it to the rate that best represents the period being measured.
+
+---
+
 ## 💡 Interpretation {: #interpretation }
 
 | Sharpe Ratio | What the value means |
@@ -97,6 +148,7 @@ The Sharpe ratio can vary dramatically depending on the lookback window. A strat
 ## 🔗 Related {: #related }
 
 - 📊 **[Sortino Ratio](sortino-ratio.md)** — Downside-only variant
+- ➗ **[Gains Against Losses (Omega)](omega-ratio.md)** — Gains above the same rate against shortfalls below it
 - 📊 **[Volatility](volatility.md)** — The denominator of the Sharpe ratio
 - 📈 **[Returns](../../fundamentals/returns.md)** — The numerator of the Sharpe ratio
 

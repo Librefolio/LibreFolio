@@ -605,6 +605,46 @@ def services_enricher_call_limits(verbose: bool = False, test_names: list = None
     return run_command(cmd, "Enricher call limit tests", verbose=verbose)
 
 
+def services_coingecko_prices(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the CoinGecko provider's prices (project 76, P2): current, in bulk, the daily history, freshness."""
+    print_section("Services: CoinGecko Prices")
+    print_info("Testing: asset_source_providers/coingecko/plugin.py (get_current_value, get_current_values_bulk, get_history_value, current_min_refresh_seconds)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_coingecko_prices.py", test_names)
+    return run_command(cmd, "CoinGecko prices tests", verbose=verbose)
+
+
+def services_coingecko_search(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the CoinGecko provider's search, metadata and page, and the PROVIDER_ID input type (project 76, P3)."""
+    print_section("Services: CoinGecko Search")
+    print_info("Testing: asset_source_providers/coingecko/plugin.py (search, fetch_asset_metadata, get_asset_url), db/models.py ProviderInputType.PROVIDER_ID, assets/base.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_coingecko_search.py", test_names)
+    return run_command(cmd, "CoinGecko search tests", verbose=verbose)
+
+
+def services_refresh_history_starts(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the first day a source has prices for, in the refresh's outcome (project 76, P2b)."""
+    print_section("Services: Refresh History Starts")
+    print_info("Testing: assets/refresh.py (FARefreshResult.history_starts), schemas/prices.py, coingecko/plugin.py (Demo vs Pro)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_refresh_history_starts.py", test_names)
+    return run_command(cmd, "Refresh history starts tests", verbose=verbose)
+
+
+def services_coingecko_provider(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the CoinGecko provider (project 76, P1): its shared group, its settings and parameters, the SDK's door."""
+    print_section("Services: CoinGecko Provider")
+    print_info("Testing: asset_source_providers/coingecko (plugin, _sdk, _currencies), plugin_settings/groups/coingecko.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_coingecko_provider.py", test_names)
+    return run_command(cmd, "CoinGecko provider tests", verbose=verbose)
+
+
+def services_field_missing_phrase(verbose: bool = False, test_names: list = None) -> bool:
+    """Test a settings field's own phrase for the «to configure» window (project 76, N3a2)."""
+    print_section("Services: Field Missing Phrase")
+    print_info("Testing: plugin_settings/fields.py (PluginSettingField.missing_key), service._field_read")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_field_missing_phrase.py", test_names)
+    return run_command(cmd, "Field missing phrase tests", verbose=verbose)
+
+
 def services_call_limit_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test the call limits as core settings of their owner, and their usage in the catalogue (project 76, U4)."""
     print_section("Services: Call Limit Settings")
@@ -3216,6 +3256,55 @@ Note: No backend server required.
         # in their storage with monkeypatch.setitem; u4 groups and claims released at teardown.
         isolation="pure",
     )
+    add_test(
+        cat,
+        "coingecko-prices",
+        services_coingecko_prices,
+        name="CoinGecko Prices",
+        desc="P2: /simple/price with precision=full, the value read as a decimal from the text, the UTC day of last_updated_at, unknown id NOT_FOUND, missing currency NO_DATA; in bulk one request for every item, each under its key, a 429 refuses the whole call; the history from market_chart/range (interval daily): the 00:00 UTC point of D is the close of D-1, a point not at midnight and a day outside the range dropped; the Demo plan's year moves an earlier start; the refresh interval from its setting",
+        # PURE: the real coingecko-sdk on an httpx.MockTransport (the P0 recordings), a test's «today»; no database, no
+        # server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "coingecko-search",
+        services_coingecko_search,
+        name="CoinGecko Search",
+        desc="P3: the id travels as PROVIDER_ID, reaching the plugin as OTHER (the reverse map unchanged); search asks /search, coins only by market cap rank (no rank last, in order), rows OTHER, Name (SYMBOL), CRYPTO, the preferred currency as currency and vs_currency, a blank query asks nothing; metadata from /coins/{id} with the P0 flags: name, CRYPTO, logo, the symbol as ticker (left out when too long), coingecko:<id> among the other identifiers; the page; search on, NOT_CONFIGURED without a key; the real path: PROVIDER_ID saved and kept, OTHER received, prices stored, a service search counted on the group",
+        # PURE: the real coingecko-sdk on an httpx.MockTransport (the P0 recordings); private SQLite files behind the
+        # settings, the counter and the session; no shared database, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "refresh-history-starts",
+        services_refresh_history_starts,
+        name="Refresh History Starts",
+        desc="P2b: a source that gives no price before a day says so (FAHistoricalData.history_starts); the refresh copies it into FARefreshResult only when the range asked started earlier (a min start counts), with the status the prices decide; a range inside the window, or a provider that says none, gives none; CoinGecko says it on the Demo plan (today - 364), never on Pro",
+        # PURE: a private SQLite file behind the session, mockprov wrapped to say a first day, CoinGecko on an
+        # httpx.MockTransport; no shared database, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "coingecko-provider",
+        services_coingecko_provider,
+        name="CoinGecko Provider",
+        desc="P1: the shared group coingecko (API key secret and required with its missing phrase, plan demo/pro, credits shared, its variables claimed, the five call limits); the provider (calls out, reads the group, refresh interval and preferred currency, no limit of its own); the 45 vs currencies against the recorded list; vs_currency required; the SDK client (no retry, timeout, the plan's root); a 429 leaves at once with Retry-After; the recorded errors 10012/10005/10011 and the others translated; the key in no text; no key, no request",
+        # PURE: the real coingecko-sdk on an httpx.MockTransport, so no socket opens; recorded bodies of the P0 trial; no
+        # database, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "field-missing-phrase",
+        services_field_missing_phrase,
+        name="Field Missing Phrase",
+        desc="N3a2: PluginSettingField.missing_key (the field named in a sentence, with its article, for the «to configure» window): optional, None by default, a declaration with it validates; the catalogue's field read carries it, None when undeclared",
+        # PURE: no database, no server, no network; the declaration and the read model only.
+        isolation="pure",
+    )
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation; the accrual golden: every number of the accrual walk pinned (regen: LIBREFOLIO_TEST_REGEN_SI_ACCRUAL_GOLDEN=1)")
     add_test(cat, "synthetic-yield-integration", services_synthetic_yield_integration, name="Synthetic Yield Integration", desc="E2E scenarios (P2P, bond, mixed)")
     add_test(cat, "scheduled-investment-cost-bounds", services_scheduled_investment_cost_bounds, name="Scheduled Investment Cost Bounds", desc="R13-SEC7-2 (N73): late interest in closed form per date, bounded day counts, cache cap, horizon")
@@ -4632,7 +4721,14 @@ Note: No backend server required.
         desc="POST /assets/provider and POST /fx/providers/routes: a provider newly put to use and not configured refuses the whole request (422 NOT_CONFIGURED, first in request order, nothing written, replace kept), re-save and a provider already on the pair pass, one readiness call per request, managed profile; N2b: 503 when the settings cannot be read, reason and variables in the 422",
         isolation="pure",
     )
-    add_test(cat, "plugin-settings-guards", services_plugin_settings_guards, name="Plugin Settings Guards", desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings", isolation="pure")
+    add_test(
+        cat,
+        "plugin-settings-guards",
+        services_plugin_settings_guards,
+        name="Plugin Settings Guards",
+        desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings; U4c: the «Call limits» block lists exactly the owners of the limits, the five windows and real examples",
+        isolation="pure",
+    )
     add_test(
         cat,
         "platform-readiness",

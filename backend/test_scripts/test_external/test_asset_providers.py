@@ -111,6 +111,14 @@ def test_provider_metadata(provider_code: str):
         raise
 
 
+def _skip_if_not_configured(error: AssetSourceError, provider_code: str) -> None:
+    """A provider whose required settings have no value (CoinGecko without its key) asks nothing: there is nothing to
+    test without them (project 76, P3). With them in the environment, the test reaches the real source."""
+    if error.error_code == "NOT_CONFIGURED":
+        print_info(f"{provider_code} is not configured - SKIPPING")
+        pytest.skip(f"{provider_code}: not configured")
+
+
 @pytest.mark.asyncio
 async def test_current_value(provider_code: str):  # noqa: C901 — per-case test loop, flat asserts
     """Test get_current_value method."""
@@ -176,6 +184,7 @@ async def test_current_value(provider_code: str):  # noqa: C901 — per-case tes
         print_success(f"All {len(provider.test_cases)} test cases passed")
 
     except AssetSourceError as e:
+        _skip_if_not_configured(e, provider_code)
         # Check if it's a "requires provider_params" or "not supported" error
         if "requires provider_params" in str(e).lower() or "not supported" in str(e).lower():
             print_warning(f"{provider_code}: {e} - SKIPPING")
@@ -224,7 +233,11 @@ async def test_current_values_bulk(provider_code: str):
             identifier_type = IdentifierType[identifier_type]
         items.append(FACurrentValueRequest(key=str(index), identifier=case["identifier"], identifier_type=identifier_type, provider_params=case.get("provider_params") or {}))
 
-    answer = await provider.get_current_values_bulk(items)
+    try:
+        answer = await provider.get_current_values_bulk(items)
+    except AssetSourceError as e:
+        _skip_if_not_configured(e, provider_code)
+        raise
 
     assert set(answer) == {item.key for item in items}, f"bulk answered {sorted(answer)}, asked {[item.key for item in items]}"
     for item in items:
@@ -297,6 +310,7 @@ async def test_historical_data(provider_code: str):
         print_success("Historical data fetch successful")
 
     except AssetSourceError as e:
+        _skip_if_not_configured(e, provider_code)
         print_error(f"Provider error: {e}")
         raise
 
@@ -328,6 +342,7 @@ async def test_search(provider_code: str):
         try:
             results = await provider.search(search_term)
         except AssetSourceError as e:
+            _skip_if_not_configured(e, provider_code)
             # Provider has search method but doesn't support it or raises error
             if "not supported" in str(e).lower():
                 print_info(f"{provider_code} search not supported - SKIPPING")

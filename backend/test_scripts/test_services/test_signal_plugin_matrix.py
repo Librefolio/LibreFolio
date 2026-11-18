@@ -188,10 +188,10 @@ EXPECTED_RISK_DOCS_PATHS = {
     "RISK_DRAWDOWN": "financial-theory/technical-analysis/risk-metrics/current-drawdown/",
     "RISK_ROLLING_VOLATILITY": "financial-theory/technical-analysis/risk-metrics/volatility/",
     "RISK_ROLLING_SHARPE": "financial-theory/technical-analysis/risk-metrics/sharpe-ratio/",
-    # RN-22: both read around the Sortino's target, whose page explains the semi-deviation today; the theory pages of
-    # the new measures are RN-24, which repoints these two.
+    # The semi-deviation is explained in the Sortino page's own section (the «How does it move?» page links it there);
+    # Omega has its page since RN-24.
     "RISK_ROLLING_DOWNSIDE_DEVIATION": "financial-theory/technical-analysis/risk-metrics/sortino-ratio/",
-    "RISK_ROLLING_OMEGA": "financial-theory/technical-analysis/risk-metrics/sortino-ratio/",
+    "RISK_ROLLING_OMEGA": "financial-theory/technical-analysis/risk-metrics/omega-ratio/",
     "RISK_ROLLING_BETA": "financial-theory/technical-analysis/risk-metrics/beta-active-return/",
     "ASSET_CALENDAR_ROLLING_RETURN": "financial-theory/fundamentals/returns/",
 }
@@ -427,6 +427,27 @@ def _declared_param_units(signal_code: str) -> dict[str, tuple[str | None, str |
     """(x-suffix, x-tooltip-key) of every param, read from the schema the catalog serves."""
     properties = SignalPluginRegistry.get_plugin(signal_code).catalog_definition().params_schema.get("properties", {})
     return {key: (schema.get("x-suffix"), schema.get("x-tooltip-key")) for key, schema in properties.items()}
+
+
+# The parameters a semantic control fills (`x-control`): the frontend draws them without a number field. The comparison
+# asset is a picker; the risk-free rate (RN-21, the consultant, 17/11/2026) is the reader's one rate, shared with the
+# risk pages, so the chart shows it and never a second field that could say another figure.
+EXPECTED_SEMANTIC_CONTROLS = {
+    "RISK_ROLLING_BETA": {"comparison_asset_id": "comparison_asset"},
+    "RISK_ROLLING_SHARPE": {"risk_free_annual_rate": "risk_free_rate"},
+    "RISK_ROLLING_DOWNSIDE_DEVIATION": {"target_annual_return": "risk_free_rate"},
+    "RISK_ROLLING_OMEGA": {"target_annual_return": "risk_free_rate"},
+}
+
+
+def _declared_semantic_controls(signal_code: str) -> dict[str, str]:
+    properties = SignalPluginRegistry.get_plugin(signal_code).catalog_definition().params_schema.get("properties", {})
+    return {key: schema["x-control"] for key, schema in properties.items() if "x-control" in schema}
+
+
+@pytest.mark.parametrize("signal_code", sorted(EXPECTED_PARAM_UNITS))
+def test_semantic_controls_are_pinned(signal_code):
+    assert _declared_semantic_controls(signal_code) == EXPECTED_SEMANTIC_CONTROLS.get(signal_code, {})
 
 
 def _translation(catalog: dict, dotted_key: str) -> object:

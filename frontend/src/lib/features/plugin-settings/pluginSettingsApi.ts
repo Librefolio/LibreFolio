@@ -37,6 +37,8 @@ export interface SettingField {
     description: string;
     label_key: string | null;
     description_key: string | null;
+    /** The i18n key of the field named in a sentence, with its article (project 76, N3a2): the «to configure» window. */
+    missing_key: string | null;
     options: SettingOption[];
     min_length: number | null;
     max_length: number | null;
@@ -154,6 +156,7 @@ export function fieldOf(raw: unknown): SettingField {
         description: typeof field.description === 'string' ? field.description : '',
         label_key: textOrNull(field.label_key),
         description_key: textOrNull(field.description_key),
+        missing_key: textOrNull(field.missing_key),
         options: Array.isArray(field.options) ? field.options.map(optionOf) : [],
         min_length: numberOrNull(field.min_length),
         max_length: numberOrNull(field.max_length),

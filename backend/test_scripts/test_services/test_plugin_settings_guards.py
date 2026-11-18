@@ -21,6 +21,10 @@ declare settings) and the sources of ``backend/app/``:
 4. **AI Export never reads the plugin settings**: no module under ``services/ai_export/`` imports
    ``services.plugin_settings`` (absolute, relative or through ``importlib``), ``PluginSystemSetting`` or
    ``PluginUserSetting`` (by name, by attribute or by a star import), or names their tables.
+5. **The call-limit block** (project 76, U4c, the developer's option b): the block «Call limits» of ``.env.example``
+   lists exactly the families and plugin codes that own the five limit fields (shipped plugins and credit-sharing
+   groups), the five windows, and at least two worked examples that are real variables. The plugin and group guards
+   of 1 and 1b leave the limit variables to this block.
 
 Pure: the sources and ``.env.example`` are read as text, the real registries are only read (their discovery is the
 application's own), and the synthetic declarations are never registered. Every guard asserts an absence, so each one
@@ -30,6 +34,7 @@ first proves on synthetic input that it sees a presence.
 from __future__ import annotations
 
 import ast
+import re
 from collections import defaultdict
 from collections.abc import Iterable
 from pathlib import Path
@@ -103,8 +108,8 @@ def undocumented(plugins: Iterable[Plugin], documented: set[str]) -> list[str]:
     """The variables of the shipped plugins' system fields that ``.env.example`` does not list.
 
     The core's call limits (project 76, U4) are documented once, by their pattern, in the block «Call limits» of
-    ``.env.example`` (option (b), the developer's to confirm): they follow one rule for every plugin. Option (a), one line
-    per variable, is this exemption removed and the lines added.
+    ``.env.example`` (option (b), the developer's choice): the block lists the families, codes and windows, checked
+    against the registries in section 5 (U4c).
     """
     return [f"{family}/{code}/{declared.key}: {variable}" for family, code, declared, variable in _variables(plugins, shipped_only=True) if variable not in documented and declared.key not in CALL_LIMIT_KEYS]
 
@@ -175,8 +180,9 @@ def test_every_variable_of_a_shipped_system_field_is_documented():
 
 
 def undocumented_group_variables(groups: dict, documented: set[str]) -> list[str]:
-    """The variables of the system fields of the groups (not ``test_only``) that ``.env.example`` does not list."""
-    return [f"group/{name}/{declared.key}: {variable}" for name, group in groups.items() if not group.test_only for declared in group.fields for variable in env_variables("group", name, declared) if variable not in documented]
+    """The variables of the system fields of the groups (not ``test_only``) that ``.env.example`` does not list. The five
+    call limits of a credit-sharing group are listed by the block «Call limits» instead (U4c, section 5)."""
+    return [f"group/{name}/{declared.key}: {variable}" for name, group in groups.items() if not group.test_only for declared in group.fields if declared.key not in CALL_LIMIT_KEYS for variable in env_variables("group", name, declared) if variable not in documented]
 
 
 def test_the_group_documentation_guard_flags_an_undocumented_group_field_and_skips_a_test_only_group():
@@ -428,8 +434,137 @@ def test_nothing_under_ai_export_reaches_the_plugin_settings():
 
 def test_the_call_limit_variables_are_documented_by_their_pattern():
     """Project 76, U4, option (b): ``.env.example`` documents the core's call-limit variables by their pattern, with the
-    five windows, the rule of an empty value and of 0, and one example line."""
+    five windows, the rule of an empty value and of 0, and worked examples (the list and the examples: section 5)."""
     text = ENV_EXAMPLE.read_text(encoding="utf-8")
     assert "_CALL_LIMIT_<MINUTE|HOUR|DAY|WEEK|MONTH>" in text
     assert "LIBREFOLIO_PLUGIN_ASSET_YFINANCE_CALL_LIMIT_DAY" in _documented()
     assert "0: the plugin is stopped" in text
+
+
+# =============================================================================
+# 5. U4c: THE CALL-LIMIT BLOCK LISTS WHO HAS LIMITS, AND SHOWS HOW TO BUILD A NAME
+# =============================================================================
+#
+# The developer's choice for question 9 (option b): one block «Call limits» in ``.env.example`` that lists the admissible
+# families, plugin codes and windows, with a few worked examples, instead of one line per variable. The list is
+# checked against the registries here, so it never drifts: a plugin that gains the limits (lane 68's enricher, P1's
+# CoinGecko group) turns this red until its code is listed.
+
+#: One family line of the block: ``#   ASSET     YFINANCE, JUSTETF`` (or ``(none yet …)``)
+CALL_LIMIT_FAMILY_LINE = re.compile(r"^#   (?P<family>[A-Z]+) {2,}(?P<codes>\S.*)$")
+#: The windows line of the block: ``#   windows   MINUTE, HOUR, DAY, WEEK, MONTH``
+CALL_LIMIT_WINDOWS_LINE = re.compile(r"^#   windows {2,}(?P<windows>\S.*)$")
+
+
+def _code_part(family: str, code: str) -> str:
+    """The plugin code as the variable spells it: ``borsa_italiana`` → ``BORSA_ITALIANA``."""
+    variable = env_name(family, code, CALL_LIMIT_KEYS[0])
+    return variable[len(f"{ENV_PREFIX}{family.upper()}_") : -len("_" + CALL_LIMIT_KEYS[0].upper())]
+
+
+def call_limit_owners(plugins: Iterable[Plugin], groups: dict) -> dict[str, set[str]]:
+    """``FAMILY → {CODE}`` of the shipped owners of the five limit fields: plugins, then groups (``GROUP``)."""
+    owners: dict[str, set[str]] = defaultdict(set)
+    for family, code, plugin_class in plugins:
+        if not getattr(plugin_class, "test_only", False) and set(CALL_LIMIT_KEYS) <= {declared.key for declared in getattr(plugin_class, "settings_fields", ())}:
+            owners[family.upper()].add(_code_part(family, code))
+    for name, group in groups.items():
+        if not group.test_only and set(CALL_LIMIT_KEYS) <= {declared.key for declared in group.fields}:
+            owners["GROUP"].add(_code_part("group", name))
+    return dict(owners)
+
+
+def call_limit_block(text: str) -> list[str]:
+    """The lines of the block «Call limits»: from its first line to the next bare ``#`` line."""
+    lines = text.splitlines()
+    start = next((index for index, line in enumerate(lines) if line.startswith("# Call limits.")), None)
+    if start is None:
+        return []
+    end = next((index for index in range(start, len(lines)) if lines[index].strip() == "#"), len(lines))
+    return lines[start:end]
+
+
+def call_limit_listed(text: str) -> dict[str, set[str]]:
+    """``FAMILY → {CODE}`` as the block lists them; a line in parentheses lists none. Lines outside the block are not read."""
+    listed: dict[str, set[str]] = {}
+    for line in call_limit_block(text):
+        if match := CALL_LIMIT_FAMILY_LINE.match(line):
+            codes = match["codes"].strip()
+            listed[match["family"]] = set() if codes.startswith("(") else {code.strip() for code in codes.split(",")}
+    return listed
+
+
+def call_limit_drift(owners: dict[str, set[str]], listed: dict[str, set[str]]) -> list[str]:
+    """What the block gets wrong: a family with owners and no line, a code missing from its line, a code listed for none."""
+    problems = []
+    for family in sorted(set(owners) | set(listed)):
+        have, shown = owners.get(family, set()), listed.get(family)
+        if shown is None:
+            problems.append(f"{family}: no line, owners {sorted(have)}")
+            continue
+        if missing := have - shown:
+            problems.append(f"{family}: not listed {sorted(missing)}")
+        if extra := shown - have:
+            problems.append(f"{family}: listed but no such owner {sorted(extra)}")
+    return problems
+
+
+def test_u4c_the_drift_guard_flags_a_missing_family_a_missing_code_and_a_code_of_none():
+    """5, barrier on synthetic input: each kind of drift is named; an exact block and an empty family line pass."""
+    owners = {"ASSET": {"YFINANCE", "JUSTETF"}, "FX": {"ECB"}}
+    assert call_limit_drift(owners, {"ASSET": {"YFINANCE", "JUSTETF"}, "FX": {"ECB"}, "GROUP": set()}) == []
+    assert call_limit_drift(owners, {"ASSET": {"YFINANCE"}}) == ["ASSET: not listed ['JUSTETF']", "FX: no line, owners ['ECB']"]
+    assert call_limit_drift(owners, {"ASSET": {"YFINANCE", "JUSTETF", "GONE"}, "FX": {"ECB"}}) == ["ASSET: listed but no such owner ['GONE']"]
+    text = "#   FX        OUTSIDE\n# Call limits. Text.\n#   ASSET     YFINANCE, JUSTETF\n#   GROUP     (none yet: …)\n# ASSET     NOT, A, LIST\n#\n#   FX        AFTER\n"
+    assert call_limit_listed(text) == {"ASSET": {"YFINANCE", "JUSTETF"}, "GROUP": set()}, "only the block's family lines"
+    assert _code_part("asset", "borsa_italiana") == "BORSA_ITALIANA"
+
+
+def test_u4c_the_call_limit_block_lists_every_owner_of_the_limits_and_nothing_else():
+    """5: the block's family lines equal the shipped owners of the five fields, plugins and groups."""
+    from backend.app.services.plugin_settings.groups import all_groups  # noqa: PLC0415 — as the group guards above
+
+    owners = call_limit_owners(_registered(), all_groups())
+    assert {"YFINANCE", "CSS_SCRAPER"} <= owners.get("ASSET", set()) and "ECB" in owners.get("FX", set()), f"barrier: the registries were walked: {owners}"
+
+    drift = call_limit_drift(owners, call_limit_listed(ENV_EXAMPLE.read_text(encoding="utf-8")))
+
+    assert not drift, f"fix the family lines of the block «Call limits» in {ENV_EXAMPLE.name}: {drift}"
+
+
+def test_u4c_the_block_names_the_five_windows_and_shows_worked_examples():
+    """5: one windows line with the five windows, in the counter's order; at least two commented example lines, each a
+    real variable of a listed owner, with an «e.g.» value."""
+    text = ENV_EXAMPLE.read_text(encoding="utf-8")
+    block = call_limit_block(text)
+    assert block, "barrier: the block «Call limits» is found"
+    windows = [match["windows"] for line in block if (match := CALL_LIMIT_WINDOWS_LINE.match(line))]
+    assert windows == [", ".join(key.removeprefix("call_limit_").upper() for key in CALL_LIMIT_KEYS)], windows
+
+    from backend.app.services.plugin_settings.groups import all_groups  # noqa: PLC0415 — as the group guards above
+
+    owners = call_limit_owners(_registered(), all_groups())
+    real = {f"{ENV_PREFIX}{family}_{code}_{key.upper()}" for family, codes in owners.items() for code in codes for key in CALL_LIMIT_KEYS}
+    examples = [(line.name, block[line.number - 1]) for line in _variable_lines("\n".join(block)) if "_CALL_LIMIT_" in line.name]
+    assert len(examples) >= 2, f"at least two worked examples: {examples}"
+    for name, raw in examples:
+        assert name in real, f"an example names no real variable: {name}"
+        assert raw.startswith("# ") and "e.g." in raw, f"an example is commented and gives a value: {raw!r}"
+
+
+def test_u4c_a_credit_sharing_groups_limits_are_documented_by_the_block_not_line_by_line():
+    """5: the group guard (1b) leaves the five limit variables of a ``shares_credits`` group to the block, as the plugin
+    guard does; the group's own field is still flagged."""
+    from backend.app.services.plugin_settings.groups import SettingsGroup, all_groups, register_group, release_group  # noqa: PLC0415 — as above
+
+    name = "u4c_guard_sharing"
+    try:
+        register_group(SettingsGroup(name=name, label="U4c sharing", shares_credits=True, fields=(_secret("api_key"),)))
+        groups = {name: all_groups()[name]}
+        assert {declared.key for declared in groups[name].fields} >= set(CALL_LIMIT_KEYS), "barrier: the group got the limits"
+
+        flagged = undocumented_group_variables(groups, set())
+
+        assert flagged == [f"group/{name}/api_key: {env_name('group', name, 'api_key')}"], flagged
+    finally:
+        release_group(name)

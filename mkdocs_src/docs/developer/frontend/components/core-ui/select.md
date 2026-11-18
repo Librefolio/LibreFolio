@@ -132,7 +132,7 @@ Every survivor gets a tier, and the list is sorted by tier:
 - The sort is **stable** (ties keep the caller's order) and runs **inside each section**: rows are
   reordered between two titles — the rows ahead of the first title form a section of their own —
   and titles never move, so a row never leaves its section. The caller's structure — the sections
-  of `AssetSelect` or `ImportAssetPicker` — stays as decided.
+  of `AssetPickerPanel` or `ImportAssetPicker` — stays as decided.
 - Only the order depends on the tier, never the set. An empty (or blank) query keeps the source
   order, and the caller's array is never reordered in place.
 
@@ -393,8 +393,13 @@ with `ui/media/AssetPickerModal.svelte`, which picks an image file. One panel, t
   `${testId}-trigger`, `${testId}-search`, `search-select-option-{id}`,
   `search-select-header-__section:{key}`), the same search (`filterOptions()`, with its
   [ranking](#ranking-the-matches)) and the same keyboard (`stepSelectable()`). One click chooses and
-  closes. `sections` and `restLabel` work as in `AssetSelect`; it also takes `placeholder`,
-  `loading`, `disabled`, `dropdownPosition` (default: `auto`) and `dropdownMinWidth` (default: 280).
+  closes. `sections` are titled groups (an asset joins the first that takes it, an empty one prints
+  no title) and `restLabel` titles the rest under them; it also takes `placeholder`, `loading`,
+  `disabled`, `dropdownPosition` (default: `auto`) and `dropdownMinWidth` (default: 280). With both
+  `createLabel` and `onCreateNew`, an action sits at the foot of the list (the transaction form's
+  **New asset**): pressing it closes the list and chooses nothing; without both, nothing is drawn.
+  As in `SearchSelect`, only a touch or pen close blocks a reopening for 200 ms (the ghost click);
+  a mouse or keyboard close never does.
   The trigger is one line at a fixed height: the `w-4 h-4` icon, `ticker · name` and, for an
   inactive asset, the inactive badge.
 
@@ -432,7 +437,10 @@ import.
 
 **Used in**: `risk/LabAssetPicker.svelte` (multi mode), on the **Correlation** tab of the Assets
 page, and `risk/BenchmarkSelect.svelte` (single mode, `BenchmarkSelect.svelte:197`), the benchmark
-picker of the Correlation tab and of the Dashboard's Risk tab. Planned, not done yet: the
-**Asset Comparison** chart signal is to adopt the single mode.
+picker of the Correlation tab and of the Dashboard's Risk tab; in single mode also the chart's
+**Asset Comparison** signal (`ChartSignalsSection.svelte`), the comparison asset of the backend
+signals (`signals/components/SignalAssetParamControl.svelte`, Rolling Beta) and the transaction
+form's asset field (`transactions/form/TxFormAssetField.svelte`, RN-12). `AssetSelect` stays in the
+guided import and in **Merge assets**.
 **Data source**: none of its own — the caller passes `assets` and `verdicts`; the currency menu
 takes its flags from `currencyStore`.

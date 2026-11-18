@@ -30,6 +30,7 @@ import type {RiskAnalyticResult} from '$lib/features/risk/riskStore.svelte';
 import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
 import {formatFixed} from '$lib/utils/core/formatFixed';
 import {uiLocale} from '$lib/stores/app/uiLocale';
+import {riskFreeParameters} from './riskFreeRate';
 
 /**
  * The scenario description in the user's current language. A scenario carries a
@@ -277,10 +278,7 @@ export function buildBaseAnalytics(mode: RiskMode, ctx: BaseAnalyticsContext): R
         }
     };
     if (mode === 'historical') {
-        add('historical_kpi', {
-            risk_free_annual_rate: ctx.appliedRiskFreePercent / 100,
-            target_annual_return: 0,
-        });
+        add('historical_kpi', riskFreeParameters(ctx.appliedRiskFreePercent));
         add('correlation');
         add('historical_var', {confidence_level: 0.95, horizon_days: 1}, DAILY_VAR_INSTANCE);
         if (ctx.includeMonthlyVar) {
@@ -299,7 +297,7 @@ export function buildBaseAnalytics(mode: RiskMode, ctx: BaseAnalyticsContext): R
             // The risk-free rate is threaded into the KPI exactly as the singular
             // wave threads it: Sharpe and Sortino are charged against the reader's
             // setting, not against a constant this file chose.
-            if (paidLevels) add('asset_set_kpi', {risk_free_annual_rate: ctx.appliedRiskFreePercent / 100, target_annual_return: 0});
+            if (paidLevels) add('asset_set_kpi', riskFreeParameters(ctx.appliedRiskFreePercent));
             if (lossLevels) {
                 add('asset_set_var', {confidence_level: 0.95, horizon_days: 1}, ASSET_SET_DAILY_VAR_INSTANCE);
                 // The bad month is compounded by the backend over real overlapping
@@ -309,7 +307,7 @@ export function buildBaseAnalytics(mode: RiskMode, ctx: BaseAnalyticsContext): R
                 add('asset_set_drawdown');
                 // The move table's KPI, on this calendar (RN-19). When one request carries both levels (the union), the
                 // KPI already in it is on that same calendar and is read instead: the union stays byte for byte.
-                if (!paidLevels) add('asset_set_kpi', {risk_free_annual_rate: ctx.appliedRiskFreePercent / 100, target_annual_return: 0}, ASSET_SET_MOVE_KPI_INSTANCE);
+                if (!paidLevels) add('asset_set_kpi', riskFreeParameters(ctx.appliedRiskFreePercent), ASSET_SET_MOVE_KPI_INSTANCE);
             }
             if (paidLevels) add('asset_set_risk_return');
             // 🔴 The benchmark rides in **this** request, not in one of its own.
@@ -338,8 +336,7 @@ export function buildBaseAnalytics(mode: RiskMode, ctx: BaseAnalyticsContext): R
             if (paidLevels && ctx.assetSetBenchmarkId != null) {
                 add('asset_set_comparison', {
                     comparison_asset_id: ctx.assetSetBenchmarkId,
-                    risk_free_annual_rate: ctx.appliedRiskFreePercent / 100,
-                    target_annual_return: 0,
+                    ...riskFreeParameters(ctx.appliedRiskFreePercent),
                 });
             }
         }
@@ -348,16 +345,10 @@ export function buildBaseAnalytics(mode: RiskMode, ctx: BaseAnalyticsContext): R
         if (ctx.includeCurrentCompositionRiskReturn) {
             // Same params as the historical wave: the risk-free rate is a property of
             // the reader's setting, not of the series it is charged against.
-            add('historical_kpi', {
-                risk_free_annual_rate: ctx.appliedRiskFreePercent / 100,
-                target_annual_return: 0,
-            });
+            add('historical_kpi', riskFreeParameters(ctx.appliedRiskFreePercent));
             // Each point carries its own Sharpe and Sortino, charged the same rate and target as
             // the KPI above, so a holding's row and the portfolio's cards read one setting.
-            add('asset_risk_return', {
-                risk_free_annual_rate: ctx.appliedRiskFreePercent / 100,
-                target_annual_return: 0,
-            });
+            add('asset_risk_return', riskFreeParameters(ctx.appliedRiskFreePercent));
         }
     }
     return analytics;

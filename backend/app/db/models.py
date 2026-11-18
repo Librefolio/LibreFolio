@@ -82,18 +82,22 @@ class ProviderInputType(StrEnum):
     - ISIN: An ISIN code (e.g., IE00B4L5Y983)
     - URL: A full URL to scrape (e.g., https://example.com/price)
     - AUTO_GENERATED: No user input needed — identifier is auto-generated (e.g., UUID)
+    - PROVIDER_ID: The provider's own code for the asset, no official identifier (e.g., CoinGecko's «bitcoin»;
+      project 76, P3)
 
     Mapping to stored IdentifierType:
     - TICKER → IdentifierType.TICKER
     - ISIN → IdentifierType.ISIN
     - URL → IdentifierType.OTHER
     - AUTO_GENERATED → IdentifierType.UUID
+    - PROVIDER_ID → IdentifierType.OTHER
     """
 
     TICKER = "TICKER"
     ISIN = "ISIN"
     URL = "URL"
     AUTO_GENERATED = "AUTO_GENERATED"
+    PROVIDER_ID = "PROVIDER_ID"
 
 
 class IdentifierType(StrEnum):
@@ -1317,7 +1321,7 @@ class AssetProviderAssignment(SQLModel, table=True):
         nullable=True,
         description="Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.). NULL for AUTO_GENERATED providers.",
     )
-    identifier_type: ProviderInputType = Field(nullable=False, description="Provider input type (TICKER, ISIN, URL, AUTO_GENERATED)")
+    identifier_type: ProviderInputType = Field(nullable=False, description="Provider input type (TICKER, ISIN, URL, AUTO_GENERATED, PROVIDER_ID)")
     provider_params: Optional[str] = Field(
         default=None,
         sa_column=Column(Text),

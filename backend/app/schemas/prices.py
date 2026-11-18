@@ -335,6 +335,10 @@ class FAHistoricalData(StrictModel):
         description="The quote currency as the provider reports it, NOT normalized (Yahoo's `GBp` for a line quoted in pence; the price points carry the ISO code, `GBP`): a validator here would hide the minor unit.",
     )
     source: Optional[str] = None
+    history_starts: Optional[date_type] = Field(
+        None,
+        description="The first day the source has prices for, when it gives none before (CoinGecko's Demo plan: one year). The refresh reports it when the range asked starts earlier (project 76, P2b)",
+    )
 
 
 # ============================================================================

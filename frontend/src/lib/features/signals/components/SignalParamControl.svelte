@@ -6,6 +6,8 @@
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import SignalAssetParamControl from './SignalAssetParamControl.svelte';
+    import {answeredParam} from '$lib/features/signals/answeredParams.svelte';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     import {numericArrows} from '$lib/actions/numericArrows';
     interface Props {
@@ -13,9 +15,20 @@
         value: unknown;
         affectsLabel?: string;
         onchange: (value: unknown) => void;
+        /** The asset the chart shows, ruled out of a comparison-asset parameter (RN-12b). */
+        mainAssetId?: number | null;
+        /** The signal instance this parameter belongs to: a value the backend chose is read from its last answer. */
+        instanceId?: string;
     }
 
-    let {descriptor, value, affectsLabel = '', onchange}: Props = $props();
+    let {descriptor, value, affectsLabel = '', onchange, mainAssetId = null, instanceId = ''}: Props = $props();
+
+    /** The rate the chart's answer was computed with, in percent, or null before an answer (RN-21, B). */
+    let answeredRatePercent = $derived.by((): number | null => {
+        if (descriptor.control !== 'risk_free_rate' || !instanceId) return null;
+        const answered = answeredParam(instanceId, descriptor.key);
+        return typeof answered === 'number' && Number.isFinite(answered) ? Number((answered * 100).toFixed(6)) : null;
+    });
 
     function translatedLabel(): string {
         const direct = $t(descriptor.label);
@@ -66,7 +79,17 @@
     {/if}
 
     {#if descriptor.control === 'comparison_asset'}
-        <SignalAssetParamControl {value} onchange={(assetId) => onchange(assetId)} />
+        <SignalAssetParamControl {value} {mainAssetId} onchange={(assetId) => onchange(assetId)} />
+    {:else if descriptor.control === 'risk_free_rate'}
+        <!-- RN-21: the reader's one risk-free rate, shared with the risk pages; the request takes it from the same store
+             (`requestBuilder`), so no field here can say another figure. The line says the rate of the answer the chart
+             draws, never the field's: «0 %» while the series is still at 0 % is true (the consultant, B); before an
+             answer, no figure. -->
+        <Tooltip text={$t('signals.riskFreeRate.where')} position="top">
+            <span class="text-xs text-lf-secondary" data-testid="signal-param-risk-free-rate" data-percent={answeredRatePercent ?? ''}>
+                {$t('signals.riskFreeRate.uses', {values: {rate: answeredRatePercent === null ? '—' : formatPercent(answeredRatePercent, {signed: false, trim: true, digits: 4})}})}
+            </span>
+        </Tooltip>
     {:else if descriptor.type === 'number'}
         <div class="flex items-center gap-1">
             <input
