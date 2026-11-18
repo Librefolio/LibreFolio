@@ -11,6 +11,7 @@
     import {amountOnValue, formatCurrencyAmount} from '../riskAnalysisHelpers';
     import {omegaFigure, type MoveColumn, type MoveFigures, type ScopeMoveFigures} from '../moveFigures';
     import {figurePercent, gainPercent, signedAmount} from './l1/l1Helpers';
+    import {withRateKey} from '../riskFreeRate';
 
     /**
      * «How does it move?» (RN-18; Q21 c, Q22 a) — the four green twins of «How much can it hurt?»: the best day, thirty
@@ -90,10 +91,18 @@
     /**
      * The semi-deviation read against the swing it is part of (Q23 a; the consultant, 17/11/2026): «downward 9.8% · out of
      * a 13.9% swing», both from the same historical KPI — a comparison, not the scope's volatility, which L3 states on its
-     * own perimeter. Alone when the volatility did not come back.
+     * own perimeter. Alone when the volatility did not come back. With a risk-free rate (RN-21) it counts the days below
+     * it, and says so; at 0 it is today's sentence.
      */
-    function semiDeviationText(down: number, swing: number | null): string {
-        return swing === null ? figurePercent(down) : $t('risk.levels.move.rows.semiDeviationValue', {values: {down: figurePercent(down), swing: figurePercent(swing)}});
+    function semiDeviationText(down: number, swing: number | null, rate: number | null): string {
+        return swing === null ? figurePercent(down) : $t(withRateKey('risk.levels.move.rows.semiDeviationValue', rate), {values: {down: figurePercent(down), swing: figurePercent(swing)}});
+    }
+
+    /** The row's help: its perimeter when the two series differ (RN-18b), with the rate's sentence after it (RN-21); otherwise what a semi-deviation is. */
+    function semiDeviationHelp(rate: number | null): string {
+        if (!perimeterDiffers) return $t(withRateKey('risk.assetSet.levels.move.columnHelp.downsideDeviation', rate));
+        const perimeter = $t('risk.levels.move.rows.semiDeviationPerimeter');
+        return rate ? `${perimeter} ${$t('risk.levels.move.rows.semiDeviationBelowRate')}` : perimeter;
     }
 
     /** The semi-deviation is the Sortino's denominator: its page explains it (as the lab's column links it). */
@@ -122,7 +131,7 @@
     {/if}
 {/snippet}
 
-<div class="space-y-4" data-testid="risk-move">
+<div class="space-y-4" data-testid="risk-move" data-risk-free-rate={figures?.riskFreeRate ?? ''}>
     {#if loading && figures === null}
         <div data-testid="risk-move-loading">
             <RiskCardGrid>
@@ -208,15 +217,7 @@
                             {@render measure($t('risk.assetSet.levels.move.columns.positiveShare'), figurePercent(figures.positiveShare), 'risk-move-positive-share')}
                         {/if}
                         {#if figures.downsideDeviation !== null}
-                            {@render measure(
-                                $t('risk.levels.move.rows.semiDeviation'),
-                                semiDeviationText(figures.downsideDeviation, figures.volatility),
-                                'risk-move-semi-deviation',
-                                SEMI_DEVIATION_DOCS.docsPath,
-                                undefined,
-                                undefined,
-                                perimeterDiffers ? $t('risk.levels.move.rows.semiDeviationPerimeter') : $t('risk.assetSet.levels.move.columnHelp.downsideDeviation'),
-                            )}
+                            {@render measure($t('risk.levels.move.rows.semiDeviation'), semiDeviationText(figures.downsideDeviation, figures.volatility, figures.riskFreeRate), 'risk-move-semi-deviation', SEMI_DEVIATION_DOCS.docsPath, undefined, undefined, semiDeviationHelp(figures.riskFreeRate))}
                         {/if}
                         {#if figures.averageDrawdown !== null}
                             {@render measure($t('risk.levels.move.rows.averageDrawdown'), figurePercent(figures.averageDrawdown), 'risk-move-average-drawdown')}

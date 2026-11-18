@@ -13,6 +13,8 @@ import {schemas} from '$lib/api';
 import type {RiskAnalyticResult} from '$lib/features/risk/riskStore.svelte';
 import {riskOutput, singleValue} from '$lib/features/risk/riskTypes';
 import {formatFixed} from '$lib/utils/core/formatFixed';
+import {formatPercent} from '$lib/utils/core/formatPercent';
+import {usedRiskFreeRate} from './riskFreeRate';
 
 type KpiItem = z.infer<typeof schemas.RiskAssetSetKpiItem>;
 type DrawdownItem = z.infer<typeof schemas.RiskAssetSetDrawdownItem>;
@@ -154,6 +156,11 @@ export function warningCodes(result: RiskAnalyticResult | null): Set<string> {
 export interface ScopeMoveFigures extends MoveFigures {
     /** The historical KPI's annualized volatility, the semi-deviation's term of comparison. */
     volatility: number | null;
+    /**
+     * The risk-free rate the KPI was charged (RN-21), as an annual fraction, or null when the answer names none. Omega
+     * and the semi-deviation count from it, so the block's sentences name it — the answer's, never the field's.
+     */
+    riskFreeRate: number | null;
 }
 
 /**
@@ -166,7 +173,15 @@ export function buildMoveFigures(kpi: RiskAnalyticResult | null, monthlyVar: Ris
     const month = riskOutput(monthlyVar, schemas.RiskVarCvarOutput);
     const fall = riskOutput(drawdown, schemas.RiskDrawdownOutput);
     if (!shape && !month && !fall) return null;
-    return {volatility: finiteOrNull(shape?.volatility), ...readMoveFigures(shape, singleValue(month?.best_horizon) ?? null, fall, warningCodes(kpi))};
+    return {volatility: finiteOrNull(shape?.volatility), riskFreeRate: usedRiskFreeRate(kpi), ...readMoveFigures(shape, singleValue(month?.best_horizon) ?? null, fall, warningCodes(kpi))};
+}
+
+/**
+ * A rate as a sentence names it: an annual fraction written as a percent, as few decimals as it has (`2.5%`), up to
+ * the four the field keeps — a sentence never rounds the rate it says it used (0.125% stays 0.125%).
+ */
+export function riskFreeRateText(rate: number): string {
+    return formatPercent(rate, {scale: 100, signed: false, trim: true, digits: 4});
 }
 
 /** A translator as the components hand it: `$t`. */
@@ -180,13 +195,19 @@ export function omegaFigure(omega: number): string {
 /**
  * The block's headline (RN-18): gains against losses, and how long the largest rally lasted when it lasted at all.
  * Empty without gains against losses — the figure the sentence is about: an invented headline reads like a measured one.
+ * With a risk-free rate (RN-21) Omega counts from it, and the sentence says so and names the rate the answer used; at 0
+ * it is today's sentence (the consultant, 17/11/2026: «sotto il tasso (0 %)» would weigh without saying anything).
  */
-export function moveLead(figures: MoveFigures | null, t: MoveTranslator): string {
+export function moveLead(figures: (MoveFigures & {riskFreeRate?: number | null}) | null, t: MoveTranslator): string {
     if (figures?.omega == null) return '';
     const omega = omegaFigure(figures.omega);
+    const rate = figures.riskFreeRate ? riskFreeRateText(figures.riskFreeRate) : null;
     const days = figures.rally?.days;
-    if (typeof days === 'number' && days > 0) return t('risk.levels.move.lead.both', {values: {omega, days: t('risk.levels.l1.daysCount', {values: {days}})}});
-    return t('risk.levels.move.lead.omega', {values: {omega}});
+    if (typeof days === 'number' && days > 0) {
+        const values = {omega, days: t('risk.levels.l1.daysCount', {values: {days}})};
+        return rate ? t('risk.levels.move.lead.bothWithRate', {values: {...values, rate}}) : t('risk.levels.move.lead.both', {values});
+    }
+    return rate ? t('risk.levels.move.lead.omegaWithRate', {values: {omega, rate}}) : t('risk.levels.move.lead.omega', {values: {omega}});
 }
 
 /**
