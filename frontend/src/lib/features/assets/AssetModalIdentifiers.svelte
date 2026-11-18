@@ -116,7 +116,7 @@
 </script>
 
 <!-- Sub-section: Identifiers -->
-<div class="space-y-2">
+<div class="space-y-2" data-testid="asset-modal-identifiers">
     <div class="flex items-center justify-between">
         <div class="text-[10px] font-semibold text-lf-muted uppercase tracking-wider">
             {$t('common.identifiers')}
