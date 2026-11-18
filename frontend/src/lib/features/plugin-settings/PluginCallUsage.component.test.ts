@@ -53,6 +53,9 @@ vi.mock('$lib/i18n', async (importOriginal) => {
     return {...(await importOriginal<typeof import('$lib/i18n')>()), _: readable(fake.translate)};
 });
 vi.mock('$lib/stores/app/notify.svelte', () => ({notify: fake.notify}));
+// The instance's profile (U5b): self-hosted unless a case says managed
+const profile = vi.hoisted(() => ({managed: false}));
+vi.mock('$lib/features/instance/profile', () => ({managedConfirmed: () => profile.managed, selfHostedConfirmed: () => !profile.managed}));
 
 import PluginSettingsForm from './PluginSettingsForm.svelte';
 import {uiLocale} from '$lib/stores/app/uiLocale';
@@ -289,12 +292,32 @@ describe('PluginCallUsage — the managed profile', () => {
         expect(within(yahoo).queryByTestId('plugin-settings-invalid-env'), 'configured: no message on top').toBeNull();
     });
 
-    it('CU-12: not configured with nothing shown to fix: the managed text on top, naming no variable', () => {
-        mount(entry({plugin_code: 'yfinance', plugin_name: 'Yahoo Finance', configured: false, fields: [], call_usage: usage()}));
+    // U5b (the consultant, 19/11): the managed text comes from the catalogue's own reason, in the managed profile only
+    it('CU-12: managed, reason invalid_locked_setting: the managed text on top, naming no variable, with no button', () => {
+        profile.managed = true;
+        try {
+            mount(entry({plugin_code: 'yfinance', plugin_name: 'Yahoo Finance', configured: false, reason: 'invalid_locked_setting', fields: [], call_usage: usage()}));
 
-        const top = within(card('yfinance')).getByTestId('plugin-settings-invalid-env');
-        expect(top).toHaveAttribute('data-case', 'managed');
-        expect(text(top)).toBe('pluginSettings.notConfigured.managed {provider=Yahoo Finance}');
+            const top = within(card('yfinance')).getByTestId('plugin-settings-invalid-env');
+            expect(top).toHaveAttribute('data-case', 'managed');
+            expect(text(top)).toBe('pluginSettings.notConfigured.managed {provider=Yahoo Finance}');
+            expect(within(top).queryAllByRole('button')).toEqual([]);
+        } finally {
+            profile.managed = false;
+        }
+    });
+
+    it('CU-12b: managed, any other reason, or the same card outside managed: nothing on top', () => {
+        profile.managed = true;
+        try {
+            mount(entry({plugin_code: 'yfinance', plugin_name: 'Yahoo Finance', configured: false, reason: 'missing_fields', fields: [], call_usage: usage()}));
+            expect(within(card('yfinance')).queryByTestId('plugin-settings-invalid-env')).toBeNull();
+        } finally {
+            profile.managed = false;
+        }
+        cleanup();
+        mount(entry({plugin_code: 'yfinance', plugin_name: 'Yahoo Finance', configured: false, fields: [], call_usage: usage()}));
+        expect(within(card('yfinance')).queryByTestId('plugin-settings-invalid-env'), 'self-hosted: no guess from a hidden card').toBeNull();
     });
 });
 

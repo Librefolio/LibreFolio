@@ -23,6 +23,7 @@
     import {fetchPluginEntry, savePluginSettings, type PluginSettingsEntry, type SettingField} from './pluginSettingsApi';
     import PluginCallUsage from './PluginCallUsage.svelte';
     import {cardProblem, hasCallBlock, ownFields} from './callUsage';
+    import {managedConfirmed} from '$lib/features/instance/profile';
     import {
         chosen,
         cleared,
@@ -90,7 +91,7 @@
     const editable = $derived(entry.fields.some((field) => field.editable));
     /** The plugin's own fields: the call limits are the «Calls» block's. */
     const fields = $derived(ownFields(entry));
-    const problemOnTop = $derived(cardProblem(entry, entryTitle(entry, $_)));
+    const problemOnTop = $derived(cardProblem(entry, entryTitle(entry, $_), managedConfirmed()));
 
     function update(key: string, next: FormState): void {
         form = next;

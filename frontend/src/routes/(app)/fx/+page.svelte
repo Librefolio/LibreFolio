@@ -310,12 +310,15 @@
         // Preload currency graph so provider icons are cached before FxTable renders (E1c fix)
         getCurrencyGraph();
         // The first load holds the page's Refresh button (Y11): the catalog, the pairs, their rates.
-        await pageBusy.track('fx-first-load', async () => {
-            await loadFxSignalDefinitions();
-            await loadPairSources();
-        });
-        // Load asset list for cross-domain signal selection
-        loadAssetList();
+        try {
+            await pageBusy.track('fx-first-load', async () => {
+                await loadFxSignalDefinitions();
+                await loadPairSources();
+            });
+        } finally {
+            // Load asset list for cross-domain signal selection; `data-busy` holds until it is in (FB-7d).
+            void loadAssetList();
+        }
         onboardingGuide.maybeStartContextual('fx_page_guide');
     });
 
@@ -1024,6 +1027,12 @@
         }
     }
 
+    /**
+     * The asset list, and the comparison series it lets the cards ask: a load wave of the page (FB-7d). True from the
+     * start, so the page never says settled between its first load and this one.
+     */
+    let assetListLoading = $state(true);
+
     /** Load asset list for signal settings — lightweight, no chart data needed */
     async function loadAssetList() {
         try {
@@ -1038,9 +1047,11 @@
                 is_benchmark: a.is_benchmark === true,
             }));
             // The cards' comparisons with an asset need its currency (the key of its cached series): ask them now.
-            void fetchComparisonSeries();
+            await fetchComparisonSeries();
         } catch {
             // Non-critical — asset dropdown will just be empty
+        } finally {
+            assetListLoading = false;
         }
     }
 
@@ -1413,8 +1424,8 @@
      * note there — until this is false, the rates on screen are not the final ones.
      */
     // The cards' rolling returns are a load wave too (Y-40): `data-busy` holds until they are in.
-    // The assets the cards compare are one too (Y-41).
-    let busy = $derived(loading || periodChangesLoading || comparisonSeriesLoading > 0 || pairs.some((p) => p.loading) || calendarAssetsLoading > 0 || [...calendarBySlug.values()].some((entry) => entry.own.state === 'loading'));
+    // The assets the cards compare are one too (Y-41), and the asset list that lets them be asked (FB-7d).
+    let busy = $derived(loading || assetListLoading || periodChangesLoading || comparisonSeriesLoading > 0 || pairs.some((p) => p.loading) || calendarAssetsLoading > 0 || [...calendarBySlug.values()].some((entry) => entry.own.state === 'loading'));
 </script>
 
 <div class="space-y-6 text-lf-primary" aria-busy={busy} data-busy={busy ? 'true' : 'false'} data-testid="fx-page">
