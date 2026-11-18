@@ -122,6 +122,15 @@ flowchart LR
 - **The page** (`get_asset_url`): `https://www.coingecko.com/en/coins/<id>`, built from the id alone, with no I/O; an
   id CoinGecko cannot have has none.
 
+## 🖼️ The Provider's Icon
+
+`get_icon` points at `asset_source_providers/static/coingecko.png`, the asset family's static folder, through
+`generate_static_url()`. The app serves it under `/api/v1/uploads/plugin/asset/coingecko.png`, so no browser asks
+coingecko.com for it, and no user's address reaches CoinGecko that way.
+
+- **Until the file is there**, `get_icon` is `None`: the interface shows the default icon, and nothing is logged.
+- **The coins' logos are another thing:** the metadata links each coin's logo from CoinGecko's image host (above).
+
 ## 🏷️ Attribution
 
 CoinGecko's terms ask for every price it gives to be shown with «Powered by CoinGecko», prominent, linked to its site.
