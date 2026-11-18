@@ -21,6 +21,10 @@
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import AssetSearchAutocomplete from './AssetSearchAutocomplete.svelte';
     import AssetModalDetails from './AssetModalDetails.svelte';
+    import AssetEnrichersModal from './enrichers/AssetEnrichersModal.svelte';
+    import {createEnricherRecognitionState} from './enrichers/enricherRecognition.svelte';
+    import type {EnricherBinding, EnricherInfo, EnricherReadState} from './enrichers/enrichersEditState';
+    import {loadProfileCatalogue, type ProfileVoice} from './profile/profileStore';
     import AssetModalFooter from './AssetModalFooter.svelte';
     import AssetModalImportNotices from './AssetModalImportNotices.svelte';
     import AssetModalIdentifiers from './AssetModalIdentifiers.svelte';
@@ -93,6 +97,8 @@
         provider_params?: Record<string, any> | null;
         provider_user_url?: string;
         provider_url?: string | null;
+        /** The asset's enrichers (plan 68, B3): bindings in their order, and the last read of each. Edit mode only. */
+        enrichers?: {config: Record<string, EnricherBinding>; state?: Record<string, EnricherReadState>} | null;
     }
 
     // =========================================================================
@@ -461,9 +467,95 @@
     );
     let title = $derived(editMode ? $t('assets.modal.titleEdit') : $t('assets.modal.title'));
 
+    // =========================================================================
+    // Enrichers (plan 68, E8a)
+    // =========================================================================
+
+    /** The asset's enrichers: code → binding, the order is the priority. */
+    let enrichersConfig = $state<Record<string, EnricherBinding>>({});
+    /** The list the window opened with: an edit sends `enrichers` only when it differs. */
+    let initialEnrichers: Record<string, EnricherBinding> = {};
+    let enrichersReadState = $state<Record<string, EnricherReadState>>({});
+    /** The user applied a list of their own: «Riconosci» no longer changes it. Always true in edit mode. */
+    let enrichersChosen = $state(false);
+    let enrichersModalOpen = $state(false);
+    let enricherCatalogue = $state<EnricherInfo[]>([]);
+    let profileTopics = $state<ProfileVoice[]>([]);
+    const recognition = createEnricherRecognitionState();
+
+    function resetEnrichers(data: AssetData['enrichers'] | null, edit: boolean) {
+        recognition.cancel();
+        enrichersConfig = {...(data?.config ?? {})};
+        initialEnrichers = {...enrichersConfig};
+        enrichersReadState = {...(data?.state ?? {})};
+        enrichersChosen = edit;
+        enrichersModalOpen = false;
+    }
+
+    /** The identifiers of the form, type → value, as «Riconosci» and the enrichers' window read them. */
+    let formIdentifiers = $derived(Object.fromEntries(identifierRows.filter((row) => row.type !== 'OTHER' && row.value.trim() !== '').map((row) => [row.type, row.value.trim()])));
+
+    // At creation «Riconosci» starts by itself with a whole ISIN (PROF, rounds 18 and 21); never in edit mode or in the
+    // tour's preview. A question already asked is not asked again (enricherRecognition).
+    $effect(() => {
+        if (!open || editMode || tourPreview) return;
+        const input = {assetType, identifiers: formIdentifiers, priceProviderCode: hasProvider ? providerCode : null};
+        untrack(() => {
+            if (recognition.start(input)) loadEnricherCatalogues();
+        });
+    });
+
+    // What «Riconosci» proposes is the list until the user applies one of their own
+    $effect(() => {
+        const proposal = recognition.proposal;
+        if (editMode || untrack(() => enrichersChosen)) return;
+        untrack(() => (enrichersConfig = proposal));
+    });
+
+    /**
+     * The catalogues the enrichers' window and the line under the header need: read once, when «Riconosci» starts or the
+     * window opens, never just because the asset window opened.
+     */
+    let enricherCataloguesAsked = false;
+    function loadEnricherCatalogues() {
+        if (enricherCataloguesAsked) return;
+        enricherCataloguesAsked = true;
+        void zodiosApi.list_enrichers_api_v1_assets_enrichers_get().then(
+            (catalogue) => (enricherCatalogue = ((catalogue as {enrichers?: EnricherInfo[]} | undefined)?.enrichers ?? []) as EnricherInfo[]),
+            () => (enricherCataloguesAsked = false),
+        );
+        void loadProfileCatalogue().then(
+            (voices) => (profileTopics = voices ?? []),
+            () => (profileTopics = []),
+        );
+    }
+
+    function openEnrichers() {
+        loadEnricherCatalogues();
+        enrichersModalOpen = true;
+    }
+
+    /** The codes «Riconosci» is still asking: the covering ones not answered yet. */
+    let enrichersSearching = $derived(recognition.status === 'running' ? enricherCatalogue.filter((info) => info.default_priority?.[assetType as keyof typeof info.default_priority] != null && !recognition.recognitions[info.code]).map((info) => info.code) : []);
+
+    /** The line under the header: what «Riconosci» found. Only at creation, once it has run. */
+    let enrichersBanner = $derived.by((): {state: 'running' | 'found' | 'none' | 'refused' | 'error'; text: string} | null => {
+        if (editMode) return null;
+        if (recognition.status === 'running') return {state: 'running', text: $t('assets.modal.enrichersSearching')};
+        if (recognition.status === 'refused') return {state: 'refused', text: $t('assets.modal.enrichersRefused')};
+        if (recognition.status === 'error') return {state: 'error', text: $t('assets.modal.enrichersError')};
+        if (recognition.status !== 'done') return null;
+        const codes = Object.keys(enrichersConfig);
+        if (!codes.length) return {state: 'none', text: $t('assets.modal.enrichersNone')};
+        const names = codes.map((code) => enricherCatalogue.find((info) => info.code === code)?.name ?? recognition.recognitions[code]?.name ?? code).join(', ');
+        return {state: 'found', text: $t('assets.modal.enrichersFound', {values: {count: codes.length, names}})};
+    });
+
     /** Build form snapshot for dirty tracking — single source of truth */
     function buildFormSnapshot(): string {
         return JSON.stringify([
+            // The enrichers count only once the user chose them: «Riconosci»'s proposal alone changes nothing to discard
+            enrichersChosen ? JSON.stringify(Object.entries(enrichersConfig)) : null,
             displayName,
             currency,
             assetType,
@@ -548,11 +640,16 @@
                     providerNoProvider = false;
                     providerExpanded = true;
                 }
+                resetEnrichers(editMode && editData ? (editData.enrichers ?? null) : null, editMode);
                 initialSnapshot = buildFormSnapshot();
                 initialClassification = $state.snapshot(buildClassificationParams(shortDescription, sectorDistribution, geographicDistribution));
             });
         } else {
-            untrack(() => providerProbe.cancelPending());
+            untrack(() => {
+                providerProbe.cancelPending();
+                // No work in the background (round 28): the answers in flight are dropped with the window
+                recognition.cancel();
+            });
         }
     });
 
@@ -1227,7 +1324,7 @@
 
     /** The form's values, as the save requests are built from them (./assetPayload.ts). */
     function formFields(): AssetFormFields {
-        return {displayName, currency, assetType, iconUrl, quoteBaseQuantity, active, isBenchmark, userUrl: providerUserUrl, shortDescription, sectorDistribution, geographicDistribution, identifierRows};
+        return {displayName, currency, assetType, iconUrl, quoteBaseQuantity, active, isBenchmark, userUrl: providerUserUrl, shortDescription, sectorDistribution, geographicDistribution, identifierRows, enrichers: $state.snapshot(enrichersConfig)};
     }
 
     /** The provider the save assigns to the asset. */
@@ -1246,6 +1343,8 @@
             throw new Error(result?.message || 'Failed to create asset');
         }
         const assetId = result.asset_id;
+        // Created: what «Riconosci» still has in flight is dropped (round 28)
+        recognition.cancel();
         naLog(`created asset #${assetId} "${displayName.trim()}" type=${assetType} currency=${currency} qbq=${createItem.quote_base_quantity} · identifiers: ${identifiersSummary()} · provider=${hasProvider ? providerCode : 'none'}`);
 
         // Upsert the new asset into the shared cache so other pages
@@ -1328,7 +1427,7 @@
         }
 
         // Step 1: Patch asset (classification_params only when it changed since the modal opened)
-        const patchItem = buildPatchItem(assetId, formFields(), initialClassification);
+        const patchItem = buildPatchItem(assetId, formFields(), initialClassification, initialEnrichers);
         const patchPayload = [patchItem];
 
         // N68 — a currency change is never refused, but the PATCH that makes it deletes, in the same call, the asset's prices and
@@ -1555,6 +1654,9 @@
                     descriptionFromPrefill = false;
                     markManualField('short_description');
                 }}
+                enricherCount={Object.keys(enrichersConfig).length}
+                {enrichersBanner}
+                onenrichers={tourPreview ? undefined : openEnrichers}
             />
 
             <!-- More Info (collapsible — Identifiers + Classification) -->
@@ -1734,6 +1836,27 @@
 />
 
 <!-- Provider Comparison Modal -->
+<!-- The enrichers' window over the asset window (plan 68, E8a): it hands the list back, saved with the asset -->
+{#if enrichersModalOpen}
+    <AssetEnrichersModal
+        bind:open={enrichersModalOpen}
+        asset={{name: displayName, assetType, identifiers: formIdentifiers}}
+        config={enrichersConfig}
+        readState={enrichersReadState}
+        catalogue={enricherCatalogue}
+        profileCatalogue={profileTopics}
+        recognitions={recognition.recognitions}
+        searching={enrichersSearching}
+        zIndex={zIndex + 30}
+        onapply={(config) => {
+            enrichersConfig = config;
+            enrichersChosen = true;
+            enrichersModalOpen = false;
+        }}
+        oncancel={() => (enrichersModalOpen = false)}
+    />
+{/if}
+
 <ProviderComparisonModal
     bind:open={showComparisonModal}
     differences={comparisonDifferences}

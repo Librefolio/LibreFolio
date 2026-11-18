@@ -48,6 +48,11 @@
  * no longer exists: the removal disconnects the linked transactions, and its 409s are the split refusal (said inline,
  * as the assignment's) and the conflict.
  *
+ * «Riconosci» of the enrichers (plan 68, E8a) starts by itself at creation with a whole ISIN, which several cases here
+ * have: it is incidental traffic, like the plugin settings read. Its stream (`./enrichers/recognizeStream`) answers an
+ * empty `done` at once, and the two catalogues it reads (`GET /assets/enrichers`, `GET /assets/profile/catalogue`)
+ * are routed empty, so these cases stay about the probe; the enrichers' own cases are `AssetModal.enrichers.test.ts`.
+ *
  * «Ask provider» refused for too many probes (workstream X, X-R66) — red until
  * X-R66: the metadata probe refused with 429 PROBE_RATE_LIMITED is toasted as
  * the catalogue's PROBE_RATE_LIMITED, with the time the pause ends, instead of
@@ -87,6 +92,9 @@ type ResultStatus = 'success' | 'error' | 'warning';
 type SearchProps = ComponentProps<typeof AssetSearchAutocomplete>;
 type SearchSelection = Parameters<NonNullable<SearchProps['onselect']>>[0];
 
+const recognizeStream = vi.hoisted(() => ({recognizeEnrichers: vi.fn()}));
+vi.mock('./enrichers/recognizeStream', () => recognizeStream);
+
 const mocks = vi.hoisted(() => ({
     // Explicit facade: even forbidden mutation/search/reference requests are
     // recorded before throwing, because the product catches several of them.
@@ -109,6 +117,9 @@ const mocks = vi.hoisted(() => ({
         list_sectors_api_v1_utilities_sectors_get: vi.fn(),
         list_files_api_v1_uploads_get: vi.fn(),
         get_plugin_settings_api_v1_settings_plugins_get: vi.fn(),
+        // Plan 68 E8a: the catalogues «Riconosci» reads, incidental here
+        list_enrichers_api_v1_assets_enrichers_get: vi.fn(),
+        profile_catalogue_api_v1_assets_profile_catalogue_get: vi.fn(),
     },
     axios: {request: vi.fn(), get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn()},
     providers: {
@@ -754,6 +765,10 @@ beforeEach(() => {
         checkArguments('incidental provider settings read', args, expectedSettingsRead(args));
         return Promise.resolve({plugins: []});
     });
+    // Plan 68 E8a: «Riconosci» is incidental here (see the header): empty catalogues, an empty answer
+    mocks.api.list_enrichers_api_v1_assets_enrichers_get.mockImplementation(() => Promise.resolve({enrichers: [], default_order: {}}));
+    mocks.api.profile_catalogue_api_v1_assets_profile_catalogue_get.mockImplementation(() => Promise.resolve({voices: []}));
+    recognizeStream.recognizeEnrichers.mockReset().mockResolvedValue({kind: 'done', done: null});
 
     const currencies: CurrencyInfo[] = [
         {code: 'USD', name: 'US dollar', symbol: '$', flag_emoji: '🇺🇸', country_codes: ['US'], country_names: ['United States']},
