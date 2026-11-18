@@ -58,7 +58,7 @@
     import {IDENTIFIER_TYPES} from '$lib/utils/assetTypes';
     import {columnsToIdentifierRows, fieldToIdType, identifierValue, withIdentifier, mergeOtherIdentifierValues, withElectedPrimary} from './assetIdentifiers';
     import {searchResultAssetType, searchResultAssignmentType, searchResultIdentifier, searchResultProviderParams} from './assetSearchSelection';
-    import {compareMetadata, type ComparisonAction, type ComparisonSnapshot} from './assetMetadataComparison';
+    import {compareMetadata, type ComparisonAction, type ComparisonScope, type ComparisonSnapshot} from './assetMetadataComparison';
     import {hasSomethingToLose, loadCurrencyChangeImpact, type CurrencyChangeImpact} from './currencyImpact';
     import {buildClassificationParams, buildCreateItem, buildPatchItem, buildProviderAssignItem, type AssetFormFields, type ClassificationParams, type ProviderAssignment} from './assetPayload';
     import {isQuoteBaseQuantityInvalid, quoteBaseQuantityErrorKey, defaultQuoteBaseQuantity, proposeQuoteBase, quoteBaseNote, computeHasProvider, computeProviderDirty, groupImportNotices, type QuoteBaseSource, type QuoteBaseSuggestion} from './assetFormState';
@@ -1116,7 +1116,7 @@
      *
      * @param scope Which fields to compare. 'all' = everything, others = section-specific.
      */
-    async function fetchAndCompareMetadata(scope: 'all' | 'identifiers' | 'sector' | 'geographic', origin: 'manual' | 'selection' = 'manual') {
+    async function fetchAndCompareMetadata(scope: ComparisonScope, origin: 'manual' | 'selection' = 'manual') {
         if (!hasProvider || saving) return;
         const request = providerProbe.beginMetadata();
         const requestIntent = new Map(manualFieldRevisions);
@@ -1141,7 +1141,7 @@
             // The decision is pure (./assetMetadataComparison.ts); the writes are applied here, in order.
             const lineSuggestion = lineQuoteBaseSuggestion?.key === request.key ? lineQuoteBaseSuggestion.suggestion : null;
             const providerName = providerDisplayName(request.configuration.providerCode);
-            const {actions, differences, missingFields} = compareMetadata(
+            const {actions, differences} = compareMetadata(
                 meta.patch_data,
                 comparisonSnapshot(),
                 scope,
@@ -1156,19 +1156,12 @@
                         const note = quoteBaseNote(source, providerName);
                         return note ? $t(note.key, {values: note.values}) : undefined;
                     },
-                    description: $t('common.description'),
-                    sector: $t('common.sectorDistribution'),
-                    geographic: $t('common.geoDistribution'),
                 },
                 lineSuggestion,
             );
             for (const action of actions) applyComparisonAction(action);
 
-            // --- RESULTS: consistent toast logic (Fix 3) ---
-            if (missingFields.length > 0) {
-                toasts.info($t('assets.comparison.noDistributionData', {values: {fields: missingFields.join(', ')}}));
-            }
-
+            // --- RESULTS ---
             if (differences.length > 0) {
                 const intent = new Map(manualFieldRevisions);
                 if (origin === 'manual') {
@@ -1180,8 +1173,7 @@
                     if (decision.kind === 'open') openComparison(decision.differences, request, intent);
                     else if (decision.kind === 'hold') heldComparison = {differences: decision.differences, context: request, intent};
                 }
-            } else if (missingFields.length === 0) {
-                // Only show success if nothing was missing — never both info + success
+            } else {
                 toasts.success($t('assets.comparison.allMatch'));
             }
         } catch (e: any) {
@@ -1215,8 +1207,8 @@
         fetchAndCompareMetadata('all');
     }
 
-    /** Per-section "Ask Provider" — compares only the given section */
-    function handleAskProviderSection(section: 'identifiers' | 'sector' | 'geographic') {
+    /** Per-section "Ask Provider" — compares only the given section (the identifiers: plan 68 E9 left them alone) */
+    function handleAskProviderSection(section: Exclude<ComparisonScope, 'all'>) {
         fetchAndCompareMetadata(section);
     }
 
@@ -1230,10 +1222,6 @@
             currencyUserSet,
             iconUrl: iconUrl ?? '',
             quoteBaseQuantity,
-            shortDescription,
-            descriptionFromPrefill,
-            sectorDistribution,
-            geographicDistribution,
         };
     }
 
@@ -1242,14 +1230,6 @@
         switch (action.kind) {
             case 'fill':
                 setFieldValue(action.field, action.value);
-                break;
-            case 'fillDistribution':
-                if (action.field === 'sector_area') sectorDistribution = action.value;
-                else geographicDistribution = action.value;
-                break;
-            case 'mergeDescription':
-                shortDescription = action.value;
-                descriptionFromPrefill = false;
                 break;
             case 'mergeOther':
                 if (mergeOtherIdentifiers(action.values) === 0) return;
@@ -1282,10 +1262,6 @@
                 case 'icon_url':
                     // The provider's logo (project 76, P3)
                     iconUrl = value || null;
-                    break;
-                case 'short_description':
-                    shortDescription = value;
-                    descriptionFromPrefill = false;
                     break;
             }
         }
@@ -1320,12 +1296,6 @@
                         setFieldValue(diff.field, diff.providerValue);
                     }
                     if (diff.field === 'quote_base_quantity') quoteBaseHint = diff.quoteBaseSource ? suggestionHint(diff.quoteBaseSource, comparisonContext?.configuration.providerCode, comparisonContext?.key ?? providerConfigKey) : null;
-                } else if (diff.type === 'distribution') {
-                    if (diff.field === 'sector_area') {
-                        sectorDistribution = diff.providerValue?.distribution ?? diff.providerValue;
-                    } else if (diff.field === 'geographic_area') {
-                        geographicDistribution = diff.providerValue?.distribution ?? diff.providerValue;
-                    }
                 }
                 autoFilledFields = new Set([...autoFilledFields, diff.field]);
             }
@@ -1819,10 +1789,10 @@
                             </div>
 
                             <!-- Sector Distribution -->
-                            <DistributionEditor kind="sector" bind:value={sectorDistribution} {hasProvider} {askingProvider} onchange={() => markManualField('sector_area')} onAskProvider={() => handleAskProviderSection('sector')} zIndex={zIndex + 20} />
+                            <DistributionEditor kind="sector" bind:value={sectorDistribution} onchange={() => markManualField('sector_area')} zIndex={zIndex + 20} />
 
                             <!-- Geographic Distribution -->
-                            <DistributionEditor kind="geographic" bind:value={geographicDistribution} {hasProvider} {askingProvider} onchange={() => markManualField('geographic_area')} onAskProvider={() => handleAskProviderSection('geographic')} zIndex={zIndex + 20} />
+                            <DistributionEditor kind="geographic" bind:value={geographicDistribution} onchange={() => markManualField('geographic_area')} zIndex={zIndex + 20} />
                         </div>
                     </div>
                 {/if}
