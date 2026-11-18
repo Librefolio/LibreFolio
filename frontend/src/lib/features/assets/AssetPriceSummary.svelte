@@ -25,6 +25,7 @@
     import {formatPrice} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {SIGN_TEXT} from '$lib/theme/toneClasses';
+    import ProviderAttributionNote from './ProviderAttributionNote.svelte';
 
     interface Props {
         /** Last (closing) price */
@@ -81,45 +82,52 @@
         fxPairUrl?: string;
         /** Opens the "create FX pair" modal from the currency selector's footer action. */
         onCreateForex?: () => void;
+        /** The asset's price provider: its terms may ask a line under the price («Powered by CoinGecko», project 76, P4). */
+        providerCode?: string | null;
     }
 
-    let {lastPrice, deltaPercent, deltaAbs, displayCurrency = $bindable(), assetCurrency, layoutMode, filtersStacked, maxWidth, livePriceConversionFailed = false, livePriceDirection = 'neutral', livePriceFlashToken = 0, fxPairUrl, onCreateForex}: Props = $props();
+    let {lastPrice, deltaPercent, deltaAbs, displayCurrency = $bindable(), assetCurrency, layoutMode, filtersStacked, maxWidth, livePriceConversionFailed = false, livePriceDirection = 'neutral', livePriceFlashToken = 0, fxPairUrl, onCreateForex, providerCode = null}: Props = $props();
 </script>
 
 <div class="flex flex-wrap {layoutMode === 'oneRow' ? 'flex-row items-center gap-4 px-3' : filtersStacked ? 'flex-col items-start gap-2 w-full' : 'flex-col items-center gap-2'}" style={filtersStacked && maxWidth ? `max-width: ${maxWidth}px` : ''}>
     {#if lastPrice !== null}
-        <div class="flex items-center gap-2 {layoutMode === 'oneRow' ? '' : filtersStacked ? 'justify-around w-full' : 'justify-center w-full'}">
-            <div class="flex items-center gap-1.5">
-                {#key livePriceFlashToken}
-                    <span
-                        class="font-mono text-lg font-semibold transition-colors duration-300 {livePriceDirection === 'up' ? 'lf-price-flash-up' : livePriceDirection === 'down' ? 'lf-price-flash-down' : 'text-lf-secondary'}"
-                        data-testid="asset-detail-live-price"
-                        data-live-price-direction={livePriceDirection}
-                    >
-                        {formatPrice(lastPrice)}
-                    </span>
-                {/key}
-                <span class="text-xs text-lf-muted">{livePriceConversionFailed ? assetCurrency : displayCurrency}</span>
-                {#if livePriceConversionFailed}
-                    <Tooltip text={$t('assetDetail.livePriceConversionFailed', {values: {currency: assetCurrency}})} position="bottom">
-                        <span class="text-lf-warning">
-                            <AlertTriangle size={13} />
+        <!-- The price and, under it, its provider's attribution: one column in every layout (project 76, P4) -->
+        <div class="flex flex-col gap-0.5 {layoutMode === 'oneRow' ? '' : 'w-full'}">
+            <div class="flex items-center gap-2 {layoutMode === 'oneRow' ? '' : filtersStacked ? 'justify-around w-full' : 'justify-center w-full'}">
+                <div class="flex items-center gap-1.5">
+                    {#key livePriceFlashToken}
+                        <span
+                            class="font-mono text-lg font-semibold transition-colors duration-300 {livePriceDirection === 'up' ? 'lf-price-flash-up' : livePriceDirection === 'down' ? 'lf-price-flash-down' : 'text-lf-secondary'}"
+                            data-testid="asset-detail-live-price"
+                            data-live-price-direction={livePriceDirection}
+                        >
+                            {formatPrice(lastPrice)}
                         </span>
-                    </Tooltip>
-                {/if}
-                {#if deltaAbs !== null}
-                    <span class="text-xs text-lf-muted" data-testid="asset-price-summary-range-delta-abs">
-                        ({formatPrice(deltaAbs, {signed: true})})
+                    {/key}
+                    <span class="text-xs text-lf-muted">{livePriceConversionFailed ? assetCurrency : displayCurrency}</span>
+                    {#if livePriceConversionFailed}
+                        <Tooltip text={$t('assetDetail.livePriceConversionFailed', {values: {currency: assetCurrency}})} position="bottom">
+                            <span class="text-lf-warning">
+                                <AlertTriangle size={13} />
+                            </span>
+                        </Tooltip>
+                    {/if}
+                    {#if deltaAbs !== null}
+                        <span class="text-xs text-lf-muted" data-testid="asset-price-summary-range-delta-abs">
+                            ({formatPrice(deltaAbs, {signed: true})})
+                        </span>
+                    {/if}
+                </div>
+
+                {#if deltaPercent !== null}
+                    <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}" data-testid="asset-price-summary-range-delta">
+                        {#if deltaPercent >= 0}<TrendingUp size={12} />{:else}<TrendingDown size={12} />{/if}
+                        {formatPercent(deltaPercent)}
                     </span>
                 {/if}
             </div>
-
-            {#if deltaPercent !== null}
-                <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}" data-testid="asset-price-summary-range-delta">
-                    {#if deltaPercent >= 0}<TrendingUp size={12} />{:else}<TrendingDown size={12} />{/if}
-                    {formatPercent(deltaPercent)}
-                </span>
-            {/if}
+            <!-- The provider's attribution, under the price: never in a tooltip (project 76, P4) -->
+            <ProviderAttributionNote providerCodes={[providerCode]} align={layoutMode === 'oneRow' || filtersStacked ? 'start' : 'center'} testId="asset-price-attribution" />
         </div>
     {/if}
 

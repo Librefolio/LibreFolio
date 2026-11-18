@@ -2456,6 +2456,7 @@
                     livePriceFlashToken={live.flashToken}
                     fxPairUrl={mainFxPairUrl}
                     onCreateForex={() => (showFxPairAddModal = true)}
+                    providerCode={assetInfo.provider_code}
                 />
             {/if}
         {/snippet}
