@@ -114,6 +114,8 @@ const mocks = vi.hoisted(() => ({
     providers: {
         ensureAssetProvidersCached: vi.fn(),
         getAssetProviderName: vi.fn(),
+        getAssetProviderAcceptedTypes: vi.fn(() => []),
+        getAssetProviderParamKeys: vi.fn(() => null),
         getAssetProviderIconUrl: vi.fn(),
         isParametricProvider: vi.fn(),
     },
