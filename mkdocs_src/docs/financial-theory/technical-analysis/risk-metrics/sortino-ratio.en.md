@@ -16,6 +16,8 @@ where:
 - $R_f$ = risk-free rate (or minimum acceptable return)
 - $\sigma_d$ = **downside deviation** (annualized)
 
+In LibreFolio the threshold is the reader's **risk-free rate**: the one fixed annual rate set under the period line of every risk page, 0% until it is set, and the same value as the Sharpe ratio's $R_f$ and the threshold of [Gains Against Losses (Omega)](omega-ratio.md) and of the semi-deviation. Which rate to choose, and why a short bill rather than a long bond, is explained under [The Risk-Free Rate](sharpe-ratio.md#risk-free-rate).
+
 !!! info "How the threshold enters the calculation"
 
     The threshold — the minimum acceptable return — is supplied as an **effective annual** rate and converted to an **effective per-period** rate through the same conversion the Sharpe ratio uses:
@@ -119,6 +121,7 @@ LibreFolio uses the **threshold convention with the $N$ divisor** — the formul
 ## 🔗 Related {: #related }
 
 - 📐 **[Sharpe Ratio](sharpe-ratio.md)** — Total volatility variant
+- ➗ **[Gains Against Losses (Omega)](omega-ratio.md)** — The same numerator, over the average shortfall instead of the semi-deviation
 - 📊 **[Volatility](volatility.md)** — Understanding standard deviation
 - 📈 **[Max Drawdown](max-drawdown.md)** — Another downside-focused metric
 

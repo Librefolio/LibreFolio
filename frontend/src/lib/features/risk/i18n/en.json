@@ -37,7 +37,8 @@
           "units": "Or years, months and days: 2y3m5d",
           "sum": "A year counts 365 days, a month 30"
         }
-      }
+      },
+      "riskFreeRateHint": "The latest yield of a short government bill, such as a 12-month Treasury bill."
     },
     "title": "Risk",
     "dashboardTitle": "Portfolio risk",
@@ -154,7 +155,9 @@
             "sortino": "How much average annual return for each unit of downward swing: it looks at the falls only, not at the rises.",
             "sharpe": "How much average annual return for each unit of volatility: the pay for the risk taken, rises and falls alike.",
             "beta": "How much the asset moved when the benchmark moved: 1 means as much, 2 twice as much, 0 independently of it.",
-            "correlation": "How closely the asset and the benchmark moved together, from −1 (always opposite) to +1 (always together)."
+            "correlation": "How closely the asset and the benchmark moved together, from −1 (always opposite) to +1 (always together).",
+            "sharpeWithRate": "How much average annual return above the risk-free rate for each unit of volatility: the pay for the risk taken, rises and falls alike.",
+            "sortinoWithRate": "How much average annual return above the risk-free rate for each unit of swing below that rate: it looks at the falls under the rate only, not at the rises."
           },
           "axisReturn": "Average annual return",
           "period": {
@@ -194,7 +197,9 @@
             "meanUpDown": "The average up day and the average down day.",
             "streak": "The longest run of days in a row with a gain, and when.",
             "averageDrawdown": "How far below its highest level the asset stood on an average day of the period: the whole underwater stretch, not only the worst fall.",
-            "extremeDays": "How much more often very large days, up or down, came than a bell curve would give: 1× is the bell curve, above it the tails are fatter."
+            "extremeDays": "How much more often very large days, up or down, came than a bell curve would give: 1× is the bell curve, above it the tails are fatter.",
+            "omegaWithRate": "Gains against losses: for every euro lost below the risk-free rate, how many were gained above it.",
+            "downsideDeviationWithRate": "The semi-deviation: how much the asset swings below the risk-free rate, yearly, in the unit of the volatility."
           }
         }
       },
@@ -590,7 +595,19 @@
         },
         "shockUnconfigured": "Not in this scenario, so shocked by 0: {names}. The total counts them as untouched.",
         "replayTotalAsset": "This asset would have ended the period at {percent} {amount}",
-        "shockTotalAsset": "This asset would move by {percent} {amount}"
+        "shockTotalAsset": "This asset would move by {percent} {amount}",
+        "rates": "Rates rising or falling",
+        "ratesHint": "From the duration read in the Profile.",
+        "ratesSource": "From the duration read in the Profile ({source}, {date}): {years} years.",
+        "ratesUp": "Rates rise",
+        "ratesDown": "Rates fall",
+        "ratesBy": "by",
+        "ratesFall": "The price would fall by about {percent}{amount}.",
+        "ratesRise": "The price would rise by about {percent}{amount}.",
+        "ratesCaveat": "A first-order approximation: it holds for small moves and does not count the coupons received meanwhile.",
+        "ratesMissing": "Rates rising or falling: no duration in the profile of this security.",
+        "ratesMissingLink": "Open the Profile",
+        "ratesPointsUnit": "points"
       },
       "backtestNotice": "With a slice active, these figures are rebuilt from today’s composition: they say how it *would* have gone, not how it actually went.",
       "notice": {
@@ -629,11 +646,15 @@
           "averageDrawdown": "Below the peak, on average",
           "extremeDaysValue": "{value}× a bell curve",
           "semiDeviationValue": "{down} downward · out of a {swing} swing over the period",
-          "semiDeviationPerimeter": "Measured on the portfolio as you held it over the period. The \"Am I being paid for this risk?\" table measures today's holdings, so its volatility can differ."
+          "semiDeviationPerimeter": "Measured on the portfolio as you held it over the period. The \"Am I being paid for this risk?\" table measures today's holdings, so its volatility can differ.",
+          "semiDeviationValueWithRate": "{down} below the rate · out of a {swing} swing over the period",
+          "semiDeviationBelowRate": "The semi-deviation counts only the days below the risk-free rate."
         },
         "lead": {
           "both": "For every 1 lost on the bad days, {omega} were gained on the good ones; the largest rally lasted {days}.",
-          "omega": "For every 1 lost on the bad days, {omega} were gained on the good ones."
+          "omega": "For every 1 lost on the bad days, {omega} were gained on the good ones.",
+          "omegaWithRate": "Counting from the risk-free rate ({rate} a year): for every 1 lost below it, {omega} gained above it.",
+          "bothWithRate": "Counting from the risk-free rate ({rate} a year): for every 1 lost below it, {omega} gained above it; the largest rally lasted {days}."
         }
       }
     },

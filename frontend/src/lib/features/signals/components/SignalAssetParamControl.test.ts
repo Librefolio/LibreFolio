@@ -63,9 +63,9 @@ beforeEach(() => {
     cache.failure = null;
 });
 
-function mount(props: {value?: unknown; excludeAssetIds?: number[]} = {}) {
+function mount(props: {value?: unknown; excludeAssetIds?: number[]; mainAssetId?: number | null} = {}) {
     const onchange = vi.fn();
-    render(SignalAssetParamControl, {props: {value: props.value ?? null, excludeAssetIds: props.excludeAssetIds, onchange}});
+    render(SignalAssetParamControl, {props: {value: props.value ?? null, excludeAssetIds: props.excludeAssetIds, mainAssetId: props.mainAssetId, onchange}});
     return {onchange, trigger: screen.getByTestId(`${TEST_ID}-trigger`), control: screen.getByTestId(`${TEST_ID}-control`)};
 }
 
@@ -117,6 +117,32 @@ describe('SignalAssetParamControl — on the shared asset panel (RN-12)', () => 
         await fireEvent.click(within(listbox).getByTestId(`search-select-option-${BASALT.id}`));
 
         expect(onchange).toHaveBeenCalledExactlyOnceWith(BASALT.id);
+    });
+
+    // RN-12b (the consultant, 17/11/2026): an asset compared with itself says nothing, in any comparison signal. The
+    // chart's own asset is listed apart, with the reason «Confronto Asset» gives, and cannot be chosen; a saved
+    // configuration that points at it is left as it is.
+    it('lists the chart’s own asset apart, with its reason, and never offers it', async () => {
+        const {trigger, onchange} = mount({mainAssetId: QUARTZ.id});
+        await openList(trigger);
+
+        const blocked = screen.getByTestId(`${TEST_ID}-blocked`);
+        const own = within(blocked).getByTestId(`search-select-option-${QUARTZ.id}`);
+        expect(own).toHaveAttribute('data-reasons', 'main-asset');
+        expect(own).toBeDisabled();
+        await fireEvent.click(own);
+        expect(onchange).not.toHaveBeenCalled();
+    });
+
+    it('rules nothing out without a chart asset', async () => {
+        const {trigger} = mount();
+        await openList(trigger);
+        expect(screen.queryByTestId(`${TEST_ID}-blocked`)).toBeNull();
+    });
+
+    it('keeps a saved choice of the chart’s own asset in the trigger', async () => {
+        const {trigger} = mount({value: QUARTZ.id, mainAssetId: QUARTZ.id});
+        await waitFor(() => expect(trigger.textContent).toContain(QUARTZ.display_name));
     });
 
     it('says so when the asset cache fails to load', async () => {

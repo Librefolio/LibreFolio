@@ -335,11 +335,22 @@ registry described in [Registry Pattern](../../architecture/patterns/registry_pa
 | `asset_set_drawdown` | `drawdown_set` | asset_set | historical | 2 | scope assets |
 | `asset_set_risk_return` | `risk_return_set` | asset_set | historical | 20 | scope assets |
 | `asset_set_comparison` | `comparison_set` | asset_set | historical | 20 | scope assets |
+| `rate_shock` | `rate_shock` | asset | current_composition | none (no series read) | the profile's modified duration |
 
 "20" is `RISK_MIN_OBSERVATIONS`. `stress` covers two methods: `hypothetical` (bucket shocks along
 one dimension) and `historical_replay` (a crisis window, with proxies and exclusions). The five
 `*_set` output kinds are lists of per-asset rows with no set-level figure: a selection has no
 weights, so there is nothing to aggregate.
+
+`rate_shock` (RN-25) is the rates scenario of an asset: for each parallel move of the yield it is asked
+(`yield_changes`, decimal ratios, up and down alike, within two points), the price change
+−modified duration × Δy (`duration_price_change()` in `financial_math/bond_duration.py`), a first-order
+estimate with no convexity. The duration is the asset profile's `modified_duration`, read by
+`load_asset_classifications()` with the day its value was read and its source: the step holding the
+analysis day, or the first reading when the day comes before it (D3's rule). The scope loads the profile
+for it as for the hypothetical stress (`reads_asset_profile()` in `risk/plan.py`). It reads no return
+series, so no observation gate applies (`available_observations()` answers `None`). Without a duration the
+answer is `data_unavailable` with `details.reason = "no_modified_duration"`, never a zero.
 
 #### 📉 The Drawdown Episode {: #drawdown-episode }
 

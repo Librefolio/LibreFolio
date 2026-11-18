@@ -54,6 +54,7 @@
     import {headerWidth, measureHeaderTitle, outsideParts, pointIdOf, referenceRowsFirst, riskReturnNotes, rowIdForPoint, rowIdOf, type RiskReturnCapabilities, type RiskReturnOutside, type RiskReturnRow} from './riskReturnLevel';
     import {headerFontsSettled} from './headerFonts.svelte';
     import '$lib/theme/components/table.css';
+    import {withRateKey} from './riskFreeRate';
 
     interface Props {
         /** One per asset, in the order the page opens them in. */
@@ -148,6 +149,11 @@
         correlation: 'risk.assetSet.levels.l3.columnHelp.correlation',
     };
 
+    /** The help of a column: Sharpe and Sortino count from the risk-free rate the answers were charged (RN-21), and say so when there is one. */
+    function helpKey(id: ValueColumn): string {
+        return id === 'sharpe' || id === 'sortino' ? withRateKey(HELP_KEYS[id], riskFreeRate) : HELP_KEYS[id];
+    }
+
     /** The columns a page may leave `undefined` per row: the ratios, measured by a query of their own. */
     const RATIO_COLUMNS: ReadonlySet<ValueColumn> = new Set<ValueColumn>(['sortino', 'sharpe', 'beta', 'correlation']);
 
@@ -201,7 +207,7 @@
             id,
             header: () => $t(TITLE_KEYS[id]),
             ...(fullTitleKey ? {displayName: () => $t(fullTitleKey)} : {}),
-            headerTooltip: () => (fullTitleKey ? $t('risk.levels.l3.table.namedHelp', {values: {name: $t(fullTitleKey), help: $t(HELP_KEYS[id])}}) : $t(HELP_KEYS[id])),
+            headerTooltip: () => (fullTitleKey ? $t('risk.levels.l3.table.namedHelp', {values: {name: $t(fullTitleKey), help: $t(helpKey(id))}}) : $t(helpKey(id))),
             type: 'number',
             align: 'right',
             width,

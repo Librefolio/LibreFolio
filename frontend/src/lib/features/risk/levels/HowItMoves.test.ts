@@ -22,13 +22,14 @@ import {_} from '$lib/i18n';
 import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import {formatDay, formatDayRange} from '$lib/utils/core/formatAxisDate';
-import {fireEvent, render, screen, setupI18n} from '$test/component';
+import {cleanup, fireEvent, render, screen, setupI18n} from '$test/component';
 
 import type {ScopeMoveFigures} from '../moveFigures';
 import HowItMoves from './HowItMoves.svelte';
 
 const FIGURES: ScopeMoveFigures = {
     volatility: 0.139,
+    riskFreeRate: null,
     bestDay: 0.034,
     bestDayDate: '2026-04-09',
     bestMonth: {gain: 0.116, from: '2026-04-22', to: '2026-05-21'},
@@ -202,5 +203,21 @@ describe('HowItMoves — the semi-deviation says its perimeter', () => {
         mount(FIGURES, null, false);
 
         expect(await tooltipOf('risk-move-semi-deviation')).toBe(norm(say('risk.assetSet.levels.move.columnHelp.downsideDeviation')));
+    });
+
+    // RN-21 (the consultant, 17/11/2026): with a risk-free rate the semi-deviation counts the days under it, and says so.
+    it('with a rate, counts below it: the value, the perimeter tooltip and the usual help', async () => {
+        mount({...FIGURES, riskFreeRate: 0.025}, null, true);
+        expect(text('risk-move-semi-deviation-value')).toBe(say('risk.levels.move.rows.semiDeviationValueWithRate', {down: '9.8%', swing: '13.9%'}));
+        expect(await tooltipOf('risk-move-semi-deviation')).toBe(norm(`${say('risk.levels.move.rows.semiDeviationPerimeter')} ${say('risk.levels.move.rows.semiDeviationBelowRate')}`));
+        cleanup();
+
+        mount({...FIGURES, riskFreeRate: 0.025}, null, false);
+        expect(await tooltipOf('risk-move-semi-deviation')).toBe(norm(say('risk.assetSet.levels.move.columnHelp.downsideDeviationWithRate')));
+    });
+
+    it('at a rate of 0, keeps today’s sentences', () => {
+        mount({...FIGURES, riskFreeRate: 0}, null, true);
+        expect(text('risk-move-semi-deviation-value')).toBe(say('risk.levels.move.rows.semiDeviationValue', {down: '9.8%', swing: '13.9%'}));
     });
 });

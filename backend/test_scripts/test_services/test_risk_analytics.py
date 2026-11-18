@@ -277,6 +277,8 @@ def test_registry_discovers_all_deterministic_analytics():
         "historical_kpi",
         "historical_var",
         "portfolio_optimization",
+        # RN-25: one asset's price under a move of its yield, from the profile's modified duration.
+        "rate_shock",
         "risk_contribution",
         "simulation",
         "stress",
@@ -421,6 +423,20 @@ def test_drawdown_summary_broker_filtered_portfolio_reuses_twrr_path():
     # P19, on the portfolio TWRR: the trough is 0.96 * 0.98 of the peak, and the episode is still open.
     assert output.maximum_drawdown_trough_to_peak_ratio == pytest.approx(-output.maximum_drawdown / (1.0 + output.maximum_drawdown))
     assert output.maximum_drawdown_trough_to_peak_ratio == pytest.approx(1.0 / (0.96 * 0.98) - 1.0)
+
+
+def test_drawdown_summary_labels_a_current_composition_backtest_as_one():
+    # A sliced portfolio in historical mode reads today's weights replayed over past returns (Q-C1, `risk/results.py`):
+    # neither a price series nor the portfolio's TWRR. The label names that series, as historical_kpi's method does,
+    # never «price_only_close», which says one asset's closes.
+    returns = [0.01, -0.04, -0.02, 0.03]
+    context = replace(make_context({1: returns, 2: returns}), primary_return_basis=RiskReturnBasis.CURRENT_COMPOSITION_BACKTEST)
+    computation = DrawdownSummaryAnalytic().compute(DrawdownSummaryParams(), context)
+    output = computation.output
+    assert output.return_basis == RiskReturnBasis.CURRENT_COMPOSITION_BACKTEST
+    assert output.calculation_basis == "current_composition_backtest"
+    assert computation.method == "current_composition_backtest"
+    assert computation.return_basis == RiskReturnBasis.CURRENT_COMPOSITION_BACKTEST
 
 
 def test_drawdown_summary_requires_primary_history():
@@ -3654,6 +3670,29 @@ def test_historical_kpi_publishes_the_shape_of_the_days_of_its_series():
     assert output.omega_ratio == shape.omega_ratio
     assert output.downside_deviation == shape.downside_deviation
     assert output.extreme_day_ratio == shape.extreme_day_ratio
+
+
+def test_historical_kpi_one_user_rate_moves_only_the_figures_that_read_it():
+    """RN-21: the user's risk-free rate goes in as both parameters (Q9 bis: one threshold for every «excess» measure).
+
+    Sharpe, Sortino, Omega and the semi-deviation read it; the volatility and the shape of the days that count gains
+    against zero do not. The result says which rate it used, so a page writes the rate of its answer, not of its field.
+    """
+    returns = _kpi_returns()
+    context = make_context({1: returns, 2: returns})
+    at_zero = HistoricalKpiAnalytic().compute(HistoricalKpiParams(), context)
+    charged = HistoricalKpiAnalytic().compute(HistoricalKpiParams(risk_free_annual_rate=0.03, target_annual_return=0.03), context)
+
+    for field in ("sharpe", "sortino", "omega_ratio", "downside_deviation"):
+        assert getattr(charged.output, field) is not None, field
+        assert getattr(charged.output, field) != getattr(at_zero.output, field), field
+    assert charged.output.sharpe < at_zero.output.sharpe
+    assert charged.output.omega_ratio < at_zero.output.omega_ratio
+    assert charged.output.downside_deviation > at_zero.output.downside_deviation
+    for field in ("volatility", "best_realization", "positive_observation_share", "mean_positive_return", "mean_negative_return", "extreme_day_ratio", "max_drawdown"):
+        assert getattr(charged.output, field) == getattr(at_zero.output, field), field
+    assert charged.risk_free is not None
+    assert charged.risk_free.annual_rate == 0.03
 
 
 def test_historical_kpi_declares_a_window_without_a_gain():

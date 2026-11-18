@@ -133,6 +133,14 @@ Raise it and the table above inverts. At $h = 10$, a series quoted on trading da
 
     Moving from 95% to 99% does not produce a more accurate answer; it asks about a rarer event. It also asks about one estimated from fewer observations, so the higher level is read from a thinner slice of the same history.
 
+!!! warning "A long horizon counts overlapping windows, not independent ones"
+
+    Above one day the tail is read from **overlapping** windows: `horizon_compounded_returns` compounds every run of $n$ consecutive returns, starting one observation after the previous run, so two neighbouring windows share $n - 1$ of their $n$ returns. The count $T = N - n + 1$ therefore overstates how much independent evidence the figure rests on.
+
+    The 30-day Value at Risk — the Thirty bad days card, `historical_var` and `asset_set_var` at a horizon of 30 days — makes the gap concrete. One year of a series quoted on trading days gives $N \approx 252$ returns and $n = 21$, hence $T = 232$ windows; but those windows hold only about $252 / 21 = 12$ **non-overlapping** months. The 5% tail of $T = 232$ is some 12 windows, and windows that share 20 of their 21 days mostly describe one or two bad stretches seen from adjacent starting days. The gate of 20 compounded windows is met from $N = 40$ returns, which is fewer than two independent months.
+
+    The 1-day figure has no such overlap: each of its $T = N$ observations is a separate day. At the same window and confidence level, the 30-day Value at Risk is therefore a **far noisier estimate** than the 1-day one — a different window, or a single extra crisis month, can move it by much more — and it should be read as an order of magnitude rather than to its last digit.
+
 !!! warning "It inherits its window"
 
     The figure is computed from the returns of the analysed period, over the observation calendar those series share. The window, the observation count and the basis used are published with the result — see [Data Quality](data-quality.md).

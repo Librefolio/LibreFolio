@@ -606,9 +606,9 @@ describe('buildBaseAnalytics', () => {
         expect(analytics.map((a) => a.analytic_code)).toEqual(['historical_kpi']);
     });
 
-    it('historical: seeds KPI with the applied risk-free rate as a fraction', () => {
+    it('historical: seeds KPI with the applied risk-free rate as a fraction, and the same threshold (RN-21, Q9 bis)', () => {
         const analytics = buildBaseAnalytics('historical', ctx(['historical_kpi'], 2));
-        expect(analytics[0].parameters).toEqual({risk_free_annual_rate: 0.02, target_annual_return: 0});
+        expect(analytics[0].parameters).toEqual({risk_free_annual_rate: 0.02, target_annual_return: 0.02});
     });
 
     it('historical: VaR carries a 1-day 95% window', () => {
@@ -663,6 +663,28 @@ describe('buildBaseAnalytics', () => {
 
     // k6 (06/10): each risk/return point publishes its own Sharpe and Sortino, so the scatter is charged
     // exactly what the KPI beside it is charged — the same perimeter, the same rate, the same target.
+    // RN-25: the asset's rates scenario rides in the current-composition wave, every step at once, so the page knows
+    // from one answer whether to offer the tool and switches between the steps without asking again.
+    it('current_composition: the rates scenario asks its six steps, up and down, only when opted in and advertised', () => {
+        const asked = buildBaseAnalytics('current_composition', {...ctx(['risk_contribution', 'rate_shock']), includeRateShock: true});
+        const rates = asked.find((analytic) => analytic.analytic_code === 'rate_shock');
+        expect(rates?.parameters).toEqual({yield_changes: [0.005, 0.01, 0.02, -0.005, -0.01, -0.02]});
+        expect(rates?.instance_id).toBe('base-current_composition-rate_shock');
+
+        expect(
+            buildBaseAnalytics('current_composition', ctx(['risk_contribution', 'rate_shock'])).some((analytic) => analytic.analytic_code === 'rate_shock'),
+            'not opted in',
+        ).toBe(false);
+        expect(
+            buildBaseAnalytics('current_composition', {...ctx(['risk_contribution']), includeRateShock: true}).some((analytic) => analytic.analytic_code === 'rate_shock'),
+            'not advertised for the scope',
+        ).toBe(false);
+        expect(
+            buildBaseAnalytics('historical', {...ctx(['historical_kpi', 'rate_shock']), includeRateShock: true}).some((analytic) => analytic.analytic_code === 'rate_shock'),
+            'never in the historical wave',
+        ).toBe(false);
+    });
+
     it('current_composition: the risk/return points are charged the rate and the target of the KPI beside them', () => {
         const analytics = buildBaseAnalytics('current_composition', {...ctx(['risk_contribution', 'historical_kpi', 'asset_risk_return'], 3.5), includeCurrentCompositionRiskReturn: true});
         expect(
@@ -671,8 +693,8 @@ describe('buildBaseAnalytics', () => {
         ).toEqual(['risk_contribution', 'historical_kpi', 'asset_risk_return']);
         const kpi = analytics.find((a) => a.analytic_code === 'historical_kpi');
         const riskReturn = analytics.find((a) => a.analytic_code === 'asset_risk_return');
-        expect(kpi?.parameters, 'premise: the KPI is charged 3.5% as a fraction').toEqual({risk_free_annual_rate: 0.035, target_annual_return: 0});
-        expect(riskReturn?.parameters, "the risk/return points are not charged the KPI's rate and target").toEqual({risk_free_annual_rate: 0.035, target_annual_return: 0});
+        expect(kpi?.parameters, 'premise: the KPI is charged 3.5% as a fraction').toEqual({risk_free_annual_rate: 0.035, target_annual_return: 0.035});
+        expect(riskReturn?.parameters, "the risk/return points are not charged the KPI's rate and target").toEqual({risk_free_annual_rate: 0.035, target_annual_return: 0.035});
         expect(JSON.stringify(riskReturn?.parameters), 'the risk/return points carry the same parameters as the KPI in other bytes').toBe(JSON.stringify(kpi?.parameters));
     });
 
@@ -723,26 +745,26 @@ describe('buildBaseAnalytics', () => {
         // Written out, never derived from the constants that build them. The context charges a 2%
         // risk-free rate, so the KPI carries 0.02 — and so, since k6 (06/10), does the comparison: the
         // reference's own Sharpe and Sortino are charged the reader's rate and a zero target, as the KPI is.
-        const KPI = ['base-historical-asset_set_kpi', 'asset_set_kpi', {risk_free_annual_rate: 0.02, target_annual_return: 0}];
+        const KPI = ['base-historical-asset_set_kpi', 'asset_set_kpi', {risk_free_annual_rate: 0.02, target_annual_return: 0.02}];
         const BAD_DAY = ['base-historical-asset_set_var', 'asset_set_var', {confidence_level: 0.95, horizon_days: 1}];
         const BAD_MONTH = ['base-historical-asset_set_var-monthly', 'asset_set_var', {confidence_level: 0.95, horizon_days: 30}];
         const DRAWDOWN = ['base-historical-asset_set_drawdown', 'asset_set_drawdown', {}];
         /** RN-19: the KPI the «How did each one move?» table reads, on L1°'s calendar — its own instance, as the two VaRs are. */
-        const MOVE_KPI = ['base-historical-asset_set_kpi-move', 'asset_set_kpi', {risk_free_annual_rate: 0.02, target_annual_return: 0}];
+        const MOVE_KPI = ['base-historical-asset_set_kpi-move', 'asset_set_kpi', {risk_free_annual_rate: 0.02, target_annual_return: 0.02}];
         const RISK_RETURN = ['base-historical-asset_set_risk_return', 'asset_set_risk_return', {}];
-        const COMPARISON = ['base-historical-asset_set_comparison', 'asset_set_comparison', {comparison_asset_id: BENCHMARK, risk_free_annual_rate: 0.02, target_annual_return: 0}];
+        const COMPARISON = ['base-historical-asset_set_comparison', 'asset_set_comparison', {comparison_asset_id: BENCHMARK, risk_free_annual_rate: 0.02, target_annual_return: 0.02}];
 
         /**
          * What the union returns with a benchmark of 47, copied from a run before the split and kept literal: the pin.
          * k6 (06/10) is its one deliberate change: the comparison also carries the rate and the target.
          */
         const UNION_TODAY = [
-            ['base-historical-asset_set_kpi', 'asset_set_kpi', {risk_free_annual_rate: 0.02, target_annual_return: 0}],
+            ['base-historical-asset_set_kpi', 'asset_set_kpi', {risk_free_annual_rate: 0.02, target_annual_return: 0.02}],
             ['base-historical-asset_set_var', 'asset_set_var', {confidence_level: 0.95, horizon_days: 1}],
             ['base-historical-asset_set_var-monthly', 'asset_set_var', {confidence_level: 0.95, horizon_days: 30}],
             ['base-historical-asset_set_drawdown', 'asset_set_drawdown', {}],
             ['base-historical-asset_set_risk_return', 'asset_set_risk_return', {}],
-            ['base-historical-asset_set_comparison', 'asset_set_comparison', {comparison_asset_id: 47, risk_free_annual_rate: 0.02, target_annual_return: 0}],
+            ['base-historical-asset_set_comparison', 'asset_set_comparison', {comparison_asset_id: 47, risk_free_annual_rate: 0.02, target_annual_return: 0.02}],
         ];
 
         it.each<[string, number | null]>([
@@ -771,8 +793,8 @@ describe('buildBaseAnalytics', () => {
             const analytics = buildBaseAnalytics('historical', {...ctx(ASSET_SET_CODES, 3.5), includeAssetSetPaidLevels: true, assetSetBenchmarkId: BENCHMARK});
             const kpi = analytics.find((analytic) => analytic.analytic_code === 'asset_set_kpi');
             const comparison = analytics.find((analytic) => analytic.analytic_code === 'asset_set_comparison');
-            expect(kpi?.parameters, 'premise: the KPI beside it is charged 3.5% as a fraction').toEqual({risk_free_annual_rate: 0.035, target_annual_return: 0});
-            const expected = {comparison_asset_id: BENCHMARK, risk_free_annual_rate: 0.035, target_annual_return: 0};
+            expect(kpi?.parameters, 'premise: the KPI beside it is charged 3.5% as a fraction').toEqual({risk_free_annual_rate: 0.035, target_annual_return: 0.035});
+            const expected = {comparison_asset_id: BENCHMARK, risk_free_annual_rate: 0.035, target_annual_return: 0.035};
             expect(comparison?.parameters, "the comparison is not charged the KPI's rate and target").toEqual(expected);
             expect(JSON.stringify(comparison?.parameters), 'the comparison carries the right parameters in other bytes: the benchmark first, then the two rates').toBe(JSON.stringify(expected));
         });

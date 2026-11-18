@@ -47,6 +47,8 @@ class RollingOmegaParams(BaseModel):
         le=10.0,
         json_schema_extra={
             "x-i18n-key": "chartSettings.params.targetAnnualReturn",
+            # The reader's one risk-free rate, shared with the risk pages (RN-21): the chart shows it, never a field.
+            "x-control": "risk_free_rate",
             "x-control-order": 2,
             "x-step": 0.001,
             "x-tooltip-key": "signals.tooltips.targetAnnualReturn",
@@ -66,7 +68,7 @@ class RollingOmegaPlugin(SignalPlugin):
     semantic_id = "rolling_omega_ratio"
     semantic_description = "Compares rolling gains above the target with losses below it."
     icon = "➗"
-    docs_path = "financial-theory/technical-analysis/risk-metrics/sortino-ratio/"
+    docs_path = "financial-theory/technical-analysis/risk-metrics/omega-ratio/"
     category = SignalCategory.RISK
     params_model = RollingOmegaParams
     input_requirements = SignalInputRequirements(

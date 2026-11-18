@@ -8,6 +8,7 @@
     import type {RiskReturnRow} from '../riskReturnLevel';
     import {buildRiskAdjusted, uncoveredWeight} from './levelHelpers';
     import {buildRiskReturnPoints, buildRiskReturnRows, selectKpiWave} from './l3Helpers';
+    import {usedRiskFreeRate} from '../riskFreeRate';
 
     /**
      * L3 — "am I being paid for this risk?"
@@ -45,8 +46,6 @@
         assetNames?: Record<number, string>;
         /** Each asset's icon, for the table, resolved by the panel. */
         assetIcons?: ReadonlyMap<number, string>;
-        /** Anchors the Capital Market Line at x = 0. Percent, as the panel holds it. */
-        appliedRiskFreePercent?: number;
         loading?: boolean;
         /** The table's instance, for the column menu the panel draws beside the level's manual icon. */
         tableRef?: DataTable<RiskReturnRow>;
@@ -59,7 +58,7 @@
         oneAsset?: boolean;
     }
 
-    let {historicalResults, currentResults = [], comparisonResult, benchmarkName = null, assetNames = {}, assetIcons = new Map(), appliedRiskFreePercent = 0, loading = false, tableRef = $bindable(), subjectLabel, oneAsset = false}: Props = $props();
+    let {historicalResults, currentResults = [], comparisonResult, benchmarkName = null, assetNames = {}, assetIcons = new Map(), loading = false, tableRef = $bindable(), subjectLabel, oneAsset = false}: Props = $props();
     let wave = $derived(selectKpiWave(currentResults, historicalResults));
     // RN-18b: the row names the perimeter its figures have — today's holdings when the current-composition KPI came back,
     // the plain «Portfolio» when L3 fell back to the history (the title says which).
@@ -90,6 +89,12 @@
     // of it — with no cash at all — the sentence announced a third in cash. The split
     // is L2's own (`uncoveredWeight`), so the two levels cannot tell it differently;
     // when it is unknown, neither sentence is said rather than call it all cash.
+    /**
+     * The rate the answers on screen were charged (RN-21): the line starts there and the Sharpe and Sortino helps name it.
+     * The risk/return answer's, else the benchmark's, else the KPI the cards show (L3 fallen back to the history has
+     * neither of the first two); 0 when none names one.
+     */
+    let lineRate = $derived(usedRiskFreeRate(riskReturnResult) ?? usedRiskFreeRate(comparisonResult) ?? usedRiskFreeRate(resultByCode(wave.results, 'historical_kpi')) ?? 0);
     let uncovered = $derived(uncoveredWeight(riskReturnResult));
     let outside = $derived(uncovered === null ? null : {cash: uncovered.cash, unpriced: uncovered.unpriced});
 
@@ -110,7 +115,7 @@
     let benchmarkApplies = $derived(figures.beta !== null || rows.some((row) => row.role === 'benchmark'));
 </script>
 
-<div class="space-y-4" data-testid="risk-l3" data-perimeter={wave.perimeter ?? ''}>
+<div class="space-y-4" data-testid="risk-l3" data-perimeter={wave.perimeter ?? ''} data-risk-free-rate={lineRate}>
     {#if loading && rows.length === 0}
         <div class="h-40 animate-pulse rounded-lg bg-lf-panel" data-testid="risk-l3-loading"></div>
     {:else if rows.length === 0}
@@ -134,7 +139,7 @@
                 return: $t('risk.levels.l3.scatter.axisReturn'),
                 capitalMarketLine: $t('risk.levels.l3.scatter.line'),
             }}
-            riskFreeRate={appliedRiskFreePercent / 100}
+            riskFreeRate={lineRate}
             {outside}
             bind:tableRef
         />

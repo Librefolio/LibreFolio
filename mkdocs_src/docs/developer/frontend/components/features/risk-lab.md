@@ -113,10 +113,13 @@ API. Which analytics each section asks for is the table in
 | L3° *What did each of these pay for its risk?* | `RiskControllerHost`, `includeAssetSetPaidLevels` (`AssetSetComparisonLevels.svelte:277`) | `assetSetBenchmarkId` (l.139) |
 | L4° *What if…?* | `AssetSetReplaySection.svelte`, replay on demand | Never |
 
-- **Rates.** Every lab controller sends `appliedRiskFreePercent: 0` (`AssetSetCorrelationSection.svelte:72`,
-  `AssetSetComparisonLevels.svelte:121`, l.137, `AssetSetReplaySection.svelte:84`), and the two KPIs and the
-  comparison send `target_annual_return: 0` (`riskAnalysisHelpers.ts:352`, l.362, l.389-393). The lab has no
-  control for either.
+- **Rates.** The reader's risk-free rate (RN-21): one value for every risk page, in percent, kept per user in the
+  browser (`riskFreeRateStore.svelte.ts`, 0 % until set) and set from the field under the period line
+  (`RiskFreeRateField.svelte`, mounted by `RiskPeriodLine`). L1° and L3° read it (`AssetSetComparisonLevels.svelte`);
+  correlation and replay keep `appliedRiskFreePercent: 0`, since nothing they ask reads a rate and a change would only
+  re-ask them. Every analytic that declares the two parameters gets the same annual fraction for both
+  (`riskFreeParameters()`, `riskFreeRate.ts`: the Sharpe's rate is the threshold of Sortino, Omega and the
+  semi-deviation, Q9 bis).
 - **Bad month.** `MONTHLY_VAR_HORIZON_DAYS = 30` calendar days (`riskAnalysisHelpers.ts:291`, used at
   l.337 and l.358). The engine turns them into observations at the observed frequency — about 21 on a
   trading-day calendar, 30 on an every-day one — as explained in
@@ -245,7 +248,9 @@ title-width rule (`titleWidth()` over `headerWidth()`).
   (`frontend/src/lib/components/charts/scatterChartHelpers.ts:160`) anchors the line on a benchmark with positive
   volatility, else on the portfolio, which a selection never has: no benchmark, no line. The notes come
   from `riskReturnNotes()` (`riskReturnLevel.ts:174`): `above` and `line` only with a line, `return` and
-  `priceOnly` always. The line starts at `LAB_RISK_FREE_RATE = 0` (`AssetSetRiskReturnSection.svelte:137`).
+  `priceOnly` always. The line starts at the rate the answers were charged (`usedRiskFreeRate()` of the comparison, else
+  of the KPI: `metadata.risk_free.annual_rate`), never at the field's value; Sharpe's and Sortino's helps take their
+  `…WithRate` sisters when that rate is not 0.
 - **Period line.** `assetSetCalculationWindow()` (`assetSetLevels.ts:517`) reads the first result with
   metadata — from `end − calendar_days + 1` to `end` — and sets `narrowed` when that start is more than
   `NARROWED_AFTER_DAYS` (7, l.494) after the toolbar's start, or that end more than 7 days before the
@@ -399,9 +404,9 @@ current-composition `historical_kpi` and `asset_risk_return` and the on-demand `
   may be the benchmark (`L3Benchmark.svelte:158`); an effect asks the comparison once per
   `baseEpoch|benchmark` when the picker reports `set` and the catalogue is `ready` (l.83-93); any other
   state bumps the generation and drops the answer (l.101-107).
-- **Rates.** The comparison runs on `current_composition` with the page's risk-free rate and
-  `target_annual_return: 0` (`L3Benchmark.svelte:133`). That rate is `appliedRiskFreePercent = 0`, with no control
-  (`levels/RiskLevelsPanel.svelte:77`): the same zeros as the lab ([Requests](#requests), *Rates*).
+- **Rates.** The comparison runs on `current_composition` with the reader's risk-free rate as both parameters
+  (`riskFreeParameters()` in `L3Benchmark.svelte`), the value `RiskLevelsPanel` reads from the shared store: the same
+  rate as the lab ([Requests](#requests), *Rates*).
 - **Table and chart.** The shared `RiskReturnLevel` ([Risk and Return (L3°)](#risk-return)), with
   `capabilities={{weight: true, ratios: true, benchmark: benchmarkApplies}}` (`L3RiskAdjusted.svelte:113`).
   `benchmarkApplies` is a measured beta or a benchmark row (l.97), not the lab's `status === 'ok'`. The

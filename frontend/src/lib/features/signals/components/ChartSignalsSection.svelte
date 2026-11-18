@@ -624,7 +624,14 @@
                             <div class="flex flex-wrap gap-2">
                                 {#each typeInfo.paramDescriptors as desc}
                                     {#if typeInfo.source === 'backend'}
-                                        <SignalParamControl descriptor={desc} value={signal.params[desc.key]} affectsLabel={signalParamAffectsLabel(typeInfo, desc)} onchange={(value) => updateSignalParam(signal.id, desc.key, value)} />
+                                        <SignalParamControl
+                                            descriptor={desc}
+                                            value={signal.params[desc.key]}
+                                            affectsLabel={signalParamAffectsLabel(typeInfo, desc)}
+                                            mainAssetId={mainAssetId > 0 ? mainAssetId : null}
+                                            instanceId={signal.id}
+                                            onchange={(value) => updateSignalParam(signal.id, desc.key, value)}
+                                        />
                                     {:else}
                                         <div class="flex items-center gap-1.5" data-testid={`signal-param-${signal.id}-${desc.key}`}>
                                             <span class="text-[10px] text-lf-muted uppercase">

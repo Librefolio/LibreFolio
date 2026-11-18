@@ -67,6 +67,7 @@ describe('buildMoveFigures — one scope', () => {
 
         expect(figures).toEqual({
             volatility: 0.139,
+            riskFreeRate: null,
             bestDay: 0.034,
             bestDayDate: '2026-04-09',
             bestMonth: {gain: 0.116, from: '2026-04-22', to: '2026-05-21'},
@@ -120,6 +121,12 @@ describe('buildMoveFigures — one scope', () => {
         expect(figures?.bestMonth).toBeNull();
     });
 
+    it('reads the risk-free rate the KPI was charged (RN-21), never one beside it', () => {
+        const charged = {...kpi(), metadata: {risk_free: {annual_rate: 0.025, source: 'analytic_param', currency: 'EUR'}}} as unknown as RiskAnalyticResult;
+        expect(buildMoveFigures(charged, null, null)?.riskFreeRate).toBe(0.025);
+        expect(buildMoveFigures(kpi(), null, null)?.riskFreeRate, 'an answer that names no rate').toBeNull();
+    });
+
     it('is null when none of the three answered', () => {
         expect(buildMoveFigures(null, null, null)).toBeNull();
         expect(buildMoveFigures({instance_id: 'x', analytic_code: 'historical_kpi', status: 'unavailable', output: null} as unknown as RiskAnalyticResult, null, null)).toBeNull();
@@ -138,6 +145,20 @@ describe('moveLead — the block’s headline (RN-18)', () => {
     it('says gains against losses alone when the rally has no length', () => {
         expect(moveLead({...base, omega: 1.9, rally: {gain: 0, from: null, to: null, days: 0}}, t)).toBe(`risk.levels.move.lead.omega ${JSON.stringify({omega: '1.90'})}`);
         expect(moveLead({...base, omega: 1.9, rally: null}, t)).toBe(`risk.levels.move.lead.omega ${JSON.stringify({omega: '1.90'})}`);
+    });
+
+    // RN-21 (the consultant, 17/11/2026): with a rate the headline counts from it and names it, as the answer used it.
+    it('counts from the risk-free rate the answer was charged, and names it a year', () => {
+        expect(moveLead({...base, omega: 1.25, rally: {gain: 0.246, from: '2026-04-21', to: '2026-11-04', days: 197}, riskFreeRate: 0.025}, t)).toBe(`risk.levels.move.lead.bothWithRate ${JSON.stringify({omega: '1.25', days: 'risk.levels.l1.daysCount {"days":197}', rate: '2.5%'})}`);
+        expect(moveLead({...base, omega: 1.9, rally: null, riskFreeRate: 0.025}, t)).toBe(`risk.levels.move.lead.omegaWithRate ${JSON.stringify({omega: '1.90', rate: '2.5%'})}`);
+    });
+
+    it('names the rate with every decimal the field keeps, never rounded', () => {
+        expect(moveLead({...base, omega: 1.9, rally: null, riskFreeRate: 0.00125}, t)).toBe(`risk.levels.move.lead.omegaWithRate ${JSON.stringify({omega: '1.90', rate: '0.125%'})}`);
+    });
+
+    it('keeps today’s headline at a rate of 0', () => {
+        expect(moveLead({...base, omega: 1.9, rally: null, riskFreeRate: 0}, t)).toBe(`risk.levels.move.lead.omega ${JSON.stringify({omega: '1.90'})}`);
     });
 
     it('says nothing without gains against losses: an invented headline is worse than none', () => {

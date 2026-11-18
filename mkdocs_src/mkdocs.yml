@@ -286,6 +286,9 @@ plugins:
             Volatility: Volatilità
             "Current Drawdown": "Drawdown attuale"
             Worst Realization: Peggior Realizzazione
+            "📈 How Does It Move?": "📈 Come si Muove?"
+            "Gains Against Losses (Omega)": "Guadagni contro Perdite (Omega)"
+            The Shape of the Days: La Forma dei Giorni
             "🧩 Am I Diversified?": "🧩 Sono Diversificato?"
             Correlation: Correlazione
             Risk Contribution: Contributo al Rischio
@@ -561,6 +564,9 @@ plugins:
             Volatility: Volatilité
             "Current Drawdown": "Repli actuel"
             Worst Realization: Pire Réalisation
+            "📈 How Does It Move?": "📈 Comment Évolue-t-il ?"
+            "Gains Against Losses (Omega)": "Gains contre Pertes (Omega)"
+            The Shape of the Days: La Forme des Journées
             "🧩 Am I Diversified?": "🧩 Suis-je Diversifié ?"
             Correlation: Corrélation
             Risk Contribution: Contribution au Risque
@@ -836,6 +842,9 @@ plugins:
             Volatility: Volatilidad
             "Current Drawdown": "Caída actual"
             Worst Realization: Peor Realización
+            "📈 How Does It Move?": "📈 ¿Cómo se Mueve?"
+            "Gains Against Losses (Omega)": "Ganancias frente a Pérdidas (Omega)"
+            The Shape of the Days: La Forma de los Días
             "🧩 Am I Diversified?": "🧩 ¿Estoy Diversificado?"
             Correlation: Correlación
             Risk Contribution: Contribución al Riesgo
@@ -1185,6 +1194,9 @@ nav:
                   - Value at Risk: financial-theory/technical-analysis/risk-metrics/value-at-risk.md
                   - Conditional Value at Risk: financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md
                   - Worst Realization: financial-theory/technical-analysis/risk-metrics/worst-realization.md
+              - "📈 How Does It Move?":
+                  - The Shape of the Days: financial-theory/technical-analysis/risk-metrics/return-shape.md
+                  - "Gains Against Losses (Omega)": financial-theory/technical-analysis/risk-metrics/omega-ratio.md
               - "🧩 Am I Diversified?":
                   - Correlation: financial-theory/technical-analysis/risk-metrics/correlation.md
                   - Risk Contribution: financial-theory/technical-analysis/risk-metrics/risk-contribution.md

@@ -6,13 +6,13 @@ Risk metrics provide **quantitative measures** of portfolio risk. Each metric ca
 
 ## 🧭 The Four Questions {: #the-four-questions }
 
-Every page in this section exists to answer one of four questions. A metric earns its place by answering one of them; two cross-cutting pages explain how the answers are computed and how far they can be trusted. The two tables further down compare the four best-known of these metrics side by side and suggest when to reach for each.
+Every page in this section exists to answer one of four questions, or to describe the other side of the first one — how a series moves when it is not falling. A metric earns its place by answering one of them; two cross-cutting pages explain how the answers are computed and how far they can be trusted. The two tables further down compare the four best-known of these metrics side by side and suggest when to reach for each.
 
 ### 📉 How Much Can It Hurt? {: #how-much-can-it-hurt }
 
 | Metric | What it answers |
 |--------|-----------------|
-| **[Max Drawdown](max-drawdown.md)** | The largest peak-to-trough decline before a new peak — the worst loss an investor would actually have lived through. |
+| **[Max Drawdown](max-drawdown.md)** | The largest peak-to-trough decline of the compounded return curve before a new peak — the worst fall an investor would actually have lived through. |
 | **[Current Drawdown](current-drawdown.md)** | How far below its own historical peak a portfolio stands right now, as opposed to the worst fall it ever suffered. |
 | **[Drawdown at Risk](drawdown-at-risk.md)** | Drawdown at Risk applies the quantile idea to drawdowns rather than to returns: it is the drawdown depth that should not be exceeded at a chosen confidence level. |
 | **[Conditional Drawdown at Risk](conditional-drawdown-at-risk.md)** | Conditional Drawdown at Risk averages the drawdowns that did breach the Drawdown at Risk threshold, answering how deep the fall goes once it goes past that point. |
@@ -22,6 +22,15 @@ Every page in this section exists to answer one of four questions. A metric earn
 | **[Worst Realization](worst-realization.md)** | The least favourable single-period return actually observed in the available history — an observed fact rather than an estimate. |
 
 *The first five read the **path** the portfolio actually took; the last three read the **distribution** of its returns. Shuffle the order of those returns and the last three are unchanged, while the first five can change completely.*
+
+### 📈 How Does It Move? {: #how-does-it-move }
+
+The positive twins of the measures above, read on the same days: the best moments of the period, and what an ordinary day looked like.
+
+| Metric | What it answers |
+|--------|-----------------|
+| **[The Shape of the Days](return-shape.md)** | The best day, the best 30 days and the largest rally; the share of positive days, the average up and down day and the longest positive streak; how far below its peak the series stood on average; how fat its tails are; and when each of these is blank. |
+| **[Gains Against Losses (Omega)](omega-ratio.md)** | For every euro lost below the risk-free rate, how many were gained above it — the headline of the block, read against 1×. |
 
 ### 🧩 Am I Diversified? {: #am-i-diversified }
 
@@ -88,7 +97,7 @@ Every page in this section exists to answer one of four questions. A metric earn
     - **Historical metrics ≠ future risk**: Past volatility may not predict future volatility
     - **Normal distribution assumption**: Sharpe and Sortino assume returns are roughly normal; financial returns have fat tails
     - **Lookback sensitivity**: Metrics change significantly depending on the time window
-    - **Benchmark dependency**: Sharpe and Sortino depend on the risk-free rate, which changes over time
+    - **Benchmark dependency**: Sharpe, Sortino, Omega and the semi-deviation depend on the risk-free rate, which changes over time while LibreFolio applies one fixed rate to the whole window — see [The Risk-Free Rate](sharpe-ratio.md#risk-free-rate)
 
 ---
 

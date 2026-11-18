@@ -212,6 +212,8 @@ const scatter = vi.hoisted(() => {
         /** The linked selection's chart half, as `ScatterChart` takes it. */
         selectedId?: string | null;
         onpointclick?: (pointId: string) => void;
+        /** Where the line of the risk-free rate starts, as an annual fraction. */
+        riskFreeRate?: number;
     }
     const mounts: {testId: string | undefined; labels: StandInProps['labels']; points: {id: string; role: string | undefined}[]; live: StandInProps}[] = [];
     function ScatterChartStandIn(anchor: ChildNode, props: StandInProps): void {
@@ -1041,6 +1043,16 @@ describe('AssetSetRiskReturnSection — the headers explain, they do not link', 
         expect(document.querySelectorAll('[data-testid^="risk-asset-set-l3-docs-"]'), 'no per-column documentation link').toHaveLength(0);
     });
 
+    // RN-21: Sharpe and Sortino are charged the reader's risk-free rate; their helps say «above the rate» when there is one.
+    it.each(['sharpe', 'sortino'] as const)('%s: with a rate, its help counts from it', async (column) => {
+        const charged = {...COMPARISON_WITH_RATIOS, metadata: {risk_free: {annual_rate: 0.025, source: 'analytic_param', currency: 'EUR'}}} as unknown as RiskAnalyticResult;
+        mountWith({...WITH_BENCHMARK, comparison: charged});
+
+        await fireEvent.click(screen.getByTestId(`dt-sort-${column}`));
+        const help = await screen.findByRole('tooltip');
+        expect(normalize(help.textContent)).toBe(normalize(get(_)(`${helpKey(column)}WithRate`)));
+    });
+
     it.each(VALUE_COLUMNS)('%s: its title reveals the help worded from its own columnHelp key', async (column) => {
         mountWith(WITH_BENCHMARK);
 
@@ -1236,6 +1248,15 @@ describe('AssetSetRiskReturnSection — a column sorts by the figure it draws', 
 });
 
 describe('AssetSetRiskReturnSection — the scatter', () => {
+    // RN-21: the line through the benchmark starts at the rate the answers were charged, not at 0 nor at the field.
+    it('starts the line at the rate the comparison was charged', () => {
+        const charged = {...COMPARISON, metadata: {risk_free: {annual_rate: 0.025, source: 'analytic_param', currency: 'EUR'}}} as unknown as RiskAnalyticResult;
+        mountWith({...WITH_BENCHMARK, comparison: charged});
+
+        const [mount] = scatterMounts();
+        expect(mount.live.riskFreeRate).toBe(0.025);
+    });
+
     it("labels its vertical axis with the lab's own key, risk.assetSet.levels.l3.axisReturn", () => {
         mountWith(MAIN);
 

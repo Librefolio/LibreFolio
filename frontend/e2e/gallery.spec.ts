@@ -3797,11 +3797,9 @@ test.describe('Gallery Screenshots', () => {
                     // The product offers the promote for the pair (promoteMatch)
                     const promoteBtn = page.getByTestId('toolbar-action-promote');
                     await expect(promoteBtn, `the product offers no promote for #${withdrawal.id} and #${deposit.id}`).toBeVisible({timeout: 5_000});
-                    // The shot has the promote button's tooltip over the dialog's title, as a user has it. The button sits in a
-                    // Tooltip, which pins its tooltip on a click (Tooltip.svelte, toggle) and closes a pinned one on a click
-                    // outside it — never one inside the dialog: ModalBase stops its clicks — or 30 s after the pointer left.
-                    // Real behaviour, so the shot keeps it, declared (pinnedTooltip), instead of faking a click to hide it; it is
-                    // on the designer's list. None on screen before the click, one after: the one in the shot is the promote's.
+                    // The page's selection bar is the floating one (DataTableToolbar, variant="floating", since 13/11): its buttons
+                    // carry a visible label, `title` and `aria-label`, and sit in no Tooltip, so a click pins none. None on screen
+                    // before the click, none after: nothing covers the dialog's title in the shot.
                     const tooltip = page.getByTestId('tooltip-content');
                     await expect(tooltip, 'no tooltip is on screen before the promote is clicked').toHaveCount(0);
                     await promoteBtn.click();
@@ -3809,11 +3807,9 @@ test.describe('Gallery Screenshots', () => {
                     // which also has data-testid="promote-merge-modal"
                     const mergeModal = page.locator('[data-testid="promote-merge-modal"][role="dialog"]');
                     await expect(mergeModal, 'the pair diverges, so the product asks to merge it').toBeVisible({timeout: 5_000});
-                    await expect(tooltip, "the click pinned the promote button's tooltip, and no other tooltip is on screen").toHaveCount(1);
+                    await expect(tooltip, 'the floating bar pins no tooltip on a click, and no other tooltip is on screen').toHaveCount(0);
                     await freezeAnimations(page);
-                    await screenshot(page, viewport, lang, theme, 'transactions', 'promote-merge-modal', {pinnedTooltip: true});
-                    // Nothing pins it again without a click: there now, so there in the picture.
-                    await expect(tooltip, 'the pinned tooltip has closed: it closes 30 s after the pointer leaves the button, so the shot may have been taken without it').toHaveCount(1);
+                    await screenshot(page, viewport, lang, theme, 'transactions', 'promote-merge-modal');
                     // Nothing is committed: the dialog is cancelled, and the next combination starts from a new load
                     await page.keyboard.press('Escape');
                 }
