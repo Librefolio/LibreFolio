@@ -118,16 +118,21 @@
         "loadError": "No se pudieron cargar los gastos enlazados",
         "missingAmount": "Introduce el importe de este gasto",
         "loading": "Cargando los gastos enlazados…",
-        "open": "Abrir"
+        "open": "Abrir",
+        "linkExisting": "Enlazar un gasto existente…"
       },
       "parent": {
         "title": "Enlazada a",
         "unlink": "Desenlazar",
         "unlinked": "Desenlazada: al guardar será una transacción independiente",
         "loadError": "No se pudo cargar la transacción enlazada",
-        "loading": "Cargando la transacción enlazada…"
+        "loading": "Cargando la transacción enlazada…",
+        "link": "Enlazar a una transacción…",
+        "pending": "Se enlazará al guardar",
+        "undo": "Deshacer"
       },
-      "openFailed": "No se pudo abrir la transacción"
+      "openFailed": "No se pudo abrir la transacción",
+      "candidatesFailed": "No se pudieron cargar las transacciones para enlazar"
     },
     "bulk": {
       "resetRow": "Restablecer fila",
@@ -369,7 +374,16 @@
       "pairedNote": "Al seleccionar una transacción vinculada se agrega automáticamente su par.",
       "requiredRole": "requerido",
       "addN": "Agregar {n}",
-      "searchAdd": "Buscar y agregar"
+      "searchAdd": "Buscar y agregar",
+      "chargesTitle": "Elige los gastos que enlazar",
+      "chargesFilterShort": "Gastos sin enlazar",
+      "chargesFilterLong": "Gastos sin enlazar · {broker} · {asset}",
+      "parentTitle": "Elige la transacción a la que enlazar este gasto",
+      "parentFilterShort": "Transacciones enlazables",
+      "parentFilterLong": "Transacciones enlazables · {broker} · {asset}",
+      "linkN": "Enlazar {n} seleccionadas",
+      "link": "Enlazar",
+      "noAsset": "sin activo"
     },
     "access": {
       "partnerNotAccessible": "La transacción vinculada está en un bróker al cual el usuario no tiene acceso."

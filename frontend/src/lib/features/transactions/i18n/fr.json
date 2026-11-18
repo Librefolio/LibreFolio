@@ -118,16 +118,21 @@
         "loadError": "Les frais liés n'ont pas pu être chargés",
         "missingAmount": "Saisissez le montant de ce frais",
         "loading": "Chargement des frais liés…",
-        "open": "Ouvrir"
+        "open": "Ouvrir",
+        "linkExisting": "Lier un frais existant…"
       },
       "parent": {
         "title": "Liée à",
         "unlink": "Délier",
         "unlinked": "Déliée : à l'enregistrement, ce sera une transaction à part",
         "loadError": "La transaction liée n'a pas pu être chargée",
-        "loading": "Chargement de la transaction liée…"
+        "loading": "Chargement de la transaction liée…",
+        "link": "Lier à une transaction…",
+        "pending": "Sera liée à l'enregistrement",
+        "undo": "Annuler"
       },
-      "openFailed": "La transaction n'a pas pu être ouverte"
+      "openFailed": "La transaction n'a pas pu être ouverte",
+      "candidatesFailed": "Les transactions à lier n'ont pas pu être chargées"
     },
     "bulk": {
       "resetRow": "Réinitialiser la ligne",
@@ -369,7 +374,16 @@
       "pairedNote": "La sélection d'une transaction liée ajoute automatiquement son partenaire.",
       "requiredRole": "requis",
       "addN": "Ajouter {n}",
-      "searchAdd": "Chercher et ajouter"
+      "searchAdd": "Chercher et ajouter",
+      "chargesTitle": "Choisissez les frais à lier",
+      "chargesFilterShort": "Frais non liés",
+      "chargesFilterLong": "Frais non liés · {broker} · {asset}",
+      "parentTitle": "Choisissez la transaction à laquelle lier ce frais",
+      "parentFilterShort": "Transactions liables",
+      "parentFilterLong": "Transactions liables · {broker} · {asset}",
+      "linkN": "Lier {n} sélectionnées",
+      "link": "Lier",
+      "noAsset": "sans actif"
     },
     "access": {
       "partnerNotAccessible": "La transaction liée est sur un courtier auquel l'utilisateur n'a pas accès."

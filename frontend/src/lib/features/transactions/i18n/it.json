@@ -118,16 +118,21 @@
         "loadError": "Non è stato possibile caricare le spese collegate",
         "missingAmount": "Inserisci l'importo di questa spesa",
         "loading": "Caricamento delle spese collegate…",
-        "open": "Apri"
+        "open": "Apri",
+        "linkExisting": "Collega una spesa esistente…"
       },
       "parent": {
         "title": "Collegamento",
         "unlink": "Scollega",
         "unlinked": "Scollegata: al salvataggio sarà una transazione a sé",
         "loadError": "Non è stato possibile caricare la transazione collegata",
-        "loading": "Caricamento della transazione collegata…"
+        "loading": "Caricamento della transazione collegata…",
+        "link": "Collega a una transazione…",
+        "pending": "Sarà collegata al salvataggio",
+        "undo": "Annulla"
       },
-      "openFailed": "Non è stato possibile aprire la transazione"
+      "openFailed": "Non è stato possibile aprire la transazione",
+      "candidatesFailed": "Non è stato possibile caricare le transazioni da collegare"
     },
     "bulk": {
       "resetRow": "Reimposta riga",
@@ -369,7 +374,16 @@
       "pairedNote": "Selezionando una transazione collegata, il partner viene aggiunto automaticamente.",
       "requiredRole": "richiesto",
       "addN": "Aggiungi {n}",
-      "searchAdd": "Cerca e aggiungi"
+      "searchAdd": "Cerca e aggiungi",
+      "chargesTitle": "Scegli le spese da collegare",
+      "chargesFilterShort": "Spese non collegate",
+      "chargesFilterLong": "Spese non collegate · {broker} · {asset}",
+      "parentTitle": "Scegli la transazione a cui collegare la spesa",
+      "parentFilterShort": "Transazioni collegabili",
+      "parentFilterLong": "Transazioni collegabili · {broker} · {asset}",
+      "linkN": "Collega {n} selezionate",
+      "link": "Collega",
+      "noAsset": "senza asset"
     },
     "access": {
       "partnerNotAccessible": "La transazione collegata è su un broker al quale l'utente non ha accesso."

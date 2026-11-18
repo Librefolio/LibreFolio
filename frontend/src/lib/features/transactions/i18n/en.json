@@ -118,16 +118,21 @@
         "loadError": "The linked charges could not be loaded",
         "missingAmount": "Enter the amount of this charge",
         "loading": "Loading the linked charges…",
-        "open": "Open"
+        "open": "Open",
+        "linkExisting": "Link an existing charge…"
       },
       "parent": {
         "title": "Linked to",
         "unlink": "Unlink",
         "unlinked": "Unlinked: it will be a transaction of its own when saved",
         "loadError": "The linked transaction could not be loaded",
-        "loading": "Loading the linked transaction…"
+        "loading": "Loading the linked transaction…",
+        "link": "Link to a transaction…",
+        "pending": "Will be linked when saved",
+        "undo": "Undo"
       },
-      "openFailed": "The transaction could not be opened"
+      "openFailed": "The transaction could not be opened",
+      "candidatesFailed": "The transactions to link could not be loaded"
     },
     "bulk": {
       "resetRow": "Reset row",
@@ -369,7 +374,16 @@
       "pairedNote": "Selecting a paired transaction auto-adds its partner.",
       "requiredRole": "required",
       "addN": "Add {n}",
-      "searchAdd": "Search & add"
+      "searchAdd": "Search & add",
+      "chargesTitle": "Choose the charges to link",
+      "chargesFilterShort": "Unlinked charges",
+      "chargesFilterLong": "Unlinked charges · {broker} · {asset}",
+      "parentTitle": "Choose the transaction to link this charge to",
+      "parentFilterShort": "Linkable transactions",
+      "parentFilterLong": "Linkable transactions · {broker} · {asset}",
+      "linkN": "Link {n} selected",
+      "link": "Link",
+      "noAsset": "no asset"
     },
     "access": {
       "partnerNotAccessible": "The linked transaction is on a broker the user cannot access."
