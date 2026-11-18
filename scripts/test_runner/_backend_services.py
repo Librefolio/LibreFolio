@@ -557,6 +557,14 @@ def services_coingecko_prices(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "CoinGecko prices tests", verbose=verbose)
 
 
+def services_provider_attribution(verbose: bool = False, test_names: list = None) -> bool:
+    """Test a provider's attribution line, CoinGecko's «Powered by CoinGecko» (project 76, P4)."""
+    print_section("Services: Provider Attribution")
+    print_info("Testing: schemas/provider.py (FAProviderAttribution, FAProviderInfo.attribution), assets/base.py, coingecko/plugin.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_attribution.py", test_names)
+    return run_command(cmd, "Provider attribution tests", verbose=verbose)
+
+
 def services_coingecko_search(verbose: bool = False, test_names: list = None) -> bool:
     """Test the CoinGecko provider's search, metadata and page, and the PROVIDER_ID input type (project 76, P3)."""
     print_section("Services: CoinGecko Search")
@@ -3152,6 +3160,15 @@ Note: No backend server required.
         desc="P2: /simple/price with precision=full, the value read as a decimal from the text, the UTC day of last_updated_at, unknown id NOT_FOUND, missing currency NO_DATA; in bulk one request for every item, each under its key, a 429 refuses the whole call; the history from market_chart/range (interval daily): the 00:00 UTC point of D is the close of D-1, a point not at midnight and a day outside the range dropped; the Demo plan's year moves an earlier start; the refresh interval from its setting",
         # PURE: the real coingecko-sdk on an httpx.MockTransport (the P0 recordings), a test's «today»; no database, no
         # server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "provider-attribution",
+        services_provider_attribution,
+        name="Provider Attribution",
+        desc="P4: FAProviderAttribution is a short text and an https link, anything else refused; the base provider has none, CoinGecko's is Powered by CoinGecko linked to its site; every registered provider has none or a valid one; FAProviderInfo carries it, none by default",
+        # PURE: the schemas and the registered plugins' constants; no database, no server, no network.
         isolation="pure",
     )
     add_test(
