@@ -758,7 +758,7 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
     def accepted_identifier_types(self) -> list[ProviderInputType]:  # pragma: no cover
         """
         Input types accepted by this provider (for frontend identifier type dropdown).
-        Uses ProviderInputType (TICKER, ISIN, URL, AUTO_GENERATED), NOT IdentifierType.
+        Uses ProviderInputType (TICKER, ISIN, URL, AUTO_GENERATED, PROVIDER_ID), NOT IdentifierType.
         Default: [TICKER, ISIN].
         """
         return [ProviderInputType.TICKER, ProviderInputType.ISIN]
@@ -777,6 +777,8 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
             ProviderInputType.ISIN.value: IdentifierType.ISIN,
             ProviderInputType.URL.value: IdentifierType.OTHER,
             ProviderInputType.AUTO_GENERATED.value: IdentifierType.UUID,
+            # The provider's own code (CoinGecko's «bitcoin»): no official identifier, so OTHER (project 76, P3)
+            ProviderInputType.PROVIDER_ID.value: IdentifierType.OTHER,
         }
         if input_type in mapping:
             return mapping[input_type]
@@ -794,6 +796,7 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
         Used when auto-populating asset identifier columns from provider data.
         Returns None if no matching ProviderInputType exists (e.g., CUSIP, SEDOL, FIGI
         have no provider equivalent — they are asset-record-only identifiers).
+        OTHER stays URL: PROVIDER_ID maps to OTHER too, but a client that sends OTHER has always meant a URL.
         """
         mapping = {
             IdentifierType.TICKER.value: ProviderInputType.TICKER,

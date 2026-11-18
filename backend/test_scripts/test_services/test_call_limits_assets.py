@@ -100,7 +100,7 @@ BASE_PAUSE = 60.0
 SCOPE = "api.u2.example"
 #: The test-only asset double that counts its calls (U4, for the limit's API and E2E tests): left out of the flags pin below
 COUNTING_DOUBLE = "mockcount"
-SHIPPED_FLAGS = {"yfinance": True, "justetf": True, "borsa_italiana": True, "css_scraper": True, "scheduled_investment": False, "mockprov": False}
+SHIPPED_FLAGS = {"yfinance": True, "justetf": True, "borsa_italiana": True, "css_scraper": True, "coingecko": True, "scheduled_investment": False, "mockprov": False}
 
 
 class FakeClock:

@@ -244,7 +244,13 @@
       "userUrl": "URL de Usuario",
       "providerUrl": "URL del Proveedor",
       "identifier": "Identificador",
-      "identifierType": "Tipo de Identificador"
+      "identifierType": "Tipo de Identificador",
+      "inputType": {
+        "PROVIDER_ID": "ID del proveedor"
+      },
+      "inputTypePlaceholder": {
+        "PROVIDER_ID": "p. ej. bitcoin"
+      }
     },
     "schedule": {
       "title": "Calendario de intereses",
@@ -533,6 +539,9 @@
     "PROVIDER_ERROR": "El proveedor falló: {detail}",
     "PROBE_RATE_LIMITED": "Demasiadas comprobaciones: inténtalo a las {time}",
     "PROBE_RATE_LIMITED_DAY": "Demasiadas comprobaciones: inténtalo el {time}",
-    "PROBE_RATE_LIMITED_NO_TIME": "Demasiadas comprobaciones: inténtalo en un minuto"
+    "PROBE_RATE_LIMITED_NO_TIME": "Demasiadas comprobaciones: inténtalo en un minuto",
+    "PLAN_REQUIRED": "Esta solicitud necesita un plan de pago del proveedor.",
+    "WRONG_PLAN": "La clave del proveedor no coincide con el plan elegido (Demo o Pro): revisa el plan en Ajustes › Plugins.",
+    "INVALID_API_KEY": "El proveedor rechazó la clave API: revísala en Ajustes › Plugins."
   }
 }

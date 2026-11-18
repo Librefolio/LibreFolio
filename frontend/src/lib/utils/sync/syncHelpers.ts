@@ -30,6 +30,8 @@ export interface AssetCreateSyncResult {
     inserted_count?: number;
     updated_count?: number;
     errors?: string[];
+    /** The first day the source has prices for, when the range asked started earlier (project 76, P2b). */
+    history_starts?: string | null;
 }
 
 export interface SyncResult {
@@ -49,6 +51,9 @@ export interface SyncResult {
     // Corporate events:
     events_fetched?: number;
     events_changed?: number;
+    /** The first day the source has prices for (`YYYY-MM-DD`), when the range asked started earlier: the days before
+     * are imported by hand (project 76, P2b). Absent otherwise. */
+    history_starts?: string | null;
 }
 
 // =========================================================================

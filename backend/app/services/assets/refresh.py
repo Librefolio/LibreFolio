@@ -95,6 +95,8 @@ class _FetchedRefreshData:
     #: The day of a current value dated before today that the round's history did not have (project 76, C3b): written
     #: only if the database has no price for that day either, since a current value never replaces a past day's close
     quote_only_if_missing: date_type | None = None
+    #: The first day the source has prices for, when the range asked started before it (project 76, P2b)
+    history_starts: date_type | None = None
 
 
 async def _prepare_refresh_items(  # noqa: C901 — per-item validation maps each rejection to a typed result
@@ -256,6 +258,7 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
             async with semaphore:
                 prices_data = []
                 events_data = []
+                history_starts: date_type | None = None
                 today = date_type.today()
 
                 # Cache key for this provider+identifier combo.
@@ -337,6 +340,10 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                                             continue
                                         cached_dates[d_iso] = p
                                     logger.debug(f"Fetched {len(fetched_points)} historical prices for asset {asset_id}")
+                                # P2b: the source has no price before this day, and the range asked starts earlier
+                                first_day = hist_data.history_starts if hist_data else None
+                                if first_day is not None and (start == "min" or start < first_day):
+                                    history_starts = first_day
                                 if hist_data and hist_data.events:
                                     events_data = [e.model_dump() for e in hist_data.events]
                                     logger.debug(f"Fetched {len(events_data)} events for asset {asset_id}")
@@ -400,7 +407,10 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                         logger.warning(f"Current value fetch failed for asset {asset_id}: {curr_e}")
 
                 if not prices_data:
-                    return None, (refusal.message if refusal is not None else (refused_note or "No price data available from provider")), refusal
+                    # P2b: a range wholly before the source's first day brings nothing, and that day is what the user
+                    # needs: it travels with the error, which the persist step reports first
+                    starts_only = _FetchedRefreshData(prices=[], source=provider_code, events=[], history_starts=history_starts) if history_starts is not None else None
+                    return starts_only, (refusal.message if refusal is not None else (refused_note or "No price data available from provider")), refusal
 
                 return (
                     _FetchedRefreshData(
@@ -409,6 +419,7 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                         events=events_data,
                         notes=(refused_note,) if refused_note else (),
                         quote_only_if_missing=quote_only_if_missing,
+                        history_starts=history_starts,
                     ),
                     None,
                     refusal,
@@ -531,6 +542,7 @@ async def _persist_refresh_item(  # noqa: C901 — sequential guarded persist st
             provider_used=provider_code,
             errors=[fetch_error],
             elapsed_ms=elapsed_ms,
+            history_starts=remote_data.history_starts if remote_data is not None else None,
         )
 
     if not remote_data:
@@ -760,6 +772,7 @@ async def _persist_refresh_item(  # noqa: C901 — sequential guarded persist st
         message=message,
         errors=errors,
         elapsed_ms=elapsed_ms,
+        history_starts=remote_data.history_starts if remote_data is not None else None,
         # I-bis #24 — delta payload (None when empty OR above cap).
         changed_points=(changed_items_delta if changed_items_delta and len(changed_items_delta) <= CHANGED_POINTS_PAYLOAD_CAP else None),
     )

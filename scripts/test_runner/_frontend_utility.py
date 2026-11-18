@@ -174,6 +174,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/assets/bulk/assetBulkVerify.test.ts",
             "src/lib/features/assets/assetPayload.test.ts",
             "src/lib/features/assets/assetSearchSelection.test.ts",
+            "src/lib/features/assets/providerInputTypes.test.ts",
             "src/lib/features/assets/assetSearchSections.test.ts",
             "src/lib/features/assets/assetSearchReport.test.ts",
             "src/lib/features/assets/assetDataSaveSummary.test.ts",

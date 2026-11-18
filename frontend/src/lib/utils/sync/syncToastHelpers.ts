@@ -11,6 +11,7 @@
  */
 
 import {fxPairHtml, fxProviderBadgeHtml, parseProviderChain, type FxPairHtmlOptions} from '$lib/utils/providerHelpers';
+import {formatDay} from '$lib/utils/core/formatAxisDate';
 
 // Inline SVG icons (from Lucide) — small enough to embed in toast HTML strings
 const ICON_STYLE = 'display:inline-block;vertical-align:middle;margin-right:4px;width:14px;height:14px';
@@ -53,7 +54,31 @@ export interface SyncToastResult {
  * @param tr - Translation function (from get(t)). Required for i18n suffixes.
  * @returns Toast variant and HTML message
  */
-export function buildAssetSyncToast(result: any, label: string, tr: (key: string, opts?: any) => string): SyncToastResult {
+/**
+ * The line that says from which day the source has prices, when the range asked started earlier (project 76, P2b): the
+ * days before are imported by hand. Empty when the outcome carries no such day. It is no error, so it never changes the
+ * toast's variant.
+ */
+export function historyStartsNote(result: {history_starts?: string | null} | null | undefined, tr: (key: string, opts?: any) => string): string {
+    const day = result?.history_starts;
+    return day ? tr('prices.sync.historyStarts', {values: {date: formatDay(day)}}) : '';
+}
+
+/**
+ * The one line of a sync of many assets (the consultant, 18/11): how many of them come from a source with prices only
+ * from a later day, instead of one long line in each asset's toast. Empty when none does.
+ */
+export function historyStartsSummary(results: readonly {history_starts?: string | null}[], tr: (key: string, opts?: any) => string): string {
+    const count = results.filter((result) => !!result?.history_starts).length;
+    return count > 0 ? tr('prices.sync.historyStartsMany', {values: {count}}) : '';
+}
+
+/** Options of `buildAssetSyncToast`. `historyNote: false`: the caller sums the first-day lines of many assets up. */
+export interface AssetSyncToastOptions {
+    historyNote?: boolean;
+}
+
+export function buildAssetSyncToast(result: any, label: string, tr: (key: string, opts?: any) => string, options: AssetSyncToastOptions = {}): SyncToastResult {
     if (!result) {
         return {variant: 'error', message: `${label} — ${tr('prices.sync.noResponse')}`};
     }
@@ -65,23 +90,25 @@ export function buildAssetSyncToast(result: any, label: string, tr: (key: string
 
     const priceLine = `${dollarSignSvg} ${fetched}↓ ${changed}Δ`;
     const eventLine = evtFetched > 0 ? `\n${calendarClockSvg} ${evtFetched}↓ ${evtChanged}Δ` : '';
+    const note = options.historyNote === false ? '' : historyStartsNote(result, tr);
+    const historyLine = note ? `\n${note}` : '';
 
     if (result.status === 'ok') {
         // I-bis #1 — surface "ok but zero changes" as a warning so the user doesn't
         // miss silent failures (e.g. provider returned rows in wrong currency and the
         // backend dropped them all).
         if (changed === 0 && evtChanged === 0) {
-            return {variant: 'warning', message: `${label}:\n${priceLine}${eventLine}\n${tr('prices.sync.noChanges')}`};
+            return {variant: 'warning', message: `${label}:\n${priceLine}${eventLine}\n${tr('prices.sync.noChanges')}${historyLine}`};
         }
-        return {variant: 'success', message: `${label}:\n${priceLine}${eventLine}`};
+        return {variant: 'success', message: `${label}:\n${priceLine}${eventLine}${historyLine}`};
     } else if (result.status === 'partial') {
         // I-bis #23 — append provider message when present (e.g. "Current value only, history unavailable")
         const detail = result.message ? `\n${result.message}` : '';
-        return {variant: 'warning', message: `${label} (${tr('prices.sync.partialSuffix')}):\n${priceLine}${eventLine}${detail}`};
+        return {variant: 'warning', message: `${label} (${tr('prices.sync.partialSuffix')}):\n${priceLine}${eventLine}${detail}${historyLine}`};
     } else if (result.status === 'skipped') {
         return {variant: 'info', message: `${label} — ${tr('prices.sync.skippedSuffix')}`};
     } else {
-        return {variant: 'error', message: `${label} — ${result.message || tr('prices.sync.failedDefault')}`};
+        return {variant: 'error', message: `${label} — ${result.message || tr('prices.sync.failedDefault')}${historyLine}`};
     }
 }
 
