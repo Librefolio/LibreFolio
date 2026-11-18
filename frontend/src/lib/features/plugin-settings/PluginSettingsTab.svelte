@@ -25,6 +25,8 @@
      * plugin can bring into view. A group the tab does not list (a test-only one) is named, with no button. */
     const groupNames = $derived(Object.fromEntries(entries.filter((entry) => entry.family === 'group').map((entry) => [entry.plugin_code, entryTitle(entry, $_)])));
     const listedGroups = $derived(Object.keys(groupNames));
+    /** The listed groups that own a call count (project 76, U5): a plugin that reads one says its calls count there. */
+    const countGroups = $derived(entries.filter((entry) => entry.family === 'group' && entry.call_usage !== undefined).map((entry) => entry.plugin_code));
 
     /** Bring a shared group's form into view, and the focus to its heading. */
     function openGroup(name: string): void {
@@ -108,7 +110,7 @@
                             <PluginSettingsForm {entry} onsaved={groupSaved} />
                         </div>
                     {:else}
-                        <PluginSettingsForm {entry} {groupNames} onopengroup={openGroup} onsaved={replace} openableGroups={listedGroups} />
+                        <PluginSettingsForm {countGroups} {entry} {groupNames} onopengroup={openGroup} onsaved={replace} openableGroups={listedGroups} />
                     {/if}
                 {/each}
             </section>
