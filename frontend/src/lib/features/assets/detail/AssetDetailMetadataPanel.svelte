@@ -13,6 +13,7 @@
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import type {ProviderAssignmentFlat} from '$lib/types';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
+    import {providerInputTypeLabel} from '../providerInputTypes';
 
     interface Props {
         /** The panel is unfolded; kept by the page, so it survives a tab switch and a change of asset. */
@@ -124,7 +125,7 @@
                             {assignmentProviderName}
                         </span>
                         <span class="text-lf-muted">→</span>
-                        <span class="font-mono text-lf-muted">{providerAssignment.identifier} ({providerAssignment.identifier_type})</span>
+                        <span class="font-mono text-lf-muted">{providerAssignment.identifier} ({providerInputTypeLabel(String(providerAssignment.identifier_type), $t)})</span>
                         {#if providerAssignment.last_fetch_at}
                             <span class="text-xs text-lf-muted">
                                 {$t('assets.provider.lastFetch')}: {new Date(String(providerAssignment.last_fetch_at)).toLocaleDateString(uiLocale())}
