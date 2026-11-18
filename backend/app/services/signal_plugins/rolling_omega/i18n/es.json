@@ -1,0 +1,11 @@
+{
+  "signals": {
+    "riskRollingOmega": {
+      "name": "Ganancias / pérdidas móviles (Omega)",
+      "description": "En una ventana móvil, las ganancias por encima del objetivo divididas por las pérdidas por debajo: por encima de 1 la ventana ganó más de lo que perdió.",
+      "output": "Omega",
+      "outputDescription": "Suma de los rendimientos por encima del objetivo dividida por la suma de los déficits por debajo.",
+      "referenceEven": "Ganancias = pérdidas"
+    }
+  }
+}

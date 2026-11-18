@@ -16,7 +16,9 @@
  *
  * Nothing is computed here beyond reading what the backend stores: an asset
  * without a usable distribution maps to `null`, and a failed read yields empty
- * maps — the matrix then simply offers fewer orderings.
+ * maps. The factory also publishes the read's `status` (RN-20): the matrix offers
+ * its five orderings always, and an ordering it cannot use says why — still
+ * reading, the read failed, or no asset has the data — so the reason is true.
  */
 import {zodiosApi} from '$lib/api';
 import {normalizeDistribution, type Distribution} from '$lib/features/assets/assetPayload';
@@ -31,6 +33,9 @@ export interface MatrixMetadata {
 }
 
 export const EMPTY_MATRIX_METADATA: MatrixMetadata = {types: new Map(), sectors: new Map(), regions: new Map()};
+
+/** Where the read stands: in flight, failed (the maps are empty), or answered — the maps hold what the backend stores. */
+export type MatrixMetadataStatus = 'loading' | 'ready' | 'failed';
 
 /**
  * One row of the bulk metadata read, as this module reads it. The generated
@@ -99,6 +104,7 @@ export async function loadMatrixMetadata(assetIds: readonly number[], language: 
  */
 export function createMatrixMetadata(inputs: () => {assetIds: readonly number[]; language: string}) {
     let metadata = $state<MatrixMetadata>(EMPTY_MATRIX_METADATA);
+    let status = $state<MatrixMetadataStatus>('ready');
     let request = 0;
     const idsKey = $derived(assetIdsKey(inputs().assetIds));
     const language = $derived(inputs().language);
@@ -109,16 +115,20 @@ export function createMatrixMetadata(inputs: () => {assetIds: readonly number[];
         const current = ++request;
         if (ids.length === 0) {
             metadata = EMPTY_MATRIX_METADATA;
+            status = 'ready';
             return;
         }
+        status = 'loading';
         void (async () => {
             try {
                 const next = await loadMatrixMetadata(ids, lang);
                 if (current !== request) return;
                 metadata = next;
+                status = 'ready';
             } catch {
                 if (current !== request) return;
                 metadata = EMPTY_MATRIX_METADATA;
+                status = 'failed';
             }
         })();
     });
@@ -132,6 +142,9 @@ export function createMatrixMetadata(inputs: () => {assetIds: readonly number[];
         },
         get regions() {
             return metadata.regions;
+        },
+        get status() {
+            return status;
         },
     };
 }

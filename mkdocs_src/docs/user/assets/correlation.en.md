@@ -7,6 +7,7 @@ Each block below follows one pattern: what it answers, a screenshot, its tools a
 - 🧺 **[Building the Selection](#building-the-selection)** — which assets are compared
 - 🕸️ **[Correlation](#correlation)** — which of them move together
 - 📉 **[How Much Did Each of These Hurt?](#how-much-did-each-hurt)** — the losses of each one
+- 📈 **[How Did Each One Move?](#how-did-each-move)** — the best moments of each one, and what its days were like
 - ⚖️ **[What Did Each of These Pay for Its Risk?](#what-did-each-pay)** — risk against return
 - ⏮️ **[What If…?](#what-if)** — a past episode, replayed
 - 🚩 **[Notices and Missing Data](#each-section-speaks-for-itself)** — what the data lacked
@@ -39,7 +40,7 @@ The card at the top answers *which assets are compared?* Each chip is one select
 This section answers *which of these move together?* — to spot the assets that are really the same bet, and any that cushion the others.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="risk" data-name="lab-correlation" alt="The Correlation section with five assets: the triangular matrix with its legend, order buttons and sector and region badges; The most alike pairs RE Loan Roma with RE Loan Milano at 0.94, near-identical, and The ones that offset is empty" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="risk" data-name="lab-correlation" alt="The Correlation section with five assets: the triangular matrix with its legend, the five order buttons and the type, sector and region badges; The most alike pairs RE Loan Roma with RE Loan Milano at 0.94, near-identical, and The ones that offset is empty" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 **Tools shown**
@@ -52,7 +53,8 @@ This section answers *which of these move together?* — to spot the assets that
 - **One square per pair**: blue when the two assets move together, red when they move in opposite directions, grey when they move independently. Hover or tap it for the value in words.
 - **Start from the two lists**: **The most alike** names the pairs that are almost the same exposure, **The ones that offset** the pairs that cushion each other. An empty list is a finding. Click a pair to find it in the matrix.
 - **A dash is not a zero**: the pair could not be measured — too little history, or a price that never moved.
-- **The order buttons** rearrange the matrix; they never change a value.
+- **The order buttons** rearrange the matrix; they never change a value. All five are always there — by similarity, type, sector, region and name; one the selection has no data for is greyed out, and tapping it says why: no type, sector or region known for these assets, or their details still loading or not loaded — reload the page to try again.
+- **Above the matrix**, one row of badges per type, sector and region tells what the selection holds, each group with how many assets it covers.
 
 ---
 
@@ -77,6 +79,41 @@ This section puts every asset on the same scale of harm: its worst losses in the
 - **Each column is its own horizon**, from a day to the whole period: compare the assets down a column, never add the columns up.
 - **Not a ranking**: the table opens in your selection's order. Click a column title to sort it, or hover it for what it measures.
 - **On a short period**, **Bad day** and **Bad month** can stay empty while the drawdown columns are filled: they need more history.
+
+---
+
+## 📈 How Did Each One Move? {: #how-did-each-move }
+
+This section is the other side of the one above: for each selected asset, its best moments over the period and what its days were like.
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="risk" data-name="lab-move-table" alt="The How did each one move? table: one row per asset with Best day, Best 30 days and Largest rally with their dates, Gains / losses, Positive days and Semi-dev." style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+
+**Tools shown**
+
+- **Best day** — the best single day of the period, with its date under the figure
+- **Best 30 days** — the best 30 days the asset really went through, from one day to another, with the dates: the twin of **Bad month**, read on the same overlapping one-month stretches. It can be negative: an asset that only fell still has a best stretch
+- **Largest rally** — the largest rise from a low to a later high, with its dates and how long it lasted: the twin of **Worst fall**
+- **Gains / losses** — for every euro lost on the bad days, how many were gained on the good ones: *1.22×* means 1.22 gained for every 1 lost. A bad day is one below the Sortino's target, which on this page is 0
+- **Positive days** — the share of the days with a gain; a day at exactly zero does not count
+- **Semi-dev.** — the semi-deviation: how much the asset swings on the way down, on a yearly basis, in the same unit as the volatility → [Downside Deviation](../../financial-theory/technical-analysis/risk-metrics/sortino-ratio.md#downside-deviation)
+
+Four more columns are hidden at first: open the column toggle in the section's header, beside the manual icon, to show them.
+
+- **Average day ±** — the average up day and the average down day
+- **Positive streak** — the longest run of days in a row with a gain, with its dates
+- **Below peak, avg.** — how far below its highest level the asset stood on an average day of the period: the whole time spent under a peak, not only the worst fall. An asset that never fell shows 0.0%
+- **Extreme days** — how much more often very large days, up or down, came than a bell curve would give: *1×* is the bell curve, *2.4×* means fatter tails
+
+**How to read it**
+
+- **Compare the assets down a column**, never add the columns up: a day, 30 days and the whole period are different horizons.
+- **Not a ranking**: the table opens in your selection's order. Click a column title to sort it, or hover it for what it measures.
+- **A dash says why.** Hover or tap it: an asset that never gained in the period has no best day, no average up day and no streak; one with no losing day has no average down day and no **Gains / losses**; one whose price never moved has no **Extreme days**.
+- **An asset that never rose** shows **0.0%** under **Largest rally**, with no dates: a measured zero, not a missing figure.
+- **On a short period**, **Largest rally** and **Below peak, avg.** can be the only figures filled: the other columns need more history.
+- **Same days as the table above.** Every figure is measured over the same period as *How much did each of these hurt?*, and choosing a benchmark under *Compared with* never changes this table.
 
 ---
 

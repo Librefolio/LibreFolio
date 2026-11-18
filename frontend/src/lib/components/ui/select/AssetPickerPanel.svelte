@@ -20,12 +20,16 @@
   current value is never dropped: the trigger shows it whatever its verdict or the filters, and the
   list marks it current, in the blocked section if it is ineligible.
 
+  Single mode may carry one action of the caller's at the foot of the list (`createLabel` with
+  `onCreateNew`, `AssetSelect`'s pair): the transaction form's «New asset» (RN-12). Without both,
+  nothing is drawn.
+
   The panel keeps the caller's order (`assetSelectOrder` is `AssetSelect`'s, for a caller that wants
   it). Its own test ids all start with `testId`, so two pickers on a page never share one.
 -->
 <script lang="ts">
     import {untrack, type Snippet} from 'svelte';
-    import {AlertTriangle, Check, ChevronDown, Coins, Layers, Lock, Search, X} from 'lucide-svelte';
+    import {AlertTriangle, Check, ChevronDown, Coins, Layers, Lock, Plus, Search, X} from 'lucide-svelte';
 
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
@@ -67,7 +71,7 @@
         value?: number | null;
         /** Single: a new choice. */
         onchange?: (assetId: number) => void;
-        /** Single: titled groups, as `AssetSelect` has them. */
+        /** Single: titled groups, ahead of the panel's own (who holds the asset). */
         sections?: readonly PickerSection[];
         /** Single: title of the assets no section claimed, shown only under a titled section. */
         restLabel?: string;
@@ -77,6 +81,10 @@
         /** Single: the dropdown's side and minimum width, as `SearchSelect`'s. */
         dropdownPosition?: 'top' | 'bottom' | 'auto';
         dropdownMinWidth?: number;
+        /** Single: the label of an action at the foot of the list, as `AssetSelect`'s «New asset». Drawn only with `onCreateNew`. */
+        createLabel?: string;
+        /** Single: the foot action, pressed. The list closes first; nothing is chosen. */
+        onCreateNew?: () => void;
     }
 
     let {
@@ -100,6 +108,8 @@
         disabled = false,
         dropdownPosition = 'auto',
         dropdownMinWidth = 280,
+        createLabel = '',
+        onCreateNew,
     }: Props = $props();
 
     let open = $state(false);
@@ -115,6 +125,28 @@
     let triggerFocusedAt = 0;
     /** When the dropdown last closed: a touch's late click must not open it again. */
     let lastClosedAt = 0;
+    /** Pointer type of the last press inside the single picker; a key press inside it clears it (as `SearchSelect`). */
+    let lastPointerType = '';
+    /** Whether the last close came from a touch or pen press: the only close a ghost click can follow. */
+    let closedByTouch = false;
+    let singleRoot = $state<HTMLDivElement>();
+
+    $effect(() => {
+        const root = singleRoot;
+        if (!root) return;
+        const onPointerDown = (event: PointerEvent) => {
+            lastPointerType = event.pointerType ?? '';
+        };
+        const onKeyDown = () => {
+            lastPointerType = '';
+        };
+        root.addEventListener('pointerdown', onPointerDown, true);
+        root.addEventListener('keydown', onKeyDown, true);
+        return () => {
+            root.removeEventListener('pointerdown', onPointerDown, true);
+            root.removeEventListener('keydown', onKeyDown, true);
+        };
+    });
 
     const listboxId = `asset-picker-listbox-${Math.random().toString(36).substring(2, 9)}`;
 
@@ -248,7 +280,7 @@
         })),
     );
 
-    /** `AssetSelect`'s sections: each asset joins the first section that takes it; empty sections print no title; the rest is titled only under a titled section. */
+    /** The sections, as `AssetSelect` had them: each asset joins the first section that takes it; empty sections print no title; the rest is titled only under a titled section. */
     function sectioned(options: SelectOption[]): SelectOption[] {
         const all = [...(sections ?? []), ...scopeSections];
         if (!options.some((option) => !option.header && all.some((section) => section.match(assetOf(option))))) return options;
@@ -288,15 +320,22 @@
 
     function openSingle(): void {
         if (disabled) return;
-        // A touch's late click right after a close must not reopen it.
-        if (Date.now() - lastClosedAt < 200) return;
+        // A touch's late click right after a close must not reopen it; a mouse or keyboard close never blocks the
+        // next opening, as in `SearchSelect` (a form picks one asset after another at once).
+        if (closedByTouch && Date.now() - lastClosedAt < 200) return;
         open = true;
     }
 
     function closeSingle(): void {
         open = false;
         lastClosedAt = Date.now();
+        closedByTouch = lastPointerType === 'touch' || lastPointerType === 'pen';
         triggerRef?.focus();
+    }
+
+    function createNew(): void {
+        closeSingle();
+        onCreateNew?.();
     }
 
     function toggleSingle(): void {
@@ -574,7 +613,7 @@
         {/snippet}
     </SelectPopover>
 {:else}
-    <div class="relative w-full text-lf-primary" data-testid={testId}>
+    <div bind:this={singleRoot} class="relative w-full text-lf-primary" data-testid={testId}>
         <SelectPopover bind:open rootClass="relative block w-full" testId="{testId}-panel" placement={{position: dropdownPosition, minWidth: dropdownMinWidth}}>
             {#snippet trigger(popover)}
                 {#if customTrigger}
@@ -702,6 +741,14 @@
                         {/if}
                     {/if}
                 </div>
+
+                <!-- The caller's own action at the foot (RN-12: the transaction form's «New asset»), as SearchSelect's sticky footer. -->
+                {#if createLabel && onCreateNew}
+                    <button type="button" class="flex w-full shrink-0 items-center gap-2 border-t border-lf-subtle px-4 py-2.5 text-left text-sm text-lf-link transition-colors hover:bg-lf-selected" onclick={createNew} data-testid="{testId}-create-new">
+                        <Plus size={14} class="shrink-0" />
+                        <span class="truncate font-medium">{createLabel}</span>
+                    </button>
+                {/if}
             {/snippet}
         </SelectPopover>
     </div>

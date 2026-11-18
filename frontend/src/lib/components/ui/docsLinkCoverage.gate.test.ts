@@ -10,7 +10,7 @@
  * here by name.
  *
  * Out on purpose (coordinator, 16/11/2026): modals and the AI Export popover (a dialog is not a page panel), the
- * `/welcome` page, the old Asset Detail risk tab (replaced by RN-17).
+ * `/welcome` page. The old Asset Detail risk tab is gone (RN-17); the levels panel on the asset has its row.
  */
 import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
@@ -22,6 +22,8 @@ const SRC = resolve(__dirname, '../../..');
 const PANELS: ReadonlyArray<readonly [string, string, string]> = [
     // Group 3 — the risk header of Dashboard and Broker (a prop: Asset Detail passes its own with RN-17).
     ['lib/features/risk/levels/RiskPanelHeader.svelte', 'user/dashboard/risk/', 'risk.docsHelp.header'],
+    // The same header on one asset, the Asset Detail's «Risk & Scenarios» tab (RN-17 c).
+    ['lib/features/risk/levels/RiskPanelHeader.svelte', 'user/assets/detail/', 'risk.docsHelp.headerAsset'],
     // Group 5 — brokers.
     ['routes/(app)/brokers/+page.svelte', 'user/brokers/', 'brokers.docsHelp.list'],
     ['routes/(app)/brokers/[id]/+page.svelte', 'user/brokers/info/', 'brokers.docsHelp.info'],
@@ -50,7 +52,8 @@ const PANELS: ReadonlyArray<readonly [string, string, string]> = [
     // Group 7 — Asset Detail, in its components only (the page itself is lane 68's and RN-17's).
     ['lib/features/assets/detail/AssetDetailHeader.svelte', 'user/assets/detail/', 'assetDetail.docsHelp.header'],
     ['lib/features/assets/detail/AssetDetailMeasuresSection.svelte', 'user/assets/detail/measures/', 'assetDetail.docsHelp.measures'],
-    ['lib/features/assets/detail/AssetDetailMetadataPanel.svelte', 'user/assets/detail/classification/', 'assetDetail.docsHelp.metadata'],
+    // The «Profilo» tab (plan 68, E3E4b) took the place of the metadata panel: its icon sits in the classification header.
+    ['lib/features/assets/profile/ProfileClassification.svelte', 'user/assets/detail/classification/', 'assetDetail.docsHelp.profile'],
     // The data editor: one icon at the right of its Prices | Events tab row (the page covers both; its title is the page's).
     ['lib/features/assets/AssetDataEditorSection.svelte', 'user/assets/detail/data-editor/', 'assetDetail.docsHelp.dataEditor'],
 ];

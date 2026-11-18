@@ -507,3 +507,30 @@ describe('RiskLevelSection — the banner around what the level could not give',
         expect(normalize(theBlock('health').textContent), 'the health line is not exactly its entry').toBe(`${resolve(NAME_KEY)}: ${resolve(FAILED_KEY)}`);
     });
 });
+
+// RN-16b (developer's Q7 «per ora B»): the simulation leaves out a holding shorter than the horizon, and L4's frame says
+// which, with its history and the horizon — the sentence the panel builds from the result (`resultReasons`), drawn here.
+describe('RiskLevelSection — L4 names the holding the simulation left out (RN-16b)', () => {
+    it('draws the reason with the holding, its history and the horizon', async () => {
+        const {resultReasons} = await import('./levelHelpers');
+        const simulation = {
+            instance_id: 'simulation',
+            analytic_code: 'simulation',
+            status: 'partial',
+            warnings: [
+                {
+                    code: 'simulation_asset_shorter_than_horizon',
+                    message: 'Asset 3 has 63 days of history, less than the 365-day horizon.',
+                    message_i18n_key: 'risk.warnings.simulation_excluded_short_history',
+                    message_params: {history_days: 63, horizon_days: 365, names: 'Invented Fund', count: 1},
+                    details: {asset_id: 3, treatment: 'zero_return_residual'},
+                },
+            ],
+        };
+        const reasons = resultReasons([simulation as never], get(_));
+        mountFrame({level: 4, collapsible: false, reasons});
+
+        const [line] = screen.getAllByTestId(`${TEST_ID}-reason`);
+        for (const part of ['Invented Fund', '63', '365']) expect(line.textContent, `the line does not say ${part}`).toContain(part);
+    });
+});

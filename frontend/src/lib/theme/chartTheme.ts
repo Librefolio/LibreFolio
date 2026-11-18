@@ -203,11 +203,14 @@ export const RISK_RETURN_COLORS = {
 
 /**
  * The returns histogram's bars: the bar holding the VaR cut is the warning, the bars lying beyond it are the loss at 80 %
- * (the weight the CSS bars gave it, `SIGN_BAR.histogram.loss`), the rest is the neutral surface (`chartNeutrals().returnHistogram`).
+ * (the weight the CSS bars gave it, `SIGN_BAR.histogram.loss`), the gains' tail (RN-18, Q21: every chart that shows the
+ * losses' tail shows the gains' too) the gain at the same weight, the rest is the neutral surface
+ * (`chartNeutrals().returnHistogram`).
  */
 export const RETURN_HISTOGRAM_COLORS = {
     cut: rolePair('--lf-warning'),
     tail: rolePairAlpha('--lf-loss', 0.8),
+    gain: rolePairAlpha('--lf-gain', 0.8),
 } as const;
 
 /** The allocation charts: pie and donut, allocation history. Their category colours: `./chartCategories`; their neutrals: `chartNeutrals().allocation`. */

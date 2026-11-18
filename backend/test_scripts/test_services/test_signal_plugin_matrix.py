@@ -47,6 +47,8 @@ LEGACY_CODES = {
 RISK_CODES = {
     "RISK_DRAWDOWN",
     "RISK_ROLLING_BETA",
+    "RISK_ROLLING_DOWNSIDE_DEVIATION",
+    "RISK_ROLLING_OMEGA",
     "RISK_ROLLING_SHARPE",
     "RISK_ROLLING_VOLATILITY",
 }
@@ -150,6 +152,14 @@ EXPECTED_SEMANTIC_IDS = {
         "rolling_beta",
         ["rolling_beta.value"],
     ),
+    "RISK_ROLLING_DOWNSIDE_DEVIATION": (
+        "rolling_downside_deviation",
+        ["rolling_downside_deviation.value"],
+    ),
+    "RISK_ROLLING_OMEGA": (
+        "rolling_omega_ratio",
+        ["rolling_omega_ratio.value"],
+    ),
     "RISK_ROLLING_SHARPE": (
         "rolling_sharpe_ratio",
         ["rolling_sharpe_ratio.value"],
@@ -178,6 +188,10 @@ EXPECTED_RISK_DOCS_PATHS = {
     "RISK_DRAWDOWN": "financial-theory/technical-analysis/risk-metrics/current-drawdown/",
     "RISK_ROLLING_VOLATILITY": "financial-theory/technical-analysis/risk-metrics/volatility/",
     "RISK_ROLLING_SHARPE": "financial-theory/technical-analysis/risk-metrics/sharpe-ratio/",
+    # RN-22: both read around the Sortino's target, whose page explains the semi-deviation today; the theory pages of
+    # the new measures are RN-24, which repoints these two.
+    "RISK_ROLLING_DOWNSIDE_DEVIATION": "financial-theory/technical-analysis/risk-metrics/sortino-ratio/",
+    "RISK_ROLLING_OMEGA": "financial-theory/technical-analysis/risk-metrics/sortino-ratio/",
     "RISK_ROLLING_BETA": "financial-theory/technical-analysis/risk-metrics/beta-active-return/",
     "ASSET_CALENDAR_ROLLING_RETURN": "financial-theory/fundamentals/returns/",
 }
@@ -196,6 +210,8 @@ EXPECTED_IMPLEMENTATION_VERSIONS = {
     "RISK_ROLLING_BETA": "1.1.0",
     "RISK_ROLLING_SHARPE": "1.1.0",
     "RISK_ROLLING_VOLATILITY": "1.1.0",
+    "RISK_ROLLING_DOWNSIDE_DEVIATION": "1.0.0",
+    "RISK_ROLLING_OMEGA": "1.0.0",
     # Decision 29 publishes the calendar return without changing a single value: no bump.
     CALENDAR_CODE: "1.4.0",
 }
@@ -243,6 +259,8 @@ EXPECTED_PARAM_UNITS = {
     "RISK_ROLLING_BETA": {"window": RISK_WINDOW, "comparison_asset_id": (None, "signals.tooltips.comparisonAsset")},
     "RISK_ROLLING_SHARPE": {"window": RISK_WINDOW, "risk_free_annual_rate": (None, "signals.tooltips.riskFreeAnnualRate")},
     "RISK_ROLLING_VOLATILITY": {"window": RISK_WINDOW},
+    "RISK_ROLLING_DOWNSIDE_DEVIATION": {"window": RISK_WINDOW, "target_annual_return": (None, "signals.tooltips.targetAnnualReturn")},
+    "RISK_ROLLING_OMEGA": {"window": RISK_WINDOW, "target_annual_return": (None, "signals.tooltips.targetAnnualReturn")},
     CALENDAR_CODE: {"window_days": ("days", "signals.riskRollingReturn.windowTooltip")},
 }
 # The four UI catalogues, merged from their sources (scripts/i18n_catalog.py) without the English fallback.
@@ -280,10 +298,10 @@ def default_requests() -> list[SignalRequest]:
     ]
 
 
-def test_registry_has_twenty_two_complete_definitions():
+def test_registry_has_twenty_four_complete_definitions():
     definitions = SignalPluginRegistry.list_definitions()
     assert {definition.signal_code for definition in definitions} == ALL_CODES
-    assert len(definitions) == 22
+    assert len(definitions) == 24
 
     for definition in definitions:
         assert definition.implementation_version

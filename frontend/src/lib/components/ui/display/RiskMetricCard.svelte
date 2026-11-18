@@ -102,7 +102,7 @@
     const valueClass = $derived(sentiment === 'positive' ? SIGN_TEXT.headline.gain : sentiment === 'negative' ? SIGN_TEXT.headline.loss : SIGN_TEXT.headline.neutral);
 </script>
 
-<div class="relative @container bg-lf-card text-lf-primary rounded-xl border border-lf-subtle shadow-sm shadow-lf-shadow-card p-5 flex flex-col gap-2 overflow-hidden" data-testid={testId}>
+<div class="relative @container bg-lf-card text-lf-primary rounded-xl border border-lf-subtle shadow-sm shadow-lf-shadow-card p-5 flex flex-col gap-2 overflow-hidden" data-testid={testId} data-sentiment={sentiment}>
     {#if accentClass}
         <div class="absolute top-0 left-0 right-0 h-0.5 {accentClass}" data-testid={testId ? `${testId}-accent` : undefined}></div>
     {/if}

@@ -6349,19 +6349,15 @@ test.describe('Gallery Screenshots', () => {
 
                     await openGalleryAsset(page, GALLERY_ASSET);
 
-                    // The classification (metadata) panel open. Its toggle publishes no aria-expanded: the panel is rendered only
-                    // while it is open, so the panel says whether a click is needed, and that it took.
-                    const metadataToggle = page.getByTestId('asset-detail-metadata-toggle');
-                    const metadataPanel = page.getByTestId('asset-detail-metadata-panel');
-                    await expect(metadataToggle).toBeVisible({timeout: 15_000});
-                    if (!(await metadataPanel.isVisible())) await metadataToggle.click();
-                    await expect(metadataPanel, 'the classification panel is open').toBeVisible();
-                    // Its map and pie come with the classification, after the panel: drawn, every one (Apple has both).
-                    await chartsDrawn(metadataPanel, 'the classification panel');
-                    // Framed from the top of the page, the panel 8 px under the screen's edge — or as near as the page's end
-                    // allows: the bare scroll into view it replaces depended on where the page stood, and on the charts' arrival
-                    // (plan 56, class B).
-                    await frameTarget(page, metadataPanel, `${viewport}/${lang}/${theme}/assets/detail-classification`);
+                    // The «Profilo» tab (plan 68, E3E4b), which took the place of the metadata panel: its read published,
+                    // then its classification, whose map and pie are drawn, every one (Apple has both).
+                    await page.getByTestId('asset-detail-tab-profile').click();
+                    await expect(page.getByTestId('asset-profile-tab')).toHaveAttribute('data-status', 'ready', {timeout: 15_000});
+                    const classification = page.getByTestId('profile-classification');
+                    await chartsDrawn(classification, 'the classification of the Profile tab');
+                    // Framed from the top of the page, the classification 8 px under the screen's edge — or as near as the
+                    // page's end allows (plan 56, class B).
+                    await frameTarget(page, classification, `${viewport}/${lang}/${theme}/assets/detail-classification`);
                     await screenshot(page, viewport, lang, theme, 'assets', 'detail-classification');
                 }
             }
@@ -6765,8 +6761,9 @@ test.describe('Gallery Screenshots', () => {
                 await waitForChart(heatmap, 30_000);
                 await expect.poll(async () => idSet(await heatmap.getAttribute('data-asset-order')), {message: 'the matrix does not draw the seeded selection'}).toEqual(selection);
                 await expect(correlation.getByTestId('risk-correlation-ordering-similarity')).toHaveAttribute('aria-pressed', 'true');
-                await expect(correlation.getByTestId('risk-correlation-ordering-sector'), 'the assets metadata never reached the matrix').toBeVisible({timeout: 15_000});
-                await expect(correlation.getByTestId('risk-correlation-ordering-region')).toBeVisible();
+                // RN-20: every ordering is on screen from the start; available is what says the metadata arrived.
+                await expect(correlation.getByTestId('risk-correlation-ordering-sector'), 'the assets metadata never reached the matrix').not.toHaveAttribute('aria-disabled', 'true', {timeout: 15_000});
+                await expect(correlation.getByTestId('risk-correlation-ordering-region')).not.toHaveAttribute('aria-disabled', 'true');
                 await expect(correlation.getByTestId('risk-correlation-groups')).toBeVisible();
                 await expect(correlation.getByTestId('risk-correlation-pairs-correlated').getByTestId(pairTestId(ids.milano, ids.roma)), 'the two loans are not ranked among the most alike').toBeVisible();
                 await expect(correlation.getByTestId('risk-correlation-pairs-offsetting')).toBeVisible();
@@ -6921,7 +6918,7 @@ test.describe('Gallery Screenshots', () => {
             const ids = await resolveLabIds(page);
             const selection = labSelection(ids);
             const guard = await guardReadOnly(page);
-            // No benchmark: L3° measures without a comparison, so the notice counts exactly five measurements.
+            // No benchmark: L3° measures without a comparison, so the notice counts exactly six measurements.
             await seedLabStorage(page, ids.userId, {selection, benchmark: null});
             // INJECTED (galleryRiskLab.ts, injectStalePrice): RE Loan Roma's price 12 days old on every base wave, and the
             // matrix's own answer not back; the eligibility answers about Roma carry the matching stale-end verdict
@@ -6954,12 +6951,19 @@ test.describe('Gallery Screenshots', () => {
                     await expect(panel.getByTestId(`risk-selected-asset-${assetId}`), `asset ${assetId} is not clean over the year: the gallery data went stale`).toHaveAttribute('data-level', 'eligible');
                 }
 
-                // The notice: amber, one cause — the stale price — and the five partial measurements of the two levels.
+                // The notice: amber, one cause — the stale price — and the six partial measurements of the two levels: L1°'s
+                // bad day, bad month, drawdown and, since RN-19, the KPI of «How did each one move?», on L1°'s own calendar;
+                // L3°'s KPI and risk/return. Named, not only counted, so a measurement added or lost says which.
                 const notice = panel.getByTestId('risk-partial-notice');
                 await expect(notice).toBeVisible();
                 await expect(notice).toHaveAttribute('data-tone', 'warning');
                 await expect(notice.getByTestId('risk-partial-reasons')).toHaveAttribute('data-count', '1');
-                await expect(notice.getByTestId('risk-partial-measurements')).toHaveAttribute('data-count', '5');
+                const measurements = notice.getByTestId('risk-partial-measurements');
+                await expect(measurements).toHaveAttribute('data-count', '6');
+                const instances = await measurements.getByTestId('risk-partial-measurement').evaluateAll((chips) => chips.map((chip) => chip.getAttribute('data-instance') ?? '').sort());
+                expect(instances, 'the partial measurements of the two levels').toEqual(
+                    ['base-historical-asset_set_var', 'base-historical-asset_set_var-monthly', 'base-historical-asset_set_drawdown', 'base-historical-asset_set_kpi-move', 'base-historical-asset_set_kpi', 'base-historical-asset_set_risk_return'].sort(),
+                );
                 // Above it the banner, folded as every load opens it; under it the matrix's own banner, naming the measurement
                 // that did not come back, and why. No other section banner, and no period offer, in the shot: the selection's
                 // eligibility answer keeps the engine's suggestion, which over a year of fresh prices is none.

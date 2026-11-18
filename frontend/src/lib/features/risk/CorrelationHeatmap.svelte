@@ -33,6 +33,13 @@
      *    labels, and the empty first row and last column of the triangle are
      *    gone, so the full row sits on the column names.
      *
+     * 6. **Every ordering, on every heatmap (RN-20, Q12).** The five buttons are
+     *    always there, in one order; one without its data is offered but
+     *    unavailable and says why — still reading the assets' details, the read
+     *    failed, or no asset has the data — so a page never shows two orderings
+     *    on one day and five on another. A third badge row, the type, joins the
+     *    sector and the area.
+     *
      * The arithmetic lives in `correlationHelpers.ts` and is unit-tested there;
      * this file is the drawing.
      */
@@ -50,7 +57,8 @@
     import type {RiskCorrelationOutput} from '$lib/features/risk/riskTypes';
     import {getCountryInfo} from '$lib/stores/reference/countryStore';
     import {ensureSectorsLoaded, getSectorEmoji} from '$lib/stores/reference/sectorStore';
-    import {ASSET_TYPE_MENU_ORDER, sectorI18nKey} from '$lib/utils/assetTypes';
+    import {ASSET_TYPE_MENU_ORDER, getAssetTypeIconUrl, sectorI18nKey} from '$lib/utils/assetTypes';
+    import type {MatrixMetadataStatus} from './matrixMetadata.svelte';
     import CorrelationPairsList from './CorrelationPairsList.svelte';
     import {
         buildLookup,
@@ -96,29 +104,45 @@
         assetRegions?: ReadonlyMap<number, Distribution | null>;
         /** `similarity` groups assets that move together; `name` sorts by the label the reader sees. */
         initialOrdering?: 'similarity' | 'name';
+        /**
+         * Where the page's read of the assets' details stands (`createMatrixMetadata().status`): the reason an ordering
+         * without its data gives — still reading, the read failed, or no asset has the data. Maps handed in whole are
+         * `ready`.
+         */
+        metadataStatus?: MatrixMetadataStatus;
     }
 
-    let {output, assetLabels = new Map(), assetTypes = new Map(), assetSectors = new Map(), assetRegions = new Map(), initialOrdering = 'similarity'}: Props = $props();
+    let {output, assetLabels = new Map(), assetTypes = new Map(), assetSectors = new Map(), assetRegions = new Map(), initialOrdering = 'similarity', metadataStatus = 'ready'}: Props = $props();
     /** `null` means "the caller's choice still stands"; any click pins it locally. */
     let orderingOverride = $state<Ordering | null>(null);
     let sectorGroups = $derived(exposureGroups(assetSectors));
     let regionGroups = $derived(exposureGroups(assetRegions));
-    let modes = $derived<Ordering[]>([
-        'similarity',
-        ...(assetTypes.size > 0 ? (['type'] as const) : []),
-        ...(hasGroups(sectorGroups) ? (['sector'] as const) : []),
-        ...(hasGroups(regionGroups) ? (['region'] as const) : []),
-        // Last, by the developer's choice: the one ordering that says nothing about the assets.
-        'name',
-    ]);
+    /** Every ordering, on every heatmap, always in this order; `name` last, the one that says nothing about the assets. */
+    const MODES: readonly Ordering[] = ['similarity', 'type', 'sector', 'region', 'name'];
+    /** A type counts only when an asset **of the matrix** has one: unknown types, or another asset's, order nothing. */
+    let hasTypes = $derived(
+        output.asset_ids.some((assetId) => {
+            const type = assetTypes.get(assetId);
+            return typeof type === 'string' && type !== '';
+        }),
+    );
+    /** The orderings that can order the matrix now: offered is not available. */
+    let available = $derived(new Set<Ordering>(['similarity', 'name', ...(hasTypes ? (['type'] as const) : []), ...(hasGroups(sectorGroups) ? (['sector'] as const) : []), ...(hasGroups(regionGroups) ? (['region'] as const) : [])]));
     /**
-     * The reader's choice holds only while it is offered. A grouping whose data went
+     * The reader's choice holds only while it is available. A grouping whose data went
      * away (a failed metadata read) used to stay in force with no button pressed,
      * ordering the matrix by a criterion the reader can no longer see; now the matrix
      * falls back to the caller's ordering. The choice itself is kept, so it applies
      * again the moment its data comes back.
      */
-    let ordering = $derived<Ordering>(orderingOverride !== null && modes.includes(orderingOverride) ? orderingOverride : initialOrdering);
+    let ordering = $derived<Ordering>(orderingOverride !== null && available.has(orderingOverride) ? orderingOverride : initialOrdering);
+
+    /** Why an ordering cannot order the matrix: the stable code tests read, and the sentence the reader reads. */
+    function unavailableReason(mode: Ordering): {code: 'loading' | 'failed' | 'no-data'; text: string} {
+        if (metadataStatus === 'loading') return {code: 'loading', text: $t('risk.assetSet.ordering.unavailable.loading')};
+        if (metadataStatus === 'failed') return {code: 'failed', text: $t('risk.assetSet.ordering.unavailable.failed')};
+        return {code: 'no-data', text: $t(`risk.assetSet.ordering.unavailable.${mode}`)};
+    }
     let container: HTMLDivElement | undefined = $state(undefined);
     /** The scrolling box around the chart: its width, not the chart's, is the room available. */
     let wrapper: HTMLDivElement | undefined = $state(undefined);
@@ -154,14 +178,17 @@
      * once, with how many assets it holds, in the order the grouped matrix would
      * show it — computed by the same `exposureOrder`, so the two cannot disagree.
      */
+    let typeSummary = $derived(summariseTypes());
     let sectorSummary = $derived(summarise(sectorGroups, 'sector'));
     let regionSummary = $derived(summarise(regionGroups, 'region'));
+    /** The rows in the order of the buttons: type, sector, area. */
     let badgeRows = $derived([
+        {dimension: 'type' as const, label: $t('risk.assetSet.exposure.type'), summary: typeSummary},
         {dimension: 'sector' as const, label: $t('risk.assetSet.exposure.sector'), summary: sectorSummary},
         {dimension: 'region' as const, label: $t('risk.assetSet.exposure.region'), summary: regionSummary},
     ]);
     /** Per dimension: `true` when its row cannot show every name on one line, and folds to icon + count. */
-    let compactRows = $state<Record<'sector' | 'region', boolean>>({sector: false, region: false});
+    let compactRows = $state<Record<BadgeDimension, boolean>>({type: false, sector: false, region: false});
 
     /**
      * The developer: badge rows never wrap — when the names do not fit, they fold
@@ -169,7 +196,7 @@
      * with every name shown (`w-max`, so its width is its content's); the row
      * folds exactly when that copy is wider than the row.
      */
-    function foldWhenNarrow(node: HTMLElement, dimension: 'sector' | 'region') {
+    function foldWhenNarrow(node: HTMLElement, dimension: BadgeDimension) {
         const probe = node.querySelector<HTMLElement>('[data-badge-probe]');
         const measure = () => {
             if (probe) compactRows[dimension] = probe.offsetWidth > node.clientWidth;
@@ -221,8 +248,28 @@
         return new Map([...distributions].map(([assetId, distribution]) => [assetId, dominantExposure(distribution)]));
     }
 
+    /** Whether an asset **of the matrix** has a group: a map about other assets orders nothing. */
     function hasGroups(groups: ReadonlyMap<number, ExposureGroup | null>): boolean {
-        return [...groups.values()].some((group) => group !== null);
+        return output.asset_ids.some((assetId) => (groups.get(assetId) ?? null) !== null);
+    }
+
+    /**
+     * The type row's badges: each type once, with how many assets it holds, in the order the type ordering draws them —
+     * computed by the same `typeOrder`, so the row and the ordering cannot disagree. An asset without a type is
+     * «unclassified», last, as the ordering puts it.
+     */
+    function summariseTypes(): (BadgeParts & {count: number})[] {
+        if (!hasTypes) return [];
+        const typeOf = (assetId: number) => assetTypes.get(assetId) || null;
+        const sorted = typeOrder(output.asset_ids, typeOf, nameOf, ASSET_TYPE_MENU_ORDER);
+        const summary: (BadgeParts & {count: number; key: string | null})[] = [];
+        for (const assetId of sorted) {
+            const type = typeOf(assetId);
+            const last = summary.at(-1);
+            if (last && last.key === type) last.count += 1;
+            else summary.push({...(type ? {icon: '', iconUrl: getAssetTypeIconUrl(type), name: $t(`assets.types.${type}`, {default: type})} : {icon: UNCLASSIFIED_ICON, name: $t('risk.assetSet.group.unclassified')}), count: 1, key: type});
+        }
+        return summary;
     }
 
     function summarise(groups: ReadonlyMap<number, ExposureGroup | null>, dimension: 'sector' | 'region'): (BadgeParts & {count: number})[] {
@@ -249,9 +296,13 @@
 
     /** A badge's two parts: the icon survives when a badge row is too narrow for the names. */
     interface BadgeParts {
+        /** An emoji (sector, country), or empty when `iconUrl` draws the icon (an asset type's PNG). */
         icon: string;
+        iconUrl?: string;
         name: string;
     }
+
+    type BadgeDimension = 'type' | 'sector' | 'region';
 
     /** Emoji for the groups that have no sector or country of their own (the developer's call). */
     const DIVERSIFIED_ICON = '🧩';
@@ -561,24 +612,49 @@
     }
 </script>
 
+<!-- A badge's icon: an asset type's PNG, or a sector's or a country's emoji followed by its space. -->
+{#snippet badgeIcon(group: BadgeParts)}
+    {#if group.iconUrl}<img src={group.iconUrl} alt="" class="h-3.5 w-3.5 shrink-0 object-contain" data-hide-on-error="display" />{:else}{group.icon}{' '}{/if}
+{/snippet}
+
 <div class="space-y-3">
     <div class="flex items-center justify-end">
         <div class="inline-flex max-w-full overflow-x-auto rounded-lg border border-lf-subtle" role="group" aria-label={$t('risk.assetSet.ordering.label')}>
-            {#each modes as mode (mode)}
-                <button
-                    type="button"
-                    class="shrink-0 px-2.5 py-1 text-xs font-medium whitespace-nowrap transition-colors {ordering === mode ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-secondary hover:bg-lf-hover'}"
-                    aria-pressed={ordering === mode}
-                    onclick={() => (orderingOverride = mode)}
-                    data-testid="risk-correlation-ordering-{mode}"
-                >
-                    {$t(`risk.assetSet.ordering.${mode}`)}
-                </button>
+            {#each MODES as mode (mode)}
+                {#if available.has(mode)}
+                    <button
+                        type="button"
+                        class="shrink-0 px-2.5 py-1 text-xs font-medium whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-lf-focus {ordering === mode
+                            ? 'bg-lf-checked text-lf-on-checked'
+                            : 'bg-lf-card text-lf-secondary hover:bg-lf-hover'}"
+                        aria-pressed={ordering === mode}
+                        onclick={() => (orderingOverride = mode)}
+                        data-testid="risk-correlation-ordering-{mode}"
+                    >
+                        {$t(`risk.assetSet.ordering.${mode}`)}
+                    </button>
+                {:else}
+                    {@const reason = unavailableReason(mode)}
+                    <!-- Offered, not available: aria-disabled, not disabled, so the button keeps the focus and the click
+                         that open its reason (a natively disabled button gives neither). -->
+                    <Tooltip text={reason.text} position="top" interactiveChild wrapperClass="shrink-0">
+                        <button
+                            type="button"
+                            class="cursor-not-allowed bg-lf-card px-2.5 py-1 text-xs font-medium whitespace-nowrap text-lf-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-lf-focus"
+                            aria-pressed="false"
+                            aria-disabled="true"
+                            data-disabled-reason={reason.code}
+                            data-testid="risk-correlation-ordering-{mode}"
+                        >
+                            {$t(`risk.assetSet.ordering.${mode}`)}
+                        </button>
+                    </Tooltip>
+                {/if}
             {/each}
         </div>
     </div>
 
-    {#if sectorSummary.length > 0 || regionSummary.length > 0}
+    {#if typeSummary.length > 0 || sectorSummary.length > 0 || regionSummary.length > 0}
         <!-- The selection's composition, whatever the ordering: one row per dimension, each
              group once with its size. The label of the dimension the matrix is grouped by
              is underlined, so the two readings line up. -->
@@ -589,17 +665,19 @@
                         <div data-badge-probe aria-hidden="true" class="pointer-events-none invisible absolute top-0 left-0 flex w-max items-center gap-1.5 whitespace-nowrap">
                             <span class="font-semibold">{row.label}</span>
                             {#each row.summary as group, index (index)}
-                                <span class="rounded-full px-2 py-0.5">{group.icon} {group.name} <span class="font-semibold">· {group.count}</span></span>
+                                <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5">{@render badgeIcon(group)}{group.name} <span class="font-semibold">· {group.count}</span></span>
                             {/each}
                         </div>
                         <span class="shrink-0 font-semibold text-lf-secondary {ordering === row.dimension ? 'underline decoration-lf-link decoration-2 underline-offset-2' : ''}">{row.label}</span>
                         {#each row.summary as group, index (index)}
                             {#if compactRows[row.dimension]}
                                 <Tooltip text={group.name} position="top">
-                                    <span class="shrink-0 rounded-full bg-lf-panel px-2 py-0.5 whitespace-nowrap text-lf-secondary">{group.icon} <span class="font-semibold tabular-nums">{group.count}</span></span>
+                                    <span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-lf-panel px-2 py-0.5 whitespace-nowrap text-lf-secondary" data-testid="risk-correlation-group-badge">{@render badgeIcon(group)}<span class="font-semibold tabular-nums">{group.count}</span></span>
                                 </Tooltip>
                             {:else}
-                                <span class="shrink-0 rounded-full bg-lf-panel px-2 py-0.5 whitespace-nowrap text-lf-secondary">{group.icon} {group.name} <span class="font-semibold tabular-nums">· {group.count}</span></span>
+                                <span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-lf-panel px-2 py-0.5 whitespace-nowrap text-lf-secondary" data-testid="risk-correlation-group-badge"
+                                    >{@render badgeIcon(group)}{group.name} <span class="font-semibold tabular-nums">· {group.count}</span></span
+                                >
                             {/if}
                         {/each}
                     </div>

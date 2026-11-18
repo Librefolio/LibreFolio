@@ -91,7 +91,7 @@ Shown when the type's rules allow them:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `asset_id` | `number \| null` | Selected asset (`AssetSelect`); **New asset** opens a stacked `AssetModal` |
+| `asset_id` | `number \| null` | Selected asset (`TxFormAssetField`, the shared `AssetPickerPanel` in single mode); **New asset**, at the foot of the list while the row can be edited, opens a stacked `AssetModal` |
 | `quantity` | `string` | Exact decimal string, edited with `ExactQuantityInput` (built on `ExactDecimalInput`; at most 15 integer and 10 fraction digits); `'0'` when the type forbids a quantity |
 
 ---

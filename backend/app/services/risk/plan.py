@@ -27,6 +27,11 @@ def is_historical_replay_plan(plan: AnalyticPlan) -> bool:
     return plan.request.analytic_code == "stress" and getattr(plan.params, "method", None) == RiskStressMethod.HISTORICAL_REPLAY
 
 
+def is_simulation_plan(plan: AnalyticPlan) -> bool:
+    """The simulation prepares its own history (RN-16, developer's Q4 c): all the common history, never the period."""
+    return plan.request.analytic_code == "simulation"
+
+
 def is_hypothetical_plan(plan: AnalyticPlan) -> bool:
     return plan.request.analytic_code == "stress" and getattr(plan.params, "method", None) == RiskStressMethod.HYPOTHETICAL
 

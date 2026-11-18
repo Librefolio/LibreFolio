@@ -1,0 +1,11 @@
+{
+  "signals": {
+    "riskRollingOmega": {
+      "name": "Rolling Gains / Losses (Omega)",
+      "description": "Over a rolling window, the gains above the target divided by the losses below it: above 1 the window gained more than it lost.",
+      "output": "Omega",
+      "outputDescription": "Sum of the returns above the target divided by the sum of the shortfalls below it.",
+      "referenceEven": "Gains = losses"
+    }
+  }
+}

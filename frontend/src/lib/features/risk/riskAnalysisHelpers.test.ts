@@ -26,7 +26,6 @@
  * the store is module level and shared with every other suite in the run, and a
  * leftover `true` would turn each `'$1,234.50'` below into a placeholder.
  */
-import {readFileSync} from 'node:fs';
 import {afterAll, afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
 // The browser, pinned before any import: the interface locale takes its region from it.
@@ -43,29 +42,23 @@ import {uiLocale} from '$lib/stores/app/uiLocale';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import {
     addDays,
+    amountOnValue,
     ASSET_SET_DAILY_VAR_INSTANCE,
     ASSET_SET_MONTHLY_VAR_INSTANCE,
     buildBaseAnalytics,
     DAILY_VAR_INSTANCE,
     formatCurrencyAmount,
     formatRatio,
-    formatScopedCurrencyAmount,
     localizedScenarioText,
     MONTHLY_VAR_HORIZON_DAYS,
     MONTHLY_VAR_INSTANCE,
     normalizeQualityIssue,
-    numberRecord,
-    presentStressBuckets,
     resultByCode,
-    scalarString,
     stressImpactDimension,
     type BaseAnalyticsContext,
 } from './riskAnalysisHelpers';
 
 type Issue = NonNullable<RiskDataQualityReport['issues']>[number];
-
-const riskAnalysisPanelSource = readFileSync(new URL('./RiskAnalysisPanel.svelte', import.meta.url), 'utf8');
-const assetRiskScenariosViewSource = readFileSync(new URL('./AssetRiskScenariosView.svelte', import.meta.url), 'utf8');
 
 beforeEach(() => setPrivacyEnabled(false));
 afterEach(() => setPrivacyEnabled(false));
@@ -112,103 +105,6 @@ describe('localizedScenarioText', () => {
     it('treats a non-string requested value as absent and keeps searching', () => {
         // requested (fr) is a number → skip to en
         expect(localizedScenarioText({fr: 7, en: 'crash'}, 'fr')).toBe('crash');
-    });
-});
-
-describe('scalarString', () => {
-    it('returns a plain string unchanged', () => {
-        expect(scalarString('sector')).toBe('sector');
-    });
-
-    it('returns the first string in an array', () => {
-        expect(scalarString([null, 'sector', 'geography'])).toBe('sector');
-    });
-
-    it('returns null for an array with no string', () => {
-        expect(scalarString([null, 3, false])).toBeNull();
-    });
-
-    it('returns null for a non-string, non-array value', () => {
-        expect(scalarString(42)).toBeNull();
-    });
-
-    it('returns null for null/undefined', () => {
-        expect(scalarString(null)).toBeNull();
-        expect(scalarString(undefined)).toBeNull();
-    });
-});
-
-describe('numberRecord', () => {
-    it('keeps only numeric entries', () => {
-        expect(numberRecord({a: 1, b: 'x', c: 2, d: null})).toEqual({a: 1, c: 2});
-    });
-
-    it('returns an empty object when nothing is numeric', () => {
-        expect(numberRecord({a: 'x', b: null})).toEqual({});
-    });
-
-    it('returns an empty object for a non-object', () => {
-        expect(numberRecord(42)).toEqual({});
-        expect(numberRecord(null)).toEqual({});
-        expect(numberRecord('x')).toEqual({});
-    });
-
-    it('returns an empty object for an array', () => {
-        // an array is typeof "object" but must not be treated as a record
-        expect(numberRecord([1, 2, 3])).toEqual({});
-    });
-});
-
-describe('presentStressBuckets', () => {
-    it('asset_class: upper-cases the single class', () => {
-        expect(presentStressBuckets('asset_class', {assetClass: 'equity'})).toEqual(['EQUITY']);
-    });
-
-    it('asset_class: trims before upper-casing', () => {
-        expect(presentStressBuckets('asset_class', {assetClass: '  bond '})).toEqual(['BOND']);
-    });
-
-    it('asset_class: OTHER when the class is blank', () => {
-        expect(presentStressBuckets('asset_class', {assetClass: '   '})).toEqual(['OTHER']);
-    });
-
-    it('asset_class: OTHER when the class is null/undefined', () => {
-        expect(presentStressBuckets('asset_class', {assetClass: null})).toEqual(['OTHER']);
-        expect(presentStressBuckets('asset_class', {})).toEqual(['OTHER']);
-    });
-
-    it('sector: keeps buckets with a finite positive weight', () => {
-        const buckets = presentStressBuckets('sector', {sectorExposure: {Tech: 0.4, Energy: 0.6}});
-        expect(buckets).toEqual(['Tech', 'Energy']);
-    });
-
-    it('sector: drops zero, negative and non-finite weights', () => {
-        const buckets = presentStressBuckets('sector', {
-            sectorExposure: {Tech: 0.5, Zero: 0, Neg: -0.1, Nan: Number.NaN, Inf: Number.POSITIVE_INFINITY},
-        });
-        expect(buckets).toEqual(['Tech']);
-    });
-
-    it('sector: trims bucket names and drops the ones that trim to empty', () => {
-        const buckets = presentStressBuckets('sector', {sectorExposure: {'  Tech ': 0.5, '   ': 0.5}});
-        expect(buckets).toEqual(['Tech']);
-    });
-
-    it('sector: sentinel [Other] when nothing has positive weight', () => {
-        expect(presentStressBuckets('sector', {sectorExposure: {Tech: 0}})).toEqual(['Other']);
-    });
-
-    it('sector: sentinel [Other] when the exposure map is null/absent', () => {
-        expect(presentStressBuckets('sector', {sectorExposure: null})).toEqual(['Other']);
-        expect(presentStressBuckets('sector', {})).toEqual(['Other']);
-    });
-
-    it('geography: reads the geography exposure, not the sector one', () => {
-        const buckets = presentStressBuckets('geography', {
-            sectorExposure: {Tech: 0.9},
-            geographyExposure: {US: 0.7, EU: 0.3},
-        });
-        expect(buckets).toEqual(['US', 'EU']);
     });
 });
 
@@ -540,15 +436,6 @@ describe('formatCurrencyAmount', () => {
             expect(formatCurrencyAmount('not-a-number', '978', 'en-US')).toBe('—');
         });
 
-        it('formatScopedCurrencyAmount: the same fallback on a portfolio scope', () => {
-            expect(formatScopedCurrencyAmount('1234.5', '978', 'portfolio', 'en-US')).toBe('1,234.50 978');
-        });
-
-        it('formatScopedCurrencyAmount: still an em-dash on an asset scope', () => {
-            // Green before the fix too: the scope guard answers before any formatting.
-            expect(formatScopedCurrencyAmount('1234.5', '978', 'asset', 'en-US')).toBe('—');
-        });
-
         it('control: a well-formed but unassigned code (XYZ) still goes through Intl', () => {
             // Three ASCII letters are well-formed whether or not ISO assigns them,
             // so Intl accepts XYZ and keeps writing it: the fallback is for codes
@@ -599,31 +486,7 @@ describe('formatCurrencyAmount', () => {
     });
 });
 
-describe('formatScopedCurrencyAmount', () => {
-    it('formats normally on a portfolio scope', () => {
-        expect(formatScopedCurrencyAmount('1234.5', 'USD', 'portfolio', 'en-US')).toBe('$1,234.50');
-    });
-
-    // The mutation-sensitive pair. The backend sends null on these scopes today,
-    // so both would read '—' with or without the guard; passing a real amount is
-    // the only way to make the assertion capable of failing.
-    it('suppresses a real amount on an asset scope', () => {
-        expect(formatScopedCurrencyAmount('1234.5', 'USD', 'asset', 'en-US')).toBe('—');
-    });
-
-    it('suppresses a real amount on an asset_set scope', () => {
-        expect(formatScopedCurrencyAmount('1234.5', 'USD', 'asset_set', 'en-US')).toBe('—');
-    });
-
-    // Guards the other direction: a guard that blanked every scope would also
-    // pass the two above, and would silently empty the dashboard's amounts on
-    // the day the backend starts computing them.
-    it('still em-dashes a missing amount on a portfolio scope', () => {
-        expect(formatScopedCurrencyAmount(null, 'USD', 'portfolio', 'en-US')).toBe('—');
-    });
-});
-
-describe('formatCurrencyAmount / formatScopedCurrencyAmount — without a locale, the interface language (M-18)', () => {
+describe('formatCurrencyAmount — without a locale, the interface language (M-18)', () => {
     /** A gain above a thousand and a loss: the grouping, the decimal separator and the place of the sign. */
     const AMOUNTS = ['12345.5', '-1234.5'] as const;
 
@@ -678,25 +541,6 @@ describe('formatCurrencyAmount / formatScopedCurrencyAmount — without a locale
 
         expect(
             AMOUNTS.map((value) => formatCurrencyAmount(value, 'EUR')),
-            `without a locale, an Italian UI must read Italian amounts: ${spelled(italian)}`,
-        ).toEqual(italian);
-    });
-
-    it('formatScopedCurrencyAmount: on a portfolio scope, the same Italian amounts without a locale; an explicit locale still wins', async () => {
-        const {italian, american} = notations('EUR');
-        expect(
-            AMOUNTS.map((value) => formatScopedCurrencyAmount(value, 'EUR', 'portfolio')),
-            'control: an English UI on an en-US browser writes en-US',
-        ).toEqual(american);
-
-        await italianUi();
-        expect(
-            AMOUNTS.map((value) => formatScopedCurrencyAmount(value, 'EUR', 'portfolio', 'en-US')),
-            'an explicit locale still wins',
-        ).toEqual(american);
-
-        expect(
-            AMOUNTS.map((value) => formatScopedCurrencyAmount(value, 'EUR', 'portfolio')),
             `without a locale, an Italian UI must read Italian amounts: ${spelled(italian)}`,
         ).toEqual(italian);
     });
@@ -883,6 +727,8 @@ describe('buildBaseAnalytics', () => {
         const BAD_DAY = ['base-historical-asset_set_var', 'asset_set_var', {confidence_level: 0.95, horizon_days: 1}];
         const BAD_MONTH = ['base-historical-asset_set_var-monthly', 'asset_set_var', {confidence_level: 0.95, horizon_days: 30}];
         const DRAWDOWN = ['base-historical-asset_set_drawdown', 'asset_set_drawdown', {}];
+        /** RN-19: the KPI the «How did each one move?» table reads, on L1°'s calendar — its own instance, as the two VaRs are. */
+        const MOVE_KPI = ['base-historical-asset_set_kpi-move', 'asset_set_kpi', {risk_free_annual_rate: 0.02, target_annual_return: 0}];
         const RISK_RETURN = ['base-historical-asset_set_risk_return', 'asset_set_risk_return', {}];
         const COMPARISON = ['base-historical-asset_set_comparison', 'asset_set_comparison', {comparison_asset_id: BENCHMARK, risk_free_annual_rate: 0.02, target_annual_return: 0}];
 
@@ -902,9 +748,11 @@ describe('buildBaseAnalytics', () => {
         it.each<[string, number | null]>([
             ['without a benchmark', null],
             ['with a benchmark set', BENCHMARK],
-        ])('L1° alone, %s: the bad day, the bad month and the drawdown — never the comparison', (_when, benchmark) => {
+        ])("L1° alone, %s: the bad day, the bad month, the drawdown and the move table's KPI — never the comparison", (_when, benchmark) => {
             const analytics = buildBaseAnalytics('historical', {...ctx(ASSET_SET_CODES), includeAssetSetLossLevels: true, assetSetBenchmarkId: benchmark});
-            expect(wire(analytics), "L1°'s request is not the loss family alone — the VaR over a day and over a calendar month, then the drawdown, and nothing of the benchmark").toEqual([BAD_DAY, BAD_MONTH, DRAWDOWN]);
+            // RN-19: the KPI rides here too, under its own instance, so the move table reads one calendar — L1°'s — and a
+            // benchmark chosen for L3° never moves it.
+            expect(wire(analytics), "L1°'s request is not the loss family and the move table's KPI — the VaR over a day and over a calendar month, the drawdown, the KPI, and nothing of the benchmark").toEqual([BAD_DAY, BAD_MONTH, DRAWDOWN, MOVE_KPI]);
         });
 
         it('L3° alone, without a benchmark: the KPI and the risk/return, and no comparison', () => {
@@ -998,41 +846,15 @@ describe('buildBaseAnalytics', () => {
     });
 });
 
-describe('sync completion source contracts', () => {
-    it('forwards PageSyncModal completion detail through RiskAnalysisPanel unchanged', () => {
-        const modalTag = riskAnalysisPanelSource.match(/<PageSyncModal\b[\s\S]*?\/>/)?.at(0) ?? '';
-        expect(modalTag).not.toBe('');
-        expect(modalTag).toMatch(/\bonsynced\s*=\s*\{handleSynced\}/);
-
-        const handlerMatch = riskAnalysisPanelSource.match(/async\s+function\s+handleSynced\(\s*detail\s*:\s*\{\s*accepted\s*:\s*boolean\s*\}\s*\)\s*:\s*Promise<void>\s*\{([\s\S]*?)\n\s{4}\}/);
-        expect(handlerMatch).not.toBeNull();
-        const handlerBody = handlerMatch?.at(1)?.replace(/\s+/g, ' ').trim() ?? '';
-        expect(handlerBody).toMatch(/\bawait\s+onsynced\?\.\(\s*detail\s*\)\s*;/);
-        expect(handlerBody).not.toMatch(/\bonsynced\?\.\(\s*\)/);
-        expect(handlerBody).not.toMatch(/\bonsynced\?\.\(\s*\{/);
+// RN-17 (Q17 A1): the one place a risk level turns a fraction into money — on your position, or on the scope's worth.
+describe('amountOnValue', () => {
+    it('is the fraction times the value', () => {
+        expect(amountOnValue(-0.125, 8000)).toBe(-1000);
+        expect(amountOnValue(0, 8000)).toBe(0);
     });
 
-    // J-71: the rule behind the sync button is `syncTargets.ts::buildSyncTargets`; RiskPanelHeader and AssetSetRiskPanel read it,
-    // and the panel used to keep the copy "so a second surface does not become a second copy" it was lifted to avoid.
-    it('reads the assets and pairs of its sync modal from buildSyncTargets, with no copy of the rule of its own', () => {
-        expect(riskAnalysisPanelSource, 'the panel imports the shared rule').toMatch(/import\s*\{[^}]*\bbuildSyncTargets\b[^}]*\}\s*from\s*'\$lib\/features\/risk\/syncTargets'|import\s*\{[^}]*\bbuildSyncTargets\b[^}]*\}\s*from\s*'\.\/syncTargets'/);
-        expect(riskAnalysisPanelSource, 'and calls it').toMatch(/\bbuildSyncTargets\(/);
-        const modalTag = riskAnalysisPanelSource.match(/<PageSyncModal\b[\s\S]*?\/>/)?.at(0) ?? '';
-        expect(modalTag, 'the sync modal is given what the rule answers').toMatch(/assets=\{syncTargets\.assets\}/);
-        expect(modalTag).toMatch(/fxPairs=\{syncTargets\.fxPairs\}/);
-        expect(riskAnalysisPanelSource, 'no local list of assets to sync').not.toMatch(/\blet\s+syncAssets\b/);
-        expect(riskAnalysisPanelSource, 'no local list of pairs to sync').not.toMatch(/\blet\s+syncFxPairs\b/);
-    });
-
-    it('types and forwards AssetRiskScenariosView completion callbacks unchanged', () => {
-        expect(assetRiskScenariosViewSource).toMatch(/\bonsynced\?\s*:\s*\(\s*detail\s*:\s*\{\s*accepted\s*:\s*boolean\s*\}\s*\)\s*=>\s*void\s*\|\s*Promise<void>\s*;/);
-
-        const propsBinding = assetRiskScenariosViewSource.match(/let\s*\{([\s\S]*?)\}\s*:\s*Props\s*=\s*\$props\(\)\s*;/)?.at(1) ?? '';
-        expect(propsBinding).toMatch(/(?:^|,)\s*onsynced\s*(?:,|$)/);
-
-        const riskPanelTag = assetRiskScenariosViewSource.match(/<RiskAnalysisPanel\b[\s\S]*?\/>/)?.at(0) ?? '';
-        expect(riskPanelTag).not.toBe('');
-        expect(riskPanelTag).toContain('{onsynced}');
-        expect(riskPanelTag).not.toMatch(/\bonsynced\s*=/);
+    it('is no amount without a usable value or fraction: never a guess, never a zero', () => {
+        for (const value of [null, undefined, 0, -100, Number.NaN, Number.POSITIVE_INFINITY]) expect(amountOnValue(-0.1, value), `value ${value}`).toBeNull();
+        for (const fraction of [null, undefined, Number.NaN]) expect(amountOnValue(fraction, 8000), `fraction ${fraction}`).toBeNull();
     });
 });

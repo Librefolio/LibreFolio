@@ -164,3 +164,28 @@ describe('ReturnHistogram — without a distribution', () => {
         expect(screen.queryByTestId('risk-l1-histogram-chart')).toBeNull();
     });
 });
+
+// RN-18: the positive tail beside the losses' — its bars published, its threshold said after the VaR's, each bar's
+// tooltip placing it in the best days.
+describe('ReturnHistogram — the green tail', () => {
+    const GREEN: Histogram = {
+        ...HISTOGRAM,
+        bins: [...HISTOGRAM.bins.map((entry) => ({...entry, aboveGain: false})), {lowerBound: 3, upperBound: 6, count: 3, share: 0.3, holdsCut: false, belowCut: false, aboveGain: true}],
+        gain: {threshold: 3, share: 0.05},
+    };
+
+    it('publishes the green bars and says where the best days start, after the VaR threshold', () => {
+        render(ReturnHistogram, {props: {histogram: GREEN}});
+
+        expect(screen.getByTestId(BIN(3)).getAttribute('data-above-gain')).toBe('true');
+        expect(screen.getByTestId(BIN(2)).getAttribute('data-above-gain')).toBe('false');
+        expect(screen.getByTestId('risk-l1-histogram-gain').textContent).toContain(say('risk.levels.l1.histogram.gain', {share: '5%', value: '+3.0%'}));
+        expect(words(3)).toContain(say('risk.levels.l1.histogram.position.gain', {share: '5%', value: '+3.0%'}));
+    });
+
+    it('says nothing of a green tail when the answer has none', () => {
+        render(ReturnHistogram, {props: {histogram: {...HISTOGRAM, gain: null}}});
+
+        expect(screen.queryByTestId('risk-l1-histogram-gain')).toBeNull();
+    });
+});

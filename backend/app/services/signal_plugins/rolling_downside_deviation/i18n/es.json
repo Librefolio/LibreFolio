@@ -1,0 +1,10 @@
+{
+  "signals": {
+    "riskRollingDownsideDeviation": {
+      "name": "Semidesviación móvil",
+      "description": "Volatilidad anualizada de los rendimientos por debajo del objetivo en una ventana móvil: el denominador del Sortino, para leer junto a la volatilidad.",
+      "output": "Semidesviación",
+      "outputDescription": "Déficit cuadrático medio por debajo del objetivo, anualizado, en puntos porcentuales."
+    }
+  }
+}

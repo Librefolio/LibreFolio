@@ -173,6 +173,21 @@
         "scheduleFrom": "Dal",
         "scheduleTo": "Al",
         "scheduleRate": "Tasso"
+      },
+      "tab": {
+        "notAvailable": "non disponibile",
+        "data": "Dati",
+        "details": "Dettagli",
+        "dataAsOf": "dati al {date}",
+        "history": "Storia del dato: {voice}",
+        "loadFailed": "Non è stato possibile leggere il profilo dell'asset",
+        "missing": "Questo asset non esiste più",
+        "editData": "Modifica i dati",
+        "isin": "ISIN",
+        "ticker": "Ticker",
+        "dataSince": "dal {date}",
+        "beforeProfile": "valore di prima del profilo",
+        "companySector": "Settore"
       }
     }
   }

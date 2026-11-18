@@ -31,7 +31,8 @@
          */
         lead?: string;
         /** Ordinal shown before the question, so the scale is legible at a glance. */
-        level: 1 | 2 | 3 | 4;
+        /** `move`: «How does it move?» (RN-18), the positive twin of L1; published as `data-level`. */
+        level: 1 | 2 | 3 | 4 | 'move';
         /** Collapsible levels start closed; the rest are always open. */
         collapsible?: boolean;
         testId: string;

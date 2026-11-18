@@ -472,7 +472,7 @@ ask**: it is an interface decision, not a test detail.
 **A section that is not there yet is the same trap without a sleep.** When a block is rendered
 conditionally on data fetched at runtime, its absence carries **two meanings at once** — unsupported,
 or not loaded yet — so waiting for it to appear asks *"has the network finished?"* while reading like
-*"is this supported?"*. `RiskAnalysisPanel` gates every section on a capability catalog and publishes
+*"is this supported?"*. `RiskLevelsPanel` gates every section on a capability catalog and publishes
 `data-catalog="pending|ready"`; specs wait on the gate, then assert on what is behind it. Anything
 still missing at that point is a genuine red.
 

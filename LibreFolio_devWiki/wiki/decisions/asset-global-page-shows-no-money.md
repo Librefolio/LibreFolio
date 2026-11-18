@@ -170,13 +170,12 @@ stubs the eligibility engine and waits for every chip's verdict before asserting
 | Role | Path |
 |------|------|
 | The panel under the rule — mounts the three sections | `frontend/src/lib/features/risk/AssetSetRiskPanel.svelte` |
-| Rendered the money unguarded on 2026-09-05; since `4573c9e2a` through `formatScopedCurrencyAmount` | `frontend/src/lib/features/risk/RiskAnalysisPanel.svelte` |
-| Em dash for absent amounts; `formatScopedCurrencyAmount` (scope guard); `formatCurrencyAmount` (whole-string privacy mask) | `frontend/src/lib/features/risk/riskAnalysisHelpers.ts` |
+| Em dash for absent amounts; `formatCurrencyAmount` (whole-string privacy mask). The scope guard `formatScopedCurrencyAmount` left with the legacy panel, its last caller (RN-17 c, 2026-11-17) | `frontend/src/lib/features/risk/riskAnalysisHelpers.ts` |
 | Pins the mask — `with global privacy on` | `frontend/src/lib/features/risk/riskAnalysisHelpers.test.ts` |
 | Passes `showMoney={false}` | `frontend/src/lib/features/risk/AssetSetReplaySection.svelte` |
 | Money sites behind `!showMoney`; formats with the risk formatter | `frontend/src/lib/features/risk/levels/l4/L4Replay.svelte` |
 | L1°/L3° arithmetic with no currency parameter | `frontend/src/lib/features/risk/assetSetLevels.ts` |
-| Asset-detail Risk tab — `RiskAnalysisPanel` on `scope.kind: 'asset'` | `frontend/src/lib/features/risk/AssetRiskScenariosView.svelte` |
+| Asset-detail Risk tab — the levels on `scope.kind: 'asset'`, money on your position (RN-17; the legacy `RiskAnalysisPanel` is gone) | `frontend/src/lib/features/risk/AssetRiskTab.svelte` |
 | Masks the number, keeps the currency; the only emitters of `.currency-symbol` | `frontend/src/lib/utils/currency/currencyFormat.ts` |
 | `privacy-toggle`, `aria-pressed` | `frontend/src/lib/components/ui/PrivacyToggle.svelte` |
 | The net — *prints no money, even when the API hands it some*; `pinPrivacyOff` | `frontend/e2e/portfolio/risk-lab.spec.ts` |

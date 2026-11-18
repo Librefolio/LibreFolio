@@ -65,10 +65,11 @@ class RiskUnavailableError(ValueError):
 # answers RESOURCE_LIMIT, without a remedy nobody has checked. A refusal is built by `resource_limit_error()` alone, so
 # the remedies the backend can name are exactly the values of this table.
 REMEDY_BY_METRIC: dict[str, str] = {
-    "portfolio_cells": "paths_or_horizon",
-    "stochastic_cells": "paths_or_horizon",
-    "history_cells": "period",
-    "observations": "period",
+    # RN-16: the paths fall to the fewest that fit before a simulation is refused (Q5 a), so the cure left is a
+    # shorter horizon; and the history keeps the most recent observations that fit (Q4 c), so `history_cells` and
+    # `observations` — defences a user never reaches — name no remedy: no period the user picks moves them.
+    "portfolio_cells": "horizon",
+    "stochastic_cells": "horizon",
     "assets": "positions",
     "sobol_dimension": "horizon_or_sampling",
     "price_item_days": "period_or_assets",

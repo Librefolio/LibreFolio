@@ -35,6 +35,8 @@ export interface HistogramBin {
     count: number;
     holdsCut: boolean;
     belowCut: boolean;
+    /** RN-18: a whole bar of the gains' tail, the green twin of `belowCut`. */
+    aboveGain?: boolean;
 }
 
 export interface ReturnHistogramOptionInput {
@@ -80,10 +82,11 @@ export interface HistogramDatum {
     itemStyle: {color: string};
 }
 
-/** The bar's fill: the cut, the tail, or the neutral surface. */
-export function binColor(bin: Pick<HistogramBin, 'holdsCut' | 'belowCut'>, dark: boolean, scope?: Element | null): string {
+/** The bar's fill: the cut, the losses' tail, the gains' tail (RN-18), or the neutral surface. The cut wins over both tails. */
+export function binColor(bin: Pick<HistogramBin, 'holdsCut' | 'belowCut' | 'aboveGain'>, dark: boolean, scope?: Element | null): string {
     if (bin.holdsCut) return themed(RETURN_HISTOGRAM_COLORS.cut, dark);
     if (bin.belowCut) return themed(RETURN_HISTOGRAM_COLORS.tail, dark);
+    if (bin.aboveGain) return themed(RETURN_HISTOGRAM_COLORS.gain, dark);
     return chartNeutrals(dark, scope).returnHistogram.bar;
 }
 

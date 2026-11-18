@@ -48,8 +48,21 @@ import {describe, expect, it} from 'vitest';
 import {schemas} from '$lib/api';
 import type {RiskAnalyticResult} from '$lib/features/risk/riskStore.svelte';
 
-import {ASSET_SET_DAILY_VAR_INSTANCE, ASSET_SET_MONTHLY_VAR_INSTANCE} from './riskAnalysisHelpers';
-import {assetSetCalculationWindow, buildAssetSetBenchmarkPoint, buildAssetSetChartPoints, buildAssetSetHurtRows, buildAssetSetPaidRows, buildAssetSetScatterPoints, calendarLength, withBenchmarkRow, type AssetSetBenchmarkPoint, type AssetSetPaidRow, type CalendarLength} from './assetSetLevels';
+import {ASSET_SET_DAILY_VAR_INSTANCE, ASSET_SET_MONTHLY_VAR_INSTANCE, ASSET_SET_MOVE_KPI_INSTANCE} from './riskAnalysisHelpers';
+import {
+    assetSetCalculationWindow,
+    buildAssetSetBenchmarkPoint,
+    buildAssetSetChartPoints,
+    buildAssetSetHurtRows,
+    buildAssetSetMoveRows,
+    buildAssetSetPaidRows,
+    buildAssetSetScatterPoints,
+    calendarLength,
+    withBenchmarkRow,
+    type AssetSetBenchmarkPoint,
+    type AssetSetPaidRow,
+    type CalendarLength,
+} from './assetSetLevels';
 
 type Payload = Record<string, unknown>;
 
@@ -1256,5 +1269,90 @@ describe('calendarLength', () => {
         {before: 'by two years', start: '2027-10-01', end: '2025-10-01'},
     ])('is nothing when the end precedes the start $before — never a negative part', ({start, end}) => {
         expect(calendarLength(start, end)).toEqual({years: 0, months: 0, days: 0});
+    });
+});
+
+// ---------------------------------------------------------------------------
+// RN-19: «How did each one move?» — the positive twin of the loss table, one row per selected asset, read from L1°'s
+// own calendar: the KPI's shape of the days, the best 30 days of the monthly VaR, the largest rally of the drawdown.
+// A blank says why when the backend named the asset in a warning (Q20); otherwise the table's blank note says it.
+// ---------------------------------------------------------------------------
+describe('buildAssetSetMoveRows', () => {
+    const MOVE_SHAPE = {
+        best_realization: 0.052,
+        best_realization_date: '2024-05-12',
+        positive_observation_share: 0.53,
+        mean_positive_return: 0.013,
+        mean_negative_return: -0.012,
+        longest_positive_run_observations: 8,
+        longest_positive_run_start_date: '2024-03-04',
+        longest_positive_run_end_date: '2024-03-13',
+        omega_ratio: 1.22,
+        downside_deviation: 0.196,
+        extreme_day_ratio: 2.4,
+    };
+    const bestWindow = (gain: number) => ({compounded_return: gain, start_date: '2024-04-21', end_date: '2024-05-20'});
+    const rally = {largest_rally: 0.384, largest_rally_start_date: '2024-04-21', largest_rally_end_date: '2024-09-02', largest_rally_duration_days: 134, average_drawdown: -0.031};
+
+    function moveKpi(items: Payload[], warnings: Payload[] = []): RiskAnalyticResult {
+        return {...ok('asset_set_kpi', {kind: 'kpi_set', drawdown_confidence_level: 0.95, items}, ASSET_SET_MOVE_KPI_INSTANCE), warnings} as unknown as RiskAnalyticResult;
+    }
+
+    it('reads each figure of an asset from the answer that measures it, with its dates', () => {
+        const rows = buildAssetSetMoveRows([7], LABELS, moveKpi([kpiItem(7, MOVE_SHAPE)]), monthlyVar([{...varItem(7, 0.04, 0.05), best_horizon: bestWindow(0.183)}]), drawdownResult([{...recoveredFall(7), ...rally}]));
+
+        expect(rows).toEqual([
+            {
+                assetId: 7,
+                name: 'Vanguard FTSE All-World',
+                bestDay: 0.052,
+                bestDayDate: '2024-05-12',
+                bestMonth: {gain: 0.183, from: '2024-04-21', to: '2024-05-20'},
+                rally: {gain: 0.384, from: '2024-04-21', to: '2024-09-02', days: 134},
+                omega: 1.22,
+                positiveShare: 0.53,
+                downsideDeviation: 0.196,
+                meanUp: 0.013,
+                meanDown: -0.012,
+                streak: {days: 8, from: '2024-03-04', to: '2024-03-13'},
+                averageDrawdown: -0.031,
+                extremeDays: 2.4,
+                reasons: {},
+            },
+        ]);
+    });
+
+    it('keeps a best 30 days that lost: a figure, never a blank', () => {
+        const [row] = buildAssetSetMoveRows([7], LABELS, moveKpi([kpiItem(7, MOVE_SHAPE)]), monthlyVar([{...varItem(7, 0.04, 0.05), best_horizon: bestWindow(-0.021)}]), drawdownResult([recoveredFall(7)]));
+
+        expect(row.bestMonth).toEqual({gain: -0.021, from: '2024-04-21', to: '2024-05-20'});
+    });
+
+    it('reads no rise as a measured zero with no dates, and an answer without the field as unmeasured', () => {
+        const [flat] = buildAssetSetMoveRows([7], LABELS, null, null, drawdownResult([{...neverFell(7), largest_rally: 0, largest_rally_duration_days: 0}]));
+        const [old] = buildAssetSetMoveRows([7], LABELS, null, null, drawdownResult([neverFell(7)]));
+
+        expect(flat.rally).toEqual({gain: 0, from: null, to: null, days: 0});
+        expect(old.rally).toBeNull();
+    });
+
+    it('gives every selected asset a row, in the selection order, blanks for what was not measured', () => {
+        const rows = buildAssetSetMoveRows(SELECTION, LABELS, moveKpi([kpiItem(3, MOVE_SHAPE)]), null, null);
+
+        expect(rows.map((row) => row.assetId)).toEqual(SELECTION);
+        expect(rows.find((row) => row.assetId === 7)).toMatchObject({bestDay: null, omega: null, bestMonth: null, rally: null, streak: null, averageDrawdown: null, extremeDays: null});
+    });
+
+    it('names the reason of a blank on the cell, from the warning that names the asset (Q20)', () => {
+        const falling = {...MOVE_SHAPE, best_realization: null, best_realization_date: null, mean_positive_return: null, longest_positive_run_observations: null, longest_positive_run_start_date: null, longest_positive_run_end_date: null, positive_observation_share: 0};
+        const warnings = [
+            {code: 'best_realization_undefined', message: 'x', degrades_result: false, message_i18n_key: 'risk.warnings.best_realization_undefined_assets', details: {asset_ids: [7]}},
+            {code: 'omega_undefined', message: 'x', degrades_result: false, message_i18n_key: 'risk.warnings.omega_undefined_assets', details: {asset_ids: [3]}},
+            {code: 'extreme_day_ratio_undefined', message: 'x', degrades_result: false, message_i18n_key: 'risk.warnings.extreme_day_ratio_undefined_assets', details: {asset_ids: [3]}},
+        ];
+        const rows = buildAssetSetMoveRows([7, 3], LABELS, moveKpi([kpiItem(7, falling), kpiItem(3, {...MOVE_SHAPE, omega_ratio: null, extreme_day_ratio: null})], warnings), null, null);
+
+        expect(rows[0].reasons).toEqual({bestDay: 'risk.warnings.best_realization_undefined', meanUp: 'risk.warnings.best_realization_undefined', streak: 'risk.warnings.best_realization_undefined'});
+        expect(rows[1].reasons).toEqual({omega: 'risk.warnings.omega_undefined', extremeDays: 'risk.warnings.extreme_day_ratio_undefined'});
     });
 });

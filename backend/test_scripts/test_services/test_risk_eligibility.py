@@ -54,6 +54,7 @@ from backend.app.services.risk.eligibility import (  # noqa: E402
     PriceWindowFacts,
     analysis_eligibility,
     common_quoted_range,
+    first_fx_rate_dates,
     load_price_window_facts,
     period_limits_coverage,
     replay_coverage,
@@ -1144,7 +1145,8 @@ async def test_weekend_repeats_are_carries_not_quotes_in_the_window_facts(seven_
         fx_available=True,
         first_quote_in_window=date(2025, 4, 7),
         first_quote_ever=date(2025, 4, 5),
-        last_quote_ever=date(2025, 5, 4),        currency="EUR",
+        last_quote_ever=date(2025, 5, 4),
+        currency="EUR",
     )
     # The seven-day ETF is quoted on weekdays only. Without a holiday table, Good Friday and Easter
     # Monday are flat weekdays, so quotes. The first row, a Saturday, has no row before it: a quote.
@@ -1156,7 +1158,8 @@ async def test_weekend_repeats_are_carries_not_quotes_in_the_window_facts(seven_
         fx_available=True,
         first_quote_in_window=date(2025, 4, 7),
         first_quote_ever=date(2025, 4, 5),
-        last_quote_ever=date(2025, 5, 2),        currency="EUR",
+        last_quote_ever=date(2025, 5, 2),
+        currency="EUR",
     )
 
 
@@ -1305,3 +1308,29 @@ async def test_an_eligibility_request_awaits_the_holiday_table_once_for_both_rea
     assert len(seen["loader"]) == 2
     assert len(seen["ensure"]) == 1
     assert seen["loader"] == [table, table]
+
+
+@pytest.mark.asyncio
+async def test_a_currency_s_first_rate_is_the_first_usable_row_of_the_pair_stored_either_way_round():
+    """RN-16c (the consultant, 17/11/2026): the simulation's first useful day reads the same rows the series preparation
+    converts with — the direct pair, whichever way round it is stored (`unit_rate_steps`), and only its usable rates (a
+    legacy row outside `usable_fx_rate_bounds` is a missing rate there, so it is here). A chain route's sync stores its
+    rates as that direct pair too (`fx/sync.py`), so a currency reached through a third one has the same rows."""
+    usable_day, unusable_day = date(2024, 6, 3), date(2023, 1, 2)
+    stored_ids: list[int] = []
+    async with session() as db:
+        # Stored as EUR/NGN: asked as NGN → EUR, the pair the other way round.
+        for day, rate in ((unusable_day, Decimal("0")), (usable_day, Decimal("1650.5"))):
+            row = FxRate(base="EUR", quote=ANALYSIS_FX_CURRENCY, date=day, rate=rate, source="MANUAL")
+            db.add(row)
+            await db.flush()
+            stored_ids.append(row.id)
+        await db.commit()
+    try:
+        async with session() as db:
+            first = await first_fx_rate_dates(db, currencies={ANALYSIS_FX_CURRENCY, "EUR"}, target_currency="EUR")
+        assert first == {ANALYSIS_FX_CURRENCY: usable_day}
+    finally:
+        async with session() as db:
+            await db.execute(delete(FxRate).where(FxRate.id.in_(stored_ids)))
+            await db.commit()

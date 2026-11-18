@@ -55,8 +55,8 @@ vi.mock('$lib/features/risk/syncTargets', async (importOriginal) => {
 });
 // The dialog is the subject's neighbour, not the subject: a stub that publishes the props it was given.
 vi.mock('$lib/features/fx/FxPairAddModal.svelte', async () => ({default: (await import('$test/harness/FxPairAddModalStub.svelte')).default}));
-// The sync modal fetches providers and rates when it opens, and no case here opens it.
-vi.mock('$lib/components/ui/modals/PageSyncModal.svelte', () => ({default: () => {}}));
+// The sync modal fetches providers and rates when it opens: a stub with its two ways of completing stands in (RN-17 c).
+vi.mock('$lib/components/ui/modals/PageSyncModal.svelte', async () => ({default: (await import('$test/harness/PageSyncModalStub.svelte')).default}));
 
 const STUB = 'fx-pair-add-modal-stub';
 const STUB_CREATED = 'fx-pair-add-modal-stub-created';
@@ -259,5 +259,20 @@ describe('RiskPanelHeader — the docs icon beside the title (RN-13, B1)', () =>
         await fireEvent.click(icon as HTMLElement);
         expect(open, 'the icon does not open the risk tab’s page').toHaveBeenCalledWith('/mkdocs/user/dashboard/risk/', '_blank', 'noopener');
         open.mockRestore();
+    });
+});
+
+// RN-17 (c): the page that hosts the panel decides on what the sync wrote — the Asset Detail drops its comparison overlays
+// only on an accepted sync — so the modal's completion goes to the reload unchanged, never as a bare «synced».
+describe('RiskPanelHeader — the sync modal’s completion', () => {
+    it('hands the reload the completion as the modal reported it, accepted or not', async () => {
+        const {controller, handleSynced} = fakeController([]);
+        render(RiskPanelHeader, {props: {controller, dateStart: '2026-01-01', dateEnd: '2026-06-30', targetCurrency: 'EUR', showActions: true}});
+
+        await fireEvent.click(screen.getByTestId('page-sync-modal-stub-accepted'));
+        await eventually(() => expect(handleSynced).toHaveBeenLastCalledWith({accepted: true}));
+        await fireEvent.click(screen.getByTestId('page-sync-modal-stub-unchanged'));
+        await eventually(() => expect(handleSynced).toHaveBeenLastCalledWith({accepted: false}));
+        expect(handleSynced).toHaveBeenCalledTimes(2);
     });
 });
