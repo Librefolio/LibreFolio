@@ -11,7 +11,9 @@
  *   «Can't find it? Let us know» row is the one of a plain instance (as the premium shot);
  * - `GET /api/v1/assets/provider/search/stream`: a canned stream, as `services/assets/search.py` sends it — `coingecko` with
  *   its three rows, every other provider asked with none, then `done`. The search never reaches the backend, so nothing
- *   reaches CoinGecko; any request to a `coingecko.com` host is aborted and recorded ({@link CoinGeckoSearch.coingeckoHosts}).
+ *   reaches CoinGecko; any request to a `coingecko.com` host is aborted and recorded ({@link CoinGeckoSearch.coingeckoHosts}),
+ *   except the provider's icon ({@link COINGECKO_ICON_URL}, P1b-b): an image CoinGecko serves to every page that shows it,
+ *   as Yahoo's and justETF's icons, and no API request.
  * Registered after the gallery's offline guard, so tried before it. The routes stay with the page until the gallery's outer
  * afterEach drops them (`leaveGalleryPage`).
  */
@@ -27,6 +29,14 @@ const SEARCH_STREAM_PATH = `${API}/assets/provider/search/stream`;
 export const COINGECKO = 'coingecko';
 /** What Search Online is typed: the query of the shot. */
 export const GALLERY_COINGECKO_QUERY = 'bitcoin';
+/** The provider's icon: CoinGecko's favicon by URL (`get_icon`, P1b-b), let through so the shot shows it. */
+export const COINGECKO_ICON_URL = 'https://www.coingecko.com/favicon.ico';
+
+/** The icon's request, whatever its query: the gallery writes favicon URLs with `?lf-gallery` (galleryReportSets.ts). */
+function isCoinGeckoIcon(url: URL): boolean {
+    const icon = new URL(COINGECKO_ICON_URL);
+    return url.origin === icon.origin && url.pathname === icon.pathname;
+}
 /** CoinGecko's three answers, by their CoinGecko id, in the order the stream sends them. */
 export const GALLERY_COINGECKO_IDS = ['bitcoin', 'wrapped-bitcoin', 'bitcoin-cash'] as const;
 
@@ -76,7 +86,7 @@ export async function serveGalleryCoinGeckoSearch(page: Page): Promise<CoinGecko
 
     const record: CoinGeckoSearch = {asked: [], coingeckoHosts: []};
     await page.route(
-        (url) => url.hostname === 'coingecko.com' || url.hostname.endsWith('.coingecko.com'),
+        (url) => (url.hostname === 'coingecko.com' || url.hostname.endsWith('.coingecko.com')) && !isCoinGeckoIcon(url),
         async (route) => {
             record.coingeckoHosts.push(`${route.request().method()} ${route.request().url()}`);
             await route.abort();

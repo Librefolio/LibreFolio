@@ -2348,16 +2348,26 @@ test.describe('Gallery Screenshots', () => {
                 await expect(card.locator('[data-testid="plugin-setting-secret-state"][data-state="set"], [data-testid="plugin-setting-secret-state"][data-state="env"]')).toHaveCount(0);
                 await expect(card.getByTestId('plugin-setting-plan'), 'the plan is on its default, Demo').toHaveAttribute('data-source', 'default');
                 await freezeAnimations(page);
-                // The card at the top of the screen, the header slid away above it: the capture takes the card's box only.
-                await frameTarget(page, card, shot);
-                await headerAsScrolledDown(page, shot);
-                await expect(card, `${shot}: the card is whole on the screen`).toBeInViewport({ratio: 1});
+                // The card under the header, whatever the header's state: the capture takes the card's box only. Since U5 the
+                // card holds the «Calls» block, so it can be taller than a phone's screen, and as the last card of the page its
+                // scroll can be clamped at the end; the element capture takes the whole card either way.
+                const headerHeight = await page.getByTestId('app-header').evaluate((element) => element.getBoundingClientRect().height);
+                await frameTarget(page, card, shot, Math.ceil(headerHeight) + 8);
+                const top = await card.evaluate((element) => element.getBoundingClientRect().top);
+                expect(top, `${shot}: the card starts under the header`).toBeGreaterThanOrEqual(headerHeight);
+                await expect(card, `${shot}: the card starts on the screen`).toBeInViewport();
                 await waitForSplashGone(page);
                 await settleShot(page, shot, {subject: card});
                 await expectDrawnUnder(page, lang);
                 const dir = getGalleryPath(viewport, lang, theme, 'settings');
                 ensureDir(dir);
-                await card.screenshot({path: path.join(dir, 'plugin-group-coingecko.png'), timeout: CAPTURE_TIMEOUT_MS});
+                // The card's box in the page, captured from the whole page: an element capture of a card taller than the screen
+                // scrolls it, and the fixed header lands on its title (the phone, since U5).
+                const box = await card.evaluate((element) => {
+                    const rect = element.getBoundingClientRect();
+                    return {x: rect.left + window.scrollX, y: rect.top + window.scrollY, width: rect.width, height: rect.height};
+                });
+                await page.screenshot({path: path.join(dir, 'plugin-group-coingecko.png'), fullPage: true, clip: box, timeout: CAPTURE_TIMEOUT_MS});
                 console.log(`  📸 ${shot}.png`);
             });
         });
