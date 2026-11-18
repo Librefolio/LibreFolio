@@ -39,25 +39,7 @@
     import {patchIssueMessage, type AssetPatchAnswer, type AssetPatchIssue} from '../assetPatchResult';
     import type {ProfileVoice} from './profileStore';
     import {formatProfileValue} from './profileTabState';
-    import {
-        applyDifferences,
-        compareAsk,
-        newRow,
-        panelWeights,
-        pendingFromPanel,
-        pendingFromRow,
-        profilePatch,
-        rowFromPending,
-        rowIssues,
-        voicePlace,
-        type AskAnswer,
-        type CurrentVoice,
-        type EditRow,
-        type PendingChanges,
-        type PendingVoice,
-        type ProfileDifference,
-        type RowIssue,
-    } from './profileEditState';
+    import {applyDifferences, compareAsk, newRow, panelWeights, withPanel, pendingFromRow, profilePatch, rowFromPending, rowIssues, voicePlace, type AskAnswer, type CurrentVoice, type EditRow, type PendingChanges, type PendingVoice, type ProfileDifference, type RowIssue} from './profileEditState';
 
     /** The body of `POST /assets/profile/ask`: an asset by id, or one not created yet by its type and enrichers. */
     export interface ProfileAskRequest {
@@ -631,7 +613,7 @@
                         <DistributionEditor
                             kind={voice.map_keys === 'sector' ? 'sector' : 'geographic'}
                             value={panelValue(voice.key)}
-                            onchange={(weights) => (panelChanges = {...panelChanges, [voice.key]: pendingFromPanel(voice.key, weights, 'new')})}
+                            onchange={(weights) => (panelChanges = withPanel(panelChanges, voice.key, weights, current))}
                             hasProvider={canAsk}
                             askingProvider={asking === voice.key}
                             onAskProvider={() => askKeys([voice.key], voice.key)}
