@@ -18,7 +18,8 @@ voice wins; an enricher down leaves the voice to the next one. The others' value
 **Ask** reads (from the cache when it can) and writes nothing; it works before the asset exists. **Refresh** reads the
 assets' bindings, then — the reads all done, never under the write lock — writes each asset in its own transaction: the
 merged voices through the store (``source`` the enricher, its ``source_date``) and the ``state`` of each enricher read
-(``read_at`` UTC, ``status``, ``error_code``, ``retry_after``, ``voices``). The ``config`` is read again when writing: a
+(``read_at`` UTC, ``status``, ``error_code``, ``retry_after``, ``voices``, and ``confirmed``: voice → the moment of
+the last read that gave it, kept across failed and partial reads, D1d). The ``config`` is read again when writing: a
 binding the user removed meanwhile writes nothing, and the merge follows the order of now.
 
 This module holds the TTL cache, whose library starts a thread at import: import it lazily from modules in the import
@@ -48,7 +49,7 @@ from backend.app.logging_config import get_logger
 from backend.app.services.assets.profile.catalogue import ProfileValueError, normalize_value
 from backend.app.services.assets.profile.store import ProfileWrite, profile_today, write_values
 from backend.app.services.enrichers.base import RATE_LIMITED, EnricherBinding, EnricherPlugin, EnricherReadItem, EnricherReadStatus
-from backend.app.services.enrichers.bindings import load_enrichers, update_state
+from backend.app.services.enrichers.bindings import CONFIRMED_FIELD, load_enrichers, update_state
 from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.enrichers.usable import NOT_CONFIGURED, configured_enricher, usable_codes
 from backend.app.services.platform import call_counter
@@ -354,7 +355,17 @@ async def ask_profile(asset_type: AssetType, config: Mapping[str, Mapping[str, A
 
 
 def _state_entry(outcome: ReadOutcome, read_at: datetime) -> dict[str, Any]:
-    return {"read_at": read_at.isoformat(), "status": outcome.status.value, "error_code": outcome.error_code, "retry_after": outcome.retry_after, "voices": len(outcome.values)}
+    """The ``state`` of one read; ``confirmed`` the voices it gave, at ``read_at``. A voice held for the second round is
+    confirmed too: the source gave it, and the retry never reads that source again (D1d)."""
+    given = sorted(outcome.values) if outcome.status is EnricherReadStatus.OK else []
+    return {
+        "read_at": read_at.isoformat(),
+        "status": outcome.status.value,
+        "error_code": outcome.error_code,
+        "retry_after": outcome.retry_after,
+        "voices": len(outcome.values),
+        CONFIRMED_FIELD: dict.fromkeys(given, read_at.isoformat()),
+    }
 
 
 def _already_read(entry: Any, since: datetime) -> bool:
