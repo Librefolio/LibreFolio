@@ -11,7 +11,7 @@ This section provides the technical deep-dive for each asset pricing provider in
 | [**Borsa Italiana**](provider_borsa_italiana.md) | `borsa_italiana` | History, Search, Metadata, URL resolution | ✅ | ✅ | ISIN | Beta |
 | [**CSS Scraper**](provider_cssscraper.md) | `css_scraper` | Current Value | ✅ | ✅ | URL | Beta |
 | [**Scheduled Investment**](provider_scheduled_investment.md) | `scheduled_investment` | History (Calc), Events | — | ✅ | AUTO_GENERATED | Beta |
-| **CoinGecko** | `coingecko` | History, Search, Metadata, Current Value (bulk) | ✅ | ✅ | PROVIDER_ID | Beta |
+| [**CoinGecko**](provider_coingecko.md) | `coingecko` | History, Search, Metadata, Current Value (bulk) | ✅ | ✅ | PROVIDER_ID | Beta |
 | **Mock Provider** | `mockprov` | History, Search | — | — | TICKER, ISIN | Alpha |
 
 ### 🔑 Feature Key
@@ -73,6 +73,20 @@ Italian market data provider — fetches stocks, bonds (BTP), and ETFs listed on
 - **URL resolution**: `resolvable_url_domains = ["borsaitaliana.it"]`; `resolve_url(url)` returns the canonical IT + EN result set for fund/detail pages, then search flattens and de-dupes by `(identifier, language)`
 - **Key details**: Full OHLCV history for listed instruments, dual-language search with flag emojis, fund NAV pricing by internal `codice_fondo` (not ISIN), current fund NAV only when NAV date is today, fund history as one NAV point at its real date, `identifier_other` stored as a JSON list for alternative technical identifiers
 - 📖 [Technical Details →](provider_borsa_italiana.md)
+
+---
+
+## 🦎 [CoinGecko (`coingecko`)](provider_coingecko.md)
+
+Cryptocurrency prices from CoinGecko through its official SDK (`coingecko-sdk` 5.1.0), on the account of the shared
+group `coingecko` (an API key; the free Demo plan is enough).
+
+- **Features**: Current Value (in bulk too), History (daily), Search, Metadata
+- **Identifier type**: `PROVIDER_ID`, CoinGecko's own id (`bitcoin`), received as `IdentifierType.OTHER`
+- **Provider params**: `vs_currency`, required, one of 45 national currencies; it must be the asset's currency
+- **Key details**: the point at 00:00 UTC of day D is the close of D−1; the Demo plan answers the last 365 days, and the
+  refresh says from which day; «Powered by CoinGecko» shown with its prices
+- 📖 [Technical Details →](provider_coingecko.md)
 
 ---
 

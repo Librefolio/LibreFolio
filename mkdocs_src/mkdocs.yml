@@ -1274,6 +1274,7 @@ nav:
                   - CSS Scraper Tech: developer/backend/assets/provider_cssscraper.md
                   - Scheduled Investment Tech: developer/backend/assets/provider_scheduled_investment.md
                   - Borsa Italiana Tech: developer/backend/assets/provider_borsa_italiana.md
+                  - CoinGecko Tech: developer/backend/assets/provider_coingecko.md
               - Events: developer/backend/assets/events.md
           - "💱 FX (Currency)":
               - Architecture: developer/backend/fx/architecture.md
