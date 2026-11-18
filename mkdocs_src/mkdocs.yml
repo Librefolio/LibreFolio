@@ -1023,6 +1023,7 @@ nav:
               - CSS Scraper: user/assets/providers/css-scraper.md
               - Scheduled Investment: user/assets/providers/scheduled-investment.md
               - Borsa Italiana: user/assets/providers/borsa-italiana.md
+              - CoinGecko: user/assets/providers/coingecko.md
       - 💱 FX Rates:
           - Overview: user/fx/index.md
           - Adding a Pair: user/fx/add-pair.md
@@ -1286,6 +1287,7 @@ nav:
                   - CSS Scraper Tech: developer/backend/assets/provider_cssscraper.md
                   - Scheduled Investment Tech: developer/backend/assets/provider_scheduled_investment.md
                   - Borsa Italiana Tech: developer/backend/assets/provider_borsa_italiana.md
+                  - CoinGecko Tech: developer/backend/assets/provider_coingecko.md
               - Events: developer/backend/assets/events.md
           - "💱 FX (Currency)":
               - Architecture: developer/backend/fx/architecture.md
