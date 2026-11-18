@@ -1560,7 +1560,7 @@ async def test_probe_provider_config_history_and_metadata():
     assert "→" in response.history.date_range
     assert response.metadata is not None and response.metadata.success is True
     assert response.metadata.patch_data is not None
-    assert response.metadata.patch_data["classification_params"]["short_description"].startswith("Mock test asset PROBE_ME")
+    assert response.metadata.patch_data.get("classification_params") is None, "D6: the provider gives no classification"
     print_success("✓ Probe history + metadata paths both succeeded")
 
 
