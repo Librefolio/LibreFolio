@@ -48,6 +48,8 @@ class RollingSharpeParams(BaseModel):
         le=10.0,
         json_schema_extra={
             "x-i18n-key": "chartSettings.params.riskFreeAnnualRate",
+            # The reader's one risk-free rate, shared with the risk pages (RN-21): the chart shows it, never a field.
+            "x-control": "risk_free_rate",
             "x-control-order": 2,
             "x-step": 0.001,
             "x-tooltip-key": "signals.tooltips.riskFreeAnnualRate",

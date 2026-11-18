@@ -85,6 +85,12 @@ describe('signal params JSON Schema mapper', () => {
         });
     });
 
+    // RN-21: the reader's one risk-free rate, shared with the risk pages, is a semantic control as the comparison asset is.
+    it('maps the risk-free rate control', () => {
+        const descriptors = mapSignalParamsSchema({type: 'object', properties: {risk_free_annual_rate: {type: 'number', default: 0, 'x-control': 'risk_free_rate'}}}, {});
+        expect(descriptors[0]).toMatchObject({key: 'risk_free_annual_rate', type: 'number', control: 'risk_free_rate'});
+    });
+
     it('rejects unsupported nested parameters explicitly', () => {
         expect(() =>
             mapSignalParamsSchema({

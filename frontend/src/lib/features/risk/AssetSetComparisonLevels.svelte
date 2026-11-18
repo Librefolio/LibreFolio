@@ -74,6 +74,7 @@
     import {levelErrorHealth} from './levels/partialNotice';
     import RiskLevelSection from './levels/RiskLevelSection.svelte';
     import RiskControllerHost from './RiskControllerHost.svelte';
+    import {riskFreeRate} from './riskFreeRateStore.svelte';
 
     interface Props {
         /** Already non-empty: the caller's `{#if}` is the guard, see above. */
@@ -106,10 +107,9 @@
 
     let {assetIds, assetLabels, assetIcons, dateStart, dateEnd, targetCurrency, benchmarkId, refreshVersion = 0, benchmarkPending = false, benchmarkPicker}: Props = $props();
 
-    // Sharpe and Sortino are charged against a zero risk-free rate here, as the
-    // correlation section already does, because this page has no control to set
-    // one — and inventing a rate the reader never chose would put a number in the
-    // denominator of every ratio on screen.
+    // Sharpe, Sortino, Omega and the semi-deviation are charged the reader's risk-free rate (RN-21), the one every
+    // risk page reads: L1°'s move table and L3°'s ratios alike. 0 % until the reader sets one.
+    let appliedRiskFreePercent = $derived(riskFreeRate.percent);
 
     /** L1°: its share of the wave, and never the benchmark — not even read here. */
     const lossController = createRiskPanelController(
@@ -118,7 +118,7 @@
             dateStart,
             dateEnd,
             targetCurrency,
-            appliedRiskFreePercent: 0,
+            appliedRiskFreePercent,
             refreshVersion,
         }),
         {includeAssetSetLossLevels: true},
@@ -134,7 +134,7 @@
         dateStart,
         dateEnd,
         targetCurrency,
-        appliedRiskFreePercent: 0,
+        appliedRiskFreePercent,
         refreshVersion,
         assetSetBenchmarkId: benchmarkId,
     });

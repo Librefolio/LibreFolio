@@ -37,7 +37,8 @@
           "units": "Ou des années, mois et jours : 2a3m5j",
           "sum": "Une année compte 365 jours, un mois 30"
         }
-      }
+      },
+      "riskFreeRateHint": "Le dernier rendement d'un titre d'État court, par exemple un BTF à 12 mois."
     },
     "title": "Risque",
     "dashboardTitle": "Risque du portefeuille",
@@ -154,7 +155,9 @@
             "sortino": "Combien de rendement moyen annuel pour chaque unité de variation à la baisse : seules les baisses comptent, pas les hausses.",
             "sharpe": "Combien de rendement moyen annuel pour chaque unité de volatilité : la rémunération du risque pris, hausses et baisses confondues.",
             "beta": "De combien l'actif a bougé quand la référence bougeait : 1 veut dire autant, 2 deux fois plus, 0 indépendamment d'elle.",
-            "correlation": "À quel point l'actif et la référence ont évolué ensemble, de −1 (toujours opposés) à +1 (toujours ensemble)."
+            "correlation": "À quel point l'actif et la référence ont évolué ensemble, de −1 (toujours opposés) à +1 (toujours ensemble).",
+            "sharpeWithRate": "Combien de rendement moyen annuel au-dessus du taux sans risque pour chaque unité de volatilité : la rémunération du risque pris, hausses et baisses confondues.",
+            "sortinoWithRate": "Combien de rendement moyen annuel au-dessus du taux sans risque pour chaque unité de variation sous ce taux : seules les baisses sous le taux comptent, pas les hausses."
           },
           "axisReturn": "Rendement moyen annuel",
           "period": {
@@ -194,7 +197,9 @@
             "meanUpDown": "Le jour moyen en hausse et le jour moyen en baisse.",
             "streak": "La plus longue série de jours consécutifs en gain, et quand.",
             "averageDrawdown": "À quelle distance de son plus haut l'actif se trouvait un jour moyen de la période : toute la période sous l'eau, pas seulement la pire baisse.",
-            "extremeDays": "Combien plus souvent sont venus de très grands jours, à la hausse ou à la baisse, qu'une courbe en cloche ne le donnerait : 1× est la cloche, au-dessus les queues sont plus épaisses."
+            "extremeDays": "Combien plus souvent sont venus de très grands jours, à la hausse ou à la baisse, qu'une courbe en cloche ne le donnerait : 1× est la cloche, au-dessus les queues sont plus épaisses.",
+            "omegaWithRate": "Gains contre pertes : pour chaque euro perdu sous le taux sans risque, combien ont été gagnés au-dessus.",
+            "downsideDeviationWithRate": "Le semi-écart : combien l'actif oscille sous le taux sans risque, sur un an, dans l'unité de la volatilité."
           }
         }
       },
@@ -629,11 +634,15 @@
           "averageDrawdown": "Sous le sommet, en moyenne",
           "extremeDaysValue": "{value}× une courbe en cloche",
           "semiDeviationValue": "à la baisse {down} · sur une oscillation de {swing} sur la période",
-          "semiDeviationPerimeter": "Mesurés sur le portefeuille tel que vous l'avez détenu sur la période. Le tableau « Suis-je payé pour ce risque ? » mesure la composition actuelle : sa volatilité peut donc être différente."
+          "semiDeviationPerimeter": "Mesurés sur le portefeuille tel que vous l'avez détenu sur la période. Le tableau « Suis-je payé pour ce risque ? » mesure la composition actuelle : sa volatilité peut donc être différente.",
+          "semiDeviationValueWithRate": "sous le taux {down} · sur une oscillation de {swing} sur la période",
+          "semiDeviationBelowRate": "Le semi-écart ne compte que les jours sous le taux sans risque."
         },
         "lead": {
           "both": "Pour 1 perdu les mauvais jours, {omega} ont été gagnés les bons jours ; la plus forte hausse a duré {days}.",
-          "omega": "Pour 1 perdu les mauvais jours, {omega} ont été gagnés les bons jours."
+          "omega": "Pour 1 perdu les mauvais jours, {omega} ont été gagnés les bons jours.",
+          "omegaWithRate": "En comptant à partir du taux sans risque ({rate} par an) : pour 1 perdu en dessous, {omega} gagnés au-dessus.",
+          "bothWithRate": "En comptant à partir du taux sans risque ({rate} par an) : pour 1 perdu en dessous, {omega} gagnés au-dessus ; la plus forte hausse a duré {days}."
         }
       }
     },

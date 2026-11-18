@@ -3656,6 +3656,29 @@ def test_historical_kpi_publishes_the_shape_of_the_days_of_its_series():
     assert output.extreme_day_ratio == shape.extreme_day_ratio
 
 
+def test_historical_kpi_one_user_rate_moves_only_the_figures_that_read_it():
+    """RN-21: the user's risk-free rate goes in as both parameters (Q9 bis: one threshold for every «excess» measure).
+
+    Sharpe, Sortino, Omega and the semi-deviation read it; the volatility and the shape of the days that count gains
+    against zero do not. The result says which rate it used, so a page writes the rate of its answer, not of its field.
+    """
+    returns = _kpi_returns()
+    context = make_context({1: returns, 2: returns})
+    at_zero = HistoricalKpiAnalytic().compute(HistoricalKpiParams(), context)
+    charged = HistoricalKpiAnalytic().compute(HistoricalKpiParams(risk_free_annual_rate=0.03, target_annual_return=0.03), context)
+
+    for field in ("sharpe", "sortino", "omega_ratio", "downside_deviation"):
+        assert getattr(charged.output, field) is not None, field
+        assert getattr(charged.output, field) != getattr(at_zero.output, field), field
+    assert charged.output.sharpe < at_zero.output.sharpe
+    assert charged.output.omega_ratio < at_zero.output.omega_ratio
+    assert charged.output.downside_deviation > at_zero.output.downside_deviation
+    for field in ("volatility", "best_realization", "positive_observation_share", "mean_positive_return", "mean_negative_return", "extreme_day_ratio", "max_drawdown"):
+        assert getattr(charged.output, field) == getattr(at_zero.output, field), field
+    assert charged.risk_free is not None
+    assert charged.risk_free.annual_rate == 0.03
+
+
 def test_historical_kpi_declares_a_window_without_a_gain():
     falling = [-0.001 - 0.0002 * (index % 3) for index in range(24)]
     computation = HistoricalKpiAnalytic().compute(HistoricalKpiParams(), make_context({1: falling, 2: falling}))

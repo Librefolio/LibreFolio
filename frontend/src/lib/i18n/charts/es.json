@@ -233,6 +233,10 @@
       "blocked": "No disponibles",
       "isMainAsset": "Es el activo del gráfico",
       "alreadyCompared": "Ya comparado en otra señal"
+    },
+    "riskFreeRate": {
+      "uses": "usa tu tasa libre de riesgo: {rate}",
+      "where": "Una sola tasa para todas las páginas de riesgo y estas señales: cámbiala bajo la línea del periodo de una pestaña Riesgo."
     }
   }
 }

@@ -67,8 +67,8 @@
         dateEnd,
         targetCurrency,
         // No risk-free rate reaches a correlation: it is a rate the Sharpe family
-        // needs, and passing a live one here would re-ask the question on every
-        // keystroke in a control this section does not read.
+        // needs, and passing the reader's (RN-21) here would re-ask the question
+        // whenever it changes, for figures that do not read it.
         appliedRiskFreePercent: 0,
         refreshVersion,
     }));

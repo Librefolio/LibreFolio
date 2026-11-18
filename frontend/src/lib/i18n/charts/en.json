@@ -233,6 +233,10 @@
       "blocked": "Not available",
       "isMainAsset": "This is the asset of the chart",
       "alreadyCompared": "Already compared in another signal"
+    },
+    "riskFreeRate": {
+      "uses": "uses your risk-free rate: {rate}",
+      "where": "One rate for every risk page and these signals: change it under the period line of a Risk tab."
     }
   }
 }

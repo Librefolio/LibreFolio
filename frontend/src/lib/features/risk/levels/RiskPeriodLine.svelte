@@ -2,12 +2,16 @@
     import {_ as t} from '$lib/i18n';
 
     import {dayFormatter} from '../eligibility';
+    import RiskFreeRateField from '../RiskFreeRateField.svelte';
 
     /**
      * The period and the currency the figures below are measured on (RN-11, Q14), one line shared by every risk
      * surface: the levels' header (`RiskPanelHeader`: Dashboard, Broker) and the lab above its sections. The period is
      * the one asked for, the page's; when the analysis starts later, the level's box says so (the warning
      * `analysis_starts_late`). An open end reads «from {start}».
+     *
+     * Under it, the reader's risk-free rate (RN-21): one more condition of the figures below, so it sits where the
+     * others are said, on every surface that says them (the consultant, 17/11/2026).
      */
     interface Props {
         dateStart: string;
@@ -28,3 +32,4 @@
 {#if dateStart}
     <p class="text-xs text-lf-muted" data-testid={testId} data-start={dateStart} data-end={dateEnd} data-currency={currency}>{text}</p>
 {/if}
+<RiskFreeRateField />
