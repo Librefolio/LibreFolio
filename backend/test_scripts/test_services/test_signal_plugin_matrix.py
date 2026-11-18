@@ -188,10 +188,10 @@ EXPECTED_RISK_DOCS_PATHS = {
     "RISK_DRAWDOWN": "financial-theory/technical-analysis/risk-metrics/current-drawdown/",
     "RISK_ROLLING_VOLATILITY": "financial-theory/technical-analysis/risk-metrics/volatility/",
     "RISK_ROLLING_SHARPE": "financial-theory/technical-analysis/risk-metrics/sharpe-ratio/",
-    # RN-22: both read around the Sortino's target, whose page explains the semi-deviation today; the theory pages of
-    # the new measures are RN-24, which repoints these two.
+    # The semi-deviation is explained in the Sortino page's own section (the «How does it move?» page links it there);
+    # Omega has its page since RN-24.
     "RISK_ROLLING_DOWNSIDE_DEVIATION": "financial-theory/technical-analysis/risk-metrics/sortino-ratio/",
-    "RISK_ROLLING_OMEGA": "financial-theory/technical-analysis/risk-metrics/sortino-ratio/",
+    "RISK_ROLLING_OMEGA": "financial-theory/technical-analysis/risk-metrics/omega-ratio/",
     "RISK_ROLLING_BETA": "financial-theory/technical-analysis/risk-metrics/beta-active-return/",
     "ASSET_CALENDAR_ROLLING_RETURN": "financial-theory/fundamentals/returns/",
 }

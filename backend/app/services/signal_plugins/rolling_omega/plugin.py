@@ -68,7 +68,7 @@ class RollingOmegaPlugin(SignalPlugin):
     semantic_id = "rolling_omega_ratio"
     semantic_description = "Compares rolling gains above the target with losses below it."
     icon = "➗"
-    docs_path = "financial-theory/technical-analysis/risk-metrics/sortino-ratio/"
+    docs_path = "financial-theory/technical-analysis/risk-metrics/omega-ratio/"
     category = SignalCategory.RISK
     params_model = RollingOmegaParams
     input_requirements = SignalInputRequirements(
