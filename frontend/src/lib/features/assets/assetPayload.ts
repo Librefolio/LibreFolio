@@ -10,6 +10,7 @@
  *
  * @module features/assets/assetPayload
  */
+import type {EnricherBinding} from './enrichers/enrichersEditState';
 import {identifierRowsToColumns, type IdentifierRow} from './assetIdentifiers';
 
 /** A distribution map: `{Technology: 0.4, Health: 0.6}` etc. */
@@ -92,6 +93,13 @@ export interface AssetFormFields {
     sectorDistribution: Distribution;
     geographicDistribution: Distribution;
     identifierRows: IdentifierRow[];
+    /** The asset's enrichers (plan 68, E8a): code → binding, the order of the keys is the priority. */
+    enrichers: Record<string, EnricherBinding>;
+}
+
+/** Two enricher lists are the same when they hold the same bindings in the same order: the order is the priority. */
+export function sameEnrichers(left: Record<string, EnricherBinding>, right: Record<string, EnricherBinding>): boolean {
+    return JSON.stringify(Object.entries(left)) === JSON.stringify(Object.entries(right));
 }
 
 /**
@@ -110,6 +118,7 @@ export function buildCreateItem(form: AssetFormFields) {
         user_url: form.userUrl || undefined,
         classification_params: buildClassificationParams(form.shortDescription, form.sectorDistribution, form.geographicDistribution),
         ...identifierRowsToColumns(form.identifierRows),
+        ...(Object.keys(form.enrichers).length > 0 ? {enrichers: form.enrichers} : {}),
     };
 }
 
@@ -117,9 +126,10 @@ export function buildCreateItem(form: AssetFormFields) {
  * The item of the edit request. Unlike the create item, an empty user URL or identifier column is sent as `null` (a
  * deliberate clear) and the icon as it is; the OTHER identifiers always go as the whole list, `[]` when no row is left,
  * because the backend reads `null` there as "leave unchanged"; `classification_params` is present only when it differs
- * from the one the modal opened with (see `buildClassificationPatch`).
+ * from the one the modal opened with (see `buildClassificationPatch`); `enrichers` likewise, only when the list or its
+ * order differs from the one the modal opened with (absent means unchanged, `{}` clears them).
  */
-export function buildPatchItem(assetId: number, form: AssetFormFields, initialClassification: ClassificationParams | undefined) {
+export function buildPatchItem(assetId: number, form: AssetFormFields, initialClassification: ClassificationParams | undefined, initialEnrichers: Record<string, EnricherBinding> = {}) {
     const classificationPatch = buildClassificationPatch(initialClassification, buildClassificationParams(form.shortDescription, form.sectorDistribution, form.geographicDistribution));
     const idCols = identifierRowsToColumns(form.identifierRows);
     return {
@@ -140,6 +150,7 @@ export function buildPatchItem(assetId: number, form: AssetFormFields, initialCl
         identifier_figi: idCols.identifier_figi || null,
         identifier_uuid: idCols.identifier_uuid || null,
         identifier_other: idCols.identifier_other ?? [],
+        ...(sameEnrichers(form.enrichers, initialEnrichers) ? {} : {enrichers: form.enrichers}),
     };
 }
 

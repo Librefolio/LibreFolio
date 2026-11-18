@@ -183,6 +183,8 @@
     let providerAssignmentLoaded = $state(false);
     /** How many enrichers the asset has; null until known (the dot waits for it). */
     let assetEnricherCount = $state<number | null>(null);
+    /** The asset's enrichers as `GET /assets` answers them: the asset window edits them (plan 68, E8a). */
+    let assetEnrichers = $state<{config: Record<string, any>; state: Record<string, any>} | null>(null);
     /** Bumped after anything that writes the profile: the «Profilo» tab reads again. */
     let profileRefreshKey = $state(0);
     // The dots (plan 68, E3): «Panoramica» without a price provider, «Profilo» without an enricher — both once known.
@@ -1125,6 +1127,7 @@
         shortDescription = null;
         classificationLoaded = false;
         assetEnricherCount = null;
+        assetEnrichers = null;
         providerIconUrl = null;
 
         await Promise.all([ensureCurrenciesLoaded(get(currentLanguage)), ensureAssetProvidersCached(), loadAssetInfo(), loadProviderAssignment(), loadAssetSignalDefinitions(), loadFxPairSlugs(), loadAssetList()]);
@@ -1606,7 +1609,8 @@
                 queries: {asset_ids: [data.assetId]},
             });
             const items = response as any[];
-            // The «Profilo» tab's dot: how many enrichers the asset has (its bindings, plan 68 B3)
+            // The asset's enrichers (its bindings, plan 68 B3): the «Profilo» tab's dot, and the asset window's list (E8a)
+            assetEnrichers = items.length > 0 && items[0].enrichers ? {config: items[0].enrichers.config ?? {}, state: items[0].enrichers.state ?? {}} : null;
             assetEnricherCount = items.length > 0 ? Object.keys(items[0].enrichers?.config ?? {}).length : null;
             if (items.length > 0 && items[0].classification_params) {
                 const cp = items[0].classification_params;
@@ -2377,6 +2381,7 @@
             provider_params: providerAssignment?.provider_params ?? null,
             provider_user_url: assetInfo.user_url ?? '',
             provider_url: providerAssignment?.provider_url ?? null,
+            enrichers: assetEnrichers,
         };
     }
 

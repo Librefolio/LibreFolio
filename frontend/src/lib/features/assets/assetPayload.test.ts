@@ -180,6 +180,7 @@ function form(overrides: Partial<AssetFormFields> = {}): AssetFormFields {
         sectorDistribution: {},
         geographicDistribution: {},
         identifierRows: [],
+        enrichers: {},
         ...overrides,
     };
 }
@@ -326,6 +327,30 @@ describe('buildPatchItem', () => {
             const item = buildPatchItem(1, form({shortDescription: 'Phones and computers', sectorDistribution: {Technology: 1}, geographicDistribution: {USA: 1}}), initial);
             expect(item).toHaveProperty('classification_params', {short_description: 'Phones and computers', geographic_area: {distribution: {USA: 1}}});
         });
+    });
+});
+
+describe('the enrichers on the asset (plan 68, E8a)', () => {
+    const JUSTETF = {identifier_type: 'ISIN', identifier: 'IE00BK5BQT80'};
+    const YAHOO = {identifier_type: 'TICKER', identifier: 'VWCE.DE'};
+
+    it('creates the asset with the enrichers chosen, in their order, and without the key when there are none', () => {
+        const item = buildCreateItem(form({enrichers: {yahoo_finance: YAHOO, justetf: JUSTETF}}));
+        expect(Object.keys(item.enrichers ?? {})).toEqual(['yahoo_finance', 'justetf']);
+        expect(item.enrichers).toEqual({yahoo_finance: YAHOO, justetf: JUSTETF});
+        expect(buildCreateItem(form())).not.toHaveProperty('enrichers');
+    });
+
+    it('leaves the enrichers out of an edit that did not change them: absent means unchanged', () => {
+        const initial = {justetf: JUSTETF, yahoo_finance: YAHOO};
+        expect(buildPatchItem(1, form({enrichers: {justetf: {...JUSTETF}, yahoo_finance: {...YAHOO}}}), undefined, initial)).not.toHaveProperty('enrichers');
+    });
+
+    it('sends the whole list when the order, a binding or the set changed; {} to clear them all', () => {
+        const initial = {justetf: JUSTETF, yahoo_finance: YAHOO};
+        expect(buildPatchItem(1, form({enrichers: {yahoo_finance: YAHOO, justetf: JUSTETF}}), undefined, initial).enrichers).toEqual({yahoo_finance: YAHOO, justetf: JUSTETF});
+        expect(buildPatchItem(1, form({enrichers: {justetf: JUSTETF, yahoo_finance: {...YAHOO, identifier: 'VWRA.L'}}}), undefined, initial)).toHaveProperty('enrichers');
+        expect(buildPatchItem(1, form({enrichers: {}}), undefined, initial).enrichers).toEqual({});
     });
 });
 

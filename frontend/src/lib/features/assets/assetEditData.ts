@@ -3,6 +3,7 @@ import {zodiosApi} from '$lib/api';
 import {safeNumber, safeScalar, safeString} from '$lib/types/common';
 import type AssetModal from './AssetModal.svelte';
 import {normalizeDistribution} from './assetPayload';
+import type {EnricherBinding, EnricherReadState} from './enrichers/enrichersEditState';
 
 export type AssetEditData = NonNullable<ComponentProps<typeof AssetModal>['editData']>;
 
@@ -52,5 +53,7 @@ export async function loadAssetEditData(assetId: number): Promise<AssetEditData>
         provider_params: safeScalar(assignment?.provider_params),
         provider_user_url: safeString(asset.user_url) ?? '',
         provider_url: safeString(assignment?.provider_url),
+        // The asset's enrichers (plan 68, E8a): the asset window shows the list and sends it only when changed
+        enrichers: detail.enrichers ? {config: (safeScalar(detail.enrichers)?.config ?? {}) as Record<string, EnricherBinding>, state: (safeScalar(detail.enrichers)?.state ?? {}) as Record<string, EnricherReadState>} : null,
     };
 }
