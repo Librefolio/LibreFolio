@@ -214,27 +214,33 @@ describe('cardProblem — the red message at the top of the card', () => {
     it('an invalid limit variable, named: the administrator’s text with the variable and the provider', () => {
         const fields = [CURRENCY, LIMITS[0], LIMITS[1], invalidDay('LF_DAY'), LIMITS[3], limit('month', {editable: false, locked: true, source: 'env', problem: 'invalid_env', env_variable: 'LF_MONTH'})];
 
-        expect(cardProblem(entry({configured: false, fields}), 'justETF')).toStrictEqual({kind: 'invalidLimitAdmin', key: 'pluginSettings.notConfigured.invalidLimitAdmin', values: {provider: 'justETF', variable: 'LF_DAY, LF_MONTH'}});
+        expect(cardProblem(entry({configured: false, fields}), 'justETF', false)).toStrictEqual({kind: 'invalidLimitAdmin', key: 'pluginSettings.notConfigured.invalidLimitAdmin', values: {provider: 'justETF', variable: 'LF_DAY, LF_MONTH'}});
     });
 
     it('an invalid limit variable, not named (another user): «stopped, tell the administrator»', () => {
         const fields = [CURRENCY, LIMITS[0], LIMITS[1], invalidDay(null), LIMITS[3], LIMITS[4]];
 
-        expect(cardProblem(entry({configured: false, fields}), 'justETF')).toStrictEqual({kind: 'invalidMember', key: 'pluginSettings.notConfigured.invalidMember', values: {provider: 'justETF'}});
+        expect(cardProblem(entry({configured: false, fields}), 'justETF', false)).toStrictEqual({kind: 'invalidMember', key: 'pluginSettings.notConfigured.invalidMember', values: {provider: 'justETF'}});
     });
 
-    it('the managed profile: not configured, every limit hidden, nothing shown to fix → the managed text', () => {
-        expect(cardProblem(entry({configured: false, fields: [], call_usage: usage()}), 'Yahoo Finance')).toStrictEqual({kind: 'managed', key: 'pluginSettings.notConfigured.managed', values: {provider: 'Yahoo Finance'}});
+    // U5b (the consultant, 19/11): in the managed profile the catalogue's own reason decides, the readiness check's
+    // (`reason`), never a guess from what the card shows; the same text for an administrator and a member, no button.
+    it('managed, reason invalid_locked_setting → the managed text, whatever the card shows (some limits, a group)', () => {
+        const managedText = (provider: string) => ({kind: 'managed', key: 'pluginSettings.notConfigured.managed', values: {provider}});
+        expect(cardProblem(entry({configured: false, reason: 'invalid_locked_setting', fields: [], call_usage: usage()}), 'Yahoo Finance', true)).toStrictEqual(managedText('Yahoo Finance'));
+        expect(cardProblem(entry({configured: false, reason: 'invalid_locked_setting', fields: [CURRENCY, LIMITS[0], LIMITS[1]]}), 'justETF', true), 'only some limits locked').toStrictEqual(managedText('justETF'));
+        expect(cardProblem(entry({configured: false, reason: 'invalid_locked_setting', groups: ['mock']}), 'X', true), 'with a group').toStrictEqual(managedText('X'));
     });
 
-    it('no message: configured; or something shown explains it (a required field unset, a field’s problem, a group)', () => {
-        const managed = {fields: [], call_usage: usage()};
-        expect(cardProblem(entry(), 'justETF')).toBeNull();
-        expect(cardProblem(entry({...managed}), 'Yahoo Finance'), 'managed but configured').toBeNull();
-        expect(cardProblem(entry({...managed, configured: false, fields: [field({key: 'api_key', secret: true, required: true, type: 'string'})]}), 'X')).toBeNull();
-        expect(cardProblem(entry({...managed, configured: false, fields: [field({key: 'region', type: 'string', problem: 'invalid_stored'})]}), 'X')).toBeNull();
-        expect(cardProblem(entry({...managed, configured: false, groups: ['mock']}), 'X')).toBeNull();
-        expect(cardProblem(entry({configured: false, fields: [CURRENCY, ...LIMITS]}), 'X'), 'not managed, no invalid limit: the fields say why').toBeNull();
+    it('managed, any other reason → no message on top (the fields say why)', () => {
+        expect(cardProblem(entry({configured: false, reason: 'missing_fields', fields: [], call_usage: usage()}), 'Yahoo Finance', true)).toBeNull();
+        expect(cardProblem(entry({reason: null}), 'justETF', true), 'configured').toBeNull();
+    });
+
+    it('outside managed: unchanged, and never the managed text guessed from a hidden card', () => {
+        expect(cardProblem(entry(), 'justETF', false)).toBeNull();
+        expect(cardProblem(entry({configured: false, fields: [], call_usage: usage()}), 'Yahoo Finance', false)).toBeNull();
+        expect(cardProblem(entry({configured: false, fields: [CURRENCY, ...LIMITS]}), 'X', false), 'no invalid limit: the fields say why').toBeNull();
     });
 });
 
