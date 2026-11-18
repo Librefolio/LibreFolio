@@ -181,6 +181,7 @@ function form(overrides: Partial<AssetFormFields> = {}): AssetFormFields {
         geographicDistribution: {},
         identifierRows: [],
         enrichers: {},
+        profile: {},
         ...overrides,
     };
 }
@@ -351,6 +352,20 @@ describe('the enrichers on the asset (plan 68, E8a)', () => {
         expect(buildPatchItem(1, form({enrichers: {yahoo_finance: YAHOO, justetf: JUSTETF}}), undefined, initial).enrichers).toEqual({yahoo_finance: YAHOO, justetf: JUSTETF});
         expect(buildPatchItem(1, form({enrichers: {justetf: JUSTETF, yahoo_finance: {...YAHOO, identifier: 'VWRA.L'}}}), undefined, initial)).toHaveProperty('enrichers');
         expect(buildPatchItem(1, form({enrichers: {}}), undefined, initial).enrichers).toEqual({});
+    });
+});
+
+describe('the profile on the asset (plan 68, E8b)', () => {
+    const PROFILE = {ter: '0.002', fund_provider: {from: 'justetf', seen: 'Vanguard'}, withholding_tax: null};
+
+    it('creates the asset with the pending changes of the profile, and without the key when there are none', () => {
+        expect(buildCreateItem(form({profile: PROFILE})).profile).toEqual(PROFILE);
+        expect(buildCreateItem(form())).not.toHaveProperty('profile');
+    });
+
+    it('sends the profile on an edit only when a change waits: absent leaves every voice untouched', () => {
+        expect(buildPatchItem(1, form({profile: PROFILE}), undefined).profile).toEqual(PROFILE);
+        expect(buildPatchItem(1, form(), undefined)).not.toHaveProperty('profile');
     });
 });
 

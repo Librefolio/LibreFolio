@@ -95,6 +95,15 @@ export interface AssetFormFields {
     identifierRows: IdentifierRow[];
     /** The asset's enrichers (plan 68, E8a): code → binding, the order of the keys is the priority. */
     enrichers: Record<string, EnricherBinding>;
+    /**
+     * The profile's pending changes, as `PATCH /assets` takes them (`profilePatch`, plan 68 E8b): voice → a value, null
+     * (left empty on purpose) or `{from, seen}` (a source's value). Absent or empty: nothing to write.
+     */
+    profile?: Record<string, unknown>;
+}
+
+function profileOf(form: AssetFormFields): {profile?: Record<string, unknown>} {
+    return form.profile && Object.keys(form.profile).length > 0 ? {profile: form.profile} : {};
 }
 
 /** Two enricher lists are the same when they hold the same bindings in the same order: the order is the priority. */
@@ -119,6 +128,7 @@ export function buildCreateItem(form: AssetFormFields) {
         classification_params: buildClassificationParams(form.shortDescription, form.sectorDistribution, form.geographicDistribution),
         ...identifierRowsToColumns(form.identifierRows),
         ...(Object.keys(form.enrichers).length > 0 ? {enrichers: form.enrichers} : {}),
+        ...profileOf(form),
     };
 }
 
@@ -151,6 +161,7 @@ export function buildPatchItem(assetId: number, form: AssetFormFields, initialCl
         identifier_uuid: idCols.identifier_uuid || null,
         identifier_other: idCols.identifier_other ?? [],
         ...(sameEnrichers(form.enrichers, initialEnrichers) ? {} : {enrichers: form.enrichers}),
+        ...profileOf(form),
     };
 }
 
