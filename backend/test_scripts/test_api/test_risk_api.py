@@ -24,7 +24,7 @@ from backend.app.config import set_test_mode
 from backend.app.db.models import Asset, AssetType, PriceHistory, User
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.risk.results import RiskAnalyticResult, RiskError, RiskQueryResponse
-from backend.app.schemas.risk.vocabulary import RiskErrorCode, RiskResultStatus
+from backend.app.schemas.risk.vocabulary import RiskErrorCode, RiskHistoricalReplayExclusionReason, RiskResultStatus
 from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS, STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.risk.quant.workers import (
     shutdown_quant_worker_pools,
@@ -486,6 +486,13 @@ async def test_risk_query_runs_all_analytics_against_populated_test_database():
         "p95": pytest.approx(0),
     }
     assert len(simulation["percentile_bands"]) == 31
+    # RN-16: estimated on its own history read from the database — all the common history up to today, never the
+    # page's period — and stated with the answer, with none of the page-period warnings (it has no requested start).
+    assert simulation["estimation_start"] is not None and simulation["estimation_end"] is not None
+    assert simulation["estimation_start"] < simulation["estimation_end"] <= date.today().isoformat()
+    assert simulation["estimation_observations"] == simulation_result["metadata"]["n_observations"]
+    assert simulation["requested_path_count"] == 256
+    assert not {"analysis_starts_late", "short_history"} & {warning["code"] for warning in simulation_result["warnings"]}
 
 
 @pytest.mark.asyncio
@@ -901,3 +908,79 @@ async def test_asset_eligibility_carries_the_common_span_and_the_proposal_it_ver
     assert body["common_range"] == {"start": "2013-02-01", "end": "2013-06-30"}
     # The period trimmed to the common span, from the day after the late asset's first quote.
     assert body["suggested_range"] == {"start": "2013-02-02", "end": ELIGIBILITY_END.isoformat()}
+
+
+@pytest.mark.asyncio
+async def test_risk_query_answers_the_asset_detail_s_own_levels_on_one_asset():
+    """RN-17: the Asset Detail's tab asks, on one asset in `current_composition`, the KPI, the asset's own risk/return pair
+    (`asset_risk_return` on scope `asset`, consultant 17/11 «A») and the comparison with a reference, and a replay with nothing left — the real service on
+    the populated test database answers all three, the pair being the asset's own, weight 1."""
+    user_id = await fixture_user_id()
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api/v1")
+
+    async def current_user():
+        return SimpleNamespace(id=user_id)
+
+    app.dependency_overrides[get_current_user] = current_user
+    end = date.today() - timedelta(days=3)
+    start = end - timedelta(days=297)
+    window = {"start": start.isoformat(), "end": end.isoformat()}
+
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            # Two held, priced assets of broker 3, chosen by what they are (a measured volatility), lowest ids first.
+            holdings = await client.post(
+                f"{API_BASE}/query",
+                json={"scope": {"kind": "portfolio", "broker_ids": [3]}, "date_range": window, "target_currency": "EUR", "mode": "current_composition", "composition_policy": "current_buy_and_hold", "analytics": [{"instance_id": "pairs", "analytic_code": "asset_risk_return"}]},
+            )
+            assert holdings.status_code == 200
+            measured = sorted(item["asset_id"] for item in holdings.json()["items"][0]["output"]["items"] if item["volatility"] is not None)
+            assert len(measured) >= 2, "premise: broker 3 holds two priced assets"
+            subject, reference = measured[0], measured[1]
+
+            response = await client.post(
+                f"{API_BASE}/query",
+                json={
+                    "scope": {"kind": "asset", "asset_id": subject},
+                    "date_range": window,
+                    "target_currency": "EUR",
+                    "mode": "current_composition",
+                    "composition_policy": "current_buy_and_hold",
+                    "analytics": [
+                        {"instance_id": "kpi", "analytic_code": "historical_kpi"},
+                        {"instance_id": "pair", "analytic_code": "asset_risk_return"},
+                        {"instance_id": "comparison", "analytic_code": "comparison", "parameters": {"comparison_asset_id": reference}},
+                        # A replay long before any seeded price: on one asset nothing is left to replay.
+                        {"instance_id": "replay", "analytic_code": "stress", "parameters": {"method": "historical_replay", "replay_range": {"start": "2000-01-03", "end": "2000-03-31"}}},
+                        # RN-16b: a simulation on one asset — its only holding is never left out, and its window of one
+                        # holding stays in the calendar (a million-day price budget once started it before year 1).
+                        {"instance_id": "simulation", "analytic_code": "simulation", "parameters": {"horizon_days": 30, "path_count": 1024}},
+                    ],
+                },
+            )
+    finally:
+        await shutdown_quant_worker_pools()
+
+    assert response.status_code == 200
+    by_id = {item["instance_id"]: item for item in response.json()["items"]}
+    for instance in ("kpi", "pair", "comparison"):
+        assert by_id[instance]["status"] in {"ok", "partial"} and by_id[instance]["output"] is not None, by_id[instance]
+        assert by_id[instance]["metadata"]["scope"] == "asset"
+    pair = by_id["pair"]["output"]
+    assert [(item["asset_id"], item["weight"]) for item in pair["items"]] == [(subject, 1.0)]
+    assert pair["portfolio_expected_annual_return"] == pytest.approx(pair["items"][0]["expected_annual_return"], rel=1e-12)
+    assert pair["portfolio_volatility"] == pytest.approx(pair["items"][0]["volatility"], rel=1e-12)
+    assert by_id["comparison"]["output"]["comparison_asset_id"] == reference
+    # The «nothing left» answer the tab's replay reads (`replayNothingLeft`): refused as insufficient history, the asset
+    # listed with its reason and no weight (one asset is an unweighted scope) — never another code, which the tab
+    # would show as a plain error.
+    simulation = by_id["simulation"]
+    assert simulation["status"] in {"ok", "partial"} and simulation["output"] is not None, simulation
+    assert not any(warning["code"] == "simulation_asset_shorter_than_horizon" for warning in simulation["warnings"])
+    replay = by_id["replay"]
+    assert replay["status"] == "unavailable" and replay["error"]["code"] == "insufficient_history", replay
+    assert [(item["asset_id"], item["weight"]) for item in replay["error"]["details"]["excluded_assets"]] == [(subject, None)]
+    # The reason is the engine's (here the first gap it meets: prices, or FX that far back), always one the tab names.
+    assert replay["error"]["details"]["excluded_assets"][0]["reason"] in {reason.value for reason in RiskHistoricalReplayExclusionReason}

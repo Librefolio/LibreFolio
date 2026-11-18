@@ -8,7 +8,7 @@
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
 
-    import {formatCurrencyAmount} from '../riskAnalysisHelpers';
+    import {amountOnValue, formatCurrencyAmount} from '../riskAnalysisHelpers';
     import {buildCurrentDrawdown, buildHurtRows} from './levelHelpers';
     import {buildReturnHistogram, buildTailMeasures, buildUnderwater, gainPercent, lossAmount, lossPercent} from './l1/l1Helpers';
     import ReturnHistogram from './l1/ReturnHistogram.svelte';
@@ -78,8 +78,22 @@
 
     /** The money a loss fraction costs at the current scope value; a zero loss carries no minus. */
     function lossMoney(fraction: number): string {
-        if (!showMoney || scopeValue == null) return '';
-        return lossAmount(scopeValue * fraction, (value) => formatCurrencyAmount(value, currency));
+        const amount = showMoney ? amountOnValue(fraction, scopeValue) : null;
+        return amount === null ? '' : lossAmount(amount, (value) => formatCurrencyAmount(value, currency));
+    }
+
+    /**
+     * A fall's money said as what it is (RN-11, C8): today's value times the fall, not what was lost when it
+     * happened — a 20 % fall from 100 000 to 80 000 lost 20 000, and the card reads 80 000 × 20 % = 16 000.
+     * For the worst and the current fall only: a bad day or month on today's value needs no such word.
+     */
+    function sameFallToday(money: string): string {
+        return money === '' ? '' : $t('risk.levels.l1.sameFallToday', {values: {amount: money}});
+    }
+
+    /** A loss card's money: the worst fall's says it is the same fall on today's value (C8). */
+    function rowCaption(row: {id: string; loss: number}): string {
+        return caption(row.id === 'worst' ? sameFallToday(lossMoney(row.loss)) : lossMoney(row.loss));
     }
 
     /**
@@ -98,7 +112,7 @@
     /**
      * The card's subtitle, what the parentheses of the title used to say (F8): which part of the distribution, and the measure's name.
      * The worst fall's is built from two catalogue names — «lived through» and the glossary's own «maximum drawdown» — so the measure
-     * keeps the one name `riskGlossary.test.ts` holds everywhere.
+     * keeps one name (D8; since RN-17 c the legacy KPI card that named it a second time is gone).
      */
     function subtitle(id: 'day' | 'month' | 'worst'): string {
         return id === 'worst' ? `${$t('risk.levels.l1.technical.lived')} · ${$t('risk.levels.l1.technical.worst')}` : $t(`risk.levels.l1.technical.${id}`);
@@ -164,7 +178,7 @@
         <div data-testid="risk-l1-cards">
             <RiskCardGrid>
                 {#each rows as row (row.id)}
-                    <RiskMetricCard layout="figure" label={$t(`risk.levels.l1.rows.${row.id}`)} technicalName={subtitle(row.id)} value={lossPercent(row.loss)} caption={caption(lossMoney(row.loss))} sentiment="negative" docsPath={DOC_PATHS[row.id]} testId="risk-l1-card-{row.id}">
+                    <RiskMetricCard layout="figure" label={$t(`risk.levels.l1.rows.${row.id}`)} technicalName={subtitle(row.id)} value={lossPercent(row.loss)} caption={rowCaption(row)} sentiment="negative" docsPath={DOC_PATHS[row.id]} testId="risk-l1-card-{row.id}">
                         {#snippet submetrics()}
                             <!-- Every card has the same shape (F8, 06/11/2026): which one it was, then the figures that refine the card's
                                  own. The day: the worst day seen and its date. The month: the worst 30 days really lived through and their
@@ -208,7 +222,7 @@
                         label={$t('risk.levels.l1.currentDrawdown')}
                         technicalName={$t('risk.levels.l1.technical.current')}
                         value={lossPercent(current.loss)}
-                        caption={caption(lossMoney(current.loss))}
+                        caption={caption(sameFallToday(lossMoney(current.loss)))}
                         sentiment="negative"
                         docsPath="{DOCS}/current-drawdown/"
                         testId="risk-l1-card-current"

@@ -153,6 +153,11 @@ perform blocking I/O directly on the application's main event loop.
 |--------|---------|-------------|
 | `get_icon` | `None` | Provider icon URL for the UI |
 | `supports_history` | `True` | Set `False` for providers that only support current prices (e.g., web scrapers) |
+| `supports_bulk_current` | `False` | A class attribute: `True` when `get_current_values_bulk` prices many assets in one request. Checked when the class is defined: `True` without an override stops the import. See [Current Values in Bulk](#bulk-current) |
+| `calls_external_service` | `True` | A class attribute: whether the provider reaches an external service. Each call through `call_provider()` is then counted before it leaves, on the provider's row or on the shared group whose credits it spends, and refused (`AssetCallLimitError`, a `RATE_LIMITED` refusal) when an instance limit is full (project 76, `services/platform/call_counter.py`). `False` for a provider that computes its answers with no network, such as `scheduled_investment` |
+| `bulk_current_max_items` | `100` | A class attribute: the most items one `get_current_values_bulk` call receives, a whole number of at least 1; the core splits a larger group |
+| `get_current_values_bulk(items)` | Raises `NOT_SUPPORTED` | The current value of many assets in one call, each answer under its item's `key`. See [Current Values in Bulk](#bulk-current) |
+| `current_min_refresh_seconds` | `None` | A property: how long a current value stays fresh, in seconds; `None` keeps two minutes, less than two minutes is ignored. For a source with a budget of calls, read it from a setting (`self.settings`): the core reads it on the configured instance only, before the call and outside the provider's thread, so no I/O here. See [Asset Architecture → Current Values Read in Bulk](../../backend/assets/architecture.md#bulk-current-reads) |
 | `params_schema` | `[]` | List of field definitions for `provider_params`. Used by frontend to generate dynamic forms. Each field has a `key`, a `type` (`string`, `number`, `currency`, `select` with `options` / `option_labels`, or `ui_component` for a custom editor), `required` (shown with a red `*`), and optionally `default`, `placeholder`, a short `label` (the caption) and a `description` (the tooltip). The caption is the translation `assets.providerParams.<code>.label.<key>`, else `label`, else the raw `key` — declare a `label` so users do not see internal names; the tooltip is `assets.providerParams.<code>.description.<key>`, else `description`. Both translations live in the provider's own fragment: see [Plugin Folder and Translations](#plugin-folder). The parameters belong to one asset and are stored in clear with it: never a secret there, see [Settings](#settings). |
 | `get_asset_url(identifier, type, params)` | `None` | Generate URL to the provider's page for this asset (e.g., Yahoo Finance quote page). Shown to the user: never a secret in it, see [Secrets](#secrets) |
 | `resolvable_url_domains` | `[]` | Domains this provider can turn a page URL back into a search-item for (opt-in). See [Asset Search & Link-Finder](../../backend/assets/search_link_finder.md). |
@@ -194,6 +199,11 @@ overrides:
 - **The instance's overrides**, read at every call (`config/plugins.py`): `LIBREFOLIO_ASSET_PROVIDERS_PREMIUM` makes
   exactly the listed providers premium; `LIBREFOLIO_ASSET_PROVIDERS_ORDER` puts the listed providers first, in its
   order. A code that no provider has is ignored and logged once.
+- **Switched off by the instance** (project 76, X1): with `LIBREFOLIO_ASSET_PROVIDERS_ENABLED` set, a provider it does
+  not list is absent everywhere: the registry finds it nowhere (`AbstractPluginRegistry._switched_off`, beside the
+  test-only rule X-R44), so no list, search, assignment, setting or call reaches it. A new plugin therefore stays off
+  on such an instance until the administrator lists it. Exchange-rate providers have the twin
+  `LIBREFOLIO_FX_PROVIDERS_ENABLED`, which never switches off `MANUAL`.
 
 `GET /assets/provider` shows each provider's effective `tier` and `priority`. The non-streaming search
 (`GET /assets/provider/search`) returns the results in this order; the streaming one sends them as they arrive, and
@@ -586,6 +596,61 @@ single `***` ([Secrets](plugin_settings.md#secrets)).
 
 The full contract (types, environment variables, secrets, caching, the API and the security model)
 is in [Plugin Settings](plugin_settings.md).
+
+---
+
+## 📦 Current Values in Bulk {: #bulk-current }
+
+Some sources answer many identifiers in one request: Yahoo's quote list, CoinGecko's `/simple/price`. A provider built
+on one says so with `supports_bulk_current = True` and implements `get_current_values_bulk(items)`; the core can then
+price all its assets with one call instead of one call per asset. A provider that does not stays on the per-asset path
+of `get_current_value()`, unchanged.
+
+Each item is an `FACurrentValueRequest` (`backend/app/schemas/prices.py`): the `identifier`, `identifier_type` and
+`provider_params` that `get_current_value()` would receive, and a `key` chosen by the core. The answer is a dict:
+
+| The source says | The plugin answers |
+|---|---|
+| a price for the asset | `answer[item.key] = FACurrentValue(...)`, exactly what `get_current_value()` gives for the same inputs |
+| an error for that asset alone (unknown identifier, no price) | `answer[item.key] = AssetSourceError(...)`: the other assets still answer |
+| nothing about the asset | leave `item.key` out: the core serves the asset's last stored price |
+| «too many requests» for the request | raise `AssetRateLimitedError` for the whole call: the core pauses the provider, as for any call ([Too Many Requests](#too-many-requests)) |
+| any other failure of the request | raise `AssetSourceError` for the whole call |
+
+- **One request, never a loop.** Do not implement it as a loop over `get_current_value()`: the core already makes
+  those calls, each with its own pause scope (`cooldown_scope()`) and timeout, and a loop inside one call would lose
+  both.
+- **At most `bulk_current_max_items` items** reach one call: set it to the source's own limit, or to what fits in one
+  request URL.
+- **Same answer as the single call.** Value, currency and `as_of_date` must match what `get_current_value()` returns
+  for the same asset, so the two paths can be swapped freely; a test on one recorded response should show it.
+- The declarations are checked when the class is defined: `supports_bulk_current` a bool,
+  `bulk_current_max_items` a whole number of at least 1, and `True` only beside an override.
+
+```python
+class MyProvider(AssetSourceProvider):
+    supports_bulk_current = True
+    bulk_current_max_items = 50
+
+    async def get_current_values_bulk(self, items):
+        try:
+            rows = self._client.quotes([item.identifier for item in items])  # one request
+        except Exception as error:
+            raise_if_rate_limited(error, self.provider_name)
+            raise AssetSourceError(f"Bulk quote failed: {error}", "FETCH_ERROR") from error
+        by_symbol = {row["symbol"]: row for row in rows}
+        answer = {}
+        for item in items:
+            row = by_symbol.get(item.identifier)
+            if row is None:
+                continue  # nothing about this asset: the core serves its last stored price
+            answer[item.key] = FACurrentValue(value=row["price"], currency=row["currency"], as_of_date=row["date"], source=self.provider_name)
+        return answer
+```
+
+The test-only `mockprov` reads in bulk: it answers every item as `get_current_value()` would, records the keys of each
+call (`mock_bulk_calls()`, `reset_mock_bulk_calls()`), leaves out an item whose `provider_params` hold
+`mock_bulk_omit`, and refuses the whole call for an item that holds `mock_rate_limited`.
 
 ---
 

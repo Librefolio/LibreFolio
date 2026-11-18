@@ -20,7 +20,8 @@ oculta las divisas que ya están emparejadas con la otra, por lo que un par no s
 Haz clic en **Añadir ruta de conversión** para ver todas las formas en que los proveedores pueden producir este tipo de cambio:
 
 - 🔗 **Conversión directa (1 paso)** — un proveedor publica el par;
-- 🔀 **Conversión en cadena** — pasa por otras divisas, agrupada por número de pasos;
+- 🔀 **Conversión en cadena** — pasa por otras divisas, agrupada por número de pasos; un grupo grande muestra
+  sus primeras 200 rutas y un botón **Mostrar más** para las demás;
 - 🚫 **No utilizables** — proveedores que no pueden alcanzar este par.
 
 Filtra con el cuadro de búsqueda (proveedor, divisa o país) y luego haz clic en una ruta para añadirla.

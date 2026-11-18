@@ -6,6 +6,7 @@ import asyncio
 import threading
 
 from backend.app.services.risk.quant.models import (
+    MAX_HISTORY_OBSERVATIONS,
     SimulationEngineRequest,
     SimulationEngineResult,
     simulation_cache_key,
@@ -21,6 +22,8 @@ from backend.app.utils.runtime.cache import get_ttl_cache
 MAX_PORTFOLIO_CELLS = 20_000_000
 MAX_STOCHASTIC_CELLS = 200_000_000
 MAX_HISTORY_CELLS = 250_000
+# The fewest paths a simulation falls to before it is «too large» (developer's Q5 a, 16/11/2026, «per ora»).
+MIN_SIMULATION_PATHS = 1024
 
 _simulation_cache = get_ttl_cache(
     "risk_simulation",
@@ -118,6 +121,38 @@ def clear_simulation_cache() -> None:
     _simulation_cache.clear()
 
 
+def history_observation_cap(asset_count: int) -> int:
+    """The most observations a bootstrap history may carry across the process boundary for ``asset_count`` positions.
+
+    Both ceilings at once: ``MAX_HISTORY_OBSERVATIONS`` rows, and ``MAX_HISTORY_CELLS`` rows × positions. A longer
+    history keeps its most recent observations up to this count (RN-16, developer's Q4 c with Q5's rule).
+    """
+    return min(MAX_HISTORY_OBSERVATIONS, MAX_HISTORY_CELLS // max(asset_count, 1))
+
+
+def fit_path_count(requested: int, *, horizon_days: int, asset_count: int) -> int | None:
+    """The path count a simulation runs: ``requested`` when it fits the budgets, otherwise the largest power of two
+    below it that does, never under ``MIN_SIMULATION_PATHS`` — None when not even those fit (RN-16, developer's Q5 a).
+
+    The budgets are :func:`validate_resource_budget`'s two path budgets: the percentile matrix (paths × days + 1) and
+    the stochastic workload (paths × days × positions). A request that fits stays as asked, power of two or not.
+    """
+
+    def fits(paths: int) -> bool:
+        return paths * (horizon_days + 1) <= MAX_PORTFOLIO_CELLS and paths * horizon_days * asset_count <= MAX_STOCHASTIC_CELLS
+
+    if fits(requested):
+        return requested
+    paths = 1 << (requested.bit_length() - 1)
+    if paths == requested:
+        paths //= 2
+    while paths >= MIN_SIMULATION_PATHS:
+        if fits(paths):
+            return paths
+        paths //= 2
+    return None
+
+
 def validate_resource_budget(
     request: SimulationEngineRequest,
 ) -> None:
@@ -154,8 +189,11 @@ __all__ = [
     "MAX_HISTORY_CELLS",
     "MAX_PORTFOLIO_CELLS",
     "MAX_STOCHASTIC_CELLS",
+    "MIN_SIMULATION_PATHS",
     "SimulationResourceLimitError",
     "clear_simulation_cache",
+    "fit_path_count",
+    "history_observation_cap",
     "run_simulation",
     "validate_resource_budget",
 ]

@@ -77,7 +77,7 @@ backend/app/services/financial_math/
 ├── series_steps.py          series as steps (D-P4): the point holding a day (value_at), the points of a window clipped (points_between), the steps of a list of change rows (steps_from_rows, Decimals compared with their exponent)
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
 ├── acceptable_cost.py       the Rebalancer's table «maximum acceptable cost»: rows to two significant digits, 2·λ·d²/F, λ from euros
-├── weights.py               a share of a total (none on a total ≤ 0), allocation slices (none on a sum ≤ 0), gross weights, concentration (largest weight, HHI), the largest deviation from targets
+├── weights.py               a share of a total (none on a total ≤ 0), allocation slices (none on a sum ≤ 0), gross weights, concentration (largest weight, HHI), N_eff, the largest deviation from targets
 ├── splits.py                stock splits in the ledger: the ADJUSTMENT rows linked to a SPLIT asset event (one query), the ids an average-cost replay rescales, the usable-ratio rule, the incoming adjustments without a cost that a SPLIT retype must not orphan, the split a share change implies (`implied_split_ratio`)
 ├── holding_window.py        how long a position has been held at its broker: oldest open lot, a closed position's window, its exits, the move that closed it (`closing_move`)
 ├── fifo/                    the lots, matched in FIFO or LIFO (the name stays fifo/, D5)

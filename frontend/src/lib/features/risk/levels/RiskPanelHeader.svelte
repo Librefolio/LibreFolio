@@ -12,6 +12,8 @@
     import {addPairSides, buildSyncTargets, labQualityAction} from '$lib/features/risk/syncTargets';
 
     import {RotateCw} from 'lucide-svelte';
+    import RiskPeriodLine from './RiskPeriodLine.svelte';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     /**
      * Everything above the answer: what it is, how stale it is, how to refresh it.
@@ -32,9 +34,13 @@
         dateEnd: string;
         targetCurrency: string;
         showActions?: boolean;
+        /** The user page the docs icon on the header's right edge opens (RN-13, B1): the risk tab of Dashboard and Broker unless told otherwise. */
+        docsPath?: string;
+        /** One asset (the Asset Detail): the docs icon opens the asset page and names the asset's questions (RN-17 c). */
+        oneAsset?: boolean;
     }
 
-    let {controller, title = '', subtitle = '', internalSubset = false, assetIds = [], dateStart, dateEnd, targetCurrency, showActions = true}: Props = $props();
+    let {controller, title = '', subtitle = '', internalSubset = false, assetIds = [], dateStart, dateEnd, targetCurrency, showActions = true, docsPath = 'user/dashboard/risk/', oneAsset = false}: Props = $props();
 
     let syncOpen = $state(false);
 
@@ -79,9 +85,10 @@
                 {internalSubset ? $t('risk.internalSubset') : subtitle}
             </p>
         {/if}
+        <RiskPeriodLine {dateStart} {dateEnd} currency={targetCurrency} />
     </div>
-    {#if showActions}
-        <div class="flex items-center gap-2">
+    <div class="flex items-center gap-2">
+        {#if showActions}
             <button
                 type="button"
                 class="flex items-center gap-1.5 rounded-lg border border-lf-subtle bg-lf-card px-3 py-1.5 text-xs text-lf-secondary disabled:opacity-50"
@@ -92,8 +99,13 @@
                 <RotateCw size={14} />
                 {$t('common.sync')}
             </button>
-        </div>
-    {/if}
+        {/if}
+        {#if oneAsset}
+            <DocsLink path="user/assets/detail/" label={$t('risk.docsHelp.headerAsset')} icon="book" size={16} testId="risk-levels-docs" />
+        {:else}
+            <DocsLink path={docsPath} label={$t('risk.docsHelp.header')} icon="book" size={16} testId="risk-levels-docs" />
+        {/if}
+    </div>
 </div>
 
 {#if controller.loadError}
@@ -106,7 +118,7 @@
     <DataQualityBanner issues={controller.dataQualityIssues} mode="grouped" onaction={(action, target) => handleQualityAction(action, target)} />
 {/if}
 
-<PageSyncModal bind:open={syncOpen} {dateStart} {dateEnd} assets={syncTargets.assets} fxPairs={syncTargets.fxPairs} onsynced={() => controller.handleSynced()} onclose={() => (syncOpen = false)} />
+<PageSyncModal bind:open={syncOpen} {dateStart} {dateEnd} assets={syncTargets.assets} fxPairs={syncTargets.fxPairs} onsynced={(detail) => controller.handleSynced(detail)} onclose={() => (syncOpen = false)} />
 
 {#if addPairOpen}
     <FxPairAddModal bind:open={addPairOpen} initialBase={addPairInitial.base} initialQuote={addPairInitial.quote} oncreated={refreshAfterPair} onsynced={refreshAfterPair} />

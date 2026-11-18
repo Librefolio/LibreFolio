@@ -16,6 +16,7 @@ from collections.abc import Iterable
 from backend.app.schemas.brim import BRIMFileInfo, BRIMFileStatus
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.plugin_settings.contract import BoundSettings
+from backend.app.services.plugin_settings.groups import plugin_groups
 from backend.app.services.plugin_settings.resolver import settings_changed_since
 from backend.app.services.plugin_settings.runtime import bound_settings_for
 
@@ -34,9 +35,10 @@ async def apply_settings_staleness(files: Iterable[BRIMFileInfo], user_id: int |
             continue
         plugin_class = BRIMProviderRegistry.get_plugin(code)
         fields = getattr(plugin_class, "settings_fields", ())
-        if not fields:
+        groups = plugin_groups(plugin_class) if plugin_class is not None else ()
+        if not fields and not groups:
             continue
         if code not in current:
             current[code] = await bound_settings_for(BRIMProviderRegistry, code, user_id=user_id)
-        if settings_changed_since(info.parsed_settings_fingerprint, current[code], fields):
+        if settings_changed_since(info.parsed_settings_fingerprint, current[code], fields, groups):
             info.parse_is_stale = True

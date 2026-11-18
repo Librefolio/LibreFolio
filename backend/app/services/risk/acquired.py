@@ -86,6 +86,26 @@ def worst_realization_index(returns: Sequence[float]) -> int:
     return min(range(len(values)), key=values.__getitem__)
 
 
+def best_realization(returns: Sequence[float]) -> float:
+    """The best single observed return: the twin of :func:`worst_realization` (RN-14).
+
+    ``max(X)``, with no floor, for the same reason: a window in which every return is a loss yields a negative best
+    day, which is the truth. Adapting that case to a contract that states the best day as a gain is the caller's job.
+    """
+    values = _finite(returns, name="returns")
+    if not values:
+        raise ValueError("returns must not be empty")
+    return max(values)
+
+
+def best_realization_index(returns: Sequence[float]) -> int:
+    """Position of the best observed return, resolving ties to the earliest."""
+    values = _finite(returns, name="returns")
+    if not values:
+        raise ValueError("returns must not be empty")
+    return max(range(len(values)), key=lambda index: (values[index], -index))
+
+
 def maximum_drawdown(drawdowns: Sequence[float]) -> float:
     """Deepest peak-relative decline, as a non-positive number.
 
@@ -166,30 +186,17 @@ def ulcer_index(drawdowns: Sequence[float]) -> float:
     return math.sqrt(squared / (len(series) - 1))
 
 
-def effective_number_of_assets(weights: Sequence[float]) -> float | None:
-    """Inverse Herfindahl over the supplied weights: equivalent position count.
+def average_drawdown(drawdowns: Sequence[float]) -> float:
+    """Mean of the underwater curve: «below the peak, on average» (ADD), as a non-positive number (RN-14).
 
-    The unit is a *number of positions*, never a percentage: ``0.5, 0.3, 0.15,
-    0.05`` yields ``2.74``, meaning the portfolio behaves like roughly two and
-    three-quarter equal positions.
-
-    The weights are consumed as given. Risk weights are already
-    ``position value / net worth`` — the same denominator AI Export uses for
-    ``nav_weight_percent`` — so passing them unmodified reproduces AI Export's
-    cash semantics: cash sits in the denominator but is never a term. Any
-    renormalization here would silently make the product state two different
-    numbers for one portfolio's concentration.
-
-    Returns ``None`` when no weight carries value, which is a fully liquid
-    scope rather than a zero-concentration one.
+    Equivalent to ``-riskfolio.ADD_Rel``, the compounded curve every other drawdown here walks; never ``ADD_Abs``,
+    which walks the uncompounded sum. Consumes the baseline-inclusive series and divides by the number of *returns*,
+    as :func:`ulcer_index` does and for the same reason: riskfolio's ``n - 1`` counts the inserted baseline.
     """
-    values = _finite(weights, name="weights")
-    if any(value < 0 for value in values):
-        raise ValueError("negative weights are outside the first-wave contract")
-    herfindahl = math.fsum(value * value for value in values)
-    if herfindahl <= _ZERO_TOLERANCE:
-        return None
-    return 1.0 / herfindahl
+    series = _finite(drawdowns, name="drawdown series")
+    if len(series) < 2:
+        raise ValueError("average drawdown requires at least one return observation")
+    return math.fsum(series) / (len(series) - 1)
 
 
 def diversification_ratio(
@@ -235,10 +242,12 @@ def diversification_ratio(
 
 
 __all__ = [
+    "average_drawdown",
+    "best_realization",
+    "best_realization_index",
     "conditional_drawdown_at_risk",
     "diversification_ratio",
     "drawdown_at_risk",
-    "effective_number_of_assets",
     "maximum_drawdown",
     "ulcer_index",
     "worst_realization",

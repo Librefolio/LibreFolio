@@ -17,6 +17,7 @@ from backend.app.logging_config import get_logger
 from backend.app.schemas.tools import ToolDescriptor, ToolDiscoveryFailure, ToolDiscoveryReason
 from backend.app.services.platform.provider_registry import PLUGIN_MODULE_NAME, AbstractPluginRegistry
 from backend.app.services.plugin_settings.fields import SettingsDeclarationError, claim_env_variables, validate_declaration
+from backend.app.services.plugin_settings.groups import validate_plugin_groups
 from backend.app.services.tools.base import ToolDefinitionError, ToolPlugin, ToolService
 from backend.app.services.tools.schema import declared_operations, generate_tool_schema, require_roundtrip_output, schema_fingerprint
 from backend.app.services.tools.wire import encode_json
@@ -99,6 +100,24 @@ def _validate_plugin_class(plugin_class: object) -> type[ToolPlugin]:
     return plugin_class
 
 
+def _check_settings_declaration(plugin_class: type[ToolPlugin], tool_code: str) -> None:
+    """This registry builds its own definitions, so the checks of the shared ``register`` (the declaration, the shared groups it
+    names, the claim of the environment variables) are made here, per tool code: an invalid declaration quarantines that service
+    only (``invalid_settings``). A Tool keeps no secret, so it may not name a group that holds one (project 76, G1)."""
+    fields = getattr(plugin_class, "settings_fields", ())
+    groups = getattr(plugin_class, "settings_groups", ())
+    if not fields and not groups:
+        return
+    try:
+        if fields:
+            validate_declaration(fields, family="tool")
+        if groups:
+            validate_plugin_groups(plugin_class, family="tool")
+        claim_env_variables("tool", tool_code, fields)
+    except SettingsDeclarationError as exc:
+        raise ToolDefinitionError("invalid_settings") from exc
+
+
 def build_tool_definition(plugin_class: type[ToolPlugin], service: ToolService) -> ToolDefinition:
     plugin_class = _validate_plugin_class(plugin_class)
     if not isinstance(service, ToolService):
@@ -116,15 +135,7 @@ def build_tool_definition(plugin_class: type[ToolPlugin], service: ToolService) 
     except Exception as exc:
         # One malformed bundled service must not hide sibling services.
         raise ToolDefinitionError("invalid_schema") from exc
-    fields = getattr(plugin_class, "settings_fields", ())
-    if fields:
-        # This registry builds its own definitions, so the checks of the shared ``register`` (the declaration and the claim of the
-        # environment variables) are made here, per tool code: an invalid declaration quarantines that service only.
-        try:
-            validate_declaration(fields, family="tool")
-            claim_env_variables("tool", service.tool_code, fields)
-        except SettingsDeclarationError as exc:
-            raise ToolDefinitionError("invalid_settings") from exc
+    _check_settings_declaration(plugin_class, service.tool_code)
     operations = declared_operations(input_schema)
     if not service.operations or {policy.operation for policy in service.operations} != operations:
         raise ToolDefinitionError("invalid_operation_policy")

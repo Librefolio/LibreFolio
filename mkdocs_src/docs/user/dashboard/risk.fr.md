@@ -114,12 +114,12 @@ Quel effet une crise passée, ou un choc que vous imaginez, aurait-il sur le por
 - **Choc hypothétique** : cliquez sur un scénario, comme *Krach boursier*, pour le lancer ; **Afficher le choc par catégorie** vous permet de modifier ses hypothèses.
 - **Simulation** : choisissez un mode — *Historique remélangé* est recommandé — et un horizon, en jours ou en années, mois et jours (`2a3m5j`), puis **Simuler**. Lisez le cône comme un éventail de possibilités, pas comme une prévision.
 
-!!! note "La simulation est encore en bêta"
+!!! note "La simulation dépend de l'historique qu'elle lit"
 
-    Son résultat dépend fortement de la quantité d'historique que contient la période par rapport à l'horizon — voir [Pourquoi la simulation est encore en bêta](../../financial-theory/technical-analysis/risk-metrics/simulation-modes.md#why-beta).
+    Son résultat dépend fortement de la quantité d'historique que contient la période par rapport à l'horizon — voir [Ce que la simulation ne fait pas encore](../../financial-theory/technical-analysis/risk-metrics/simulation-modes.md#why-beta).
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="La boîte Et si… ? Simulation : l'avis bêta et l'avertissement du modèle, les cinq modes avec Historique remélangé recommandé, l'horizon, les trajectoires et la graine, et après Simuler les chiffres terminaux, le cône et Ce que cette simulation a supposé" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="La boîte Et si… ? Simulation : l'avertissement du modèle, les cinq modes avec Historique remélangé recommandé, l'horizon, les trajectoires et la graine, et après Simuler les chiffres terminaux, le cône et Ce que cette simulation a supposé" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---

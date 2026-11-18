@@ -55,6 +55,7 @@
     import {closedPositionsToList} from './closedPositions';
     import type {AllocationHistoryDimensions, PortfolioSummary, PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     // =========================================================================
     // Props
@@ -462,6 +463,7 @@
                 <ArrowUpRight size={12} />
                 {$_('dashboard.seeAllPositions')}
             </a>
+            <DocsLink path="user/dashboard/positions/" label={$_('dashboard.docsHelp.positions')} icon="book" size={16} testId="positions-docs" />
         </div>
     </div>
 

@@ -52,6 +52,7 @@
     import {assetNameColumn, figureCell} from './assetSetTable';
     import {formatShare} from './levels/shareFormat';
     import {headerWidth, measureHeaderTitle, outsideParts, pointIdOf, referenceRowsFirst, riskReturnNotes, rowIdForPoint, rowIdOf, type RiskReturnCapabilities, type RiskReturnOutside, type RiskReturnRow} from './riskReturnLevel';
+    import {headerFontsSettled} from './headerFonts.svelte';
     import '$lib/theme/components/table.css';
 
     interface Props {
@@ -193,6 +194,8 @@
      */
     function valueColumn(id: ValueColumn, figure: (row: T) => number | null | undefined, text: (value: number) => string): ColumnDef<T> {
         const fullTitleKey = FULL_TITLE_KEYS[id];
+        // Measured again once the page's fonts are in: before, the canvas draws the fallback face (RN-09).
+        void headerFontsSettled();
         const width = headerWidth($t(TITLE_KEYS[id]), measureHeaderTitle);
         return {
             id,
@@ -296,26 +299,30 @@
 
 <div class="space-y-4">
     {#if title}
-        <h4 class="text-sm font-medium text-lf-secondary">{title}</h4>
+        <h4 class="text-sm font-medium text-lf-secondary" data-testid="{testIdPrefix}-title">{title}</h4>
     {/if}
 
     <div bind:this={tableWrapper} class="risk-return-table" data-testid="{testIdPrefix}-table" data-row-count={assetRowCount} data-reference-count={addedRowCount}>
-        <DataTable
-            bind:this={tableRef}
-            data={orderedRows}
-            {columns}
-            getRowId={rowIdOf}
-            getRowClass={rowTint}
-            {storageKey}
-            enableSelection={true}
-            selectionMode="single"
-            onSelectionChange={(ids) => (selectedRowId = ids.length > 0 ? ids[0] : null)}
-            enableActions={false}
-            enableColumnFilters={false}
-            defaultPageSize={RISK_PAGE_SIZE}
-            pageSizeOptions={RISK_PAGE_SIZES}
-            enableContextMenu={false}
-        />
+        <!-- Drawn again once the page's fonts are in (RN-09), as L1°'s table: DataTable takes its column widths
+             when it is created. Once, at most. -->
+        {#key headerFontsSettled()}
+            <DataTable
+                bind:this={tableRef}
+                data={orderedRows}
+                {columns}
+                getRowId={rowIdOf}
+                getRowClass={rowTint}
+                {storageKey}
+                enableSelection={true}
+                selectionMode="single"
+                onSelectionChange={(ids) => (selectedRowId = ids.length > 0 ? ids[0] : null)}
+                enableActions={false}
+                enableColumnFilters={false}
+                defaultPageSize={RISK_PAGE_SIZE}
+                pageSizeOptions={RISK_PAGE_SIZES}
+                enableContextMenu={false}
+            />
+        {/key}
     </div>
 
     {#if afterTable}

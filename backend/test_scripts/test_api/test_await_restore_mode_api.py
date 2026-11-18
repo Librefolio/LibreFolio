@@ -170,7 +170,9 @@ def unreadable_restore(reason: str) -> dict[str, Any]:
 
 
 #: What the scheduler reaches past its switches (``test_system_wake.py``): none of it in the mode.
-PAST_THE_SWITCHES = ("am_i_leader", "load_scheduler_settings", "load_state", "save_state", "due_current_price", "due_history_sync", "run_current_price_refresh", "run_history_sync")
+#: Lot B6 (project 68): the third job's due function and body, ``due_profile_read`` and ``run_profile_read``, are past the
+#: switches too (trapped with ``raising=False``, as every name here).
+PAST_THE_SWITCHES = ("am_i_leader", "load_scheduler_settings", "load_state", "save_state", "due_current_price", "due_history_sync", "run_current_price_refresh", "run_history_sync", "due_profile_read", "run_profile_read")
 
 PASSWORD = "AwaitRestorePass123!"
 BASE_URL = "http://h62-mode.test"

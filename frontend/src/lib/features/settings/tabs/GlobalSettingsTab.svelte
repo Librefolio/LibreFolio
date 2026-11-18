@@ -32,6 +32,7 @@
     import {pendingSchedulerRetry} from '$lib/features/settings/schedulerRetry';
     import {getInstanceStorage} from '$lib/features/backup/backupApi';
     import {SETTINGS_FIELD_PARAM} from '$lib/features/settings/settingsPaths';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     // Props
     interface Props {
@@ -79,7 +80,17 @@
 
     // Keys managed exclusively via SchedulerConfigModal — never shown as raw fields
     // Same for the clean-up of the kept backups (FB-24), which the Backup section edits.
-    const SCHEDULER_HIDDEN_KEYS = new Set(['scheduler_current_price_frequency_minutes', 'scheduler_history_sync_times', 'scheduler_history_sync_days', 'scheduler_history_sync_horizon_days', 'scheduler_timezone', 'backup_cleanup_max_mb', 'backup_cleanup_max_days']);
+    const SCHEDULER_HIDDEN_KEYS = new Set([
+        'scheduler_current_price_frequency_minutes',
+        'scheduler_history_sync_times',
+        'scheduler_history_sync_days',
+        'scheduler_history_sync_horizon_days',
+        'scheduler_profile_read_days',
+        'scheduler_profile_read_times',
+        'scheduler_timezone',
+        'backup_cleanup_max_mb',
+        'backup_cleanup_max_days',
+    ]);
 
     // Placeholder settings: rendered read-only with a "Coming soon" badge until the feature lands
     const PLACEHOLDER_KEYS = new Set<string>();
@@ -630,6 +641,7 @@
                             <ShieldOff size={18} />
                         </div>
                     {/if}
+                    <DocsLink path="admin/settings/" label={$_('settings.docsHelp.global')} icon="book" size={16} testId="global-settings-docs" />
                 </div>
             </div>
             <p class="text-sm text-lf-muted">{$_('settings.globalSettingsDescription')}</p>
@@ -948,6 +960,8 @@
         times: editedValues['scheduler_history_sync_times'] || '06:00,23:00',
         days: editedValues['scheduler_history_sync_days'] || 'mon,tue,wed,thu,fri,sat',
         horizon: parseInt(editedValues['scheduler_history_sync_horizon_days'] || '14', 10),
+        profileTimes: editedValues['scheduler_profile_read_times'] || '03:00',
+        profileDays: editedValues['scheduler_profile_read_days'] || 'sat',
     }}
     onsave={async () => {
         await loadSettings();

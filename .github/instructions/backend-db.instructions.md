@@ -24,12 +24,14 @@ exactly. **Table names are plural** — a lookup for `asset` or `transaction` fi
 | `Broker` | `brokers` | name, description, portal_url, icon_url, default_import_plugin, allow_cash_overdraft, allow_asset_shorting, is_active, opened_at |
 | `BrokerUserAccess` | `broker_user_access` | broker_id, user_id, role, share_percentage |
 | `Asset` | `assets` | display_name, currency, asset_type, **is_benchmark**, classification_params (JSON), quote_base_quantity, active, user_url, identifier_* (one column per `IdentifierType`) |
-| `Transaction` | `transactions` | broker_id, asset_id, type, date, quantity, **amount**, currency, related_transaction_id, tags, cost_basis_override, cost_basis_currency, asset_event_id |
+| `Transaction` | `transactions` | broker_id, asset_id, type, date, quantity, **amount**, currency, related_transaction_id (pairs), parent_transaction_id (a FEE or TAX to its parent, one-way), tags, cost_basis_override, cost_basis_currency, asset_event_id |
 | `PriceHistory` | `price_history` | asset_id, date, open, high, low, close, volume, adjusted_close, currency, source_plugin_key, fetched_at |
 | `AssetEvent` | `asset_events` | asset_id, date, type, value, currency, provider_assignment_id, notes |
 | `FxRate` | `fx_rates` | base, quote, date, rate, **source** |
 | `FxConversionRoute` | `fx_conversion_routes` | base, quote, priority, chain_steps |
 | `AssetProviderAssignment` | `asset_provider_assignments` | asset_id, provider_code, identifier, identifier_type, provider_params, last_fetch_at |
+| `AssetProfileUpdate` | `asset_profile_updates` | asset_id, key (a voice of the profile catalogue, no CHECK), value (JSON text, NULL = left empty), source (enricher code, `user`, `legacy`), user_id, read_on, source_date — one row per change, never updated |
+| `AssetEnrichers` | `asset_enrichers` | asset_id (PK), config (JSON: ordered enricher bindings), state (JSON: last read per enricher), updated_at |
 
 Two traps this table used to set: a transaction carries a signed **`amount`**, not
 `price` + `fees` (unified transactions), and a user's role is the boolean

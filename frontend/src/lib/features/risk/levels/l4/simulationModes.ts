@@ -2,11 +2,11 @@
  * The five simulation modes, and the two contract axes each one stands for.
  *
  * The backend takes two independent-looking fields, `process` and `regime`, but
- * they are **not** free: `simulation.py:158` refuses any prescribed regime that
+ * they are **not** free: `SimulationParams._validate_parametric_params` refuses any prescribed regime that
  * is not carried by the block bootstrap. A UI offering the two as separate
  * dropdowns would let the reader build "GBM + prolonged crisis", a combination
  * the server rejects — and it does not reject it loudly. A params
- * `ValidationError` is caught per-analytic (`service.py:141-150`) and returned
+ * `ValidationError` is caught per-analytic (`RiskService.execute`) and returned
  * as a **200 with the analytic unavailable**, so the invalid choice would show
  * up as the simulation rung silently failing to appear, with no visible cause.
  *

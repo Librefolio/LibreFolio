@@ -24,7 +24,7 @@
  *      its catalogue key and its values (`message_i18n_key`, `message_params`); the
  *      section words it through them, like the Dashboard, rather than printing the
  *      backend's English `message`. Checked in the four shipped locales, on a warning the
- *      section keeps after D372: stale prices, which `service.py` attaches to any
+ *      section keeps after D372: stale prices, which `success_result` (`risk/results.py`) attaches to any
  *      degraded answer, the replay's included.
  *   3. **What the block explains, the section does not repeat (D372).** The replay's
  *      exclusion and coverage warnings are shown in the block, beside the number they
@@ -58,9 +58,9 @@
  * the queue's end throws rather than inventing an answer.
  *
  * ⚠️ Every figure and name below is invented. The payloads are shaped to be emittable —
- * an asset-set replay (`stress.py::_historical`: no aggregate return on an unweighted
+ * an asset-set replay (`StressAnalytic._historical`: no aggregate return on an unweighted
  * scope, the excluded asset `omitted_from_replay`), and the exclusion warning as
- * `_replay_exclusion_warning` builds it and `service.py` completes it with `names` and
+ * `_replay_exclusion_warning` builds it and `with_warning_asset_names` (`risk/results.py`) completes it with `names` and
  * `count` — but nothing here was read off a running backend. One warning rides a payload
  * of this scope that the engine would not send, on purpose: the coverage warning, which
  * it emits on weighted scopes only. It is there to prove the section reads
@@ -147,7 +147,7 @@ const LABELS: ReadonlyMap<number, string> = new Map([
     [UNPRICED, 'Synthetic Holding C'],
 ]);
 
-/** The exclusion warning of an asset the engine left out of the window, with the names `service.py` adds. The block shows it (D372). */
+/** The exclusion warning of an asset the engine left out of the window, with the names `with_warning_asset_names` (`risk/results.py`) adds. The block shows it (D372). */
 const EXCLUDED_KEY = 'risk.warnings.historical_replay_excluded_no_prices';
 const EXCLUDED_PARAMS = {treatment: 'omitted_from_replay', names: 'Synthetic Holding C', count: 1};
 const EXCLUDED_MESSAGE = 'Historical replay excluded assets with no prices in the replay window.';
@@ -239,7 +239,7 @@ function replayAnswer({excluded = true, warnings}: {excluded?: boolean; warnings
     return {instance_id: 'single-stress', analytic_code: 'stress', status: degraded ? 'partial' : 'ok', output, metadata, warnings: answerWarnings};
 }
 
-/** A replay that did not run: `unavailable` and no output, as `schemas/risk.py` demands of it. */
+/** A replay that did not run: `unavailable` and no output, as `RiskAnalyticResult.validate_status_payload` (`schemas/risk/results.py`) demands of it. */
 function refusal(code: 'execution_timeout' | 'insufficient_history', message: string, details?: Record<string, unknown>): RiskAnalyticResult {
     return {instance_id: 'single-stress', analytic_code: 'stress', status: 'unavailable', output: null, error: {code, message, ...(details === undefined ? {} : {details})}};
 }

@@ -68,8 +68,13 @@ AI_EXPORT_PURE_TEST_PATHS = (
 PROVIDER_ERROR_TEST_PATHS = (
     "backend/test_scripts/test_services/test_borsa_italiana_errors.py",
     "backend/test_scripts/test_services/test_fx_parse_errors.py",
+    "backend/test_scripts/test_services/test_fx_bcb.py",
+    "backend/test_scripts/test_services/test_fx_bdi.py",
+    "backend/test_scripts/test_services/test_fx_boc.py",
     "backend/test_scripts/test_services/test_fx_boe_quotes.py",
     "backend/test_scripts/test_services/test_fx_fed_quotes.py",
+    "backend/test_scripts/test_services/test_fx_nbu.py",
+    "backend/test_scripts/test_services/test_fx_norges.py",
     "backend/test_scripts/test_services/test_justetf_errors.py",
     "backend/test_scripts/test_services/test_snb_errors.py",
     "backend/test_scripts/test_services/test_yahoo_finance_errors.py",
@@ -560,6 +565,54 @@ def services_provider_policy(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Asset provider policy tests", verbose=verbose)
 
 
+def services_providers_enabled(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the instance allow-lists of the asset and FX providers (project 76, X1)."""
+    print_section("Services: Providers Enabled")
+    print_info("Testing: LIBREFOLIO_ASSET_PROVIDERS_ENABLED / LIBREFOLIO_FX_PROVIDERS_ENABLED, the registry hook, lists, assignments, routes, prices, refresh, FX sync, search, plugin settings and groups")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_providers_enabled.py", test_names)
+    return run_command(cmd, "Providers enabled tests", verbose=verbose)
+
+
+def services_call_counter(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the per-instance call counter of the plugins that call an external service (project 76, U1)."""
+    print_section("Services: Plugin Call Counter")
+    print_info("Testing: window_starts/window_end in UTC, one atomic upsert per call, window resets, limits (refused and not counted, the window ending last named, 0 = stopped), database failure lets the call go, read_counts never writes, two processes on one file")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_call_counter.py", test_names)
+    return run_command(cmd, "Plugin call counter tests", verbose=verbose)
+
+
+def services_call_limits_assets(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the asset boundary counting and limiting the calls of a plugin to its external service (project 76, U2)."""
+    print_section("Services: Asset Call Limits")
+    print_info("Testing: assets/core.py (call_provider, call_owner), assets/base.py (calls_external_service, AssetCallLimitError), plugin_settings/groups (shares_credits)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_call_limits_assets.py", test_names)
+    return run_command(cmd, "Asset call limit tests", verbose=verbose)
+
+
+def services_call_limits_fx(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the FX boundary counting and limiting the calls of a plugin to its external service (project 76, U3)."""
+    print_section("Services: FX Call Limits")
+    print_info("Testing: fx/runtime.py (call_fx_provider), fx/base.py (calls_external_service, FXCallLimitError), platform/call_counter.py (call_owner), platform/provider_cooldown.py (the limit pause), fx/catalog.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_call_limits_fx.py", test_names)
+    return run_command(cmd, "FX call limit tests", verbose=verbose)
+
+
+def services_enricher_call_limits(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the enrichers' read boundary counting and limiting the calls of a plugin to its external service (project 76, K1)."""
+    print_section("Services: Enricher Call Limits")
+    print_info("Testing: enrichers/refresh.py (read_bindings), platform/call_counter.py (count_and_check, call_owner)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_call_limits.py", test_names)
+    return run_command(cmd, "Enricher call limit tests", verbose=verbose)
+
+
+def services_call_limit_settings(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the call limits as core settings of their owner, and their usage in the catalogue (project 76, U4)."""
+    print_section("Services: Call Limit Settings")
+    print_info("Testing: plugin_settings/call_limits.py, register(), register_group(), readiness.plugin_may_be_unconfigured, catalogue call_usage, call_counter.read_counts_many, mockcount")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_call_limit_settings.py", test_names)
+    return run_command(cmd, "Call limit settings tests", verbose=verbose)
+
+
 def services_synthetic_yield(verbose: bool = False, test_names: list = None) -> bool:
     """Test synthetic yield calculation for SCHEDULED_YIELD assets."""
     print_section("Services: Synthetic Yield Calculation")
@@ -651,6 +704,38 @@ def services_linked_adjustment_pair(verbose: bool = False, test_names: list = No
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_linked_adjustment_pair.py", test_names)
     return run_command(cmd, "Linked adjustment pair tests", verbose=verbose)
+
+
+def services_transaction_charges(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the rules of the link of a charge (FEE, TAX) to its parent transaction (project 66, lot R2)."""
+    print_section("Services: Transaction Charges")
+    print_info("Testing: backend/app/services/transactions/charges.py + schemas/transactions/type_metadata.py (charge_role)")
+    print_info(
+        "Tests: the charge and parent type lists of the type table; each rule of a link (type, pair, parent found, broker, asset) in order; date and currency free; a parent with charges keeps a parent type; the reader of the charges of some parents through idx_transactions_parent; the messages in 4 languages"
+    )
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transaction_charges.py", test_names)
+    return run_command(cmd, "Transaction charges tests", verbose=verbose)
+
+
+def services_transaction_charge_links(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the batch stage that links a charge to its parent (project 66, lot R3)."""
+    print_section("Services: Transaction Charge Links")
+    print_info("Testing: backend/app/services/transactions/charges.py (link_charges) + the create items (ref, parent_ref, parent_transaction_id)")
+    print_info("Tests: a parent created in the batch or saved; unknown or duplicated names; a parent missing, not visible or deleted by the batch; the rules on the final state; the messages in 4 languages")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transaction_charge_links.py", test_names)
+    return run_command(cmd, "Transaction charge links tests", verbose=verbose)
+
+
+def services_transaction_charge_edits(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the deletes and updates of linked charges and their parents (project 66, lots R4 and R5)."""
+    print_section("Services: Transaction Charge Edits")
+    print_info("Testing: backend/app/services/transactions/charges.py (link_charges: unlink, relink, deleted parents, touched parents) + the update items")
+    print_info("Tests: a parent deleted with its charges left is refused; deleted with them, or with them unlinked, goes; updates link, unlink and relink; a promoted parent with charges is refused; a broker with linked rows is deleted")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transaction_charge_edits.py", test_names)
+    return run_command(cmd, "Transaction charge edits tests", verbose=verbose)
 
 
 def services_linked_cash_pair(verbose: bool = False, test_names: list = None) -> bool:
@@ -1381,6 +1466,16 @@ def services_dust_threshold(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Daily state dust threshold tests", verbose=verbose)
 
 
+def services_classification_from_profile(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that the portfolio engine reads each asset's countries and sectors from the asset profile, per day (project 68, lot D2)."""
+    print_section("Services: Classification From Profile (project 68, D2)")
+    print_info("Testing: backend/app/services/financial_math/portfolio/engine.py (_load_asset_classifications, calculate) over the profile store")
+    print_info("Tests: one ClassificationStep list per voice carried back to date_from, None for an asset without rows (classification_params are not read), Decimal weights, a NULL row; by_geography and by_sector of each day, the change day's segment")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_classification_from_profile.py", test_names)
+    return run_command(cmd, "Classification from profile tests", verbose=verbose)
+
+
 def services_external_cash_leg_pools(verbose: bool = False, test_names: list = None) -> bool:
     """Test that a cash leg crossing the perimeter, or orphan, moves K/R as a DEPOSIT or a WITHDRAWAL (B3, MF-J3)."""
     print_section("Services: External Cash Leg Pools (B3 / MF-J3)")
@@ -1464,6 +1559,18 @@ def services_probe_rate_limit(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "Probe rate-limit tests", verbose=verbose)
 
 
+def services_enricher_rate_limit(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that the enricher routes draw from the probe's per-user limit (plan 68 C0)."""
+    print_section("Services: Enricher Rate Limit")
+    print_info("Testing: api/v1/assets/enrichers.py (recognize_enrichers, test_enricher, search_enricher), api/v1/assets/profile.py (ask_profile, refresh_profile), api/v1/assets/providers.py (probe_limiter)")
+    print_info(
+        "Tests: recognize, test, search and ask count one hit each on probe_limiter() before anything else; past it 429 PROBE_RATE_LIMITED, retry_after = Retry-After = ceil(wait) >= 1, nothing reached, refusal not counted; per user; free again after the window; one count shared with the probe; off at 0; refresh not limited"
+    )
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_rate_limit.py", test_names)
+    return run_command(cmd, "Enricher rate-limit tests", verbose=verbose)
+
+
 def services_quote_base_suggestion(verbose: bool = False, test_names: list = None) -> bool:
     """Z-32 (d): a provider's quote base suggestion (FAQuoteBaseSuggestion) in its search results and in the probe's metadata."""
     print_section("Services: Quote Base Suggestion (Z-32 d)")
@@ -1494,6 +1601,38 @@ def services_bulk_writes_chunked(verbose: bool = False, test_names: list = None)
     print_info("Tests: 1 500-item upserts/deletions exact, no «Expression tree is too large» (500/501 at the chunk edge); change detection over 1 035 pairs; > 10 000 items 422 bulk_too_many_items before any write, 10 000 pass; no 500 or item error echoes its SQL; barrier: one OR of 1 500 refused")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_bulk_writes_chunked.py", test_names)
     return run_command(cmd, "Bulk writes chunked tests", verbose=verbose)
+
+
+def services_bulk_current_values(verbose: bool = False, test_names: list = None) -> bool:
+    """Project 76 C1+C2+C3: the bulk current-price read of asset providers (C1 pure; C2 and C3 on a private SQLite, no server, no network)."""
+    print_section("Services: Bulk Current Values (project 76, C1+C2+C3)")
+    print_info("Testing: schemas/prices.py (FACurrentValueRequest), services/assets/base.py (supports_bulk_current, bulk_current_max_items, get_current_values_bulk), asset_source_providers/mockprov/plugin.py, " "services/assets/bulk_current.py and price_query.get_current_prices_bulk (C2)")
+    print_info(
+        "Tests: the default refuses (NOT_SUPPORTED); class-definition guards (TypeError); the request refuses extra fields and an empty key; mockprov answers per key like get_current_value, omits on command, answers NOT_FOUND per item, refuses the whole call when rate limited, and records every call"
+    )
+    print_info(
+        "C2: one provider call per group and chunk; aligned expiry (every active asset of the provider read, answers cached per asset); the 120 s group stamp (DB fallback without a call, re-read after it or for a new member); single-flight on the group lock; RATE_LIMITED on every requested item with no stamp left; a failed call falls back to the DB with a short stamp; a per-item error falls back alone; today's row only for requested assets"
+    )
+    print_info("C3: the history refresh reads today's current value in one bulk call per group before the history, shares the live read's group and stamp, asks nothing for a past range, fails RATE_LIMITED without asking the history, notes an unstorable value (X-R51)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_bulk_current_values.py", test_names)
+    return run_command(cmd, "Bulk current values tests", verbose=verbose)
+
+
+def services_yahoo_finance_bulk(verbose: bool = False, test_names: list = None) -> bool:
+    """Project 76 C5: Yahoo Finance reads current values in bulk (recorded v7 response; no DB, no server, no network)."""
+    print_section("Services: Yahoo Finance Bulk Current Values (project 76, C5)")
+    print_info("Testing: asset_source_providers/yahoo_finance/plugin.py (get_current_values_bulk, _fetch_v7_quotes, _quote_from_info, _bulk_quote_available)")
+    print_info("Tests: same result as get_current_value on the recorded quotes, exchange-zone dates, one request, absent key for an unreturned symbol, previous-close fallback and NO_DATA, 429 raised once, ISIN resolution, wrong identifier type, capability, same symbol twice")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_yahoo_finance_bulk.py", test_names)
+    return run_command(cmd, "Yahoo Finance bulk tests", verbose=verbose)
+
+
+def services_yahoo_search_crypto_eur(verbose: bool = False, test_names: list = None) -> bool:
+    """Project 76 Y1: Yahoo's search adds a crypto's euro ticker beside its dollar one (fake yf, replaced v7 wire)."""
+    print_section("Services: Yahoo Search, a Crypto's Euro Ticker (project 76, Y1)")
+    print_info("Testing: asset_source_providers/yahoo_finance/plugin.py (search, _with_euro_twins)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_yahoo_search_crypto_eur.py", test_names)
+    return run_command(cmd, "Yahoo search crypto EUR tests", verbose=verbose)
 
 
 def services_current_prices_bulk(verbose: bool = False, test_names: list = None) -> bool:
@@ -1586,6 +1725,51 @@ def services_asset_type_rules(verbose: bool = False, test_names: list = None) ->
     print_info("Tests: every AssetType has a family, ETF_*/CROWDFUND_* roll up, family change, INDEX with and without transactions")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_type_rules.py", test_names)
     return run_command(cmd, "Asset type rules tests", verbose=verbose)
+
+
+def services_asset_profile_catalogue(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the asset profile catalogue: its voices and the stored form of their values (project 68, lot A1)."""
+    print_section("Services: Asset Profile Catalogue")
+    print_info("Testing: backend/app/services/assets/profile/catalogue.py, backend/app/schemas/assets/profile.py")
+    print_info("Tests: the 37 voices in order with shape, sign, groups and flags; get_voice; normalize_value for every shape; determinism and idempotency")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_profile_catalogue.py", test_names)
+    return run_command(cmd, "Asset profile catalogue tests", verbose=verbose)
+
+
+def services_asset_profile_store(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the asset profile store: write a voice only when it changes, read it as steps (project 68, lot A3)."""
+    print_section("Services: Asset Profile Store")
+    print_info("Testing: backend/app/services/assets/profile/store.py")
+    print_info("Tests: profile_today in the scheduler's zone; now = last row in (read_on, id); writes only on a different stored form, force_source, None, order, refusals, read_on, the write lock; steps, carry_back, min; forget; recent changes and the volatile panel")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_profile_store.py", test_names)
+    return run_command(cmd, "Asset profile store tests", verbose=verbose)
+
+
+def services_asset_profile_double_write(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the double write of classification_params into the asset profile by POST/PATCH /assets (project 68, lot A4)."""
+    print_section("Services: Asset Profile Double Write")
+    print_info("Testing: AssetCRUDService.create_assets_bulk / patch_assets_bulk with user_id")
+    print_info("Tests: user rows by the author on create; only the voices a patch touches; null sector, null classification; same value; read_on never before now; dry run and rolled-back batch write nothing")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_profile_double_write.py", test_names)
+    return run_command(cmd, "Asset profile double write tests", verbose=verbose)
+
+
+def services_asset_profile_from(verbose: bool = False, test_names: list = None) -> bool:
+    """Run «use the source's value» ({"from": code}) in the profile writes of POST/PATCH /assets (project 68, lot B5b)."""
+    print_section("Services: Asset Profile From")
+    print_info("Testing: AssetCRUDService.create_assets_bulk / patch_assets_bulk with {'from': code} profile values")
+    print_info("Tests: cache hit or read now, the row in the source's name (force, same source no row), the item's new binding, refusals profileValueInvalid, seen and profileSourceChanged, dry run, POST")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_profile_from.py", test_names)
+    return run_command(cmd, "Asset profile from tests", verbose=verbose)
+
+
+def services_asset_profile_merge(verbose: bool = False, test_names: list = None) -> bool:
+    """Run what merging two assets and deleting an asset do to the asset profile (project 68, lot A5)."""
+    print_section("Services: Asset Profile Merge")
+    print_info("Testing: AssetCRUDService.merge_assets / delete_assets_bulk on the profile and the enrichers")
+    print_info("Tests: a voice only the source holds now moves whole (same ids, read_on, order); shared, empty-now and target-emptied voices stay the target's; the column follows the moved classification voices; enrichers; dry run; no orphan; delete")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_profile_merge.py", test_names)
+    return run_command(cmd, "Asset profile merge tests", verbose=verbose)
 
 
 def services_asset_digit_limits(verbose: bool = False, test_names: list = None) -> bool:
@@ -1775,6 +1959,14 @@ def services_scheduler_backoff(verbose: bool = False, test_names: list = None) -
     )
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_backoff.py", test_names)
     return run_command(cmd, "Scheduler retry and backoff tests", verbose=verbose)
+
+
+def services_scheduler_profile_read(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the scheduler's third job, the weekly read of the enrichers, and refresh_assets(hold_deferred=…) (project 68, lot B6)."""
+    print_section("Services: Scheduler Profile Read")
+    print_info("Testing: backend/app/services/platform/scheduler/jobs.py (run_profile_read), joblog.py, enrichers/refresh.py (hold_deferred, read_since)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_profile_read.py", test_names)
+    return run_command(cmd, "Scheduler profile read tests", verbose=verbose)
 
 
 def services_scheduler_price_refresh(verbose: bool = False, test_names: list = None) -> bool:
@@ -1981,6 +2173,70 @@ def services_plugin_settings_contract(verbose: bool = False, test_names: list = 
     return run_command(cmd, "Plugin settings contract tests", verbose=verbose)
 
 
+def services_enricher_contracts(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the enricher contract: what the registry refuses at registration, every discovered enricher, the test enricher."""
+    print_section("Services: Enricher Contracts")
+    print_info("Testing: backend/app/services/enrichers/base.py, enrichers/registry.py, enricher_providers/mockenrich/plugin.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_contracts.py", test_names)
+    return run_command(cmd, "Enricher contract tests", verbose=verbose)
+
+
+def services_enricher_recognize(verbose: bool = False, test_names: list = None) -> bool:
+    """Test «recognize» in cascade over the enrichers (project 68, lot B4)."""
+    print_section("Services: Enricher Recognize")
+    print_info("Testing: backend/app/services/enrichers/recognize.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_recognize.py", test_names)
+    return run_command(cmd, "Enricher recognize tests", verbose=verbose)
+
+
+def services_enricher_justetf(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the justETF enricher: declarations, mapping to stored forms, not found, recognize, read, search (plan 68, lot C1)."""
+    print_section("Services: Enricher justETF")
+    print_info("Testing: backend/app/services/enricher_providers/justetf/plugin.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_justetf.py", test_names)
+    return run_command(cmd, "Enricher justETF tests", verbose=verbose)
+
+
+def services_enricher_borsa_italiana(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Borsa Italiana enricher: declarations, bond and stock sheets to stored forms, language, not found, recognize, read, search (plan 68, lot C2)."""
+    print_section("Services: Enricher Borsa Italiana")
+    print_info("Testing: backend/app/services/enricher_providers/borsa_italiana/plugin.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_borsa_italiana.py", test_names)
+    return run_command(cmd, "Enricher Borsa Italiana tests", verbose=verbose)
+
+
+def services_enricher_yahoo(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Yahoo Finance enricher: declarations, info and fund data to stored forms, not found, recognize, read (plan 68, lot C3)."""
+    print_section("Services: Enricher Yahoo Finance")
+    print_info("Testing: backend/app/services/enricher_providers/yahoo_finance/plugin.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_yahoo.py", test_names)
+    return run_command(cmd, "Enricher Yahoo Finance tests", verbose=verbose)
+
+
+def services_enricher_refresh(verbose: bool = False, test_names: list = None) -> bool:
+    """Test reading the profile from the enrichers: catalogue filter, read cache, merge, ask and refresh (project 68, lot B5a)."""
+    print_section("Services: Enricher Refresh")
+    print_info("Testing: backend/app/services/enrichers/refresh.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_refresh.py", test_names)
+    return run_command(cmd, "Enricher refresh tests", verbose=verbose)
+
+
+def services_enricher_enabled(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the enrichers active on the instance: LIBREFOLIO_ENRICHERS_ENABLED and the required settings (project 68, lot B2)."""
+    print_section("Services: Enricher Enabled")
+    print_info("Testing: LIBREFOLIO_ENRICHERS_ENABLED, EnricherRegistry's gate, no clean-up, the read cache after the switch, NOT_CONFIGURED")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_enabled.py", test_names)
+    return run_command(cmd, "Enricher enabled tests", verbose=verbose)
+
+
+def services_enricher_bindings(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the enricher bindings of an asset: config and state, the installed enrichers, their default order (project 68, lot B3)."""
+    print_section("Services: Enricher Bindings")
+    print_info("Testing: backend/app/services/enrichers/bindings.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_bindings.py", test_names)
+    return run_command(cmd, "Enricher bindings tests", verbose=verbose)
+
+
 def services_plugin_settings_crypto(verbose: bool = False, test_names: list = None) -> bool:
     """Test the encryption of the secret plugin settings and the re-encryption a restore needs."""
     print_section("Services: Plugin Settings Encryption")
@@ -2011,6 +2267,30 @@ def services_secret_masking(verbose: bool = False, test_names: list = None) -> b
     print_info("Testing: backend/app/utils/runtime/secret_masking.py and its wiring in logging_config.configure_logging")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_secret_masking.py", test_names)
     return run_command(cmd, "Secret masking tests", verbose=verbose)
+
+
+def services_plugin_settings_groups(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the shared settings groups: declaration, binding without own fields, missing, masking, fingerprint, gate."""
+    print_section("Services: Plugin Settings Groups")
+    print_info("Testing: register_group, validate_plugin_groups, BoundSettings.group, configure_instance, call_provider")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_plugin_settings_groups.py", test_names)
+    return run_command(cmd, "Plugin settings groups tests", verbose=verbose)
+
+
+def services_plugin_readiness(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the readiness check of the plugins: the rule of the call boundary, the managed profile, the provider lists."""
+    print_section("Services: Plugin Readiness")
+    print_info("Testing: plugin_settings/readiness.py, FAProviderInfo / FXProviderInfo, GET /assets/provider, GET /fx/providers")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_plugin_readiness.py", test_names)
+    return run_command(cmd, "Plugin readiness tests", verbose=verbose)
+
+
+def services_not_configured_writes(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the writes that would put an unconfigured plugin to use: an asset assignment, an FX route (project 76, N2)."""
+    print_section("Services: Not Configured Writes")
+    print_info("Testing: POST /assets/provider and POST /fx/providers/routes refuse a new unconfigured provider (422 NOT_CONFIGURED)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_not_configured_writes.py", test_names)
+    return run_command(cmd, "Not configured writes tests", verbose=verbose)
 
 
 def services_plugin_settings_guards(verbose: bool = False, test_names: list = None) -> bool:
@@ -2851,7 +3131,7 @@ Note: No backend server required.
     add_test(cat, "signal-plugins-close-only", services_signal_plugins_close_only, name="Close-only Signal Plugins", desc="SMA, ROC, StochRSI, KAMA and PPO delegation, warm-up and Asset/FX parity")
     add_test(cat, "signal-plugins-ohlc", services_signal_plugins_ohlc, name="OHLC Signal Plugins", desc="ATR, ADX, NATR, Aroon, Donchian and CCI strict input and numerical regression")
     add_test(cat, "signal-plugins-volume", services_signal_plugins_volume, name="Volume Signal Plugins", desc="OBV rebasing and MFI zero/missing volume, levels and TA-Lib delegation")
-    add_test(cat, "signal-plugin-matrix", services_signal_plugin_matrix, name="Full Signal Plugin Matrix", desc="Uniform 22-plugin domains, fields, gaps, boundaries and isolation gate")
+    add_test(cat, "signal-plugin-matrix", services_signal_plugin_matrix, name="Full Signal Plugin Matrix", desc="Uniform 24-plugin domains, fields, gaps, boundaries and isolation gate")
     add_test(cat, "asset-signals", services_asset_signals, name="Asset Signals", desc="Extended bulk load, FX-before-compute, signal-only response and isolation")
     # Write-scoped (the category default): unique-name assets deleted with their prices; FX rows only on AMD/BDT, AMD/SZL,
     # AMD/LSL, BBD/BZD (MVR/SCR never seeded), pairs no other test uses, dated 1980-1987, wiped before and after.
@@ -2865,6 +3145,75 @@ Note: No backend server required.
         desc="F21, where the asset providers stand in the search: LIBREFOLIO_ASSET_PROVIDERS_PREMIUM/ORDER read stripped, lowercased, in order, once each; effective tier and priority (declared, else the variables'; unknown codes dropped and warned once per process); search order premium first, then priority, ties and repeated codes as given (D-X3); search_rank; tier/search_priority checked at class definition; the non-streaming search answers provider by provider in that order",
         # PURE: no lane DB, no server, no network. Both variables are set with monkeypatch in this process; the registry
         # provider_policy sees and core.configured_provider are replaced by stand-ins; each search runs a query of its own.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "providers-enabled",
+        services_providers_enabled,
+        name="Providers Enabled",
+        desc="X1: LIBREFOLIO_ASSET_PROVIDERS_ENABLED / LIBREFOLIO_FX_PROVIDERS_ENABLED read at every call; registry hook (_switched_off, case-insensitive, MANUAL always on, unknown codes warned once); a switched-off provider out of the lists, assignments, routes, search and plugin settings; its existing assignment, refresh and FX route answer as an unknown code; groups served only with a reader on",
+        # PURE: no lane DB, no server, no network. Both variables through monkeypatch in this process; a private SQLite file
+        # under tmp_path behind every get_async_engine touched; extra plugins put in the registries' storage with
+        # monkeypatch.setitem, or in throwaway subclasses of the real registries; the mocks answer every provider call.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "call-counter",
+        services_call_counter,
+        name="Plugin Call Counter",
+        desc="U1: plugin_call_counters, one row per (family, plugin_code), five UTC calendar windows (minute, hour, day, ISO week, month); count_and_check counts +1 in one atomic upsert, resets the windows that changed, never lowers a start, refuses without counting when a limit is full (CallLimitReached names the full window ending last, resets_at, retry_after; limit 0 refused before the statement), returns None with one warning when the database fails; read_counts reads stale windows as 0 and never writes; two processes on one file lose no update and admit exactly the limit; U2: the counter's own busy_timeout (COUNTER_BUSY_TIMEOUT_MS 2000, the connection's value restored), the failure warning at most once a minute per pair",
+        # PURE: no lane DB, no server, no network. Every database is a private SQLite file under tmp_path built by
+        # create_all, behind call_counter.get_async_engine (patched); the session's engines are tripwires. The two child
+        # processes run a script under tmp_path on that private file only, with the lane's TMPDIR.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "call-limits-assets",
+        services_call_limits_assets,
+        name="Asset Call Limits",
+        desc="U2: AssetSourceProvider.calls_external_service (True; scheduled_investment and mockprov False); SettingsGroup.shares_credits (two refused); core.call_owner (the credit-sharing group, else the plugin; call_limit_<window> fields, 0 kept); call_provider counts +1 before the call (failed, timed out or refused too), never a bare double, NOT_CONFIGURED, a pause or a local plugin; a full window never calls the provider, pauses it with the counter's wait and raises AssetCallLimitError (RATE_LIMITED, details reason/window/limit); a failing counter lets the call go; one group row for the plugins of a credit-sharing group",
+        # PURE: no lane DB, no server, no network. The counter (and the plugin settings' reads) on a private SQLite file
+        # under tmp_path built by create_all; call_counter._utc frozen; a private Cooldowns on a fake clock; test plugins
+        # put in the asset registry's storage with monkeypatch.setitem and test groups released at teardown.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "call-limits-fx",
+        services_call_limits_fx,
+        name="FX Call Limits",
+        desc="U3: FXRateProvider.calls_external_service (True; MANUAL, MOCKFX, MOCKFX_FAIL False); call_counter.call_owner(provider, family), core.call_owner equal to it; call_fx_provider counts +1 before the call (failed or refused too), never a bare double, NOT_CONFIGURED, a source pause, a limit pause or a local plugin; a full window never calls the provider, pauses it exactly until the window ends on its own key (never the 429 streak) and raises FXCallLimitError (RATE_LIMITED, details reason/window/limit); a changed fingerprint lifts the limit pause, never a source pause; a count without a verdict frees both trials; a failing counter lets the call go; one group row for the FX plugins of a credit-sharing group; the catalog counts its list and answers a full limit like a refusal",
+        # PURE: no lane DB, no server, no network. The counter (and the plugin settings' reads) on a private SQLite file
+        # under tmp_path built by create_all; call_counter._utc on a test clock; a private Cooldowns on a fake clock; test
+        # FX plugins put in the FX registry's storage with monkeypatch.setitem, test groups released at teardown, and the
+        # catalog cache entries and last known lists of the test's own codes deleted at its end.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "enricher-call-limits",
+        services_enricher_call_limits,
+        name="Enricher Call Limits",
+        desc="K1: read_bindings counts +1 per binding sent to a real read of a plugin with calls_external_service (never a cached, not-configured or unknown one, never a plugin with the flag False or absent), in request order, before read; a full window (or limit 0) keeps that binding and the following ones from read: RATE_LIMITED with the counter's retry_after and a message naming the call limit, window and limit, never cached; one group row for an enricher and an asset plugin of a credit-sharing group; a failing counter lets the bindings be read",
+        # PURE: no lane DB, no server, no network. The counter and the plugin settings' reads on a private SQLite file
+        # under tmp_path built by create_all; call_counter._utc on a test clock; test enrichers (and one asset plugin)
+        # put in the registries' storage with monkeypatch.setitem, test groups released at teardown, a private Cooldowns,
+        # the enricher_read cache cleared around each test.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "call-limit-settings",
+        services_call_limit_settings,
+        name="Call Limit Settings",
+        desc="U4: the five core call_limit_<window> fields (optional system integers, min 0) handed out at registration to a plugin that calls out and reads no credit-sharing group, and to a credit-sharing group; their variables claimed, a valid one the boundary's limit, an invalid one NOT_CONFIGURED; the limits in the fingerprint; readiness.plugin_may_be_unconfigured (group, required field or a set variable) and READY without the database; the catalogue's call_usage on the owning entry only (five windows, one now, counts read once, a database error → none and one warning, managed hides a locked limit); the test-only counting provider mockcount",
+        # PURE: no lane DB, no server, no network. A private SQLite file under tmp_path built by create_all behind the
+        # runtime, readiness and call_counter engines; call_counter._utc frozen; a private Cooldowns; throwaway registries
+        # of the base for the registration rules; the real asset and FX registries read after discovery, test plugins put
+        # in their storage with monkeypatch.setitem; u4 groups and claims released at teardown.
         isolation="pure",
     )
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation; the accrual golden: every number of the accrual walk pinned (regen: LIBREFOLIO_TEST_REGEN_SI_ACCRUAL_GOLDEN=1)")
@@ -2913,6 +3262,27 @@ Note: No backend server required.
         services_linked_cash_pair,
         name="Linked Cash Pair",
         desc="W6-7: a CASH_TRANSFER pair in two currencies or with amounts that are not opposite, and an FX_CONVERSION in one currency, are refused on the first create (pairCurrencyMismatch, pairAmountMismatch, pairCurrencySame; commit and validate); coherent and stored pairs are not touched; the rule follows TX_TYPE_METADATA; the messages exist in EN/IT/FR/ES",
+    )
+    add_test(
+        cat,
+        "transaction-charges",
+        services_transaction_charges,
+        name="Transaction Charges",
+        desc="Project 66 R2: a FEE or TAX linked to its parent (BUY, SELL, DIVIDEND, INTEREST, DEPOSIT, WITHDRAWAL): the type lists of the table, each refusal in order (chargeNotACharge, chargeRowIsPaired, chargeParentNotFound, chargeParentTypeNotAllowed, chargeBrokerMismatch, chargeAssetMissing, chargeAssetMismatch), date and currency free, chargesBlockParentType, the reader through idx_transactions_parent; the messages exist in EN/IT/FR/ES",
+    )
+    add_test(
+        cat,
+        "transaction-charge-links",
+        services_transaction_charge_links,
+        name="Transaction Charge Links",
+        desc="Project 66 R3: the batch links a charge to the parent it names (parent_ref of a create, parent_transaction_id of a saved row) on the final state, on commit and validate: chargeRefDuplicate, chargeParentRefNotFound, chargeParentTwice, chargeParentIdInvalid, a parent missing, not visible or deleted by the batch is not found, the rules of R2 with parentRef; the messages exist in EN/IT/FR/ES",
+    )
+    add_test(
+        cat,
+        "transaction-charge-edits",
+        services_transaction_charge_edits,
+        name="Transaction Charge Edits",
+        desc="Project 66 R4/R5: a parent deleted while it keeps charges is refused (chargesDeleteIncomplete), with its charges deleted or unlinked in the batch it goes; updates link (parent_transaction_id, parent_ref), unlink (0) and relink; a saved row that keeps charges must stay a parent, not a leg of a pair (chargesBlockParentType); a broker with linked rows is deleted; the message exists in EN/IT/FR/ES",
     )
     add_test(
         cat,
@@ -3249,7 +3619,7 @@ Note: No backend server required.
         "rate-limit-results",
         services_rate_limit_results,
         name="Rate-Limit Results",
-        desc="error_code RATE_LIMITED and retry_after on: the live current price (last known price kept, or the error item; no call while paused), the refresh result (FAILED with nothing stored, PARTIAL or OK with what came stored), the FX sync pair (FAILED or PARTIAL through a refused provider, the shortest wait; a fallback-served pair and a plain failure untouched; INFO, no traceback), each probe operation (on the result and in error_details), the search (providers_with_errors, INFO not a traceback, a cached query still answered) and its SSE provider_error event",
+        desc="error_code RATE_LIMITED and retry_after on: the live current price (last known price kept, or the error item; no call while paused), the refresh result (FAILED with nothing stored, PARTIAL or OK with what came stored), the FX sync pair (FAILED or PARTIAL through a refused provider, the shortest wait; a fallback-served pair and a plain failure untouched; INFO, no traceback), each probe operation (on the result and in error_details), the search (providers_with_errors, INFO not a traceback, a cached query still answered) and its SSE provider_error event; U2: a full call limit through the same paths (last known price, scheduler deferred, refresh FAILED, search provider with errors, probe RATE_LIMITED), one count per bulk chunk, and the guard that no caller holds a write transaction while a provider is called; U3: a full FX call limit through the sync (the next route serves the pair, a lone route ends like a refusal, one count per provider) and the history job (deferred)",
         # PURE: every database is a private file under tmp_path built with create_all and put in place of the process's
         # engine (db.session.async_engine) with monkeypatch; no session on the lane DB, no server. Pauses, MockFX's mode,
         # the registries' hand-outs and the plugin settings variables are monkeypatched per test; identifiers, queries
@@ -3441,7 +3811,7 @@ Note: No backend server required.
         "financial-math",
         services_financial_math,
         name="Financial Math",
-        desc="Average cost, native cash and its first negative day, returns and periods, the ledger control totals: movements, conversions through the FX service, diagnostics; boundaries of the whole layer, the day-count primitives' one home",
+        desc="Average cost, native cash and its first negative day, returns and periods, the ledger control totals: movements, conversions through the FX service, diagnostics; boundaries of the whole layer, the day-count primitives' one home, the annual coupon from the period coupon (COUPONS_PER_YEAR, annual_coupon_rate)",
         # PURE: each module's only I/O is convert_bulk, which every test replaces on its
         # module with a double; the session handed to it is None or a sentinel, or, for the
         # ledger control totals, one on a private SQLite file under tmp_path that no other
@@ -3492,6 +3862,18 @@ Note: No backend server required.
         # skips this action so that the file runs once there.
         in_all=False,
         # PURE: DailyStateBuilder over mock transactions; no DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "classification-from-profile",
+        services_classification_from_profile,
+        name="Classification From Profile",
+        desc="Project 68 D2: PortfolioCalculationEngine._load_asset_classifications reads the geography and sector steps of the asset profile (carried back to date_from, Decimal weights, a NULL row as None, an asset without rows None: classification_params are no longer read); calculate gives each day's by_geography and by_sector from them, a change on a quiet day opening a segment",
+        # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
+        # skips this action so that the file runs once there.
+        in_all=False,
+        # PURE: a private SQLite file under tmp_path built with create_all, disposed at teardown; no lane DB, no server, no network.
         isolation="pure",
     )
     add_test(
@@ -3586,6 +3968,17 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "enricher-rate-limit",
+        services_enricher_rate_limit,
+        name="Enricher Rate Limit",
+        desc="Plan 68 C0: POST /assets/enrichers/recognize, POST /assets/enrichers/{code}/test, GET /assets/enrichers/{code}/search and POST /assets/profile/ask take the probe's per-user limit: one hit per call on probe_limiter() before anything else (recognize: one for all the enrichers it asks, checked before the stream starts); past it 429 PROBE_RATE_LIMITED with an int retry_after >= 1 (the wait rounded up) equal to Retry-After and a message, no registry, enricher or session reached, the refusal not counted (429 before an unknown enricher's 404); another user is not limited; past the window the user calls again; probes and enricher calls share one count (one limiter built by probe_limiter() for both); probe_limiter() None or LIBREFOLIO_PROBE_RATE_LIMIT=0 limits none; POST /assets/profile/refresh is not limited",
+        # PURE: no DB, no server, no network. The route coroutines are called directly; probe_limiter() returns a private
+        # SlidingWindowLimiter on a fake clock (or PROBES_BY_LIMIT starts empty per test), and the registry, the plugins,
+        # the cascade, the profile reads, the manager's probe and the session are recording stubs, all with monkeypatch.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "quote-base-suggestion",
         services_quote_base_suggestion,
         name="Quote Base Suggestion",
@@ -3615,6 +4008,16 @@ Note: No backend server required.
         desc="chunks(); upsert_rates_bulk / delete_rates_bulk / bulk_delete_prices at 500, 501 and ~1 500 OR terms with exact values and counts; fx/sync._stored_rates and change detection over 1 035 pairs; FX DELETE of 1 500 separate days 200; POST/DELETE /fx/currencies/rate and DELETE /assets/prices (ranges over every asset) > 10 000 → 422 bulk_too_many_items before any write, 10 000 pass; 500s and per-item errors never echo the SQL; barrier: one OR of 1 500 refused; delete_rates_bulk matches by bisection (≤ 4⌈log₂(D+1)⌉ counted comparisons per deletion, 2 000 × 2 000) and equals a brute-force scan on random requests (overlaps, end < start, missing pair, single days); MF-SEC9e bulk_delete_prices: a row in two ranges counted once, an asset in two items answers its total over both in each result, per-asset counts sum to total_deleted; empty request → empty response, DELETE /assets/prices 200; 2 000 ranges send ≤ ⌈intervals/500⌉+2 SELECTs and DELETEs (engine statement count, not 1 per range); brute-force reference on random overlapping requests; guards: inclusive bounds, end=start, adjacent and disjoint random ranges; guard: POST /assets/prices answers a service ValueError (the digits refusal) 400 with its own message",
         # PURE: one private in-memory SQLite per test (create_all), disposed at teardown; services, the FX provider lookup
         # and route loggers replaced by monkeypatch; the cap/failure cases hand the routes stand-in sessions.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "bulk-current-values",
+        services_bulk_current_values,
+        name="Bulk Current Values (project 76, C1+C2+C3+C3b+C4)",
+        desc="The bulk current-price read of asset providers: C1 FACurrentValueRequest, supports_bulk_current / bulk_current_max_items / get_current_values_bulk with their class-definition guards, mockprov's bulk answer; C2 get_current_prices_bulk reading a bulk provider's group in one call (aligned expiry, group stamp, single-flight, rate limit, failure fallback, chunks); C3 the history refresh reads today's value through the same bulk group before the history (one call, shared with the live read, none for a past range, aligned expiry, refused read fails the refresh, unstorable value noted); C3b the midnight rule (the current quote never replaces a stored or fetched history point of a day before today, it only adds a missing one: yesterday's true close survives, a missing yesterday gets the quote, a resume keeps a close only the DB has); C4 a provider's minimum refresh interval of current values (current_min_refresh_seconds, core.current_cache_ttl and its fallbacks, the TTL of every cache writer and of the group stamp, the plan's call count of 2 per fake hour, a bulk provider refused once then served after the pause)",
+        # PURE: schema and class-definition checks, mockprov called directly, and the service on a private SQLite file
+        # swapped for the process engine, a private cache, pauses and group clock; no lane DB, no server, no network.
         isolation="pure",
     )
     add_test(
@@ -3701,6 +4104,56 @@ Note: No backend server required.
         name="Asset Type Rules",
         desc="Lane 65 B1: asset_type_family (every AssetType member has a family; ETF_* -> ETF, CROWDFUND_* -> CROWDFUND, any other its own), family_changed, classify_type_change (ETF -> ETF_STOCK ok; CROWDFUND_REAL_ESTATE -> ETF_STOCK and STOCK -> BOND warn; ETF -> INDEX warns without transactions and is blocked with them, with no warning on top; an INDEX already holding transactions is left alone), only INDEX forbids transactions",
         # PURE: functions over the enum, no session, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "asset-profile-catalogue",
+        services_asset_profile_catalogue,
+        name="Asset Profile Catalogue",
+        desc="Project 68 A1: CATALOGUE holds exactly the 37 voices of plan 3.6 in order (shape, sign, unit, groups, key figure, charted, volatile, choices, map keys; numeric shapes signed, choices only on choice voices, map keys only on maps, charted implies key figure); get_voice refuses an unknown key; normalize_value gives the stored form of every shape (number, percentage, amount, date, text, choice, country, currency, map, table), refuses floats, bools, NaN, huge exponents, wrong signs, loose dates, non-ISO codes, bad maps and overlapping coupon rows with ProfileValueError naming the voice; the form is deterministic (key order, rounding, thirds tie) and idempotent, also after a JSON round trip",
+        # PURE: functions over the catalogue and in-memory values; no database, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "asset-profile-store",
+        services_asset_profile_store,
+        name="Asset Profile Store",
+        desc="Project 68 A3: profile_today is the date in scheduler_timezone (UTC when not set or not a zone); current_rows is each voice's last row in (read_on, id) order; write_values writes only when the stored form differs from now whoever wrote either (spelling, map key order and rounding, a row with non-canonical JSON text: the same value), force_source writes the source's row unless now is that value from that source, None is a NULL row only over a value, writes of one call apply in order, one refused value or unknown voice raises ProfileValueError and writes nothing, read_on never before now's, user_id only on user rows, source_date stored, two connections writing the same new value make one row (write lock before the comparison); read_steps: one step per stretch, carry_back per voice, min per asset among the voices asked, nothing for no rows or a first row after end, one day without end, the last row of a day holds it, same value and source merge, keys None all voices, an unknown key refused, value_at and points_between on the steps; forget_updates: now and steps follow, all or nothing (ProfileUpdatesNotFound, ProfileUpdatesNewer), the count; recent_changes newest first 20 a page with total and the value before, the panel hides a volatile voice's source rows but those by hand and the first after one",
+        # PURE: every database is a private SQLite file under tmp_path built with create_all (two engines on it for the
+        # lock case); no session on the lane DB, no server; every day and moment passed in.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "asset-profile-double-write",
+        services_asset_profile_double_write,
+        name="Asset Profile Double Write",
+        desc="Project 68 A4: until D7, classification_params sent to create_assets_bulk / patch_assets_bulk (keyword user_id) is also written into the profile in the same transaction: source user, user_id the author, read_on today in scheduler_timezone and never before the voice's now; POST: three rows for description, geography and sector, none without classification; PATCH: only the voices it touches (sector alone: one row, even when the profile's geography differs from the column), sector_area null a NULL row, classification_params null NULL rows for the voices with a value only, the value now (another spelling) no row; the dry run (commit=False) and a batch rolled back on patchFailed write none; a patch that does not touch the classification writes none; a description of spaces counts as empty (no row on POST, an empty row on PATCH)",
+        # PURE: every database is a private SQLite file under tmp_path built with create_all; no session on the lane DB,
+        # no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "asset-profile-from",
+        services_asset_profile_from,
+        name="Asset Profile From",
+        desc="Project 68 B5b: a profile value {from: code} (optionally seen) on patch_assets_bulk / create_assets_bulk takes that enricher's value of the asset's binding after the item: from the enricher_read cache when it holds the voice (no call), else read now (fills the cache; a cached read of other voices does not answer); the row in the source's name (user_id NULL, the read's source_date), forced over the same value from another source, none when now is that value from that source; the binding the same item sets is used, a code it removes refused; profileValueInvalid on profile.<voice>, whole batch refused, dry run the same: code not bound, enricher not installed, no value for the voice, not found, error, raise, keys other than from/seen; seen in stored form: profileSourceChanged warning {voice, seen, now} only when different, the value read now saved; dry run same warning, nothing written; POST: from with the item's enrichers, a refused one fails its item",
+        # PURE: every database is a private SQLite file under tmp_path built with create_all; the synthetic enrichers are
+        # registered in the process's own EnricherRegistry (removed at teardown with their claims) and the process-wide
+        # enricher_read cache is cleared around each test; no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "asset-profile-merge",
+        services_asset_profile_merge,
+        name="Asset Profile Merge",
+        desc="Project 68 A5: merge_assets moves to the target every voice the source holds now with a non-empty value and the target has no row of, whole, by changing only asset_id (same row ids, read_on, source, user_id, source_date, created_at, NULL rows of its history included), seen by current_rows and read_steps of the target; a voice both hold keeps the target's rows only, a voice empty now on the source is not moved, a voice the target emptied on purpose stays the target's and empty (no mixing of histories); until D7 a moved description / geography / sector sets that part of the target's classification_params from the moved value, never from the source's column, the other parts and a shared voice's part kept; the source's asset_enrichers row deleted, the target's unchanged (or still none); dry_run moves and deletes nothing; no profile or enrichers row points at the source afterwards; delete_assets_bulk deletes the asset's profile rows and enrichers row and leaves another asset's (guard: ON DELETE CASCADE)",
+        # PURE: every database is a private SQLite file under tmp_path built with create_all; no session on the lane DB,
+        # no server, no network.
         isolation="pure",
     )
     add_test(
@@ -3875,6 +4328,19 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "scheduler-profile-read",
+        services_scheduler_profile_read,
+        name="Scheduler Profile Read",
+        desc="Project 68 B6: run_profile_read reads the active assets with a non-empty enricher config only; a regular round starts a round (round_started_at), refresh_assets(hold_deferred=True), counts assets ok / err / deferred (a RATE_LIMITED read), retry_at now + the shortest pause, or 15 minutes when no refused read gave one (B6c); the retry round (retry_at come) reads only what was not read since the round's start (plugin not called, cached values still merged), hold_deferred=False, never sets retry_at again, keeps round_started_at; a regular round after it reads everything; one log entry per run that validates as SchedulerLogEntry; the consultant's two cases (held in round one, written from the first in round two; refused again, written from the second); refresh_assets(hold_deferred) holds only the voices the refused enricher declares for the asset's type whose winner comes after it",
+        # PURE: every database is a private SQLite file under tmp_path built with create_all, reached by the job through
+        # jobs.get_async_engine / refresh.get_async_engine replaced for the test (a barrier checks the entry names only the
+        # file's assets); the job log is under tmp_path; synthetic enrichers registered in the process's own
+        # EnricherRegistry (removed at teardown) and the process-wide enricher_read cache cleared around each test; no
+        # server, no network, no sleep.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "scheduler-jobs",
         services_scheduler_jobs,
         name="Scheduler Job Bodies",
@@ -4041,10 +4507,131 @@ Note: No backend server required.
     # get_async_engine, the instance key is a test key set with monkeypatch (the data directory pointed into tmp_path,
     # so no key file is ever read or made in the lane), and the real plugin registries are only read.
     add_test(cat, "plugin-settings-contract", services_plugin_settings_contract, name="Plugin Settings Contract", desc="Declarations per family, refusal at registration, values per type, refusals without the value, derived variable names, BoundSettings and the test doubles", isolation="pure")
+    # Enrichers (plan 68, B1). PURE: the registry is read and synthetic classes registered in process, removed at each
+    # teardown with their environment claims; test mode is set with monkeypatch. No DB, no server, no network.
+    add_test(
+        cat,
+        "enricher-contracts",
+        services_enricher_contracts,
+        name="Enricher Contracts",
+        desc="Declarations refused at registration (a degree for every AssetType and no other key, degrees int >= 0 or None, voices catalogue keys of covered types only, terms, identifier types, code), every discovered enricher keeps them, mockenrich recognize/read/page_url/no search/test only",
+        isolation="pure",
+    )
+    # PURE: every database is a private SQLite file under tmp_path built with create_all; the synthetic enrichers are
+    # registered in the process's own EnricherRegistry and removed at teardown with their claims; no server, no network.
+    add_test(
+        cat,
+        "enricher-bindings",
+        services_enricher_bindings,
+        name="Enricher Bindings",
+        desc="Project 68 B3: save_config keeps the order given (row and stored text), {} clears, never touches state (a removed enricher keeps its state entry); update_state sets its codes, never touches config, a read finishing after the user's save keeps the user's config (and the reverse); load_enrichers leaves out assets without a row; installed_enrichers by code; default_order by degree, price provider, found order, code; enrichers_catalogue declarations and a default order for every AssetType",
+        isolation="pure",
+    )
+    # PURE: synthetic enrichers registered in the process's own EnricherRegistry (removed at teardown with their claims)
+    # and passed through plugins=; mockenrich read in test mode set with monkeypatch. No DB, no server, no network.
+    add_test(
+        cat,
+        "enricher-recognize",
+        services_enricher_recognize,
+        name="Enricher Recognize",
+        desc="Project 68 B4: recognize_cascade asks the enrichers covering the type with the first known identifier they accept (request order first); a strong identifier found and not known is learned before the round it starts (once, even from two sources); a different strong one is a conflict that adds and starts nothing; a ticker only reported; found never asked again, not found asked again with a learned identifier; a raising plugin is an error, the others answer; answers in order of arrival (threading.Event holds) and default_order keeps it; mockenrich ISIN → LEI learned",
+        isolation="pure",
+    )
+    # PURE: the plugin module's get_etf_overview and load_overview replaced by fakes (recorded overviews in
+    # fixtures/justetf/, a tiny DataFrame); a call the test did not offer fails it. No DB, no server, no network.
+    add_test(
+        cat,
+        "enricher-justetf",
+        services_enricher_justetf,
+        name="Enricher justETF",
+        desc="Plan 68 C1: JustETFEnricher declarations (justetf, PRICE_SOURCE, ISIN, ETF family + COMMODITY at 10, 13 voices (legal_form only where an ETC or ETN can sit), not test-only, pause_seconds > 0); recorded overviews (SWDA, VWCE, bond, hedged, gold ETC) mapped to stored forms through the real catalogue (TER and weights as fractions, fund size millions EUR, replication/distribution/legal-form codes, domicile ISO3, English dates, «Other» kept, sectors helper first then the justETF table, holdings date on countries and sectors); synthetic sheets for every replication text, unknown texts absent and logged, ETC/ETN etc_etn, ETF absent, TER 0; empty «ETF Screener» sheet not found; recognize (non-ISIN no call, 429 raises); read per binding (error isolated, 429 RATE_LIMITED for the rest without a call); search over load_overview",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "enricher-borsa-italiana",
+        services_enricher_borsa_italiana,
+        name="Enricher Borsa Italiana",
+        desc="Plan 68 C2: BorsaItalianaEnricher declarations (borsa_italiana, PRICE_SOURCE, ISIN, BOND at 10 and STOCK at 20, CRYPTO and every other type uncovered, 20 bond voices (no inception date; outstanding amount in the denomination currency, absent when two differ), sector and legal form for a stock, params language/mic/platform, no import from the price plugin); recorded sheets (BTP Valore, ordinary BTP, BTP Italia, BTP 2072, Austria 2117, EuroTLX corporate; ENEL, ASML, Apple; an ETF) rebuilt with the library's types and mapped to stored forms through the real catalogue (percents as fractions, the missing annual coupon from financial_math, frequency/structure/day count/issuer type tables in EN and IT, Plain Vanilla silent, sovereign issuer country and geography, yields/duration/accrued dated by the reference price date); EN/IT invariance of the MOT bonds; not found; recognize (non-ISIN no call, the library's 403 refusal raised as a rate limit); read per binding (error isolated, refusal RATE_LIMITED for the rest without a call, one Sessione per read); search through cerca; page URL",
+        # PURE: the plugin's library calls (ottieni_scheda, cerca, Sessione) are fakes on the plugin module that fail the
+        # test on any call not offered; no database, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "enricher-yahoo",
+        services_enricher_yahoo,
+        name="Enricher Yahoo Finance",
+        desc="Plan 68 C3: YahooFinanceEnricher declarations (yfinance, PRICE_SOURCE, TICKER only, STOCK at 10, ETF family and FUND at 20, CRYPTO/COMMODITY/BOND uncovered, share and fund voices, no search, not test-only, pause_seconds > 0, yfinance imported as yf, nothing from the price plugin); recorded info and funds_data (Enel, Apple, ASML, SWDA, VWCE, bond ETF, hedged ETF, gold ETC, Anima fund) mapped by quoteType to stored forms through the real catalogue (share: sector at 100 % when the helper knows it, industry, issuer country ISO3, market cap only in an upper-case ISO currency, business summary; fund: netExpenseRatio percent as a fraction, family, inception epoch as a UTC date, sector weightings through helper then table with unknown keys folded into Other, funds_data only for a fund and only when sector is asked, its failure keeping the info voices); TER and inception cross-checked with justETF's recordings; not found (empty info, no quoteType, Invalid ISIN, nameless EQUITY row); recognize (non-TICKER no call, name, page, no identifiers, refusal raises); read per binding (error SOURCE_ERROR isolated, YFRateLimitError RATE_LIMITED for the rest without a call)",
+        # PURE: the plugin's yf is a fake module on the plugin that fails the test on any symbol or attribute not
+        # offered, and yfinance's own entry points fail too; no database, no server, no network.
+        isolation="pure",
+    )
+    # PURE: every database is a private SQLite file under tmp_path built with create_all; the synthetic enrichers are
+    # registered in the process's own EnricherRegistry (removed at teardown with their claims) and the process-wide
+    # enricher_read cache is cleared around each test; no server, no network.
+    add_test(
+        cat,
+        "enricher-refresh",
+        services_enricher_refresh,
+        name="Enricher Refresh",
+        desc="Project 68 B5a: read_bindings one read call per enricher with its bindings in order, enrichers at once (outcomes in order of arrival), as yielded, unanswered bindings (fewer items, index out of range or twice, raise mid-way) once as error, RATE_LIMITED with retry_after; values in stored form, refused/unknown/None voices dropped and logged; read cache 1800 s keyed on the whole binding (params), ok and not_found kept, error and RATE_LIMITED never, a partial read never answers more, use_cache=False; merge_voices first of the order per voice with its source_date, others, enricher down, not in order ignored; ask_profile config order, cache, keys; refresh_assets source rows and state, different from now, failure isolation, missing asset error, no bindings, not installed skipped, deferred, read_since, config read again when writing (removed, reordered), inactive read; A3 one wrong voice logged, the others written",
+        isolation="pure",
+    )
+    # PURE: no lane DB, no server, no network. The variables through monkeypatch in this process; a private SQLite file
+    # under tmp_path behind every get_async_engine touched (settings, readiness, refresh); the synthetic enrichers are
+    # MockEnricher subclasses registered in the process's own EnricherRegistry (removed at teardown with their claims);
+    # the enricher_read cache is cleared around each test; justetf's library calls are stubs that record and raise.
+    add_test(
+        cat,
+        "enricher-enabled",
+        services_enricher_enabled,
+        name="Enricher Enabled",
+        desc="Project 68 B2: LIBREFOLIO_ENRICHERS_ENABLED read at every call (enrichers_enabled, X1's parser); EnricherRegistry's gate: an enricher not listed is not found, listed, installed, in the catalogue or any default order, never asked by the cascade; unknown code warned once; no clean-up: a turned-off binding, its state and rows stay, the refresh skips it, the job item stays ok, a PATCH keeps it; the read cache never answers a turned-off or uninstalled enricher (NO_ANSWER), source_value says not installed; a required setting left empty: refresh skips, ask/source_value NOT_CONFIGURED without a call (warm cache too), the API cascade does not ask it, test/search routes 422 NOT_CONFIGURED (api/plugin_errors.py) with the missing keys readiness may tell; voices hand over; one skip log line per refresh; a turned-off one 404 like an unknown code; configured, it is used",
+        isolation="pure",
+    )
     add_test(cat, "plugin-settings-crypto", services_plugin_settings_crypto, name="Plugin Settings Encryption", desc="AES-256-GCM blob and AAD, key id, subkeys, count and rekey on a sqlite3 copy (savepoint, idempotent, unreadable rows kept), key status (unusable key: totals)", isolation="pure")
     add_test(cat, "plugin-settings-runtime", services_plugin_settings_runtime, name="Plugin Settings Resolution", desc="env > _FILE > row > default, invalid variable unconfigures, unusable key, fingerprints, configure_instance, NOT_CONFIGURED and masking at both boundaries", isolation="pure")
-    add_test(cat, "plugin-settings-service", services_plugin_settings_service, name="Plugin Settings Service", desc="Catalogue and all-or-nothing writes on a private DB: scopes, LOCKED_BY_ENV, managed profile, item rules, log without values, key unavailable, MOCKFX writes", isolation="pure")
+    add_test(
+        cat,
+        "plugin-settings-service",
+        services_plugin_settings_service,
+        name="Plugin Settings Service",
+        desc="Catalogue and all-or-nothing writes on a private DB: scopes, LOCKED_BY_ENV, managed profile, item rules, log without values, key unavailable, MOCKFX writes, G2: shared groups as catalogue entries (used_by, configured through a group) and admin-only writes",
+        isolation="pure",
+    )
     add_test(cat, "secret-masking", services_secret_masking, name="Secret Masking", desc="mask_text with the URL forms, mask_exception through chains and groups, structlog processor and logging filter, the context variable across threads and tasks, the wiring in configure_logging", isolation="pure")
+    # Shared settings groups (project 76, G1). PURE: private SQLite under tmp_path through a private engine, a test instance
+    # key, every variable through monkeypatch; each test registers its own g1_ groups and releases them at teardown.
+    add_test(
+        cat,
+        "plugin-settings-groups",
+        services_plugin_settings_groups,
+        name="Plugin Settings Groups",
+        desc="register_group refusals and variable claims, validate_plugin_groups, binding with no own field (env > row > default), missing as group.key, masking, fingerprint, unbound, pickle, NOT_CONFIGURED, gate",
+        isolation="pure",
+    )
+    # Plugin readiness (project 76, N1). PURE: private SQLite under tmp_path through a private engine, a test instance key, every
+    # variable through monkeypatch; the two provider lists are called in process, no server, no network.
+    add_test(
+        cat,
+        "plugin-readiness",
+        services_plugin_readiness,
+        name="Plugin Readiness",
+        desc="One readiness check per plugin = the call boundary's rule (rows, variables, unreadable secret, groups, user fields), managed profile hides locked fields, one DB session, provider schemas and the asset and FX lists; N2b: reason, variables, settings_unavailable",
+        isolation="pure",
+    )
+    # Not configured writes (project 76, N2). PURE: private SQLite under tmp_path handed to the routes and to the readiness check,
+    # a test instance key, every variable through monkeypatch; the two write routes are called in process, no server, no
+    # network. The real asset and FX registries receive this module's provider classes through monkeypatch (in-process only).
+    add_test(
+        cat,
+        "not-configured-writes",
+        services_not_configured_writes,
+        name="Not Configured Writes",
+        desc="POST /assets/provider and POST /fx/providers/routes: a provider newly put to use and not configured refuses the whole request (422 NOT_CONFIGURED, first in request order, nothing written, replace kept), re-save and a provider already on the pair pass, one readiness call per request, managed profile; N2b: 503 when the settings cannot be read, reason and variables in the 422",
+        isolation="pure",
+    )
     add_test(cat, "plugin-settings-guards", services_plugin_settings_guards, name="Plugin Settings Guards", desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings", isolation="pure")
     add_test(
         cat,
@@ -4435,7 +5022,7 @@ Note: No backend server required.
         "fx-sync-service",
         services_fx_sync,
         name="FX Sync Orchestration",
-        desc="_is_date_within_sync_range (N83: an old rate is kept too, no 1900-01-01 floor), _process_route/_compute_multi_step",
+        desc="_is_date_within_sync_range (N83: an old rate is kept too, no 1900-01-01 floor; D2: no rate after the sync's end, weekend kept), _process_route/_compute_multi_step",
         exclusive_because="an autouse fixture truncates fx_rates and fx_conversion_routes before every test, so any concurrent unit reading rates or routes loses them mid-test",
     )
     add_test(cat, "provider-registry-misc", services_provider_registry_misc, name="Provider Registry Helpers", desc="auto_discover, register, get_provider_instance, BRIM plugin detection")
@@ -4464,7 +5051,25 @@ Note: No backend server required.
         "provider-errors",
         services_provider_errors,
         name="Provider Error Paths",
-        desc="justETF, Borsa Italiana, Yahoo Finance, SNB, BOE, FED and ECB when the source misbehaves or refuses for too many requests (every client doubled); a value that is no number skips its line only (X-R50, X-R52); FED and BOE read each currency from its series, in the direction the bank quotes it (lane 75)",
+        desc="justETF, Borsa Italiana, Yahoo Finance, SNB, BOE, FED and ECB when the source misbehaves or refuses for too many requests (every client doubled); a value that is no number skips its line only (X-R50, X-R52); FED and BOE read each currency from its series, in the direction the bank quotes it, NORGES divides each series by its unit, NBU keeps every day under its exchangedate, BOC reads one Valet group for every currency, BDI refuses a series not quoted per 1 EUR, BCB checks each row's code and symbol (lane 75)",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "yahoo-finance-bulk",
+        services_yahoo_finance_bulk,
+        name="Yahoo Finance Bulk Current Values (project 76, C5)",
+        desc="Yahoo's current values in one v7 quote request: same value, currency and exchange-zone date as the single read on the recorded response, one request for all symbols, an unreturned symbol answers nothing, previous-close fallback and NO_DATA, a 429 raised once and never retried, ISIN resolved to its symbol, wrong identifier type refused per item, capability flags",
+        # PURE: the recorded v7 response served by a replaced YfData.get_raw_json and a fake yf; no DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "yahoo-search-crypto-eur",
+        services_yahoo_search_crypto_eur,
+        name="Yahoo Search, a Crypto's Euro Ticker (project 76, Y1)",
+        desc="Y1: a crypto's -EUR twin right after its -USD row when Yahoo quotes it in EUR, every twin asked in one v7 request; nothing asked without a crypto, with the twin listed, or without the v7 helper; a twin not returned or not in EUR adds no row; the extra request failing (an error or a 429) leaves the search as it was",
+        # PURE: a fake yf (Search, Ticker) and a replaced YfData.get_raw_json; no DB, no server, no network.
         isolation="pure",
     )
     add_test(cat, "borsa-italiana-search", services_borsa_italiana_search, name="Borsa Italiana Search", desc="Single-fetch search, IT+EN variants, ISIN direct hit (engine mocked)")

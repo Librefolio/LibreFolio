@@ -19,11 +19,13 @@ from backend.app.schemas.signals.result import SignalRequest
 from backend.app.schemas.signals.vocabulary import SignalAvailabilityReason, SignalCalendarReturnPointStatus, SignalDomain, SignalErrorCode, SignalStatus, SignalWarningCode
 from backend.app.services import signal_plugins as signal_plugins_package
 from backend.app.services.risk.metrics import (
+    annualized_downside_deviation,
     annualized_sharpe,
     annualized_volatility,
     beta,
     compounded_return,
     daily_risk_free_rate,
+    omega_ratio,
     sample_covariance,
     sample_variance,
     underwater_drawdown,
@@ -39,6 +41,7 @@ from backend.app.services.signal_plugins.drawdown.plugin import (
 from backend.app.services.signals import risk_adapters as signal_helpers
 from backend.app.services.signals.base import SignalUnavailableError
 from backend.app.services.signals.execution import SignalPreparedSeriesBundle
+from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.app.services.signals.service import SignalService
 
 
@@ -108,7 +111,6 @@ def _prepared_set(
         calendar_days=(dates[-1] - dates[0]).days,
         annualization_factor=(len(dates) - 1) * 365 / (dates[-1] - dates[0]).days,
         calendar_coverage=1.0,
-        fresh_quote_coverage=1.0,
         data_quality=DataQualityReport(),
         fx_fingerprint="0" * 64,
     )
@@ -321,6 +323,100 @@ async def test_partially_flat_sharpe_windows_are_explicitly_partial():
     assert any(warning.code == SignalWarningCode.UNDEFINED_METRIC_WINDOW for warning in result.warnings)
     assert any(point.value is None for point in result.series[0].points)
     assert any(point.value is not None for point in result.series[0].points)
+
+
+# --------------------------------------------------------------------------- #
+# RN-22: the rolling semi-deviation and the rolling Omega
+# --------------------------------------------------------------------------- #
+# Up 10 %, down 10 %, up, up, down, up: every two-return window but one holds a loss; the one of two gains has none.
+_RN22_PRICES = [100.0, 110.0, 99.0, 108.9, 119.79, 107.811, 118.5921]
+_RN22_TARGET = 0.03
+
+
+async def _rn22_results(prices: list[float], requests: list[SignalRequest]):
+    dates = _dates(len(prices))
+    primary = _prepared_series(1, dates, prices)
+    bundle = SignalPreparedSeriesBundle(primary_asset_id=1, series_sets={None: _prepared_set(primary)})
+    results = await SignalService().compute(requests, _price_points(dates, prices), _context(dates), prepared_series_bundle=bundle)
+    return {result.instance_id: result for result in results}, primary
+
+
+@pytest.mark.asyncio
+async def test_the_rolling_semi_deviation_and_omega_publish_what_the_one_home_answers_for_each_window():
+    """Each visible point is the scalar measure of its own window, around the target the request carries (RN-22)."""
+    by_id, primary = await _rn22_results(
+        _RN22_PRICES,
+        [
+            SignalRequest(instance_id="semi", signal_code="RISK_ROLLING_DOWNSIDE_DEVIATION", params={"window": 2, "target_annual_return": _RN22_TARGET}),
+            SignalRequest(instance_id="omega", signal_code="RISK_ROLLING_OMEGA", params={"window": 2, "target_annual_return": _RN22_TARGET}),
+        ],
+    )
+    returns = [point.value for point in primary.returns.points]
+    factor = 365.0
+
+    semi = by_id["semi"]
+    assert semi.status == SignalStatus.OK, semi.error
+    for point in semi.series[0].points:
+        end = [p.valuation_date for p in primary.valuations.points].index(point.date)
+        assert point.value == pytest.approx(annualized_downside_deviation(returns[end - 2 : end], factor, annual_target_return=_RN22_TARGET) * 100.0)
+
+    omega = by_id["omega"]
+    for point in omega.series[0].points:
+        end = [p.valuation_date for p in primary.valuations.points].index(point.date)
+        expected = omega_ratio(returns[end - 2 : end], factor, annual_target_return=_RN22_TARGET)
+        assert (point.value is None) == (expected is None)
+        if expected is not None:
+            assert point.value == pytest.approx(expected)
+
+
+@pytest.mark.asyncio
+async def test_a_window_without_a_loss_leaves_the_omega_undefined_and_partial_and_the_semi_deviation_at_zero():
+    """Like the Sharpe at zero volatility: «non definita», said, never a huge number; the semi-deviation is a real 0."""
+    by_id, _ = await _rn22_results(
+        _RN22_PRICES,
+        [
+            SignalRequest(instance_id="semi", signal_code="RISK_ROLLING_DOWNSIDE_DEVIATION", params={"window": 2}),
+            SignalRequest(instance_id="omega", signal_code="RISK_ROLLING_OMEGA", params={"window": 2}),
+        ],
+    )
+
+    omega = by_id["omega"]
+    assert omega.status == SignalStatus.PARTIAL
+    assert omega.availability.reason_code == SignalAvailabilityReason.PARTIAL_UNDEFINED_METRIC
+    assert any(warning.code == SignalWarningCode.UNDEFINED_METRIC_WINDOW for warning in omega.warnings)
+    assert any(point.value is None for point in omega.series[0].points)
+    assert any(point.value is not None for point in omega.series[0].points)
+
+    semi = by_id["semi"]
+    assert semi.status == SignalStatus.OK
+    assert all(point.value is not None for point in semi.series[0].points)
+    assert 0.0 in [point.value for point in semi.series[0].points]
+
+
+@pytest.mark.asyncio
+async def test_a_series_that_never_loses_leaves_the_omega_unavailable_as_an_undefined_metric():
+    by_id, _ = await _rn22_results(
+        [100.0, 101.0, 103.0, 104.0, 107.0, 108.0, 111.0],
+        [SignalRequest(instance_id="omega", signal_code="RISK_ROLLING_OMEGA", params={"window": 2})],
+    )
+
+    omega = by_id["omega"]
+    assert omega.status == SignalStatus.UNAVAILABLE
+    assert omega.availability.reason_code == SignalAvailabilityReason.UNDEFINED_METRIC
+    assert omega.series == []
+
+
+def test_the_semi_deviation_shares_the_volatility_axis_and_the_omega_reads_against_one():
+    """Switched on together, the volatility and the semi-deviation are two lines on one axis (Q23 a); the Omega's line
+    reads against 1× — above it the window gained more than it lost."""
+    volatility = SignalPluginRegistry.get_plugin("RISK_ROLLING_VOLATILITY").output_specs[0]
+    semi = SignalPluginRegistry.get_plugin("RISK_ROLLING_DOWNSIDE_DEVIATION").output_specs[0]
+    omega = SignalPluginRegistry.get_plugin("RISK_ROLLING_OMEGA").output_specs[0]
+
+    assert semi.axis == volatility.axis
+    assert semi.unit == volatility.unit
+    assert [level.value for level in omega.default_reference_levels] == [1.0]
+    assert omega.axis.key != volatility.axis.key
 
 
 @pytest.mark.asyncio

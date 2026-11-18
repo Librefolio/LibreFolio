@@ -10,7 +10,8 @@ Covers:
   get_current_user as anonymous and lets any other refusal through; live, direct, and its OpenAPI 200 (full answer first)
 - the /system router split one module per resource (C2): the routes of system.py, in their order; /system/ready after them,
   /system/block last, after /system/ready (CP6)
-- GET /api/v1/system/plugin-diagnostics: session required (live HTTP), failure-list shape for a logged-in user
+- GET /api/v1/system/plugin-diagnostics: session required (live HTTP), failure-list shape for a logged-in user; the
+  enricher registry (plan 68, B1) reports its discovery failures as system ``enricher``, in process
 - classify_ip / client_address (utils/runtime/network.py): the class of a client address, and which address (plan 36, §2.1)
 - GET /api/v1/system/connection: session required, {client_class, cookie_secure} live and in-process (plan 36, §2.1)
 - GET /api/v1/system/instance: public, no session; {profile, accounts, email, support_url, legal, client_log_level} live (the lane's default profile,
@@ -69,6 +70,7 @@ from backend.app.db.session import get_session_generator
 from backend.app.schemas.auth import AccountsInstanceConfig
 from backend.app.schemas.system import PluginDiagnosticsResponse, ReadinessChecks, ReadinessResponse, SystemInfoPublicResponse, SystemInfoResponse
 from backend.app.schemas.tools import ToolDiscoveryFailure
+from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.platform import instance_links, readiness
 from backend.app.services.platform.provider_registry import PluginDiscoveryFailure
 from backend.app.services.risk.registry import RiskAnalyticRegistry
@@ -357,7 +359,7 @@ PLUGIN_DIAGNOSTICS_URL = f"{API_BASE}/system/plugin-diagnostics"
 TIMEOUT = 30
 PASSWORD = "PluginDiagPass123!"
 #: The ``system`` label get_plugin_diagnostics gives each registry it reads.
-PLUGIN_SYSTEMS = {"asset", "fx", "brim", "signals", "risk", "tools"}
+PLUGIN_SYSTEMS = {"asset", "fx", "brim", "signals", "risk", "tools", "enricher"}
 
 
 @pytest.fixture(scope="module")
@@ -489,6 +491,8 @@ class TestPluginDiagnosticsCoverRiskAndTools:
         monkeypatch.setattr(RiskAnalyticRegistry, "get_discovery_errors", classmethod(lambda cls: (failure,)))
         snapshot = ToolRegistrySnapshot({}, (ToolDiscoveryFailure(tool_code=None, filename="bad_tool/plugin.py", reason="import_failed"),))
         monkeypatch.setattr(ToolPluginRegistry, "get_snapshot", classmethod(lambda cls: snapshot))
+        # The enrichers have their own case below; silenced here, whether the route reads them yet or not.
+        monkeypatch.setattr(EnricherRegistry, "get_discovery_errors", classmethod(lambda cls: ()))
 
         listed = diagnostics.get_plugin_diagnostics(None).root
 
@@ -496,6 +500,24 @@ class TestPluginDiagnosticsCoverRiskAndTools:
         assert set(by_system) == {"risk", "tools"}, listed
         assert by_system["risk"].filename == "broken.py" and "ImportError" in by_system["risk"].error
         assert by_system["tools"].filename == "bad_tool/plugin.py" and "import_failed" in by_system["tools"].error
+
+
+class TestPluginDiagnosticsCoverEnrichers:
+    """Plan 68, B1: the enricher registry reports the plugins that fail to load, as system ``enricher``. In process: the
+    other registries are silenced, the enricher registry given one failure through its own class."""
+
+    def test_a_failed_enricher_plugin_is_listed(self, monkeypatch):
+        for registry in (diagnostics.AssetProviderRegistry, diagnostics.FXProviderRegistry, diagnostics.BRIMProviderRegistry, diagnostics.SignalPluginRegistry, RiskAnalyticRegistry):
+            monkeypatch.setattr(registry, "get_discovery_errors", classmethod(lambda cls: ()))
+        monkeypatch.setattr(ToolPluginRegistry, "get_snapshot", classmethod(lambda cls: ToolRegistrySnapshot({}, ())))
+        failure = PluginDiscoveryFailure(module_name="backend.app.services.enricher_providers.broken_source.plugin", error_type="ImportError", message="boom")
+        monkeypatch.setattr(EnricherRegistry, "get_discovery_errors", classmethod(lambda cls: (failure,)))
+        assert EnricherRegistry.get_discovery_errors() == (failure,), "barrier: the enricher registry answers the failure it was given"
+
+        listed = diagnostics.get_plugin_diagnostics(None).root
+
+        assert [(item.system, item.filename) for item in listed] == [("enricher", "plugin.py")], listed
+        assert "ImportError" in listed[0].error and "boom" in listed[0].error
 
 
 # ============================================================================

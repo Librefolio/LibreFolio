@@ -372,6 +372,7 @@
       },
       "hintDays": "Enter 0 to keep backups until you delete them.",
       "timing": "The rules apply within an hour: after every backup and at every start, at most once an hour."
-    }
+    },
+    "docsHelp": "Copies of the whole instance — database, files and settings — to download, restore or move to another server."
   }
 }

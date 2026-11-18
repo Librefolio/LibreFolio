@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import delete, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import get_settings
@@ -37,22 +37,30 @@ from backend.app.config.plugins import plugin_setting_env_origin
 from backend.app.db.models import PluginSystemSetting, PluginUserSetting, User
 from backend.app.logging_config import get_logger
 from backend.app.schemas.plugin_settings import (
+    PluginCallUsage,
+    PluginCallWindow,
     PluginSettingErrorCode,
     PluginSettingFieldRead,
     PluginSettingOptionRead,
     PluginSettingsCatalogResponse,
     PluginSettingsPluginRead,
+    PluginSettingsPluginRef,
     PluginSettingsWriteResponse,
     PluginSettingWriteItem,
     PluginSettingWriteResult,
 )
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.fx.registry import FXProviderRegistry
+from backend.app.services.platform import call_counter
 from backend.app.services.platform.instance_key import InstanceKeyError
 from backend.app.services.platform.provider_registry import AbstractProviderRegistry
+from backend.app.services.plugin_settings.call_limits import CALL_LIMIT_KEYS
+from backend.app.services.plugin_settings.contract import qualified_missing
 from backend.app.services.plugin_settings.crypto import encrypt_secret, key_id_of, secret_aad, settings_subkey
 from backend.app.services.plugin_settings.fields import PluginSettingField, SettingScope, SettingType, SettingValueError, env_variables, validate_value
+from backend.app.services.plugin_settings.groups import GROUP_FAMILY, SettingsGroup, all_groups, is_withheld, plugin_groups, served_group
 from backend.app.services.plugin_settings.resolver import FieldState, StoredValue, missing_field_keys, resolve_plugin_fields
 from backend.app.services.plugin_settings.runtime import stored_value
 from backend.app.services.tools.registry import ToolPluginRegistry
@@ -61,7 +69,7 @@ from backend.app.utils.datetime_utils import utcnow
 logger = get_logger(__name__)
 
 #: The families whose plugins may declare settings, with their registries.
-FAMILY_REGISTRIES: dict[str, type[AbstractProviderRegistry]] = {"asset": AssetProviderRegistry, "fx": FXProviderRegistry, "brim": BRIMProviderRegistry, "tool": ToolPluginRegistry}
+FAMILY_REGISTRIES: dict[str, type[AbstractProviderRegistry]] = {"asset": AssetProviderRegistry, "fx": FXProviderRegistry, "brim": BRIMProviderRegistry, "tool": ToolPluginRegistry, "enricher": EnricherRegistry}
 
 #: The families whose plugins have no icon of their own: a Tool is drawn with the ``icon_key`` of its service by the Tools page, and the
 #: settings catalogue lists it with the neutral icon.
@@ -70,7 +78,7 @@ FAMILIES_WITHOUT_ICON: frozenset[str] = frozenset({"tool"})
 #: The attribute of a plugin instance that holds its icon URL, per family: the one its family's provider list publishes
 #: (``GET /assets/provider`` reads ``get_icon``, ``GET /fx/providers`` reads ``icon``, the BRIM plugins publish ``icon_url``). A new family
 #: adds one row, or joins ``FAMILIES_WITHOUT_ICON``.
-FAMILY_ICON_ATTRIBUTES: dict[str, str] = {"asset": "get_icon", "fx": "icon", "brim": "icon_url"}
+FAMILY_ICON_ATTRIBUTES: dict[str, str] = {"asset": "get_icon", "fx": "icon", "brim": "icon_url", "enricher": "icon"}
 
 
 class PluginSettingsRefused(Exception):
@@ -96,6 +104,14 @@ class _Plugin:
     plugin_class: type
     name: str
     icon_url: str | None
+
+    @property
+    def fields(self) -> tuple[PluginSettingField, ...]:
+        return getattr(self.plugin_class, "settings_fields", ())
+
+    @property
+    def groups(self) -> tuple[SettingsGroup, ...]:
+        return plugin_groups(self.plugin_class)
 
 
 def _plugin_identity(family: str, plugin_class: type, code: str) -> tuple[str, str | None]:
@@ -127,13 +143,14 @@ def _plugin_identity(family: str, plugin_class: type, code: str) -> tuple[str, s
 
 
 def _plugins(family: str | None, plugin_code: str | None) -> Iterator[_Plugin]:
-    """The registered plugins that declare settings, filtered; a test-only one only when ``plugin_code`` names it."""
+    """The registered plugins that declare settings (fields of their own, or shared groups), filtered; a test-only one
+    only when ``plugin_code`` names it."""
     for name, registry in FAMILY_REGISTRIES.items():
         if family is not None and name != family:
             continue
         for code in registry.list_plugin_codes():
             plugin_class = registry.get_plugin(code)
-            if plugin_class is None or not getattr(plugin_class, "settings_fields", ()):
+            if plugin_class is None or not (getattr(plugin_class, "settings_fields", ()) or plugin_groups(plugin_class)):
                 continue
             if plugin_code is not None and code != plugin_code:
                 continue
@@ -144,6 +161,58 @@ def _plugins(family: str | None, plugin_code: str | None) -> Iterator[_Plugin]:
 
 def _find_plugin(family: str, plugin_code: str) -> _Plugin | None:
     return next(iter(_plugins(family, plugin_code)), None)
+
+
+def _groups(family: str | None, plugin_code: str | None) -> list[SettingsGroup]:
+    """The shared groups the catalogue lists (``family`` None or ``group``), by name; a test-only one only when
+    ``plugin_code`` names it, and never outside test mode (``is_withheld``), as for the plugins."""
+    if family is not None and family != GROUP_FAMILY:
+        return []
+    groups = []
+    for name, group in sorted(all_groups().items()):
+        if plugin_code is not None and name != plugin_code:
+            continue
+        if (group.test_only and plugin_code is None) or is_withheld(group) or _switched_off_group(group):
+            continue
+        groups.append(group)
+    return groups
+
+
+def _switched_off_group(group: SettingsGroup) -> bool:
+    """X1: the instance's allow-lists switch off every plugin that reads ``group``. Such a group is not served, as its
+    plugins are not: no entry, and a write to it is ``UNKNOWN_FIELD`` (no trace, as decision N2).
+
+    False without any allow-list, and while one plugin that reads it is served (any family); true only when at least one
+    reader is switched off by a list. A group no plugin reads (a test's) stays as it is.
+    """
+    listing = [registry for registry in FAMILY_REGISTRIES.values() if registry._enabled_codes() is not None]  # noqa: SLF001 — the registries' own allow-list
+    if not listing:
+        return False
+    for registry in FAMILY_REGISTRIES.values():
+        for code in registry.list_plugin_codes():
+            if group.name in (getattr(registry.get_plugin(code), "settings_groups", ()) or ()):
+                return False
+    for registry in listing:
+        registry.auto_discover()
+        for code, plugin_class in registry._get_storage().items():  # noqa: SLF001 — every registered plugin, the switched-off ones included
+            if not registry._withheld(plugin_class) and group.name in (getattr(plugin_class, "settings_groups", ()) or ()) and registry._switched_off(code):  # noqa: SLF001 — see above
+                return True
+    return False
+
+
+def _group_users(group: SettingsGroup) -> list[PluginSettingsPluginRef]:
+    """The plugins of every family that read ``group``, as their entries name them. A test-only plugin only for a
+    test-only group: a group users see never names a plugin they cannot."""
+    users = []
+    for family, registry in FAMILY_REGISTRIES.items():
+        for code in registry.list_plugin_codes():
+            plugin_class = registry.get_plugin(code)
+            if plugin_class is None or group.name not in (getattr(plugin_class, "settings_groups", ()) or ()):
+                continue
+            if getattr(plugin_class, "test_only", False) and not group.test_only:
+                continue
+            users.append(PluginSettingsPluginRef(family=family, plugin_code=code, plugin_name=_plugin_identity(family, plugin_class, code)[0]))
+    return users
 
 
 def _is_managed() -> bool:
@@ -195,25 +264,97 @@ def _field_read(state: FieldState, *, is_admin: bool) -> PluginSettingFieldRead:
     )
 
 
-def _resolve_catalogue(plugins: list[_Plugin], system: dict, user: dict, user_id: int) -> list[list[FieldState]]:
-    return [resolve_plugin_fields(plugin.family, plugin.code, plugin.plugin_class.settings_fields, system.get((plugin.family, plugin.code), {}), user.get((plugin.family, plugin.code), {}), user_id=user_id, decrypt=False) for plugin in plugins]
+def _resolve_catalogue(plugins: list[_Plugin], groups: list[SettingsGroup], system: dict, user: dict, user_id: int) -> tuple[list[list[FieldState]], dict[str, list[FieldState]]]:
+    """The state of every listed plugin's fields, and of every group the listed plugins or the listed groups need (each
+    group resolved once). Synchronous: run it in a worker thread."""
+    plugin_states = [resolve_plugin_fields(plugin.family, plugin.code, plugin.fields, system.get((plugin.family, plugin.code), {}), user.get((plugin.family, plugin.code), {}), user_id=user_id, decrypt=False) for plugin in plugins]
+    needed = {group.name: group for group in groups}
+    for plugin in plugins:
+        needed.update({group.name: group for group in plugin.groups})
+    group_states = {name: resolve_plugin_fields(GROUP_FAMILY, name, group.fields, system.get((GROUP_FAMILY, name), {}), None, user_id=None, decrypt=False) for name, group in needed.items()}
+    return plugin_states, group_states
+
+
+def _owns_count(plugin: _Plugin) -> bool:
+    """Whether the plugin's calls are counted on its own row (project 76, U4): it reaches an external service and reads no
+    credit-sharing group (``call_counter.call_owner``'s rule)."""
+    return bool(getattr(plugin.plugin_class, "calls_external_service", False)) and not any(group.shares_credits for group in plugin.groups)
+
+
+def _usage(family: str, code: str, states: list[FieldState], counts: call_counter.CallCounts, now: Any, managed: bool) -> PluginCallUsage:
+    """The usage block of an owner: each window's count, its limit (hidden in the managed profile when its variable locks
+    it), the end of the window of ``now``, and whether it is full (on the real limit)."""
+    limits = {state.field.key: state for state in states if state.field.key in CALL_LIMIT_KEYS}
+    starts = call_counter.window_starts(now)
+    windows = []
+    for window in call_counter.WINDOWS:
+        state = limits.get(f"call_limit_{window}")
+        limit = state.value if state is not None and isinstance(state.value, int) and not isinstance(state.value, bool) else None
+        count = getattr(counts, window)
+        shown = None if (state is not None and managed and state.locked) else limit
+        windows.append(PluginCallWindow(window=window, count=count, limit=shown, resets_at=call_counter.window_end(window, starts[window]), full=limit is not None and count >= limit))
+    return PluginCallUsage(family=family, plugin_code=code, windows=windows)
+
+
+async def _read_owner_counts(owners: list[tuple[str, str]], now: Any) -> dict[tuple[str, str], call_counter.CallCounts] | None:
+    """The counts of every owner in one read; None when the counter table cannot be read (one warning, never a 500)."""
+    if not owners:
+        return {}
+    try:
+        return await call_counter.read_counts_many(owners, now=now)
+    except SQLAlchemyError as error:
+        logger.warning("Plugin call counts not read for the settings catalogue: the usage blocks are left out", owners=len(owners), error=type(error).__name__)
+        return None
 
 
 async def read_catalogue(session: AsyncSession, user: User, *, family: str | None = None, plugin_code: str | None = None) -> PluginSettingsCatalogResponse:
-    """The plugins that declare settings, and the state of each field for ``user``."""
+    """The plugins that declare settings, then the shared groups (project 76), and the state of each field for ``user``.
+
+    A plugin is ``configured`` when its own fields and the fields of every group it reads leave nothing missing: the rule
+    of a call (``contract.qualified_missing``). A group is an entry of its own (``family="group"``): its fields, the
+    plugins that read it (``used_by``), and ``configured`` judged on its fields.
+    """
     plugins = list(_plugins(family, plugin_code))
-    if not plugins:
+    groups = _groups(family, plugin_code)
+    if not plugins and not groups:
         return PluginSettingsCatalogResponse(plugins=[])
     system, own = await _rows_by_plugin(session, user.id)
-    all_states = await asyncio.to_thread(_resolve_catalogue, plugins, system, own, user.id)
+    plugin_states, group_states = await asyncio.to_thread(_resolve_catalogue, plugins, groups, system, own, user.id)
     managed = _is_managed()
+    # The call usage of the entries that own a count (U4): one now, one read for the whole catalogue
+    now = call_counter._utc(None)
+    owners = [(plugin.family, plugin.code) for plugin in plugins if _owns_count(plugin)] + [(GROUP_FAMILY, group.name) for group in groups if group.shares_credits]
+    counts = await _read_owner_counts(owners, now)
     entries = []
-    for plugin, states in zip(plugins, all_states, strict=True):
+    for plugin, states in zip(plugins, plugin_states, strict=True):
         fields = [_field_read(state, is_admin=user.is_superuser) for state in states if not (managed and state.locked)]
-        if fields:
-            # Judged on every field, the hidden ones too: a yes or no, which names none of them (decision N2).
-            configured = not missing_field_keys(states)
-            entries.append(PluginSettingsPluginRead(family=plugin.family, plugin_code=plugin.code, plugin_name=plugin.name, icon_url=plugin.icon_url, configured=configured, fields=fields))
+        read = [group.name for group in plugin.groups]
+        # A group the managed profile hides whole (every field locked) is not named either: no trace, no dead link (N2)
+        names = [name for name in read if not (managed and all(state.locked for state in group_states[name]))]
+        usage = _usage(plugin.family, plugin.code, states, counts[(plugin.family, plugin.code)], now, managed) if counts is not None and (plugin.family, plugin.code) in counts else None
+        # U4b: an owner whose every field the managed profile hides keeps its entry, read-only, for its usage block
+        if fields or names or usage is not None:
+            # Judged on every field, the hidden ones and the groups' too: a yes or no, which names none of them (decision N2).
+            configured = not qualified_missing(missing_field_keys(states), {name: missing_field_keys(group_states[name]) for name in read})
+            entries.append(PluginSettingsPluginRead(family=plugin.family, plugin_code=plugin.code, plugin_name=plugin.name, icon_url=plugin.icon_url, configured=configured, fields=fields, groups=names, call_usage=usage))
+    for group in groups:
+        states = group_states[group.name]
+        fields = [_field_read(state, is_admin=user.is_superuser) for state in states if not (managed and state.locked)]
+        group_usage = _usage(GROUP_FAMILY, group.name, states, counts[(GROUP_FAMILY, group.name)], now, managed) if counts is not None and (GROUP_FAMILY, group.name) in counts else None
+        if fields or group_usage is not None:
+            entries.append(
+                PluginSettingsPluginRead(
+                    family=GROUP_FAMILY,
+                    plugin_code=group.name,
+                    plugin_name=group.label,
+                    name_key=group.label_key,
+                    icon_url=None,
+                    configured=not missing_field_keys(states),
+                    fields=fields,
+                    used_by=_group_users(group),
+                    call_usage=group_usage,
+                )
+            )
     return PluginSettingsCatalogResponse(plugins=entries)
 
 
@@ -233,22 +374,31 @@ def _locking_variable(family: str, plugin_code: str, declared: PluginSettingFiel
     return next((variable for variable in env_variables(family, plugin_code, declared) if plugin_setting_env_origin(variable) is not None), None)
 
 
+def _declared_fields(family: str, plugin_code: str) -> tuple[PluginSettingField, ...] | None:
+    """The fields a write may name for ``family``/``plugin_code``: a plugin's own, or a shared group's (project 76); None
+    when there is no such plugin or group. A test-only one is found when named, as a write always names it."""
+    if family == GROUP_FAMILY:
+        group = served_group(plugin_code)
+        return group.fields if group is not None and not _switched_off_group(group) else None
+    plugin = _find_plugin(family, plugin_code)
+    return plugin.fields if plugin is not None else None
+
+
 def _check_item(item: PluginSettingWriteItem, user: User, managed: bool, seen: set[tuple]) -> tuple[_Accepted | None, PluginSettingErrorCode | None, str | None]:  # noqa: C901, PLR0911 — one flat list of refusals
-    plugin = _find_plugin(item.family.value, item.plugin_code)
-    declared = None
-    if plugin is not None:
-        declared = next((field for field in plugin.plugin_class.settings_fields if field.key == item.field_key and field.scope.value == item.scope.value), None)
-    if plugin is None or declared is None:
+    family, code = item.family.value, item.plugin_code
+    fields = _declared_fields(family, code)
+    declared = next((field for field in fields or () if field.key == item.field_key and field.scope.value == item.scope.value), None)
+    if declared is None:
         return None, PluginSettingErrorCode.UNKNOWN_FIELD, "no such plugin setting in this scope"
     if declared.scope is SettingScope.SYSTEM:
-        locked_by = _locking_variable(plugin.family, plugin.code, declared)
+        locked_by = _locking_variable(family, code, declared)
         if locked_by is not None and managed:
             return None, PluginSettingErrorCode.UNKNOWN_FIELD, "no such plugin setting in this scope"
         if not user.is_superuser:
             return None, PluginSettingErrorCode.FORBIDDEN_SCOPE, "only an administrator writes the instance's settings"
         if locked_by is not None:
             return None, PluginSettingErrorCode.LOCKED_BY_ENV, f"set by the environment variable {locked_by}"
-    identity = (plugin.family, plugin.code, declared.key, declared.scope.value)
+    identity = (family, code, declared.key, declared.scope.value)
     if identity in seen:
         return None, PluginSettingErrorCode.INVALID_VALUE, "the field appears twice in this write"
     seen.add(identity)

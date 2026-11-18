@@ -1,5 +1,5 @@
 /**
- * Asset page, Risk tab — the comparison measures against the SHARED benchmark.
+ * Asset page, Risk tab — L3 measures against the SHARED benchmark.
  *
  * Owner: the Risk workstream. Developer decision, 01/10/2026: wherever a page measures
  * against a benchmark there is a picker; on load it shows the current benchmark, and it
@@ -7,38 +7,43 @@
  * it opens on it, and changing it there changes it everywhere. Holding an asset does not
  * disqualify it as a benchmark; being the asset the page measures does.
  *
- * Four cases, each read off the state the picker publishes on its root —
- * `risk-comparison-asset-select-control`, with `data-benchmark-id` (the resolved value, ''
- * when there is none) and `data-measured` — and off what reaches the wire; never off an
- * icon or a label:
- *   1. a stored benchmark opens the tab with the picker on it, and Run sends a
+ * Since RN-17 the tab mounts the levels panel on the asset, so the picker is L3's — the
+ * Dashboard's own, `risk-l3-benchmark-select` — and L3 compares by itself once the choice
+ * is confirmed (`set`): there is no «Run» button any more. Four cases, each read off the
+ * state the picker publishes on its root — `risk-l3-benchmark-select-control`, with
+ * `data-benchmark-id` (the resolved value, '' when there is none) and
+ * `data-benchmark-state` — and off what reaches the wire; never off an icon or a label:
+ *   1. a stored benchmark opens the tab with the picker on it, and L3 sends a
  *      `comparison` whose `comparison_asset_id` is that id;
- *   2. a stored benchmark that IS this asset is still the current one — never dropped —
- *      published as measured, with its ⚠ visible, and nothing is compared: the backend
- *      would refuse a yardstick that is also the subject;
+ *   2. a stored benchmark that IS this asset is still the current one — never dropped from
+ *      the picker nor from storage — L3 says why (`risk-l3-benchmark-is-subject`), and
+ *      nothing is compared: the backend would refuse a yardstick that is also the subject;
  *   3. choosing another asset here writes the reader's shared key;
- *   4. nothing stored: no benchmark published, and Run disabled until a choice is made.
+ *   4. nothing stored: no benchmark published and nothing compared, until a choice is made.
  *
  * Registered as `front-portfolio risk-benchmark-shared` (the `-unit` action next to it is
  * the store's).
  *
- * `risk-asset-detail.spec.ts` is the ownerless net for this page and stays as it is: this
- * file shares nothing with it but `risk-mocks.ts`, which is additive.
+ * The eligibility engine is answered here, every asked asset admitted (`answerEligibility`):
+ * the lane's engine judges the seed's prices against today's date, and its verdicts would
+ * decide whether a stored choice is `set` or `blocked` — D378's subject, pinned in
+ * `risk-asset-detail.spec.ts`, not this file's.
  *
  * Nothing to restore: the risk endpoints are mocked, the choice lives in this context's
  * `localStorage` (which dies with the context), and no database row is written — the page's
  * live-price poll included, held for the whole test (`holdLivePricePoll`) — so every
  * test runs beside its neighbours.
  */
-import {expect, test, type Page} from '../fixtures/playwright';
+import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {schemas} from '../../src/lib/api/generated';
 import {installRiskMocks, waitForRiskCatalog, type RiskRequest} from './risk-mocks';
 
-/** The picker's test id on the asset page: `-trigger`, `-search` and `-measured` hang off it. */
-const PICKER = 'risk-comparison-asset-select';
-/** Its root, the id `SignalAssetParamControl` already gives it today: where the page reads its state. */
+/** L3's picker on the asset page: `-trigger`, `-search` and `-control` hang off it. */
+const PICKER = 'risk-l3-benchmark-select';
+/** Its root, where the page publishes the choice and how far it got confirming it. */
 const CONTROL = `${PICKER}-control`;
 
 interface CatalogueAsset {
@@ -119,13 +124,45 @@ async function storeBenchmark(page: Page, assetId: number | null): Promise<strin
     return key;
 }
 
-/** The asset's page, Risk tab, by a full document load; returns once the comparison controls are up. */
-async function openAssetRisk(page: Page, assetId: number): Promise<void> {
+/**
+ * Answer `POST /risk/eligibility` with every asked asset admitted: a copy, reduced to that one
+ * verdict, of `answerEligibility` in `risk-lab.spec.ts` (a spec may not import another). The body
+ * goes through the generated schema, because the client validates every response.
+ */
+async function answerEligibility(page: Page): Promise<void> {
+    await page.route('**/api/v1/risk/eligibility', async (route) => {
+        const sent = (route.request().postDataJSON() ?? {}) as {asset_ids?: number[]; date_range?: {start?: string; end?: string | null}};
+        const start = sent.date_range?.start ?? '';
+        const lastDay = sent.date_range?.end ?? start;
+        const body = schemas.RiskEligibilityResponse.parse({
+            items: [...new Set(sent.asset_ids ?? [])].map((assetId) => ({asset_id: assetId, level: 'eligible', reasons: [], first_quote: start, last_quote: lastDay, quotes_in_period: 60})),
+            min_quotes: 20,
+            stale_days: 7,
+        });
+        await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify(body)}).catch(() => undefined);
+    });
+}
+
+/**
+ * The asset's page, Risk tab, by a full document load; returns the levels panel once its
+ * capability catalogue is in and L3's picker is up.
+ */
+async function openAssetRisk(page: Page, assetId: number): Promise<Locator> {
     await navigateTo(page, `/assets/${assetId}?tab=risk`);
     await expect(page.getByTestId('asset-detail-risk-panel')).toBeVisible({timeout: 15_000});
     // Every section is gated on the capability catalog: wait for the gate, then for what is behind it.
-    await waitForRiskCatalog(page);
-    await expect(page.getByTestId('risk-comparison-controls')).toBeVisible();
+    const panel = await waitForRiskCatalog(page);
+    await expect(panel.getByTestId('risk-l3-benchmark')).toBeVisible();
+    return panel;
+}
+
+/**
+ * The barrier every «nothing compared» below is read after: the panel's base wave has landed
+ * and it talked to the risk endpoint about this asset, so it had every chance to ask.
+ */
+async function expectBaseWave(panel: Locator, requests: RiskRequest[], assetId: number): Promise<void> {
+    await expect(panel).toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+    await expect.poll(() => askedAbout(requests, assetId), {timeout: 10_000, message: 'the panel never asked the risk endpoint about this asset, so "no comparison" would prove nothing'}).toBe(true);
 }
 
 /**
@@ -201,60 +238,59 @@ async function holdLivePricePoll(page: Page): Promise<void> {
     });
 }
 
-test.describe('Asset page Risk tab — the comparison opens on the shared benchmark', () => {
+test.describe('Asset page Risk tab — L3 opens on the shared benchmark', () => {
     test.beforeEach(async ({page}) => {
         await holdLivePricePoll(page);
         await login(page, TEST_USER);
     });
 
-    test('opens on the benchmark the reader chose elsewhere, and Run compares against it', async ({page}) => {
+    test('opens on the benchmark the reader chose elsewhere, and L3 compares against it', async ({page}) => {
         const requests = await installRiskMocks(page);
+        await answerEligibility(page);
         const {subject, benchmark} = await castAssets(page);
         await storeBenchmark(page, benchmark.id);
 
-        await openAssetRisk(page, subject.id);
+        const panel = await openAssetRisk(page, subject.id);
 
-        const control = page.getByTestId(CONTROL);
+        const control = panel.getByTestId(CONTROL);
         await expect(control, 'the picker did not open on the stored benchmark').toHaveAttribute('data-benchmark-id', String(benchmark.id), {timeout: 8_000});
-        await expect(control).toHaveAttribute('data-measured', 'false');
-        // Not this asset, so nothing to warn about — an absence asserted behind the presence above.
-        await expect(page.getByTestId(`${PICKER}-measured`)).toHaveCount(0);
+        await expect(control, 'the stored benchmark was never confirmed').toHaveAttribute('data-benchmark-state', 'set', {timeout: 10_000});
+        // Not this asset, so nothing to say about it — an absence asserted behind the presence above.
+        await expect(panel.getByTestId('risk-l3-benchmark-is-subject')).toHaveCount(0);
 
-        const run = page.getByTestId('risk-comparison-run');
-        await expect(run).toBeEnabled();
-        await run.click();
-
-        await expect.poll(() => comparisonIdsFor(requests, subject.id), {timeout: 10_000, message: 'Run sent no comparison against the stored benchmark'}).toContain(benchmark.id);
+        await expect.poll(() => comparisonIdsFor(requests, subject.id), {timeout: 10_000, message: 'L3 sent no comparison against the stored benchmark'}).toContain(benchmark.id);
         expect(new Set(comparisonIdsFor(requests, subject.id)), 'a comparison went out against something other than the stored benchmark').toEqual(new Set([benchmark.id]));
     });
 
-    test('when the stored benchmark is this very asset, keeps it flagged as measured and compares nothing', async ({page}) => {
+    test('when the stored benchmark is this very asset, keeps it as the choice, says why and compares nothing', async ({page}) => {
         const requests = await installRiskMocks(page);
+        await answerEligibility(page);
         const {subject} = await castAssets(page);
-        await storeBenchmark(page, subject.id);
+        const key = await storeBenchmark(page, subject.id);
 
-        await openAssetRisk(page, subject.id);
+        const panel = await openAssetRisk(page, subject.id);
 
-        const control = page.getByTestId(CONTROL);
-        await expect(control, 'a measured benchmark must stay the current one, not be dropped').toHaveAttribute('data-benchmark-id', String(subject.id), {timeout: 8_000});
-        await expect(control).toHaveAttribute('data-measured', 'true');
-        await expect(page.getByTestId(`${PICKER}-measured`)).toBeVisible();
-        await expect(page.getByTestId('risk-comparison-run')).toBeDisabled();
+        const control = panel.getByTestId(CONTROL);
+        await expect(control, 'the asset itself must stay the current benchmark, not be dropped').toHaveAttribute('data-benchmark-id', String(subject.id), {timeout: 8_000});
+        // `set` first: a choice still `pending` compares nothing either, and the absence below would be about that.
+        await expect(control).toHaveAttribute('data-benchmark-state', 'set', {timeout: 10_000});
+        await expect(panel.getByTestId('risk-l3-benchmark-is-subject')).toBeVisible();
 
         // Presence barrier for the absence below: the panel has finished its own load, and
         // has talked to the risk endpoint about this asset — so it had every chance to ask.
-        await expect(page.getByTestId('asset-detail-risk-panel').getByTestId('risk-analysis-panel')).toHaveAttribute('data-busy', 'false', {timeout: 15_000});
-        await expect.poll(() => askedAbout(requests, subject.id), {timeout: 10_000, message: 'the panel never asked the risk endpoint about this asset, so "no comparison" would prove nothing'}).toBe(true);
-        expect(comparisonIdsFor(requests, subject.id), 'a comparison went out although the only benchmark on offer is the asset itself').toEqual([]);
+        await expectBaseWave(panel, requests, subject.id);
+        expect(comparisonIdsFor(requests, subject.id), 'a comparison went out although the benchmark is the asset itself').toEqual([]);
+        expect(await readKey(page, key), 'the shared choice was dropped because this page measures it').toBe(String(subject.id));
     });
 
     test('choosing another asset here makes it the shared choice', async ({page}) => {
         await installRiskMocks(page);
+        await answerEligibility(page);
         const {subject, benchmark, held} = await castAssets(page);
         const key = await storeBenchmark(page, benchmark.id);
 
-        await openAssetRisk(page, subject.id);
-        const control = page.getByTestId(CONTROL);
+        const panel = await openAssetRisk(page, subject.id);
+        const control = panel.getByTestId(CONTROL);
         // Barrier: the stored choice was read, so what follows is a change, not a first choice.
         await expect(control).toHaveAttribute('data-benchmark-id', String(benchmark.id), {timeout: 8_000});
 
@@ -265,13 +301,14 @@ test.describe('Asset page Risk tab — the comparison opens on the shared benchm
         await expect.poll(() => readKey(page, key), {message: 'the choice made on the asset page did not reach the shared key'}).toBe(String(held.id));
     });
 
-    test('with nothing stored, no benchmark is published and Run waits for a choice', async ({page}) => {
-        await installRiskMocks(page);
+    test('with nothing stored, no benchmark is published and nothing is compared until a choice is made', async ({page}) => {
+        const requests = await installRiskMocks(page);
+        await answerEligibility(page);
         const {subject, held} = await castAssets(page);
         await storeBenchmark(page, null);
 
-        await openAssetRisk(page, subject.id);
-        const control = page.getByTestId(CONTROL);
+        const panel = await openAssetRisk(page, subject.id);
+        const control = panel.getByTestId(CONTROL);
         const trigger = page.getByTestId(`${PICKER}-trigger`);
 
         // Barrier: the picker's asset list has arrived, so a default invented from it would
@@ -282,13 +319,14 @@ test.describe('Asset page Risk tab — the comparison opens on the shared benchm
         await expect(trigger).toHaveAttribute('aria-expanded', 'false');
 
         await expect(control, 'with nothing stored the root must publish an empty data-benchmark-id').toHaveAttribute('data-benchmark-id', '');
-        await expect(control).toHaveAttribute('data-measured', 'false');
-        await expect(page.getByTestId(`${PICKER}-measured`)).toHaveCount(0);
-        await expect(page.getByTestId('risk-comparison-run')).toBeDisabled();
+        await expect(control).toHaveAttribute('data-benchmark-state', 'none');
+        await expectBaseWave(panel, requests, subject.id);
+        expect(comparisonIdsFor(requests, subject.id), 'a comparison went out with no benchmark chosen').toEqual([]);
 
         await chooseInPicker(page, held);
 
         await expect(control).toHaveAttribute('data-benchmark-id', String(held.id));
-        await expect(page.getByTestId('risk-comparison-run')).toBeEnabled();
+        await expect(control).toHaveAttribute('data-benchmark-state', 'set', {timeout: 10_000});
+        await expect.poll(() => comparisonIdsFor(requests, subject.id), {timeout: 10_000, message: 'the choice was not compared'}).toEqual([held.id]);
     });
 });

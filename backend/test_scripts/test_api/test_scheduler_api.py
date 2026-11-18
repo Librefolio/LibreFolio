@@ -19,7 +19,14 @@ and ``get_data_dir`` replaced where the scheduler's ``state`` and ``joblog`` mod
 test's own ``tmp_path`` — as ``test_scheduler_state.py`` does. The state route still reads the scheduler timezone from
 the lane's database: a read. Nothing is written outside ``tmp_path``, so the unit stays write-scoped.
 
-Test IDs: SAPI-001..SAPI-014
+Lot B6 (project 68, SAPI-015..SAPI-018), in-process like SAPI-010..SAPI-014: the third job, ``profile_read`` (the
+weekly read of the enrichers). The state route answers it as it answers the other two — the same job info, read from
+``scheduler_state.json``, its defaults when the file has no such job or no file is there —; the log route answers its
+entries (``job: "profile_read"``, ``summary {ok, err, deferred}``, ``retry_at``, ``items [{asset_id, name, status,
+voices_written, error}]``) beside the price jobs' entries, intact. ``round_started_at`` is internal to the scheduler:
+not pinned in the answer.
+
+Test IDs: SAPI-001..SAPI-018
 """
 
 import json
@@ -637,3 +644,104 @@ class TestSchedulerLogZ7bKeys:
         gaps = _not_carried(_answered(written), _entry(body, written), f"{written['job']} entry")
         assert not gaps, "an entry written before lot Z7b must come back with the defaults:\n" + "\n".join(gaps)
         print_success("old entry intact, with the defaults of lot Z7b ✓")
+
+
+# ============================================================================
+# SAPI-015..SAPI-018, in-process: the third job of lot B6, profile_read
+# ============================================================================
+
+#: The job info the state route answers per job, as the other two (lot Z7c-2 included).
+_JOB_INFO_FIELDS = (*_STATE_FIELDS_BEFORE_Z7B, *_Z7B_STATE_DEFAULTS)
+
+#: A state of lot B6: the two jobs of Z7b and profile_read, each with values of its own.
+_STATE_B6: dict[str, dict[str, Any]] = {
+    **_STATE_Z7B,
+    "profile_read": {
+        "last_run_at": "2026-11-14T03:00:09+01:00",
+        "last_duration_s": 9.5,
+        "last_status": "partial",
+        "last_items_ok": 6,
+        "last_items_err": 1,
+        "last_error": None,
+        "last_items_deferred": 2,
+        "retry_at": "2026-11-14T02:01:00+00:00",
+        "consecutive_failures": 0,
+        "next_attempt_at": None,
+        "round_started_at": "2026-11-14T02:00:00+00:00",
+    },
+}
+
+#: A profile-read entry as the contract of lot B6 shapes it.
+_PROFILE_READ_ENTRY: dict[str, Any] = {
+    "ts": "2026-11-14T03:00:09+00:00",
+    "job": "profile_read",
+    "duration_s": 9.5,
+    "status": "partial",
+    "summary": {"ok": 1, "err": 1, "deferred": 1},
+    "retry_at": "2026-11-14T03:01:00+00:00",
+    "items": [
+        {"asset_id": 71, "name": "Read", "status": "ok", "voices_written": 3, "error": None},
+        {"asset_id": 72, "name": "Broken", "status": "error", "voices_written": 0, "error": "LAB_ERROR"},
+        {"asset_id": 73, "name": "Refused", "status": "deferred", "voices_written": 1, "error": None},
+    ],
+}
+
+
+@pytest.mark.asyncio
+class TestSchedulerProfileRead:
+    async def test_scheduler_state_answers_profile_read_as_the_other_jobs(self, scheduler_data_dir: Path):
+        """SAPI-015: ``scheduler_state.json`` holding the three jobs → GET /settings/scheduler/state answers
+        ``profile_read`` with the same job info as the other two, as the file holds it; the other two are unchanged."""
+        print_section("SAPI-015: GET /settings/scheduler/state — profile_read")
+        _write_state(scheduler_data_dir, _STATE_B6)
+
+        data = await _get_in_process("/scheduler/state")
+
+        assert "profile_read" in data, f"the state route answers the third job: {sorted(data)}"
+        for job in ("current_price", "history_sync", "profile_read"):
+            expected = {field: _STATE_B6[job][field] for field in _JOB_INFO_FIELDS}
+            assert {field: data[job].get(field, "<missing>") for field in _JOB_INFO_FIELDS} == expected, f"{job}: answered as the file holds it"
+        print_success("profile_read answered, the same job info")
+
+    @pytest.mark.parametrize("state_file", ["written before B6", "absent"])
+    async def test_scheduler_state_without_profile_read_answers_its_defaults(self, scheduler_data_dir: Path, state_file: str):
+        """SAPI-016: a state file with the two jobs of before only, or no file → ``profile_read`` at its defaults (never
+        run, nothing counted, nothing pending)."""
+        print_section(f"SAPI-016: GET /settings/scheduler/state — profile_read, state file {state_file}")
+        if state_file != "absent":
+            _write_state(scheduler_data_dir, _STATE_Z7B)
+        else:
+            assert not (scheduler_data_dir / "scheduler_state.json").exists(), "premise: the test's data directory holds no state file"
+
+        data = await _get_in_process("/scheduler/state")
+
+        defaults = {"last_run_at": None, "last_duration_s": None, "last_status": None, "last_items_ok": 0, "last_items_err": 0, **_Z7B_STATE_DEFAULTS}
+        assert {field: data.get("profile_read", {}).get(field, "<missing>") for field in defaults} == defaults, f"profile_read at its defaults: {data.get('profile_read')}"
+        print_success("profile_read at its defaults")
+
+    async def test_scheduler_log_answers_a_profile_read_entry_intact_beside_the_others(self, scheduler_data_dir: Path):
+        """SAPI-017: a log holding a profile-read entry between a history-sync and a current-price one → GET
+        /settings/scheduler/log answers the three, and the profile-read entry intact."""
+        print_section("SAPI-017: GET /settings/scheduler/log — a profile_read entry")
+        written = [_HISTORY_ENTRY_Z7B, _PROFILE_READ_ENTRY, _PRICE_ENTRY_Z7B]
+        _write_log(scheduler_data_dir, written)
+
+        body = await _get_in_process("/scheduler/log")
+
+        assert sorted((entry.get("ts"), entry.get("job")) for entry in body["entries"]) == sorted((entry["ts"], entry["job"]) for entry in written), f"the three entries of the test's log: {body['entries']}"
+        gaps = _not_carried(_PROFILE_READ_ENTRY, _entry(body, _PROFILE_READ_ENTRY), "profile_read entry")
+        assert not gaps, "the log route must pass a profile_read entry through intact:\n" + "\n".join(gaps)
+        print_success("profile_read entry intact")
+
+    async def test_scheduler_log_since_filters_profile_read_entries_too(self, scheduler_data_dir: Path):
+        """SAPI-018: ``?since=`` after the profile-read entry and before the current-price one → only the current-price
+        entry; before both → both."""
+        print_section("SAPI-018: GET /settings/scheduler/log?since= — profile_read entries filtered by ts")
+        _write_log(scheduler_data_dir, [_PROFILE_READ_ENTRY, {**_PRICE_ENTRY_Z7B, "ts": "2026-11-14T04:00:00+00:00"}])
+
+        later = await _get_in_process("/scheduler/log?since=2026-11-14T03:30:00%2B00:00")
+        earlier = await _get_in_process("/scheduler/log?since=2026-11-14T02:30:00%2B00:00")
+
+        assert [entry.get("job") for entry in later["entries"]] == ["current_price"], later["entries"]
+        assert sorted(entry.get("job") for entry in earlier["entries"]) == ["current_price", "profile_read"], earlier["entries"]
+        print_success("since applies to profile_read entries")

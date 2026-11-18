@@ -92,7 +92,8 @@
     },
     "deleteSkipped": "Los archivos que no puedes eliminar se han quedado en su sitio",
     "backups": "Copias",
-    "systemUploader": "Sistema"
+    "systemUploader": "Sistema",
+    "docsHelp": "Los archivos que subiste: los informes de brókeres por importar y las imágenes que usa LibreFolio, con el espacio que ocupan."
   },
   "files": {
     "deleteFailed": "Error al eliminar el archivo"

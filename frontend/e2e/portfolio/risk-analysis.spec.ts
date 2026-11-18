@@ -4,7 +4,6 @@ import {login, navigateTo} from '../fixtures/auth-helpers';
 import {expectChartCanvas} from '../fixtures/charts';
 import {t as catalogueText} from '../fixtures/i18n-data';
 import {TEST_USER} from '../fixtures/test-users';
-import {goToAssetsPage} from '../assets/assets-helpers';
 import {schemas} from '../../src/lib/api/generated';
 
 type RiskScope = {kind: 'asset'; asset_id: number} | {kind: 'asset_set'; asset_ids: number[]} | {kind: 'portfolio'; broker_ids?: number[] | null};
@@ -51,12 +50,13 @@ interface RiskMockOptions {
      * Answers the simulation with `unavailable`, the way a busy worker, a
      * timeout or a series too short does.
      *
-     * `schemas/risk.py:1056` forbids an `unavailable` result from carrying an
-     * output, so this is not an unlikely corner: it is the **only** shape that
-     * branch can take. Every step of L4 renders on `{#if output}`, so before
-     * the level disclosed its health the reader got a blank panel with no cause
-     * — and no fixture in this suite had ever produced the state that reveals
-     * it. Opt-in, so every other test is unmoved.
+     * `RiskAnalyticResult.validate_status_payload` (`schemas/risk/results.py`)
+     * forbids an `unavailable` result from carrying an output, so this is not
+     * an unlikely corner: it is the **only** shape that branch can take. Every
+     * step of L4 renders on `{#if output}`, so before the level disclosed its
+     * health the reader got a blank panel with no cause — and no fixture in
+     * this suite had ever produced the state that reveals it. Opt-in, so every
+     * other test is unmoved.
      */
     unavailableSimulation?: boolean;
     /**
@@ -109,7 +109,8 @@ interface RiskMockOptions {
      * code would degrade both at once, and a test asking *under which level* a
      * measurement is disclosed could not tell the two claims apart.
      *
-     * Each status keeps a shape `validate_status_payload` (`schemas/risk.py`)
+     * Each status keeps a shape that
+     * `RiskAnalyticResult.validate_status_payload` (`schemas/risk/results.py`)
      * accepts. `partial` keeps the output the stub answered with — a partial
      * measurement is still drawn, which is what makes it partial rather than
      * missing — and `unavailable` drops it (`output: null`) and carries an
@@ -162,9 +163,10 @@ interface RiskMockOptions {
      *
      * Invented figures, like the rest of the branch, and read by no assertion; the
      * backend constrains both to be strictly positive, and that is all L2 checks
-     * before drawing the two cards. 2.07 is 1/Σw² of the stub's two weights (0.6
-     * and 0.35), the inverse Herfindahl the backend computes; 1.15 is a ratio above
-     * one, which a long-only pair that is not perfectly correlated has.
+     * before drawing the two cards. 1.87 is the inverse Herfindahl of the stub's two
+     * weights (0.6 and 0.35) re-taken over their own sum, as the backend computes it
+     * since RN-15 (it was 2.07, cash in the denominator); 1.15 is a ratio above one,
+     * which a long-only pair that is not perfectly correlated has.
      *
      * Opt-in, and absent means ABSENT: without it the output carries neither key,
      * byte for byte the payload of every other test.
@@ -469,7 +471,9 @@ function excludedWeightField(options: RiskMockOptions): {excluded_weight?: numbe
  * key is added, so the payload every other test reads is unchanged.
  */
 function concentrationFields(options: RiskMockOptions): {effective_number_of_assets?: number; diversification_ratio?: number} {
-    return options.concentration ? {effective_number_of_assets: 2.07, diversification_ratio: 1.15} : {};
+    // 1.87, what the backend gives these two items since RN-15: the weights 0.6 and 0.35 re-taken over their own sum,
+    // cash out — 1 / (0.632² + 0.368²). It can no longer exceed the two positions, as the old 2.07 did.
+    return options.concentration ? {effective_number_of_assets: 1.87, diversification_ratio: 1.15} : {};
 }
 
 /** One `comparison` item as Risk's k6 sends it: a holding's beta and correlation, each optional, as the contract declares them. */
@@ -559,6 +563,21 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                     conditional_drawdown_at_risk: -0.079,
                     drawdown_confidence_level: 0.9,
                     ulcer_index: 0.041,
+                    // RN-14, the positive twins «How does it move?» (RN-18) reads — the same numbers as
+                    // `risk-mocks.ts`. The best day +3.4% lies in bin 6 (0.02 ≤ 0.034 < 0.04), the bar the green tail
+                    // paints; the streak and the best day sit inside the rally below, which climbs from the
+                    // max-drawdown trough to the current peak.
+                    best_realization: 0.034,
+                    best_realization_date: '2024-01-15',
+                    positive_observation_share: 0.55,
+                    mean_positive_return: 0.0072,
+                    mean_negative_return: -0.0081,
+                    longest_positive_run_observations: 6,
+                    longest_positive_run_start_date: '2024-01-08',
+                    longest_positive_run_end_date: '2024-01-15',
+                    omega_ratio: 1.34,
+                    downside_deviation: 0.097,
+                    extreme_day_ratio: 1.8,
                 },
             };
         case 'correlation': {
@@ -609,7 +628,7 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
             // written down and the provenance is not dressed up as a measurement.
             //
             //  1. `portfolio_volatility` is strictly positive. At zero
-            //     `capitalMarketLine` (`scatterChartHelpers.ts:111`) returns null
+            //     `capitalMarketLine` (`scatterChartHelpers.ts`) returns null
             //     and the line vanishes *silently*, leaving a chart that still
             //     looks finished.
             //  2. Two items with **different** volatilities. `hasScatter` is
@@ -723,6 +742,14 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                     // (the day has the worst realization's date). −0,121 is worse than the 0,094 average of the worst 5 %,
                     // as a worst window always is.
                     ...(longHorizon ? {worst_horizon: {compounded_return: -0.121, start_date: '2023-11-14', end_date: '2023-12-14'}} : {}),
+                    // RN-14: the twin of the worst window — the best 30 days, dated, which «How does it move?» prints.
+                    ...(longHorizon ? {best_horizon: {compounded_return: 0.087, start_date: '2024-01-05', end_date: '2024-02-04'}} : {}),
+                    // RN-14: the green tail, the mirror of the cut. 0.017 falls inside bin 5 (0.01 ≤ 0.017 < 0.02), so the
+                    // edge the backend pins is the first one past it, 0.02 — the lower bound of bin 6, whose 3 of 60
+                    // observations are the best 5 %. Never on an edge: an edge would pass under `>` and `>=` alike.
+                    // The month has no bins, so no edge: only its threshold.
+                    gain_threshold: longHorizon ? 0.061 : 0.017,
+                    gain_bin_edge: longHorizon ? null : 0.02,
                 },
             };
         }
@@ -773,6 +800,13 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                     coverage: 0.98,
                     calculation_basis: 'daily_close',
                     return_basis: 'twrr',
+                    // RN-14: the twin of the maximum drawdown — from its trough (2023-12-03) to the current peak
+                    // (2024-02-05), 64 calendar days — and the mean of the six underwater points above.
+                    largest_rally: 0.112,
+                    largest_rally_start_date: '2023-12-03',
+                    largest_rally_end_date: '2024-02-05',
+                    largest_rally_duration_days: 64,
+                    average_drawdown: -0.034,
                 },
             };
         case 'comparison': {
@@ -807,9 +841,10 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                 // `risk_contribution` answer above gives them (0.6 and 0.35), and the 0.05 that
                 // answer calls cash is here a third holding, with no price in the window. Every
                 // weight travels as the raw fraction it is, and the names are synthetic markers
-                // where `service.py` would put display names — so a test reads these numbers back
-                // and tells the sentences apart without reading a translated word. With the
-                // option absent, and on every other scope, the replay answers as it always has.
+                // where `with_warning_asset_names` (`risk/results.py`) would put display names — so a
+                // test reads these numbers back and tells the sentences apart without reading a
+                // translated word. With the option absent, and on every other scope, the replay
+                // answers as it always has.
                 if (request.scope.kind === 'portfolio' && options.replayExclusions) {
                     const askedRange = (analytic.parameters?.replay_range ?? request.date_range) as {start: string; end: string};
                     // The late listing's first quote: 10 days after the panel's own window starts,
@@ -1056,6 +1091,12 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                     terminal_mean_return: 0.095,
                     terminal_volatility: 0.14,
                     probability_of_loss: 0.27,
+                    // RN-16: the simulation's own history, stated with the answer (invented, like the rest).
+                    requested_path_count: pathCount,
+                    estimation_start: '2022-09-01',
+                    estimation_end: '2026-11-13',
+                    estimation_observations: 1050,
+                    history_truncated: false,
                 },
             };
         }
@@ -1096,9 +1137,10 @@ function withInjectedWarnings(result: Record<string, unknown>, options: RiskMock
  * Replaces a result with the failure its analytic would have returned.
  *
  * `output: null` and `status: 'failed'` together, never one without the other:
- * `schemas/risk.py` forbids a failed result from carrying an output, so a stub
- * that kept the output while flipping the status would model a payload the
- * backend cannot emit — and the level would render its rows *and* its error.
+ * `RiskAnalyticResult.validate_status_payload` (`schemas/risk/results.py`)
+ * forbids a failed result from carrying an output, so a stub that kept the
+ * output while flipping the status would model a payload the backend cannot
+ * emit — and the level would render its rows *and* its error.
  */
 function withInjectedError(result: Record<string, unknown>, options: RiskMockOptions): Record<string, unknown> {
     const code = options.analyticErrors?.[String(result.analytic_code)];
@@ -1134,8 +1176,10 @@ function withInjectedStatus(result: Record<string, unknown>, options: RiskMockOp
  *
  * Two pages poll `POST /assets/prices/current`: `/assets` for every listed asset
  * at once, and `/assets/{id}` for its own, each on load and every 30 s — Asset
- * Detail from a second timer too, 5 s in and every minute after. This file reaches
- * both through `openFirstAssetDetail`. Each answered call is a portfolio mutation
+ * Detail from a second timer too, 5 s in and every minute after. This file no
+ * longer visits either (Asset Detail's risk tab lives in `risk-asset-detail.spec.ts`),
+ * but keeps the hold so a test that ever does cannot reach the providers. Each
+ * answered call is a portfolio mutation
  * twice over. The backend asks the live providers and writes today's prices into
  * the shared test database — measured on the test lane on 05/10/2026: one full run
  * of this file made real provider calls (eight live quotes, JustETF's live feeds,
@@ -1150,7 +1194,7 @@ function withInjectedStatus(result: Record<string, unknown>, options: RiskMockOp
  * stale. An unanswered call does nothing at all. Each poller awaits it and, after
  * axios's 30 s timeout, catches the error — silently on Asset Detail, with one
  * non-critical warning on `/assets` — and none of them feeds `data-busy`, so the
- * `data-busy="false"` that `goToAssetsPage` waits for still arrives. The handler
+ * pages' `data-busy="false"` still arrives. The handler
  * calls no route method, so nothing can throw when the context closes.
  *
  * Installed by `installRiskMocks`, so every test in this file holds it. Dashboard
@@ -1287,23 +1331,10 @@ async function installRiskMocks(page: Page, options: RiskMockOptions = {}): Prom
 }
 
 /**
- * Every section of the risk panel is gated on the capability catalog, so an
+ * Every section of the four-level panel is gated on the capability catalog, so an
  * absent section means "unsupported" *or* "not loaded yet". The panel publishes
  * which one via `data-catalog`; wait for it before asserting on any section, or
  * the assertion is really a bet on fetch latency.
- */
-async function waitForRiskCatalog(page: Page): Promise<void> {
-    await expect(page.getByTestId('risk-analysis-panel').first()).toHaveAttribute('data-catalog', 'ready', {timeout: 20_000});
-}
-
-/**
- * The same gate, for the four-level panel that Dashboard and Broker Detail mount.
- *
- * A second helper rather than a widened first one, and deliberately so: Asset
- * Detail still mounts the legacy `risk-analysis-panel`, and a locator matching
- * either testid would report "ready" for whichever panel the page happened to
- * have — including the wrong one. One helper per component keeps the question
- * unambiguous, and leaves `waitForRiskCatalog` untouched for the asset specs.
  *
  * Waits for the capability catalogue, then for the base wave to land. The second
  * half is what makes every section assertion below a statement about the answer
@@ -1417,19 +1448,6 @@ async function reloadBrokerRiskCold(page: Page): Promise<Locator> {
     await page.waitForSelector('html[data-i18n-ready="true"]', {timeout: 15_000});
     await expect(page.getByTestId('broker-risk-tab')).toBeVisible({timeout: 10_000});
     return waitForRiskLevels(page);
-}
-
-async function openFirstAssetDetail(page: Page): Promise<number> {
-    await goToAssetsPage(page);
-    const firstCard = page.getByTestId(/^asset-card-\d+$/).first();
-    await expect(firstCard).toBeVisible({timeout: 8_000});
-    const testId = await firstCard.getAttribute('data-testid');
-    const assetId = Number(testId?.replace('asset-card-', ''));
-    if (!Number.isInteger(assetId) || assetId <= 0) throw new Error('Seeded asset card must expose a numeric data-testid.');
-    await firstCard.click();
-    await expect(page.getByTestId('asset-detail-page')).toBeVisible({timeout: 12_000});
-    await expect(page.getByTestId('asset-detail-tab-overview')).toBeVisible({timeout: 12_000});
-    return assetId;
 }
 
 /** The analytic codes the mocked catalogue advertises for `portfolio` in one mode. */
@@ -1952,13 +1970,11 @@ test.describe('Risk analysis functional integration', () => {
 
         const panel = await openDashboardRisk(page);
 
-        // The Dashboard now opens with no beta notice at all, and that absence is
-        // the claim: L1, L2 and L3 rest on observed facts and have left beta. The
-        // banner survives on one rung only — the simulation, inside the closed L4
-        // drawer — so zero here is what "the rest is finished" looks like from the
-        // reader's side. `toHaveCount(0)` rather than `not.toBeVisible()`: a closed
-        // drawer does not render its body, so the node is absent rather than
-        // hidden, and only a count can tell those two apart.
+        // The Dashboard opens with no beta notice at all, and that absence is the
+        // claim: every level has left beta, the simulation last (RN-06, Q6). The
+        // simulation rung, opened, carries none either: the level-4 test reads it.
+        // `toHaveCount(0)` rather than `not.toBeVisible()`: only a count tells an
+        // absent node from a hidden one.
         await expect(page.getByTestId('risk-beta-banner')).toHaveCount(0);
 
         // Dashboard's scope is the whole portfolio, so it must carry no subset
@@ -2141,7 +2157,7 @@ test.describe('Risk analysis functional integration', () => {
         await expect(panel.locator('[data-testid="risk-level-1-metadata-row"][data-codes="historical_var drawdown_summary"]')).toHaveCount(1);
         await expect(panel.locator('[data-testid="risk-level-1-metadata-row"][data-codes="historical_kpi"]')).toHaveCount(1);
 
-        // The guard of `translateOrRaw` on the real catalogue: `RiskResultFrame:108`
+        // The guard of `translateOrRaw` on the real catalogue: the return-basis line of `RiskResultFrame`
         // builds this same key unguarded, and a basis it has not seen prints
         // `risk.returnBasis.<value>` on screen. Neither row may do that.
         for (const text of await bases.allTextContents()) {
@@ -2207,6 +2223,78 @@ test.describe('Risk analysis functional integration', () => {
         await expect(syncButton).toBeEnabled();
         await syncButton.click();
         await expect(page.getByTestId('page-sync-modal')).toBeVisible({timeout: 5_000});
+    });
+
+    /**
+     * RN-18 (Q21 c, Q22 a): «How does it move?», the positive twin of L1, sits right after it and reads L1's own
+     * answers — the historical KPI, the 30-day VaR's best window, the drawdown summary — so each card's figure is the
+     * stub's RN-14 field and nothing else. L1's histogram paints the gains' tail from `gain_bin_edge`: whole bars at or
+     * past the edge, and the legend from `gain_threshold`. Every figure below is one the stub sends; nothing is read
+     * off a label.
+     */
+    test('«How does it move?» follows L1 with its four figures, and the histogram paints the gains’ tail', async ({page}) => {
+        await installRiskMocks(page);
+        const panel = await openDashboardRisk(page);
+
+        // Right after L1. `data-level` is published by other nodes too (the partial notice's groups, eligibility
+        // options), so only the level sections are read, in document order.
+        await expect
+            .poll(() => panel.locator('section[data-testid^="risk-level-"][data-level]').evaluateAll((nodes) => nodes.slice(0, 2).map((node) => node.getAttribute('data-level'))), {
+                timeout: 10_000,
+                message: 'the first two levels are not L1 and «How does it move?»',
+            })
+            .toEqual(['1', 'move']);
+
+        const move = panel.getByTestId('risk-level-move');
+        const cards = move.getByTestId('risk-move-cards');
+        await expect(cards).toBeVisible({timeout: 10_000});
+        // Four cards, and only these four: volatility, Sharpe and Sortino live in L3's table (Q22).
+        await expect(cards.locator('> div > [data-testid^="risk-move-card-"]')).toHaveCount(4);
+        // Behind the cards, so the absences are about a drawn block.
+        await expect(move.getByTestId('risk-move-empty')).toHaveCount(0);
+        await expect(move.getByTestId('risk-move-loading')).toHaveCount(0);
+
+        // The best day: the KPI's `best_realization` (0.034) on its date.
+        await expect(move.getByTestId('risk-move-card-bestDay-value')).toHaveText('+3.4%');
+        await expect(move.getByTestId('risk-move-card-bestDay')).toHaveAttribute('data-sentiment', 'positive');
+        await expect(move.getByTestId('risk-move-best-day-date-value')).toContainText('2024');
+        await expect(move.getByTestId('risk-move-mean-up-down')).toBeVisible();
+        // The best 30 days: the month VaR's `best_horizon`, with its own window.
+        await expect(move.getByTestId('risk-move-card-bestMonth-value')).toHaveText('+8.7%');
+        await expect(move.getByTestId('risk-move-card-bestMonth')).toHaveAttribute('data-sentiment', 'positive');
+        await expect(move.getByTestId('risk-move-best-month-period')).toHaveAttribute('data-from', '2024-01-05');
+        await expect(move.getByTestId('risk-move-best-month-period')).toHaveAttribute('data-to', '2024-02-04');
+        // The largest rally: the drawdown summary's, from the trough back to the peak, and how long it took.
+        await expect(move.getByTestId('risk-move-card-rally-value')).toHaveText('+11.2%');
+        await expect(move.getByTestId('risk-move-card-rally')).toHaveAttribute('data-sentiment', 'positive');
+        await expect(move.getByTestId('risk-move-rally-period')).toHaveAttribute('data-from', '2023-12-03');
+        await expect(move.getByTestId('risk-move-rally-period')).toHaveAttribute('data-to', '2024-02-05');
+        await expect(move.getByTestId('risk-move-rally-duration-value')).toContainText('64');
+        await expect(move.getByTestId('risk-move-streak')).toHaveAttribute('data-from', '2024-01-08');
+        await expect(move.getByTestId('risk-move-streak')).toHaveAttribute('data-to', '2024-01-15');
+        // What the days were like: Omega 1.34, then the KPI's rows and the drawdown's average.
+        await expect(move.getByTestId('risk-move-card-days-value')).toContainText('1.34');
+        for (const row of ['risk-move-positive-share', 'risk-move-semi-deviation', 'risk-move-average-drawdown', 'risk-move-extreme-days']) {
+            await expect(move.getByTestId(`${row}-value`), `${row} carries no figure`).toHaveText(/\d/);
+        }
+        await expect(move.getByTestId('risk-move-positive-share-value')).toContainText('55');
+        await expect(move.getByTestId('risk-move-average-drawdown-value')).toContainText('3.4');
+        // Omega is defined, so the block has its headline.
+        await expect(panel.getByTestId('risk-level-move-lead')).toBeVisible();
+
+        // --- L1's histogram: the green tail ---------------------------------
+        // `gain_bin_edge` is 0.02, the lower edge of bin 6: that bar alone is green, its neighbour is not, and no
+        // bar that holds or lies beyond the VaR's cut is.
+        const histogram = panel.getByTestId('risk-l1-histogram');
+        await expect(histogram.getByTestId('risk-l1-histogram-bin-6')).toHaveAttribute('data-above-gain', 'true');
+        await expect(histogram.getByTestId('risk-l1-histogram-bin-5')).toHaveAttribute('data-above-gain', 'false');
+        await expect(histogram.getByTestId('risk-l1-histogram-bin-2')).toHaveAttribute('data-above-gain', 'false');
+        await expect(histogram.locator('[data-above-gain="true"]')).toHaveCount(1);
+        // The legend, from `gain_threshold` > 0: the share is the answer's `1 − confidence_level`, the edge its threshold.
+        const gainLegend = histogram.getByTestId('risk-l1-histogram-gain');
+        await expect(gainLegend).toBeVisible();
+        await expect(gainLegend).toContainText('5%');
+        await expect(gainLegend).toContainText('+1.7%');
     });
 
     test('per-analytic unavailable state remains isolated', async ({page}) => {
@@ -2325,126 +2413,6 @@ test.describe('Risk analysis functional integration', () => {
         expect([...new Set(askedScopes)]).toEqual([String(brokerId)]);
     });
 
-    test('asset detail preserves Overview and exposes Risk through its dedicated tab', async ({page}) => {
-        await installRiskMocks(page);
-        await openFirstAssetDetail(page);
-
-        await expect(page.getByTestId('asset-detail-signals-toggle')).toBeVisible({timeout: 8_000});
-        await expect(page.getByTestId('risk-beta-banner')).toHaveCount(0);
-        await expect(page.getByTestId('asset-detail-risk-panel')).toHaveCount(0);
-
-        await page.getByTestId('asset-detail-tab-risk').click();
-        await expect(page).toHaveURL(/[?&]tab=risk(?:&|$)/);
-        await expect(page.getByTestId('asset-detail-risk-panel')).toBeVisible({timeout: 12_000});
-        await expect(page.getByTestId('risk-beta-banner')).toBeVisible();
-        await expect(page.getByTestId('risk-beta-banner')).toHaveCount(1);
-        await expect(page.getByTestId('asset-detail-signals-toggle')).toHaveCount(0);
-
-        await page.getByTestId('asset-risk-configure-signals').click();
-        await expect(page.getByTestId('asset-detail-signals-toggle')).toBeVisible({timeout: 8_000});
-        await expect(page.getByTestId('asset-detail-signals-toggle')).toHaveAttribute('aria-expanded', 'true');
-        await expect(page.getByTestId('asset-detail-risk-panel')).toHaveCount(0);
-    });
-
-    test('asset Risk runs typed scenarios, exposes replay audit and switches simulation view', async ({page}) => {
-        const requests = await installRiskMocks(page);
-        const assetId = await openFirstAssetDetail(page);
-        await page.getByTestId('asset-detail-tab-risk').click();
-        await expect(page.getByTestId('asset-detail-risk-panel')).toBeVisible({timeout: 12_000});
-
-        // The comparison section renders only once the capability catalog has landed:
-        // wait for the panel to say so, rather than for the section to appear — an
-        // absent section is otherwise indistinguishable from an unsupported one.
-        await waitForRiskCatalog(page);
-        await expect(page.getByTestId('risk-comparison-controls')).toBeVisible({timeout: 12_000});
-        await page.getByTestId('risk-comparison-asset-select-trigger').click();
-        const comparisonOption = page.getByTestId(/^search-select-option-\d+$/).first();
-        await expect(comparisonOption).toBeVisible({timeout: 5_000});
-        await comparisonOption.click();
-        await page.getByTestId('risk-comparison-run').click();
-        await expectChartCanvas(page, 'risk-comparison-chart', 8_000);
-
-        const stressBucketInputs = page.getByTestId(/^risk-stress-bucket-input-/);
-        await expect(stressBucketInputs).toHaveCount(1, {timeout: 8_000});
-        await page.getByTestId('risk-stress-show-all').check();
-        await expect.poll(() => stressBucketInputs.count(), {timeout: 8_000}).toBeGreaterThan(1);
-        const stressBucketInput = stressBucketInputs.first();
-        await expect(stressBucketInput).toBeVisible({timeout: 8_000});
-        const stressBucketTestId = await stressBucketInput.getAttribute('data-testid');
-        const stressBucketId = stressBucketTestId?.replace('risk-stress-bucket-input-', '');
-        if (!stressBucketId) throw new Error('Stress bucket input must expose its canonical bucket ID.');
-        await stressBucketInput.fill('-25');
-        await page.getByTestId('risk-stress-run').click();
-        await expect(page.getByTestId('risk-stress-impacts')).toBeVisible({timeout: 8_000});
-        await expect(page.getByTestId('risk-stress-audit')).toBeVisible();
-        await expect(page.getByTestId(`risk-stress-audit-asset-${assetId}`)).toBeVisible();
-
-        await page.getByTestId('risk-replay-proxy-select-trigger').click();
-        const proxyOption = page.getByTestId(/^search-select-option-\d+$/).first();
-        await expect(proxyOption).toBeVisible({timeout: 5_000});
-        const proxyOptionTestId = await proxyOption.getAttribute('data-testid');
-        const proxyAssetId = Number(proxyOptionTestId?.replace('search-select-option-', ''));
-        if (!Number.isInteger(proxyAssetId) || proxyAssetId <= 0) throw new Error('Replay proxy option must expose a numeric asset ID.');
-        await proxyOption.click();
-        await page.getByTestId('risk-replay-run').click();
-        await expect(page.getByTestId('risk-replay-audit')).toBeVisible({timeout: 8_000});
-        await expect(page.getByTestId(`risk-replay-audit-proxy-${assetId}`)).toBeVisible();
-        await expect(page.getByTestId('risk-replay-audit-missing-history-policy')).toBeVisible();
-        await expect(page.getByTestId('risk-replay-audit-composition-policy')).toBeVisible();
-        await expect(page.getByTestId('risk-replay-audit-proxy-series-usage')).toBeVisible();
-
-        const simulationQuery = page.waitForRequest(
-            (request) => {
-                if (request.method() !== 'POST' || !request.url().includes('/api/v1/risk/query')) return false;
-                const body = request.postDataJSON() as RiskRequest;
-                return body.analytics.some((analytic) => analytic.analytic_code === 'simulation');
-            },
-            {timeout: 10_000},
-        );
-        await expect(page.getByTestId('risk-simulation-run')).toBeEnabled();
-        await page.getByTestId('risk-simulation-run').click();
-        await simulationQuery;
-        await expect(page.getByTestId('risk-simulation-chart')).toBeVisible({timeout: 12_000});
-        await expect(page.getByTestId('risk-simulation-assumptions')).toBeVisible();
-        await page.getByTestId('risk-simulation-view-terminal').click();
-        await expect(page.getByTestId('risk-simulation-terminal-distribution')).toBeVisible({timeout: 5_000});
-
-        await expect
-            .poll(
-                () => {
-                    const assetRequests = requests.filter((request) => request.scope.kind === 'asset' && request.scope.asset_id === assetId);
-                    return new Set(assetRequests.flatMap((request) => request.analytics.map((analytic) => analytic.analytic_code)));
-                },
-                {timeout: 15_000},
-            )
-            .toEqual(new Set(['comparison', 'historical_kpi', 'historical_var', 'simulation', 'stress']));
-
-        const hypotheticalRequest = requests.flatMap((request) => request.analytics).find((analytic) => analytic.analytic_code === 'stress' && analytic.parameters?.method === 'hypothetical');
-        expect(hypotheticalRequest?.parameters).toMatchObject({
-            method: 'hypothetical',
-            dimension: 'asset_class',
-            bucket_shocks: {
-                [stressBucketId]: -0.25,
-            },
-        });
-
-        const replayRequest = requests.flatMap((request) => request.analytics).find((analytic) => analytic.analytic_code === 'stress' && analytic.parameters?.method === 'historical_replay');
-        expect(replayRequest?.parameters).toMatchObject({
-            method: 'historical_replay',
-            missing_history_policy: 'manual_proxy_or_exclude',
-            proxy_assets: [{asset_id: assetId, proxy_asset_id: proxyAssetId}],
-            excluded_assets: [],
-        });
-
-        const simulationRequest = requests.flatMap((request) => request.analytics).find((analytic) => analytic.analytic_code === 'simulation');
-        expect(simulationRequest?.parameters).toMatchObject({
-            sampling_method: 'mc',
-            path_count: 8192,
-            random_seed: 123456,
-        });
-        expect(simulationRequest?.parameters).not.toHaveProperty('seed');
-    });
-
     test('level 4 pays for its catalogue once, orders its three rungs and answers both scenarios', async ({page}) => {
         const requests = await installRiskMocks(page);
 
@@ -2490,38 +2458,19 @@ test.describe('Risk analysis functional integration', () => {
         await expect(panel.getByTestId('risk-l4-simulation').getByTestId('risk-l4-model-warning')).toBeVisible();
         await expect(panel.getByTestId('risk-l4-replay').getByTestId('risk-l4-model-warning')).toHaveCount(0);
 
-        // And the beta banner is *here*, on this rung and nowhere else.
-        //
-        // This is the assertion the three surfaces above cannot make. They each
-        // say the banner is absent, and three zeroes agree just as happily with a
-        // banner that was deleted outright as with one that moved: an absence does
-        // not name what caused it. Without this line the component could be
-        // removed from the codebase entirely and the whole suite would stay green.
-        //
-        // The page-wide count is the double-mount gate the three surfaces used to
-        // hold, following the banner to the one rung that still earns it. It is
-        // not decoration: `RiskAnalysisPanel` still carries its own mount behind a
-        // `showBetaBanner` prop, so "exactly one" is a live constraint rather than
-        // an observation about today's tree.
-        await expect(panel.getByTestId('risk-l4-simulation').getByTestId('risk-beta-banner')).toBeVisible();
-        await expect(panel.getByTestId('risk-l4-replay').getByTestId('risk-beta-banner')).toHaveCount(0);
-        await expect(page.getByTestId('risk-beta-banner')).toHaveCount(1);
-
-        // *Which* claim it makes, not merely that it is here. The component serves
-        // two surfaces that are beta for unrelated reasons — Asset Detail is parked
-        // whole, this rung is held back by one recorded defect — and their texts are
-        // translated, so no assertion in this suite can read them. `data-scope` is
-        // what makes the distinction assertable at all: without it, swapping the
-        // component's default would silently tell the reader of a finished
-        // Dashboard that the whole subsystem is still provisional, and every count
-        // above would still be right.
-        await expect(panel.getByTestId('risk-l4-simulation').getByTestId('risk-beta-banner')).toHaveAttribute('data-scope', 'simulation');
+        // And no beta banner, on this rung or anywhere on the page (RN-06, Q6: the
+        // simulation left beta on 16/11/2026). The model warning above stays: it is
+        // about epistemics, not maturity, and a model stays a model. Read once the
+        // simulation rung is on screen, so the zero is an absence and not a page
+        // still loading.
+        await expect(panel.getByTestId('risk-l4-simulation')).toBeVisible();
+        await expect(page.getByTestId('risk-beta-banner'), 'a beta banner on the Dashboard: no part of the four levels is in beta any more').toHaveCount(0);
 
         // Every editor really mounted, with the defaults the request will carry.
         await expect(panel.getByTestId('risk-replay')).toBeVisible();
         await expect(panel.getByTestId('risk-replay-preset')).toBeVisible();
         // One range picker for the replay's period, read inside L4's own replay block —
-        // Asset Detail's risk tab has a replay of its own, with the same testids. Bound
+        // the block, not the page, owns these testids. Bound
         // to the panel's own window rather than frozen at mount: which window it holds
         // is read after the run below, against the question the replay puts on the wire.
         // Its quick ranges sit beside the dates, all but MAX: D376 (05/10/2026) brings them
@@ -2629,8 +2578,7 @@ test.describe('Risk analysis functional integration', () => {
     /**
      * Every handle of the retired exclude-and-retry flow and of the one-line audit (D372):
      * none may come back, in any state of L4's replay. Asserted inside L4's own replay block,
-     * never on the page: Asset Detail's risk tab has a replay of its own, out of F3's scope,
-     * which reuses several of these testids.
+     * never on the page.
      */
     const RETIRED_REPLAY_TEST_IDS = ['risk-replay-blocker', 'risk-replay-exclude', 'risk-replay-exclusions', 'risk-replay-exclusion', 'risk-replay-audit'];
 
@@ -2778,6 +2726,36 @@ test.describe('Risk analysis functional integration', () => {
         for (const testId of RETIRED_REPLAY_TEST_IDS) await expect(replay.getByTestId(testId), `${testId} belongs to the retired flow`).toHaveCount(0);
     });
 
+    // RN-16 (developer's Q4 c; consultant, 17/11/2026): the simulation is estimated on its own history, never the page's
+    // period, so a new period leaves its cone on screen; a new currency changes what it projects, so it drops it.
+    test('a new period keeps the simulation on screen, a new currency drops it', async ({page}) => {
+        const requests = await installRiskMocks(page);
+
+        const panel = await openDashboardRisk(page);
+        await openLevel4(panel);
+        await expect(panel.getByTestId('risk-simulation-run')).toBeEnabled({timeout: 8_000});
+        await panel.getByTestId('risk-simulation-run').click();
+        await expect(panel.getByTestId('risk-simulation-terminal')).toBeVisible({timeout: 8_000});
+        await expect(panel.getByTestId('risk-simulation-estimation')).toBeVisible();
+
+        // A period the page demonstrably moves to, and the base wave demonstrably asked again for it: the barrier that
+        // makes the presence below a fact about the new period, not about a change not yet applied.
+        const asked = requests.length;
+        // The page's period, in the Dashboard's controls: L4 open, the replay's own picker offers the same presets.
+        const oneYear = page.getByTestId('dashboard-controls').getByTestId('date-preset-1y');
+        await expect(oneYear).toHaveAttribute('data-active', 'false');
+        await oneYear.click();
+        await expect(oneYear).toHaveAttribute('data-active', 'true');
+        await expect.poll(() => requests.length, {timeout: 15_000}).toBeGreaterThan(asked);
+        await expect(panel.getByTestId('risk-simulation-terminal')).toBeVisible();
+        await expect(panel.getByTestId('risk-simulation-estimation')).toBeVisible();
+
+        await page.getByTestId('dashboard-target-currency-trigger').click();
+        await page.getByTestId('dashboard-target-currency').getByTestId('search-select-option-USD').click();
+        await expect(panel.getByTestId('risk-simulation-terminal')).toHaveCount(0, {timeout: 15_000});
+        await expect(panel.getByTestId('risk-simulation-estimation')).toHaveCount(0);
+    });
+
     test('an unavailable simulation names the step and its state instead of rendering nothing', async ({page}) => {
         await installRiskMocks(page, {unavailableSimulation: true});
 
@@ -2787,10 +2765,11 @@ test.describe('Risk analysis functional integration', () => {
         await expect(panel.getByTestId('risk-simulation-run')).toBeEnabled({timeout: 8_000});
         await panel.getByTestId('risk-simulation-run').click();
 
-        // `schemas/risk.py:1056` forbids an `unavailable` result from carrying an
-        // output, and every rung renders on `{#if output}`. So the absence below
-        // is guaranteed by the contract, not by this fixture's choices — which is
-        // exactly why the *presence* of the disclosure is the whole assertion.
+        // `RiskAnalyticResult.validate_status_payload` (`schemas/risk/results.py`)
+        // forbids an `unavailable` result from carrying an output, and every
+        // rung renders on `{#if output}`. So the absence below is guaranteed by
+        // the contract, not by this fixture's choices — which is exactly why the
+        // *presence* of the disclosure is the whole assertion.
         const health = panel.getByTestId('risk-level-4-health');
         await expect(health).toBeVisible({timeout: 8_000});
         await expect(health).toHaveAttribute('data-count', '1');

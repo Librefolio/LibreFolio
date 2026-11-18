@@ -28,6 +28,10 @@ is simply wrong. The hand-written list sat one layer above the backend's gate, w
 `5f50a2a21` («fix(risk): derive the stress buckets from the AssetType enum»): every bucket an `asset_class` shock can
 name now comes from the backend enum itself, pinned by `stressBuckets.test.ts`.
 
+**2026-11-17 (RN-17 c)**: the list, its uniform shock and their test left with the legacy Asset Detail panel, their
+only reader. The levels' shock on one asset offers no type shock (Q16-4); the presets come from the backend's scenario
+catalogue, which `test_risk_scenario_catalog.py` checks against the enum in both directions.
+
 ## Prevention
 
 A list that mirrors a backend enum is derived from it, never typed again — the enum is the contract.
@@ -36,7 +40,6 @@ A list that mirrors a backend enum is derived from it, never typed again — the
 
 | Role | Path |
 |------|------|
-| Buckets from the enum | `frontend/src/lib/features/risk/riskRequest.ts` |
-| Test | `frontend/src/lib/features/risk/stressBuckets.test.ts` |
-| The stress editor (legacy panel) | `frontend/src/lib/features/risk/RiskAnalysisPanel.svelte` |
+| Accepts any `AssetType` bucket, shocks a missing one by 0 | `backend/app/services/risk_plugins/stress/plugin.py` |
+| The scenario catalogue checked against the enum | `backend/test_scripts/test_services/test_risk_scenario_catalog.py` |
 | Journal (R5) | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/R5-post-merge-e-review.md` |

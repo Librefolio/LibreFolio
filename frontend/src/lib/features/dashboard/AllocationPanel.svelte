@@ -20,6 +20,7 @@
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
     import {assetColorRanks as rankAssets} from './positionsSeries';
     import {sectorI18nKey} from '$lib/utils/assetTypes';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     type AllocationTab = 'type' | 'sector' | 'geo' | 'asset';
     type AllocationView = 'now' | 'history';
@@ -150,9 +151,9 @@
 </script>
 
 <div class="lg:col-span-2 bg-lf-card text-lf-primary rounded-xl border border-lf-subtle shadow-sm shadow-lf-shadow-card p-4 flex flex-col gap-3 min-h-[380px] lg:min-h-0" data-testid="allocation-panel">
-    <div class="flex items-center justify-between">
+    <div class="flex items-center gap-2">
         <h2 class="text-sm font-semibold text-lf-secondary">{$_('dashboard.allocation')}</h2>
-        <div class="flex rounded-lg overflow-hidden border border-lf-subtle text-xs font-medium">
+        <div class="ml-auto flex rounded-lg overflow-hidden border border-lf-subtle text-xs font-medium">
             <button
                 class="px-2.5 py-1.5 transition-colors {allocationView === 'now' ? 'bg-lf-action text-lf-on-action' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                 onclick={() => selectView('now')}
@@ -168,6 +169,7 @@
                 title={$_('dashboard.history')}><AreaChart size={14} /></button
             >
         </div>
+        <DocsLink path="user/dashboard/charts/" label={$_('dashboard.docsHelp.allocation')} icon="book" size={16} testId="allocation-docs" />
     </div>
 
     {#if !lockedTab}

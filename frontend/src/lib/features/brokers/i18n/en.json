@@ -354,6 +354,12 @@
         "currencyMissing": "Choose the currency.",
         "fixBeforeSaving": "Some fields of the operating profile are not valid: fix the ones in red to save."
       }
+    },
+    "docsHelp": {
+      "list": "Your brokers and accounts: each holds its own cash and positions. Open one to see its portfolio, import its reports or share it.",
+      "info": "The broker's settings: whether it is active, when it opened, and whether it allows a negative cash balance or short positions.",
+      "sharing": "Who else can see or edit this broker, and with which role: owner, editor or viewer.",
+      "lots": "The purchase lots behind this position, matched FIFO or LIFO: what each one cost, how long it has been held and what it returns."
     }
   }
 }

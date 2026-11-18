@@ -51,7 +51,7 @@
         /**
          * Risk contribution over the scope.
          *
-         * PORTFOLIO-only by contract (`risk_contribution.py:46`), and measured:
+         * PORTFOLIO-only by contract (`RiskContributionAnalytic.supported_scopes`), and measured:
          * an `asset_set` asking for it is answered `unavailable` /
          * `incompatible_scope`. Everything derived from it — the three cards and
          * every row — is therefore absent on that scope rather than empty, which
@@ -129,42 +129,24 @@
         return assetNames[assetId] ?? `#${assetId}`;
     }
 
+    /** How close to the count N_eff must be to read as even weights: a figure computed from weights is a float. */
+    const EVEN_TOLERANCE = 1e-9;
+
     /**
      * How to read `N_eff` against the number of positions on screen.
      *
-     * The figure is not a count and routinely exceeds the holdings — measured
-     * here at 14.97 over 7 — and that is the documented convention, not a
-     * defect: weights are position value over TOTAL NAV, so cash dilutes every
-     * weight without contributing a square of its own
-     * (`concentration.en.md#where-cash-sits`). Adding cash scales the count by
-     * `1/s²`, and with `s` near a half that is roughly a fourfold inflation.
+     * Since RN-15 (developer's Q8 a, 16/11/2026) the backend measures it on the priced positions alone, weighed on their
+     * own sum: cash and the holdings without prices are not in its denominator (the banner names those left out), so it
+     * never exceeds the positions this level measured. The old «above the count» sentences — the excess was the
+     * uncovered part — have nothing left to explain and are gone.
      *
-     * Putting the two numbers side by side makes the gap visible, which is only
-     * half the job: the gap means opposite things in its two directions, and the
-     * same page states which (`#interpretation`). ABOVE the count, the excess is
-     * cash and says nothing about how the weights are spread. BELOW it, the
-     * weights are lopsided and a few positions carry the portfolio. A caption
-     * that shows the comparison without its rule leaves the reader to guess the
-     * direction, and the wrong guess reads as "the software is broken".
-     *
-     * Equality is neither case — even weights and no cash — so it gets its own
-     * sentence rather than being folded into a branch it would falsify.
-     *
-     * The comparison is against the positions THIS LEVEL MEASURED, which is what
-     * the reader can count underneath. A holding excluded for want of a usable
-     * price series is not among them; it is in the uncovered card instead.
+     * Two readings remain. BELOW the count, the weights are lopsided and a few positions carry the portfolio; AT the
+     * count, the weights are even. Equality is compared with a tolerance: a figure computed from weights is a float.
      */
     let effectiveAssetsReading = $derived.by(() => {
         if (!concentration) return '';
         const positions = rows.length;
-        const effective = concentration.effectiveNumberOfAssets;
-        // The excess comes from the part the risk model does not speak for — cash AND holdings without a price series, not cash alone
-        // (D5, 07/11/2026) — and the sentence says how much that is. Without the share (a payload that does not state it) it says
-        // the same without the figure.
-        if (effective > positions) {
-            return uncovered === null ? $t('risk.levels.l2.effectiveAssets.aboveCountNoShare', {values: {positions}}) : $t('risk.levels.l2.effectiveAssets.aboveCount', {values: {positions, share: share(uncovered)}});
-        }
-        const key = effective < positions ? 'belowCount' : 'evenCount';
+        const key = concentration.effectiveNumberOfAssets < positions - EVEN_TOLERANCE ? 'belowCount' : 'evenCount';
         return $t(`risk.levels.l2.effectiveAssets.${key}`, {values: {positions}});
     });
 
@@ -385,7 +367,7 @@
                         {$t('risk.levels.l2.correlation.noRedundancy')}
                     </p>
                 {/if}
-                <CorrelationHeatmap output={correlation} {assetLabels} assetTypes={matrixMetadata.types} assetSectors={matrixMetadata.sectors} assetRegions={matrixMetadata.regions} />
+                <CorrelationHeatmap output={correlation} {assetLabels} assetTypes={matrixMetadata.types} assetSectors={matrixMetadata.sectors} assetRegions={matrixMetadata.regions} metadataStatus={matrixMetadata.status} />
             </div>
         {/if}
     {/if}

@@ -98,7 +98,8 @@
       "riskFreeAnnualRate": "Tasa anual libre de riesgo",
       "comparisonAsset": "Activo de comparación",
       "window": "Ventana",
-      "fullHistory": "Historial completo"
+      "fullHistory": "Historial completo",
+      "targetAnnualReturn": "Rentabilidad anual objetivo"
     },
     "yAxisScale": "Escala Eje Y",
     "yAxisScaleDesc": "Control del rango del eje primario",
@@ -201,7 +202,8 @@
       "riskWindow": "Número de observaciones preparadas de rendimientos diarios en cada ventana móvil.",
       "riskFreeAnnualRate": "Tasa anual efectiva libre de riesgo usada solo para calcular el Sharpe.",
       "comparisonAsset": "Activo guardado usado como serie real de comparación para la beta.",
-      "riskFullHistory": "Mide el drawdown respecto al pico más alto de todo el historial disponible, no solo de la ventana visible. Desactívalo para una vista más rápida relativa a la ventana."
+      "riskFullHistory": "Mide el drawdown respecto al pico más alto de todo el historial disponible, no solo de la ventana visible. Desactívalo para una vista más rápida relativa a la ventana.",
+      "targetAnnualReturn": "Rentabilidad anual con la que se miden los días, como en el Sortino: solo los rendimientos por debajo cuentan como pérdidas. 0 cuenta cada pérdida."
     },
     "units": {
       "days": "días",

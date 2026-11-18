@@ -43,7 +43,7 @@ class CorrelationParams(BaseModel):
 @register_plugin(RiskAnalyticRegistry)
 class CorrelationAnalytic(RiskAnalytic):
     analytic_code = "correlation"
-    algorithm_version = "1.0.0"
+    algorithm_version = "1.1.0"
     name_i18n_key = "risk.analytics.correlation.name"
     description_i18n_key = "risk.analytics.correlation.description"
     output_kind = RiskOutputKind.MATRIX
@@ -59,16 +59,21 @@ class CorrelationAnalytic(RiskAnalytic):
         asset_ids = context.scope_asset_ids
         series = {asset_id: prepared_asset_returns(context, asset_id)[1] for asset_id in asset_ids}
         expected = context.prepared_series.n_observations if context.prepared_series else 0
-        matrix, observations, coverage = pairwise_correlation_matrix(
+        matrix, observations, _pair_coverage = pairwise_correlation_matrix(
             [series[asset_id] for asset_id in asset_ids],
             expected_observations=expected,
         )
+        # D144 (1.1.0): every pair lives on the one joint calendar, so the pairs' own coverage
+        # (their observations over the calendar's) is 1 by construction and cannot be judged.
+        # What can fall short is the calendar itself, against the requested period: cells,
+        # threshold and result all carry that one figure.
+        calendar_coverage = context.prepared_series.calendar_coverage if context.prepared_series else 0.0
         cells: list[RiskMatrixCell] = []
         insufficient = False
         undefined = False
-        # Guarded exactly as the old loop body was: with an empty scope there are no pairs
-        # to judge, and an empty set reports a coverage of 0.0 that must not be read as low.
-        low_coverage = bool(asset_ids) and coverage < params.min_coverage
+        # With an empty scope there are no pairs to judge, and an empty set reports a coverage
+        # of 0.0 that must not be read as low.
+        low_coverage = bool(asset_ids) and calendar_coverage < params.min_coverage
         for row_index, row_asset_id in enumerate(asset_ids):
             for column_index, column_asset_id in enumerate(asset_ids):
                 value = matrix[row_index][column_index]
@@ -87,7 +92,7 @@ class CorrelationAnalytic(RiskAnalytic):
                         column_asset_id=column_asset_id,
                         value=value,
                         observations=observations,
-                        coverage=coverage,
+                        coverage=calendar_coverage,
                         status=status,
                     )
                 )
@@ -117,7 +122,7 @@ class CorrelationAnalytic(RiskAnalytic):
                     code="low_pair_coverage",
                     message_i18n_key="risk.warnings.low_pair_coverage",
                     message_params={"minCoverage": round(params.min_coverage * 100)},
-                    message="One or more correlation cells are below the requested coverage threshold.",
+                    message="The common calendar of the correlation covers less of the requested period than the coverage threshold.",
                     details={"min_coverage": params.min_coverage},
                 )
             )
@@ -131,6 +136,6 @@ class CorrelationAnalytic(RiskAnalytic):
             n_observations=context.prepared_series.n_observations if context.prepared_series else 0,
             calendar_days=context.prepared_series.calendar_days if context.prepared_series else 0,
             annualization_factor=context.prepared_series.annualization_factor if context.prepared_series else None,
-            coverage=context.prepared_series.calendar_coverage if context.prepared_series else 0,
+            coverage=calendar_coverage,
             return_basis=context.prepared_series.series[0].returns.return_basis if context.prepared_series and context.prepared_series.series else None,
         )

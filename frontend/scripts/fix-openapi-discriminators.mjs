@@ -49,6 +49,7 @@ const discriminatedSchemas = [
     'RiskHypotheticalShockScenario',
     'SchedulerLogCurrentPriceEntry',
     'SchedulerLogHistorySyncEntry',
+    'SchedulerLogProfileReadEntry',
     'PortfolioPlannerSourceRootPath',
     'PortfolioPlannerSourceSectionPath',
     'PortfolioPlannerSourceEntityPath',

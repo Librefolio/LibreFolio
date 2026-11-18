@@ -12,10 +12,16 @@
     import {ExternalLink, ImageIcon} from 'lucide-svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
+    import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
     import type {CellContent} from './types';
     import {formatCellDate} from './dataTableLogic';
 
     let {cellContent}: {cellContent: CellContent} = $props();
+
+    /** A decimal number written out, as `normalizeDecimalInput` leaves it: what an amount cell hands over. */
+    const DECIMAL_TEXT = /^-?\d+(\.\d+)?$/;
+    /** The amount typed in an `editable-amount` cell is not a number: nothing is handed over until it is. */
+    let amountInvalid = $state(false);
 
     /** Handle image load error — hide image and show fallback */
     function handleImageError(e: Event) {
@@ -126,23 +132,44 @@
             onclick={(e) => e.stopPropagation()}
         />
     {:else if cellContent.type === 'editable-text'}
-        <input
-            type="text"
-            class="cell-editable-text"
-            value={cellContent.value}
-            placeholder={cellContent.placeholder ?? ''}
-            maxlength={cellContent.maxLength}
-            onblur={(e) => cellContent.onchange(e.currentTarget.value)}
-            onkeydown={(e) => {
-                if (e.key === 'Enter') e.currentTarget.blur();
-            }}
-            onclick={(e) => e.stopPropagation()}
-        />
+        {#snippet textInput()}
+            <input
+                type="text"
+                class="cell-editable-text"
+                data-testid="cell-editable-text"
+                value={cellContent.value}
+                placeholder={cellContent.placeholder ?? ''}
+                maxlength={cellContent.maxLength}
+                onblur={(e) => cellContent.onchange(e.currentTarget.value)}
+                onkeydown={(e) => {
+                    if (e.key === 'Enter') e.currentTarget.blur();
+                }}
+                onclick={(e) => e.stopPropagation()}
+            />
+        {/snippet}
+        {#if cellContent.unit}
+            <span class="cell-editable-text-with-unit">
+                {@render textInput()}
+                <span class="cell-editable-text-unit" data-testid="cell-editable-text-unit">{cellContent.unit}</span>
+            </span>
+        {:else}
+            {@render textInput()}
+        {/if}
     {:else if cellContent.type === 'editable-select'}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div class="cell-editable-select-wrapper" onclick={(e) => e.stopPropagation()}>
-            <SimpleSelect value={cellContent.value} options={cellContent.options} compact showChevron={false} dropdownPosition="auto" onchange={(v) => cellContent.onchange(v)} />
+            <SimpleSelect
+                value={cellContent.value}
+                options={cellContent.options}
+                placeholder={cellContent.placeholder}
+                compact
+                showChevron={false}
+                dropdownPosition="auto"
+                testId={cellContent.testId}
+                optionTestId={cellContent.testId ? (option) => `${cellContent.testId}-option-${option.value}` : undefined}
+                onchange={(v) => cellContent.onchange(v)}
+            />
         </div>
     {:else if cellContent.type === 'editable-checkbox'}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -166,6 +193,61 @@
                          {cellContent.value ? 'translate-x-[18px] bg-lf-switch-knob-on' : 'translate-x-[3px] bg-lf-switch-knob-off border border-lf-input'}"
                 ></span>
             </button>
+        </div>
+    {:else if cellContent.type === 'editable-date'}
+        <!-- The app's own date field, never a native date input: that one follows the browser's language, not the app's
+             (nativeDateInput.gate.test.ts). Future dates allowed: a maturity is one. -->
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="cell-editable-date" onclick={(e) => e.stopPropagation()}>
+            <SingleDatePicker value={cellContent.value ?? ''} label="" compact inputStyle clearable allowFuture testid="cell-editable-date" onchange={(date) => cellContent.onchange(date === '' ? null : date)} />
+        </div>
+    {:else if cellContent.type === 'editable-amount'}
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="cell-editable-amount" onclick={(e) => e.stopPropagation()}>
+            <!-- type="text" + manual normalisation, as editable-number; the amount stays decimal text, never a float -->
+            <input
+                type="text"
+                inputmode="decimal"
+                autocomplete="off"
+                class="cell-editable-number"
+                value={cellContent.amount ?? ''}
+                placeholder={cellContent.placeholder ?? ''}
+                aria-label={cellContent.ariaLabel}
+                aria-invalid={amountInvalid ? 'true' : undefined}
+                data-testid="cell-editable-amount-value"
+                oninput={() => (amountInvalid = false)}
+                onblur={(e) => {
+                    const raw = normalizeDecimalInput(e.currentTarget.value);
+                    if (raw === '') {
+                        cellContent.onchange({amount: null, currency: cellContent.currency});
+                        return;
+                    }
+                    if (!DECIMAL_TEXT.test(raw)) {
+                        amountInvalid = true;
+                        return;
+                    }
+                    e.currentTarget.value = raw;
+                    cellContent.onchange({amount: raw, currency: cellContent.currency});
+                }}
+                onkeydown={(e) => {
+                    if (e.key === 'Enter') e.currentTarget.blur();
+                }}
+            />
+            <div class="cell-editable-amount-currency">
+                <SimpleSelect
+                    value={cellContent.currency ?? ''}
+                    options={cellContent.currencies}
+                    compact
+                    showChevron={false}
+                    dropdownPosition="auto"
+                    ariaLabel={cellContent.currencyAriaLabel}
+                    testId="cell-editable-amount-currency"
+                    optionTestId={(option) => `cell-editable-amount-currency-option-${option.value}`}
+                    onchange={(v) => cellContent.onchange({amount: cellContent.amount, currency: v || null})}
+                />
+            </div>
         </div>
     {:else if cellContent.type === 'html'}
         {#if cellContent.tooltip}
@@ -373,9 +455,45 @@
         transition: border-color 0.15s;
     }
 
+    /* A fixed unit beside the field (plan 68, E10c3): «0.19 %», «6.8 years» */
+    .cell-editable-text-with-unit {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+    }
+
+    .cell-editable-text-unit {
+        flex-shrink: 0;
+        font-size: 0.8125rem;
+        color: var(--lf-text-muted);
+        white-space: nowrap;
+    }
+
     .cell-editable-text:focus {
         border-color: var(--lf-focus);
         box-shadow: 0 0 0 1px color-mix(in oklab, var(--lf-focus) 25%, transparent);
+    }
+
+    /* Editable date cell (plan 68, E10a): SingleDatePicker in its input style, as wide as a date needs */
+    .cell-editable-date {
+        min-width: 9.5rem;
+        max-width: 12rem;
+    }
+
+    /* Editable amount cell (plan 68, E10a): the number cell and a currency choice side by side */
+    .cell-editable-amount {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+    }
+
+    .cell-editable-amount .cell-editable-number[aria-invalid='true'] {
+        border-color: var(--lf-danger);
+    }
+
+    .cell-editable-amount-currency {
+        min-width: 5.5rem;
+        position: relative;
     }
 
     .cell-editable-number::placeholder,

@@ -16,11 +16,20 @@ Each provider represents a central bank or financial data source that provides e
 
 | Provider | File | Code | Base Currency | Source |
 |----------|------|------|---------------|--------|
-| **ECB** | `ecb/plugin.py` | `ECB` | EUR | XML feed |
-| **FED** | `fed/plugin.py` | `FED` | USD | JSON API |
-| **BOE** | `boe/plugin.py` | `BOE` | GBP | JSON API |
-| **SNB** | `snb/plugin.py` | `SNB` | CHF | JSON API |
+| **ECB** | `ecb/plugin.py` | `ECB` | EUR | SDMX JSON, one request per currency |
+| **FED** | `fed/plugin.py` | `FED` | USD | FRED CSV, one series per currency (each declares its direction) |
+| **BOE** | `boe/plugin.py` | `BOE` | GBP | IADB CSV, one series per currency |
+| **SNB** | `snb/plugin.py` | `SNB` | CHF | JSON cube, monthly averages |
+| **BDI** | `bdi/plugin.py` | `BDI` | EUR | JSON time series per currency (~149), convention C checked |
+| **BCB** | `bcb/plugin.py` | `BCB` | USD | PTAX CSV per currency (fixed `ChkMoeda` table, `_parse.py`), BRL from the USD cotação |
+| **NORGES** | `norges/plugin.py` | `NORGES` | NOK | SDMX CSV, every currency in one request |
+| **NBU** | `nbu/plugin.py` | `NBU` | UAH | JSON range per currency, every day incl. weekends |
+| **BOC** | `boc/plugin.py` | `BOC` | CAD | Valet JSON, one group request |
 | **MANUAL** | `manual/plugin.py` | `MANUAL` | Any | Sentinel (no sync) |
+
+A provider's note (`warning_i18n`) has a level, `warning_level`: `"warning"` (⚠️, a data limit that can mislead: SNB,
+BOC, BDI) or `"info"` (ℹ️, a fact worth knowing: FED, NORGES, NBU, BCB). Unit and direction tests: one
+`test_fx_<code>*.py` per provider, registered in `services provider-errors`; answers are synthetic, never downloaded.
 
 ## MANUAL Provider (Sentinel)
 
@@ -32,7 +41,7 @@ The MANUAL provider is a special sentinel that handles pairs not covered by any 
 
 ## Multi-Provider Fallback
 
-FX pairs can have multiple providers with priority ordering. When syncing rates, the system tries providers in priority order (lower = higher priority). If ECB fails, it falls back to FED, then BOE, then SNB.
+FX pairs can have multiple providers with priority ordering. When syncing rates, the system tries providers in priority order (lower = higher priority). The order is the user's: each route has a priority.
 
 ## Adding a New FX Provider
 

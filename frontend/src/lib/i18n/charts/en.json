@@ -98,7 +98,8 @@
       "riskFreeAnnualRate": "Risk-free annual rate",
       "comparisonAsset": "Comparison asset",
       "window": "Window",
-      "fullHistory": "Full history"
+      "fullHistory": "Full history",
+      "targetAnnualReturn": "Target annual return"
     },
     "yAxisScale": "Y-Axis Scale",
     "yAxisScaleDesc": "Primary axis range control",
@@ -201,7 +202,8 @@
       "riskWindow": "Number of prepared daily return observations in each rolling window.",
       "riskFreeAnnualRate": "Annual effective risk-free rate used only to calculate Sharpe.",
       "comparisonAsset": "Persisted asset used as the real comparison series for beta.",
-      "riskFullHistory": "Measure drawdown against the highest peak of the entire available history, not just the visible window. Disable for a faster, window-relative view."
+      "riskFullHistory": "Measure drawdown against the highest peak of the entire available history, not just the visible window. Disable for a faster, window-relative view.",
+      "targetAnnualReturn": "Annual return the days are measured against, as for the Sortino: only the returns below it count as losses. 0 counts every loss."
     },
     "units": {
       "days": "days",

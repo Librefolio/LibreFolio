@@ -315,9 +315,13 @@ When multiple paths are found, `FxProviderSelect.svelte` sorts them:
 
 The picker opens from **Add conversion route** and also lists, under **Not usable**, every
 provider other than `MANUAL` that appears in no path for the pair. When there is no direct route,
-the first chain group opens by itself. The search splits the query on spaces and keeps a route only
+the first chain group opens by itself. An open group draws at most `CHAIN_PAGE` (200) chains in this order, and a
+**Show more** button (`fx-route-chain-more-<steps>`, `data-hidden` = the chains not drawn) draws 200 more per click;
+a new search starts again from 200 (developer decision «b1», lane 75: drawn whole, the 4-step group of a pair such as
+NOK→USD, ~36 000 chains once the wave-1 banks are in, crashed the browser tab). The search splits the query on spaces and keeps a route only
 when every token matches its search text: provider codes and names, plus the code, name, flag and
-country names of each currency on the path. A provider's `warning_i18n` shows on a route as ⚠️, or as ℹ️
+country names of each currency on the path, and it always filters every chain, drawn or not; each route's search
+text is built at the first search. A provider's `warning_i18n` shows on a route as ⚠️, or as ℹ️
 when its `warning_level` is `info`; a route with both kinds of note shows ⚠️ (`data-warning-level` publishes the level).
 
 ## Output Format

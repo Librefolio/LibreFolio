@@ -1,7 +1,7 @@
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
     import type {RiskAnalyticResult, RiskScope} from '$lib/features/risk/riskStore.svelte';
-    import {createRiskPanelController, discardedErrorCodes, LEVEL_ON_DEMAND_ANALYSES} from '$lib/features/risk/riskPanelController.svelte';
+    import {createRiskPanelController, discardedErrorCodes, LEVEL_ON_DEMAND_ANALYSES, type RiskSyncCompletion} from '$lib/features/risk/riskPanelController.svelte';
     import {setTweenHydration} from '$lib/components/ui/TweenedValue.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
@@ -12,6 +12,7 @@
     import {withWholeBroker} from '../riskRequest';
 
     import L1HowMuchItHurts from './L1HowMuchItHurts.svelte';
+    import HowItMoves from './HowItMoves.svelte';
     import L2Diversification from './L2Diversification.svelte';
     import L3Benchmark from './L3Benchmark.svelte';
     import L3RiskAdjusted from './L3RiskAdjusted.svelte';
@@ -26,7 +27,8 @@
     import {levelErrorHealth, partialNotice} from './partialNotice';
     import RiskPartialNotice from './RiskPartialNotice.svelte';
     import {selectKpiWave} from './l3Helpers';
-    import {resultByCode, DAILY_VAR_INSTANCE, MONTHLY_VAR_INSTANCE} from '../riskAnalysisHelpers';
+    import {resultByCode, resultByInstance, DAILY_VAR_INSTANCE, MONTHLY_VAR_INSTANCE} from '../riskAnalysisHelpers';
+    import {buildMoveFigures, moveLead, semiDeviationPerimeterDiffers} from '../moveFigures';
     import {formatPercent} from '$lib/utils/core/formatPercent';
 
     /**
@@ -74,7 +76,7 @@
         /** Asset ids in scope, seeding the names and the scenario editors. */
         assetIds?: number[];
         refreshVersion?: number;
-        onsynced?: () => void | Promise<void>;
+        onsynced?: (detail: RiskSyncCompletion) => void | Promise<void>;
     }
 
     let {scope, dateStart, dateEnd, targetCurrency, title = '', subtitle = '', wholeBroker = false, internalSubset = false, scopeValue = null, assetIds = [], refreshVersion = 0, onsynced}: Props = $props();
@@ -84,7 +86,7 @@
     let appliedRiskFreePercent = $state(0);
 
     const controller = createRiskPanelController(() => ({scope: withWholeBroker(scope, wholeBroker), dateStart, dateEnd, targetCurrency, appliedRiskFreePercent, refreshVersion}), {
-        onsynced: () => onsynced?.(),
+        onsynced: (detail) => onsynced?.(detail),
         // Page cache: a failed refresh of the figures on screen keeps them, and says so.
         onrefreshfailed: () => toasts.error($t('risk.states.loadFailed')),
         // L1 is the only consumer of these two, and both are opt-in so that
@@ -115,11 +117,13 @@
     let historicalResults = $derived(controller.historicalResults);
     let currentResults = $derived(controller.currentResults);
     let contributionResult = $derived(resultByCode(currentResults, 'risk_contribution'));
-    // `correlation` is requested in the historical wave (`riskAnalysisHelpers:240`)
+    // `correlation` is requested in the historical wave (`buildBaseAnalytics` in `riskAnalysisHelpers.ts`)
     // and was resolved and handed to nobody. It is not a datum to ask for: it is
     // one already paid for and thrown away.
     let correlationResult = $derived(resultByCode(historicalResults, 'correlation'));
     let initialLoading = $derived(controller.initialLoading);
+    /** The Asset Detail's x-ray (RN-17): only the levels and tools that have meaning on one asset. */
+    let oneAsset = $derived(scope.kind === 'asset');
     let loadError = $derived(controller.loadError);
 
     // Each level discloses only the measurements it actually renders. The filter
@@ -135,6 +139,10 @@
     const L1_LABELS = {[DAILY_VAR_INSTANCE]: 'risk.levels.l1.rows.day', [MONTHLY_VAR_INSTANCE]: 'risk.levels.l1.rows.month'};
 
     let l1Results = $derived(historicalResults.filter((result) => L1_CODES.includes(result.analytic_code)));
+    // «How does it move?» (RN-18) reads L1's own answers — the KPI, the 30-day VaR's best window, the drawdown summary —
+    // and asks nothing of its own; so it declares nothing either: what failed is said once, in L1's frame.
+    let moveFigures = $derived(buildMoveFigures(resultByCode(historicalResults, 'historical_kpi'), resultByInstance(historicalResults, MONTHLY_VAR_INSTANCE), resultByCode(historicalResults, 'drawdown_summary')));
+    let moveHeadline = $derived(moveLead(moveFigures, $t));
     // L3 declares what it draws (F2b): the benchmark comparison, the KPI of the wave
     // `L3RiskAdjusted` picks — the current composition's when it came back, through
     // the same `selectKpiWave` — and the current composition's risk/return scatter.
@@ -203,12 +211,13 @@
      * L4's three steps, for the same reason as the three levels above — and it
      * was the only section without them.
      *
-     * `schemas/risk.py:1056` forbids an `unavailable` or `failed` result from
-     * carrying an output, so the `{#if output}` each step renders on is not
-     * *probably* empty on that branch: it is empty **by contract**. Without this
-     * the reader asks for a simulation, the spinner stops, and nothing appears —
-     * no figure and no cause. Reachable today with no exotic input at all: a busy
-     * worker, a timeout, a series too short.
+     * `RiskAnalyticResult.validate_status_payload` (`schemas/risk/results.py`)
+     * forbids an `unavailable` or `failed` result from carrying an output, so
+     * the `{#if output}` each step renders on is not *probably* empty on that
+     * branch: it is empty **by contract**. Without this the reader asks for a
+     * simulation, the spinner stops, and nothing appears — no figure and no
+     * cause. Reachable today with no exotic input at all: a busy worker, a
+     * timeout, a series too short.
      *
      * Naming the step and its state is all that is offered. A timeout is not a
      * question the reader can answer, so no remedy is promised — but it is still
@@ -254,6 +263,8 @@
      * came from what actually happened.
      */
     let backtest = $derived(backtestDeclared(historicalResults));
+    // RN-18b: the semi-deviation's swing and L3's volatility differ only when they read two series.
+    let moveSwingDiffers = $derived(semiDeviationPerimeterDiffers({oneAsset, backtest, l3Perimeter: selectKpiWave(currentResults, historicalResults).perimeter}));
 
     /**
      * The benchmark's name, resolved where every other name already is.
@@ -324,7 +335,9 @@
 </script>
 
 <div class="space-y-4 text-lf-primary" data-testid="risk-levels-panel" data-scope={scope.kind} data-catalog={controller.catalogState} data-busy={initialLoading ? 'true' : 'false'}>
-    <RiskPanelHeader {controller} {title} {subtitle} {internalSubset} {assetIds} {dateStart} {dateEnd} {targetCurrency} />
+    <!-- One asset: the Asset Detail toolbar holds the page's one Refresh (Y11, decision 48), so the header draws no sync of its own;
+         its docs icon opens the Asset Detail's own page, in the asset's words (RN-17 c). -->
+    <RiskPanelHeader {controller} {title} {subtitle} {internalSubset} {assetIds} {dateStart} {dateEnd} {targetCurrency} showActions={!oneAsset} {oneAsset} />
 
     {#if backtest}
         <p class="rounded-lg border border-lf-warning-line bg-lf-warning-soft px-3 py-2 text-xs text-lf-warning-on-soft" data-testid="risk-backtest-notice">
@@ -342,17 +355,47 @@
             <L1HowMuchItHurts {historicalResults} {scopeValue} currency={targetCurrency} loading={initialLoading} />
         </RiskLevelSection>
 
-        <RiskLevelSection level={2} title={$t('risk.levels.l2.title')} lead={l2Lead} testId="risk-level-2" docsPath="financial-theory/technical-analysis/risk-metrics/" health={levelErrorHealth(l2Health)} errorCodes={l2Errors} metadata={l2Metadata}>
-            <L2Diversification {contributionResult} {correlationResult} {assetNames} loading={initialLoading} />
+        <!-- RN-18 (Q21 c, Q22 a): the positive twin of L1, the same block on every surface. No health of its own: its answers
+             are L1's, and a second amber frame would repeat L1's word for word. -->
+        <RiskLevelSection level="move" title={$t('risk.levels.move.title')} lead={moveHeadline} testId="risk-level-move" docsPath="financial-theory/technical-analysis/risk-metrics/">
+            <HowItMoves figures={moveFigures} {scopeValue} currency={targetCurrency} loading={initialLoading} perimeterDiffers={moveSwingDiffers} />
         </RiskLevelSection>
+
+        <!-- One asset (RN-17): nothing to diversify — correlation and risk contribution do not declare the asset scope. -->
+        {#if !oneAsset}
+            <RiskLevelSection level={2} title={$t('risk.levels.l2.title')} lead={l2Lead} testId="risk-level-2" docsPath="financial-theory/technical-analysis/risk-metrics/" health={levelErrorHealth(l2Health)} errorCodes={l2Errors} metadata={l2Metadata}>
+                <L2Diversification {contributionResult} {correlationResult} {assetNames} loading={initialLoading} />
+            </RiskLevelSection>
+        {/if}
 
         {#snippet l3Actions()}
             <ColumnVisibilityToggle tableRef={l3Table} />
         {/snippet}
 
-        <RiskLevelSection level={3} title={$t('risk.levels.l3.title')} testId="risk-level-3" docsPath="financial-theory/technical-analysis/risk-metrics/" health={levelErrorHealth(l3Health)} errorCodes={l3Errors} metadata={l3Metadata} actions={l3Table ? l3Actions : undefined}>
-            <L3Benchmark {controller} riskFreePercent={appliedRiskFreePercent} period={{start: dateStart, end: dateEnd}} currency={targetCurrency} />
-            <L3RiskAdjusted bind:tableRef={l3Table} {historicalResults} {currentResults} {assetNames} {assetIcons} {appliedRiskFreePercent} comparisonResult={controller.comparisonResult} {benchmarkName} loading={initialLoading} />
+        <RiskLevelSection
+            level={3}
+            title={$t(oneAsset ? 'risk.levels.l3.titleAsset' : 'risk.levels.l3.title')}
+            testId="risk-level-3"
+            docsPath="financial-theory/technical-analysis/risk-metrics/"
+            health={levelErrorHealth(l3Health)}
+            errorCodes={l3Errors}
+            metadata={l3Metadata}
+            actions={l3Table ? l3Actions : undefined}
+        >
+            <L3Benchmark {controller} subjectAssetId={scope.kind === 'asset' ? scope.asset_id : null} riskFreePercent={appliedRiskFreePercent} period={{start: dateStart, end: dateEnd}} currency={targetCurrency} />
+            <L3RiskAdjusted
+                bind:tableRef={l3Table}
+                subjectLabel={scope.kind === 'asset' ? assetNames[scope.asset_id] : undefined}
+                {oneAsset}
+                {historicalResults}
+                {currentResults}
+                {assetNames}
+                {assetIcons}
+                {appliedRiskFreePercent}
+                comparisonResult={controller.comparisonResult}
+                {benchmarkName}
+                loading={initialLoading}
+            />
         </RiskLevelSection>
 
         <!-- Closed until asked for, and the scenario catalogue is fetched on that
@@ -372,10 +415,10 @@
         >
             <L4WhatIf {controller}>
                 {#snippet replay()}
-                    <L4Replay {controller} {assetNames} currency={targetCurrency} {dateStart} {dateEnd} />
+                    <L4Replay {controller} {assetNames} currency={targetCurrency} {dateStart} {dateEnd} {scopeValue} />
                 {/snippet}
                 {#snippet shock()}
-                    <L4Shock {controller} {assetNames} currency={targetCurrency} />
+                    <L4Shock {controller} {assetNames} currency={targetCurrency} withoutTypeShock={oneAsset} {scopeValue} />
                 {/snippet}
                 {#snippet simulation()}
                     <L4Simulation {controller} {dateEnd} />

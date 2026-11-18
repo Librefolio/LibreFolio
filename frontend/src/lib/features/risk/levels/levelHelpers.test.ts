@@ -30,7 +30,9 @@ import {
     lossMagnitude,
     uncoveredWeight,
     warningSentence,
+    type WarningTranslator,
 } from './levelHelpers';
+import {dayFormatter} from '../eligibility';
 
 /** A successful result carrying `output`, shaped like the API's. */
 function ok(analyticCode: string, output: Record<string, unknown>, instanceId = `base-historical-${analyticCode}`): RiskAnalyticResult {
@@ -52,10 +54,9 @@ describe('buildHurtRows', () => {
         expect(rows.map((row) => row.id)).toEqual(['day', 'month', 'worst']);
     });
 
-    it('leads with the CVaR and keeps the VaR as the secondary figure', () => {
+    it('leads with the CVaR', () => {
         const [row] = buildHurtRows([varResult(DAILY_VAR_INSTANCE, 0.018, 0.024)]);
         expect(row.loss).toBe(0.024);
-        expect(row.secondaryLoss).toBe(0.018);
     });
 
     it('never mixes the daily and monthly VaR up, even though they share an analytic code', () => {
@@ -155,11 +156,6 @@ describe('buildHurtRows', () => {
     it('prefers the drawdown summary over the KPI when both are present', () => {
         const rows = buildHurtRows([ok('historical_kpi', {max_drawdown: -0.087, max_drawdown_duration_days: 19}), ok('drawdown_summary', {maximum_drawdown: -0.384, maximum_drawdown_duration_days: 570})]);
         expect(rows[0]).toMatchObject({loss: 0.384, durationDays: 570});
-    });
-
-    it('drops the secondary figure when VaR and CVaR coincide, instead of printing it twice', () => {
-        const [row] = buildHurtRows([varResult(DAILY_VAR_INSTANCE, 0.02, 0.02)]);
-        expect(row.secondaryLoss).toBeNull();
     });
 
     it('returns nothing at all when the wave is empty', () => {
@@ -490,7 +486,7 @@ describe('uncoveredWeight', () => {
 
     /*
      * The derived cash is cleaned at the risk service's own weight tolerance, 1e-9
-     * (`services/risk/service.py:515` and `:524`): a difference thinner than that is
+     * (`load_scope_inputs`, `services/risk/scope.py`): a difference thinner than that is
      * float noise, and a card stating it would caption a sliver of cash nobody holds.
      * Only the derived figure is cleaned — `total` and `unpriced` are published
      * numbers and stay exactly as the payload states them.
@@ -511,7 +507,7 @@ describe('uncoveredWeight', () => {
     });
 
     it("keeps a residual of exactly 1e-9 as cash: the line is strict, as in the service's in-transit check", () => {
-        // `service.py` reads `abs(...) < 1e-9` as noise, so exactly 1e-9 is not.
+        // `load_scope_inputs` (`risk/scope.py`) reads `abs(...) < 1e-9` as noise, so exactly 1e-9 is not.
         expect(uncoveredWeight(contribution({cash_weight: 1e-9, excluded_weight: 0}))).toStrictEqual({total: 1e-9, unpriced: 0, cash: 1e-9});
     });
 
@@ -759,7 +755,7 @@ describe('resultReasons', () => {
         expect(reasons).toHaveLength(2);
     });
 
-    // A partial wave with no warnings at all is ordinary: `service.py:736` also
+    // A partial wave with no warnings at all is ordinary: `success_result` (`risk/results.py`) also
     // turns a wave partial for exclusions and data quality, each disclosed by its
     // own surface. Inventing a reason here would be worse than showing none.
     it('stays empty rather than inventing a cause', () => {
@@ -1306,7 +1302,7 @@ describe('resultReasons — keyed warnings', () => {
         expect(resultReasons(results), 'verbatim: one sentence standing for two causes claimed one of them, or badged one set of assets for both').toStrictEqual([{key: `${EXCLUDED_CASE.code}:${EXCLUDED_CASE.message}`, message: EXCLUDED_CASE.message, occurrences: 4}]);
     });
 
-    // `stress.py` emits one fallback per asset, naming it under `details.asset_id` beside the
+    // `StressAnalytic._hypothetical` emits one fallback per asset, naming it under `details.asset_id` beside the
     // cause. Worded, the names split the sentence, so each asset's line keeps its own badge.
     it('carries the one asset and the cause of each hypothetical fallback, which names its asset under asset_id', () => {
         const first = resolve(FALLBACK_CASE.key, {...FALLBACK_CASE.params, names: HOLDING_A});
@@ -1329,7 +1325,7 @@ describe('resultErrorCodes', () => {
         expect(resultErrorCodes([failed('a', {code: 'incompatible_scope'})])).toEqual(['incompatible_scope']);
     });
 
-    // `RiskResultFrame:23` reads the same field through `singleValue` because the
+    // `errorCode` in `RiskResultFrame` reads the same field through `singleValue` because the
     // generated client types it as a value *or* a list. Reaching for
     // `result.error.code` works on today's payload and returns `undefined` the
     // day one arrives wrapped — an error that would then disclose nothing at all,
@@ -1367,7 +1363,7 @@ describe('translateErrorCode', () => {
         expect(translateErrorCode('incompatible_scope', translate, 'risk.errors.unknown')).toBe('This analytic does not support the selected scope.');
     });
 
-    // The defect recorded at `RiskResultFrame:108`: without the `translated === key`
+    // The defect recorded at the return-basis line of `RiskResultFrame`: without the `translated === key`
     // comparison, a code the backend gains tomorrow prints `risk.errors.<code>` on
     // screen. Nothing else in the stack catches it — a key is a string, and a
     // string renders.
@@ -1396,7 +1392,7 @@ describe('translateErrorCode', () => {
  *
  * The simulation refuses a run too large to carry with `resource_limit`, and its `details` now
  * say which limit was hit and which setting brings the run back within reach: `{metric, actual,
- * limit, remedy}`, the remedy one of four (`simulation.py::_REMEDY_BY_METRIC`). The four are not
+ * limit, remedy}`, the remedy one of four (`REMEDY_BY_METRIC`, `risk/base.py`). The four are not
  * interchangeable — fewer paths or a shorter horizon cure only the path budgets, a history too
  * long needs a shorter period, the Sobol dimension ignores the paths, and no setting shrinks the
  * number of positions — so one generic «too large to run» leaves the reader guessing which
@@ -1425,7 +1421,9 @@ describe('translateErrorCode', () => {
  */
 
 /** The remedies a refusal can name, in the contract's order: this file's own copy, which the export is pinned to. */
-const REMEDIES = ['paths_or_horizon', 'horizon_or_sampling', 'period', 'positions', 'period_or_assets'] as const;
+// RN-16: the paths fall to the fewest that fit, so a too-large simulation names the horizon alone; and the history keeps
+// its most recent observations, so no refusal names the period any more.
+const REMEDIES = ['horizon', 'horizon_or_sampling', 'positions', 'period_or_assets'] as const;
 type Remedy = (typeof REMEDIES)[number];
 
 /** `MAX_SIMULATION_ASSETS`, the ceiling the `positions` sentence cites: pinned on the backend by `test_the_ceilings_cited_to_the_user_are_pinned`. */
@@ -1438,11 +1436,10 @@ const UNKNOWN_ERROR_KEY = 'risk.errors.unknown';
 const remedyCode = (remedy: Remedy): string => `resource_limit_${remedy}`;
 const remedyKey = (remedy: Remedy): string => `risk.errors.${remedyCode(remedy)}`;
 
-/** One refusal per remedy, its details as the backend sends them for a metric that maps to it: `simulation.py::_resource_limit`, and `risk/scope.py::prepare_asset_series` for the price-day budget (J-50). */
+/** One refusal per remedy, its details as the backend sends them for a metric that maps to it: `resource_limit_error` (`risk/base.py`), and `risk/scope.py::prepare_asset_series` for the price-day budget (J-50). */
 const REFUSAL_DETAILS: Record<Remedy, Record<string, unknown>> = {
-    paths_or_horizon: {metric: 'portfolio_cells', actual: 20_000_001, limit: 20_000_000, remedy: 'paths_or_horizon'},
+    horizon: {metric: 'stochastic_cells', actual: 373_760_000, limit: 200_000_000, remedy: 'horizon'},
     horizon_or_sampling: {metric: 'sobol_dimension', actual: 21_202, limit: 21_201, remedy: 'horizon_or_sampling'},
-    period: {metric: 'observations', actual: 5001, limit: 5000, remedy: 'period'},
     positions: {metric: 'assets', actual: 101, limit: POSITIONS_CEILING, remedy: 'positions'},
     period_or_assets: {metric: 'price_item_days', actual: 5_000_001, limit: 5_000_000, remedy: 'period_or_assets'},
 };
@@ -1487,7 +1484,7 @@ describe('errorDisplayCode — the code an error is worded by', () => {
 
     // The remedy alone decides: the rest of the details describes the limit, not the cure.
     it('needs nothing from the details but the remedy', () => {
-        expect(errorDisplayCode(limitRefusal({remedy: 'period'}))).toBe('resource_limit_period');
+        expect(errorDisplayCode(limitRefusal({remedy: 'positions'}))).toBe('resource_limit_positions');
     });
 
     it('reads the code trimmed, and refines it once trimmed', () => {
@@ -1505,8 +1502,8 @@ describe('errorDisplayCode — the code an error is worded by', () => {
         ['a blank code', {code: '   '}],
         ['a numeric code', {code: 7}],
         ['a code wrapped in a list', {code: ['resource_limit']}],
-        ['a known remedy without a code', {details: REFUSAL_DETAILS.period}],
-        ['a blank code beside a known remedy', {code: '  ', details: REFUSAL_DETAILS.period}],
+        ['a known remedy without a code', {details: REFUSAL_DETAILS.positions}],
+        ['a blank code beside a known remedy', {code: '  ', details: REFUSAL_DETAILS.positions}],
     ])('has no code for %s', (_label, error) => {
         expect(errorDisplayCode(error)).toBeNull();
     });
@@ -1519,14 +1516,14 @@ describe('errorDisplayCode — the code an error is worded by', () => {
         ['no details', {code: 'resource_limit'}],
         ['null details', limitRefusal(null)],
         ['details naming no remedy, as for a metric the backend has none for', limitRefusal({metric: 'synthetic_cells', actual: 11, limit: 10})],
-        ['a remedy added after this build', limitRefusal({...REFUSAL_DETAILS.period, remedy: 'future_remedy'})],
+        ['a remedy added after this build', limitRefusal({...REFUSAL_DETAILS.positions, remedy: 'future_remedy'})],
         ['an empty remedy', limitRefusal({remedy: ''})],
-        ['a fragment of two real remedies', limitRefusal({remedy: 'horizon'})],
+        ['a fragment of a real remedy', limitRefusal({remedy: 'or_sampling'})],
         ['a numeric remedy', limitRefusal({remedy: 7})],
         ['a null remedy', limitRefusal({remedy: null})],
-        ['a remedy wrapped in a list', limitRefusal({remedy: ['period']})],
-        ['details that are a list', limitRefusal([{remedy: 'period'}])],
-        ['a list carrying a remedy of its own', limitRefusal(Object.assign(['period'], {remedy: 'period'}))],
+        ['a remedy wrapped in a list', limitRefusal({remedy: ['positions']})],
+        ['details that are a list', limitRefusal([{remedy: 'positions'}])],
+        ['a list carrying a remedy of its own', limitRefusal(Object.assign(['positions'], {remedy: 'positions'}))],
         ['the remedy "constructor"', limitRefusal({remedy: 'constructor'})],
         ['the remedy "toString"', limitRefusal({remedy: 'toString'})],
         ['the remedy "__proto__"', limitRefusal({remedy: '__proto__'})],
@@ -1536,7 +1533,7 @@ describe('errorDisplayCode — the code an error is worded by', () => {
 
     // Only `resource_limit` is refined. The near misses catch a prefix, a suffix or a
     // case-insensitive match; an already refined code is not refined a second time.
-    it.each(['invalid_parameters', 'insufficient_history', 'resource_limit_period', 'not_a_resource_limit', 'RESOURCE_LIMIT'])('returns %s unchanged, whatever remedy its details name', (code) => {
+    it.each(['invalid_parameters', 'insufficient_history', 'resource_limit_positions', 'not_a_resource_limit', 'RESOURCE_LIMIT'])('returns %s unchanged, whatever remedy its details name', (code) => {
         for (const remedy of REMEDIES) {
             expect(errorDisplayCode({code, details: REFUSAL_DETAILS[remedy]}), `${code} beside the remedy ${remedy}`).toBe(code);
         }
@@ -1556,18 +1553,18 @@ describe('resultErrorCodes — a refusal for size keeps the remedy it names', ()
     }
 
     it('gives back one code per remedy when two refusals name different ones', () => {
-        expect(resultErrorCodes([refusedResult('a', refusal('period')), refusedResult('b', refusal('positions'))])).toEqual(['resource_limit_period', 'resource_limit_positions']);
+        expect(resultErrorCodes([refusedResult('a', refusal('horizon')), refusedResult('b', refusal('positions'))])).toEqual(['resource_limit_horizon', 'resource_limit_positions']);
     });
 
     it('says one remedy once, however many refusals name it', () => {
-        expect(resultErrorCodes([refusedResult('a', refusal('paths_or_horizon')), refusedResult('b', refusal('paths_or_horizon'))])).toEqual(['resource_limit_paths_or_horizon']);
+        expect(resultErrorCodes([refusedResult('a', refusal('horizon')), refusedResult('b', refusal('horizon'))])).toEqual(['resource_limit_horizon']);
     });
 
     // A refusal naming no remedy and one naming a remedy this build does not know are the
     // same generic cause: said once, beside the refined one and never in its place.
     it('keeps a plain resource_limit beside a refined one, and says the generic cause once', () => {
         const plain = {code: 'resource_limit', message: REFUSAL_MESSAGE};
-        const unknownRemedy = {code: 'resource_limit', message: REFUSAL_MESSAGE, details: {...REFUSAL_DETAILS.period, remedy: 'future_remedy'}};
+        const unknownRemedy = {code: 'resource_limit', message: REFUSAL_MESSAGE, details: {...REFUSAL_DETAILS.positions, remedy: 'future_remedy'}};
         expect(resultErrorCodes([refusedResult('a', plain), refusedResult('b', refusal('horizon_or_sampling')), refusedResult('c', unknownRemedy)])).toEqual(['resource_limit', 'resource_limit_horizon_or_sampling']);
     });
 
@@ -1581,13 +1578,13 @@ describe('resultErrorCodes — a refusal for size keeps the remedy it names', ()
         const results = [
             null,
             refusedResult('a', refusal('positions')),
-            refusedResult('b', {code: 'incompatible_scope', message: REFUSAL_MESSAGE, details: {remedy: 'period'}}),
+            refusedResult('b', {code: 'incompatible_scope', message: REFUSAL_MESSAGE, details: {remedy: 'horizon'}}),
             refusedResult('c', {code: '   '}),
             undefined,
-            refusedResult('d', refusal('period')),
+            refusedResult('d', refusal('horizon')),
             refusedResult('e', refusal('positions')),
         ];
-        expect(resultErrorCodes(results)).toEqual(['resource_limit_positions', 'incompatible_scope', 'resource_limit_period']);
+        expect(resultErrorCodes(results)).toEqual(['resource_limit_positions', 'incompatible_scope', 'resource_limit_horizon']);
     });
 });
 
@@ -1651,5 +1648,48 @@ describe('the catalogues word every remedy a refusal can name', () => {
         expect(new Set(sentences).size, `two remedies read alike in ${locale}.json: ${JSON.stringify(sentences)}`).toBe(REMEDIES.length);
         // The ceiling as a number of its own: «1000» contains the digits and cites another one.
         expect(sentences[REMEDIES.indexOf('positions')], `${remedyKey('positions')} does not cite the ceiling of ${POSITIONS_CEILING} positions in ${locale}.json`).toMatch(new RegExp(`(?<!\\d)${POSITIONS_CEILING}(?!\\d)`));
+    });
+});
+
+describe('warningSentence — a day travels in the reader’s format (RN-11)', () => {
+    it('formats an ISO day parameter in the interface locale, and leaves every other string as it came', () => {
+        // `analysis_starts_late` carries the day the analysis really starts as an ISO day: shown
+        // raw it would read «2026-03-16» in a sentence of words. A string that only contains a day
+        // (a name) is not a day.
+        const seen: Record<string, unknown>[] = [];
+        const translate: WarningTranslator = (_id, options) => {
+            seen.push({...(options?.values ?? {})});
+            return 'translated';
+        };
+        warningSentence({code: 'analysis_starts_late', message: 'The analysis starts on 2026-03-16.', message_i18n_key: 'risk.warnings.analysis_starts_late', message_params: {start: '2026-03-16', names: 'Fund 2026-03-16', count: 2}}, translate);
+        const day = dayFormatter()('2026-03-16');
+        expect(day, 'premise: the reader’s format is not the ISO day').not.toBe('2026-03-16');
+        expect(seen[0], 'the ISO day reached the sentence as it came, or a non-day string was rewritten').toEqual({start: day, names: 'Fund 2026-03-16', count: 2});
+    });
+});
+
+// RN-16b (developer's Q7 «per ora B»): the simulation leaves out a holding shorter than the horizon, and L4's notice names
+// it — the backend adds `names` (`with_warning_asset_names`), the sentence says its history and the horizon.
+describe('resultReasons — the simulation names a holding it left out (RN-16b)', () => {
+    it('says the holding, its history and the horizon, through the catalogue', () => {
+        const simulation = {
+            instance_id: 'simulation',
+            analytic_code: 'simulation',
+            status: 'partial',
+            output: null,
+            warnings: [
+                {
+                    code: 'simulation_asset_shorter_than_horizon',
+                    message: 'Asset 3 has 63 days of history, less than the 365-day horizon: left out of the simulation, its weight counted as cash.',
+                    message_i18n_key: 'risk.warnings.simulation_excluded_short_history',
+                    message_params: {history_days: 63, horizon_days: 365, names: 'Invented Fund', count: 1},
+                    details: {asset_id: 3, treatment: 'zero_return_residual'},
+                },
+            ],
+        } as unknown as RiskAnalyticResult;
+
+        const [reason] = levelHelpers.resultReasons([simulation], get(_));
+        expect(reason.message).toBe(get(_)('risk.warnings.simulation_excluded_short_history', {values: {history_days: 63, horizon_days: 365, names: 'Invented Fund', count: 1}}));
+        for (const part of ['Invented Fund', '63', '365']) expect(reason.message).toContain(part);
     });
 });

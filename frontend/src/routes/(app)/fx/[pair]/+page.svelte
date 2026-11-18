@@ -97,6 +97,7 @@
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
     import {subscribeFxCreationSyncCompleted} from '$lib/services/fxCreationSync';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     const DISABLED_AI_EXPORT_COMPATIBILITY = emptyAiExportCompatibility();
 
@@ -1602,6 +1603,9 @@
             <button class="p-1.5 rounded-lg hover:bg-lf-hover text-lf-muted hover:text-lf-secondary transition-colors" data-testid="fx-detail-swap-btn" onclick={handleSwapDirection} title={$t('common.swapDirection')}>
                 <ArrowLeftRight size={16} />
             </button>
+        </div>
+        <div class="ml-auto">
+            <DocsLink path="user/fx/detail/" label={$t('fx.docsHelp.detail')} icon="book" size={16} testId="fx-detail-docs" />
         </div>
     </div>
 

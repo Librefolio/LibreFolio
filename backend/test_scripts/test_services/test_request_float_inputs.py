@@ -89,7 +89,7 @@ Under test: the app of ``backend/app/main.py``, its routes, and the schemas thei
     model: ``ToolTransportModel`` sets ``allow_inf_nan=False``, which ``JsonValue`` respects. The four others refuse
     through ``ensure_json_safe`` (``backend/app/utils/json_utils.py``) in a ``mode="before"`` validator of their field:
     ``SignalRequest.params``; ``provider_params`` in ``FAProviderConfigBase`` (``schemas/provider.py``), which both
-    provider requests inherit; and ``RiskAnalyticRequest.parameters`` (``schemas/risk.py``). The last two validators
+    provider requests inherit; and ``RiskAnalyticRequest.parameters`` (``schemas/risk/scope.py``). The last two validators
     came with H-34. Self-test, on an app of its own: ``Any``, ``object`` and ``JsonValue`` as a field, a list item
     behind ``Annotated``, a mapping value and behind ``Optional``, each noted with its type and its route, and the
     float beside them a leaf, not a free-form position.
@@ -134,6 +134,7 @@ from starlette.requests import Request
 
 import backend.app.main as app_main
 from backend.app.config import API_V1_PREFIX
+from backend.app.schemas.assets.assets import FAAssetCreateItem, FAAssetPatchItem
 from backend.app.schemas.provider import FAProviderAssignmentItem, FAProviderProbeRequest
 from backend.app.schemas.risk.scope import RiskAnalyticRequest
 from backend.app.schemas.signals.result import SignalRequest
@@ -737,6 +738,16 @@ def _provider_config(value: JsonValue) -> dict[str, JsonValue]:
     return {"provider_code": PROBE_PROVIDER, "identifier": "X", "identifier_type": "TICKER", "provider_params": value}
 
 
+def probe_asset_create(value: JsonValue) -> BaseModel:
+    """``POST /api/v1/assets``: one item of its list, its profile written by hand (plan 68, B3)."""
+    return FAAssetCreateItem.model_validate({"display_name": "Probe", "currency": "EUR", "asset_type": "ETF", "profile": value})
+
+
+def probe_asset_patch(value: JsonValue) -> BaseModel:
+    """``PATCH /api/v1/assets`` and ``POST /api/v1/assets/validate``: one item of the list, its profile (plan 68, B3)."""
+    return FAAssetPatchItem.model_validate({"asset_id": 1, "profile": value})
+
+
 def probe_provider_assignment(value: JsonValue) -> BaseModel:
     """``POST /api/v1/assets/provider``: one assignment of its list."""
     return FAProviderAssignmentItem.model_validate({"asset_id": 1, **_provider_config(value)})
@@ -765,6 +776,8 @@ def probe_tool_compute_item(value: JsonValue) -> BaseModel:
 #: (g): the free-form positions a request reached when this guard was written, by owner, each with its probe: the request
 #: model that holds the position, validated in Python mode around a mapping placed in the field of the position.
 KNOWN_FREE_FORM: dict[str, Callable[[JsonValue], BaseModel]] = {
+    "backend.app.schemas.assets.assets.FAAssetCreateItem.profile{*}": probe_asset_create,
+    "backend.app.schemas.assets.assets.FAAssetPatchItem.profile{*}": probe_asset_patch,
     "backend.app.schemas.provider.FAProviderAssignmentItem.provider_params{*}": probe_provider_assignment,
     "backend.app.schemas.provider.FAProviderProbeRequest.provider_params{*}": probe_provider_probe,
     "backend.app.schemas.risk.scope.RiskAnalyticRequest.parameters{*}": probe_risk_analytic,

@@ -84,6 +84,7 @@ from backend.app.services.asset_source_providers.mockprov.plugin import MockProv
 from backend.app.services.assets import core as asset_core
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.fx import runtime as fx_runtime
 from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.fx_providers.mockfx.plugin import MockFXFailProvider, MockFXProvider
@@ -533,10 +534,11 @@ SERVICES_PACKAGE = "backend.app.services"
 SERVICES_DIRECTORY = PROJECT_ROOT / "backend" / "app" / "services"
 REGISTRY_MODULE = "registry"
 #: The registries of the base the application defines today: the walk finds at least these.
-KNOWN_REGISTRIES: tuple[type[AbstractPluginRegistry], ...] = (AssetProviderRegistry, FXProviderRegistry, BRIMProviderRegistry, SignalPluginRegistry, RiskAnalyticRegistry, ToolPluginRegistry)
+KNOWN_REGISTRIES: tuple[type[AbstractPluginRegistry], ...] = (AssetProviderRegistry, FXProviderRegistry, BRIMProviderRegistry, SignalPluginRegistry, RiskAnalyticRegistry, ToolPluginRegistry, EnricherRegistry)
 #: The families whose plugins may be flagged ``test_only``: their registries serve a plugin only through the base doors,
-#: which ask ``_withheld``, or (the Tools, X5-4b) through a snapshot that is built without the withheld classes.
-TEST_ONLY_FAMILIES: tuple[type[AbstractPluginRegistry], ...] = (AssetProviderRegistry, FXProviderRegistry, ToolPluginRegistry)
+#: which ask ``_withheld``, or (the Tools, X5-4b) through a snapshot that is built without the withheld classes. The
+#: enrichers (plan 68, B1; ``mockenrich`` is test-only): ``EnricherRegistry`` adds no door of its own (read at B1).
+TEST_ONLY_FAMILIES: tuple[type[AbstractPluginRegistry], ...] = (AssetProviderRegistry, FXProviderRegistry, ToolPluginRegistry, EnricherRegistry)
 #: The doors of the other families that serve a plugin without asking ``_withheld`` (read at f4b7516b6).
 UNGUARDED_DOORS: dict[type[AbstractPluginRegistry], str] = {
     BRIMProviderRegistry: "auto_detect_plugin, get_compatible_plugins and list_plugin_info walk _providers",
@@ -620,8 +622,8 @@ def test_guard_only_asset_and_fx_plugins_are_flagged_test_only(monkeypatch: pyte
     but the asset and the FX ones serves a class flagged ``test_only``; every other family has doors that would still
     serve it on a production instance (``UNGUARDED_DOORS``). A seventh family is checked with no edit here.
 
-    Barriers: the walk finds the six registries known today, and neither a base nor a registry of test code; each of the
-    six serves a class; the flag is read where it lives: ``mockprov``, ``MOCKFX`` and ``MOCKFX_FAIL`` are found flagged
+    Barriers: the walk finds the seven registries known today, and neither a base nor a registry of test code; each of the
+    seven serves a class (the enrichers' ``mockenrich``: red until plan 68 B1's registry registers it); the flag is read where it lives: ``mockprov``, ``MOCKFX`` and ``MOCKFX_FAIL`` are found flagged
     (not as the only ones: a new asset or FX double is allowed).
     """
     _test_mode(monkeypatch)

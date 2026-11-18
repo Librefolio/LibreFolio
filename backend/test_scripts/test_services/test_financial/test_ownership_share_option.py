@@ -694,7 +694,7 @@ async def _stress(book: _Book, user_id: int, apply_ownership_share: bool | None 
     request = _risk_request(book, apply_ownership_share, stress=True)
     async with AsyncSession(book.engine, expire_on_commit=False) as session:
         inputs = await load_scope_inputs(session, user_id=user_id, request=request)
-        classifications = await load_asset_classifications(session, inputs.requested_asset_ids)
+        classifications = await load_asset_classifications(session, inputs.requested_asset_ids, request.date_range.end or request.date_range.start)
     prepared = prepare_asset_series_set([], requested_range=request.date_range, target_currency=EUR)
     context = replace(build_execution_context(request=request, scope_inputs=inputs, prepared=prepared), asset_classifications=classifications)
     params = StressParams.model_validate(_STRESS_PARAMETERS)

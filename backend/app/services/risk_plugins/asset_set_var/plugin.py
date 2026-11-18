@@ -4,19 +4,19 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.app.schemas.risk.outputs import RiskAssetSetVarCvarItem, RiskAssetSetVarCvarOutput, RiskWorstHorizonWindow
+from backend.app.schemas.risk.outputs import RiskAssetSetVarCvarItem, RiskAssetSetVarCvarOutput
 from backend.app.schemas.risk.vocabulary import RiskErrorCode, RiskMode, RiskOutputKind, RiskScopeKind
 from backend.app.services.financial_math.returns import calendar_days_to_observations
 from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS
 from backend.app.services.platform.provider_registry import register_plugin
-from backend.app.services.risk.analytic_helpers import prepared_scope_series, require_annualization_factor
+from backend.app.services.risk.analytic_helpers import dated_horizon_window, prepared_scope_series, require_annualization_factor
 from backend.app.services.risk.base import (
     RiskAnalytic,
     RiskComputation,
     RiskExecutionContext,
     RiskUnavailableError,
 )
-from backend.app.services.risk.metrics import historical_var_cvar, worst_horizon_window
+from backend.app.services.risk.metrics import best_horizon_window, historical_var_cvar, worst_horizon_window
 from backend.app.services.risk.registry import RiskAnalyticRegistry
 
 
@@ -71,7 +71,8 @@ class AssetSetVarAnalytic(RiskAnalytic):
     # 2.0.0 — the horizon is in calendar days, converted to `horizon_observations`
     # at the joint calendar's observed frequency; 1.x compounded `horizon_days`
     # observations.
-    algorithm_version = "2.1.0"
+    # 2.2.0 (RN-14) — each row adds its best window (`best_horizon`), the twin of the worst; VaR and CVaR do not move.
+    algorithm_version = "2.2.0"
     name_i18n_key = "risk.analytics.assetSetVar.name"
     description_i18n_key = "risk.analytics.assetSetVar.description"
     output_kind = RiskOutputKind.VAR_CVAR_SET
@@ -107,13 +108,13 @@ class AssetSetVarAnalytic(RiskAnalytic):
                 horizon_observations=horizon_observations,
             )
             horizon_count = len(summary.horizon_returns)
-            worst = worst_horizon_window(summary.horizon_returns, horizon_observations)
             items.append(
                 RiskAssetSetVarCvarItem(
                     asset_id=asset_id,
                     value_at_risk=summary.value_at_risk,
                     conditional_value_at_risk=summary.conditional_value_at_risk,
-                    worst_horizon=None if worst is None else RiskWorstHorizonWindow(compounded_return=worst.compounded_return, start_date=dates[worst.start_index], end_date=dates[worst.end_index]),
+                    worst_horizon=dated_horizon_window(worst_horizon_window(summary.horizon_returns, horizon_observations), dates),
+                    best_horizon=dated_horizon_window(best_horizon_window(summary.horizon_returns, horizon_observations), dates),
                 )
             )
 

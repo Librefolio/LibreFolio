@@ -208,6 +208,41 @@ class Cooldowns:
                 self._pauses.popitem(last=False)
             return wait
 
+    def hold(self, key: Hashable, seconds: float) -> float:
+        """Pause ``key`` for exactly ``seconds`` and return the pause left (project 76, U2b: a full call limit).
+
+        Not a refusal: no base, no doubling, no jitter, no refusal counted, so a hold never lengthens a later pause of
+        the same key. Capped at ``hard_max_seconds``; a running pause that ends later is kept, never shortened.
+        """
+        wait = min(max(float(seconds), 0.0), self._hard_max)
+        with self._lock:
+            now = self._clock()
+            previous = self._pauses.get(key)
+            if previous is not None and self._left(previous, now) >= wait:
+                self._pauses.move_to_end(key)
+                return self._left(previous, now)
+            self._pauses[key] = _Pause(refusals=0, wait=wait, until=now + wait)
+            self._pauses.move_to_end(key)
+            while len(self._pauses) > self._max_keys:
+                self._pauses.popitem(last=False)
+            return wait
+
+    def peek(self, key: Hashable) -> float:
+        """The seconds of pause left on ``key``, 0 when none: a read that hands out no trial (project 76, U3).
+
+        For a pause whose end is a fact, not a guess about the remote (a full call limit, ``hold``): when it ends every
+        caller may go at once, and something else decides (the counter's atomic statement). An ended pause is forgotten.
+        """
+        with self._lock:
+            pause = self._pauses.get(key)
+            if pause is None:
+                return 0.0
+            left = self._left(pause, self._clock())
+            if left <= 0:
+                del self._pauses[key]
+                return 0.0
+            return left
+
     def succeeded(self, key: Hashable) -> int:
         """Forget ``key`` after an answer; return the refusals in a row it had, 0 when there was nothing to forget.
 

@@ -27,6 +27,7 @@ import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBann
 import type {RiskAnalyticResult} from '$lib/features/risk/riskStore.svelte';
 import {riskMetadata, riskOutput, singleValue} from '$lib/features/risk/riskTypes';
 import {utcMs} from '$lib/utils/dateOnly';
+import {datePeriod, finiteOrNull as num, readMoveFigures, type MoveColumn, type MoveFigures} from '$lib/features/risk/moveFigures';
 
 /**
  * What a section of the lab hands its panel, read through `bind:this`, for the one notice above
@@ -137,33 +138,6 @@ function byAsset<T extends {asset_id: number}>(items: readonly T[] | undefined):
 }
 
 /**
- * A finite number, or null — through the house unwrapper.
- *
- * ⚠️ The generated client widens every optional numeric field to
- * `((number | null) | Array<number | null>)`, because that is how the OpenAPI
- * `anyOf` round-trips — so `stats.sharpe` is *typed* as a value or a list of
- * them and will not compile without unwrapping.
- *
- * 📌 The widening is a TypeScript artefact, not a runtime one, and saying
- * otherwise would misdescribe the defence: the emitted **zod** schema for those
- * same fields is `z.union([z.number(), z.null()]).optional()`, which rejects a
- * list outright — so `riskOutput` discards the whole payload before a list could
- * reach here. `correlationHelpers.ts:28` records the same disagreement between
- * the two halves of the generated client. What `singleValue` actually earns is
- * the right to read the field without a cast, and a cast is how a future shape
- * change would arrive unannounced.
- */
-function num(value: number | null | undefined | readonly (number | null)[]): number | null {
-    const single = singleValue(value);
-    return typeof single === 'number' && Number.isFinite(single) ? single : null;
-}
-
-/** A pair of ISO dates from the payload, in order, or null: a lone date would point at a stretch nobody stated. */
-function datePeriod(from: string | null | undefined, to: string | null | undefined): {from: string; to: string} | null {
-    return typeof from === 'string' && typeof to === 'string' && from <= to ? {from, to} : null;
-}
-
-/**
  * The display name of an asset, degrading to `#id` rather than to a blank.
  *
  * A blank row label is indistinguishable from a rendering fault; `#7` at least
@@ -171,6 +145,49 @@ function datePeriod(from: string | null | undefined, to: string | null | undefin
  */
 function label(assetId: number, names: ReadonlyMap<number, string>): string {
     return names.get(assetId) ?? `#${assetId}`;
+}
+
+/** The columns of «How did each one move?» whose blank can say why (RN-19): the figures' own (`moveFigures.ts`). */
+export type AssetSetMoveColumn = MoveColumn;
+
+/**
+ * One row of «How did each one move?» (RN-19): the positive twin of the loss table, every figure read from L1°'s own
+ * calendar — the figures of `moveFigures.ts`, the one reading the levels' block shares (RN-18).
+ */
+export interface AssetSetMoveRow extends MoveFigures {
+    assetId: number;
+    name: string;
+}
+
+/** The warning codes that name each asset, from a result's warnings. */
+function warnedAssets(result: RiskAnalyticResult | null): Map<number, Set<string>> {
+    const named = new Map<number, Set<string>>();
+    const warnings = (result as {warnings?: unknown} | null)?.warnings;
+    for (const warning of Array.isArray(warnings) ? warnings : []) {
+        const code = typeof warning?.code === 'string' ? warning.code : null;
+        const ids = warning?.details?.asset_ids;
+        if (!code || !Array.isArray(ids)) continue;
+        for (const id of ids) if (typeof id === 'number') named.set(id, (named.get(id) ?? new Set()).add(code));
+    }
+    return named;
+}
+
+/**
+ * Build «How did each one move?» (RN-19): one row per selected asset, in the selection's order. `kpi` is the KPI of
+ * L1°'s request (its own instance), so the shape of the days, the best 30 days (`monthlyVar`'s `best_horizon`) and the
+ * largest rally (`drawdown`) share one calendar.
+ */
+export function buildAssetSetMoveRows(assetIds: readonly number[], names: ReadonlyMap<number, string>, kpi: RiskAnalyticResult | null, monthlyVar: RiskAnalyticResult | null, drawdown: RiskAnalyticResult | null): AssetSetMoveRow[] {
+    const shapes = byAsset(riskOutput(kpi, schemas.RiskAssetSetKpiOutput)?.items);
+    const monthly = byAsset(riskOutput(monthlyVar, schemas.RiskAssetSetVarCvarOutput)?.items);
+    const falls = byAsset(riskOutput(drawdown, schemas.RiskAssetSetDrawdownOutput)?.items);
+    const warned = warnedAssets(kpi);
+
+    return assetIds.map((assetId) => ({
+        assetId,
+        name: label(assetId, names),
+        ...readMoveFigures(shapes.get(assetId), singleValue(monthly.get(assetId)?.best_horizon) ?? null, falls.get(assetId), warned.get(assetId) ?? new Set<string>()),
+    }));
 }
 
 /**
@@ -401,8 +418,8 @@ function utcDay(isoDay: string): number {
  *
  * The engine reports an asset set's `analyzed_range` from its first to its last RETURN, and
  * `calendar_days` from the BASELINE PRICE to that last return. The baseline is the last day
- * BEFORE the toolbar's period whenever every asset has a price there (`risk/service.py` loads
- * from the day before; `market_series.py` takes the latest such day), and the first price
+ * BEFORE the toolbar's period whenever every asset has a price there (the preparation,
+ * `market_series.py`, loads from the day before and takes the latest such day), and the first price
  * inside it otherwise. So the period opens the day after the baseline — `end − calendar_days + 1`,
  * the first day whose movement the figures capture — which is the toolbar's own first day in the
  * common case, quoted or not. Not `analyzed_range.start`: that is the first QUOTED day, a Monday
@@ -463,4 +480,23 @@ export function calendarLength(start: string, end: string): CalendarLength {
     while (addMonthsClamped(start, wholeMonths + 1) <= endExclusive) wholeMonths += 1;
     const days = Math.round((endExclusive - addMonthsClamped(start, wholeMonths)) / DAY_MS);
     return {years: Math.floor(wholeMonths / 12), months: wholeMonths % 12, days};
+}
+
+/** The `$_` this module is handed, so it stays a plain module (no store read here). */
+export type LengthTranslator = (key: string, options: {values: Record<string, number>}) => string;
+
+/**
+ * `calendarLength` in words — «3 mesi e 1 giorno», «4 anni e 2 mesi»: zero parts left out, the rest joined the way the
+ * reader's language joins a list; a span shorter than a day reads as its count of days. One sentence for every place
+ * that states how long a window is (L3°'s note in the lab, the simulation's history in L4 — RN-16).
+ */
+export function calendarLengthText(start: string, end: string, translate: LengthTranslator, language: string, fallbackDays = 0): string {
+    const {years, months, days} = calendarLength(start, end);
+    const parts = [
+        years > 0 ? translate('risk.assetSet.levels.l3.period.years', {values: {count: years}}) : null,
+        months > 0 ? translate('risk.assetSet.levels.l3.period.months', {values: {count: months}}) : null,
+        days > 0 ? translate('risk.assetSet.levels.l3.period.days', {values: {count: days}}) : null,
+    ].filter((part): part is string => part !== null);
+    if (parts.length === 0) return translate('risk.assetSet.levels.l3.period.days', {values: {count: fallbackDays}});
+    return new Intl.ListFormat(language, {style: 'long', type: 'conjunction'}).format(parts);
 }

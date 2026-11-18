@@ -55,7 +55,7 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import type {RiskAnalyticResult} from '$lib/features/risk/riskStore.svelte';
 
-    import {assetSetCalculationWindow, buildAssetSetBenchmarkPoint, buildAssetSetChartPoints, buildAssetSetPaidRows, calendarLength, withBenchmarkRow, type AssetSetPaidRow} from './assetSetLevels';
+    import {assetSetCalculationWindow, buildAssetSetBenchmarkPoint, buildAssetSetChartPoints, buildAssetSetPaidRows, calendarLengthText, withBenchmarkRow, type AssetSetPaidRow} from './assetSetLevels';
     import {dayFormatter} from './eligibility';
     import RiskReturnLevel from './RiskReturnLevel.svelte';
     import {uiLocale} from '$lib/stores/app/uiLocale';
@@ -152,15 +152,7 @@
      * as a count of days (the developer's review, round 4). Zero parts are left out, and the
      * rest are joined the way the reader's language joins a list.
      */
-    let periodLength = $derived.by(() => {
-        if (calculationWindow === null) return '';
-        const {years, months, days} = calendarLength(calculationWindow.start, calculationWindow.end);
-        const parts = [years > 0 ? $t('risk.assetSet.levels.l3.period.years', {values: {count: years}}) : null, months > 0 ? $t('risk.assetSet.levels.l3.period.months', {values: {count: months}}) : null, days > 0 ? $t('risk.assetSet.levels.l3.period.days', {values: {count: days}}) : null].filter(
-            (part): part is string => part !== null,
-        );
-        if (parts.length === 0) return $t('risk.assetSet.levels.l3.period.days', {values: {count: calculationWindow.days}});
-        return new Intl.ListFormat($currentLanguage, {style: 'long', type: 'conjunction'}).format(parts);
-    });
+    let periodLength = $derived(calculationWindow === null ? '' : calendarLengthText(calculationWindow.start, calculationWindow.end, $t, $currentLanguage, calculationWindow.days));
     /** The first line: the window, and — only when it is shorter — the period that was asked for. */
     let periodWindowText = $derived.by(() => {
         if (calculationWindow === null) return '';

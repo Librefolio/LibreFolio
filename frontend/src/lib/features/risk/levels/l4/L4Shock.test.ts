@@ -14,7 +14,7 @@
  * its `title` and its fields' accessible names. What is pinned here:
  *
  *   1. **The rows are named as the legacy panel names them** (`stressBucketLabel`,
- *      `RiskAnalysisPanel.svelte:357-365`): `Other` → common.other; `european_union` →
+ *      `RiskAnalysisPanel.svelte`): `Other` → common.other; `european_union` →
  *      risk.stress.europeanUnion; an asset class → assets.types.<ID>; a sector → its emoji and
  *      sectors.<key> (`sectorI18nKey`); a country → its flag and its name, from the country cache. The
  *      dimension is the answer's (`output.dimension`): the sector and geography answers are put on
@@ -122,6 +122,7 @@ import {createRiskPanelController, type RiskControllerInputs, type RiskPanelCont
 import type {RiskAnalyticResult} from '$lib/features/risk/riskStore.svelte';
 import {sectorI18nKey} from '$lib/utils/assetTypes';
 import L4Shock from './L4Shock.svelte';
+import {formatCurrencyAmount} from '../../riskAnalysisHelpers';
 
 type Dimension = RiskScenarioDimension;
 type ShockImpact = NonNullable<RiskStressOutput['impacts']>[number];
@@ -188,7 +189,7 @@ function answeredSectorEmoji(key: string): string {
 // Answers, written the way `risk_plugins/stress/plugin.py::_hypothetical` writes them
 // ---------------------------------------------------------------------------
 
-/** One line of a holding's `bucket_audit`; its contribution is the product `schemas/risk.py` validates. */
+/** One line of a holding's `bucket_audit`; its contribution is the product `RiskStressBucketAudit.validate_resolution` (`schemas/risk/outputs.py`) validates. */
 function slice(exposure_bucket_id: string, exposure: number, candidate_bucket_ids: string[], applied_bucket_id: string | null, bucket_shock: number, rule: ShockSlice['rule']): ShockSlice {
     return {exposure_bucket_id, exposure, candidate_bucket_ids, applied_bucket_id, bucket_shock, shock_contribution: exposure * bucket_shock, rule};
 }
@@ -856,6 +857,42 @@ describe('L4Shock — a bucket nobody holds is not a row (T-SHK, D5)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// The classes a scenario leaves out (RN-10, Q14)
+// ---------------------------------------------------------------------------
+//
+// A request may name only some asset classes. A held class it leaves out is shocked by zero and
+// applied to no bucket (`unconfigured_zero` on the holding's audit line, `_resolve_bucket`), so the
+// total speaks as if that holding were immune. The block names those classes, once each, by the
+// name the rows use; with every held class configured it says nothing. Read through `data-buckets`
+// and the labels the rows use, never through the sentence, which is translated.
+
+/** Two classes configured; the portfolio also holds bonds (twice) and crypto, which the request leaves out. */
+const PARTIAL_SHOCKS: Shocks = {STOCK: -0.2, ETF: -0.15};
+const PARTIAL_ANSWER = shockOutput('asset_class', PARTIAL_SHOCKS, [classHolding(121, 0.4, 'STOCK', PARTIAL_SHOCKS), classHolding(122, 0.2, 'BOND', PARTIAL_SHOCKS), classHolding(123, 0.1, 'CRYPTO', PARTIAL_SHOCKS), classHolding(124, 0.1, 'BOND', PARTIAL_SHOCKS)]);
+
+describe('L4Shock — the classes a scenario leaves out are named (RN-10, Q14)', () => {
+    it('names every held class the scenario does not configure, once each, by the name its row would have', async () => {
+        mount(shockResult(PARTIAL_ANSWER));
+        expect(screen.getByTestId('risk-shock-total'), 'barrier: the answer parsed and its total is stated').toBeInTheDocument();
+
+        const note = screen.queryByTestId('risk-shock-unconfigured');
+        expect(note, 'bonds and crypto were shocked by zero because the scenario does not name them, and the block does not say so').not.toBeNull();
+        expect(note, 'the classes left out, once each and in order').toHaveAttribute('data-buckets', 'BOND,CRYPTO');
+        const names = expectedRows('asset_class', ['bucket:BOND', 'bucket:CRYPTO']);
+        await waitFor(() => {
+            for (const name of Object.values(names)) expect(note?.textContent, `a class left out is not named as its row would be: ${name}`).toContain(name);
+        });
+    });
+
+    it('says nothing when the scenario configures every held class', () => {
+        mount(shockResult(RISK_OFF_ANSWER));
+        expect(screen.getByTestId('risk-shock-total'), 'barrier: the answer parsed and its total is stated').toBeInTheDocument();
+
+        expect(screen.queryByTestId('risk-shock-unconfigured'), 'every held class is in «Global risk-off», and the block still lists some as left out').toBeNull();
+    });
+});
+
+// ---------------------------------------------------------------------------
 // The detail editor
 // ---------------------------------------------------------------------------
 
@@ -901,5 +938,46 @@ describe('L4Shock — the labels follow a language switch in place (T-SHK)', () 
         switchLanguage(SWITCH_TO);
 
         await waitFor(() => expect(rowLabels(ITALY_EU_ROWS), `after a switch to ${SWITCH_TO} in place, a country keeps its ${UI} name — the country names were not loaded again in the new language — or the catalogue words did not follow`).toEqual(expectedRows('geography', ITALY_EU_ROWS)));
+    });
+});
+
+// ---------------------------------------------------------------------------
+// RN-17 (Q16-4): on one asset, no shock «by type»
+// ---------------------------------------------------------------------------
+
+describe('L4Shock — on one asset, no shock by type (Q16-4)', () => {
+    it('offers the sector and area presets and none by type: one asset has one type, the result would be the shock itself', async () => {
+        const {value: controller, stop} = effectRoot(() => createRiskPanelController(() => ({...controllerInputs(), scope: {kind: 'asset', asset_id: 7}})));
+        stops.push(stop);
+        flushSync();
+        render(L4Shock, {props: {controller, assetNames: {}, currency: 'EUR', withoutTypeShock: true}});
+        await controller.loadScenarioCatalog();
+        flushSync();
+
+        const offered = within(screen.getByTestId('risk-shock-presets'))
+            .queryAllByTestId('risk-shock-preset')
+            .map((node) => node.getAttribute('data-preset-id'));
+        expect(offered, 'premise: the catalogue reached the block').toContain('banking_crisis');
+        expect(offered).toContain('host_italy_eu');
+        expect(offered, 'a shock by type offered on one asset').not.toContain('global_risk_off');
+    });
+});
+
+// RN-17 (Q17 A1, consultant 17/11): on one asset you own, the shock's total carries the money on your position.
+describe('L4Shock — on one asset you own, the total in money on your position', () => {
+    it('prints the total as the return times your position, and nothing of money when the asset is not owned', async () => {
+        const assetAnswer: RiskStressOutput = {...BANKING_ANSWER, portfolio_return: -0.103, impact_amount: null};
+        const result = {...shockResult(assetAnswer), metadata: {...metadata(), scope: 'asset'}} as RiskAnalyticResult;
+        const {value: controller, stop} = effectRoot(() => createRiskPanelController(() => ({...controllerInputs(), scope: {kind: 'asset', asset_id: 7}})));
+        stops.push(stop);
+        flushSync();
+        controller.setResult('stress', result);
+        const view = render(L4Shock, {props: {controller, assetNames: {}, currency: 'EUR', withoutTypeShock: true, scopeValue: 12400}});
+
+        expect(screen.getByTestId('risk-shock-total').textContent).toContain(formatCurrencyAmount(String(-0.103 * 12400), 'EUR'));
+        view.unmount();
+
+        render(L4Shock, {props: {controller, assetNames: {}, currency: 'EUR', withoutTypeShock: true, scopeValue: null}});
+        expect(screen.getByTestId('risk-shock-total').textContent).not.toContain('€');
     });
 });

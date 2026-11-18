@@ -177,6 +177,30 @@ def test_building_a_definition_validates_the_settings_declaration(code: str, fie
     assert caught.value.reason == "invalid_settings"
 
 
+@pytest.mark.parametrize(
+    ("code", "groups"),
+    [
+        pytest.param("settings_group_secret", ("tool_g1_secret",), id="a-group-holding-a-secret"),
+        pytest.param("settings_group_unknown", ("tool_g1_nowhere",), id="an-unknown-group"),
+        pytest.param("settings_group_string", "tool_g1_secret", id="not-a-tuple"),
+    ],
+)
+def test_building_a_definition_validates_the_settings_groups(code: str, groups: object):
+    """Project 76, G1: the Tool registry checks ``settings_groups`` as the shared ``register`` does
+    (``validate_plugin_groups``): a Tool may not name an unknown group, nor a group that holds a secret (a Tool keeps no
+    secret, ``FAMILY_RULES["tool"]``), else the group's key would reach its worker. Refused with ``invalid_settings``."""
+    from backend.app.services.plugin_settings.groups import SettingsGroup, register_group, release_group  # noqa: PLC0415 — the G1 package
+
+    register_group(SettingsGroup(name="tool_g1_secret", label="Secret group", fields=(PluginSettingField(key="api_key", type=SettingType.STRING, scope=SettingScope.SYSTEM, secret=True, label="Key"),)))
+    try:
+        plugin = type("Grouped_" + code, (fx.RoundingToolPlugin,), {"__module__": __name__, "settings_groups": groups, "services": (fx.round_service(code),)})
+        with pytest.raises(ToolDefinitionError) as caught:
+            build_tool_definition(plugin, plugin.services[0])
+        assert caught.value.reason == "invalid_settings"
+    finally:
+        release_group("tool_g1_secret")
+
+
 def test_a_valid_declaration_builds_its_definition():
     definition = build_tool_definition(fx.RoundingToolPlugin, fx.RoundingToolPlugin.services[0])
     assert definition.descriptor.tool_code == fx.ROUNDING_CODE

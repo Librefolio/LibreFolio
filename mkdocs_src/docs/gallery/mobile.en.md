@@ -866,7 +866,7 @@ The Edit Asset modal at Classification on a phone: Sector Distribution and Geogr
 
 ### 🌳 Grouped Indicator Search
 
-The signal picker groups the 22 indicators by family with counts, search and keyboard navigation.
+The signal picker groups the 24 indicators by family with counts, search and keyboard navigation.
 
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="assets" data-name="detail-signals-tree" alt="🌳 Grouped Indicator Search">
@@ -934,7 +934,7 @@ A real past period applied to the portfolio you hold today: the Historical repla
 
 ### 🎲 Simulation
 
-The What if…? simulation step with its beta notice.
+The What if…? simulation step with its model warning.
 
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="🎲 Simulation">

@@ -29,7 +29,7 @@ amount of money: a selection has no weights.
 | `eligibility.ts` | Reads and words the engine's verdicts; batches; `fitPeriodOffer()`. |
 | `LabAssetPicker.svelte` | The **+**: `AssetPickerPanel` in multi mode. |
 | `AssetSetCorrelationSection.svelte`, `CorrelationHeatmap.svelte`, `CorrelationPairsList.svelte`, `correlationHelpers.ts`, `matrixMetadata.svelte.ts` | Correlation section. |
-| `AssetSetComparisonLevels.svelte`, `AssetSetLossComparisonSection.svelte`, `AssetSetRiskReturnSection.svelte`, `RiskReturnLevel.svelte`, `assetSetLevels.ts`, `assetSetTable.ts` | L1° (losses) and L3° (risk and return). |
+| `AssetSetComparisonLevels.svelte`, `AssetSetLossComparisonSection.svelte`, `AssetSetMoveComparisonSection.svelte`, `AssetSetRiskReturnSection.svelte`, `RiskReturnLevel.svelte`, `assetSetLevels.ts`, `assetSetTable.ts` | L1° (losses), the move table (best moments) and L3° (risk and return). |
 | `AssetSetReplaySection.svelte`, `levels/l4/L4Replay.svelte`, `levels/l4/TornadoChart.svelte` | L4° (historical replay). |
 | `levels/RiskLevelSection.svelte`, `levels/RiskPartialNotice.svelte`, `levels/partialNotice.ts`, `levels/levelMetadata.ts`, `syncTargets.ts` | Section frames, the shared notice, banner actions. |
 
@@ -108,16 +108,17 @@ API. Which analytics each section asks for is the table in
 | Section | Controller | Benchmark |
 |---|---|---|
 | Correlation | `AssetSetCorrelationSection.svelte:64` | Never |
-| L1° *How much did each of these hurt?* | `lossController`, `includeAssetSetLossLevels` (`AssetSetComparisonLevels.svelte:114-123`) | Never |
-| L3° *What did each of these pay for its risk?* | `RiskControllerHost`, `includeAssetSetPaidLevels` (`AssetSetComparisonLevels.svelte:244`) | `assetSetBenchmarkId` (l.138) |
+| L1° *How much did each of these hurt?* | `lossController`, `includeAssetSetLossLevels` (`AssetSetComparisonLevels.svelte:115-124`) | Never |
+| *How did each one move?* | `lossController`, `includeAssetSetLossLevels` — the same request as L1°; `AssetSetMoveComparisonSection.svelte` reads its KPI by instance (`ASSET_SET_MOVE_KPI_INSTANCE`) | Never |
+| L3° *What did each of these pay for its risk?* | `RiskControllerHost`, `includeAssetSetPaidLevels` (`AssetSetComparisonLevels.svelte:277`) | `assetSetBenchmarkId` (l.139) |
 | L4° *What if…?* | `AssetSetReplaySection.svelte`, replay on demand | Never |
 
 - **Rates.** Every lab controller sends `appliedRiskFreePercent: 0` (`AssetSetCorrelationSection.svelte:72`,
-  `AssetSetComparisonLevels.svelte:120`, l.136, `AssetSetReplaySection.svelte:84`), and the KPI and the
-  comparison send `target_annual_return: 0` (`riskAnalysisHelpers.ts:336`, l.370-373). The lab has no
+  `AssetSetComparisonLevels.svelte:121`, l.137, `AssetSetReplaySection.svelte:84`), and the two KPIs and the
+  comparison send `target_annual_return: 0` (`riskAnalysisHelpers.ts:352`, l.362, l.389-393). The lab has no
   control for either.
-- **Bad month.** `MONTHLY_VAR_HORIZON_DAYS = 30` calendar days (`riskAnalysisHelpers.ts:282`, used at
-  l.321 and l.342). The engine turns them into observations at the observed frequency — about 21 on a
+- **Bad month.** `MONTHLY_VAR_HORIZON_DAYS = 30` calendar days (`riskAnalysisHelpers.ts:291`, used at
+  l.337 and l.358). The engine turns them into observations at the observed frequency — about 21 on a
   trading-day calendar, 30 on an every-day one — as explained in
   [Value at Risk](../../../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md#the-observation-count-is-not-the-history-length).
 - **One calendar per request.** The engine prepares one joint calendar per request from the scope, the
@@ -131,7 +132,7 @@ API. Which analytics each section asks for is the table in
   benchmark waits for the lab's verdicts, so L3° asks once and never tries a benchmark that turns out
   `blocked`. The Beta and Correlation columns follow the answer, not the choice:
   `benchmarkApplies = benchmarkId !== null && comparison.status === 'ok'`
-  (`AssetSetComparisonLevels.svelte:207`).
+  (`AssetSetComparisonLevels.svelte:218`).
 - **Sync and reload.** `openSync()` opens a `PageSyncModal` on the selection's prices and the configured
   FX pairs that convert them (`buildSyncTargets()`, `syncTargets.ts:43`). After an accepted sync, and on
   `reload()`, the panel calls `invalidateRisk()` and bumps `refreshVersion` for every section
@@ -159,9 +160,17 @@ API. Which analytics each section asks for is the table in
   position. `type` follows the asset-type menu order, then the name. `sector` and `region` use
   `dominantExposure()` (l.362): the key holding at least `DOMINANT_SHARE` (0.5, l.337) of the classified
   weight, *Other* left out; `exposureOrder()` (l.396) then sorts named groups, *Diversified*, *Other*
-  only and *Unclassified*. A mode is offered only when its data exist (`CorrelationHeatmap.svelte:93`).
-  The sector and country distributions come from one bulk `GET /api/v1/assets?asset_ids=…`
-  (`matrixMetadata.svelte.ts:85`); a failed read only hides those two buttons.
+  only and *Unclassified*. All five modes are drawn always, in that order (RN-20, `MODES`); one without
+  its data is offered but unavailable — `aria-disabled`, not `disabled`, so its reason opens on a click
+  or Enter — with a stable `data-disabled-reason` (`loading`, `failed`, `no-data`) taken from the read's
+  state (`metadataStatus`). Offered is not available: a chosen mode whose data goes away stops ordering
+  the matrix (the caller's ordering is drawn and pressed) and applies again when the data returns. A
+  type counts only when an asset has one. The sector and country distributions come from one bulk
+  `GET /api/v1/assets?asset_ids=…` (`loadMatrixMetadata`), whose factory publishes `status`
+  (`loading`, `ready`, `failed`) beside the three maps.
+- **Badge rows.** Type, sector and region, in the order of the buttons: each group once with its count,
+  in the order its ordering draws it (`typeOrder`, `exposureOrder`); an asset type shows its PNG icon,
+  an asset without a type is *Unclassified*. A row too narrow folds to icon and count.
 
 ---
 
@@ -177,9 +186,49 @@ API. Which analytics each section asks for is the table in
   tooltip explains it (`figureCell()`, `assetSetTable.ts:25`).
 - **Widths.** Each figure column opens at its title's measured width, which is also its minimum
   (`titleWidth()`, l.137; `headerWidth()`, `riskReturnLevel.ts:106`).
-- **Mixed outcomes.** `asset_set_drawdown` needs 2 observations and the other four analytics 20, so a
-  short window returns one `ok` beside four `unavailable` (`AssetSetComparisonLevels.svelte:39-47`;
-  floors in [The Analytics](../../../backend/risk/architecture.md#analytics)).
+- **Mixed outcomes.** `asset_set_drawdown` needs 2 observations and every other per-asset analytic 20, so
+  on a short window L1°'s request returns the drawdown `ok` beside the two VaR instances and the move
+  KPI `unavailable` (`AssetSetComparisonLevels.svelte:39-47`; floors in
+  [The Analytics](../../../backend/risk/architecture.md#analytics)).
+
+---
+
+## 📈 Move Table {: #move-table }
+
+*How did each one move?* sits between L1° and L3° and is L1°'s positive twin, drawn by
+`AssetSetMoveComparisonSection.svelte` with the same `DataTable`, the same `figureCell()` and the same
+title-width rule (`titleWidth()` over `headerWidth()`).
+
+- **One request, one calendar.** It sends nothing of its own: `buildBaseAnalytics()` adds an
+  `asset_set_kpi` under `ASSET_SET_MOVE_KPI_INSTANCE` (`base-historical-asset_set_kpi-move`) to L1°'s
+  request, only when the paid levels are off — the case of `lossController`. When one request carries
+  both levels, the KPI already in it is on that calendar and no second one is asked. The table also reads
+  the 30-day `asset_set_var`'s `best_horizon` and `asset_set_drawdown`'s `largest_rally*` and
+  `average_drawdown` fields from the same request, so a row never mixes two calendars and the benchmark,
+  which joins only L3°'s request, never moves it.
+- **Rows.** `buildAssetSetMoveRows()` (`assetSetLevels.ts`) builds one row per selected id, in the
+  selection's order; each row's figures come from `readMoveFigures()` (`moveFigures.ts`), the one reading
+  the levels' block *How does it move?* shares (RN-18), so a field means the same figure on both. Columns: Best day, Best 30 days, Largest rally (dates and `lasted N d`), Gains /
+  losses (Omega, drawn `1.22×`), Positive days, Semi-dev.; then four `hiddenByDefault` columns, reached
+  through the `ColumnVisibilityToggle` in the frame's header: Average day ±, Positive streak, Below peak,
+  avg. (`asset_set_drawdown`'s `average_drawdown`, ≤ 0; a never-fallen asset prints `0.0%`) and Extreme
+  days (the KPI's `extreme_day_ratio`, kurtosis / 3, drawn `2.4×`). A rally of 0 is a measured `0.0%`
+  with no dates.
+- **Signs.** A return is drawn signed with U+2212, in the gain tone above zero and the loss tone below
+  (`SIGN_TEXT.riskTable`): the best 30 days of an asset that only fell are negative. An exact zero has
+  no sign and no tone (`0.0%`). Every text a cell draws goes through `escapeHtml`.
+- **Blank reasons.** `MOVE_BLANK_REASONS` maps the KPI's warnings that name assets in
+  `details.asset_ids` to columns: `best_realization_undefined` → Best day, Average day ± and Positive
+  streak; `omega_undefined` → Gains / losses; `extreme_day_ratio_undefined` → Extreme days;
+  `average_loss_undefined` → `meanDown`. The dash's tooltip then shows the singular
+  `risk.warnings.<code>`; any other blank shows `risk.assetSet.levels.blankNote`.
+  Average day ± is one cell over `meanUp ?? meanDown`: it is blank only when both halves are, and a
+  single missing half is an inline dash in a measured cell that still carries the tooltip, worded from
+  the reasons of its blank halves (`blankHalves`), or the blank note when the backend named none.
+- **Frame.** Its amber alert covers only the move KPI (`degradedResults([moveKpi], MOVE_LABELS)`):
+  a missing 30-day VaR or drawdown is already said under L1°. Its calculation details read the KPI,
+  the 30-day VaR and the drawdown. It shares L1°'s loading, error, discarded and **Retry** states,
+  because it shares L1°'s controller.
 
 ---
 
@@ -189,7 +238,7 @@ API. Which analytics each section asks for is the table in
   `capabilities={{ratios: true, benchmark: benchmarkApplies}}` and no weight
   (`AssetSetRiskReturnSection.svelte:198`), so Beta and Correlation exist only with a measured benchmark
   (`RiskReturnLevel.svelte:261`).
-- **Benchmark row.** `withBenchmarkRow()` (`assetSetLevels.ts:296`) adds a `ref-<id>` row for a benchmark
+- **Benchmark row.** `withBenchmarkRow()` (`assetSetLevels.ts:422`) adds a `ref-<id>` row for a benchmark
   outside the selection; a selected benchmark keeps its own row. `referenceRowsFirst()` opens the table
   with it (`RiskReturnLevel.svelte:95`).
 - **Chart and line.** The chart needs two placeable points (l.101). `capitalMarketLineAnchor()`
@@ -197,10 +246,10 @@ API. Which analytics each section asks for is the table in
   volatility, else on the portfolio, which a selection never has: no benchmark, no line. The notes come
   from `riskReturnNotes()` (`riskReturnLevel.ts:174`): `above` and `line` only with a line, `return` and
   `priceOnly` always. The line starts at `LAB_RISK_FREE_RATE = 0` (`AssetSetRiskReturnSection.svelte:137`).
-- **Period line.** `assetSetCalculationWindow()` (`assetSetLevels.ts:391`) reads the first result with
+- **Period line.** `assetSetCalculationWindow()` (`assetSetLevels.ts:517`) reads the first result with
   metadata — from `end − calendar_days + 1` to `end` — and sets `narrowed` when that start is more than
-  `NARROWED_AFTER_DAYS` (7, l.368) after the toolbar's start, or that end more than 7 days before the
-  toolbar's end. The length is spelled in calendar units by `calendarLength()` (l.436).
+  `NARROWED_AFTER_DAYS` (7, l.494) after the toolbar's start, or that end more than 7 days before the
+  toolbar's end. The length is spelled in calendar units by `calendarLength()` (l.563).
 - **Selection.** Rows and dots share the table's single selection; a selected asset's dot is drawn larger
   in the selection green, while the benchmark keeps its colour (the same `scatterChartHelpers.ts`, l.101).
 
@@ -226,10 +275,13 @@ API. Which analytics each section asks for is the table in
 ## 🚩 Notices and Frames {: #notices }
 
 - **One notice.** `partialNotice()` (`levels/partialNotice.ts:40`) runs over the results of the
-  correlation section and the two levels, read through each section's `qualitySource()`
+  correlation section and the comparison levels, read through each section's `qualitySource()`
   (`AssetSetRiskPanel.svelte:625`). The replay hands it no results (`AssetSetReplaySection.svelte:127`)
-  and keeps its own status. Only `partial` results become badges; the two VaR instances are labelled
-  *Bad day* and *Bad month* (`VAR_LABELS`, `AssetSetComparisonLevels.svelte:158`). The notice is blue,
+  and keeps its own status. The levels' `qualitySource()` hands over, in page order, the daily VaR, the
+  monthly VaR, the drawdown, the move KPI, the risk/return pair, L3°'s KPI and the comparison. Only
+  `partial` results become badges; the two VaR instances are labelled *Bad day* and *Bad month*
+  (`VAR_LABELS`, `AssetSetComparisonLevels.svelte:162`), and the move KPI by its table's title
+  (`MOVE_LABELS`), since L3°'s KPI shares its code. The notice is blue,
   titled *Holdings without prices…*, only when every reason is `no_price_source`, and titled *Worth
   knowing…* when nothing is partial (`levels/RiskPartialNotice.svelte:42`, l.54).
 - **One banner.** The four controllers' `dataQualityIssues` are merged by `mergeQualityIssues()`
@@ -247,7 +299,7 @@ API. Which analytics each section asks for is the table in
   coverage, annualization factor and return basis. `levelMetadata()` (`levels/levelMetadata.ts:54`)
   collapses analytics that agree into one row, and leaves out `method`.
 - **Manual links.** Each frame's book icon (`docsPath`) opens the theory: the correlation page, the risk
-  metrics index for L1° and L3°, the historical replay page for L4°.
+  metrics index for L1°, the move table and L3°, the historical replay page for L4°.
 
 ---
 
@@ -390,8 +442,8 @@ current-composition `historical_kpi` and `asset_risk_return` and the on-demand `
   sampling select exists for GBM only (`levels/l4/L4Simulation.svelte:62`), the seed input is hidden on
   QMC (l.64), and `SOBOL_START_INDEX` is fixed at 0 (l.45). The answer shows the terminal mean, the
   probability of loss and the P5–P95 band (l.216-222), the drift-uncertainty note (l.225) and
-  `SimulationProvenance` (l.244). The beta banner and the model warning are drawn in the simulation box
-  only (`L4WhatIf.svelte:156-160`).
+  `SimulationProvenance` (l.244). The model warning is drawn in the simulation box only (`L4WhatIf`);
+  the beta banner went when the simulation left beta (RN-06).
 - **Disclosure.** L4 keeps its own: every degraded status, named per step (`L4_STEP_LABELS`,
   `RiskLevelsPanel.svelte:229`), its reasons (l.239), its errors with discarded runs (l.240) and its
   metadata (l.241). The replay enters through `replaySectionView()` (l.214), so its warnings are read in

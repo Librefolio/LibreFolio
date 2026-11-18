@@ -21,12 +21,14 @@ class JobState:
     retry_at: Optional[str] = None  # ISO datetime (UTC): the deferred items are retried then, before the regular round
     consecutive_failures: int = 0  # runs in a row that raised
     next_attempt_at: Optional[str] = None  # ISO datetime (UTC): after a run that raised, none before it
+    round_started_at: Optional[str] = None  # ISO datetime (UTC): the start of the round a retry continues (profile_read)
 
 
 @dataclass
 class SchedulerState:
     current_price: JobState = field(default_factory=JobState)
     history_sync: JobState = field(default_factory=JobState)
+    profile_read: JobState = field(default_factory=JobState)  # the weekly read of the asset profiles (plan 68, B6)
 
 
 def _state_path() -> Path:
@@ -53,6 +55,7 @@ def load_state() -> SchedulerState:
         return SchedulerState(
             current_price=_job_state(data.get("current_price", {})),
             history_sync=_job_state(data.get("history_sync", {})),
+            profile_read=_job_state(data.get("profile_read", {})),
         )
     except (json.JSONDecodeError, TypeError, KeyError):
         return SchedulerState()

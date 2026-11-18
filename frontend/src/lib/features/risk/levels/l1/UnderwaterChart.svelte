@@ -12,7 +12,7 @@
     the only reference the chart exists to give.
   - `viewMode='percentage'` + values pre-multiplied by 100 — percentage mode
     relabels the axis and moves the baseline to zero, but converts nothing
-    (`LineChart.svelte:373` plots `d.value` verbatim). The scaling is done in
+    (`LineChart.svelte` plots `d.value` verbatim). The scaling is done in
     `buildUnderwater`, and the two must stay together: either alone draws a chart
     that is wrong by a factor of a hundred while looking perfectly plausible.
   - `colorByBaseline={false}` — every underwater value is ≤ 0, so the default

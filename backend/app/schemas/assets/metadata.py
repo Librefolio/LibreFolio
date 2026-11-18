@@ -15,6 +15,7 @@ from typing import Optional
 
 from pydantic import Field, field_validator
 
+from backend.app.schemas.assets.enrichers import FAAssetEnrichers
 from backend.app.schemas.common import (
     SafeDecimal,
     StrictModel,
@@ -279,3 +280,4 @@ class FAAssetMetadataResponse(StrictModel):
     quote_base_quantity: Optional[int] = Field(1, description="How many units the raw market quote refers to")
     classification_params: Optional[FAClassificationParams] = None
     provider_code: Optional[str] = Field(None, description="Provider code if assigned (e.g. 'yfinance')")
+    enrichers: Optional[FAAssetEnrichers] = Field(None, description="The asset's enrichers: bindings in their order, and what each last read (plan 68, B3); null when it has none")

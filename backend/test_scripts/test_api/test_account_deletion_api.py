@@ -757,6 +757,49 @@ class TestAccountDeletion:
         print_success("✓ X and Z went with their transactions and files; Y and W stayed with B; the surviving leg is the unlinked ADJUSTMENT a split leaves, with its cost basis")
 
     @pytest.mark.asyncio
+    async def test_account_deletion_takes_a_broker_with_linked_charges(self, test_server):
+        """ACCDEL-LINK-01 — GUARD (lot 66 R4): a BUY with a FEE and a TAX linked to it, on a broker whose last owner deletes the account.
+
+        A owns the broker alone; the charges point at the BUY (``parent_ref`` in the committing batch). The deletion
+        must not die of the foreign key between them (no 500) and the broker's three transactions must be gone,
+        read in the test database scoped to their ids. B only keeps a session alive for the cleanup of the asset.
+        """
+        print_section("ACCDEL-LINK-01: account deletion with linked charges")
+        engine = _test_db_engine()
+        owned = _Owned()
+
+        async with httpx.AsyncClient() as client_a, httpx.AsyncClient() as client_b:
+            try:
+                await _register(client_a, owned, "accdel_link_a")
+                await _register(client_b, owned, "accdel_link_b")
+                broker_id = await _create_broker_allowing_short(client_a, unique_name("AccDelLink"))
+                owned.broker_ids.append(broker_id)
+                asset_id = await _create_asset(client_a, owned)
+                buy = {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": DEPOSIT_DATE, "quantity": "10", "cash": {"code": "USD", "amount": "-100"}, "ref": "buy"}
+                fee = {"broker_id": broker_id, "asset_id": asset_id, "type": "FEE", "date": DEPOSIT_DATE, "cash": {"code": "USD", "amount": "-2"}, "parent_ref": "buy"}
+                tax = {"broker_id": broker_id, "asset_id": asset_id, "type": "TAX", "date": DEPOSIT_DATE, "cash": {"code": "USD", "amount": "-1"}, "parent_ref": "buy"}
+                ids = await _commit(client_a, [buy, fee, tax])
+                tx_ids = sorted(ids.values())
+
+                async with AsyncSession(engine) as session:
+                    linked = (await session.execute(select(Transaction.id, Transaction.parent_transaction_id).where(Transaction.id.in_(tx_ids)))).all()
+                assert sorted(tuple(row) for row in linked) == sorted([(ids[0], None), (ids[1], ids[0]), (ids[2], ids[0])]), f"Precondition: the FEE and the TAX must be linked to the BUY: {linked}"
+
+                resp = await client_a.delete(f"{API_BASE}/auth/users/me", timeout=TIMEOUT)
+                assert resp.status_code == 200, f"A's account deletion failed (no 500 expected): {resp.status_code} {resp.text}"
+
+                async with AsyncSession(engine) as session:
+                    left_transactions = (await session.scalars(select(Transaction.id).where(Transaction.id.in_(tx_ids)))).all()
+                    left_brokers = (await session.scalars(select(Broker.id).where(Broker.id == broker_id))).all()
+                assert not left_transactions, f"The BUY and its charges must go with the broker: {sorted(left_transactions)} remain"
+                assert not left_brokers, f"The broker of the deleted last owner must be gone: {left_brokers}"
+            finally:
+                cleanup_errors = await _cleanup(owned, engine)
+                assert not cleanup_errors, f"Owned data cleanup failed: {cleanup_errors}"
+
+        print_success("✓ A BUY with linked charges went with its broker, no integrity error")
+
+    @pytest.mark.asyncio
     async def test_sole_administrator_is_still_refused(self, private_instance: _PrivateInstance):
         """ACCDEL-002 — red until A-16 on the refusal's detail alone; the refusal and «nothing touched» are guards,
         green today and after (D6: refusing the last active administrator is a product rule).

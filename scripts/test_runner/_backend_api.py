@@ -483,6 +483,16 @@ def api_batch_split_promote(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Batch split/promote tests", verbose=verbose)
 
 
+def api_transactions_charges(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the linked charges API tests (project 66, lot R3)."""
+    print_section("Linked Charges API Tests")
+    print_info("Testing: ref / parent_ref / parent_transaction_id on creates, parent_transaction_id and charges_count on reads")
+    print_info("Tests: the parent_ids and without_parent filters, /validate writes nothing, a parent of another user is not found, charge_role in /transactions/types")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_transactions_charges_api.py", test_names)
+    return run_command(cmd, "Linked charges API tests", verbose=verbose)
+
+
 def api_transactions_wac_inline(verbose: bool = False, test_names: list = None) -> bool:
     """Run WAC inline validate/commit tests (P16-P28)."""
     print_section("WAC Inline Validate/Commit Tests")
@@ -502,6 +512,36 @@ def api_assets_patch_fields(verbose: bool = False, test_names: list = None) -> b
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_assets_patch_fields.py", test_names)
     return run_command(cmd, "Assets patch fields tests", verbose=verbose)
+
+
+def api_assets_enrichers(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the enrichers and profile of an asset through the asset routes (project 68, lot B3)."""
+    print_section("Assets Enrichers (project 68 B3) API Tests")
+    print_info("Testing GET /assets/enrichers; enrichers and profile on POST/PATCH /assets and POST /assets/validate; enrichers on GET /assets")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_assets_enrichers.py", test_names)
+    return run_command(cmd, "Assets enrichers tests", verbose=verbose)
+
+
+def api_assets_profile_read(verbose: bool = False, test_names: list = None) -> bool:
+    """Run reading the profile from the enrichers through the routes (project 68, lots B5a and B5b)."""
+    print_section("Assets Profile Read (project 68 B5a) API Tests")
+    print_info("Testing POST /assets/profile/ask and POST /assets/profile/refresh with mockenrich")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_assets_profile_read.py", test_names)
+    return run_command(cmd, "Assets profile read tests", verbose=verbose)
+
+
+def api_assets_profile(verbose: bool = False, test_names: list = None) -> bool:
+    """Run reading and forgetting the asset profile through the routes (project 68, lot D1)."""
+    print_section("Assets Profile (project 68 D1) API Tests")
+    print_info("Testing GET /assets/profile/catalogue, POST /assets/profile/query and DELETE /assets/profile")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_assets_profile.py", test_names)
+    return run_command(cmd, "Assets profile tests", verbose=verbose)
 
 
 def api_assets_validate(verbose: bool = False, test_names: list = None) -> bool:
@@ -804,7 +844,7 @@ def api_plugin_settings(verbose: bool = False, test_names: list[str] | None = No
     """Run the plugin settings API tests: catalogue, all-or-nothing writes, write-only secrets, isolation, delivery."""
     print_section("Plugin Settings API Tests")
     print_info("Testing GET /settings/plugins and PATCH /settings/plugins/bulk with the test double mockprov (MOCKFX read-only)")
-    print_info("Tests: catalogue and roles, write-only secrets, 422 with every item, no input echo, isolation, delivery to the plugin, CASCADE and SET NULL")
+    print_info("Tests: catalogue and roles, write-only secrets, 422 with every item, no input echo, isolation, delivery to the plugin, CASCADE and SET NULL, G2: the shared group mock (entry, used_by, write, echo)")
     print_info("Note: Server will be automatically started and stopped by test")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_plugin_settings_api.py", test_names)
@@ -1512,8 +1552,36 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "tx-balance-walk", api_tx_balance_walk, name="TX Balance Walk", desc="Same-day ordering, cascade, end-of-day")
     add_test(api, "broker-overdraft-off-refused", api_broker_overdraft_off_refused, name="Broker Overdraft Off Refused", desc="PATCH allow_cash_overdraft=false over a negative cash is refused and the stored flag stays on (own user and broker)")
     add_test(api, "batch-split-promote", api_batch_split_promote, name="Batch Split/Promote", desc="Split/promote in unified batch + suggest")
+    add_test(
+        api,
+        "transactions-charges",
+        api_transactions_charges,
+        name="Linked Charges",
+        desc="Project 66 R3: charges linked to their parent in a batch (ref, parent_ref, parent_transaction_id), read back with parent_transaction_id and charges_count, the parent_ids and without_parent filters, /validate, another user's parent not found, charge_role in /transactions/types",
+    )
     add_test(api, "transactions-wac", api_transactions_wac_inline, name="WAC Cost Basis", desc="WAC inline validate/commit (P16-P28)")
-    add_test(api, "assets-patch-fields", api_assets_patch_fields, name="Assets Patch Fields", desc="PATCH /assets field-level updates, all or nothing batches, assetNameTaken")
+    add_test(api, "assets-patch-fields", api_assets_patch_fields, name="Assets Patch Fields", desc="PATCH /assets field-level updates, all or nothing batches, assetNameTaken; A4: POST/PATCH write classification_params into the profile in the authenticated user's name")
+    add_test(
+        api,
+        "assets-enrichers",
+        api_assets_enrichers,
+        name="Assets Enrichers",
+        desc="Project 68 B3: GET /assets/enrichers (mockenrich, a default order for every type); enrichers on POST/PATCH /assets kept in the order sent with free keys, replaced, cleared by {} or null, absent unchanged, malformed 422, state answered by GET; profile on PATCH (user row by the caller, null empties, absent untouched, invalid value profileValueInvalid on profile.<voice> and nothing saved, the same on validate, profile wins over classification_params, never changes the column) and on POST (user rows, invalid item not created); B4: POST /assets/enrichers/recognize SSE (enricher_result found with the LEI, identifier_learned, done with found_order/default_order/identifiers; unknown ISIN not found; codes restricts; uncovered type; 422 empty identifiers), GET /assets/enrichers/{code}/search (400 no search, 404 unknown), POST /assets/enrichers/{code}/test (mockenrich answer, not found, 404, writes nothing); B5b: the enrichers sent bind codes never installed and the test route's asset is bound on the lane DB, so no background read runs beside the test",
+    )
+    add_test(
+        api,
+        "assets-profile-read",
+        api_assets_profile_read,
+        name="Assets Profile Read",
+        desc="Project 68 B5a: POST /assets/profile/ask with asset_type+enrichers (mockenrich, unique ISIN: ter 0.0022, geography stored form, description, one ok outcome) and with asset_id (same, nothing written), keys restricts, 422 without asset_id or type+enrichers and with both; POST /assets/profile/refresh writes mockenrich rows without user, state ok on GET /assets, a second refresh writes nothing new, a missing asset answers error, MOCK_RATE_LIMITED outcome RATE_LIMITED with retry_after (assets bound on the lane DB, not by a route); B5b: POST /assets with enrichers and a committed PATCH that sets them read the assets in the background (state ok and mockenrich rows within a deadline), never /validate, a refused batch or a PATCH without enrichers (after a marker POST read to ok); profile {from: mockenrich, seen} warns profileSourceChanged on validate and PATCH and writes the row in mockenrich's name",
+    )
+    add_test(
+        api,
+        "assets-profile",
+        api_assets_profile,
+        name="Assets Profile",
+        desc="Project 68 D1: GET /assets/profile/catalogue (every catalogue voice once, in order, every field); POST /assets/profile/query (steps date/through/value/source/update_id in a range, start min, one day; keys restricts, absent is every voice with rows; results in request order, a missing asset answers no voice; as_of aware UTC; unknown voice in keys or changes.key 422 PROFILE_VOICE_UNKNOWN; over MAX_BULK_ITEMS 422 bulk_too_many_items; changes: the panel keeps of a volatile voice the user row and the first source row after it, one voice lists every row, newest first with previous/has_previous, never filtered by the range); DELETE /assets/profile (forget the last row, the previous value holds; a row of another asset 404 PROFILE_UPDATES_NOT_FOUND, a row created after as_of 409 PROFILE_UPDATES_NEWER, all or nothing over the request, as_of required); rows seeded on the lane DB for the test's own assets, no enricher bound",
+    )
     add_test(api, "assets-validate", api_assets_validate, name="Assets Validate", desc="POST /assets/validate dry run of the all-or-nothing asset PATCH: never writes, a currency change keeps prices and events, same issues and warnings as PATCH")
     add_test(api, "ohlc-sentinel", api_ohlc_sentinel, name="OHLC Sentinel", desc="F.4 merge on POST /assets/prices (N92): null or absent keeps the stored value, 'clear' empties it, a number writes it; -1, any other text and a close not above 0 refused with 422, nothing written")
     add_test(api, "current-price-persistence", api_current_price_persistence, name="Current Price Persistence", desc="/current endpoint OHLC upsert")
@@ -1607,9 +1675,9 @@ Tests for REST API endpoints (server auto-started):
         "plugin-settings",
         api_plugin_settings,
         name="Plugin Settings API",
-        desc="Catalogue and roles, write-only secrets, all-or-nothing 422 with every item, no input echo in FastAPI's 422, user isolation, delivery to mockprov, CASCADE and SET NULL",
+        desc="Catalogue and roles, write-only secrets, all-or-nothing 422 with every item, no input echo in FastAPI's 422, user isolation, delivery to mockprov, CASCADE and SET NULL, the shared test-only group mock (catalogue entry, used_by, admin write, delivery via lf-group-echo)",
         # The user fields are written by accounts the module registers and deletes; the system fields are not scopable.
-        exclusive_because="writes and clears the instance-wide plugin settings of mockprov, whose values make the fingerprint in the cache keys of every mockprov call: a concurrent unit would see its mockprov values change and miss its cache entries mid-test",
+        exclusive_because="writes and clears the instance-wide plugin settings of mockprov and of the shared group mock, whose values make the fingerprint in the cache keys of every mockprov call: a concurrent unit would see its mockprov values change and miss its cache entries mid-test",
     )
     add_test(
         api,

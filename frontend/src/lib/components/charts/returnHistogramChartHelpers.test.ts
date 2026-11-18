@@ -103,6 +103,13 @@ describe('buildReturnHistogramOption — one datum per bin', () => {
         expect(binColor({holdsCut: true, belowCut: false}, true)).toBe('#f59e0b');
         expect(binColor({holdsCut: false, belowCut: true}, true)).toBe('rgba(255,122,134,0.8)');
     });
+
+    // RN-18: the positive tail in the gain's green at the loss's weight; the bar holding the VaR cut stays the VaR's.
+    it('draws the green tail in the gain at 80 %, in both themes, and never over the VaR bar', () => {
+        expect(binColor({holdsCut: false, belowCut: false, aboveGain: true}, false)).toBe('rgba(24,121,78,0.8)');
+        expect(binColor({holdsCut: false, belowCut: false, aboveGain: true}, true)).toBe('rgba(94,214,154,0.8)');
+        expect(binColor({holdsCut: true, belowCut: false, aboveGain: true}, true)).toBe('#f59e0b');
+    });
 });
 
 describe('buildReturnHistogramOption — the cut', () => {

@@ -12,7 +12,14 @@ the machine slept is caught up, even on a day that is not configured. Without a
 last run (None or unreadable) only today's slots count, as before: SD-001..013
 stay valid as they are. SD-014..022 pin the decision.
 
-Test IDs: SD-001..SD-022
+Lot B6 (project 68, SD-023..SD-032): ``due_profile_read(now, settings, state)``, the weekly read of the enrichers.
+The retry rules first (``_retry_rule``), then the history sync's rule on the profile read's own days and times
+(``profile_read_days``, ``profile_read_times``, in ``scheduler_timezone``): due on the chosen day from the chosen
+time; caught up when the instance was off at that slot; not due again after it ran. The history sync's days and times
+here are disjoint from the profile read's, so a rule that reads the wrong ones fails. ``due_profile_read`` is read
+from the module at call time: until it exists, only these cases fail.
+
+Test IDs: SD-001..SD-032
 """
 
 import sys
@@ -350,4 +357,135 @@ class TestDueHistorySyncMissedSlot:
         assert due_history_sync(_now(10, 0, day=14), _make_settings(), state) is False
         assert due_history_sync(_now(5, 0, day=9), _make_settings(days=ALL_DAYS), state) is False
         assert due_history_sync(_now(8, 0, day=8), _make_settings(times=[time(6, 0)], days=["mon"]), state) is True
+        print_success("only today's slots")
+
+
+# ============================================================================
+# due_profile_read (lot B6)
+# ============================================================================
+
+#: History sync Monday to Friday at 06:00 and 23:00; the profile read Saturday at 03:00: disjoint on purpose.
+HISTORY_DAYS = ["mon", "tue", "wed", "thu", "fri"]
+
+
+def _profile_settings(days: list[str] | None = None, times: list[time] | None = None, scheduler_timezone: str = "Europe/Rome") -> SchedulerSettings:
+    """Every field given: the history sync on weekdays (06:00, 23:00), the profile read on ``days`` at ``times``."""
+    return SchedulerSettings(
+        scheduler_enabled=True,
+        current_price_frequency_minutes=10,
+        history_sync_times=[time(6, 0), time(23, 0)],
+        history_sync_days=list(HISTORY_DAYS),
+        history_sync_horizon_days=14,
+        scheduler_timezone=scheduler_timezone,
+        profile_read_days=list(days) if days is not None else ["sat"],
+        profile_read_times=list(times) if times is not None else [time(3, 0)],
+    )
+
+
+def _profile_state(last: str | None = None, *, retry_at: str | None = None, next_attempt_at: str | None = None, history_last: str | None = None) -> SchedulerState:
+    return SchedulerState(
+        current_price=JobState(),
+        history_sync=JobState(last_run_at=history_last),
+        profile_read=JobState(last_run_at=last, retry_at=retry_at, next_attempt_at=next_attempt_at),
+    )
+
+
+def _due_profile_read(now: datetime, settings: SchedulerSettings, state: SchedulerState) -> bool:
+    return scheduler_module.due_profile_read(now, settings, state)
+
+
+class TestDueProfileRead:
+    """In June 2026 Europe/Rome is at +02:00, the offset of _now() and _iso(); 2026-06-13 is a Saturday."""
+
+    def test_due_on_the_chosen_day_from_the_chosen_time(self):
+        """SD-023: never run; Saturday 02:59 → False; 03:00 → True; 10:00 → True."""
+        print_section("SD-023: due_profile_read — Saturday 03:00, never run")
+        settings, state = _profile_settings(), _profile_state()
+        assert _due_profile_read(_now(2, 59, day=13), settings, state) is False
+        assert _due_profile_read(_now(3, 0, day=13), settings, state) is True
+        assert _due_profile_read(_now(10, 0, day=13), settings, state) is True
+        print_success("from 03:00 on Saturday")
+
+    def test_not_due_on_another_day_while_the_history_sync_is(self):
+        """SD-024: never run, a fresh state; Monday 10:00 and Friday 23:30: the history sync is due, the profile read is
+        not — it has its own days."""
+        print_section("SD-024: due_profile_read — a weekday, history due, profile not")
+        settings, state = _profile_settings(), _profile_state()
+        for now in (_now(10, 0, day=8), _now(23, 30, day=12)):
+            assert due_history_sync(now, settings, state) is True, f"premise: the history sync is due at {now}"
+            assert _due_profile_read(now, settings, state) is False, f"the profile read reads its own days: {now}"
+        print_success("its own days")
+
+    def test_its_own_times_on_a_day_both_share(self):
+        """SD-025: both on Saturday, the history sync at 06:00 and 23:00, the profile read at 03:00; never run, Saturday
+        04:00: the profile read is due, the history sync is not yet — the profile read has its own times."""
+        print_section("SD-025: due_profile_read — its own times")
+        settings = _profile_settings()
+        settings.history_sync_days = ["sat"]
+        state = _profile_state()
+        now = _now(4, 0, day=13)
+        assert due_history_sync(now, settings, state) is False, "premise: the history sync's 06:00 has not come"
+        assert _due_profile_read(now, settings, state) is True
+        print_success("03:00 is its own")
+
+    def test_not_due_again_after_it_ran(self):
+        """SD-026: ran Saturday 03:00:30 → not due that Saturday at 10:00, nor Sunday, nor Monday, nor Friday 23:59."""
+        print_section("SD-026: due_profile_read — ran this week")
+        settings, state = _profile_settings(), _profile_state(datetime(2026, 6, 13, 3, 0, 30, tzinfo=TZ).isoformat())
+        for now in (_now(10, 0, day=13), _now(10, 0, day=14), _now(10, 0, day=15), _now(23, 59, day=19)):
+            assert _due_profile_read(now, settings, state) is False, f"not due again before next Saturday: {now}"
+        print_success("once a week")
+
+    def test_due_again_the_next_saturday(self):
+        """SD-027: ran Saturday 2026-06-06 03:01 → due on Saturday 2026-06-13 from 03:00, not at 02:59."""
+        print_section("SD-027: due_profile_read — the next week")
+        settings, state = _profile_settings(), _profile_state(_iso(3, 1, day=6))
+        assert _due_profile_read(_now(2, 59, day=13), settings, state) is False
+        assert _due_profile_read(_now(3, 0, day=13), settings, state) is True
+        print_success("next Saturday 03:00")
+
+    def test_caught_up_when_the_instance_was_off_at_the_slot(self):
+        """SD-028: ran Saturday 2026-06-06 03:01; the instance was off on Saturday 2026-06-13 at 03:00: due on Sunday
+        10:00 and on Tuesday 08:00 — the missed slot is caught up at the next run."""
+        print_section("SD-028: due_profile_read — catch-up of a missed Saturday")
+        settings, state = _profile_settings(), _profile_state(_iso(3, 1, day=6))
+        assert _due_profile_read(_now(10, 0, day=14), settings, state) is True
+        assert _due_profile_read(_now(8, 0, day=16), settings, state) is True
+        print_success("caught up")
+
+    def test_the_times_are_local_to_the_scheduler_timezone(self):
+        """SD-029: America/New_York (−04:00 in June): Saturday 03:00 there is 07:00 UTC. Never run: Saturday 06:59 UTC →
+        False; 07:00 UTC → True."""
+        print_section("SD-029: due_profile_read — New York's 03:00")
+        settings, state = _profile_settings(scheduler_timezone="America/New_York"), _profile_state()
+        assert _due_profile_read(datetime(2026, 6, 13, 6, 59, tzinfo=UTC), settings, state) is False
+        assert _due_profile_read(datetime(2026, 6, 13, 7, 0, tzinfo=UTC), settings, state) is True
+        print_success("local to the scheduler's zone")
+
+    def test_a_retry_that_has_come_makes_it_due_off_its_day(self):
+        """SD-030: ran Saturday 03:00 with a refusal: ``retry_at`` Saturday 03:31 → due from 03:31, not at 03:30."""
+        print_section("SD-030: due_profile_read — retry_at")
+        settings = _profile_settings()
+        state = _profile_state(_iso(3, 0, day=13), retry_at=datetime(2026, 6, 13, 3, 31, tzinfo=TZ).isoformat())
+        assert _due_profile_read(_now(3, 30, day=13), settings, state) is False
+        assert _due_profile_read(_now(3, 31, day=13), settings, state) is True
+        print_success("the retry first")
+
+    def test_a_failure_wait_ahead_holds_it_back_even_at_its_slot(self):
+        """SD-031: never run, ``next_attempt_at`` Saturday 03:05: at 03:01 → False though the slot came; at 03:05 → True."""
+        print_section("SD-031: due_profile_read — next_attempt_at")
+        settings = _profile_settings()
+        state = _profile_state(next_attempt_at=datetime(2026, 6, 13, 3, 5, tzinfo=TZ).isoformat())
+        assert _due_profile_read(_now(3, 1, day=13), settings, state) is False
+        assert _due_profile_read(_now(3, 5, day=13), settings, state) is True
+        print_success("held back after a failure")
+
+    @pytest.mark.parametrize("last", [None, "NOT_A_VALID_ISO_DATETIME"], ids=["never-run", "unreadable"])
+    def test_without_a_readable_last_run_only_today_counts(self, last: str | None):
+        """SD-032: no last run, or an unreadable one: today's slots alone. Sunday 10:00 → False (Saturday's slot is not
+        caught up before any run); Saturday 10:00 → True."""
+        print_section(f"SD-032: due_profile_read — last run {last!r}: today's rule")
+        settings, state = _profile_settings(), _profile_state(last)
+        assert _due_profile_read(_now(10, 0, day=14), settings, state) is False
+        assert _due_profile_read(_now(10, 0, day=13), settings, state) is True
         print_success("only today's slots")

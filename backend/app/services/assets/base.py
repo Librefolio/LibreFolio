@@ -24,6 +24,7 @@ from backend.app.db.models import (
 from backend.app.logging_config import get_logger
 from backend.app.schemas import (
     FACurrentValue,
+    FACurrentValueRequest,
     FAHistoricalData,
     FAPricePoint,
 )
@@ -73,6 +74,16 @@ class AssetRateLimitedError(AssetSourceError, RateLimitedError):
         AssetSourceError.__init__(self, message, "RATE_LIMITED", details)
         self.retry_after = retry_after
         self.scope = scope
+
+
+class AssetCallLimitError(AssetRateLimitedError):
+    """The instance's call limit of the provider is reached (project 76, U2): the call never left.
+
+    A ``RATE_LIMITED`` refusal like a source's, so every path that handles one (the pause, the scheduler's «deferred»,
+    the last stored price, the «too many requests» message) handles it unchanged. ``details`` says which limit:
+    ``{"reason": "call_limit", "window": "month", "limit": 10000}``; ``retry_after`` is the pause the boundary decided,
+    at most the end of the full window.
+    """
 
 
 def rate_limited_from_response(response: object, provider_name: str, *, scope: str | None = None) -> AssetRateLimitedError | None:
@@ -192,6 +203,20 @@ def _validate_search_declarations(cls: type) -> None:
         raise TypeError(f"{cls.__name__}.search_priority must be a whole number of at least 0, not {priority!r}")
 
 
+def _validate_bulk_current_declarations(cls: type) -> None:
+    """Check a provider class's bulk current-value declarations when it is defined (project 76, C1), so a wrong one
+    stops the import instead of reaching the core: ``supports_bulk_current`` a bool, ``bulk_current_max_items`` a whole
+    number of at least 1, and ``supports_bulk_current = True`` only beside an override of ``get_current_values_bulk``."""
+    supported = cls.supports_bulk_current
+    if not isinstance(supported, bool):
+        raise TypeError(f"{cls.__name__}.supports_bulk_current must be a bool, not {supported!r}")
+    most = cls.bulk_current_max_items
+    if isinstance(most, bool) or not isinstance(most, int) or most < 1:
+        raise TypeError(f"{cls.__name__}.bulk_current_max_items must be a whole number of at least 1, not {most!r}")
+    if supported and cls.get_current_values_bulk is AssetSourceProvider.get_current_values_bulk:
+        raise TypeError(f"{cls.__name__}.supports_bulk_current is True but get_current_values_bulk is not overridden")
+
+
 class AssetSourceProvider(PluginSettingsMixin, ABC):
     """
     Abstract base class for asset pricing providers (plugins).
@@ -226,7 +251,7 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
 
     The core also caches results automatically:
     - get_history_value → smart range cache (15min TTL, per-date granularity)
-    - get_current_value → 2min TTL cache
+    - get_current_value → 2min TTL cache, or the provider's ``current_min_refresh_seconds``
     - fetch_asset_metadata → 30min TTL cache
     - search → 2-layer cache (query-level 15min + item-level 24h)
 
@@ -258,6 +283,9 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
     - tier, search_priority: where the provider stands in the asset search (F21; see below)
     - get_icon(): Provider icon URL
     - supports_history: False if provider cannot fetch historical data
+    - supports_bulk_current, bulk_current_max_items, get_current_values_bulk(): current values of many assets in one
+      call (project 76)
+    - current_min_refresh_seconds: how long a current value stays fresh (project 76; default two minutes)
     - search(): Search for assets by query
     - validate_params(): Validate provider-specific parameters
     - fetch_asset_metadata(): Fetch asset metadata (type, sector, etc.)
@@ -275,6 +303,20 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
     #: overrides it with LIBREFOLIO_ASSET_PROVIDERS_ORDER.
     search_priority: ClassVar[int] = DEFAULT_SEARCH_PRIORITY
 
+    #: Whether ``get_current_values_bulk`` prices many assets in one call (project 76): a source that answers several
+    #: identifiers in one request (Yahoo's quote list, CoinGecko's ``/simple/price``). False, the default: the core asks
+    #: ``get_current_value`` once per asset, each call with its own pause scope and timeout.
+    supports_bulk_current: ClassVar[bool] = False
+
+    #: Whether the provider reaches an external service (project 76, U2): each call through the boundary is then counted,
+    #: and refused when an instance limit is full (``services/platform/call_counter.py``). False for a provider that
+    #: computes its answers itself, with no network (Scheduled Investment, the test doubles): never counted.
+    calls_external_service: ClassVar[bool] = True
+
+    #: The most items one ``get_current_values_bulk`` call receives: the core splits a larger group. A whole number of at
+    #: least 1; the source's own limit, or what fits in one request.
+    bulk_current_max_items: ClassVar[int] = 100
+
     def __init_subclass__(cls, **kwargs):
         """Wrap each concrete ``get_history_value`` with a post-execution OHLC guard.
 
@@ -287,6 +329,7 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
         """
         super().__init_subclass__(**kwargs)
         _validate_search_declarations(cls)
+        _validate_bulk_current_declarations(cls)
         impl = cls.__dict__.get("get_history_value")
         if impl is None or getattr(impl, "_ohlc_guarded", False):
             return
@@ -483,6 +526,49 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
             - FETCH_ERROR: Network/API error
             - MISSING_PARAMS: Required provider_params missing
         """
+
+    @property
+    def current_min_refresh_seconds(self) -> float | None:
+        """How long a current value of this provider stays fresh, in seconds (project 76, C4): the core reads the
+        source again only after it. ``None``, the default: two minutes, as for every provider before.
+
+        For a source with a budget of calls (a free plan's credits): typically read from a setting, so the
+        administrator chooses. The core reads it only on the configured instance it calls, never on a bare one: a
+        setting is read through ``self.settings`` (``core.current_cache_ttl``). Less than two minutes, or a value that
+        is no number of seconds, is ignored and logged: two minutes then. The core reads it before the call, on its own
+        loop, outside the provider's thread: no I/O here, as in ``cooldown_scope``.
+        """
+        return None
+
+    async def get_current_values_bulk(self, items: list[FACurrentValueRequest]) -> dict[str, FACurrentValue | AssetSourceError]:
+        """Fetch the current value of many assets in one call (project 76). Override only with
+        ``supports_bulk_current = True``; the default refuses with ``NOT_SUPPORTED``, and the core never calls it then.
+
+        PLUGIN RESPONSIBILITY:
+        - One request to the source for all ``items`` (at most ``bulk_current_max_items``), never a loop of
+          ``get_current_value`` calls: the core already makes those, each with its own pause scope and timeout.
+        - Answer each item under its ``key``: an ``FACurrentValue`` as ``get_current_value`` would give for the same
+          inputs, or the ``AssetSourceError`` of that asset alone (an unknown identifier, a quote without a price).
+        - Leave a key out when the source says nothing about that asset: the core serves its last stored price.
+        - Raise for the whole call when the whole call failed: ``AssetRateLimitedError`` for a refusal for too many
+          requests (the core pauses the provider, as for any call), ``AssetSourceError`` for any other failure.
+
+        CORE WILL:
+        - Group the assets of one provider, settings and pause scope, and split them into calls of at most
+          ``bulk_current_max_items``, each through ``call_provider()`` with a timeout of its own.
+        - Ignore a key it did not ask for, and cache each answer as the per-asset path does.
+
+        Args:
+            items: the assets to price, each with the caller's ``key``; the keys are distinct
+
+        Returns:
+            dict mapping each answered key to its ``FACurrentValue`` or its ``AssetSourceError``
+
+        Raises:
+            AssetRateLimitedError: the source refused the call for too many requests
+            AssetSourceError: ``NOT_SUPPORTED`` by default; any other failure of the whole call
+        """
+        raise AssetSourceError(f"Provider {self.provider_code} does not read current values in bulk", "NOT_SUPPORTED")
 
     @property
     def supports_history(self) -> bool:

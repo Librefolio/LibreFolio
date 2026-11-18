@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from datetime import date
-from typing import Annotated, List, Literal, Optional, Union
+from typing import Annotated, Any, List, Literal, Optional, Union
 
 from pydantic import Field, FiniteFloat, PositiveInt, model_validator
 
@@ -31,6 +31,34 @@ from backend.app.schemas.risk.vocabulary import (
 )
 
 
+def _validate_return_shape(model: Any) -> None:
+    """RN-14: a dated measure carries its dates whole — never a date without its figure, never half a run."""
+    if (model.best_realization is None) != (model.best_realization_date is None):
+        raise ValueError("best_realization and best_realization_date go together")
+    run = (model.longest_positive_run_observations, model.longest_positive_run_start_date, model.longest_positive_run_end_date)
+    if any(value is None for value in run) and any(value is not None for value in run):
+        raise ValueError("the longest positive run carries its length and both dates, or none of them")
+    if model.longest_positive_run_end_date is not None and model.longest_positive_run_end_date < model.longest_positive_run_start_date:
+        raise ValueError("longest_positive_run_end_date must not precede its start date")
+
+
+def _validate_largest_rally(model: Any) -> None:
+    """RN-14: the twin of the drawdown episode. No rise is no rally — a zero with no dates, as no_drawdown."""
+    dates = (model.largest_rally_start_date, model.largest_rally_end_date)
+    if model.largest_rally is None:
+        if any(value is not None for value in (*dates, model.largest_rally_duration_days)):
+            raise ValueError("rally dates and duration need a largest_rally")
+        return
+    if model.largest_rally == 0:
+        if any(value is not None for value in dates) or model.largest_rally_duration_days not in (None, 0):
+            raise ValueError("no rally must not expose dates or a duration")
+        return
+    if any(value is None for value in dates):
+        raise ValueError("a rally requires its start and end dates")
+    if model.largest_rally_end_date <= model.largest_rally_start_date:
+        raise ValueError("a rally must end after its start")
+
+
 class RiskKpiOutput(StrictModel):
     kind: Literal[RiskOutputKind.KPI] = Field(default=RiskOutputKind.KPI, json_schema_extra={"enum": ["kpi"]})
     volatility: FiniteFloat = Field(..., ge=0)
@@ -49,6 +77,24 @@ class RiskKpiOutput(StrictModel):
     drawdown_at_risk: Optional[FiniteFloat] = Field(None, le=0)
     conditional_drawdown_at_risk: Optional[FiniteFloat] = Field(None, le=0)
     ulcer_index: Optional[FiniteFloat] = Field(None, ge=0)
+    # RN-14 — the positive twins and the shape of the days (domande-RISK.md, «Le misure, fissate»). Null until the
+    # analytic fills them; each keeps the sign of its meaning, and a dated measure carries its dates whole.
+    best_realization: Optional[FiniteFloat] = Field(None, gt=0, description="The best single observed return, the twin of worst_realization; null without a gaining observation.")
+    best_realization_date: Optional[date] = None
+    positive_observation_share: Optional[FiniteFloat] = Field(None, ge=0, le=1, description="Share of observations with a gain; a day at exactly zero is not one.")
+    mean_positive_return: Optional[FiniteFloat] = Field(None, gt=0, description="The average up day: mean of the returns above zero.")
+    mean_negative_return: Optional[FiniteFloat] = Field(None, lt=0, description="The average down day: mean of the returns below zero.")
+    longest_positive_run_observations: Optional[int] = Field(None, ge=1, description="The longest streak of consecutive observations with a gain.")
+    longest_positive_run_start_date: Optional[date] = None
+    longest_positive_run_end_date: Optional[date] = None
+    omega_ratio: Optional[FiniteFloat] = Field(None, ge=0, description="Gains against losses around the Sortino's target; null with no observation below it, exactly when the Sortino is.")
+    downside_deviation: Optional[FiniteFloat] = Field(None, ge=0, description="The semi-deviation: the Sortino's annualized downside deviation, in the unit of the volatility.")
+    extreme_day_ratio: Optional[FiniteFloat] = Field(None, ge=0, description="Pearson kurtosis over the bell curve's 3: how much more frequent extreme days are.")
+
+    @model_validator(mode="after")
+    def validate_return_shape(self) -> RiskKpiOutput:
+        _validate_return_shape(self)
+        return self
 
     @model_validator(mode="after")
     def validate_drawdown_tail_ordering(self) -> RiskKpiOutput:
@@ -100,7 +146,8 @@ class RiskContributionOutput(StrictModel):
     # Concentration, acquired. These two are published together on purpose: the
     # effective count is blind to correlation, so ten equally weighted holdings score
     # ten whether they are independent or move as one. Only the ratio tells them apart.
-    # Unit of effective_number_of_assets is *positions*, never a percentage.
+    # Unit of effective_number_of_assets is *positions*, never a percentage. Since RN-15 it is measured on the priced
+    # positions alone, weighed on their own sum: cash is not in its denominator, so it never exceeds `len(items)`.
     effective_number_of_assets: Optional[FiniteFloat] = Field(None, gt=0)
     # >= 1 for long-only weights by Cauchy-Schwarz, but constrained only to gt=0 so a
     # portfolio sitting exactly at the bound cannot fail validation on a rounding.
@@ -344,10 +391,10 @@ class RiskVarCvarBin(StrictModel):
 
 
 class RiskWorstHorizonWindow(StrictModel):
-    """The worst stretch of one horizon the series actually went through.
+    """The worst stretch of one horizon the series actually went through — or, as `best_horizon`, the best one (RN-14).
 
     The VaR and the CVaR are statistics of the whole distribution of compounded windows; this is
-    the single lowest window, the one a reader can look up. `compounded_return` is the holding-period
+    the single lowest (or highest) window, the one a reader can look up. The name stays: it is the wire contract. `compounded_return` is the holding-period
     return of the window (a loss when negative). `start_date` and `end_date` are the dates of the
     first and of the last daily return compounded in it, both inclusive, so the stretch ran from the
     close before `start_date` to the close of `end_date`.
@@ -386,6 +433,24 @@ class RiskVarCvarOutput(StrictModel):
     return_bins: List[RiskVarCvarBin] = Field(default_factory=list)
     var_bin_edge: Optional[FiniteFloat] = None
     worst_horizon: Optional[RiskWorstHorizonWindow] = None
+    best_horizon: Optional[RiskWorstHorizonWindow] = Field(None, description="RN-14: the best stretch of one horizon the series went through, the twin of worst_horizon (same window shape).")
+    gain_threshold: Optional[FiniteFloat] = Field(
+        None,
+        ge=0,
+        description="RN-14: where the green tail starts, the mirror of value_at_risk (the same estimator on the gains, same level and horizon); 0 without a gain.",
+    )
+    gain_bin_edge: Optional[FiniteFloat] = Field(
+        None,
+        description="RN-14: the return_bins edge the green tail's whole bars start on: gain_threshold itself when the grid pins both cuts, otherwise the first edge past it.",
+    )
+
+    @model_validator(mode="after")
+    def validate_green_tail(self) -> RiskVarCvarOutput:
+        if self.gain_bin_edge is not None and self.gain_threshold is not None and self.gain_bin_edge < self.gain_threshold:
+            raise ValueError("gain_bin_edge must not sit below gain_threshold")
+        if self.gain_bin_edge is not None and self.var_bin_edge is not None and self.gain_bin_edge < self.var_bin_edge:
+            raise ValueError("gain_bin_edge must not sit below var_bin_edge")
+        return self
 
     @model_validator(mode="after")
     def validate_tail_ordering(self) -> RiskVarCvarOutput:
@@ -450,6 +515,26 @@ class RiskSimulationOutput(StrictModel):
         None,
         description="Sample size the drift was estimated from, so the factor can be read as a consequence rather than a verdict.",
     )
+    # RN-16 (developer's Q5 a): `path_count` is the count the simulation ran, the largest power of two that fits when
+    # the request did not; this is the one asked for.
+    requested_path_count: Optional[PositiveInt] = Field(None, description="The path count asked for; `path_count` is the one run, lower when the request did not fit the budget.")
+    # RN-16 (developer's Q4 c): the history the simulation was estimated on — its own, never the page's period.
+    estimation_start: Optional[date] = Field(None, description="Date of the first return the simulation was estimated on.")
+    estimation_end: Optional[date] = Field(None, description="Date of the last return the simulation was estimated on: where the cone starts.")
+    estimation_observations: Optional[PositiveInt] = Field(None, description="Number of returns the simulation was estimated on.")
+    history_truncated: bool = Field(False, description="True when a longer common history existed and only its most recent observations fit the budget.")
+
+    @model_validator(mode="after")
+    def validate_estimation_window(self) -> RiskSimulationOutput:
+        """The paths run are never more than the ones asked; the window comes whole, start before end."""
+        if self.requested_path_count is not None and self.path_count > self.requested_path_count:
+            raise ValueError("path_count cannot exceed requested_path_count")
+        window = (self.estimation_start, self.estimation_end, self.estimation_observations)
+        if any(value is None for value in window) and any(value is not None for value in window):
+            raise ValueError("the estimation window carries its start, its end and its observations, or none of them")
+        if self.estimation_start is not None and self.estimation_end is not None and self.estimation_end < self.estimation_start:
+            raise ValueError("estimation_end must not precede estimation_start")
+        return self
 
     @model_validator(mode="after")
     def validate_drift_uncertainty_disclosure(self) -> RiskSimulationOutput:
@@ -595,6 +680,18 @@ class RiskDrawdownOutput(StrictModel):
     calculation_basis: str = Field(..., min_length=1)
     return_basis: RiskReturnBasis
     underwater_series: List[RiskDrawdownPoint] = Field(default_factory=list)
+    # RN-14 — the twins of the episode above: the largest rise from a low to a later high, and the average depth below
+    # the peak (ADD). Null until the analytic fills them.
+    largest_rally: Optional[FiniteFloat] = Field(None, ge=0, description="The largest rise from a low to a later high (0.246 = +24.6 %), the twin of the maximum drawdown; 0 with no rise.")
+    largest_rally_start_date: Optional[date] = Field(None, description="The low the rally climbed from (the baseline when it is the first value).")
+    largest_rally_end_date: Optional[date] = Field(None, description="The high the rally reached.")
+    largest_rally_duration_days: Optional[int] = Field(None, ge=0, description="Calendar days from the low to the high.")
+    average_drawdown: Optional[FiniteFloat] = Field(None, le=0, description="«Below the peak, on average»: the mean of the underwater curve (ADD).")
+
+    @model_validator(mode="after")
+    def validate_largest_rally(self) -> RiskDrawdownOutput:
+        _validate_largest_rally(self)
+        return self
 
     @model_validator(mode="after")
     def validate_episode_contract(self) -> RiskDrawdownOutput:  # noqa: C901 — flat status-branch invariant raises
@@ -686,6 +783,24 @@ class RiskAssetSetKpiItem(StrictModel):
     drawdown_at_risk: Optional[FiniteFloat] = Field(None, le=0)
     conditional_drawdown_at_risk: Optional[FiniteFloat] = Field(None, le=0)
     ulcer_index: Optional[FiniteFloat] = Field(None, ge=0)
+    # RN-14 — the positive twins and the shape of the days (domande-RISK.md, «Le misure, fissate»). Null until the
+    # analytic fills them; each keeps the sign of its meaning, and a dated measure carries its dates whole.
+    best_realization: Optional[FiniteFloat] = Field(None, gt=0, description="The best single observed return, the twin of worst_realization; null without a gaining observation.")
+    best_realization_date: Optional[date] = None
+    positive_observation_share: Optional[FiniteFloat] = Field(None, ge=0, le=1, description="Share of observations with a gain; a day at exactly zero is not one.")
+    mean_positive_return: Optional[FiniteFloat] = Field(None, gt=0, description="The average up day: mean of the returns above zero.")
+    mean_negative_return: Optional[FiniteFloat] = Field(None, lt=0, description="The average down day: mean of the returns below zero.")
+    longest_positive_run_observations: Optional[int] = Field(None, ge=1, description="The longest streak of consecutive observations with a gain.")
+    longest_positive_run_start_date: Optional[date] = None
+    longest_positive_run_end_date: Optional[date] = None
+    omega_ratio: Optional[FiniteFloat] = Field(None, ge=0, description="Gains against losses around the Sortino's target; null with no observation below it, exactly when the Sortino is.")
+    downside_deviation: Optional[FiniteFloat] = Field(None, ge=0, description="The semi-deviation: the Sortino's annualized downside deviation, in the unit of the volatility.")
+    extreme_day_ratio: Optional[FiniteFloat] = Field(None, ge=0, description="Pearson kurtosis over the bell curve's 3: how much more frequent extreme days are.")
+
+    @model_validator(mode="after")
+    def validate_return_shape(self) -> RiskAssetSetKpiItem:
+        _validate_return_shape(self)
+        return self
 
     @model_validator(mode="after")
     def validate_drawdown_tail_ordering(self) -> RiskAssetSetKpiItem:
@@ -719,6 +834,7 @@ class RiskAssetSetVarCvarItem(StrictModel):
     value_at_risk: FiniteFloat = Field(..., ge=0)
     conditional_value_at_risk: FiniteFloat = Field(..., ge=0)
     worst_horizon: Optional[RiskWorstHorizonWindow] = None
+    best_horizon: Optional[RiskWorstHorizonWindow] = Field(None, description="RN-14: the best stretch of one horizon the series went through, the twin of worst_horizon (same window shape).")
 
     @model_validator(mode="after")
     def validate_tail_ordering(self) -> RiskAssetSetVarCvarItem:
@@ -774,6 +890,18 @@ class RiskAssetSetDrawdownItem(StrictModel):
         description="Gain needed to climb from the maximum drawdown's trough back to the peak before it (0.25 = +25 %); 0 without a drawdown, null for a total loss.",
     )
     remaining_to_peak_ratio: Optional[FiniteFloat] = Field(..., ge=0, description="Gain still needed to climb from the current value back to the running peak; 0 when not underwater, null for a total loss.")
+    # RN-14 — the twins of the episode above: the largest rise from a low to a later high, and the average depth below
+    # the peak (ADD). Null until the analytic fills them.
+    largest_rally: Optional[FiniteFloat] = Field(None, ge=0, description="The largest rise from a low to a later high (0.246 = +24.6 %), the twin of the maximum drawdown; 0 with no rise.")
+    largest_rally_start_date: Optional[date] = Field(None, description="The low the rally climbed from (the baseline when it is the first value).")
+    largest_rally_end_date: Optional[date] = Field(None, description="The high the rally reached.")
+    largest_rally_duration_days: Optional[int] = Field(None, ge=0, description="Calendar days from the low to the high.")
+    average_drawdown: Optional[FiniteFloat] = Field(None, le=0, description="«Below the peak, on average»: the mean of the underwater curve (ADD).")
+
+    @model_validator(mode="after")
+    def validate_largest_rally(self) -> RiskAssetSetDrawdownItem:
+        _validate_largest_rally(self)
+        return self
 
     @model_validator(mode="after")
     def validate_episode_contract(self) -> RiskAssetSetDrawdownItem:  # noqa: C901 — flat status-branch invariant raises

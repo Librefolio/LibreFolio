@@ -24,6 +24,8 @@ const metadataStandIn = vi.hoisted(() => ({
         sectors: ReadonlyMap<number, Readonly<Record<string, number>> | null>;
         regions: ReadonlyMap<number, Readonly<Record<string, number>> | null>;
     },
+    /** Where the read stands, as the factory publishes it (RN-20). */
+    status: 'ready' as 'loading' | 'ready' | 'failed',
 }));
 
 vi.mock('$lib/features/risk/matrixMetadata.svelte', async (importOriginal) => {
@@ -32,7 +34,7 @@ vi.mock('$lib/features/risk/matrixMetadata.svelte', async (importOriginal) => {
         ...actual,
         createMatrixMetadata: (inputs: () => {assetIds: readonly number[]; language: string}) => {
             metadataStandIn.inputs.push(inputs);
-            return metadataStandIn.maps ?? actual.EMPTY_MATRIX_METADATA;
+            return {...(metadataStandIn.maps ?? actual.EMPTY_MATRIX_METADATA), status: metadataStandIn.status};
         },
     };
 });
@@ -112,6 +114,7 @@ beforeAll(async () => {
 beforeEach(() => {
     metadataStandIn.inputs = [];
     metadataStandIn.maps = null;
+    metadataStandIn.status = 'ready';
 });
 
 function mount(): void {
@@ -140,13 +143,24 @@ describe('L2Diversification — the matrix orders by type, sector and area (B7)'
         }
     });
 
-    it('offers only similarity and name when the metadata read gave nothing, and still draws the matrix', async () => {
+    /**
+     * RN-20 (the developer, 16/11: «vorrei ovunque tutti i sort possibili»): with nothing to order by, the three
+     * orderings stay on screen, unavailable, and their reason follows the state of L2's read — this was the page with
+     * two orderings, while the read was in flight or after it failed.
+     */
+    it.each([
+        {status: 'loading', reason: 'loading'},
+        {status: 'failed', reason: 'failed'},
+        {status: 'ready', reason: 'no-data'},
+    ] as const)('offers all five when the metadata read is $status and gave nothing, the three without data unavailable ($reason), and still draws the matrix', async ({status, reason}) => {
+        metadataStandIn.status = status;
         mount();
         await waitFor(() => expect(screen.getByTestId(ORDERING('similarity'))).toBeTruthy());
 
-        expect(screen.queryByTestId(ORDERING('name'))).not.toBeNull();
+        expect(screen.getByTestId(ORDERING('name'))).not.toHaveAttribute('aria-disabled');
         for (const mode of ['type', 'sector', 'region']) {
-            expect(screen.queryByTestId(ORDERING(mode)), `"${mode}" is offered with no data to order by`).toBeNull();
+            expect(screen.getByTestId(ORDERING(mode)), `"${mode}" is not offered`).toHaveAttribute('aria-disabled', 'true');
+            expect(screen.getByTestId(ORDERING(mode))).toHaveAttribute('data-disabled-reason', reason);
         }
         expect(screen.queryByTestId('risk-l2-correlation')).not.toBeNull();
     });

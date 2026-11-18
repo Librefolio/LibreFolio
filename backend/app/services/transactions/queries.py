@@ -12,6 +12,7 @@ from backend.app.schemas.transactions.transactions import (
     TXQueryParams,
     TXReadItem,
 )
+from backend.app.services.transactions.charges import charge_counts, charges_of_condition, without_parent_condition
 
 
 class TransactionQueryMixin:
@@ -49,7 +50,7 @@ class TransactionQueryMixin:
             by_id = {tx.id: tx for tx in result.scalars().all()}
             ordered = [by_id[i] for i in params.ids if i in by_id]
             items = [TXReadItem.from_db_model(tx) for tx in ordered]
-            return await self._enrich_partner_broker_ids(items)
+            return await self._enrich_charges_count(await self._enrich_partner_broker_ids(items))
 
         stmt = select(Transaction)
 
@@ -83,6 +84,11 @@ class TransactionQueryMixin:
             stmt = stmt.where(Transaction.related_transaction_id.is_(None))
         if params.exclude_ids:
             stmt = stmt.where(Transaction.id.notin_(params.exclude_ids))
+        # Linked charges (project 66): the charges of some parents, and the charges a parent could take.
+        if params.parent_ids:
+            stmt = stmt.where(charges_of_condition(params.parent_ids))
+        if params.without_parent:
+            stmt = stmt.where(without_parent_condition())
 
         stmt = stmt.order_by(Transaction.date.desc(), Transaction.id.desc())
         stmt = stmt.offset(params.offset)
@@ -91,7 +97,14 @@ class TransactionQueryMixin:
 
         result = await self.session.execute(stmt)
         items = [TXReadItem.from_db_model(tx) for tx in result.scalars().all()]
-        return await self._enrich_partner_broker_ids(items)
+        return await self._enrich_charges_count(await self._enrich_partner_broker_ids(items))
+
+    async def _enrich_charges_count(self, items: List[TXReadItem]) -> List[TXReadItem]:
+        """Batch-populate charges_count: how many charges (FEE, TAX) point at each item (project 66)."""
+        counts = await charge_counts(self.session, (item.id for item in items))
+        for item in items:
+            item.charges_count = counts.get(item.id, 0)
+        return items
 
     async def _enrich_partner_broker_ids(self, items: List[TXReadItem]) -> List[TXReadItem]:
         """Batch-populate partner_broker_id for all items with related_transaction_id."""

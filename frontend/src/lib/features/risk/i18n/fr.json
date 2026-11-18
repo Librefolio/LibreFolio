@@ -9,7 +9,6 @@
       "sampling": "Stratégie d'échantillonnage",
       "paths": "Trajectoires simulées",
       "randomSeed": "Graine aléatoire",
-      "sobolStartIndex": "Indice de départ Sobol",
       "optimizationStrategy": "Stratégie",
       "covarianceEstimator": "Estimateur de covariance",
       "riskFreeRate": "Taux sans risque",
@@ -43,10 +42,8 @@
     "title": "Risque",
     "dashboardTitle": "Risque du portefeuille",
     "brokerTitle": "Risque du courtier",
-    "assetTitle": "Risque de l'actif",
     "internalSubset": "Risque interne de ce sous-ensemble du courtier",
     "dashboardFullPortfolio": "Le risque utilise tout le portefeuille ; le filtre de courtier du tableau de bord n'est pas appliqué.",
-    "assetRollingHint": "Le risque glissant reste disponible dans Signaux ; ce panneau couvre comparaison, scénarios, VaR et simulation.",
     "states": {
       "partial": "Partiel",
       "empty": "Aucun résultat",
@@ -61,8 +58,7 @@
       "observations": "Observations",
       "coverage": "Couverture",
       "annualization": "Facteur d'annualisation",
-      "returnBasis": "Base de rendement",
-      "method": "Méthode"
+      "returnBasis": "Base de rendement"
     },
     "returnBasis": {
       "price_only": "Prix uniquement",
@@ -75,12 +71,6 @@
       "undefined": "Indéfini"
     },
     "quality": {
-      "status": "Qualité des données",
-      "ok": "OK",
-      "carried_forward": "Valeurs reportées",
-      "partial": "Partielle",
-      "carriedPrices": "Points de prix reportés",
-      "carriedFx": "Points de change reportés",
       "missingPrice": "{count} actif(s) sans prix sur cette période — exclus de l'analyse",
       "missingFx": "{count} paire(s) de devises sans source de change — les actifs cotés dans ces devises sont exclus",
       "missingFxRates": "Taux de change manquants ou de plus de {days} jours pour {count} paire(s) — synchronisez pour compléter l'analyse",
@@ -111,7 +101,14 @@
         "name": "Par nom",
         "type": "Par type",
         "sector": "Par secteur",
-        "region": "Par zone"
+        "region": "Par zone",
+        "unavailable": {
+          "type": "Aucun type connu pour ces actifs.",
+          "sector": "Aucun secteur connu pour ces actifs.",
+          "region": "Aucune zone connue pour ces actifs.",
+          "loading": "Les détails des actifs sont encore en cours de chargement : cet ordre en a besoin.",
+          "failed": "Les détails des actifs n'ont pas pu être chargés : cet ordre en a besoin. Rechargez la page pour réessayer."
+        }
       },
       "pairs": {
         "correlatedTitle": "Les plus semblables",
@@ -169,6 +166,36 @@
             "days": "{count, plural, one {# jour} other {# jours}}"
           },
           "referenceItself": "Non applicable : cet actif est la référence elle-même, et il ne se compare pas à lui-même."
+        },
+        "move": {
+          "title": "Comment chacun a-t-il bougé ?",
+          "description": "Pour chaque actif choisi, ses meilleurs moments sur la période et à quoi ressemblaient ses jours.",
+          "times": "{value}×",
+          "days": "{days, plural, one {# jour} other {# jours}}",
+          "columns": {
+            "bestDay": "Meilleur jour",
+            "bestMonth": "30 meilleurs jours",
+            "rally": "Plus forte hausse",
+            "omega": "Gains / pertes",
+            "positiveShare": "Jours positifs",
+            "downsideDeviation": "Semi-écart",
+            "meanUpDown": "Jour moyen ±",
+            "streak": "Série positive",
+            "averageDrawdown": "Sous le sommet, moy.",
+            "extremeDays": "Jours extrêmes"
+          },
+          "columnHelp": {
+            "bestDay": "La meilleure journée de la période, et quand.",
+            "bestMonth": "Les 30 meilleurs jours que l'actif a réellement vécus, d'un jour à l'autre : le pendant du mauvais mois.",
+            "rally": "La plus forte hausse d'un creux à un sommet ultérieur, avec sa durée : le pendant de la pire baisse.",
+            "omega": "Gains contre pertes : pour chaque euro perdu les mauvais jours, combien ont été gagnés les bons.",
+            "positiveShare": "La part des jours en gain ; un jour exactement à zéro ne compte pas.",
+            "downsideDeviation": "Le semi-écart : combien l'actif oscille à la baisse, sur un an, dans l'unité de la volatilité.",
+            "meanUpDown": "Le jour moyen en hausse et le jour moyen en baisse.",
+            "streak": "La plus longue série de jours consécutifs en gain, et quand.",
+            "averageDrawdown": "À quelle distance de son plus haut l'actif se trouvait un jour moyen de la période : toute la période sous l'eau, pas seulement la pire baisse.",
+            "extremeDays": "Combien plus souvent sont venus de très grands jours, à la hausse ou à la baisse, qu'une courbe en cloche ne le donnerait : 1× est la cloche, au-dessus les queues sont plus épaisses."
+          }
         }
       },
       "legend": {
@@ -182,7 +209,8 @@
       },
       "exposure": {
         "sector": "Secteur",
-        "region": "Zone"
+        "region": "Zone",
+        "type": "Type"
       },
       "syncSelectionHint": "Synchronise les prix des actifs sélectionnés et les taux de change qui les convertissent",
       "reloadHint": "Recharge toutes les analyses de la sélection",
@@ -208,73 +236,30 @@
       }
     },
     "metrics": {
-      "volatility": "Volatilité",
-      "maxDrawdown": "Perte maximale",
-      "drawdownDuration": "Durée du repli",
-      "sharpe": "Sharpe",
-      "sortino": "Sortino",
-      "portfolioVolatility": "Volatilité du portefeuille",
       "cashWeight": "Liquidités et non couvert",
-      "var": "Valeur à risque",
-      "cvar": "VaR conditionnelle",
-      "activeReturn": "Rendement actif",
-      "trackingError": "Erreur de suivi",
-      "informationRatio": "Ratio d'information",
-      "correlation": "Corrélation",
-      "beta": "Bêta",
-      "scenarioReturn": "Rendement du scénario",
-      "impactAmount": "Impact monétaire",
-      "shock": "Choc",
-      "contribution": "Contribution",
       "terminalMean": "Rendement terminal moyen",
-      "terminalVolatility": "Volatilité terminale",
       "probabilityOfLoss": "Probabilité de perte"
     },
     "comparison": {
-      "comparisonAsset": "Actif de comparaison",
-      "results": "Résultats de la comparaison"
+      "comparisonAsset": "Actif de comparaison"
     },
     "actions": {
-      "compare": "Comparer",
       "runScenario": "Exécuter le scénario",
       "simulate": "Simuler",
       "runReplay": "Lancer le rejeu"
     },
     "stress": {
-      "uniformShock": "Choc uniforme sur les actifs",
-      "results": "Résultats du stress",
       "preset": "Préréglage",
-      "dimension": "Dimension",
-      "showAllBuckets": "Afficher toutes les catégories",
       "dimensions": {
         "asset_class": "Classe d'actifs",
         "sector": "Secteur",
         "geography": "Géographie"
       },
-      "auditTitle": "Audit des expositions appliquées",
-      "missingMetadataOther": "Les données de secteur ou de géographie étaient indisponibles pour cet actif. Il a été traité comme Autre à 100 %.",
-      "exposureBucket": "Catégorie d'exposition",
-      "exposure": "Exposition",
-      "appliedBucket": "Catégorie appliquée",
-      "rule": "Règle",
-      "europeanUnion": "Union européenne",
-      "rules": {
-        "direct": "Directe",
-        "country": "Pays spécifique",
-        "geography_group": "Groupe géographique",
-        "other": "Repli sur Autre",
-        "missing_metadata_other": "Métadonnées manquantes → Autre",
-        "unconfigured_zero": "Non configuré → choc nul"
-      }
+      "europeanUnion": "Union européenne"
     },
     "simulation": {
       "simulated": "Bandes de percentiles simulées",
       "assumptions": "{paths} trajectoires sur {days} jours ; composition actuelle conservée, sans coûts, flux, inflation ni rééquilibrage.",
-      "evolution": "Évolution",
-      "terminalDistribution": "Distribution finale",
-      "p05": "P5 terminal",
-      "p50": "P50 terminal",
-      "p95": "P95 terminal",
       "mode": {
         "label": "Mode de simulation",
         "recommended": "Recommandé",
@@ -301,7 +286,10 @@
         }
       },
       "driftUncertainty": "La dérive provient de {count} observations : cela seul situe cette médiane entre {low} et {high}.",
-      "driftUncertaintyWide": "La dérive provient de seulement {count} observations : cela seul situe cette médiane entre {low} et {high} — plus large que la bande ci-dessus."
+      "driftUncertaintyWide": "La dérive provient de seulement {count} observations : cela seul situe cette médiane entre {low} et {high} — plus large que la bande ci-dessus.",
+      "estimation": "Estimée sur {length} d'historique, du {start} au {end} ({count} observations), quelle que soit la période choisie plus haut.",
+      "estimationTruncated": "Un historique commun plus long existe : ce sont ses {count} observations les plus récentes, autant que le calcul peut en porter.",
+      "pathsReduced": "{used} trajectoires au lieu de {requested} : autant que le calcul en permet pour ce portefeuille et cet horizon."
     },
     "errors": {
       "analytic_not_found": "Analyse indisponible.",
@@ -319,11 +307,10 @@
       "optimization_infeasible": "Aucune allocation ne satisfait les contraintes demandées.",
       "unknown": "Cette mesure n'a pas renvoyé de résultat.",
       "answer_discarded": "La réponse a été écartée parce que les données ont changé pendant son arrivée. Relancez l'analyse.",
-      "resource_limit_paths_or_horizon": "Cette simulation est trop volumineuse pour être exécutée. Utilisez moins de trajectoires simulées ou un horizon plus court.",
       "resource_limit_horizon_or_sampling": "Cette simulation quasi-Monte-Carlo est trop volumineuse pour être exécutée. Raccourcissez l'horizon ou choisissez l'échantillonnage Monte-Carlo.",
-      "resource_limit_period": "Cette simulation est trop volumineuse pour être exécutée : la période contient trop d'historique. Choisissez une période plus courte.",
       "resource_limit_positions": "Une simulation peut inclure au plus 100 positions, et ce portefeuille en compte davantage. Simulez plutôt un courtier avec moins de positions.",
-      "resource_limit_period_or_assets": "Cette analyse est trop volumineuse pour être exécutée : ces actifs couvrent trop de jours de prix. Choisissez une période plus courte ou moins d'actifs."
+      "resource_limit_period_or_assets": "Cette analyse est trop volumineuse pour être exécutée : ces actifs couvrent trop de jours de prix. Choisissez une période plus courte ou moins d'actifs.",
+      "resource_limit_horizon": "Cette simulation est trop grande pour être exécutée, même en ramenant les trajectoires à 1 024. Choisissez un horizon plus court."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe est indéfini car la volatilité est nulle.",
@@ -362,50 +349,26 @@
       "historical_replay_mostly_excluded": "Le résultat ne décrit qu'une partie de votre portefeuille ({covered, number, percent}) : le reste est exclu du rejeu.",
       "assets_excluded_no_price_source": "{count, plural, one {# actif exclu} other {# actifs exclus}} du calcul : aucune source de prix attribuée et aucun prix jamais enregistré — {names}.",
       "total_loss_no_recovery": "La valeur est tombée à zéro : aucun gain ne peut la ramener à son sommet, la reprise nécessaire n'est donc pas affichée.",
-      "total_loss_no_recovery_assets": "{count, plural, one {# actif est tombé} other {# actifs sont tombés}} à zéro : aucun gain ne peut {count, plural, one {le ramener à son sommet} other {les ramener à leur sommet}}, la reprise nécessaire n'est donc pas affichée — {names}."
+      "total_loss_no_recovery_assets": "{count, plural, one {# actif est tombé} other {# actifs sont tombés}} à zéro : aucun gain ne peut {count, plural, one {le ramener à son sommet} other {les ramener à leur sommet}}, la reprise nécessaire n'est donc pas affichée — {names}.",
+      "analysis_starts_late": "L'analyse commence le {start} : avant ce jour, aucun jour de prix complet n'est disponible.",
+      "short_history": "{names} : aucun prix avant le début de la période, leur historique commence donc à l'intérieur.",
+      "best_realization_undefined": "Aucune observation en gain sur la période.",
+      "best_realization_undefined_assets": "Aucune observation en gain sur la période pour {names}.",
+      "average_loss_undefined": "Aucun jour en perte sur la période : il n'y a pas de jour moyen en baisse.",
+      "average_loss_undefined_assets": "Aucun jour en perte sur la période pour {names} : il n'y a pas de jour moyen en baisse.",
+      "omega_undefined": "Gains contre pertes non défini : aucun jour n'est passé sous le rendement cible.",
+      "omega_undefined_assets": "Gains contre pertes non défini pour {names} : aucun jour n'est passé sous le rendement cible.",
+      "extreme_day_ratio_undefined": "Jours extrêmes non définis car la série ne bouge pas.",
+      "extreme_day_ratio_undefined_assets": "Jours extrêmes non définis pour {names} : la série ne bouge pas.",
+      "simulation_history_shorter_than_horizon": "La simulation projette {horizon_days} jours à partir de {history_days} jours d'historique : la bande n'est pas plus large que cet historique.",
+      "simulation_excluded_short_history": "{names} : {history_days} jours d'historique, moins que l'horizon de {horizon_days} jours : hors de la simulation, son poids compte comme liquidités.",
+      "simulation_mostly_excluded": "La simulation ne décrit qu'une partie de votre portefeuille ({covered, number, percent}) : le reste est exclu de la simulation."
     },
     "assetDetail": {
       "overviewTab": "Vue d'ensemble",
       "riskScenariosTab": "Risque et scénarios",
-      "summaryTitle": "Synthèse du risque",
-      "summaryDescription": "Risque observé, risque baissier, comparaison avec un actif réel et scénarios pour cet actif.",
-      "rollingMetric": "Mesure glissante configurée",
-      "noRollingMetric": "Aucun signal de risque glissant n'est configuré pour cet actif.",
-      "configureSignals": "Configurer les signaux avancés dans Vue d'ensemble"
-    },
-    "replay": {
-      "title": "Rejeu historique",
-      "compositionNotice": "Applique les rendements historiques observés à la composition actuelle ; ne reconstitue pas la détention passée.",
-      "preset": "Période prédéfinie",
-      "proxy": "Proxy historique manuel",
-      "exclude": "Exclure cet actif du rejeu",
-      "results": "Résultats du rejeu historique",
-      "proxyCount": "Proxies manuels utilisés",
-      "excludedCount": "Actifs exclus",
-      "treatment": {
-        "omitted_from_replay": "Omis du rejeu",
-        "zero_return_residual": "Conservé comme résidu à rendement nul"
-      },
-      "missingHistoryPolicy": "Politique d'historique manquant",
-      "compositionPolicy": "Politique de composition",
-      "proxySeriesUsage": "Utilisation de la série proxy",
-      "missingHistoryPolicies": {
-        "manual_proxy_or_exclude": "Proxy manuel ou exclusion"
-      },
-      "compositionPolicies": {
-        "current_buy_and_hold": "Buy and hold actuel"
-      },
-      "proxySeriesUsages": {
-        "returns_only": "Rendements historiques uniquement"
-      }
-    },
-    "betaBanner": {
-      "title": "L'analyse des risques est en version bêta.",
-      "description": "Les calculs, les résultats et l'interface peuvent évoluer avant la version stable.",
-      "simulation": {
-        "title": "La simulation est encore en version bêta.",
-        "description": "Son résultat dépend fortement de la quantité d'historique demandée par rapport à l'horizon : une fenêtre courte avec un horizon long peut produire des chiffres invraisemblables. Tous les autres niveaux de l'analyse des risques sont sortis de la version bêta."
-      }
+      "positionNote": "Les montants portent sur votre position d'aujourd'hui : {amount}.",
+      "planPrices": "Prix issus du plan, pas du marché : ici, la volatilité et la VaR disent seulement à quel point le plan est régulier."
     },
     "levels": {
       "l1": {
@@ -445,14 +408,17 @@
           "position": {
             "beyond": "Au-delà du seuil VaR ({value}) : jours que la VaR décrit",
             "holds": "Contient le seuil VaR ({value})",
-            "above": "Au-dessus du seuil VaR ({value})"
+            "above": "Au-dessus du seuil VaR ({value})",
+            "gain": "Dans les meilleurs {share} des jours (dès {value})"
           },
-          "binDays": "{count, plural, one {# jour} other {# jours}} · {share}"
+          "binDays": "{count, plural, one {# jour} other {# jours}} · {share}",
+          "gain": "les meilleurs {share} des jours dès {value}"
         },
         "when": "Quand",
         "since": "Depuis",
         "duration": "Durée",
-        "daysCount": "{days, plural, one {# jour} other {# jours}}"
+        "daysCount": "{days, plural, one {# jour} other {# jours}}",
+        "sameFallToday": "{amount} · la même chute, sur la valeur d'aujourd'hui"
       },
       "l2": {
         "title": "Suis-je aussi diversifié que je le crois ?",
@@ -463,11 +429,9 @@
         "showLess": "Afficher moins",
         "effectiveAssets": {
           "label": "Combien de paris indépendants ai-je réellement ?",
-          "aboveCount": "Au-dessus des {positions} positions mesurées : l'excédent vient de la part non couverte ({share} : liquidités et positions sans prix), et ne dit rien des poids",
           "belowCount": "En dessous des {positions} positions mesurées : les poids sont déséquilibrés, et quelques-unes portent le portefeuille",
-          "evenCount": "Exactement les {positions} positions mesurées : poids uniformes et rien de non couvert",
-          "name": "Nombre effectif de positions",
-          "aboveCountNoShare": "Au-dessus des {positions} positions mesurées : l'excédent vient de la part non couverte (liquidités et positions sans prix), et ne dit rien des poids"
+          "evenCount": "Exactement les {positions} positions mesurées : les poids sont uniformes",
+          "name": "Nombre effectif de positions"
         },
         "diversificationRatio": {
           "label": "Répartir l'argent a-t-il servi à quelque chose ?",
@@ -503,7 +467,7 @@
         },
         "scatter": {
           "title": "Risque contre rendement, actif par actif",
-          "portfolio": "Portefeuille",
+          "portfolio": "Portefeuille, composition actuelle",
           "axisVolatility": "Volatilité annualisée",
           "axisReturn": "Rendement moyen annuel",
           "line": "Droite risque-rendement",
@@ -524,7 +488,9 @@
             "weight": "Poids dans le portefeuille : {share}",
             "benchmark": "Référence",
             "heldBenchmark": "Référence · en portefeuille, poids {share}"
-          }
+          },
+          "titleOneAsset": "Risque contre rendement",
+          "portfolioName": "Portefeuille"
         },
         "rows": {
           "kpi": "Sortino, Sharpe et volatilité"
@@ -535,7 +501,9 @@
           "notHeld": "Pas dans le portefeuille : l'indice de référence est là pour la comparaison.",
           "expectedReturnShort": "Rend. annuel",
           "namedHelp": "{name}\n{help}"
-        }
+        },
+        "titleAsset": "Par rapport à une référence",
+        "benchmarkIsSubject": "La référence est cet actif lui-même : choisissez-en une autre pour comparer."
       },
       "l4": {
         "title": "Que se passe-t-il si… ?",
@@ -616,7 +584,10 @@
           "contribution": "Contribution",
           "impact": "Impact",
           "bar": "Effet"
-        }
+        },
+        "shockUnconfigured": "Absents de ce scénario, donc un choc de 0 : {names}. Le total les compte comme intacts.",
+        "replayTotalAsset": "Cet actif aurait terminé la période à {percent} {amount}",
+        "shockTotalAsset": "Cet actif bougerait de {percent} {amount}"
       },
       "backtestNotice": "Avec un sous-ensemble actif, ces chiffres sont reconstruits à partir de la composition actuelle : ils disent ce qui *se serait* passé, pas ce qui s’est réellement passé.",
       "notice": {
@@ -630,6 +601,36 @@
           "invalid_currency": "{count, plural, one {# actif exclu} other {# actifs exclus}} : la devise de leurs prix n'est pas valide.",
           "insufficient_history": "{count, plural, one {# actif exclu} other {# actifs exclus}} : historique insuffisant sur la période.",
           "no_price_source": "{count, plural, one {# actif exclu} other {# actifs exclus}} : aucune source de prix n'est assignée et aucun prix n'a jamais été enregistré."
+        }
+      },
+      "move": {
+        "title": "Comment évolue-t-il ?",
+        "cards": {
+          "bestDay": "Le meilleur jour",
+          "bestMonth": "Trente bons jours",
+          "rally": "La plus forte hausse",
+          "days": "À quoi ressemblaient les jours"
+        },
+        "technical": {
+          "bestDay": "Le jumeau du pire jour",
+          "bestMonth": "Les 30 meilleurs jours",
+          "rally": "D'un creux au sommet qui suit",
+          "days": "Gains contre pertes · Omega"
+        },
+        "omegaCaption": "{value} gagnés pour 1 perdu",
+        "sameRiseToday": "{amount} · la même hausse, sur la valeur d'aujourd'hui",
+        "rows": {
+          "meanUpDown": "Jour moyen",
+          "meanUpDownValue": "{up} en hausse · {down} en baisse",
+          "semiDeviation": "Semi-écart",
+          "averageDrawdown": "Sous le sommet, en moyenne",
+          "extremeDaysValue": "{value}× une courbe en cloche",
+          "semiDeviationValue": "à la baisse {down} · sur une oscillation de {swing} sur la période",
+          "semiDeviationPerimeter": "Mesurés sur le portefeuille tel que vous l'avez détenu sur la période. Le tableau « Suis-je payé pour ce risque ? » mesure la composition actuelle : sa volatilité peut donc être différente."
+        },
+        "lead": {
+          "both": "Pour 1 perdu les mauvais jours, {omega} ont été gagnés les bons jours ; la plus forte hausse a duré {days}.",
+          "omega": "Pour 1 perdu les mauvais jours, {omega} ont été gagnés les bons jours."
         }
       }
     },
@@ -652,6 +653,15 @@
     "benchmark": {
       "measuredHere": "Cette référence est aussi un actif mesuré ici et ne peut pas servir de mesure à elle-même : choisissez-en une autre pour la comparaison.",
       "blocked": "Inutilisables sur cette période"
+    },
+    "period": {
+      "range": "Période {start} – {end} · en {currency}",
+      "open": "Période depuis le {start} · en {currency}"
+    },
+    "docsHelp": {
+      "header": "Combien le portefeuille peut perdre, comment il évolue, s'il est diversifié, si le risque est rémunéré et ce qui pourrait arriver : les questions de l'onglet Risque, sur la période indiquée.",
+      "assetSet": "Choisissez quelques actifs et comparez-les sur la période : combien chacun a perdu, ce qu'il a rapporté pour son risque, lesquels évoluent ensemble et comment ils auraient traversé les crises passées.",
+      "headerAsset": "Combien cet actif peut perdre, comment il évolue, comment il se compare à une référence et ce qui pourrait arriver : les questions de son onglet Risque et scénarios, sur la période indiquée."
     }
   }
 }

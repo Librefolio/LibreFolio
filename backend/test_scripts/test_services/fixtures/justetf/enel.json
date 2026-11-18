@@ -1,0 +1,39 @@
+{
+ "source": "justetf",
+ "asset": "enel",
+ "version": "justetf-scraping 0.1.0",
+ "recorded_at": "2026-11-10T17:06:49",
+ "calls": {
+  "get_etf_overview": {
+   "seconds": 0.55,
+   "error": null,
+   "response": {
+    "isin": "IT0003128367",
+    "name": "ETF Screener",
+    "description": null,
+    "index": null,
+    "investment_focus": null,
+    "fund_size_eur": null,
+    "ter": null,
+    "replication": null,
+    "legal_structure": null,
+    "strategy_risk": null,
+    "sustainability": false,
+    "fund_currency": null,
+    "currency_hedged": true,
+    "volatility_1y": null,
+    "inception_date": null,
+    "distribution_policy": null,
+    "distribution_frequency": null,
+    "fund_domicile": null,
+    "fund_provider": null,
+    "top_holdings": [],
+    "countries": [],
+    "sectors": [],
+    "holdings_date": null,
+    "listings": [],
+    "gettex": null
+   }
+  }
+ }
+}

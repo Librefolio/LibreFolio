@@ -262,6 +262,36 @@ def db_migration_005(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Migration 005 tests", verbose=verbose)
 
 
+def db_migration_006_asset_profile(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the asset_profile step of migration 006_release_1_4_0_schema (project 68, lot A2), on temporary databases only."""
+    print_section("DB Test: Migration 006, step asset_profile")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: asset_profile_updates and asset_enrichers as the contract states them; FKs at work; 1.3 data kept; models = migration; downgrade; idempotence; the profile reads use the index; no redundant index; A4: the legacy copy of classification_params and its downgrade")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_migration_006_asset_profile.py", test_names)
+    return run_command(cmd, "Migration 006 asset profile tests", verbose=verbose)
+
+
+def db_migration_006_call_counters(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the plugin_call_counters step of migration 006_release_1_4_0_schema (project 76, lot U1), on temporary databases only."""
+    print_section("DB Test: Migration 006, step plugin_call_counters")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: plugin_call_counters as the contract states it (composite key, no FK/CHECK/extra index, no AUTOINCREMENT); 1.3 data kept; models = migration; downgrade and up again; idempotence; no redundant index")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_migration_006_call_counters.py", test_names)
+    return run_command(cmd, "Migration 006 call counters tests", verbose=verbose)
+
+
+def db_migration_006_charge_links(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the charge_links step of migration 006_release_1_4_0_schema (project 66, lot R1), on temporary databases only."""
+    print_section("DB Test: Migration 006, step charge_links")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: transactions.parent_transaction_id (INTEGER NULL, deferred self FK, partial index idx_transactions_parent) as the contract states it; deferred FK at work; 1.3 data kept, all parents NULL; models = migration; downgrade and up again; idempotence; no redundant index")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_migration_006_charge_links.py", test_names)
+    return run_command(cmd, "Migration 006 charge links tests", verbose=verbose)
+
+
 def db_migration_006_broker_profile(verbose: bool = False, test_names: list = None) -> bool:
     """Test the broker operating profile step of 006_release_1_4_0_schema (project 67, P1), on temporary databases only."""
     print_section("DB Test: Migration 006 — broker operating profile")
@@ -335,6 +365,9 @@ def db_all(verbose: bool = False) -> bool:
         "post-migration-orphan-pairs",
         "integrity-check",
         "migration-005",
+        "migration-006-asset-profile",
+        "migration-006-call-counters",
+        "migration-006-charge-links",
         "migration-006-broker-profile",
         "referential-integrity",
         "fx-rates",
@@ -440,7 +473,37 @@ Note: No backend server required. Tests operate directly on test DB.
         prereq="None (temporary databases)",
         isolation="pure",
     )
-    # PURE: as migration-005, every database is a private file under tmp_path.
+    # PURE: as migration-005, every database is a private file under tmp_path, Alembic in-process on it alone.
+    add_test(
+        cat,
+        "migration-006-asset-profile",
+        db_migration_006_asset_profile,
+        name="Migration 006 Asset Profile",
+        desc="006_release_1_4_0_schema, step asset_profile (project 68, A2): asset_profile_updates and asset_enrichers with their columns, FKs (CASCADE, SET NULL) and the one index; a populated 1.3 database keeps its rows; models = migration; downgrade and up again; idempotence; the profile reads search through the index; no redundant index; step asset_profile_legacy_copy (A4): classification_params copied as legacy rows (description, geography, sector; JSON numbers and strings; the voices today's rules refuse skipped, the others kept), read_on the upgrade day in scheduler_timezone (UTC without a valid one), one created_at, nothing added when run again, downgrade rebuilds the column from the last rows",
+        prereq="None (temporary databases)",
+        isolation="pure",
+    )
+    # PURE: as migration-006-asset-profile, every database is a private file under tmp_path, Alembic in-process on it alone.
+    add_test(
+        cat,
+        "migration-006-call-counters",
+        db_migration_006_call_counters,
+        name="Migration 006 Call Counters",
+        desc="006_release_1_4_0_schema, step plugin_call_counters (project 76, U1): the table with its columns, the composite primary key (family, plugin_code), no FK, CHECK, extra index or AUTOINCREMENT; a populated 1.3 database keeps its rows; models = migration; downgrade and up again; the upgrade run again, finding the table, and the downgrade finding it gone all complete; no redundant index",
+        prereq="None (temporary databases)",
+        isolation="pure",
+    )
+    # PURE: as migration-006-call-counters, every database is a private file under tmp_path, Alembic in-process on it alone.
+    add_test(
+        cat,
+        "migration-006-charge-links",
+        db_migration_006_charge_links,
+        name="Migration 006 Charge Links",
+        desc="006_release_1_4_0_schema, step charge_links (project 66, R1): transactions.parent_transaction_id INTEGER NULL with a self foreign key (NO ACTION, DEFERRABLE INITIALLY DEFERRED: a missing parent or a parent deleted under a child fails at commit, parent and child deleted together commit) and the partial index idx_transactions_parent searched by IN lookups; idx_transactions_related unchanged; a populated 1.3 database keeps its rows, every transaction without a parent; models = migration; downgrade and up again; the upgrade run again, finding the column without the index, and the downgrade finding it gone all complete; no redundant index",
+        prereq="None (temporary databases)",
+        isolation="pure",
+    )
+    # PURE: as migration-006-charge-links, every database is a private file under tmp_path, Alembic in-process on it alone.
     add_test(
         cat,
         "migration-006-broker-profile",

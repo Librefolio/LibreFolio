@@ -41,23 +41,35 @@ from backend.app.schemas.risk.outputs import RiskKpiOutput
 from backend.app.schemas.risk.vocabulary import RiskMode, RiskReturnBasis, RiskScopeKind
 from backend.app.schemas.signals.vocabulary import SignalWarningCode
 from backend.app.services.financial_math.returns import calendar_days_to_observations, positive_annualization_factor
+from backend.app.services.risk.acquired import average_drawdown, best_realization, best_realization_index
 from backend.app.services.risk.base import RiskExecutionContext
 from backend.app.services.risk.metrics import (
     ZERO_TOLERANCE,
     ReturnHistogram,
+    annualized_downside_deviation,
     annualized_sharpe,
     annualized_sortino,
     annualized_volatility,
+    best_horizon_window,
     beta,
     compounded_return,
     correlation_matrix,
     covariance_matrix,
     daily_risk_free_rate,
     drawdown_episodes,
+    extreme_day_ratio,
+    gain_threshold,
     historical_var_cvar,
+    horizon_compounded_returns,
+    largest_rally,
+    longest_positive_run,
+    mean_negative_return,
+    mean_positive_return,
+    omega_ratio,
     pairwise_correlation,
     pairwise_correlation_matrix,
     pearson_correlation,
+    positive_observation_share,
     return_distribution_histogram,
     risk_contributions_from_covariance,
     sample_covariance,
@@ -1344,9 +1356,13 @@ def test_the_historical_var_analytic_publishes_contiguous_bins_cut_exactly_on_th
     boundaries = [item.lower_bound for item in bins] + [bins[-1].upper_bound]
     assert min(abs(boundary - output.var_bin_edge) for boundary in boundaries) == 0.0
 
-    # The plugin is a re-packer: bounds and counts are the primitive's, bit for bit.
+    # The plugin is a re-packer: bounds and counts are the primitive's, bit for bit — the grid pinned on both cuts since
+    # RN-14 (the VaR and the green tail's threshold, the mirror of the VaR).
     summary = historical_var_cvar(returns, confidence_level=_CONFIDENCE_LEVEL)
-    histogram = return_distribution_histogram(summary.horizon_returns, pinned_edge=-summary.value_at_risk)
+    green = gain_threshold(returns, confidence_level=_CONFIDENCE_LEVEL)
+    histogram = return_distribution_histogram(summary.horizon_returns, pinned_edge=-summary.value_at_risk, gain_edge=green)
+    assert output.gain_threshold == green
+    assert output.gain_bin_edge == histogram.gain_edge == green
     assert [item.lower_bound for item in bins] == list(histogram.edges[:-1])
     assert [item.upper_bound for item in bins] == list(histogram.edges[1:])
     assert tuple(item.count for item in bins) == histogram.counts
@@ -2484,6 +2500,17 @@ def test_a_window_of_one_refuses_a_dispersion_statistic_on_both_paths():
             lambda: _loop_beta(returns, comparison, 1),
             lambda: rolling_beta_values(returns, comparison, 1),
         ),
+        # RN-22: the semi-deviation and the Omega refuse a window of one with the scalar path's own sentence.
+        (
+            "semi-deviation",
+            lambda: _loop_downside_deviation(returns, 1, _ANNUALIZATION),
+            lambda: risk_adapters_module.rolling_annualized_downside_deviation_values(returns, 1, _ANNUALIZATION, scale=100.0),
+        ),
+        (
+            "omega",
+            lambda: _loop_omega(returns, 1, _ANNUALIZATION),
+            lambda: risk_adapters_module.rolling_omega_values(returns, 1, _ANNUALIZATION),
+        ),
     ):
         with pytest.raises(ValueError, match="at least two observations") as loop_error:
             loop_call()
@@ -2512,6 +2539,8 @@ def test_the_vectorised_rolling_helpers_refuse_a_bad_annualization_factor_as_the
     for label, loop_call, vectorised_call in (
         ("annualized volatility", lambda: _loop_annualized_volatility(returns, 5, factor, scale=100.0), lambda: rolling_annualized_volatility_values(returns, 5, factor, scale=100.0)),
         ("annualized sharpe", lambda: _loop_annualized_sharpe(returns, 5, factor), lambda: rolling_annualized_sharpe_values(returns, 5, factor)),
+        ("semi-deviation", lambda: _loop_downside_deviation(returns, 5, factor), lambda: risk_adapters_module.rolling_annualized_downside_deviation_values(returns, 5, factor, scale=100.0)),
+        ("omega", lambda: _loop_omega(returns, 5, factor), lambda: risk_adapters_module.rolling_omega_values(returns, 5, factor)),
     ):
         with pytest.raises(ValueError) as loop_error:
             loop_call()
@@ -2525,6 +2554,8 @@ def test_the_vectorised_rolling_helpers_refuse_a_bad_annualization_factor_as_the
     [
         pytest.param("annualized volatility", lambda returns, factor: rolling_annualized_volatility_values(returns, 5, factor, scale=100.0), id="volatility"),
         pytest.param("annualized sharpe", lambda returns, factor: rolling_annualized_sharpe_values(returns, 5, factor), id="sharpe"),
+        pytest.param("semi-deviation", lambda returns, factor: risk_adapters_module.rolling_annualized_downside_deviation_values(returns, 5, factor, scale=100.0), id="semi-deviation"),
+        pytest.param("omega", lambda returns, factor: risk_adapters_module.rolling_omega_values(returns, 5, factor), id="omega"),
     ],
 )
 def test_the_vectorised_rolling_helpers_read_the_annualization_rule_of_the_house(monkeypatch, label, call):
@@ -3775,3 +3806,187 @@ def test_the_rolling_sharpe_path_charges_the_same_trading_day_rate_as_the_scalar
     reverted = [_reverted_calendar_day_rate(annual_rate) * factor / volatility for volatility in volatility_values[window:]]
     assert all(old < new for old, new in zip(reverted, expected, strict=True))
     assert min(expected) > 1e-2
+
+
+# --------------------------------------------------------------------------- #
+# RN-14 — the positive measures and the shape of the days («Le misure, fissate», 12/11/2026).
+#
+# riskfolio, SciPy and NumPy are the oracles. Two conventions differ from the library, and both are pinned here
+# rather than hidden in a tolerance: the semi-deviation is the Sortino's own denominator, over T (LPM p = 2 divides
+# by T − 1); the average drawdown walks the compounded curve of every other drawdown we publish (ADD_Rel, never
+# ADD_Abs, which walks the uncompounded sum).
+# --------------------------------------------------------------------------- #
+
+_TARGET_ANNUAL_RETURN = 0.03
+
+
+def test_omega_matches_the_upper_over_the_lower_first_partial_moment_of_riskfolio():
+    returns = _daily_returns()
+    target = daily_risk_free_rate(_TARGET_ANNUAL_RETURN, _ANNUALIZATION)
+    column = _column(returns)
+    upper = float(rk.LPM(-column, MAR=-target, p=1))
+    lower = float(rk.LPM(column, MAR=target, p=1))
+
+    assert omega_ratio(returns, _ANNUALIZATION, annual_target_return=_TARGET_ANNUAL_RETURN) == pytest.approx(upper / lower, rel=1e-12)
+
+
+def test_the_semi_deviation_is_riskfolio_second_partial_moment_rescaled_from_t_minus_one_to_t():
+    returns = _daily_returns()
+    target = daily_risk_free_rate(_TARGET_ANNUAL_RETURN, _ANNUALIZATION)
+    second_moment = float(rk.LPM(_column(returns), MAR=target, p=2))
+    rescaled = second_moment * math.sqrt((len(returns) - 1) / len(returns)) * math.sqrt(_ANNUALIZATION)
+
+    ours = annualized_downside_deviation(returns, _ANNUALIZATION, annual_target_return=_TARGET_ANNUAL_RETURN)
+    assert ours == pytest.approx(rescaled, rel=1e-12)
+    # The divisor is a real difference, not noise: the published figure is the Sortino's, not the library's.
+    assert ours != pytest.approx(second_moment * math.sqrt(_ANNUALIZATION), rel=1e-6)
+
+
+def test_the_sortino_is_the_annualized_excess_return_over_the_published_semi_deviation():
+    """The card's semi-deviation and the Sortino share one function: Sortino = excess × f / semi-deviation."""
+    returns = _daily_returns()
+    target = daily_risk_free_rate(_TARGET_ANNUAL_RETURN, _ANNUALIZATION)
+    excess = math.fsum(value - target for value in returns) / len(returns)
+    deviation = annualized_downside_deviation(returns, _ANNUALIZATION, annual_target_return=_TARGET_ANNUAL_RETURN)
+
+    assert annualized_sortino(returns, _ANNUALIZATION, annual_target_return=_TARGET_ANNUAL_RETURN) == pytest.approx(excess * _ANNUALIZATION / deviation, rel=1e-12)
+
+
+def test_the_average_drawdown_matches_riskfolio_relative_add_and_not_the_absolute_one():
+    returns = _daily_returns()
+    column = _column(returns)
+    ours = average_drawdown(summarize_drawdown(returns).drawdowns)
+
+    assert ours == pytest.approx(-float(rk.ADD_Rel(column)), rel=1e-12)
+    assert ours != pytest.approx(-float(rk.ADD_Abs(column)), rel=1e-6)
+
+
+def test_the_extreme_day_ratio_is_scipy_pearson_kurtosis_over_three():
+    returns = _daily_returns()
+
+    assert extreme_day_ratio(returns) == pytest.approx(float(scipy_excess_kurtosis(np.asarray(returns), fisher=False)) / 3.0, rel=1e-12)
+
+
+def test_the_best_day_the_up_and_down_days_and_the_positive_share_match_numpy():
+    returns = _daily_returns()
+    array = np.asarray(returns, dtype=float)
+
+    assert best_realization(returns) == float(array.max())
+    assert best_realization_index(returns) == int(np.argmax(array))
+    assert positive_observation_share(returns) == pytest.approx(float(np.mean(array > 0)), rel=1e-12)
+    assert mean_positive_return(returns) == pytest.approx(float(array[array > 0].mean()), rel=1e-12)
+    assert mean_negative_return(returns) == pytest.approx(float(array[array < 0].mean()), rel=1e-12)
+
+
+def test_the_longest_positive_run_matches_a_numpy_run_length_scan():
+    returns = _daily_returns()
+    positive = np.concatenate(([0], (np.asarray(returns) > 0).astype(int), [0]))
+    edges = np.flatnonzero(np.diff(positive))
+    starts, ends = edges[0::2], edges[1::2]
+    lengths = ends - starts
+    longest = int(np.argmax(lengths))
+
+    run = longest_positive_run(returns)
+    assert (run.length, run.start_index, run.end_index) == (int(lengths[longest]), int(starts[longest]), int(ends[longest]) - 1)
+
+
+def test_the_best_thirty_days_and_the_largest_rally_match_numpy():
+    returns = _daily_returns()
+    horizon = calendar_days_to_observations(30, _ANNUALIZATION)
+    windows = horizon_compounded_returns(returns, horizon)
+    best = best_horizon_window(windows, horizon)
+    assert best.compounded_return == float(np.max(windows))
+    assert best.start_index == int(np.argmax(windows))
+
+    wealth = np.asarray(wealth_index(returns))
+    running_low = np.minimum.accumulate(wealth)
+    rise = wealth / running_low - 1.0
+    rally = largest_rally(wealth.tolist())
+    assert rally.gain == pytest.approx(float(rise.max()), rel=1e-12)
+    assert rally.peak_index == int(np.argmax(rise))
+    assert wealth[rally.trough_index] == running_low[rally.peak_index]
+
+
+# --------------------------------------------------------------------------- #
+# RN-22: the rolling semi-deviation and the rolling Omega, against the one home
+# --------------------------------------------------------------------------- #
+#
+# The two new risk signals publish, window by window, exactly what `risk/metrics.py` answers for that window:
+# `annualized_downside_deviation` (×100, the volatility's scale, so the two lines share one axis) and `omega_ratio`,
+# both around the Sortino's target. The vectorised helpers in `risk_adapters.py` are judged by the reference loop
+# (`rolling_single_values` over the scalar functions), as the three migrated helpers are above.
+
+_RN22_TARGETS = (0.0, 0.03)
+
+
+def _loop_downside_deviation(returns: Sequence[float], window: int, factor: float, *, target: float = 0.0) -> tuple[list[float | None], int]:
+    """The rolling semi-deviation as the scalar definition gives it, window by window, on the volatility's scale."""
+    return rolling_single_values(returns, window, lambda sample: annualized_downside_deviation(sample, factor, annual_target_return=target) * 100.0)
+
+
+def _loop_omega(returns: Sequence[float], window: int, factor: float, *, target: float = 0.0) -> tuple[list[float | None], int]:
+    """The rolling Omega as the scalar definition gives it: undefined where the window has no observation below the target."""
+    return rolling_single_values(returns, window, lambda sample: omega_ratio(sample, factor, annual_target_return=target))
+
+
+def _losses_then_a_long_gaining_run(window: int) -> list[float]:
+    """Losses and gains, then more than ``window`` observations above the target, then losses again.
+
+    The trap a rolling sum could fall in: once the last loss slides out of the window, an incrementally updated sum of
+    losses could keep a residue instead of an exact zero — a negative one would put NaN under a square root, a positive
+    one would pass the tolerance and publish an Omega of 1e12 (pandas' own sum lands on zero here, measured 17/11; the
+    helpers sum each window anew so it never depends on that). Every window wholly inside the gaining run must be
+    undefined, exactly as the loop says.
+    """
+    generator = np.random.default_rng(2207)
+    head = [float(value) for value in generator.normal(0.0004, 0.013, 60)]
+    gaining = [float(abs(value)) + 0.0005 for value in generator.normal(0.0, 0.009, window + 25)]
+    tail = [float(value) for value in generator.normal(-0.0002, 0.012, 40)]
+    return head + gaining + tail
+
+
+@pytest.mark.parametrize("target", _RN22_TARGETS)
+@pytest.mark.parametrize("seed", _ROLLING_SEEDS)
+@pytest.mark.parametrize("window", _ROLLING_WINDOWS)
+def test_the_vectorised_rolling_semi_deviation_reproduces_the_one_home_window_by_window(window, seed, target):
+    """Over T and around the target — not ``rolling().std()``: a zero is an answer, never undefined."""
+    returns = _rolling_sample(seed)
+    vectorised = risk_adapters_module.rolling_annualized_downside_deviation_values(returns, window, _ANNUALIZATION, annual_target_return=target, scale=100.0)
+
+    _assert_rolling_paths_agree(vectorised, _loop_downside_deviation(returns, window, _ANNUALIZATION, target=target), observations=len(returns), label=f"semi-deviation, window={window}, seed={seed}, target={target}")
+    assert vectorised[1] == 0
+
+
+@pytest.mark.parametrize("target", _RN22_TARGETS)
+@pytest.mark.parametrize("seed", _ROLLING_SEEDS)
+@pytest.mark.parametrize("window", _ROLLING_WINDOWS)
+def test_the_vectorised_rolling_omega_reproduces_the_one_home_window_by_window(window, seed, target):
+    """Gains over losses around the target, window by window, undefined exactly where the scalar Omega is."""
+    returns = _rolling_sample(seed)
+    loop = _loop_omega(returns, window, _ANNUALIZATION, target=target)
+
+    _assert_rolling_paths_agree(risk_adapters_module.rolling_omega_values(returns, window, _ANNUALIZATION, annual_target_return=target), loop, observations=len(returns), label=f"omega, window={window}, seed={seed}, target={target}")
+
+
+@pytest.mark.parametrize("window", (7, 20, 30))
+def test_the_rolling_omega_is_undefined_in_every_window_of_a_gaining_run_and_never_publishes_a_residue(window):
+    """The windows wholly inside a run with no loss are undefined — counted to the unit — and nothing infinite or huge leaks."""
+    returns = _losses_then_a_long_gaining_run(window)
+    loop = _loop_omega(returns, window, _ANNUALIZATION)
+    run_windows = (window + 25) - window + 1
+
+    assert loop[1] >= run_windows, "premise: the gaining run holds its windows, each undefined by the scalar Omega"
+    vectorised = risk_adapters_module.rolling_omega_values(returns, window, _ANNUALIZATION)
+    _assert_rolling_paths_agree(vectorised, loop, observations=len(returns), label=f"omega, gaining run, window={window}")
+    assert max(value for value in vectorised[0] if value is not None) < 1e6, "a residue of the losses' rolling sum published a huge Omega"
+
+
+@pytest.mark.parametrize("window", (7, 20, 30))
+def test_the_rolling_semi_deviation_is_a_measured_zero_in_a_gaining_run_never_a_nan(window):
+    """No observation below the target: the semi-deviation is 0 — a defined value — and the sum's residue is no NaN."""
+    returns = _losses_then_a_long_gaining_run(window)
+    vectorised = risk_adapters_module.rolling_annualized_downside_deviation_values(returns, window, _ANNUALIZATION, scale=100.0)
+
+    _assert_rolling_paths_agree(vectorised, _loop_downside_deviation(returns, window, _ANNUALIZATION), observations=len(returns), label=f"semi-deviation, gaining run, window={window}")
+    start = 60 + window  # the first window wholly inside the gaining run ends here (index in the values, baseline included)
+    assert vectorised[0][start] == 0.0

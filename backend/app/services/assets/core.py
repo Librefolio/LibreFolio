@@ -36,12 +36,14 @@ import hashlib
 import json
 import math
 from collections.abc import Awaitable, Callable
+from datetime import timedelta
 from typing import Optional
 
 from backend.app.logging_config import get_logger
-from backend.app.services.assets.base import AssetRateLimitedError, AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.base import AssetCallLimitError, AssetRateLimitedError, AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
-from backend.app.services.platform.provider_cooldown import record_no_verdict, record_refusal, record_success, wait_before_call
+from backend.app.services.platform import call_counter
+from backend.app.services.platform.provider_cooldown import limit_pause_left, record_limit_pause, record_no_verdict, record_refusal, record_success, wait_before_call
 from backend.app.services.plugin_settings.contract import PluginSettingsMixin
 from backend.app.services.plugin_settings.runtime import configure_instance
 from backend.app.utils.runtime.cache import get_ttl_cache
@@ -56,11 +58,16 @@ logger = get_logger(__name__)
 # ============================================================================
 
 _asset_history_cache = get_ttl_cache("asset_history_fetch", maxsize=500, ttl=900)  # 15 min
-_asset_current_cache = get_ttl_cache("asset_current_fetch", maxsize=300, ttl=120)  # 2 min
+_asset_current_cache = get_ttl_cache("asset_current_fetch", maxsize=5000, ttl=120)  # 2 min, or the provider's interval (current_cache_ttl); a bulk read caches every active asset of its provider (76)
 _asset_metadata_cache = get_ttl_cache("asset_metadata_fetch", maxsize=200, ttl=1800)  # 30 min
 _search_result_cache = get_ttl_cache("search_results", maxsize=5000, ttl=86400)  # 24h — individual items
 _search_query_cache = get_ttl_cache("search_queries", maxsize=500, ttl=900)  # 15 min — query→results
 _RISK_WARMUP_DAY_MULTIPLIER = 2
+
+#: How long a current value stays in ``_asset_current_cache`` when its provider declares nothing longer: two minutes.
+CURRENT_CACHE_DEFAULT_SECONDS = 120.0
+#: The providers and values already logged as an unusable ``current_min_refresh_seconds``: once each.
+_reported_refresh_seconds: set[tuple[str, str]] = set()
 
 
 def _provider_params_hash(provider_params: Optional[dict]) -> str:
@@ -152,10 +159,51 @@ def asset_cache_key(provider_code: str, identifier: str | None, identifier_type:
 
 
 async def drop_asset_cache_entries(provider_code: str, identifier: str | None, identifier_type: object, provider_params: dict | str | None) -> None:
-    """Drop the cached history and current value of one provider assignment, keyed as a call would key them now."""
+    """Drop the cached history and current value of one provider assignment, keyed as a call would key them now, and the
+    bulk-read stamps that cover it (``bulk_current.forget_member``)."""
     key = asset_cache_key(provider_code, identifier, identifier_type, provider_params, await settings_cache_part_for(provider_code))
     _asset_history_cache.delete(key)
     _asset_current_cache.delete(key)
+    # A bulk read's stamp must not keep serving the database for it: the next request reads its group again (76, C2)
+    from backend.app.services.assets.bulk_current import forget_member  # noqa: PLC0415 — bulk_current imports this module
+
+    forget_member(key)
+
+
+def current_cache_ttl(provider: AssetSourceProvider) -> float:
+    """The seconds a current value of ``provider`` stays fresh (project 76, C4): its ``current_min_refresh_seconds``
+    when that is a number of at least ``CURRENT_CACHE_DEFAULT_SECONDS``, else two minutes.
+
+    Read on the configured instance the caller holds (``configured_provider``): the value may come from its settings.
+    A test double without the property, ``None``, a bool, a text, a number below two minutes or a property that raises
+    all give two minutes; the unusable ones are logged once per provider and value.
+    """
+    code = getattr(provider, "provider_code", None)
+    try:
+        declared = getattr(provider, "current_min_refresh_seconds", None)
+    except Exception as error:  # noqa: BLE001 — a broken property must not stop the prices: two minutes then
+        _report_refresh_seconds(code, f"raised {type(error).__name__}", error)
+        return CURRENT_CACHE_DEFAULT_SECONDS
+    if declared is None:
+        return CURRENT_CACHE_DEFAULT_SECONDS
+    if isinstance(declared, bool) or not isinstance(declared, (int, float)) or not math.isfinite(declared) or declared < CURRENT_CACHE_DEFAULT_SECONDS:
+        _report_refresh_seconds(code, repr(declared)[:40], None)
+        return CURRENT_CACHE_DEFAULT_SECONDS
+    return float(declared)
+
+
+def _report_refresh_seconds(code: str | None, shown: str, error: Exception | None) -> None:
+    """Log once per provider and value that its ``current_min_refresh_seconds`` is not used."""
+    if (str(code), shown) in _reported_refresh_seconds:
+        return
+    _reported_refresh_seconds.add((str(code), shown))
+    logger.warning("Provider current_min_refresh_seconds ignored: two minutes used", provider=code, value=shown, minimum=CURRENT_CACHE_DEFAULT_SECONDS, exc_info=error)
+
+
+def remember_current_value(provider: AssetSourceProvider, cache_key: tuple, quote: object) -> None:
+    """Cache a current value of ``provider`` under ``cache_key`` for the provider's interval (``current_cache_ttl``):
+    every writer of ``_asset_current_cache`` goes through here."""
+    _asset_current_cache.set(cache_key, quote, ttl=timedelta(seconds=current_cache_ttl(provider)))
 
 
 def cooldown_scope_for(provider: AssetSourceProvider, identifier: str, identifier_type=None, provider_params: dict | None = None) -> str | None:
@@ -175,6 +223,56 @@ def cooldown_scope_for(provider: AssetSourceProvider, identifier: str, identifie
     return scope if isinstance(scope, str) and scope else None
 
 
+def call_owner(provider: AssetSourceProvider) -> tuple[str, str, call_counter.CallLimits]:
+    """Who a call of ``provider`` is counted and limited on (project 76, U2): ``call_counter.call_owner`` for the asset
+    family — the shared group whose credits it spends, else the provider — with the limits of that owner."""
+    return call_counter.call_owner(provider, "asset")
+
+
+async def _admit_call(provider: AssetSourceProvider, code: str, scope: str | None) -> None:
+    """The refusals before any I/O, in order: a required setting without a value (``NOT_CONFIGURED``), a pause after
+    «too many requests», a full call limit (only for a provider that reaches an external service). None of the first
+    two is counted."""
+    settings = provider.settings
+    if settings.missing:
+        missing = list(settings.missing)
+        raise AssetSourceError(f"Provider {code} is not configured: {', '.join(missing)} missing", "NOT_CONFIGURED", {"missing": missing})
+    wait = wait_before_call("asset", code, scope)
+    if wait > 0:
+        raise AssetRateLimitedError(f"Provider {code} is paused after too many requests: {math.ceil(wait)} s left", retry_after=wait, scope=scope)
+    # A test double with settings that is no AssetSourceProvider declares nothing: never counted, as a bare double
+    if getattr(provider, "calls_external_service", False):
+        try:
+            await _count_call(provider, code, scope)
+        except AssetCallLimitError:
+            # A limit refusal is no verdict on the source: the trial of its expired pause goes to the next caller
+            record_no_verdict("asset", code, scope)
+            raise
+
+
+async def _count_call(provider: AssetSourceProvider, code: str, scope: str | None) -> None:
+    """Count the call before it leaves, whatever it then meets (project 76, U2). A full limit refuses it and pauses the
+    provider exactly until the window ends, on the limit's own key (U2b: never a source's 429 streak), and the caller
+    gets a ``RATE_LIMITED`` refusal that every existing path handles unchanged."""
+    fingerprint = provider.settings.fingerprint
+    left = limit_pause_left("asset", code, fingerprint)
+    if left > 0:
+        raise AssetCallLimitError(f"Provider {code} is paused at its call limit: {math.ceil(left)} s left", retry_after=left, scope=scope, details={"reason": "call_limit"})
+    family, owner, limits = call_owner(provider)
+    try:
+        await call_counter.count_and_check(family, owner, limits)
+    except call_counter.CallLimitReached as full:
+        logger.warning("Provider call refused: instance call limit reached", provider=code, owner=f"{family}/{owner}", window=full.window, limit=full.limit, retry_after_s=round(full.retry_after, 1))
+        # Exactly until the full window ends, on the limit's own key: never a refusal of the source (U2b)
+        paused = record_limit_pause("asset", code, fingerprint, full.retry_after)
+        details = {"reason": "call_limit", "window": full.window, "limit": full.limit}
+        raise AssetCallLimitError(f"Provider {code} reached its {full.window} call limit ({full.limit})", retry_after=paused or full.retry_after, scope=scope, details=details) from full
+    except BaseException:
+        # Neither an answer nor a refusal (cancelled, say): the trial of an expired source pause goes to the next caller
+        record_no_verdict("asset", code, scope)
+        raise
+
+
 async def call_provider[ResultT](provider: AssetSourceProvider, fn: Callable[[], Awaitable[ResultT]], *, timeout: float, scope: str | None = None) -> ResultT:
     """The one boundary of every call to an asset provider.
 
@@ -188,6 +286,11 @@ async def call_provider[ResultT](provider: AssetSourceProvider, fn: Callable[[],
       called: ``AssetRateLimitedError`` at once, ``retry_after`` the seconds of pause left. A refusal the call meets
       (the plugin raises a ``RateLimitedError``) pauses the provider, and the error leaves with ``retry_after`` set to
       the pause decided; an answer ends a pause; any other end frees the trial of an expired pause for the next caller.
+    - A provider that reaches an external service (``calls_external_service``) is counted before the call leaves, on
+      its own row or on the group whose credits it spends (``call_owner``, ``services/platform/call_counter.py``),
+      even when the call then fails. A full instance limit refuses it without calling: ``AssetCallLimitError`` (a
+      ``RATE_LIMITED`` refusal, ``details`` naming the window and the limit), and the provider is paused exactly until
+      the window ends, on the limit's own key (U2b).
     - The provider's secrets are in flight for the call: masked in every line logged meanwhile, here and in the
       provider's thread, and in the exception the call raises, its chain included (``utils/runtime/secret_masking.py``).
       An error that still shows a secret after masking (its text built by a ``__str__`` of its own) is replaced by an
@@ -205,12 +308,7 @@ async def call_provider[ResultT](provider: AssetSourceProvider, fn: Callable[[],
         return await _run_provider_in_thread(fn, timeout=timeout)
     code = provider.provider_code
     settings = provider.settings
-    if settings.missing:
-        missing = list(settings.missing)
-        raise AssetSourceError(f"Provider {code} is not configured: {', '.join(missing)} missing", "NOT_CONFIGURED", {"missing": missing})
-    wait = wait_before_call("asset", code, scope)
-    if wait > 0:
-        raise AssetRateLimitedError(f"Provider {code} is paused after too many requests: {math.ceil(wait)} s left", retry_after=wait, scope=scope)
+    await _admit_call(provider, code, scope)
     secrets = settings.secret_values()
     # A secret the caller chose (a personal field) is in this call: hide whole every text that shows a secret, since
     # masking it in place would tell whether that value occurs beside an instance secret (decision N15).

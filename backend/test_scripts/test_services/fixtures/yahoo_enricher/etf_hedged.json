@@ -1,0 +1,378 @@
+{
+ "source": "yahoo",
+ "asset": "etf_hedged",
+ "version": "yfinance 1.7.0",
+ "recorded_at": "2026-11-10T17:07:16",
+ "calls": {
+  "info_from_isin": {
+   "seconds": 0.45,
+   "error": null,
+   "response": {
+    "phone": "353 1 246 7000",
+    "executiveTeam": [],
+    "maxAge": 86400,
+    "priceHint": 2,
+    "previousClose": 117.34,
+    "open": 117.99,
+    "dayLow": 116.96,
+    "dayHigh": 118.78,
+    "regularMarketPreviousClose": 117.34,
+    "regularMarketOpen": 117.99,
+    "regularMarketDayLow": 116.96,
+    "regularMarketDayHigh": 118.78,
+    "trailingPE": 21.681395,
+    "volume": 21283,
+    "regularMarketVolume": 21283,
+    "averageVolume": 42101,
+    "averageVolume10days": 53441,
+    "averageDailyVolume10Day": 53441,
+    "bid": 116.96,
+    "ask": 117.06,
+    "bidSize": 0,
+    "askSize": 0,
+    "yield": 0.0,
+    "totalAssets": 5324820480,
+    "fiftyTwoWeekLow": 100.71,
+    "fiftyTwoWeekHigh": 190.52,
+    "allTimeHigh": 190.52,
+    "allTimeLow": 21.25,
+    "fulldayPrice": 117.06,
+    "fulldayChange": -0.27999878,
+    "fulldayChangePercent": -0.23862177,
+    "fiftyDayAverage": 119.2783,
+    "twoHundredDayAverage": 114.80052,
+    "navPrice": 117.4914,
+    "currency": "EUR",
+    "tradeable": false,
+    "ytdReturn": 9.89676,
+    "beta3Year": 0.0,
+    "fundFamily": "BlackRock Asset Management Ireland - ETF",
+    "fundInceptionDate": 1285804800,
+    "legalType": "Exchange Traded Fund",
+    "threeYearAverageReturn": 0.17551929,
+    "fiveYearAverageReturn": 0.082126506,
+    "quoteType": "ETF",
+    "symbol": "IWDE.L",
+    "language": "en-US",
+    "region": "US",
+    "typeDisp": "ETF",
+    "quoteSourceName": "Delayed Quote",
+    "triggerable": false,
+    "customPriceAlertConfidence": "LOW",
+    "corporateActions": [],
+    "regularMarketTime": 1794325896,
+    "exchange": "LSE",
+    "messageBoardId": "finmb_128390225",
+    "exchangeTimezoneName": "Europe/London",
+    "exchangeTimezoneShortName": "GMT",
+    "gmtOffSetMilliseconds": 0,
+    "market": "gb_market",
+    "esgPopulated": false,
+    "hasPrePostMarketData": false,
+    "firstTradeDateMilliseconds": 1285830000000,
+    "shortName": "ISHARES V PUBLIC LIMITED COMPAN",
+    "longName": "iShares MSCI World EUR Hedged UCITS ETF (Acc)",
+    "regularMarketChange": -0.27999878,
+    "regularMarketChangePercent": -0.23862177,
+    "regularMarketPrice": 117.06,
+    "regularMarketDayRange": "116.96 - 118.78",
+    "fullExchangeName": "LSE",
+    "averageDailyVolume3Month": 42101,
+    "fiftyTwoWeekLowChange": 16.349998,
+    "fiftyTwoWeekLowChangePercent": 0.16234732,
+    "fiftyTwoWeekRange": "100.71 - 190.52",
+    "fiftyTwoWeekHighChange": -73.46001,
+    "fiftyTwoWeekHighChangePercent": -0.38557634,
+    "fiftyTwoWeekChangePercent": 10.075045,
+    "dividendYield": 0.0,
+    "trailingThreeMonthReturns": 0.40826,
+    "trailingThreeMonthNavReturns": 0.40826,
+    "netAssets": 5324820500.0,
+    "epsTrailingTwelveMonths": 5.399099,
+    "fiftyDayAverageChange": -2.2182999,
+    "fiftyDayAverageChangePercent": -0.018597683,
+    "twoHundredDayAverageChange": 2.2594757,
+    "twoHundredDayAverageChangePercent": 0.019681755,
+    "netExpenseRatio": 0.55,
+    "sourceInterval": 15,
+    "exchangeDataDelayedBy": 15,
+    "cryptoTradeable": false,
+    "marketState": "REGULAR",
+    "trailingPegRatio": null
+   }
+  },
+  "search_isin": {
+   "seconds": 0.16,
+   "error": null,
+   "response": [
+    {
+     "symbol": "IWDE.L",
+     "exchange": "LSE",
+     "exchDisp": "London",
+     "quoteType": "ETF",
+     "typeDisp": "ETF",
+     "shortname": "ISHARES V PUBLIC LIMITED COMPAN",
+     "longname": "iShares MSCI World EUR Hedged UCITS ETF (Acc)",
+     "sector": null,
+     "industry": null
+    }
+   ]
+  },
+  "info_ticker:IWDE.L": {
+   "seconds": 0.14,
+   "error": null,
+   "response": {
+    "phone": "353 1 246 7000",
+    "executiveTeam": [],
+    "maxAge": 86400,
+    "priceHint": 2,
+    "previousClose": 117.34,
+    "open": 117.99,
+    "dayLow": 116.96,
+    "dayHigh": 118.78,
+    "regularMarketPreviousClose": 117.34,
+    "regularMarketOpen": 117.99,
+    "regularMarketDayLow": 116.96,
+    "regularMarketDayHigh": 118.78,
+    "trailingPE": 21.681395,
+    "volume": 21283,
+    "regularMarketVolume": 21283,
+    "averageVolume": 42101,
+    "averageVolume10days": 53441,
+    "averageDailyVolume10Day": 53441,
+    "bid": 116.96,
+    "ask": 117.06,
+    "bidSize": 0,
+    "askSize": 0,
+    "yield": 0.0,
+    "totalAssets": 5324820480,
+    "fiftyTwoWeekLow": 100.71,
+    "fiftyTwoWeekHigh": 190.52,
+    "allTimeHigh": 190.52,
+    "allTimeLow": 21.25,
+    "fulldayPrice": 117.06,
+    "fulldayChange": -0.27999878,
+    "fulldayChangePercent": -0.23862177,
+    "fiftyDayAverage": 119.2783,
+    "twoHundredDayAverage": 114.80052,
+    "navPrice": 117.4914,
+    "currency": "EUR",
+    "tradeable": false,
+    "ytdReturn": 9.89676,
+    "beta3Year": 0.0,
+    "fundFamily": "BlackRock Asset Management Ireland - ETF",
+    "fundInceptionDate": 1285804800,
+    "legalType": "Exchange Traded Fund",
+    "threeYearAverageReturn": 0.17551929,
+    "fiveYearAverageReturn": 0.082126506,
+    "quoteType": "ETF",
+    "symbol": "IWDE.L",
+    "language": "en-US",
+    "region": "US",
+    "typeDisp": "ETF",
+    "quoteSourceName": "Delayed Quote",
+    "triggerable": false,
+    "customPriceAlertConfidence": "LOW",
+    "corporateActions": [],
+    "regularMarketTime": 1794325896,
+    "exchange": "LSE",
+    "messageBoardId": "finmb_128390225",
+    "exchangeTimezoneName": "Europe/London",
+    "exchangeTimezoneShortName": "GMT",
+    "gmtOffSetMilliseconds": 0,
+    "market": "gb_market",
+    "esgPopulated": false,
+    "marketState": "REGULAR",
+    "firstTradeDateMilliseconds": 1285830000000,
+    "regularMarketChange": -0.27999878,
+    "regularMarketChangePercent": -0.23862177,
+    "regularMarketPrice": 117.06,
+    "regularMarketDayRange": "116.96 - 118.78",
+    "fullExchangeName": "LSE",
+    "averageDailyVolume3Month": 42101,
+    "fiftyTwoWeekLowChange": 16.349998,
+    "fiftyTwoWeekLowChangePercent": 0.16234732,
+    "fiftyTwoWeekRange": "100.71 - 190.52",
+    "fiftyTwoWeekHighChange": -73.46001,
+    "fiftyTwoWeekHighChangePercent": -0.38557634,
+    "fiftyTwoWeekChangePercent": 10.075045,
+    "dividendYield": 0.0,
+    "trailingThreeMonthReturns": 0.40826,
+    "trailingThreeMonthNavReturns": 0.40826,
+    "netAssets": 5324820500.0,
+    "epsTrailingTwelveMonths": 5.399099,
+    "fiftyDayAverageChange": -2.2182999,
+    "fiftyDayAverageChangePercent": -0.018597683,
+    "twoHundredDayAverageChange": 2.2594757,
+    "twoHundredDayAverageChangePercent": 0.019681755,
+    "netExpenseRatio": 0.55,
+    "sourceInterval": 15,
+    "exchangeDataDelayedBy": 15,
+    "cryptoTradeable": false,
+    "hasPrePostMarketData": false,
+    "shortName": "ISHARES V PUBLIC LIMITED COMPAN",
+    "longName": "iShares MSCI World EUR Hedged UCITS ETF (Acc)",
+    "trailingPegRatio": null
+   }
+  },
+  "funds_data:IWDE.L": {
+   "seconds": 0.08,
+   "error": null,
+   "response": {
+    "description": "",
+    "fund_overview": {
+     "categoryName": null,
+     "family": "BlackRock Asset Management Ireland - ETF",
+     "legalType": "Exchange Traded Fund"
+    },
+    "fund_operations": [
+     {
+      "Attributes": "Annual Report Expense Ratio",
+      "IWDE.L": 0.0055,
+      "Category Average": null
+     },
+     {
+      "Attributes": "Annual Holdings Turnover",
+      "IWDE.L": 0.1878,
+      "Category Average": null
+     },
+     {
+      "Attributes": "Total Net Assets",
+      "IWDE.L": 260331.94,
+      "Category Average": 260331.94
+     }
+    ],
+    "asset_classes": {
+     "cashPosition": 0.012999999,
+     "stockPosition": 0.98660004,
+     "bondPosition": 0.0,
+     "preferredPosition": 0.0,
+     "convertiblePosition": 0.0,
+     "otherPosition": 0.00029999999
+    },
+    "top_holdings": [
+     {
+      "Symbol": "AAPL",
+      "Name": "Apple Inc",
+      "Holding Percent": 0.0557575
+     },
+     {
+      "Symbol": "NVDA",
+      "Name": "NVIDIA Corp",
+      "Holding Percent": 0.0518246
+     },
+     {
+      "Symbol": "MSFT",
+      "Name": "Microsoft Corp",
+      "Holding Percent": 0.0405717
+     },
+     {
+      "Symbol": "AMZN",
+      "Name": "Amazon.com Inc",
+      "Holding Percent": 0.0256324
+     },
+     {
+      "Symbol": "GOOGL",
+      "Name": "Alphabet Inc Class A",
+      "Holding Percent": 0.0180871
+     },
+     {
+      "Symbol": "AVGO",
+      "Name": "Broadcom Inc",
+      "Holding Percent": 0.0162346
+     },
+     {
+      "Symbol": "META",
+      "Name": "Meta Platforms Inc Class A",
+      "Holding Percent": 0.014877
+     },
+     {
+      "Symbol": "GOOG",
+      "Name": "Alphabet Inc Class C",
+      "Holding Percent": 0.0143268
+     },
+     {
+      "Symbol": "TSLA",
+      "Name": "Tesla Inc",
+      "Holding Percent": 0.0126001
+     },
+     {
+      "Symbol": "LLY",
+      "Name": "Eli Lilly and Co",
+      "Holding Percent": 0.0124995
+     }
+    ],
+    "equity_holdings": [
+     {
+      "Average": "Price/Earnings",
+      "IWDE.L": 0.04579,
+      "Category Average": null
+     },
+     {
+      "Average": "Price/Book",
+      "IWDE.L": 0.26189,
+      "Category Average": null
+     },
+     {
+      "Average": "Price/Sales",
+      "IWDE.L": 0.36343,
+      "Category Average": null
+     },
+     {
+      "Average": "Price/Cashflow",
+      "IWDE.L": 0.0627,
+      "Category Average": null
+     },
+     {
+      "Average": "Median Market Cap",
+      "IWDE.L": null,
+      "Category Average": null
+     },
+     {
+      "Average": "3 Year Earnings Growth",
+      "IWDE.L": null,
+      "Category Average": null
+     }
+    ],
+    "bond_holdings": [
+     {
+      "Average": "Duration",
+      "IWDE.L": null,
+      "Category Average": null
+     },
+     {
+      "Average": "Maturity",
+      "IWDE.L": null,
+      "Category Average": null
+     },
+     {
+      "Average": "Credit Quality",
+      "IWDE.L": null,
+      "Category Average": null
+     }
+    ],
+    "bond_ratings": {
+     "us_government": 0.0
+    },
+    "sector_weightings": {
+     "realestate": 0.0163,
+     "consumer_cyclical": 0.086,
+     "basic_materials": 0.0301,
+     "consumer_defensive": 0.052800003,
+     "technology": 0.3062,
+     "communication_services": 0.0727,
+     "financial_services": 0.1597,
+     "utilities": 0.024600001,
+     "industrials": 0.1039,
+     "energy": 0.046,
+     "healthcare": 0.1018
+    }
+   }
+  },
+  "isin_of_ticker:IWDE.L": {
+   "seconds": 0.64,
+   "error": null,
+   "response": "-"
+  }
+ }
+}

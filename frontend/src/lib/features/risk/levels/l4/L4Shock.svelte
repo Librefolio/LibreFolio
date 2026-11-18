@@ -11,10 +11,10 @@
     import {buildHypotheticalShockParameters, type RiskScenarioDimension} from '$lib/features/risk/riskRequest';
     import type {RiskPanelController} from '$lib/features/risk/riskPanelController.svelte';
 
-    import {formatCurrencyAmount, stressImpactDimension} from '../../riskAnalysisHelpers';
+    import {amountOnValue, formatCurrencyAmount, stressImpactDimension} from '../../riskAnalysisHelpers';
     import {geographyGroupNamer, stressBucketLabel} from '../../stressBucketLabel';
     import TornadoChart from './TornadoChart.svelte';
-    import {shockOptions, shockScenario, tornadoRows, type TornadoRow} from './scenarioHelpers';
+    import {shockOptions, shockScenario, tornadoRows, unconfiguredBuckets, type TornadoRow} from './scenarioHelpers';
     import {formatPercent} from '$lib/utils/core/formatPercent';
 
     /**
@@ -42,32 +42,45 @@
          * `metadata` is fail-closed, because a caller cannot forget it; a prop
          * alone is fail-open, so a future mount on `asset_set` that omits it
          * brings the euros back. **What is returned**: `''` makes the amount
-         * absent, which is right everywhere, whereas the `—` of
-         * `formatScopedCurrencyAmount` is right inside a card and wrong inside a
-         * sentence — "would have ended the period at −12.30% —" reads as a
+         * absent, which is right everywhere, whereas a card's `—` is wrong inside
+         * a sentence — "would have ended the period at −12.30% —" reads as a
          * number that failed to load, not as one that does not apply.
          *
-         * So the default is derived from the payload and the prop is an explicit
-         * override. The condition is the one `formatScopedCurrencyAmount`
-         * already uses, reused rather than restated, so the guards across the
-         * subsystem converge on the same predicate even where the string differs.
+         * So the default is derived from the payload (the scope is a portfolio)
+         * and the prop is an explicit override. On one asset the money comes
+         * from `scopeValue` instead, your position (Q17 A1, RN-17).
          */
         showMoney?: boolean;
+        /**
+         * One asset (RN-17, Q16-4): no shock by type. An asset has one type, so a shock by type lands in one bucket and
+         * its result is the shock itself; by sector and by area still pass through an ETF's breakdown.
+         */
+        withoutTypeShock?: boolean;
+        /** Your position's value on one asset (Q17 A1): the total's money is the return times it; none when null. */
+        scopeValue?: number | null;
     }
 
-    let {controller, assetNames, currency, showMoney: showMoneyOverride}: Props = $props();
+    let {controller, assetNames, currency, showMoney: showMoneyOverride, withoutTypeShock = false, scopeValue = null}: Props = $props();
 
     let presetId = $state('');
-    let dimension = $state<RiskScenarioDimension>('asset_class');
+    let dimension = $state<RiskScenarioDimension>(untrack(() => withoutTypeShock) ? 'sector' : 'asset_class');
     let bucketShocks = $state<Record<string, number>>({});
     let showDetail = $state(false);
 
-    let options = $derived(shockOptions(controller.scenarioCatalog, $currentLanguage));
+    let options = $derived(shockOptions(controller.scenarioCatalog, $currentLanguage).filter((option) => !withoutTypeShock || shockScenario(controller.scenarioCatalog, option.value)?.dimension !== 'asset_class'));
     let result = $derived(controller.stressResult);
     let output = $derived(riskOutput(result, schemas.RiskStressOutput));
     let scopeKind = $derived(singleValue(riskMetadata(result)?.scope) ?? '');
     let showMoney = $derived(showMoneyOverride ?? scopeKind === 'portfolio');
+    /** The answer is about one asset (RN-17): its own sentence, and the money on your position when you own it. */
+    let oneAsset = $derived(scopeKind === 'asset');
+    let assetAmount = $derived.by(() => {
+        const amount = amountOnValue(output?.portfolio_return, scopeValue);
+        return amount === null ? '' : formatCurrencyAmount(String(amount), currency);
+    });
     let rows = $derived(tornadoRows(output));
+    /** The held buckets the scenario left out, shocked by zero (RN-10): named under the total, never left silent. */
+    let unconfigured = $derived(unconfiguredBuckets(output));
     let buckets = $derived(Object.keys(bucketShocks).sort((left, right) => left.localeCompare(right)));
 
     /** Bumped once the country and sector names of the current language have arrived. */
@@ -188,18 +201,24 @@
 
     {#if output}
         <p class="text-sm text-lf-secondary" data-testid="risk-shock-total">
-            {$t('risk.levels.l4.shockTotal', {
+            {$t(oneAsset ? 'risk.levels.l4.shockTotalAsset' : 'risk.levels.l4.shockTotal', {
                 values: {
                     percent: output.portfolio_return == null ? '—' : `${output.portfolio_return < 0 ? '−' : '+'}${formatPercent(Math.abs(output.portfolio_return), {scale: 100, signed: false})}`,
-                    amount: !showMoney || output.impact_amount == null ? '' : formatCurrencyAmount(output.impact_amount, currency),
+                    amount: oneAsset ? assetAmount : !showMoney || output.impact_amount == null ? '' : formatCurrencyAmount(output.impact_amount, currency),
                 },
             })}
         </p>
         <TornadoChart {rows} label={rowLabel} {nameHeader} amount={rowAmount} testId="risk-shock-tornado" />
+        {#if unconfigured.length > 0}
+            <!-- A held class the scenario does not name is shocked by zero: the total counts it as untouched. -->
+            <p class="text-xs text-lf-warning" data-testid="risk-shock-unconfigured" data-buckets={unconfigured.join(',')}>
+                {$t('risk.levels.l4.shockUnconfigured', {values: {names: unconfigured.map((bucket) => bucketName(bucket, answeredDimension)).join(', ')}})}
+            </p>
+        {/if}
         {#if output.classification_coverage != null && output.classification_coverage < 1}
-            <!-- Coverage below one means some holdings had no bucket to fall in.
-                 Unstated, the total would silently speak for less than the whole
-                 portfolio while looking as if it spoke for all of it. -->
+            <!-- Coverage below one means some holdings had no classification data
+                 (`metadata_fallback`): they were counted as "Other" at 100% and are in the
+                 total. The warning in the level's reasons names them. -->
             <p class="text-xs text-lf-warning" data-testid="risk-shock-coverage">
                 {$t('risk.levels.l4.shockCoverage', {values: {percent: formatPercent(output.classification_coverage, {scale: 100, signed: false, digits: 0})}})}
             </p>

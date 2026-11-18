@@ -503,3 +503,36 @@ class TestLargestWeightDeviationAt:
         assert _weights().largest_weight_deviation_at([(Decimal("50"), Decimal("0.5")), (Decimal("50"), Decimal("0.5"))], Decimal("100")) == (Decimal("0"), None)
         assert _weights().largest_weight_deviation_at([], Decimal("100")) == (Decimal("0"), None)
         assert _weights().largest_weight_deviation_at([(Decimal("1"), Decimal("0"))], Decimal("0")) is None
+
+
+class TestEffectiveNumberOfPositions:
+    """RN-15 (developer's Q8 a, 16/11/2026): N_eff = 10 000 ÷ the Herfindahl index of ``concentration``, in points, over
+    the weights renormalized on their own sum — the one home of the formula, which ``risk/acquired.py`` used to copy."""
+
+    @staticmethod
+    def _effective(weights: Sequence[float]) -> float | None:
+        value = _weights().effective_number_of_positions({index: Decimal(weight) for index, weight in enumerate(weights)})
+        return None if value is None else float(value)
+
+    def test_it_is_ten_thousand_over_the_herfindahl_index_in_points(self):
+        weights = [0.5, 0.3, 0.15, 0.05]
+        _, herfindahl_points = _weights().concentration(Decimal(weight) * 100 for weight in weights)
+
+        assert self._effective(weights) == pytest.approx(2.73972602739726, abs=1e-12)
+        assert self._effective(weights) == pytest.approx(10000.0 / float(herfindahl_points), abs=1e-12)
+
+    @pytest.mark.parametrize("count", [1, 4, 10, 37])
+    def test_equal_weights_give_the_count_itself(self, count):
+        assert self._effective([1.0 / count] * count) == pytest.approx(count, abs=1e-9)
+
+    def test_the_weights_are_taken_over_their_own_sum_so_what_is_not_among_them_leaves_the_denominator(self):
+        """Cash, a position without a price: not given, not counted — N_eff never exceeds the weights given."""
+        assert self._effective([0.25, 0.25]) == pytest.approx(2.0, abs=1e-12)
+        assert self._effective([0.5, 0.5]) == pytest.approx(2.0, abs=1e-12)
+        assert self._effective([0.24919719587288608, 0.15911534301518165]) <= 2.0
+
+    def test_none_without_a_weight_of_value_and_a_negative_weight_refused(self):
+        assert self._effective([0.0, 0.0]) is None
+        assert self._effective([]) is None
+        with pytest.raises(ValueError):
+            self._effective([0.5, -0.2])

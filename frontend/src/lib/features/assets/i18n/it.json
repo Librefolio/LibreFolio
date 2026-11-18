@@ -71,7 +71,13 @@
     "loadFailed": "Impossibile caricare i dati dell'asset",
     "pricesLoadFailed": "Impossibile caricare i prezzi",
     "manualChip": "Manuale",
-    "externalLinkHint": "{name}: apri {site} in una nuova scheda"
+    "externalLinkHint": "{name}: apri {site} in una nuova scheda",
+    "docsHelp": {
+      "header": "Un asset nel dettaglio: grafico dei prezzi e segnali, misure, eventi e classificazione, con la fonte dei prezzi e le tue transazioni.",
+      "measures": "Scegli due giorni sul grafico e leggi di quanto sono cambiati, tra l'uno e l'altro, l'asset e le linee disegnate con lui.",
+      "metadata": "Cos'è l'asset: descrizione, settori e paesi, identificativi e il fornitore che ne dà i prezzi.",
+      "dataEditor": "Correggi e completa a mano i dati dell'asset: i prezzi giornalieri e gli eventi, come dividendi e frazionamenti."
+    }
   },
   "assets": {
     "create": "Nuovo asset",
@@ -483,6 +489,9 @@
       "toBeRemoved": "Da rimuovere",
       "urlNone": "nessun URL",
       "alreadyWithout": "{already} già senza"
+    },
+    "docsHelp": {
+      "list": "Tutti gli asset che LibreFolio segue, con la fonte dei prezzi, l'ultimo prezzo e la variazione. Aprine uno per grafico, eventi e dati."
     }
   },
   "events": {

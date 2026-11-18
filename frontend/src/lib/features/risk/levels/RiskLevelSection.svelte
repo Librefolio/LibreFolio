@@ -31,7 +31,8 @@
          */
         lead?: string;
         /** Ordinal shown before the question, so the scale is legible at a glance. */
-        level: 1 | 2 | 3 | 4;
+        /** `move`: «How does it move?» (RN-18), the positive twin of L1; published as `data-level`. */
+        level: 1 | 2 | 3 | 4 | 'move';
         /** Collapsible levels start closed; the rest are always open. */
         collapsible?: boolean;
         testId: string;
@@ -260,7 +261,7 @@
                                 {#if row.returnBasis !== null}
                                     <div>
                                         <dt>{$t('risk.metadata.returnBasis')}</dt>
-                                        <!-- Guarded, unlike `RiskResultFrame:108`, which builds this
+                                        <!-- Guarded, unlike the return-basis line of `RiskResultFrame`, which builds this
                                              same key with no fallback: a basis the catalogue has not
                                              seen prints `risk.returnBasis.<value>` there. Here it
                                              degrades to the backend token, which is information. -->

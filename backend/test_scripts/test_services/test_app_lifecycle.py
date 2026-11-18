@@ -37,7 +37,9 @@ steps), ``middleware.py`` and ``static_site.py``, cut out of ``backend/app/main.
     never by reading the variable again. Each "nothing" has its presence barrier: the same step, switched on, calls the
     stand-in. MF-J45a (red before its cure: no such step): the ``portfolio-engine`` shutdown step stands after
     ``quant-pools`` and before ``caches`` (relative order, a constraint of its own beside the steps of CP2b) and reaches
-    ``app_lifespan.shutdown_engine_executor`` through the module's name when it runs.
+    ``app_lifespan.shutdown_engine_executor`` through the module's name when it runs. Plan 68, B1 (red before its cure):
+    the ``providers`` shutdown step (``_shutdown_providers``) shuts down the enrichers too, beside the asset, FX and BRIM
+    providers, each registry's ``shutdown_all_providers`` replaced by a recorder.
 (e) Middleware: GZip outside CORS, with their options, checked in relative order so that a workstream adds an entry,
     and a test of its own constraint, without touching this file's tests; ``install_middleware`` adds any stack with
     its first entry outermost; the app of ``backend.app.main`` carries ``MIDDLEWARE_STACK``.
@@ -83,7 +85,11 @@ from structlog.testing import capture_logs
 
 import backend.app.main as app_main
 from backend.app.config import API_V1_PREFIX, is_test_mode
+from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.brim import brim_parse_pool
+from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.enrichers.registry import EnricherRegistry
+from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.platform import app_lifespan, lifecycle, static_site
 from backend.app.services.platform.lifecycle import MIN_STEP_SECONDS, Step, current_step, run_shutdown_steps, run_startup_steps
 from backend.app.services.platform.middleware import MIDDLEWARE_STACK, MiddlewareEntry, install_middleware
@@ -740,6 +746,21 @@ def test_the_brim_parse_pool_is_prewarmed_after_the_market_holidays_and_before_t
     print_section("W-B53: the brim-parse-pool startup step, after market-holidays and before the scheduler")
     assert_in_relative_order(app_lifespan.STARTUP_STEPS, ("market-holidays", "brim-parse-pool", "scheduler"), "STARTUP_STEPS")
     print_success("✓ market-holidays, brim-parse-pool, scheduler")
+
+
+def test_the_providers_step_shuts_down_every_provider_family_the_enrichers_included(monkeypatch: pytest.MonkeyPatch) -> None:
+    print_section("Plan 68 B1: the providers shutdown step reaches the enrichers")
+    called: list[str] = []
+    for registry in (AssetProviderRegistry, FXProviderRegistry, BRIMProviderRegistry, EnricherRegistry):
+        monkeypatch.setattr(registry, "shutdown_all_providers", classmethod(lambda cls: called.append(cls.__name__)))
+    assert _step(app_lifespan.SHUTDOWN_STEPS, "providers").run is not None, "barrier: the providers step exists"
+
+    app_lifespan._shutdown_providers()
+
+    assert {"AssetProviderRegistry", "FXProviderRegistry", "BRIMProviderRegistry"} <= set(called), f"barrier: the step reaches the provider families it always did, called {called}"
+    assert "EnricherRegistry" in called, f"the providers step leaves the enrichers running: it called {called}"
+    assert len(called) == len(set(called)), f"a registry shut down twice: {called}"
+    print_success(f"✓ {', '.join(called)}")
 
 
 def test_the_portfolio_engine_is_shut_down_after_the_quant_pools_and_before_the_caches() -> None:

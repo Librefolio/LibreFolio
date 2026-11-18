@@ -23,7 +23,7 @@
  * ⚠️ Every figure below was **invented while writing this file**: nothing was read off a running
  * backend, and nothing here may be described as measured. The payloads are shaped to be
  * *emittable* — they satisfy the zod schemas `assetSetLevels.ts` parses with and the pydantic
- * validators in `backend/app/schemas/risk.py` that would have produced them: CVaR ≥ VaR, and the
+ * validators in `backend/app/schemas/risk/outputs.py` that would have produced them: CVaR ≥ VaR, and the
  * episode contract (a negative maximum with ordered peak/trough dates and a recovered ratio; a
  * recovery date only on `recovered`). Dates agree with durations the way `metrics.py` counts them,
  * so the arithmetic can be checked instead of trusted. `metadata` and `data_quality` are omitted

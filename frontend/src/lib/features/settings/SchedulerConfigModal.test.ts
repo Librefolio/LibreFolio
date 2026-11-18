@@ -381,7 +381,9 @@ describe('what makes the save button live', () => {
 });
 
 describe('saving', () => {
-    it('sends the five keys the backend expects, and nothing else', async () => {
+    it('sends the seven keys the backend expects, and nothing else', async () => {
+        // Adapted by design in lot B6b (plan 68): the profile read adds its two keys,
+        // at their defaults here because DEFAULTS carries no profile values.
         const m = mount();
 
         await fireEvent.click(saveButton());
@@ -393,6 +395,8 @@ describe('saving', () => {
             scheduler_history_sync_days: 'mon,wed',
             scheduler_history_sync_horizon_days: '14',
             scheduler_timezone: 'UTC',
+            scheduler_profile_read_times: '03:00',
+            scheduler_profile_read_days: 'sat',
         });
         expect(m.onsave).toHaveBeenCalledOnce();
     });
@@ -686,5 +690,330 @@ describe('dismissing', () => {
         mount({open: false});
 
         expect(screen.queryByTestId('scheduler-config-modal')).toBeNull();
+    });
+});
+
+/**
+ * Lot B6b (plan 68) — the third job, `profile_read`: a weekly read of the asset profiles from their enrichers, with
+ * its own times and its own weekdays (`scheduler_profile_read_times`, `scheduler_profile_read_days`; backend B6,
+ * defaults `03:00` and `sat`, an empty list refused).
+ *
+ * The section is `scheduler-config-profile-read`, after the horizon. Its lists are its own state: nothing done to
+ * the history lists moves them, and nothing done to them moves the history lists. That is why each test below
+ * asserts both sides — the list it touched changed, the other did not.
+ *
+ * Handles. The chips' × buttons are named `profileReadTimesRemove <slot>` (never `historyTimesRemove`, so `slots()`
+ * keeps seeing only the history chips); the day buttons are `scheduler-profile-day-<day>` with `aria-pressed`, named
+ * `profileReadDay <historyDays<Day> label>`, so `dayButton()` (exact accessible name) still finds exactly one button.
+ * `currentValues.profileTimes` / `profileDays` are optional: a parent that passes neither gets the backend defaults.
+ */
+describe('the profile read (lot B6b)', () => {
+    const PROFILE_REMOVE = 'settings.global.scheduler.profileReadTimesRemove';
+    const PROFILE = {profileTimes: '03:00,21:30', profileDays: 'sat,sun'};
+    const WEEK = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+
+    function profileSection(): HTMLElement {
+        return screen.getByTestId('scheduler-config-profile-read');
+    }
+
+    /** The profile chips, in DOM order, read off the accessible name of their × button. */
+    function profileSlots(): string[] {
+        return screen.queryAllByRole('button', {name: new RegExp(`^${PROFILE_REMOVE} `)}).map((b) => (b.getAttribute('aria-label') ?? '').replace(`${PROFILE_REMOVE} `, ''));
+    }
+
+    function profileTimeInput(): HTMLElement {
+        return screen.getByTestId('scheduler-profile-time-input');
+    }
+
+    function profileAdd(): HTMLElement {
+        return screen.getByTestId('scheduler-profile-time-add');
+    }
+
+    async function typeProfileTime(value: string): Promise<void> {
+        await fireEvent.input(profileTimeInput(), {target: {value}});
+    }
+
+    async function addProfileTime(value: string): Promise<void> {
+        await typeProfileTime(value);
+        await fireEvent.click(profileAdd());
+    }
+
+    function profileDay(day: string): HTMLElement {
+        return screen.getByTestId(`scheduler-profile-day-${day}`);
+    }
+
+    /** The profile days switched on, in week order, read off `aria-pressed`. */
+    function profileDays(): string[] {
+        return WEEK.filter((d) => profileDay(d).getAttribute('aria-pressed') === 'true');
+    }
+
+    /** The history days switched on, in week order, read off `aria-pressed`. */
+    function historyDays(): string[] {
+        return WEEK.filter((d) => dayButton(d).getAttribute('aria-pressed') === 'true');
+    }
+
+    async function saveAndRead(): Promise<Record<string, string>> {
+        await fireEvent.click(saveButton());
+        await waitFor(() => expect(patch).toHaveBeenCalled());
+        return savedKeys();
+    }
+
+    describe('opening', () => {
+        it('has its own section, after the horizon', () => {
+            mount();
+
+            const horizon = screen.getByTestId('scheduler-config-horizon');
+            expect(horizon.compareDocumentPosition(profileSection()) & Node.DOCUMENT_POSITION_FOLLOWING, 'the profile section follows the horizon').toBeTruthy();
+            expect(within(profileSection()).getByTestId('scheduler-profile-time-input')).toHaveAttribute('type', 'time');
+        });
+
+        it('loads the profile values it was given, beside the history ones', () => {
+            mount({currentValues: {...DEFAULTS, ...PROFILE}});
+
+            expect(profileSlots()).toEqual(['03:00', '21:30']);
+            expect(profileDays()).toEqual(['sat', 'sun']);
+            expect(slots(), 'the history chips are their own').toEqual(['09:00', '17:30']);
+            expect(historyDays(), 'the history days are their own').toEqual(['mon', 'wed']);
+        });
+
+        it('falls back to 03:00 on Saturday when the parent passes no profile values', () => {
+            mount();
+
+            expect(profileSlots()).toEqual(['03:00']);
+            expect(profileDays()).toEqual(['sat']);
+        });
+
+        it('names each profile day after the history day label, so the history day buttons stay one per name', () => {
+            mount();
+
+            expect(profileDay('sat')).toHaveAttribute('aria-label', 'settings.global.scheduler.profileReadDay settings.global.scheduler.historyDaysSat');
+            // getByRole throws on two matches: one history button per exact name, and not the profile one.
+            expect(dayButton('sat')).not.toBe(profileDay('sat'));
+        });
+
+        it('names each profile chip with its own key, never the history one', () => {
+            mount({currentValues: {...DEFAULTS, ...PROFILE}});
+
+            expect(screen.getByRole('button', {name: `${PROFILE_REMOVE} 21:30`})).toBeInTheDocument();
+            expect(screen.queryByRole('button', {name: `${REMOVE} 21:30`})).toBeNull();
+        });
+
+        it('leaves the profile values alone when the parent re-renders while it is already open', async () => {
+            const m = mount({currentValues: {...DEFAULTS, ...PROFILE}});
+            await addProfileTime('22:00');
+            await fireEvent.click(profileDay('mon'));
+
+            await m.rerender({currentValues: {...DEFAULTS, profileTimes: '12:00', profileDays: 'wed'}});
+
+            expect(profileSlots()).toEqual(['03:00', '21:30', '22:00']);
+            expect(profileDays()).toEqual(['mon', 'sat', 'sun']);
+        });
+
+        it('re-reads the profile values on the next open, so a cancelled edit does not survive', async () => {
+            const m = mount({currentValues: {...DEFAULTS, ...PROFILE}});
+            await addProfileTime('22:00');
+            await fireEvent.click(screen.getByTestId('scheduler-config-cancel'));
+
+            await m.rerender({open: true, currentValues: {...DEFAULTS, profileTimes: '04:15', profileDays: 'tue'}});
+
+            expect(profileSlots()).toEqual(['04:15']);
+            expect(profileDays()).toEqual(['tue']);
+        });
+
+        it('re-reads the defaults on the next open when the parent then passes no profile values', async () => {
+            const m = mount({currentValues: {...DEFAULTS, ...PROFILE}});
+            await fireEvent.click(screen.getByTestId('scheduler-config-cancel'));
+
+            await m.rerender({open: true, currentValues: {...DEFAULTS}});
+
+            expect(profileSlots()).toEqual(['03:00']);
+            expect(profileDays()).toEqual(['sat']);
+        });
+    });
+
+    describe('profile times', () => {
+        it('adds one, normalised to HH:MM, kept in order, and clears the field — the history chips untouched', async () => {
+            mount({currentValues: {...DEFAULTS, ...PROFILE}});
+
+            await addProfileTime('22:15:40');
+            expect(profileTimeInput()).toHaveValue('');
+            await addProfileTime('01:00');
+
+            expect(profileSlots()).toEqual(['01:00', '03:00', '21:30', '22:15']);
+            expect(slots()).toEqual(['09:00', '17:30']);
+        });
+
+        it('swallows a duplicate and still clears the field', async () => {
+            mount({currentValues: {...DEFAULTS, ...PROFILE}});
+
+            await addProfileTime('03:00');
+
+            expect(profileSlots()).toEqual(['03:00', '21:30']);
+            expect(profileTimeInput()).toHaveValue('');
+        });
+
+        it('takes a time the history list already has: the two lists do not share a duplicate check', async () => {
+            mount({currentValues: {...DEFAULTS, ...PROFILE}});
+
+            await addProfileTime('09:00');
+
+            expect(profileSlots()).toEqual(['03:00', '09:00', '21:30']);
+            expect(slots()).toEqual(['09:00', '17:30']);
+        });
+
+        it('adds on Enter', async () => {
+            mount({currentValues: {...DEFAULTS, ...PROFILE}});
+
+            await typeProfileTime('05:45');
+            await fireEvent.keyDown(profileTimeInput(), {key: 'Enter'});
+
+            expect(profileSlots()).toEqual(['03:00', '05:45', '21:30']);
+            expect(slots()).toEqual(['09:00', '17:30']);
+        });
+
+        it('is not reached by the history time input', async () => {
+            mount({currentValues: {...DEFAULTS, ...PROFILE}});
+
+            await typeTime('06:00');
+            await fireEvent.click(screen.getByTestId('scheduler-config-time-add'));
+
+            expect(slots()).toEqual(['06:00', '09:00', '17:30']);
+            expect(profileSlots()).toEqual(['03:00', '21:30']);
+        });
+
+        it('removes the profile chip the user pointed at', async () => {
+            mount({currentValues: {...DEFAULTS, ...PROFILE}});
+
+            await fireEvent.click(screen.getByRole('button', {name: `${PROFILE_REMOVE} 21:30`}));
+
+            expect(profileSlots()).toEqual(['03:00']);
+            expect(slots()).toEqual(['09:00', '17:30']);
+        });
+
+        it('keeps a profile chip when the history chip with the same time is removed', async () => {
+            mount({currentValues: {...DEFAULTS, times: '03:00,17:30', ...PROFILE}});
+
+            await fireEvent.click(screen.getByRole('button', {name: `${REMOVE} 03:00`}));
+
+            expect(slots()).toEqual(['17:30']);
+            expect(profileSlots()).toEqual(['03:00', '21:30']);
+        });
+    });
+
+    describe('profile days', () => {
+        it('switches a profile day on and off without touching the history days', async () => {
+            mount({currentValues: {...DEFAULTS, ...PROFILE}});
+
+            await fireEvent.click(profileDay('mon'));
+            expect(profileDays()).toEqual(['mon', 'sat', 'sun']);
+            await fireEvent.click(profileDay('sun'));
+            expect(profileDays()).toEqual(['mon', 'sat']);
+
+            expect(historyDays()).toEqual(['mon', 'wed']);
+        });
+
+        it('is not reached by the history day buttons', async () => {
+            mount({currentValues: {...DEFAULTS, ...PROFILE}});
+
+            await fireEvent.click(dayButton('fri'));
+            await fireEvent.click(dayButton('mon'));
+
+            expect(historyDays()).toEqual(['wed', 'fri']);
+            expect(profileDays()).toEqual(['sat', 'sun']);
+        });
+
+        it('refuses to switch off the last remaining profile day', async () => {
+            mount();
+
+            await fireEvent.click(profileDay('sat'));
+
+            expect(profileDays()).toEqual(['sat']);
+            expect(saveButton()).toBeEnabled();
+        });
+
+        it('still lets the last profile day be switched off once a second one is on', async () => {
+            // The presence barrier for the refusal above: it is about being last.
+            mount();
+
+            await fireEvent.click(profileDay('sun'));
+            await fireEvent.click(profileDay('sat'));
+
+            expect(profileDays()).toEqual(['sun']);
+        });
+
+        it('guards each list on its own: a lone history day does not lock the profile days, nor the reverse', async () => {
+            mount({currentValues: {...DEFAULTS, days: 'mon', profileTimes: '03:00', profileDays: 'sat,sun'}});
+
+            await fireEvent.click(profileDay('sat'));
+            expect(profileDays(), 'two profile days: one may go').toEqual(['sun']);
+            await fireEvent.click(dayButton('mon'));
+            expect(historyDays(), 'the lone history day stays').toEqual(['mon']);
+
+            await fireEvent.click(dayButton('fri'));
+            await fireEvent.click(dayButton('mon'));
+            expect(historyDays(), 'two history days: one may go').toEqual(['fri']);
+            await fireEvent.click(profileDay('sun'));
+            expect(profileDays(), 'the lone profile day stays').toEqual(['sun']);
+        });
+    });
+
+    describe('what the save needs', () => {
+        it('blocks the save once the last profile time is gone', async () => {
+            mount();
+            expect(saveButton(), 'premise: the defaults are saveable').toBeEnabled();
+
+            await fireEvent.click(screen.getByRole('button', {name: `${PROFILE_REMOVE} 03:00`}));
+
+            expect(profileSlots()).toEqual([]);
+            expect(saveButton()).toBeDisabled();
+            await fireEvent.click(saveButton());
+            await tick();
+            expect(patch).not.toHaveBeenCalled();
+        });
+
+        it('blocks the save when the stored profile days are empty', () => {
+            // An empty string is an empty list, as for the history days; only a missing value falls back to `sat`.
+            mount({currentValues: {...DEFAULTS, profileDays: ''}});
+
+            expect(profileDays()).toEqual([]);
+            expect(saveButton()).toBeDisabled();
+        });
+    });
+
+    describe('saving', () => {
+        it('sends the edited profile times and days, while the history keys stay as they were', async () => {
+            mount({currentValues: {...DEFAULTS, ...PROFILE}});
+
+            await addProfileTime('01:00');
+            await fireEvent.click(profileDay('mon'));
+            await fireEvent.click(profileDay('sun'));
+
+            const saved = await saveAndRead();
+            expect(saved.scheduler_profile_read_times).toBe('01:00,03:00,21:30');
+            expect(saved.scheduler_profile_read_days).toBe('mon,sat');
+            expect(saved.scheduler_history_sync_times).toBe('09:00,17:30');
+            expect(saved.scheduler_history_sync_days).toBe('mon,wed');
+            expect(Object.keys(saved)).toHaveLength(7);
+        });
+
+        it('keeps the profile days in the week order, not the order they were clicked', async () => {
+            mount({currentValues: {...DEFAULTS, profileTimes: '03:00', profileDays: 'sun'}});
+
+            await fireEvent.click(profileDay('tue'));
+
+            expect((await saveAndRead()).scheduler_profile_read_days).toBe('tue,sun');
+        });
+
+        it('keeps the saved event as it was: the history time count, no profile field', async () => {
+            mount({currentValues: {...DEFAULTS, ...PROFILE}});
+            await addProfileTime('01:00');
+
+            await fireEvent.click(saveButton());
+            await waitFor(() => expect(notified).toHaveBeenCalled());
+
+            const [event] = notified.mock.calls[0];
+            expect(event.name).toBe('settings.scheduler.saved');
+            expect(event.detail).toEqual({frequencyMinutes: 10, horizonDays: 14, timezone: 'UTC', times: 2});
+        });
     });
 });

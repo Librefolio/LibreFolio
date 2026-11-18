@@ -98,7 +98,8 @@
       "riskFreeAnnualRate": "Taux annuel sans risque",
       "comparisonAsset": "Actif de comparaison",
       "window": "Fenêtre",
-      "fullHistory": "Historique complet"
+      "fullHistory": "Historique complet",
+      "targetAnnualReturn": "Rendement annuel cible"
     },
     "yAxisScale": "Échelle Axe Y",
     "yAxisScaleDesc": "Contrôle de la plage de l'axe primaire",
@@ -201,7 +202,8 @@
       "riskWindow": "Nombre d’observations préparées des rendements quotidiens dans chaque fenêtre glissante.",
       "riskFreeAnnualRate": "Taux annuel effectif sans risque utilisé uniquement pour calculer le Sharpe.",
       "comparisonAsset": "Actif enregistré utilisé comme série de comparaison réelle pour le bêta.",
-      "riskFullHistory": "Mesure le repli par rapport au pic le plus haut de tout l'historique disponible, pas seulement la fenêtre visible. Désactivez pour une vue plus rapide relative à la fenêtre."
+      "riskFullHistory": "Mesure le repli par rapport au pic le plus haut de tout l'historique disponible, pas seulement la fenêtre visible. Désactivez pour une vue plus rapide relative à la fenêtre.",
+      "targetAnnualReturn": "Rendement annuel auquel les jours sont comparés, comme pour le Sortino : seuls les rendements en dessous comptent comme des pertes. 0 compte chaque perte."
     },
     "units": {
       "days": "jours",

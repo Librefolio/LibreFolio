@@ -62,7 +62,8 @@ Modules:
 * ``acceptable_cost`` — the Rebalancer's table «maximum acceptable cost»: rows of misplaced money to two significant
   digits, ``2·λ·d²/F``, and ``λ`` from the euros typed on the reference row (B4 of project 67).
 * ``weights`` — a part's share of a total (none on a total at or below zero), the slices of an
-  allocation (none on a sum at or below zero), gross weights, and concentration (largest weight, Herfindahl index).
+  allocation (none on a sum at or below zero), gross weights, concentration (largest weight, Herfindahl index), and
+  the effective number of positions (10 000 over the index of the weights renormalized on their own sum).
 * ``holding_window`` — how long a position has been held at its broker: the oldest lot still
   open and a closed position's flight time, from its quantity stream (a split rescales the lots).
 * ``fifo`` — FIFO lots: custody fragments, closures, transfers, and the allocation of

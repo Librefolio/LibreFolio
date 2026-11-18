@@ -155,49 +155,49 @@ class IdentifierType(StrEnum):
     OTHER = "OTHER"
 
 
+# Asset type classification.
+#
+# Usage: Categorize assets by their nature for reporting and analysis.
+#
+# - STOCK: Individual company shares (e.g., Apple, Microsoft)
+# - ETF: Exchange Traded Fund with mixed or unstated content (e.g., balanced, multi-asset)
+# - BOND: Fixed income securities (government or corporate bonds)
+# - CRYPTO: Cryptocurrencies (e.g., Bitcoin, Ethereum)
+# - FUND: Mutual funds or investment funds
+# - HOLD: Assets without automatic market pricing (art, collectibles, unlisted companies)
+# - CROWDFUND: Peer-to-peer or business crowdfunding loans (e.g., Mintos); the residual of its family
+# - COMMODITY: Physical goods and their direct exposures (gold, oil, agricultural)
+# - REAL_ESTATE: Property exposure (REITs, listed real estate vehicles)
+# - INDEX: Market indices and benchmarks (e.g., S&P 500, MSCI World) — no transactions allowed
+# - OTHER: Any other asset type not listed above
+#
+# Subtypes answer a single question: *which base type does this instrument contain?*
+# The second level is therefore not a parallel taxonomy — it is the set of base types.
+# Two families have one, ETF and CROWDFUND; their plain values stay the residual for
+# mixed or unstated content.
+#
+# - ETF_STOCK / ETF_BOND / ETF_COMMODITY / ETF_REAL_ESTATE / ETF_CRYPTO: named after
+#   the base type they hold; plain ETF remains the residual for mixed content.
+# - ETF_MONETARY: money-market funds. The one subtype with **no** base-type counterpart,
+#   because cash itself is an account balance, not an asset that is bought.
+# - CROWDFUND_REAL_ESTATE: crowdfunding loans backed by property projects (e.g., Recrowd).
+#   It contains REAL_ESTATE, but it is shocked in stress scenarios as the loan it is.
+#
+# Impact:
+# - INDEX forbids transactions (rule in ``services/assets/type_rules.py``, enforced by the
+#   transaction batch); every other value is behaviourally inert in the backend.
+# - The family of a type (``ETF_*`` -> ETF, ``CROWDFUND_*`` -> CROWDFUND, any other is its
+#   own) is ``asset_type_family`` in ``services/assets/type_rules.py``; the bulk asset edit
+#   warns when a change crosses families.
+# - Drives portfolio breakdown and allocation analysis, where subtypes roll up to the
+#   base type they contain rather than to their family.
+# - Supplies the `asset_class` buckets of stress scenarios. A type absent from a
+#   scenario's bucket_shocks is shocked by zero **silently**, which is why the enum and
+#   those tables are guarded by a dedicated coverage test.
+# - Selects the icon and the localized label in the UI.
+#
 class AssetType(StrEnum):
-    """
-    Asset type classification.
-
-    Usage: Categorize assets by their nature for reporting and analysis.
-
-    - STOCK: Individual company shares (e.g., Apple, Microsoft)
-    - ETF: Exchange Traded Fund with mixed or unstated content (e.g., balanced, multi-asset)
-    - BOND: Fixed income securities (government or corporate bonds)
-    - CRYPTO: Cryptocurrencies (e.g., Bitcoin, Ethereum)
-    - FUND: Mutual funds or investment funds
-    - HOLD: Assets without automatic market pricing (art, collectibles, unlisted companies)
-    - CROWDFUND: Peer-to-peer or business crowdfunding loans (e.g., Mintos); the residual of its family
-    - COMMODITY: Physical goods and their direct exposures (gold, oil, agricultural)
-    - REAL_ESTATE: Property exposure (REITs, listed real estate vehicles)
-    - INDEX: Market indices and benchmarks (e.g., S&P 500, MSCI World) — no transactions allowed
-    - OTHER: Any other asset type not listed above
-
-    Subtypes answer a single question: *which base type does this instrument contain?*
-    The second level is therefore not a parallel taxonomy — it is the set of base types.
-    Two families have one, ETF and CROWDFUND; their plain values stay the residual for
-    mixed or unstated content.
-
-    - ETF_STOCK / ETF_BOND / ETF_COMMODITY / ETF_REAL_ESTATE / ETF_CRYPTO: named after
-      the base type they hold; plain ETF remains the residual for mixed content.
-    - ETF_MONETARY: money-market funds. The one subtype with **no** base-type counterpart,
-      because cash itself is an account balance, not an asset that is bought.
-    - CROWDFUND_REAL_ESTATE: crowdfunding loans backed by property projects (e.g., Recrowd).
-      It contains REAL_ESTATE, but it is shocked in stress scenarios as the loan it is.
-
-    Impact:
-    - INDEX forbids transactions (rule in ``services/assets/type_rules.py``, enforced by the
-      transaction batch); every other value is behaviourally inert in the backend.
-    - The family of a type (``ETF_*`` -> ETF, ``CROWDFUND_*`` -> CROWDFUND, any other is its
-      own) is ``asset_type_family`` in ``services/assets/type_rules.py``; the bulk asset edit
-      warns when a change crosses families.
-    - Drives portfolio breakdown and allocation analysis, where subtypes roll up to the
-      base type they contain rather than to their family.
-    - Supplies the `asset_class` buckets of stress scenarios. A type absent from a
-      scenario's bucket_shocks is shocked by zero **silently**, which is why the enum and
-      those tables are guarded by a dedicated coverage test.
-    - Selects the icon and the localized label in the UI.
-    """
+    """Asset type classification (the full description is in the comment above the class)."""
 
     STOCK = "STOCK"
     ETF = "ETF"
@@ -264,7 +264,7 @@ class TransactionType(StrEnum):
 
     - ADJUSTMENT: Manual asset quantity correction (splits, gifts, etc.)
       Signs: quantity +/-, amount = 0
-      Optional: related_transaction_id
+      related_transaction_id: only on pairs stored before 22/10/2026; a new pair is refused (use TRANSFER)
       Example: Stock split 2:1 adds 100 shares
 
     == Cash-only transactions (quantity = 0) ==
@@ -637,6 +637,31 @@ class PluginSystemSetting(SQLModel, table=True):
     )
 
 
+class PluginCallCounter(SQLModel, table=True):
+    """How many calls a plugin (or a shared group, ``family="group"``) made to its external service (project 76, U1).
+
+    One row per ``family`` and ``plugin_code``. Five calendar windows aligned in UTC — minute, hour, day, ISO week, month
+    — each with the start of the window its count belongs to (``<window>_since``, epoch seconds) and the count.
+    ``services/platform/call_counter.py`` writes it, one atomic statement per call, and reads it for the settings page.
+    """
+
+    __tablename__ = "plugin_call_counters"
+
+    family: str = Field(sa_column=Column(String(16), primary_key=True, nullable=False))
+    plugin_code: str = Field(sa_column=Column(String(64), primary_key=True, nullable=False))
+    minute_since: int = Field(sa_column=Column(Integer, nullable=False))
+    minute_count: int = Field(sa_column=Column(Integer, nullable=False))
+    hour_since: int = Field(sa_column=Column(Integer, nullable=False))
+    hour_count: int = Field(sa_column=Column(Integer, nullable=False))
+    day_since: int = Field(sa_column=Column(Integer, nullable=False))
+    day_count: int = Field(sa_column=Column(Integer, nullable=False))
+    week_since: int = Field(sa_column=Column(Integer, nullable=False))
+    week_count: int = Field(sa_column=Column(Integer, nullable=False))
+    month_since: int = Field(sa_column=Column(Integer, nullable=False))
+    month_count: int = Field(sa_column=Column(Integer, nullable=False))
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=UtcDateTime, nullable=False)
+
+
 class PluginUserSetting(SQLModel, table=True):
     """A plugin setting of one user (``scope = user``): a preference, or a personal secret, written by that user only.
 
@@ -877,6 +902,7 @@ class Transaction(SQLModel, table=True):
     - Both default to 0 and are NOT NULL for easier SUM calculations
     - currency is required only when amount != 0
     - related_transaction_id links paired transactions (transfers, FX)
+    - parent_transaction_id links a charge (FEE, TAX) to the transaction it belongs to, one-way
     - tags stored as comma-separated string for simple queries
 
     Field semantics:
@@ -887,7 +913,9 @@ class Transaction(SQLModel, table=True):
     Relationship rules:
     - TRANSFER: quantity != 0, amount = 0, related_transaction_id REQUIRED
     - FX_CONVERSION: quantity = 0, amount != 0, related_transaction_id REQUIRED
-    - ADJUSTMENT: quantity != 0, amount = 0, related_transaction_id OPTIONAL
+    - ADJUSTMENT: quantity != 0, amount = 0, related_transaction_id only on pairs stored before 22/10/2026 (a new
+      pair of ADJUSTMENTs is refused: a move of units between brokers is a TRANSFER)
+    - FEE, TAX: parent_transaction_id OPTIONAL, the transaction the charge belongs to (project 66)
     """
 
     __tablename__ = "transactions"
@@ -895,6 +923,8 @@ class Transaction(SQLModel, table=True):
         Index("idx_transactions_broker_date", "broker_id", "date", "id"),
         Index("idx_transactions_asset_date", "asset_id", "date"),
         Index("idx_transactions_related", "related_transaction_id"),
+        # Partial: only linked charges (project 66, migration 006 step charge_links).
+        Index("idx_transactions_parent", "parent_transaction_id", sqlite_where=text("parent_transaction_id IS NOT NULL")),
         Index("idx_transactions_asset_event", "asset_event_id"),
         {"sqlite_autoincrement": True},  # ids leave the backend: never reuse one (plan 34)
     )
@@ -938,6 +968,21 @@ class Transaction(SQLModel, table=True):
             nullable=True,
         ),
         description="Links to paired transaction (for TRANSFER, FX_CONVERSION). Bidirectional.",
+    )
+
+    # Link of a charge to its parent (project 66, issue #25): a FEE or a TAX points at the BUY, SELL, DIVIDEND,
+    # INTEREST, DEPOSIT or WITHDRAWAL it belongs to; the parent knows nothing. ONE-WAY, unlike related_transaction_id,
+    # which stays the link of the three pairs. DEFERRABLE INITIALLY DEFERRED like it: a batch that deletes a parent and
+    # its charges does not depend on their order. Read and written only through services/transactions/charges.py
+    # (from lot R2 of project 66).
+    parent_transaction_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(
+            Integer,
+            ForeignKey("transactions.id", deferrable=True, initially="DEFERRED"),
+            nullable=True,
+        ),
+        description="The transaction this FEE or TAX belongs to. One-way: the parent does not point back.",
     )
 
     # Relationship for ORM access (post_update=True for bidirectional self-reference)
@@ -1285,6 +1330,65 @@ class AssetProviderAssignment(SQLModel, table=True):
 
 
 # ============================================================================
+# ASSET PROFILE (plan 68)
+# ============================================================================
+
+
+class AssetProfileUpdate(SQLModel, table=True):
+    """One change of one voice of an asset's profile: its TER, its countries, the maturity of a bond… (plan 68, §3.1).
+
+    A row is never updated. A new value is a new row, written only when it differs from the voice's value now
+    (``services/assets/profile/store.py``); «now» is the voice's last row in (``read_on``, ``id``) order, the order of
+    its steps. A row can be deleted, to
+    forget a change (``DELETE /assets/profile``), and every row goes with its asset.
+
+    - ``key``: the voice, one of the profile catalogue (``services/assets/profile/catalogue.py``). Plain text with no
+      CHECK: a new voice is a catalogue entry, with no migration; the catalogue checks what is written.
+    - ``value``: the voice's stored form as JSON text (``catalogue.normalize_value``); NULL is a value left empty on
+      purpose.
+    - ``source``: the enricher's code, ``user`` for a value written by hand, ``legacy`` for the value copied from
+      ``classification_params`` by migration 006.
+    - ``user_id``: who wrote a ``user`` row; NULL for a source, and once that account is deleted.
+    - ``read_on``: the day the value was read or written, in the scheduler's time zone, never before the voice's row
+      now: the day it holds from.
+    - ``source_date``: the day the source says its data are of («data at 30/09»), when it says one.
+    """
+
+    __tablename__ = "asset_profile_updates"
+    __table_args__ = (
+        # The profile read: one asset, some voices, up to a day (store.py), and «now» of one voice. Proof in 006.
+        Index("ix_asset_profile_updates_asset_key_read_on", "asset_id", "key", "read_on"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    asset_id: int = Field(sa_column=Column(Integer, ForeignKey("assets.id", ondelete="CASCADE"), nullable=False))
+    key: str = Field(sa_column=Column(String, nullable=False))
+    value: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    source: str = Field(sa_column=Column(String, nullable=False))
+    user_id: Optional[int] = Field(default=None, sa_column=Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True))
+    read_on: date_type = Field(nullable=False)
+    source_date: Optional[date_type] = Field(default=None, nullable=True)
+    created_at: datetime = Field(default_factory=utcnow, sa_type=UtcDateTime)
+
+
+class AssetEnrichers(SQLModel, table=True):
+    """The enrichers of one asset (plan 68, §3.1): which plugins read its profile, in which order, and how they last did.
+
+    - ``config``: a JSON object, plugin code → the binding that plugin reads (identifier type, identifier, parameters).
+      The order of its keys is the priority, so it is stored as written and never re-sorted. Only the user writes it.
+    - ``state``: a JSON object, plugin code → when it last read this asset and with what outcome. Only the reads that
+      save write it (the weekly job, «Aggiorna», the read after a save): two columns, so neither overwrites the other.
+    """
+
+    __tablename__ = "asset_enrichers"
+
+    asset_id: int = Field(sa_column=Column(Integer, ForeignKey("assets.id", ondelete="CASCADE"), primary_key=True))
+    config: str = Field(default="{}", sa_column=Column(Text, nullable=False, server_default=text("'{}'")))
+    state: str = Field(default="{}", sa_column=Column(Text, nullable=False, server_default=text("'{}'")))
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=UtcDateTime)
+
+
+# ============================================================================
 # EVENT LISTENERS
 # ============================================================================
 
@@ -1296,6 +1400,7 @@ class AssetProviderAssignment(SQLModel, table=True):
 @event.listens_for(FxConversionRoute, "before_update")
 @event.listens_for(UserSettings, "before_update")
 @event.listens_for(BrokerUserAccess, "before_update")
+@event.listens_for(AssetEnrichers, "before_update")
 def receive_before_update(_mapper, _connection, target):
     """Update updated_at timestamp on update."""
     target.updated_at = utcnow()

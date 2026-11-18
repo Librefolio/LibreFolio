@@ -38,6 +38,7 @@ erDiagram
         int broker_id FK
         int asset_id FK "Nullable"
         int related_transaction_id FK "Nullable, DEFERRED"
+        int parent_transaction_id FK "Nullable, DEFERRED, one-way"
         int asset_event_id FK "Nullable, RESTRICT"
         string type "VARCHAR(32), TransactionType value"
         date date
@@ -101,6 +102,7 @@ The single source of truth for all financial operations. Each transaction belong
 | `amount` | Signed cash delta (+in, −out). Default 0, NOT NULL. `RealDecimal(18, 6)`: up to 15 digits before the decimal point (decision N63) and 6 decimal places, read back as written (see [Decimal Columns](index.md#decimal-columns)) |
 | `currency` | ISO 4217 code — required when amount ≠ 0 |
 | `related_transaction_id` | Bidirectional self-FK for paired ops (TRANSFER, FX_CONVERSION, CASH_TRANSFER) |
+| `parent_transaction_id` | One-way self-FK of a charge (FEE, TAX) to the transaction it belongs to (BUY, SELL, DIVIDEND, INTEREST, DEPOSIT, WITHDRAWAL); the parent does not point back. `DEFERRABLE INITIALLY DEFERRED`, no `ON DELETE` action; partial index `idx_transactions_parent` (only the linked rows). Since 1.4 (migration 006, step `charge_links`) |
 | `tags` | Comma-separated user tags |
 | `description` | Free-text |
 | `cost_basis_override` | Frozen per-unit cost for incoming seeded lots: receiving `TRANSFER`s, positive `ADJUSTMENT`s, imported snapshots, inheritances (see below). A per-unit price, so `RealDecimal(24, 12)` like the prices: up to 12 digits before the decimal point and 12 decimal places, read back as written (see [Decimal Columns](index.md#decimal-columns)) |
@@ -111,6 +113,7 @@ The single source of truth for all financial operations. Each transaction belong
 
 - `quantity` and `amount` are **signed** and **NOT NULL** — a balance is the plain sum of the rows, done in Python by `financial_math`, never with an SQL `SUM()` (see [Decimal Columns](index.md#decimal-columns))
 - Paired transactions are **bidirectional** (A→B and B→A) using `DEFERRABLE INITIALLY DEFERRED` FK
+- A charge points **one way** at its parent (`parent_transaction_id`): many charges, one parent, no chains; `related_transaction_id` stays the link of the three pairs
 - `link_uuid` is accepted by create payloads only as transient batch correlation; it is not a `transactions` column
 - Tags are stored as CSV for simple `LIKE` queries without a join table
 

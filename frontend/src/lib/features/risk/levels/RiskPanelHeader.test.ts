@@ -27,6 +27,7 @@ import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBann
 import type {RiskPanelController} from '$lib/features/risk/riskPanelController.svelte';
 import {mergeAssets, resetAssetStore} from '$lib/stores/reference/assetStore';
 
+import {dayFormatter} from '../eligibility';
 import RiskPanelHeader from './RiskPanelHeader.svelte';
 
 const mocks = vi.hoisted(() => ({
@@ -54,8 +55,8 @@ vi.mock('$lib/features/risk/syncTargets', async (importOriginal) => {
 });
 // The dialog is the subject's neighbour, not the subject: a stub that publishes the props it was given.
 vi.mock('$lib/features/fx/FxPairAddModal.svelte', async () => ({default: (await import('$test/harness/FxPairAddModalStub.svelte')).default}));
-// The sync modal fetches providers and rates when it opens, and no case here opens it.
-vi.mock('$lib/components/ui/modals/PageSyncModal.svelte', () => ({default: () => {}}));
+// The sync modal fetches providers and rates when it opens: a stub with its two ways of completing stands in (RN-17 c).
+vi.mock('$lib/components/ui/modals/PageSyncModal.svelte', async () => ({default: (await import('$test/harness/PageSyncModalStub.svelte')).default}));
 
 const STUB = 'fx-pair-add-modal-stub';
 const STUB_CREATED = 'fx-pair-add-modal-stub-created';
@@ -226,5 +227,52 @@ describe('RiskPanelHeader — its sync button reads the shared rule (J-71)', () 
 
         expect(mocks.buildSyncTargets, 'the rule was asked, and found nothing').toHaveBeenCalledWith([UNKNOWN_ASSET_ID], 'EUR', expect.any(Function), expect.any(Set));
         expect(screen.getByTestId('risk-sync-button')).toBeDisabled();
+    });
+});
+
+describe('RiskPanelHeader — the period beside the title (RN-11, Q14)', () => {
+    // The figures below are measured on the page's period and currency: the header says which, in the
+    // reader's day format, through the line every risk surface shares (`RiskPeriodLine`). Read through its
+    // data attributes and the formatted days, never through the translated words around them.
+    it('writes the period asked for and the currency under the title', () => {
+        const {controller} = fakeController([]);
+        render(RiskPanelHeader, {props: {controller, dateStart: '2026-01-01', dateEnd: '2026-06-30', targetCurrency: 'EUR', showActions: false}});
+
+        const line = screen.queryByTestId('risk-period');
+        expect(line, 'the header does not say which period and currency its figures are measured on').not.toBeNull();
+        expect(line).toHaveAttribute('data-start', '2026-01-01');
+        expect(line).toHaveAttribute('data-end', '2026-06-30');
+        expect(line).toHaveAttribute('data-currency', 'EUR');
+        const day = dayFormatter();
+        for (const text of [day('2026-01-01'), day('2026-06-30'), 'EUR']) expect(line?.textContent, `the line does not read ${text}`).toContain(text);
+    });
+});
+
+describe('RiskPanelHeader — the docs icon beside the title (RN-13, B1)', () => {
+    it('opens the risk tab’s user page, beside the title', async () => {
+        const open = vi.spyOn(window, 'open').mockReturnValue(null);
+        const {controller} = fakeController([]);
+        render(RiskPanelHeader, {props: {controller, dateStart: '2026-01-01', dateEnd: '2026-06-30', targetCurrency: 'EUR', showActions: false}});
+
+        const icon = screen.queryByTestId('risk-levels-docs');
+        expect(icon, 'the risk header has no docs icon').not.toBeNull();
+        await fireEvent.click(icon as HTMLElement);
+        expect(open, 'the icon does not open the risk tab’s page').toHaveBeenCalledWith('/mkdocs/user/dashboard/risk/', '_blank', 'noopener');
+        open.mockRestore();
+    });
+});
+
+// RN-17 (c): the page that hosts the panel decides on what the sync wrote — the Asset Detail drops its comparison overlays
+// only on an accepted sync — so the modal's completion goes to the reload unchanged, never as a bare «synced».
+describe('RiskPanelHeader — the sync modal’s completion', () => {
+    it('hands the reload the completion as the modal reported it, accepted or not', async () => {
+        const {controller, handleSynced} = fakeController([]);
+        render(RiskPanelHeader, {props: {controller, dateStart: '2026-01-01', dateEnd: '2026-06-30', targetCurrency: 'EUR', showActions: true}});
+
+        await fireEvent.click(screen.getByTestId('page-sync-modal-stub-accepted'));
+        await eventually(() => expect(handleSynced).toHaveBeenLastCalledWith({accepted: true}));
+        await fireEvent.click(screen.getByTestId('page-sync-modal-stub-unchanged'));
+        await eventually(() => expect(handleSynced).toHaveBeenLastCalledWith({accepted: false}));
+        expect(handleSynced).toHaveBeenCalledTimes(2);
     });
 });

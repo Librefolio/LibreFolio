@@ -2298,7 +2298,7 @@ class TestAssetEventLinkService:
 
 
 class TestLinkedPairValidation:
-    """H.1 — pairing rules: type must match, TRANSFER requires distinct brokers."""
+    """H.1 — pairing rules: type must match, TRANSFER requires distinct brokers, a link_uuid group must be a pair type (F-1)."""
 
     @pytest.mark.asyncio
     async def test_pairing_rejects_mixed_types_in_link_uuid(self, session, test_broker, test_broker_overdraft):
@@ -2481,49 +2481,67 @@ class TestLinkedPairValidation:
             assert written == [], f"W-B17: the user is told the exchange was refused, yet broker {broker_id} keeps its FX_CONVERSION rows {written}"
 
     @pytest.mark.asyncio
-    async def test_pairing_allows_deposit_withdrawal_linked(self, session, test_broker, test_broker_overdraft):
-        """H.2 — DEPOSIT/WITHDRAWAL pair linked by link_uuid: allowed as intent marker."""
+    async def test_two_withdrawals_under_one_link_uuid_are_refused(self, session, test_broker, test_broker_overdraft):
+        """Two WITHDRAWALs under one link_uuid are refused (pairTypeNotLinkable); nothing is written.
+
+        H.2's "intent marker" is gone since lane 66 R0 / F-1: a link_uuid group must be one of the three pair types
+        (TRANSFER, FX_CONVERSION, CASH_TRANSFER). A DEPOSIT and a WITHDRAWAL become a pair through a promote into
+        CASH_TRANSFER, not by sharing a link_uuid.
+        """
         service = TransactionService(session)
-        # Fund source broker.
-        await create_bulk(
+        broker_a_id, broker_b_id = test_broker.id, test_broker_overdraft.id
+        # Fund the source broker (also the presence barrier for the read-back below).
+        funding = await create_bulk(
             service,
             [
                 TXCreateItem(
-                    broker_id=test_broker.id,
+                    broker_id=broker_a_id,
                     type=TransactionType.DEPOSIT,
                     date=date.today() - timedelta(days=1),
                     cash=Currency(code="EUR", amount=Decimal("1000")),
                 )
             ],
         )
+        deposit_id = funding.results[0].transaction_id
+        description = "F-1 two withdrawals one link_uuid"
         items = [
             TXCreateItem(
-                broker_id=test_broker.id,
+                broker_id=broker_id,
                 type=TransactionType.WITHDRAWAL,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("-500")),
                 link_uuid="cash-transfer-intent",
-            ),
-            # Same type on both sides (WITHDRAWAL+WITHDRAWAL) — pair valid per
-            # H.2 (different amounts but we just want the link to resolve).
-            # Both sides carry negative cash to satisfy Rule 11 (cash sign).
-            TXCreateItem(
-                broker_id=test_broker_overdraft.id,
-                type=TransactionType.WITHDRAWAL,
-                date=date.today(),
-                cash=Currency(code="EUR", amount=Decimal("-500")),
-                link_uuid="cash-transfer-intent",
-            ),
+                description=description,
+            )
+            for broker_id in (broker_a_id, broker_b_id)
         ]
-        response = await create_bulk(service, items)
-        # Both WITHDRAWAL → same type OK; linked pair should succeed.
-        assert response.rolled_back is False, response.errors
-        assert response.success_count == 2
-        # Verify bidirectional link.
-        ids = [r.transaction_id for r in response.results]
-        txs = await service.get_by_ids(ids)
-        assert txs[0].related_transaction_id == txs[1].id
-        assert txs[1].related_transaction_id == txs[0].id
+        # Raw execute_batch (as POST /transactions/commit) to read the issue code; the savepoint stands in for the
+        # request's transaction, so the funding deposit survives the rollback.
+        savepoint = await session.begin_nested()
+        response = await service.execute_batch(
+            creates_raw=[item.model_dump(mode="json") for item in items],
+            updates_raw=[],
+            deletes=[],
+            commit=True,
+        )
+        if response.committed:
+            await savepoint.commit()
+        else:
+            await savepoint.rollback()
+
+        issues = [(issue.operation, issue.index, issue.code, issue.params) for issue in response.issues]
+        assert response.committed is False, f"F-1: two WITHDRAWALs under one link_uuid were committed, issues {issues}"
+        refusals = [issue for issue in response.issues if issue.code == "pairTypeNotLinkable"]
+        assert len(refusals) == 1, f"F-1: expected exactly one pairTypeNotLinkable issue, got {issues}"
+        assert (refusals[0].operation, refusals[0].index, refusals[0].params) == ("create", 0, {"type": "WITHDRAWAL"}), f"F-1: refusal not on create 0 with the type, got {issues}"
+
+        # Presence barrier, then nothing of this batch written on either broker.
+        deposits = await service.query(TXQueryParams(broker_id=broker_a_id, types=[TransactionType.DEPOSIT]))
+        assert deposit_id in {row.id for row in deposits}, f"scaffold: the read-back no longer sees deposit {deposit_id}"
+        for broker_id in (broker_a_id, broker_b_id):
+            rows = await service.query(TXQueryParams(broker_id=broker_id, types=[TransactionType.WITHDRAWAL]))
+            written = [row.id for row in rows if row.description == description]
+            assert written == [], f"F-1: batch refused, yet broker {broker_id} keeps WITHDRAWAL rows {written}"
 
 
 # ============================================================================
@@ -2583,30 +2601,36 @@ class TestQueryFiltersH3:
     async def test_query_filters_only_unlinked(self, session, test_broker, test_broker_overdraft, seeded):
         """only_unlinked excludes rows with related_transaction_id."""
         service = TransactionService(session)
-        # Create a linked pair (both DEPOSIT, different brokers, same link_uuid).
-        await create_bulk(
+        # A linked pair: a CASH_TRANSFER from the overdraft broker to the other one. Two DEPOSITs under one link_uuid were
+        # linked here until lane 66 R0 (F-1) refused a link_uuid group of a type that is not a pair.
+        response = await create_bulk(
             service,
             [
                 TXCreateItem(
-                    broker_id=test_broker.id,
-                    type=TransactionType.DEPOSIT,
+                    broker_id=test_broker_overdraft.id,
+                    type=TransactionType.CASH_TRANSFER,
                     date=date.today(),
-                    cash=Currency(code="USD", amount=Decimal("300")),
+                    cash=Currency(code="USD", amount=Decimal("-300")),
                     link_uuid="pair-for-unlink-test",
                 ),
                 TXCreateItem(
-                    broker_id=test_broker_overdraft.id,
-                    type=TransactionType.DEPOSIT,
+                    broker_id=test_broker.id,
+                    type=TransactionType.CASH_TRANSFER,
                     date=date.today(),
                     cash=Currency(code="USD", amount=Decimal("300")),
                     link_uuid="pair-for-unlink-test",
                 ),
             ],
         )
+        assert response.rolled_back is False, f"scaffold: the linked pair this test filters out was not created: {response.errors}"
+        pair_ids = {r.transaction_id for r in response.results}
+        linked = await service.get_by_ids(list(pair_ids))
+        assert all(row.related_transaction_id in pair_ids for row in linked), "scaffold: the two rows must be linked to each other"
         params = TXQueryParams(currency="USD", only_unlinked=True)
         results = await service.query(params)
         for r in results:
             assert r.related_transaction_id is None
+        assert not pair_ids & {r.id for r in results}, "only_unlinked returned a leg of the linked pair"
 
     @pytest.mark.asyncio
     async def test_query_filters_exclude_ids(self, session, seeded):

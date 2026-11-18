@@ -88,7 +88,8 @@ END = date(2024, 3, 14)
 #: How many differing fields an assertion message shows.
 _DIFF_SHOWN = 12
 #: The fields that name a row rather than measure it: the ids are asserted on their own, the names carry the book's tag.
-_IDENTITY = {"asset_id", "broker_id", "asset_name", "broker_name", "asset_ticker"}
+#: ``broker_ids`` (the brokers a row stands for, added with ``group_by``) holds ids too.
+_IDENTITY = {"asset_id", "broker_id", "broker_ids", "asset_name", "broker_name", "asset_ticker"}
 #: The fields MF-CB adds: excluded from the comparison with HEAD's figures (absent there).
 _NEW_FIELDS = {"closed_by", "closed_to_broker_id"}
 

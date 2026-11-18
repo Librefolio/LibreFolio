@@ -9,6 +9,7 @@ from backend.app.db.models import User
 from backend.app.schemas.system import PluginDiagnosticsResponse, PluginDiscoveryFailureInfo
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.risk.registry import RiskAnalyticRegistry
 from backend.app.services.signals.registry import SignalPluginRegistry
@@ -56,6 +57,7 @@ def get_plugin_diagnostics(
             *_plugin_discovery_failures("asset", AssetProviderRegistry),
             *_plugin_discovery_failures("fx", FXProviderRegistry),
             *_plugin_discovery_failures("brim", BRIMProviderRegistry),
+            *_plugin_discovery_failures("enricher", EnricherRegistry),
             *_plugin_discovery_failures("signals", SignalPluginRegistry),
             *_plugin_discovery_failures("risk", RiskAnalyticRegistry),
             *_tool_discovery_failures(),

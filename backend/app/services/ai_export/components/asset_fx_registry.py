@@ -128,13 +128,13 @@ ASSET_FX_COMPONENTS: tuple[ComponentSpec, ...] = (
     *FX_TIMING_CONTEXT_COMPONENTS,
 )
 
-# 8 Asset core + 3 full technical + 2 context + 1 drawdown = 14; 5 FX core + 4 full
-# technical + 2 context + 1 timing context = 12; combined = 26. Asserted at import
+# 9 Asset core (asset.profile since plan 68 D5) + 3 full technical + 2 context + 1 drawdown = 15; 5 FX core + 4 full
+# technical + 2 context + 1 timing context = 12; combined = 27. Asserted at import
 # time so any future drift in the source waves' tuples fails immediately, not deep
 # inside a test.
 ASSET_REAL_COMPONENT_IDS: tuple[str, ...] = tuple(spec.component_id for spec in ASSET_FX_COMPONENTS if Domain.ASSET in spec.domains)
 FX_REAL_COMPONENT_IDS: tuple[str, ...] = tuple(spec.component_id for spec in ASSET_FX_COMPONENTS if Domain.FX in spec.domains)
-ASSET_REAL_COMPONENT_COUNT = 14
+ASSET_REAL_COMPONENT_COUNT = 15
 FX_REAL_COMPONENT_COUNT = 12
 
 if len(ASSET_FX_COMPONENTS) != ASSET_REAL_COMPONENT_COUNT + FX_REAL_COMPONENT_COUNT:
