@@ -140,6 +140,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/risk/RiskFreeRateField.test.ts",
             "src/lib/features/risk/riskFreeRateStore.test.ts",
             "src/lib/features/risk/riskFreeRateStore.reads.test.ts",
+            "src/lib/features/risk/riskBenchmarkStore.reads.test.ts",
             "src/lib/features/risk/riskAnalysisHelpers.test.ts",
             "src/lib/features/risk/correlationHelpers.test.ts",
             "src/lib/features/risk/assetSetSelection.test.ts",
