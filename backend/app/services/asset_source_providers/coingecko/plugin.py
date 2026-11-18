@@ -34,6 +34,7 @@ from backend.app.db.models import ProviderInputType
 from backend.app.logging_config import get_logger
 from backend.app.schemas.assets.assets import FAAssetPatchItem
 from backend.app.schemas.prices import FACurrentValue, FACurrentValueRequest, FAHistoricalData, FAPricePoint
+from backend.app.schemas.provider import FAProviderAttribution
 from backend.app.services.asset_source_providers.coingecko import _sdk
 from backend.app.services.asset_source_providers.coingecko._currencies import DEFAULT_VS_CURRENCY, VS_CURRENCIES
 from backend.app.services.assets.base import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
@@ -142,6 +143,11 @@ class CoinGeckoProvider(AssetSourceProvider):
     @property
     def provider_name(self) -> str:
         return "CoinGecko"
+
+    @property
+    def attribution(self) -> FAProviderAttribution:
+        # CoinGecko's terms: every price shown with «Powered by CoinGecko», prominent, linked to its site (P4)
+        return FAProviderAttribution(text="Powered by CoinGecko", url="https://www.coingecko.com/")
 
     @property
     def supports_meaningful_volume(self) -> bool:
