@@ -316,8 +316,8 @@ async def test_search_orders_italian_first_grouped_by_code(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_fund_metadata_includes_page_sections(monkeypatch):
-    """A fund's short description carries name + ISIN + Caratteristiche/Costi entries."""
+async def test_fund_metadata_has_name_isin_and_code(monkeypatch):
+    """A fund's metadata: its name, ISIN and code. No description (plan 68, D6: the profile is the enrichers')."""
 
     dati = SimpleNamespace(
         codice=CODE,
@@ -338,17 +338,12 @@ async def test_fund_metadata_includes_page_sections(monkeypatch):
     assert item.identifier_isin == ISIN
     assert item.identifier_other == [CODE]
     assert item.display_name.endswith("🇮🇹")
-    sd = item.classification_params.short_description
-    assert "ISIN: LU2178929613" in sd
-    assert "Classe: P" in sd
-    assert "Categoria Assogestioni: Bilanciati" in sd
-    assert "Costi — Gestione: 1.3" in sd
-    assert "Costi — Rimborso: 0%" in sd
+    assert item.classification_params is None
 
 
 @pytest.mark.asyncio
 async def test_fund_metadata_degrades_without_sections(monkeypatch):
-    """With an older scraping lib (no section fields) the description falls back to name+ISIN."""
+    """With an older scraping lib (no section fields) the metadata still comes back."""
     dati = SimpleNamespace(codice=CODE, nome="Eurizon X", valuta="EUR", isin=ISIN)  # no section attrs
     provider = BorsaItalianaProvider()
     monkeypatch.setattr(provider, "_fetch_fund", lambda code: dati)
@@ -356,5 +351,6 @@ async def test_fund_metadata_degrades_without_sections(monkeypatch):
     item = await provider.fetch_asset_metadata(ISIN, IdentifierType.ISIN, {"codice_fondo": CODE})
 
     assert item is not None
-    assert item.classification_params.short_description == "Eurizon X | ISIN: LU2178929613"
+    assert item.display_name.startswith("Eurizon X")
+    assert item.classification_params is None
     assert item.identifier_other == [CODE]
