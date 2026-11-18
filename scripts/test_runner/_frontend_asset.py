@@ -320,6 +320,18 @@ def front_asset_enrichers(verbose: bool = False, ui: bool = False, headed: bool 
     return _run_playwright("assets/asset-enrichers.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_asset_profile_edit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the profile data E2E tests (plan 68, E8b2): the profile window from the asset window, saved with it."""
+    print_section("Frontend Asset Profile Edit Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("assets/asset-profile-edit.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_asset_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all Asset tests (unit + E2E)."""
     if _common.nothing_left_to_run("front-asset"):
@@ -396,6 +408,7 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "asset-modal", front_asset_modal, name="Asset Modal", desc="Create/edit modal, provider, distributions", tests="assets/asset-modal.spec.ts")
     add_test(cat, "asset-data-editor", front_asset_data_editor, name="Asset Data Editor", desc="Prices/Events tabs, CSV import", tests="assets/asset-data-editor.spec.ts")
     add_test(cat, "asset-classification", front_asset_classification, name="Asset Classification", desc="Distribution editors round-trip (geo, sector)", tests="assets/asset-classification.spec.ts")
+    add_test(cat, "asset-profile-edit", front_asset_profile_edit, name="Asset Profile Edit", desc="Plan 68 E8b2: the «Dati del profilo» row of the asset window opens the profile window; a value kept there waits, is counted and is saved with the asset", tests="assets/asset-profile-edit.spec.ts")
     add_test(cat, "asset-enrichers", front_asset_enrichers, name="Asset Enrichers", desc="Plan 68 E8a: the «Arricchitori» button of the asset window opens the enrichers' window; mockenrich added there is saved with the asset (the lane serves only mockenrich)", tests="assets/asset-enrichers.spec.ts")
     add_test(cat, "asset-currency-change", front_asset_currency_change, name="Asset Currency Change", desc="N68: changing the currency asks the dry run, cancel changes nothing, confirm is one PATCH that keeps the split and its adjustment", tests="assets/asset-currency-change.spec.ts")
     add_test(cat, "asset-event-delete", front_asset_event_delete, name="Asset Event Delete", desc="Delete asset events flow", tests="assets/asset-event-delete.spec.ts")
