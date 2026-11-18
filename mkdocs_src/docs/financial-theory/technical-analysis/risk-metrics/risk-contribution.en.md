@@ -79,7 +79,9 @@ The decomposition refuses inputs it cannot honestly decompose. These are **decla
 | Matrix dimensions must match the weights | Rejected |
 | All return series must share one common calendar | Rejected — the covariance matrix is built over a single observation calendar |
 
-A short position would break the arithmetic above in a specific way: with negative weights, a component contribution can be negative, and a share of "total risk" that is below zero cannot be read as a share of anything. Refusing the input is the honest response until the presentation contract covers that case.
+Negative weights are refused (`risk_contributions_from_covariance` raises on them), so every holding the decomposition sees is long. That does **not** make every contribution positive. The sign of a component contribution is the sign of $(\Sigma w)_i = \sum_j \sigma_{ij} w_j$, the covariance of asset $i$ with the portfolio as a whole: a long position that tends to move **against** the rest of the book — a hedge, or any asset negatively correlated with the portfolio — has $(\Sigma w)_i < 0$, and therefore a negative marginal, component and percentage contribution, at a positive weight.
+
+Such a negative share is published as computed: nothing floors it at zero. It is not a defect of the arithmetic but its plainest statement — the position **removes** volatility from the portfolio — and the shares still sum to exactly $1$, the others then summing to more than $1$ between them.
 
 Cash is handled without appearing in the matrix at all. Asset weights sum to one minus the cash share, so the volatility computed is already that of the **whole** portfolio, cash included — and cash never shows up as a contributor, because a holding that does not move has a marginal contribution of zero. The cash share is published alongside the contributions so the reader can see what the remainder is.
 
@@ -92,6 +94,7 @@ Read the percentage contribution **against the weight**, not on its own:
 - contribution ≈ weight — the position carries its own share, no more
 - contribution > weight — it is a concentrated source of risk relative to the capital committed to it
 - contribution < weight — it is diluting portfolio risk, either because it is calm or because it moves differently from the rest
+- contribution < 0 — it is hedging: it moves against the portfolio as a whole, so holding it lowers total volatility, and every other position's share is correspondingly larger
 
 The marginal figure answers a different question and is the one to use when thinking about a change: it says what the **next** euro into that position does to total volatility. A position can carry a large component contribution simply because it is large, while its marginal contribution is unremarkable.
 
