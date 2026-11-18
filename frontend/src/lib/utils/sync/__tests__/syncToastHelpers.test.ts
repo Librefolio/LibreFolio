@@ -20,7 +20,7 @@
  * tests supply isolated currency metadata; provider-chain parsing stays real.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {buildAssetSyncToast, buildFxSyncToast, historyStartsNote} from '../syncToastHelpers';
+import {buildAssetSyncToast, buildFxSyncToast, historyStartsNote, historyStartsSummary} from '../syncToastHelpers';
 import {formatDay} from '$lib/utils/core/formatAxisDate';
 import {formatElapsed, formatTime} from '../syncHelpers';
 import {fxPairHtml, parseProviderChain, type FxPairHtmlOptions} from '$lib/utils/providerHelpers';
@@ -158,6 +158,17 @@ describe('buildAssetSyncToast', () => {
             const toast = buildAssetSyncToast({status: 'failed', errors: ['No price data available from provider'], history_starts: '2025-11-18'}, 'BTC', spy());
             expect(toast.variant).toBe('error');
             expect(toast.message).toContain('prices.sync.historyStarts');
+        });
+
+        it('leaves the line out when the caller sums it up for many assets', () => {
+            const toast = buildAssetSyncToast({status: 'ok', points_fetched: 3, points_changed: 3, history_starts: '2025-11-18'}, 'BTC', spy(), {historyNote: false});
+            expect(toast.message).not.toContain('prices.sync.historyStarts');
+        });
+
+        it('sums many assets up in one line, with their count (the consultant, 18/11)', () => {
+            const t = vi.fn((key: string, opts?: {values?: Record<string, number>}) => `[[${key}|${opts?.values?.count ?? ''}]]`);
+            expect(historyStartsSummary([{history_starts: '2025-11-18'}, {history_starts: null}, {history_starts: '2025-11-18'}], t)).toBe('[[prices.sync.historyStartsMany|2]]');
+            expect(historyStartsSummary([{history_starts: null}, {}], t)).toBe('');
         });
 
         it('says nothing when the outcome has no first day', () => {

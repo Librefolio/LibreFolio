@@ -64,7 +64,21 @@ export function historyStartsNote(result: {history_starts?: string | null} | nul
     return day ? tr('prices.sync.historyStarts', {values: {date: formatDay(day)}}) : '';
 }
 
-export function buildAssetSyncToast(result: any, label: string, tr: (key: string, opts?: any) => string): SyncToastResult {
+/**
+ * The one line of a sync of many assets (the consultant, 18/11): how many of them come from a source with prices only
+ * from a later day, instead of one long line in each asset's toast. Empty when none does.
+ */
+export function historyStartsSummary(results: readonly {history_starts?: string | null}[], tr: (key: string, opts?: any) => string): string {
+    const count = results.filter((result) => !!result?.history_starts).length;
+    return count > 0 ? tr('prices.sync.historyStartsMany', {values: {count}}) : '';
+}
+
+/** Options of `buildAssetSyncToast`. `historyNote: false`: the caller sums the first-day lines of many assets up. */
+export interface AssetSyncToastOptions {
+    historyNote?: boolean;
+}
+
+export function buildAssetSyncToast(result: any, label: string, tr: (key: string, opts?: any) => string, options: AssetSyncToastOptions = {}): SyncToastResult {
     if (!result) {
         return {variant: 'error', message: `${label} — ${tr('prices.sync.noResponse')}`};
     }
@@ -76,7 +90,7 @@ export function buildAssetSyncToast(result: any, label: string, tr: (key: string
 
     const priceLine = `${dollarSignSvg} ${fetched}↓ ${changed}Δ`;
     const eventLine = evtFetched > 0 ? `\n${calendarClockSvg} ${evtFetched}↓ ${evtChanged}Δ` : '';
-    const note = historyStartsNote(result, tr);
+    const note = options.historyNote === false ? '' : historyStartsNote(result, tr);
     const historyLine = note ? `\n${note}` : '';
 
     if (result.status === 'ok') {
