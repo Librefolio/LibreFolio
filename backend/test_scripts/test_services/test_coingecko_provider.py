@@ -411,36 +411,21 @@ async def test_p1_an_invalid_plan_in_its_variable_is_an_invalid_locked_setting(p
 
 
 # =============================================================================
-# P1b. THE ICON, BUNDLED WITH THE PLUGIN
+# P1b. THE ICON: COINGECKO'S OWN FAVICON, BY URL
 # =============================================================================
 #
-# The logo is a file of the asset family's static folder, served by the app (`/api/v1/uploads/plugin/asset/…`): no
-# browser asks coingecko.com for it, so no user's address reaches CoinGecko. Until the file is there the provider has
-# no icon, as before P1b, and says nothing about it.
+# The developer's choice (P1b-b): the icon points at CoinGecko's favicon, as Yahoo's, justETF's and Borsa Italiana's
+# point at theirs, so it follows CoinGecko's own updates. No file is bundled.
+
+COINGECKO_FAVICON = "https://www.coingecko.com/favicon.ico"
 
 
-def test_p1b_without_the_file_the_provider_has_no_icon_and_logs_nothing(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture):
-    from backend.app.services.asset_source_providers.coingecko import plugin as coingecko_plugin  # noqa: PLC0415 — the module whose path is replaced
-
-    monkeypatch.setattr(coingecko_plugin, "ICON_FILE", tmp_path / "coingecko.png")
-    caplog.set_level("DEBUG", logger=coingecko_plugin.__name__)
-
-    assert CoinGeckoProvider().get_icon is None
-    assert not [record for record in caplog.records if record.name == coingecko_plugin.__name__], "a missing icon is the default, not news"
+def test_p1b_the_icon_is_coingeckos_favicon_by_url():
+    assert CoinGeckoProvider().get_icon == COINGECKO_FAVICON
 
 
-def test_p1b_with_the_file_the_icon_is_the_apps_own_url(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    from backend.app.services.asset_source_providers.coingecko import plugin as coingecko_plugin  # noqa: PLC0415 — the module whose path is replaced
-
-    icon = tmp_path / "coingecko.png"
-    icon.write_bytes(b"\x89PNG\r\n\x1a\n")
-    monkeypatch.setattr(coingecko_plugin, "ICON_FILE", icon)
-
-    assert CoinGeckoProvider().get_icon == "/api/v1/uploads/plugin/asset/coingecko.png"
-
-
-def test_p1b_the_icon_file_is_the_one_the_static_route_serves_for_that_url():
+def test_p1b_no_icon_file_is_bundled():
     from backend.app.api.v1.uploads import plugin_static_file  # noqa: PLC0415 — the route's own resolution
-    from backend.app.services.asset_source_providers.coingecko import plugin as coingecko_plugin  # noqa: PLC0415 — its path, unpatched
 
-    assert plugin_static_file("asset", "coingecko.png") == coingecko_plugin.ICON_FILE.resolve()
+    bundled = plugin_static_file("asset", "coingecko.png")
+    assert bundled is not None and not bundled.exists(), "the icon is the favicon's URL, not a file of the static folder"
