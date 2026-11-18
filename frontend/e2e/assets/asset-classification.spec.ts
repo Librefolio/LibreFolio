@@ -4,6 +4,10 @@
  * Tests the distribution editor round-trip: add geo/sector entries → save → reopen → verify persistence,
  * and that the editor speaks the UI language (weight column header, total badge).
  *
+ * The sectors and the countries are the profile's (plan 68, E9): their editors are the panels of the profile window,
+ * opened over the asset window by the «Dati del profilo» row. «Tieni le modifiche» hands the change back, and the
+ * asset window's save sends it.
+ *
  * Prerequisites:
  * - Test server running (./dev.py server --test)
  * - Database populated (./dev.py test db populate --force)
@@ -112,17 +116,44 @@ async function createAssetAndOpenEdit(page: import('@playwright/test').Page, nam
     await expect(page.getByTestId('asset-modal-form')).toBeVisible({timeout: 5000});
 }
 
-/** Helper: ensure the "More Info" section is expanded (it is a toggle, not a button). */
-async function expandMoreInfo(page: import('@playwright/test').Page) {
-    // AssetModal opens this section by itself when the asset already carries
-    // identifiers (`moreInfoExpanded = identifierRows.length > 0`), so clicking
-    // unconditionally would *close* it. Ask for the end state, not the click.
-    // The state is read from the header, after the modal has filled its form from the asset (the section opens in the
-    // same pass): `data-expanded` is the section's own state, not a probe of its content.
+/**
+ * Open the profile window over the asset window, once the asset window has filled its form: the panels of the sectors
+ * and of the countries are its distribution editors. «Adesso» arrives from the profile of today, so a panel holding a
+ * stored distribution shows it a moment later.
+ */
+async function openProfileWindow(page: import('@playwright/test').Page) {
     await expect(page.getByTestId('asset-modal-display-name')).not.toHaveValue('', {timeout: 5_000});
-    const header = page.getByTestId('asset-modal-more-info');
-    if ((await header.getAttribute('data-expanded')) !== 'true') await header.click();
-    await expect(page.getByTestId('distribution-editor-geographic')).toBeVisible({timeout: 5000});
+    await page.getByTestId('asset-modal-profile-row').click();
+    const window = page.getByTestId('profile-edit-modal');
+    await expect(window).toBeVisible({timeout: 10_000});
+    await expect(window.getByTestId('distribution-editor-geographic')).toBeVisible({timeout: 10_000});
+    await expect(window.getByTestId('distribution-editor-sector')).toBeVisible({timeout: 10_000});
+    return window;
+}
+
+/** «Tieni le modifiche»: the change goes back to the asset window, which saves it with the asset. */
+async function keepProfile(page: import('@playwright/test').Page) {
+    await page.getByTestId('profile-edit-keep').click();
+    await expect(page.getByTestId('profile-edit-modal')).toBeHidden({timeout: 10_000});
+}
+
+/** Save the asset window, and wait for it to close. */
+async function saveAssetWindow(page: import('@playwright/test').Page) {
+    await page.getByTestId('asset-modal-save').click();
+    await expect(page.getByTestId('asset-modal-form')).not.toBeVisible({timeout: 10_000});
+}
+
+/** Reopen the asset window from the detail page. */
+async function reopenAssetWindow(page: import('@playwright/test').Page) {
+    await page.getByTestId('asset-detail-edit-btn').click();
+    await expect(page.getByTestId('asset-modal-form')).toBeVisible({timeout: 5000});
+}
+
+/** Close the profile window without keeping anything, then the asset window. */
+async function closeBoth(page: import('@playwright/test').Page) {
+    await page.getByTestId('profile-edit-cancel').click();
+    await expect(page.getByTestId('profile-edit-modal')).toBeHidden({timeout: 10_000});
+    await page.getByTestId('asset-modal-cancel').click();
 }
 
 test.describe('Asset Classification Round-Trip', () => {
@@ -147,39 +178,20 @@ test.describe('Asset Classification Round-Trip', () => {
     test('geo distribution persists after save and reopen', async ({page}) => {
         const assetName = `E2E Geo Test ${uniqueSuffix()}`;
         await createAssetAndOpenEdit(page, assetName, owned);
+        let window = await openProfileWindow(page);
 
-        // Expand More Info
-        await expandMoreInfo(page);
+        // Add a geographic entry: the total badge renders only once it exists
+        await window.getByTestId('distribution-add-geographic').click();
+        await expect(window.getByTestId('distribution-total-geographic')).toBeVisible({timeout: 10_000});
 
-        // Add geographic entry
-        const addGeoBtn = page.getByTestId('distribution-add-geographic');
-        await addGeoBtn.click();
+        await keepProfile(page);
+        await saveAssetWindow(page);
+        await reopenAssetWindow(page);
+        window = await openProfileWindow(page);
 
-        // The new entry should appear in the distribution editor
-        const geoEditor = page.getByTestId('distribution-editor-geographic');
-        await expect(geoEditor).toBeVisible();
-
-        // Verify total badge is visible (entry was added)
-        const geoTotal = page.getByTestId('distribution-total-geographic');
-        await expect(geoTotal).toBeVisible({timeout: 10_000});
-
-        // Save
-        await page.getByTestId('asset-modal-save').click();
-        await expect(page.getByTestId('asset-modal-form')).not.toBeVisible({timeout: 10_000});
-
-        // Reopen edit modal
-        await page.getByTestId('asset-detail-edit-btn').click();
-        await expect(page.getByTestId('asset-modal-form')).toBeVisible({timeout: 5000});
-
-        // Expand More Info again
-        await expandMoreInfo(page);
-
-        // Verify that the geographic distribution is still present
-        const geoTotalAfter = page.getByTestId('distribution-total-geographic');
-        await expect(geoTotalAfter).toBeVisible({timeout: 3000});
-
-        // Close modal
-        await page.getByTestId('asset-modal-cancel').click();
+        // The geographic distribution is the profile's now: «Adesso» shows it
+        await expect(window.getByTestId('distribution-total-geographic')).toBeVisible({timeout: 10_000});
+        await closeBoth(page);
     });
 
     // ========================================================================
@@ -188,34 +200,18 @@ test.describe('Asset Classification Round-Trip', () => {
     test('sector distribution persists after save and reopen', async ({page}) => {
         const assetName = `E2E Sector Test ${uniqueSuffix()}`;
         await createAssetAndOpenEdit(page, assetName, owned);
+        let window = await openProfileWindow(page);
 
-        // Expand More Info
-        await expandMoreInfo(page);
+        await window.getByTestId('distribution-add-sector').click();
+        await expect(window.getByTestId('distribution-total-sector')).toBeVisible({timeout: 10_000});
 
-        // Add sector entry
-        const addSectorBtn = page.getByTestId('distribution-add-sector');
-        await addSectorBtn.click();
+        await keepProfile(page);
+        await saveAssetWindow(page);
+        await reopenAssetWindow(page);
+        window = await openProfileWindow(page);
 
-        // Verify total badge appears
-        const sectorTotal = page.getByTestId('distribution-total-sector');
-        await expect(sectorTotal).toBeVisible({timeout: 10_000});
-
-        // Save
-        await page.getByTestId('asset-modal-save').click();
-        await expect(page.getByTestId('asset-modal-form')).not.toBeVisible({timeout: 10_000});
-
-        // Reopen
-        await page.getByTestId('asset-detail-edit-btn').click();
-        await expect(page.getByTestId('asset-modal-form')).toBeVisible({timeout: 5000});
-
-        // Expand More Info
-        await expandMoreInfo(page);
-
-        // Verify sector distribution still present
-        const sectorTotalAfter = page.getByTestId('distribution-total-sector');
-        await expect(sectorTotalAfter).toBeVisible({timeout: 3000});
-
-        await page.getByTestId('asset-modal-cancel').click();
+        await expect(window.getByTestId('distribution-total-sector')).toBeVisible({timeout: 10_000});
+        await closeBoth(page);
     });
 
     // ========================================================================
@@ -224,54 +220,39 @@ test.describe('Asset Classification Round-Trip', () => {
     test('clearing distribution persists after save', async ({page}) => {
         const assetName = `E2E Clear Test ${uniqueSuffix()}`;
         await createAssetAndOpenEdit(page, assetName, owned);
+        let window = await openProfileWindow(page);
 
-        // Expand More Info
-        await expandMoreInfo(page);
+        // Add a geo entry. The button's handler is async — it loads the country list on first use — so the row does not
+        // exist when the click resolves: wait for the total badge, which only renders once there is an entry.
+        await window.getByTestId('distribution-add-geographic').click();
+        await expect(window.getByTestId('distribution-total-geographic')).toBeVisible({timeout: 10_000});
+        await keepProfile(page);
+        await saveAssetWindow(page);
 
-        // Add geo entry. The button's handler is async — it loads the country list on
-        // first use — so the row does not exist when the click resolves. Saving before
-        // the row lands saves nothing, and the test then blames the reopen. Wait for
-        // the total badge, which only renders once there is an entry.
-        const addGeoBtn = page.getByTestId('distribution-add-geographic');
-        await addGeoBtn.click();
-        await expect(page.getByTestId('distribution-total-geographic')).toBeVisible({timeout: 10_000});
+        await reopenAssetWindow(page);
+        window = await openProfileWindow(page);
+        // The entry is there («Adesso»): its row has its actions
+        await expect(window.getByTestId('distribution-total-geographic')).toBeVisible({timeout: 10_000});
 
-        // Save with entry
-        await page.getByTestId('asset-modal-save').click();
-        await expect(page.getByTestId('asset-modal-form')).not.toBeVisible({timeout: 10_000});
-
-        // Reopen
-        await page.getByTestId('asset-detail-edit-btn').click();
-        await expect(page.getByTestId('asset-modal-form')).toBeVisible({timeout: 5000});
-        await expandMoreInfo(page);
-
-        // Confirm entry exists (total badge visible)
-        await expect(page.getByTestId('distribution-total-geographic')).toBeVisible({timeout: 3000});
-
-        // Delete the entry via row action. DataTable rows expose a "row-actions-{id}" kebab
-        // button that opens a ContextMenu with "context-menu-action-{actionId}" items (see
-        // DataTable.svelte / ContextMenu.svelte; same pattern as brokers-detail.spec.ts).
-        const geoEditor = page.getByTestId('distribution-editor-geographic');
+        // Delete the entry via row action. DataTable rows expose a "row-actions-{id}" kebab button that opens a
+        // ContextMenu with "context-menu-action-{actionId}" items (see DataTable.svelte / ContextMenu.svelte).
+        const geoEditor = window.getByTestId('distribution-editor-geographic');
         const rowActionsBtn = geoEditor.getByTestId(/^row-actions-/).first();
-        // The total badge above proves the entry is there: its row has its actions.
         await expect(rowActionsBtn).toBeVisible({timeout: 5_000});
         await rowActionsBtn.click();
         await page.getByTestId('context-menu-action-delete').click();
+        await expect(window.getByTestId('distribution-total-geographic')).not.toBeVisible({timeout: 5_000});
 
-        // Save (now empty)
-        await page.getByTestId('asset-modal-save').click();
-        await expect(page.getByTestId('asset-modal-form')).not.toBeVisible({timeout: 10_000});
+        // Kept and saved empty: the profile's countries are emptied on purpose
+        await keepProfile(page);
+        await saveAssetWindow(page);
 
-        // Reopen one more time
-        await page.getByTestId('asset-detail-edit-btn').click();
-        await expect(page.getByTestId('asset-modal-form')).toBeVisible({timeout: 5000});
-        await expandMoreInfo(page);
-
-        // Verify geo distribution is empty (no total badge)
-        const geoTotalFinal = page.getByTestId('distribution-total-geographic');
-        await expect(geoTotalFinal).not.toBeVisible({timeout: 3000});
-
-        await page.getByTestId('asset-modal-cancel').click();
+        await reopenAssetWindow(page);
+        window = await openProfileWindow(page);
+        // «Adesso» is read again on this opening: let the panel's caption settle, then the badge must stay away
+        await expect(window.getByTestId('profile-panel-caption-geography')).toBeVisible({timeout: 10_000});
+        await expect(window.getByTestId('distribution-total-geographic')).not.toBeVisible({timeout: 3000});
+        await closeBoth(page);
     });
 });
 
@@ -360,10 +341,10 @@ test.describe('Distribution editor in the UI language', () => {
         try {
             await setLanguage(page, 'fr');
             await createAssetAndOpenEdit(page, assetName);
-            await expandMoreInfo(page);
+            const window = await openProfileWindow(page);
 
             // One entry on a fresh asset; the total badge renders only once it exists.
-            const geoEditor = page.getByTestId('distribution-editor-geographic');
+            const geoEditor = window.getByTestId('distribution-editor-geographic');
             await geoEditor.getByTestId('distribution-add-geographic').click();
             const total = geoEditor.getByTestId('distribution-total-geographic');
             await expect(total).toBeVisible({timeout: 10_000});
