@@ -115,6 +115,23 @@ async def _rows(family: str, asked: list[_Asked], user_id: int | None) -> tuple[
     return system, user, False
 
 
+def invalid_locked_variables(own: list[FieldState], groups: dict[str, list[FieldState]]) -> list[str | None]:
+    """The variables that lock a field with an invalid value, the plugin's and its groups' (N2b)."""
+    invalid = [state.env_variable for state in own if state.locked and state.problem == "invalid_env"]
+    invalid += [state.env_variable for states in groups.values() for state in states if state.locked and state.problem == "invalid_env"]
+    return invalid
+
+
+def readiness_reason(own: list[FieldState], groups: dict[str, list[FieldState]]) -> str | None:
+    """Why a plugin (its own fields, and its groups' by name) is not configured: ``invalid_locked_setting`` when a variable
+    that locks a field has an invalid value (fixed on the server, whatever else is missing, N2b), ``missing_fields``
+    otherwise; None when nothing is missing. The one rule of the boundary's check and of the settings catalogue (U5b)."""
+    every = qualified_missing(missing_field_keys(own), {name: missing_field_keys(states) for name, states in groups.items()})
+    if not every:
+        return None
+    return "invalid_locked_setting" if invalid_locked_variables(own, groups) else "missing_fields"
+
+
 def _judge(family: str, asked: list[_Asked], system: dict, user: dict, user_id: int | None, managed: bool, unavailable: bool = False) -> dict[str, PluginReadiness]:  # noqa: PLR0913 — the rows, the caller and the profile
     """The readiness of each plugin asked, from its fields' and its groups' states (no secret decrypted). Synchronous."""
     group_states: dict[str, list[FieldState]] = {}
@@ -130,9 +147,9 @@ def _judge(family: str, asked: list[_Asked], system: dict, user: dict, user_id: 
             hidden = {state.field.key for state in own if state.locked}
             hidden |= {f"{group.name}.{state.field.key}" for group in entry.groups for state in group_states[group.name] if state.locked}
         # An invalid value in a variable that locks a field is fixed on the server, whatever else is missing (N2b)
-        invalid = [state.env_variable for state in own if state.locked and state.problem == "invalid_env"]
-        invalid += [state.env_variable for group in entry.groups for state in group_states[group.name] if state.locked and state.problem == "invalid_env"]
-        reason = None if not every else ("invalid_locked_setting" if invalid else "missing_fields")
+        read = {group.name: group_states[group.name] for group in entry.groups}
+        invalid = invalid_locked_variables(own, read)
+        reason = readiness_reason(own, read)
         variables = () if managed or not every else tuple(variable for variable in invalid if variable)
         answers[entry.code] = PluginReadiness(configured=not every, missing=tuple(key for key in every if key not in hidden), reason=reason, variables=variables, settings_unavailable=unavailable)
     return answers
