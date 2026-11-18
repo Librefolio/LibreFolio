@@ -369,16 +369,14 @@ def _merged_report(runs, scenario: ExactPlannerScenario) -> PlanReport:
         votes.append(SeededRunVote(seed=run.seed, origin=outcome.origin, closed=outcome.closed, infeasible=infeasible, value=outcome.value, band=outcome.band, bound=outcome.bound))
     verdict = merge_seeded_runs(votes)
     margin = seeded_margin(votes, verdict)
+    # No amount on the line (lot LOGS of project 67): a run's value and bound, and the margin, are money of the user's
+    # portfolio. Which run closed, and how long each took, is what a diagnosis of the seeds reads.
     logger.info(
         "Rebalancer seeded runs",
-        runs=[
-            {"seed": vote.seed, "origin": vote.origin, "closed": vote.closed, "infeasible": vote.infeasible, "value": None if vote.value is None else float(vote.value), "bound": None if vote.bound is None else float(vote.bound), "seconds": run.seconds, "failure": run.failure}
-            for vote, run in zip(votes, runs, strict=True)
-        ],
+        runs=[{"seed": vote.seed, "origin": vote.origin, "closed": vote.closed, "infeasible": vote.infeasible, "seconds": run.seconds, "failure": run.failure} for vote, run in zip(votes, runs, strict=True)],
         state=verdict.state,
         chosen=None if verdict.index is None else votes[verdict.index].seed,
         downgrade=verdict.downgrade,
-        margin=None if margin is None else float(margin),
     )
     if verdict.index is None:
         raise SeededRunsFailedError(f"no run of the Rebalancer could be published ({verdict.state})")

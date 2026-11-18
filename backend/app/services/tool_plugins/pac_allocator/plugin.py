@@ -139,9 +139,8 @@ def _log_engine_failure(exc: Exception, execution_id: str) -> None:
     the at most two LibreFolio frames that called it, nearest first, and
     ``raised_in`` the library frame below it, if any.
 
-    The worker is a spawn child that never calls ``configure_logging``: the
-    line reaches the server's stderr (console, ``docker logs``), not
-    ``librefolio.log``.
+    The worker sends its lines to the server, which writes them in
+    ``librefolio.log`` with the request's id (lot LOGS of project 67).
     """
     frames = traceback.extract_tb(exc.__traceback__)
     own = [frame for frame in frames if Path(frame.filename).resolve().is_relative_to(_BACKEND_ROOT)]

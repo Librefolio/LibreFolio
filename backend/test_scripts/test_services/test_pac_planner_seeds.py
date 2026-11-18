@@ -438,6 +438,21 @@ def test_a_proven_plan_carries_no_margin() -> None:
     assert (proven.proof.kind, getattr(proven.proof, "margin", None)) == ("optimal_proven", None)
 
 
+def test_the_seeded_runs_line_carries_no_amount() -> None:
+    """Lot LOGS of project 67 (the coordinator's ruling on the log rule): the «Rebalancer seeded runs» line names each run's
+    seed, origin, state, seconds and failure, never an amount of the plan. A run's value and bound, and the margin, are
+    money of the user's portfolio, which the UI masks as personal."""
+    from structlog.testing import capture_logs  # noqa: PLC0415 — beside its only use
+
+    with capture_logs() as lines:
+        planner.plan_exact_scenario(cases.t4(), solver_time_budget_seconds=5, seeds=(1, 2, 3))
+
+    (line,) = [line for line in lines if line["event"] == "Rebalancer seeded runs"]
+    assert set(line) == {"event", "log_level", "runs", "state", "chosen", "downgrade"}
+    assert [set(run) for run in line["runs"]] == [{"seed", "origin", "closed", "infeasible", "seconds", "failure"}] * 3
+    assert [run["seed"] for run in line["runs"]] == [1, 2, 3]
+
+
 # ---------------------------------------------------------------------------- the planner, three runs in processes
 
 
