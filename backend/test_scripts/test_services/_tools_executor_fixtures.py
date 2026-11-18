@@ -15,6 +15,7 @@ is emergency teardown, never evidence that the production supervisor succeeded.
 
 from __future__ import annotations
 
+import logging
 import multiprocessing
 import os
 import signal
@@ -32,6 +33,7 @@ from typing import Any, Literal, NoReturn, Self, cast
 import psutil
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from backend.app.logging_config import get_logger
 from backend.app.schemas.tools import ToolDocumentation, ToolOperationPolicy, ToolUIDescriptor
 from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.tools.base import ToolExecutionContext, ToolPlugin, ToolService
@@ -43,7 +45,7 @@ _SETUP_TIMEOUT = 30.0
 _CLEANUP_TIMEOUT = 5.0
 _CHILD_CONTROL: Connection | None = None
 _CHILD_EXECUTION_ID: str | None = None
-# The real worker's response endpoint, published only to the close_and_linger and progress_rogue scenarios.
+# The real worker's response endpoint, published only to the close_and_linger, progress_rogue and log scenarios.
 _CHILD_RESPONSE: Connection | None = None
 FIXTURE_TOOL_CODE = "private_executor_fixture"
 
@@ -216,6 +218,8 @@ class FixtureInput(BaseModel):
         "progress",
         "progress_rogue",
         "progress_flood",
+        "log",
+        "log_flood",
     ]
     text: str = "private"
     size: int = Field(default=2_048, strict=True, le=1_000_000)
@@ -326,6 +330,33 @@ def _report_fixture_progress(scenario: str, context: ToolExecutionContext) -> No
             context.report_progress("search", step, 100)
 
 
+#: How many lines the log_flood scenario writes: well past the child's cap of log frames.
+FIXTURE_LOG_FLOOD_LINES = 500
+
+
+def _write_fixture_log_lines(scenario: str, context: ToolExecutionContext) -> None:
+    """The log scenarios (lot LOGS of project 67): a structured line, a line under the parent's level, a library's plain
+    line, and log frames the parent must drop; or a flood past every cap."""
+    log = get_logger("tools.fixture")
+    if scenario == "log":
+        log.info("Fixture line", seed=11, value=1.5)
+        log.debug("Fixture debug line")
+        logging.getLogger("fixture.library").warning("Library line %s", "w")
+        if _CHILD_RESPONSE is None:
+            raise _PrivateFixtureFailure("log requires the private control wrapper")
+        for raw in (
+            {"level": 20, "logger": "x", "message": "PRIVATE extra", "secret": "PRIVATE"},
+            {"level": "20", "logger": "x", "message": "PRIVATE level"},
+            {"level": 20, "logger": "x"},
+            # Well formed, but with fields the parent's own processors own: it arrives without them.
+            {"level": 20, "logger": "x", "message": '{"event": "Hostile line %s", "positional_args": ["a"], "request_id": "FAKE"}'},
+        ):
+            _CHILD_RESPONSE.send_bytes(encode_json({"kind": "log", "execution_id": context.execution_id, **raw}))
+    elif scenario == "log_flood":
+        for index in range(FIXTURE_LOG_FLOOD_LINES):
+            log.info("Flood line", index=index)
+
+
 @register_plugin(FixtureRegistry)
 class FixturePlugin(ToolPlugin):
     contract_version = "1.0.0"
@@ -393,6 +424,7 @@ class FixturePlugin(ToolPlugin):
             _wait_for_release(parameters.text)
 
         _report_fixture_progress(parameters.scenario, context)
+        _write_fixture_log_lines(parameters.scenario, context)
 
         # These two probes must start from a valid, genuinely constructed model.
         text = "private" if parameters.scenario in ("unicode", "invalid_output") else parameters.text
@@ -464,7 +496,7 @@ def controlled_worker_entry(target: Callable[..., object], args: tuple[object, .
                 raise AssertionError("Partial-frame fixture received unexpected worker arguments")
             _stall_after_partial_frame(job, response, cancellation)
         else:
-            if isinstance(parameters, dict) and parameters.get("scenario") in ("close_and_linger", "progress_rogue"):
+            if isinstance(parameters, dict) and parameters.get("scenario") in ("close_and_linger", "progress_rogue", "log"):
                 # The real worker still runs the handshake and compute; compute then closes this same endpoint, or
                 # writes on it the raw frames no plugin can send through report_progress.
                 response = args[1] if len(args) > 1 else None

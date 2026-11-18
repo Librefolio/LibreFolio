@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import logging
 import multiprocessing
 import os
 import threading
@@ -13,11 +15,13 @@ from typing import Protocol
 import psutil
 from pydantic import BaseModel, ValidationError
 
+from backend.app.logging_config import configure_child_logging
 from backend.app.schemas.tools import ToolError, ToolErrorCode, ToolItemMetrics
 from backend.app.services.plugin_settings.contract import BoundSettings
 from backend.app.services.tools.base import ToolExecutionContext, ToolExecutionError
 from backend.app.services.tools.registry import ToolDefinition, ToolPluginRegistry
-from backend.app.services.tools.wire import decode_json, encode_json, encode_progress_frame, plain_json_object, validation_error
+from backend.app.services.tools.wire import decode_json, encode_json, encode_log_frame, encode_progress_frame, plain_json_object, validation_error
+from backend.app.utils.runtime.secret_masking import secrets_in_flight
 
 
 class CancellationSignal(Protocol):
@@ -55,19 +59,35 @@ class PipeCancellation:
 #: the pipe never fills, so the child never waits for its parent to report progress.
 CHILD_PROGRESS_FRAME_CAP = 64
 
+#: The most log lines a child sends (lot LOGS of project 67); the rest are counted in one last line at close. A plan's own
+#: lines are a handful; the cap bounds what a chatty plugin writes into the server's log. Unlike the progress frames, 200
+#: lines of up to 16 KiB can exceed the pipe's buffer: a send may then wait for the parent, who reads the pipe without pause.
+CHILD_LOG_FRAME_CAP = 200
+
+#: How much of a line too long for its frame is kept: the head, then «…». Tried longest first.
+_LOG_LINE_CUTS = (4_000, 1_000)
+
+#: The line that counts the log lines a child did not send.
+DROPPED_LOG_LINES_EVENT = "Tool worker log lines dropped"
+
 
 class PipeProgressReporter:
-    """The child's progress channel (lot V1 of project 67): small frames on the response pipe, between ``ready`` and the
-    result. It never blocks for long, never raises: a malformed call is dropped, past its cap it stops, a broken pipe is
-    swallowed, and once closed (compute returned) it sends nothing, so a stray thread cannot split the result frame. It
-    writes progress frames only: no raw frame reaches the pipe through it. The parent checks every frame again: declared phase, shape, duplicates, its own cap."""
+    """The child's channel to its parent (lot V1 of project 67; log lines since lot LOGS): small frames on the response pipe,
+    between ``ready`` and the result. It never blocks for long, never raises: a malformed call is dropped, past its cap it
+    stops, a broken pipe is swallowed, and once closed (compute returned) it sends nothing, so a stray thread cannot split
+    the result frame. It writes progress and log frames only: no raw frame reaches the pipe through it, and one lock serialises
+    both. It sends only from the process that made it: a process forked from the worker (a seeded run of the Rebalancer)
+    inherits it and must never write on the same pipe. The parent checks every frame again: shape, phase, level, its own caps."""
 
     def __init__(self, connection: Connection, execution_id: str) -> None:
         self._connection = connection
         self._execution_id = execution_id
         self._lock = threading.Lock()
         self._sent = 0
+        self._log_sent = 0
+        self._log_dropped = 0
         self._closed = False
+        self._pid = os.getpid()
 
     def report(self, phase: str, step: int | None = None, total: int | None = None) -> None:
         if not isinstance(phase, str) or not all(value is None or (type(value) is int and value >= 0) for value in (step, total)):
@@ -78,20 +98,84 @@ class PipeProgressReporter:
             return
         self._send(frame)
 
+    def log(self, level: int, logger: str, message: str) -> None:
+        """One rendered log line for the parent's log; past the cap it is only counted, for the line sent at close."""
+        if os.getpid() != self._pid:
+            return
+        frame = _log_frame(self._execution_id, level, logger, message)
+        with self._lock:
+            if self._closed:
+                return
+            if frame is None or self._log_sent >= CHILD_LOG_FRAME_CAP:
+                self._log_dropped += 1
+                return
+            self._log_sent += 1
+            self._write(frame)
+
     def _send(self, payload: bytes) -> None:
+        if os.getpid() != self._pid:
+            return
         with self._lock:
             if self._closed or self._sent >= CHILD_PROGRESS_FRAME_CAP:
                 return
             self._sent += 1
-            try:
-                self._connection.send_bytes(payload)
-            except (OSError, ValueError):
-                # A broken pipe ends the reporting, not the calculation: the parent sees the crash on the result frame.
-                self._closed = True
+            self._write(payload)
+
+    def _write(self, payload: bytes) -> None:
+        """Under the lock: one frame on the pipe."""
+        try:
+            self._connection.send_bytes(payload)
+        except (OSError, ValueError):
+            # A broken pipe ends the reporting, not the calculation: the parent sees the crash on the result frame.
+            self._closed = True
 
     def close(self) -> None:
+        """Send nothing more; first, the count of the log lines not sent, when there are any."""
+        if os.getpid() != self._pid:
+            return
         with self._lock:
+            if not self._closed and self._log_dropped:
+                counted = json.dumps({"event": DROPPED_LOG_LINES_EVENT, "dropped": self._log_dropped})
+                frame = _log_frame(self._execution_id, logging.WARNING, __name__, counted)
+                if frame is not None:
+                    self._write(frame)
             self._closed = True
+
+
+def _log_frame(execution_id: str, level: int, logger: str, message: str) -> bytes | None:
+    """The frame of one line, its head kept when the whole does not fit; None when not even the head fits."""
+    for text in (message, *(message[:cut] + "…" for cut in _LOG_LINE_CUTS if len(message) > cut)):
+        try:
+            return encode_log_frame(execution_id, level, logger[:200], text)
+        except ValueError:
+            continue
+    return None
+
+
+class PipeLogHandler(logging.Handler):
+    """The child's one log handler (lot LOGS of project 67): every record, rendered as the server renders it, becomes a log
+    frame on the channel. In a process forked from the worker it keeps the old behaviour: a warning goes to stderr."""
+
+    def __init__(self, channel: PipeProgressReporter) -> None:
+        super().__init__()
+        self._channel = channel
+        self._pid = os.getpid()
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            if os.getpid() != self._pid:
+                fallback = logging.lastResort
+                if fallback is not None and record.levelno >= fallback.level:
+                    fallback.handle(record)
+                return
+            self._channel.log(record.levelno, record.name, self.format(record))
+        except Exception:  # an isolation boundary: a line that cannot be sent never stops the calculation
+            self.handleError(record)
+
+
+def route_logs_to_parent(channel: PipeProgressReporter, level: int) -> None:
+    """In the worker: every line at ``level`` or above goes to the parent through ``channel`` (lot LOGS of project 67)."""
+    configure_child_logging(PipeLogHandler(channel), level)
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,6 +197,8 @@ class ToolWorkerJob:
     memory_limit_bytes: int = 1_073_741_824
     #: The values of the plugin's settings for this job (resolved by the parent for the user who asks), or None for a tool without fields.
     settings: BoundSettings | None = None
+    #: The parent's logging level (lot LOGS of project 67): the child sends the lines at or above it.
+    log_level: int = logging.WARNING
 
 
 def _elapsed_ms(started_ns: int) -> int:
@@ -163,6 +249,14 @@ def _error_code_for_phase(phase: str) -> ToolErrorCode:
 
 
 def _execute(job: ToolWorkerJob, cancellation: CancellationSignal, registry_class: type[ToolPluginRegistry], progress: PipeProgressReporter | None = None) -> dict[str, object]:
+    """The job, with its settings' secrets in flight (lot LOGS of project 67): every line logged while it runs, and every
+    error it raises, is masked before it leaves the child."""
+    secrets = job.settings.secret_values() if job.settings is not None else frozenset()
+    with secrets_in_flight(secrets):
+        return _execute_job(job, cancellation, registry_class, progress)
+
+
+def _execute_job(job: ToolWorkerJob, cancellation: CancellationSignal, registry_class: type[ToolPluginRegistry], progress: PipeProgressReporter | None = None) -> dict[str, object]:
     metrics: dict[str, int | None] = {}
     phase = "definition"
     context = ToolExecutionContext(
@@ -259,6 +353,7 @@ def execute_tool_job(
             )
             # No plugin code runs before the supervisor has adopted the owned session.
             progress = PipeProgressReporter(response, job.execution_id)
+            route_logs_to_parent(progress, job.log_level)
             if cancellation.await_start(job.hard_deadline):
                 try:
                     frame = _execute(job, cancellation, registry_class, progress)

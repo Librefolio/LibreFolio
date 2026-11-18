@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import logging
 import multiprocessing
 import os
 import select
@@ -15,6 +17,7 @@ from contextlib import ExitStack
 from dataclasses import dataclass, field
 from multiprocessing.connection import Connection
 
+import structlog
 from pydantic import ValidationError
 
 from backend.app.logging_config import get_logger
@@ -42,8 +45,8 @@ from backend.app.services.tools.catalog import effective_operation
 from backend.app.services.tools.process_tree import OwnedProcessTree
 from backend.app.services.tools.registry import ToolPluginRegistry, ToolRegistrySnapshot
 from backend.app.services.tools.resources import ToolResourceController
-from backend.app.services.tools.wire import MAX_SAFE_JSON_INTEGER, PROGRESS_FRAME_MAX_BYTES, decode_json, encode_json, plain_json_object
-from backend.app.services.tools.worker import PipeCancellation, ToolWorkerJob, execute_tool_job
+from backend.app.services.tools.wire import LOG_FRAME_MAX_BYTES, MAX_SAFE_JSON_INTEGER, PROGRESS_FRAME_MAX_BYTES, decode_json, encode_json, plain_json_object
+from backend.app.services.tools.worker import CHILD_LOG_FRAME_CAP, PipeCancellation, ToolWorkerJob, execute_tool_job
 
 logger = get_logger(__name__)
 
@@ -54,6 +57,14 @@ _EXIT_GRACE_SECONDS = 0.5
 TOOL_PROGRESS_MESSAGE_CAP = 50
 _PROGRESS_KEYS = frozenset({"kind", "execution_id", "phase"})
 _PROGRESS_OPTIONAL_KEYS = frozenset({"step", "total"})
+#: The most worker log lines the parent writes for one job (lot LOGS of project 67): the child's cap and its count line.
+TOOL_LOG_LINE_CAP = CHILD_LOG_FRAME_CAP + 1
+_LOG_KEYS = frozenset({"kind", "execution_id", "level", "logger", "message"})
+_LOG_LEVELS = frozenset({5, logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR, logging.CRITICAL})
+#: The keys of a child's rendered line that the parent's own processors write again, or that structlog reads as commands
+#: (``positional_args`` would be formatted into the event). The keys the parent's context binds (``request_id``) are
+#: dropped too, at each line: the child never overrides them.
+_CHILD_LINE_OWN_KEYS = frozenset({"event", "level", "logger", "timestamp", "exc_info", "stack_info", "positional_args"})
 
 #: What the executor calls with each accepted progress message, in the event loop of ``compute``.
 type ToolProgressListener = Callable[[ToolComputeProgress], None]
@@ -134,6 +145,7 @@ class _OwnedJob:
     progress_phases: tuple[str, ...] = ()
     on_progress: _ProgressForward | None = None
     progress_seen: set[tuple[str, int | None, int | None]] = field(default_factory=set)
+    log_lines: int = 0
 
 
 @dataclass(slots=True)
@@ -233,6 +245,33 @@ def _accept_progress(frame: dict[str, object], job: _OwnedJob) -> None:
         job.on_progress(phase, step, total)
 
 
+def _accept_log(frame: dict[str, object], job: _OwnedJob) -> None:
+    """A child's log line after ``ready`` (lot LOGS of project 67): written to the server's log as one of its own lines, at
+    the child's level, with ``worker`` and the job's ``execution_id`` (the request's id comes from this thread's context).
+    A structured line keeps its fields; a library's plain line is its text. A malformed frame, or one past the cap, is
+    dropped, never a crash."""
+    level, name, message = frame.get("level"), frame.get("logger"), frame.get("message")
+    if set(frame) != _LOG_KEYS or type(level) is not int or level not in _LOG_LEVELS:
+        return
+    if not isinstance(name, str) or not 0 < len(name) <= 200 or not isinstance(message, str) or len(message) > LOG_FRAME_MAX_BYTES:
+        return
+    if job.log_lines >= TOOL_LOG_LINE_CAP:
+        return
+    job.log_lines += 1
+    event, fields = message, {}
+    try:
+        rendered = json.loads(message)
+    except ValueError:  # a parsing probe: a library's plain line is not JSON, and is written as text
+        rendered = None
+    if isinstance(rendered, dict) and isinstance(rendered.get("event"), str):
+        event = rendered["event"]
+        bound = structlog.contextvars.get_contextvars()
+        fields = {key: value for key, value in rendered.items() if key not in _CHILD_LINE_OWN_KEYS and key not in bound}
+        if isinstance(rendered.get("timestamp"), str):
+            fields["worker_at"] = rendered["timestamp"]
+    get_logger(name).log(level, event, **{**fields, "worker": "tool", "worker_logger": name, "execution_id": job.spec.execution_id})
+
+
 def _wait_result(response: Connection, cancellation: Connection, job: _OwnedJob) -> tuple[object, ToolError | None]:
     ready = False
     while True:
@@ -253,6 +292,8 @@ def _wait_result(response: Connection, cancellation: Connection, job: _OwnedJob)
             return result
         elif frame.get("kind") == "progress" and ready:
             _accept_progress(frame, job)
+        elif frame.get("kind") == "log" and ready:
+            _accept_log(frame, job)
         else:
             raise ToolExecutionError("worker_crashed")
 
@@ -577,6 +618,7 @@ class ToolExecutor:
             engine_timeout_ms=operation.engine_timeout_ms,
             memory_limit_bytes=operation.memory_limit_bytes,
             settings=bound,
+            log_level=logging.getLogger().getEffectiveLevel(),
         )
         job = _OwnedJob(
             spec,
