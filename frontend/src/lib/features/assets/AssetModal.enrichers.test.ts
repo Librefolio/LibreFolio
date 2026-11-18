@@ -98,6 +98,8 @@ beforeEach(async () => {
     vi.mocked(zodiosApi.list_currencies_api_v1_utilities_currencies_get).mockResolvedValue({items: [], language: 'en'});
     vi.mocked(zodiosApi.list_enrichers_api_v1_assets_enrichers_get as never as ReturnType<typeof vi.fn>).mockResolvedValue({enrichers: [], default_order: {}});
     vi.mocked(zodiosApi.profile_catalogue_api_v1_assets_profile_catalogue_get as never as ReturnType<typeof vi.fn>).mockResolvedValue({voices: []});
+    // At creation a settled list starts the automatic «Chiedi» (E8b2): an answer with nothing in it fills nothing
+    vi.mocked(zodiosApi.ask_profile_api_v1_assets_profile_ask_post as never as ReturnType<typeof vi.fn>).mockResolvedValue({voices: {}, outcomes: []});
     vi.stubGlobal(
         'fetch',
         vi.fn<typeof fetch>(async () => new Response(null, {status: 503})),
