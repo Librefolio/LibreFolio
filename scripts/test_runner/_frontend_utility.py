@@ -160,6 +160,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/risk/levels/L1HowMuchItHurts.test.ts",
             "src/lib/features/risk/levels/HowItMoves.test.ts",
             "src/lib/features/risk/levels/RiskPartialNoticeBadges.test.ts",
+            "src/lib/features/risk/levels/l4/L4Rates.test.ts",
             "src/lib/features/assets/providerProbe.test.ts",
             "src/lib/features/assets/resolveProviderError.test.ts",
             "src/lib/features/assets/assetIdentifiers.test.ts",

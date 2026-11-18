@@ -595,7 +595,19 @@
         },
         "shockUnconfigured": "No están en este escenario, así que su choque es 0: {names}. El total los cuenta como intactos.",
         "replayTotalAsset": "Este activo habría cerrado el periodo en {percent} {amount}",
-        "shockTotalAsset": "Este activo se movería {percent} {amount}"
+        "shockTotalAsset": "Este activo se movería {percent} {amount}",
+        "rates": "Tipos al alza o a la baja",
+        "ratesHint": "A partir de la duración leída en el Perfil.",
+        "ratesSource": "A partir de la duración leída en el Perfil ({source}, {date}): {years} años.",
+        "ratesUp": "Los tipos suben",
+        "ratesDown": "Los tipos bajan",
+        "ratesBy": "en",
+        "ratesFall": "El precio bajaría alrededor de un {percent}{amount}.",
+        "ratesRise": "El precio subiría alrededor de un {percent}{amount}.",
+        "ratesCaveat": "Una aproximación de primer orden: vale para movimientos pequeños y no cuenta los cupones cobrados mientras tanto.",
+        "ratesMissing": "Tipos al alza o a la baja: ninguna duración en el perfil de este título.",
+        "ratesMissingLink": "Abrir el Perfil",
+        "ratesPointsUnit": "puntos"
       },
       "backtestNotice": "Con un subconjunto activo, estas cifras se reconstruyen sobre la composición de hoy: dicen cómo *habría* ido, no cómo fue en realidad.",
       "notice": {
