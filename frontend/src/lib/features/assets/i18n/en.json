@@ -234,7 +234,14 @@
         "removeTitle": "Remove the provider?",
         "removeMessage": "Removing the provider deletes {what}. {unlinked} The prices already saved are kept, and so are the manual events. This cannot be undone. Continue?",
         "removeConfirm": "Remove provider"
-      }
+      },
+      "enrichersButton": "Enrichers",
+      "enrichersFound": "{count, plural, one {# enricher found} other {# enrichers found}}: {names}. They will be saved with the asset.",
+      "enrichersSearching": "Looking for the enrichers that know this asset…",
+      "enrichersNone": "No enricher knows this asset.",
+      "enrichersRefused": "Too many requests to the sources: choose the enrichers by hand.",
+      "enrichersError": "The enrichers could not be searched: choose them by hand.",
+      "enrichersReview": "Check or change"
     },
     "provider": {
       "assignment": "Provider Assignment",

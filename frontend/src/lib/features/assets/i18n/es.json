@@ -234,7 +234,14 @@
         "removeTitle": "¿Quitar el proveedor?",
         "removeMessage": "Quitar el proveedor elimina {what}. {unlinked} Los precios ya guardados se conservan, igual que los eventos manuales. Esta acción no se puede deshacer. ¿Continuar?",
         "removeConfirm": "Quitar proveedor"
-      }
+      },
+      "enrichersButton": "Enriquecedores",
+      "enrichersFound": "{count, plural, one {# enriquecedor encontrado} other {# enriquecedores encontrados}}: {names}. Se guardarán con el activo.",
+      "enrichersSearching": "Buscando los enriquecedores que conocen este activo…",
+      "enrichersNone": "Ningún enriquecedor conoce este activo.",
+      "enrichersRefused": "Demasiadas solicitudes a las fuentes: elige los enriquecedores a mano.",
+      "enrichersError": "No se pudieron buscar los enriquecedores: elígelos a mano.",
+      "enrichersReview": "Revisar o cambiar"
     },
     "provider": {
       "assignment": "Asignación de Proveedor",

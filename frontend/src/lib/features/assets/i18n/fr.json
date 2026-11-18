@@ -234,7 +234,14 @@
         "removeTitle": "Retirer le fournisseur ?",
         "removeMessage": "Retirer le fournisseur supprime {what}. {unlinked} Les prix déjà enregistrés sont conservés, ainsi que les événements manuels. Cette action est irréversible. Continuer ?",
         "removeConfirm": "Retirer le fournisseur"
-      }
+      },
+      "enrichersButton": "Enrichisseurs",
+      "enrichersFound": "{count, plural, one {# enrichisseur trouvé} other {# enrichisseurs trouvés}} : {names}. Ils seront enregistrés avec l'actif.",
+      "enrichersSearching": "Recherche des enrichisseurs qui connaissent cet actif…",
+      "enrichersNone": "Aucun enrichisseur ne connaît cet actif.",
+      "enrichersRefused": "Trop de demandes aux sources : choisissez les enrichisseurs à la main.",
+      "enrichersError": "Impossible de rechercher les enrichisseurs : choisissez-les à la main.",
+      "enrichersReview": "Vérifier ou modifier"
     },
     "provider": {
       "assignment": "Attribution du Fournisseur",
