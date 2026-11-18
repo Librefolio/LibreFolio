@@ -2,8 +2,9 @@
  * Group E — real ImportWizard asset-inspector persistence and nested dialogs.
  *
  * E1-001: stored metadata + quote base survive a manual edit, including inactive assets.
- * E1-002: explicit, offline Ask Provider distributions survive PATCH, GET and reopen;
- *         the quote base row it also proposes (Z-32 d) is cancelled, the stored base kept.
+ * E1-002: Ask Provider leaves the classification alone (plan 68 E9: sectors and countries are the profile's): the
+ *         provider's distributions fill nothing; the quote base row it proposes (Z-32 d) is cancelled, the stored base
+ *         kept, the form left clean and the reopen reads nothing again.
  * E1-003: clearing description preserves sector/geographic; whole classification can still be nulled.
  * E2-001: a currency change with market data asks the server's dry run first (GET .../market-data/summary), then the
  *         confirm modal is actionable above the inspector; nothing is written before the confirm, cancel is inert, and
@@ -562,8 +563,9 @@ test.describe('Group E — import asset inspector', () => {
         expectNoImplicitProviderIO(owned, 0);
     });
 
-    test('E1-002: Ask Provider distributions survive real save and reopen without refetch', async ({page, owned}) => {
+    test('E1-002: Ask Provider fills no distribution, and a cancelled quote base leaves the asset as it was', async ({page, owned}) => {
         const asset = await createAsset(page, owned, 'provider', {provider: true, quoteBase: 25});
+        // The provider still answers with a classification: the comparison must not read it (plan 68, E9)
         const classification: Classification = {
             sector_area: {distribution: {Technology: 0.7, Financials: 0.3}},
             geographic_area: {distribution: {USA: 0.6, ITA: 0.4}},
@@ -579,19 +581,11 @@ test.describe('Group E — import asset inspector', () => {
         await expandClassification(page);
         await expect(page.getByTestId('distribution-add-sector')).toBeVisible();
         await expect(page.getByTestId('distribution-add-geographic')).toBeVisible();
-        await expect(page.getByTestId('distribution-editor-sector').getByRole('textbox')).toHaveCount(0);
-        await expect(page.getByTestId('distribution-editor-geographic').getByRole('textbox')).toHaveCount(0);
         expectNoImplicitProviderIO(owned, 0);
 
-        // Global Ask Provider covers both empty distributions in one dry-run request;
-        // no per-section button handles are required in the baseline build.
+        // Z-32 (d): the quote base is compared with the ladder. No suggestion and no type from the provider, so the
+        // ETF's default, 1, differs from the stored 25: the only row, checked, no note (only BOND's default has one).
         await page.getByTestId('asset-modal-ask-provider').click();
-        await expectDistribution(page, 'sector', classification.sector_area!.distribution);
-        await expectDistribution(page, 'geographic', classification.geographic_area!.distribution);
-        // Z-32 (d): the quote base is compared with the ladder too. No suggestion and no type
-        // from the provider, so the ETF's default, 1, differs from the stored 25: one row, checked
-        // like every row (developer's decision Q-Q5 (a)), no note (only BOND's default has one).
-        // The distributions above were actions, filled before the dialog opened over the Save.
         const comparison = page.getByTestId('comparison-modal');
         await expect(comparison).toBeVisible({timeout: UI_TIMEOUT});
         await expect(comparison.getByTestId('comparison-body')).toHaveAttribute('data-total-count', '1');
@@ -605,21 +599,17 @@ test.describe('Group E — import asset inspector', () => {
         await comparison.getByTestId('comparison-cancel').click();
         await expect(comparison).toBeHidden({timeout: UI_TIMEOUT});
         await expect(page.getByTestId('asset-modal-quote-base-quantity')).toHaveValue('25');
-        // A probe is a dry run. Only the user's real Save may persist its proposal.
-        expect((await readMetadata(page, asset.id)).classification_params).toBeNull();
-        const patch = await saveInspector(page, asset);
-        expect(patch.quote_base_quantity).toBe(25);
-        expect(normalizedClassification(patch.classification_params)).toEqual(normalizedClassification(classification));
-        expectMetadata(await readMetadata(page, asset.id), asset, asset.name, 'EUR', classification);
+        // The provider's distributions filled nothing: the editors are still empty, and the form is clean
+        await expect(page.getByTestId('distribution-editor-sector').getByRole('textbox')).toHaveCount(0);
+        await expect(page.getByTestId('distribution-editor-geographic').getByRole('textbox')).toHaveCount(0);
+        await closeUnchangedInspector(page);
+        expectMetadata(await readMetadata(page, asset.id), asset);
         const expectedProbe: ProbeRequest = {provider_code: PROVIDER, identifier: asset.ticker, identifier_type: 'TICKER', provider_params: null, operations: ['metadata']};
         expect(owned.probes.map((request) => ({...request, provider_params: request.provider_params ?? null}))).toEqual([expectedProbe]);
 
         const beforeReopen = owned.probes.length;
         await openInspector(page, inspector, asset.name);
         await expect(page.getByTestId('asset-modal-quote-base-quantity')).toHaveValue('25');
-        await expandClassification(page);
-        await expectDistribution(page, 'sector', classification.sector_area!.distribution);
-        await expectDistribution(page, 'geographic', classification.geographic_area!.distribution);
         await closeUnchangedInspector(page);
         expectNoImplicitProviderIO(owned, beforeReopen);
     });
