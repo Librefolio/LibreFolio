@@ -4,6 +4,8 @@ The CoinGecko provider prices cryptocurrencies from [CoinGecko](https://www.coin
 Python SDK, `coingecko-sdk`, pinned at **5.1.0** in the `Pipfile`. It gives the current price, in bulk too, the daily
 history, search, metadata and the coin's page. It needs an API key: the free Demo plan is enough (project 76).
 
+📖 **User Guide**: [CoinGecko — User Manual](../../../user/assets/providers/coingecko.md)
+
 The code lives in `backend/app/services/asset_source_providers/coingecko/`:
 
 | File | What it holds |
