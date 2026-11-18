@@ -876,7 +876,7 @@ describe('AssetModal — prefill (create wizard)', () => {
         expect(createFn()).toHaveBeenCalledWith([expect.objectContaining({display_name: 'Apple Inc.', identifier_isin: 'US0378331005'})]);
     });
 
-    it('carries currency, asset type, quote base and short description from the import, and stays collapsed without identifiers', async () => {
+    it('carries currency, asset type and quote base from the import, never a description, and stays collapsed without identifiers', async () => {
         createFn().mockResolvedValue({results: [{success: true, asset_id: 101}]} as never);
         const oncreated = vi.fn();
         render(AssetModal, {
@@ -887,7 +887,6 @@ describe('AssetModal — prefill (create wizard)', () => {
                 currency: 'EUR',
                 asset_type: 'ETF',
                 quote_base_quantity: 5,
-                classification_params: {short_description: 'A short blurb'},
             },
             oncreated,
         });
@@ -905,9 +904,11 @@ describe('AssetModal — prefill (create wizard)', () => {
                 display_name: 'Vanguard FTSE',
                 currency: 'EUR',
                 asset_type: 'ETF',
-                classification_params: expect.objectContaining({short_description: 'A short blurb'}),
             }),
         ]);
+        // The description is the profile's (plan 68, E9): the import writes none, the field starts empty
+        expect((createFn().mock.calls[0][0] as Array<Record<string, unknown>>)[0]).not.toHaveProperty('classification_params');
+        expect((screen.queryByTestId('asset-modal-description') as HTMLTextAreaElement | null)?.value ?? '').toBe('');
     });
 });
 

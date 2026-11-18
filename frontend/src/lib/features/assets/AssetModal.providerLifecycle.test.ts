@@ -52,6 +52,8 @@
  * have: it is incidental traffic, like the plugin settings read. Its stream (`./enrichers/recognizeStream`) answers an
  * empty `done` at once, and the two catalogues it reads (`GET /assets/enrichers`, `GET /assets/profile/catalogue`)
  * are routed empty, so these cases stay about the probe; the enrichers' own cases are `AssetModal.enrichers.test.ts`.
+ * In edit mode the window also reads the profile of today (plan 68, E9: the description field shows it): routed to an
+ * empty profile, incidental like the catalogues; the description's own cases are `AssetModal.profile.test.ts`.
  *
  * «Ask provider» refused for too many probes (workstream X, X-R66) — red until
  * X-R66: the metadata probe refused with 429 PROBE_RATE_LIMITED is toasted as
@@ -120,6 +122,8 @@ const mocks = vi.hoisted(() => ({
         // Plan 68 E8a: the catalogues «Riconosci» reads, incidental here
         list_enrichers_api_v1_assets_enrichers_get: vi.fn(),
         profile_catalogue_api_v1_assets_profile_catalogue_get: vi.fn(),
+        // Plan 68 E9: in edit mode the window reads the profile of today (the description field), incidental here
+        query_profile_api_v1_assets_profile_query_post: vi.fn(),
     },
     axios: {request: vi.fn(), get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn()},
     providers: {
@@ -791,6 +795,8 @@ beforeEach(() => {
     // Plan 68 E8a: «Riconosci» is incidental here (see the header): empty catalogues, an empty answer
     mocks.api.list_enrichers_api_v1_assets_enrichers_get.mockImplementation(() => Promise.resolve({enrichers: [], default_order: {}}));
     mocks.api.profile_catalogue_api_v1_assets_profile_catalogue_get.mockImplementation(() => Promise.resolve({voices: []}));
+    // Plan 68 E9: the profile of today, read at open in edit mode for the description field: an empty profile
+    mocks.api.query_profile_api_v1_assets_profile_query_post.mockImplementation(() => Promise.resolve({as_of: '2026-11-18T10:00:00Z', items: []}));
     recognizeStream.recognizeEnrichers.mockReset().mockResolvedValue({kind: 'done', done: null});
 
     const currencies: CurrencyInfo[] = [
@@ -1323,7 +1329,7 @@ describe('AssetModal provider lifecycle', () => {
     });
 
     it('closes a real valid comparison on public draft switch and accepts only a new draft choice', async () => {
-        const view = await renderEdit(editFixture({classification_params: {short_description: 'Stored description'}}));
+        const view = await renderEdit(editFixture());
         const oldMetadata = expectMetadata('valid old-draft conflict', 'Provider comparison title', 'Stored description');
         await fireEvent.click(screen.getByTestId('asset-modal-ask-provider'));
         await oldMetadata.finish();

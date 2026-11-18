@@ -10,7 +10,10 @@
  *   still growing and never in edit mode; its answer fills the empty voices «dalla fonte», counted by the row;
  * - the automatic fills alone ask to discard nothing; a change the user kept does;
  * - a value the window would refuse blocks the save;
- * - a fill whose source left the list is not sent.
+ * - a fill whose source left the list is not sent;
+ * - the description field is a view of the profile's description (E9): «Adesso»'s at open in edit mode, the window's
+ *   kept value, the automatic fill; what the user types leaves as `profile`, never as `classification_params`; the
+ *   sectors and the countries are not in the asset window any more.
  *
  * How it is tested: the real asset window, real i18n; the API a spy per method; «Riconosci»'s stream faked; the
  * profile window stood in by a recorder of its props (its own test is `ProfileEditModal.test.ts`).
@@ -194,5 +197,77 @@ describe('in edit mode', () => {
         await fireEvent.click(screen.getByTestId('asset-modal-save'));
         await waitFor(() => expect(patchFn()).toHaveBeenCalled());
         expect((patchFn().mock.calls[0][0] as Array<Record<string, unknown>>)[0]).not.toHaveProperty('profile');
+    });
+});
+
+describe('the description and the classification are the profile’s (E9)', () => {
+    const EDIT = {id: 8, display_name: 'Vanguard FTSE All-World', currency: 'EUR', asset_type: 'ETF', quote_base_quantity: 1, active: true, identifier_isin: ISIN, enrichers: {config: {justetf: JUSTETF}, state: {}}};
+    const step = (value: unknown, source = 'justetf') => [{date: '2026-11-18', through: '2026-11-18', value, source, update_id: 4, opened_on: '2026-11-08', source_date: null}];
+    const TODAY = {as_of: '2026-11-18T10:00:00Z', items: [{asset_id: 8, voices: {description: step('Global equity fund')}, changes: null}]};
+    const description = () => screen.getByTestId('asset-modal-description') as HTMLTextAreaElement;
+    const sentPatch = () => (patchFn().mock.calls[0][0] as Array<Record<string, unknown>>)[0];
+
+    it('shows «Adesso»’s description as soon as the window opens in edit mode, and saves a change as the profile’s', async () => {
+        api('query_profile_api_v1_assets_profile_query_post').mockResolvedValue(TODAY);
+        patchFn().mockResolvedValue({results: [{success: true, asset_id: 8}], success_count: 1});
+        render(AssetModal, {open: true, editMode: true, editData: EDIT, onupdated: vi.fn()});
+        await waitFor(() => expect(description().value).toBe('Global equity fund'));
+        expect(form()).toHaveAttribute('data-dirty', 'false');
+
+        await fireEvent.input(description(), {target: {value: 'My own notes'}});
+        expect(form()).toHaveAttribute('data-dirty', 'true');
+        await waitFor(() => expect(row()).toHaveAttribute('data-count', '1'));
+        // The profile window opens with the same change: one value, two places
+        await fireEvent.click(row());
+        await waitFor(() => expect(profileWindow.mounts.length).toBeGreaterThan(0));
+        expect(lastWindow().pending).toEqual({description: {key: 'description', kind: 'value', value: 'My own notes', origin: 'new'}});
+
+        await fireEvent.click(screen.getByTestId('asset-modal-save'));
+        await waitFor(() => expect(patchFn()).toHaveBeenCalled());
+        expect(sentPatch().profile).toEqual({description: 'My own notes'});
+        expect(sentPatch()).not.toHaveProperty('classification_params');
+    });
+
+    it('empties an existing description on purpose: the save sends null', async () => {
+        api('query_profile_api_v1_assets_profile_query_post').mockResolvedValue(TODAY);
+        patchFn().mockResolvedValue({results: [{success: true, asset_id: 8}], success_count: 1});
+        render(AssetModal, {open: true, editMode: true, editData: EDIT, onupdated: vi.fn()});
+        await waitFor(() => expect(description().value).toBe('Global equity fund'));
+        await fireEvent.input(description(), {target: {value: ''}});
+        await fireEvent.click(screen.getByTestId('asset-modal-save'));
+        await waitFor(() => expect(patchFn()).toHaveBeenCalled());
+        expect(sentPatch().profile).toEqual({description: null});
+    });
+
+    it('shows in the field the description the profile window kept', async () => {
+        render(AssetModal, {open: true, editMode: false, prefillData: {...PREFILL, identifier_isin: null}, initialNoProvider: true, oncreated: vi.fn()});
+        await fireEvent.click(row());
+        await waitFor(() => expect(profileWindow.mounts.length).toBeGreaterThan(0));
+        lastWindow().onkeep({description: {key: 'description', kind: 'value', value: 'Kept in the window', origin: 'new'}});
+        await waitFor(() => expect(description().value).toBe('Kept in the window'));
+    });
+
+    it('shows the automatic fill of the description at creation, and sends it in the source’s name', async () => {
+        askFn().mockResolvedValue({voices: {description: {value: 'From justETF', source: 'justetf'}}, outcomes: [{code: 'justetf', status: 'ok'}]});
+        createFn().mockResolvedValue({results: [{success: true, asset_id: 44}]});
+        render(AssetModal, {open: true, editMode: false, prefillData: PREFILL, initialNoProvider: true, oncreated: vi.fn()});
+        await waitFor(() => expect(calls).toHaveLength(1));
+        await settle(calls[0], [found('justetf'), done(['justetf'])]);
+        await waitFor(() => expect(description().value).toBe('From justETF'));
+        await fireEvent.click(screen.getByTestId('asset-modal-save'));
+        await waitFor(() => expect(createFn()).toHaveBeenCalled());
+        const sent = (createFn().mock.calls[0][0] as Array<Record<string, unknown>>)[0];
+        expect(sent.profile).toEqual({description: {from: 'justetf', seen: 'From justETF'}});
+        expect(sent).not.toHaveProperty('classification_params');
+    });
+
+    it('has no sectors nor countries of its own: they live in the profile window', async () => {
+        render(AssetModal, {open: true, editMode: false, prefillData: {...PREFILL, identifier_isin: null}, initialNoProvider: true, oncreated: vi.fn()});
+        const moreInfo = screen.getByTestId('asset-modal-more-info');
+        if (moreInfo.getAttribute('data-expanded') !== 'true') await fireEvent.click(moreInfo);
+        await waitFor(() => expect(moreInfo).toHaveAttribute('data-expanded', 'true'));
+        expect(screen.getByTestId('asset-modal-identifiers')).toBeInTheDocument();
+        expect(screen.queryByTestId('distribution-editor-sector')).toBeNull();
+        expect(screen.queryByTestId('distribution-editor-geographic')).toBeNull();
     });
 });
