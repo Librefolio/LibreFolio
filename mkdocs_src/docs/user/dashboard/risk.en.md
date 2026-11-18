@@ -50,19 +50,19 @@ The other side of *How much can it hurt?*: the best moments of the period, and w
 
 **Tools shown**
 
-- **The best day** — the best single day of the period, and when it was; under it, the **Average day**: the average up day and the average down day
-- **Thirty good days** — the best 30 days the portfolio really went through, from one day to another, and when: the twin of *The worst 30 days*. It can be negative: a portfolio that only fell still has a best stretch
-- **The largest rally** — the largest rise from a low to a later high, when it began and ended, and how long it lasted: the twin of *The worst fall*. Under it, the **Positive streak**: the longest run of days in a row with a gain
-- **What the days were like** — **gains against losses** (Omega): for every 1 lost on the bad days, how many were gained on the good ones (*1.25×* means 1.25 gained for every 1 lost; a bad day is one below the Sortino's target, 0 here). Under it:
-    - **Positive days** — the share of the days with a gain; a day at exactly zero does not count
+- **The best day** — the best single day of the period, and when it was; under it, the **Average day**: the average up day and the average down day → [Best Day](../../financial-theory/technical-analysis/risk-metrics/return-shape.md#best-day), [Average Day](../../financial-theory/technical-analysis/risk-metrics/return-shape.md#average-day)
+- **Thirty good days** — the best 30 days the portfolio really went through, from one day to another, and when: the twin of *The worst 30 days*. It can be negative: a portfolio that only fell still has a best stretch → [Best 30 Days](../../financial-theory/technical-analysis/risk-metrics/return-shape.md#best-30-days)
+- **The largest rally** — the largest rise from a low to a later high, when it began and ended, and how long it lasted: the twin of *The worst fall*. Under it, the **Positive streak**: the longest run of days in a row with a gain → [Largest Rally](../../financial-theory/technical-analysis/risk-metrics/return-shape.md#largest-rally), [Positive Streak](../../financial-theory/technical-analysis/risk-metrics/return-shape.md#positive-streak)
+- **What the days were like** — **gains against losses** (Omega): for every 1 lost on the bad days, how many were gained on the good ones (*1.25×* means 1.25 gained for every 1 lost; a bad day is one below your risk-free rate, 0% until you set one) → [Gains Against Losses (Omega)](../../financial-theory/technical-analysis/risk-metrics/omega-ratio.md). Under it:
+    - **Positive days** — the share of the days with a gain; a day at exactly zero does not count → [Positive Days](../../financial-theory/technical-analysis/risk-metrics/return-shape.md#positive-days)
     - **Semi-deviation** — how much the portfolio swings on the way down, on a yearly basis, written beside the whole swing it is part of: *9.8% downward · out of a 13.9% swing over the period* means the falls weigh less than the rises. Both come from the same days as the cards → [Downside Deviation](../../financial-theory/technical-analysis/risk-metrics/sortino-ratio.md#downside-deviation)
-    - **Below the peak, on average** — how far below its highest level the portfolio stood on an average day: the whole time spent under a peak, not only the worst fall
-    - **Extreme days** — how much more often very large days, up or down, came than a bell curve would give: *1×* is the bell curve, above it the tails are fatter
+    - **Below the peak, on average** — how far below its highest level the portfolio stood on an average day: the whole time spent under a peak, not only the worst fall → [Below the Peak, on Average](../../financial-theory/technical-analysis/risk-metrics/return-shape.md#average-drawdown)
+    - **Extreme days** — how much more often very large days, up or down, came than a bell curve would give: *1×* is the bell curve, above it the tails are fatter → [Extreme Days](../../financial-theory/technical-analysis/risk-metrics/return-shape.md#extreme-days)
 
 **How to read it**
 
 - **The amount** beside the best day, the thirty good days and the largest rally is that gain applied to your net worth today; the largest rally says so, as the worst fall does.
-- **A dash says why**: a period with no gaining day has no best day, no average up day and no streak; one with no losing day has no gains against losses; the line under the figure gives the reason.
+- **A dash says why**: a period with no gaining day has no best day, no average up day and no streak; one with no losing day has no average down day; one with no day below your risk-free rate has no gains against losses; the line under the figure gives the reason.
 - **A rally of 0.0%**, with no dates, means the portfolio never rose from a low in the period: a measured zero, not a missing figure.
 - **Volatility, annual return, Sharpe and Sortino** are not repeated here: they are in the table of *Am I being paid for this risk?*, measured on the portfolio as you hold it today, while this block reads the period as you lived it; the swing beside the semi-deviation can therefore differ from that table's volatility, and the semi-deviation's tooltip says so. On an asset's page the two are the same series.
 
