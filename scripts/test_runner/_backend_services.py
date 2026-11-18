@@ -102,6 +102,7 @@ RISK_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_risk_exclusion_reasons.py",
     "backend/test_scripts/test_services/test_risk_price_day_budget.py",
     "backend/test_scripts/test_services/test_risk_replay_range_bounds.py",
+    "backend/test_scripts/test_services/test_risk_rate_shock.py",
 )
 
 PAC_PLANNER_CORE_TEST_PATHS = (
