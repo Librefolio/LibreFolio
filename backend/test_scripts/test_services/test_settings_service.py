@@ -618,7 +618,7 @@ _ROUND5_ONBOARDING_FLOW_VERSIONS = {
     "fx_detail_guide": 1,
     "asset_page_guide": 1,
     "asset_guide": 1,
-    "asset_detail_guide": 1,
+    "asset_detail_guide": 2,
     "tools_page_guide": 1,
 }
 _REMOVED_ONBOARDING_DRAFT_FLOWS = {
@@ -702,7 +702,9 @@ class TestOnboardingServiceEnsure:
         assert {flow.value for flow in OnboardingFlow} == set(_ROUND5_ONBOARDING_FLOW_VERSIONS)
         assert set(actual_versions).isdisjoint(_REMOVED_ONBOARDING_DRAFT_FLOWS)
         assert actual_steps == _ROUND5_ONBOARDING_STEPS
-        assert set(actual_versions.values()) == {1}, "Every unreleased Round 5 flow must remain at version 1"
+        # Released since 1.2, a flow moves to a new version when its content changes (skill onboarding-guide, rule 6): the
+        # asset detail guide is at 2 since its metadata step points at the «Profilo» tab (plan 68, E3E4b)
+        assert {flow for flow, version in actual_versions.items() if version != 1} == {"asset_detail_guide"}
 
     @pytest.mark.asyncio
     async def test_ensure_creates_all_missing_rows_pending_current_version(self):

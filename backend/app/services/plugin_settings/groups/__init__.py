@@ -168,4 +168,5 @@ def validate_plugin_groups(plugin_class: type, *, family: str) -> None:
 
 # The groups that ship, one module each, registered on import: here, so that every process that imports the settings
 # (the server, a spawned worker) has them before the plugins that read them. At the end: they import this module.
+from backend.app.services.plugin_settings.groups import coingecko as _coingecko_group  # noqa: E402, F401 — registered on import
 from backend.app.services.plugin_settings.groups import mock as _mock_group  # noqa: E402, F401 — registered on import

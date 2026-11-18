@@ -373,7 +373,10 @@
       "overviewTab": "Panoramica",
       "riskScenariosTab": "Rischio e scenari",
       "positionNote": "Gli importi sono sulla tua posizione di oggi: {amount}.",
-      "planPrices": "Prezzi dal piano, non dal mercato: qui volatilità e VaR dicono solo quanto è regolare il piano."
+      "planPrices": "Prezzi dal piano, non dal mercato: qui volatilità e VaR dicono solo quanto è regolare il piano.",
+      "profileTab": "Profilo",
+      "profileNoEnrichers": "Nessun arricchitore configurato",
+      "overviewNoPriceProvider": "Nessun provider dei prezzi"
     },
     "levels": {
       "l1": {

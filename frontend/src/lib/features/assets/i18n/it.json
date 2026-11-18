@@ -7,11 +7,7 @@
     "editData": "Modifica prezzi e eventi",
     "pricesTab": "Prezzi",
     "eventsTab": "Eventi",
-    "metadata": "Metadati e classificazione",
-    "editViaModal": "Modifica nella modale asset",
     "displayCurrency": "Converti in",
-    "noIdentifiers": "Nessun identificativo configurato",
-    "noClassification": "Nessun dato di classificazione",
     "noDataScheduled": "Configura il piano interessi tramite Modifica per generare i prezzi",
     "syncPrices": "Sincronizza prezzi",
     "recalculate": "Ricalcola",
@@ -75,8 +71,8 @@
     "docsHelp": {
       "header": "Un asset nel dettaglio: grafico dei prezzi e segnali, misure, eventi e classificazione, con la fonte dei prezzi e le tue transazioni.",
       "measures": "Scegli due giorni sul grafico e leggi di quanto sono cambiati, tra l'uno e l'altro, l'asset e le linee disegnate con lui.",
-      "metadata": "Cos'è l'asset: descrizione, settori e paesi, identificativi e il fornitore che ne dà i prezzi.",
-      "dataEditor": "Correggi e completa a mano i dati dell'asset: i prezzi giornalieri e gli eventi, come dividendi e frazionamenti."
+      "dataEditor": "Correggi e completa a mano i dati dell'asset: i prezzi giornalieri e gli eventi, come dividendi e frazionamenti.",
+      "profile": "Cos'è l'asset: paesi e settori, descrizione, numeri chiave e dettagli, letti dai suoi arricchitori o scritti a mano."
     }
   },
   "assets": {
@@ -249,8 +245,12 @@
       "providerUrl": "URL Provider",
       "identifier": "Identificativo",
       "identifierType": "Tipo Identificativo",
-      "lastFetch": "Ultimo Fetch",
-      "neverFetched": "Mai eseguito"
+      "inputType": {
+        "PROVIDER_ID": "ID del provider"
+      },
+      "inputTypePlaceholder": {
+        "PROVIDER_ID": "es. bitcoin"
+      }
     },
     "schedule": {
       "title": "Piano Interessi",
@@ -539,6 +539,9 @@
     "PROVIDER_ERROR": "Il provider ha restituito un errore: {detail}",
     "PROBE_RATE_LIMITED": "Troppe verifiche: riprova alle {time}",
     "PROBE_RATE_LIMITED_DAY": "Troppe verifiche: riprova il {time}",
-    "PROBE_RATE_LIMITED_NO_TIME": "Troppe verifiche: riprova tra un minuto"
+    "PROBE_RATE_LIMITED_NO_TIME": "Troppe verifiche: riprova tra un minuto",
+    "PLAN_REQUIRED": "Questa richiesta richiede un piano a pagamento del provider.",
+    "WRONG_PLAN": "La chiave del provider non corrisponde al piano impostato (Demo o Pro): controlla il piano in Impostazioni › Plugin.",
+    "INVALID_API_KEY": "Il provider ha rifiutato la chiave API: controllala in Impostazioni › Plugin."
   }
 }

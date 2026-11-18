@@ -222,6 +222,33 @@ describe('PortfolioBannerActions · sync prices', () => {
         expect(actions.syncingCode).toBeNull();
     });
 
+    // Project 76, P2b (the consultant, 18/11): twenty new coins on CoinGecko's Demo plan all come back with the day the
+    // source starts from. One line sums them up, instead of one long line in each asset's toast.
+    it('sums the first-day lines of many assets up in one info toast', async () => {
+        mocks.syncPrices.mockResolvedValue({
+            results: [
+                {asset_id: 7, status: 'ok', points_fetched: 364, points_changed: 364, history_starts: '2025-11-18'},
+                {asset_id: 9, status: 'ok', points_fetched: 364, points_changed: 364, history_starts: '2025-11-18'},
+            ],
+        });
+        const {actions} = make();
+        await actions.handleAction('sync_asset_prices', null, stalePrice());
+        const messages = Object.values(mocks.toast).flatMap((mock) => mock.mock.calls.map(([message]) => String(message)));
+        expect(
+            messages.filter((message) => message.includes('prices.sync.historyStarts')),
+            'no asset toast carries its own line',
+        ).toEqual(['prices.sync.historyStartsMany']);
+        expect(mocks.toast.info).toHaveBeenCalledWith('prices.sync.historyStartsMany');
+    });
+
+    it('keeps the line in the toast of a single asset', async () => {
+        mocks.syncPrices.mockResolvedValue({results: [{asset_id: 7, status: 'ok', points_fetched: 364, points_changed: 364, history_starts: '2025-11-18'}]});
+        const {actions} = make();
+        await actions.handleAction('sync_asset_prices', null, stalePrice({affected_asset_ids: [7], affected_asset_names: ['Alpha']}));
+        expect(String(mocks.toast.success.mock.calls[0]?.[0])).toContain('prices.sync.historyStarts');
+        expect(mocks.toast.info).not.toHaveBeenCalled();
+    });
+
     it('asks nothing when the issue flags no asset', async () => {
         const {actions} = make();
         await actions.handleAction('sync_asset_prices', null, stalePrice({affected_asset_ids: []}));

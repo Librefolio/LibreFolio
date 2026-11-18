@@ -34,10 +34,21 @@ vi.mock('$lib/api', () => ({
         sync_rates_api_v1_fx_currencies_sync_post: vi.fn(),
     },
 }));
-vi.mock('$lib/stores/currencyGraphStore', () => ({
-    findConversionPaths: vi.fn(),
-    getCachedFxProviders: vi.fn(),
-}));
+vi.mock('$lib/stores/currencyGraphStore', async () => {
+    const {writable} = await import('svelte/store');
+    return {
+        findConversionPaths: vi.fn(),
+        getCachedFxProviders: vi.fn(),
+        // N3c: the picker reads the providers' readiness again; the modal after a save in «Configure»
+        refreshFxProviderReadiness: vi.fn(async () => undefined),
+        fxProvidersVersion: writable(0),
+    };
+});
+// N3c: the viewer's role decides the case of the «to configure» window; a member here.
+vi.mock('$lib/stores/app/auth', async () => {
+    const {readable} = await import('svelte/store');
+    return {auth: readable({user: {is_superuser: false}})};
+});
 vi.mock('$lib/stores/reference/currencyStore', async (importOriginal) => ({
     ...(await importOriginal<typeof import('$lib/stores/reference/currencyStore')>()),
     ensureCurrenciesLoaded: vi.fn().mockResolvedValue(undefined),
@@ -1014,5 +1025,51 @@ describe('FxPairAddModal — the editor posts the intermediate pairs first, with
         expect(oncreated).toHaveBeenCalledTimes(1);
         // A provider creation syncs the pair and its legs in the background: let it finish inside this test.
         await waitFor(() => expect(onsynced).toHaveBeenCalledTimes(1));
+    });
+});
+
+// =========================================================================
+// Project 76, N3c — a provider that is not configured, in the pair's routes (mock section 1.3)
+// =========================================================================
+
+describe('FxPairAddModal — a provider to configure in the routes (76 N3c)', () => {
+    const FED_OFF: ProviderInfo = {...PROVIDERS[1], configured: false, missing_settings: ['api_key'], missing_reason: 'missing_fields', invalid_variables: []};
+    const chainRow = () => document.querySelector<HTMLElement>(`[data-testid^="fx-route-chain-"][data-route-key="${CHAIN_KEY}"]`);
+
+    beforeEach(() => {
+        vi.mocked(getCachedFxProviders).mockReturnValue([PROVIDERS[0], FED_OFF]);
+    });
+
+    it('N3c-M1: a new pair: the route through it is switched off, and a touch opens the common window on it (family fx)', async () => {
+        mount();
+        await ready();
+        await fireEvent.click(await screen.findByTestId('fx-route-picker-toggle'));
+        await fireEvent.click(await screen.findByTestId('fx-route-chain-toggle-2'));
+        await waitFor(() => expect(chainRow()).not.toBeNull());
+        expect(chainRow()).toHaveAttribute('data-needs-setup', 'true');
+
+        await fireEvent.click(chainRow()!);
+
+        const window = await screen.findByTestId('plugin-not-configured-modal');
+        expect(window).toHaveAttribute('data-plugin', 'FED');
+        expect(window).toHaveAttribute('data-case', 'missing_member');
+        expect(selectedRouteKeys()).toEqual([]);
+    });
+
+    it('N3c-M2: editing a pair whose saved route uses it: the route stays with the triangle, and its other routes are not switched off', async () => {
+        await editStored(CHAIN);
+        const row = document.querySelector<HTMLElement>(`[data-testid="fx-route-selected"][data-route-key="${CHAIN_KEY}"]`)!;
+        expect(within(row).getByTestId('fx-route-needs-setup')).toHaveAttribute('data-provider', 'FED');
+
+        await fireEvent.click(within(row).getByTestId('fx-route-needs-setup'));
+        expect(await screen.findByTestId('plugin-not-configured-modal')).toHaveAttribute('data-plugin', 'FED');
+        await fireEvent.click(screen.getByTestId('plugin-not-configured-close'));
+        await waitFor(() => expect(screen.queryByTestId('plugin-not-configured-modal')).toBeNull());
+
+        await fireEvent.click(screen.getByTestId('fx-route-remove'));
+        await fireEvent.click(await screen.findByTestId('fx-route-picker-toggle'));
+        await fireEvent.click(await screen.findByTestId('fx-route-chain-toggle-2'));
+        await waitFor(() => expect(chainRow()).not.toBeNull());
+        expect(chainRow(), 'the pair already uses FED: a route removed and put back stays on').toHaveAttribute('data-needs-setup', 'false');
     });
 });

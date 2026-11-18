@@ -373,7 +373,10 @@
       "overviewTab": "Overview",
       "riskScenariosTab": "Risk & Scenarios",
       "positionNote": "Amounts are on your position today: {amount}.",
-      "planPrices": "Prices from the plan, not from the market: here volatility and VaR only say how regular the plan is."
+      "planPrices": "Prices from the plan, not from the market: here volatility and VaR only say how regular the plan is.",
+      "profileTab": "Profile",
+      "profileNoEnrichers": "No enricher configured",
+      "overviewNoPriceProvider": "No price provider"
     },
     "levels": {
       "l1": {

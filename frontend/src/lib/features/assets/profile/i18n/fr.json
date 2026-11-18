@@ -173,6 +173,21 @@
         "scheduleFrom": "Du",
         "scheduleTo": "Au",
         "scheduleRate": "Taux"
+      },
+      "tab": {
+        "notAvailable": "non disponible",
+        "data": "Données",
+        "details": "Détails",
+        "dataAsOf": "données au {date}",
+        "history": "Historique de la donnée : {voice}",
+        "loadFailed": "Impossible de lire le profil de l'actif",
+        "missing": "Cet actif n'existe plus",
+        "editData": "Modifier les données",
+        "isin": "ISIN",
+        "ticker": "Ticker",
+        "dataSince": "depuis le {date}",
+        "beforeProfile": "valeur d'avant le profil",
+        "companySector": "Secteur"
       }
     }
   }

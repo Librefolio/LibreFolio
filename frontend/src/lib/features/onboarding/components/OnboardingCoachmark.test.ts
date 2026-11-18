@@ -2697,7 +2697,7 @@ const ROUND5_PRESENTATION_CASES = [
     {label: 'Asset detail header', flow: 'asset_detail_guide', stepId: 'asset.detail.header', anchorId: 'asset.detail.header', path: '/assets/42', target: rect(80, 280, 100, 40), pointer: 'none', highlight: 'pulse', backdrop: false, placement: 'right'},
     {label: 'Asset detail chart', flow: 'asset_detail_guide', stepId: 'asset.detail.chart', anchorId: 'asset.detail.chart', path: '/assets/42', target: rect(80, 280, 100, 40), pointer: 'none', highlight: 'pulse', backdrop: false, placement: 'right'},
     {label: 'Asset detail editor action', flow: 'asset_detail_guide', stepId: 'asset.detail.editor', anchorId: 'asset.detail.editor', path: '/assets/42', target: rect(80, 280, 100, 40), pointer: 'cursor', highlight: 'none', backdrop: false, placement: 'right'},
-    {label: 'Asset detail metadata action', flow: 'asset_detail_guide', stepId: 'asset.detail.metadata', anchorId: 'asset.detail.metadata', path: '/assets/42', target: rect(80, 280, 100, 40), pointer: 'cursor', highlight: 'none', backdrop: false, placement: 'right'},
+    {label: 'Asset detail metadata action', flow: 'asset_detail_guide', stepId: 'asset.detail.metadata', anchorId: 'asset.detail.profile', path: '/assets/42', target: rect(80, 280, 100, 40), pointer: 'cursor', highlight: 'none', backdrop: false, placement: 'right'},
     {label: 'Asset detail risk action', flow: 'asset_detail_guide', stepId: 'asset.detail.risk', anchorId: 'asset.detail.risk', path: '/assets/42', target: rect(80, 280, 100, 40), pointer: 'cursor', highlight: 'none', backdrop: false, placement: 'right'},
 ] as const;
 

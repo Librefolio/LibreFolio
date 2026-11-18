@@ -65,6 +65,8 @@ vi.mock('$lib/api', async () => {
 vi.mock('$lib/utils/providerHelpers', () => ({
     ensureAssetProvidersCached: vi.fn(() => Promise.resolve()),
     getAssetProviderName: vi.fn((c: string) => c),
+    getAssetProviderAcceptedTypes: vi.fn(() => []),
+    getAssetProviderParamKeys: vi.fn(() => null),
     getAssetProviderIconUrl: vi.fn(() => null),
     isParametricProvider: vi.fn(() => false),
 }));
@@ -80,7 +82,7 @@ import {zodiosApi} from '$lib/api';
 import {_} from '$lib/i18n';
 import {currentLanguage} from '$lib/stores/app/language';
 import {toasts} from '$lib/stores/app/toastStore.svelte';
-import {getAssetProviderName, isParametricProvider} from '$lib/utils/providerHelpers';
+import {getAssetProviderAcceptedTypes, getAssetProviderName, getAssetProviderParamKeys, isParametricProvider} from '$lib/utils/providerHelpers';
 import {DEFAULT_INSTANCE_CONFIG, instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
 import {GITHUB_NEW_ISSUE_URL} from '$lib/features/support/supportChannel';
 
@@ -1701,5 +1703,73 @@ describe('AssetModal — the quote base: the plugin’s suggestion, else the typ
             showsNumber('comparison-provider-quote_base_quantity', 1);
             expect(screen.queryByTestId('comparison-note-quote_base_quantity'), 'a STOCK’s default has no note').toBeNull();
         });
+    });
+});
+
+// Project 76, P3 (the consultant's rule): a CoinGecko result is typed OTHER, CoinGecko's own code. Choosing it gives the
+// assignment the provider's first accepted type (PROVIDER_ID) from the first read on — never OTHER, which the server
+// reads as URL — and writes `coingecko:<id>` among the other identifiers. The search is the real AssetSearchAutocomplete
+// over a streamed answer, as in the blocks above; the provider list is the cache's (`getAssetProviderAcceptedTypes`).
+describe("AssetModal — a provider's own code from the search (76 P3)", () => {
+    const COIN = {identifier: 'bitcoin', identifier_type: 'OTHER', display_name: 'Bitcoin (BTC)', provider_code: 'coingecko', currency: 'EUR', asset_type: 'CRYPTO', via_web: false, provider_params: {vs_currency: 'EUR'}};
+
+    const LOGO = 'https://coin-images.coingecko.com/coins/images/1/large/bitcoin.png';
+
+    afterEach(() => {
+        vi.mocked(zodiosApi.probe_provider_config_api_v1_assets_provider_probe_post).mockReset();
+        vi.mocked(getAssetProviderAcceptedTypes).mockReset();
+        vi.mocked(getAssetProviderParamKeys).mockReset();
+    });
+
+    it('gives the assignment PROVIDER_ID from the first read, its own params only, coingecko:bitcoin among the other identifiers, and the logo', async () => {
+        vi.mocked(getAssetProviderAcceptedTypes).mockImplementation((code: string | null | undefined) => (code === 'coingecko' ? ['PROVIDER_ID', 'TICKER'] : []));
+        vi.mocked(getAssetProviderParamKeys).mockImplementation((code: string | null | undefined) => (code === 'coingecko' ? ['vs_currency'] : null));
+        // The connection test passes; the metadata read brings the logo, the symbol and the id among the other identifiers
+        vi.mocked(zodiosApi.probe_provider_config_api_v1_assets_provider_probe_post).mockImplementation((async (body: {operations: string[]}) => {
+            const answer = {provider_code: 'coingecko', identifier: 'bitcoin', total_execution_time_ms: 1};
+            if (!body.operations.includes('metadata')) return {...answer, current_price: {success: true, execution_time_ms: 1}, history: {success: true, execution_time_ms: 1}};
+            return {...answer, metadata: {success: true, execution_time_ms: 1, patch_data: {display_name: 'Bitcoin (BTC)', asset_type: 'CRYPTO', icon_url: LOGO, identifier_ticker: 'BTC', identifier_other: ['coingecko:bitcoin']}}};
+        }) as never);
+        // Two accepted types on the panel's own list: with one, the panel would rewrite the type itself and hide what the
+        // modal sent first
+        vi.mocked(zodiosApi.list_providers_api_v1_assets_provider_get).mockResolvedValue([
+            {code: 'coingecko', name: 'CoinGecko', description: 'Synthetic searchable provider metadata', kind: 'online_scraper', supports_search: true, params_schema: [], accepted_identifier_types: ['PROVIDER_ID', 'TICKER']},
+        ] as never);
+        const encoder = new TextEncoder();
+        const events = [{event: 'provider_results', provider_code: 'coingecko', results: [COIN]}, {event: 'done'}];
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async (url: string) => {
+                if (!String(url).includes('/assets/provider/search/stream')) return new Response(null, {status: 503});
+                const chunks = events.map((event) => encoder.encode(`data: ${JSON.stringify(event)}\n`));
+                let next = 0;
+                return {ok: true, body: {getReader: () => ({read: async () => (next < chunks.length ? {done: false, value: chunks[next++]} : {done: true, value: undefined}), cancel: vi.fn()})}};
+            }),
+        );
+        render(AssetModal, {open: true, editMode: false, initialSearchQuery: 'bitcoin', oncreated: vi.fn()});
+        await waitForForm();
+
+        const box = document.querySelector<HTMLElement>('[data-search-autocomplete]');
+        expect(box, 'the form shows its online search').not.toBeNull();
+        await fireEvent.focusIn(within(box!).getByRole('textbox'));
+        const row = await waitFor(
+            () => {
+                const found = document.querySelector<HTMLElement>('[data-testid^="asset-search-result-"][data-identifier="bitcoin"]');
+                expect(found, 'the search lists bitcoin').not.toBeNull();
+                return found!;
+            },
+            {timeout: 3_000},
+        );
+        await fireEvent.click(row);
+
+        const probe = vi.mocked(zodiosApi.probe_provider_config_api_v1_assets_provider_probe_post);
+        await waitFor(() => expect(probe).toHaveBeenCalled());
+        expect((probe.mock.calls[0][0] as {identifier_type: string}).identifier_type, 'the first read already asks as PROVIDER_ID').toBe('PROVIDER_ID');
+        // Its own params only: no `currency` beside `vs_currency`, which its schema does not have (the consultant, 18/11)
+        expect((probe.mock.calls[0][0] as {provider_params: unknown}).provider_params).toStrictEqual({vs_currency: 'EUR'});
+        expect(nameInput()).toHaveValue('Bitcoin (BTC)');
+        await waitFor(() => expect(screen.getByTestId('asset-modal-form').textContent ?? '').toContain('coingecko:bitcoin'));
+        // The asset had no icon: the provider's logo fills it
+        await waitFor(() => expect(screen.getByTestId('asset-modal-form').querySelector(`img[src="${LOGO}"]`), 'the logo is the icon').not.toBeNull());
     });
 });

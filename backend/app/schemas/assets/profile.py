@@ -27,6 +27,7 @@ table      ``[{"from": …, "to": …, "rate": …}]``      rows in order
 from __future__ import annotations
 
 from datetime import date, datetime
+from datetime import date as date_type
 from enum import StrEnum
 from typing import Any, Dict, List, Optional
 
@@ -210,11 +211,15 @@ class FAProfileQueryItem(StrictModel):
 
 class FAProfileStepPoint(StepSpan):
     """One step of a voice: from ``date`` to ``through`` the value is ``value`` (stored form; null: empty on purpose),
-    given by ``source``. ``update_id`` is the row the step starts with."""
+    given by ``source``. ``update_id`` is the row the step starts with.
+
+    ``date`` is cut to the range read; ``opened_on`` and ``source_date`` never are (D1c): the «dati al» of the tab."""
 
     value: Any = None
     source: str
     update_id: int
+    opened_on: date_type = Field(..., description="The read_on of the row that opens the step: the day it was really read, never cut to the range")
+    source_date: Optional[date_type] = Field(None, description="The day the source says the value is of («data at 30/09»), when it says one")
 
 
 class FAProfileChange(StrictModel):

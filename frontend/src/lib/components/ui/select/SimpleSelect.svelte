@@ -9,7 +9,7 @@
     import type {Snippet} from 'svelte';
     import type {SelectOption} from './types';
     import {firstSelectable, isSelectable, lastSelectable, stepSelectable} from './optionFilter';
-    import {Check, ChevronDown} from 'lucide-svelte';
+    import {Check, ChevronDown, SlidersHorizontal} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import {portal} from '$lib/actions/portal';
 
@@ -42,6 +42,8 @@
         selectedItem?: Snippet<[SelectOption]>;
         /** Change callback */
         onchange?: (value: string) => void;
+        /** An option that needs setting up was chosen (`needsSetup`, project 76 N3b): the value stays as it was. */
+        onneedssetup?: (option: SelectOption) => void;
         /** Compact mode: smaller padding, text-xs, thinner border */
         compact?: boolean;
         /** Show chevron icon in trigger button (default: true) */
@@ -65,6 +67,7 @@
         item,
         selectedItem,
         onchange,
+        onneedssetup,
         compact = false,
         showChevron = true,
         matchTriggerWidth = false,
@@ -224,6 +227,13 @@
 
     function selectOption(option: SelectOption) {
         if (option.disabled || option.header) return;
+        if (option.needsSetup) {
+            // Reachable, never chosen: the caller says why it cannot be used yet
+            closeDropdown();
+            triggerRef?.focus();
+            onneedssetup?.(option);
+            return;
+        }
         value = option.value;
         onchange?.(option.value);
         closeDropdown();
@@ -359,7 +369,9 @@
                             id={getOptionId(option)}
                             tabindex="-1"
                             aria-selected={value === option.value}
-                            aria-disabled={option.disabled ?? false}
+                            aria-disabled={option.disabled || option.needsSetup ? true : false}
+                            data-needs-setup={option.needsSetup ? 'true' : 'false'}
+                            title={option.needsSetup ? option.needsSetupHint : undefined}
                             data-highlighted={index === highlightedIndex}
                             data-testid={optionTestId?.(option)}
                             onclick={() => selectOption(option)}
@@ -371,7 +383,7 @@
                             class="w-full flex items-center justify-between px-3 py-2 text-sm text-left transition-colors
                                {option.disabled ? 'opacity-50 cursor-not-allowed' : ''}
                                {index === highlightedIndex ? 'bg-lf-selected' : value === option.value ? 'bg-lf-selected/50' : 'hover:bg-lf-hover'}
-                               {value === option.value ? 'text-lf-link' : 'text-lf-primary'}"
+                               {value === option.value ? 'text-lf-link' : option.needsSetup ? 'text-lf-muted' : 'text-lf-primary'}"
                         >
                             {#if item}
                                 <div class="flex-1 min-w-0">
@@ -384,6 +396,8 @@
                             {/if}
                             {#if value === option.value}
                                 <Check size={16} class="ml-2 flex-shrink-0 text-lf-link" />
+                            {:else if option.needsSetup}
+                                <SlidersHorizontal aria-hidden="true" size={14} class="ml-2 flex-shrink-0 text-lf-warning" data-testid={testId ? `${testId}-needs-setup-icon` : undefined} />
                             {/if}
                         </button>
                     {/if}

@@ -7,11 +7,7 @@
     "editData": "Edit Prices & Events",
     "pricesTab": "Prices",
     "eventsTab": "Events",
-    "metadata": "Metadata & Classification",
-    "editViaModal": "Edit in asset modal",
     "displayCurrency": "Convert to",
-    "noIdentifiers": "No identifiers configured",
-    "noClassification": "No classification data",
     "noDataScheduled": "Configure interest schedule via Edit to generate prices",
     "syncPrices": "Sync Prices",
     "recalculate": "Recalculate",
@@ -75,8 +71,8 @@
     "docsHelp": {
       "header": "One asset in detail: its price chart and signals, measures, events and classification, with the source of its prices and your transactions in it.",
       "measures": "Pick two days on the chart and read how much the asset, and the lines drawn with it, changed between them.",
-      "metadata": "What the asset is: its description, sectors and countries, identifiers, and the provider that prices it.",
-      "dataEditor": "Correct and complete the asset's data by hand: its daily prices and its events, such as dividends and splits."
+      "dataEditor": "Correct and complete the asset's data by hand: its daily prices and its events, such as dividends and splits.",
+      "profile": "What the asset is: its countries and sectors, its description, its key figures and its details, read by its enrichers or written by hand."
     }
   },
   "assets": {
@@ -249,8 +245,12 @@
       "providerUrl": "Provider URL",
       "identifier": "Identifier",
       "identifierType": "Identifier Type",
-      "lastFetch": "Last Fetch",
-      "neverFetched": "Never fetched"
+      "inputType": {
+        "PROVIDER_ID": "Provider ID"
+      },
+      "inputTypePlaceholder": {
+        "PROVIDER_ID": "e.g. bitcoin"
+      }
     },
     "schedule": {
       "title": "Interest Schedule",
@@ -539,6 +539,9 @@
     "PROVIDER_ERROR": "The provider failed: {detail}",
     "PROBE_RATE_LIMITED": "Too many checks: try again at {time}",
     "PROBE_RATE_LIMITED_DAY": "Too many checks: try again on {time}",
-    "PROBE_RATE_LIMITED_NO_TIME": "Too many checks: try again in a minute"
+    "PROBE_RATE_LIMITED_NO_TIME": "Too many checks: try again in a minute",
+    "PLAN_REQUIRED": "This request needs a paid plan of the provider.",
+    "WRONG_PLAN": "The provider's key does not match the plan set for it (Demo or Pro): check the plan in Settings › Plugins.",
+    "INVALID_API_KEY": "The provider refused the API key: check it in Settings › Plugins."
   }
 }

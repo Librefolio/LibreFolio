@@ -1,6 +1,6 @@
 # 🗂️ Classification
 
-The Classification panel shows the asset's **sector** and **geographic** distribution, when this data has been configured for the asset (manually or fetched from a provider).
+The **Profile** tab of the asset page opens with the asset's **sector** and **geographic** distribution, when this data has been configured for the asset (manually or fetched from a provider). Below it come the description, the key figures and the details.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="assets" data-name="detail-classification" alt="Asset Classification Panel" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -26,9 +26,10 @@ A **pie chart** showing the percentage breakdown by country or region (e.g., Uni
 
 ## 🛠️ How to Use
 
-1. Click the **Classification** toggle button in the toolbar area
-2. The panel expands below the chart showing sector and geographic data
-3. Hover over pie chart slices or map regions for details
+1. Open the **Profile** tab, between **Overview** and **Risk & Scenarios**
+2. The classification is at the top, with the date of its data («data as of …», or «from …» when the source gives none)
+3. When the composition changed in the period chosen at the top of the page, pick another date to see that day's
+4. Hover over pie chart slices or map regions for details
 
 ---
 

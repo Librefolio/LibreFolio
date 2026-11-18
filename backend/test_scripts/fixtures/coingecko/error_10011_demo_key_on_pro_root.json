@@ -1,0 +1,16 @@
+{
+  "recorded": "2026-11-17, coingecko-sdk 5.1.0, Demo key (removed): project 76 P0",
+  "request": {
+    "endpoint": "pro root /simple/price",
+    "ids": "bitcoin",
+    "vs_currencies": "eur"
+  },
+  "status": 400,
+  "body": {
+    "timestamp": "2026-11-17T13:58:58.754+00:00",
+    "error_code": 10011,
+    "status": {
+      "error_message": "If you are using Demo API key, please change your root URL  from pro-api.coingecko.com to api.coingecko.com  Please refer here for more details: https://docs.coingecko.com/v3.0.1/reference/introduction"
+    }
+  }
+}

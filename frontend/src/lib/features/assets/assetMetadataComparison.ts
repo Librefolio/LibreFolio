@@ -36,6 +36,8 @@ export interface ComparisonSnapshot {
     currency: string;
     /** The user picked the currency (otherwise the form shows a default the provider may correct silently). */
     currencyUserSet: boolean;
+    /** The asset's icon URL, `''` for none (project 76, P3: a provider's logo is compared like the other fields). */
+    iconUrl: string;
     /** The form's quote base ("Units per single price"). */
     quoteBaseQuantity: number;
     shortDescription: string;
@@ -50,6 +52,7 @@ export interface ComparisonLabels {
     name: string;
     type: string;
     currency: string;
+    icon: string;
     quoteBase: string;
     /** The note under the quote base row, from where its proposal comes; undefined for none. */
     quoteBaseNote: (source: QuoteBaseSource) => string | undefined;
@@ -107,7 +110,8 @@ export function compareMetadata(patchData: Record<string, any>, snapshot: Compar
             // Name/casing noise: the on-site search title and the metadata page title
             // differ only in case (e.g. "T-bond" vs "T-Bond") — same instrument, not a
             // real difference. Skip instead of showing a false diff.
-            const isCaseOnly = currentVal.trim().toLowerCase() === providerVal.trim().toLowerCase();
+            // Not for an icon: a URL's path is case-sensitive, so another case is another image (project 76, P3).
+            const isCaseOnly = field !== 'icon_url' && currentVal.trim().toLowerCase() === providerVal.trim().toLowerCase();
             // Currency not explicitly chosen: on a fresh asset the search may leave the
             // currency unset, so the form still shows the base-currency default (e.g. EUR)
             // while the provider knows the real one (e.g. a USD-denominated EuroTLX bond).
@@ -161,6 +165,8 @@ export function compareMetadata(patchData: Record<string, any>, snapshot: Compar
         compareStringField('display_name', labels.name, snapshot.displayName, patchData.display_name);
         compareStringField('asset_type', labels.type, snapshot.assetType, patchData.asset_type);
         compareStringField('currency', labels.currency, snapshot.currency, patchData.currency);
+        // The provider's logo: filled when the asset has none, a choice when it has another (project 76, P3)
+        compareStringField('icon_url', labels.icon, snapshot.iconUrl, patchData.icon_url);
         compareQuoteBase();
     }
 

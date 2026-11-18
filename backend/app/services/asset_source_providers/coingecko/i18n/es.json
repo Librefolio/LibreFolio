@@ -1,0 +1,28 @@
+{
+  "pluginSettings": {
+    "asset": {
+      "coingecko": {
+        "label": {
+          "current_refresh_minutes": "Actualización del precio",
+          "preferred_currency": "Moneda preferida"
+        },
+        "description": {
+          "current_refresh_minutes": "Cuánto tiempo sigue vigente un precio actual antes de volver a pedirlo a CoinGecko. Más largo ahorra los créditos de la cuenta.",
+          "preferred_currency": "La moneda en la que la búsqueda muestra el precio de cada moneda."
+        }
+      }
+    }
+  },
+  "assets": {
+    "providerParams": {
+      "coingecko": {
+        "label": {
+          "vs_currency": "Moneda del precio"
+        },
+        "description": {
+          "vs_currency": "La moneda en la que CoinGecko da el precio de la moneda: debe ser la moneda del activo."
+        }
+      }
+    }
+  }
+}

@@ -122,7 +122,9 @@ class ProfileRow:
 class ProfileStep:
     """One step of a voice: from ``date`` to ``through`` (both included) the value is ``value``, given by ``source``.
 
-    ``update_id`` is the row the step starts with.
+    ``update_id`` is the row the step starts with. ``date`` is cut to the range read; ``opened_on`` (that row's
+    ``read_on``) and ``source_date`` (its date at the source) never are: they say when the value was really read, and of
+    what day the source says it is (D1c, the tab's «dati al»).
     """
 
     date: date
@@ -130,6 +132,8 @@ class ProfileStep:
     value: Any
     source: str
     update_id: int
+    opened_on: date | None = None
+    source_date: date | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -377,7 +381,7 @@ def _asset_steps(records: Sequence[AssetProfileUpdate], start: date, end: date, 
 
 
 def _step(record: AssetProfileUpdate, first: date, through: date) -> ProfileStep:
-    return ProfileStep(date=first, through=through, value=_value(record), source=record.source, update_id=record.id)
+    return ProfileStep(date=first, through=through, value=_value(record), source=record.source, update_id=record.id, opened_on=record.read_on, source_date=record.source_date)
 
 
 async def rows_fingerprint(session: AsyncSession, asset_ids: Iterable[int], keys: Iterable[str]) -> tuple[int, int, datetime | None]:

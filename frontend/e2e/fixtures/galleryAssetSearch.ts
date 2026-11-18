@@ -50,8 +50,10 @@ export async function serveGalleryPremiumSearch(page: Page): Promise<PremiumSear
     // The real list, through `page.request`, which no page route reaches.
     const listed = await page.request.get(PROVIDER_LIST_PATH);
     expect(listed.ok(), `GET ${PROVIDER_LIST_PATH} answered ${listed.status()}`).toBe(true);
-    const searchable = ((await listed.json()) as Array<{code: string; supports_search?: boolean}>)
-        .filter((provider) => provider.supports_search === true && provider.code !== 'mockprov')
+    // Searchable and configured, as the search selects them by default (N3a): a provider still to configure (CoinGecko
+    // without its key, project 76) is switched off before any search
+    const searchable = ((await listed.json()) as Array<{code: string; supports_search?: boolean; configured?: boolean}>)
+        .filter((provider) => provider.supports_search === true && provider.configured !== false && provider.code !== 'mockprov')
         .map((provider) => provider.code)
         .sort();
     if (searchable.length < 2) throw new Error(`the premium search needs two searchable providers besides mockprov; this backend lists ${JSON.stringify(searchable)}`);

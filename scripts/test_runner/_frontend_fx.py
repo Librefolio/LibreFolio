@@ -206,6 +206,22 @@ def front_fx_flag_font(verbose: bool = False, ui: bool = False, headed: bool = F
     return _run_playwright("fx/fx-flag-font.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_fx_provider_not_configured(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the FX route picker's not-configured provider E2E tests (project 76, N3c).
+
+    The provider list is the backend's, one real provider (BOE) rewritten as not configured by the page's own route: no
+    setting or environment variable is touched. The edit case owns one pair per project, verified empty, deleted after.
+    """
+    print_section("Frontend FX Provider Not Configured Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("fx/fx-provider-not-configured.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_fx(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all FX tests (unit + E2E)."""
     if _common.nothing_left_to_run("front-fx"):
@@ -262,6 +278,14 @@ def populate_registry(registry: dict) -> None:
         name="FX Flag Font (CDP)",
         desc="Which font draws a flag, read through CDP: Apple Color Emoji on an Apple host with no Noto download (transactions cash cell, dashboard, FX, offline page), the self-hosted Noto flags elsewhere; digits/#/* never drawn by an emoji font (own broker + deposits, self-cleaning; desktop Chromium)",
         tests="fx/fx-flag-font.spec.ts",
+    )
+    add_test(
+        cat,
+        "fx-provider-not-configured",
+        front_fx_provider_not_configured,
+        name="FX Provider Not Configured",
+        desc="76 N3c: the pair dialog's route picker with BOE patched as not configured (page route, no setting touched): its direct and chain routes switched off, a touch opens PluginNotConfiguredModal (missing_member) and adds nothing; an owned pair (one per project, verified empty, deleted after) whose saved route uses BOE shows the triangle, opens the window, its chains stay on",
+        tests="fx/fx-provider-not-configured.spec.ts",
     )
     add_test(cat, "all", front_fx, test_names=False, name="All FX Tests", desc="Run all FX tests (unit + E2E)")
     registry["front-fx"] = cat

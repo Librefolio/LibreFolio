@@ -32,7 +32,7 @@ Click two points of the chart to read the change between them.
 
 ### 🗂️ [Classification](classification.md)
 
-The sector and country breakdown, in the **Metadata & Classification** panel.
+The sector and country breakdown, at the top of the **Profile** tab, with the asset's description, key figures and details.
 
 ### 📅 [Events](events.md)
 
