@@ -15,6 +15,8 @@
  * - **the user's own changes** (the automatic fills untouched are not: they must not ask to discard anything);
  * - **whether the changes block the save**: a value the window would refuse (a broker file's prefill can be wrong);
  * - **«Adesso» in edit mode**: each voice's value today and who gave it, from a one-day read of the profile.
+ * - **the description field** of the asset window (E9): a view of the profile's `description`, the waiting value else
+ *   «Adesso»'s; what the user types there is a pending change like the window's own.
  *
  * @module features/assets/profile/assetProfileDraft
  */
@@ -96,4 +98,31 @@ export function currentFromRead(voices: ProfileVoices): Record<string, CurrentVo
         if (last) current[key] = {value: last.value ?? null, source: last.source};
     }
     return current;
+}
+
+/** The text of a description value: a string as it is, anything else (null, absent) as nothing. */
+function descriptionText(value: unknown): string {
+    return typeof value === 'string' ? value : '';
+}
+
+/**
+ * What the description field of the asset window shows (E9): the description waiting to be saved — the user's, a
+ * source's fill, or nothing when it is emptied on purpose — else «Adesso»'s, else nothing.
+ */
+export function descriptionShown(pending: PendingChanges, current: Record<string, CurrentVoice>): string {
+    const change = pending.description;
+    if (change) return change.kind === 'emptied' ? '' : descriptionText(change.kind === 'source' ? change.seen : change.value);
+    return descriptionText(current.description?.value);
+}
+
+/**
+ * The pending changes after the user typed `text` in the description field (E9). The text equal to «Adesso»'s, blanks
+ * around it aside, is no change: the waiting one is taken back. An empty text over a description that exists empties it
+ * on purpose (the save sends null). Anything else is a value of the user's, which replaces a source's fill.
+ */
+export function withDescription(pending: PendingChanges, current: Record<string, CurrentVoice>, text: string): PendingChanges {
+    const {description: _previous, ...others} = pending;
+    if (text.trim() === descriptionText(current.description?.value).trim()) return others;
+    if (text.trim() === '') return {...others, description: {key: 'description', kind: 'emptied', origin: 'new'}};
+    return {...others, description: {key: 'description', kind: 'value', value: text, origin: 'new'}};
 }

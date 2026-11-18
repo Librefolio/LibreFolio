@@ -12,11 +12,13 @@
  * - a fill whose source left the list is dropped (the creation would refuse the whole asset: «not an enricher of this
  *   asset»);
  * - the automatic fills alone are not the user's changes (they must not ask to discard anything);
- * - a pending change the window would refuse (a broker file's prefill can be wrong) blocks the save.
+ * - a pending change the window would refuse (a broker file's prefill can be wrong) blocks the save;
+ * - the description field of the asset window is a view of the profile's description (E9): the waiting value, else
+ *   «Adesso»'s; typing «Adesso»'s value again takes the change back, emptying an existing one sends null.
  */
 import {describe, expect, it} from 'vitest';
 import * as draft from './assetProfileDraft';
-import type {AskAnswer, PendingChanges, PendingVoice} from './profileEditState';
+import {profilePatch, type AskAnswer, type PendingChanges, type PendingVoice} from './profileEditState';
 import type {ProfileStep, ProfileVoice} from './profileStore';
 
 function voice(key: string, shape: string, extra: Partial<ProfileVoice> = {}): ProfileVoice {
@@ -128,5 +130,42 @@ describe('«Adesso» in edit mode (E8b2)', () => {
     it('takes the last step when the read holds several, and leaves out a voice without one', () => {
         expect(draft.currentFromRead({ter: [step('0.0022', 'legacy', '2026-11-01'), step('0.0019', 'justetf')], sector: []})).toEqual({ter: {value: '0.0019', source: 'justetf'}});
         expect(draft.currentFromRead({})).toEqual({});
+    });
+});
+
+describe('the description field of the asset window (E9)', () => {
+    const now = (value: unknown, source = 'user') => ({description: {value, source}});
+
+    it('shows the waiting value, else «Adesso»’s, else nothing', () => {
+        expect(draft.descriptionShown({}, {})).toBe('');
+        expect(draft.descriptionShown({}, now('Global equity fund', 'justetf'))).toBe('Global equity fund');
+        expect(draft.descriptionShown({}, now(null))).toBe('');
+        expect(draft.descriptionShown({description: typed('description', 'My notes')}, now('Global equity fund'))).toBe('My notes');
+        expect(draft.descriptionShown({description: fill('description', 'From the source')}, {})).toBe('From the source');
+        expect(draft.descriptionShown({description: {key: 'description', kind: 'emptied', origin: 'new'}}, now('Global equity fund'))).toBe('');
+    });
+
+    it('writes what the user types as a value of theirs, leaving the other voices alone', () => {
+        const pending: PendingChanges = {ter: typed('ter', '0.0019')};
+        expect(draft.withDescription(pending, now('Global equity fund'), 'My notes')).toEqual({ter: typed('ter', '0.0019'), description: typed('description', 'My notes')});
+        expect(pending).toEqual({ter: typed('ter', '0.0019')});
+    });
+
+    it('takes the change back when the user types «Adesso»’s value again, blanks around it included', () => {
+        expect(draft.withDescription({description: typed('description', 'My notes')}, now('Global equity fund'), '  Global equity fund ')).toEqual({});
+        // At creation «Adesso» is empty: an empty field is no change
+        expect(draft.withDescription({description: typed('description', 'x')}, {}, '   ')).toEqual({});
+    });
+
+    it('empties on purpose a description that exists: the save sends null', () => {
+        const pending = draft.withDescription({}, now('Global equity fund'), '');
+        expect(pending).toEqual({description: {key: 'description', kind: 'emptied', origin: 'new'}});
+        expect(profilePatch(pending)).toEqual({description: null});
+    });
+
+    it('makes a source fill the user’s once they change it', () => {
+        const pending = draft.withDescription({description: fill('description', 'From the source')}, {}, 'From the source, and mine');
+        expect(pending).toEqual({description: typed('description', 'From the source, and mine')});
+        expect(draft.userChanges(pending, {description: fill('description', 'From the source')})).toEqual(pending);
     });
 });
