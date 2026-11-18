@@ -35,6 +35,8 @@ export interface ChargeDraft {
     description: string;
     /** The values saved, for the diff; `null` for a new row. */
     original: {type: ChargeType; cash: ChargeCash | null; description: string} | null;
+    /** A saved charge the picker added to this parent's section (it belongs to no parent yet, lot F4): the batch links it. */
+    linkNew?: boolean;
     /**
      * `linked`: in the section. A saved charge the user took out of it is kept with its state, so the batch and the Bulk
      * (F7) still see it: `unlink` (it stays, as a row of its own, with the changes the user typed) or `delete`. A new row
@@ -80,6 +82,12 @@ export function chargesFromRows(rows: readonly TXReadItem[]): ChargeDraft[] {
         });
 }
 
+/** A saved charge picked to be linked to this parent (F4): its row, marked `linkNew`; `null` for a row that is no charge. */
+export function chargeFromPicked(row: TXReadItem): ChargeDraft | null {
+    const [draft] = chargesFromRows([row]);
+    return draft ? {...draft, linkNew: true} : null;
+}
+
 /** A new row of the given type, with no amount yet; `seq` keeps its key unique in the form. */
 export function newCharge(type: ChargeType, _defaultCode: string | null, seq: number): ChargeDraft {
     return {key: `new-${seq}`, id: null, type, cash: null, description: '', original: null, state: 'linked'};
@@ -117,7 +125,7 @@ export function chargeRowsMissingAmount(charges: readonly ChargeDraft[]): string
 
 /** The section's state as one string, for the form's unsaved-changes baseline and its anti-bounce. */
 export function chargesKey(charges: readonly ChargeDraft[]): string {
-    return JSON.stringify(charges.map((charge) => [charge.key, charge.state, charge.type, charge.cash?.amount ?? null, charge.cash?.code ?? null, charge.description]));
+    return JSON.stringify(charges.map((charge) => [charge.key, charge.state, charge.type, charge.cash?.amount ?? null, charge.cash?.code ?? null, charge.description, charge.linkNew === true]));
 }
 
 function sameCash(a: ChargeCash | null, b: ChargeCash | null): boolean {
@@ -150,6 +158,12 @@ export function buildChargesBatch(charges: readonly ChargeDraft[], parent: Charg
         if (!original || original.type !== charge.type) update.type = charge.type;
         if (!original || !sameCash(original.cash, charge.cash)) update.cash = cash;
         if (!original || original.description.trim() !== description) update.description = description;
+        if (charge.linkNew) {
+            // Picked in this form: never linked, so an unlink sends nothing, a linked one always sends the link.
+            if (charge.state === 'unlink') continue;
+            batch.updates.push({...update, ...link});
+            continue;
+        }
         if (charge.state === 'unlink') update.parent_transaction_id = 0;
         if (Object.keys(update).length > 1) batch.updates.push(update);
     }

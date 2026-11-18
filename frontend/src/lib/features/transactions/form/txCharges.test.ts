@@ -12,7 +12,7 @@
 import {describe, expect, it} from 'vitest';
 import type {TypeRule} from '../transactionTypeStore';
 import type {TXReadItem} from '../types';
-import {buildChargesBatch, chargeCashDirection, chargeRowsMissingAmount, chargesFromRows, chargesKey, chargesTotal, newCharge, type ChargeDraft, type ChargesParent} from './txCharges';
+import {buildChargesBatch, chargeCashDirection, chargeFromPicked, chargeRowsMissingAmount, chargesFromRows, chargesKey, chargesTotal, newCharge, type ChargeDraft, type ChargesParent} from './txCharges';
 
 /** FEE and TAX as the backend declares them: cash out (negative), required; an asset is optional, no quantity; role «charge». */
 const CHARGE_RULE: TypeRule = {
@@ -281,5 +281,76 @@ describe('buildChargesBatch — unlinked, deleted rows and order', () => {
 
     it('is empty for nothing to do', () => {
         expect(buildChargesBatch([], PARENT, link, RULES)).toEqual({creates: [], updates: [], deletes: []});
+    });
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+//  F4 — a saved charge picked into a parent's section (`linkNew`). RED FIRST: `chargeFromPicked` and `linkNew` do not
+//  exist yet.
+// ---------------------------------------------------------------------------------------------------------------
+
+describe('chargeFromPicked', () => {
+    it('turns a saved FEE into a linked draft flagged linkNew, with the magnitude and the original', () => {
+        const draft = chargeFromPicked(row({id: 20, type: 'FEE', cash: {code: 'EUR', amount: '-5.00'}, description: 'bank'}));
+        expect(draft).toEqual({key: 'saved-20', id: 20, state: 'linked', linkNew: true, type: 'FEE', cash: {amount: '5', code: 'EUR'}, description: 'bank', original: {type: 'FEE', cash: {amount: '5', code: 'EUR'}, description: 'bank'}});
+    });
+
+    it('does the same for a TAX', () => {
+        expect(chargeFromPicked(row({id: 31, type: 'TAX', cash: {code: 'USD', amount: '-2.50'}}))).toEqual({
+            key: 'saved-31',
+            id: 31,
+            state: 'linked',
+            linkNew: true,
+            type: 'TAX',
+            cash: {amount: '2.5', code: 'USD'},
+            description: '',
+            original: {type: 'TAX', cash: {amount: '2.5', code: 'USD'}, description: ''},
+        });
+    });
+
+    it('answers null for a row that is not a charge', () => {
+        expect(chargeFromPicked(row({id: 1, type: 'BUY', cash: {code: 'EUR', amount: '-100'}}))).toBeNull();
+    });
+
+    it('is never set by chargesFromRows or newCharge', () => {
+        expect(chargesFromRows([row({id: 1, type: 'FEE', cash: {code: 'EUR', amount: '-1'}})])[0]).not.toHaveProperty('linkNew');
+        expect(newCharge('FEE', 'EUR', 1)).not.toHaveProperty('linkNew');
+    });
+});
+
+describe('chargesKey — linkNew', () => {
+    it('changes when linkNew is set on a row', () => {
+        expect(chargesKey([saved(1, {linkNew: true})])).not.toBe(chargesKey([saved(1)]));
+    });
+});
+
+describe('buildChargesBatch — linkNew rows', () => {
+    it('links an untouched picked row to a parent of the same batch: {id, parent_ref}', () => {
+        expect(buildChargesBatch([saved(10, {linkNew: true})], PARENT, {parent_ref: 'p'}, RULES)).toEqual({creates: [], updates: [{id: 10, parent_ref: 'p'}], deletes: []});
+    });
+
+    it('links an untouched picked row to a saved parent: {id, parent_transaction_id}', () => {
+        expect(buildChargesBatch([saved(10, {linkNew: true})], PARENT, {parent_transaction_id: 42}, RULES).updates).toEqual([{id: 10, parent_transaction_id: 42}]);
+    });
+
+    it('sends the changed cash together with the link', () => {
+        const batch = buildChargesBatch([saved(10, {linkNew: true, cash: {amount: '7', code: 'EUR'}})], PARENT, {parent_transaction_id: 42}, RULES);
+        expect(batch.updates).toEqual([{id: 10, cash: {code: 'EUR', amount: '-7'}, parent_transaction_id: 42}]);
+    });
+
+    it('a deleted picked row goes to the deletes, with no update', () => {
+        expect(buildChargesBatch([saved(10, {linkNew: true, state: 'delete'})], PARENT, {parent_ref: 'p'}, RULES)).toEqual({creates: [], updates: [], deletes: [10]});
+    });
+
+    it('an unlinked picked row sends nothing: it was never linked', () => {
+        expect(buildChargesBatch([saved(10, {linkNew: true, state: 'unlink'})], PARENT, {parent_ref: 'p'}, RULES)).toEqual({creates: [], updates: [], deletes: []});
+    });
+
+    it('rows without linkNew are unchanged beside a linkNew one', () => {
+        const batch = buildChargesBatch([saved(10), saved(11, {linkNew: true}), saved(12, {state: 'unlink'})], PARENT, {parent_transaction_id: 42}, RULES);
+        expect(batch.updates).toEqual([
+            {id: 11, parent_transaction_id: 42},
+            {id: 12, parent_transaction_id: 0},
+        ]);
     });
 });
