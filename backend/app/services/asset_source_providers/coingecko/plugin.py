@@ -29,9 +29,10 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Dict, TypeVar
 
-from backend.app.db import IdentifierType
+from backend.app.db import AssetType, IdentifierType
 from backend.app.db.models import ProviderInputType
 from backend.app.logging_config import get_logger
+from backend.app.schemas.assets.assets import FAAssetPatchItem
 from backend.app.schemas.prices import FACurrentValue, FACurrentValueRequest, FAHistoricalData, FAPricePoint
 from backend.app.services.asset_source_providers.coingecko import _sdk
 from backend.app.services.asset_source_providers.coingecko._currencies import DEFAULT_VS_CURRENCY, VS_CURRENCIES
@@ -79,6 +80,10 @@ def _coin_id(identifier: str) -> str:
     if not _COIN_ID.fullmatch(coin) or ".." in coin:
         raise AssetSourceError("Not a CoinGecko coin id", "NOT_FOUND", {"identifier": coin[:64]})
     return coin
+
+
+#: The longest ticker an asset keeps (``FAAssetPatchItem.identifier_ticker``): a longer symbol is left out.
+_TICKER_MAX_LENGTH = 20
 
 
 def _unique(values: Iterable[str]) -> list[str]:
@@ -145,8 +150,9 @@ class CoinGeckoProvider(AssetSourceProvider):
 
     @property
     def accepted_identifier_types(self) -> list:
-        # The CoinGecko id («bitcoin») travels as a ticker-like identifier: no input type names a provider's own id.
-        return [ProviderInputType.TICKER]
+        # The CoinGecko id («bitcoin») is CoinGecko's own code, not a ticker: PROVIDER_ID, which reaches the plugin as
+        # OTHER (the consultant's rule, P3). The asset's ticker is the symbol (BTC), from the metadata.
+        return [ProviderInputType.PROVIDER_ID]
 
     @property
     def params_schema(self) -> list[dict]:
@@ -172,15 +178,14 @@ class CoinGeckoProvider(AssetSourceProvider):
 
     @property
     def test_cases(self) -> list[dict]:
-        # None: the generic provider tests (``test_external/test_asset_providers.py``) call a bare instance, which has no
-        # key, and the brief allows no call to the real CoinGecko outside the P0 trial. Its prices are pinned on the P0
-        # recordings instead (``test_services/test_coingecko_prices.py``).
-        return []
+        # The generic external tests (``test_external/test_asset_providers.py``) reach the real CoinGecko only with the
+        # key in the environment; without it the provider answers NOT_CONFIGURED and they skip. Its prices are pinned
+        # on the P0 recordings (``test_services/test_coingecko_prices.py``).
+        return [{"identifier": "bitcoin", "identifier_type": IdentifierType.OTHER, "provider_params": {"vs_currency": "EUR"}}]
 
     @property
     def test_search_query(self) -> str | None:
-        # Search is lot P3
-        return None
+        return "bitcoin"
 
     # =========================================================================
     # The client
@@ -320,3 +325,77 @@ class CoinGeckoProvider(AssetSourceProvider):
             if start <= day <= end_date:
                 points[day] = FAPricePoint(date=day, close=entry[1], currency=currency)
         return FAHistoricalData(prices=[points[day] for day in sorted(points)], events=[], currency=currency, source=self.provider_name, history_starts=first_day)
+
+    # =========================================================================
+    # Search, metadata, the asset's page (lot P3)
+    # =========================================================================
+
+    def _preferred_currency(self) -> str:
+        """The user's currency for the search's rows: the setting, when CoinGecko prices in it; else the default."""
+        preferred = str(self.settings.get("preferred_currency") or "").strip().upper()
+        return preferred if preferred in VS_CURRENCIES else DEFAULT_VS_CURRENCY
+
+    def _json(self, request: Callable[[Any], Any]) -> Any:
+        """A raw SDK call's body as plain JSON."""
+        return json.loads(self._call(request).http_response.text)
+
+    async def search(self, query: str) -> list[dict]:
+        """CoinGecko's ``/search``: its coins only, by market capitalisation (a coin without a rank last, in CoinGecko's
+        order), each in the user's preferred currency. The id is CoinGecko's own code: ``OTHER``."""
+        text = (query or "").strip()
+        if not text:
+            return []
+        body = self._json(lambda client: client.search.with_raw_response.get(query=text))
+        coins = [coin for coin in (body.get("coins") or []) if isinstance(coin, dict) and isinstance(coin.get("id"), str) and coin["id"]]
+        coins.sort(key=lambda coin: (not isinstance(coin.get("market_cap_rank"), int), coin.get("market_cap_rank") or 0))
+        currency = self._preferred_currency()
+        rows = []
+        for coin in coins:
+            name = str(coin.get("name") or coin["id"]).strip()
+            symbol = str(coin.get("symbol") or "").strip().upper()
+            rows.append(
+                {
+                    "identifier": coin["id"],
+                    "identifier_type": IdentifierType.OTHER,
+                    "display_name": f"{name} ({symbol})" if symbol else name,
+                    "currency": currency,
+                    "type": AssetType.CRYPTO.value,
+                    "provider_params": {"vs_currency": currency},
+                }
+            )
+        return rows
+
+    async def fetch_asset_metadata(self, identifier: str, identifier_type: IdentifierType, provider_params: dict | None = None) -> FAAssetPatchItem | None:
+        """``/coins/{id}`` without its tickers, markets or translations: the name, CRYPTO, the logo, the symbol as the
+        ticker (left out when no ticker column holds it), and ``coingecko:<id>`` among the other identifiers (§3.8)."""
+        coin = _coin_id(identifier)
+        body = self._json(
+            lambda client: client.coins.with_raw_response.get_id(
+                coin,
+                localization=False,
+                tickers=False,
+                market_data=False,
+                community_data=False,
+                developer_data=False,
+                sparkline=False,
+            )
+        )
+        if not isinstance(body, dict):
+            return None
+        symbol = str(body.get("symbol") or "").strip().upper()
+        image = body.get("image") if isinstance(body.get("image"), dict) else {}
+        return FAAssetPatchItem(
+            asset_id=0,
+            display_name=str(body.get("name") or "").strip() or None,
+            asset_type=AssetType.CRYPTO,
+            icon_url=image.get("large") or image.get("small") or None,
+            identifier_ticker=symbol if 0 < len(symbol) <= _TICKER_MAX_LENGTH else None,
+            identifier_other=[f"{self.provider_code}:{coin}"],
+        )
+
+    def get_asset_url(self, identifier: str, identifier_type: IdentifierType, provider_params: dict | None = None) -> str | None:
+        """The coin's page on CoinGecko, built from the id alone: never the key, no I/O."""
+        try:
+            return f"https://www.coingecko.com/en/coins/{_coin_id(identifier)}"
+        except AssetSourceError:
+            return None
