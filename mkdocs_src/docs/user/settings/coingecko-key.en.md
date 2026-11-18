@@ -66,6 +66,10 @@ When you create the asset, LibreFolio loads its history: the last year on the De
 
 - CoinGecko's [Developer Dashboard](https://www.coingecko.com/en/developers/dashboard) shows how many calls the key
   has used this month.
+- LibreFolio counts them too: the **Calls** block of the **CoinGecko** card under **Shared settings**, in **Settings ›
+  Plugins**, shows this instance's calls this minute, hour, day, week and month, and an administrator can set a limit
+  on each (see **Calls and Their Limits** in [Plugin Settings](plugins.md)). CoinGecko's month may start again on another day than
+  LibreFolio's (the 1st, UTC): the two counts can differ, and CoinGecko's Dashboard has the account's own.
 - Running short? An administrator can set a longer **Price refresh** (60, 120 or 240 minutes) on the CoinGecko card
   under **Prices** in **Settings › Plugins**: the prices update less often, and the credits last longer.
 

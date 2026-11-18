@@ -73,6 +73,11 @@ To spend fewer, an administrator can set a longer **Price refresh** (60, 120 or 
 card under **Prices** in **Settings › Plugins**. CoinGecko's [Developer Dashboard](https://www.coingecko.com/en/developers/dashboard) shows
 the account's exact usage.
 
+LibreFolio keeps its own count: the **Calls** block of the **CoinGecko** card under **Shared settings** shows the calls
+of this instance, and an administrator can cap each window, for example the month below the plan's credits
+(see **Calls and Their Limits** in [Plugin Settings](../../settings/plugins.md)). CoinGecko's month may start again on another day than
+LibreFolio's, so the two counts can differ.
+
 ## 🏷️ Terms and Attribution {: #attribution }
 
 The prices are CoinGecko's, under [CoinGecko's API terms](https://www.coingecko.com/en/api_terms): whoever creates
