@@ -14,7 +14,8 @@
  * - the automatic fills alone are not the user's changes (they must not ask to discard anything);
  * - a pending change the window would refuse (a broker file's prefill can be wrong) blocks the save;
  * - the description field of the asset window is a view of the profile's description (E9): the waiting value, else
- *   «Adesso»'s; typing «Adesso»'s value again takes the change back, emptying an existing one sends null.
+ *   «Adesso»'s; typing «Adesso»'s value again, exactly, takes the change back (a blank being typed is never eaten),
+ *   emptying an existing one sends null.
  */
 import {describe, expect, it} from 'vitest';
 import * as draft from './assetProfileDraft';
@@ -151,10 +152,18 @@ describe('the description field of the asset window (E9)', () => {
         expect(pending).toEqual({ter: typed('ter', '0.0019')});
     });
 
-    it('takes the change back when the user types «Adesso»’s value again, blanks around it included', () => {
-        expect(draft.withDescription({description: typed('description', 'My notes')}, now('Global equity fund'), '  Global equity fund ')).toEqual({});
-        // At creation «Adesso» is empty: an empty field is no change
+    it('takes the change back when the user types «Adesso»’s value again, exactly', () => {
+        expect(draft.withDescription({description: typed('description', 'My notes')}, now('Global equity fund'), 'Global equity fund')).toEqual({});
+        // At creation «Adesso» is empty: an empty field, or blanks alone, is no change
         expect(draft.withDescription({description: typed('description', 'x')}, {}, '   ')).toEqual({});
+    });
+
+    it('never eats a blank the user is typing after «Adesso»’s value: the field shows what waits (E9b)', () => {
+        // The field is a view of the pending change: were «Global equity fund » taken back, the field would show «Adesso»
+        // again and the blank before the next word would vanish under the user's cursor
+        const pending = draft.withDescription({}, now('Global equity fund'), 'Global equity fund ');
+        expect(pending).toEqual({description: typed('description', 'Global equity fund ')});
+        expect(draft.descriptionShown(pending, now('Global equity fund'))).toBe('Global equity fund ');
     });
 
     it('empties on purpose a description that exists: the save sends null', () => {

@@ -116,13 +116,16 @@ export function descriptionShown(pending: PendingChanges, current: Record<string
 }
 
 /**
- * The pending changes after the user typed `text` in the description field (E9). The text equal to «Adesso»'s, blanks
- * around it aside, is no change: the waiting one is taken back. An empty text over a description that exists empties it
- * on purpose (the save sends null). Anything else is a value of the user's, which replaces a source's fill.
+ * The pending changes after the user typed `text` in the description field (E9). The text equal to «Adesso»'s, exactly,
+ * is no change: the waiting one is taken back. Exactly, because the field shows what waits: a blank typed after
+ * «Adesso»'s value, before the next word, must stay. An empty text (blanks alone) is no change at creation and, over a
+ * description that exists, empties it on purpose (the save sends null). Anything else is a value of the user's, which
+ * replaces a source's fill.
  */
 export function withDescription(pending: PendingChanges, current: Record<string, CurrentVoice>, text: string): PendingChanges {
     const {description: _previous, ...others} = pending;
-    if (text.trim() === descriptionText(current.description?.value).trim()) return others;
-    if (text.trim() === '') return {...others, description: {key: 'description', kind: 'emptied', origin: 'new'}};
+    const now = descriptionText(current.description?.value);
+    if (text === now) return others;
+    if (text.trim() === '') return now === '' ? others : {...others, description: {key: 'description', kind: 'emptied', origin: 'new'}};
     return {...others, description: {key: 'description', kind: 'value', value: text, origin: 'new'}};
 }
