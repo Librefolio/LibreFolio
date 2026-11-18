@@ -417,3 +417,17 @@ export function formatReplayDate(iso: string, locale: string): string {
 export function formatReplayShare(fraction: number, locale: string): string {
     return new Intl.NumberFormat(locale, {style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1}).format(fraction);
 }
+
+/**
+ * What the asset's «What if…?» shows of its rates scenario (RN-25; the consultant, 18/11/2026), from the answer of
+ * `rate_shock` in the base wave: the tool where the answer came back (the profile holds a duration, whatever the asset
+ * type); one line on a bond whose profile has none (`no_modified_duration`), where the reader expects the tool; nothing
+ * otherwise — a stock never had one to miss.
+ */
+export function rateShockAvailability(result: RiskAnalyticResult | null | undefined, assetType: string | null | undefined): 'tool' | 'missing' | 'none' {
+    if (!result) return 'none';
+    if (result.status === 'ok') return 'tool';
+    const details = (firstError(result.error)?.details ?? {}) as Record<string, unknown>;
+    const reason = details.reason;
+    return result.status === 'unavailable' && reason === 'no_modified_duration' && assetType === 'BOND' ? 'missing' : 'none';
+}

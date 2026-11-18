@@ -200,6 +200,12 @@ export interface BaseAnalyticsContext {
      */
     includeCurrentCompositionRiskReturn?: boolean;
     /**
+     * Adds the asset's rates scenario (RN-25, `rate_shock`), every step of the page at once (`RATE_SHOCK_STEPS`): its
+     * answer says whether the profile holds a duration, so the page knows from it whether to offer the tool, and
+     * switching between the steps asks nothing. The capability gate keeps it on the asset scope.
+     */
+    includeRateShock?: boolean;
+    /**
      * Adds the five per-asset analytics an asset set can answer.
      *
      * **Opt-in like the three above**, and for a sharper reason than tidiness:
@@ -256,6 +262,12 @@ export const ASSET_SET_MONTHLY_VAR_INSTANCE = 'base-historical-asset_set_var-mon
  * positive days sit beside the best 30 days and the largest rally of L1°'s own analytics, so the row must come from one
  * calendar — L1°'s, which no benchmark joins. L3°'s KPI rides with the benchmark and may be measured on a narrower one.
  */
+/**
+ * The yield moves of the asset's rates scenario (RN-25; the consultant, 18/11/2026): half a point, one point and two
+ * points, up and down, as decimal ratios. The backend refuses any move past two points.
+ */
+export const RATE_SHOCK_STEPS: readonly number[] = [0.005, 0.01, 0.02, -0.005, -0.01, -0.02];
+
 export const ASSET_SET_MOVE_KPI_INSTANCE = 'base-historical-asset_set_kpi-move';
 
 /**
@@ -342,6 +354,7 @@ export function buildBaseAnalytics(mode: RiskMode, ctx: BaseAnalyticsContext): R
         }
     } else {
         add('risk_contribution');
+        if (ctx.includeRateShock) add('rate_shock', {yield_changes: [...RATE_SHOCK_STEPS]});
         if (ctx.includeCurrentCompositionRiskReturn) {
             // Same params as the historical wave: the risk-free rate is a property of
             // the reader's setting, not of the series it is charged against.

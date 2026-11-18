@@ -137,6 +137,8 @@ export interface RiskControllerOptions {
      * Sharpe have to come from the same series or the chart contradicts the cards.
      */
     includeCurrentCompositionRiskReturn?: boolean;
+    /** Adds the asset's rates scenario to the current-composition wave (RN-25): see `BaseAnalyticsContext`. */
+    includeRateShock?: boolean;
     /**
      * Adds the five per-asset analytics of the asset-set laboratory.
      *
@@ -447,6 +449,7 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
                 includeDrawdownSummary: options.includeDrawdownSummary === true,
                 includeMonthlyVar: options.includeMonthlyVar === true,
                 includeCurrentCompositionRiskReturn: options.includeCurrentCompositionRiskReturn === true,
+                includeRateShock: options.includeRateShock === true,
                 includeAssetSetLevels: options.includeAssetSetLevels === true,
                 includeAssetSetLossLevels: options.includeAssetSetLossLevels === true,
                 includeAssetSetPaidLevels: options.includeAssetSetPaidLevels === true,
