@@ -275,6 +275,17 @@ A FEE or a TAX can point at the transaction it belongs to (project 66; the backe
   through the bulk workspace, where the form hands its rows back. The section is therefore read-only unless the host
   passes `allowChargeEdits`: then it adds, changes, unlinks and deletes rows, and «Apply» hands every draft over as
   `_charges` (and a charge's own form hands `_parent_unlink`). The bulk workspace turns it on once it saves them.
+- **Linking what already exists** (also behind `allowChargeEdits`) reuses `bulk/TransactionPickerModal.svelte` with the
+  rows the form fetched (`rows`, plus `title`, `filterLabel`, `addLabel`, `maxSelect` and `zIndex` above the form):
+    - «Link an existing charge…», in the parent's section: the FEE and TAX rows of the same broker with no parent
+      (`GET /transactions?without_parent=true&broker_id=…`), on the parent's asset (`null` with `null`) and not already in
+      the section. Each picked row becomes a `ChargeDraft` with `linkNew` (`chargeFromPicked`), and the batch always
+      sends its link. Unlinking or trashing a picked row only takes it back out of the section: it was never linked,
+      and the picker offers it again.
+    - «Link to a transaction…», in the form of a FEE or TAX with no parent: the rows of the same broker whose type has
+      `charge_role` `parent`, on the charge's asset and not paired. One row; it shows as pending, with «Undo», and «Apply»
+      hands `_parent_link`.
+    - A failed fetch shows a toast and opens no picker. Changing the form's broker or asset drops what was picked.
 - **«Open»** (`onOpenTransaction`): the host shows the other transaction in the same modal, in the same mode, and passes
   `highlightTxId` so the charge the user came from is highlighted in its parent's section. With unsaved changes the
   existing discard confirmation comes first. The transactions page and the portfolio views wire it in read-only.
