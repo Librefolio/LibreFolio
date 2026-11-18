@@ -3821,7 +3821,7 @@ test.describe('Risk analysis functional integration', () => {
          * `appliedRiskFreePercent / 100` and draws no control to move it. So the oracle is the page's own KPI
          * of the same wave, read off the same capture, and the claim is that the comparison asks at that rate.
          */
-        test('the comparison is asked at the rates the page applies: its risk-free rate and a zero target, beside the benchmark', async ({page}) => {
+        test('the comparison is asked at the rates the page applies: its risk-free rate, and the same threshold (RN-21), beside the benchmark', async ({page}) => {
             try {
                 // The Dashboard's scope, every broker the user owns (R2/N): read before the page loads and once
                 // it has settled (`ownedBrokerIds`).
@@ -3835,14 +3835,14 @@ test.describe('Risk analysis functional integration', () => {
                 expect(kpis.length, 'premise: the current composition wave asked for its KPI').toBeGreaterThan(0);
                 const appliedRate = kpis[0].parameters?.risk_free_annual_rate;
                 expect(typeof appliedRate === 'number' && Number.isFinite(appliedRate), `premise: the KPI carries the applied risk-free rate as a number, read ${JSON.stringify(appliedRate)}`).toBe(true);
-                for (const kpi of kpis) expect(kpi.parameters, 'premise: the wave asks every KPI at one rate and a zero target').toEqual({risk_free_annual_rate: appliedRate, target_annual_return: 0});
+                for (const kpi of kpis) expect(kpi.parameters, 'premise: the wave asks every KPI at one rate, its threshold the same').toEqual({risk_free_annual_rate: appliedRate, target_annual_return: appliedRate});
 
                 // The claim. Barrier first: the benchmark's row is drawn (`openWithUnheldBenchmark`), so its
                 // comparison was asked and recorded.
                 const comparisons = requests.filter((request) => portfolioOver(request, owned)).flatMap((request) => request.analytics.filter((analytic) => analytic.analytic_code === 'comparison'));
                 expect(comparisons.length, `barrier: the Dashboard's comparison is in the capture, asked over every broker the user owns (${readingsText(owned)})`).toBeGreaterThan(0);
                 for (const comparison of comparisons) {
-                    expect(comparison.parameters, 'the comparison is not asked at the rates the page applies, beside its benchmark').toEqual({comparison_asset_id: benchmarkId, risk_free_annual_rate: appliedRate, target_annual_return: 0});
+                    expect(comparison.parameters, 'the comparison is not asked at the rates the page applies, beside its benchmark').toEqual({comparison_asset_id: benchmarkId, risk_free_annual_rate: appliedRate, target_annual_return: appliedRate});
                 }
             } finally {
                 await clearRiskBenchmark(page);
@@ -4804,5 +4804,82 @@ test.describe('Risk analysis functional integration', () => {
                 await clearRiskBenchmark(page);
             }
         });
+    });
+});
+
+/**
+ * RN-21 — the reader's risk-free rate: one field under the period line, one value for every risk page.
+ *
+ * On the real backend: a rate typed on the Dashboard goes with the next question as both the Sharpe's rate and the
+ * threshold of Sortino, Omega and the semi-deviation (Q9 bis), the field says what the page uses, and a broker's page
+ * opens on the same value. The browser keeps the value per user, so each test's fresh context starts at 0 %.
+ */
+test.describe('Risk analysis — the reader’s risk-free rate (RN-21)', () => {
+    test.describe.configure({timeout: 90_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('a rate set on the Dashboard is asked with every question that reads it, and a broker page opens on it', async ({page}) => {
+        const panel = await openDashboardRisk(page);
+        const field = panel.getByTestId('risk-free-rate');
+        await expect(field).toHaveValue('0');
+
+        const charged = page.waitForRequest(
+            (request) => {
+                if (request.method() !== 'POST' || !request.url().includes('/api/v1/risk/query')) return false;
+                const body = request.postDataJSON() as {analytics?: Array<{analytic_code?: string; parameters?: Record<string, unknown>}>};
+                return (body.analytics ?? []).some((analytic) => analytic.analytic_code === 'historical_kpi' && analytic.parameters?.risk_free_annual_rate === 0.025);
+            },
+            {timeout: 20_000},
+        );
+        await field.fill('2.5');
+        await field.press('Enter');
+
+        const body = (await charged).postDataJSON() as {analytics: Array<{analytic_code: string; parameters?: Record<string, unknown>}>};
+        for (const analytic of body.analytics.filter((item) => item.parameters && 'risk_free_annual_rate' in item.parameters)) {
+            expect(analytic.parameters, `${analytic.analytic_code}: the threshold is the rate`).toMatchObject({risk_free_annual_rate: 0.025, target_annual_return: 0.025});
+        }
+        await expect(panel.getByTestId('risk-free-rate-field')).toHaveAttribute('data-percent', '2.5');
+        await expect(panel).toHaveAttribute('data-busy', 'false', {timeout: 30_000});
+        // The answers came back charged: «How does it move?» and L3 say the rate their answers used, not the field's.
+        await expect(panel.getByTestId('risk-move')).toHaveAttribute('data-risk-free-rate', '0.025', {timeout: 30_000});
+        await expect(panel.getByTestId('risk-l3')).toHaveAttribute('data-risk-free-rate', '0.025', {timeout: 30_000});
+
+        // A full load: the stored rate is read cold, inside the panel's derivations, and the broker's KPI is asked with it.
+        const brokerKpi = page.waitForRequest(
+            (request) => {
+                if (request.method() !== 'POST' || !request.url().includes('/api/v1/risk/query')) return false;
+                const asked = request.postDataJSON() as {analytics?: Array<{analytic_code?: string; parameters?: Record<string, unknown>}>};
+                return (asked.analytics ?? []).some((analytic) => analytic.analytic_code === 'historical_kpi' && analytic.parameters?.risk_free_annual_rate === 0.025 && analytic.parameters?.target_annual_return === 0.025);
+            },
+            {timeout: 30_000},
+        );
+        const {panel: brokerPanel} = await openFirstBrokerRisk(page);
+        await brokerKpi;
+        await expect(brokerPanel.getByTestId('risk-free-rate')).toHaveValue('2.5');
+
+        // The chart's Rolling Sharpe uses the same rate: it says so, and asks for it, with no field of its own.
+        await navigateTo(page, '/assets');
+        const apple = page.locator('[data-testid^="asset-card-"]').filter({hasText: /Apple/i}).first();
+        await expect(apple, 'the seeded Apple asset must be on the list').toBeVisible({timeout: 30_000});
+        await apple.click();
+        await expect(page.getByTestId('asset-detail-page')).toBeVisible({timeout: 30_000});
+        await page.getByTestId('asset-detail-signals-toggle').click();
+        await expect(page.getByTestId('asset-detail-signals-panel')).toBeVisible({timeout: 10_000});
+        const sharpeRequest = page.waitForRequest(
+            (request) => {
+                if (request.method() !== 'POST' || !request.url().includes('/api/v1/assets/prices/query')) return false;
+                const items = request.postDataJSON() as Array<{signals?: Array<{signal_code?: string; params?: {risk_free_annual_rate?: number}}>}>;
+                return Array.isArray(items) && items.some((item) => item.signals?.some((signal) => signal.signal_code === 'RISK_ROLLING_SHARPE' && signal.params?.risk_free_annual_rate === 0.025));
+            },
+            {timeout: 20_000},
+        );
+        await page.getByTestId('signals-indicator-select-button').click();
+        await page.getByTestId('signal-tree-group-risk').click();
+        await page.getByTestId('signal-tree-option-risk-rolling-sharpe').click();
+        await sharpeRequest;
+        await expect(page.getByTestId('signal-param-risk-free-rate')).toHaveAttribute('data-percent', '2.5');
     });
 });
