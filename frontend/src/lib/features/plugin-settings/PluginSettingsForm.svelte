@@ -8,6 +8,7 @@
   colours are roles only (theme-roles skill), every class a whole literal.
 -->
 <script lang="ts">
+    import ProviderAttributionNote from '$lib/features/assets/ProviderAttributionNote.svelte';
     import {Lock, Puzzle, Share2} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import {SimpleSelect} from '$lib/components/ui/select';
@@ -165,6 +166,10 @@
         {/if}
     </header>
 
+    {#if entry.family === 'asset'}
+        <!-- The line a price source's terms ask for (CoinGecko's «Powered by CoinGecko», project 76, P4) -->
+        <ProviderAttributionNote providerCodes={[entry.plugin_code]} testId="plugin-settings-attribution" />
+    {/if}
     {#if entry.family === 'group' && (entry.used_by ?? []).length > 0}
         <p class="text-sm text-lf-secondary" data-testid="plugin-settings-used-by">
             {$_('pluginSettings.group.usedBy', {values: {plugins: (entry.used_by ?? []).map((user) => user.plugin_name).join(', ')}})}

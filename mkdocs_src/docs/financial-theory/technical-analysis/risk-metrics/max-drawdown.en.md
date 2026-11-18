@@ -1,24 +1,40 @@
 # 📉 Max Drawdown
 
-Max Drawdown (MDD) measures the **largest peak-to-trough decline** in portfolio value before a new peak is established. It answers the question: *"What was the worst loss an investor could have experienced?"*
+Max Drawdown (MDD) measures the **largest peak-to-trough decline** of the compounded return curve before a new peak is established. It answers the question: *"What was the worst fall an investment went through, from a high to the low after it?"*
+
+The curve is built from **returns**, not from the money held. A deposit raises the value of a portfolio without being a recovery, and a withdrawal lowers it without being a fall; a curve of values would record both as market moves. A curve of compounded returns records neither.
 
 ---
 
 ## 🔢 Formula {: #formula }
 
-$$
-MDD = \frac{Trough - Peak}{Peak} = \min_{t} \left( \frac{V_t - \max_{\tau \leq t} V_\tau}{\max_{\tau \leq t} V_\tau} \right)
-$$
-
-where $V_t$ is the portfolio value at time $t$.
-
-The drawdown at any point $t$ is:
+The returns $r_1, \dots, r_T$ of the period are compounded into a growth index that starts at $1$ on the day before the first return:
 
 $$
-DD_t = \frac{V_t - V_{peak}}{V_{peak}}
+W_0 = 1, \qquad W_t = \prod_{s=1}^{t} (1 + r_s)
 $$
 
-Max drawdown is the minimum (most negative) value of $DD_t$ over the entire observation period.
+The drawdown at any point $t$ is the distance of that index from the highest level it had reached so far:
+
+$$
+DD_t = \frac{W_t - \max_{\tau \leq t} W_\tau}{\max_{\tau \leq t} W_\tau}
+$$
+
+and Max Drawdown is the minimum (most negative) value of $DD_t$ over the entire observation period:
+
+$$
+MDD = \frac{Trough - Peak}{Peak} = \min_{t} DD_t
+$$
+
+!!! info "Which returns the curve compounds"
+
+    The returns are those of the series the analysis prepared (`wealth_index` and `underwater_drawdown`, read by `summarize_drawdown` and `drawdown_episodes`):
+
+    - on a **portfolio** or a **broker**, the [time-weighted return](../performance-metrics/portfolio-engine/twrr.md) (TWRR) of each day, which is neutral to deposits and withdrawals by construction;
+    - on an **asset**, its price returns, converted into the currency of the analysis;
+    - on a portfolio narrowed to some of its assets, or in the mode that measures today's composition, today's weights replayed over the past returns of the assets — a backtest of the current holdings, which the result declares in its `return_basis` (`current_composition_backtest`).
+
+    The [Current Drawdown](current-drawdown.md), the [Ulcer Index](ulcer-index.md) and the drawdown quantiles walk the same curve.
 
 ---
 
@@ -34,12 +50,14 @@ Max drawdown is the minimum (most negative) value of $DD_t$ over the entire obse
 
 !!! example "Numerical example"
 
-    Portfolio value sequence: 100 → 120 → 90 → 110 → 130
+    Growth index, rebased to 100: 100 → 120 → 90 → 110 → 130 (returns of $+20\%$, $-25\%$, $+22.2\%$, $+18.2\%$)
 
     - Peak: 120
     - Trough: 90
     - MDD: $(90 - 120) / 120 = -25\%$
     - Recovery: reached 120 again, then new high at 130
+
+    Had the investor deposited money on the day of the trough, the value of the portfolio would have jumped while the index above did not move: the deposit is capital added, not ground regained.
 
 ---
 

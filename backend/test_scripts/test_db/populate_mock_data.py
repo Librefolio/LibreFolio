@@ -1106,6 +1106,13 @@ def populate_assets(session: Session):
     session.commit()
     print(f"  ✅ {len(profile_rows)} legacy profile rows")
 
+    # The modified duration of one bond, as the Borsa Italiana enricher reads it (plan 70, RN-25): the rates scenario of
+    # its Risk tab reads it. The other seeded bond, BTP Più, keeps none: its tab says the profile has no duration.
+    bond = session.exec(select(Asset).where(Asset.display_name == "BTP Italia 2028")).one()
+    session.add(AssetProfileUpdate(asset_id=bond.id, key="modified_duration", value=json.dumps(normalize_value("modified_duration", "2.15")), source="borsa_italiana", read_on=date.today()))
+    session.commit()
+    print("  ✅ BTP Italia 2028: modified duration 2.15 years in the profile")
+
 
 def populate_asset_provider_assignments(session: Session):
     """Assign data providers to assets that need price fetching."""

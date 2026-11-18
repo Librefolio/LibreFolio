@@ -31,6 +31,7 @@
     import {assetNameColumn, figureCell} from './assetSetTable';
     import {headerFontsSettled} from './headerFonts.svelte';
     import {headerWidth, measureHeaderTitle} from './riskReturnLevel';
+    import {usedRiskFreeRate, withRateKey} from './riskFreeRate';
 
     interface Props {
         assetIds: number[];
@@ -96,6 +97,9 @@
         return [row.meanUp === null ? 'meanUp' : null, row.meanDown === null ? 'meanDown' : null].filter((half): half is AssetSetMoveColumn => half !== null);
     }
 
+    /** The columns that count from the risk-free rate the KPI was charged (RN-21): their helps say so when there is one. */
+    const RATE_COLUMNS: ReadonlySet<MoveColumnId> = new Set<MoveColumnId>(['omega', 'downsideDeviation']);
+
     function column(
         id: MoveColumnId,
         value: (row: AssetSetMoveRow) => number | null,
@@ -106,7 +110,7 @@
         return {
             id,
             header: () => $t(`risk.assetSet.levels.move.columns.${id}`),
-            headerTooltip: () => $t(`risk.assetSet.levels.move.columnHelp.${id}`),
+            headerTooltip: () => $t(RATE_COLUMNS.has(id) ? withRateKey(`risk.assetSet.levels.move.columnHelp.${id}`, usedRiskFreeRate(kpi)) : `risk.assetSet.levels.move.columnHelp.${id}`),
             type: 'number',
             align: 'right',
             width,

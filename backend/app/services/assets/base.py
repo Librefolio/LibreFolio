@@ -31,6 +31,7 @@ from backend.app.schemas import (
 from backend.app.schemas.assets.assets import FAAssetPatchItem
 from backend.app.schemas.provider import (
     DEFAULT_SEARCH_PRIORITY,
+    FAProviderAttribution,
     FAProviderKind,
     FAProviderTier,
     FAQuoteBaseSuggestion,
@@ -425,6 +426,12 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
         Returns:
             URL string (remote or local path), or None for default icon
         """
+        return None
+
+    @property
+    def attribution(self) -> FAProviderAttribution | None:
+        """The line the provider's terms ask the interface to show with its prices, with its link (CoinGecko's «Powered
+        by CoinGecko»; project 76, P4). A constant: no I/O, no setting, nothing from an identifier. None: none asked."""
         return None
 
     @property

@@ -37,7 +37,8 @@
           "units": "Oppure anni, mesi e giorni: 2a3m5g",
           "sum": "Un anno vale 365 giorni, un mese 30"
         }
-      }
+      },
+      "riskFreeRateHint": "Il rendimento più recente del BOT a 12 mesi o del BTP a 2 anni."
     },
     "title": "Rischio",
     "dashboardTitle": "Rischio portafoglio",
@@ -154,7 +155,9 @@
             "sortino": "Quanto rendimento medio annuo per ogni unità di oscillazione verso il basso: guarda solo le cadute, non le salite.",
             "sharpe": "Quanto rendimento medio annuo per ogni unità di volatilità: il compenso per il rischio preso, salite e cadute insieme.",
             "beta": "Quanto si è mosso l'asset quando si muoveva il benchmark: 1 vuol dire come lui, 2 il doppio, 0 indipendentemente da lui.",
-            "correlation": "Quanto l'asset e il benchmark si sono mossi insieme, da −1 (sempre opposti) a +1 (sempre insieme)."
+            "correlation": "Quanto l'asset e il benchmark si sono mossi insieme, da −1 (sempre opposti) a +1 (sempre insieme).",
+            "sharpeWithRate": "Quanto rendimento medio annuo sopra il tasso privo di rischio per ogni unità di volatilità: il compenso per il rischio preso, salite e cadute insieme.",
+            "sortinoWithRate": "Quanto rendimento medio annuo sopra il tasso privo di rischio per ogni unità di oscillazione sotto quel tasso: guarda solo le cadute sotto il tasso, non le salite."
           },
           "axisReturn": "Rendimento medio annuo",
           "period": {
@@ -194,7 +197,9 @@
             "meanUpDown": "Il giorno medio in salita e il giorno medio in discesa.",
             "streak": "La serie più lunga di giorni consecutivi in guadagno, e quando.",
             "averageDrawdown": "Quanto sotto il suo massimo stava l'asset in un giorno medio del periodo: tutto il tratto sott'acqua, non solo la peggior discesa.",
-            "extremeDays": "Quanto più spesso sono arrivati giorni molto grandi, in su o in giù, di quanto darebbe una curva a campana: 1× è la campana, sopra le code sono più grasse."
+            "extremeDays": "Quanto più spesso sono arrivati giorni molto grandi, in su o in giù, di quanto darebbe una curva a campana: 1× è la campana, sopra le code sono più grasse.",
+            "omegaWithRate": "Guadagni contro perdite: per ogni euro perso sotto il tasso privo di rischio, quanti ne sono stati guadagnati sopra.",
+            "downsideDeviationWithRate": "La semi-deviazione: quanto l'asset oscilla sotto il tasso privo di rischio, su base annua, nell'unità della volatilità."
           }
         }
       },
@@ -590,7 +595,19 @@
         },
         "shockUnconfigured": "Non sono nello scenario, quindi il loro shock è 0: {names}. Il totale li conta come intatti.",
         "replayTotalAsset": "Questo asset avrebbe chiuso il periodo a {percent} {amount}",
-        "shockTotalAsset": "Questo asset si muoverebbe di {percent} {amount}"
+        "shockTotalAsset": "Questo asset si muoverebbe di {percent} {amount}",
+        "rates": "Tassi in salita o in discesa",
+        "ratesHint": "Dalla duration letta nel Profilo.",
+        "ratesSource": "Dalla duration letta nel Profilo ({source}, {date}): {years} anni.",
+        "ratesUp": "I tassi salgono",
+        "ratesDown": "I tassi scendono",
+        "ratesBy": "di",
+        "ratesFall": "Il prezzo scenderebbe di circa {percent}{amount}.",
+        "ratesRise": "Il prezzo salirebbe di circa {percent}{amount}.",
+        "ratesCaveat": "È un'approssimazione al primo ordine: vale per piccoli movimenti e non conta le cedole che nel frattempo arrivano.",
+        "ratesMissing": "Tassi in salita o in discesa: nessuna duration nel profilo di questo titolo.",
+        "ratesMissingLink": "Apri il Profilo",
+        "ratesPointsUnit": "punti"
       },
       "backtestNotice": "Con una fetta attiva, questi numeri sono ricostruiti sulla composizione di oggi: dicono come *sarebbe* andata, non come è andata davvero.",
       "notice": {
@@ -629,11 +646,15 @@
           "averageDrawdown": "Sotto il massimo, in media",
           "extremeDaysValue": "{value}× una campana",
           "semiDeviationValue": "verso il basso {down} · su un'oscillazione di {swing} nel periodo",
-          "semiDeviationPerimeter": "Misurate sul portafoglio come l'hai avuto nel periodo. La tabella \"Sto venendo pagato per questo rischio?\" misura la composizione di oggi: per questo la sua volatilità può essere diversa."
+          "semiDeviationPerimeter": "Misurate sul portafoglio come l'hai avuto nel periodo. La tabella \"Sto venendo pagato per questo rischio?\" misura la composizione di oggi: per questo la sua volatilità può essere diversa.",
+          "semiDeviationValueWithRate": "sotto il tasso {down} · su un'oscillazione di {swing} nel periodo",
+          "semiDeviationBelowRate": "La semi-deviazione conta solo i giorni sotto il tasso privo di rischio."
         },
         "lead": {
           "both": "Per ogni 1 perso nei giorni cattivi ne ha guadagnati {omega} nei buoni; la salita più grande è durata {days}.",
-          "omega": "Per ogni 1 perso nei giorni cattivi ne ha guadagnati {omega} nei buoni."
+          "omega": "Per ogni 1 perso nei giorni cattivi ne ha guadagnati {omega} nei buoni.",
+          "omegaWithRate": "Contando dal tasso privo di rischio ({rate} l'anno): per ogni 1 perso sotto, {omega} guadagnati sopra.",
+          "bothWithRate": "Contando dal tasso privo di rischio ({rate} l'anno): per ogni 1 perso sotto, {omega} guadagnati sopra; la salita più grande è durata {days}."
         }
       }
     },

@@ -19,7 +19,7 @@ from backend.app.services.risk.base import (
     RiskExecutionContext,
     RiskSeriesInputs,
 )
-from backend.app.services.risk.plan import AnalyticPlan, is_historical_replay_plan, is_hypothetical_plan
+from backend.app.services.risk.plan import AnalyticPlan, is_historical_replay_plan, reads_no_price_series
 from backend.app.utils.day_spans import merged_spans
 
 _PRICE_EXCLUSION_REASONS = frozenset({DataQualityExclusionReason.MISSING_PRICE.value, "no_price_source"})
@@ -196,7 +196,7 @@ def plan_data_quality(
 ) -> DataQualityReport:
     if is_historical_replay_plan(plan) and context.historical_replay is not None:
         return context.historical_replay.data_quality
-    if is_hypothetical_plan(plan):
+    if reads_no_price_series(plan):
         if context.scope_kind == RiskScopeKind.PORTFOLIO and context.portfolio_data_quality is not None:
             return context.portfolio_data_quality
         return DataQualityReport()

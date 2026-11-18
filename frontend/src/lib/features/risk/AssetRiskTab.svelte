@@ -72,6 +72,6 @@
     {/if}
     {#key assetId}
         <!-- A new asset on the same route starts a new panel: its simulation and scenario tools never carry over. -->
-        <RiskLevelsPanel scope={{kind: 'asset', asset_id: assetId}} {dateStart} {dateEnd} {targetCurrency} assetIds={[assetId]} scopeValue={positionValue} {refreshVersion} {onsynced} />
+        <RiskLevelsPanel scope={{kind: 'asset', asset_id: assetId}} {dateStart} {dateEnd} {targetCurrency} assetIds={[assetId]} scopeValue={positionValue} {refreshVersion} {onsynced} {assetType} />
     {/key}
 </div>

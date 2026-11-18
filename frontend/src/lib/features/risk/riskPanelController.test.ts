@@ -1493,7 +1493,7 @@ describe('riskPanelController', () => {
                     target_currency: 'EUR',
                     mode: 'historical',
                     analytics: [
-                        {instance_id: 'base-historical-historical_kpi', analytic_code: 'historical_kpi', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0}},
+                        {instance_id: 'base-historical-historical_kpi', analytic_code: 'historical_kpi', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0.02}},
                         {instance_id: 'base-historical-correlation', analytic_code: 'correlation', parameters: {}},
                         {instance_id: 'base-historical-historical_var', analytic_code: 'historical_var', parameters: {confidence_level: 0.95, horizon_days: 1}},
                         {instance_id: 'base-historical-historical_var-monthly', analytic_code: 'historical_var', parameters: {confidence_level: 0.95, horizon_days: 30}},
@@ -1511,9 +1511,9 @@ describe('riskPanelController', () => {
                     composition_policy: 'current_buy_and_hold',
                     analytics: [
                         {instance_id: 'base-current_composition-risk_contribution', analytic_code: 'risk_contribution', parameters: {}},
-                        {instance_id: 'base-current_composition-historical_kpi', analytic_code: 'historical_kpi', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0}},
+                        {instance_id: 'base-current_composition-historical_kpi', analytic_code: 'historical_kpi', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0.02}},
                         // k6 (06/10): the points' own Sharpe and Sortino are charged what the KPI beside them is.
-                        {instance_id: 'base-current_composition-asset_risk_return', analytic_code: 'asset_risk_return', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0}},
+                        {instance_id: 'base-current_composition-asset_risk_return', analytic_code: 'asset_risk_return', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0.02}},
                     ],
                 },
                 false,
@@ -1585,7 +1585,7 @@ describe('riskPanelController', () => {
                             target_currency: 'EUR',
                             mode: 'historical',
                             analytics: [
-                                {instance_id: 'base-historical-historical_kpi', analytic_code: 'historical_kpi', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0}},
+                                {instance_id: 'base-historical-historical_kpi', analytic_code: 'historical_kpi', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0.02}},
                                 {instance_id: 'base-historical-historical_var', analytic_code: 'historical_var', parameters: {confidence_level: 0.95, horizon_days: 1}},
                                 {instance_id: 'base-historical-historical_var-monthly', analytic_code: 'historical_var', parameters: {confidence_level: 0.95, horizon_days: 30}},
                                 {instance_id: 'base-historical-drawdown_summary', analytic_code: 'drawdown_summary', parameters: {}},
@@ -1601,8 +1601,8 @@ describe('riskPanelController', () => {
                             mode: 'current_composition',
                             composition_policy: 'current_buy_and_hold',
                             analytics: [
-                                {instance_id: 'base-current_composition-historical_kpi', analytic_code: 'historical_kpi', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0}},
-                                {instance_id: 'base-current_composition-asset_risk_return', analytic_code: 'asset_risk_return', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0}},
+                                {instance_id: 'base-current_composition-historical_kpi', analytic_code: 'historical_kpi', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0.02}},
+                                {instance_id: 'base-current_composition-asset_risk_return', analytic_code: 'asset_risk_return', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0.02}},
                             ],
                         },
                         false,

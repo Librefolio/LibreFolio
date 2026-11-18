@@ -92,25 +92,25 @@ This section is the other side of the one above: for each selected asset, its be
 
 **Tools shown**
 
-- **Best day** — the best single day of the period, with its date under the figure
-- **Best 30 days** — the best 30 days the asset really went through, from one day to another, with the dates: the twin of **Bad month**, read on the same overlapping one-month stretches. It can be negative: an asset that only fell still has a best stretch
-- **Largest rally** — the largest rise from a low to a later high, with its dates and how long it lasted: the twin of **Worst fall**
-- **Gains / losses** — for every euro lost on the bad days, how many were gained on the good ones: *1.22×* means 1.22 gained for every 1 lost. A bad day is one below the Sortino's target, which on this page is 0
-- **Positive days** — the share of the days with a gain; a day at exactly zero does not count
+- **Best day** — the best single day of the period, with its date under the figure → [Best Day](../../financial-theory/technical-analysis/risk-metrics/return-shape.md#best-day)
+- **Best 30 days** — the best 30 days the asset really went through, from one day to another, with the dates: the twin of **Bad month**, read on the same overlapping one-month stretches. It can be negative: an asset that only fell still has a best stretch → [Best 30 Days](../../financial-theory/technical-analysis/risk-metrics/return-shape.md#best-30-days)
+- **Largest rally** — the largest rise from a low to a later high, with its dates and how long it lasted: the twin of **Worst fall** → [Largest Rally](../../financial-theory/technical-analysis/risk-metrics/return-shape.md#largest-rally)
+- **Gains / losses** — for every euro lost on the bad days, how many were gained on the good ones: *1.22×* means 1.22 gained for every 1 lost. A bad day is one below your risk-free rate, 0% until you set one → [Gains Against Losses (Omega)](../../financial-theory/technical-analysis/risk-metrics/omega-ratio.md)
+- **Positive days** — the share of the days with a gain; a day at exactly zero does not count → [Positive Days](../../financial-theory/technical-analysis/risk-metrics/return-shape.md#positive-days)
 - **Semi-dev.** — the semi-deviation: how much the asset swings on the way down, on a yearly basis, in the same unit as the volatility → [Downside Deviation](../../financial-theory/technical-analysis/risk-metrics/sortino-ratio.md#downside-deviation)
 
 Four more columns are hidden at first: open the column toggle in the section's header, beside the manual icon, to show them.
 
-- **Average day ±** — the average up day and the average down day
-- **Positive streak** — the longest run of days in a row with a gain, with its dates
-- **Below peak, avg.** — how far below its highest level the asset stood on an average day of the period: the whole time spent under a peak, not only the worst fall. An asset that never fell shows 0.0%
-- **Extreme days** — how much more often very large days, up or down, came than a bell curve would give: *1×* is the bell curve, *2.4×* means fatter tails
+- **Average day ±** — the average up day and the average down day → [Average Day](../../financial-theory/technical-analysis/risk-metrics/return-shape.md#average-day)
+- **Positive streak** — the longest run of days in a row with a gain, with its dates → [Positive Streak](../../financial-theory/technical-analysis/risk-metrics/return-shape.md#positive-streak)
+- **Below peak, avg.** — how far below its highest level the asset stood on an average day of the period: the whole time spent under a peak, not only the worst fall. An asset that never fell shows 0.0% → [Below the Peak, on Average](../../financial-theory/technical-analysis/risk-metrics/return-shape.md#average-drawdown)
+- **Extreme days** — how much more often very large days, up or down, came than a bell curve would give: *1×* is the bell curve, *2.4×* means fatter tails → [Extreme Days](../../financial-theory/technical-analysis/risk-metrics/return-shape.md#extreme-days)
 
 **How to read it**
 
 - **Compare the assets down a column**, never add the columns up: a day, 30 days and the whole period are different horizons.
 - **Not a ranking**: the table opens in your selection's order. Click a column title to sort it, or hover it for what it measures.
-- **A dash says why.** Hover or tap it: an asset that never gained in the period has no best day, no average up day and no streak; one with no losing day has no average down day and no **Gains / losses**; one whose price never moved has no **Extreme days**.
+- **A dash says why.** Hover or tap it: an asset that never gained in the period has no best day, no average up day and no streak; one with no losing day has no average down day; one with no day below your risk-free rate has no **Gains / losses**; one whose price never moved has no **Extreme days**.
 - **An asset that never rose** shows **0.0%** under **Largest rally**, with no dates: a measured zero, not a missing figure.
 - **On a short period**, **Largest rally** and **Below peak, avg.** can be the only figures filled: the other columns need more history.
 - **Same days as the table above.** Every figure is measured over the same period as *How much did each of these hurt?*, and choosing a benchmark under *Compared with* never changes this table.
@@ -204,6 +204,7 @@ When something is wrong with the data, the tab says so once, right below the sel
 - **One period for all the assets.** Every figure covers the same days for every selected asset, so the rows can be compared. An asset with a shorter history shortens that period for all of them, and their figures change: this is expected → [Data Quality](../../financial-theory/technical-analysis/risk-metrics/data-quality.md#alignment-what-missing-data-actually-costs)
 - **One currency.** Returns are measured in your **Default Currency**, set in [Preferences](../settings/preferences.md) (the instance's default if you never chose one), exchange-rate moves included.
 - **A dash is not a zero.** The figure could not be measured for that asset over this period; hover or tap it to read why.
+- **The risk-free rate**, under the line with the period and the currency, is what you could earn without taking risk: 0% until you set it, applied when you press Enter or leave the field. Sharpe and Sortino count the return above it; **Gains / losses** and the semi-deviation count from it, and their sentences name the rate they used. It is one value for every risk page. The ⓘ beside it suggests where to read one: the latest yield of a short government bill → [Sharpe Ratio](../../financial-theory/technical-analysis/risk-metrics/sharpe-ratio.md)
 - **Another page, another figure.** Another page or another selection measures over different days: compare figures only when they cover the same period.
 
 ---

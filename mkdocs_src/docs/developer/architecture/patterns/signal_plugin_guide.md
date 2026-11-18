@@ -764,6 +764,17 @@ symbol such as `%` or `σ` needs no key, while a word unit needs `signals.units.
 in the four languages. The units are shared by every plugin, so they live in the `charts`
 subsystem, where `./dev.py i18n add` writes them without `--into`.
 
+`x-control` replaces a parameter's field with a semantic control, never by signal code
+(`schemaMapper.ts` refuses any other value; `test_signal_plugin_matrix.py` pins who declares one):
+
+- `"comparison_asset"`: the asset picker (`SignalAssetParamControl.svelte`, the shared asset panel). The
+  chart's own asset is listed as not selectable, with its reason: an asset compared with itself says nothing.
+  Rolling Beta's `comparison_asset_id`.
+- `"risk_free_rate"`: the reader's one risk-free rate, shared with the risk pages (RN-21). The chart
+  shows no field, only the rate it uses, and `requestBuilder.ts` sends the shared value as an
+  annual fraction, whatever the configuration saved. Rolling Sharpe's `risk_free_annual_rate` and
+  the `target_annual_return` of Rolling Semi-deviation and Rolling Omega.
+
 Prefer schema metadata over frontend conditionals. New parameter shapes should be added
 to the shared JSON Schema mapper only when they are reusable across plugins.
 

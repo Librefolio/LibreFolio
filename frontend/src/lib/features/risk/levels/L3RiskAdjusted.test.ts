@@ -56,6 +56,8 @@ const scatter = vi.hoisted(() => {
         points: readonly {id: string; role?: string}[];
         testId?: string;
         selectedId?: string | null;
+        /** Where the line of the risk-free rate starts, as an annual fraction. */
+        riskFreeRate?: number;
         onpointclick?: (pointId: string) => void;
     }
     const mounts: {testId: string | undefined; live: StandInProps}[] = [];
@@ -145,7 +147,6 @@ const BASE: Props = {
     benchmarkName: null,
     assetNames: ASSET_NAMES,
     assetIcons: new Map([[1, '/icons/asset-types/stock.png']]),
-    appliedRiskFreePercent: 2,
 };
 const WITH_UNHELD: Props = {...BASE, comparisonResult: COMPARISON_UNHELD, benchmarkName: BENCHMARK_NAME};
 const WITH_HELD: Props = {...BASE, comparisonResult: COMPARISON_HELD, benchmarkName: ASSET_NAMES[2]};
@@ -265,6 +266,28 @@ afterEach(() => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+// RN-21: the line starts at the rate the answer was charged (`metadata.risk_free`), not at a value read beside it — so a
+// page whose rate just changed never draws the old answer's dots under the new rate's line.
+describe('L3RiskAdjusted — the line starts at the rate of the answer', () => {
+    const charged = (rate: number): RiskAnalyticResult => ({...RISK_RETURN, metadata: {mode: 'current_composition', risk_free: {annual_rate: rate, source: 'analytic_param', currency: 'EUR'}}}) as unknown as RiskAnalyticResult;
+
+    it('reads the risk/return answer’s own rate', () => {
+        mount({...BASE, currentResults: [charged(0.03), CURRENT_KPI]});
+        expect(handedToScatter().riskFreeRate).toBe(0.03);
+    });
+
+    it('on the fallback to the history, reads the rate of the KPI the cards show', () => {
+        const charged = {...HISTORICAL_KPI, metadata: {...((HISTORICAL_KPI as {metadata?: object}).metadata ?? {}), risk_free: {annual_rate: 0.025, source: 'analytic_param', currency: 'EUR'}}} as unknown as RiskAnalyticResult;
+        mount({...BASE, historicalResults: [charged], currentResults: []});
+        expect(screen.getByTestId('risk-l3')).toHaveAttribute('data-risk-free-rate', '0.025');
+    });
+
+    it('starts at 0 when the answer names no rate', () => {
+        mount(BASE);
+        expect(handedToScatter().riskFreeRate).toBe(0);
+    });
+});
 
 describe('L3RiskAdjusted — the four cards are the portfolio’s row now', () => {
     it('draws the table, and none of the cards that used to stand above it', () => {
