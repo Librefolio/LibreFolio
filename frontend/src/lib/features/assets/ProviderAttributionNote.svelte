@@ -25,9 +25,11 @@
         /** Where the line sits in its row. */
         align?: 'start' | 'center' | 'end';
         testId?: string;
+        /** Spacing classes for the line where it sits (padding, margins): none drawn when there is no line. */
+        extraClass?: string;
     }
 
-    let {providerCodes = [], assetIds = [], align = 'start', testId = 'provider-attribution-note'}: Props = $props();
+    let {providerCodes = [], assetIds = [], align = 'start', testId = 'provider-attribution-note', extraClass = ''}: Props = $props();
 
     const lines = $derived.by(() => {
         // Both caches may land after the first draw: their versions make the line appear then
@@ -50,7 +52,7 @@
 </script>
 
 {#if lines.length > 0}
-    <p class="flex flex-wrap gap-x-2 text-xs text-lf-secondary {alignClass}" data-testid={testId} data-providers={lines.map((line) => line.code).join(',')}>
+    <p class="flex flex-wrap gap-x-2 text-xs text-lf-secondary {alignClass} {extraClass}" data-testid={testId} data-providers={lines.map((line) => line.code).join(',')}>
         {#each lines as line (line.code)}
             <a href={line.url} target="_blank" rel="noopener noreferrer" class="text-lf-secondary hover:text-lf-link hover:underline focus-visible:outline-lf-focus" data-testid="provider-attribution-link" data-provider={line.code}>{line.text}</a>
         {/each}
