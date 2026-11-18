@@ -71,7 +71,7 @@ Abstract base class for all asset pricing plugins, defined in
 | `accepted_identifier_types` | — | `[TICKER, ISIN]` | Input types accepted by this provider |
 | `supports_history` | — | `True` | `False` for current-price-only providers |
 | `search()` | — | raises `NOT_SUPPORTED` | Search for assets by name/ticker/ISIN |
-| `fetch_asset_metadata()` | — | `None` | Fetch asset metadata (type, sector, identifiers) |
+| `fetch_asset_metadata()` | — | `None` | Fetch asset metadata (type, currency, name, identifiers; never the profile, plan 68 D6) |
 | `cooldown_scope()` | — | `None` | The part of the provider a pause after «too many requests» covers (the CSS Scraper: the page's host); `None` pauses the whole provider. See [Provider Pauses](#provider-pauses) |
 | `provider_help_url` | — | `None` | URL to the provider's documentation page |
 

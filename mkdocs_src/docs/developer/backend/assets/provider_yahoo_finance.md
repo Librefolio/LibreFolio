@@ -166,28 +166,10 @@ history uses `NO_DATA`, and malformed or unexpected Yahoo responses use `FETCH_E
 ### 📋 Metadata (`fetch_asset_metadata`)
 
 - Fetches full `ticker.info` from Yahoo Finance.
-- Extracts: `asset_type`, `currency`, `short_description` (from `longBusinessSummary`), `sector` (single-sector distribution), `identifier_ticker`, `identifier_isin`.
+- Extracts: `asset_type`, `currency`, `identifier_ticker`, `identifier_isin`.
 - ISIN is obtained via `ticker.isin` (not available for all markets).
-- Unknown sectors are logged as warnings and mapped to "Other".
-
-#### Fund data (`quoteType` `etf` / `mutualfund`)
-
-For a fund the plugin also reads `Ticker.funds_data` (`_read_fund_extras`), one more Yahoo request in the same
-cached metadata call. An equity never touches it.
-
-| Piece | Source | Goes to |
-|-------|--------|---------|
-| Sector breakdown | `sector_weightings` | `classification_params.sector_area`, replacing the single `info["sector"]` |
-| Description | `description` | `short_description`, only when `longBusinessSummary` is empty |
-| Expense ratio | `fund_operations` («Annual Report Expense Ratio») | ` \| TER: x%` after the description |
-| Issuer | `fund_overview["family"]` | ` \| Issuer: <family>` after the TER |
-
-- **Sector keys are Yahoo's own spellings** (`consumer_cyclical`, `realestate`, `financial_services`…), which
-  `FinancialSector.from_string` does not know: `_YAHOO_FUND_SECTORS` maps the eleven explicitly. A key outside the table
-  goes to «Other» with the unknown-sector warning. The weights are renormalised to 1, as justETF's are.
-- **The expense ratio is a fraction** (`0.0003` = 0.03 %): it is shown as a percentage rounded to two decimals. A
-  missing, `NaN` or non-positive value is left out (VWCE.DE has none).
-- **The 500-character cap cuts the head of the description, never the tail**, so the TER and the issuer always survive.
+- No description, countries or sectors, and no `Ticker.funds_data` for a fund: they are the asset's profile, which the
+  Yahoo enricher reads (`backend/app/services/enricher_providers/yahoo_finance/`).
 - **Error policy**: every piece is read apart (`_read_fund_piece`), so one that Yahoo lacks or that cannot be read costs
   only itself and is logged as a warning; the metadata still comes back. A «too many requests» refusal is the exception
   and leaves as `AssetRateLimitedError`, like every other Yahoo call.
