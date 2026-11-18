@@ -1060,6 +1060,7 @@ nav:
           - Profile: user/settings/profile.md
           - User Preferences: user/settings/preferences.md
           - Plugins: user/settings/plugins.md
+          - CoinGecko Key: user/settings/coingecko-key.md
           - About: user/settings/about.md
       - 🧩 Misc:
           - Image Crop: user/misc/image-crop.md

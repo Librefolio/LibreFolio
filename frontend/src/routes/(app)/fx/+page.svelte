@@ -839,12 +839,18 @@
                 requestVersion,
             });
 
-            const needsRates = askedFromMin || store.getMissingIntervals(dateStart, dateEnd).length > 0;
+            // FB-7c: «All» pending, only a pair this session has no first day for is asked from `min` (a pair known to have no rate
+            // too: never the 2000 placeholder); a pair with a first day starts from it, and from its store when that holds it. One
+            // newcomer (a pair added meanwhile) never sends every pair back
+            const knownFirstDay = askedFromMin ? firstDateOf('fx', pair.config.slug) : undefined;
+            const pairFromMin = askedFromMin && knownFirstDay === undefined;
+            const pairStart = knownFirstDay ?? dateStart;
+            const needsRates = pairFromMin || store.getMissingIntervals(pairStart, dateEnd).length > 0;
             if (!needsRates) {
                 // Fast path: already cached — nothing to wait for, so clear the
                 // per-card skeleton here too (this branch never reaches the bulk
                 // call below, which is the only other place that clears it).
-                pairs[i] = {...pair, data: store.getRange(dateStart, dateEnd).data, loading: false};
+                pairs[i] = {...pair, data: store.getRange(pairStart, dateEnd).data, loading: false};
             } else {
                 needFetch.push({index: i, slug: pair.config.slug});
                 // A store a catch-up marked stale that still holds points for the range (Y5-1, D3): they go on screen at once and the rates
@@ -856,7 +862,7 @@
             if (needsRates || plan.requests.length > 0) {
                 bulkRequests.push({
                     slug: pair.config.slug,
-                    start: askedFromMin ? MIN_START : dateStart,
+                    start: pairFromMin ? MIN_START : pairStart,
                     end: dateEnd,
                     signals: plan.requests,
                     displayedInverted: isCardInverted(pair.config.slug),
@@ -935,11 +941,14 @@
         const plan = buildBackendSignalRequestPlan(configs, signalDefinitions);
         const state = resultStateForPair(pair.config.slug);
         const requestVersion = state.beginRequest();
-        const askedFromMin = isMaxPending;
-        const needsRates = askedFromMin || store.getMissingIntervals(dateStart, dateEnd).length > 0;
+        // FB-7c: as in the bulk read, only a pair with no first day remembered this session is asked from `min`
+        const knownFirstDay = isMaxPending ? firstDateOf('fx', pair.config.slug) : undefined;
+        const askedFromMin = isMaxPending && knownFirstDay === undefined;
+        const pairStart = knownFirstDay ?? dateStart;
+        const needsRates = askedFromMin || store.getMissingIntervals(pairStart, dateEnd).length > 0;
 
         if (!needsRates && plan.requests.length === 0) {
-            pairs[index] = {...pair, data: store.getRange(dateStart, dateEnd).data};
+            pairs[index] = {...pair, data: store.getRange(pairStart, dateEnd).data};
             const mapped = mapSignalInstanceResults(configs, plan, []);
             if (state.apply(requestVersion, mapped)) {
                 signalResultsByPair = new Map(signalResultsByPair).set(pair.config.slug, [...state.values()]);
@@ -953,7 +962,7 @@
             const result = await loadFxRatesAndSignalsBulk([
                 {
                     slug: pair.config.slug,
-                    start: askedFromMin ? MIN_START : dateStart,
+                    start: askedFromMin ? MIN_START : pairStart,
                     end: dateEnd,
                     signals: plan.requests,
                     displayedInverted: isCardInverted(pair.config.slug),

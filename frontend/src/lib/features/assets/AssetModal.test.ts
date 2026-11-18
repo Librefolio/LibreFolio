@@ -69,11 +69,21 @@ vi.mock('$lib/utils/providerHelpers', () => ({
     getAssetProviderParamKeys: vi.fn(() => null),
     getAssetProviderIconUrl: vi.fn(() => null),
     isParametricProvider: vi.fn(() => false),
+    // The attribution line of the search and of the comparison window (76 P4): no provider here asks for one
+    assetProvidersVersion: {subscribe: (run: (value: number) => void) => (run(0), () => undefined)},
+    getAssetProviderAttribution: vi.fn(() => null),
 }));
 vi.mock('$lib/stores/app/toastStore.svelte', () => ({
     toasts: {success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn()},
 }));
-vi.mock('$lib/stores/reference/assetStore', () => ({mergeAssets: vi.fn(), invalidateAfterMutation: vi.fn()}));
+vi.mock('$lib/stores/reference/assetStore', () => ({
+    mergeAssets: vi.fn(),
+    invalidateAfterMutation: vi.fn(),
+    // Read by the attribution line (76 P4)
+    assetStoreVersion: {subscribe: (run: (value: number) => void) => (run(0), () => undefined)},
+    ensureAssetsLoaded: vi.fn(async () => undefined),
+    getAssetInfo: vi.fn(() => null),
+}));
 
 import AssetModal from './AssetModal.svelte';
 import type {ComponentProps} from 'svelte';

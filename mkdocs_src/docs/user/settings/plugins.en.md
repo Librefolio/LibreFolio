@@ -10,12 +10,14 @@ then the **Plugins** tab, after **Preferences** (on a phone, the tab with the pu
 Every user has it; what you can change there depends on
 [whose setting it is](#personal-and-instance). The book icon at its top opens this page.
 
-Only the plugins that ask for something are listed, under **Prices** for the
+The plugins that ask for something are listed, and so is every plugin that calls an outside service,
+for its [Calls](#calls) block: under **Prices** for the
 [price providers](../assets/providers/index.md) and **Exchange rates** for the
 [exchange-rate providers](../fx/providers/index.md), each heading after its family's icon (a column
 chart for prices, coins for exchange rates); a heading with no such plugin is left out. Of
-the plugins shipped with LibreFolio, two have a setting today, a personal search preference each:
-**JustETF** and **Borsa Italiana** (see [Search Preferences](#search-preferences)). A plugin added
+the plugins shipped with LibreFolio, **JustETF** and **Borsa Italiana** have a personal search preference each
+(see [Search Preferences](#search-preferences)); the others that call an outside service, such as **Yahoo Finance**
+and the central banks of the exchange rates, show their **Calls** block alone. A plugin added
 to your installation may ask for more. The tab also has a **Tools** group, for the [Tools](../tools/index.md) that have settings of their own; none of them does yet, so you will not see it today. When no plugin asks for anything, the tab says *No installed
 plugin asks for settings.*
 
@@ -135,6 +137,33 @@ work: **JustETF** and **Borsa Italiana** are always **Configured**.
 
 ---
 
+## 📊 Calls and Their Limits {: #calls }
+
+Every plugin that calls an outside service has a **Calls** block in its form, after its own settings: how many calls
+this LibreFolio has made to that service, and how many it may make. It has five boxes, **Minute**, **Hour**, **Day**,
+**Week** and **Month**, side by side (one under the other on a phone). Each shows the calls of the current window and
+its limit, *412 / 2,000*, or the calls alone and *No limit*.
+
+- **Calendar windows, in UTC**: the day starts again at 00:00 UTC, the week on Monday, the month on the 1st. The
+  counts are read when the page opens and after a save: reload the page to see newer ones.
+- **The limits are whole-instance settings.** An administrator types a whole number in a box and clicks the form's
+  **Save**; an empty box means no limit. **0** stops the plugin: no call goes out until an administrator changes it.
+  The other users see the limits read-only, with *Only an administrator can change the limits.*
+- **A full window** turns its box amber, and a line says when it resumes, such as *Daily limit reached: 2,000 of
+  2,000. Resumes on 18 November at 00:00 UTC.* (the minute and the hour name only the time). Until then LibreFolio
+  makes no call to that service, and the calls start again by themselves.
+- **A limit set by the server** shows its value with a lock, and under the boxes, *Month — Set by the server*
+  ([Set by the Server](#set-by-the-server)).
+- **A limit variable with an invalid value** stops the plugin: the form says so at its top, in red, and the box says
+  *invalid value*. The variable needs a whole number of 0 or more, or nothing: an administrator fixes it on the server.
+- **An account shared by several plugins** (CoinGecko): the calls of every plugin that uses it count on the account,
+  so the **Calls** block is on the account's card, under **Shared settings**. Each plugin's form says *Its calls count
+  on CoinGecko: the counter and the limits are there.*, and **Open** brings that card into view.
+- **A hosted service** may set the limits itself: the block then shows the counts alone, without the limits, and
+  *Instance limit reached: resumes …* when a window is full.
+
+---
+
 ## 🛠️ Configure, From an Asset {: #configure }
 
 You do not have to leave an asset to change its provider's settings: **Configure** opens the same
@@ -167,6 +196,10 @@ preference only keeps one of its rows.
 Set them here, under **JustETF** and **Borsa Italiana**, or with **Configure** in the asset dialog
 while that provider is chosen.
 
+**CoinGecko** has a **Preferred currency** too, also **Personal**, but it works another way: its search always shows
+each coin once, in that currency (EUR by default), and that currency becomes the price currency of an asset you create
+from a result. See [CoinGecko](../assets/providers/coingecko.md#preferred-currency).
+
 ### 👑 The Crown in JustETF Results {: #crown }
 
 👑 marks a fund's own currency, the one its NAV is computed in — not necessarily the one you trade
@@ -183,5 +216,6 @@ How the currency of a justETF asset works: [Pick the Currency in Search](../asse
 - 🎛️ **[User Preferences](preferences.md)** — Language, base currency, theme and guides
 - ⚙️ **[Settings Overview](index.md)** — Every tab of Settings
 - 📡 **[justETF](../assets/providers/justetf.md)** and 🇮🇹 **[Borsa Italiana](../assets/providers/borsa-italiana.md)** — The two providers with a search preference
+- 🔑 **[Get and Set the CoinGecko Key](coingecko-key.md)** — A shared account: the key every CoinGecko plugin uses
 - 🛠️ **[Plugin Settings for administrators](../../admin/configuration_secrets.md#plugin-settings)** — The server variables, the instance key and the encryption of the secrets
 - 🧩 **[Plugin Settings for developers](../../developer/architecture/patterns/plugin_settings.md)** — How a plugin declares its settings

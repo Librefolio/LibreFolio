@@ -132,6 +132,7 @@ import {writeTextToClipboard} from '$lib/utils/clipboard';
 import {APP_VERSION} from '$lib/version';
 import {buildSearchReport, type ProviderOutcome, type SearchReportContext} from './assetSearchReport';
 import {GITHUB_NEW_ISSUE_URL, reportHref} from '$lib/features/support/supportChannel';
+import {getAssetProviderAttribution} from '$lib/utils/providerHelpers';
 
 const listProviders = vi.mocked(zodiosApi.list_providers_api_v1_assets_provider_get);
 const restSearch = vi.mocked(zodiosApi.search_assets_via_providers_api_v1_assets_provider_search_get);
@@ -1661,5 +1662,38 @@ describe('AssetSearchAutocomplete — a provider to configure is switched off (7
         await mountReady();
         expect(chip('beta')).toHaveAttribute('data-configured', 'true');
         expect(chip('beta')).toHaveAttribute('data-selected', 'true');
+    });
+});
+
+// Project 76, P4b (the consultant's rule, 18/11): wherever a provider's data is on screen and the provider has an
+// attribution, its line is there. Search rows are the provider's data too (names, ids): the line goes under the
+// results when such a provider answered with at least one row.
+describe("AssetSearchAutocomplete — a provider's attribution under its results (76 P4b)", () => {
+    const ATTRIBUTION = {text: 'Powered by Alpha', url: 'https://alpha.example/'};
+
+    afterEach(() => {
+        vi.mocked(getAssetProviderAttribution).mockImplementation(() => null);
+    });
+
+    it('shows the line of a provider with an attribution that answered with a row', async () => {
+        vi.mocked(getAssetProviderAttribution).mockImplementation((code: string | null | undefined) => (code === 'alpha' ? ATTRIBUTION : null));
+        await mountReady();
+        await type('apple');
+        await waitFor(() => expect(state()).toBe('results'));
+
+        const note = await screen.findByTestId('asset-search-attribution');
+        const links = within(note).getAllByTestId('provider-attribution-link');
+        expect(links.map((link) => link.getAttribute('data-provider'))).toEqual(['alpha']);
+        expect(links[0]).toHaveAttribute('href', ATTRIBUTION.url);
+    });
+
+    it('shows nothing when that provider gave no row', async () => {
+        vi.mocked(getAssetProviderAttribution).mockImplementation((code: string | null | undefined) => (code === 'alpha' ? ATTRIBUTION : null));
+        global.fetch = vi.fn(async () => sseResponse([{event: 'provider_results', results: [R2]}, {event: 'done'}])) as never;
+        await mountReady();
+        await type('microsoft');
+        await waitFor(() => expect(state()).toBe('results'));
+
+        expect(screen.queryByTestId('asset-search-attribution')).toBeNull();
     });
 });
