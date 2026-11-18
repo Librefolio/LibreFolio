@@ -8,6 +8,7 @@ The profile is written through ``POST`` and ``PATCH /assets`` (one door to write
 - ``ask`` reads the enrichers without saving, ``refresh`` («Aggiorna») saves as the weekly read does (B5a).
 """
 
+from collections.abc import Sequence
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -37,7 +38,8 @@ from backend.app.schemas.assets.profile import (
     FAProfileStepPoint,
 )
 from backend.app.services.assets.profile.catalogue import CATALOGUE
-from backend.app.services.assets.profile.store import CHANGES_PAGE_SIZE, ProfileChangesPage, ProfileUpdatesNewer, ProfileUpdatesNotFound, forget_updates, read_steps, recent_changes
+from backend.app.services.assets.profile.freshness import VoiceFreshness, holding_now, voice_freshness
+from backend.app.services.assets.profile.store import CHANGES_PAGE_SIZE, ProfileChangesPage, ProfileStep, ProfileUpdatesNewer, ProfileUpdatesNotFound, forget_updates, profile_today, read_steps, recent_changes
 from backend.app.services.enrichers.bindings import load_enrichers
 from backend.app.services.enrichers.refresh import ReadOutcome, refresh_assets
 from backend.app.services.enrichers.refresh import ask_profile as read_and_merge
@@ -124,6 +126,14 @@ def _unknown_voice(items: List[FAProfileQueryItem]) -> str | None:
     return None
 
 
+def _step_points(steps: Sequence[ProfileStep], now: VoiceFreshness | None) -> List[FAProfileStepPoint]:
+    """The steps of one voice; the last one says how fresh «now» is when ``now`` is given (D1d)."""
+    points = [FAProfileStepPoint(date=step.date, through=step.through, value=step.value, source=step.source, update_id=step.update_id, opened_on=step.opened_on, source_date=step.source_date) for step in steps]
+    if now is not None and points:
+        points[-1] = points[-1].model_copy(update={"confirmed_on": now.confirmed_on, "stale": now.stale})
+    return points
+
+
 def _changes_page(page: ProfileChangesPage, number: int, size: int) -> FAProfileChangesPage:
     items = [
         FAProfileChange(
@@ -149,6 +159,9 @@ async def query_profile(items: List[FAProfileQueryItem], session: AsyncSession =
     changes when ``changes`` is given. An asset with no rows answers no voice; one that does not exist answers ``error``
     «Asset not found» in its item, and the other items are read (D1b).
 
+    The last step of a volatile voice, when it holds «now», says when «now» was last confirmed and whether that is
+    more than 30 days ago (``confirmed_on``, ``stale``: D1d, ``services/assets/profile/freshness.py``).
+
     ``as_of`` is taken before the read: «Dimentica» sends it back, so a row written after it is never forgotten by a page
     that has not shown it. A voice the catalogue does not list is refused (422 ``PROFILE_VOICE_UNKNOWN``) before any read.
     """
@@ -163,13 +176,16 @@ async def query_profile(items: List[FAProfileQueryItem], session: AsyncSession =
     as_of = utcnow()
     asked = list(dict.fromkeys(item.asset_id for item in items))
     existing = set((await session.execute(select(Asset.id).where(Asset.id.in_(asked)))).scalars().all()) if asked else set()
+    today = await profile_today(session, as_of)
+    asked_keys = None if any(item.keys is None for item in items) else {key for item in items for key in item.keys or ()}
+    fresh = await voice_freshness(session, [asset_id for asset_id in asked if asset_id in existing], today=today, keys=asked_keys)
     results: List[FAProfileQueryResult] = []
     for item in items:
         if item.asset_id not in existing:
             results.append(FAProfileQueryResult(asset_id=item.asset_id, error=ASSET_NOT_FOUND))
             continue
         steps = (await read_steps(session, [item.asset_id], item.date_range, item.keys)).get(item.asset_id, {})
-        voices = {key: [FAProfileStepPoint(date=step.date, through=step.through, value=step.value, source=step.source, update_id=step.update_id, opened_on=step.opened_on, source_date=step.source_date) for step in voice_steps] for key, voice_steps in steps.items()}
+        voices = {key: _step_points(voice_steps, holding_now(fresh.get(item.asset_id, {}).get(key), voice_steps)) for key, voice_steps in steps.items()}
         changes = None
         if item.changes is not None:
             page = await recent_changes(session, item.asset_id, key=item.changes.key, page=item.changes.page)
