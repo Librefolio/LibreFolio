@@ -167,6 +167,10 @@ preference only keeps one of its rows.
 Set them here, under **JustETF** and **Borsa Italiana**, or with **Configure** in the asset dialog
 while that provider is chosen.
 
+**CoinGecko** has a **Preferred currency** too, also **Personal**, but it works another way: its search always shows
+each coin once, in that currency (EUR by default), and that currency becomes the price currency of an asset you create
+from a result. See [CoinGecko](../assets/providers/coingecko.md#preferred-currency).
+
 ### 👑 The Crown in JustETF Results {: #crown }
 
 👑 marks a fund's own currency, the one its NAV is computed in — not necessarily the one you trade
@@ -183,5 +187,6 @@ How the currency of a justETF asset works: [Pick the Currency in Search](../asse
 - 🎛️ **[User Preferences](preferences.md)** — Language, base currency, theme and guides
 - ⚙️ **[Settings Overview](index.md)** — Every tab of Settings
 - 📡 **[justETF](../assets/providers/justetf.md)** and 🇮🇹 **[Borsa Italiana](../assets/providers/borsa-italiana.md)** — The two providers with a search preference
+- 🔑 **[Get and Set the CoinGecko Key](coingecko-key.md)** — A shared account: the key every CoinGecko plugin uses
 - 🛠️ **[Plugin Settings for administrators](../../admin/configuration_secrets.md#plugin-settings)** — The server variables, the instance key and the encryption of the secrets
 - 🧩 **[Plugin Settings for developers](../../developer/architecture/patterns/plugin_settings.md)** — How a plugin declares its settings

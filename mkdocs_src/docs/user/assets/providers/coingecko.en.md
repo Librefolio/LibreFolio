@@ -13,7 +13,7 @@ a free CoinGecko account and its API key, which an administrator sets once for t
 
 ## 🔑 What You Need
 
-- **A free CoinGecko account** with a **Demo** API key. It needs no credit card. The Demo plan allows 10 000 calls a
+- **A free CoinGecko account** with a **Demo** API key ([how to get and set it](../../settings/coingecko-key.md)). It needs no credit card. The Demo plan allows 10 000 calls a
   month and 100 a minute ([CoinGecko's plans](https://www.coingecko.com/en/api/pricing)): plenty for a personal
   portfolio (see [Credits](#credits)).
 - **An administrator** puts the key in **Settings › Plugins**, on the **CoinGecko** card under **Shared settings**:
@@ -94,6 +94,7 @@ link to its site. LibreFolio does that for you:
 ## 🔗 Related
 
 - 🔌 **[Asset Providers](index.md)** — Compare the providers
+- 🔑 **[Get and Set the CoinGecko Key](../../settings/coingecko-key.md)** — From no account to the first price
 - 🧩 **[Plugin Settings](../../settings/plugins.md)** — The key, the plan and your preferred currency
 - ✏️ **[Data Editor](../detail/data-editor.md)** — Import the older prices
 - 🛠️ **For developers: [CoinGecko Provider](../../../developer/backend/assets/provider_coingecko.md)** — The SDK, the
