@@ -239,7 +239,7 @@
       "enrichersFound": "{count, plural, one {# enrichisseur trouvé} other {# enrichisseurs trouvés}} : {names}. Ils seront enregistrés avec l'actif.",
       "enrichersSearching": "Recherche des enrichisseurs qui connaissent cet actif…",
       "enrichersNone": "Aucun enrichisseur ne connaît cet actif.",
-      "enrichersRefused": "Trop de demandes aux sources : choisissez les enrichisseurs à la main.",
+      "enrichersRefused": "Trop de demandes aux sources : en attente, la recherche reprend d'elle-même dans un instant.",
       "enrichersError": "Impossible de rechercher les enrichisseurs : choisissez-les à la main.",
       "enrichersReview": "Vérifier ou modifier"
     },

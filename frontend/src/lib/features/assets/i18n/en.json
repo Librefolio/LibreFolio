@@ -239,7 +239,7 @@
       "enrichersFound": "{count, plural, one {# enricher found} other {# enrichers found}}: {names}. They will be saved with the asset.",
       "enrichersSearching": "Looking for the enrichers that know this asset…",
       "enrichersNone": "No enricher knows this asset.",
-      "enrichersRefused": "Too many requests to the sources: choose the enrichers by hand.",
+      "enrichersRefused": "Too many requests to the sources: waiting, the search starts again by itself in a moment.",
       "enrichersError": "The enrichers could not be searched: choose them by hand.",
       "enrichersReview": "Check or change"
     },

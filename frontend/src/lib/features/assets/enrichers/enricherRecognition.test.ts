@@ -92,13 +92,45 @@ describe('what it keeps and proposes', () => {
         expect(Object.keys(state.proposal)).toEqual(['justetf', 'yahoo_finance']);
     });
 
-    it('says a refusal for too many requests as a state, with its wait', async () => {
-        const state = createEnricherRecognitionState();
-        state.start(ETF);
-        calls[0].finish({kind: 'refused', retryAfter: 12});
-        await flush();
-        expect(state.status).toBe('refused');
-        expect(state.retryAfter).toBe(12);
+    it('waits out a refusal for too many requests and asks again by itself, with no action of the user (PROF, E8c)', async () => {
+        vi.useFakeTimers();
+        try {
+            const state = createEnricherRecognitionState();
+            state.start(ETF);
+            calls[0].finish({kind: 'refused', retryAfter: 12});
+            await vi.advanceTimersByTimeAsync(0);
+            expect(state.status).toBe('refused');
+            expect(state.retryAfter).toBe(12);
+            await vi.advanceTimersByTimeAsync(11_000);
+            expect(calls).toHaveLength(1);
+            await vi.advanceTimersByTimeAsync(1_000);
+            expect(calls, 'the same question is asked again once the wait is over').toHaveLength(2);
+            expect(calls[1].request).toEqual(calls[0].request);
+            expect(state.status).toBe('running');
+            calls[1].onEvent(found('justetf'));
+            calls[1].finish({kind: 'done', done: done(['justetf'])});
+            await vi.advanceTimersByTimeAsync(0);
+            expect(state.status).toBe('done');
+            expect(Object.keys(state.proposal)).toEqual(['justetf']);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('waits a minute when the refusal names no wait, and asks nothing more once cancelled', async () => {
+        vi.useFakeTimers();
+        try {
+            const state = createEnricherRecognitionState();
+            state.start(ETF);
+            calls[0].finish({kind: 'refused', retryAfter: null});
+            await vi.advanceTimersByTimeAsync(59_000);
+            expect(calls).toHaveLength(1);
+            state.cancel();
+            await vi.advanceTimersByTimeAsync(5_000);
+            expect(calls, 'a cancelled wait never asks again').toHaveLength(1);
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it('turns a failure into an error state, never a throw', async () => {

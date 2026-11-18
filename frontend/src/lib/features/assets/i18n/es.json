@@ -239,7 +239,7 @@
       "enrichersFound": "{count, plural, one {# enriquecedor encontrado} other {# enriquecedores encontrados}}: {names}. Se guardarán con el activo.",
       "enrichersSearching": "Buscando los enriquecedores que conocen este activo…",
       "enrichersNone": "Ningún enriquecedor conoce este activo.",
-      "enrichersRefused": "Demasiadas solicitudes a las fuentes: elige los enriquecedores a mano.",
+      "enrichersRefused": "Demasiadas solicitudes a las fuentes: en espera, la búsqueda se reanuda sola en un momento.",
       "enrichersError": "No se pudieron buscar los enriquecedores: elígelos a mano.",
       "enrichersReview": "Revisar o cambiar"
     },

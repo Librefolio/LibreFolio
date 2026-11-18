@@ -10,7 +10,9 @@
  *   while it runs), and the `default_order` of `done`.
  * - **What it proposes**: the found ones in the default order, each bound to the identifier it was found by.
  * - **No work in the background** (round 28): `cancel` (the asset created, the window closed) drops what is in flight.
- * - A 429 is a state (`refused`, its wait), a failure too (`error`): the window says it, nothing throws.
+ * - A 429 (the per-user limit of the probes, C0) is a wait, not an end (PROF, E8c): the state is `refused` with its
+ *   wait (`retryAfter`, a minute when the answer names none), and the same question is asked again by itself once the
+ *   wait is over; the user starts nothing. `cancel` and a new question end the wait. A failure is a state (`error`).
  *
  * @module features/assets/enrichers/enricherRecognition
  */
@@ -41,10 +43,14 @@ function keyOf(request: RecognizeRequest): string {
     return JSON.stringify([request.asset_type, identifiers, request.price_provider_code ?? null]);
 }
 
+/** The wait when a refusal for too many requests names none: the limiter's window, a minute. */
+const DEFAULT_RETRY_SECONDS = 60;
+
 export function createEnricherRecognitionState() {
     let sequence = 0;
     let key: string | null = null;
     let controller: AbortController | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
     let status = $state<RecognitionStatus>('idle');
     let recognitions = $state<Record<string, EnricherRecognition>>({});
     let defaultOrder = $state<string[]>([]);
@@ -52,6 +58,8 @@ export function createEnricherRecognitionState() {
 
     function drop() {
         sequence += 1;
+        if (retryTimer !== null) clearTimeout(retryTimer);
+        retryTimer = null;
         controller?.abort();
         controller = null;
         recognitions = {};
@@ -59,14 +67,9 @@ export function createEnricherRecognitionState() {
         retryAfter = null;
     }
 
-    /** Ask, when the form holds a strong identifier and the question is new; true when a question started. */
-    function start(input: RecognitionInput): boolean {
-        const request = requestOf(input);
-        if (request === null) return false;
-        const next = keyOf(request);
-        if (next === key) return false;
+    /** Ask `request`, the current question: its answers replace whatever an earlier asking of it left. */
+    function ask(request: RecognizeRequest) {
         drop();
-        key = next;
         status = 'running';
         const mine = sequence;
         const session = getClientSessionGeneration();
@@ -87,6 +90,14 @@ export function createEnricherRecognitionState() {
                 if (outcome.kind === 'refused') {
                     status = 'refused';
                     retryAfter = outcome.retryAfter;
+                    // The same question again once the wait is over: the user starts nothing (PROF, E8c)
+                    retryTimer = setTimeout(
+                        () => {
+                            retryTimer = null;
+                            if (current()) ask(request);
+                        },
+                        (outcome.retryAfter ?? DEFAULT_RETRY_SECONDS) * 1000,
+                    );
                 } else if (outcome.kind === 'done') {
                     status = 'done';
                 }
@@ -95,6 +106,16 @@ export function createEnricherRecognitionState() {
                 if (current()) status = 'error';
             },
         );
+    }
+
+    /** Ask, when the form holds a strong identifier and the question is new; true when a question started. */
+    function start(input: RecognitionInput): boolean {
+        const request = requestOf(input);
+        if (request === null) return false;
+        const next = keyOf(request);
+        if (next === key) return false;
+        key = next;
+        ask(request);
         return true;
     }
 
