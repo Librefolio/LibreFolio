@@ -34,9 +34,11 @@
         onOpen?: ((id: number) => void) | null;
         /** The charge the user came from, highlighted (F3). */
         highlightId?: number | null;
+        /** «Link an existing charge…» (F4): the form opens the picker; `null` hides it. */
+        onLinkExisting?: (() => void) | null;
     }
 
-    let {charges = $bindable(), editable, canAdd, parentCash, direction, loadState, missingKeys, onOpen = null, highlightId = null}: Props = $props();
+    let {charges = $bindable(), editable, canAdd, parentCash, direction, loadState, missingKeys, onOpen = null, highlightId = null, onLinkExisting = null}: Props = $props();
 
     let seq = 0;
     const shown = $derived(linkedCharges(charges));
@@ -52,12 +54,19 @@
         charges = [...charges, newCharge(type, parentCash?.code ?? null, seq)];
     }
 
-    function unlink(key: string) {
-        update(key, {state: 'unlink'});
+    function drop(key: string) {
+        charges = charges.filter((other) => other.key !== key);
     }
 
+    /** A charge picked in this form (F4) was never linked: unlinking it only takes it back out of the section. */
+    function unlink(charge: ChargeDraft) {
+        if (charge.linkNew) drop(charge.key);
+        else update(charge.key, {state: 'unlink'});
+    }
+
+    /** A new row, or a charge picked in this form, leaves the section; a saved linked charge is deleted on save. */
     function remove(charge: ChargeDraft) {
-        if (charge.id === null) charges = charges.filter((other) => other.key !== charge.key);
+        if (charge.id === null || charge.linkNew) drop(charge.key);
         else update(charge.key, {state: 'delete'});
     }
 
@@ -118,7 +127,7 @@
                                 aria-label={$t('transactions.form.charges.unlink')}
                                 title={$t('transactions.form.charges.unlink')}
                                 data-testid={`tx-form-charge-unlink-${charge.key}`}
-                                onclick={() => unlink(charge.key)}><Link2Off size={14} /></button
+                                onclick={() => unlink(charge)}><Link2Off size={14} /></button
                             >
                         {/if}
                         {#if editable}
@@ -165,6 +174,14 @@
                 >
             {/each}
         </div>
+        {#if onLinkExisting}
+            <button
+                type="button"
+                class="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-lf-input bg-lf-field text-lf-link hover:border-lf-input-hover focus-visible:outline-2 focus-visible:outline-lf-focus"
+                data-testid="tx-form-charges-link-existing"
+                onclick={() => onLinkExisting?.()}>{$t('transactions.form.charges.linkExisting')}</button
+            >
+        {/if}
     {/if}
 
     {#if totals}

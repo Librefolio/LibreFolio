@@ -64,7 +64,7 @@
     import {assetStoreVersion, ensureAssetsLoaded, getAssetInfo, getAllAssets, refreshAllAssets} from '$lib/stores/reference/assetStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {ensureBrokersLoaded, getEditableBrokers, brokerStoreVersion, refreshAllBrokers, getBrokerInfo, getBrokerRole, type BrokerInfo} from '$lib/stores/reference/brokerStore';
-    import {type TransactionTypeCode, type PairFormLayout, getTransactionTypeIconUrl, getTypeRule, getPairFormLayout, isDraftReadyForValidation, ensureTypesLoaded, getSwapGroup, typesVersion} from '$lib/features/transactions/transactionTypeStore';
+    import {type TransactionTypeCode, type PairFormLayout, TX_TYPES, getTransactionTypeIconUrl, getTypeRule, getPairFormLayout, isDraftReadyForValidation, ensureTypesLoaded, getSwapGroup, typesVersion} from '$lib/features/transactions/transactionTypeStore';
     import {createValidateScheduler} from '$lib/features/transactions/useValidateScheduler.svelte';
     import {commitTransactions, validateTransactions} from '$lib/features/transactions/txCommitApi';
     import {resolveIssueMessage, type ResolverContext} from '$lib/features/transactions/resolveValidationMessage';
@@ -91,7 +91,9 @@
     import TxFormOptionalSection from './TxFormOptionalSection.svelte';
     import TxFormChargesSection from './TxFormChargesSection.svelte';
     import TxFormParentSection from './TxFormParentSection.svelte';
-    import {chargeCashDirection, chargeRowsMissingAmount, chargesFromRows, chargesKey, linkedCharges, type ChargeDraft} from './txCharges';
+    import TransactionPickerModal from '../bulk/TransactionPickerModal.svelte';
+    import {notify} from '$lib/stores/app/notify.svelte';
+    import {chargeCashDirection, chargeFromPicked, chargeRowsMissingAmount, chargesFromRows, chargesKey, linkedCharges, type ChargeDraft} from './txCharges';
 
     // =========================================================================
     // Types
@@ -361,6 +363,22 @@
     let parentRequest = 0;
     /** «Open» waiting for the discard confirmation: the transaction to show once the user confirms. */
     let pendingOpenId = $state<number | null>(null);
+    /** F4: the transaction picked as this charge's parent, linked when the host saves. */
+    let parentPending = $state<TXReadItem | null>(null);
+    /** F4: the picker, for the charges of this parent or for the parent of this charge. */
+    let pickerMode = $state<'charges' | 'parent' | null>(null);
+    let pickerRows = $state<TXReadItem[]>([]);
+    /** F4: the broker and asset the picks were made for; changing either drops them (a link needs both equal). */
+    let pickedFor = $state<string | null>(null);
+    const linkContext = $derived(`${draft.broker_id ?? ''}|${draft.asset_id ?? ''}`);
+    $effect(() => {
+        if (pickedFor === null || linkContext === pickedFor) return;
+        untrack(() => {
+            parentPending = null;
+            charges = charges.filter((charge) => !charge.linkNew);
+            pickedFor = null;
+        });
+    });
     /** Bug5-fix: broker_id of partner that the user cannot access.
      *  When set, the "To" side shows a locked placeholder instead of empty. */
     let inaccessiblePartnerBrokerId = $state<number | null>(null);
@@ -646,7 +664,7 @@
 
     /** The form's state as one string: the draft, the pair's other side and the linked charges. */
     function baselineKey(): string {
-        return JSON.stringify(draft) + JSON.stringify(dualTo) + chargesKey(charges) + (parentUnlinked ? '|parent-unlinked' : '');
+        return JSON.stringify(draft) + JSON.stringify(dualTo) + chargesKey(charges) + (parentUnlinked ? '|parent-unlinked' : '') + (parentPending ? `|parent-link:${parentPending.id}` : '');
     }
 
     /**
@@ -690,6 +708,9 @@
         const request = ++parentRequest;
         parentRow = null;
         parentUnlinked = false;
+        parentPending = null;
+        pickerMode = null;
+        pickedFor = null;
         const id = row?.parent_transaction_id ?? 0;
         if (!id || id <= 0) {
             parentLoad = 'ready';
@@ -707,6 +728,51 @@
                 parentLoad = 'error';
             }
         })();
+    }
+
+    /** The asset rule of a link (rule 3): the same asset, or none on both sides. */
+    function sameAsset(row: TXReadItem): boolean {
+        return (row.asset_id ?? null) === (draft.asset_id ?? null);
+    }
+
+    /** The asset as the picker's filter label names it. */
+    function assetLabel(): string {
+        return draft.asset_id != null ? getAssetInfo(draft.asset_id)?.display_name || `#${draft.asset_id}` : $t('transactions.picker.noAsset');
+    }
+
+    /** F4: «Link an existing charge…» — the unlinked charges of this broker with this asset, not already in the section. */
+    async function openChargesPicker() {
+        try {
+            const rows = (await zodiosApi.query_transactions_api_v1_transactions_get({queries: {without_parent: true, broker_id: draft.broker_id}} as never)) as TXReadItem[];
+            const inSection = new Set(charges.map((charge) => charge.id));
+            pickerRows = (rows ?? []).filter((row) => sameAsset(row) && !inSection.has(row.id));
+            pickerMode = 'charges';
+        } catch {
+            notify({name: 'tx.form.charges.candidates.failed', detail: {brokerId: draft.broker_id}, toast: {variant: 'error', message: $t('transactions.form.candidatesFailed')}});
+        }
+    }
+
+    /** F4: «Link to a transaction…» — the parents of this broker with this asset that are no leg of a pair (rule 8). */
+    async function openParentPicker() {
+        const types = TX_TYPES.filter((type) => getTypeRule(type).chargeRole === 'parent');
+        try {
+            const rows = (await zodiosApi.query_transactions_api_v1_transactions_get({queries: {broker_id: draft.broker_id, types}} as never)) as TXReadItem[];
+            pickerRows = (rows ?? []).filter((row) => sameAsset(row) && row.related_transaction_id == null);
+            pickerMode = 'parent';
+        } catch {
+            notify({name: 'tx.form.parent.candidates.failed', detail: {brokerId: draft.broker_id}, toast: {variant: 'error', message: $t('transactions.form.candidatesFailed')}});
+        }
+    }
+
+    function handlePicked(rows: TXReadItem[]) {
+        if (rows.length > 0) pickedFor = linkContext;
+        if (pickerMode === 'charges') {
+            const picked = rows.map(chargeFromPicked).filter((draftRow): draftRow is ChargeDraft => draftRow !== null);
+            charges = [...charges, ...picked];
+        } else if (pickerMode === 'parent' && rows.length === 1) {
+            parentPending = rows[0];
+        }
+        pickerMode = null;
     }
 
     /** «Open» (F3): show another transaction in this modal; with unsaved changes, after the discard confirmation. */
@@ -961,7 +1027,9 @@
     /** The linked charges: editable only in the form the Bulk hosts (it saves them, lot F7); read-only elsewhere. */
     let chargesEditable = $derived(!isReadonly && !commitOnSave && allowChargeEdits);
     let chargesMissing = $derived(chargesEditable ? chargeRowsMissingAmount(charges) : []);
-    let showParent = $derived(!pairLayout && rule.chargeRole === 'charge' && (mainRow?.parent_transaction_id ?? 0) > 0);
+    let hasSavedParent = $derived((mainRow?.parent_transaction_id ?? 0) > 0);
+    /** The charge's «Linked to»: with a saved parent always; without one only where it can be linked (F4). */
+    let showParent = $derived(!pairLayout && rule.chargeRole === 'charge' && (hasSavedParent || chargesEditable));
     let showCharges = $derived(!pairLayout && rule.chargeRole === 'parent' && (chargesEditable || chargesLoad !== 'ready' || linkedCharges(charges).length > 0));
     let hasLocalErrors = $derived(formChecks.some((check) => check.kind === 'format') || (showCharges && chargesMissing.length > 0));
 
@@ -1383,6 +1451,8 @@
                 if (chargesEditable && showCharges) (payload as any)._charges = $state.snapshot(charges);
                 // F3: the charge unlinked from its parent in this form; the Bulk saves it (lot F7).
                 if (chargesEditable && showParent && parentUnlinked) (payload as any)._parent_unlink = true;
+                // F4: the parent picked for a charge that has none; the Bulk saves it (lot F7).
+                if (chargesEditable && showParent && parentPending) (payload as any)._parent_link = parentPending.id;
                 onPushDraft?.(payload);
             }
             onClose();
@@ -1808,18 +1878,22 @@
                     missingKeys={chargesMissing}
                     onOpen={onOpenTransaction ? requestOpenTransaction : null}
                     highlightId={highlightTxId}
+                    onLinkExisting={chargesEditable && mainRow?.related_transaction_id == null ? openChargesPicker : null}
                 />
             {/if}
 
             <!-- F3: the transaction a charge belongs to, «Open» and «Unlink» -->
             {#if showParent}
                 <TxFormParentSection
-                    parentId={mainRow?.parent_transaction_id ?? 0}
+                    parentId={hasSavedParent ? (mainRow?.parent_transaction_id ?? null) : null}
                     parent={parentRow}
                     loadState={parentLoad}
                     unlinked={parentUnlinked}
                     onOpen={onOpenTransaction && !parentUnlinked ? requestOpenTransaction : null}
                     onUnlink={chargesEditable && !parentUnlinked ? () => (parentUnlinked = true) : null}
+                    pending={parentPending}
+                    onLink={chargesEditable && !hasSavedParent && mainRow?.related_transaction_id == null ? openParentPicker : null}
+                    onUndo={() => (parentPending = null)}
                 />
             {/if}
 
@@ -1902,6 +1976,22 @@
         pendingOpenId = null;
     }}
     zIndex={70}
+/>
+
+<!-- F4: the picker of the charges of this parent, or of the parent of this charge -->
+<TransactionPickerModal
+    open={pickerMode !== null}
+    excludeIds={new Set()}
+    rows={pickerRows}
+    title={pickerMode === 'parent' ? $t('transactions.picker.parentTitle') : $t('transactions.picker.chargesTitle')}
+    filterLabel={pickerMode === 'parent'
+        ? {short: $t('transactions.picker.parentFilterShort'), long: $t('transactions.picker.parentFilterLong', {values: {broker: getBrokerInfo(draft.broker_id)?.name ?? `#${draft.broker_id}`, asset: assetLabel()}})}
+        : {short: $t('transactions.picker.chargesFilterShort'), long: $t('transactions.picker.chargesFilterLong', {values: {broker: getBrokerInfo(draft.broker_id)?.name ?? `#${draft.broker_id}`, asset: assetLabel()}})}}
+    addLabel={(n) => (pickerMode === 'parent' ? $t('transactions.picker.link') : $t('transactions.picker.linkN', {values: {n}}))}
+    maxSelect={pickerMode === 'parent' ? 1 : undefined}
+    zIndex={zIndex + 10}
+    onAdd={handlePicked}
+    onClose={() => (pickerMode = null)}
 />
 
 <!-- W39: Inline broker creation modal. -->
