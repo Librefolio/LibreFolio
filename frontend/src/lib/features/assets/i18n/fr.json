@@ -85,7 +85,18 @@
       "lastPrice": "Dernier Prix",
       "quoteBaseQuantity": "Unités/cotation",
       "txCount": "Tx",
-      "txCountTooltip": "Transactions utilisant cet actif. Vert : dans des courtiers que vous possédez. Bleu : uniquement dans les courtiers d'autres utilisateurs. Gris : aucune — actif enregistré mais jamais utilisé."
+      "txCountTooltip": "Transactions utilisant cet actif. Vert : dans des courtiers que vous possédez. Bleu : uniquement dans les courtiers d'autres utilisateurs. Gris : aucune — actif enregistré mais jamais utilisé.",
+      "risk": {
+        "maxDrawdown": "Drawdown max",
+        "volatility": "Volatilité",
+        "annualReturn": "Rendement annuel",
+        "sharpe": "Sharpe",
+        "sortino": "Sortino",
+        "worstDay": "Pire jour",
+        "bestDay": "Meilleur jour",
+        "rally": "Plus forte hausse",
+        "hint": "Mesuré sur cet actif seul, sur la période et dans la devise de cette page, à votre taux sans risque : le même chiffre que l'onglet Risque de l'actif avec les mêmes réglages."
+      }
     },
     "empty": {
       "noAssets": "Aucun actif",
