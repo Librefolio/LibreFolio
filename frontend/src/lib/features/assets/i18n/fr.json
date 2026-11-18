@@ -241,7 +241,9 @@
       "enrichersNone": "Aucun enrichisseur ne connaît cet actif.",
       "enrichersRefused": "Trop de demandes aux sources : en attente, la recherche reprend d'elle-même dans un instant.",
       "enrichersError": "Impossible de rechercher les enrichisseurs : choisissez-les à la main.",
-      "enrichersReview": "Vérifier ou modifier"
+      "enrichersReview": "Vérifier ou modifier",
+      "enrichersReading": "Leurs données sont en cours de lecture.",
+      "enrichersReadingWaiting": "Trop de demandes : leurs données seront lues d'elles-mêmes dans un instant."
     },
     "provider": {
       "assignment": "Attribution du Fournisseur",

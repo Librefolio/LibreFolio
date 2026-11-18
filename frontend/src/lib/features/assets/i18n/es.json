@@ -241,7 +241,9 @@
       "enrichersNone": "Ningún enriquecedor conoce este activo.",
       "enrichersRefused": "Demasiadas solicitudes a las fuentes: en espera, la búsqueda se reanuda sola en un momento.",
       "enrichersError": "No se pudieron buscar los enriquecedores: elígelos a mano.",
-      "enrichersReview": "Revisar o cambiar"
+      "enrichersReview": "Revisar o cambiar",
+      "enrichersReading": "Sus datos se están leyendo ahora.",
+      "enrichersReadingWaiting": "Demasiadas solicitudes: sus datos se leerán solos en un momento."
     },
     "provider": {
       "assignment": "Asignación de Proveedor",

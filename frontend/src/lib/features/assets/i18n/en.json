@@ -241,7 +241,9 @@
       "enrichersNone": "No enricher knows this asset.",
       "enrichersRefused": "Too many requests to the sources: waiting, the search starts again by itself in a moment.",
       "enrichersError": "The enrichers could not be searched: choose them by hand.",
-      "enrichersReview": "Check or change"
+      "enrichersReview": "Check or change",
+      "enrichersReading": "Their data are being read now.",
+      "enrichersReadingWaiting": "Too many requests: their data will be read by themselves in a moment."
     },
     "provider": {
       "assignment": "Provider Assignment",

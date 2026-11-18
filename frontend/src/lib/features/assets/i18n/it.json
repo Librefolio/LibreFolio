@@ -241,7 +241,9 @@
       "enrichersNone": "Nessun arricchitore conosce questo asset.",
       "enrichersRefused": "Troppe richieste alle fonti: in attesa, la ricerca riparte da sola fra poco.",
       "enrichersError": "Non è stato possibile cercare gli arricchitori: sceglili a mano.",
-      "enrichersReview": "Controlla o cambia"
+      "enrichersReview": "Controlla o cambia",
+      "enrichersReading": "I loro dati si stanno leggendo adesso.",
+      "enrichersReadingWaiting": "Troppe richieste: i loro dati si leggeranno da soli fra poco."
     },
     "provider": {
       "assignment": "Assegnazione Provider",
