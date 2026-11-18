@@ -24,7 +24,13 @@
     import AssetEnrichersModal from './enrichers/AssetEnrichersModal.svelte';
     import {createEnricherRecognitionState} from './enrichers/enricherRecognition.svelte';
     import type {EnricherBinding, EnricherInfo, EnricherReadState} from './enrichers/enrichersEditState';
-    import {loadProfileCatalogue, type ProfileVoice} from './profile/profileStore';
+    import {invalidateAssetProfile, loadProfileCatalogue, readAssetProfile, type ProfileVoice} from './profile/profileStore';
+    import AssetModalProfileRow from './profile/AssetModalProfileRow.svelte';
+    import ProfileEditModal from './profile/ProfileEditModal.svelte';
+    import {createProfileAutoAsk} from './profile/profileAutoAsk.svelte';
+    import {autoAskRequest, currentFromRead, mergeAutoFills, profileBlocksSave, profileRowSummary, userChanges, withoutFillsOutside} from './profile/assetProfileDraft';
+    import {profilePatch, type AskAnswer, type CurrentVoice, type PendingChanges, type PendingVoice} from './profile/profileEditState';
+    import {todayIso} from '$lib/utils/dateOnly';
     import AssetModalFooter from './AssetModalFooter.svelte';
     import AssetModalImportNotices from './AssetModalImportNotices.svelte';
     import AssetModalIdentifiers from './AssetModalIdentifiers.svelte';
@@ -551,9 +557,90 @@
         return {state: 'found', text: $t('assets.modal.enrichersFound', {values: {count: codes.length, names}})};
     });
 
+    // =========================================================================
+    // Profile (plan 68, E8b2): the «Dati del profilo» row and window, the automatic «Chiedi»
+    // =========================================================================
+
+    /** The changes the profile window kept, and the automatic fills: they leave with the save (`profilePatch`). */
+    let profilePending = $state<PendingChanges>({});
+    /** The automatic fills now in place: a later answer replaces those the user did not touch. */
+    let profileAuto = $state<Record<string, PendingVoice>>({});
+    /** «Adesso» of an asset that exists: its profile of today, read when the window first opens. */
+    let profileCurrent = $state<Record<string, CurrentVoice>>({});
+    let profileVoices = $state<ProfileVoice[]>([]);
+    let profileModalOpen = $state(false);
+    let profileCurrentAsked = false;
+    const autoAsk = createProfileAutoAsk(
+        (request) => zodiosApi.ask_profile_api_v1_assets_profile_ask_post(request as never) as Promise<AskAnswer>,
+        (answer) => {
+            const merged = mergeAutoFills(profilePending, profileAuto, answer, profileCurrent);
+            profilePending = merged.pending;
+            profileAuto = merged.auto;
+            loadProfileVoices();
+        },
+    );
+
+    /** The profile's catalogue: read when something of the profile is shown, never just because the window opened. */
+    function loadProfileVoices() {
+        void loadProfileCatalogue().then(
+            (voices) => (profileVoices = voices ?? []),
+            () => undefined,
+        );
+    }
+
+    function resetProfile() {
+        autoAsk.cancel();
+        profilePending = {};
+        profileAuto = {};
+        profileCurrent = {};
+        profileModalOpen = false;
+        profileCurrentAsked = false;
+    }
+
+    function openProfile() {
+        loadProfileVoices();
+        const id = editMode ? editData?.id : undefined;
+        if (id && !profileCurrentAsked) {
+            profileCurrentAsked = true;
+            void readAssetProfile(id, {start: todayIso()}).then(
+                (read) => {
+                    if (read.kind === 'found' && editData?.id === id) profileCurrent = currentFromRead(read.voices);
+                },
+                () => (profileCurrentAsked = false),
+            );
+        }
+        profileModalOpen = true;
+    }
+
+    // At creation, once the enrichers are settled («Riconosci» done, or a list the user applied), the automatic «Chiedi»
+    // fills the empty voices (PROF §14.8); never on the proposal still growing, never in edit mode or in the preview
+    $effect(() => {
+        if (!open) return;
+        const request = autoAskRequest({editMode, tourPreview, assetType, enrichers: enrichersConfig, settled: recognition.status === 'done' || enrichersChosen});
+        if (request) untrack(() => autoAsk.start($state.snapshot(request) as typeof request));
+    });
+
+    // A fill whose source left the list goes: the creation would refuse the whole asset
+    $effect(() => {
+        const config = enrichersConfig;
+        untrack(() => {
+            const kept = withoutFillsOutside(profilePending, config);
+            if (Object.keys(kept).length === Object.keys(profilePending).length) return;
+            profilePending = kept;
+            profileAuto = Object.fromEntries(Object.entries(profileAuto).filter(([key]) => key in kept));
+        });
+    });
+
+    let profileSummary = $derived(profileRowSummary(profilePending, profileVoices));
+    /** A value the profile window would refuse blocks the save. */
+    let profileBlocked = $derived(profileBlocksSave(profilePending, profileVoices));
+    let enricherNames = $derived(Object.fromEntries(enricherCatalogue.map((info) => [info.code, info.name])));
+
     /** Build form snapshot for dirty tracking — single source of truth */
     function buildFormSnapshot(): string {
         return JSON.stringify([
+            // The profile's changes count once they are the user's: the automatic fills alone change nothing to discard
+            JSON.stringify(userChanges(profilePending, profileAuto)),
             // The enrichers count only once the user chose them: «Riconosci»'s proposal alone changes nothing to discard
             enrichersChosen ? JSON.stringify(Object.entries(enrichersConfig)) : null,
             displayName,
@@ -641,6 +728,7 @@
                     providerExpanded = true;
                 }
                 resetEnrichers(editMode && editData ? (editData.enrichers ?? null) : null, editMode);
+                resetProfile();
                 initialSnapshot = buildFormSnapshot();
                 initialClassification = $state.snapshot(buildClassificationParams(shortDescription, sectorDistribution, geographicDistribution));
             });
@@ -649,6 +737,7 @@
                 providerProbe.cancelPending();
                 // No work in the background (round 28): the answers in flight are dropped with the window
                 recognition.cancel();
+                autoAsk.cancel();
             });
         }
     });
@@ -1249,7 +1338,7 @@
     // =========================================================================
 
     function handleSave() {
-        if (tourPreview || !isValid) return;
+        if (tourPreview || !isValid || profileBlocked) return;
         // I-bis #2 — retest 1.3 follow-up: when the user changes the provider
         // dropdown, ``ProviderAssignmentSection.handleProviderChange`` clears
         // the identifier on purpose (different providers use different ID
@@ -1333,7 +1422,22 @@
 
     /** The form's values, as the save requests are built from them (./assetPayload.ts). */
     function formFields(): AssetFormFields {
-        return {displayName, currency, assetType, iconUrl, quoteBaseQuantity, active, isBenchmark, userUrl: providerUserUrl, shortDescription, sectorDistribution, geographicDistribution, identifierRows, enrichers: $state.snapshot(enrichersConfig)};
+        return {
+            displayName,
+            currency,
+            assetType,
+            iconUrl,
+            quoteBaseQuantity,
+            active,
+            isBenchmark,
+            userUrl: providerUserUrl,
+            shortDescription,
+            sectorDistribution,
+            geographicDistribution,
+            identifierRows,
+            enrichers: $state.snapshot(enrichersConfig),
+            profile: profilePatch(withoutFillsOutside($state.snapshot(profilePending) as PendingChanges, enrichersConfig)),
+        };
     }
 
     /** The provider the save assigns to the asset. */
@@ -1352,15 +1456,19 @@
             throw new Error(result?.message || 'Failed to create asset');
         }
         const assetId = result.asset_id;
-        // Created: what «Riconosci» still has in flight is dropped (round 28)
+        // Created: what «Riconosci» and the automatic «Chiedi» still have in flight is dropped (round 28)
         recognition.cancel();
+        autoAsk.cancel();
+        invalidateAssetProfile(assetId);
         naLog(`created asset #${assetId} "${displayName.trim()}" type=${assetType} currency=${currency} qbq=${createItem.quote_base_quantity} · identifiers: ${identifiersSummary()} · provider=${hasProvider ? providerCode : 'none'}`);
 
         // Upsert the new asset into the shared cache so other pages
         // (transactions cell, AssetCard, AssetTable, …) reflect the entry
         // immediately. The BE response only carries `asset_id`; we merge the
         // fields the FE just submitted (no extra round-trip).
-        mergeAssets([{id: assetId, ...(createItem as Record<string, unknown>)}]);
+        // The asset's own fields only: its enrichers and its profile are not the shared asset cache's
+        const {enrichers: _enrichers, profile: _profile, ...cachedCreate} = createItem as Record<string, unknown>;
+        mergeAssets([{id: assetId, ...cachedCreate}]);
 
         // Step 2: Assign provider (separate try/catch — asset already created)
         // Skip assignment for scheduled_investment if no schedule is configured yet
@@ -1464,7 +1572,10 @@
         // the new icon/name/etc. without a manual reload. The BE response
         // only carries the per-item results; we merge the fields
         // the FE just submitted.
-        mergeAssets([{id: assetId, ...(patchItem as unknown as Record<string, unknown>)}]);
+        const {enrichers: _enrichers, profile: _profile, ...cachedPatch} = patchItem as unknown as Record<string, unknown>;
+        mergeAssets([{id: assetId, ...cachedPatch}]);
+        // The profile may have changed (its row, the enrichers' read): the pages read it again
+        invalidateAssetProfile(assetId);
 
         // Step 2: Handle provider change
         if (providerNoProvider) {
@@ -1732,6 +1843,9 @@
                 onreconcile={reconcileProviderContext}
             />
 
+            <!-- The profile's data (plan 68, E8b2): a window over this one; what it keeps leaves with the save -->
+            <AssetModalProfileRow summary={profileSummary} onopen={openProfile} disabled={tourPreview} />
+
             <!-- Auto-assign info banner -->
             {#if searchResultSelected && hasProvider && !editMode}
                 <InfoBanner variant="info">
@@ -1748,7 +1862,7 @@
         </fieldset>
     </div>
 
-    <AssetModalFooter bind:active bind:isBenchmark {saving} {isValid} {tourPreview} {editMode} oncancel={handleClose} onsave={handleSave} />
+    <AssetModalFooter bind:active bind:isBenchmark {saving} isValid={isValid && !profileBlocked} {tourPreview} {editMode} oncancel={handleClose} onsave={handleSave} />
 </ModalBase>
 
 <!-- Confirmation: Save without test -->
@@ -1846,6 +1960,27 @@
 
 <!-- Provider Comparison Modal -->
 <!-- The enrichers' window over the asset window (plan 68, E8a): it hands the list back, saved with the asset -->
+<!-- The profile window over the asset window (plan 68, E8b2): «Tieni le modifiche» hands the changes back here -->
+{#if profileModalOpen}
+    <ProfileEditModal
+        bind:open={profileModalOpen}
+        assetName={displayName}
+        mode="keep"
+        assetId={editMode ? (editData?.id ?? null) : null}
+        askTarget={editMode ? null : {asset_type: assetType, enrichers: enrichersConfig}}
+        catalogue={profileVoices}
+        current={profileCurrent}
+        pending={profilePending}
+        sourceNames={enricherNames}
+        zIndex={zIndex + 30}
+        onkeep={(pending) => {
+            profilePending = pending;
+            profileModalOpen = false;
+        }}
+        oncancel={() => (profileModalOpen = false)}
+    />
+{/if}
+
 {#if enrichersModalOpen}
     <AssetEnrichersModal
         bind:open={enrichersModalOpen}
