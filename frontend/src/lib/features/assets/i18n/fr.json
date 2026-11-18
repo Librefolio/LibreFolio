@@ -382,8 +382,7 @@
       "currentValue": "Valeur actuelle",
       "providerValue": "Valeur du fournisseur",
       "applySelected": "Appliquer la selection ({count}/{total})",
-      "allMatch": "Toutes les donnees correspondent au fournisseur",
-      "noDistributionData": "Le fournisseur n'a pas de données pour : {fields}"
+      "allMatch": "Toutes les donnees correspondent au fournisseur"
     },
     "distribution": {
       "total": "Total",

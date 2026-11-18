@@ -382,8 +382,7 @@
       "currentValue": "Valore Attuale",
       "providerValue": "Valore Provider",
       "applySelected": "Applica Selezionati ({count}/{total})",
-      "allMatch": "Tutti i dati corrispondono al provider",
-      "noDistributionData": "Il provider non ha dati per: {fields}"
+      "allMatch": "Tutti i dati corrispondono al provider"
     },
     "distribution": {
       "total": "Totale",
