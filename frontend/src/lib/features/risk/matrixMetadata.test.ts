@@ -95,15 +95,12 @@ describe('matrixMetadataFromReads', () => {
     });
 
     it('takes the last step of a voice', () => {
-        const item: MatrixProfileItem = {
-            asset_id: 20,
-            voices: {
-                sector: [
-                    {date: '2026-01-01', through: '2026-06-30', value: {Energy: '1'}, source: 'legacy', update_id: 1, opened_on: '2026-01-01'},
-                    {date: '2026-07-01', through: '2026-11-17', value: TECH_MAP, source: 'justetf', update_id: 2, opened_on: '2026-07-01'},
-                ],
-            },
-        };
+        // The steps as the API answers them, whole; the module reads only their values
+        const steps = [
+            {date: '2026-01-01', through: '2026-06-30', value: {Energy: '1'}, source: 'legacy', update_id: 1, opened_on: '2026-01-01'},
+            {date: '2026-07-01', through: '2026-11-17', value: TECH_MAP, source: 'justetf', update_id: 2, opened_on: '2026-07-01'},
+        ];
+        const item: MatrixProfileItem = {asset_id: 20, voices: {sector: steps}};
         expect(matrixMetadataFromReads([{asset_id: 20}], [item]).sectors.get(20)).toEqual(TECH);
     });
 
