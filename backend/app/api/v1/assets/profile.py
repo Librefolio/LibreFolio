@@ -169,7 +169,7 @@ async def query_profile(items: List[FAProfileQueryItem], session: AsyncSession =
             results.append(FAProfileQueryResult(asset_id=item.asset_id, error=ASSET_NOT_FOUND))
             continue
         steps = (await read_steps(session, [item.asset_id], item.date_range, item.keys)).get(item.asset_id, {})
-        voices = {key: [FAProfileStepPoint(date=step.date, through=step.through, value=step.value, source=step.source, update_id=step.update_id) for step in voice_steps] for key, voice_steps in steps.items()}
+        voices = {key: [FAProfileStepPoint(date=step.date, through=step.through, value=step.value, source=step.source, update_id=step.update_id, opened_on=step.opened_on, source_date=step.source_date) for step in voice_steps] for key, voice_steps in steps.items()}
         changes = None
         if item.changes is not None:
             page = await recent_changes(session, item.asset_id, key=item.changes.key, page=item.changes.page)

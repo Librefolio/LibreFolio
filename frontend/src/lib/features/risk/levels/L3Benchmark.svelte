@@ -4,6 +4,7 @@
     import type {RiskBenchmarkState} from '$lib/features/risk/riskBenchmarkStore.svelte';
 
     import BenchmarkSelect from '../BenchmarkSelect.svelte';
+    import {riskFreeParameters} from '../riskFreeRate';
 
     /**
      * The one benchmark L3 measures against, on every page at once.
@@ -38,9 +39,14 @@
          */
         period: {start: string; end: string};
         currency: string;
+        /**
+         * The asset the page is about (the Asset Detail, RN-17): a reference that is this asset itself compares nothing
+         * — the old panel's guard, kept — so the comparison is not asked, and a line says why.
+         */
+        subjectAssetId?: number | null;
     }
 
-    let {controller, riskFreePercent, period, currency}: Props = $props();
+    let {controller, riskFreePercent, period, currency, subjectAssetId = null}: Props = $props();
 
     /** The choice in force, resolved by the picker: an id the asset list does not hold reads as null. */
     let selected = $state<number | null>(null);
@@ -61,6 +67,8 @@
      * exactly once per question, which is the number of times the question changed.
      */
     let askedFor = $state<string | null>(null);
+    /** The reference chosen is the page's own asset: nothing to compare. */
+    let isSubject = $derived(selected !== null && subjectAssetId !== null && selected === subjectAssetId);
 
     $effect(() => {
         controller.registerLauncher('comparison', run);
@@ -82,7 +90,7 @@
         // the moment it arrives.
         const ready = controller.catalogState === 'ready';
         const epoch = controller.baseEpoch;
-        if (benchmarkState !== 'set' || selected === null) return;
+        if (benchmarkState !== 'set' || selected === null || isSubject) return;
         const key = `${epoch}|${selected}`;
         // A persisted benchmark that needed a click on every page load would make
         // the persistence worth nothing: the reader would re-choose the same
@@ -99,7 +107,7 @@
     // already on screen goes with it, so the benchmark's row and figures do not outlive the
     // choice that justified them. Bumping first discards a reply still in flight.
     $effect(() => {
-        if (benchmarkState === 'set') return;
+        if (benchmarkState === 'set' && !isSubject) return;
         if (askedFor === null && !controller.comparisonResult) return;
         askedFor = null;
         controller.bumpGeneration('comparison');
@@ -128,9 +136,9 @@
         // guard is here and not only in the effect: nothing but a confirmed choice is asked.
         //
         // The two rates are `historical_kpi`'s (`riskAnalysisHelpers`), so the benchmark's Sharpe
-        // and Sortino stand beside the portfolio's on one footing. They are two because Sortino
-        // measures against a target return (the MAR), not against the risk-free rate.
-        await controller.runGuarded('comparison', () => (benchmarkState !== 'set' || selected === null ? null : {code: 'comparison', mode: 'current_composition', parameters: {comparison_asset_id: selected, risk_free_annual_rate: riskFreePercent / 100, target_annual_return: 0}}));
+        // and Sortino stand beside the portfolio's on one footing: two parameters, one value, the
+        // reader's risk-free rate (RN-21, Q9 bis: one threshold for every «excess» measure).
+        await controller.runGuarded('comparison', () => (benchmarkState !== 'set' || selected === null || isSubject ? null : {code: 'comparison', mode: 'current_composition', parameters: {comparison_asset_id: selected, ...riskFreeParameters(riskFreePercent)}}));
     }
 
     /**
@@ -157,4 +165,7 @@
     <div class="min-w-0 max-w-xs flex-1">
         <BenchmarkSelect bind:value={selected} bind:state={benchmarkState} measuredAssetIds={[]} {period} {currency} boxClass="w-full" testid="risk-l3-benchmark-select" onchange={choose} />
     </div>
+    {#if isSubject}
+        <span class="text-xs text-lf-muted" data-testid="risk-l3-benchmark-is-subject">{$t('risk.levels.l3.benchmarkIsSubject')}</span>
+    {/if}
 </div>

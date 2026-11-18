@@ -66,13 +66,15 @@
     import {ANSWER_DISCARDED_CODE, createRiskPanelController, type RiskControllerInputs, type RiskPanelController} from '$lib/features/risk/riskPanelController.svelte';
 
     import AssetSetLossComparisonSection from './AssetSetLossComparisonSection.svelte';
-    import type {AssetSetHurtRow, AssetSetPaidRow, AssetSetQualitySource} from './assetSetLevels';
+    import type {AssetSetHurtRow, AssetSetMoveRow, AssetSetPaidRow, AssetSetQualitySource} from './assetSetLevels';
+    import AssetSetMoveComparisonSection from './AssetSetMoveComparisonSection.svelte';
     import AssetSetRiskReturnSection from './AssetSetRiskReturnSection.svelte';
-    import {ASSET_SET_DAILY_VAR_INSTANCE, ASSET_SET_MONTHLY_VAR_INSTANCE, resultByCode, resultByInstance} from './riskAnalysisHelpers';
+    import {ASSET_SET_DAILY_VAR_INSTANCE, ASSET_SET_MONTHLY_VAR_INSTANCE, ASSET_SET_MOVE_KPI_INSTANCE, resultByCode, resultByInstance} from './riskAnalysisHelpers';
     import {degradedResults, levelMetadata, resultErrorCodes} from './levels/levelHelpers';
     import {levelErrorHealth} from './levels/partialNotice';
     import RiskLevelSection from './levels/RiskLevelSection.svelte';
     import RiskControllerHost from './RiskControllerHost.svelte';
+    import {riskFreeRate} from './riskFreeRateStore.svelte';
 
     interface Props {
         /** Already non-empty: the caller's `{#if}` is the guard, see above. */
@@ -105,10 +107,9 @@
 
     let {assetIds, assetLabels, assetIcons, dateStart, dateEnd, targetCurrency, benchmarkId, refreshVersion = 0, benchmarkPending = false, benchmarkPicker}: Props = $props();
 
-    // Sharpe and Sortino are charged against a zero risk-free rate here, as the
-    // correlation section already does, because this page has no control to set
-    // one — and inventing a rate the reader never chose would put a number in the
-    // denominator of every ratio on screen.
+    // Sharpe, Sortino, Omega and the semi-deviation are charged the reader's risk-free rate (RN-21), the one every
+    // risk page reads: L1°'s move table and L3°'s ratios alike. 0 % until the reader sets one.
+    let appliedRiskFreePercent = $derived(riskFreeRate.percent);
 
     /** L1°: its share of the wave, and never the benchmark — not even read here. */
     const lossController = createRiskPanelController(
@@ -117,7 +118,7 @@
             dateStart,
             dateEnd,
             targetCurrency,
-            appliedRiskFreePercent: 0,
+            appliedRiskFreePercent,
             refreshVersion,
         }),
         {includeAssetSetLossLevels: true},
@@ -133,7 +134,7 @@
         dateStart,
         dateEnd,
         targetCurrency,
-        appliedRiskFreePercent: 0,
+        appliedRiskFreePercent,
         refreshVersion,
         assetSetBenchmarkId: benchmarkId,
     });
@@ -148,6 +149,9 @@
     let dailyVar = $derived(resultByInstance(lossHistorical, ASSET_SET_DAILY_VAR_INSTANCE));
     let monthlyVar = $derived(resultByInstance(lossHistorical, ASSET_SET_MONTHLY_VAR_INSTANCE));
     let drawdown = $derived(resultByCode(lossHistorical, 'asset_set_drawdown'));
+    // «How did each one move?» (RN-19) reads the KPI of L1°'s request — its own instance — never L3°'s, which rides with
+    // the benchmark: the row's figures share one calendar.
+    let moveKpi = $derived(resultByInstance(lossHistorical, ASSET_SET_MOVE_KPI_INSTANCE));
     let riskReturn = $derived(resultByCode(paidHistorical, 'asset_set_risk_return'));
     let kpi = $derived(resultByCode(paidHistorical, 'asset_set_kpi'));
     let comparison = $derived(resultByCode(paidHistorical, 'asset_set_comparison'));
@@ -159,8 +163,11 @@
         [ASSET_SET_DAILY_VAR_INSTANCE]: 'risk.assetSet.levels.l1.columns.badDay',
         [ASSET_SET_MONTHLY_VAR_INSTANCE]: 'risk.assetSet.levels.l1.columns.badMonth',
     };
+    /** The move table's KPI, named by its table: L3°'s KPI shares the code, so a notice must say which one is missing. */
+    const MOVE_LABELS = {[ASSET_SET_MOVE_KPI_INSTANCE]: 'risk.assetSet.levels.move.title'};
 
     let l1Results = $derived([dailyVar, monthlyVar, drawdown]);
+    let moveResults = $derived([moveKpi, monthlyVar, drawdown]);
     let l3Results = $derived([riskReturn, kpi, comparison]);
 
     // Each frame keeps only what did not come back at all; what is partial, and why, the lab's
@@ -177,20 +184,24 @@
     let l1Errors = $derived([...resultErrorCodes(l1Results), ...lossDiscardedCodes]);
     let l1Metadata = $derived(levelMetadata(l1Results));
 
+    let moveHealth = $derived(levelErrorHealth(degradedResults([moveKpi], MOVE_LABELS)));
+    let moveErrors = $derived([...resultErrorCodes([moveKpi]), ...lossDiscardedCodes]);
+    let moveMetadata = $derived(levelMetadata(moveResults));
+
     let l3Health = $derived(levelErrorHealth(degradedResults(l3Results)));
     let l3Errors = $derived([...resultErrorCodes(l3Results), ...paidDiscardedCodes]);
     let l3Metadata = $derived(levelMetadata(l3Results));
 
     /**
-     * What the panel reads through `bind:this` for the lab's one notice: the six results the two
+     * What the panel reads through `bind:this` for the lab's one notice: the seven results the three
      * frames render, the controllers' own objects in page order (`null` where an answer had
-     * none), the two VaR horizons' labels, and both controllers' data-quality issues, L1°'s
+     * none), the labels of the three that share an analytic code (the two VaR horizons and the move KPI), and both controllers' data-quality issues, L1°'s
      * first. A function, so a `$derived` in the panel tracks what it reads here.
      */
     export function qualitySource(): AssetSetQualitySource {
         return {
-            results: [dailyVar, monthlyVar, drawdown, riskReturn, kpi, comparison],
-            labels: VAR_LABELS,
+            results: [dailyVar, monthlyVar, drawdown, moveKpi, riskReturn, kpi, comparison],
+            labels: {...VAR_LABELS, ...MOVE_LABELS},
             issues: [...lossController.dataQualityIssues, ...(paidController?.dataQualityIssues ?? [])],
         };
     }
@@ -212,6 +223,8 @@
      * 30/09), and only while there is a table to act on.
      */
     let lossTable = $state<DataTable<AssetSetHurtRow>>();
+    /** «How did each one move?»'s table, the same way: its toggle is the only way to the two hidden columns of Q21 c. */
+    let moveTable = $state<DataTable<AssetSetMoveRow>>();
     /** L3°'s table, the same way: its toggle beside L3°'s manual, only while the table is shown. */
     let riskTable = $state<DataTable<AssetSetPaidRow>>();
 </script>
@@ -232,8 +245,28 @@
     />
 </RiskLevelSection>
 
+<RiskLevelSection title={$t('risk.assetSet.levels.move.title')} level={1} testId="risk-asset-set-move-level" health={moveHealth} errorCodes={moveErrors} metadata={moveMetadata} docsPath="financial-theory/technical-analysis/risk-metrics/" actions={moveTable ? moveActions : undefined}>
+    <AssetSetMoveComparisonSection
+        bind:tableRef={moveTable}
+        {assetIds}
+        {assetLabels}
+        {assetIcons}
+        kpi={moveKpi}
+        {monthlyVar}
+        {drawdown}
+        loading={lossController.initialLoading}
+        failed={lossController.loadError}
+        discarded={lossController.loadDiscarded}
+        onretry={() => void lossController.loadBase(true)}
+    />
+</RiskLevelSection>
+
 {#snippet lossActions()}
     <ColumnVisibilityToggle tableRef={lossTable} />
+{/snippet}
+
+{#snippet moveActions()}
+    <ColumnVisibilityToggle tableRef={moveTable} />
 {/snippet}
 
 {#snippet riskActions()}

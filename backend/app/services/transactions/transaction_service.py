@@ -34,6 +34,7 @@ from backend.app.services.transactions.balances import TransactionBalancesMixin
 from backend.app.services.transactions.batch_costs import compute_wac_and_fx_issues, validate_cost_basis
 from backend.app.services.transactions.batch_creates import apply_creates, apply_promotes, resolve_create_links
 from backend.app.services.transactions.batch_edits import apply_deletes, apply_splits, apply_updates, make_standalone, pair_sides, validate_updated_pairs, warn_inverted_updated_pairs
+from backend.app.services.transactions.charges import link_charges
 from backend.app.services.transactions.event_suggestions import TransactionEventSuggestionsMixin
 from backend.app.services.transactions.promotion import TransactionPromotionMixin
 from backend.app.services.transactions.queries import TransactionQueryMixin
@@ -126,7 +127,7 @@ class TransactionService(TransactionAccessMixin, TransactionValidationMixin, Tra
         """Unified pipeline for both /validate (commit=False) and /commit (commit=True).
 
         Order: parse → decimal limits → dates → cost basis sign → access → delete → split → update → create → promote →
-        link → WAC → cost basis → balance replay → response. A refused access, a value past its column's
+        link → charge links → WAC → cost basis → balance replay → response. A refused access, a value past its column's
         integer digits (W-B58: the stages after compute with it), or a date outside its bounds (N74: the replay and
         the rates use it), stops the batch after the access check. A cost basis below 0 (J-60) does not: it overflows
         nothing, and the row's other refusals come in the same answer.
@@ -165,6 +166,7 @@ class TransactionService(TransactionAccessMixin, TransactionValidationMixin, Tra
         await apply_creates(self, context)
         await apply_promotes(self, context)
         resolve_create_links(self, context)
+        await link_charges(self, context)
 
         await compute_wac_and_fx_issues(self, context)
         await validate_cost_basis(self, context)

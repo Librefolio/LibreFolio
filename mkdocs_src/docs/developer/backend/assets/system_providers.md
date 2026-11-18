@@ -11,6 +11,7 @@ This section provides the technical deep-dive for each asset pricing provider in
 | [**Borsa Italiana**](provider_borsa_italiana.md) | `borsa_italiana` | History, Search, Metadata, URL resolution | ✅ | ✅ | ISIN | Beta |
 | [**CSS Scraper**](provider_cssscraper.md) | `css_scraper` | Current Value | ✅ | ✅ | URL | Beta |
 | [**Scheduled Investment**](provider_scheduled_investment.md) | `scheduled_investment` | History (Calc), Events | — | ✅ | AUTO_GENERATED | Beta |
+| [**CoinGecko**](provider_coingecko.md) | `coingecko` | History, Search, Metadata, Current Value (bulk) | ✅ | ✅ | PROVIDER_ID | Beta |
 | **Mock Provider** | `mockprov` | History, Search | — | — | TICKER, ISIN | Alpha |
 
 ### 🔑 Feature Key
@@ -28,6 +29,12 @@ This section provides the technical deep-dive for each asset pricing provider in
 
 - **CSS Scraper** `get_asset_url` returns the identifier itself (which is the URL to scrape).
 - **Scheduled Investment** uses `AUTO_GENERATED` identifier type — no external identifier needed.
+- **CoinGecko** uses `PROVIDER_ID`: its id (`bitcoin`) is CoinGecko's own code, no official identifier. The plugin
+  receives it as `IdentifierType.OTHER`, as a `URL` is. Its search rows are typed `OTHER`. For a provider that accepts
+  `PROVIDER_ID`, and for it only, choosing such a row gives the assignment `PROVIDER_ID` and adds `<provider>:<id>`
+  (`coingecko:bitcoin`) to the asset's other identifiers, as its metadata does; the asset's ticker is the coin's
+  symbol, from the metadata. Any other provider's `OTHER` row behaves as before: Borsa Italiana's fallback keeps the
+  fund's bare code, and the server reads `OTHER` as `URL` (project 76).
 - **Mock Provider** (`mockprov`) is test-only: always registered, but served only when `LIBREFOLIO_TEST_MODE` is on; outside test mode its registry withholds it, and naming it reaches nothing ([Test-Only Plugins](../../architecture/patterns/plugin_settings.md#test-only)).
 
 ---
@@ -66,6 +73,20 @@ Italian market data provider — fetches stocks, bonds (BTP), and ETFs listed on
 - **URL resolution**: `resolvable_url_domains = ["borsaitaliana.it"]`; `resolve_url(url)` returns the canonical IT + EN result set for fund/detail pages, then search flattens and de-dupes by `(identifier, language)`
 - **Key details**: Full OHLCV history for listed instruments, dual-language search with flag emojis, fund NAV pricing by internal `codice_fondo` (not ISIN), current fund NAV only when NAV date is today, fund history as one NAV point at its real date, `identifier_other` stored as a JSON list for alternative technical identifiers
 - 📖 [Technical Details →](provider_borsa_italiana.md)
+
+---
+
+## 🦎 [CoinGecko (`coingecko`)](provider_coingecko.md)
+
+Cryptocurrency prices from CoinGecko through its official SDK (`coingecko-sdk` 5.1.0), on the account of the shared
+group `coingecko` (an API key; the free Demo plan is enough).
+
+- **Features**: Current Value (in bulk too), History (daily), Search, Metadata
+- **Identifier type**: `PROVIDER_ID`, CoinGecko's own id (`bitcoin`), received as `IdentifierType.OTHER`
+- **Provider params**: `vs_currency`, required, one of 45 national currencies; it must be the asset's currency
+- **Key details**: the point at 00:00 UTC of day D is the close of D−1; the Demo plan answers the last 365 days, and the
+  refresh says from which day; «Powered by CoinGecko» shown with its prices
+- 📖 [Technical Details →](provider_coingecko.md)
 
 ---
 

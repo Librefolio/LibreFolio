@@ -367,7 +367,7 @@
                         {$t('risk.levels.l2.correlation.noRedundancy')}
                     </p>
                 {/if}
-                <CorrelationHeatmap output={correlation} {assetLabels} assetTypes={matrixMetadata.types} assetSectors={matrixMetadata.sectors} assetRegions={matrixMetadata.regions} />
+                <CorrelationHeatmap output={correlation} {assetLabels} assetTypes={matrixMetadata.types} assetSectors={matrixMetadata.sectors} assetRegions={matrixMetadata.regions} metadataStatus={matrixMetadata.status} />
             </div>
         {/if}
     {/if}

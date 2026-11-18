@@ -30,13 +30,15 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {notify} from '$lib/stores/app/notify.svelte';
     import {ensureCurrenciesLoaded, getAllCurrencies} from '$lib/stores/reference/currencyStore';
-    import {ensureCountriesLoaded, getAllCountries} from '$lib/stores/reference/countryStore';
+    import {ensureCountriesLoaded, getAllCountries, getCountryInfo} from '$lib/stores/reference/countryStore';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
     import {currentLanguage} from '$lib/stores/app/language';
     import {fractionToPercent} from '$lib/utils/core/exactDecimal';
     import ProviderComparisonModal from '../ProviderComparisonModal.svelte';
     import type {DiffItem} from '../ProviderComparisonModal.svelte';
     import {patchIssueMessage, type AssetPatchAnswer, type AssetPatchIssue} from '../assetPatchResult';
     import type {ProfileVoice} from './profileStore';
+    import {formatProfileValue} from './profileTabState';
     import {
         applyDifferences,
         compareAsk,
@@ -263,28 +265,11 @@
         return sourceNames[code] ?? code;
     }
 
-    /** A stored value as the window shows it: a percentage in percent, a choice by its label, an amount with its currency. */
+    /** A stored value as the window shows it: as the «Profilo» tab writes it (`formatProfileValue`), one way for the app. */
     function display(key: string, value: unknown): string {
         const voice = voices.get(key);
-        if (value === null || value === undefined || value === '' || !voice) return '';
-        if (voice.shape === 'percentage') return `${fractionToPercent(String(value)) ?? String(value)} %`;
-        if (voice.shape === 'choice') return $t(`assets.profile.choices.${key}.${String(value)}`);
-        if (voice.shape === 'amount') {
-            const amount = value as {amount?: unknown; currency?: unknown};
-            return `${String(amount.amount ?? '')} ${String(amount.currency ?? '')}`.trim();
-        }
-        if (voice.shape === 'map') {
-            return Object.entries(value as Record<string, unknown>)
-                .slice(0, 3)
-                .map(([name, weight]) => `${name} ${fractionToPercent(String(weight)) ?? weight} %`)
-                .join(', ');
-        }
-        if (voice.shape === 'table') {
-            const schedule = value as Array<{from?: string; to?: string}>;
-            return schedule.length ? `${schedule[0].from ?? ''} → ${schedule[schedule.length - 1].to ?? ''}` : '';
-        }
-        if (voice.unit) return `${String(value)} ${$t(`assets.profile.units.${voice.unit}`)}`;
-        return String(value);
+        if (!voice) return '';
+        return formatProfileValue(voice, value, {translate: (label) => $t(label), locale: uiLocale(), countryName: (iso3) => getCountryInfo(iso3).name});
     }
 
     function issueText(issue: RowIssue): string {

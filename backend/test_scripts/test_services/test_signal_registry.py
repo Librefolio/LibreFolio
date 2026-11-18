@@ -30,7 +30,8 @@ from backend.app.services.signals.registry import SignalPluginRegistry
 CALENDAR_SIGNAL_CODE = "ASSET_CALENDAR_ROLLING_RETURN"
 REMOVED_SIGNAL_CODE = "RISK_ROLLING_RETURN"
 CALENDAR_REPRESENTATIVE_WINDOWS = (1, 7, 14, 30, 60, 90, 365, 1095)
-PUBLIC_SIGNAL_COUNT = 22
+# RN-22 added the rolling semi-deviation and the rolling Omega.
+PUBLIC_SIGNAL_COUNT = 24
 
 
 class DemoParams(BaseModel):
@@ -670,8 +671,8 @@ def test_catalog_visibility_partitions_the_registry_and_nothing_is_hidden_any_mo
     exactly the visible half of the registered plugins. Since decision 29 the
     hidden half is empty: the calendar plugin, the one hidden executable, is
     public, and the observation-count rolling return it replaces is no longer
-    registered — one plugin out, one in, so the 22-entry public overlay count
-    holds and the registry shrinks to it."""
+    registered — one plugin out, one in, so the public overlay count held
+    and the registry shrank to it (24 entries since RN-22's two risk signals)."""
     registered_codes = set(SignalPluginRegistry.list_plugin_codes())
     catalog_codes = {definition.signal_code for definition in SignalPluginRegistry.list_definitions()}
     visible_codes = {code for code in registered_codes if SignalPluginRegistry.get_plugin(code).catalog_visible}

@@ -56,6 +56,8 @@ const scatter = vi.hoisted(() => {
         points: readonly {id: string; role?: string}[];
         testId?: string;
         selectedId?: string | null;
+        /** Where the line of the risk-free rate starts, as an annual fraction. */
+        riskFreeRate?: number;
         onpointclick?: (pointId: string) => void;
     }
     const mounts: {testId: string | undefined; live: StandInProps}[] = [];
@@ -145,7 +147,6 @@ const BASE: Props = {
     benchmarkName: null,
     assetNames: ASSET_NAMES,
     assetIcons: new Map([[1, '/icons/asset-types/stock.png']]),
-    appliedRiskFreePercent: 2,
 };
 const WITH_UNHELD: Props = {...BASE, comparisonResult: COMPARISON_UNHELD, benchmarkName: BENCHMARK_NAME};
 const WITH_HELD: Props = {...BASE, comparisonResult: COMPARISON_HELD, benchmarkName: ASSET_NAMES[2]};
@@ -265,6 +266,28 @@ afterEach(() => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+// RN-21: the line starts at the rate the answer was charged (`metadata.risk_free`), not at a value read beside it — so a
+// page whose rate just changed never draws the old answer's dots under the new rate's line.
+describe('L3RiskAdjusted — the line starts at the rate of the answer', () => {
+    const charged = (rate: number): RiskAnalyticResult => ({...RISK_RETURN, metadata: {mode: 'current_composition', risk_free: {annual_rate: rate, source: 'analytic_param', currency: 'EUR'}}}) as unknown as RiskAnalyticResult;
+
+    it('reads the risk/return answer’s own rate', () => {
+        mount({...BASE, currentResults: [charged(0.03), CURRENT_KPI]});
+        expect(handedToScatter().riskFreeRate).toBe(0.03);
+    });
+
+    it('on the fallback to the history, reads the rate of the KPI the cards show', () => {
+        const charged = {...HISTORICAL_KPI, metadata: {...((HISTORICAL_KPI as {metadata?: object}).metadata ?? {}), risk_free: {annual_rate: 0.025, source: 'analytic_param', currency: 'EUR'}}} as unknown as RiskAnalyticResult;
+        mount({...BASE, historicalResults: [charged], currentResults: []});
+        expect(screen.getByTestId('risk-l3')).toHaveAttribute('data-risk-free-rate', '0.025');
+    });
+
+    it('starts at 0 when the answer names no rate', () => {
+        mount(BASE);
+        expect(handedToScatter().riskFreeRate).toBe(0);
+    });
+});
 
 describe('L3RiskAdjusted — the four cards are the portfolio’s row now', () => {
     it('draws the table, and none of the cards that used to stand above it', () => {
@@ -548,5 +571,98 @@ describe('L3RiskAdjusted — the notes under the chart, one idea per line (T10)'
         expect(lines).toHaveLength(6);
         expect(lines[4]).toHaveAttribute('data-anchor', 'portfolio');
         expect(normalize(lines[4].textContent)).toBe(normalize(t('risk.levels.l3.scatter.notes.line')));
+    });
+});
+
+// RN-17 (consultant 17/11, «A»): on one asset `asset_risk_return` answers the asset's own pair, weight 1. The table is
+// the asset and the benchmark — the asset never repeated as a holding — with its annual return, and no weight column.
+const ASSET_RISK_RETURN = result(
+    'base-current_composition-asset_risk_return',
+    'asset_risk_return',
+    {kind: 'risk_return', portfolio_volatility: 0.139, portfolio_expected_annual_return: 0.128, cash_weight: 0, excluded_weight: 0, items: [{asset_id: 1, weight: 1, volatility: 0.139, expected_annual_return: 0.128}]},
+    'current_composition',
+);
+
+describe('L3RiskAdjusted — on one asset, the asset and the benchmark, with the asset’s annual return', () => {
+    it('draws the asset once, with its annual return, the benchmark after it, and no weight column', () => {
+        mount({historicalResults: [HISTORICAL_KPI], currentResults: [ASSET_RISK_RETURN, CURRENT_KPI], comparisonResult: COMPARISON_UNHELD, benchmarkName: BENCHMARK_NAME, subjectLabel: 'Invented ETF', oneAsset: true} as Props);
+
+        expect(drawnOrder(), 'the asset repeated as a holding of itself').toEqual(['ref-portfolio', `ref-${BENCHMARK_ID}`]);
+        expect(cellOf('ref-portfolio', 'expectedReturn')).toHaveTextContent('+12.8%');
+        expect(headerOrder(), 'a weight column on one asset: always 100 %').not.toContain('weight');
+    });
+});
+
+// RN-17: on the Asset Detail the subject of the table is the asset, not a portfolio.
+describe('L3RiskAdjusted — on one asset, the subject row is the asset', () => {
+    it('names the subject row with the asset’s name, never «Portfolio», and keeps the benchmark after it', () => {
+        mount({historicalResults: [HISTORICAL_KPI], currentResults: [], comparisonResult: COMPARISON_UNHELD, benchmarkName: BENCHMARK_NAME, subjectLabel: 'Invented ETF'} as Props);
+
+        expect(drawnOrder()).toEqual(['ref-portfolio', `ref-${BENCHMARK_ID}`]);
+        const subject = within(rowById('ref-portfolio')).getByTestId('risk-l3-row-ref-name');
+        expect(normalize(subject.textContent)).toBe('Invented ETF');
+        expect(normalize(subject.textContent)).not.toBe(normalize(t('risk.levels.l3.scatter.portfolio')));
+    });
+});
+
+// RN-17 (c): on one asset the level speaks of the asset — the title without «asset by asset» and without the perimeter
+// (one asset weighs 1: «on the current composition» says nothing). The portfolio's line note («runs through the
+// portfolio») never reaches one asset: with no benchmark the asset is one dot, and one dot draws no chart and no notes;
+// with a benchmark the line runs through the benchmark.
+describe('L3RiskAdjusted — on one asset, in the asset’s words', () => {
+    it('titles the table «risk against return» with no perimeter, and with no benchmark draws no chart, so no line note', () => {
+        mount({historicalResults: [HISTORICAL_KPI], currentResults: [ASSET_RISK_RETURN, CURRENT_KPI], comparisonResult: null, subjectLabel: 'Invented ETF', oneAsset: true} as Props);
+
+        expect(normalize(screen.getByTestId('risk-l3-title').textContent)).toBe(normalize(t('risk.levels.l3.scatter.titleOneAsset')));
+        expect(screen.queryByTestId('risk-l3-risk-return'), 'one dot drawn as a chart').toBeNull();
+        expect(screen.queryByTestId('risk-l3-scatter-line')).toBeNull();
+    });
+
+    it('with a benchmark, runs the line through the benchmark, never «through the portfolio»', () => {
+        mount({historicalResults: [HISTORICAL_KPI], currentResults: [ASSET_RISK_RETURN, CURRENT_KPI], comparisonResult: COMPARISON_UNHELD, benchmarkName: BENCHMARK_NAME, subjectLabel: 'Invented ETF', oneAsset: true} as Props);
+
+        const line = screen.getByTestId('risk-l3-scatter-line');
+        expect(line).toHaveAttribute('data-anchor', 'benchmark');
+        expect(normalize(line.textContent)).toBe(normalize(t('risk.levels.l3.scatter.notes.lineBenchmark')));
+    });
+
+    it('keeps the portfolio’s words on a portfolio: the title with its perimeter, the line through the portfolio', () => {
+        mount({historicalResults: [HISTORICAL_KPI], currentResults: [ASSET_RISK_RETURN, CURRENT_KPI], comparisonResult: null} as Props);
+
+        expect(normalize(screen.getByTestId('risk-l3-title').textContent)).toBe(normalize(`${t('risk.levels.l3.scatter.title')} · ${t('risk.levels.l3.perimeter.current_composition')}`));
+        expect(normalize(screen.getByTestId('risk-l3-scatter-line').textContent)).toBe(normalize(t('risk.levels.l3.scatter.notes.line')));
+    });
+});
+
+// RN-18 (the consultant, 17/11/2026, option A): on the Asset Detail, volatility, annual return, Sharpe and Sortino live
+// only in L3's asset row — «How does it move?» does not repeat them — so the row must stand without a benchmark chosen.
+describe('L3RiskAdjusted — on one asset with no benchmark, the asset’s four figures', () => {
+    it('draws the asset’s row with its volatility, annual return, Sortino and Sharpe, and no benchmark row', () => {
+        mount({historicalResults: [HISTORICAL_KPI], currentResults: [ASSET_RISK_RETURN, CURRENT_KPI], comparisonResult: null, subjectLabel: 'Invented ETF', oneAsset: true} as Props);
+
+        expect(drawnOrder()).toEqual(['ref-portfolio']);
+        for (const column of ['volatility', 'expectedReturn', 'sortino', 'sharpe']) {
+            expect(cellOf('ref-portfolio', column).textContent?.trim(), `the asset's ${column} is not drawn without a benchmark`).toMatch(/\d/);
+        }
+    });
+});
+
+// RN-18b (the consultant's texts, 17/11/2026): L3's Portfolio row says its perimeter — today's holdings — beside the
+// block «How does it move?», which reads the period as lived. Pinned on the shipped English catalogue.
+describe('L3RiskAdjusted — the Portfolio row says its perimeter', () => {
+    it('names the row «Portfolio, today’s holdings» in English, through its own key', () => {
+        mount({historicalResults: [HISTORICAL_KPI], currentResults: [ASSET_RISK_RETURN, CURRENT_KPI], comparisonResult: null} as Props);
+
+        expect(t('risk.levels.l3.scatter.portfolio')).toBe("Portfolio, today's holdings");
+        expect(normalize(within(rowById('ref-portfolio')).getByTestId('risk-l3-row-ref-name').textContent)).toBe(normalize(t('risk.levels.l3.scatter.portfolio')));
+    });
+});
+
+describe('L3RiskAdjusted — the Portfolio row names the perimeter its figures have', () => {
+    it('on the fallback to the historical KPI, the row is the plain «Portfolio», as the title says «on the real history»', () => {
+        mount({historicalResults: [HISTORICAL_KPI], currentResults: [], comparisonResult: null} as Props);
+
+        expect(normalize(within(rowById('ref-portfolio')).getByTestId('risk-l3-row-ref-name').textContent)).toBe(normalize(t('risk.levels.l3.scatter.portfolioName')));
+        expect(t('risk.levels.l3.scatter.portfolioName')).not.toBe(t('risk.levels.l3.scatter.portfolio'));
     });
 });

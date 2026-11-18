@@ -26,11 +26,12 @@ from backend.app.services.risk.eligibility import (
     period_limits_coverage,
     suggested_analysis_ranges,
 )
-from backend.app.services.risk.plan import AnalyticPlan, is_geography_hypothetical_plan, is_historical_replay_plan, is_hypothetical_plan
+from backend.app.services.risk.plan import AnalyticPlan, is_geography_hypothetical_plan, is_historical_replay_plan, is_simulation_plan, reads_asset_profile
 from backend.app.services.risk.registry import RiskAnalyticRegistry
 from backend.app.services.risk.replay import prepare_historical_replay_context
 from backend.app.services.risk.results import available_observations, build_execution_context, requires_valid_composition, result_metadata, success_result, unavailable_result, with_warning_asset_names
 from backend.app.services.risk.scope import RiskScopeNotFoundError, bounded_range, geography_group_members, load_asset_classifications, load_existing_asset_ids, load_never_priced_asset_ids, load_scope_inputs, prepare_asset_series, scope_exclusions
+from backend.app.services.risk.simulation_window import prepare_simulation_context
 
 logger = get_logger(__name__)
 
@@ -134,7 +135,7 @@ class RiskService:
             prepared=prepared,
             never_priced_asset_ids=never_priced_asset_ids,
         )
-        if any(is_hypothetical_plan(plan) for plan in plans.values()):
+        if any(reads_asset_profile(plan) for plan in plans.values()):
             context = replace(
                 context,
                 asset_classifications=await load_asset_classifications(self.db, scope_inputs.requested_asset_ids, request.date_range.end or request.date_range.start),
@@ -165,17 +166,27 @@ class RiskService:
                 )
                 continue
             plan_context = context
-            if is_historical_replay_plan(plan):
+            if is_historical_replay_plan(plan) or is_simulation_plan(plan):
                 try:
-                    plan_context = await prepare_historical_replay_context(
-                        self.db,
-                        plan=plan,
-                        context=context,
-                        scope_inputs=scope_inputs,
-                        existing_asset_ids=existing_asset_ids,
-                        target_currency=request.target_currency,
-                        market_holidays=market_holidays,
-                    )
+                    if is_simulation_plan(plan):
+                        plan_context = await prepare_simulation_context(
+                            self.db,
+                            request=request,
+                            scope_inputs=scope_inputs,
+                            never_priced_asset_ids=never_priced_asset_ids,
+                            horizon_days=plan.params.horizon_days,
+                            market_holidays=market_holidays,
+                        )
+                    else:
+                        plan_context = await prepare_historical_replay_context(
+                            self.db,
+                            plan=plan,
+                            context=context,
+                            scope_inputs=scope_inputs,
+                            existing_asset_ids=existing_asset_ids,
+                            target_currency=request.target_currency,
+                            market_holidays=market_holidays,
+                        )
                 except RiskUnavailableError as exc:
                     results[index] = unavailable_result(
                         plan.request,

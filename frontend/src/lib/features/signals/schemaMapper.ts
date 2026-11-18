@@ -63,7 +63,7 @@ function readAffectedOutputs(key: string, value: unknown): string[] | undefined 
 
 function readSemanticControl(key: string, value: unknown): SignalParamDescriptor['control'] {
     if (value === undefined) return undefined;
-    if (value === 'comparison_asset') return value;
+    if (value === 'comparison_asset' || value === 'risk_free_rate') return value;
     throw new UnsupportedSignalSchemaError(`Signal parameter '${key}' has unsupported x-control '${String(value)}'`);
 }
 

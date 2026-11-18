@@ -1609,6 +1609,9 @@ async function fb7bResetPair(page: Page, quote: string, moment: 'precondition' |
     expect(probe.status(), `${moment}: no EUR-${quote} rate is stored, so converting ${quote} today must fail, got ${await probe.text()}`).toBe(404);
 }
 
+/** Who a reserved quote belongs to: one per test, two for FB-7c (its known pair and the pair new to the session). */
+type QuoteOwner = 'allStart' | 'minRequest' | 'secondVisit' | 'knownPair' | 'newcomer';
+
 fb7bTest.describe('FB-7b FX list: All starts at the first stored rate', () => {
     // A ceiling, never a delay: a sign-in, an API seeding and the page loads each test waits for by name.
     fb7bTest.describe.configure({timeout: 60_000});
@@ -1624,12 +1627,12 @@ fb7bTest.describe('FB-7b FX list: All starts at the first stored rate', () => {
      * or catalogue of the worktree (grep of frontend/e2e, frontend/src/lib/i18n, backend/test_scripts and scripts): not the
      * ones the FX detail's FB-7b, the sync or the provider-editor tests reserve either.
      */
-    const QUOTE: Readonly<Record<string, Readonly<Record<'allStart' | 'minRequest' | 'secondVisit', string>>>> = {
-        desktop: {allStart: 'XAF', minRequest: 'YER', secondVisit: 'MDL'},
-        mobile: {allStart: 'SYP', minRequest: 'SHP', secondVisit: 'MRU'},
+    const QUOTE: Readonly<Record<string, Readonly<Record<QuoteOwner, string>>>> = {
+        desktop: {allStart: 'XAF', minRequest: 'YER', secondVisit: 'MDL', knownPair: 'FJD', newcomer: 'GNF'},
+        mobile: {allStart: 'SYP', minRequest: 'SHP', secondVisit: 'MRU', knownPair: 'KMF', newcomer: 'MVR'},
     };
 
-    function quoteFor(owner: 'allStart' | 'minRequest' | 'secondVisit'): string {
+    function quoteFor(owner: QuoteOwner): string {
         const project = fb7bTest.info().project.name;
         const quote = QUOTE[project]?.[owner];
         if (!quote) throw new Error(`No currency is reserved for the FB-7b list ${owner} test on project "${project}": reserve one that sorts after EUR and that no seed, spec or test uses`);
@@ -1784,6 +1787,53 @@ fb7bTest.describe('FB-7b FX list: All starts at the first stored rate', () => {
         expect(
             onList.filter((ask) => ask.start === 'min'),
             'the first day is remembered for the session: the list does not ask the pair from min again',
+        ).toEqual([]);
+    });
+
+    // FB-7c (the coordinator's triage, 18/11): a pair new to the session must not send every pair back to `min`. Between the
+    // two visits a second pair appears, as a neighbouring spec's pair does on the shared database: the known pair is not
+    // asked from min again, the newcomer is. Deterministic: the newcomer is created here, not hoped for from a neighbour.
+    fb7bTest('FB-7c a pair new to the session is asked from min, and the known pair is not asked from min again', async ({page, ownedFxQuotes}) => {
+        const known = quoteFor('knownPair');
+        const newcomer = quoteFor('newcomer');
+        await seedOldRatePair(page, ownedFxQuotes, known);
+        const asks: Array<PairAsk & {quote: string}> = [];
+        page.on('request', (request) => {
+            for (const quote of [known, newcomer]) asks.push(...pairAsksFor(request, quote, page.url()).map((ask) => ({...ask, quote})));
+        });
+        await openListOnAll(page);
+        await ownCard(page, known);
+        await expectFromOnOrBefore(page, FIRST_RATE_DAY, 'first visit: «All» starts on the oldest first rate');
+
+        // Away, in-app; the newcomer appears meanwhile.
+        await page.getByTestId('nav-assets').click();
+        await expect(page).toHaveURL(/\/assets(?:[?#]|$)/, {timeout: 15_000});
+        await expect(page.getByTestId('fx-page'), 'the list really unmounted').toHaveCount(0);
+        await seedOldRatePair(page, ownedFxQuotes, newcomer);
+
+        // Back, in-app.
+        const mark = asks.length;
+        await page.goBack();
+        await expect(page, 'back on the list, still on «All»').toHaveURL(/\/fx\?.*start=min/, {timeout: 15_000});
+        const list = page.getByTestId('fx-page');
+        await expect(list).toBeVisible({timeout: 15_000});
+        await waitForSettled(list, 30_000);
+        await ownCard(page, known);
+        await ownCard(page, newcomer);
+        await expectFromOnOrBefore(page, FIRST_RATE_DAY, 'second visit: «All» still starts on the oldest first rate');
+
+        const onList = asks.slice(mark).filter((ask) => new URL(ask.pageUrl).pathname === '/fx');
+        expect(
+            onList.filter((ask) => ask.quote === newcomer && ask.start === 'min'),
+            'precondition: the pair new to the session is asked from min',
+        ).not.toEqual([]);
+        expect(
+            onList.filter((ask) => ask.quote === known && ask.start === 'min'),
+            'the known pair is not asked from min again because another pair is new',
+        ).toEqual([]);
+        expect(
+            onList.flatMap((ask) => ask.requestStarts).filter((start) => start === PLACEHOLDER_START),
+            `no item of the second visit asks from the ${PLACEHOLDER_START} placeholder`,
         ).toEqual([]);
     });
 });

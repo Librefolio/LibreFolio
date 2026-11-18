@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "rateShock": {
+        "name": "Rates rising or falling",
+        "description": "An asset's price under a parallel move of its yield, from the modified duration read in its profile: a first-order estimate, −duration × the move."
+      }
+    }
+  }
+}

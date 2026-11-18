@@ -20,7 +20,7 @@
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
     import {axiosInstance, zodiosApi} from '$lib/api';
-    import {ChartLine, Pencil, RefreshCw, Ruler, Settings, Shield, X} from 'lucide-svelte';
+    import {ChartLine, IdCard, Pencil, RefreshCw, Ruler, Settings, Shield, X} from 'lucide-svelte';
     import AssetDataEditorSection from '$lib/features/assets/AssetDataEditorSection.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
@@ -38,14 +38,15 @@
     import AssetDetailSignalsPanel from '$lib/features/assets/detail/AssetDetailSignalsPanel.svelte';
     import AssetDetailMeasuresSection from '$lib/features/assets/detail/AssetDetailMeasuresSection.svelte';
     import AssetDetailHeader from '$lib/features/assets/detail/AssetDetailHeader.svelte';
-    import AssetDetailMetadataPanel from '$lib/features/assets/detail/AssetDetailMetadataPanel.svelte';
+    import AssetProfileTab from '$lib/features/assets/detail/AssetProfileTab.svelte';
+    import {invalidateAssetProfile} from '$lib/features/assets/profile/profileStore';
     import AssetDetailToolbarActions from '$lib/features/assets/detail/AssetDetailToolbarActions.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import FxPairAddModal from '$lib/features/fx/FxPairAddModal.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
-    import AssetRiskScenariosView from '$lib/features/risk/AssetRiskScenariosView.svelte';
+    import AssetRiskTab from '$lib/features/risk/AssetRiskTab.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {
@@ -63,7 +64,19 @@
         type SignalInstanceResult,
         type SignalProblem,
     } from '$lib/features/signals';
-    import {DEFAULT_AXIS_SCALE, detailModesForPrimaryView, effectiveCalendarReturnWindow, normalizeAxisScaleSettings, primaryViewForDetailModes, resolveLineShape, setPairSettings, getGlobalLineShape, lineShapeFollowsGlobal, getSettingsForPair, type AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import {
+        DEFAULT_AXIS_SCALE,
+        detailModesForPrimaryView,
+        effectiveCalendarReturnWindow,
+        normalizeAxisScaleSettings,
+        primaryViewForDetailModes,
+        resolveLineShape,
+        setPairSettings,
+        getGlobalLineShape,
+        lineShapeFollowsGlobal,
+        getSettingsForPair,
+        type AxisScaleSettings,
+    } from '$lib/stores/chartSettingsStore.svelte';
     import type {LineShape} from '$lib/components/charts/lineShape';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {invalidateFxRoutes} from '$lib/stores/reference/fxRoutesStore';
@@ -85,8 +98,30 @@
     import {buildOverlaySignalInfoMap} from '$lib/components/charts/signalLabel';
     import {ensureSignalFxPairs, fxPairSlugsOf} from '$lib/features/signals/comparisonSeries';
     import {buildFxPairComparisonQuery, fxPairComparisonViews} from '$lib/features/signals/crossTypeCalendar';
-    import {applyComparisonAssetsData, buildComparisonSyncRange, clearComparisonAssetsData, earliestComparisonDate, type ComparisonAssetsLoadResult, collectConfiguredComparisonFxSlugs, comparisonAnswerGenerations, comparisonAnswerIsCacheable, comparisonAnswerKey, loadComparisonAssetsData} from '$lib/features/signals/loadComparisonData';
-    import {buildChartRequestBody, calendarComparisonFingerprint as chartCalendarComparisonFingerprint, calendarDataFingerprint as chartCalendarDataFingerprint, calendarPeerAssetIds, calendarReturnRequests, chartCurrencies, fxPairTargetsOf, heldPointsToChartPoints, priceComparisonLoadFingerprint as chartPriceComparisonLoadFingerprint, priceComparisonRuntimeIsAuthoritative as chartPriceComparisonRuntimeIsAuthoritative} from '$lib/features/assets/detail/assetDetailChartRequest';
+    import {
+        applyComparisonAssetsData,
+        buildComparisonSyncRange,
+        clearComparisonAssetsData,
+        earliestComparisonDate,
+        type ComparisonAssetsLoadResult,
+        collectConfiguredComparisonFxSlugs,
+        comparisonAnswerGenerations,
+        comparisonAnswerIsCacheable,
+        comparisonAnswerKey,
+        loadComparisonAssetsData,
+    } from '$lib/features/signals/loadComparisonData';
+    import {
+        buildChartRequestBody,
+        calendarComparisonFingerprint as chartCalendarComparisonFingerprint,
+        calendarDataFingerprint as chartCalendarDataFingerprint,
+        calendarPeerAssetIds,
+        calendarReturnRequests,
+        chartCurrencies,
+        fxPairTargetsOf,
+        heldPointsToChartPoints,
+        priceComparisonLoadFingerprint as chartPriceComparisonLoadFingerprint,
+        priceComparisonRuntimeIsAuthoritative as chartPriceComparisonRuntimeIsAuthoritative,
+    } from '$lib/features/assets/detail/assetDetailChartRequest';
     import {comparisonAssetIds as comparisonPeerAssetIds, detailPageSignalSources, parseBackendSignalResults, signalDataContextFingerprint} from '$lib/features/signals/chartPageSignals';
     import {renderBackendResults, renderCalendarPairComparisons, renderLocalSignals, type SignalDataSources} from '$lib/features/signals/chartSignalRendering';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
@@ -130,13 +165,9 @@
         pageAlive = false;
     });
 
-    const ASSET_DETAIL_TAB_IDS = ['overview', 'risk'] as const;
+    const ASSET_DETAIL_TAB_IDS = ['overview', 'profile', 'risk'] as const;
     type AssetDetailTabId = (typeof ASSET_DETAIL_TAB_IDS)[number];
     let activeTab = $state<AssetDetailTabId>('overview');
-    let assetDetailTabs = $derived([
-        {id: 'overview', label: $t('risk.assetDetail.overviewTab'), icon: ChartLine, testId: 'asset-detail-tab-overview'},
-        {id: 'risk', label: $t('risk.assetDetail.riskScenariosTab'), icon: Shield, testId: 'asset-detail-tab-risk', guideAnchor: 'asset.detail.risk'},
-    ]);
 
     $effect(() => {
         activeTab = getResolvedTabParam($page.url.searchParams, ASSET_DETAIL_TAB_IDS, 'overview');
@@ -150,6 +181,16 @@
     let providerAssignment = $state<ProviderAssignmentFlat | null>(null);
     // Unknown is not "manual": until the assignment request settles, Sync is merely disabled.
     let providerAssignmentLoaded = $state(false);
+    /** How many enrichers the asset has; null until known (the dot waits for it). */
+    let assetEnricherCount = $state<number | null>(null);
+    /** Bumped after anything that writes the profile: the «Profilo» tab reads again. */
+    let profileRefreshKey = $state(0);
+    // The dots (plan 68, E3): «Panoramica» without a price provider, «Profilo» without an enricher — both once known.
+    let assetDetailTabs = $derived([
+        {id: 'overview', label: $t('risk.assetDetail.overviewTab'), icon: ChartLine, testId: 'asset-detail-tab-overview', dot: providerAssignmentLoaded && providerAssignment === null ? {label: $t('risk.assetDetail.overviewNoPriceProvider')} : undefined},
+        {id: 'profile', label: $t('risk.assetDetail.profileTab'), icon: IdCard, testId: 'asset-detail-tab-profile', guideAnchor: 'asset.detail.profile', dot: assetEnricherCount === 0 ? {label: $t('risk.assetDetail.profileNoEnrichers')} : undefined},
+        {id: 'risk', label: $t('risk.assetDetail.riskScenariosTab'), icon: Shield, testId: 'asset-detail-tab-risk', guideAnchor: 'asset.detail.risk'},
+    ]);
     let chartData: any[] = $state([]);
     let events: any[] = $state([]);
     let comparisonEvents = $state<Map<number, any[]>>(new Map());
@@ -247,7 +288,6 @@
     let showCalendarMeasures = $state(false);
     let showSignals = $state(false);
     let showDataEditor = $state(false);
-    let showMetadata = $state(false);
 
     // Filter bar layout is now owned by PageToolbar (shared with dashboard/broker-detail/assets
     // list) — layoutMode is bound out (see bind:layoutMode below) for the one usage elsewhere on
@@ -319,7 +359,7 @@
     let allConfiguredFxSlugs: string[] = $state([]);
     let allAssets: Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null; currency?: string; is_benchmark?: boolean}> = $state([]);
 
-    // Classification data (loaded when has_metadata)
+    // Classification data (read with the asset's enrichers, for the «Profilo» dot)
     let sectorDistribution: Record<string, number> | null = $state(null);
     let geographicDistribution: Record<string, number> | null = $state(null);
     let shortDescription: string | null = $state(null);
@@ -485,10 +525,6 @@
     let assetProviderName = $derived.by(() => {
         void $assetProvidersVersion;
         return assetInfo?.provider_code ? getAssetProviderName(assetInfo.provider_code) : '';
-    });
-    let assignmentProviderName = $derived.by(() => {
-        void $assetProvidersVersion;
-        return providerAssignment?.provider_code ? getAssetProviderName(providerAssignment.provider_code) : '';
     });
     let isManualOnly = $derived(providerAssignmentLoaded && !providerAssignment);
     let isInactive = $derived(assetInfo?.active === false);
@@ -709,19 +745,15 @@
         }
     }
 
-    let identifiersList = $derived.by((): [string, string][] => {
+    /** The asset's identifiers other than the ISIN and the ticker, which the «Profilo» tab shows on their own rows. */
+    let otherIdentifiers = $derived.by((): [string, string][] => {
         if (!assetInfo) return [];
-        return buildIdentifiersList(assetInfo as Record<string, unknown>);
+        return buildIdentifiersList({...(assetInfo as Record<string, unknown>), identifier_isin: null, identifier_ticker: null});
     });
 
     let signalDefinitionsByType = $derived(new Map(signalDefinitions.map((definition) => [definition.type, definition])));
 
     let backendOverlaySignals: RenderedSignal[] = $derived(renderBackendResults(signals, signalInstanceResults, signalDefinitionsByType, lineData, viewMode, (key) => $t(key)));
-
-    let rollingRiskSignals = $derived.by(() => {
-        const riskConfigIds = new Set(signals.filter((config) => signalDefinitionsByType.get(config.signalType)?.indicatorGroup === 'risk').map((config) => config.id));
-        return backendOverlaySignals.filter((signal) => riskConfigIds.has(signal.id.split(':')[0]));
-    });
 
     // Overlay signals: the saved local signals, drawn by the one renderer with the page's data (Y-42), then the backend results.
     // A comparison reads the series its load wrote into its config; an asset that is gone is named by the signal's own
@@ -1092,6 +1124,7 @@
         geographicDistribution = null;
         shortDescription = null;
         classificationLoaded = false;
+        assetEnricherCount = null;
         providerIconUrl = null;
 
         await Promise.all([ensureCurrenciesLoaded(get(currentLanguage)), ensureAssetProvidersCached(), loadAssetInfo(), loadProviderAssignment(), loadAssetSignalDefinitions(), loadFxPairSlugs(), loadAssetList()]);
@@ -1101,12 +1134,9 @@
         if (info?.provider_code) {
             providerIconUrl = getAssetProviderIconUrl(info.provider_code);
         }
-        // Load classification data if available
-        if (info?.has_metadata) {
-            await loadClassificationData();
-        } else {
-            classificationLoaded = true;
-        }
+        // Classification and enrichers: always read, the «Profilo» tab's dot needs the enrichers of an asset without
+        // classification too (plan 68, E3)
+        await loadClassificationData();
         // Load comparison asset data after initial data is ready
         await maybeLoadComparison();
         await loadSignalFxPairs();
@@ -1576,6 +1606,8 @@
                 queries: {asset_ids: [data.assetId]},
             });
             const items = response as any[];
+            // The «Profilo» tab's dot: how many enrichers the asset has (its bindings, plan 68 B3)
+            assetEnricherCount = items.length > 0 ? Object.keys(items[0].enrichers?.config ?? {}).length : null;
             if (items.length > 0 && items[0].classification_params) {
                 const cp = items[0].classification_params;
                 sectorDistribution = cp.sector_area?.distribution ?? null;
@@ -1822,14 +1854,8 @@
             providerIconUrl = getAssetProviderIconUrl(assetInfo.provider_code);
         }
         // Reload classification data if metadata is available (always refresh after sync)
-        if (assetInfo?.has_metadata) {
-            await loadClassificationData();
-        } else {
-            sectorDistribution = null;
-            geographicDistribution = null;
-            shortDescription = null;
-            classificationLoaded = true;
-        }
+        // Always read: the enrichers count for the «Profilo» tab's dot (plan 68, E3); no classification resets the three
+        await loadClassificationData();
     }
 
     // Page sync modal state
@@ -2300,6 +2326,9 @@
         editModalOpen = false;
         const prevCurrency = assetInfo?.currency;
         await reloadMetadata();
+        // The asset window writes the profile too (A4): the «Profilo» tab reads again
+        invalidateAssetProfile(data.assetId);
+        profileRefreshKey += 1;
         // I.6 post-feedback: if the asset currency was changed via the wipe-on-change
         // flow, the previously-selected `displayCurrency` is now stale (still pointing
         // to the OLD asset currency). Reset it to the NEW asset.currency so the chart
@@ -2355,14 +2384,6 @@
         if (!ASSET_DETAIL_TAB_IDS.includes(tabId as AssetDetailTabId)) return;
         activeTab = tabId as AssetDetailTabId;
         void goto(buildTabUrlFromLocation(window.location.href, tabId === 'overview' ? null : tabId), {replaceState: true, noScroll: true});
-    }
-
-    async function openSignalConfiguration(): Promise<void> {
-        setPrimaryMode('price');
-        handleAssetDetailTabChange('overview');
-        showSignals = true;
-        await tick();
-        document.querySelector('[data-testid="asset-detail-signals-toggle"]')?.scrollIntoView({behavior: 'smooth', block: 'start'});
     }
 </script>
 
@@ -2435,6 +2456,7 @@
                     livePriceFlashToken={live.flashToken}
                     fxPairUrl={mainFxPairUrl}
                     onCreateForex={() => (showFxPairAddModal = true)}
+                    providerCode={assetInfo.provider_code}
                 />
             {/if}
         {/snippet}
@@ -2556,7 +2578,8 @@
                             gridLines={settings.gridLines}
                             staleGradient={settings.staleGradient}
                             lineShape={resolveLineShape(settings)}
-                            lineShapeFollowsGlobal={!settings.lineShape && lineShapeFollowsGlobal()} onlineshapechange={handleLineShapeChange}
+                            lineShapeFollowsGlobal={!settings.lineShape && lineShapeFollowsGlobal()}
+                            onlineshapechange={handleLineShapeChange}
                             axisRows={aestheticsAxisRows}
                             onchange={handleAestheticsChange}
                             onaxischange={handleAxisScaleChange}
@@ -2897,43 +2920,17 @@
                 />
             </div>
         </AssetDetailMeasuresSection>
-
-        <!-- ======================================================================= -->
-        <!-- Foldable Panel: Metadata & Classification -->
-        <!-- ======================================================================= -->
+    {:else if activeTab === 'profile'}
         {#if assetInfo}
-            <AssetDetailMetadataPanel
-                bind:open={showMetadata}
-                {shortDescription}
-                {providerExternalUrl}
-                {classificationLoaded}
-                {sectorDistribution}
-                {geographicDistribution}
-                {identifiersList}
-                {providerAssignment}
-                {providerIconUrl}
-                {assignmentProviderName}
-                onedit={() => {
-                    editDataForModal = buildEditData();
-                    editModalOpen = true;
-                }}
-            />
+            <AssetProfileTab assetId={data.assetId} period={{start: dateStart, end: dateEnd, all: activePreset === 'MAX'}} isin={assetInfo.identifier_isin ?? null} ticker={assetInfo.identifier_ticker ?? null} {otherIdentifiers} refreshKey={profileRefreshKey} />
+        {:else}
+            <div class="flex min-h-48 items-center justify-center" data-testid="asset-detail-profile-loading">
+                <RefreshCw size={24} class="animate-spin text-lf-link" />
+            </div>
         {/if}
     {:else if assetInfo && displayCurrency}
         <div data-testid="asset-detail-risk-panel">
-            <AssetRiskScenariosView
-                assetId={data.assetId}
-                {dateStart}
-                {dateEnd}
-                targetCurrency={displayCurrency}
-                assetClass={assetInfo.asset_type}
-                sectorExposure={sectorDistribution}
-                geographyExposure={geographicDistribution}
-                {rollingRiskSignals}
-                refreshVersion={riskRefreshVersion}
-                onconfigure={openSignalConfiguration}
-                onsynced={handlePageSyncComplete}
-            />
+            <AssetRiskTab assetId={data.assetId} assetType={assetInfo.asset_type} parametricPrices={isParametric} {dateStart} {dateEnd} targetCurrency={displayCurrency} refreshVersion={riskRefreshVersion} onsynced={handlePageSyncComplete} />
         </div>
     {:else}
         <div class="flex min-h-48 items-center justify-center" data-testid="asset-detail-risk-loading">

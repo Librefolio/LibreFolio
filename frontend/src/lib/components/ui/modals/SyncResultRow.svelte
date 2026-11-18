@@ -29,12 +29,13 @@
 -->
 <script lang="ts">
     import type {Component, Snippet} from 'svelte';
-    import {CalendarClock, DollarSign, RotateCw} from 'lucide-svelte';
+    import {CalendarClock, DollarSign, Info, RotateCw} from 'lucide-svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {_ as t} from '$lib/i18n';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {writeExportToClipboard} from '$lib/utils/clipboard';
     import {clearTimer} from '$lib/utils/core/clearTimer';
+    import {formatDay} from '$lib/utils/core/formatAxisDate';
     import type {SyncResult} from '$lib/utils/sync/syncHelpers';
     import {formatElapsed, STATUS_ICONS} from '$lib/utils/sync/syncHelpers';
     import {STATUS_TONES} from '$lib/theme/toneClasses';
@@ -82,6 +83,10 @@
     /** The one line that fits on screen. */
     const shortError = $derived(result.errors?.[0] ?? result.message ?? $t('prices.sync.failedDefault') ?? 'Failed');
 
+    /** The source has no prices before this day, and the range asked started earlier (project 76, P2b). It is no
+     * error: shown whatever the status, on a line of its own, so the user knows from which day to import by hand. */
+    const historyStarts = $derived(result.history_starts ?? null);
+
     async function copyError(): Promise<void> {
         await writeExportToClipboard(fullError, toasts, $t('common.copiedToClipboard'));
     }
@@ -95,7 +100,7 @@
     }
 </script>
 
-<div class="flex items-center gap-2 text-xs text-lf-secondary group" data-row-id={result.id} data-status={result.status} data-testid="sync-result-row">
+<div class="flex items-center gap-2 text-xs text-lf-secondary group {historyStarts ? 'flex-wrap' : ''}" data-row-id={result.id} data-status={result.status} data-testid="sync-result-row">
     {#if retryable && !syncing}
         {#if statusTooltip}
             <Tooltip text={statusTooltip} position="top">
@@ -166,5 +171,12 @@
 
     {#if result.elapsed_ms}
         <span class="ml-auto text-lf-muted font-mono tabular-nums text-[10px]">{formatElapsed(result.elapsed_ms)}</span>
+    {/if}
+
+    {#if historyStarts}
+        <span class="basis-full flex items-start gap-1 pl-5 text-lf-info" data-date={historyStarts} data-testid="sync-row-history-starts">
+            <Info size={12} class="shrink-0 mt-px" />
+            <span>{$t('prices.sync.historyStarts', {values: {date: formatDay(historyStarts)}})}</span>
+        </span>
     {/if}
 </div>

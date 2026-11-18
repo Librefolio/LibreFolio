@@ -515,6 +515,26 @@ class RiskSimulationOutput(StrictModel):
         None,
         description="Sample size the drift was estimated from, so the factor can be read as a consequence rather than a verdict.",
     )
+    # RN-16 (developer's Q5 a): `path_count` is the count the simulation ran, the largest power of two that fits when
+    # the request did not; this is the one asked for.
+    requested_path_count: Optional[PositiveInt] = Field(None, description="The path count asked for; `path_count` is the one run, lower when the request did not fit the budget.")
+    # RN-16 (developer's Q4 c): the history the simulation was estimated on — its own, never the page's period.
+    estimation_start: Optional[date] = Field(None, description="Date of the first return the simulation was estimated on.")
+    estimation_end: Optional[date] = Field(None, description="Date of the last return the simulation was estimated on: where the cone starts.")
+    estimation_observations: Optional[PositiveInt] = Field(None, description="Number of returns the simulation was estimated on.")
+    history_truncated: bool = Field(False, description="True when a longer common history existed and only its most recent observations fit the budget.")
+
+    @model_validator(mode="after")
+    def validate_estimation_window(self) -> RiskSimulationOutput:
+        """The paths run are never more than the ones asked; the window comes whole, start before end."""
+        if self.requested_path_count is not None and self.path_count > self.requested_path_count:
+            raise ValueError("path_count cannot exceed requested_path_count")
+        window = (self.estimation_start, self.estimation_end, self.estimation_observations)
+        if any(value is None for value in window) and any(value is not None for value in window):
+            raise ValueError("the estimation window carries its start, its end and its observations, or none of them")
+        if self.estimation_start is not None and self.estimation_end is not None and self.estimation_end < self.estimation_start:
+            raise ValueError("estimation_end must not precede estimation_start")
+        return self
 
     @model_validator(mode="after")
     def validate_drift_uncertainty_disclosure(self) -> RiskSimulationOutput:
@@ -615,6 +635,27 @@ class RiskPortfolioOptimizationOutput(StrictModel):
     sensitivity: List[RiskOptimizationSensitivityPoint] = Field(default_factory=list)
     method: str = Field(..., min_length=1)
     algorithm_version: str = Field(..., min_length=1)
+
+
+class RiskRateShockScenario(StrictModel):
+    """One parallel move of the yield and the price change it gives, both as decimal ratios (0.01 == one point)."""
+
+    yield_change: FiniteFloat
+    price_change: FiniteFloat
+
+
+class RiskRateShockOutput(StrictModel):
+    """An asset's price under parallel moves of its yield (RN-25): −modified duration × Δy, a first-order estimate.
+
+    The duration is the asset profile's ``modified_duration`` holding the analysis day, with the day it was read and its
+    source, so a page says which figure it used. Rises and falls alike, in the order they were asked.
+    """
+
+    kind: Literal[RiskOutputKind.RATE_SHOCK] = Field(default=RiskOutputKind.RATE_SHOCK, json_schema_extra={"enum": ["rate_shock"]})
+    modified_duration: FiniteFloat = Field(..., ge=0)
+    duration_read_on: date
+    duration_source: str = Field(..., min_length=1)
+    scenarios: List[RiskRateShockScenario] = Field(..., min_length=1)
 
 
 class RiskDrawdownPoint(StrictModel):
@@ -1041,6 +1082,7 @@ RiskAnalyticOutput = Annotated[
         RiskAssetSetDrawdownOutput,
         RiskAssetSetReturnOutput,
         RiskAssetSetComparisonOutput,
+        RiskRateShockOutput,
     ],
     Field(discriminator="kind"),
 ]

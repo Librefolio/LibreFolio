@@ -136,12 +136,13 @@ import {expectGalleryBackupReady, serveGalleryBackupJob} from './fixtures/galler
 import {openAiExportPanel, selectAiExportSelection} from './ai-export/helpers';
 import {serveGalleryBackupList, serveGalleryStorage} from './fixtures/galleryFilesBackups';
 import {GALLERY_PREMIUM_QUERY, serveGalleryPremiumSearch} from './fixtures/galleryAssetSearch';
+import {COINGECKO, GALLERY_COINGECKO_IDS, GALLERY_COINGECKO_QUERY, serveGalleryCoinGeckoSearch} from './fixtures/galleryCoinGecko';
 import {serveGalleryWhatsNew} from './fixtures/galleryWhatsNew';
 import {backToRestoreCard, rollBackRestoreOverlay, serveGalleryRestore} from './fixtures/galleryRestore';
 import {serveGalleryCacheStatus} from './fixtures/galleryCache';
 import {expectGallerySecurityServed, GALLERY_SECURITY_ATTENTION_COUNT, GALLERY_SECURITY_FINDING_IDS, gallerySecurityReads, serveGallerySecurityChecks, serveGallerySecurityFindings} from './fixtures/gallerySecurity';
 import {extendScreenToBlock, fitScreenToDialog, PAGE_BLOCK, restoreTallScreen} from './fixtures/galleryTallShots';
-import {boxStill, bringIntoViewFromTop, captureShot, COLUMN_FILTER_GAP, DROPDOWN_GAP, expectDropdownAt, frameTarget, logApiOnFailure, scrollStill, settledToOpen, settleShot, type ShotOptions, trackApiRequests} from './fixtures/galleryShot';
+import {boxStill, bringIntoViewFromTop, CAPTURE_TIMEOUT_MS, captureShot, COLUMN_FILTER_GAP, DROPDOWN_GAP, expectDropdownAt, frameTarget, logApiOnFailure, scrollStill, settledToOpen, settleShot, type ShotOptions, trackApiRequests} from './fixtures/galleryShot';
 import {brimFileId, chooseTheme, closePreview, FILES_SAMPLES, filesTableReady, fontsLoaded, gridPreviewReady, imagePreviewReady, imagesInViewLoaded, languageMenuClosed, markdownPreviewReady, openPreview, pdfPreviewReady, staticFileId, textPreviewReady} from './fixtures/galleryFiles';
 import {expectDrawnUnder, setBrowserLocale, stampDocumentLocale} from './fixtures/galleryLocale';
 import {completeWelcome, prepareOnboardingAccount} from './fixtures/onboarding-accounts';
@@ -2313,6 +2314,54 @@ test.describe('Gallery Screenshots', () => {
             });
         });
 
+        test('coingecko key card (admin) - all languages and themes', async ({page}, testInfo) => {
+            // Project 76, P7 — the CoinGecko key guide (user/settings/coingecko-key): the CoinGecko account under «Shared
+            // settings», as an administrator finds it before the key — «to configure», API key empty, plan Demo. Nothing is
+            // mocked and nothing is typed or saved: the lane's own state (a key on the shared backend would send every search
+            // to the real CoinGecko). An administrator's view: the key is editable, so its field is drawn.
+            // The card only: the gallery's capture takes the screen (captureShot), and no shot option crops it, so this shot
+            // settles the page as every shot does (settleShot) and then captures the card's own box.
+            const viewport = getViewport(testInfo);
+            await login(page, TEST_ADMIN);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                const shot = `${viewport}/${lang}/${theme}/settings/plugin-group-coingecko`;
+                await navigateTo(page, '/settings?tab=plugins');
+                await expect(page.getByTestId('settings-tab-plugins')).toHaveAttribute('aria-selected', 'true', {timeout: 10_000});
+                const tab = page.getByTestId('plugin-settings-tab');
+                await waitForSettled(tab, 15_000);
+                await expect(page.getByTestId('plugin-settings-load-error')).toHaveCount(0);
+                // The group's card, not the price source's: both carry `plugin-settings-form-coingecko`, each in its family.
+                const card = tab.locator('[data-testid="plugin-settings-family"][data-family="group"]').getByTestId('plugin-settings-form-coingecko');
+                await expect(card, 'the CoinGecko group is listed under Shared settings').toHaveCount(1);
+                await expect(card).toBeVisible();
+                await expect(card).toHaveAttribute('data-family', 'group');
+                // Its real state, before the key. No secret saved, or set by a variable of the server: a leftover of the E2E, or a
+                // variable of the shell, would give a shot CI cannot reproduce. An editable key that is not set draws no state
+                // line, so the empty field and the absent «Replace» say it positively.
+                await expect(card, 'the group is still to configure').toHaveAttribute('data-configured', 'false');
+                await expect(card.getByTestId('plugin-settings-status')).toHaveAttribute('data-configured', 'false');
+                const apiKey = card.getByTestId('plugin-setting-api_key');
+                await expect(apiKey, 'an administrator can type the key').toHaveAttribute('data-editable', 'true');
+                await expect(apiKey.getByTestId('plugin-setting-secret-input'), 'the key field is empty').toHaveValue('');
+                await expect(card.getByTestId('plugin-setting-replace'), 'no key is stored').toHaveCount(0);
+                await expect(card.locator('[data-testid="plugin-setting-secret-state"][data-state="set"], [data-testid="plugin-setting-secret-state"][data-state="env"]')).toHaveCount(0);
+                await expect(card.getByTestId('plugin-setting-plan'), 'the plan is on its default, Demo').toHaveAttribute('data-source', 'default');
+                await freezeAnimations(page);
+                // The card at the top of the screen, the header slid away above it: the capture takes the card's box only.
+                await frameTarget(page, card, shot);
+                await headerAsScrolledDown(page, shot);
+                await expect(card, `${shot}: the card is whole on the screen`).toBeInViewport({ratio: 1});
+                await waitForSplashGone(page);
+                await settleShot(page, shot, {subject: card});
+                await expectDrawnUnder(page, lang);
+                const dir = getGalleryPath(viewport, lang, theme, 'settings');
+                ensureDir(dir);
+                await card.screenshot({path: path.join(dir, 'plugin-group-coingecko.png'), timeout: CAPTURE_TIMEOUT_MS});
+                console.log(`  📸 ${shot}.png`);
+            });
+        });
+
         test('backup ready (admin) - all languages and themes', async ({page}, testInfo) => {
             // The administrators' Backup tab with a finished backup on offer: the lane never runs a real backup, so the job the
             // card follows is stored and answered, before any navigation, by galleryBackup.ts — done, 46.0 MB, no warning.
@@ -3748,11 +3797,9 @@ test.describe('Gallery Screenshots', () => {
                     // The product offers the promote for the pair (promoteMatch)
                     const promoteBtn = page.getByTestId('toolbar-action-promote');
                     await expect(promoteBtn, `the product offers no promote for #${withdrawal.id} and #${deposit.id}`).toBeVisible({timeout: 5_000});
-                    // The shot has the promote button's tooltip over the dialog's title, as a user has it. The button sits in a
-                    // Tooltip, which pins its tooltip on a click (Tooltip.svelte, toggle) and closes a pinned one on a click
-                    // outside it — never one inside the dialog: ModalBase stops its clicks — or 30 s after the pointer left.
-                    // Real behaviour, so the shot keeps it, declared (pinnedTooltip), instead of faking a click to hide it; it is
-                    // on the designer's list. None on screen before the click, one after: the one in the shot is the promote's.
+                    // The page's selection bar is the floating one (DataTableToolbar, variant="floating", since 13/11): its buttons
+                    // carry a visible label, `title` and `aria-label`, and sit in no Tooltip, so a click pins none. None on screen
+                    // before the click, none after: nothing covers the dialog's title in the shot.
                     const tooltip = page.getByTestId('tooltip-content');
                     await expect(tooltip, 'no tooltip is on screen before the promote is clicked').toHaveCount(0);
                     await promoteBtn.click();
@@ -3760,11 +3807,9 @@ test.describe('Gallery Screenshots', () => {
                     // which also has data-testid="promote-merge-modal"
                     const mergeModal = page.locator('[data-testid="promote-merge-modal"][role="dialog"]');
                     await expect(mergeModal, 'the pair diverges, so the product asks to merge it').toBeVisible({timeout: 5_000});
-                    await expect(tooltip, "the click pinned the promote button's tooltip, and no other tooltip is on screen").toHaveCount(1);
+                    await expect(tooltip, 'the floating bar pins no tooltip on a click, and no other tooltip is on screen').toHaveCount(0);
                     await freezeAnimations(page);
-                    await screenshot(page, viewport, lang, theme, 'transactions', 'promote-merge-modal', {pinnedTooltip: true});
-                    // Nothing pins it again without a click: there now, so there in the picture.
-                    await expect(tooltip, 'the pinned tooltip has closed: it closes 30 s after the pointer leaves the button, so the shot may have been taken without it').toHaveCount(1);
+                    await screenshot(page, viewport, lang, theme, 'transactions', 'promote-merge-modal');
                     // Nothing is committed: the dialog is cancelled, and the next combination starts from a new load
                     await page.keyboard.press('Escape');
                 }
@@ -6349,19 +6394,15 @@ test.describe('Gallery Screenshots', () => {
 
                     await openGalleryAsset(page, GALLERY_ASSET);
 
-                    // The classification (metadata) panel open. Its toggle publishes no aria-expanded: the panel is rendered only
-                    // while it is open, so the panel says whether a click is needed, and that it took.
-                    const metadataToggle = page.getByTestId('asset-detail-metadata-toggle');
-                    const metadataPanel = page.getByTestId('asset-detail-metadata-panel');
-                    await expect(metadataToggle).toBeVisible({timeout: 15_000});
-                    if (!(await metadataPanel.isVisible())) await metadataToggle.click();
-                    await expect(metadataPanel, 'the classification panel is open').toBeVisible();
-                    // Its map and pie come with the classification, after the panel: drawn, every one (Apple has both).
-                    await chartsDrawn(metadataPanel, 'the classification panel');
-                    // Framed from the top of the page, the panel 8 px under the screen's edge — or as near as the page's end
-                    // allows: the bare scroll into view it replaces depended on where the page stood, and on the charts' arrival
-                    // (plan 56, class B).
-                    await frameTarget(page, metadataPanel, `${viewport}/${lang}/${theme}/assets/detail-classification`);
+                    // The «Profilo» tab (plan 68, E3E4b), which took the place of the metadata panel: its read published,
+                    // then its classification, whose map and pie are drawn, every one (Apple has both).
+                    await page.getByTestId('asset-detail-tab-profile').click();
+                    await expect(page.getByTestId('asset-profile-tab')).toHaveAttribute('data-status', 'ready', {timeout: 15_000});
+                    const classification = page.getByTestId('profile-classification');
+                    await chartsDrawn(classification, 'the classification of the Profile tab');
+                    // Framed from the top of the page, the classification 8 px under the screen's edge — or as near as the
+                    // page's end allows (plan 56, class B).
+                    await frameTarget(page, classification, `${viewport}/${lang}/${theme}/assets/detail-classification`);
                     await screenshot(page, viewport, lang, theme, 'assets', 'detail-classification');
                 }
             }
@@ -6459,6 +6500,58 @@ test.describe('Gallery Screenshots', () => {
                     await expect(dialog).toBeHidden();
                 }
             }
+        });
+
+        test('coingecko search results - all languages and themes', async ({page}, testInfo) => {
+            // Project 76, P7 — the CoinGecko key guide's «Try it»: Search Online for «bitcoin» once the key is set, CoinGecko's
+            // chip on and its three coins listed. The lane keeps CoinGecko without a key: the configured list and the answer
+            // are the page's own routes (galleryCoinGecko.ts), nothing reaches the backend's search or CoinGecko. Nothing is
+            // created.
+            const viewport = getViewport(testInfo);
+            const simulation = await serveGalleryCoinGeckoSearch(page);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
+                for (const theme of THEMES) {
+                    const shot = `${viewport}/${lang}/${theme}/assets/coingecko-search`;
+                    await goToAssetsPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    await page.getByTestId('assets-add-button').click();
+                    const dialog = page.getByTestId('asset-modal');
+                    await expect(dialog.getByTestId('asset-modal-form')).toBeVisible({timeout: 5_000});
+                    const chip = dialog.getByTestId(`asset-search-provider-${COINGECKO}`);
+                    await expect(chip, 'CoinGecko is listed as configured').toHaveAttribute('data-configured', 'true', {timeout: 15_000});
+                    await expect(chip, 'Search Online asks CoinGecko').toHaveAttribute('data-selected', 'true');
+                    const asked = simulation.asked.length;
+                    // Its input has no test id: it is the one text field of the search block.
+                    await dialog.locator('[data-search-autocomplete] input[type="text"]').fill(GALLERY_COINGECKO_QUERY);
+                    const results = dialog.getByTestId('asset-search-results');
+                    await expect(results, 'the search ends with results').toHaveAttribute('data-state', 'results', {timeout: 15_000});
+                    expect(simulation.asked.length, 'the simulated stream answered the search').toBeGreaterThan(asked);
+                    expect(simulation.asked.at(-1), 'the search asked CoinGecko').toContain(COINGECKO);
+                    const coins = results.locator(`[data-testid^="asset-search-result-"][data-provider="${COINGECKO}"]`);
+                    await expect(coins, "CoinGecko's three coins").toHaveCount(GALLERY_COINGECKO_IDS.length);
+                    for (const id of GALLERY_COINGECKO_IDS) await expect(results.locator(`[data-testid^="asset-search-result-"][data-identifier="${id}"]`), `the coin ${id} is listed`).toHaveCount(1);
+                    await expect(results.getByTestId('asset-search-not-configured'), 'no provider asks to be configured').toHaveCount(0);
+                    await waitForMotionSettled(dialog, 'the asset modal');
+                    // DESKTOP — the tall-screen rule (galleryTallShots.ts): the dialog whole, results included.
+                    if (viewport === 'desktop') await fitScreenToDialog(page, dialog, `desktop/${lang}/${theme}/assets/coingecko-search`, {body: page.getByTestId('asset-modal-form').locator('..')});
+                    // MOBILE — the dialog's body scrolled to the results, which stand under the form's first fields.
+                    if (viewport === 'mobile') {
+                        await results.scrollIntoViewIfNeeded();
+                        await boxStill(results, `${shot}: the results`);
+                    }
+                    await expect(results, `${shot}: the results are whole on the screen`).toBeInViewport({ratio: 1});
+                    await screenshot(page, viewport, lang, theme, 'assets', 'coingecko-search', {subject: results});
+                    await restoreTallScreen(page);
+                    await page.keyboard.press('Escape');
+                    await expect(dialog).toBeHidden();
+                }
+            }
+            expect(simulation.coingeckoHosts, 'no request went to CoinGecko').toEqual([]);
         });
 
         // The ETF family of the type menu: each specific type and the composite icon it previews, the ETF tag
@@ -6765,8 +6858,9 @@ test.describe('Gallery Screenshots', () => {
                 await waitForChart(heatmap, 30_000);
                 await expect.poll(async () => idSet(await heatmap.getAttribute('data-asset-order')), {message: 'the matrix does not draw the seeded selection'}).toEqual(selection);
                 await expect(correlation.getByTestId('risk-correlation-ordering-similarity')).toHaveAttribute('aria-pressed', 'true');
-                await expect(correlation.getByTestId('risk-correlation-ordering-sector'), 'the assets metadata never reached the matrix').toBeVisible({timeout: 15_000});
-                await expect(correlation.getByTestId('risk-correlation-ordering-region')).toBeVisible();
+                // RN-20: every ordering is on screen from the start; available is what says the metadata arrived.
+                await expect(correlation.getByTestId('risk-correlation-ordering-sector'), 'the assets metadata never reached the matrix').not.toHaveAttribute('aria-disabled', 'true', {timeout: 15_000});
+                await expect(correlation.getByTestId('risk-correlation-ordering-region')).not.toHaveAttribute('aria-disabled', 'true');
                 await expect(correlation.getByTestId('risk-correlation-groups')).toBeVisible();
                 await expect(correlation.getByTestId('risk-correlation-pairs-correlated').getByTestId(pairTestId(ids.milano, ids.roma)), 'the two loans are not ranked among the most alike').toBeVisible();
                 await expect(correlation.getByTestId('risk-correlation-pairs-offsetting')).toBeVisible();
@@ -6921,7 +7015,7 @@ test.describe('Gallery Screenshots', () => {
             const ids = await resolveLabIds(page);
             const selection = labSelection(ids);
             const guard = await guardReadOnly(page);
-            // No benchmark: L3° measures without a comparison, so the notice counts exactly five measurements.
+            // No benchmark: L3° measures without a comparison, so the notice counts exactly six measurements.
             await seedLabStorage(page, ids.userId, {selection, benchmark: null});
             // INJECTED (galleryRiskLab.ts, injectStalePrice): RE Loan Roma's price 12 days old on every base wave, and the
             // matrix's own answer not back; the eligibility answers about Roma carry the matching stale-end verdict
@@ -6954,12 +7048,19 @@ test.describe('Gallery Screenshots', () => {
                     await expect(panel.getByTestId(`risk-selected-asset-${assetId}`), `asset ${assetId} is not clean over the year: the gallery data went stale`).toHaveAttribute('data-level', 'eligible');
                 }
 
-                // The notice: amber, one cause — the stale price — and the five partial measurements of the two levels.
+                // The notice: amber, one cause — the stale price — and the six partial measurements of the two levels: L1°'s
+                // bad day, bad month, drawdown and, since RN-19, the KPI of «How did each one move?», on L1°'s own calendar;
+                // L3°'s KPI and risk/return. Named, not only counted, so a measurement added or lost says which.
                 const notice = panel.getByTestId('risk-partial-notice');
                 await expect(notice).toBeVisible();
                 await expect(notice).toHaveAttribute('data-tone', 'warning');
                 await expect(notice.getByTestId('risk-partial-reasons')).toHaveAttribute('data-count', '1');
-                await expect(notice.getByTestId('risk-partial-measurements')).toHaveAttribute('data-count', '5');
+                const measurements = notice.getByTestId('risk-partial-measurements');
+                await expect(measurements).toHaveAttribute('data-count', '6');
+                const instances = await measurements.getByTestId('risk-partial-measurement').evaluateAll((chips) => chips.map((chip) => chip.getAttribute('data-instance') ?? '').sort());
+                expect(instances, 'the partial measurements of the two levels').toEqual(
+                    ['base-historical-asset_set_var', 'base-historical-asset_set_var-monthly', 'base-historical-asset_set_drawdown', 'base-historical-asset_set_kpi-move', 'base-historical-asset_set_kpi', 'base-historical-asset_set_risk_return'].sort(),
+                );
                 // Above it the banner, folded as every load opens it; under it the matrix's own banner, naming the measurement
                 // that did not come back, and why. No other section banner, and no period offer, in the shot: the selection's
                 // eligibility answer keeps the engine's suggestion, which over a year of fresh prices is none.

@@ -73,7 +73,7 @@ const ASSET_DETAIL_STEPS = [
     area('asset.detail.header', 'asset-detail-header'),
     area('asset.detail.chart', 'asset-detail-chart'),
     cursor('asset.detail.editor', 'asset-detail-editdata-btn'),
-    cursor('asset.detail.metadata', 'asset-detail-metadata-toggle'),
+    cursor('asset.detail.metadata', 'asset-detail-tab-profile'),
     cursor('asset.detail.risk', 'asset-detail-tab-risk'),
 ];
 

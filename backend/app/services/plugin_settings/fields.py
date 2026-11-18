@@ -8,6 +8,8 @@ travel back in a 422, nor reach a log.
 
 ``label`` and ``description`` are English text, the fallback for a plugin mounted without translations; ``label_key``
 and ``description_key`` name the i18n keys the interface uses, declared here so that the interface never builds a key.
+``missing_key`` names the phrase that says the field is missing in a sentence, with its article («la chiave API»): the
+«to configure» window reads it (project 76, N3a2), and names the field by its label when there is none.
 
 Scope:
 
@@ -143,6 +145,8 @@ class PluginSettingField:
     maximum: float | None = None
     label_key: str | None = None
     description_key: str | None = None
+    #: The i18n key of the field named in a sentence, with its article: «la chiave API» (project 76, N3a2)
+    missing_key: str | None = None
     env: str | None = None
 
     @property

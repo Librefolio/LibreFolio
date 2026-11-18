@@ -137,12 +137,17 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/charts/ReturnHistogramChart.test.ts",
             "src/lib/features/risk/horizonExpression.test.ts",
             "src/lib/features/risk/SimulationHorizonField.test.ts",
+            "src/lib/features/risk/RiskFreeRateField.test.ts",
+            "src/lib/features/risk/riskFreeRateStore.test.ts",
+            "src/lib/features/risk/riskFreeRateStore.reads.test.ts",
+            "src/lib/features/risk/riskBenchmarkStore.reads.test.ts",
             "src/lib/features/risk/riskAnalysisHelpers.test.ts",
             "src/lib/features/risk/correlationHelpers.test.ts",
             "src/lib/features/risk/assetSetSelection.test.ts",
             "src/lib/features/risk/eligibility.test.ts",
             "src/lib/features/risk/matrixMetadata.test.ts",
             "src/lib/features/risk/assetSetLevels.test.ts",
+            "src/lib/features/risk/moveFigures.test.ts",
             "src/lib/features/risk/assetSetI18n.test.ts",
             "src/lib/features/risk/warningTranslatorSites.test.ts",
             "src/nativeDateInput.gate.test.ts",
@@ -153,7 +158,9 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/risk/levels/L2DiversificationMatrix.test.ts",
             "src/lib/features/risk/levels/l1/ReturnHistogram.test.ts",
             "src/lib/features/risk/levels/L1HowMuchItHurts.test.ts",
+            "src/lib/features/risk/levels/HowItMoves.test.ts",
             "src/lib/features/risk/levels/RiskPartialNoticeBadges.test.ts",
+            "src/lib/features/risk/levels/l4/L4Rates.test.ts",
             "src/lib/features/assets/providerProbe.test.ts",
             "src/lib/features/assets/resolveProviderError.test.ts",
             "src/lib/features/assets/assetIdentifiers.test.ts",
@@ -165,12 +172,15 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/assets/assetPatchResult.test.ts",
             "src/lib/features/assets/profile/profileStore.test.ts",
             "src/lib/features/assets/profile/profileEditState.test.ts",
+            "src/lib/features/assets/profile/profileTabState.test.ts",
             "src/lib/features/assets/enrichers/enrichersEditState.test.ts",
             "src/lib/features/assets/enrichers/enricherCalls.test.ts",
             "src/lib/features/assets/bulk/assetBulkEdit.test.ts",
             "src/lib/features/assets/bulk/assetBulkVerify.test.ts",
             "src/lib/features/assets/assetPayload.test.ts",
             "src/lib/features/assets/assetSearchSelection.test.ts",
+            "src/lib/features/assets/providerInputTypes.test.ts",
+            "src/lib/features/assets/providerAttribution.test.ts",
             "src/lib/features/assets/assetSearchSections.test.ts",
             "src/lib/features/assets/assetSearchReport.test.ts",
             "src/lib/features/assets/assetDataSaveSummary.test.ts",
@@ -279,7 +289,6 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/tools/pac-allocator/planner/pluralCountSites.test.ts",
             "src/lib/features/tools/pac-allocator/planner/source.test.ts",
             "src/lib/i18n/catalogIcuLocale.test.ts",
-            "src/lib/i18n/riskGlossary.test.ts",
             "src/lib/i18n/importWizardAssetsCount.test.ts",
             "src/lib/i18n/ownerEmailChangeChecks.test.ts",
             "src/lib/i18n/instanceKeyChecks.test.ts",
@@ -297,6 +306,8 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/plugin-settings/pluginSettingsForm.test.ts",
             "src/lib/features/plugin-settings/pluginSettingsApi.test.ts",
             "src/lib/features/plugin-settings/pluginSettingsApi.callLimits.test.ts",
+            "src/lib/features/plugin-settings/notConfigured.test.ts",
+            "src/lib/features/plugin-settings/callUsage.test.ts",
             "src/lib/features/settings/users/linkShare.test.ts",
             "src/lib/features/settings/users/addressProbe.test.ts",
             "src/lib/features/security/cspNotice.test.ts",
@@ -416,6 +427,8 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/select/AssetTypeSelect.test.ts",
             "src/lib/components/ui/select/AssetPickerPanel.test.ts",
             "src/lib/components/ui/select/AssetPickerPanel.rows.test.ts",
+            "src/lib/features/signals/components/SignalAssetParamControl.test.ts",
+            "src/lib/features/signals/components/SignalParamControl.test.ts",
             "src/lib/components/ui/ViewModeToggle.test.ts",
             "src/lib/components/ui/data-editor/DataEditor.test.ts",
             "src/lib/components/ui/data-editor/DataExportModal.test.ts",
@@ -458,6 +471,9 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/assets/AssetDataEditorSection.test.ts",
             "src/lib/features/assets/ProviderComparisonModal.test.ts",
             "src/lib/features/assets/profile/ProfileEditModal.test.ts",
+            "src/lib/features/assets/profile/ProfileKeyFigureCard.test.ts",
+            "src/lib/features/assets/profile/ProfileDetails.test.ts",
+            "src/lib/features/assets/profile/ProfileClassification.test.ts",
             "src/lib/features/assets/enrichers/AssetEnrichersModal.test.ts",
             "src/lib/components/ui/input/DistributionEditor.askLabel.test.ts",
             "src/lib/features/assets/CellDateRange.test.ts",
@@ -468,7 +484,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/assets/detail/AssetDetailHeader.test.ts",
             "src/lib/features/assets/detail/AssetDetailSignalsPanel.test.ts",
             "src/lib/features/assets/detail/AssetDetailMeasuresSection.test.ts",
-            "src/lib/features/assets/detail/AssetDetailMetadataPanel.test.ts",
+            "src/lib/features/assets/detail/AssetProfileTab.test.ts",
             "src/lib/features/assets/detail/AssetChartModeToggle.test.ts",
             "src/lib/features/assets/detail/AssetCalendarWindowControls.test.ts",
             "src/lib/features/assets/detail/AssetCalendarControls.idPrefix.test.ts",
@@ -515,12 +531,19 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/charts/SemiDonutChart.test.ts",
             "src/lib/features/risk/AssetSetLossComparisonSection.test.ts",
             "src/lib/features/risk/AssetSetLossComparisonSection.fonts.test.ts",
+            "src/lib/features/risk/AssetSetMoveComparisonSection.test.ts",
+            "src/lib/features/risk/AssetSetMoveComparisonSection.fonts.test.ts",
             "src/lib/features/risk/AssetSetRiskReturnSection.test.ts",
             "src/lib/components/charts/ScatterChart.test.ts",
             "src/lib/features/risk/AssetSetReplaySection.test.ts",
             "src/lib/features/risk/AssetSetComparisonLevels.test.ts",
             "src/lib/features/risk/AssetSetCorrelationSection.test.ts",
             "src/lib/features/risk/CorrelationHeatmap.test.ts",
+            "src/lib/features/risk/CorrelationHeatmap.orderings.test.ts",
+            "src/lib/features/risk/levels/RiskLevelsPanel.asset.test.ts",
+            "src/lib/features/risk/AssetRiskTab.test.ts",
+            "src/lib/features/risk/assetRiskTabRules.test.ts",
+            "src/lib/features/risk/matrixMetadata.status.svelte.test.ts",
             "src/lib/features/risk/AssetChip.test.ts",
             "src/lib/features/auth/RegisterCard.test.ts",
             "src/lib/features/auth/RegisterCard.language.test.ts",
@@ -559,6 +582,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/assets/AssetTable.test.ts",
             "src/lib/features/assets/AssetCard.test.ts",
             "src/lib/features/assets/AssetPriceSummary.test.ts",
+            "src/lib/features/assets/ProviderAttributionNote.test.ts",
             "src/lib/features/assets/AssetTable.privacy.test.ts",
             "src/lib/features/dashboard/KpiSection.test.ts",
             "src/lib/features/dashboard/ExposureTable.test.ts",
@@ -614,6 +638,8 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/plugin-settings/PluginSettingsForm.component.test.ts",
             "src/lib/features/plugin-settings/PluginSettingsTab.test.ts",
             "src/lib/features/plugin-settings/PluginSettingsModal.test.ts",
+            "src/lib/features/plugin-settings/PluginNotConfiguredModal.test.ts",
+            "src/lib/features/plugin-settings/PluginCallUsage.component.test.ts",
             "src/lib/features/email/VerifyEmailCard.test.ts",
             "src/lib/features/email/VerificationNotice.test.ts",
             "src/lib/features/email/SendLinkByEmail.test.ts",
@@ -1378,6 +1404,17 @@ def front_plugin_settings(verbose: bool = False, ui: bool = False, headed: bool 
     return _run_playwright("settings/plugin-settings.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_plugin_call_limits(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the «Calls» block E2E (project 76, lot U5) on desktop: an administrator sets mockcount's week limit in «Configure»."""
+    print_section("Frontend Plugin Call Limits Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    # Desktop only (the default project): the spec owns mockcount's week limit, which a second project in the same invocation would write too.
+    return _run_playwright("settings/plugin-call-limits.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_utility_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, coverage: bool = False) -> bool:
     """Run all frontend utility/component E2E tests."""
     print_header("Frontend Utility Tests (Playwright)")
@@ -1860,6 +1897,15 @@ def populate_registry(registry: dict) -> None:
         desc="Settings › Plugins and «Configure» (workstream X, lot CP11c), desktop: as a member and as an administrator ?tab=plugins selects the tab and its read settles (data-busy); the asset family lists justETF and Borsa Italiana, configured, each personal select (preferred_currency all/EUR/USD/CHF/GBP, preferred_language all/it/en) on its default and editable, its list opened and closed with Escape, nothing chosen, and never the test-only mockprov; «Configure» on mockprov from the edit dialog of an asset of the test's own (mockprov assigned over the API under the identifier the mock refuses to quote: the provider select never offers mockprov), no «not configured» badge; the dialog over mockprov's seven fields scrolls its body between title and «Close» at 1280×720 (precondition: the body overflows; «Close» whole in the window, Save reached by scrolling the body): a member finds the four instance fields read only (data-editable false, note adminOnly) and the instance secret only set or unset with no control, saves results_limit 25 and a personal_token (the PATCH sends the number as a number and the secret only in secret_value; pluginSettings.saved names the fields, never a value), reads them back (data-source db, the secret «set» and its field gone, the API never returning it), then «Use the default» and Clear, saved, back to default and unset on screen and through the API; an administrator saves mockprov's instance api_key the same way, finds «Replace» opening an empty field and cancels it, clears it; search on a simulated stream (page.route; the REST fallback aborted and recorded): justETF reported NOT_CONFIGURED gets its «to configure» row (data-provider), a 👑 result brings asset-search-crown-legend, and the row's «Configure» opens justETF's settings over the asset dialog, closed without saving (the preference still the default through the API). Every mockprov field a test may write is recorded before its Save and cleared over the API by its owner after each test, whatever happened, and the asset deleted",
         prereq="Populated DB + test users (e2e_test_user a member, e2e_test_admin an administrator); no environment variable sets a mockprov field on the lane (LIBREFOLIO_MOCKPROV_API_KEY, LIBREFOLIO_PLUGIN_ASSET_MOCKPROV_*); the justETF and Borsa Italiana search preferences of both users on their default",
         tests="settings/plugin-settings.spec.ts",
+    )
+    add_test(
+        cat,
+        "plugin-call-limits",
+        front_plugin_call_limits,
+        name="Plugin Call Limits E2E",
+        desc="The «Calls» block of a plugin's card (project 76, lot U5), desktop: e2e_test_admin reads the test-only counted provider mockcount over the API (precondition: call_limit_week unset, not locked, editable; a call_usage with the five windows), creates an asset of its own priced by mockcount, opens «Configure» from the asset dialog's provider panel, finds the block (data-managed false, five boxes, the week an input with no limit and a count), types 1 000 000 in the week's box (data-edit text), saves (the PATCH one system item with the number as a number, pluginSettings.saved naming call_limit_week), and after the read-back sees data-limit 1000000 and «/ limit» on the box, the field saved (source db) and the usage window's limit through the API; never mockprov, never CoinGecko's key; the week limit cleared over the API by the administrator and the asset deleted after the test, whatever happened",
+        prereq="Test users (e2e_test_admin an administrator); the backend in test mode (mockcount is test-only); no LIBREFOLIO_PLUGIN_ASSET_MOCKCOUNT_* variable on the lane",
+        tests="settings/plugin-call-limits.spec.ts",
     )
     add_test(cat, "all", front_utility_all, test_names=False, name="All Frontend Utility Tests", desc="Run all utility/component E2E tests")
     registry["front-utility"] = cat

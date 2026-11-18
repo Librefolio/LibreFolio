@@ -327,7 +327,7 @@ def front_portfolio_risk_request_unit(verbose: bool = False, ui: bool = False, h
     """Run Risk request-builder unit tests."""
     print(f"\n{Colors.BLUE}Running: Risk request builder Vitest unit tests{Colors.NC}")
     result = subprocess.run(
-        ["npx", "vitest", "run", "src/lib/features/risk/simulationParameters.test.ts", "src/lib/features/risk/stressBuckets.test.ts"],
+        ["npx", "vitest", "run", "src/lib/features/risk/simulationParameters.test.ts"],
         cwd="frontend",
         capture_output=not verbose,
         env=vitest_env("front-portfolio"),
@@ -456,6 +456,7 @@ def front_portfolio_risk_levels_component(verbose: bool = False, ui: bool = Fals
             "vitest",
             "run",
             "src/lib/features/risk/levels/l4/L4Replay.test.ts",
+            "src/lib/features/risk/levels/l4/L4Simulation.test.ts",
             "src/lib/features/risk/levels/l4/L4Shock.test.ts",
             "src/lib/features/risk/levels/RiskPartialNotice.test.ts",
             "src/lib/features/risk/levels/RiskLevelSection.test.ts",
@@ -475,26 +476,6 @@ def front_portfolio_risk_levels_component(verbose: bool = False, ui: bool = Fals
         return True
 
     print_error(f"Risk levels component Vitest tests - FAILED (exit code: {result.returncode})")
-    if not verbose:
-        print(result.stdout.decode() if result.stdout else "")
-        print(result.stderr.decode() if result.stderr else "")
-    return False
-
-
-def front_portfolio_risk_frame_component(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
-    """Run the legacy risk result frame component tests (Vitest + jsdom mount)."""
-    print(f"\n{Colors.BLUE}Running: Risk result frame component Vitest tests{Colors.NC}")
-    result = subprocess.run(
-        ["npx", "vitest", "run", "src/lib/features/risk/RiskResultFrame.test.ts"],
-        cwd="frontend",
-        capture_output=not verbose,
-        env=vitest_env("front-portfolio"),
-    )
-    if result.returncode == 0:
-        print_success("Risk result frame component Vitest tests - PASSED")
-        return True
-
-    print_error(f"Risk result frame component Vitest tests - FAILED (exit code: {result.returncode})")
     if not verbose:
         print(result.stdout.decode() if result.stdout else "")
         print(result.stderr.decode() if result.stderr else "")
@@ -754,8 +735,8 @@ def populate_registry(registry: dict) -> None:
         front_portfolio_risk_request_unit,
         test_names=False,
         name="Risk Request Builder Unit Tests",
-        desc="What the request actually carries: the simulation process is chosen by the caller rather than hard-coded, each mode carries its own seed field and forbids the other one, and the legacy aliases keep their documented geometric-Brownian default; the stress editor and the uniform shock cover every AssetType the backend knows, derived from the enum rather than listed by hand",
-        tests="src/lib/features/risk/simulationParameters.test.ts, src/lib/features/risk/stressBuckets.test.ts",
+        desc="What the request actually carries: the simulation process is chosen by the caller rather than hard-coded, each mode carries its own seed field and forbids the other one, and the legacy aliases keep their documented geometric-Brownian default",
+        tests="src/lib/features/risk/simulationParameters.test.ts",
     )
     add_test(cat, "risk-benchmark-unit", front_portfolio_risk_benchmark_unit, test_names=False, name="Risk Benchmark Store Unit Tests", desc="One benchmark shared by every scope: user scoping, reload survival, corrupt-value rejection", tests="src/lib/features/risk/riskBenchmarkStore.test.ts")
     add_test(
@@ -768,16 +749,7 @@ def populate_registry(registry: dict) -> None:
         test_names=False,
         name="Risk Levels Component Tests",
         desc="L4 historical replay mounted in jsdom over a real panel controller: the composition total is withheld rather than degraded to a dash when the scope carries no aggregate return (and is still stated when a weighted replay came out flat at 0.0), and the audit sentence names the treatment the payload actually carries — the omitted-from-replay wording as soon as one exclusion was omitted, the carried-at-zero-return wording when every exclusion was a zero-return residual, when nothing was excluded, and when the payload carries no excluded list at all. Which of the two keys was selected is proved by resolving both from the shipped catalogue instead of pinning a translated sentence; the one partial notice above the levels, mounted in jsdom: nothing when there is nothing to disclose; the causes first, then the measurements they affected; its tone informative only when every cause states a holding with no price source, amber for anything else, a cause nobody stated included; its title naming that cause when the tone is informative and something came back partial, else the partial title, else the notes title when only warnings on whole results are left (the three keys guarded in the four catalogues); each measurement a chip named by its label, else its catalogue name, else its raw code, grouped under the question of the level that renders it, in page order, with the unplaced ones last and never dropped; each reason once with its arity, and never a key on screen; the uncovered card of L2, mounted alone: there with an ok or a partial contribution, and absent, with its residual line and its card grid, when the contribution is missing, unavailable or failed, never a zero standing in for an unknown; and the frame around one level, mounted alone: a measurement that did not come back whole is named in its health line by its label when it has one, else by its catalogue name found through the shared camelCase rule (historical_var as risk.analytics.historicalVar.name, never the raw code a key built without the rule falls back to); and the one benchmark picker every Risk surface mounts: it opens on the shared choice (a stored id it cannot confirm — a deleted asset or a list that did not load — reads as unknown and stays stored), publishes its resolution state (none, pending, set, unknown) with the resolved id and whether the page measures it, leaves out only what the page measures while keeping the current choice listed and flagged by risk.benchmark.measuredHere, lists benchmarks first, writes the shared store before value and onchange, and never lets a late check overwrite a choice made meanwhile; and the portfolio's L3 mounted alone over a payload: the table in place of the four cards, titled with the question and the perimeter it read, the portfolio's row first and marked as itself, a benchmark nobody holds added second, or the held one moved up second keeping its holding's cells with beta and correlation not applicable, each figure from its own part of the payload (the dot's pair, the drawn KPI's ratios, the comparison's beta and correlation), a ratio the payload does not carry a plain dash with no tooltip, the weight column always and beta and correlation only with a measured benchmark, the return's short title with the full name opening its tooltip and listed in the column menu, every figure column as wide as its title, one selection shared by a row and its dot, and the notes under the chart in reading order; the L4 tool selector (D377): nothing open on a first visit, each added tool in the fixed observed, assumed, modelled order and remembered per user in this browser, the close button dropping the tool with its answer, and a single supplied tool shown at once with no selector; the scenario table that replaces the bars (D376): one row per holding in the given order with its key on the asset cell, a column only where some row has a value, and the bars on one shared scale; and the risk panel header's data-quality banner (TC-23, Q-TC23-1), mounted over a stubbed add-pair dialog: an add_fx_pair chip opens the dialog on its own pair and the next chip on its own, the one button of an issue with no pair opens it empty, oncreated and onsynced each reload the answer once, an add chip never navigates while a navigate_fx chip still opens its pair's page",
-        tests="src/lib/features/risk/levels/l4/L4Replay.test.ts, src/lib/features/risk/levels/RiskPartialNotice.test.ts, src/lib/features/risk/levels/RiskLevelSection.test.ts, src/lib/features/risk/levels/L2Diversification.test.ts, src/lib/features/risk/BenchmarkSelect.test.ts, src/lib/features/risk/levels/L3RiskAdjusted.test.ts, src/lib/features/risk/levels/L4WhatIf.test.ts, src/lib/features/risk/levels/l4/TornadoChart.test.ts, src/lib/features/risk/levels/RiskPanelHeader.test.ts",
-    )
-    add_test(
-        cat,
-        "risk-frame-component",
-        front_portfolio_risk_frame_component,
-        test_names=False,
-        name="Risk Result Frame Component Tests",
-        desc="The legacy result frame Asset Detail mounts once per analytic, rendered in jsdom: each warning is worded through its own i18n key formatted with the names, counts, dimension and covered share it carries — never the raw ICU source a code-named key printed when it was called without values, never the generic sentence when the backend sent a reason key such as assets_excluded_missing_price — a warning without a key, or with a key this build does not ship, shows the backend sentence instead of a raw key, the generic sentence is kept only for a warning with neither, and across every risk.warnings sentence with arguments (read off en.json at test time, values built from each sentence's own ICU arguments) a warning is worded through its key once its values arrive and shows the backend sentence when they do not, never a brace or a key; the error branch still words its code through risk.errors.<code> with the state sentence as fallback. Expected sentences are resolved from the shipped catalogue through the same formatter instead of pinned",
-        tests="src/lib/features/risk/RiskResultFrame.test.ts",
+        tests="src/lib/features/risk/levels/l4/L4Replay.test.ts, src/lib/features/risk/levels/l4/L4Simulation.test.ts, src/lib/features/risk/levels/RiskPartialNotice.test.ts, src/lib/features/risk/levels/RiskLevelSection.test.ts, src/lib/features/risk/levels/L2Diversification.test.ts, src/lib/features/risk/BenchmarkSelect.test.ts, src/lib/features/risk/levels/L3RiskAdjusted.test.ts, src/lib/features/risk/levels/L4WhatIf.test.ts, src/lib/features/risk/levels/l4/TornadoChart.test.ts, src/lib/features/risk/levels/RiskPanelHeader.test.ts",
     )
     add_test(
         cat,

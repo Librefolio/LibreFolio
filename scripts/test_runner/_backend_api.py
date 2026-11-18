@@ -483,6 +483,16 @@ def api_batch_split_promote(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Batch split/promote tests", verbose=verbose)
 
 
+def api_transactions_charges(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the linked charges API tests (project 66, lot R3)."""
+    print_section("Linked Charges API Tests")
+    print_info("Testing: ref / parent_ref / parent_transaction_id on creates, parent_transaction_id and charges_count on reads")
+    print_info("Tests: the parent_ids and without_parent filters, /validate writes nothing, a parent of another user is not found, charge_role in /transactions/types")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_transactions_charges_api.py", test_names)
+    return run_command(cmd, "Linked charges API tests", verbose=verbose)
+
+
 def api_transactions_wac_inline(verbose: bool = False, test_names: list = None) -> bool:
     """Run WAC inline validate/commit tests (P16-P28)."""
     print_section("WAC Inline Validate/Commit Tests")
@@ -1533,6 +1543,13 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "tx-balance-walk", api_tx_balance_walk, name="TX Balance Walk", desc="Same-day ordering, cascade, end-of-day")
     add_test(api, "broker-overdraft-off-refused", api_broker_overdraft_off_refused, name="Broker Overdraft Off Refused", desc="PATCH allow_cash_overdraft=false over a negative cash is refused and the stored flag stays on (own user and broker)")
     add_test(api, "batch-split-promote", api_batch_split_promote, name="Batch Split/Promote", desc="Split/promote in unified batch + suggest")
+    add_test(
+        api,
+        "transactions-charges",
+        api_transactions_charges,
+        name="Linked Charges",
+        desc="Project 66 R3: charges linked to their parent in a batch (ref, parent_ref, parent_transaction_id), read back with parent_transaction_id and charges_count, the parent_ids and without_parent filters, /validate, another user's parent not found, charge_role in /transactions/types",
+    )
     add_test(api, "transactions-wac", api_transactions_wac_inline, name="WAC Cost Basis", desc="WAC inline validate/commit (P16-P28)")
     add_test(api, "assets-patch-fields", api_assets_patch_fields, name="Assets Patch Fields", desc="PATCH /assets field-level updates, all or nothing batches, assetNameTaken; A4: POST/PATCH write classification_params into the profile in the authenticated user's name")
     add_test(

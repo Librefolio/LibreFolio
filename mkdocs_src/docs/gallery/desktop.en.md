@@ -854,7 +854,7 @@ The Edit Asset modal at Classification: Sector Distribution and Geographic Distr
 
 ### 🌳 Grouped Indicator Search
 
-The signal picker groups the 22 indicators by family with counts, search and keyboard navigation.
+The signal picker groups the 24 indicators by family with counts, search and keyboard navigation.
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="assets" data-name="detail-signals-tree" alt="🌳 Grouped Indicator Search">

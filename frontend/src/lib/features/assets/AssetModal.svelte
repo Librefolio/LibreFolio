@@ -47,12 +47,12 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {IDENTIFIER_TYPES} from '$lib/utils/assetTypes';
     import {columnsToIdentifierRows, fieldToIdType, identifierValue, withIdentifier, mergeOtherIdentifierValues, withElectedPrimary} from './assetIdentifiers';
-    import {searchResultAssetType, searchResultIdentifier, searchResultProviderParams} from './assetSearchSelection';
+    import {searchResultAssetType, searchResultAssignmentType, searchResultIdentifier, searchResultProviderParams} from './assetSearchSelection';
     import {compareMetadata, type ComparisonAction, type ComparisonSnapshot} from './assetMetadataComparison';
     import {hasSomethingToLose, loadCurrencyChangeImpact, type CurrencyChangeImpact} from './currencyImpact';
     import {buildClassificationParams, buildCreateItem, buildPatchItem, buildProviderAssignItem, type AssetFormFields, type ClassificationParams, type ProviderAssignment} from './assetPayload';
     import {isQuoteBaseQuantityInvalid, quoteBaseQuantityErrorKey, defaultQuoteBaseQuantity, proposeQuoteBase, quoteBaseNote, computeHasProvider, computeProviderDirty, groupImportNotices, type QuoteBaseSource, type QuoteBaseSuggestion} from './assetFormState';
-    import {ensureAssetProvidersCached, getAssetProviderName, isParametricProvider} from '$lib/utils/providerHelpers';
+    import {ensureAssetProvidersCached, getAssetProviderAcceptedTypes, getAssetProviderName, getAssetProviderParamKeys, isParametricProvider} from '$lib/utils/providerHelpers';
     import type {AssetCreateSyncResult} from '$lib/utils/sync/syncHelpers';
     import {mergeAssets, invalidateAfterMutation} from '$lib/stores/reference/assetStore';
     import {entityDetailLinkHtml} from '$lib/utils/core/entityLink';
@@ -725,7 +725,7 @@
         quoteBaseQuantity = quoteBase.quantity;
 
         // Auto-fill identifier based on identifier_type
-        const identifier = searchResultIdentifier(identifierRows, result.identifier_type, result.identifier);
+        const identifier = searchResultIdentifier(identifierRows, result.identifier_type, result.identifier, result.provider_code ? {code: result.provider_code, acceptedTypes: getAssetProviderAcceptedTypes(result.provider_code)} : null);
         if (identifier.kind === 'conflict') {
             // Two codes of the same type, both legitimate: don't pick for the user.
             // The provider link below is established regardless — the search did its job;
@@ -739,11 +739,14 @@
         // Auto-fill provider
         providerCode = result.provider_code;
         providerIdentifier = result.identifier;
-        providerIdentifierType = result.identifier_type;
+        // OTHER is an asset column, not an assignment type: the provider's own (CoinGecko's PROVIDER_ID, P3). The search
+        // loaded the provider list when it opened; were it still empty, ProviderAssignmentSection sets the only type a
+        // provider accepts
+        providerIdentifierType = searchResultAssignmentType(result.identifier_type, getAssetProviderAcceptedTypes(result.provider_code));
         providerNoProvider = false;
         // Carry over provider_params from search result (e.g. language, currency): the provider's own take priority,
         // the result's currency is the fallback.
-        providerParams = searchResultProviderParams(result.provider_params, result.currency);
+        providerParams = searchResultProviderParams(result.provider_params, result.currency, getAssetProviderParamKeys(result.provider_code));
         resetDraftReads(result.provider_url ?? null);
         // After the reset, which clears the previous selection's questions: these are this one's.
         selectionQuestions = question ? [question] : [];
@@ -961,6 +964,7 @@
                     name: $t('common.name'),
                     type: $t('common.type'),
                     currency: $t('common.currency'),
+                    icon: $t('common.icon'),
                     quoteBase: $t('assets.modal.quoteBaseQuantity'),
                     quoteBaseNote: (source) => {
                         const note = quoteBaseNote(source, providerName);
@@ -1038,6 +1042,7 @@
             assetType,
             currency,
             currencyUserSet,
+            iconUrl: iconUrl ?? '',
             quoteBaseQuantity,
             shortDescription,
             descriptionFromPrefill,
@@ -1087,6 +1092,10 @@
                     break;
                 case 'currency':
                     currency = value;
+                    break;
+                case 'icon_url':
+                    // The provider's logo (project 76, P3)
+                    iconUrl = value || null;
                     break;
                 case 'short_description':
                     shortDescription = value;
@@ -1610,6 +1619,7 @@
                 bind:expanded={providerExpanded}
                 bind:noProvider={providerNoProvider}
                 bind:providerCode
+                savedProviderCode={editMode ? initialProviderCode : ''}
                 bind:identifier={providerIdentifier}
                 bind:identifierType={providerIdentifierType}
                 bind:providerParams
@@ -1738,6 +1748,7 @@
     differences={comparisonDifferences}
     assetName={displayName}
     zIndex={zIndex + 20}
+    providerCodes={[providerCode]}
     onapply={handleComparisonApply}
     oncancel={() => {
         showComparisonModal = false;

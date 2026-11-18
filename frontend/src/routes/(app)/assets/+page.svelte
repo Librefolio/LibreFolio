@@ -51,6 +51,8 @@
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import type {AssetCreateSyncResult} from '$lib/utils/sync/syncHelpers';
+    import {historyStartsNote} from '$lib/utils/sync/syncToastHelpers';
+    import ProviderAttributionNote from '$lib/features/assets/ProviderAttributionNote.svelte';
     import type {ChartPrimaryView, ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {effectiveCalendarReturnWindow, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setItemPrimaryView, setPairSettings, setScopePrimaryView} from '$lib/stores/chartSettingsStore.svelte';
     import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, extractCalendarReturnView, type CalendarReturnView} from '$lib/features/signals/calendarReturn';
@@ -1347,16 +1349,20 @@
         if (r && (!r.errors || r.errors.length === 0)) {
             const fetched = r.points_fetched ?? 0;
             const changed = (r.inserted_count ?? 0) + (r.updated_count ?? 0);
+            const note = historyStartsNote(r, $t);
             toasts.success(
                 $t('assets.sync.toastOk', {
                     values: {name: linkCreatedAsset ? entityDetailLinkHtml({kind: 'asset', id: asset.id}, asset.display_name) : escapeHtml(asset.display_name), fetched, changed},
-                }),
+                }) + (note ? `\n${note}` : ''),
             );
         } else {
+            const note = historyStartsNote(r, $t);
             toasts.error(
                 $t('assets.sync.toastFailed', {
                     values: {name: asset.display_name},
-                }) + (r?.errors?.[0] ? ': ' + r.errors[0] : ''),
+                }) +
+                    (r?.errors?.[0] ? ': ' + r.errors[0] : '') +
+                    (note ? `\n${note}` : ''),
             );
         }
     }
@@ -2452,6 +2458,9 @@
             {/each}
         </div>
     {/if}
+
+    <!-- A provider's attribution, once under the list, only when an asset on screen is priced by it (project 76, P4) -->
+    <ProviderAttributionNote providerCodes={filteredAssets.map((asset) => asset.provider_code)} align="end" testId="assets-provider-attribution" />
 </div>
 
 <AssetBrowseOrder view={viewMode} panels={assetPanels} />

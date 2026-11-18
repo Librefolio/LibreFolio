@@ -30,7 +30,9 @@
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {ConfirmModal} from '$lib/components/table';
     import {CurrencySearchSelect, FxProviderSelect} from '$lib/components/ui/select';
-    import type {ChainStep} from '$lib/utils/currency/currencyGraph';
+    import type {ChainStep, ProviderInfo} from '$lib/utils/currency/currencyGraph';
+    import PluginNotConfiguredModal from '$lib/features/plugin-settings/PluginNotConfiguredModal.svelte';
+    import {refreshFxProviderReadiness} from '$lib/stores/currencyGraphStore';
     import {getRegisteredPairs} from '$lib/features/fx/fxStoreRegistry';
     import {ensureFxRoutesLoaded, getConfiguredPairSlugs, fxRoutesVersion} from '$lib/stores/reference/fxRoutesStore';
     import {currentLanguage} from '$lib/stores/app/language';
@@ -89,6 +91,13 @@
 
     // Baseline routes for edit mode dirty detection
     let baselineRoutesJson = $state('[]');
+    /**
+     * The providers the pair's saved routes use (project 76, N3c): never switched off in the picker, since the backend
+     * accepts a provider already on the pair (N2). Read from the baseline, so a route removed and put back stays on.
+     */
+    let savedProviderCodes = $derived(editMode ? [...new Set((JSON.parse(baselineRoutesJson) as ChainStep[][]).flat().map((step) => step.provider))] : []);
+    /** The provider a switched-off route or a triangle asked about (N3c): the common window; null when closed. */
+    let settingUp = $state<ProviderInfo | null>(null);
 
     // Populate state when editMode opens, and load routes from backend
     let loadingRoutes = $state(false);
@@ -475,7 +484,7 @@
                 {/if}
 
                 <!-- Route selection (unified: DFS pathfinding + search + flags) -->
-                <FxProviderSelect {baseCurrency} bind:selectedRoutes {configuredPairSlugs} disabled={saving || !hasCurrencies} language={$currentLanguage} onSelectionChange={handleRoutesChange} {quoteCurrency} />
+                <FxProviderSelect {baseCurrency} bind:selectedRoutes {configuredPairSlugs} disabled={saving || !hasCurrencies} language={$currentLanguage} onSelectionChange={handleRoutesChange} onneedssetup={(provider) => (settingUp = provider)} {quoteCurrency} {savedProviderCodes} />
 
                 <!-- Create intermediate pairs checkbox (visible only when chain routes are selected) -->
                 {#if hasChainRoutes}
@@ -530,3 +539,8 @@
     warning={true}
     zIndex={70}
 />
+
+{#if settingUp !== null}
+    <!-- A provider that is not configured, from the route picker (N3c): why; a save in «Configure» reads the readiness again. -->
+    <PluginNotConfiguredModal family="fx" onClose={() => (settingUp = null)} onSaved={() => void refreshFxProviderReadiness()} open={true} pluginCode={settingUp.code} pluginName={settingUp.name} readiness={settingUp} />
+{/if}

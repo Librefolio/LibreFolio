@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "rateShock": {
+        "name": "Tipos al alza o a la baja",
+        "description": "El precio de un activo ante un desplazamiento paralelo de su rendimiento, a partir de la duración modificada leída en su perfil: una estimación de primer orden, −duración × el desplazamiento."
+      }
+    }
+  }
+}

@@ -264,17 +264,17 @@ the product does not expose. Publish it.
 rendered conditionally on data that arrives asynchronously, its absence means
 **two different things** — the feature is unsupported, or the fetch hasn't landed.
 Waiting for the section to appear therefore asks *"has the network finished?"*
-while looking like it asks *"is this supported?"*. `RiskAnalysisPanel` hides every
+while looking like it asks *"is this supported?"*. `RiskLevelsPanel` hides every
 section behind a capability catalog and now publishes `data-catalog="pending|ready"`;
 the spec waits on that, and a section still missing afterwards is a real red.
 
 ```ts
 // ✘ green at 1 worker, red at 4 — and the red looks like a broken feature
-await expect(page.getByTestId('risk-comparison-controls')).toBeVisible({timeout: 12_000});
+await expect(page.getByTestId('risk-level-2')).toBeVisible({timeout: 12_000});
 
 // ✔ ask whether the gate has opened, then assert on what's behind it
-await expect(page.getByTestId('risk-analysis-panel')).toHaveAttribute('data-catalog', 'ready');
-await expect(page.getByTestId('risk-comparison-controls')).toBeVisible();
+await expect(page.getByTestId('risk-levels-panel')).toHaveAttribute('data-catalog', 'ready');
+await expect(page.getByTestId('risk-level-2')).toBeVisible();
 ```
 
 ### 5. Never assert on translated text

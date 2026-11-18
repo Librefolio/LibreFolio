@@ -24,6 +24,10 @@ class RiskExcludedAsset(StrictModel):
 
     asset_id: int
     reason: str = Field(..., min_length=1)
+    details: Dict[str, JsonValue] = Field(
+        default_factory=dict,
+        description="What the reason rests on, when it has figures: `shorter_than_horizon` (RN-16c) carries the simulation's `horizon_days` and the holding's `first_useful_day`.",
+    )
 
 
 class RiskHistoricalReplayProxyAsset(StrictModel):

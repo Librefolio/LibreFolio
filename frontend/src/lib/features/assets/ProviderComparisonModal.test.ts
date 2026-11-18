@@ -63,6 +63,12 @@ import {currentLanguage} from '$lib/stores/app/language';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
 import {formatPercent} from '$lib/utils/core/formatPercent';
+// Project 76, P4b: the provider list, stubbed with one attribution; the asset store is not read here.
+vi.mock('$lib/utils/providerHelpers', async () => ({
+    assetProvidersVersion: (await import('svelte/store')).writable(0),
+    ensureAssetProvidersCached: vi.fn(async () => undefined),
+    getAssetProviderAttribution: vi.fn((code: string | null | undefined) => (code === 'coingecko' ? {text: 'Powered by CoinGecko', url: 'https://www.coingecko.com/'} : null)),
+}));
 import ProviderComparisonModal, {type DiffItem} from './ProviderComparisonModal.svelte';
 
 /** A plain string-valued difference. `label` is arbitrary — never asserted on. */
@@ -611,5 +617,25 @@ describe('ProviderComparisonModal — the quote base row and its note (Z-32 d)',
         expect(screen.getByTestId('comparison-checkbox-quote_base_quantity')).toBeChecked();
         await fireEvent.click(screen.getByTestId('comparison-apply'));
         expect(lastApply(onapply)).toEqual({fields: ['quote_base_quantity'], resolutions: {}});
+    });
+});
+
+// Project 76, P4b (the consultant's rule, 18/11): the window compares the provider's own data, so a provider with an
+// attribution has its line in the window's footer.
+describe("ProviderComparisonModal — the provider's attribution (76 P4b)", () => {
+    it('shows the line of a provider with an attribution', async () => {
+        mount([stringDiff('display_name', 'BTC', 'Bitcoin')], {providerCodes: ['coingecko']});
+        await settled();
+        const note = screen.getByTestId('comparison-attribution');
+        expect(within(note).getByTestId('provider-attribution-link')).toHaveAttribute('data-provider', 'coingecko');
+    });
+
+    it.each<[string, Record<string, unknown>]>([
+        ['a provider that asks none', {providerCodes: ['yfinance']}],
+        ['a caller that names no provider (the profile window)', {}],
+    ])('shows nothing for %s', async (_label, props) => {
+        mount([stringDiff('display_name', 'BTC', 'Bitcoin')], props);
+        await settled();
+        expect(screen.queryByTestId('comparison-attribution')).toBeNull();
     });
 });

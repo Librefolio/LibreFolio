@@ -40,8 +40,13 @@ investor rarely says aloud: does all this complexity earn more than a single wor
 
 - The Risk tab of the Dashboard and broker pages renders the four levels (`4573c9e2a`, [[features/F-111]]); the Lab
   reuses them for a selection of assets ([[features/F-112]]).
-- A metric with no question has no home: tracking error and the information ratio stay only on the legacy Asset Detail
-  panel ([[features/F-113]]) and in the deferrals.
+- A metric with no question has no home: tracking error and the information ratio lived only on the legacy Asset
+  Detail panel ([[features/F-113]], deleted on 2026-11-17 by RN-17) and stay in the deferrals.
+- **2026-11-17 (RN-18) — a fifth question.** «How does it move?», between L1 and L2: the positive side, the twin of
+  «How much can it hurt?» (best day, thirty good days, largest rally, what the days were like), decided in Q22 a
+  (12/11/2026) for neutrality: «How much can it hurt?» stays the question about losses, and the positive has its own.
+  It is a new question with its own block, not part of L1. The number of questions differs from page to page (the
+  Asset Detail has no L2), so the texts no longer state a count; the slug of this page stays as it is.
 - The other decisions that bind the work are listed in [[concepts/risk-binding-decisions]].
 
 ## Source files

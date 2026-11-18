@@ -144,7 +144,7 @@ finish"* — each one names a state the product does not expose.
 **And a section that has not rendered yet is the same trap without a sleep.** A block
 gated on fetched data (`{#if supportsComparison}`) is absent both when the feature is
 unsupported and when the fetch is still in flight, so waiting for it silently measures
-network latency. Wait for the gate, not the gated: `RiskAnalysisPanel` publishes
+network latency. Wait for the gate, not the gated: `RiskLevelsPanel` publishes
 `data-catalog="pending|ready"` for exactly this.
 
 > **If how to surface it is not obvious, stop and ask the user.** It is an interface

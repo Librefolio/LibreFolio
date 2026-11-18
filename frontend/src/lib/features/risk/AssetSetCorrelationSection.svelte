@@ -67,8 +67,8 @@
         dateEnd,
         targetCurrency,
         // No risk-free rate reaches a correlation: it is a rate the Sharpe family
-        // needs, and passing a live one here would re-ask the question on every
-        // keystroke in a control this section does not read.
+        // needs, and passing the reader's (RN-21) here would re-ask the question
+        // whenever it changes, for figures that do not read it.
         appliedRiskFreePercent: 0,
         refreshVersion,
     }));
@@ -139,7 +139,7 @@
                 <button type="button" class="mt-2 rounded-md border border-lf-input px-3 py-1.5 text-sm text-lf-secondary hover:bg-lf-hover" onclick={() => void controller.loadBase(true)} data-testid="risk-correlation-retry">{$t('common.retry')}</button>
             </div>
         {:else if output}
-            <CorrelationHeatmap {output} {assetLabels} {assetTypes} assetSectors={matrixMetadata.sectors} assetRegions={matrixMetadata.regions} />
+            <CorrelationHeatmap {output} {assetLabels} {assetTypes} assetSectors={matrixMetadata.sectors} assetRegions={matrixMetadata.regions} metadataStatus={matrixMetadata.status} />
         {:else if controller.initialLoading}
             <div class="h-48 animate-pulse rounded-lg bg-lf-panel" data-testid="risk-correlation-loading"></div>
         {:else if controller.loadDiscarded}

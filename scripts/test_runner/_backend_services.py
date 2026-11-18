@@ -102,6 +102,7 @@ RISK_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_risk_exclusion_reasons.py",
     "backend/test_scripts/test_services/test_risk_price_day_budget.py",
     "backend/test_scripts/test_services/test_risk_replay_range_bounds.py",
+    "backend/test_scripts/test_services/test_risk_rate_shock.py",
 )
 
 PAC_PLANNER_CORE_TEST_PATHS = (
@@ -549,6 +550,54 @@ def services_enricher_call_limits(verbose: bool = False, test_names: list = None
     return run_command(cmd, "Enricher call limit tests", verbose=verbose)
 
 
+def services_coingecko_prices(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the CoinGecko provider's prices (project 76, P2): current, in bulk, the daily history, freshness."""
+    print_section("Services: CoinGecko Prices")
+    print_info("Testing: asset_source_providers/coingecko/plugin.py (get_current_value, get_current_values_bulk, get_history_value, current_min_refresh_seconds)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_coingecko_prices.py", test_names)
+    return run_command(cmd, "CoinGecko prices tests", verbose=verbose)
+
+
+def services_provider_attribution(verbose: bool = False, test_names: list = None) -> bool:
+    """Test a provider's attribution line, CoinGecko's «Powered by CoinGecko» (project 76, P4)."""
+    print_section("Services: Provider Attribution")
+    print_info("Testing: schemas/provider.py (FAProviderAttribution, FAProviderInfo.attribution), assets/base.py, coingecko/plugin.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_attribution.py", test_names)
+    return run_command(cmd, "Provider attribution tests", verbose=verbose)
+
+
+def services_coingecko_search(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the CoinGecko provider's search, metadata and page, and the PROVIDER_ID input type (project 76, P3)."""
+    print_section("Services: CoinGecko Search")
+    print_info("Testing: asset_source_providers/coingecko/plugin.py (search, fetch_asset_metadata, get_asset_url), db/models.py ProviderInputType.PROVIDER_ID, assets/base.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_coingecko_search.py", test_names)
+    return run_command(cmd, "CoinGecko search tests", verbose=verbose)
+
+
+def services_refresh_history_starts(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the first day a source has prices for, in the refresh's outcome (project 76, P2b)."""
+    print_section("Services: Refresh History Starts")
+    print_info("Testing: assets/refresh.py (FARefreshResult.history_starts), schemas/prices.py, coingecko/plugin.py (Demo vs Pro)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_refresh_history_starts.py", test_names)
+    return run_command(cmd, "Refresh history starts tests", verbose=verbose)
+
+
+def services_coingecko_provider(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the CoinGecko provider (project 76, P1): its shared group, its settings and parameters, the SDK's door."""
+    print_section("Services: CoinGecko Provider")
+    print_info("Testing: asset_source_providers/coingecko (plugin, _sdk, _currencies), plugin_settings/groups/coingecko.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_coingecko_provider.py", test_names)
+    return run_command(cmd, "CoinGecko provider tests", verbose=verbose)
+
+
+def services_field_missing_phrase(verbose: bool = False, test_names: list = None) -> bool:
+    """Test a settings field's own phrase for the «to configure» window (project 76, N3a2)."""
+    print_section("Services: Field Missing Phrase")
+    print_info("Testing: plugin_settings/fields.py (PluginSettingField.missing_key), service._field_read")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_field_missing_phrase.py", test_names)
+    return run_command(cmd, "Field missing phrase tests", verbose=verbose)
+
+
 def services_call_limit_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test the call limits as core settings of their owner, and their usage in the catalogue (project 76, U4)."""
     print_section("Services: Call Limit Settings")
@@ -648,6 +697,38 @@ def services_linked_adjustment_pair(verbose: bool = False, test_names: list = No
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_linked_adjustment_pair.py", test_names)
     return run_command(cmd, "Linked adjustment pair tests", verbose=verbose)
+
+
+def services_transaction_charges(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the rules of the link of a charge (FEE, TAX) to its parent transaction (project 66, lot R2)."""
+    print_section("Services: Transaction Charges")
+    print_info("Testing: backend/app/services/transactions/charges.py + schemas/transactions/type_metadata.py (charge_role)")
+    print_info(
+        "Tests: the charge and parent type lists of the type table; each rule of a link (type, pair, parent found, broker, asset) in order; date and currency free; a parent with charges keeps a parent type; the reader of the charges of some parents through idx_transactions_parent; the messages in 4 languages"
+    )
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transaction_charges.py", test_names)
+    return run_command(cmd, "Transaction charges tests", verbose=verbose)
+
+
+def services_transaction_charge_links(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the batch stage that links a charge to its parent (project 66, lot R3)."""
+    print_section("Services: Transaction Charge Links")
+    print_info("Testing: backend/app/services/transactions/charges.py (link_charges) + the create items (ref, parent_ref, parent_transaction_id)")
+    print_info("Tests: a parent created in the batch or saved; unknown or duplicated names; a parent missing, not visible or deleted by the batch; the rules on the final state; the messages in 4 languages")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transaction_charge_links.py", test_names)
+    return run_command(cmd, "Transaction charge links tests", verbose=verbose)
+
+
+def services_transaction_charge_edits(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the deletes and updates of linked charges and their parents (project 66, lots R4 and R5)."""
+    print_section("Services: Transaction Charge Edits")
+    print_info("Testing: backend/app/services/transactions/charges.py (link_charges: unlink, relink, deleted parents, touched parents) + the update items")
+    print_info("Tests: a parent deleted with its charges left is refused; deleted with them, or with them unlinked, goes; updates link, unlink and relink; a promoted parent with charges is refused; a broker with linked rows is deleted")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transaction_charge_edits.py", test_names)
+    return run_command(cmd, "Transaction charge edits tests", verbose=verbose)
 
 
 def services_linked_cash_pair(verbose: bool = False, test_names: list = None) -> bool:
@@ -2987,7 +3068,7 @@ Note: No backend server required.
     add_test(cat, "signal-plugins-close-only", services_signal_plugins_close_only, name="Close-only Signal Plugins", desc="SMA, ROC, StochRSI, KAMA and PPO delegation, warm-up and Asset/FX parity")
     add_test(cat, "signal-plugins-ohlc", services_signal_plugins_ohlc, name="OHLC Signal Plugins", desc="ATR, ADX, NATR, Aroon, Donchian and CCI strict input and numerical regression")
     add_test(cat, "signal-plugins-volume", services_signal_plugins_volume, name="Volume Signal Plugins", desc="OBV rebasing and MFI zero/missing volume, levels and TA-Lib delegation")
-    add_test(cat, "signal-plugin-matrix", services_signal_plugin_matrix, name="Full Signal Plugin Matrix", desc="Uniform 22-plugin domains, fields, gaps, boundaries and isolation gate")
+    add_test(cat, "signal-plugin-matrix", services_signal_plugin_matrix, name="Full Signal Plugin Matrix", desc="Uniform 24-plugin domains, fields, gaps, boundaries and isolation gate")
     add_test(cat, "asset-signals", services_asset_signals, name="Asset Signals", desc="Extended bulk load, FX-before-compute, signal-only response and isolation")
     # Write-scoped (the category default): unique-name assets deleted with their prices; FX rows only on AMD/BDT, AMD/SZL,
     # AMD/LSL, BBD/BZD (MVR/SCR never seeded), pairs no other test uses, dated 1980-1987, wiped before and after.
@@ -3072,6 +3153,64 @@ Note: No backend server required.
         # in their storage with monkeypatch.setitem; u4 groups and claims released at teardown.
         isolation="pure",
     )
+    add_test(
+        cat,
+        "coingecko-prices",
+        services_coingecko_prices,
+        name="CoinGecko Prices",
+        desc="P2: /simple/price with precision=full, the value read as a decimal from the text, the UTC day of last_updated_at, unknown id NOT_FOUND, missing currency NO_DATA; in bulk one request for every item, each under its key, a 429 refuses the whole call; the history from market_chart/range (interval daily): the 00:00 UTC point of D is the close of D-1, a point not at midnight and a day outside the range dropped; the Demo plan's year moves an earlier start; the refresh interval from its setting",
+        # PURE: the real coingecko-sdk on an httpx.MockTransport (the P0 recordings), a test's «today»; no database, no
+        # server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "provider-attribution",
+        services_provider_attribution,
+        name="Provider Attribution",
+        desc="P4: FAProviderAttribution is a short text and an https link, anything else refused; the base provider has none, CoinGecko's is Powered by CoinGecko linked to its site; every registered provider has none or a valid one; FAProviderInfo carries it, none by default",
+        # PURE: the schemas and the registered plugins' constants; no database, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "coingecko-search",
+        services_coingecko_search,
+        name="CoinGecko Search",
+        desc="P3: the id travels as PROVIDER_ID, reaching the plugin as OTHER (the reverse map unchanged); search asks /search, coins only by market cap rank (no rank last, in order), rows OTHER, Name (SYMBOL), CRYPTO, the preferred currency as currency and vs_currency, a blank query asks nothing; metadata from /coins/{id} with the P0 flags: name, CRYPTO, logo, the symbol as ticker (left out when too long), coingecko:<id> among the other identifiers; the page; search on, NOT_CONFIGURED without a key; the real path: PROVIDER_ID saved and kept, OTHER received, prices stored, a service search counted on the group",
+        # PURE: the real coingecko-sdk on an httpx.MockTransport (the P0 recordings); private SQLite files behind the
+        # settings, the counter and the session; no shared database, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "refresh-history-starts",
+        services_refresh_history_starts,
+        name="Refresh History Starts",
+        desc="P2b: a source that gives no price before a day says so (FAHistoricalData.history_starts); the refresh copies it into FARefreshResult only when the range asked started earlier (a min start counts), with the status the prices decide; a range inside the window, or a provider that says none, gives none; CoinGecko says it on the Demo plan (today - 364), never on Pro",
+        # PURE: a private SQLite file behind the session, mockprov wrapped to say a first day, CoinGecko on an
+        # httpx.MockTransport; no shared database, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "coingecko-provider",
+        services_coingecko_provider,
+        name="CoinGecko Provider",
+        desc="P1: the shared group coingecko (API key secret and required with its missing phrase, plan demo/pro, credits shared, its variables claimed, the five call limits); the provider (calls out, reads the group, refresh interval and preferred currency, no limit of its own); the 45 vs currencies against the recorded list; vs_currency required; the SDK client (no retry, timeout, the plan's root); a 429 leaves at once with Retry-After; the recorded errors 10012/10005/10011 and the others translated; the key in no text; no key, no request",
+        # PURE: the real coingecko-sdk on an httpx.MockTransport, so no socket opens; recorded bodies of the P0 trial; no
+        # database, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "field-missing-phrase",
+        services_field_missing_phrase,
+        name="Field Missing Phrase",
+        desc="N3a2: PluginSettingField.missing_key (the field named in a sentence, with its article, for the «to configure» window): optional, None by default, a declaration with it validates; the catalogue's field read carries it, None when undeclared",
+        # PURE: no database, no server, no network; the declaration and the read model only.
+        isolation="pure",
+    )
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation; the accrual golden: every number of the accrual walk pinned (regen: LIBREFOLIO_TEST_REGEN_SI_ACCRUAL_GOLDEN=1)")
     add_test(cat, "synthetic-yield-integration", services_synthetic_yield_integration, name="Synthetic Yield Integration", desc="E2E scenarios (P2P, bond, mixed)")
     add_test(cat, "scheduled-investment-cost-bounds", services_scheduled_investment_cost_bounds, name="Scheduled Investment Cost Bounds", desc="R13-SEC7-2 (N73): late interest in closed form per date, bounded day counts, cache cap, horizon")
@@ -3118,6 +3257,27 @@ Note: No backend server required.
         services_linked_cash_pair,
         name="Linked Cash Pair",
         desc="W6-7: a CASH_TRANSFER pair in two currencies or with amounts that are not opposite, and an FX_CONVERSION in one currency, are refused on the first create (pairCurrencyMismatch, pairAmountMismatch, pairCurrencySame; commit and validate); coherent and stored pairs are not touched; the rule follows TX_TYPE_METADATA; the messages exist in EN/IT/FR/ES",
+    )
+    add_test(
+        cat,
+        "transaction-charges",
+        services_transaction_charges,
+        name="Transaction Charges",
+        desc="Project 66 R2: a FEE or TAX linked to its parent (BUY, SELL, DIVIDEND, INTEREST, DEPOSIT, WITHDRAWAL): the type lists of the table, each refusal in order (chargeNotACharge, chargeRowIsPaired, chargeParentNotFound, chargeParentTypeNotAllowed, chargeBrokerMismatch, chargeAssetMissing, chargeAssetMismatch), date and currency free, chargesBlockParentType, the reader through idx_transactions_parent; the messages exist in EN/IT/FR/ES",
+    )
+    add_test(
+        cat,
+        "transaction-charge-links",
+        services_transaction_charge_links,
+        name="Transaction Charge Links",
+        desc="Project 66 R3: the batch links a charge to the parent it names (parent_ref of a create, parent_transaction_id of a saved row) on the final state, on commit and validate: chargeRefDuplicate, chargeParentRefNotFound, chargeParentTwice, chargeParentIdInvalid, a parent missing, not visible or deleted by the batch is not found, the rules of R2 with parentRef; the messages exist in EN/IT/FR/ES",
+    )
+    add_test(
+        cat,
+        "transaction-charge-edits",
+        services_transaction_charge_edits,
+        name="Transaction Charge Edits",
+        desc="Project 66 R4/R5: a parent deleted while it keeps charges is refused (chargesDeleteIncomplete), with its charges deleted or unlinked in the batch it goes; updates link (parent_transaction_id, parent_ref), unlink (0) and relink; a saved row that keeps charges must stay a parent, not a leg of a pair (chargesBlockParentType); a broker with linked rows is deleted; the message exists in EN/IT/FR/ES",
     )
     add_test(
         cat,
@@ -4467,7 +4627,14 @@ Note: No backend server required.
         desc="POST /assets/provider and POST /fx/providers/routes: a provider newly put to use and not configured refuses the whole request (422 NOT_CONFIGURED, first in request order, nothing written, replace kept), re-save and a provider already on the pair pass, one readiness call per request, managed profile; N2b: 503 when the settings cannot be read, reason and variables in the 422",
         isolation="pure",
     )
-    add_test(cat, "plugin-settings-guards", services_plugin_settings_guards, name="Plugin Settings Guards", desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings", isolation="pure")
+    add_test(
+        cat,
+        "plugin-settings-guards",
+        services_plugin_settings_guards,
+        name="Plugin Settings Guards",
+        desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings; U4c: the «Call limits» block lists exactly the owners of the limits, the five windows and real examples",
+        isolation="pure",
+    )
     add_test(
         cat,
         "platform-readiness",

@@ -10,7 +10,7 @@
  */
 import {describe, expect, it} from 'vitest';
 import {ASSET_TYPES} from '$lib/utils/assetTypes';
-import {searchResultAssetType, searchResultIdentifier, searchResultProviderParams, type SearchIdentifierOutcome} from './assetSearchSelection';
+import {searchResultAssetType, searchResultAssignmentType, searchResultIdentifier, searchResultProviderParams, type SearchIdentifierOutcome} from './assetSearchSelection';
 import type {IdentifierRow} from './assetIdentifiers';
 
 const row = (type: string, value: string): IdentifierRow => ({id: `id-${type}-${value}`, type, value});
@@ -107,6 +107,75 @@ describe('searchResultIdentifier', () => {
         expect(next).not.toBe(rows);
         expect(next[0]).not.toBe(rows[0]);
         expect(rows).toStrictEqual([{id: 'isin', type: 'ISIN', value: ''}, row('TICKER', 'BTP')]);
+    });
+});
+
+// Project 76, P3 (the consultant's rule, corrected 18/11): a provider that accepts PROVIDER_ID (CoinGecko) has its own
+// code typed OTHER in a search row. For such a provider only, OTHER is a list that grows: the code is written as
+// `<provider>:<code>` (`coingecko:bitcoin`), never in conflict, and the assignment takes PROVIDER_ID. Every other
+// provider's OTHER row stays exactly as before (Borsa Italiana's fallback: one OTHER row, the server reads OTHER as URL).
+const COINGECKO = {code: 'coingecko', acceptedTypes: ['PROVIDER_ID']};
+const BORSA_ITALIANA = {code: 'borsa_italiana', acceptedTypes: ['ISIN']};
+
+describe("searchResultIdentifier — a provider's own code (OTHER, PROVIDER_ID)", () => {
+    it('adds `<provider>:<code>` beside the OTHER rows already there, with no conflict, the ticker row untouched', () => {
+        const rows = deepFreeze([row('TICKER', 'BTC'), row('OTHER', 'broker-label')]);
+        const next = rowsOf(searchResultIdentifier(rows, 'OTHER', ' bitcoin ', COINGECKO));
+        expect(next).toStrictEqual([row('TICKER', 'BTC'), row('OTHER', 'broker-label'), {id: expect.any(String), type: 'OTHER', value: 'coingecko:bitcoin'}]);
+    });
+
+    it('adds nothing when the list already holds it, in any case', () => {
+        const rows = deepFreeze([row('OTHER', 'CoinGecko:Bitcoin')]);
+        expect(rowsOf(searchResultIdentifier(rows, 'other', 'bitcoin', COINGECKO))).toStrictEqual([row('OTHER', 'CoinGecko:Bitcoin')]);
+    });
+
+    it('writes into an empty OTHER row instead of adding one', () => {
+        const rows = deepFreeze([{id: 'other', type: 'OTHER', value: '  '}]);
+        expect(rowsOf(searchResultIdentifier(rows, 'OTHER', 'bitcoin', COINGECKO))).toStrictEqual([{id: 'other', type: 'OTHER', value: 'coingecko:bitcoin'}]);
+    });
+
+    it("leaves Borsa Italiana's fallback row (a fund's internal code, typed OTHER) as before: no prefix, a conflict with another OTHER code", () => {
+        expect(rowsOf(searchResultIdentifier([], 'OTHER', '2FADB', BORSA_ITALIANA))).toStrictEqual([{id: expect.any(String), type: 'OTHER', value: '2FADB'}]);
+        expect(searchResultIdentifier(deepFreeze([row('OTHER', 'broker-label')]), 'OTHER', '2FADB', BORSA_ITALIANA)).toStrictEqual({kind: 'conflict', type: 'OTHER', incoming: '2FADB', current: 'broker-label'});
+    });
+
+    it('keeps the behaviour of before when the provider is not known', () => {
+        expect(rowsOf(searchResultIdentifier([], 'OTHER', 'bitcoin'))).toStrictEqual([{id: expect.any(String), type: 'OTHER', value: 'bitcoin'}]);
+    });
+});
+
+describe('searchResultAssignmentType', () => {
+    it('keeps a type the assignment accepts (a ProviderInputType), upper-cased', () => {
+        expect(searchResultAssignmentType('isin', ['ISIN'])).toBe('ISIN');
+        expect(searchResultAssignmentType('TICKER', ['TICKER', 'ISIN'])).toBe('TICKER');
+    });
+
+    it('gives OTHER the PROVIDER_ID of a provider that accepts it', () => {
+        expect(searchResultAssignmentType('OTHER', ['PROVIDER_ID'])).toBe('PROVIDER_ID');
+        expect(searchResultAssignmentType('other', ['TICKER', 'PROVIDER_ID'])).toBe('PROVIDER_ID');
+    });
+
+    it('leaves OTHER as it is for any other provider (Borsa Italiana), or an unknown one: the server reads it as URL, as before', () => {
+        expect(searchResultAssignmentType('OTHER', ['ISIN'])).toBe('OTHER');
+        expect(searchResultAssignmentType('OTHER', [])).toBe('OTHER');
+    });
+});
+
+// Project 76, P3: the result's currency joins the params only when the provider's params schema has a `currency`
+// field (justETF, the CSS scraper); CoinGecko's `vs_currency` and Yahoo's empty schema get none. With the schema not
+// known, as before.
+describe('searchResultProviderParams — only a provider with a currency param gets it', () => {
+    it('adds it when the schema has a currency field', () => {
+        expect(searchResultProviderParams({language: 'it'}, 'EUR', ['currency', 'language'])).toStrictEqual({language: 'it', currency: 'EUR'});
+    });
+
+    it('adds nothing when the schema has none (CoinGecko, a provider with no params)', () => {
+        expect(searchResultProviderParams({vs_currency: 'EUR'}, 'EUR', ['vs_currency'])).toStrictEqual({vs_currency: 'EUR'});
+        expect(searchResultProviderParams(null, 'USD', [])).toBeNull();
+    });
+
+    it('adds it as before when the schema is not known', () => {
+        expect(searchResultProviderParams({vs_currency: 'EUR'}, 'EUR', null)).toStrictEqual({vs_currency: 'EUR', currency: 'EUR'});
     });
 });
 

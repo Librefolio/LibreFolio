@@ -66,7 +66,7 @@
  * every warning, is said once by the lab panel's `RiskPartialNotice`, as the Dashboard says it above its
  * levels; each frame keeps only what did not come back at all (`levelErrorHealth`) and no reasons. The
  * panel reads what the levels render through `bind:this`, so the levels publish `qualitySource()`: their
- * six results in page order, `null` where absent, the two VaR horizons' labels, and their two
+ * results in page order (seven since RN-19), `null` where absent, the two VaR horizons' labels (and the move KPI's), and their two
  * controllers' data-quality issues, L1°'s then L3°'s. Pinned by the final blocks; written red first,
  * against frames that still list a partial result and repeat its warning, and no `qualitySource`.
  *
@@ -125,7 +125,7 @@ import {ANSWER_DISCARDED_CODE, type RiskPanelController} from '$lib/features/ris
 import type {RiskAnalyticResult} from '$lib/features/risk/riskStore.svelte';
 import AssetSetComparisonLevels from './AssetSetComparisonLevels.svelte';
 import type {AssetSetQualitySource} from './assetSetLevels';
-import {ASSET_SET_DAILY_VAR_INSTANCE, ASSET_SET_MONTHLY_VAR_INSTANCE} from './riskAnalysisHelpers';
+import {ASSET_SET_DAILY_VAR_INSTANCE, ASSET_SET_MONTHLY_VAR_INSTANCE, ASSET_SET_MOVE_KPI_INSTANCE} from './riskAnalysisHelpers';
 
 type VarCvarOutput = z.infer<typeof schemas.RiskAssetSetVarCvarOutput>;
 type KpiOutput = z.infer<typeof schemas.RiskAssetSetKpiOutput>;
@@ -195,6 +195,20 @@ const FIGURES: RiskAnalyticResult[] = [
             items: [
                 {asset_id: HOLDING_A, volatility: 0.21, max_drawdown: -0.27, max_drawdown_duration_days: 140, sharpe: 0.62, sortino: 0.88},
                 {asset_id: HOLDING_B, volatility: 0.14, max_drawdown: -0.16, max_drawdown_duration_days: 95, sharpe: 0.41, sortino: 0.57},
+            ],
+        } satisfies KpiOutput,
+    },
+    // «How did each one move?» (RN-19): its own KPI instance, asked in L1°'s wave so a benchmark never moves it. Invented.
+    {
+        instance_id: ASSET_SET_MOVE_KPI_INSTANCE,
+        analytic_code: 'asset_set_kpi',
+        status: 'ok',
+        output: {
+            kind: 'kpi_set',
+            drawdown_confidence_level: 0.95,
+            items: [
+                {asset_id: HOLDING_A, volatility: 0.21, max_drawdown: -0.27, max_drawdown_duration_days: 140, sharpe: 0.62, sortino: 0.88, best_realization: 0.047, best_realization_date: '2022-11-10', positive_observation_share: 0.52, omega_ratio: 1.18, downside_deviation: 0.15},
+                {asset_id: HOLDING_B, volatility: 0.14, max_drawdown: -0.16, max_drawdown_duration_days: 95, sharpe: 0.41, sortino: 0.57, best_realization: 0.031, best_realization_date: '2023-03-14', positive_observation_share: 0.51, omega_ratio: 1.09, downside_deviation: 0.1},
             ],
         } satisfies KpiOutput,
     },
@@ -524,7 +538,7 @@ describe('AssetSetComparisonLevels — an answer: nothing failed, nothing discar
  * absence from passing about a page that has no toggle at all. Wherever the table is drawn it is
  * there: with figures, with an answer that measured nothing (a row of dashes per selected asset
  * is still a table), and when a later answer is discarded and the figures stay. One toggle per
- * level table: two on the page.
+ * level table: two on the page — three since RN-19's move table, counted in the block below.
  *
  * Found by testid; the menu is read by its items' testids, never by their labels. Switching a
  * column off and on is the E2E's (`risk-lab.spec.ts`): here the table only has to be the one the
@@ -677,15 +691,19 @@ for (const {name, level, frame, columns, figures} of TABLE_LEVELS) {
     });
 }
 
+/** «How did each one move?» (RN-19): a frame of its own between L1° and L3°, measured in L1°'s wave. */
+const MOVE_FRAME = 'risk-asset-set-move-level';
+
 describe('AssetSetComparisonLevels — one column toggle per level table', () => {
-    it('with figures: two toggles on the page, one in each frame', async () => {
+    it('with figures: three toggles on the page, one in each frame', async () => {
         const {controllers} = mount();
         await settled(controllers);
         await expectFigures();
         await expectL3Figures();
 
         for (const {name, frame} of TABLE_LEVELS) await expectToggle(frame, `${name} draws its table and its frame offers no column toggle`);
-        expect(screen.getAllByTestId('column-visibility-toggle'), 'the levels carry one column toggle per table, L1° and L3°').toHaveLength(TABLE_LEVELS.length);
+        await expectToggle(MOVE_FRAME, 'the move table is drawn and its frame offers no column toggle');
+        expect(screen.getAllByTestId('column-visibility-toggle'), 'one column toggle per table: L1°, «How did each one move?» and L3°').toHaveLength(TABLE_LEVELS.length + 1);
     });
 });
 
@@ -777,11 +795,20 @@ describe("AssetSetComparisonLevels — the toolbar's period reaches L3°'s perio
  * question, so every case below goes red where it first needs two.
  */
 
-/** The analytics that attribute a question to a level. `correlation` rides in every historical wave and attributes nothing. */
+/**
+ * The analytics that attribute a question to a level. `correlation` rides in every historical wave and attributes
+ * nothing. The KPI is asked by both waves (RN-19): L1°'s under the move table's own instance, L3°'s under the base one —
+ * so a KPI attributes by its instance, every other analytic by its code.
+ */
 const LEVEL_CODES: Record<Level, readonly string[]> = {
     l1: ['asset_set_var', 'asset_set_drawdown'],
     l3: ['asset_set_kpi', 'asset_set_risk_return', 'asset_set_comparison'],
 };
+
+function levelOf(analytic: {analytic_code: string; instance_id: string}): Level | null {
+    if (analytic.instance_id === ASSET_SET_MOVE_KPI_INSTANCE) return 'l1';
+    return LEVELS.map(({level}) => level).find((level) => LEVEL_CODES[level].includes(analytic.analytic_code)) ?? null;
+}
 const LEVEL_NAMES: Record<Level, string> = {l1: 'L1°', l3: 'L3°'};
 
 /** Invented benchmarks, outside the selection. Neither number occurs anywhere else in a question — not as an id, a horizon or a rate — so finding one means the benchmark is in it. */
@@ -798,12 +825,12 @@ function codesOf(request: RiskQueryRequest): string[] {
 
 /** Whether a question carries any of a level's analytics. */
 function carries(request: RiskQueryRequest, level: Level): boolean {
-    return codesOf(request).some((code) => LEVEL_CODES[level].includes(code));
+    return request.analytics.some((analytic) => levelOf(analytic) === level);
 }
 
 /** The other level's analytics a question carries: none, once the levels ask apart. */
 function foreignCodes(request: RiskQueryRequest, level: Level): string[] {
-    return codesOf(request).filter((code) => LEVEL_CODES[otherThan(level)].includes(code));
+    return request.analytics.filter((analytic) => levelOf(analytic) === otherThan(level)).map((analytic) => analytic.analytic_code);
 }
 
 /** Every question asked so far that carries a level's analytics. */
@@ -904,6 +931,45 @@ describe('AssetSetComparisonLevels — two questions: L1° is measured without t
         }
         const paid = await ownQuestion('l3');
         expect(codesOf(paid), 'without a benchmark L3° still asks what each asset was paid: the KPI and the risk/return').toEqual(expect.arrayContaining(['asset_set_kpi', 'asset_set_risk_return']));
+    });
+});
+
+/**
+ * «How did each one move?» (RN-19, the developer's decision of 12/11/2026): a table of its own between L1° and L3°. Its
+ * day-level figures come from a KPI instance of its own asked in L1°'s question, beside the monthly VaR and the
+ * drawdown it also reads, so the whole row sits on L1°'s calendar and a benchmark — L3°'s alone — never moves it.
+ */
+describe("AssetSetComparisonLevels — «How did each one move?» is measured in L1°'s question", () => {
+    it("sits between L1° and L3°, and draws each selected asset from L1°'s own KPI instance — never L3°'s", async () => {
+        const {controllers} = mount({...PROPS, benchmarkId: BENCHMARK});
+        await settled(controllers);
+
+        const table = await waitFor(() => screen.getByTestId('risk-asset-set-move-table'));
+        expect(table).toHaveAttribute('data-row-count', String(SELECTION.length));
+        await waitFor(() => {
+            for (const cell of screen.getAllByTestId('risk-asset-set-move-bestDay')) expect(cell).toHaveAttribute('data-measured', 'true');
+        });
+        const [loss, move, paid] = ['risk-asset-set-loss', MOVE_FRAME, 'risk-asset-set-paid'].map((frame) => screen.getByTestId(frame));
+        expect(precedes(loss, move) && precedes(move, paid), 'the move table sits between «How much did each one hurt?» and «What was each one paid?»').toBe(true);
+
+        const instancesOf = (level: Level): string[] => questionsOf(level).flatMap((request) => request.analytics.map((analytic) => analytic.instance_id));
+        expect(instancesOf('l1'), "L1°'s question does not ask for the move table's KPI").toContain(ASSET_SET_MOVE_KPI_INSTANCE);
+        expect(instancesOf('l3'), "L3°'s question asks for the move table's KPI: the benchmark would decide its calendar").not.toContain(ASSET_SET_MOVE_KPI_INSTANCE);
+    });
+
+    it('keeps its figures when the benchmark changes: only L3° is asked again', async () => {
+        const {view, controllers} = mount({...PROPS, benchmarkId: BENCHMARK});
+        await settled(controllers);
+        await waitFor(() => expect(screen.getAllByTestId('risk-asset-set-move-bestDay')[0]).toHaveAttribute('data-measured', 'true'));
+        const before = script.asked.length;
+
+        await view.rerender({benchmarkId: OTHER_BENCHMARK});
+        await waitFor(() => expect(comparedSince(before, OTHER_BENCHMARK)).toBe(true));
+        await quiet(controllers);
+
+        const askedAgain = script.asked.slice(before).some(({request}) => request.analytics.some((analytic) => analytic.instance_id === ASSET_SET_MOVE_KPI_INSTANCE));
+        expect(askedAgain, 'a new benchmark asked the move table again').toBe(false);
+        for (const cell of screen.getAllByTestId('risk-asset-set-move-bestDay')) expect(cell).toHaveAttribute('data-measured', 'true');
     });
 });
 
@@ -1077,7 +1143,7 @@ const MIXED: Record<Level, RiskAnalyticResult[]> = {
     l1: [partial(ASSET_SET_DAILY_VAR_INSTANCE), stopped(ASSET_SET_MONTHLY_VAR_INSTANCE, 'asset_set_var', 'unavailable'), stopped(DRAWDOWN_INSTANCE, 'asset_set_drawdown', 'failed')],
     l3: [stopped(RISK_RETURN_INSTANCE, 'asset_set_risk_return', 'unavailable'), partial(KPI_INSTANCE), stopped(COMPARISON_INSTANCE, 'asset_set_comparison', 'failed')],
 };
-const MIXED_ALL: RiskAnalyticResult[] = [...MIXED.l1, ...MIXED.l3];
+const MIXED_ALL: RiskAnalyticResult[] = [...MIXED.l1, figure(ASSET_SET_MOVE_KPI_INSTANCE), ...MIXED.l3];
 
 /** Answer every question with the results it asked for, out of `results`, and keep it. One test's scope: `beforeEach` installs the ordinary answers again. */
 function answerWith(results: RiskAnalyticResult[]): void {
@@ -1137,7 +1203,7 @@ for (const {name, level, frame, figures} of TABLE_LEVELS) {
  *
  * The notice is the panel's; the results are the levels'. The panel feeds `partialNotice` with
  * `qualitySource().results` and `.labels`, and merges `.issues` with the correlation section's, so the
- * export hands over exactly what the two frames render — the controllers' own objects, in page order,
+ * export hands over exactly what the frames render — the controllers' own objects, in page order,
  * `null` where the answer had none, whatever their status — and stays reactive: the panel calls it
  * inside a `$derived`, so an effect reading it must re-run when the store answers again.
  *
@@ -1147,11 +1213,12 @@ for (const {name, level, frame, figures} of TABLE_LEVELS) {
  * against the controller's own entry, the one the frame reads; content against the fixture.
  */
 
-/** The six results the two frames render, in page order — L1°'s three, then L3°'s in its frame's order — with the level whose controller holds each. */
+/** The seven results the three frames render, in page order — L1°'s three, the move KPI (asked by L1°'s controller), then L3°'s in its frame's order — with the level whose controller holds each. */
 const RENDERED: ReadonlyArray<{level: Level; instanceId: string}> = [
     {level: 'l1', instanceId: ASSET_SET_DAILY_VAR_INSTANCE},
     {level: 'l1', instanceId: ASSET_SET_MONTHLY_VAR_INSTANCE},
     {level: 'l1', instanceId: DRAWDOWN_INSTANCE},
+    {level: 'l1', instanceId: ASSET_SET_MOVE_KPI_INSTANCE},
     {level: 'l3', instanceId: RISK_RETURN_INSTANCE},
     {level: 'l3', instanceId: KPI_INSTANCE},
     {level: 'l3', instanceId: COMPARISON_INSTANCE},
@@ -1161,6 +1228,8 @@ const RENDERED: ReadonlyArray<{level: Level; instanceId: string}> = [
 const VAR_LABELS = {
     [ASSET_SET_DAILY_VAR_INSTANCE]: 'risk.assetSet.levels.l1.columns.badDay',
     [ASSET_SET_MONTHLY_VAR_INSTANCE]: 'risk.assetSet.levels.l1.columns.badMonth',
+    // The move table's KPI shares its code with L3°'s: named by its table's title (RN-19).
+    [ASSET_SET_MOVE_KPI_INSTANCE]: 'risk.assetSet.levels.move.title',
 };
 
 /** The levels' `qualitySource`, reached through the instance the harness mounted — as the panel reaches it, through `bind:this`. */
@@ -1177,7 +1246,7 @@ function heldBy(controller: RiskPanelController, instanceId: string): RiskAnalyt
 
 /** The controller whose answer carries a level's own analytics: found by what it holds, never by creation order. */
 function controllerOf(controllers: RiskPanelController[], level: Level): RiskPanelController {
-    const owners = controllers.filter((controller) => controller.historicalResults.some((result) => LEVEL_CODES[level].includes(result.analytic_code)));
+    const owners = controllers.filter((controller) => controller.historicalResults.some((result) => levelOf(result) === level));
     expect(owners, `premise: not exactly one controller holds ${LEVEL_NAMES[level]}'s analytics`).toHaveLength(1);
     return owners[0];
 }
@@ -1192,7 +1261,7 @@ function heldResults(controllers: RiskPanelController[]): Array<RiskAnalyticResu
 function expectSameResults(actual: ReadonlyArray<RiskAnalyticResult | null>, expected: ReadonlyArray<RiskAnalyticResult | null>, when: string): void {
     expect(
         actual.map((result) => result?.instance_id ?? null),
-        `${when}: not the six results the two frames render, in page order`,
+        `${when}: not the seven results the three frames render, in page order`,
     ).toEqual(expected.map((result) => result?.instance_id ?? null));
     actual.forEach((result, index) => expect(result, `${when}: ${RENDERED[index].instanceId} is not the object its controller holds — the notice would read a copy, not what the frame reads`).toBe(expected[index]));
 }
@@ -1230,7 +1299,7 @@ function answerPerLevel(byLevel: Record<Level, RiskAnalyticResult[]>): void {
 }
 
 describe('AssetSetComparisonLevels — qualitySource(), what the lab panel reads through bind:this', () => {
-    it("returns the six results the two frames render, in page order — the controllers' own, null where the answer had none", async () => {
+    it("returns the seven results the three frames render, in page order — the controllers' own, null where the answer had none", async () => {
         const {view, controllers} = mount();
         await settled(controllers);
         await expectFigures();
@@ -1240,12 +1309,12 @@ describe('AssetSetComparisonLevels — qualitySource(), what the lab panel reads
         const answered = new Set(FIGURES.map((result) => result.instance_id));
         expect(
             results.map((result) => result?.instance_id ?? null),
-            'not the bad day, the bad month, the drawdown, then the risk/return, the KPI and the comparison — null where the answer had none',
+            'not the bad day, the bad month, the drawdown, the move KPI, then the risk/return, the KPI and the comparison — null where the answer had none',
         ).toEqual(RENDERED.map(({instanceId}) => (answered.has(instanceId) ? instanceId : null)));
         expectSameResults(results, heldResults(controllers), 'the ordinary answer');
     });
 
-    it('with all six answered, whatever their status, returns all six: nothing is filtered, the notice decides what is partial', async () => {
+    it('with all seven answered, whatever their status, returns all seven: nothing is filtered, the notice decides what is partial', async () => {
         answerWith(MIXED_ALL);
         const {view, controllers} = mount({...PROPS, benchmarkId: BENCHMARK});
         await settled(controllers);
@@ -1483,5 +1552,29 @@ describe("AssetSetComparisonLevels — the benchmark picker in L3°'s frame: whi
 
         expect(pickerInL3Frame('once the wait has ended'), 'the end of the wait replaced the picker: a BenchmarkSelect says `pending` the moment it mounts, so a picker mounted again starts the wait over').toBe(waiting);
         expect(picker.mounts(), 'the end of the wait mounted the picker again').toBe(1);
+    });
+});
+
+/**
+ * The move table rides in L1°'s question (RN-19), so it shares L1°'s load state: L1° failing shows the move table's
+ * error and retry too, L3° keeps its table, and the move table's retry asks L1°'s question alone.
+ */
+describe("AssetSetComparisonLevels — «How did each one move?» shares L1°'s load state", () => {
+    it("L1°'s question failing shows the move table's error and retry; L3° keeps its table; that retry asks L1°'s question alone", async () => {
+        const outcomes = allFiguresBut('l1', 'reject');
+        scriptByLevel(outcomes);
+        mount();
+        await ownQuestion('l1');
+        await ownQuestion('l3');
+
+        const retry = await waitFor(() => within(screen.getByTestId(MOVE_FRAME)).getByTestId('risk-asset-set-move-retry'));
+        expect(within(screen.getByTestId(MOVE_FRAME)).getByTestId('risk-asset-set-move-error')).toBeInTheDocument();
+        await expectL3Figures();
+
+        const before = script.asked.length;
+        outcomes.l1 = 'figures';
+        await fireEvent.click(retry);
+        await waitFor(() => expect(screen.getAllByTestId('risk-asset-set-move-bestDay')[0]).toHaveAttribute('data-measured', 'true'));
+        expectAskedAlone('l1', before, "the move table's retry");
     });
 });

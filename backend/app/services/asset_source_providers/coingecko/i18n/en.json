@@ -1,0 +1,28 @@
+{
+  "pluginSettings": {
+    "asset": {
+      "coingecko": {
+        "label": {
+          "current_refresh_minutes": "Price refresh",
+          "preferred_currency": "Preferred currency"
+        },
+        "description": {
+          "current_refresh_minutes": "How long a current price stays fresh before CoinGecko is asked again. Longer saves the account's credits.",
+          "preferred_currency": "The currency the search shows each coin's price in."
+        }
+      }
+    }
+  },
+  "assets": {
+    "providerParams": {
+      "coingecko": {
+        "label": {
+          "vs_currency": "Price currency"
+        },
+        "description": {
+          "vs_currency": "The currency CoinGecko prices the coin in: it must be the asset's currency."
+        }
+      }
+    }
+  }
+}

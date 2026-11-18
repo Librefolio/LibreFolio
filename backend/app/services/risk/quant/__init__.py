@@ -2,8 +2,12 @@
 
 from backend.app.services.risk.quant.engine import (
     MAX_HISTORY_CELLS,
+    MAX_STOCHASTIC_CELLS,
+    MIN_SIMULATION_PATHS,
     SimulationResourceLimitError,
     clear_simulation_cache,
+    fit_path_count,
+    history_observation_cap,
     run_simulation,
     validate_resource_budget,
 )
@@ -33,6 +37,8 @@ __all__ = [
     "MAX_HISTORY_OBSERVATIONS",
     "MAX_SIMULATION_ASSETS",
     "MAX_SOBOL_DIMENSION",
+    "MAX_STOCHASTIC_CELLS",
+    "MIN_SIMULATION_PATHS",
     "GbmParameterEstimates",
     "SimulationEngineRequest",
     "SimulationEngineResult",
@@ -41,7 +47,9 @@ __all__ = [
     "clear_simulation_cache",
     "estimate_drift_uncertainty",
     "estimate_gbm_parameters",
+    "fit_path_count",
     "historical_returns_digest",
+    "history_observation_cap",
     "resolve_block_length",
     "resolve_regime_days",
     "run_block_bootstrap",

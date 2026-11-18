@@ -243,7 +243,7 @@ test.describe('Asset Detail Page', () => {
         // panel's first base wave has landed: a forced question still joins one in
         // flight for the same key instead of sending its own, and a first-wave
         // request sent after the wait is armed would pass for the refresh's.
-        await expect(page.getByTestId('asset-detail-risk-panel').getByTestId('risk-analysis-panel'), "premise: the risk panel's first base wave never landed").toHaveAttribute('data-busy', 'false', {timeout: 60_000});
+        await expect(page.getByTestId('asset-detail-risk-panel').getByTestId('asset-risk-tab').getByTestId('risk-levels-panel'), "premise: the risk panel's first base wave never landed").toHaveAttribute('data-busy', 'false', {timeout: 60_000});
         const refreshedRiskRequest = page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/risk/query');
         await toolbar.getByTestId('asset-detail-refresh-btn').click();
         await refreshedRiskRequest;
@@ -413,14 +413,30 @@ test.describe('Asset Detail Page', () => {
     });
 
     // ========================================================================
-    // Test 8: Metadata/classification panel toggle
+    // Test 8: the «Profilo» tab (plan 68, E3E4b) — it took the place of the metadata panel
     // ========================================================================
-    test('classification panel toggles', async ({page}) => {
+    test('the Profile tab shows the classification, the description, the key figures and the details', async ({page}) => {
         await goToSeededAssetDetail(page);
-        const toggle = page.getByTestId('asset-detail-metadata-toggle');
-        await expect(toggle).toBeVisible();
-        await toggle.click();
-        await expect(page.getByTestId('asset-detail-metadata-panel')).toBeVisible();
+        // The old foldable panel is gone from the overview
+        await expect(page.getByTestId('asset-detail-metadata-toggle')).toHaveCount(0);
+
+        await page.getByTestId('asset-detail-tab-profile').click();
+        await expect(page, 'the tab is in the address, so a reload keeps it').toHaveURL(/[?&]tab=profile(?:&|$)/);
+        const tab = page.getByTestId('asset-profile-tab');
+        // The tab publishes its read: wait for it, never for the parts to appear
+        await expect(tab).toHaveAttribute('data-status', 'ready', {timeout: 15_000});
+        await expect(tab).toHaveAttribute('data-busy', 'false');
+
+        // Apple is seeded with a 1.3 classification (USA; Technology and Services) and a description: the 006 copy dates
+        // them on its first day, so the period of the page holds them
+        await expect(page.getByTestId('profile-classification-geography')).toHaveAttribute('data-state', 'value');
+        await expect(page.getByTestId('profile-classification-sector')).toHaveAttribute('data-state', 'value');
+        await expect(page.getByTestId('profile-classification-as-of')).toHaveAttribute('data-kind', /^(legacy|source_date|opened_on)$/);
+        await expect(page.getByTestId('asset-profile-description')).toHaveAttribute('data-state', 'value');
+        await expect(page.getByTestId('profile-detail-ticker')).toHaveAttribute('data-state', 'value');
+        // Every key figure of the catalogue has its card, with a value or not
+        await expect(page.getByTestId('profile-key-figure-ter')).toBeVisible();
+        await expect(page.getByTestId('profile-key-figure-maturity_date')).toBeVisible();
     });
 
     // ========================================================================
@@ -7411,18 +7427,18 @@ test.describe('Asset Detail Page', () => {
         await expect(riskTab).toHaveAttribute('aria-selected', 'true');
 
         await expect(page.getByTestId('asset-detail-risk-panel')).toBeVisible();
-        const configureSignals = page.getByTestId('asset-risk-configure-signals');
-        await expect(configureSignals).toBeVisible();
-        await configureSignals.click();
-
+        // Back to Overview through its own tab: the risk tab's «configure signals» shortcut, which also opened the
+        // signals panel, went with the one-number summary (RN-17, Q16-1). Price is restored by its own control below,
+        // and the signals panel — the comparison-asset sync further down drives it — is opened by its own toggle,
+        // asked for its state first: it may already be open.
+        await overviewTab.click();
         await expect(overviewTab).toHaveAttribute('aria-selected', 'true');
-        await expect(chart).toHaveAttribute('data-primary-mode', 'price');
-        await expect(pricePrimary).toHaveAttribute('aria-pressed', 'true');
+        await expect(page.getByTestId('asset-detail-risk-panel')).toHaveCount(0);
         const signalsToggle = page.getByTestId('asset-detail-signals-toggle');
         await expect(signalsToggle).toBeVisible();
+        if ((await signalsToggle.getAttribute('aria-expanded')) !== 'true') await signalsToggle.click();
         await expect(signalsToggle).toHaveAttribute('aria-expanded', 'true');
         await expect(page.getByTestId('asset-detail-signals-panel')).toBeVisible();
-        await expect(signalsToggle).toBeInViewport();
 
         await pricePrimary.click();
         await expect(chart).toHaveAttribute('data-primary-mode', 'price');

@@ -7,11 +7,7 @@
     "editData": "Modifier prix et événements",
     "pricesTab": "Prix",
     "eventsTab": "Événements",
-    "metadata": "Métadonnées et classification",
-    "editViaModal": "Modifier dans la modale",
     "displayCurrency": "Convertir en",
-    "noIdentifiers": "Aucun identifiant configuré",
-    "noClassification": "Aucune donnée de classification",
     "noDataScheduled": "Configurez le calendrier des intérêts via Modifier pour générer les prix",
     "syncPrices": "Synchroniser les prix",
     "recalculate": "Recalculer",
@@ -75,8 +71,8 @@
     "docsHelp": {
       "header": "Un actif en détail : son graphique de prix et ses signaux, ses mesures, ses événements et sa classification, avec la source de ses prix et vos transactions.",
       "measures": "Choisissez deux jours sur le graphique et lisez de combien l'actif, et les lignes tracées avec lui, ont changé entre les deux.",
-      "metadata": "Ce qu'est l'actif : sa description, ses secteurs et pays, ses identifiants, et le fournisseur qui donne ses prix.",
-      "dataEditor": "Corrigez et complétez à la main les données de l'actif : ses prix quotidiens et ses événements, comme les dividendes et les divisions."
+      "dataEditor": "Corrigez et complétez à la main les données de l'actif : ses prix quotidiens et ses événements, comme les dividendes et les divisions.",
+      "profile": "Ce qu'est l'actif : ses pays et secteurs, sa description, ses chiffres clés et ses détails, lus par ses enrichisseurs ou saisis à la main."
     }
   },
   "assets": {
@@ -249,8 +245,12 @@
       "providerUrl": "URL Fournisseur",
       "identifier": "Identifiant",
       "identifierType": "Type d'Identifiant",
-      "lastFetch": "Derniere mise a jour",
-      "neverFetched": "Jamais execute"
+      "inputType": {
+        "PROVIDER_ID": "ID du fournisseur"
+      },
+      "inputTypePlaceholder": {
+        "PROVIDER_ID": "ex. bitcoin"
+      }
     },
     "schedule": {
       "title": "Calendrier d'intérêts",
@@ -539,6 +539,9 @@
     "PROVIDER_ERROR": "Le fournisseur a échoué : {detail}",
     "PROBE_RATE_LIMITED": "Trop de vérifications : réessayez à {time}",
     "PROBE_RATE_LIMITED_DAY": "Trop de vérifications : réessayez le {time}",
-    "PROBE_RATE_LIMITED_NO_TIME": "Trop de vérifications : réessayez dans une minute"
+    "PROBE_RATE_LIMITED_NO_TIME": "Trop de vérifications : réessayez dans une minute",
+    "PLAN_REQUIRED": "Cette requête nécessite une offre payante du fournisseur.",
+    "WRONG_PLAN": "La clé du fournisseur ne correspond pas à l'offre choisie (Demo ou Pro) : vérifiez l'offre dans Paramètres › Plugins.",
+    "INVALID_API_KEY": "Le fournisseur a refusé la clé API : vérifiez-la dans Paramètres › Plugins."
   }
 }
