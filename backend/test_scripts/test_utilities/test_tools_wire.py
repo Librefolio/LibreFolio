@@ -667,3 +667,14 @@ def test_progress_frame_is_bounded():
     assert json.loads(wire.encode_progress_frame(execution_id, "validate", None, None)) == {"kind": "progress", "execution_id": execution_id, "phase": "validate"}
     with pytest.raises(ValueError):
         wire.encode_progress_frame(execution_id, "x" * wire.PROGRESS_FRAME_MAX_BYTES, None, None)
+
+
+def test_log_frame_is_bounded():
+    """A worker's log frame (lot LOGS of project 67): the execution id, a logging level, the logger's name and the line, under
+    a byte ceiling of its own; a frame over it is refused before it reaches the pipe."""
+    execution_id = "e" * 32
+    frame = wire.encode_log_frame(execution_id, 20, "backend.app.services.pac_allocator.planner", '{"event": "Rebalancer seeded runs"}')
+    assert len(frame) <= wire.LOG_FRAME_MAX_BYTES
+    assert json.loads(frame) == {"kind": "log", "execution_id": execution_id, "level": 20, "logger": "backend.app.services.pac_allocator.planner", "message": '{"event": "Rebalancer seeded runs"}'}
+    with pytest.raises(ValueError):
+        wire.encode_log_frame(execution_id, 20, "x", "y" * wire.LOG_FRAME_MAX_BYTES)

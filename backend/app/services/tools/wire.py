@@ -81,6 +81,20 @@ def encode_progress_frame(execution_id: str, phase: str, step: int | None, total
         raise ValueError("A progress frame exceeds its byte ceiling") from exc
 
 
+#: The byte ceiling of one log frame (lot LOGS of project 67): one rendered log line, cut by the child when longer.
+LOG_FRAME_MAX_BYTES = 16_384
+
+
+def encode_log_frame(execution_id: str, level: int, logger: str, message: str) -> bytes:
+    """A child's log frame: its execution id, the line's ``logging`` level, its logger's name and the rendered line;
+    ValueError past its byte ceiling."""
+    frame: dict[str, object] = {"kind": "log", "execution_id": execution_id, "level": level, "logger": logger, "message": message}
+    try:
+        return encode_json(frame, max_depth=1, max_bytes=LOG_FRAME_MAX_BYTES, limit_code="output_limit_exceeded")
+    except ToolExecutionError as exc:
+        raise ValueError("A log frame exceeds its byte ceiling") from exc
+
+
 def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
     result: dict[str, object] = {}
     for key, value in pairs:
