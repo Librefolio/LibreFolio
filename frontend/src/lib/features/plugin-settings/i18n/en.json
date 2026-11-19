@@ -179,6 +179,12 @@
       "group": "Shared",
       "hasUnconfigured": "Has plugins to configure",
       "nothingUnconfigured": "Every plugin is configured."
+    },
+    "search": {
+      "placeholder": "Search plugins or settings...",
+      "noMatchAll": "No plugin matches «{query}».",
+      "noMatchFamily": "No «{family}» plugin matches «{query}».",
+      "searchAll": "Search all families ({count})"
     }
   }
 }

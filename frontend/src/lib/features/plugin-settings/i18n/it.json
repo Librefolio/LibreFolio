@@ -179,6 +179,12 @@
       "group": "Condivise",
       "hasUnconfigured": "Contiene plugin da configurare",
       "nothingUnconfigured": "Tutti i plugin sono configurati."
+    },
+    "search": {
+      "placeholder": "Cerca plugin o impostazioni...",
+      "noMatchAll": "Nessun plugin corrisponde a «{query}».",
+      "noMatchFamily": "Nessun plugin di «{family}» corrisponde a «{query}».",
+      "searchAll": "Cerca in tutte le famiglie ({count})"
     }
   }
 }
