@@ -70,7 +70,7 @@ export const PAC_URL = '/tools/pac_allocator';
 const PAC_BROKER_NAMES = {ib: 'Interactive Brokers', degiro: 'DEGIRO'} as const;
 const PAC_ASSET_NAMES = {apple: 'Apple Inc.', microsoft: 'Microsoft Corporation'} as const;
 
-/** Apple and Microsoft are both 100% USA in the seed (populate_mock_data.py, `classification_params`). */
+/** Apple and Microsoft are both 100% USA in the seed (populate_mock_data.py, their `legacy` profile rows). */
 const SEEDED_COUNTRY = 'USA';
 
 /**

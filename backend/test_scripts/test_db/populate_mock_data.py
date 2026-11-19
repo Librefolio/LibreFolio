@@ -760,18 +760,24 @@ def populate_broker_user_access(session: Session):  # noqa: C901 — sequential 
     session.commit()
 
 
-#: The parts of ``classification_params`` and the profile voices migration 006 copies them to (plan 68, A4).
+#: The key of a mock asset's 1.3-style classification (the JSON the old ``classification_params`` column held). It is
+#: not a column any more (plan 68, D7b): ``populate_assets`` takes it out of the dict before building the ``Asset`` and
+#: writes its parts as the ``legacy`` profile rows migration 006 copies from that column on an upgrade.
+LEGACY_CLASSIFICATION_KEY = "legacy_classification"
+
+#: The parts of a 1.3 classification and the profile voices migration 006 copies them to (plan 68, A4).
 _LEGACY_PROFILE_PARTS = (("short_description", "description"), ("geographic_area", "geography"), ("sector_area", "sector"))
 
 
-def _legacy_profile_rows(asset: Asset) -> list[AssetProfileUpdate]:
-    """The ``legacy`` profile rows of an asset's ``classification_params``, as migration 006 writes them on an upgrade.
+def _legacy_profile_rows(asset: Asset, classification: str | None) -> list[AssetProfileUpdate]:
+    """The ``legacy`` profile rows of an asset's 1.3-style ``classification`` (JSON text), as migration 006 writes them
+    on an upgrade.
 
     Mirrors migration 006 (plan 68, A4): a freshly populated database is created at the head, so the copy never ran
     on these rows, and since D2 the portfolio engine reads countries and sectors from the profile only. A value the
     catalogue refuses is skipped with a line, as the migration does.
     """
-    params = json.loads(asset.classification_params, parse_float=Decimal) if asset.classification_params else {}
+    params = json.loads(classification, parse_float=Decimal) if classification else {}
     rows = []
     for part, voice in _LEGACY_PROFILE_PARTS:
         raw = params.get(part)
@@ -821,7 +827,7 @@ def populate_assets(session: Session):
             "asset_type": AssetType.STOCK,
             "identifier_ticker": "AAPL",
             "user_url": "https://investor.apple.com",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Technology company",
                     "geographic_area": {"distribution": {"USA": 1.0}},
@@ -835,7 +841,7 @@ def populate_assets(session: Session):
             "asset_type": AssetType.STOCK,
             "identifier_ticker": "MSFT",
             "user_url": "https://www.microsoft.com/en-us/investor",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Software and cloud computing",
                     "geographic_area": {"distribution": {"USA": 1.0}},
@@ -848,7 +854,7 @@ def populate_assets(session: Session):
             "currency": "USD",
             "asset_type": AssetType.STOCK,
             "identifier_ticker": "TSLA",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Electric vehicles and clean energy",
                     "geographic_area": {"distribution": {"USA": 0.50, "CHN": 0.25, "DEU": 0.25}},
@@ -869,7 +875,7 @@ def populate_assets(session: Session):
             "asset_type": AssetType.CROWDFUND,
             # Marked inactive — fixture for testing the "inactive asset" UI state.
             "active": False,
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Real estate development loan in Milan (closed position)",
                     "geographic_area": {"distribution": {"ITA": 1.0}},
@@ -881,7 +887,7 @@ def populate_assets(session: Session):
             "display_name": "RE Loan Roma",
             "currency": "EUR",
             "asset_type": AssetType.CROWDFUND,
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Residential project in Rome",
                     "geographic_area": {"distribution": {"ITA": 1.0}},
@@ -895,7 +901,7 @@ def populate_assets(session: Session):
             "currency": "USD",
             "asset_type": AssetType.CRYPTO,
             "identifier_ticker": "BTC-USD",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Digital gold, store of value",
                     "sector_area": {"distribution": {"Other": 1.0}},
@@ -907,7 +913,7 @@ def populate_assets(session: Session):
             "currency": "USD",
             "asset_type": AssetType.CRYPTO,
             "identifier_ticker": "ETH-USD",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Smart contract platform",
                     "sector_area": {"distribution": {"Other": 1.0}},
@@ -920,7 +926,7 @@ def populate_assets(session: Session):
             "currency": "USD",
             "asset_type": AssetType.STOCK,
             "identifier_ticker": "NVDA",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "GPU and AI computing leader",
                     "geographic_area": {"distribution": {"USA": 1.0}},
@@ -934,7 +940,7 @@ def populate_assets(session: Session):
             "asset_type": AssetType.ETF,
             "identifier_isin": "IE000BI8OT95",
             "identifier_ticker": "MWRD",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Global developed markets ETF (accumulating) — served via JustETF",
                     "geographic_area": {"distribution": {"USA": 0.65, "DEU": 0.08, "GBR": 0.08, "JPN": 0.07, "FRA": 0.06, "CHN": 0.06}},
@@ -948,7 +954,7 @@ def populate_assets(session: Session):
             "currency": "USD",
             "asset_type": AssetType.INDEX,
             "identifier_ticker": "^GSPC",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Standard & Poor's 500 — US large-cap benchmark index",
                     "geographic_area": {"distribution": {"USA": 1.0}},
@@ -961,7 +967,7 @@ def populate_assets(session: Session):
             "currency": "USD",
             "asset_type": AssetType.INDEX,
             "identifier_ticker": "URTH",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "MSCI World Index — global developed markets benchmark",
                     "geographic_area": {
@@ -987,7 +993,7 @@ def populate_assets(session: Session):
             "currency": "EUR",
             "asset_type": AssetType.BOND,
             "user_url": "https://www.dt.mef.gov.it/it/debito_pubblico/titoli_di_stato/",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Italian government inflation-linked bond maturing 2028",
                     "geographic_area": {"distribution": {"ITA": 1.0}},
@@ -1001,7 +1007,7 @@ def populate_assets(session: Session):
             "currency": "USD",
             "asset_type": AssetType.OTHER,
             "user_url": "https://www.kitco.com/charts/livegold.html",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Gold spot price (XAU/USD) via web scraping",
                     "sector_area": {"distribution": {"Basic Materials": 1.0}},
@@ -1017,7 +1023,7 @@ def populate_assets(session: Session):
             "identifier_isin": "LU1900066033",
             "identifier_ticker": "CHIP",
             "user_url": "https://www.justetf.com/it/etf-profile.html?isin=LU1900066033",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Semiconductors sector ETF tracking MSCI World Semiconductors & Semiconductor Equipment index",
                     "geographic_area": {"distribution": {"USA": 0.80, "TWN": 0.08, "KOR": 0.04, "JPN": 0.03, "NLD": 0.03, "DEU": 0.02}},
@@ -1034,7 +1040,7 @@ def populate_assets(session: Session):
             "identifier_isin": "IE00B4L5Y983",
             "identifier_ticker": "IWDA",
             "user_url": "https://www.justetf.com/it/etf-profile.html?isin=IE00B4L5Y983",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "iShares Core MSCI World — global developed markets ETF, USD share class",
                     "geographic_area": {
@@ -1063,7 +1069,7 @@ def populate_assets(session: Session):
             "currency": "EUR",
             "asset_type": AssetType.BOND,
             "user_url": "https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005634800.html?lang=en",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Italian government bond (BTP Più, maturity Feb 2033) — current price scraped from Borsa Italiana",
                     "geographic_area": {"distribution": {"ITA": 1.0}},
@@ -1076,7 +1082,7 @@ def populate_assets(session: Session):
             "display_name": "Test KRW Stock",
             "currency": "KRW",
             "asset_type": AssetType.STOCK,
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Test asset in KRW for WAC FX missing pair scenario",
                     "geographic_area": {"distribution": {"KOR": 1.0}},
@@ -1086,7 +1092,9 @@ def populate_assets(session: Session):
         },
     ]
 
+    classified: list[tuple[Asset, str]] = []
     for asset_data in assets:
+        classification = asset_data.pop(LEGACY_CLASSIFICATION_KEY, None)
         asset = Asset(**asset_data)
         # Mirror migration 003, which seeds is_benchmark from asset_type == INDEX.
         # That UPDATE runs at migration time, against a database these rows do not yet
@@ -1095,13 +1103,14 @@ def populate_assets(session: Session):
         if asset.asset_type == AssetType.INDEX:
             asset.is_benchmark = True
         session.add(asset)
+        if classification:
+            classified.append((asset, classification))
         print(f"  ✅ {asset.display_name} ({asset.currency})")
 
     session.commit()
 
     # Their countries, sectors and description in the profile, as migration 006 copies them (plan 68, A4 and D2)
-    created_assets = session.exec(select(Asset).where(Asset.classification_params.is_not(None))).all()
-    profile_rows = [row for asset in created_assets for row in _legacy_profile_rows(asset)]
+    profile_rows = [row for asset, classification in classified for row in _legacy_profile_rows(asset, classification)]
     session.add_all(profile_rows)
     session.commit()
     print(f"  ✅ {len(profile_rows)} legacy profile rows")
