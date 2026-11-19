@@ -118,6 +118,7 @@ SHIPPED_FLAGS = {
     "NBU": True,
     "BOC": True,
     "BANXICO": True,
+    "CNB": True,
     "MANUAL": False,
     "MOCKFX": False,
     "MOCKFX_FAIL": False,
