@@ -3271,7 +3271,7 @@ async def _d3_book(directory):
                 "changed": Asset(display_name="D3 changed", currency="EUR", asset_type=AssetType.ETF),
                 "later": Asset(display_name="D3 read later", currency="EUR", asset_type=AssetType.ETF),
                 "emptied": Asset(display_name="D3 emptied", currency="EUR", asset_type=AssetType.STOCK),
-                "legacy_column": Asset(display_name="D3 column only", currency="EUR", asset_type=AssetType.STOCK, classification_params='{"geographic_area":{"distribution":{"USA":"1.0"}},"sector_area":{"distribution":{"Energy":"1.0"}}}'),
+                "no_profile": Asset(display_name="D3 no profile", currency="EUR", asset_type=AssetType.STOCK),
                 "unreadable": Asset(display_name="D3 unreadable", currency="EUR", asset_type=AssetType.ETF),
             }
             session.add_all(assets.values())
@@ -3315,8 +3315,8 @@ async def test_d3_classifications_are_the_profile_of_the_analysis_day(tmp_path):
     assert loaded[ids["later"]].geography_exposures is None
     emptied = loaded[ids["emptied"]]
     assert emptied.geography_exposures is None and emptied.sector_exposures is None and emptied.metadata_error is None, "emptied on purpose: no exposure"
-    column_only = loaded[ids["legacy_column"]]
-    assert column_only.asset_class == "STOCK"
-    assert column_only.geography_exposures is None and column_only.sector_exposures is None, "classification_params is not read any more"
+    no_profile = loaded[ids["no_profile"]]
+    assert no_profile.asset_class == "STOCK"
+    assert no_profile.geography_exposures is None and no_profile.sector_exposures is None, "no profile row: no exposure"
     assert loaded[ids["unreadable"]].metadata_error == "invalid_classification_metadata"
     assert loaded[ids["unreadable"]].sector_exposures is None
