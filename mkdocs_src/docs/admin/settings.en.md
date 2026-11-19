@@ -70,7 +70,7 @@ Click the **lock icon** (🔒) in the header.
 | ⏳ Session | **Session Duration** | 24 hours | How long users stay signed in. Shorten it on shared devices. A new value applies from each user's next login. |
 | 🛡️ Security | **Registration** | By invitation | Who can create an account: **Open**, **By invitation** or **Closed**. **Open** lets in anyone who reaches the login page: avoid it if the instance is reachable from the internet. Modes, warning and `LIBREFOLIO_REGISTRATION`: [Who Can Sign Up](#registration). |
 | 🛡️ Security | **Require Email Verification** | Off | New accounts must open a link sent to their address before they can sign in; the first account never waits and existing accounts are not affected. It turns on only while email works and `LIBREFOLIO_PUBLIC_URL` can be used: until then the switch is disabled. See *Email Verification* in [Email](email.md). |
-| 🔄 Update Job | **Scheduler Enabled** | On | Turns the automatic price and exchange-rate updates on or off: [Market Data Scheduler](#market-data-scheduler). |
+| 🔄 Update Job | **Scheduler Enabled** | On | Turns the automatic price and exchange-rate updates, and the weekly asset profile read, on or off: [Market Data Scheduler](#market-data-scheduler). |
 | 🧠 Memory | **Max File Upload Size** | 10 MB | The largest file users can upload, broker reports included. Raise it if a large export is refused. |
 | 🧠 Memory | **LibreFolio total space (MB)** | `0`, no limit | The most megabytes the instance may take: it is the line the space bar of **Files** is drawn against. `0` means no limit: the bar then shows the disk. The same field is under that bar, in **Advanced**. `LIBREFOLIO_STORAGE_LIMIT_MB`, when set, wins and locks it: the field is read-only and says that whoever hosts the instance sets it ([Environment Variables](configuration.md)). **Open the settings**, on a refusal of the limit, opens this tab with the row highlighted; the tab stays locked. See [The Space Bar](backup_restore.md#space-used). |
 | 🌍 Defaults | **Default Currency** | `EUR` | The currency new users report in. Before the first save, `LIBREFOLIO_DEFAULT_CURRENCY` decides (below). |
@@ -147,12 +147,13 @@ How it decides, for developers: [The Open-Registration Warning](../developer/arc
 
 ## 🕐 Market Data Scheduler {: #market-data-scheduler }
 
-The scheduler updates prices and exchange rates on its own, even when nobody is signed in:
+The scheduler updates prices, exchange rates and asset profiles on its own, even when nobody is signed in:
 
 - 💰 **Current price refresh** — every few minutes, the latest price of each active asset with a price provider.
 - 📊 **History sync** — on the days and at the times you choose, the daily prices of those assets and the rates of every FX pair with a provider, over at least the **Lookback horizon**, to fill the gaps. If the last saved price or rate is older, it goes back to that day, up to a year at most; an asset with no saved price at all gets the horizon only: the scheduler never downloads a whole history. Pairs with manual rates only are skipped.
+- 🪪 **Asset profile read** — once a week, by default on Saturday at `03:00`, the [profile](../user/assets/detail/profile.md) of each active asset with at least one enricher: description, countries, sectors, costs, coupons… Profiles change rarely: once a week is enough. A source that refuses for too many requests is asked once more, after its pause.
 
-Server off or asleep at the sync time: the missed sync runs as soon as the server is back, without waiting for the next time. A server off for weeks fills its whole gap.
+Server off or asleep at the sync time: the missed sync runs as soon as the server is back, without waiting for the next time. A server off for weeks fills its whole gap. A profile read missed in the last seven days runs as soon as the server is back too.
 
 ### ⚙️ Configure the schedule
 
@@ -169,8 +170,10 @@ Server off or asleep at the sync time: the missed sync runs as soon as the serve
 | **Sync times** | `06:00`, `23:00` | When the history sync runs; **Add time** adds a slot. |
 | **Sync days** | Mon to Sat | The days of the history sync. |
 | **Lookback horizon** | 14 days | How many past days each sync checks at least, from 1 to 365. It goes further back, up to a year, when the last saved price or rate is older. |
+| **Read times** | `03:00` | Under **Asset profile read**: when the weekly profile read runs; **Add time** adds a slot. |
+| **Read days** | Sat | Under **Asset profile read**: the days of the profile read. |
 
-Keep at least one time and one day. A sync after the markets close (for example `22:00`) gets the most complete data.
+Keep at least one time and one day, for the history sync and for the profile read. A sync after the markets close (for example `22:00`) gets the most complete data.
 
 ??? warning "🌍 Changing the timezone — the jobs move in time"
 
@@ -187,7 +190,7 @@ Click the row (or **Details…**): the **Scheduler Execution Log** opens.
  <img class="gallery-img" data-category="settings" data-name="scheduler-log" alt="Scheduler Log Modal" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-- Each entry is one run: job, time, duration and how many items succeeded. 🟢 **OK**: all of them, or nothing to do; 🟡 **Partial**: some failed, or were deferred because their provider paused after too many requests; 🔴 **Error**: none succeeded and none was deferred.
+- Each entry is one run: job (the weekly read is **Profile read**), time, duration and how many items succeeded. 🟢 **OK**: all of them, or nothing to do; 🟡 **Partial**: some failed, or were deferred because their provider paused after too many requests; 🔴 **Error**: none succeeded and none was deferred.
 - Click an entry: each asset or FX pair, its provider and the prices changed (**Delta**). Hover an error to read it in full; double-click (long-press on a phone) to copy it.
 - A deferred item shows a pause icon and **Deferred: provider paused**: hover the label to read the provider's message. The entry counts the deferred items with ⏸, next to ✓ and ✗ (for example `3/5 ✓ · 1 ⏸ · 1 ✗`), and **Retry at** in the header gives the time of the retry.
 - Filter by job, status or period, from the last hour to the last 30 days. Only the most recent runs are kept.
