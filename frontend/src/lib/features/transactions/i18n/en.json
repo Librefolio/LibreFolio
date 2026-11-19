@@ -190,8 +190,7 @@
         "confirmTitle": "Save dates before 1900?",
         "confirmMessage": "{n} rows are dated before 1 January 1900. Save them as they are?",
         "confirmProceed": "Yes, the dates are right"
-      },
-      "unlinkHint": "These charges stay, no longer linked: {list}"
+      }
     },
     "commit": {
       "serverError": "Save failed — server error"

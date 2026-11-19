@@ -190,8 +190,7 @@
         "confirmTitle": "Enregistrer des dates antérieures à 1900 ?",
         "confirmMessage": "{n} lignes ont une date antérieure au 1er janvier 1900. Les enregistrer telles quelles ?",
         "confirmProceed": "Oui, les dates sont correctes"
-      },
-      "unlinkHint": "Ces frais restent, plus liés : {list}"
+      }
     },
     "commit": {
       "serverError": "Sauvegarde impossible — erreur serveur"

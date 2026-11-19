@@ -190,8 +190,7 @@
         "confirmTitle": "¿Guardar fechas anteriores a 1900?",
         "confirmMessage": "{n} filas tienen una fecha anterior al 1 de enero de 1900. ¿Guardarlas tal cual?",
         "confirmProceed": "Sí, las fechas son correctas"
-      },
-      "unlinkHint": "Estos gastos quedan, ya no vinculados: {list}"
+      }
     },
     "commit": {
       "serverError": "Guardado imposible — error del servidor"

@@ -190,8 +190,7 @@
         "confirmTitle": "Salvare date anteriori al 1900?",
         "confirmMessage": "{n} righe hanno una data anteriore al 1° gennaio 1900. Salvarle così?",
         "confirmProceed": "Sì, le date sono giuste"
-      },
-      "unlinkHint": "Queste spese restano, non più collegate: {list}"
+      }
     },
     "commit": {
       "serverError": "Salvataggio impossibile — errore del server"
