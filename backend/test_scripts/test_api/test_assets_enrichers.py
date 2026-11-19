@@ -10,9 +10,8 @@ Test Suite: the enrichers and the profile of an asset through the asset routes (
 3. ``profile`` on ``PATCH /assets`` (plan §3.5): a value → a ``user`` row by the caller; ``null`` → a NULL row over a
    value; a voice absent → untouched; a value of the wrong shape or an unknown voice → ``committed: false`` with one
    issue ``profileValueInvalid`` on ``profile.<voice>``, nothing of the item saved and no row — the same on
-   ``POST /assets/validate``. With ``classification_params`` on the same voice, the profile value is «now». A PATCH of
-   ``profile`` never changes the ``classification_params`` column; a PATCH of ``classification_params`` still writes
-   both (A4).
+   ``POST /assets/validate``. (Until D7a a ``classification_params`` on the same voice lost to ``profile``; the old
+   container is gone, refused with a 422: ``test_assets_crud.py``.)
 4. ``profile`` on ``POST /assets``: ``user`` rows by the creator; an invalid value fails that item, the asset is not
    created.
 5. B4, ``POST /assets/enrichers/recognize`` (Server-Sent Events, each ``data: {json}`` with an ``event`` key): with an
@@ -38,8 +37,7 @@ read, ``state`` stays ``{}`` by design), and the «test» route's asset is bound
 database (``bindings.save_config``), never through a route: no read of the server runs beside the one under test.
 ``ENRICHERS_AGAIN`` keeps mockenrich: the tests that send it compare ``config`` only, which no read ever writes.
 
-Not pinned: whether ``GET /assets`` answers ``enrichers: null`` or an empty ``config`` after a clear (both accepted),
-and what the ``classification_params`` column holds when ``classification_params`` and ``profile`` touch the same voice.
+Not pinned: whether ``GET /assets`` answers ``enrichers: null`` or an empty ``config`` after a clear (both accepted).
 
 Red until B3: ``bindings.py`` raises ``NotImplementedError`` (``GET /assets/enrichers`` answers 500, the direct
 ``update_state`` raises); ``POST /assets`` ignores ``enrichers`` and ``profile``; a ``PATCH`` carrying ``profile`` fails
@@ -52,7 +50,6 @@ from __future__ import annotations
 
 import json
 import uuid
-from decimal import Decimal
 from typing import Any
 
 import httpx
@@ -179,11 +176,10 @@ def _summary(rows: list[dict[str, Any]]) -> list[tuple[str, Any, str, int | None
     return sorted(((row["key"], row["stored"], row["source"], row["user_id"]) for row in rows), key=lambda item: item[0])
 
 
-async def _column(asset_id: int) -> tuple[str, str | None]:
-    """The asset's display name and stored ``classification_params`` text."""
+async def _name(asset_id: int) -> str:
+    """The asset's display name, as stored."""
     async with AsyncSession(get_async_engine()) as session:
-        row = (await session.execute(text("SELECT display_name, classification_params FROM assets WHERE id = :asset"), {"asset": asset_id})).one()
-    return row.display_name, row.classification_params
+        return (await session.execute(text("SELECT display_name FROM assets WHERE id = :asset"), {"asset": asset_id})).scalar_one()
 
 
 async def _asset_id_named(name: str) -> int | None:
@@ -419,105 +415,25 @@ async def test_patch_with_an_invalid_profile_value_saves_nothing_of_the_item(tes
         await _login(client)
         asset_id = await _create(client, _item("PRF_BAD"))
         try:
-            name_before, _ = await _column(asset_id)
+            name_before = await _name(asset_id)
             item = {"asset_id": asset_id, "display_name": f"Enrichers renamed {unique_id('PRF_BAD')}", "profile": {voice: value}}
             expected = [(asset_id, 0, PROFILE_VALUE_INVALID, f"profile.{voice}")]
 
             body = await _patch(client, [item])
 
             assert body["committed"] is False and _issues(body) == expected, f"one profileValueInvalid issue: committed={body['committed']} {_issues(body)}"
-            assert (await _column(asset_id))[0] == name_before, "nothing of the item is saved: the name stays"
+            assert await _name(asset_id) == name_before, "nothing of the item is saved: the name stays"
             assert await _profile_rows(asset_id) == [], "no profile row"
 
             dry = await _patch(client, [item], route="validate")
 
             assert dry["committed"] is False and _issues(dry) == expected, f"validate answers the same issue: {_issues(dry)}"
-            assert (await _column(asset_id))[0] == name_before and await _profile_rows(asset_id) == [], "validate writes nothing"
+            assert await _name(asset_id) == name_before and await _profile_rows(asset_id) == [], "validate writes nothing"
 
             valid = await _patch(client, [{"asset_id": asset_id, "profile": {"ter": TER}}])
             assert valid["committed"] is True and [row["key"] for row in await _profile_rows(asset_id)] == ["ter"], "barrier: a valid profile value is written on this asset"
         finally:
             await _delete(client, [asset_id])
-
-
-@pytest.mark.asyncio
-async def test_profile_wins_over_classification_params_on_the_same_voice(test_server):
-    """One PATCH sends a geography in ``classification_params`` and another in ``profile``: the geography «now» (the last
-    row in the store's order) is the ``profile`` one."""
-    async with httpx.AsyncClient() as client:
-        user_id = await _login(client)
-        asset_id = await _create(client, _item("PRF_WINS"))
-        try:
-            body = await _patch(
-                client,
-                [{"asset_id": asset_id, "classification_params": {"geographic_area": {"distribution": {"USA": "1"}}}, "profile": {"geography": {"JPN": "1"}}}],
-            )
-
-            assert body["committed"] is True, body
-            geography = [row for row in await _profile_rows(asset_id) if row["key"] == "geography"]
-            assert geography, "a geography row is written"
-            now = geography[-1]
-            assert (now["stored"], now["source"], now["user_id"]) == (normalize_value("geography", {"JPN": "1"}), "user", user_id), f"the profile value is now: {geography}"
-        finally:
-            await _delete(client, [asset_id])
-
-
-_CLASSIFICATION = {
-    "short_description": "Global developed-markets equity ETF",
-    "geographic_area": {"distribution": {"USA": "0.6", "JPN": "0.4"}},
-    "sector_area": {"distribution": {"Technology": "1"}},
-}
-
-
-@pytest.mark.asyncio
-async def test_patch_profile_never_changes_the_classification_column(test_server):
-    """``profile`` for geography, sector and description writes three ``user`` rows and leaves the
-    ``classification_params`` column exactly as it was (design consultant, B3)."""
-    async with httpx.AsyncClient() as client:
-        user_id = await _login(client)
-        asset_id = await _create(client, _item("PRF_COLUMN", classification_params=_CLASSIFICATION))
-        try:
-            _, column_before = await _column(asset_id)
-            assert column_before is not None, "barrier: the column holds the classification"
-            before = await _profile_rows(asset_id)
-            profile = {"geography": {"GBR": "1"}, "sector": {"Energy": "1"}, "description": "Edited by hand in the profile"}
-
-            body = await _patch(client, [{"asset_id": asset_id, "profile": profile}])
-
-            assert body["committed"] is True, body
-            new = _new(before, await _profile_rows(asset_id))
-            expected = sorted(((key, normalize_value(key, value), "user", user_id) for key, value in profile.items()), key=lambda item: item[0])
-            assert _summary(new) == expected, f"three user rows by the caller: {_summary(new)}"
-            assert (await _column(asset_id))[1] == column_before, "a PATCH of profile never changes classification_params"
-        finally:
-            await _delete(client, [asset_id])
-
-
-@pytest.mark.asyncio
-async def test_patch_classification_still_writes_the_column_and_the_profile(test_server):
-    """The contrast (A4): ``classification_params`` changes the column and writes the profile row."""
-    async with httpx.AsyncClient() as client:
-        user_id = await _login(client)
-        asset_id = await _create(client, _item("PRF_A4", classification_params=_CLASSIFICATION))
-        try:
-            _, column_before = await _column(asset_id)
-            before = await _profile_rows(asset_id)
-
-            body = await _patch(client, [{"asset_id": asset_id, "classification_params": {"sector_area": {"distribution": {"Energy": "1"}}}}])
-
-            assert body["committed"] is True, body
-            _, column_after = await _column(asset_id)
-            sectors = {name: Decimal(weight) for name, weight in json.loads(column_after)["sector_area"]["distribution"].items()}
-            assert column_after != column_before and sectors == {"Energy": Decimal(1)}, f"the column changes: {column_after}"
-            new = _new(before, await _profile_rows(asset_id))
-            assert _summary(new) == [("sector", normalize_value("sector", {"Energy": "1"}), "user", user_id)], f"and the profile gets the sector row: {_summary(new)}"
-        finally:
-            await _delete(client, [asset_id])
-
-
-# =============================================================================
-# 4. profile on POST /assets
-# =============================================================================
 
 
 @pytest.mark.asyncio
