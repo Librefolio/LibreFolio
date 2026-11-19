@@ -188,7 +188,9 @@
         "dataSince": "from {date}",
         "beforeProfile": "value from before the profile",
         "companySector": "Sector",
-        "staleConfirmed": "Confirmed on {date}, not up to date"
+        "staleConfirmed": "Confirmed on {date}, not up to date",
+        "noEnrichersText": "The data on this tab was written by hand or arrived when the asset was created: nothing keeps it up to date.",
+        "configureHint": "Opens the asset window, with the enrichers window on top"
       },
       "row": {
         "pending": "{count, plural, one {# change waiting} other {# changes waiting}}"
@@ -237,6 +239,15 @@
         "valuesInPercent": "values in %",
         "writeHint": "To write a new value: «{action}»",
         "loadFailed": "The history of this data could not be read."
+      },
+      "refresh": {
+        "button": "Refresh",
+        "hint": "Reads this asset's enrichers again · last read: {date}",
+        "hintNever": "Reads this asset's enrichers again · never read yet",
+        "written": "{count, plural, one {# data item updated} other {# data items updated}}",
+        "unchanged": "Enrichers read again: nothing changed",
+        "partial": "{count, plural, one {# source did not answer} other {# sources did not answer}}; {written, plural, one {# data item updated} other {# data items updated}}. The weekly read will try again.",
+        "failed": "The enrichers could not be read. Try again later."
       }
     }
   }

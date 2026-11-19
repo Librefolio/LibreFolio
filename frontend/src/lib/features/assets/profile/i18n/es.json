@@ -188,7 +188,9 @@
         "dataSince": "desde el {date}",
         "beforeProfile": "valor de antes del perfil",
         "companySector": "Sector",
-        "staleConfirmed": "Confirmado el {date}, sin actualizar"
+        "staleConfirmed": "Confirmado el {date}, sin actualizar",
+        "noEnrichersText": "Los datos de esta pestaña se escribieron a mano o llegaron al crear el activo: nada los mantiene actualizados.",
+        "configureHint": "Abre la ventana del activo, con la de los enriquecedores encima"
       },
       "row": {
         "pending": "{count, plural, one {# cambio pendiente} other {# cambios pendientes}}"
@@ -237,6 +239,15 @@
         "valuesInPercent": "valores en %",
         "writeHint": "Para escribir un valor nuevo: «{action}»",
         "loadFailed": "No se pudo leer el historial de este dato."
+      },
+      "refresh": {
+        "button": "Actualizar",
+        "hint": "Vuelve a leer los enriquecedores de este activo · última lectura: {date}",
+        "hintNever": "Vuelve a leer los enriquecedores de este activo · nunca leído hasta ahora",
+        "written": "{count, plural, one {# dato actualizado} other {# datos actualizados}}",
+        "unchanged": "Enriquecedores leídos de nuevo: ningún dato ha cambiado",
+        "partial": "{count, plural, one {# fuente no respondió} other {# fuentes no respondieron}}; {written, plural, one {# dato actualizado} other {# datos actualizados}}. La lectura semanal lo volverá a intentar.",
+        "failed": "No se pudieron leer los enriquecedores. Inténtelo más tarde."
       }
     }
   }
