@@ -226,6 +226,24 @@ The `SettingsLayout` component provides the structural shell for all settings ta
 - `hasNonDefaults`: Boolean to show Reset button.
 - `isLocked`: Boolean state of the edit lock.
 
+### 🧭 SettingsCategoryNav {: #settingscategorynav }
+
+The category menu of a settings page, written once (project 76, lot S1a): `SettingsLayout` (Preferences) and
+`GlobalSettingsTab` use it, and Settings › Plugins from lot S1b.
+
+- **Rendered twice by its page.** `mode="phone"` above the content: the «Category» label, a trigger and a dropdown
+  (`sm:hidden`), closed by a choice, a second press or a click outside. `mode="sidebar"` as the first column of the
+  page's row (`hidden sm:block`, `w-48`).
+- **The page keeps the state.** It passes `entries` («All» first, then `{id, icon, label}`), `selected`, `onselect`,
+  and for the phone `triggerLabel` and `triggerIcon`: each page decides what an unknown selection shows (Preferences
+  «All», Global settings the id).
+- **What it publishes.** `{testIdPrefix}-category-{key}` in the sidebar, `{testIdPrefix}-mobile-category-{key}` in
+  the dropdown, `{testIdPrefix}-mobile-category-trigger` and `-menu`, and `aria-pressed` on every entry. `key` is the
+  entry's `testKey`, else its `id`: Preferences' «All» has the id `''` and the key `all`. The prefixes are `settings`
+  (Preferences) and `global-settings`.
+- **Tests.** `SettingsCategoryNav.test.ts` (the component); the pages' own `SettingsLayout.test.ts` and
+  `GlobalSettingsTab.test.ts` were kept unchanged through the extraction.
+
 ### 🎨 PreferencesTab
 
 <div class="screenshot-container" style="margin: 1rem 0 2rem 0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-width: 600px;">
