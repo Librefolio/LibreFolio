@@ -423,4 +423,60 @@ test.describe('FX Add Pair Modal', () => {
             await page.unrouteAll({behavior: 'wait'});
         }
     });
+
+    // ========================================================================
+    // Test 6: the route search runs in a Web Worker, with the depth rule (lane 75, L20b, decision Q6)
+    // ========================================================================
+    test('the route search runs in a Web Worker and offers the shortest level and the next one', async ({page}) => {
+        // EUR → CAD: a direct route (L20B_A), a 2-step chain via USD (L20B_A + L20B_B) and a 3-step chain via USD and
+        // GBP (L20B_A + L20B_B + L20B_C). The rule offers 1 and 2 steps: the 3-step group is not drawn.
+        const provider = (code: string, base: string, targets: string[]) => ({code, name: `Route ${code}`, base_currency: base, base_currencies: [base], target_currencies: targets, description: 'Browser-local deterministic fixture'});
+        await page.route('**/api/v1/fx/providers', async (route) => {
+            expect(route.request().method()).toBe('GET');
+            await route.fulfill({json: [provider('L20B_A', 'EUR', ['CAD', 'USD']), provider('L20B_B', 'USD', ['CAD', 'GBP']), provider('L20B_C', 'GBP', ['CAD'])]});
+        });
+        await page.route('**/api/v1/fx/providers/routes', async (route) => {
+            expect(route.request().method()).toBe('GET');
+            await route.fulfill({json: {items: []}});
+        });
+        const cspViolations: string[] = [];
+        page.on('console', (message) => {
+            if (message.type() === 'error' && message.text().includes('Content Security Policy')) cspViolations.push(message.text());
+        });
+        try {
+            await goToFxPage(page);
+            await openAddPairModal(page);
+            const modal = page.getByTestId('fx-add-pair-modal');
+
+            const quoteContainer = modal.getByTestId('fx-add-pair-quote');
+            await expect(quoteContainer).toBeVisible();
+            await selectCurrency(page, quoteContainer, 'CAD');
+            const baseContainer = modal.getByTestId('fx-add-pair-base');
+            await expect(baseContainer).toBeVisible();
+            await selectCurrency(page, baseContainer, 'EUR');
+
+            const toggle = modal.getByTestId('fx-route-picker-toggle');
+            await expect(toggle).toBeVisible({timeout: 10_000});
+            if ((await toggle.getAttribute('data-open')) !== 'true') await toggle.click();
+            const picker = modal.getByTestId('fx-route-picker');
+            await expect(picker.getByTestId('fx-route-direct-L20B_A')).toBeVisible({timeout: 10_000});
+            await expect(picker.getByTestId('fx-route-chain-toggle-2')).toBeVisible();
+            await expect(picker.getByTestId('fx-route-chain-toggle-3')).toHaveCount(0);
+
+            // The answer came from the worker: a dedicated worker built from currencyRoutes.worker is alive
+            await expect
+                .poll(
+                    () =>
+                        page
+                            .workers()
+                            .map((worker) => worker.url())
+                            .filter((url) => url.includes('currencyRoutes')).length,
+                    {timeout: 10_000},
+                )
+                .toBeGreaterThan(0);
+            expect(cspViolations, 'the worker loads under the page policy').toEqual([]);
+        } finally {
+            await page.unrouteAll({behavior: 'wait'});
+        }
+    });
 });
