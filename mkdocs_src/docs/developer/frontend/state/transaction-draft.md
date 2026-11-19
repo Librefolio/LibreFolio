@@ -373,13 +373,29 @@ Upon receiving the intent, `TransactionBulkModal` resolves the actual row data d
 An id that `txStore` does not hold is left out. A caller that needs rows the page did not load adds them first with
 `txStoreAddExtras(rows)`: a row already in the store is kept, and the next `txStoreSetAll` drops the extras.
 
-**Deleting a parent and keeping its charges** (linked charges, project 66). The panel that asks what to do with the
-charges of a deleted parent (`TxChargesActionModal`, «Keep the charges» / «Delete all») opens the workspace with
-`unlinkIds`: the charges that stay, unlinked. They are not rows of the grid: a banner (`tx-bulk-unlink-hint`) names
-them. `buildBatchPayload({chargeUnlinks})` (`txPayloadHelpers.ts`) turns each into `parent_transaction_id: 0` on its
-update — joined to the charge's own update when the batch edits it, nothing when the batch deletes it — in the three
-places that build a payload (the nested form's context, «Validate now», «Save all»). An unlink counts only while its
-parent is still marked for deletion: «Restore» on the parent takes the unlinks back.
+**Linked charges in the workspace** (project 66). A charge (a FEE or a TAX) brought into the workspace is a
+`PendingOp` of its own, owned by its parent through `chargeOf`, the parent's `tempId`. It never uses `pairedWith`, so
+the pairs' code is untouched. The pure half lives in `bulk/bulkCharges.ts`:
+
+- **Ownership.** `adoptCharges` gives a present parent its saved charges, from their `parent_transaction_id`. It runs
+  after every `collapsePairedOps`: an intent, a reset, the picker. A reset that regenerates the parent's `tempId`
+  remaps its charges (`remapChargeOf`), so `chargeOf` never names a missing operation.
+- **The link that changes lives on the charge.** `parentUnlink` sends `parent_transaction_id: 0`; `parentLinkId` names
+  a saved parent absent from the workspace. A new charge typed in its parent's form carries `followsParent`: at batch
+  time it takes the parent's broker, asset and date.
+- **The payload.** `chargeParentFields` gives `parent_ref` (the parent's `tempId`, sent as its create's `ref`) or
+  `parent_transaction_id`, merged in `collectCreate` / `collectUpdate`. So the three places that build a payload see
+  the same thing: the nested form's context, «Validate now» and «Save all».
+- **The parent's form.** It receives its charges as drafts (`chargeDraftsFor`, as `_charges`, with
+  `allowChargeEdits`), read first with `parent_ids` when the workspace does not hold them all. Its answer goes back
+  onto the operations (`applyChargeDrafts`), one way: nothing typed is lost.
+
+**Deleting a parent and keeping its charges.** The panel that asks what to do with the charges of a deleted parent
+(`TxChargesActionModal`, «Keep the charges» / «Delete all») opens the workspace with `unlinkIds`. These are the
+charges that stay: rows with `parentUnlink`. A parent marked for deletion in the workspace unlinks the saved charges it
+owns that are neither deleted nor unlinked, so no charge stays linked to a deleted parent. «Restore» on the parent
+takes back every «del» and «scollega» of its charges. Until the charges are drawn under their parent, a banner
+(`tx-bulk-unlink-hint`) names the unlinked ones.
 
 ---
 
