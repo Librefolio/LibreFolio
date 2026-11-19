@@ -3,7 +3,7 @@
   TransactionActionModal (split and promote, which keep their hand-drawn tables).
   - mode='link' (Z): one parent and N charges chosen in the table's selection → «Link».
   - mode='deleteParent' (V1): one or more parents whose charges are not all deleted → «Cancel · Keep the charges ·
-    Delete all (N)»; the choice goes to the Bulk.
+    Delete all (N)»; the choice goes to the Bulk. The Bulk opens it too (66 F7-c2), with new charges (id 0) among them.
   «Before» is a DataTable with one column per transaction (positional ids `c0…`, nothing tied to a transaction id is
   stored) and a minimum width per column: on a phone the table pans sideways.
 -->
@@ -36,9 +36,11 @@
          */
         counts?: {keep: number; all: number};
         onCancel: () => void;
+        /** Stacking level: above the Bulk when the Bulk opens it (66 F7-c2). */
+        zIndex?: number;
     }
 
-    let {open, mode, parents, charges, loading = false, onConfirm, onChoose, counts, onCancel}: Props = $props();
+    let {open, mode, parents, charges, loading = false, onConfirm, onChoose, counts, onCancel, zIndex = 50}: Props = $props();
 
     type Field = 'date' | 'type' | 'cash' | 'quantity' | 'broker';
     interface FieldRow {
@@ -46,20 +48,21 @@
     }
     const FIELDS: FieldRow[] = [{field: 'date'}, {field: 'type'}, {field: 'cash'}, {field: 'quantity'}, {field: 'broker'}];
 
-    /** Each parent followed by its charges; a charge of no listed parent (link mode) after them, in order. */
+    /** Each parent followed by its charges; a charge of no listed parent (link mode) after them, in order. Grouped by
+     *  object, never by id: in the Bulk two new charges both have id 0 (66 F7-c2). */
     let columnsTx = $derived.by(() => {
         const out: TXReadItem[] = [];
-        const placed = new Set<number>();
+        const placed = new Set<TXReadItem>();
         for (const p of parents) {
             out.push(p);
             for (const c of charges) {
-                if (c.parent_transaction_id === p.id && !placed.has(c.id)) {
+                if (c.parent_transaction_id === p.id && !placed.has(c)) {
                     out.push(c);
-                    placed.add(c.id);
+                    placed.add(c);
                 }
             }
         }
-        for (const c of charges) if (!placed.has(c.id)) out.push(c);
+        for (const c of charges) if (!placed.has(c)) out.push(c);
         return out;
     });
 
@@ -80,7 +83,8 @@
         ...columnsTx.map(
             (tx, i): ColumnDef<FieldRow> => ({
                 id: `c${i}`,
-                header: `TX #${tx.id}`,
+                // A transaction not saved yet (the Bulk's new charges, 66 F7-c2) has no #id: «new».
+                header: tx.id > 0 ? `TX #${tx.id}` : $t('transactions.bulk.stateNew') || 'new',
                 type: 'text',
                 width: 150,
                 minWidth: 130,
@@ -111,7 +115,7 @@
     });
 </script>
 
-<ModalBase {open} maxWidth="xl" onRequestClose={onCancel} testId="tx-charges-modal">
+<ModalBase {open} maxWidth="xl" onRequestClose={onCancel} testId="tx-charges-modal" {zIndex}>
     <div class="flex flex-col max-h-[80vh]" data-testid="tx-charges-modal-content" data-mode={mode}>
         <div class="p-6 pb-3 border-b border-lf-subtle shrink-0">
             <div class="flex items-center gap-2 text-lg font-semibold text-lf-primary">

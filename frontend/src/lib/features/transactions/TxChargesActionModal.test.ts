@@ -348,6 +348,68 @@ describe('TxChargesActionModal — deleteParent, counts of a mixed selection', (
     });
 });
 
+// ─── 66 F7-c2: new charges (id 0) inside the Bulk ───────────────────────────────────────────────────────────────
+
+/**
+ * In the Bulk a parent's charges may be new (id 0, not saved yet). The Bulk hands each with `parent_transaction_id` = its
+ * owner's id (contract 66-F7 §18.1), so the panel places it under its parent. Two new charges both have id 0: the panel
+ * groups by object, never by id, or the second one vanishes. A column of a transaction not saved yet is headed by the
+ * catalogue's `transactions.bulk.stateNew` (here, under the key-rendering translator, the key itself), never `TX #0`.
+ */
+describe('TxChargesActionModal — deleteParent with new charges (66 F7-c2)', () => {
+    const NEW_FEE: TXReadItem = {...base, id: 0, type: 'FEE', quantity: '0', cash: {code: 'EUR', amount: '-5.00'}, parent_transaction_id: BUY.id};
+    const NEW_TAX: TXReadItem = {...base, id: 0, type: 'TAX', quantity: '0', cash: {code: 'EUR', amount: '-3.00'}, parent_transaction_id: SELL.id};
+
+    /** The headers of the per-transaction columns (every header but the field-name column), in DOM order. */
+    async function columnHeaders(): Promise<HTMLElement[]> {
+        return (await headers()).filter((th) => th.getAttribute('data-testid') !== 'dt-header-field');
+    }
+
+    /** The text of a field's cell in a transaction column. */
+    function cellText(field: string, columnId: string): string {
+        const table = screen.getByTestId('tx-charges-modal-table');
+        return (table.querySelector(`tbody tr[data-row-id="${field}"] td[data-column-id="${columnId}"]`)?.textContent ?? '').trim();
+    }
+
+    it('two parents, each with one new charge: four columns, each new charge right after its own parent', async () => {
+        mount({mode: 'deleteParent', parents: [structuredClone(BUY), structuredClone(SELL)], charges: [structuredClone(NEW_FEE), structuredClone(NEW_TAX)]});
+        await dialog();
+        const ths = await columnHeaders();
+        expect(ths, 'two parents + two new charges: no charge is lost to a shared id 0').toHaveLength(4);
+        const ids = ths.map((th) => th.getAttribute('data-testid')!.slice('dt-header-'.length));
+        expect(idOf(ths[0]), 'the BUY first').toBe(BUY.id);
+        expect(cellText('type', ids[1]), 'then the BUY’s new FEE').toBe('transactions.types.FEE');
+        expect(idOf(ths[2]), 'then the SELL').toBe(SELL.id);
+        expect(cellText('type', ids[3]), 'then the SELL’s new TAX').toBe('transactions.types.TAX');
+    });
+
+    it('a new charge’s column is headed by the catalogue’s «new», never TX #0', async () => {
+        mount({mode: 'deleteParent', parents: [structuredClone(BUY), structuredClone(SELL)], charges: [structuredClone(NEW_FEE), structuredClone(NEW_TAX)]});
+        await dialog();
+        const ths = await columnHeaders();
+        for (const at of [1, 3]) {
+            expect(ths[at].textContent ?? '', `column ${at}`).toContain('transactions.bulk.stateNew');
+            expect(ths[at].textContent ?? '', `column ${at}`).not.toContain('#0');
+        }
+    });
+
+    it('without counts, the keep after-line counts both new charges (2) and «all» names 2 parents + 2 charges (4)', async () => {
+        mount({mode: 'deleteParent', parents: [structuredClone(BUY), structuredClone(SELL)], charges: [structuredClone(NEW_FEE), structuredClone(NEW_TAX)]});
+        const dlg = await dialog();
+        expect(holdsNumber(within(dlg).getByTestId('tx-charges-modal-keep-after').textContent, 2)).toBe(true);
+        expect(holdsNumber(within(dlg).getByTestId('tx-charges-modal-all').textContent, 4)).toBe(true);
+    });
+
+    it('a saved charge and a new one under the same parent: both columns, the saved one headed by its #id', async () => {
+        mount({mode: 'deleteParent', parents: [structuredClone(BUY)], charges: [structuredClone(FEE), structuredClone(NEW_FEE)]});
+        await dialog();
+        const ths = await columnHeaders();
+        expect(ths).toHaveLength(3);
+        expect(ths.map((th) => idOf(th))).toEqual([BUY.id, FEE.id, null]);
+        expect(ths[2].textContent ?? '').toContain('transactions.bulk.stateNew');
+    });
+});
+
 // ─── storage ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 describe('TxChargesActionModal — nothing tied to a transaction id reaches localStorage', () => {
