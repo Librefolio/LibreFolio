@@ -18,6 +18,7 @@ test by the real module whose ``AsyncClient`` answers through an ``httpx.MockTra
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date
 from decimal import Decimal
 
@@ -295,17 +296,49 @@ async def test_sarb_one_series_needs_no_pause(monkeypatch: pytest.MonkeyPatch):
 
 @pytest.mark.asyncio
 async def test_sarb_too_many_requests_is_a_rate_limit_and_stops_the_series(monkeypatch: pytest.MonkeyPatch):
-    """HTTP 429 on JPY (second in sorted order) raises ``FXRateLimitedError``; USD is never asked."""
+    """HTTP 429 on AUD (first in sorted order) raises ``FXRateLimitedError`` for the whole call: the series queued behind
+    the three in flight (JPY, USD) are never asked (lane 75, L25c: at most 3 at once, a 429 stops the call as in BOE)."""
 
     def answer(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(429) if _code_of(request) == "EXCB120D" else _json(CHF_FEED)
+        return httpx.Response(429, headers={"Retry-After": "30"}) if _code_of(request) == "EXCB080D" else _json(CHF_FEED)
 
     asked = _route(monkeypatch, sarb_mod, answer)
 
     with pytest.raises(FXRateLimitedError):
-        await SARBProvider().fetch_rates(RANGE, ["USD", "JPY", "CHF"])
+        await SARBProvider().fetch_rates(RANGE, ["USD", "JPY", "CHF", "BWP", "AUD"])
 
-    assert [_code_of(r) for r in asked] == ["EXCB016D", "EXCB120D"]
+    codes = {_code_of(r) for r in asked}
+    assert "EXCB080D" in codes
+    assert codes <= {"EXCB080D", "EXCB051D", "EXCB016D"}, f"a series queued after the refusal was asked: {sorted(codes)}"
+
+
+@pytest.mark.asyncio
+async def test_sarb_asks_at_most_three_series_at_once(monkeypatch: pytest.MonkeyPatch):
+    """Six currencies: never more than ``MAX_PARALLEL`` (3) requests in flight, every currency still asked once and its
+    rows returned (lane 75, L25c, consultant's decision of 19/11/2026)."""
+    in_flight = 0
+    peak = 0
+    asked: list[str] = []
+
+    async def fake_fetch_one(self, currency: str, start: date, end: date):
+        nonlocal in_flight, peak
+        in_flight += 1
+        peak = max(peak, in_flight)
+        asked.append(currency)
+        for _ in range(5):
+            await asyncio.sleep(0)
+        in_flight -= 1
+        return [(end, currency, "ZAR", Decimal("1.0"))]
+
+    monkeypatch.setattr(SARBProvider, "_fetch_one", fake_fetch_one)
+    currencies = ["AUD", "BWP", "CHF", "JPY", "KES", "USD"]
+
+    rates = await SARBProvider().fetch_rates(RANGE, currencies)
+
+    assert SARBProvider.MAX_PARALLEL == 3
+    assert peak == 3
+    assert sorted(asked) == currencies
+    assert all(len(rates[c]) == 1 for c in currencies)
 
 
 _NOT_A_SERIES = [
