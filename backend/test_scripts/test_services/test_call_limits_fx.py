@@ -117,6 +117,7 @@ SHIPPED_FLAGS = {
     "NORGES": True,
     "NBU": True,
     "BOC": True,
+    "BANXICO": True,
     "MANUAL": False,
     "MOCKFX": False,
     "MOCKFX_FAIL": False,
