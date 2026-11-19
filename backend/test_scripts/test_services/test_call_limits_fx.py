@@ -120,6 +120,7 @@ SHIPPED_FLAGS = {
     "BANXICO": True,
     "CNB": True,
     "SARB": True,
+    "BCRP": True,
     "MANUAL": False,
     "MOCKFX": False,
     "MOCKFX_FAIL": False,
