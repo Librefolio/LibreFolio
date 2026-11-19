@@ -247,7 +247,8 @@
         "written": "{count, plural, one {# dato aggiornato} other {# dati aggiornati}}",
         "unchanged": "Arricchitori riletti: nessun dato è cambiato",
         "partial": "{count, plural, one {# fonte non ha risposto} other {# fonti non hanno risposto}}; {written, plural, one {# dato aggiornato} other {# dati aggiornati}}. Ci riproverà la lettura settimanale.",
-        "failed": "Non è stato possibile leggere gli arricchitori. Riprova più tardi."
+        "failed": "Non è stato possibile leggere gli arricchitori. Riprova più tardi.",
+        "noneActive": "Nessun arricchitore attivo: non è stato letto niente. Gli arricchitori di questo asset sono spenti o non configurati su questa istanza."
       }
     }
   }

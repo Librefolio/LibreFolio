@@ -247,7 +247,8 @@
         "written": "{count, plural, one {# data item updated} other {# data items updated}}",
         "unchanged": "Enrichers read again: nothing changed",
         "partial": "{count, plural, one {# source did not answer} other {# sources did not answer}}; {written, plural, one {# data item updated} other {# data items updated}}. The weekly read will try again.",
-        "failed": "The enrichers could not be read. Try again later."
+        "failed": "The enrichers could not be read. Try again later.",
+        "noneActive": "No active enricher: nothing was read. The enrichers of this asset are turned off or not configured on this instance."
       }
     }
   }
