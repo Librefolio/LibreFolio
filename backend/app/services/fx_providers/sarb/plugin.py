@@ -3,7 +3,7 @@ South African Reserve Bank (SARB) FX rate provider.
 
 This provider reads the daily exchange rates of the South African Reserve Bank, one JSON series per currency, from the
 service API behind the bank's web pages. ZAR is the base of the provider; the direction is the series', mixed: three
-«Rand per X» series (USD, GBP, EUR) and 21 «X per Rand».
+«Rand per X» series (USD, GBP, EUR) and 22 «X per Rand».
 
 Series list: ``https://custom.resbank.co.za/SarbWebApi/WebIndicators/HistoricalExchangeRatesDaily/``, the list behind
 the bank's «Selected Historical Rates» page
@@ -23,10 +23,12 @@ Measured on 19/11/2026:
 - The rate is the «weighted average of the banks' daily rates at approximately 10:30 am», one per South African
   business day, the value of the day published that morning.
 - Four decimals: CHF 0.0488 per rand is rounded by up to ~0.1%, CAD 0.0830 and AUD 0.0865 by ~0.06%.
-- RUB (``EXCB110D``) is published but left out until the developer answers Q3 (RUB from banks other than CBR).
+- RUB (``EXCB110D``, «Russia: Rouble per Rand»): served since the developer's answer to Q3 (19/11/2026, lane 75): the
+  rouble published by a bank other than the Central Bank of Russia (CBR, suspended by D4) is a route like the others,
+  with a neutral note saying where it comes from.
 - Budget: one request per currency with ``PAUSE_SECONDS`` between two (D9). A series from 1970 is ~4 MB in ~7 s, from
-  2000 ~3.3 s, from 2010 ~1.5 s: with 24 currencies a history from 1970 would take ~3 minutes, over the 120 s the core
-  gives a leg. ``FIRST_DAY`` is 2010-01-01: ``"min"`` for all 24 took 68.9 s, 14 days for two currencies 2.0 s
+  2000 ~3.3 s, from 2010 ~1.5 s: with 25 currencies a history from 1970 would take ~3 minutes, over the 120 s the core
+  gives a leg. ``FIRST_DAY`` is 2010-01-01: ``"min"`` for 24 of them took 68.9 s (25 with RUB: ~72 s, estimated), 14 days for two currencies 2.0 s
   (19/11/2026); a route usually asks one to three currencies. The ECB and BDI hold the older ZAR history.
 """
 
@@ -72,6 +74,7 @@ SERIES: dict[str, tuple[str, bool]] = {
     "TWD": ("EXCB126D", False),
     "THB": ("EXCB115D", False),
     "ZMW": ("EXCB071D", False),
+    "RUB": ("EXCB110D", False),
 }
 
 _CURRENCIES = sorted([*SERIES, "ZAR"])
@@ -90,11 +93,11 @@ class SARBProvider(FXRateProvider):
     direction of each series («Rand per X» or «X per Rand»). Data source: the SARB web indicators API, one request per
     currency.
 
-    Coverage: a fixed table of 24 currencies plus ZAR.
+    Coverage: a fixed table of 25 currencies plus ZAR.
     Update frequency: every South African business day, after about 10:30 SAST.
     """
 
-    #: The first day asked: a later start than the series' own, so that 24 currencies fit the core's 120 s.
+    #: The first day asked: a later start than the series' own, so that 25 currencies fit the core's 120 s.
     FIRST_DAY = date(2010, 1, 1)
     #: Pause between two requests of one call (D9: an explicit, slow pace).
     PAUSE_SECONDS = 0.3
@@ -123,19 +126,19 @@ class SARBProvider(FXRateProvider):
     @property
     def description_i18n(self) -> dict[str, str]:
         return {
-            "en": "South African Reserve Bank — daily exchange rates of 24 currencies against ZAR, among them BWP, KES, MWK, MZN and ZMW of southern and eastern Africa. Updated every South African business day after 10:30 SAST, history from 2010. Source: South African Reserve Bank.",
-            "it": "South African Reserve Bank — tassi di cambio giornalieri di 24 valute contro ZAR, tra cui BWP, KES, MWK, MZN e ZMW dell'Africa australe e orientale. Aggiornamento ogni giorno lavorativo sudafricano dopo le 10:30 SAST, storia dal 2010. Fonte: South African Reserve Bank.",
-            "fr": "South African Reserve Bank — taux de change quotidiens de 24 devises contre ZAR, dont BWP, KES, MWK, MZN et ZMW d'Afrique australe et orientale. Mise à jour chaque jour ouvrable sud-africain après 10h30 SAST, historique depuis 2010. Source : South African Reserve Bank.",
-            "es": "South African Reserve Bank — tipos de cambio diarios de 24 monedas contra ZAR, entre ellas BWP, KES, MWK, MZN y ZMW del sur y el este de África. Actualizado cada día hábil sudafricano después de las 10:30 SAST, historial desde 2010. Fuente: South African Reserve Bank.",
+            "en": "South African Reserve Bank — daily exchange rates of 25 currencies against ZAR, among them BWP, KES, MWK, MZN and ZMW of southern and eastern Africa. Updated every South African business day after 10:30 SAST, history from 2010. Source: South African Reserve Bank.",
+            "it": "South African Reserve Bank — tassi di cambio giornalieri di 25 valute contro ZAR, tra cui BWP, KES, MWK, MZN e ZMW dell'Africa australe e orientale. Aggiornamento ogni giorno lavorativo sudafricano dopo le 10:30 SAST, storia dal 2010. Fonte: South African Reserve Bank.",
+            "fr": "South African Reserve Bank — taux de change quotidiens de 25 devises contre ZAR, dont BWP, KES, MWK, MZN et ZMW d'Afrique australe et orientale. Mise à jour chaque jour ouvrable sud-africain après 10h30 SAST, historique depuis 2010. Source : South African Reserve Bank.",
+            "es": "South African Reserve Bank — tipos de cambio diarios de 25 monedas contra ZAR, entre ellas BWP, KES, MWK, MZN y ZMW del sur y el este de África. Actualizado cada día hábil sudafricano después de las 10:30 SAST, historial desde 2010. Fuente: South African Reserve Bank.",
         }
 
     @property
     def warning_i18n(self) -> dict[str, str]:
         return {
-            "en": "SARB rates are the weighted average of the banks' rates at about 10:30 South African time, one per South African business day. Except USD, GBP and EUR, the bank publishes units of the currency per rand with four decimals, so small values are rounded: CHF (0.0488 per rand) by up to about 0.1%, CAD and AUD by about 0.06%. History from 2010.",
-            "it": "I tassi della SARB sono la media ponderata dei tassi delle banche verso le 10:30 ora sudafricana, uno per giorno lavorativo sudafricano. Tranne USD, GBP ed EUR, la banca pubblica le unità di valuta per un rand con quattro decimali, quindi i valori piccoli sono arrotondati: CHF (0,0488 per rand) fino a circa lo 0,1%, CAD e AUD di circa lo 0,06%. Storia dal 2010.",
-            "fr": "Les taux de la SARB sont la moyenne pondérée des taux des banques vers 10h30 heure sud-africaine, un par jour ouvrable sud-africain. Sauf pour USD, GBP et EUR, la banque publie les unités de devise par rand avec quatre décimales : les petites valeurs sont arrondies, le CHF (0,0488 par rand) jusqu'à environ 0,1 %, le CAD et l'AUD d'environ 0,06 %. Historique depuis 2010.",
-            "es": "Los tipos de la SARB son la media ponderada de los tipos de los bancos hacia las 10:30 hora sudafricana, uno por día hábil sudafricano. Salvo USD, GBP y EUR, el banco publica las unidades de moneda por rand con cuatro decimales, así que los valores pequeños están redondeados: el CHF (0,0488 por rand) hasta un 0,1 % aproximadamente, el CAD y el AUD alrededor de un 0,06 %. Historial desde 2010.",
+            "en": "SARB rates are the weighted average of the banks' rates at about 10:30 South African time, one per South African business day. Except USD, GBP and EUR, the bank publishes units of the currency per rand with four decimals, so small values are rounded: CHF (0.0488 per rand) by up to about 0.1%, CAD and AUD by about 0.06%. History from 2010. The RUB rate is the one the SARB publishes (roubles per rand), not the Central Bank of Russia's.",
+            "it": "I tassi della SARB sono la media ponderata dei tassi delle banche verso le 10:30 ora sudafricana, uno per giorno lavorativo sudafricano. Tranne USD, GBP ed EUR, la banca pubblica le unità di valuta per un rand con quattro decimali, quindi i valori piccoli sono arrotondati: CHF (0,0488 per rand) fino a circa lo 0,1%, CAD e AUD di circa lo 0,06%. Storia dal 2010. Il tasso del RUB è quello pubblicato dalla SARB (rubli per rand), non quello della Banca centrale russa.",
+            "fr": "Les taux de la SARB sont la moyenne pondérée des taux des banques vers 10h30 heure sud-africaine, un par jour ouvrable sud-africain. Sauf pour USD, GBP et EUR, la banque publie les unités de devise par rand avec quatre décimales : les petites valeurs sont arrondies, le CHF (0,0488 par rand) jusqu'à environ 0,1 %, le CAD et l'AUD d'environ 0,06 %. Historique depuis 2010. Le taux du RUB est celui que publie la SARB (roubles par rand), pas celui de la Banque centrale de Russie.",
+            "es": "Los tipos de la SARB son la media ponderada de los tipos de los bancos hacia las 10:30 hora sudafricana, uno por día hábil sudafricano. Salvo USD, GBP y EUR, el banco publica las unidades de moneda por rand con cuatro decimales, así que los valores pequeños están redondeados: el CHF (0,0488 por rand) hasta un 0,1 % aproximadamente, el CAD y el AUD alrededor de un 0,06 %. Historial desde 2010. El tipo del RUB es el que publica la SARB (rublos por rand), no el del Banco Central de Rusia.",
         }
 
     @property
