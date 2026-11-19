@@ -949,7 +949,11 @@ the plugin.
   (`readiness.readiness_reason`), so the catalogue and the boundary always agree. It is
   `missing_fields`, `invalid_locked_setting` or null when configured, and it names no field.
 - **The interface** (U5): `PluginCallUsage.svelte` draws the five windows of `call_usage`, with the
-  limit fields as inputs an administrator saves with the card (`callUsage.ts` holds the rules). In the
+  limit fields as inputs an administrator saves with the card (`callUsage.ts` holds the rules). The boxes follow the
+  width of the block, not of the window (S1c, container queries, the block is the `@container`): under 24rem one per
+  line, the window, the count and the limit on it; from 24rem three and two, from 40rem five in a row, each with the
+  count on the window's line and the limit below. So the «Configure» dialog and the page beside the menu get three and
+  two. In the
   managed profile, an entry whose `reason` is `invalid_locked_setting` shows the managed text on top,
   the same for every user, with no button.
 - **For the tests**: `mockcount` is a test-only asset double that is counted (a class of its own, no
@@ -1097,6 +1101,14 @@ manual, [Plugin Settings](../../../user/settings/plugins.md); the code is in
   test-only `mock` is never in the tab). A group's save reads again each plugin of the tab that reads
   it, so its «configured» follows without a reload. The family of the enrichers (`enricher`, icon `IdCard`,
   **Asset profile**) has its row too, for the first enricher that declares a field.
+- **The menu (project 76, S1b; mock S0 approved 19/11).** The tab uses the shared
+  [`SettingsCategoryNav`](../../frontend/components/features/settings.md#settingscategorynav) of Global settings
+  (prefix `plugin-settings`): «All», «To configure» (`unconfigured`, listed when an entry is not configured or when it
+  is the choice) and the families present, with the short titles `MENU_TITLE_KEYS` (the sections keep
+  `FAMILY_TITLE_KEYS`), their icons (`MENU_ICONS`; the import plugins `ArrowRightLeft`, the Transactions icon), a count
+  (`data-count`) and an amber dot where an entry is to configure. `pluginMenu()` builds the entries and `filterByMenu()`
+  the shown list (`pluginSettingsForm.ts`). With «To configure» chosen and nothing left, the tab says so
+  (`plugin-settings-nothing-unconfigured`). **Open** on a group the choice hides selects `group` first.
 - **Configure on a plugin with groups** shows, below the plugin's form, one form per group it reads
   (`plugin-settings-modal-group`, each read with `fetchPluginEntry('group', name)`): «Configure» from
   the search row or the provider panel thus shows the key where it is missing: a plugin unconfigured
@@ -1266,7 +1278,7 @@ The other units that touch the plugin settings:
 | `./dev.py test services tool-settings-lifecycle` | Real spawn workers: the plugin sees the value the parent delivered, the defaults when none, the values of its own tool code, never another caller's; an unconfigured Tool starts no worker while its sibling runs. It starts processes, so it is exclusive like `tools-lifecycle` |
 | `./dev.py test services plugin-secrets-check` | The startup check of the stored secrets ([Plugin Secrets Check](../security.md#plugin-secrets-check)): `ok` without an unreadable `system` secret, otherwise an `error` that counts them alone; nothing logged and no key file generated without a stored secret; a check that cannot run is a warning, never an exception |
 | `./dev.py test front-utility core-unit` | `pluginSettingsForm.test.ts` (the rules without the DOM, `FAMILY_ICONS` included) and `pluginSettingsApi.test.ts` (the narrowing of the answers, `icon_url` included, and every outcome of a save through the real client, only the transport faked), `notConfigured.test.ts` (the case of the «to configure» window, N3) |
-| `./dev.py test front-utility component-unit` | `PluginSettingsForm.component.test.ts` (PSF-01…40, the plugin's icon and its fallback in PSF-26…30, the shared groups in PSF-33…40), `PluginSettingsTab.test.ts` (PST-01…26, the families' icons in PST-07…09, the shared groups in PST-19…26) and `PluginSettingsModal.test.ts` (PSM-01…18, the shared groups in PSM-11…18), `PluginNotConfiguredModal.test.ts` (the window's cases, N3); **Configure**, the badge, the search's row, the switched-off chip (N3-1…5) and the 👑 legend in `ProviderAssignmentSection.test.ts` and `AssetSearchAutocomplete.test.ts` |
+| `./dev.py test front-utility component-unit` | `PluginSettingsForm.component.test.ts` (PSF-01…40, the plugin's icon and its fallback in PSF-26…30, the shared groups in PSF-33…40), `PluginSettingsTab.test.ts` (PST-01…33, the families' icons in PST-07…09, the shared groups in PST-19…27, the menu in PST-28…33), `SettingsCategoryNav.test.ts` (the shared menu) and `PluginSettingsModal.test.ts` (PSM-01…18, the shared groups in PSM-11…18), `PluginNotConfiguredModal.test.ts` (the window's cases, N3); **Configure**, the badge, the search's row, the switched-off chip (N3-1…5) and the 👑 legend in `ProviderAssignmentSection.test.ts` and `AssetSearchAutocomplete.test.ts` |
 | `./dev.py test front-utility plugin-settings` | End to end, on desktop (`frontend/e2e/settings/plugin-settings.spec.ts`): the tab as a member and as an administrator, **Configure** on `mockprov` from an asset's edit dialog, the search's row and the 👑 legend on a simulated stream ([Front-Utility Tests](../../test-walkthrough/front-utility.md#plugin-settings)) |
 
 ---

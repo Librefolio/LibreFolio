@@ -198,10 +198,13 @@ export function callTone(box: CallBox): Tone {
     return box.state === 'full' || box.state === 'stopped' ? 'warning' : 'plain';
 }
 
+/** A window's box, by the width of its «Calls» block (the developer, 19/11, project 76 S1c; container queries, the block
+ * is the `@container`): narrow (a phone), the window, the count and the limit on one line; from 24rem, the count on the
+ * window's line and the limit below it. */
 export const CALL_BOX_CLASSES: Record<Tone, string> = {
-    plain: 'grid min-w-0 grid-cols-[5rem_minmax(0,1fr)] items-center gap-2 rounded-md border border-lf-subtle px-2.5 py-1.5 sm:grid-cols-1 sm:items-start sm:gap-1 sm:py-2',
-    warning: 'grid min-w-0 grid-cols-[5rem_minmax(0,1fr)] items-center gap-2 rounded-md border border-lf-warning-line bg-lf-warning-soft px-2.5 py-1.5 sm:grid-cols-1 sm:items-start sm:gap-1 sm:py-2',
-    danger: 'grid min-w-0 grid-cols-[5rem_minmax(0,1fr)] items-center gap-2 rounded-md border border-lf-danger-line bg-lf-danger-soft px-2.5 py-1.5 sm:grid-cols-1 sm:items-start sm:gap-1 sm:py-2',
+    plain: 'grid min-w-0 grid-cols-[4.5rem_minmax(0,1fr)_8.5rem] items-center gap-2 rounded-md border border-lf-subtle px-2 py-1.5 @sm:grid-cols-[minmax(0,1fr)_auto] @sm:items-baseline @sm:gap-x-1.5 @sm:gap-y-1 @sm:py-2',
+    warning: 'grid min-w-0 grid-cols-[4.5rem_minmax(0,1fr)_8.5rem] items-center gap-2 rounded-md border border-lf-warning-line bg-lf-warning-soft px-2 py-1.5 @sm:grid-cols-[minmax(0,1fr)_auto] @sm:items-baseline @sm:gap-x-1.5 @sm:gap-y-1 @sm:py-2',
+    danger: 'grid min-w-0 grid-cols-[4.5rem_minmax(0,1fr)_8.5rem] items-center gap-2 rounded-md border border-lf-danger-line bg-lf-danger-soft px-2 py-1.5 @sm:grid-cols-[minmax(0,1fr)_auto] @sm:items-baseline @sm:gap-x-1.5 @sm:gap-y-1 @sm:py-2',
 };
 
 export const CALL_LABEL_CLASSES: Record<Tone, string> = {
@@ -211,9 +214,9 @@ export const CALL_LABEL_CLASSES: Record<Tone, string> = {
 };
 
 export const CALL_COUNT_CLASSES: Record<Tone, string> = {
-    plain: 'text-sm font-semibold tabular-nums text-lf-primary',
-    warning: 'text-sm font-semibold tabular-nums text-lf-warning-on-soft',
-    danger: 'text-sm font-semibold tabular-nums text-lf-danger-on-soft',
+    plain: 'text-sm font-semibold tabular-nums text-lf-primary @sm:text-right',
+    warning: 'text-sm font-semibold tabular-nums text-lf-warning-on-soft @sm:text-right',
+    danger: 'text-sm font-semibold tabular-nums text-lf-danger-on-soft @sm:text-right',
 };
 
 export const CALL_SMALL_CLASSES: Record<Tone, string> = {
@@ -230,6 +233,6 @@ export const CALL_LOCKED_CLASSES: Record<Tone, string> = {
 };
 
 /** A limit's input: the card's input roles (`INPUT_CLASS`), compact and without the number spinner, so «No limit» and a
- * seven-digit limit fit a box of the five-column row in the «Configure» dialog. */
+ * seven-digit limit fit a box of the five-column row. The third column on a narrow block, the whole line below otherwise. */
 export const CALL_INPUT_CLASS =
-    'col-span-2 w-full min-w-0 rounded-md border border-lf-input bg-lf-field px-2 py-1 text-xs tabular-nums text-lf-primary placeholder:text-lf-placeholder [appearance:textfield] hover:border-lf-input-hover focus:outline-none focus:ring-2 focus:ring-lf-focus disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-1 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
+    'col-span-1 w-full min-w-0 rounded-md border border-lf-input bg-lf-field px-2 py-1 text-xs tabular-nums text-lf-primary placeholder:text-lf-placeholder [appearance:textfield] hover:border-lf-input-hover focus:outline-none focus:ring-2 focus:ring-lf-focus disabled:cursor-not-allowed disabled:opacity-50 @sm:col-span-2 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';

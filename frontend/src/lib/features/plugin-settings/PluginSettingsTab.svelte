@@ -6,21 +6,31 @@
   test-only plugin is never listed here (the API lists one only when named).
 
   Each plugin is a `PluginSettingsForm`, saved on its own. Colours are roles only (theme-roles skill).
+
+  The menu (project 76, S1b; mock S0 approved by the developer on 19/11) is the shared `SettingsCategoryNav`, as on Global
+  settings: «All», «To configure» and the families with short titles, each with its count and an amber dot where something
+  is to configure; a phone shows it as the «Category» dropdown. A choice filters the page; «Open» on a shared group shows
+  the groups first when the choice hides it.
 -->
 <script lang="ts">
-    import {onMount} from 'svelte';
+    import {onMount, tick} from 'svelte';
     import {Puzzle} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
+    import SettingsCategoryNav from '$lib/features/settings/SettingsCategoryNav.svelte';
     import PluginSettingsForm from './PluginSettingsForm.svelte';
     import {fetchPluginEntry, fetchPluginSettings, type PluginSettingsEntry} from './pluginSettingsApi';
-    import {entryTitle, FAMILY_ICONS, FAMILY_TITLE_KEYS, groupByFamily, groupFormId, NOTE_CLASSES} from './pluginSettingsForm';
+    import {entryTitle, FAMILY_ICONS, FAMILY_TITLE_KEYS, filterByMenu, groupByFamily, groupFormId, MENU_ICONS, MENU_TITLE_KEYS, NOTE_CLASSES, pluginMenu, type PluginMenuId} from './pluginSettingsForm';
 
     let entries = $state<PluginSettingsEntry[]>([]);
     let loading = $state(true);
     let loadFailed = $state(false);
 
-    const groups = $derived(groupByFamily(entries));
+    /** The menu's choice (S1b): everything, the entries not configured, or one family. */
+    let selected = $state<PluginMenuId>('all');
+    const navEntries = $derived(pluginMenu(entries, selected).map((item) => ({id: item.id, icon: MENU_ICONS[item.id], label: $_(MENU_TITLE_KEYS[item.id]), count: item.count, dot: item.dot})));
+    const shown = $derived(filterByMenu(entries, selected));
+    const groups = $derived(groupByFamily(shown));
     /** The shared groups this tab lists (project 76): their names for the plugins' «in the group» rows, and the ones a
      * plugin can bring into view. A group the tab does not list (a test-only one) is named, with no button. */
     const groupNames = $derived(Object.fromEntries(entries.filter((entry) => entry.family === 'group').map((entry) => [entry.plugin_code, entryTitle(entry, $_)])));
@@ -28,8 +38,12 @@
     /** The listed groups that own a call count (project 76, U5): a plugin that reads one says its calls count there. */
     const countGroups = $derived(entries.filter((entry) => entry.family === 'group' && entry.call_usage !== undefined).map((entry) => entry.plugin_code));
 
-    /** Bring a shared group's form into view, and the focus to its heading. */
-    function openGroup(name: string): void {
+    /** Bring a shared group's form into view, and the focus to its heading; first the groups, when the menu's choice hides it. */
+    async function openGroup(name: string): Promise<void> {
+        if (!document.getElementById(groupFormId(name))) {
+            selected = 'group';
+            await tick();
+        }
         const target = document.getElementById(groupFormId(name));
         if (!target) return;
         target.scrollIntoView?.({behavior: 'smooth', block: 'start'});
@@ -80,40 +94,53 @@
     });
 </script>
 
-<section aria-busy={loading} class="space-y-6 text-lf-primary" data-busy={loading ? 'true' : 'false'} data-testid="plugin-settings-tab">
-    <header class="flex items-start justify-between gap-4">
-        <div class="space-y-1">
-            <h2 class="flex items-center gap-2 text-lg font-semibold">
-                <Puzzle aria-hidden="true" class="h-5 w-5 text-lf-link" />
-                {$_('pluginSettings.tab.title')}
-            </h2>
-            <p class="text-sm text-lf-secondary">{$_('pluginSettings.tab.intro')}</p>
-        </div>
-        <DocsLink icon="book" label={$_('common.documentation')} path="user/settings/plugins/" size={18} testId="plugin-settings-docs" />
-    </header>
-
-    {#if loadFailed}
-        <p class={NOTE_CLASSES.error} data-testid="plugin-settings-load-error" role="alert">{$_('pluginSettings.loadError')}</p>
-    {:else if !loading && entries.length === 0}
-        <p class="text-sm text-lf-muted" data-testid="plugin-settings-empty">{$_('pluginSettings.tab.empty')}</p>
-    {:else}
-        {#each groups as group (group.family)}
-            {@const FamilyIcon = FAMILY_ICONS[group.family]}
-            <section class="space-y-3" data-family={group.family} data-testid="plugin-settings-family">
-                <h3 class="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-lf-secondary">
-                    <FamilyIcon aria-hidden="true" class="h-4 w-4 shrink-0" data-testid="plugin-settings-family-icon" />
-                    {$_(FAMILY_TITLE_KEYS[group.family])}
-                </h3>
-                {#each group.entries as entry (entry.plugin_code)}
-                    {#if entry.family === 'group'}
-                        <div id={groupFormId(entry.plugin_code)}>
-                            <PluginSettingsForm {entry} onsaved={groupSaved} />
-                        </div>
-                    {:else}
-                        <PluginSettingsForm {countGroups} {entry} {groupNames} onopengroup={openGroup} onsaved={replace} openableGroups={listedGroups} />
-                    {/if}
-                {/each}
-            </section>
-        {/each}
+<section aria-busy={loading} class="text-lf-primary" data-busy={loading ? 'true' : 'false'} data-testid="plugin-settings-tab">
+    {#if !loadFailed && entries.length > 0}
+        <SettingsCategoryNav dotLabel={$_('pluginSettings.menu.hasUnconfigured')} entries={navEntries} mode="phone" onselect={(id) => (selected = id as PluginMenuId)} {selected} testIdPrefix="plugin-settings" triggerIcon={MENU_ICONS[selected]} triggerLabel={$_(MENU_TITLE_KEYS[selected])} />
     {/if}
+    <div class="flex flex-col gap-4 sm:flex-row sm:gap-6">
+        {#if !loadFailed && entries.length > 0}
+            <SettingsCategoryNav dotLabel={$_('pluginSettings.menu.hasUnconfigured')} entries={navEntries} mode="sidebar" onselect={(id) => (selected = id as PluginMenuId)} {selected} testIdPrefix="plugin-settings" />
+        {/if}
+        <div class="min-w-0 flex-1 space-y-6">
+            <header class="flex items-start justify-between gap-4">
+                <div class="space-y-1">
+                    <h2 class="flex items-center gap-2 text-lg font-semibold">
+                        <Puzzle aria-hidden="true" class="h-5 w-5 text-lf-link" />
+                        {$_('pluginSettings.tab.title')}
+                    </h2>
+                    <p class="text-sm text-lf-secondary">{$_('pluginSettings.tab.intro')}</p>
+                </div>
+                <DocsLink icon="book" label={$_('common.documentation')} path="user/settings/plugins/" size={18} testId="plugin-settings-docs" />
+            </header>
+
+            {#if loadFailed}
+                <p class={NOTE_CLASSES.error} data-testid="plugin-settings-load-error" role="alert">{$_('pluginSettings.loadError')}</p>
+            {:else if !loading && entries.length === 0}
+                <p class="text-sm text-lf-muted" data-testid="plugin-settings-empty">{$_('pluginSettings.tab.empty')}</p>
+            {:else}
+                {#if selected === 'unconfigured' && shown.length === 0}
+                    <p class="text-sm text-lf-muted" data-testid="plugin-settings-nothing-unconfigured">{$_('pluginSettings.menu.nothingUnconfigured')}</p>
+                {/if}
+                {#each groups as group (group.family)}
+                    {@const FamilyIcon = FAMILY_ICONS[group.family]}
+                    <section class="space-y-3" data-family={group.family} data-testid="plugin-settings-family">
+                        <h3 class="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-lf-secondary">
+                            <FamilyIcon aria-hidden="true" class="h-4 w-4 shrink-0" data-testid="plugin-settings-family-icon" />
+                            {$_(FAMILY_TITLE_KEYS[group.family])}
+                        </h3>
+                        {#each group.entries as entry (entry.plugin_code)}
+                            {#if entry.family === 'group'}
+                                <div id={groupFormId(entry.plugin_code)}>
+                                    <PluginSettingsForm {entry} onsaved={groupSaved} />
+                                </div>
+                            {:else}
+                                <PluginSettingsForm {countGroups} {entry} {groupNames} onopengroup={openGroup} onsaved={replace} openableGroups={listedGroups} />
+                            {/if}
+                        {/each}
+                    </section>
+                {/each}
+            {/if}
+        </div>
+    </div>
 </section>

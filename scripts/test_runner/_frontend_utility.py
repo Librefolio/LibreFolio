@@ -632,6 +632,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/update-check/UpdateAvailableModal.test.ts",
             "src/lib/features/settings/SettingControls.test.ts",
             "src/lib/features/settings/SettingsLayout.test.ts",
+            "src/lib/features/settings/SettingsCategoryNav.test.ts",
             "src/lib/features/settings/PasswordChangeModal.test.ts",
             "src/lib/features/settings/SchedulerConfigModal.test.ts",
             "src/lib/features/settings/SchedulerLogModal.test.ts",

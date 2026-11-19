@@ -414,6 +414,111 @@ test.describe('Settings › Plugins — read only', () => {
 });
 
 // =============================================================================
+// 1b. The menu (project 76, S1b): «All», «To configure» and the families, on the real page
+// =============================================================================
+
+test.describe('Settings › Plugins — the menu (76 S1b)', () => {
+    test('a family shows its plugins alone and its count is the forms shown; on a phone the «Category» dropdown does the same', async ({page}) => {
+        await login(page, TEST_USER);
+        const tab = await openPluginsTab(page);
+        const forms = tab.locator('[data-testid^="plugin-settings-form-"]');
+        const sections = tab.getByTestId('plugin-settings-family');
+        /** The forms shown are as many as the entry's count says: the count read from the page, never a fixed number. */
+        const countIsShown = async (entry: Locator) => {
+            const count = Number(await entry.getAttribute('data-count'));
+            expect(count, `${await entry.getAttribute('data-testid')}: a count`).toBeGreaterThan(0);
+            await expect(forms).toHaveCount(count);
+        };
+
+        const all = tab.getByTestId('plugin-settings-category-all');
+        await expect(all, '«All» is the first choice').toHaveAttribute('aria-pressed', 'true');
+        await countIsShown(all);
+
+        const prices = tab.getByTestId('plugin-settings-category-asset');
+        await prices.click();
+        await expect(prices).toHaveAttribute('aria-pressed', 'true');
+        await expect(sections.and(tab.locator('[data-family="asset"]')), 'the price sources are shown').toHaveCount(1);
+        await expect(tab.locator('[data-testid="plugin-settings-family"]:not([data-family="asset"])'), 'no other family').toHaveCount(0);
+        await countIsShown(prices);
+
+        // A phone: the sidebar hides, the «Category» dropdown above the page chooses
+        await page.setViewportSize({width: 375, height: 812});
+        await expect(tab.getByRole('navigation'), 'the sidebar is the desktop’s').toBeHidden();
+        await tab.getByTestId('plugin-settings-mobile-category-trigger').click();
+        const menu = tab.getByTestId('plugin-settings-mobile-category-menu');
+        await expect(menu).toBeVisible();
+        const rates = menu.getByTestId('plugin-settings-mobile-category-fx');
+        const ratesCount = Number(await rates.getAttribute('data-count'));
+        await rates.click();
+        await expect(menu, 'a choice closes the dropdown').toBeHidden();
+        await expect(tab.locator('[data-testid="plugin-settings-family"]:not([data-family="fx"])'), 'only the exchange-rate sources').toHaveCount(0);
+        await expect(forms).toHaveCount(ratesCount);
+    });
+});
+
+// =============================================================================
+// 1c. The «Calls» boxes by the width of their card (project 76, S1c; the developer, 19/11)
+// =============================================================================
+
+test.describe('Settings › Plugins — the «Calls» boxes follow their card (76 S1c)', () => {
+    /** Each window's box of justETF's «Calls» block: the box, its window name, its count and its limit's input. */
+    async function calls(page: Page) {
+        const block = page.getByTestId('plugin-settings-form-justetf').getByTestId('plugin-settings-calls');
+        await expect(block.getByTestId('plugin-settings-calls-input'), 'an administrator edits the five limits').toHaveCount(5);
+        return block.getByTestId('plugin-settings-calls-window').evaluateAll((boxes) =>
+            boxes.map((box) => {
+                const rect = (element: Element | null) => {
+                    const r = element!.getBoundingClientRect();
+                    return {left: r.left, top: r.top, right: r.right, bottom: r.bottom};
+                };
+                return {
+                    window: box.getAttribute('data-window'),
+                    box: rect(box),
+                    name: rect(box.firstElementChild),
+                    count: rect(box.querySelector('[data-testid="plugin-settings-calls-count"]')),
+                    input: rect(box.querySelector('[data-testid="plugin-settings-calls-input"]')),
+                };
+            }),
+        );
+    }
+    type Box = Awaited<ReturnType<typeof calls>>[number];
+    const sameRow = (a: {top: number; bottom: number}, b: {top: number; bottom: number}) => a.top < b.bottom && b.top < a.bottom;
+    /** How many boxes share the first box's row, then the next, …: the grid's rows. */
+    const rows = (boxes: Box[]) => {
+        const out: number[] = [];
+        let top = Number.NaN;
+        for (const box of boxes) {
+            if (Math.abs(box.box.top - top) <= 2) out[out.length - 1] += 1;
+            else {
+                out.push(1);
+                top = box.box.top;
+            }
+        }
+        return out;
+    };
+    /** A box as wide as its card's grid allows: the count on the window's row, the limit below. */
+    const countBesideNameLimitBelow = (box: Box) => sameRow(box.name, box.count) && box.count.left > box.name.right && box.input.top >= box.name.bottom - 1;
+    /** One row: the window, the count, the limit. */
+    const allOnOneRow = (box: Box) => sameRow(box.name, box.count) && sameRow(box.name, box.input) && box.input.left > box.count.left;
+
+    test('desktop five in a row; beside the menu at 768 three and two; on a phone one per row, all on its line', async ({page}) => {
+        await login(page, TEST_ADMIN);
+        await openPluginsTab(page);
+
+        await expect.poll(async () => rows(await calls(page)), {message: '1280: five boxes in a row'}).toEqual([5]);
+        for (const box of await calls(page)) expect(countBesideNameLimitBelow(box), `1280 ${box.window}: the count on the window's row, the limit below — ${JSON.stringify(box)}`).toBe(true);
+
+        await page.setViewportSize({width: 768, height: 1024});
+        await expect.poll(async () => rows(await calls(page)), {message: '768, the menu beside the card: three, then two'}).toEqual([3, 2]);
+        for (const box of await calls(page)) expect(countBesideNameLimitBelow(box), `768 ${box.window} — ${JSON.stringify(box)}`).toBe(true);
+
+        await page.setViewportSize({width: 390, height: 844});
+        await expect.poll(async () => rows(await calls(page)), {message: '390: one box per row'}).toEqual([1, 1, 1, 1, 1]);
+        for (const box of await calls(page)) expect(allOnOneRow(box), `390 ${box.window}: the window, the count and the limit on one line — ${JSON.stringify(box)}`).toBe(true);
+    });
+});
+
+// =============================================================================
 // 2–3. «Configure» on mockprov, from the asset dialog
 // =============================================================================
 

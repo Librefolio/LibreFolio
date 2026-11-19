@@ -34,7 +34,7 @@
  * function must leave what it is given as it was: a mutation throws instead of passing.
  */
 import {describe, expect, it, vi} from 'vitest';
-import {ChartColumn, Coins, IdCard, Share2} from 'lucide-svelte';
+import {ArrowRightLeft, ChartColumn, Coins, IdCard, Share2, SlidersHorizontal} from 'lucide-svelte';
 import en from '$lib/i18n/en.json';
 import itCatalogue from '$lib/i18n/it.json';
 import fr from '$lib/i18n/fr.json';
@@ -51,6 +51,10 @@ import {
     FAMILY_ICONS,
     FAMILY_ORDER,
     FAMILY_TITLE_KEYS,
+    filterByMenu,
+    MENU_ICONS,
+    MENU_TITLE_KEYS,
+    pluginMenu,
     fieldDescription,
     fieldLabel,
     groupByFamily,
@@ -247,6 +251,84 @@ describe('groupByFamily — the groups of the Plugins tab', () => {
 
         expect(FAMILY_ICONS.asset).toBe(ChartColumn);
         expect(FAMILY_ICONS.fx).toBe(Coins);
+    });
+});
+
+// --- The menu (project 76, S1b) ---------------------------------------------------------------------------------------
+
+describe("pluginMenu, filterByMenu — the menu of the Plugins tab (76 S1b, the developer's yes to mock S0)", () => {
+    const OK_ASSET = entry([], {plugin_code: 'justetf', configured: true});
+    const TODO_ASSET = entry([], {plugin_code: 'coingecko', configured: false});
+    const OK_FX = entry([], {family: 'fx', plugin_code: 'ecb', configured: true});
+    const TODO_GROUP = entry([], {family: 'group', plugin_code: 'coingecko', configured: false});
+    const ANSWER = frozen([TODO_GROUP, OK_FX, TODO_ASSET, OK_ASSET]);
+
+    it('lists «All», «To configure» and each family present, in FAMILY_ORDER, with its count and a dot where something is to configure', () => {
+        expect(pluginMenu(ANSWER)).toStrictEqual([
+            {id: 'all', count: 4, dot: false},
+            {id: 'unconfigured', count: 2, dot: false},
+            {id: 'asset', count: 2, dot: true},
+            {id: 'fx', count: 1, dot: false},
+            {id: 'group', count: 1, dot: true},
+        ]);
+    });
+
+    it('leaves «To configure» out when nothing is, unless it is the entry selected', () => {
+        const allConfigured = [OK_ASSET, OK_FX];
+        expect(pluginMenu(allConfigured).map((item) => item.id)).toEqual(['all', 'asset', 'fx']);
+        expect(pluginMenu(allConfigured, 'unconfigured').map((item) => [item.id, item.count])).toEqual([
+            ['all', 2],
+            ['unconfigured', 0],
+            ['asset', 1],
+            ['fx', 1],
+        ]);
+        expect(pluginMenu([])).toStrictEqual([{id: 'all', count: 0, dot: false}]);
+    });
+
+    it('keeps a selected family that has no entry any more, with 0', () => {
+        expect(pluginMenu([OK_FX], 'asset').map((item) => [item.id, item.count])).toEqual([
+            ['all', 1],
+            ['asset', 0],
+            ['fx', 1],
+        ]);
+    });
+
+    it('filters: «All» everything, «To configure» the entries not configured, a family its own; the input untouched', () => {
+        expect(filterByMenu(ANSWER, 'all')).toStrictEqual([TODO_GROUP, OK_FX, TODO_ASSET, OK_ASSET]);
+        expect(filterByMenu(ANSWER, 'unconfigured')).toStrictEqual([TODO_GROUP, TODO_ASSET]);
+        expect(filterByMenu(ANSWER, 'asset')).toStrictEqual([TODO_ASSET, OK_ASSET]);
+        expect(filterByMenu(ANSWER, 'tool')).toStrictEqual([]);
+    });
+
+    it("has a short title key for every family (the developer's D), and «All» and «To configure» keys", () => {
+        expect(MENU_TITLE_KEYS).toStrictEqual({
+            all: 'pluginSettings.menu.all',
+            unconfigured: 'pluginSettings.status.notConfigured',
+            asset: 'pluginSettings.menu.asset',
+            fx: 'pluginSettings.menu.fx',
+            brim: 'pluginSettings.menu.brim',
+            tool: 'pluginSettings.menu.tool',
+            enricher: 'pluginSettings.menu.enricher',
+            group: 'pluginSettings.menu.group',
+        });
+        for (const catalogue of [en, itCatalogue, fr, es] as Array<Record<string, unknown>>) {
+            for (const key of [...Object.values(MENU_TITLE_KEYS), 'pluginSettings.menu.hasUnconfigured', 'pluginSettings.menu.nothingUnconfigured']) {
+                expect(
+                    key.split('.').reduce<unknown>((node, part) => (node as Record<string, unknown> | undefined)?.[part], catalogue),
+                    key,
+                ).toBeTypeOf('string');
+            }
+        }
+    });
+
+    it('draws «To configure» with the sliders, each family with its own icon, «All» with none', () => {
+        expect(MENU_ICONS.all).toBeNull();
+        expect(MENU_ICONS.unconfigured).toBe(SlidersHorizontal);
+        for (const family of FAMILY_ORDER) expect(MENU_ICONS[family]).toBe(FAMILY_ICONS[family]);
+    });
+
+    it('draws the import sources with the Transactions icon (the developer, 19/11: what they import)', () => {
+        expect(FAMILY_ICONS.brim).toBe(ArrowRightLeft);
     });
 });
 

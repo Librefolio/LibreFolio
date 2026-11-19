@@ -21,6 +21,20 @@ and the central banks of the exchange rates, show their **Calls** block alone. A
 to your installation may ask for more. The tab also has a **Tools** group, for the [Tools](../tools/index.md) that have settings of their own; none of them does yet, so you will not see it today. When no plugin asks for anything, the tab says *No installed
 plugin asks for settings.*
 
+## 🧭 The Menu {: #menu }
+
+On the left of the tab, as in **Global Settings**, a menu chooses what the page shows:
+
+- **All**, every plugin;
+- **To configure**, only the plugins that still miss something (it appears when one does);
+- one family: **Prices**, **FX rates**, **Imports** (the broker import plugins, with the Transactions icon), **Tools**,
+  **Asset profile** and **Shared** (a settings card several plugins share, such as the
+  [CoinGecko account](coingecko-key.md)).
+
+Each entry shows how many plugins it holds; an amber dot marks a family with a plugin to configure. On a phone the
+menu is the **Category** list above the page. **Open** on a plugin's shared settings row shows them even when the menu
+hides them.
+
 ## 🧾 One Plugin, One Form {: #form }
 
 Each plugin has a form of its own: its icon and name (a puzzle piece when the plugin has no icon), a
@@ -141,7 +155,8 @@ work: **JustETF** and **Borsa Italiana** are always **Configured**.
 
 Every plugin that calls an outside service has a **Calls** block in its form, after its own settings: how many calls
 this LibreFolio has made to that service, and how many it may make. It has five boxes, **Minute**, **Hour**, **Day**,
-**Week** and **Month**, side by side (one under the other on a phone). Each shows the calls of the current window and
+**Week** and **Month**: five side by side on a wide screen, three and two where the card is narrower, one per line on
+a phone. Each shows the calls of the current window and
 its limit, *412 / 2,000*, or the calls alone and *No limit*.
 
 - **Calendar windows, in UTC**: the day starts again at 00:00 UTC, the week on Monday, the month on the 1st. The

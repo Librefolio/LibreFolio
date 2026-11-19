@@ -146,6 +146,17 @@
       "adminOnly": "Only an administrator can change the limits.",
       "invalid": "invalid value",
       "invalidBy": "{variable}: invalid value"
+    },
+    "menu": {
+      "all": "All",
+      "asset": "Prices",
+      "fx": "FX rates",
+      "brim": "Imports",
+      "tool": "Tools",
+      "enricher": "Asset profile",
+      "group": "Shared",
+      "hasUnconfigured": "Has plugins to configure",
+      "nothingUnconfigured": "Every plugin is configured."
     }
   }
 }
