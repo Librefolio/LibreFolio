@@ -76,6 +76,7 @@ from backend.app.services.brim_providers.broker_trading212.plugin import Trading
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction
 from backend.app.services.financial_math.price_marks import build_asset_price_series
+from backend.test_scripts.brim_charge_links import assert_charge_link_structure
 from backend.test_scripts.brim_samples import SampleDir
 from scripts.i18n_catalog import load_catalog
 
@@ -500,6 +501,17 @@ class TestBRIMPlugin:
             out1 = plugin.parse(sample, broker_id=1)
             out2 = plugin.parse(sample, broker_id=1)
             assert out1.model_dump(mode="json") == out2.model_dump(mode="json"), f"{code}: parse() is not idempotent on {sample.name}"
+
+    def test_parse_charge_links_are_well_formed(self, code: str, plugin: BRIMProvider):
+        """Linked charges (project 66, P1a contract §3 and §6.2): on every sample, every ``ref`` is unique, every
+        ``parent_ref`` names a ``ref`` of the same output, and every name fits its 36 characters. Green on every plugin
+        today (none links yet): the guard of P2–P6, where a plugin starts linking through ``_create_linked_charge``.
+        The domain rules of a link are the helper's (``charges.charge_link_issue``), not repeated here."""
+        samples = _representative_samples(plugin)
+        if not samples:
+            pytest.skip(f"No compatible sample report for {code}")
+        for sample in samples:
+            assert_charge_link_structure(plugin.parse(sample, broker_id=1), f"{code} [{sample.name}]")
 
     def test_parse_produces_valid_fake_ids(self, code: str, plugin: BRIMProvider):
         """Every asset_id key in extracted_assets must be a recognized fake id."""
