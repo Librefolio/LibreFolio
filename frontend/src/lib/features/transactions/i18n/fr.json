@@ -9,7 +9,8 @@
       "cash": "Espèces",
       "broker": "Courtier",
       "links": "Liens",
-      "unitPrice": "Prix unitaire"
+      "unitPrice": "Prix unitaire",
+      "chargesN": "{n, plural, one {# frais} other {# frais}}"
     },
     "actions": {
       "clone": "Cloner",
@@ -64,7 +65,10 @@
       "fxSend": "Conversion en {amount}",
       "generic": "Virement",
       "depositFrom": "Encaissement de {broker} ({currency})",
-      "withdrawalTo": "Retrait vers {broker} ({currency})"
+      "withdrawalTo": "Retrait vers {broker} ({currency})",
+      "chargeOf": "Frais de : {type} · {date}",
+      "chargesToggle": "Afficher ou masquer ses frais",
+      "chargeOfOther": "Frais d'une autre transaction"
     },
     "form": {
       "titleCreate": "Nouvelle transaction",

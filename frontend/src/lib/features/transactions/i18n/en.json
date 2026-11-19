@@ -9,7 +9,8 @@
       "cash": "Cash",
       "broker": "Broker",
       "links": "Links",
-      "unitPrice": "Unit price"
+      "unitPrice": "Unit price",
+      "chargesN": "{n, plural, one {# charge} other {# charges}}"
     },
     "actions": {
       "clone": "Clone",
@@ -64,7 +65,10 @@
       "fxSend": "Converting to {amount}",
       "generic": "Cash transfer",
       "depositFrom": "Cash in from {broker} ({currency})",
-      "withdrawalTo": "Cash out to {broker} ({currency})"
+      "withdrawalTo": "Cash out to {broker} ({currency})",
+      "chargeOf": "Charge of: {type} · {date}",
+      "chargesToggle": "Show or hide its charges",
+      "chargeOfOther": "Charge of another transaction"
     },
     "form": {
       "titleCreate": "New transaction",

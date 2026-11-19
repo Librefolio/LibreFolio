@@ -9,7 +9,8 @@
       "cash": "Efectivo",
       "broker": "Bróker",
       "links": "Enlaces",
-      "unitPrice": "Precio unitario"
+      "unitPrice": "Precio unitario",
+      "chargesN": "{n, plural, one {# gasto} other {# gastos}}"
     },
     "actions": {
       "clone": "Clonar",
@@ -64,7 +65,10 @@
       "fxSend": "Convirtiendo a {amount}",
       "generic": "Transferencia de fondos",
       "depositFrom": "Ingreso desde {broker} ({currency})",
-      "withdrawalTo": "Retiro hacia {broker} ({currency})"
+      "withdrawalTo": "Retiro hacia {broker} ({currency})",
+      "chargeOf": "Gasto de: {type} · {date}",
+      "chargesToggle": "Mostrar u ocultar sus gastos",
+      "chargeOfOther": "Gasto de otra transacción"
     },
     "form": {
       "titleCreate": "Nueva transacción",

@@ -9,7 +9,8 @@
       "cash": "Importo",
       "broker": "Broker",
       "links": "Link",
-      "unitPrice": "Prezzo unitario"
+      "unitPrice": "Prezzo unitario",
+      "chargesN": "{n, plural, one {# spesa} other {# spese}}"
     },
     "actions": {
       "clone": "Clona",
@@ -64,7 +65,10 @@
       "fxSend": "Conversione in {amount}",
       "generic": "Giroconto",
       "depositFrom": "Accredito da {broker} ({currency})",
-      "withdrawalTo": "Prelievo verso {broker} ({currency})"
+      "withdrawalTo": "Prelievo verso {broker} ({currency})",
+      "chargeOf": "Spesa di: {type} · {date}",
+      "chargesToggle": "Mostra o nasconde le sue spese",
+      "chargeOfOther": "Spesa di un'altra transazione"
     },
     "form": {
       "titleCreate": "Nuova transazione",
