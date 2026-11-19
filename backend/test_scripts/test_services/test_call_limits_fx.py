@@ -119,6 +119,7 @@ SHIPPED_FLAGS = {
     "BOC": True,
     "BANXICO": True,
     "CNB": True,
+    "SARB": True,
     "MANUAL": False,
     "MOCKFX": False,
     "MOCKFX_FAIL": False,
