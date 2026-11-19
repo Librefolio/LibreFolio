@@ -33,7 +33,7 @@ Without filters or sorting, the two rows of a linked pair (a transfer or a curre
 - **One row** — right-click it, or use its row actions: **View**, **Edit**, **Clone**, **Split pair** or **Delete**. You only see the actions your role on that broker allows.
 - **Several rows** — tick them, then choose **Edit**, **Clone** or **Delete** in the selection bar. **Edit** and **Delete** leave out the rows of brokers where you are only a Viewer.
 
-Each of these opens the bulk workspace, and nothing changes before **Save All**. Editing or deleting one side of a linked pair brings its partner along.
+Each of these opens the bulk workspace, and nothing changes before **Save All**. Editing or deleting one side of a linked pair brings its partner along. Deleting a transaction that has linked charges first asks what to do with them — see [Linked charges](#linked-charges).
 
 **Clone** keeps the original date: it is how you re-record a historical row, for example under another type.
 
@@ -51,6 +51,20 @@ Some operations are two linked transactions — see [Paired transactions](form.m
 - **Unlink** — **Split pair** on a linked row turns it back into two single rows. An **Asset Transfer** becomes two **Adjustments**: the receiving one keeps its cost, and the sending one takes the units out without a value: on its broker they only leave the quantity, and their cost counts as a realized loss (see [Outgoing Adjustments](../../financial-theory/instruments/transaction-types/adjustment.md#outgoing-adjustments)).
 
 Both ask for confirmation, then save at once, without the workspace.
+
+---
+
+## 📎 Linked charges {: #linked-charges }
+
+A **Fee** or a **Tax** can be linked to the transaction it was paid for, and stays a transaction of its own. What can be linked to what, and how the form shows it, is in [Linked charges](form.md#linked-charges).
+
+- **In the list** — while the table is not sorted and not filtered on the type, a transaction's charges fold under it. The badge **N charges** (or the 🔗 next to it) opens and closes them; each charge shows `↳`, and its 🔗 takes you to its transaction. Sort the table, or filter it on the type, and every charge is a row of its own again, still marked `↳`.
+- **Link** — tick one transaction and the charges that belong to it, then click **Link** in the selection bar. A window shows the rows and what they become; **Link** saves at once. When the selection cannot be linked — another broker, another asset, half of a pair, a charge already linked elsewhere, two transactions — **Link** is greyed out: tap it, or reach it with the keyboard, to read why.
+- **Delete** — when you delete a transaction whose charges are not all in your selection, from this page or from a broker's **Transactions** tab, a window asks first:
+    - **Keep the charges** — they stay, as transactions of their own, no longer linked;
+    - **Delete all (N)** — the charges go with it.
+
+    Either way the bulk workspace opens with the rows marked, and nothing changes before **Save All**. **Cancel** opens nothing.
 
 ---
 
@@ -104,6 +118,13 @@ The workspace is a grid of draft rows — marked **new**, **edit** or **del** �
 </div>
 
 After a save, a **Promote pair** or a **Split pair**, the Transactions page clears its selection, since those rows may have changed; closing or cancelling keeps it. If a **Promote pair** or a **Split pair** is refused, nothing changes: an error message says why, and the confirmation stays open.
+
+### 📎 Linked charges in the workspace {: #bulk-linked-charges }
+
+- **Grouped rows** — a transaction's charges sit under it in the grid: the chip **N charges** opens and closes the group, and each charge shows `↳`. They are saved with it, in the same **Save All**. The form's [Linked charges](form.md#linked-charges) section adds, links, unlinks and deletes them.
+- **Link** — tick one transaction and charges that are rows of their own (a charge under a transaction has no checkbox), then click **Link** above the grid. Rows not saved yet can be linked too: the window and the messages name a new row by its number, such as *row 3*. The link is written by **Save All**. A greyed-out **Link** says why on tap or with the keyboard; besides the reasons of the list, a row marked for deletion must be restored first.
+- **Delete** — **Mark for deletion** on a transaction with linked charges, or **Delete selected** with such a transaction among the rows, asks the same question as the list: **Keep the charges** or **Delete all**. **Restore** on the transaction brings back the charges that choice changed, also when the question was asked on the Transactions page or a broker's tab; a charge you deleted or unlinked yourself stays as you left it.
+- **A transaction that leaves the workspace** (a new one deleted, or **Remove from batch**) takes along the new charges you added in its form, unless you opened and applied one on its own. A charge you joined to it with **Link** stays, as a row of its own.
 
 ---
 
