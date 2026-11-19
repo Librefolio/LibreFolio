@@ -33,7 +33,6 @@ type SyntheticAsset = {
     currency: string;
     asset_type: 'STOCK';
     active: boolean;
-    has_metadata: boolean;
     provider_code: null;
     tx_count: number;
     tx_count_own: number;
@@ -55,7 +54,6 @@ function syntheticAsset(id: number, txCount = 0, txCountOwn = 0, options: Synthe
         currency: 'EUR',
         asset_type: 'STOCK',
         active: options.active ?? true,
-        has_metadata: false,
         provider_code: null,
         tx_count: txCount,
         tx_count_own: txCountOwn,

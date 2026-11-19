@@ -218,6 +218,18 @@ describe('AssetEnrichersModal — a row opened', () => {
         await waitFor(() => expect(screen.getByTestId('enricher-test-result-justetf').dataset.status).toBe('not_configured'));
     });
 
+    it('«Usa questi arricchitori» right after typing takes the identifier: no click lost waiting for the field to let the focus go (E7c)', async () => {
+        const {onapply} = mount();
+        await fireEvent.click(screen.getByTestId('enricher-add-esma'));
+        // Typed only: no «change», no blur — the user clicks the button straight after the last key
+        await fireEvent.input(screen.getByTestId('enricher-identifier-esma'), {target: {value: 'IE00BK5BQT80'}});
+        const button = screen.getByTestId('enrichers-apply') as HTMLButtonElement;
+        expect(button.disabled, 'the window must be valid as soon as the identifier is typed').toBe(false);
+        await fireEvent.click(button);
+        expect(onapply).toHaveBeenCalledOnce();
+        expect(onapply.mock.calls[0][0].esma).toEqual({identifier_type: 'ISIN', identifier: 'IE00BK5BQT80'});
+    });
+
     it('typing the identifier by hand changes the binding', async () => {
         const {onapply} = mount();
         await fireEvent.click(screen.getByTestId('enricher-edit-justetf'));

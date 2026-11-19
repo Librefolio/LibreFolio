@@ -613,3 +613,25 @@ def test_server_without_test_mode_keeps_the_probe_limit(monkeypatch, capsys, tmp
     ``LIBREFOLIO_PROBE_RATE_LIMIT``: the default 30 applies; only a test lane turns the limit off."""
     env = _server_env(monkeypatch, capsys, tmp_path, test_mode=False)
     assert PROBE_LIMIT_VARIABLE not in env, f"a server outside test mode got {PROBE_LIMIT_VARIABLE}={env.get(PROBE_LIMIT_VARIABLE)!r}"
+
+
+# The same lane switch for the enrichers (plan 68, E8a): at creation the asset window starts «Riconosci» by itself with
+# an ISIN, and the E2E suites and the gallery create assets with one. Only mockenrich answers on a lane, so no suite
+# reaches justETF, Borsa Italiana or Yahoo (the testing rules: never a third party over the network).
+ENRICHERS_VARIABLE = "LIBREFOLIO_ENRICHERS_ENABLED"
+
+
+def test_lane_server_serves_only_the_mock_enricher(monkeypatch, capsys, tmp_path):
+    """Red: ``./dev.py server --test`` hands the lane's server ``LIBREFOLIO_ENRICHERS_ENABLED=mockenrich`` (before: not
+    set, so every enricher answered, the real sites included)."""
+    monkeypatch.delenv(ENRICHERS_VARIABLE, raising=False)
+    env = _server_env(monkeypatch, capsys, tmp_path, test_mode=True)
+    assert env.get(ENRICHERS_VARIABLE) == "mockenrich", f"the lane's server got {ENRICHERS_VARIABLE}={env.get(ENRICHERS_VARIABLE)!r}"
+
+
+def test_server_without_test_mode_serves_every_enricher(monkeypatch, capsys, tmp_path):
+    """Guard: ``./dev.py server`` without ``--test``, the variable unset, hands the server no
+    ``LIBREFOLIO_ENRICHERS_ENABLED``: every enricher is active; only a test lane narrows them."""
+    monkeypatch.delenv(ENRICHERS_VARIABLE, raising=False)
+    env = _server_env(monkeypatch, capsys, tmp_path, test_mode=False)
+    assert ENRICHERS_VARIABLE not in env, f"a server outside test mode got {ENRICHERS_VARIABLE}={env.get(ENRICHERS_VARIABLE)!r}"

@@ -726,6 +726,9 @@ current key. The same rule serves both sides:
 - **The catalogue**: `configured` is `not missing_field_keys(states)`, judged on every field of the
   plugin, the ones the managed profile hides included: a yes or a no, which names none of them. The
   interface shows it as the badge **Configured** or **To configure** ([The Interface](#interface)).
+  Since U5b the entry also carries `reason` (`missing_fields`, `invalid_locked_setting`, or null when
+  configured), the readiness check's own (`readiness_reason()`, shared with `plugins_readiness()`), so
+  the catalogue and the boundary always agree on why.
 - **Before a call** (project 76, N1): `plugins_readiness(family, codes, user_id=…)` in `readiness.py`
   answers, for each plugin asked, a `PluginReadiness(configured, missing)`: the plugin's fields and the
   fields of the groups it reads, these as `<group>.<field>`, judged for that caller. It reads the rows
@@ -942,9 +945,13 @@ the plugin.
   hoster's limits stay invisible, the usage block does not (the same for a credit-sharing group). If
   the counts cannot be read, `call_usage` is null with one warning, never an error, and such an entry
   is not listed until they can.
-- **The interface does not show them yet**: the frontend's `pluginSettingsApi` leaves out
-  `CALL_LIMIT_KEYS`, an entry they alone filled, and an entry listed only for its usage block, until
-  U5 brings the «Calls» section.
+- **Every entry carries `reason`** (U5b): the readiness check's own reason, through the same function
+  (`readiness.readiness_reason`), so the catalogue and the boundary always agree. It is
+  `missing_fields`, `invalid_locked_setting` or null when configured, and it names no field.
+- **The interface** (U5): `PluginCallUsage.svelte` draws the five windows of `call_usage`, with the
+  limit fields as inputs an administrator saves with the card (`callUsage.ts` holds the rules). In the
+  managed profile, an entry whose `reason` is `invalid_locked_setting` shows the managed text on top,
+  the same for every user, with no button.
 - **For the tests**: `mockcount` is a test-only asset double that is counted (a class of its own, no
   plugin imports another: 100 USD every day, as mockprov),
   with the five fields. Only a suite that owns its limits uses it.

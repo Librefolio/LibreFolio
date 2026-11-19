@@ -153,11 +153,6 @@ export function limitsAdminOnly(boxes: readonly CallBox[]): boolean {
     return boxes.some((box) => box.control === 'text');
 }
 
-/** What a shown field leaves to fix: a required value unset, or a problem of its own. */
-function visiblyBroken(field: SettingField): boolean {
-    return field.problem !== null || (field.required && !field.is_set && field.value === null);
-}
-
 export interface CardProblem extends Message {
     kind: 'invalidLimitAdmin' | 'invalidMember' | 'managed';
 }
@@ -166,19 +161,18 @@ export interface CardProblem extends Message {
  * The red message at the top of a card whose provider is stopped (mock section 2.4), or null:
  *   - a limit variable the server refuses: named (the server names it to an administrator only) with the provider, or
  *     «stopped, tell the administrator» for another user — the texts of the common window (`notConfigured.ts`);
- *   - the managed profile (every limit hidden): not configured, with nothing shown that says why (no field to fix, no
- *     group) — the managed text, which names nothing.
+ *   - the managed profile: the catalogue's own reason (U5b), `invalid_locked_setting` — the managed text, which names
+ *     nothing, the same for everyone, with no button; any other reason shows nothing on top.
  */
-export function cardProblem(entry: PluginSettingsEntry, provider: string): CardProblem | null {
+export function cardProblem(entry: PluginSettingsEntry, provider: string, managed: boolean): CardProblem | null {
+    // U5b (the consultant, 19/11): in the managed profile the catalogue's own reason decides, the same for an administrator
+    // and a member, with no button: a variable of the hoster locks a field with an invalid value
+    if (managed) return entry.reason === 'invalid_locked_setting' ? {kind: 'managed', key: 'pluginSettings.notConfigured.managed', values: {provider}} : null;
     const invalid = entry.fields.filter((field) => isCallLimitField(field) && field.problem === 'invalid_env');
     if (invalid.length > 0) {
         const variables = invalid.map((field) => field.env_variable).filter((name): name is string => !!name);
         if (variables.length > 0) return {kind: 'invalidLimitAdmin', key: 'pluginSettings.notConfigured.invalidLimitAdmin', values: {provider, variable: variables.join(', ')}};
         return {kind: 'invalidMember', key: 'pluginSettings.notConfigured.invalidMember', values: {provider}};
-    }
-    const managed = entry.call_usage !== undefined && !entry.fields.some(isCallLimitField);
-    if (managed && !entry.configured && entry.groups.length === 0 && !entry.fields.some(visiblyBroken)) {
-        return {kind: 'managed', key: 'pluginSettings.notConfigured.managed', values: {provider}};
     }
     return null;
 }

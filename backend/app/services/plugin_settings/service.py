@@ -57,10 +57,10 @@ from backend.app.services.platform import call_counter
 from backend.app.services.platform.instance_key import InstanceKeyError
 from backend.app.services.platform.provider_registry import AbstractProviderRegistry
 from backend.app.services.plugin_settings.call_limits import CALL_LIMIT_KEYS
-from backend.app.services.plugin_settings.contract import qualified_missing
 from backend.app.services.plugin_settings.crypto import encrypt_secret, key_id_of, secret_aad, settings_subkey
 from backend.app.services.plugin_settings.fields import PluginSettingField, SettingScope, SettingType, SettingValueError, env_variables, validate_value
 from backend.app.services.plugin_settings.groups import GROUP_FAMILY, SettingsGroup, all_groups, is_withheld, plugin_groups, served_group
+from backend.app.services.plugin_settings.readiness import readiness_reason
 from backend.app.services.plugin_settings.resolver import FieldState, StoredValue, missing_field_keys, resolve_plugin_fields
 from backend.app.services.plugin_settings.runtime import stored_value
 from backend.app.services.tools.registry import ToolPluginRegistry
@@ -336,8 +336,9 @@ async def read_catalogue(session: AsyncSession, user: User, *, family: str | Non
         # U4b: an owner whose every field the managed profile hides keeps its entry, read-only, for its usage block
         if fields or names or usage is not None:
             # Judged on every field, the hidden ones and the groups' too: a yes or no, which names none of them (decision N2).
-            configured = not qualified_missing(missing_field_keys(states), {name: missing_field_keys(group_states[name]) for name in read})
-            entries.append(PluginSettingsPluginRead(family=plugin.family, plugin_code=plugin.code, plugin_name=plugin.name, icon_url=plugin.icon_url, configured=configured, fields=fields, groups=names, call_usage=usage))
+            # U5b: the reason is the boundary's own (readiness.readiness_reason), never one the interface guesses
+            reason = readiness_reason(states, {name: group_states[name] for name in read})
+            entries.append(PluginSettingsPluginRead(family=plugin.family, plugin_code=plugin.code, plugin_name=plugin.name, icon_url=plugin.icon_url, configured=reason is None, fields=fields, groups=names, call_usage=usage, reason=reason))
     for group in groups:
         states = group_states[group.name]
         fields = [_field_read(state, is_admin=user.is_superuser) for state in states if not (managed and state.locked)]
@@ -354,6 +355,7 @@ async def read_catalogue(session: AsyncSession, user: User, *, family: str | Non
                     fields=fields,
                     used_by=_group_users(group),
                     call_usage=group_usage,
+                    reason=readiness_reason(states, {}),
                 )
             )
     return PluginSettingsCatalogResponse(plugins=entries)

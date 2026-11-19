@@ -1090,3 +1090,61 @@ async def test_u4b_a_managed_credit_sharing_group_whose_limits_are_all_locked_ke
     assert [window[2] for window in windows] == [None] * 5, "no locked value is shown"
     assert [window[4] for window in windows] == [False, True, False, False, False]
     assert not [entry for entry in catalogue.plugins if entry.plugin_code == code], "the reader names no hidden group"
+
+
+# =============================================================================
+# 9. U5b — THE CATALOGUE CARRIES THE READINESS REASON (the consultant, 19/11)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_u5b_a_managed_entry_with_an_invalid_limit_variable_says_invalid_locked_setting_even_with_some_limits_shown(db: Db, admin: User, discovered: None, monkeypatch: pytest.MonkeyPatch):
+    """U5b: the entry carries the reason the readiness check gives (N1/N2), not one guessed by the interface. In the
+    managed profile, one limit locked by an invalid variable and the others free: ``reason`` is
+    ``invalid_locked_setting``, while some limit fields are still listed."""
+    monkeypatch.setenv("LIBREFOLIO_PROFILE", "managed")
+    monkeypatch.setenv(YF_HOUR_VARIABLE, "not-a-number")
+    monkeypatch.setattr(resolver, "_warned_invalid_env", set())
+
+    entry = _entry(await _catalogue(db, admin, family="asset", plugin_code="yfinance"), "asset", "yfinance")
+
+    assert entry.configured is False
+    assert [field.key for field in entry.fields if field.key.startswith("call_limit_")], "barrier: some limits are still listed"
+    assert entry.reason == "invalid_locked_setting"
+
+
+@pytest.mark.asyncio
+async def test_u5b_a_configured_entry_has_no_reason(db: Db, admin: User, discovered: None):
+    entry = _entry(await _catalogue(db, admin, family="asset", plugin_code="yfinance"), "asset", "yfinance")
+    assert (entry.configured, entry.reason) == (True, None)
+
+
+@pytest.mark.asyncio
+async def test_u5b_the_reason_is_the_readiness_checks_own(db: Db, admin: User, discovered: None, monkeypatch: pytest.MonkeyPatch):
+    """The same answer as the boundary's check (``plugins_readiness``), whatever the case: invalid variable, then valid."""
+    for value, expected in (("not-a-number", "invalid_locked_setting"), ("5", None)):
+        monkeypatch.setenv(YF_HOUR_VARIABLE, value)
+        monkeypatch.setattr(resolver, "_warned_invalid_env", set())
+        entry = _entry(await _catalogue(db, admin, family="asset", plugin_code="yfinance"), "asset", "yfinance")
+        check = (await readiness.plugins_readiness("asset", ["yfinance"], user_id=admin.id))["yfinance"]
+        assert entry.reason == check.reason == expected, value
+
+
+@pytest.mark.asyncio
+async def test_u5b_a_reader_of_a_credit_sharing_group_gets_the_groups_reason_as_the_boundary_does(db: Db, admin: User, discovered: None, monkeypatch: pytest.MonkeyPatch):
+    """CoinGecko's shape: the invalid variable is a limit of the shared group, not of the plugin. The reader's entry and
+    the group's entry say ``invalid_locked_setting``, and the reader's is the boundary check's own answer."""
+    register_group(SettingsGroup(name="u4_u5b_group", label="U5b group", shares_credits=True, fields=()))
+    code = _code("u5b_reader")
+    monkeypatch.setitem(AssetProviderRegistry._get_storage(), code, _reader_class(code, "u4_u5b_group"))
+    monkeypatch.setenv(env_name("group", "u4_u5b_group", "call_limit_hour"), "not-a-number")
+    monkeypatch.setattr(resolver, "_warned_invalid_env", set())
+
+    catalogue = await _catalogue(db, admin)
+    reader = _entry(catalogue, "asset", code)
+    group = _entry(catalogue, "group", "u4_u5b_group")
+    check = (await readiness.plugins_readiness("asset", [code], user_id=admin.id))[code]
+
+    assert check.reason == "invalid_locked_setting", "barrier: the boundary refuses the reader"
+    assert reader.reason == check.reason
+    assert group.reason == "invalid_locked_setting"

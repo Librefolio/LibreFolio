@@ -13,12 +13,9 @@ search it by name or ticker.
 - **Dividends and splits**: recorded as asset events. For a London line quoted in pence, the dividend is
   saved in pounds (1.95 pence is 0.0195 GBP).
 - **Search**: by name or ticker.
-- **Details**: type, currency, description, sector, ticker and, when Yahoo has it, the ISIN.
-- **Fund details**: for an ETF or a fund, the sector breakdown (a stock gets its single sector), the
-  fund's own description when Yahoo has no business summary for it, and at the end of the description
-  the expense ratio (`TER: 0.03%`) and the issuer (`Issuer: Vanguard`). Yahoo does not give every fund
-  its expense ratio — Vanguard FTSE All-World (`VWCE.DE`) has none — and then that part is left out.
-  The country breakdown comes only from [justETF](justetf.md).
+- **Details**: type, currency, ticker and, when Yahoo has it, the ISIN. The description, the sector
+  and a fund's sector breakdown are the asset's [profile data](../detail/classification.md), which
+  the Yahoo enricher reads.
 
 ## ✏️ Set It Up
 

@@ -1,20 +1,20 @@
 /**
  * Gallery, Assets — the Provider Data Comparison dialog (`assets/create-provider-compare`), as a new asset meets it
  * right after a Search Online result is picked (mkdocs_src/docs/user/assets/create-edit.en.md, «Check the provider's
- * data»): an identifier row with its main-code chooser, a Type row drawn as icon badges, a distribution row.
+ * data»): an identifier row with its main-code chooser, and a Type row drawn as icon badges.
  *
  * ## The flow
  *
- * Assets → Add asset; under More Info one sector row typed by hand (the editor's «+» gives the first sector at 100%),
- * as a user who starts describing the fund before searching; then the fund's ISIN typed into Search Online and the one
- * result picked. The pick (AssetModal.svelte, `applySearchResult`) fills the empty form from the result — name, type
- * ETF, currency, ticker `NWGE` — and asks the provider twice: a connection test (`current_price` + `history`,
- * `autoTriggerProbe`) and its details (`metadata`, `fetchAndCompareMetadata`). The details fill every field still
- * empty (the ISIN, the description, the geographic split) and three differ, so the comparison opens with three rows:
+ * Assets → Add asset; the fund's ISIN typed into Search Online and the one result picked. The pick (AssetModal.svelte,
+ * `applySearchResult`) fills the empty form from the result — name, type ETF, currency, ticker `NWGE` — and asks the
+ * provider twice: a connection test (`current_price` + `history`, `autoTriggerProbe`) and its details (`metadata`,
+ * `fetchAndCompareMetadata`). The details fill every field still empty (the ISIN) and two differ, so the comparison opens
+ * with two rows:
  * - `identifier_ticker`: `NWGE` from the search against `NWGE.MI`, the listing the provider's details name — two codes
  *   of one type, so the row is the chooser (IdentifierPrimaryChooser.svelte) with the provider's code proposed;
- * - `asset_type`: ETF against Equity ETF, a refinement, so it is offered (`isFamilyOnlyProposal` is false);
- * - `sector_area`: the sector typed by hand against the provider's split.
+ * - `asset_type`: ETF against Equity ETF, a refinement, so it is offered (`isFamilyOnlyProposal` is false).
+ * The provider's description and split are in its answer, as a real provider sends them, and the comparison leaves them
+ * alone: description, sectors and countries are the profile's, which the enrichers fill (plan 68, E9).
  * The ticker, not an ISIN, carries the identifier row: an ISIN row adds the placement-code note (`isIsin`), and on the
  * phone, where the dialog's body stays capped at 60vh, the Type row would then leave the screen.
  *
@@ -24,10 +24,10 @@
  *
  * ## The screen
  *
- * The dialog's body is capped at 60% of the screen (ProviderComparisonModal.svelte, `max-h-[60vh]`) and its three rows are
- * taller than that on either project. On the desktop only — coordinator's decision, provisional, the simulation shot's rule
+ * The dialog's body is capped at 60% of the screen (ProviderComparisonModal.svelte, `max-h-[60vh]`), and its rows can be
+ * taller than that. On the desktop only — coordinator's decision, provisional, the simulation shot's rule
  * (galleryRiskLab.ts, «Screens taller than the desktop's») — {@link fitScreenToCompareDialog} gives the shot a screen tall
- * enough for the body to stop scrolling, width and scale unchanged, so the whole dialog and its three rows are in one image;
+ * enough for the body to stop scrolling, width and scale unchanged, so the whole dialog and its rows are in one image;
  * {@link restoreCompareScreen} puts the project's screen back right after the shot. The mobile project keeps its phone,
  * with the body scrolled to the identifier row and the Type row (`revealRows`).
  *
@@ -63,13 +63,10 @@ export const COMPARE_FUND = {
     providerTicker: 'NWGE.MI',
     searchType: 'ETF',
     providerType: 'ETF_STOCK',
-    /** The provider's split, three sectors (FinancialSector names, so every language translates them). */
-    sectors: {Technology: '0.45', Financials: '0.30', 'Health Care': '0.25'},
-    countries: {USA: '0.68', JPN: '0.06', GBR: '0.04', Other: '0.22'},
 } as const;
 
-/** The three rows the dialog opens with, in its own order (ProviderComparisonModal.svelte, `DIFF_FIELD_SECTIONS`). */
-export const COMPARE_FIELDS = ['identifier_ticker', 'asset_type', 'sector_area'] as const;
+/** The two rows the dialog opens with, in its own order (ProviderComparisonModal.svelte, `DIFF_FIELD_SECTIONS`). */
+export const COMPARE_FIELDS = ['identifier_ticker', 'asset_type'] as const;
 
 const SEARCH_STREAM_PATH = '/api/v1/assets/provider/search/stream';
 const SEARCH_PATH = '/api/v1/assets/provider/search';
@@ -126,11 +123,6 @@ function metadataPatch() {
         asset_type: COMPARE_FUND.providerType,
         icon_url: null,
         quote_base_quantity: null,
-        classification_params: {
-            short_description: 'Global developed-market equities, physically replicated, accumulating.',
-            geographic_area: {distribution: {...COMPARE_FUND.countries}},
-            sector_area: {distribution: {...COMPARE_FUND.sectors}},
-        },
         active: null,
         is_benchmark: null,
         user_url: null,
@@ -259,7 +251,7 @@ async function revealRows(dialog: Locator): Promise<void> {
 
 /**
  * From the Assets page (loaded, its language and theme set), open the comparison as the module notes describe it and end on
- * it framed: its three rows, the provider's ticker proposed as the main code, the form behind it settled — the connection
+ * it framed: its two rows, the provider's ticker proposed as the main code, the form behind it settled — the connection
  * test passed, the details read — and the dialog done opening. Returns the dialog (`comparison-modal`, its backdrop).
  */
 export async function openProviderCompare(page: Page, motionSettled: MotionSettled): Promise<Locator> {
@@ -270,18 +262,6 @@ export async function openProviderCompare(page: Page, motionSettled: MotionSettl
     const search = modal.getByTestId('asset-tour-search');
     // Search Online asks only the providers it has listed: the list comes from the backend, after the modal opens.
     await expect(search.getByTestId(`asset-search-provider-${PROVIDER}`), `Search Online does not ask ${PROVIDER}`).toHaveAttribute('data-selected', 'true', {timeout: 10_000});
-
-    // More Info opens by itself only for an asset with identifiers: a new one starts closed.
-    const moreInfo = modal.getByTestId('asset-modal-more-info');
-    if ((await moreInfo.getAttribute('data-expanded')) !== 'true') await moreInfo.click();
-    await expect(moreInfo).toHaveAttribute('data-expanded', 'true');
-    const sectors = modal.getByTestId('distribution-editor-sector');
-    const typed = sectors.locator('[data-testid^="distribution-entry-sector-"]');
-    await expect(typed).toHaveCount(0);
-    await sectors.getByTestId('distribution-add-sector').click();
-    await expect(typed).toHaveCount(1);
-    const typedSector = ((await typed.getAttribute('data-testid')) ?? '').slice('distribution-entry-sector-'.length);
-    if (typedSector === '') throw new Error('the typed sector row carries no key');
 
     // The ISIN in Search Online (its input has no test id: it is the one text field of the search block), then the fund.
     await search.locator('[data-search-autocomplete] input[type="text"]').fill(COMPARE_FUND.isin);
@@ -294,7 +274,7 @@ export async function openProviderCompare(page: Page, motionSettled: MotionSettl
     const dialog = page.getByTestId('comparison-modal');
     await expect(dialog, 'the pick opened no comparison').toBeVisible({timeout: 15_000});
     const body = dialog.getByTestId('comparison-body');
-    await expect(body, 'the comparison does not hold exactly the three rows the provider contradicts').toHaveAttribute('data-total-count', String(COMPARE_FIELDS.length));
+    await expect(body, 'the comparison does not hold exactly the two rows the provider contradicts').toHaveAttribute('data-total-count', String(COMPARE_FIELDS.length));
     await expect(body, 'every row starts ticked').toHaveAttribute('data-selected-count', String(COMPARE_FIELDS.length));
     for (const field of COMPARE_FIELDS) await expect(body.locator(`[data-testid="comparison-card"][data-field="${field}"]`)).toHaveCount(1);
 
@@ -306,8 +286,6 @@ export async function openProviderCompare(page: Page, motionSettled: MotionSettl
     const providerType = body.getByTestId('comparison-provider-asset_type').getByTestId('comparison-type-badge');
     await expect(currentType).toHaveAttribute('data-type', COMPARE_FUND.searchType);
     await expect(providerType).toHaveAttribute('data-type', COMPARE_FUND.providerType);
-    await expect(body.getByTestId('comparison-current-sector_area').locator(`[data-testid="comparison-dist-entry"][data-dist-key="${typedSector}"]`)).toHaveAttribute('data-dist-pct', '100.00%');
-    await expect(body.getByTestId('comparison-provider-sector_area').getByTestId('comparison-dist-entry')).toHaveCount(Object.keys(COMPARE_FUND.sectors).length);
 
     // The form behind it settled: the details read, the connection test passed (its status icon is in the dimmed form).
     await expect(form).toHaveAttribute('data-busy', 'false');
@@ -346,7 +324,7 @@ const screensBeforeCompare = new WeakMap<Page, {width: number; height: number}>(
  * so the screen becomes tall enough for the whole body, `ceil((scrollHeight + 1) / 0.6)`, and for the whole dialog around it, never
  * shorter than the project's, width and scale unchanged — measured with the dialog still, every combination (its sentences wrap
  * differently in each language), and logged (📐) under `shot`. Ends on the body no longer scrolling, the dialog settled again and
- * the dialog and its three rows asserted whole in the shot. {@link restoreCompareScreen}, right after the shot, puts the
+ * the dialog and its rows asserted whole in the shot. {@link restoreCompareScreen}, right after the shot, puts the
  * project's screen back. Reverting the decision is deleting the one call in the spec.
  */
 export async function fitScreenToCompareDialog(page: Page, dialog: Locator, shot: string, motionSettled: MotionSettled): Promise<void> {

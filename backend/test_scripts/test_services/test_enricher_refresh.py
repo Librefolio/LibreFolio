@@ -91,7 +91,7 @@ from structlog.testing import capture_logs
 from backend.app.db.base import SQLModel  # imports every model, and backend.app.db.session with its PRAGMA listener
 from backend.app.db.models import Asset, AssetProfileUpdate, AssetType
 from backend.app.logging_config import get_logger
-from backend.app.services.assets.profile import store
+from backend.app.services.assets.profile import freshness, store
 from backend.app.services.assets.profile.catalogue import normalize_value
 from backend.app.services.enrichers import bindings, refresh
 from backend.app.services.enrichers.base import RATE_LIMITED, EnricherBinding, EnricherPlugin, EnricherReadItem, EnricherReadStatus, EnricherRecognition, EnricherTerms
@@ -1143,3 +1143,77 @@ async def test_a_new_per_voice_date_alone_writes_no_row(engine: AsyncEngine, lab
     assert [row.id for row in await _rows(engine, asset_id)] == before, "no new row"
     assert _row_summary(await _rows(engine, asset_id))["ter"][3] == VOICE_DATE, "the row keeps its first date"
     print_success("per-voice dates merged, cached, written; no row for a date alone")
+
+
+# =============================================================================
+# 9. Confirmations (lot D1d): when each source last gave each voice
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_an_ok_read_confirms_each_voice_it_gave_at_its_read(engine: AsyncEngine, lab) -> None:
+    """``state[code]["confirmed"]``: voice → the moment of the read that gave it; ``voices`` stays the count."""
+    identifier = _ident("C1")
+    a = lab("confirm", table={identifier: {"ter": "0.0022", "fund_size": FUND_SIZE}})
+    asset_id = await _asset(engine, "confirm")
+    await _bind(engine, asset_id, {a.code: _binding(identifier)})
+
+    await _refresh(engine, [asset_id], now=NOW)
+
+    entry = (await _state(engine, asset_id))[a.code]
+    assert entry["voices"] == 2, f"voices stays the count: {entry}"
+    assert {key: datetime.fromisoformat(moment) for key, moment in entry.get("confirmed", {}).items()} == {"ter": NOW, "fund_size": NOW}, f"each voice given, at the read: {entry}"
+
+
+@pytest.mark.asyncio
+async def test_the_same_answer_every_week_writes_no_row_and_stays_fresh(engine: AsyncEngine, lab) -> None:
+    """Forty days ago and now the source gives the same fund size: one row, opened forty days ago, confirmed now."""
+    identifier = _ident("C2")
+    a = lab("confirm_weekly", table={identifier: {"fund_size": FUND_SIZE}})
+    asset_id = await _asset(engine, "confirm weekly")
+    await _bind(engine, asset_id, {a.code: _binding(identifier)})
+    first = _result(await _refresh(engine, [asset_id], now=NOW - timedelta(days=40)), asset_id)
+    assert first.written == ["fund_size"], f"barrier: the first read writes: {first}"
+    clear_cache(CACHE_NAME)
+
+    second = _result(await _refresh(engine, [asset_id], now=NOW), asset_id)
+
+    assert second.written == [] and len(await _rows(engine, asset_id)) == 1, f"the same value writes no row: {second}"
+    async with AsyncSession(engine) as session:
+        today = await store.profile_today(session, NOW)
+        opened = await store.profile_today(session, NOW - timedelta(days=40))
+        result = (await freshness.voice_freshness(session, [asset_id], today=today)).get(asset_id, {})
+    assert result.get("fund_size") == freshness.VoiceFreshness(confirmed_on=today, stale=False, opened_on=opened), f"opened forty days ago, confirmed now, not stale: {result}"
+
+
+@pytest.mark.asyncio
+async def test_a_failed_read_keeps_the_last_confirmation(engine: AsyncEngine, lab) -> None:
+    """Read ok ten days ago, then an error: the state says the error, the confirmation of ten days ago stays."""
+    identifier = _ident("C3")
+    a = lab("confirm_then_error", table={identifier: {"fund_size": FUND_SIZE}})
+    asset_id = await _asset(engine, "confirm then error")
+    await _bind(engine, asset_id, {a.code: _binding(identifier)})
+    await _refresh(engine, [asset_id], now=NOW - timedelta(days=10))
+    a.table[identifier] = ERROR
+    clear_cache(CACHE_NAME)
+
+    await _refresh(engine, [asset_id], now=NOW)
+
+    entry = (await _state(engine, asset_id))[a.code]
+    assert entry["status"] == "error", f"barrier: the second read failed: {entry}"
+    assert datetime.fromisoformat(entry.get("confirmed", {}).get("fund_size", "1970-01-01T00:00:00+00:00")) == NOW - timedelta(days=10), f"the last confirmation stays: {entry}"
+
+
+@pytest.mark.asyncio
+async def test_a_read_of_some_voices_keeps_the_others_confirmation(engine: AsyncEngine, lab) -> None:
+    identifier = _ident("C4")
+    a = lab("confirm_partial", table={identifier: {"ter": "0.0022", "fund_size": FUND_SIZE}})
+    asset_id = await _asset(engine, "confirm partial")
+    await _bind(engine, asset_id, {a.code: _binding(identifier)})
+    await _refresh(engine, [asset_id], now=NOW - timedelta(days=10))
+    clear_cache(CACHE_NAME)
+
+    await _refresh(engine, [asset_id], now=NOW, keys={"ter"})
+
+    confirmed = {key: datetime.fromisoformat(moment) for key, moment in (await _state(engine, asset_id))[a.code].get("confirmed", {}).items()}
+    assert confirmed == {"ter": NOW, "fund_size": NOW - timedelta(days=10)}, f"ter confirmed now, fund_size kept: {confirmed}"

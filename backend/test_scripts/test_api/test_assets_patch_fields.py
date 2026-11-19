@@ -8,10 +8,9 @@ Tests for PATCH /api/v1/assets endpoint covering base fields:
 - icon_url
 - active
 
-Metadata fields (classification_params) are tested in test_assets_metadata.py
-
-Project 68, lot A4: one test proves the routes write ``classification_params`` into the asset profile in the
-authenticated user's name (the service cases: test_services/test_asset_profile_double_write.py).
+The description, countries and sectors are the asset's profile (plan 68): one test proves the routes write a
+``profile`` sent to ``POST`` and ``PATCH /assets`` in the authenticated user's name (the profile's own cases:
+test_assets_profile.py).
 """
 
 import httpx
@@ -31,7 +30,7 @@ from backend.app.schemas.assets.assets import (
     FABulkAssetPatchResponse,
     FAinfoResponse,
 )
-from backend.app.schemas.assets.metadata import FAAssetMetadataResponse, FAClassificationParams
+from backend.app.schemas.assets.metadata import FAAssetMetadataResponse
 
 # Test server fixture
 from backend.test_scripts.test_server_helper import _TestingServerManager
@@ -790,9 +789,9 @@ async def _profile_rows_of(asset_id: int) -> list[tuple[int, str, str, int | Non
 
 @pytest.mark.asyncio
 async def test_post_and_patch_write_the_profile_in_the_authenticated_users_name(test_server):
-    """Until D7, ``classification_params`` sent to ``POST /assets`` and ``PATCH /assets`` also enters the asset profile,
-    ``source='user'``, ``user_id`` the user of the session: the route passes it to the service. POST with description,
-    geography and sector → three rows by that user; PATCH of the sector alone → one more ``sector`` row by that user."""
+    """A ``profile`` sent to ``POST /assets`` and ``PATCH /assets`` is written ``source='user'``, ``user_id`` the user of
+    the session: the route passes it to the service. POST with description, geography and sector → three rows by that
+    user; PATCH of the sector alone → one more ``sector`` row by that user (plan 68, A4; since D7a through ``profile``)."""
     print_section("A4: POST/PATCH /assets write the profile in the user's name")
 
     async with httpx.AsyncClient() as client:
@@ -801,12 +800,8 @@ async def test_post_and_patch_write_the_profile_in_the_authenticated_users_name(
         assert me.status_code == 200, f"GET /auth/me: {me.status_code} {me.text}"
         user_id = me.json()["user"]["id"]
 
-        classification = FAClassificationParams(
-            short_description="Global developed-markets equity ETF",
-            geographic_area={"distribution": {"USA": "0.6", "JPN": "0.4"}},
-            sector_area={"distribution": {"Technology": "1"}},
-        )
-        create_item = FAAssetCreateItem(display_name=f"Profile Author {unique_id('A4')}", currency="EUR", asset_type=AssetType.ETF, classification_params=classification)
+        profile = {"description": "Global developed-markets equity ETF", "geography": {"USA": "0.6", "JPN": "0.4"}, "sector": {"Technology": "1"}}
+        create_item = FAAssetCreateItem(display_name=f"Profile Author {unique_id('A4')}", currency="EUR", asset_type=AssetType.ETF, profile=profile)
         create_resp = await client.post(f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT)
         assert create_resp.status_code == 201, f"POST /assets: {create_resp.status_code} {create_resp.text}"
         asset_id = FABulkAssetCreateResponse(**create_resp.json()).results[0].asset_id
@@ -815,9 +810,9 @@ async def test_post_and_patch_write_the_profile_in_the_authenticated_users_name(
         try:
             created = await _profile_rows_of(asset_id)
             found = sorted((key, source, author) for _, key, source, author in created)
-            assert found == [("description", "user", user_id), ("geography", "user", user_id), ("sector", "user", user_id)], f"red until A4: POST must write three user rows by user {user_id}: {found}"
+            assert found == [("description", "user", user_id), ("geography", "user", user_id), ("sector", "user", user_id)], f"POST must write three user rows by user {user_id}: {found}"
 
-            patch = [{"asset_id": asset_id, "classification_params": {"sector_area": {"distribution": {"Energy": "1"}}}}]
+            patch = [{"asset_id": asset_id, "profile": {"sector": {"Energy": "1"}}}]
             patch_resp = await client.patch(f"{API_BASE}/assets", json=patch, timeout=TIMEOUT)
             assert patch_resp.status_code == 200, f"PATCH /assets: {patch_resp.status_code} {patch_resp.text}"
             assert FABulkAssetPatchResponse(**patch_resp.json()).committed is True, patch_resp.text

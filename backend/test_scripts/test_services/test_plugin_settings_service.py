@@ -427,6 +427,7 @@ async def test_an_invalid_variable_leaves_the_plugin_not_configured_even_for_an_
 #: The icons of the shipped plugins that declare settings, today: what their ``get_icon`` gives, and ``GET /assets/provider`` publishes.
 SHIPPED_ICONS = {
     "borsa_italiana": "https://www.borsaitaliana.it/media-rwd/assets/images/favicon.ico",
+    "coingecko": "https://www.coingecko.com/favicon.ico",
     "justetf": "https://www.justetf.com/android-chrome-144x144.png?v2",
 }
 STAND_IN_CODE = "stand_in"
@@ -570,7 +571,7 @@ def test_every_settings_family_has_its_icon_attribute():
 
 
 def test_the_plugins_of_the_catalogue_carry_their_icons(monkeypatch: pytest.MonkeyPatch):
-    """1: ``_plugins``, no database: justetf and borsa_italiana with their own icons; mockprov, named, with none; MOCKFX,
+    """1: ``_plugins``, no database: justetf, borsa_italiana and coingecko with their own icons; mockprov, named, with none; MOCKFX,
     named, with none, then with the ``icon`` it is given here — the FX family's icon reaches the catalogue too."""
     print_section("1: the icons of the catalogue's plugins")
     listed = {(plugin.family, plugin.code): plugin.icon_url for plugin in service._plugins(None, None)}
@@ -584,16 +585,17 @@ def test_the_plugins_of_the_catalogue_carry_their_icons(monkeypatch: pytest.Monk
     assert {code: listed[("asset", code)] for code in SHIPPED_ICONS} == SHIPPED_ICONS
     assert (mockprov.family, mockprov.code, mockprov.icon_url) == ("asset", "mockprov", None)
     assert (mockfx.family, mockfx.icon_url, mockfx_with_an_icon.icon_url) == ("fx", None, FX_ICON)
-    print_success("justetf and borsa_italiana with their icons; mockprov none; MOCKFX's own icon reaches it")
+    print_success("justetf, borsa_italiana and coingecko with their icons; mockprov none; MOCKFX's own icon reaches it")
 
 
 @pytest.mark.asyncio
 async def test_each_entry_of_the_catalogue_carries_its_plugins_icon(engine: AsyncEngine, people: dict[str, User]):
-    """1: ``read_catalogue`` puts each plugin's icon in its entry: justetf's and borsa_italiana's own, none for mockprov."""
+    """1: ``read_catalogue`` puts each plugin's icon in its entry: justetf's, borsa_italiana's and coingecko's own, none for mockprov."""
     everything = await _catalogue(engine, people["alice"])
     mockprov = await _entry(engine, people["alice"], "mockprov")
 
-    icons = {plugin.plugin_code: plugin.icon_url for plugin in everything.plugins}
+    # By the asset family's entries: the shared group «coingecko» has the same code as its reader, and no icon of its own
+    icons = {plugin.plugin_code: plugin.icon_url for plugin in everything.plugins if plugin.family == "asset"}
     assert set(SHIPPED_ICONS) <= set(icons), f"the full catalogue lists {sorted(icons)}"
     assert {code: icons[code] for code in SHIPPED_ICONS} == SHIPPED_ICONS
     assert mockprov.icon_url is None
@@ -1008,8 +1010,10 @@ async def test_in_the_managed_profile_configured_counts_a_hidden_field_without_n
         assert [field.key for field in entry.fields] == [key for key in MOCKPROV_KEYS if key != "region"], name
         assert entry.configured is configured, name
         # Project 76, G2 adds the groups a plugin reads, the plugins a group serves and a group's name key: none of them
-        # names a field, missing or not; U4's call_usage holds counts and limits by window, no field's name either
-        assert set(entry.model_dump()) == {"family", "plugin_code", "plugin_name", "icon_url", "configured", "fields", "groups", "used_by", "name_key", "call_usage"}, "the entry has no place for a missing field's name"
+        # names a field, missing or not; U4's call_usage holds counts and limits by window, no field's name either; U5b's
+        # reason is one of two words (missing_fields, invalid_locked_setting), never a field's name
+        assert set(entry.model_dump()) == {"family", "plugin_code", "plugin_name", "icon_url", "configured", "fields", "groups", "used_by", "name_key", "call_usage", "reason"}, "the entry has no place for a missing field's name"
+        assert entry.reason in (None, "missing_fields", "invalid_locked_setting"), name
         assert "region" not in shown.lower() and REGION_VARIABLE not in shown and "atlantis" not in shown, f"{name}: the hidden field shows: {shown}"
     print_success(f"region hidden for everyone, configured={configured}, named nowhere")
 

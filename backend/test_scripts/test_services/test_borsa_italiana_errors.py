@@ -21,9 +21,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from bs4 import BeautifulSoup
 from borsa_italiana_scraping import StrumentoNonRisolto
 from borsa_italiana_scraping.eccezioni import ErroreConnessione, RateLimitRaggiunto
+from bs4 import BeautifulSoup
 
 from backend.app.db import IdentifierType
 from backend.app.db.models import AssetType, ProviderInputType
@@ -113,31 +113,6 @@ def _price_api(monkeypatch, answer):
 
 
 # ── pure helpers ─────────────────────────────────────────────────────────────
-
-
-def test_infer_country_from_issuer():
-    assert bi._infer_country_from_issuer(None) is None
-    assert bi._infer_country_from_issuer("") is None
-    assert bi._infer_country_from_issuer("Republic of Italy") == "ITA"  # exact
-    assert bi._infer_country_from_issuer("United States Of America") == "USA"  # exact, mixed case
-    assert bi._infer_country_from_issuer("The Federal Republic of Germany, Berlin") == "DEU"  # substring
-    assert bi._infer_country_from_issuer("Nowhere Land") is None
-
-
-def test_infer_sector():
-    assert bi._infer_sector(_scheda(settore="Technology")) == "Technology"  # stock
-    assert bi._infer_sector(_scheda(settore=None, tipologia="Government Bonds")) == "Government Bonds"
-    assert bi._infer_sector(_scheda(settore=None, tipologia="government")) == "Government Bonds"
-    assert bi._infer_sector(_scheda(settore=None, tipologia="t-bonds")) == "Government Bonds"
-    assert bi._infer_sector(_scheda(settore=None, tipologia="Italian Government Bonds")) == "Government Bonds"
-    assert bi._infer_sector(_scheda(settore=None, tipologia="Titoli di Stato Italiani")) == "Government Bonds"
-    assert bi._infer_sector(_scheda(settore=None, tipologia="corporate")) == "Corporate Bonds"
-    assert bi._infer_sector(_scheda(settore=None, tipologia="Corporate Bonds")) == "Corporate Bonds"
-    assert bi._infer_sector(_scheda(settore=None, tipologia="Obbligazioni Corporate")) == "Corporate Bonds"
-    assert bi._infer_sector(_scheda(settore=None, tipologia="Supranational Bonds")) == "Financials"
-    assert bi._infer_sector(_scheda(settore=None, tipologia="Obbligazioni Sovranazionali")) == "Financials"
-    assert bi._infer_sector(_scheda(settore=None, tipologia="Something Unmapped")) is None
-    assert bi._infer_sector(_scheda(settore=None, tipologia=None)) is None
 
 
 def test_select_period_thresholds():
@@ -496,14 +471,7 @@ async def test_metadata_scheda_bond_full(monkeypatch):
     assert result.currency == "EUR"  # from the price-API double
     assert result.identifier_isin == "IT0005436693"
     assert result.identifier_ticker == "BTP30"
-    sd = result.classification_params.short_description
-    assert "Market: MOT" in sd and "Issuer: Republic of Italy" in sd
-    assert "Maturity: 2030-03-01" in sd and "Annual coupon: 2.5%" in sd
-    assert "Structure: Fixed rate" in sd and "Coupon frequency: Semi-annual" in sd
-    # issuer → geographic area (ITA), tipologia → canonical bond sector
-    assert result.classification_params.geographic_area is not None
-    assert result.classification_params.sector_area is not None
-    assert set(result.classification_params.sector_area.distribution) == {"Government Bonds"}
+    # Plan 68, D6: description, countries and sectors are the enrichers' (the profile), never the price provider's
 
 
 # Trimmed copies of the real AT0000A1XML2 pages (Austria 2117, expiry «20/09/17» on the page):
@@ -529,25 +497,18 @@ class _FixtureSession:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("lingua", ["it", "en"])
-async def test_metadata_bond_maturity_after_2068_both_languages(monkeypatch, lingua):
-    """The description carries the real expiry (2117), not the 2-digit-year misreading (2017), in both languages."""
+async def test_metadata_reads_the_real_bond_page_in_both_languages(monkeypatch, lingua):
+    """The real AT0000A1XML2 pages are read in both languages: a bond, its ISIN, no classification (D6). Its expiry
+    (2117, not the 2-digit-year misreading 2017) is the Borsa Italiana enricher's, tested there (``austria_2117``)."""
     monkeypatch.setattr(bi, "_get_session", lambda: _FixtureSession())
     _price_api(monkeypatch, "EUR")
 
     result = await _provider().fetch_asset_metadata("AT0000A1XML2", IdentifierType.ISIN, {"language": lingua})
 
     assert result is not None
-    assert "Maturity: 2117-09-20" in result.classification_params.short_description
-
-
-@pytest.mark.asyncio
-async def test_metadata_scheda_long_description_truncated(monkeypatch):
-    scheda = _scheda(descrizione="D" * 600, isin="IT0005436693", ticker=None)
-    monkeypatch.setattr(bi, "ottieni_scheda", lambda ident, mic=None, lingua=None, sessione=None, platform=None, url_diretto=None: scheda, raising=False)
-    result = await _provider().fetch_asset_metadata("IT0005436693", IdentifierType.ISIN)
-    sd = result.classification_params.short_description
-    assert len(sd) == 500 and sd.endswith("...")
-    assert result.identifier_ticker is None
+    assert result.asset_type == AssetType.BOND
+    assert result.identifier_isin == "AT0000A1XML2"
+    assert result.display_name
 
 
 @pytest.mark.asyncio
@@ -575,18 +536,14 @@ async def test_metadata_scheda_unresolved_page_raises_unsupported(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_metadata_scheda_minimal_no_optional_fields(monkeypatch):
-    # tipo/nome/valuta only — every optional description field is None, so the
-    # description stays None and no geographic/sector area is built. The currency
-    # is the chart API's answer, not the scheda's (K step 13, item 3b).
+    # tipo/nome/valuta only. The currency is the chart API's answer, not the
+    # scheda's (K step 13, item 3b).
     scheda = _scheda(tipo="Azione", nome="ENEL", valuta="EUR", isin="IT0003128367")
     monkeypatch.setattr(bi, "ottieni_scheda", lambda ident, mic=None, lingua=None, sessione=None, platform=None, url_diretto=None: scheda, raising=False)
     _price_api(monkeypatch, "EUR")
     result = await _provider().fetch_asset_metadata("IT0003128367", IdentifierType.ISIN)
     assert result.asset_type == AssetType.STOCK
     assert result.currency == "EUR"  # from the price-API double
-    assert result.classification_params.short_description is None
-    assert result.classification_params.geographic_area is None
-    assert result.classification_params.sector_area is None
 
 
 # ── fund metadata (by internal code) ─────────────────────────────────────────
@@ -617,19 +574,7 @@ async def test_fund_metadata_happy(monkeypatch):
     assert result.currency == "EUR"
     assert result.identifier_isin == "IT0001111111"
     assert result.identifier_other == ["ABC123"]
-    sd = result.classification_params.short_description
-    assert "ISIN: IT0001111111" in sd
-    assert "Categoria: Azionario Italia" in sd
-    assert "Società di Gestione — Gestore: Eurizon" in sd
-    assert "Costi — TER: 1.20%" in sd
-
-
-@pytest.mark.asyncio
-async def test_fund_metadata_long_description_truncated(monkeypatch):
-    monkeypatch.setattr(bi, "ottieni_dati_fondo", lambda codice, sessione=None: _fund_ns(costi={"Note": "x" * 600}), raising=False)
-    result = await _provider().fetch_asset_metadata("IT0001111111", IdentifierType.ISIN, {"codice_fondo": "ABC123"})
-    sd = result.classification_params.short_description
-    assert len(sd) == 500 and sd.endswith("...")
+    assert result.display_name.startswith("Eurizon PIR Italia")
 
 
 @pytest.mark.asyncio
@@ -640,16 +585,6 @@ async def test_fund_metadata_fetch_fails_returns_none(monkeypatch):
     monkeypatch.setattr(bi, "ottieni_dati_fondo", boom, raising=False)
     result = await _provider().fetch_asset_metadata("IT0001111111", IdentifierType.ISIN, {"codice_fondo": "ABC123"})
     assert result is None
-
-
-def test_build_fund_description_missing_name_and_isin():
-    p = _provider()
-    # nome + isin both falsy → only the section entries survive.
-    ns = SimpleNamespace(nome=None, isin=None, caratteristiche={"Categoria": "X"}, societa_gestione=None, costi=None)
-    assert p._build_fund_description(ns) == "Categoria: X"
-    # nothing at all → None.
-    empty = SimpleNamespace(nome=None, isin=None, caratteristiche=None, societa_gestione=None, costi=None)
-    assert p._build_fund_description(empty) is None
 
 
 # ── search error / dedup / general-item paths ────────────────────────────────
@@ -877,7 +812,6 @@ async def test_metadata_currency_unknown_when_price_api_fails(monkeypatch, api_e
     assert result.asset_type == AssetType.ETF
     assert result.identifier_isin == isin
     assert result.identifier_ticker == "SWDA"
-    assert result.classification_params.short_description == "Market: ETFplus"
     # the API was asked, and its failure is what left the currency unknown
     assert len(calls) == 1
 

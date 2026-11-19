@@ -48,6 +48,13 @@
  * no longer exists: the removal disconnects the linked transactions, and its 409s are the split refusal (said inline,
  * as the assignment's) and the conflict.
  *
+ * «Riconosci» of the enrichers (plan 68, E8a) starts by itself at creation with a whole ISIN, which several cases here
+ * have: it is incidental traffic, like the plugin settings read. Its stream (`./enrichers/recognizeStream`) answers an
+ * empty `done` at once, and the two catalogues it reads (`GET /assets/enrichers`, `GET /assets/profile/catalogue`)
+ * are routed empty, so these cases stay about the probe; the enrichers' own cases are `AssetModal.enrichers.test.ts`.
+ * In edit mode the window also reads the profile of today (plan 68, E9: the description field shows it): routed to an
+ * empty profile, incidental like the catalogues; the description's own cases are `AssetModal.profile.test.ts`.
+ *
  * «Ask provider» refused for too many probes (workstream X, X-R66) — red until
  * X-R66: the metadata probe refused with 429 PROBE_RATE_LIMITED is toasted as
  * the catalogue's PROBE_RATE_LIMITED, with the time the pause ends, instead of
@@ -87,6 +94,9 @@ type ResultStatus = 'success' | 'error' | 'warning';
 type SearchProps = ComponentProps<typeof AssetSearchAutocomplete>;
 type SearchSelection = Parameters<NonNullable<SearchProps['onselect']>>[0];
 
+const recognizeStream = vi.hoisted(() => ({recognizeEnrichers: vi.fn()}));
+vi.mock('./enrichers/recognizeStream', () => recognizeStream);
+
 const mocks = vi.hoisted(() => ({
     // Explicit facade: even forbidden mutation/search/reference requests are
     // recorded before throwing, because the product catches several of them.
@@ -109,6 +119,11 @@ const mocks = vi.hoisted(() => ({
         list_sectors_api_v1_utilities_sectors_get: vi.fn(),
         list_files_api_v1_uploads_get: vi.fn(),
         get_plugin_settings_api_v1_settings_plugins_get: vi.fn(),
+        // Plan 68 E8a: the catalogues «Riconosci» reads, incidental here
+        list_enrichers_api_v1_assets_enrichers_get: vi.fn(),
+        profile_catalogue_api_v1_assets_profile_catalogue_get: vi.fn(),
+        // Plan 68 E9: in edit mode the window reads the profile of today (the description field), incidental here
+        query_profile_api_v1_assets_profile_query_post: vi.fn(),
     },
     axios: {request: vi.fn(), get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn()},
     providers: {
@@ -598,7 +613,28 @@ function probeResponse(value = '42.50'): ProbeResponse {
     };
 }
 
-function metadataResponse(name: string, description: string): ProbeResponse {
+/**
+ * The logo a read brings, by a word that names the read. The asset has no icon, so the logo fills it: the positive
+ * barrier that this very read was accepted. (It was the description until plan 68 E9: the description is the
+ * profile's now, and «Chiedi al Provider» no longer reads it.)
+ */
+const PROVIDER_ICONS = 'https://icons.provider.invalid/';
+function acceptedIcon(read: string): string {
+    return `${PROVIDER_ICONS}${encodeURIComponent(read)}.png`;
+}
+
+/** Whether the form shows the logo of `read` (the asset's picture beside the name). */
+function iconShown(read: string): boolean {
+    return screen.getByTestId('asset-tour-identity').querySelector(`img[src="${acceptedIcon(read)}"]`) !== null;
+}
+
+/** Whether the form shows any logo a read brought: none, when every read was refused. */
+function providerIconShown(): boolean {
+    return screen.getByTestId('asset-tour-identity').querySelector(`img[src^="${PROVIDER_ICONS}"]`) !== null;
+}
+
+/** A metadata answer: `name`, and the logo of `read` (none for an empty `read`). */
+function metadataResponse(name: string, read: string): ProbeResponse {
     return {
         provider_code: 'lifecycle_atlas',
         identifier: 'SYN-ATLAS',
@@ -610,7 +646,7 @@ function metadataResponse(name: string, description: string): ProbeResponse {
                 display_name: name,
                 asset_type: 'STOCK',
                 currency: 'USD',
-                classification_params: {short_description: description},
+                ...(read ? {icon_url: acceptedIcon(read)} : {}),
             },
         },
     };
@@ -620,8 +656,8 @@ function expectProbe(label: string, response: ProbeResponse = probeResponse(), p
     return plan(label, routes.verification, [probeRequest(['current_price', 'history'], params)], response);
 }
 
-function expectMetadata(label: string, name: string, description: string, params: ProbeRequest['provider_params'] = {note: 'owned note'}) {
-    return plan(label, routes.metadata, [probeRequest(['metadata'], params)], metadataResponse(name, description));
+function expectMetadata(label: string, name: string, read: string, params: ProbeRequest['provider_params'] = {note: 'owned note'}) {
+    return plan(label, routes.metadata, [probeRequest(['metadata'], params)], metadataResponse(name, read));
 }
 
 function expectReady() {
@@ -767,6 +803,12 @@ beforeEach(() => {
         checkArguments('incidental provider settings read', args, expectedSettingsRead(args));
         return Promise.resolve({plugins: []});
     });
+    // Plan 68 E8a: «Riconosci» is incidental here (see the header): empty catalogues, an empty answer
+    mocks.api.list_enrichers_api_v1_assets_enrichers_get.mockImplementation(() => Promise.resolve({enrichers: [], default_order: {}}));
+    mocks.api.profile_catalogue_api_v1_assets_profile_catalogue_get.mockImplementation(() => Promise.resolve({voices: []}));
+    // Plan 68 E9: the profile of today, read at open in edit mode for the description field: an empty profile
+    mocks.api.query_profile_api_v1_assets_profile_query_post.mockImplementation(() => Promise.resolve({as_of: '2026-11-18T10:00:00Z', items: []}));
+    recognizeStream.recognizeEnrichers.mockReset().mockResolvedValue({kind: 'done', done: null});
 
     const currencies: CurrencyInfo[] = [
         {code: 'USD', name: 'US dollar', symbol: '$', flag_emoji: '🇺🇸', country_codes: ['US'], country_names: ['United States']},
@@ -881,54 +923,6 @@ describe('AssetModal import-prefill name initialization', () => {
 });
 
 describe('AssetModal provider lifecycle', () => {
-    it.each([false, true])('ignores reordered equal distributions but offers a genuine weight change (changed=%s)', async (changed) => {
-        await renderEdit(
-            editFixture({
-                classification_params: {
-                    sector_area: {distribution: {Technology: 0.4, Health: 0.6}},
-                    geographic_area: {distribution: {USA: 0.7, FRA: 0.3}},
-                },
-            }),
-        );
-        const response: ProbeResponse = {
-            provider_code: 'lifecycle_atlas',
-            identifier: 'SYN-ATLAS',
-            total_execution_time_ms: 4,
-            metadata: {
-                success: true,
-                execution_time_ms: 4,
-                patch_data: {
-                    display_name: 'OWNED ATLAS SECURITY',
-                    asset_type: 'STOCK',
-                    currency: 'USD',
-                    classification_params: {
-                        short_description: 'Current metadata accepted',
-                        sector_area: {distribution: changed ? {Health: '0.4', Technology: '0.6'} : {Health: '0.6', Technology: '0.4'}},
-                        geographic_area: {distribution: {FRA: '0.3', USA: '0.7'}},
-                    },
-                },
-            },
-        };
-        const metadata = plan('unordered metadata distributions', routes.metadata, [probeRequest(['metadata'])], response);
-        await fireEvent.click(screen.getByTestId('asset-modal-ask-provider'));
-        expectBusy(true);
-        await metadata.finish();
-        expectBusy(false);
-        // Prove this very response was accepted before asserting no false dialog.
-        expect(screen.getByTestId('asset-modal-description')).toHaveValue('Current metadata accepted');
-        expect(screen.getByTestId('asset-modal-display-name')).toHaveValue('OWNED ATLAS SECURITY');
-        if (changed) {
-            expect(screen.getByTestId('comparison-modal')).toBeVisible();
-            expect(screen.getByTestId('comparison-body')).toHaveAttribute('data-total-count', '1');
-            expect(screen.getByTestId('comparison-checkbox-sector_area')).toBeChecked();
-            expect(screen.queryByTestId('comparison-checkbox-geographic_area')).toBeNull();
-        } else {
-            expect(screen.queryByTestId('comparison-modal')).toBeNull();
-            expect(mocks.toasts.success).toHaveBeenCalledTimes(1);
-        }
-        assertTraffic();
-    });
-
     it('shares automatic/manual verification, retains manual details on remount, and clears effective provider changes', async () => {
         render(AssetModal, {open: true});
         await referenceReady;
@@ -960,7 +954,7 @@ describe('AssetModal provider lifecycle', () => {
         // Metadata is independent: its completion clears busy, not verification.
         await metadata.finish();
         expect(screen.getByTestId('asset-modal-display-name')).toHaveValue('OFFLINE ATLAS SECURITY');
-        expect(screen.getByTestId('asset-modal-description')).toHaveValue('Automatic metadata accepted');
+        expect(iconShown('Automatic metadata accepted')).toBe(true);
         expectBusy(false);
         expectStatus('testing');
         await automatic.finish();
@@ -1068,24 +1062,16 @@ describe('AssetModal provider lifecycle', () => {
         assertTraffic();
     });
 
-    it.each([
-        {field: 'display_name', revert: false},
-        {field: 'display_name', revert: true},
-        {field: 'short_description', revert: false},
-        {field: 'short_description', revert: true},
-    ] as const)('offers a diff for manually edited $field (revert=$revert) without autofilling it', async ({field, revert}) => {
+    it.each([false, true])('offers a diff for a manually edited name (revert=%s) without autofilling it', async (revert) => {
+        const field = 'display_name';
         await renderEdit();
-        const editingName = field === 'display_name';
-        const touchedId = editingName ? 'asset-modal-display-name' : 'asset-modal-description';
-        const untouchedId = editingName ? 'asset-modal-description' : 'asset-modal-display-name';
-        const initialValue = editingName ? 'Owned Atlas security' : '';
-        const manualValue = editingName ? 'User-selected name' : 'User-written description';
+        const touchedId = 'asset-modal-display-name';
+        const initialValue = 'Owned Atlas security';
+        const manualValue = 'User-selected name';
         // Case-only metadata would normally normalize a matching value. A manual
-        // edit made in flight must suppress even that overwrite. Reverting an
-        // emptied description exercises the otherwise-automatic empty-field fill.
-        const providerName = editingName && !revert ? 'USER-SELECTED NAME' : 'OWNED ATLAS SECURITY';
-        const providerDescription = editingName ? 'Untouched description enriched' : revert ? 'Provider description after manual clearing' : 'USER-WRITTEN DESCRIPTION';
-        const metadata = expectMetadata('field-level metadata intent', providerName, providerDescription);
+        // edit made in flight must suppress even that overwrite.
+        const providerName = !revert ? 'USER-SELECTED NAME' : 'OWNED ATLAS SECURITY';
+        const metadata = expectMetadata('field-level metadata intent', providerName, 'Untouched icon enriched');
         expect(screen.getByTestId(touchedId)).toHaveValue(initialValue);
         expect(screen.getByTestId('asset-modal-ask-provider')).toBeEnabled();
         await fireEvent.click(screen.getByTestId('asset-modal-ask-provider'));
@@ -1096,13 +1082,12 @@ describe('AssetModal provider lifecycle', () => {
         if (revert) await input(touchedId, initialValue);
         await metadata.finish();
 
-        // Positive acceptance barrier: the OTHER field really changed. For an
-        // untouched name this is a case-only enrichment, not a legitimate diff.
-        expect(screen.getByTestId(untouchedId)).toHaveValue(editingName ? providerDescription : providerName);
+        // Positive acceptance barrier: the untouched icon really changed.
+        expect(iconShown('Untouched icon enriched')).toBe(true);
         expectBusy(false);
         expect(screen.getByTestId('asset-modal-ask-provider')).toBeEnabled();
         const retainedValue = revert ? initialValue : manualValue;
-        const offeredValue = editingName ? providerName : providerDescription;
+        const offeredValue = providerName;
         expect(screen.getByTestId(touchedId)).toHaveValue(retainedValue);
         // The request is still current, but this field has newer manual intent:
         // offer the provider value through the REAL comparison, never autofill.
@@ -1110,9 +1095,7 @@ describe('AssetModal provider lifecycle', () => {
         expect(screen.getByTestId('comparison-body')).toHaveAttribute('data-total-count', '1');
         expect(screen.getByTestId(`comparison-checkbox-${field}`)).toBeChecked();
         expect(screen.getByTestId(`comparison-provider-${field}`)).toHaveTextContent(offeredValue);
-        if (retainedValue !== '') {
-            expect(screen.getByTestId(`comparison-current-${field}`)).toHaveTextContent(retainedValue);
-        }
+        expect(screen.getByTestId(`comparison-current-${field}`)).toHaveTextContent(retainedValue);
         expect(screen.getByTestId('comparison-apply')).toBeEnabled();
         metadata.assertUnchanged();
 
@@ -1120,7 +1103,7 @@ describe('AssetModal provider lifecycle', () => {
         await fireEvent.click(screen.getByTestId('comparison-apply'));
         await flushUi();
         expect(screen.getByTestId(touchedId)).toHaveValue(offeredValue);
-        expect(screen.getByTestId(untouchedId)).toHaveValue(editingName ? providerDescription : providerName);
+        expect(iconShown('Untouched icon enriched')).toBe(true);
         expect(screen.queryByTestId('comparison-modal')).toBeNull();
         assertTraffic();
     });
@@ -1168,7 +1151,7 @@ describe('AssetModal provider lifecycle', () => {
         expectBusy(true);
         expect(screen.getByTestId('asset-modal-ask-provider')).toBeDisabled();
         expect(screen.getByTestId('asset-modal-display-name')).toHaveValue('Owned Atlas security');
-        expect(screen.getByTestId('asset-modal-description')).toHaveValue('');
+        expect(providerIconShown(), 'a refused read lands nothing').toBe(false);
         expect(screen.queryByTestId('provider-test-result')).toBeNull();
         expect(screen.queryByTestId('comparison-modal')).toBeNull();
 
@@ -1178,7 +1161,7 @@ describe('AssetModal provider lifecycle', () => {
         expectBusy(true);
         await freshMetadata.finish();
         expect(screen.getByTestId('asset-modal-display-name')).toHaveValue('OWNED ATLAS SECURITY');
-        expect(screen.getByTestId('asset-modal-description')).toHaveValue('Reopened draft enrichment');
+        expect(iconShown('Reopened draft enrichment')).toBe(true);
         expectBusy(false);
         expect(screen.getByTestId('asset-modal-ask-provider')).toBeEnabled();
         expect(view.onupdated).not.toHaveBeenCalled();
@@ -1207,7 +1190,7 @@ describe('AssetModal provider lifecycle', () => {
         expect(screen.getByTestId('provider-identifier')).toHaveValue('SYN-ATLAS');
         expect(screen.getByTestId('param-note')).toHaveValue('owned note');
         expect(screen.getByTestId('asset-modal-display-name')).toHaveValue('Owned Atlas security');
-        expect(screen.getByTestId('asset-modal-description')).toHaveValue('');
+        expect(providerIconShown(), 'a refused read lands nothing').toBe(false);
         const parentStatus = screen.getByTestId('asset-modal-provider-status').getAttribute('data-status');
         const childStatus = screen.getByTestId('provider-test-config').getAttribute('data-status');
         expect(['not_tested', 'testing']).toContain(parentStatus);
@@ -1231,7 +1214,7 @@ describe('AssetModal provider lifecycle', () => {
         expectBusy(true);
         await freshMetadata.finish();
         expect(screen.getByTestId('asset-modal-display-name')).toHaveValue('OWNED ATLAS SECURITY');
-        expect(screen.getByTestId('asset-modal-description')).toHaveValue('Current session enrichment');
+        expect(iconShown('Current session enrichment')).toBe(true);
         expectBusy(false);
         expect(screen.getByTestId('asset-modal-ask-provider')).toBeEnabled();
         assertTraffic();
@@ -1307,7 +1290,7 @@ describe('AssetModal provider lifecycle', () => {
         await metadata.finish();
         expectStatus(verification === 'passed' ? 'passed' : 'not_tested');
         expect(screen.getByTestId('asset-modal-display-name')).toHaveValue('Saved owned security');
-        expect(screen.getByTestId('asset-modal-description')).toHaveValue('');
+        expect(providerIconShown(), 'a refused read lands nothing').toBe(false);
         expectBusy(true);
         expect(screen.queryByTestId('comparison-modal')).toBeNull();
         if (verification === 'passed') expectResults(['success', 'success'], '19.25');
@@ -1357,7 +1340,7 @@ describe('AssetModal provider lifecycle', () => {
     });
 
     it('closes a real valid comparison on public draft switch and accepts only a new draft choice', async () => {
-        const view = await renderEdit(editFixture({classification_params: {short_description: 'Stored description'}}));
+        const view = await renderEdit(editFixture());
         const oldMetadata = expectMetadata('valid old-draft conflict', 'Provider comparison title', 'Stored description');
         await fireEvent.click(screen.getByTestId('asset-modal-ask-provider'));
         await oldMetadata.finish();
@@ -1375,7 +1358,7 @@ describe('AssetModal provider lifecycle', () => {
         await flushUi();
         expectReady();
         expect(screen.getByTestId('asset-modal-display-name')).toHaveValue('Replacement draft security');
-        expect(screen.getByTestId('asset-modal-description')).toHaveValue('');
+        expect(providerIconShown(), 'a refused read lands nothing').toBe(false);
         expect(screen.getByTestId('asset-modal-form')).toHaveAttribute('data-dirty', 'false');
         expectStatus('not_tested');
         expect(screen.queryByTestId('comparison-modal')).toBeNull();
@@ -1448,7 +1431,7 @@ const STORED_ISIN = 'IT0000000004';
 const REPORT_NAME = 'Report synthetic bond';
 const SELECTION_NAME = 'Offline quoted security';
 const PROVIDER_TITLE = 'Provider metadata title';
-const ACCEPTED_DESCRIPTION = 'Selection metadata accepted';
+const ACCEPTED_READ = 'Selection metadata accepted';
 
 type MetadataPatch = Record<string, unknown>;
 
@@ -1461,7 +1444,6 @@ interface ReportPrefill {
 interface SelectionCase {
     label: string;
     patch: MetadataPatch;
-    distributions: boolean;
     after: string[];
 }
 
@@ -1491,12 +1473,12 @@ function isinRequest(operations: ProbeRequest['operations']): ProbeRequest {
 }
 
 /**
- * Metadata agreeing with the selection except for `patch`. Its description fills
- * the empty field on acceptance: the positive barrier before any absence claim.
- * With `distributions` nothing is missing, so the "all match" branch is reachable
- * and a missing success toast is evidence rather than a vacuous pass.
+ * Metadata agreeing with the selection except for `patch`. Its logo fills the asset
+ * without one on acceptance: the positive barrier before any absence claim. Nothing
+ * is ever missing (plan 68 E9: no distribution is read), so the "all match" branch is
+ * reachable and a missing success toast is evidence rather than a vacuous pass.
  */
-function isinMetadata(patch: MetadataPatch, distributions: boolean): ProbeResponse {
+function isinMetadata(patch: MetadataPatch): ProbeResponse {
     return {
         provider_code: 'lifecycle_atlas',
         identifier: PROVIDER_ISIN,
@@ -1508,10 +1490,7 @@ function isinMetadata(patch: MetadataPatch, distributions: boolean): ProbeRespon
                 display_name: SELECTION_NAME,
                 asset_type: 'STOCK',
                 currency: 'USD',
-                classification_params: {
-                    short_description: ACCEPTED_DESCRIPTION,
-                    ...(distributions ? {sector_area: {distribution: {Technology: '1'}}, geographic_area: {distribution: {USA: '1'}}} : {}),
-                },
+                icon_url: acceptedIcon(ACCEPTED_READ),
                 ...patch,
             },
         },
@@ -1551,11 +1530,11 @@ async function renderStoredIsinEdit() {
  * Pick the quoted ISIN through the real onselect. The automatic verification is
  * incidental here and finished first, so the metadata read is the one open boundary.
  */
-async function selectProviderIsin(patch: MetadataPatch, {catalog = true, distributions = false} = {}): Promise<PlannedCall> {
+async function selectProviderIsin(patch: MetadataPatch, {catalog = true} = {}): Promise<PlannedCall> {
     searchSelection.result = isinSelection();
     const schema = catalog ? expectCatalog('ISIN selection catalog') : null;
     const verification = plan('ISIN selection verification', routes.verification, [isinRequest(['current_price', 'history'])], {...probeResponse('41.25'), identifier: PROVIDER_ISIN, provider_url: `https://atlas.provider.invalid/probed/${PROVIDER_ISIN}`});
-    const metadata = plan('ISIN selection metadata', routes.metadata, [isinRequest(['metadata'])], isinMetadata(patch, distributions));
+    const metadata = plan('ISIN selection metadata', routes.metadata, [isinRequest(['metadata'])], isinMetadata(patch));
     expect(screen.getByTestId('asset-search-offline-select')).toBeEnabled();
     await fireEvent.click(screen.getByTestId('asset-search-offline-select'));
     await flushUi();
@@ -1602,10 +1581,10 @@ async function requestChooserDiscard() {
     expect(screen.getByTestId('asset-modal-identifier-primary')).toBeVisible();
 }
 
-/** This very response was accepted — its description landed — and yet no comparison is shown. */
+/** This very response was accepted — its logo landed — and yet no comparison is shown. */
 function expectAcceptedWithoutComparison() {
     expectBusy(false);
-    expect(screen.getByTestId('asset-modal-description')).toHaveValue(ACCEPTED_DESCRIPTION);
+    expect(iconShown(ACCEPTED_READ)).toBe(true);
     expect(screen.queryByTestId('comparison-modal'), 'a selection comparison must wait while a prompt of that selection is open').toBeNull();
 }
 
@@ -1646,12 +1625,12 @@ function expectSilentDrop() {
 
 describe('AssetModal search selection asks each identifier question once (R18)', () => {
     it.each<SelectionCase>([
-        {label: 'a name difference remains', patch: {identifier_isin: PROVIDER_ISIN, display_name: PROVIDER_TITLE}, distributions: false, after: ['display_name']},
-        {label: 'only the chooser ISIN differs', patch: {identifier_isin: PROVIDER_ISIN}, distributions: true, after: []},
-        {label: 'a third ISIN is another question', patch: {identifier_isin: THIRD_ISIN}, distributions: false, after: ['identifier_isin']},
-    ])('holds a comparison that lands behind the open ISIN chooser, then asks only what is left ($label)', async ({patch, distributions, after}) => {
+        {label: 'a name difference remains', patch: {identifier_isin: PROVIDER_ISIN, display_name: PROVIDER_TITLE}, after: ['display_name']},
+        {label: 'only the chooser ISIN differs', patch: {identifier_isin: PROVIDER_ISIN}, after: []},
+        {label: 'a third ISIN is another question', patch: {identifier_isin: THIRD_ISIN}, after: ['identifier_isin']},
+    ])('holds a comparison that lands behind the open ISIN chooser, then asks only what is left ($label)', async ({patch, after}) => {
         await renderReportCreate();
-        const metadata = await selectProviderIsin(patch, {distributions});
+        const metadata = await selectProviderIsin(patch);
         expectIsinChooser(REPORT_ISIN, PROVIDER_ISIN);
         expect(screen.queryByTestId('comparison-modal')).toBeNull();
 
@@ -1669,11 +1648,11 @@ describe('AssetModal search selection asks each identifier question once (R18)',
     });
 
     it.each<SelectionCase & {landsUnder: 'chooser' | 'discard confirmation'}>([
-        {label: 'lands under the chooser; a name difference remains', landsUnder: 'chooser', patch: {identifier_isin: PROVIDER_ISIN, display_name: PROVIDER_TITLE}, distributions: false, after: ['display_name']},
-        {label: 'lands under the discard confirmation; only the discarded ISIN differs', landsUnder: 'discard confirmation', patch: {identifier_isin: PROVIDER_ISIN}, distributions: true, after: []},
-    ])('keeps the comparison waiting through the discard confirmation and never re-asks the discarded code ($label)', async ({landsUnder, patch, distributions, after}) => {
+        {label: 'lands under the chooser; a name difference remains', landsUnder: 'chooser', patch: {identifier_isin: PROVIDER_ISIN, display_name: PROVIDER_TITLE}, after: ['display_name']},
+        {label: 'lands under the discard confirmation; only the discarded ISIN differs', landsUnder: 'discard confirmation', patch: {identifier_isin: PROVIDER_ISIN}, after: []},
+    ])('keeps the comparison waiting through the discard confirmation and never re-asks the discarded code ($label)', async ({landsUnder, patch, after}) => {
         await renderReportCreate();
-        const metadata = await selectProviderIsin(patch, {distributions});
+        const metadata = await selectProviderIsin(patch);
         expectIsinChooser(REPORT_ISIN, PROVIDER_ISIN);
         if (landsUnder === 'chooser') {
             await metadata.finish();
@@ -1708,11 +1687,11 @@ describe('AssetModal search selection asks each identifier question once (R18)',
     });
 
     it.each<SelectionCase>([
-        {label: 'a name difference remains', patch: {identifier_isin: PROVIDER_ISIN, display_name: PROVIDER_TITLE}, distributions: false, after: ['display_name']},
-        {label: 'only the answered ISIN differs', patch: {identifier_isin: PROVIDER_ISIN}, distributions: true, after: []},
-    ])('does not re-ask the ISIN when the read lands after the report code was kept as primary ($label)', async ({patch, distributions, after}) => {
+        {label: 'a name difference remains', patch: {identifier_isin: PROVIDER_ISIN, display_name: PROVIDER_TITLE}, after: ['display_name']},
+        {label: 'only the answered ISIN differs', patch: {identifier_isin: PROVIDER_ISIN}, after: []},
+    ])('does not re-ask the ISIN when the read lands after the report code was kept as primary ($label)', async ({patch, after}) => {
         await renderReportCreate();
-        const metadata = await selectProviderIsin(patch, {distributions});
+        const metadata = await selectProviderIsin(patch);
         expectIsinChooser(REPORT_ISIN, PROVIDER_ISIN);
         await confirmChooser(REPORT_ISIN);
         expect(screen.queryByTestId('comparison-modal')).toBeNull();
@@ -1720,7 +1699,7 @@ describe('AssetModal search selection asks each identifier question once (R18)',
 
         await metadata.finish();
         expectBusy(false);
-        expect(screen.getByTestId('asset-modal-description')).toHaveValue(ACCEPTED_DESCRIPTION);
+        expect(iconShown(ACCEPTED_READ)).toBe(true);
         // R18, second half: current (report) ≠ provider, so the answered row comes back today.
         expectComparison(after);
         if (after.length === 0) expectSilentDrop();
@@ -1757,7 +1736,7 @@ describe('AssetModal search selection asks each identifier question once (R18)',
         expect(screen.queryByTestId('comparison-modal')).toBeNull();
         expect(screen.getByTestId('asset-modal-display-name')).toHaveValue(SELECTION_NAME);
 
-        const manual = plan('manual Ask provider after the answered selection', routes.metadata, [isinRequest(['metadata'])], isinMetadata({identifier_isin: PROVIDER_ISIN}, false));
+        const manual = plan('manual Ask provider after the answered selection', routes.metadata, [isinRequest(['metadata'])], isinMetadata({identifier_isin: PROVIDER_ISIN}));
         expect(screen.getByTestId('asset-modal-ask-provider')).toBeEnabled();
         await fireEvent.click(screen.getByTestId('asset-modal-ask-provider'));
         expectBusy(true);
@@ -1898,16 +1877,16 @@ describe('AssetModal search selection asks each identifier question once (R18)',
 // shows the picture of the selected type: an attribute, never a translated label.
 // ---------------------------------------------------------------------------
 
-const TYPE_READ_DESCRIPTION = 'Type metadata accepted';
+const TYPE_READ = 'Type metadata accepted';
 
-/** A stored asset of `assetType` whose classification the provider repeats verbatim: nothing is missing, so "all match" is reachable. */
+/** A stored asset of `assetType`, without an icon: nothing is missing (plan 68 E9), so "all match" is reachable. */
 function typeEditFixture(assetType: string): EditData {
-    return editFixture({asset_type: assetType, classification_params: {sector_area: {distribution: {Technology: 1}}, geographic_area: {distribution: {USA: 1}}}});
+    return editFixture({asset_type: assetType});
 }
 
 /**
  * Metadata agreeing with `typeEditFixture` on everything but the type — and the name, when one
- * is given. Its description fills the empty field: the positive barrier before any absence claim.
+ * is given. Its logo fills the asset without one: the positive barrier before any absence claim.
  */
 function typeMetadata(assetType: string, displayName = 'Owned Atlas security'): ProbeResponse {
     return {
@@ -1921,11 +1900,7 @@ function typeMetadata(assetType: string, displayName = 'Owned Atlas security'): 
                 display_name: displayName,
                 asset_type: assetType,
                 currency: 'USD',
-                classification_params: {
-                    short_description: TYPE_READ_DESCRIPTION,
-                    sector_area: {distribution: {Technology: '1'}},
-                    geographic_area: {distribution: {USA: '1'}},
-                },
+                icon_url: acceptedIcon(TYPE_READ),
             },
         },
     };
@@ -1939,8 +1914,8 @@ async function askProviderForType(response: ProbeResponse) {
     expectBusy(true);
     await metadata.finish();
     expectBusy(false);
-    // The description is compared after the type, in the same pass: once it has landed, the type has been decided too.
-    expect(screen.getByTestId('asset-modal-description')).toHaveValue(TYPE_READ_DESCRIPTION);
+    // The icon is compared after the type, in the same pass: once it has landed, the type has been decided too.
+    expect(iconShown(TYPE_READ)).toBe(true);
 }
 
 /** The picture of the type the form holds: the closed type select shows the selected type's, and only it. */

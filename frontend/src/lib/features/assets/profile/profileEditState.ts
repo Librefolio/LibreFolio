@@ -222,6 +222,18 @@ export function pendingFromPanel(key: string, weights: Record<string, number>, o
     return {key, kind: 'value', value, origin};
 }
 
+/**
+ * The panels' changes after the user edited the panel of `key` (E9b). Weights are a value. An empty panel is never sent
+ * as an empty map, which the backend refuses: over a map «Adesso» holds it empties the voice on purpose (null), over
+ * none it is no change, and a change waiting there is taken back.
+ */
+export function withPanel(changes: PendingChanges, key: string, weights: Record<string, number>, current: Record<string, CurrentVoice>): PendingChanges {
+    if (Object.keys(weights).length > 0) return {...changes, [key]: pendingFromPanel(key, weights, 'new')};
+    const {[key]: _taken, ...others} = changes;
+    const stored = panelWeights(current[key]?.value);
+    return stored && Object.keys(stored).length > 0 ? {...others, [key]: {key, kind: 'emptied', origin: 'new'}} : others;
+}
+
 /** A stored map (decimal text) as the numbers a panel edits; null for none. */
 export function panelWeights(stored: unknown): Record<string, number> | null {
     if (!stored || typeof stored !== 'object') return null;

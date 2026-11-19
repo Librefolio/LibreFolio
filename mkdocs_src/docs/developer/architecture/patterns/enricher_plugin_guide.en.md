@@ -356,6 +356,11 @@ Around your `read`, the core:
   true; a full window refuses that binding and the rest as `RATE_LIMITED` before your `read` is called.
 - **Merges voice by voice**: for each voice, the first enricher of the asset's order whose read gave it wins. An
   enricher that failed leaves the voice to the next one; the others' values are kept beside it.
+- **Records what each read confirmed.** The saved reads write each enricher's `state` in `asset_enrichers`: `read_at`,
+  `status`, `error_code`, `retry_after`, `voices` (how many it gave) and `confirmed`, voice → the moment of the last
+  read that gave it. `confirmed` is merged, never replaced: a failed read, or a read of fewer voices, keeps the
+  confirmations it did not renew. A voice held for the [second round](#too-many-requests) is confirmed too: the source
+  gave it, and the retry does not read that source again.
 
 The default order of an asset's enrichers (`default_order()` in `bindings.py`) is by `default_priority` (lower first),
 then the enricher with the same code as the asset's price provider, then the order in which «Recognize» answered
@@ -373,6 +378,25 @@ The weekly job handles a refusal in two rounds:
    from the read cache), nothing is held any more, and no further retry is set — one retry at most.
 
 «Refresh» and «Ask» do not retry: the refused binding's outcome says `RATE_LIMITED`, with `retry_after`.
+
+### 🕰️ «Now» Not Up to Date {: #stale }
+
+A read that gives the same value writes no row, so a row says when a value changed, not when a source last confirmed
+it. For the voices the catalogue marks `volatile` (fund size, market cap, gross and net yield, modified duration, accrued
+interest), «now» is **stale** when its last confirmation is more than 30 days old (`STALE_AFTER_DAYS`,
+`backend/app/services/assets/profile/freshness.py`). The last confirmation is the `confirmed` moment of the source that
+wrote «now», as a day in the scheduler's time zone and never before the row's `read_on`; a value written by hand, or a
+source that never gave the voice, counts from the row's `read_on`. Nothing is written for it:
+
+- `POST /assets/profile/query` puts `confirmed_on` and `stale` on a volatile voice's last step when that step holds
+  «now» (it reaches the day of the «now» row, whatever day the range ends on); the «Profile» tab writes «Confirmed on
+  …, not up to date» under a stale value.
+- The rates scenario of the Risk tab gets `duration_confirmed_on` and `duration_stale` beside the duration it used, when
+  the analysis day is held by «now».
+- AI Export's `asset.profile` adds a `freshness` row for each volatile voice whose last step in the window holds «now»,
+  fresh or stale.
+
+So a source that goes silent shows up within a month, while one that gives the same figure every week keeps it fresh.
 
 ---
 
@@ -601,7 +625,8 @@ sets the variable until the administrator lists it.
 | `./dev.py test services enricher-contracts` | What the registry refuses at registration, every discovered enricher's declarations, the test enricher |
 | `./dev.py test services enricher-recognize` | The «Recognize» cascade |
 | `./dev.py test services enricher-bindings` | The bindings: `config` kept in the order given, `state` written apart |
-| `./dev.py test services enricher-refresh` | Read, cache, merge and save; unanswered bindings, `RATE_LIMITED` |
+| `./dev.py test services enricher-refresh` | Read, cache, merge and save; unanswered bindings, `RATE_LIMITED`; the `confirmed` map |
+| `./dev.py test services asset-profile-freshness` | «Now» not up to date: the confirmation, the 30 days, the voices that never age |
 | `./dev.py test services scheduler-profile-read` | The weekly job: its round, the held voices, the one retry |
 | `./dev.py test services enricher-justetf`, `enricher-borsa-italiana`, `enricher-yahoo` | Each shipped plugin against recorded pages (fixtures under `backend/test_scripts/test_services/fixtures/`), no network |
 | `./dev.py test services enricher-enabled` | `LIBREFOLIO_ENRICHERS_ENABLED` |

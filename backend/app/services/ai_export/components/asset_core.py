@@ -60,6 +60,7 @@ from backend.app.services.ai_export.components.asset_payloads import (
     AssetProfileAmountRow,
     AssetProfileCouponRow,
     AssetProfileEmptiedRow,
+    AssetProfileFreshnessRow,
     AssetProfilePayload,
     AssetProfilePercentageRow,
     AssetProfileThinnedVoice,
@@ -218,6 +219,7 @@ async def _build_profile(context: BuildContext, dependencies: Mapping[str, Secti
         history_starts_on=profile.history_starts_on,
         **{table: tuple(table_rows) for table, table_rows in rows.items()},
         thinned=tuple(thinned),
+        freshness=tuple(AssetProfileFreshnessRow(voice=voice, confirmed_on=now.confirmed_on, stale=now.stale) for voice, now in sorted(profile.freshness.items())),
     )
 
 

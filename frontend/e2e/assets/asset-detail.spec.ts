@@ -63,7 +63,6 @@ async function mockDetailAssetWithGlobalTransactions(page: Page, assetId: number
         currency: 'EUR',
         asset_type: 'STOCK',
         active: true,
-        has_metadata: false,
         provider_code: null,
         tx_count: txCount,
         // Deliberately zero: the displayed total is global and is not a promise
@@ -610,7 +609,6 @@ test.describe('Asset Detail Page', () => {
             currency: 'GBP',
             asset_type: 'STOCK',
             active: true,
-            has_metadata: false,
             provider_code: null,
             tx_count: 0,
             tx_count_own: 0,
@@ -626,7 +624,6 @@ test.describe('Asset Detail Page', () => {
             currency: 'GBP',
             asset_type: 'STOCK',
             active: true,
-            has_metadata: false,
             provider_code: null,
             tx_count: 0,
             tx_count_own: 0,
@@ -637,7 +634,6 @@ test.describe('Asset Detail Page', () => {
             currency: 'JPY',
             asset_type: 'STOCK',
             active: true,
-            has_metadata: false,
             provider_code: null,
             tx_count: 0,
             tx_count_own: 0,
@@ -648,7 +644,6 @@ test.describe('Asset Detail Page', () => {
             currency: 'CHF',
             asset_type: 'STOCK',
             active: true,
-            has_metadata: false,
             provider_code: null,
             tx_count: 0,
             tx_count_own: 0,
@@ -659,7 +654,6 @@ test.describe('Asset Detail Page', () => {
             currency: 'AUD',
             asset_type: 'STOCK',
             active: true,
-            has_metadata: false,
             provider_code: null,
             tx_count: 0,
             tx_count_own: 0,
@@ -670,7 +664,6 @@ test.describe('Asset Detail Page', () => {
             currency: 'CAD',
             asset_type: 'STOCK',
             active: true,
-            has_metadata: false,
             provider_code: null,
             tx_count: 0,
             tx_count_own: 0,
@@ -681,7 +674,6 @@ test.describe('Asset Detail Page', () => {
             currency: 'EUR',
             asset_type: 'STOCK',
             active: true,
-            has_metadata: false,
             provider_code: 'MOCKASSET',
             tx_count: 0,
             tx_count_own: 0,
@@ -815,7 +807,6 @@ test.describe('Asset Detail Page', () => {
             currency: 'EUR',
             asset_type: 'STOCK',
             active: true,
-            has_metadata: false,
             provider_code: 'MOCKASSET',
             tx_count: 0,
             tx_count_own: 0,
@@ -8488,7 +8479,6 @@ async function mockCacheHitEventsAsset(page: Page, assetId: number) {
         currency: 'EUR',
         asset_type: 'STOCK',
         active: true,
-        has_metadata: false,
         provider_code: null,
         tx_count: 0,
         tx_count_own: 0,
@@ -9704,7 +9694,7 @@ test.describe('X-R16 asset detail: an invalid signal result keeps the prices and
      * `mainSignals` as its signal results. Returns the main queries delivered and the date of the first close.
      */
     async function routeSyntheticAsset(page: Page, assetId: number, mainSignals: readonly object[]) {
-        const asset = {id: assetId, display_name: `X-R16 synthetic asset ${assetId}`, currency: 'EUR', asset_type: 'STOCK', active: true, has_metadata: false, provider_code: null, tx_count: 0, tx_count_own: 0};
+        const asset = {id: assetId, display_name: `X-R16 synthetic asset ${assetId}`, currency: 'EUR', asset_type: 'STOCK', active: true, provider_code: null, tx_count: 0, tx_count_own: 0};
         const history = Array.from({length: 90}, (_, index) => daysAgoIso(90 - index));
         const delivered: DeliveredMainQuery[] = [];
         await page.route(

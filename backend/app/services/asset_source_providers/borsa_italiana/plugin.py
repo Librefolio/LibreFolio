@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import re
 from datetime import date
-from decimal import Decimal
 from typing import Dict, List
 from urllib.parse import parse_qs, urlparse
 
@@ -17,11 +16,6 @@ from backend.app.db import IdentifierType
 from backend.app.db.models import AssetType, ProviderInputType
 from backend.app.logging_config import get_logger
 from backend.app.schemas.assets.assets import FAAssetPatchItem
-from backend.app.schemas.assets.metadata import (
-    FAClassificationParams,
-    FAGeographicArea,
-    FASectorArea,
-)
 from backend.app.schemas.prices import (
     FACurrentValue,
     FAHistoricalData,
@@ -201,78 +195,6 @@ def _search_query_variants(query: str) -> list[str]:
     add_variant(abbreviated)
 
     return variants
-
-
-# Issuer name → ISO-3166-A3 country code.
-# Expandable: add new issuers as they appear.
-_ISSUER_TO_COUNTRY: dict[str, str] = {
-    "republic of italy": "ITA",
-    "repubblica italiana": "ITA",
-    "federal republic of germany": "DEU",
-    "republic of france": "FRA",
-    "republique francaise": "FRA",
-    "kingdom of spain": "ESP",
-    "republic of austria": "AUT",
-    "kingdom of the netherlands": "NLD",
-    "republic of portugal": "PRT",
-    "republic of greece": "GRC",
-    "republic of ireland": "IRL",
-    "kingdom of belgium": "BEL",
-    "republic of finland": "FIN",
-    "united states of america": "USA",
-    "united kingdom": "GBR",
-}
-
-
-def _infer_country_from_issuer(issuer: str | None) -> str | None:
-    """Try to map issuer name to ISO-3166-A3 country code."""
-    if not issuer:
-        return None
-    key = issuer.strip().lower()
-    # Exact match first
-    if key in _ISSUER_TO_COUNTRY:
-        return _ISSUER_TO_COUNTRY[key]
-    # Substring match (e.g. "Republic of Italy" inside longer string)
-    for pattern, code in _ISSUER_TO_COUNTRY.items():
-        if pattern in key:
-            return code
-    return None
-
-
-# Bond tipologia → FinancialSector mapping.
-# FASectorArea normalizes via FinancialSector.from_string().
-# Keys in both EN and IT (case-insensitive lookup).
-_TIPOLOGIA_TO_SECTOR: dict[str, str] = {
-    # English
-    "italian government bonds": "Government Bonds",
-    "government bonds": "Government Bonds",
-    "corporate": "Corporate Bonds",
-    "corporate bonds": "Corporate Bonds",
-    "supranational bonds": "Financials",
-    # EuroTLX government paper (t-bonds, bund, ...); surfaced in the IT page
-    "t-bonds": "Government Bonds",
-    "government": "Government Bonds",
-    # Italian
-    "titoli di stato italiani": "Government Bonds",
-    "titoli di stato": "Government Bonds",
-    "obbligazioni corporate": "Corporate Bonds",
-    "obbligazioni sovranazionali": "Financials",
-}
-
-
-def _infer_sector(scheda) -> str | None:
-    """Infer sector from scheda fields.
-
-    Priority: scheda.settore (stocks) > scheda.tipologia (bonds).
-    """
-    # Stocks: direct sector field
-    if scheda.settore:
-        return scheda.settore
-    # Bonds: map tipologia
-    if scheda.tipologia:
-        key = scheda.tipologia.strip().lower()
-        return _TIPOLOGIA_TO_SECTOR.get(key)
-    return None
 
 
 def _storico_con_mic_retry(identifier: str, periodo: str, mic: str | None):
@@ -992,28 +914,6 @@ class BorsaItalianaProvider(AssetSourceProvider):
 
     # ── Metadata ────────────────────────────────────────────────────────
 
-    def _build_fund_description(self, dati: DatiFondo) -> str | None:
-        """Compose a fund's short description from the detail-page sections.
-
-        Includes the name, the real ISIN and the non-"N.D." entries scraped from
-        the Caratteristiche / Società di Gestione / Costi sections of the fund
-        page. The section fields are read defensively (``getattr``) so this
-        degrades to just name+ISIN if the installed scraping library predates
-        the enriched ``DatiFondo``.
-        """
-        parts: List[str] = []
-        if dati.nome:
-            parts.append(dati.nome)
-        if dati.isin:
-            parts.append(f"ISIN: {dati.isin}")
-        for key, value in (getattr(dati, "caratteristiche", None) or {}).items():
-            parts.append(f"{key}: {value}")
-        for key, value in (getattr(dati, "societa_gestione", None) or {}).items():
-            parts.append(f"Società di Gestione — {key}: {value}")
-        for key, value in (getattr(dati, "costi", None) or {}).items():
-            parts.append(f"Costi — {key}: {value}")
-        return " | ".join(parts) if parts else None
-
     def _fund_metadata(
         self,
         identifier: str,
@@ -1024,8 +924,9 @@ class BorsaItalianaProvider(AssetSourceProvider):
         """Build metadata for a mutual fund from its detail page (NAV-by-code funds).
 
         Funds are not on the XMIL scheda, so the standard ISIN path can't describe
-        them; instead we fetch the fund detail page by internal code and derive a
-        description from its Caratteristiche / Società di Gestione / Costi sections.
+        them; instead we fetch the fund detail page by internal code: its name,
+        currency and ISIN. The fund's description is the profile's, read by the
+        Borsa Italiana enricher (plan 68, D6).
         """
         try:
             dati = self._fetch_fund(codice_fondo)
@@ -1036,34 +937,29 @@ class BorsaItalianaProvider(AssetSourceProvider):
             return None
 
         lingua = self._get_lingua(provider_params)
-        short_description = self._build_fund_description(dati)
-        if short_description and len(short_description) > 500:
-            short_description = short_description[:497] + "..."
-
-        classification = FAClassificationParams(short_description=short_description) if short_description else None
         isin = dati.isin or (identifier if identifier_type == IdentifierType.ISIN else None)
         return FAAssetPatchItem(
             asset_id=0,  # Placeholder — caller sets the real ID
             display_name=f"{dati.nome} {self.LANGUAGE_FLAGS[lingua]}",
             currency=dati.valuta or "EUR",
             asset_type=AssetType.FUND,
-            classification_params=classification,
             identifier_isin=isin,
             identifier_other=[codice_fondo],
         )
 
-    async def fetch_asset_metadata(  # noqa: C901 — flat metadata mapping with guarded sections
+    async def fetch_asset_metadata(
         self,
         identifier: str,
         identifier_type: IdentifierType,
         provider_params: Dict | None = None,
     ) -> FAAssetPatchItem | None:
-        """Fetch asset metadata from Borsa Italiana instrument page."""
+        """Fetch asset metadata from Borsa Italiana instrument page: name, type, currency, ISIN and ticker. Description,
+        countries and sectors are the profile's, read by the Borsa Italiana enricher (plan 68, D6)."""
         self._check_availability()
 
         # Mutual funds are priced by internal code and are not on the XMIL scheda:
-        # route them to the fund-page metadata builder (name + ISIN + Caratteristiche/
-        # Società di Gestione/Costi), instead of the ISIN-based scheda path below.
+        # route them to the fund-page metadata builder (name, currency, ISIN),
+        # instead of the ISIN-based scheda path below.
         codice_fondo = (provider_params or {}).get("codice_fondo")
         if codice_fondo:
             return self._fund_metadata(identifier, identifier_type, codice_fondo, provider_params)
@@ -1087,54 +983,6 @@ class BorsaItalianaProvider(AssetSourceProvider):
 
             asset_type = _map_asset_type(scheda.tipo)
 
-            # Build description
-            description_parts = []
-            if scheda.descrizione:
-                description_parts.append(scheda.descrizione)
-            if scheda.mercato:
-                description_parts.append(f"Market: {scheda.mercato}")
-            if scheda.emittente:
-                description_parts.append(f"Issuer: {scheda.emittente}")
-            if scheda.scadenza:
-                description_parts.append(f"Maturity: {scheda.scadenza.isoformat()}")
-            if scheda.cedola_annua is not None:
-                description_parts.append(f"Annual coupon: {scheda.cedola_annua}%")
-
-            if scheda.struttura_bond:
-                description_parts.append(f"Structure: {scheda.struttura_bond}")
-            if scheda.tipologia:
-                description_parts.append(f"Tipology: {scheda.tipologia}")
-            if scheda.frequenza_cedola:
-                description_parts.append(f"Coupon frequency: {scheda.frequenza_cedola}")
-
-            short_description = " | ".join(description_parts) if description_parts else None
-            if short_description and len(short_description) > 500:
-                short_description = short_description[:497] + "..."
-
-            # Geographic area from issuer
-            geographic_area = None
-            country_code = _infer_country_from_issuer(scheda.emittente)
-            if country_code:
-                try:
-                    geographic_area = FAGeographicArea(distribution={country_code: Decimal("1.0")})
-                except Exception as e:
-                    logger.debug(f"Could not create FAGeographicArea for {identifier}: {e}")
-
-            # Sector from settore (stocks) or tipologia (bonds)
-            sector_area = None
-            sector_name = _infer_sector(scheda)
-            if sector_name:
-                try:
-                    sector_area = FASectorArea(distribution={sector_name: Decimal("1.0")})
-                except Exception as e:
-                    logger.debug(f"Could not create FASectorArea for {identifier}: {e}")
-
-            classification = FAClassificationParams(
-                short_description=short_description,
-                geographic_area=geographic_area,
-                sector_area=sector_area,
-            )
-
             # The scheda's currency can be the fund's denomination (see
             # _price_api_currency). When the API gives no answer the field stays
             # unset: a metadata refresh then keeps the stored currency instead of
@@ -1146,7 +994,6 @@ class BorsaItalianaProvider(AssetSourceProvider):
                 display_name=f"{scheda.nome} {self.LANGUAGE_FLAGS[lingua]}",
                 **({"currency": currency} if currency else {}),
                 asset_type=asset_type,
-                classification_params=classification,
                 identifier_isin=identifier,
                 identifier_ticker=scheda.ticker if scheda.ticker else None,
             )

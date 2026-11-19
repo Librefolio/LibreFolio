@@ -957,7 +957,7 @@ def test_unknown_day_count_is_absent_and_logged_once(plugin, library):
         ("en", "Foreign Public Debt", "sovereign", GOVERNMENT),
         ("it", "Titoli di stato esteri", "sovereign", GOVERNMENT),
         ("it", "Obbligazioni Finanziarie", "corporate", CORPORATE),
-        # no recording: the wordings the price plugin's sector table knows (``_TIPOLOGIA_TO_SECTOR``)
+        # no recording: wordings the site uses for other bond lists (the price plugin's old sector table, gone in plan 68 D6)
         ("en", "Corporate Bonds", "corporate", CORPORATE),
         ("en", "Supranational Bonds", "supranational", None),
         ("it", "Obbligazioni Sovranazionali", "supranational", None),

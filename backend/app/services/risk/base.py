@@ -116,6 +116,10 @@ class RiskAssetClassification:
     modified_duration: Optional[float] = None
     modified_duration_read_on: Optional[date] = None
     modified_duration_source: Optional[str] = None
+    # D1d: when the duration is the profile's «now», the day it was last confirmed and whether that is more than 30 days
+    # ago («non aggiornato»); None and False when the analysis day is held by an older reading.
+    modified_duration_confirmed_on: Optional[date] = None
+    modified_duration_stale: bool = False
 
 
 @dataclass(frozen=True, slots=True)

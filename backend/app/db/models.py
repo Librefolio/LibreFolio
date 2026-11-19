@@ -795,11 +795,11 @@ class Asset(SQLModel, table=True):
     - Provider assignment includes identifier, identifier_type, and provider_params
 
     Classification and metadata fields:
-    - classification_params: JSON containing ClassificationParamsModel structure
+    - classification_params: the old JSON of description, countries and sectors. Since plan 68 D7a nothing reads or
+      writes it (the asset profile holds them); the column goes in D7b
 
     Notes:
     - display_name must be unique to avoid user confusion
-    - Validation is done via ClassificationParamsModel Pydantic model when loaded
     """
 
     __tablename__ = "assets"
@@ -816,7 +816,7 @@ class Asset(SQLModel, table=True):
     currency: str = Field(nullable=False, description="Asset original currency")  # ISO 4217
     icon_url: Optional[str] = Field(default=None, description="URL to asset icon (local or remote)")
 
-    # Classification and metadata (JSON TEXT)
+    # The old classification JSON, unused since plan 68 D7a (removed in D7b)
     classification_params: Optional[str] = Field(default=None, sa_column=Column(Text))
     asset_type: AssetType = Field(default=AssetType.OTHER)
     quote_base_quantity: Optional[int] = Field(default=1, description="How many units the raw market quote refers to (e.g. 100 for bonds quoted on base 100)")
@@ -871,17 +871,6 @@ class Asset(SQLModel, table=True):
     def validate_identifier_other(cls, v: Any) -> Optional[List[str]]:
         """Coerce str/list/None into a clean, de-duplicated soft-identifier list."""
         return normalize_other_identifiers(v)
-
-    @field_validator("classification_params")
-    def validate_classification_params(cls, v):
-        # Lazy import to avoid circular dependency
-        from backend.app.schemas.assets.metadata import FAClassificationParams  # noqa: PLC0415 — avoid circular import
-
-        if v is None:
-            return v
-        if isinstance(v, FAClassificationParams):
-            return v.model_dump_json(exclude_none=True)
-        return FAClassificationParams(**v).model_dump_json(exclude_none=True)
 
 
 # ============================================================================

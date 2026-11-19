@@ -18,7 +18,7 @@ This section provides the technical deep-dive for each asset pricing provider in
 
 - 📈 **History**: Can fetch historical OHLC data.
 - 🔎 **Search**: Supports searching for assets by name/ticker. Detected via `test_search_query is not None`.
-- 📋 **Metadata**: Can fetch asset details (sector, description, identifiers) via `fetch_asset_metadata()`.
+- 📋 **Metadata**: Can fetch asset details (type, currency, name, identifiers) via `fetch_asset_metadata()`; the description, sectors and countries are the enrichers' (plan 68, D6).
 - 💰 **Current Value**: Can fetch the latest real-time price.
 - 📊 **Events**: Can produce asset events, returned with the history in `FAHistoricalData.events` — dividends and splits (Yahoo Finance), dividends (JustETF), interest and settlements (Scheduled Investment). There is no `supports_events` flag.
 - 🔗 **`get_asset_url`**: Generates a link to the provider's page for this asset (e.g., Yahoo Finance quote page).

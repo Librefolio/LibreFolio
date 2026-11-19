@@ -204,10 +204,9 @@ def api_parametric_provider_semantics(verbose: bool = False, test_names: list = 
 
 
 def api_assets_metadata(verbose: bool = False, test_names: list = None) -> bool:
-    """Run Assets Metadata API endpoint tests."""
+    """Run the asset bulk read API tests (GET /assets)."""
     print_section("Assets Metadata API Endpoint Tests")
-    print_info("Testing REST API endpoints for asset metadata management")
-    print_info("Tests: PATCH metadata, bulk read, refresh endpoints")
+    print_info("Testing GET /assets, the bulk read in request order")
     print_info("Note: Server will be automatically started and stopped by test")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_assets_metadata.py", test_names)
@@ -1389,7 +1388,7 @@ Tests for REST API endpoints (server auto-started):
         name="Parametric Provider Semantics",
         desc="What survives a provider removal and a switch away from a parametric provider",
     )
-    add_test(api, "assets-metadata", api_assets_metadata, name="Assets Metadata API", desc="PATCH metadata, bulk read, refresh")
+    add_test(api, "assets-metadata", api_assets_metadata, name="Assets Metadata API", desc="Bulk read of several assets, in request order")
     add_test(api, "assets-events", api_assets_events, name="Assets Events API", desc="Bulk upsert, delete, query")
     add_test(api, "events-target-currency", api_events_target_currency, name="Events Target Currency", desc="FX conversion on events query (E.8)")
     add_test(api, "assets-crud", api_assets_crud, name="Assets CRUD API", desc="Create, list, filter, delete assets, and held-now flags in the list")
@@ -1551,13 +1550,13 @@ Tests for REST API endpoints (server auto-started):
         desc="Project 66 R3: charges linked to their parent in a batch (ref, parent_ref, parent_transaction_id), read back with parent_transaction_id and charges_count, the parent_ids and without_parent filters, /validate, another user's parent not found, charge_role in /transactions/types",
     )
     add_test(api, "transactions-wac", api_transactions_wac_inline, name="WAC Cost Basis", desc="WAC inline validate/commit (P16-P28)")
-    add_test(api, "assets-patch-fields", api_assets_patch_fields, name="Assets Patch Fields", desc="PATCH /assets field-level updates, all or nothing batches, assetNameTaken; A4: POST/PATCH write classification_params into the profile in the authenticated user's name")
+    add_test(api, "assets-patch-fields", api_assets_patch_fields, name="Assets Patch Fields", desc="PATCH /assets field-level updates, all or nothing batches, assetNameTaken; POST/PATCH write the profile in the authenticated user's name")
     add_test(
         api,
         "assets-enrichers",
         api_assets_enrichers,
         name="Assets Enrichers",
-        desc="Project 68 B3: GET /assets/enrichers (mockenrich, a default order for every type); enrichers on POST/PATCH /assets kept in the order sent with free keys, replaced, cleared by {} or null, absent unchanged, malformed 422, state answered by GET; profile on PATCH (user row by the caller, null empties, absent untouched, invalid value profileValueInvalid on profile.<voice> and nothing saved, the same on validate, profile wins over classification_params, never changes the column) and on POST (user rows, invalid item not created); B4: POST /assets/enrichers/recognize SSE (enricher_result found with the LEI, identifier_learned, done with found_order/default_order/identifiers; unknown ISIN not found; codes restricts; uncovered type; 422 empty identifiers), GET /assets/enrichers/{code}/search (400 no search, 404 unknown), POST /assets/enrichers/{code}/test (mockenrich answer, not found, 404, writes nothing); B5b: the enrichers sent bind codes never installed and the test route's asset is bound on the lane DB, so no background read runs beside the test",
+        desc="Project 68 B3: GET /assets/enrichers (mockenrich, a default order for every type); enrichers on POST/PATCH /assets kept in the order sent with free keys, replaced, cleared by {} or null, absent unchanged, malformed 422, state answered by GET; profile on PATCH (user row by the caller, null empties, absent untouched, invalid value profileValueInvalid on profile.<voice> and nothing saved, the same on validate) and on POST (user rows, invalid item not created); B4: POST /assets/enrichers/recognize SSE (enricher_result found with the LEI, identifier_learned, done with found_order/default_order/identifiers; unknown ISIN not found; codes restricts; uncovered type; 422 empty identifiers), GET /assets/enrichers/{code}/search (400 no search, 404 unknown), POST /assets/enrichers/{code}/test (mockenrich answer, not found, 404, writes nothing); B5b: the enrichers sent bind codes never installed and the test route's asset is bound on the lane DB, so no background read runs beside the test",
     )
     add_test(
         api,

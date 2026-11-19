@@ -32,7 +32,6 @@ pattern of exercising the builder/runtime layer without a live DB.
 
 from __future__ import annotations
 
-import json
 from datetime import date
 from decimal import Decimal
 
@@ -40,7 +39,6 @@ import pytest
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from backend.app.schemas.assets.metadata import FAClassificationParams
 from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio.lots import LotAnalysisType, LotCustodySummarySchema, LotsAnalysisMetadata, LotsAnalysisResponse, LotSummarySchema
 from backend.app.schemas.portfolio.report import PortfolioReportMetadata, PortfolioReportResponse
@@ -103,10 +101,7 @@ def _make_context(scope: BuildScope, session: AsyncSession) -> BuildContext:
     return BuildContext(REGISTRY, request_id=scope.request_id, scope=scope, bucket_plan=bucket_plan, session=session)
 
 
-def _metadata(*, short_description: str | None = None, geographic_area=None, sector_area=None, provider_code: str | None = None, **overrides) -> AssetMetadataResource:
-    classification = None
-    if short_description is not None or geographic_area is not None or sector_area is not None:
-        classification = FAClassificationParams(short_description=short_description, geographic_area=geographic_area, sector_area=sector_area)
+def _metadata(*, provider_code: str | None = None, **overrides) -> AssetMetadataResource:
     defaults = {
         "asset_id": ASSET_ID,
         "display_name": "Test Asset",
@@ -125,10 +120,6 @@ def _metadata(*, short_description: str | None = None, geographic_area=None, sec
         "provider_identifier_type": "TICKER" if provider_code else None,
         "provider_last_fetch_date": date(2026, 1, 1) if provider_code else None,
     }
-    # D5 (plan 68): `asset.identity` v2 no longer exports a classification, so the resource may drop the field; the
-    # helper passes it only while the resource still declares it, so its removal reds no unrelated test here.
-    if "classification" in AssetMetadataResource.__dataclass_fields__:
-        defaults["classification"] = classification
     defaults.update(overrides)
     return AssetMetadataResource(**defaults)
 
@@ -1200,19 +1191,18 @@ class TestMaliciousTextRemainsData:
     async def test_identity_v2_exports_no_classification_even_when_the_asset_has_one(self, monkeypatch):
         """D5 (plan 68): `asset.identity` v2 carries no `classification` — the description, countries and sectors
         are profile voices now, exported by `asset.profile` (where the free-text `description` keeps the «verbatim,
-        never interpreted» guarantee: `test_ai_export_components_asset_fx_integration.py`). Even an asset whose
-        metadata still carries a classification (malicious text included) exports none of it from identity.
+        never interpreted» guarantee: `test_ai_export_components_asset_fx_integration.py`). The asset's metadata
+        resource has no classification (D7a), and the identity payload declares none.
 
         Before D5: `payload["classification"]["short_description"]` was the text, verbatim."""
         scope = _scope()
-        payload_text = "<script>alert('xss')</script>; DROP TABLE assets; --"
-        _patch_metadata(monkeypatch, _metadata(short_description=payload_text, geographic_area={"distribution": {"USA": "1"}}))
+        _patch_metadata(monkeypatch, _metadata())
+        assert "classification" not in AssetMetadataResource.__dataclass_fields__
         context = _make_context(scope, _make_async_session())
 
         envelope = await context.resolve("asset.identity", required=True)
 
         assert "classification" not in envelope.payload
-        assert payload_text not in json.dumps(envelope.payload)
         assert "classification" not in asset_payloads.AssetIdentityPayload.model_fields
         # Everything else of the identity is unchanged.
         assert envelope.payload["asset_id"] == ASSET_ID
@@ -1278,8 +1268,12 @@ class TestIdentityV2AndProfileSpecs:
             "coupon_schedule",
             "emptied",
             "thinned",
+            "freshness",
         }
         assert set(thinned_model.model_fields) == {"voice", "changes_in_window"}
+        freshness_model = getattr(asset_payloads, "AssetProfileFreshnessRow", None)
+        assert freshness_model is not None, "asset_payloads.AssetProfileFreshnessRow is missing (D1d)"
+        assert set(freshness_model.model_fields) == {"voice", "confirmed_on", "stale"}
         with pytest.raises(ValidationError):
             thinned_model.model_validate({"voice": "ter", "changes_in_window": 2, "extra": 1})
 

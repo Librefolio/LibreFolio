@@ -345,6 +345,9 @@ def cmd_server(args):
         # MF-SI2: the E2E suites pick search results as one user, two provider probes a pick: the per-user probe limit
         # would refuse them in a parallel run. Off on every lane; its own tests build limiters in-process.
         env["LIBREFOLIO_PROBE_RATE_LIMIT"] = "0"
+        # Plan 68 E8a: at creation the asset window starts «Riconosci» by itself with an ISIN, and the suites and the
+        # gallery create assets with one. Only mockenrich answers on a lane: no suite reaches the real sites.
+        env.setdefault("LIBREFOLIO_ENRICHERS_ENABLED", "mockenrich")
     else:
         env["LIBREFOLIO_TEST_MODE"] = "0"
     if debug_mode:
