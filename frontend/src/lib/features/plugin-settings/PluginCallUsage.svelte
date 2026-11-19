@@ -47,7 +47,7 @@
     const groupNoteKey = $derived(groupCallNoteKey(entry));
 </script>
 
-<section aria-labelledby="{uid}-title" class="space-y-2 text-lf-primary" data-managed={managed ? 'true' : 'false'} data-testid="plugin-settings-calls">
+<section aria-labelledby="{uid}-title" class="@container space-y-2 text-lf-primary" data-managed={managed ? 'true' : 'false'} data-testid="plugin-settings-calls">
     <div class="flex flex-wrap items-baseline gap-x-2">
         <h5 class="flex items-center gap-1.5 self-center text-sm font-medium text-lf-secondary" id="{uid}-title">
             <Activity aria-hidden="true" class="h-3.5 w-3.5 shrink-0 text-lf-muted" />
@@ -56,7 +56,8 @@
         <span class="text-xs text-lf-muted">{$_(SCOPE_KEYS.system)}</span>
     </div>
 
-    <div class="grid grid-cols-1 gap-1.5 sm:grid-cols-5 sm:gap-2">
+    <!-- By the width of this block (S1c): one per line; from 24rem three and two; from 40rem five in a row -->
+    <div class="grid grid-cols-1 gap-1.5 @sm:grid-cols-3 @sm:gap-2 @min-[40rem]:grid-cols-5">
         {#each boxes as box (box.window)}
             {@const tone = callTone(box)}
             {@const name = $_(CALL_WINDOW_KEYS[box.window])}
@@ -103,13 +104,13 @@
                         value={shownText(field, form)}
                     />
                     {#if problem}
-                        <p class="col-span-2 text-xs text-lf-danger sm:col-span-1" data-code={problem.code} data-testid="plugin-setting-problem">{$_(PROBLEM_KEYS[problem.code], {values: {limit: problem.limit ?? ''}})}</p>
+                        <p class="col-span-3 text-xs text-lf-danger @sm:col-span-2" data-code={problem.code} data-testid="plugin-setting-problem">{$_(PROBLEM_KEYS[problem.code], {values: {limit: problem.limit ?? ''}})}</p>
                     {/if}
                     {#if refusal}
-                        <p class="col-span-2 text-xs text-lf-danger sm:col-span-1" data-code={refusal} data-testid="plugin-setting-refusal" role="alert">{$_(refusalKey(refusal))}</p>
+                        <p class="col-span-3 text-xs text-lf-danger @sm:col-span-2" data-code={refusal} data-testid="plugin-setting-refusal" role="alert">{$_(refusalKey(refusal))}</p>
                     {/if}
                 {:else if box.control === 'locked'}
-                    <div class="col-span-2 sm:col-span-1 {CALL_LOCKED_CLASSES[tone]}" data-testid="plugin-settings-calls-locked">
+                    <div class="col-span-1 @sm:col-span-2 {CALL_LOCKED_CLASSES[tone]}" data-testid="plugin-settings-calls-locked">
                         <Lock aria-hidden="true" class="h-3 w-3 shrink-0" />
                         {#if box.state === 'invalid'}
                             <span data-testid="plugin-settings-calls-invalid">{$_('pluginSettings.calls.invalid')}</span>
