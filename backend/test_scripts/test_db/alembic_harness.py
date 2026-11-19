@@ -270,6 +270,51 @@ def _row_changes(expected: Rows, actual: Rows, tables: Iterable[str], *, columns
 
 
 # =============================================================================
+# THE COLUMNS 006 DROPS — what a round trip through 006 keeps, and how 005 is compared after it
+# =============================================================================
+
+#: The columns ``006_release_1_4_0_schema`` drops, table → ``(column, declared type)``: the step
+#: ``drop_classification_params`` (plan 68, D7b). Its downgrade adds each back with ``ALTER TABLE ADD COLUMN``, empty
+#: and **last**, so a database brought back to 005 has the 1.3 columns, but not the 1.3 text of ``CREATE TABLE``.
+DROPPED_AT_006: dict[str, tuple[tuple[str, str], ...]] = {"assets": (("classification_params", "TEXT"),)}
+
+
+def _kept_columns(rows: Rows) -> Rows:
+    """``rows`` with the columns 006 drops taken out: the columns an upgrade to 006 keeps, to compare a 1.3 database on
+    (``_row_changes(…, columns_of=_kept_columns(before))``). A dropped column's values are its step's to pin."""
+    kept: Rows = {}
+    for table, (columns, content) in rows.items():
+        dropped = {column for column, _ in DROPPED_AT_006.get(table, ())}
+        positions = [index for index, column in enumerate(columns) if column not in dropped]
+        kept[table] = ([columns[index] for index in positions], [tuple(row[index] for index in positions) for row in content])
+    return kept
+
+
+def _without_dropped_columns(objects: Iterable[tuple[Optional[str], ...]]) -> list[tuple[Optional[str], ...]]:
+    """``sqlite_master`` entries ``(type, name, tbl_name, sql)``, whitespace collapsed or removed, with each column 006 drops taken
+    out of its table's ``CREATE TABLE`` text: a new database at 005 (the column in its place) and one brought back to 005
+    (the column last) then read the same. Only the column's own definition goes: every CHECK, default and AUTOINCREMENT
+    of the text stays compared. ``_assert_dropped_columns_back`` checks the column itself."""
+    entries = []
+    for kind, name, table, sql in objects:
+        if kind == "table" and sql and name in DROPPED_AT_006:
+            for column, declared in DROPPED_AT_006[name]:
+                sql = re.sub(rf",\s*{column}\s*{declared}\b", "", sql, count=1)
+        entries.append((kind, name, table, sql))
+    return entries
+
+
+def _assert_dropped_columns_back(db: Path) -> None:
+    """After a downgrade to 005: every column 006 drops is there again, its declared type, nullable, no default."""
+    for table, columns in DROPPED_AT_006.items():
+        info = _table_info(db, table)
+        for column, declared in columns:
+            assert column in info, f"the downgrade must add {table}.{column} back: {sorted(info)}"
+            found = info[column]
+            assert (found.type.upper(), found.not_null, found.default) == (declared, False, None), f"{table}.{column} back as {declared}, nullable, no default: {found}"
+
+
+# =============================================================================
 # THE MODELS — what create_all builds, and how a table is compared
 # =============================================================================
 
