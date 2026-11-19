@@ -11,7 +11,8 @@
     `ProfileKeyFigureCard`, `ProfileDetails` and, last, «Ultime variazioni» (`ProfileChangesPanel`, E6a): a «Dimentica»
     there reads the tab again.
   - Seams: `onedit` («Modifica i dati»: the page opens `AssetProfileEditor`, the profile window in save mode, E9b2),
-    `onhistory` (the history of a voice, E6). Without them, no button.
+    `onhistory` (the history of a voice, E6: the clock of a card, a detail row, and since E6b2 the clocks beside the
+    countries, the sectors and «Descrizione»). Without them, no button.
   - The asset's enrichers (E6c, `enrichers`: how many, and the last read). With some, «Aggiorna» beside «Modifica i dati»
     (`onrefresh`: the page reads them again and saves, I13; only the icon on a phone; its hint says the last read): it is
     busy (`data-state="running"`) until the page is done, and never on the next asset. With none, on top, the box
@@ -29,6 +30,7 @@
     import ProfileChangesPanel from '$lib/features/assets/profile/ProfileChangesPanel.svelte';
     import ProfileClassification from '$lib/features/assets/profile/ProfileClassification.svelte';
     import ProfileDetails from '$lib/features/assets/profile/ProfileDetails.svelte';
+    import ProfileHistoryClock from '$lib/features/assets/profile/ProfileHistoryClock.svelte';
     import ProfileKeyFigureCard from '$lib/features/assets/profile/ProfileKeyFigureCard.svelte';
     import {loadProfileCatalogue, readAssetProfile, type ProfileVoice, type ProfileVoices} from '$lib/features/assets/profile/profileStore';
     import {detailGroups, formatProfileDay, formatProfileValue, keyFigureCards, profileCell, profileReadRange, staleSince, type PagePeriod, type ProfileCell, type ProfileFormatContext} from '$lib/features/assets/profile/profileTabState';
@@ -168,11 +170,14 @@
             </section>
         {/if}
         <section class="rounded-xl border border-lf-subtle bg-lf-card p-4 shadow-sm shadow-lf-shadow-card">
-            <ProfileClassification {voices} />
+            <ProfileClassification {voices} {onhistory} />
         </section>
 
         <section class="rounded-xl border border-lf-subtle bg-lf-card p-4 shadow-sm shadow-lf-shadow-card" data-testid="asset-profile-description" data-state={description?.state ?? 'unavailable'}>
-            <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-lf-muted">{$t('assets.profile.voices.description')}</h3>
+            <div class="mb-2 flex items-start justify-between gap-2">
+                <h3 class="text-xs font-semibold uppercase tracking-wide text-lf-muted">{$t('assets.profile.voices.description')}</h3>
+                {#if onhistory && description && description.state !== 'unavailable'}<ProfileHistoryClock voiceKey="description" testId="asset-profile-description-history" {onhistory} />{/if}
+            </div>
             {#if description?.state === 'value'}
                 <p class="whitespace-pre-wrap text-sm leading-relaxed text-lf-secondary">{String(description.step?.value ?? '')}</p>
             {:else}

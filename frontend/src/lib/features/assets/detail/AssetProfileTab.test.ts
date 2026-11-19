@@ -9,6 +9,7 @@
  * - it publishes its loading (`data-busy`, `aria-busy`) and its outcome (`data-status`: ready, failed, missing);
  * - the cards and the details come from the catalogue, the description from its voice;
  * - «Modifica i dati» is there only when the page handles it (E8);
+ * - E6b2: the clock beside «Descrizione» opens its history, when it has rows and the page handles it;
  * - E6c: with enrichers, «Aggiorna» beside it says the last read and is busy while the page refreshes (never on the next
  *   asset); without any, the box «Nessun arricchitore configurato» with «Configura»; enrichers not known yet, neither.
  *
@@ -221,5 +222,20 @@ describe('AssetProfileTab', () => {
         await waitFor(() => expect(screen.getByTestId('asset-profile-tab')).toHaveAttribute('data-status', 'ready'));
         expect(screen.queryByTestId('asset-profile-refresh')).toBeNull();
         expect(screen.queryByTestId('asset-profile-no-enrichers')).toBeNull();
+    });
+
+    it('opens the history of the description from the clock beside its title (E6b2)', async () => {
+        const onhistory = vi.fn();
+        const view = render(AssetProfileTab, {props: {assetId: 7, period: PERIOD, isin: null, ticker: null, onhistory}});
+        await waitFor(() => expect(screen.getByTestId('asset-profile-tab')).toHaveAttribute('data-status', 'ready'));
+        await fireEvent.click(screen.getByTestId('asset-profile-description-history'));
+        expect(onhistory).toHaveBeenCalledWith('description');
+        expect(screen.getByTestId('profile-classification-geography-history'), 'the tab hands the clock to the classification').toBeInTheDocument();
+        view.unmount();
+
+        store.readAssetProfile.mockResolvedValue({...FOUND, voices: {ter: [step('0.0019')]}});
+        render(AssetProfileTab, {props: {assetId: 7, period: PERIOD, isin: null, ticker: null, onhistory}});
+        await waitFor(() => expect(screen.getByTestId('asset-profile-tab')).toHaveAttribute('data-status', 'ready'));
+        expect(screen.queryByTestId('asset-profile-description-history'), 'no rows, no history').toBeNull();
     });
 });
