@@ -176,6 +176,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/assets/profile/profileTabState.test.ts",
             "src/lib/features/assets/profile/profileChanges.test.ts",
             "src/lib/features/assets/profile/profileHistory.test.ts",
+            "src/lib/features/assets/profile/profileRefresh.test.ts",
             "src/lib/features/assets/profile/assetProfileDraft.test.ts",
             "src/lib/features/assets/enrichers/enrichersEditState.test.ts",
             "src/lib/features/assets/enrichers/enricherCalls.test.ts",
