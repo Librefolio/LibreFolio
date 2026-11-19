@@ -2,6 +2,8 @@
  * «Aggiorna» and «Configura» of the «Profilo» tab (plan 68, E6c):
  * - an asset with enrichers shows «Aggiorna» beside «Modifica i dati», with the last read in its hint; a click reads the
  *   enrichers of that asset again (`POST /assets/profile/refresh` with its id) and never touches the prices;
+ * - E6c2 (PROF 19/11): with only enrichers this instance cannot use, «Aggiorna» stays, and says nothing was read
+ *   (`enrichers_read` 0 in the event), never «nothing changed»;
  * - an asset without enrichers shows the box «Nessun arricchitore configurato»: its «Configura» opens the asset window
  *   with the enrichers' window on top, for that opening only.
  *
@@ -96,6 +98,28 @@ test.describe('«Aggiorna» and «Configura» on the Profilo tab (plan 68, E6c)'
             await openEditAssetModal(page);
             await expect(page.getByTestId('asset-modal-enrichers')).toBeVisible();
             await expect(page.getByTestId('enrichers-modal')).toHaveCount(0);
+        } finally {
+            await page.request.delete(`${API_BASE}/assets?asset_ids=${assetId}`);
+        }
+    });
+
+    test('with only enrichers this instance cannot use, «Aggiorna» says nothing was read (E6c2)', async ({page}) => {
+        test.setTimeout(60_000);
+        const isin = `ZZ${uniqueToken(9)}0`.toUpperCase();
+        // An enricher code this instance does not have: the binding is kept (B2), the refresh skips it
+        const assetId = await createEtf(page, `E2E profile refresh none ${uniqueToken(8)}`, isin, {notinstalled: {identifier_type: 'ISIN', identifier: isin}});
+        try {
+            await goToAssetDetailPage(page, String(assetId));
+            await page.getByTestId('asset-detail-tab-profile').click();
+            await expect(page.getByTestId('asset-profile-tab')).toHaveAttribute('data-status', 'ready', {timeout: 15_000});
+            const button = page.getByTestId('asset-profile-refresh');
+            await expect(button, 'the button stays: the asset has a binding').toHaveAttribute('data-state', 'idle');
+
+            const since = await eventSeq(page);
+            await button.click();
+            const event = await waitForEvent(page, 'asset.profile.refreshed', {since});
+            expect(event.detail as Record<string, unknown>).toMatchObject({asset_id: assetId, enrichers_read: 0, written: []});
+            await expect(button).toHaveAttribute('data-state', 'idle', {timeout: 10_000});
         } finally {
             await page.request.delete(`${API_BASE}/assets?asset_ids=${assetId}`);
         }
