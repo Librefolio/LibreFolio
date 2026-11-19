@@ -192,7 +192,8 @@
         "confirmProceed": "Sì, le date sono giuste"
       },
       "chargesReadFailed": "Impossibile leggere le spese collegate di {ids}. «Reimposta riga» le rilegge.",
-      "deleteSkippedUnread": "{n, plural, one {# transazione non è stata eliminata: non è stato possibile leggere le sue spese collegate. «Reimposta riga» le rilegge.} other {# transazioni non sono state eliminate: non è stato possibile leggere le loro spese collegate. «Reimposta riga» le rilegge.}}"
+      "deleteSkippedUnread": "{n, plural, one {# transazione non è stata eliminata: non è stato possibile leggere le sue spese collegate. «Reimposta riga» le rilegge.} other {# transazioni non sono state eliminate: non è stato possibile leggere le loro spese collegate. «Reimposta riga» le rilegge.}}",
+      "rowRef": "riga {n}"
     },
     "commit": {
       "serverError": "Salvataggio impossibile — errore del server"
@@ -452,21 +453,22 @@
       "actionShort": "Collega",
       "title": "Collega le spese",
       "subtitle": "{n} righe separate → 1 {type} con le sue spese",
-      "target": "{type} #{id} con {n, plural, one {# spesa collegata} other {# spese collegate}}",
+      "target": "{type} {ref} con {n, plural, one {# spesa collegata} other {# spese collegate}}",
       "note": "Le spese restano transazioni a sé: cambia solo il collegamento.",
       "confirm": "Collega",
       "failed": "Collegamento delle spese non riuscito",
       "reason": {
-        "twoParents": "Scegli una sola transazione: {type} #{id} è la seconda",
-        "paired": "{type} #{id} è metà di una coppia: prima dividi la coppia",
-        "linked": "{type} #{id} è collegata a un'altra transazione: prima scollegala",
-        "otherBroker": "{type} #{id} è su un altro broker",
-        "otherAsset": "{type} #{id} ha un altro asset",
-        "noAsset": "{type} #{id} non ha un asset, e la transazione sì"
+        "twoParents": "Scegli una sola transazione: {type} {ref} è la seconda",
+        "paired": "{type} {ref} è metà di una coppia: prima dividi la coppia",
+        "linked": "{type} {ref} è collegata a un'altra transazione: prima scollegala",
+        "otherBroker": "{type} {ref} è su un altro broker",
+        "otherAsset": "{type} {ref} ha un altro asset",
+        "noAsset": "{type} {ref} non ha un asset, e la transazione sì",
+        "deleted": "{type} {ref} è da eliminare: prima ripristina la riga"
       }
     },
     "chargesDelete": {
-      "title": "Eliminare {type} #{id}?",
+      "title": "Eliminare {type} {ref}?",
       "titleMany": "Eliminare {n} transazioni con spese?",
       "lead": "{n, plural, one {Ha # spesa collegata.} other {Ha # spese collegate.}}",
       "keep": "Tieni le spese",

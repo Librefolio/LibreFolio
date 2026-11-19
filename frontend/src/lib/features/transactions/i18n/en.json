@@ -192,7 +192,8 @@
         "confirmProceed": "Yes, the dates are right"
       },
       "chargesReadFailed": "Could not read the linked charges of {ids}. «Reset row» on the row reads them again.",
-      "deleteSkippedUnread": "{n, plural, one {# transaction was not deleted: its linked charges could not be read. «Reset row» reads them again.} other {# transactions were not deleted: their linked charges could not be read. «Reset row» reads them again.}}"
+      "deleteSkippedUnread": "{n, plural, one {# transaction was not deleted: its linked charges could not be read. «Reset row» reads them again.} other {# transactions were not deleted: their linked charges could not be read. «Reset row» reads them again.}}",
+      "rowRef": "row {n}"
     },
     "commit": {
       "serverError": "Save failed — server error"
@@ -452,21 +453,22 @@
       "actionShort": "Link",
       "title": "Link the charges",
       "subtitle": "{n} separate rows → 1 {type} with its charges",
-      "target": "{type} #{id} with {n, plural, one {# linked charge} other {# linked charges}}",
+      "target": "{type} {ref} with {n, plural, one {# linked charge} other {# linked charges}}",
       "note": "The charges stay transactions of their own: only the link changes.",
       "confirm": "Link",
       "failed": "Linking the charges failed",
       "reason": {
-        "twoParents": "Choose one transaction only: {type} #{id} is a second one",
-        "paired": "{type} #{id} is half of a pair: split the pair first",
-        "linked": "{type} #{id} is linked to another transaction: unlink it first",
-        "otherBroker": "{type} #{id} is on another broker",
-        "otherAsset": "{type} #{id} has another asset",
-        "noAsset": "{type} #{id} has no asset, and the transaction has one"
+        "twoParents": "Choose one transaction only: {type} {ref} is a second one",
+        "paired": "{type} {ref} is half of a pair: split the pair first",
+        "linked": "{type} {ref} is linked to another transaction: unlink it first",
+        "otherBroker": "{type} {ref} is on another broker",
+        "otherAsset": "{type} {ref} has another asset",
+        "noAsset": "{type} {ref} has no asset, and the transaction has one",
+        "deleted": "{type} {ref} is marked for deletion: restore the row first"
       }
     },
     "chargesDelete": {
-      "title": "Delete {type} #{id}?",
+      "title": "Delete {type} {ref}?",
       "titleMany": "Delete {n} transactions with charges?",
       "lead": "{n, plural, one {It has # linked charge.} other {It has # linked charges.}}",
       "keep": "Keep the charges",

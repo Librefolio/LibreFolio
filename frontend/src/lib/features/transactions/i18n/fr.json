@@ -192,7 +192,8 @@
         "confirmProceed": "Oui, les dates sont correctes"
       },
       "chargesReadFailed": "Impossible de lire les frais liés de {ids}. «Réinitialiser la ligne» les relit.",
-      "deleteSkippedUnread": "{n, plural, one {# transaction n’a pas été supprimée : ses frais liés n’ont pas pu être lus. «Réinitialiser la ligne» les relit.} other {# transactions n’ont pas été supprimées : leurs frais liés n’ont pas pu être lus. «Réinitialiser la ligne» les relit.}}"
+      "deleteSkippedUnread": "{n, plural, one {# transaction n’a pas été supprimée : ses frais liés n’ont pas pu être lus. «Réinitialiser la ligne» les relit.} other {# transactions n’ont pas été supprimées : leurs frais liés n’ont pas pu être lus. «Réinitialiser la ligne» les relit.}}",
+      "rowRef": "ligne {n}"
     },
     "commit": {
       "serverError": "Sauvegarde impossible — erreur serveur"
@@ -452,21 +453,22 @@
       "actionShort": "Lier",
       "title": "Lier les frais",
       "subtitle": "{n} lignes séparées → 1 {type} avec ses frais",
-      "target": "{type} #{id} avec {n, plural, one {# frais lié} other {# frais liés}}",
+      "target": "{type} {ref} avec {n, plural, one {# frais lié} other {# frais liés}}",
       "note": "Les frais restent des transactions à part : seul le lien change.",
       "confirm": "Lier",
       "failed": "La liaison des frais a échoué",
       "reason": {
-        "twoParents": "Choisissez une seule transaction : {type} #{id} est la deuxième",
-        "paired": "{type} #{id} fait partie d'une paire : séparez d'abord la paire",
-        "linked": "{type} #{id} est liée à une autre transaction : déliez-la d'abord",
-        "otherBroker": "{type} #{id} est chez un autre courtier",
-        "otherAsset": "{type} #{id} a un autre actif",
-        "noAsset": "{type} #{id} n'a pas d'actif, et la transaction en a un"
+        "twoParents": "Choisissez une seule transaction : {type} {ref} est la deuxième",
+        "paired": "{type} {ref} fait partie d'une paire : séparez d'abord la paire",
+        "linked": "{type} {ref} est liée à une autre transaction : déliez-la d'abord",
+        "otherBroker": "{type} {ref} est chez un autre courtier",
+        "otherAsset": "{type} {ref} a un autre actif",
+        "noAsset": "{type} {ref} n'a pas d'actif, et la transaction en a un",
+        "deleted": "{type} {ref} est à supprimer : restaurez d'abord la ligne"
       }
     },
     "chargesDelete": {
-      "title": "Supprimer {type} #{id} ?",
+      "title": "Supprimer {type} {ref} ?",
       "titleMany": "Supprimer {n} transactions avec des frais ?",
       "lead": "{n, plural, one {Elle a # frais lié.} other {Elle a # frais liés.}}",
       "keep": "Garder les frais",

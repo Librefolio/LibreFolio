@@ -192,7 +192,8 @@
         "confirmProceed": "Sí, las fechas son correctas"
       },
       "chargesReadFailed": "No se pudieron leer los gastos vinculados de {ids}. «Restablecer fila» los vuelve a leer.",
-      "deleteSkippedUnread": "{n, plural, one {# transacción no se eliminó: no se pudieron leer sus gastos vinculados. «Restablecer fila» los vuelve a leer.} other {# transacciones no se eliminaron: no se pudieron leer sus gastos vinculados. «Restablecer fila» los vuelve a leer.}}"
+      "deleteSkippedUnread": "{n, plural, one {# transacción no se eliminó: no se pudieron leer sus gastos vinculados. «Restablecer fila» los vuelve a leer.} other {# transacciones no se eliminaron: no se pudieron leer sus gastos vinculados. «Restablecer fila» los vuelve a leer.}}",
+      "rowRef": "fila {n}"
     },
     "commit": {
       "serverError": "Guardado imposible — error del servidor"
@@ -452,21 +453,22 @@
       "actionShort": "Vincular",
       "title": "Vincular los gastos",
       "subtitle": "{n} filas separadas → 1 {type} con sus gastos",
-      "target": "{type} #{id} con {n, plural, one {# gasto vinculado} other {# gastos vinculados}}",
+      "target": "{type} {ref} con {n, plural, one {# gasto vinculado} other {# gastos vinculados}}",
       "note": "Los gastos siguen siendo transacciones propias: solo cambia el vínculo.",
       "confirm": "Vincular",
       "failed": "No se pudieron vincular los gastos",
       "reason": {
-        "twoParents": "Elige una sola transacción: {type} #{id} es la segunda",
-        "paired": "{type} #{id} es parte de un par: primero separa el par",
-        "linked": "{type} #{id} está vinculada a otra transacción: primero desvincúlala",
-        "otherBroker": "{type} #{id} está en otro bróker",
-        "otherAsset": "{type} #{id} tiene otro activo",
-        "noAsset": "{type} #{id} no tiene activo, y la transacción sí"
+        "twoParents": "Elige una sola transacción: {type} {ref} es la segunda",
+        "paired": "{type} {ref} es parte de un par: primero separa el par",
+        "linked": "{type} {ref} está vinculada a otra transacción: primero desvincúlala",
+        "otherBroker": "{type} {ref} está en otro bróker",
+        "otherAsset": "{type} {ref} tiene otro activo",
+        "noAsset": "{type} {ref} no tiene activo, y la transacción sí",
+        "deleted": "{type} {ref} está por eliminar: primero restaura la fila"
       }
     },
     "chargesDelete": {
-      "title": "¿Eliminar {type} #{id}?",
+      "title": "¿Eliminar {type} {ref}?",
       "titleMany": "¿Eliminar {n} transacciones con gastos?",
       "lead": "{n, plural, one {Tiene # gasto vinculado.} other {Tiene # gastos vinculados.}}",
       "keep": "Conservar los gastos",
