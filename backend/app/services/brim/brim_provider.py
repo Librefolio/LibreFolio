@@ -22,7 +22,8 @@ import csv
 import io
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from types import SimpleNamespace
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import structlog
 from pydantic import ValidationError
@@ -38,10 +39,19 @@ from backend.app.schemas.brim import (
     BRIMValidationIssue,
 )
 from backend.app.schemas.transactions.transactions import TXCreateItem
+from backend.app.schemas.transactions.type_metadata import charge_types
 from backend.app.services.plugin_settings.contract import PluginSettingsMixin
+from backend.app.services.transactions.charges import charge_link_issue
 from backend.app.utils.pydantic_errors import error_params, loc_to_field
 
 logger = structlog.get_logger(__name__)
+
+
+def _link_view(tx_type: Any, broker_id: int, asset_id: Optional[int], link_uuid: Optional[str]) -> SimpleNamespace:
+    """A row of a plugin's output as the charge rules read it (``charge_link_issue``, project 66 P1a): in a batch a row
+    with a ``link_uuid`` is a leg of a pair (rule 8), the role a saved row's ``related_transaction_id`` plays."""
+    return SimpleNamespace(type=tx_type, broker_id=broker_id, asset_id=asset_id, related_transaction_id=1 if link_uuid else None)
+
 
 # Encodings tried, in order, whenever a broker export is read as text. UTF-8 (with or
 # without BOM) first; then Windows-1252, which Excel on Windows and many banks write;
@@ -567,6 +577,71 @@ class BRIMProvider(PluginSettingsMixin, ABC):
                 )
             )
             return None
+
+    def _create_linked_charge(
+        self,
+        row_num: int,
+        transactions: List[TXCreateItem],
+        validation_issues: List[BRIMValidationIssue],
+        parent: TXCreateItem,
+        *,
+        context: Optional[str] = None,
+        **kwargs,
+    ) -> Optional[TXCreateItem]:
+        """Create a FEE or a TAX linked to ``parent``, a row of this same output (project 66, P1a).
+
+        The link follows the transaction rules (``charge_link_issue`` of ``services/transactions/charges.py``, the one
+        place they live), read on the incoming rows: a leg of a pair is a row with a ``link_uuid``.
+
+        - **Valid link:** the charge is created with ``parent_ref`` = the parent's ``ref`` (the parent is named first
+          when it has none, ``_ensure_ref``) and **always** the parent's broker and asset (rule 3: without them the
+          commit would refuse it). A fake asset id is fine: the core maps both rows to the same real asset.
+        - **No valid link** (a parent that is not a parent type, a leg of a pair, a tax on a fee…): the charge is
+          created free, with the values the plugin passed (a broker it left out is the parent's), as before the link
+          existed, and the parent stays unnamed.
+          Never an error for the user: the parent's type comes from the file (D10).
+
+        The creation goes through ``_create_transaction`` (same issues, same ``None`` on a validation error). A charge
+        type other than FEE or TAX, or a parent that is not in ``transactions``, is a programming error
+        (``ValueError``). A charge with no parent in the file (an account fee) is created with ``_create_transaction``.
+        """
+        charge_type = kwargs.get("type")
+        if charge_type not in charge_types():
+            raise ValueError(f"_create_linked_charge creates a FEE or a TAX, not {charge_type!r}")
+        if not any(tx is parent for tx in transactions):
+            raise ValueError("_create_linked_charge: the parent must be a row of this output (transactions)")
+        charge_view = _link_view(charge_type, parent.broker_id, parent.asset_id, kwargs.get("link_uuid"))
+        parent_view = _link_view(parent.type, parent.broker_id, parent.asset_id, parent.link_uuid)
+        if charge_link_issue(cast(Any, charge_view), cast(Any, parent_view), 0) is not None:
+            logger.debug("BRIM charge created without its link", provider=self.provider_code, row=row_num, parent_type=str(parent.type))
+            # Free: the plugin's own values; a broker it left out is the parent's (the same file, the same broker).
+            return self._create_transaction(row_num, transactions, validation_issues, context=context, **{"broker_id": parent.broker_id, **kwargs})
+        parent_ref = self._ensure_ref(parent, transactions)
+        linked = {**kwargs, "broker_id": parent.broker_id, "asset_id": parent.asset_id, "parent_ref": parent_ref}
+        return self._create_transaction(row_num, transactions, validation_issues, context=context, **linked)
+
+    @staticmethod
+    def _ensure_ref(parent: TXCreateItem, transactions: List[TXCreateItem]) -> str:
+        """The parent's ``ref`` in this output, given now when it has none (project 66, P1a).
+
+        ``r<n>``, n = 1 + its position in ``transactions`` (found by identity: two equal trades of one day are equal
+        by value); ``r<n>-2``, ``r<n>-3``… when that name is taken. Deterministic, unique in one output (the import
+        wizard renews the names per file), at most 36 characters. A parent not in ``transactions`` is a programming
+        error (``ValueError``).
+        """
+        position = next((i for i, tx in enumerate(transactions) if tx is parent), None)
+        if position is None:
+            raise ValueError("_ensure_ref: the parent must be a row of this output (transactions)")
+        if parent.ref:
+            return parent.ref
+        used = {tx.ref for tx in transactions if tx.ref}
+        base = f"r{position + 1}"
+        name, suffix = base, 1
+        while name in used:
+            suffix += 1
+            name = f"{base}-{suffix}"
+        parent.ref = name
+        return name
 
     def shutdown(self) -> None:  # pragma: no cover  # noqa: B027 — intentional no-op default
         """

@@ -1395,6 +1395,16 @@ def services_brim_gap_fix(verbose: bool = False, test_names: list = None) -> boo
     return run_command(cmd, "BRIM gap-fix tests", verbose=verbose)
 
 
+def services_brim_linked_charges(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the linked-charge helpers of BRIMProvider (project 66, P1a): _create_linked_charge, _ensure_ref, the structure check, the reimport criterion."""
+    print_section("Services: BRIM Linked Charges")
+    print_info("Testing: BRIMProvider._create_linked_charge and _ensure_ref (brim_provider.py), backend/test_scripts/brim_charge_links.py (structure check, assert_reimport_adds_nothing)")
+    print_info("Tests: valid link (parent_ref, parent's broker and asset), free charge on an invalid parent, ValueError on a non-charge type, names r<n> by identity, orphan parent_ref reported, reimport adds nothing")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_linked_charges.py", test_names)
+    return run_command(cmd, "BRIM linked charges tests", verbose=verbose)
+
+
 def services_brim_create_transaction(verbose: bool = False, test_names: list = None) -> bool:
     """Test BRIMProvider._create_transaction: its issues through the shared rule of utils/pydantic_errors.py (W-B70)."""
     print_section("Services: BRIM Create Transaction")
@@ -3808,6 +3818,15 @@ Note: No backend server required.
         isolation="pure",
     )
     add_test(cat, "brim-create-transaction", services_brim_create_transaction, name="BRIM Create Transaction", desc="_create_transaction: its issues' field and params (utils.pydantic_errors)")
+    add_test(
+        cat,
+        "brim-linked-charges",
+        services_brim_linked_charges,
+        name="BRIM Linked Charges",
+        desc="Project 66 P1a: _create_linked_charge (valid link, free charge, ValueError, issue), _ensure_ref, structure check on fake plugins, reimport adds nothing",
+        # PURE: fake plugins in memory; the reimport tests open a private in-memory SQLite each and dispose it.
+        isolation="pure",
+    )
     add_test(
         cat,
         "financial-math",
