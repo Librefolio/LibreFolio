@@ -23,9 +23,10 @@ currency.
   series codes come from `…/WebIndicators/HistoricalExchangeRatesDaily/`, the list the bank's «Selected Historical
   Rates» page reads: each entry has a `TimeseriesCode` and a `Name` such as «Rand per US Dollar» or «Switzerland: Franc
   per Rand». The name gives the direction.
-- **One request per currency**: `fetch_rates()` asks the series of each asked currency in sorted order, with a pause of
-  `PAUSE_SECONDS` (0.3 s) between two requests (D9). An unknown code, or a range without data (a weekend), answers 200
-  with `[]`.
+- **One request per currency, three at a time**: `fetch_rates()` asks the series of the asked currencies at most
+  `MAX_PARALLEL` (3) at once, with `PAUSE_SECONDS` (0.3 s) between two starts (consultant 75, 19/11/2026: the bank
+  publishes no limit, its API is sometimes slow, and a route usually asks one to three SARB currencies). An unknown code,
+  or a range without data (a weekend), answers 200 with `[]`.
 - **Values read as `Decimal`**: the answer is parsed with `json.loads(…, parse_float=Decimal)`, so `0.0488` stays
   `Decimal("0.0488")`; no value passes through a float. Rows come back newest first and are returned oldest first.
 - **Start date**: `"min"`, and any start before 2010-01-01, asks from `FIRST_DAY` (see the budget below). ZAR alone
@@ -69,7 +70,7 @@ Bank of Russia's.
 
 ### 📦 Request Budget
 
-One request per currency. Measured on 2026-11-19 on the real API:
+One request per currency, three at a time. Measured on 2026-11-19 on the real API, one at a time (before L25c):
 
 | Range | Requests | Time |
 |-------|----------|------|
@@ -78,21 +79,24 @@ One request per currency. Measured on 2026-11-19 on the real API:
 | 14 days, 2 currencies | 2 | 2.0 s |
 | `"min"` (from 2010), 24 currencies (before RUB) | 24 | 68.9 s, pause included (25 with RUB: about 72 s, estimated) |
 
-With the history from 1970, 25 currencies would take about 3 minutes, over the 120 s the core gives one leg
-(`fx/sync.py`): hence `FIRST_DAY` 2010-01-01. A route usually asks one to three SARB currencies. The ECB and BDI hold the
-older ZAR history.
+With the history from 1970, 25 currencies one at a time would take about 3 minutes: hence `FIRST_DAY` 2010-01-01, which
+keeps a first sync short. Three at a time, the `"min"` of every currency takes about a third of the times above. A route
+usually asks one to three SARB currencies: one round. The ECB and BDI hold the older ZAR history.
 
 !!! warning "The bank's API is not always that fast"
 
     The times above were measured on the afternoon of 19 November 2026. The same evening every request took 20–35 s,
     whatever its range (14 days of USD: 22.6 s; RUB from 2010: 29–35 s). At such times a sync that asks several SARB
-    currencies can exceed the 120 s of a leg, and the sync tries the next route.
+    currencies is slow: three at a time, about 35 s per round. The sync **waits** for it. Its wait of 120 s on a leg
+    (`fx/sync.py`) starts only after every provider of the sync has answered (phase 2 gathers the fetches, phase 3 waits
+    on the legs), so it never cuts a slow fetch, and the sync does not switch to the next route because of time. The
+    only limit is the 60 s timeout of each HTTP request.
 
 ### 🚨 Errors
 
 | Answer | Result |
 |--------|--------|
-| HTTP 429 on any currency | `FXRateLimitedError` (its `Retry-After`, through `raise_if_fx_rate_limited()`); no further currency is asked |
+| HTTP 429 on any currency | `FXRateLimitedError` for the whole call, with the longest `Retry-After` of the call (`raise_longest_refusal()`, as in BOE); the series not started yet are never asked |
 | Another HTTP error, a network failure, an HTML page, non-JSON text, or JSON that is not a list, for one currency | That currency gets an empty list, with a warning; the others are asked and returned (XRL-H09) |
 | The same for **every** asked currency | `FXServiceError` («SARB API error for every asked series: …»): the sync tries the next route |
 | A row whose `Value` is null, zero, negative or not a number, or whose `Period` cannot be read (X-R50) | That day only is skipped |
@@ -118,7 +122,7 @@ use synthetic answers only. The description names the source («Source: South Af
 ### 🧪 Tests
 
 `backend/test_scripts/test_services/test_fx_sarb.py` pins the direction of both kinds of series (USD; CHF and JPY), the
-exact decimals, one request per currency in sorted order with a pause, the start from 2010, the skipped rows, RUB served as
+exact decimals, one request per currency, at most 3 at once with a pause between two starts, the start from 2010, the skipped rows, RUB served as
 roubles per rand, the 429 that stops the series, one failed series that leaves the others, every series failed as an error and the
 static catalogue, all with synthetic answers written by hand (no network, no DB, no server). It is registered among the
 provider error paths:
