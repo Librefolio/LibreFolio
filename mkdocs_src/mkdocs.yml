@@ -142,6 +142,7 @@ plugins:
             Central Bank of Kenya (CBK): Central Bank of Kenya (CBK)
             Reserve Bank of India (RBI): Reserve Bank of India (RBI)
             Bank of Ghana (BOG): Bank of Ghana (BOG)
+            Banco Central de la República Argentina (BCRA): Banco Central de la República Argentina (BCRA)
             Banca d'Italia (BDI): Banca d'Italia (BDI)
             Banco Central do Brasil (BCB): Banco Central do Brasil (BCB)
             # Developer provider entries — kept in English per dev-manual policy
@@ -168,6 +169,7 @@ plugins:
             CBK Tech: CBK Tech
             RBI Tech: RBI Tech
             BOG Tech: BOG Tech
+            BCRA Tech: BCRA Tech
             BDI Tech: BDI Tech
             BCB Tech: BCB Tech
             # Developer transaction section — kept in English per dev-manual policy
@@ -439,6 +441,7 @@ plugins:
             Central Bank of Kenya (CBK): Central Bank of Kenya (CBK)
             Reserve Bank of India (RBI): Reserve Bank of India (RBI)
             Bank of Ghana (BOG): Bank of Ghana (BOG)
+            Banco Central de la República Argentina (BCRA): Banco Central de la República Argentina (BCRA)
             Banca d'Italia (BDI): Banca d'Italia (BDI)
             Banco Central do Brasil (BCB): Banco Central do Brasil (BCB)
             # Developer provider entries — kept in English per dev-manual policy
@@ -465,6 +468,7 @@ plugins:
             CBK Tech: CBK Tech
             RBI Tech: RBI Tech
             BOG Tech: BOG Tech
+            BCRA Tech: BCRA Tech
             BDI Tech: BDI Tech
             BCB Tech: BCB Tech
             # Developer transaction section — kept in English per dev-manual policy
@@ -737,6 +741,7 @@ plugins:
             Central Bank of Kenya (CBK): Central Bank of Kenya (CBK)
             Reserve Bank of India (RBI): Reserve Bank of India (RBI)
             Bank of Ghana (BOG): Bank of Ghana (BOG)
+            Banco Central de la República Argentina (BCRA): Banco Central de la República Argentina (BCRA)
             Banca d'Italia (BDI): Banca d'Italia (BDI)
             Banco Central do Brasil (BCB): Banco Central do Brasil (BCB)
             # Developer provider entries — kept in English per dev-manual policy
@@ -763,6 +768,7 @@ plugins:
             CBK Tech: CBK Tech
             RBI Tech: RBI Tech
             BOG Tech: BOG Tech
+            BCRA Tech: BCRA Tech
             BDI Tech: BDI Tech
             BCB Tech: BCB Tech
             # Developer transaction section — kept in English per dev-manual policy
@@ -1108,6 +1114,7 @@ nav:
               - Central Bank of Kenya (CBK): user/fx/providers/cbk.md
               - Reserve Bank of India (RBI): user/fx/providers/rbi.md
               - Bank of Ghana (BOG): user/fx/providers/bog.md
+              - Banco Central de la República Argentina (BCRA): user/fx/providers/bcra.md
               - Banca d'Italia (BDI): user/fx/providers/bdi.md
               - Banco Central do Brasil (BCB): user/fx/providers/bcb.md
           - 🔎 Pair Detail:
@@ -1383,6 +1390,7 @@ nav:
                   - CBK Tech: developer/backend/fx/providers/cbk.md
                   - RBI Tech: developer/backend/fx/providers/rbi.md
                   - BOG Tech: developer/backend/fx/providers/bog.md
+                  - BCRA Tech: developer/backend/fx/providers/bcra.md
                   - BDI Tech: developer/backend/fx/providers/bdi.md
                   - BCB Tech: developer/backend/fx/providers/bcb.md
           - "🕐 Scheduler (Daemon)": developer/backend/scheduler.md
