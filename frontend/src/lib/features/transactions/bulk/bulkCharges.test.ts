@@ -15,7 +15,11 @@
  *   - `applyChargeDrafts` the form's answer back onto the operations: one way, nothing typed is lost.
  *   - `chargeParentFields`/`parentNeedsRef` what the payload of a charge carries to name its parent, and which creates
  *                         need a `ref`.
- *   - `chargeUnlinkList`  the charges «scollega» under a parent «del»: they feed the F6 banner until F7-c.
+ *   - `foldBulkCharges`   (F7-c1) the grid's rows: the top-level rows in order, each open parent followed by its
+ *                         charges (`isUnderParent`), in the order of the operations.
+ *   - `rowAnchor`         (F7-c1) the row on screen that stands for an operation: a charge under a closed parent → the
+ *                         parent; open → itself; otherwise `pairedWith ?? tempId`.
+ *   (`chargeUnlinkList`, the F6 banner's list, is gone in F7-c1: the indented «scollega» rows replace the banner.)
  *
  * And the five invariants of the payload (§3 + §11.2), checked on a payload built by applying `chargeParentFields` to
  * operations that the module itself produced: every id once across updates and deletes; a deleted parent leaves each of
@@ -29,7 +33,9 @@ import type {TXReadItem} from '../types';
 import type {DraftFields, PendingOp} from './txBulkTypes';
 import {chargeFromPicked, chargesFromRows, type ChargeDraft} from '../form/txCharges';
 import {magnitudeForRule} from '../txPayloadHelpers';
-import {adoptCharges, applyChargeDrafts, chargeDraftsFor, chargeParentFields, chargeUnlinkList, isUnderParent, parentNeedsRef, remapChargeOf} from './bulkCharges';
+import {adoptCharges, applyChargeDrafts, chargeDraftsFor, chargeParentFields, isUnderParent, parentNeedsRef, remapChargeOf} from './bulkCharges';
+// F7-c1: the two functions it adds, read through the namespace so that while they do not exist only their own cases fail.
+import * as bulkChargesModule from './bulkCharges';
 
 // ---------------------------------------------------------------------------
 // Fixtures: a store of saved rows, and operations built from them
@@ -485,7 +491,7 @@ describe('applyChargeDrafts — the form’s answer back onto the operations', (
 });
 
 // ---------------------------------------------------------------------------
-// chargeParentFields / parentNeedsRef / chargeUnlinkList
+// chargeParentFields / parentNeedsRef
 // ---------------------------------------------------------------------------
 
 describe('chargeParentFields — how a charge’s payload names its parent', () => {
@@ -547,18 +553,6 @@ describe('parentNeedsRef — which creates carry a ref', () => {
     it('a new parent named only by a saved charge linked to it (linkNew) needs one too', () => {
         const ops = [createOp('new-buy', newBuyFields()), editOp(FEE_FREE, {chargeOf: 'new-buy'})];
         expect(parentNeedsRef(ops[0], ops)).toBe(true);
-    });
-});
-
-describe('chargeUnlinkList — the charges «scollega» under a parent «del» (the F6 banner until F7-c)', () => {
-    it('lists exactly those: not a deleted charge, not a linked one, not one unlinked from a parent that stays', () => {
-        const ops = [editOp(BUY_A, {markedDelete: true}), editOp(FEE_A, {chargeOf: 't-501', parentUnlink: true}), editOp(TAX_A, {chargeOf: 't-501', markedDelete: true}), editOp(BUY_B), editOp(FEE_B, {chargeOf: 't-511', parentUnlink: true}), editOp(FEE_FREE, {chargeOf: 't-501'})];
-
-        expect(chargeUnlinkList(ops).map((op) => op.tempId)).toEqual([`t-${FEE_A.id}`]);
-    });
-
-    it('nothing when no parent is deleted', () => {
-        expect(chargeUnlinkList(adoptCharges([editOp(BUY_A), editOp(FEE_A), editOp(TAX_A)], get))).toEqual([]);
     });
 });
 
@@ -752,5 +746,140 @@ describe('the five invariants of the payload, on operations the module produced'
                 violations.join(' | ') || 'no violation found',
             ).toBe(true);
         });
+    });
+});
+
+// ---------------------------------------------------------------------------
+// F7-c1 — foldBulkCharges and rowAnchor (contract 66-F7 §13 F7-c1, corrected by §14)
+// ---------------------------------------------------------------------------
+
+type FoldBulkCharges = (top: readonly PendingOp[], ops: readonly PendingOp[], expanded: ReadonlySet<string>) => PendingOp[];
+type RowAnchor = (op: PendingOp, ops: readonly PendingOp[], expanded: ReadonlySet<string>) => string;
+
+/** `foldBulkCharges`, or a failure naming it while `bulkCharges.ts` does not export it yet. */
+function foldBulkCharges(top: readonly PendingOp[], ops: readonly PendingOp[], expanded: ReadonlySet<string>): PendingOp[] {
+    const fn = (bulkChargesModule as unknown as {foldBulkCharges?: FoldBulkCharges}).foldBulkCharges;
+    expect(fn, 'bulkCharges exports foldBulkCharges').toBeTypeOf('function');
+    return fn!(top, ops, expanded);
+}
+
+/** `rowAnchor`, or a failure naming it while `bulkCharges.ts` does not export it yet. */
+function rowAnchor(op: PendingOp, ops: readonly PendingOp[], expanded: ReadonlySet<string>): string {
+    const fn = (bulkChargesModule as unknown as {rowAnchor?: RowAnchor}).rowAnchor;
+    expect(fn, 'bulkCharges exports rowAnchor').toBeTypeOf('function');
+    return fn!(op, ops, expanded);
+}
+
+const tempIds = (ops: readonly PendingOp[]): string[] => ops.map((op) => op.tempId);
+
+describe('foldBulkCharges — the grid’s rows: top-level rows, each open parent followed by its charges', () => {
+    // The ops in the order the Bulk holds them: the TAX before the FEE, so «in ops order» is not «in id order».
+    const buyA = editOp(BUY_A);
+    const taxA = editOp(TAX_A, {chargeOf: 't-501'});
+    const feeA = editOp(FEE_A, {chargeOf: 't-501'});
+    const buyB = editOp(BUY_B);
+    const feeB = editOp(FEE_B, {chargeOf: 't-511'});
+    const free = editOp(FEE_FREE);
+    const ops = [taxA, buyA, free, feeB, buyB, feeA];
+    /** The top-level rows as the Bulk sorts them (here BUY_B first, as a descending date sort would). */
+    const top = [buyB, free, buyA];
+
+    it('nothing open: the top-level rows, unchanged and in their order; no charge', () => {
+        expect(tempIds(foldBulkCharges(top, ops, new Set()))).toEqual(['t-511', 't-520', 't-501']);
+    });
+
+    it('an open parent is followed by its charges, in the order of the operations, wherever the parent sits', () => {
+        expect(tempIds(foldBulkCharges(top, ops, new Set(['t-501'])))).toEqual(['t-511', 't-520', 't-501', 't-503', 't-502']);
+    });
+
+    it('only the open parents unfold: BUY_B open, BUY_A closed', () => {
+        expect(tempIds(foldBulkCharges(top, ops, new Set(['t-511'])))).toEqual(['t-511', 't-512', 't-520', 't-501']);
+    });
+
+    it('both open: each group right after its own parent', () => {
+        expect(tempIds(foldBulkCharges(top, ops, new Set(['t-501', 't-511'])))).toEqual(['t-511', 't-512', 't-520', 't-501', 't-503', 't-502']);
+    });
+
+    it('a charge unlinked from a parent that stays is not under it: it is not inserted, even with the parent open (it is a top-level row of its own)', () => {
+        const unlinked = editOp(FEE_A, {chargeOf: 't-501', parentUnlink: true});
+        const opsU = [buyA, taxA, unlinked];
+        const topU = [buyA, unlinked];
+        expect(tempIds(foldBulkCharges(topU, opsU, new Set(['t-501'])))).toEqual(['t-501', 't-503', 't-502']);
+        expect(
+            foldBulkCharges(topU, opsU, new Set(['t-501'])).filter((op) => op.tempId === 't-502'),
+            'the unlinked FEE appears once, where the top-level rows put it',
+        ).toHaveLength(1);
+    });
+
+    it('under a parent marked for deletion a «scollega» charge is still under it: inserted, as a «del» one is', () => {
+        const deleted = editOp(BUY_A, {markedDelete: true});
+        const opsD = [deleted, editOp(FEE_A, {chargeOf: 't-501', parentUnlink: true}), editOp(TAX_A, {chargeOf: 't-501', markedDelete: true})];
+        expect(tempIds(foldBulkCharges([deleted], opsD, new Set(['t-501'])))).toEqual(['t-501', 't-502', 't-503']);
+    });
+
+    it('a new charge of a new parent unfolds the same way', () => {
+        const newBuy = createOp('new-buy', newBuyFields());
+        const newFee = createOp('new-fee', fieldsOf(FEE_A), {chargeOf: 'new-buy', followsParent: true});
+        expect(tempIds(foldBulkCharges([newBuy], [newBuy, newFee], new Set(['new-buy'])))).toEqual(['new-buy', 'new-fee']);
+    });
+
+    it('an open tempId that names no top-level row inserts nothing; a pair’s hidden half is never inserted', () => {
+        const from = editOp(PAIR_FROM);
+        const to = editOp(PAIR_TO, {pairedWith: 't-530', tempId: 't-531'});
+        expect(tempIds(foldBulkCharges([from], [from, to], new Set(['t-530', 'nobody'])))).toEqual(['t-530']);
+    });
+
+    it('returns a new array and mutates neither input', () => {
+        const topCopy = snapshot(top);
+        const opsCopy = snapshot(ops);
+        const out = foldBulkCharges(top, ops, new Set(['t-501']));
+        expect(out).not.toBe(top);
+        expect(top).toEqual(topCopy);
+        expect(ops).toEqual(opsCopy);
+    });
+});
+
+describe('rowAnchor — the row on screen that stands for an operation', () => {
+    const buyA = editOp(BUY_A);
+    const feeA = editOp(FEE_A, {chargeOf: 't-501'});
+    const ops = [buyA, feeA];
+
+    it('a charge under a closed parent → the parent’s row', () => {
+        expect(rowAnchor(feeA, ops, new Set())).toBe('t-501');
+    });
+
+    it('a charge under an open parent → its own row', () => {
+        expect(rowAnchor(feeA, ops, new Set(['t-501']))).toBe('t-502');
+    });
+
+    it('the parent itself → its own row, open or closed', () => {
+        expect(rowAnchor(buyA, ops, new Set())).toBe('t-501');
+        expect(rowAnchor(buyA, ops, new Set(['t-501']))).toBe('t-501');
+    });
+
+    it('a charge unlinked from a parent that stays is a top-level row: its own, whether the parent is open or not', () => {
+        const unlinked = editOp(FEE_A, {chargeOf: 't-501', parentUnlink: true});
+        expect(rowAnchor(unlinked, [buyA, unlinked], new Set())).toBe('t-502');
+        expect(rowAnchor(unlinked, [buyA, unlinked], new Set(['t-501']))).toBe('t-502');
+    });
+
+    it('a «scollega» charge under a parent marked for deletion is under it: the parent while closed, itself while open', () => {
+        const deleted = editOp(BUY_A, {markedDelete: true});
+        const kept = editOp(FEE_A, {chargeOf: 't-501', parentUnlink: true});
+        expect(rowAnchor(kept, [deleted, kept], new Set())).toBe('t-501');
+        expect(rowAnchor(kept, [deleted, kept], new Set(['t-501']))).toBe('t-502');
+    });
+
+    it('a pair’s hidden half → its visible half (pairedWith), as before', () => {
+        const from = editOp(PAIR_FROM);
+        const to = editOp(PAIR_TO, {pairedWith: 't-530', tempId: 't-531'});
+        expect(rowAnchor(to, [from, to], new Set())).toBe('t-530');
+    });
+
+    it('a row of its own → itself; a chargeOf naming nobody present → itself', () => {
+        const free = editOp(FEE_FREE);
+        const dangling = editOp(FEE_B, {chargeOf: 'gone'});
+        expect(rowAnchor(free, [free], new Set())).toBe('t-520');
+        expect(rowAnchor(dangling, [dangling], new Set())).toBe('t-512');
     });
 });

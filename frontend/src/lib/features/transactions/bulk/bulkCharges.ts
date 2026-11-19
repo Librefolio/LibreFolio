@@ -5,7 +5,9 @@
  * (the parent's `tempId`), never through `pairedWith`: the pairs' code is not touched. The link that changes lives on
  * the charge: `parentUnlink` («scollega»: `parent_transaction_id: 0`), `parentLinkId` (a saved parent absent from the
  * Bulk), and a create born in its parent's form carries `followsParent`. This module is the pure half of the model
- * (contract 66-F7 §10, corrected by §11); `TransactionBulkModal` wires it.
+ * (contract 66-F7 §10, corrected by §11); `TransactionBulkModal` wires it. F7-c1 (§13–§15) adds the grid's groups:
+ * `foldBulkCharges` draws each open parent's charges right after it, `rowAnchor` names the row that stands for an
+ * operation on screen.
  *
  * The values of a charge are held as the editor holds every amount (`fieldsFromTx`, W-B65): a magnitude, the type
  * carries the sign. `ChargeDraft` (`../form/txCharges.ts`) holds magnitudes too, so they pass through unchanged.
@@ -49,8 +51,17 @@ function without(op: PendingOp, ...keys: ChargeFlag[]): PendingOp {
     return next;
 }
 
+/** What «sits under its parent» reads of a row: the operations of the Bulk, and the rows `buildBulkRowLabels` labels. */
+export interface ChargeLinkRow {
+    tempId: string;
+    op?: 'create' | 'edit';
+    markedDelete?: boolean;
+    chargeOf?: string;
+    parentUnlink?: boolean;
+}
+
 /** The parent operation `op` names, if present. */
-function ownerOf(op: PendingOp, ops: readonly PendingOp[]): PendingOp | undefined {
+function ownerOf<R extends ChargeLinkRow>(op: R, ops: readonly R[]): R | undefined {
     if (op.chargeOf === undefined) return undefined;
     return ops.find((other) => other.tempId === op.chargeOf && other !== op);
 }
@@ -86,11 +97,40 @@ export function remapChargeOf(ops: readonly PendingOp[], fromTempId: string, toT
 
 /** The one predicate of «sits under its parent» (§11.7): owned by a present parent and linked to it, or unlinked from a
  *  parent marked for deletion (the state it keeps under it). */
-export function isUnderParent(op: PendingOp, ops: readonly PendingOp[]): boolean {
+export function isUnderParent<R extends ChargeLinkRow>(op: R, ops: readonly R[]): boolean {
     const owner = ownerOf(op, ops);
     if (!owner) return false;
     if (!op.parentUnlink) return true;
-    return owner.op === 'edit' && owner.markedDelete;
+    return owner.op === 'edit' && owner.markedDelete === true;
+}
+
+/**
+ * The grid's rows (F7-c1, BK2): the top-level rows in their order, each open parent (`expanded`, by `tempId`) followed by
+ * its charges (`isUnderParent`) in the order of the operations. A closed parent's charges are not drawn. A new array;
+ * neither input is mutated.
+ */
+export function foldBulkCharges(top: readonly PendingOp[], ops: readonly PendingOp[], expanded: ReadonlySet<string>): PendingOp[] {
+    const under = new Map<string, PendingOp[]>();
+    for (const op of ops) {
+        if (op.chargeOf === undefined || !expanded.has(op.chargeOf) || !isUnderParent(op, ops)) continue;
+        under.set(op.chargeOf, [...(under.get(op.chargeOf) ?? []), op]);
+    }
+    const rows: PendingOp[] = [];
+    for (const row of top) {
+        rows.push(row);
+        if (expanded.has(row.tempId)) rows.push(...(under.get(row.tempId) ?? []));
+    }
+    return rows;
+}
+
+/**
+ * The row on screen that stands for an operation (F7-c1): a charge under its parent is its own row while the group is
+ * open, the parent's row while it is closed; any other operation is its visible row (`pairedWith ?? tempId`). The
+ * highlight of an issue and the jump to it read it.
+ */
+export function rowAnchor(op: PendingOp, ops: readonly PendingOp[], expanded: ReadonlySet<string>): string {
+    if (op.chargeOf !== undefined && isUnderParent(op, ops)) return expanded.has(op.chargeOf) ? op.tempId : op.chargeOf;
+    return op.pairedWith ?? op.tempId;
 }
 
 /**
@@ -234,9 +274,4 @@ export function chargeParentFields(op: PendingOp, ops: readonly PendingOp[], get
 export function parentNeedsRef(op: PendingOp, ops: readonly PendingOp[]): boolean {
     if (op.op !== 'create') return false;
     return ops.some((other) => other !== op && other.chargeOf === op.tempId);
-}
-
-/** The charges «scollega» under a parent «del»: they feed the F6 banner until F7-c. */
-export function chargeUnlinkList(ops: readonly PendingOp[]): PendingOp[] {
-    return ops.filter((op) => op.parentUnlink === true && !(op.op === 'edit' && op.markedDelete) && isUnderParent(op, ops));
 }

@@ -11,7 +11,9 @@
  *     screen and a finger tap on «Link» opens the reason without running it.
  *   - Deleting the BUY (row trash or selection bar) while its charges are not all selected opens the panel V1:
  *     «Delete all (3)» → the Bulk with the three rows marked delete; «Keep the charges» → the Bulk with the BUY
- *     alone marked delete and the banner `tx-bulk-unlink-hint` naming the charges, which survive unlinked.
+ *     alone marked delete and the charges, which survive unlinked, indented under it with the state «unlink» (66 F7-c1:
+ *     `tx-bulk-row-label[data-charge-of]` + `tx-bulk-charge-state[data-state]`; the F6 banner `tx-bulk-unlink-hint` is
+ *     gone).
  *   - The BUY selected together with all its charges: no panel, the Bulk opens directly (today's behaviour).
  *   - A mixed selection (BUY + its FEE + an unrelated row, the TAX left out): the panel counts what the page's intent
  *     deletes («Delete all (4)», one charge kept), not «parents + their charges» (3 and 2); «Keep» unlinks the TAX alone.
@@ -241,6 +243,22 @@ function bulkDeletedRows(page: Page): Locator {
     return page.locator('[data-testid="tx-bulk-body"] tr[data-row-id]').filter({has: page.locator('[data-testid="tx-bulk-row-status"][data-status="delete"]')});
 }
 
+/** The Bulk row of transaction `id`, found by the `#id` its ID cell shows (its row id is a tempId). */
+function bulkRow(page: Page, id: number): Locator {
+    return page.locator('[data-testid="tx-bulk-body"] tr[data-row-id]').filter({has: page.locator('td[data-column-id="id"]', {hasText: new RegExp(`#${id}\\b`)})});
+}
+
+/** 66 F7-c1: expect the Bulk row of charge `chargeId` indented under the row of `parentId`, with the state `state`. */
+async function expectChargeUnder(page: Page, chargeId: number, parentId: number, state: 'linked' | 'unlink' | 'del'): Promise<void> {
+    const parentRow = bulkRow(page, parentId);
+    await expect(parentRow).toBeVisible({timeout: 8_000});
+    const parentRowId = await parentRow.getAttribute('data-row-id');
+    const row = bulkRow(page, chargeId);
+    await expect(row, `the charge #${chargeId} is not a row of the Bulk`).toBeVisible({timeout: 8_000});
+    await expect(row.getByTestId('tx-bulk-row-label'), `#${chargeId} is not indented under #${parentId}`).toHaveAttribute('data-charge-of', parentRowId ?? '<none>');
+    await expect(row.getByTestId('tx-bulk-charge-state')).toHaveAttribute('data-state', state);
+}
+
 /** Press «Save all» and return what went on the wire and whether the batch committed. The commit is the subject. */
 async function commitBulk(page: Page): Promise<{payload: CommitPayload; committed: boolean}> {
     const commitBtn = page.getByTestId('tx-bulk-commit');
@@ -411,7 +429,10 @@ test.describe('Transactions table — link charges and delete a parent with char
         await expectBulkOpen(page);
         // The Bulk holds exactly the batch this choice made: the BUY and its two charges, all marked delete.
         await expect(bulkDeletedRows(page)).toHaveCount(3, {timeout: 8_000});
-        await expect(page.getByTestId('tx-bulk-unlink-hint')).toHaveCount(0);
+        // 66 F7-c1 (was: no unlink banner): the two charges sit under their parent «del», marked «del» too, none «unlink».
+        await expectChargeUnder(page, s.feeId, s.buyId, 'del');
+        await expectChargeUnder(page, s.taxId, s.buyId, 'del');
+        await expect(page.locator('[data-testid="tx-bulk-body"] [data-testid="tx-bulk-charge-state"][data-state="unlink"]')).toHaveCount(0);
 
         const {payload, committed} = await commitBulk(page);
         expect(committed, `the delete batch rolled back (deletes=${JSON.stringify(payload.deletes ?? [])})`).toBe(true);
@@ -440,12 +461,10 @@ test.describe('Transactions table — link charges and delete a parent with char
         await expect(panel).toBeHidden({timeout: 5_000});
 
         await expectBulkOpen(page);
-        // The BUY alone is marked delete; the banner names the two charges that stay.
+        // The BUY alone is marked delete; the two charges that stay sit under it, «unlink» (66 F7-c1: was the banner).
         await expect(bulkDeletedRows(page)).toHaveCount(1, {timeout: 8_000});
-        const hint = page.getByTestId('tx-bulk-unlink-hint');
-        await expect(hint, 'the Bulk shows no unlink banner for the kept charges').toBeVisible({timeout: 8_000});
-        await expect(hint).toContainText(`#${s.feeId}`);
-        await expect(hint).toContainText(`#${s.taxId}`);
+        await expectChargeUnder(page, s.feeId, s.buyId, 'unlink');
+        await expectChargeUnder(page, s.taxId, s.buyId, 'unlink');
 
         const {payload, committed} = await commitBulk(page);
         expect(committed, `the delete-and-unlink batch rolled back (payload=${JSON.stringify(payload)})`).toBe(true);
@@ -488,7 +507,10 @@ test.describe('Transactions table — link charges and delete a parent with char
         await expectBulkOpen(page);
         await expect(page.getByTestId('tx-charges-modal')).toHaveCount(0);
         await expect(bulkDeletedRows(page)).toHaveCount(3, {timeout: 8_000});
-        await expect(page.getByTestId('tx-bulk-unlink-hint')).toHaveCount(0);
+        // 66 F7-c1 (was: no unlink banner): the two charges sit under their parent «del», marked «del» too, none «unlink».
+        await expectChargeUnder(page, s.feeId, s.buyId, 'del');
+        await expectChargeUnder(page, s.taxId, s.buyId, 'del');
+        await expect(page.locator('[data-testid="tx-bulk-body"] [data-testid="tx-bulk-charge-state"][data-state="unlink"]')).toHaveCount(0);
 
         const {payload, committed} = await commitBulk(page);
         expect(committed, `the delete batch rolled back (deletes=${JSON.stringify(payload.deletes ?? [])})`).toBe(true);
@@ -535,12 +557,11 @@ test.describe('Transactions table — link charges and delete a parent with char
         await expect(panel).toBeHidden({timeout: 5_000});
 
         await expectBulkOpen(page);
-        // BUY, FEE and X marked delete; the banner names the TAX, which stays, and not the FEE, which goes.
+        // BUY, FEE and X marked delete; under the BUY the TAX, which stays, is «unlink» and the FEE, which goes, «del»
+        // (66 F7-c1: was the banner naming the TAX and not the FEE).
         await expect(bulkDeletedRows(page)).toHaveCount(3, {timeout: 8_000});
-        const hint = page.getByTestId('tx-bulk-unlink-hint');
-        await expect(hint, 'the Bulk shows no unlink banner for the kept TAX').toBeVisible({timeout: 8_000});
-        await expect(hint).toContainText(new RegExp(`#${s.taxId}\\b`));
-        await expect(hint).not.toContainText(new RegExp(`#${s.feeId}\\b`));
+        await expectChargeUnder(page, s.taxId, s.buyId, 'unlink');
+        await expectChargeUnder(page, s.feeId, s.buyId, 'del');
 
         const {payload, committed} = await commitBulk(page);
         expect(committed, `the delete-and-unlink batch rolled back (payload=${JSON.stringify(payload)})`).toBe(true);

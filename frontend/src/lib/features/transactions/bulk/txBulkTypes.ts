@@ -66,6 +66,9 @@ export type PendingOp = ({op: 'create'} | {op: 'edit'; txId: number; markedDelet
     /** Project 66 (F7-b): a create born in its parent's form. Until it is opened on its own, the payload takes the
      *  parent's broker, asset and date at batch time. */
     followsParent?: boolean;
+    /** Project 66 (F7-c1): a saved charge the Bulk read itself when its parent entered (`charges_count`), unchanged when
+     *  read. Its group starts closed, and «Remove from batch» on the parent takes it along while it is unchanged. */
+    loadedWithParent?: true;
 };
 
 /** Single source of truth: WAC results per auto-op (keyed by tempId).

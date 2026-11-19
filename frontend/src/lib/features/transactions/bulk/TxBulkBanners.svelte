@@ -49,8 +49,6 @@
         bannerSuggestions: SuggestEntry[];
         fieldIssues: ValidationIssue[];
         hasPairedDelete: boolean;
-        /** The charges that stay, unlinked, after their parent's deletion (66 F6), as «Type #id, …»; '' = none. */
-        unlinkList?: string;
         hasWacFxIssues: boolean;
         mergeAllPairs: SuggestEntry[];
         resolverCtx: ResolverContext;
@@ -95,7 +93,6 @@
         bannerSuggestions,
         fieldIssues,
         hasPairedDelete,
-        unlinkList = '',
         hasWacFxIssues,
         mergeAllPairs,
         resolverCtx,
@@ -214,11 +211,6 @@
     {#if hasPairedDelete}
         <InfoBanner variant="info">
             <p data-testid="tx-bulk-split-hint">ℹ️ {$t('transactions.bulk.splitHint')}</p>
-        </InfoBanner>
-    {/if}
-    {#if unlinkList}
-        <InfoBanner variant="info">
-            <p data-testid="tx-bulk-unlink-hint">ℹ️ {$t('transactions.bulk.unlinkHint', {values: {list: unlinkList}})}</p>
         </InfoBanner>
     {/if}
     {#if todoBlockerEntries.length > 0}

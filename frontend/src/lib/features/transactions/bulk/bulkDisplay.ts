@@ -1,4 +1,5 @@
 import type {ResolvedOp} from '../txPayloadHelpers';
+import {isUnderParent, type ChargeLinkRow} from './bulkCharges';
 
 export interface BulkDisplayRow {
     tempId: string;
@@ -83,21 +84,34 @@ export function createBulkDateComparator<T extends BulkDisplayRow>(rows: readonl
 }
 
 /** Numbers belong to the sorted workspace, not an API array, file or current page.
- *  Filters may leave gaps; each visible group and its hidden legs retain the same label. */
-export function buildBulkRowLabels(rows: readonly BulkDisplayRow[], visibleRows: readonly BulkDisplayRow[]): Map<string, string> {
-    const partners = new Map<string, BulkDisplayRow[]>();
+ *  Filters may leave gaps; each visible group and its hidden legs retain the same label.
+ *  66 F7-c1: a linked charge under its parent (`isUnderParent`) takes no number of its own: it is `<parent>·k`, k = 1..
+ *  in the order of the operations (as a hidden partner is `Nb`), whether its group is open or closed. */
+export function buildBulkRowLabels<R extends BulkDisplayRow & ChargeLinkRow>(rows: readonly R[], visibleRows: readonly R[]): Map<string, string> {
+    const partners = new Map<string, R[]>();
+    const charges = new Map<string, R[]>();
+    const underParent = new Set<string>();
     for (const row of rows) {
+        if (row.chargeOf !== undefined && isUnderParent(row, rows)) {
+            underParent.add(row.tempId);
+            charges.set(row.chargeOf, [...(charges.get(row.chargeOf) ?? []), row]);
+        }
         if (!row.pairedWith) continue;
         const group = partners.get(row.pairedWith) ?? [];
         group.push(row);
         partners.set(row.pairedWith, group);
     }
     const labels = new Map<string, string>();
-    visibleRows.forEach((row, index) => {
+    let number = 0;
+    for (const row of visibleRows) {
+        if (underParent.has(row.tempId)) continue;
+        number++;
         const children = partners.get(row.tempId) ?? [];
-        labels.set(row.tempId, `${index + 1}${children.length > 0 ? 'a' : ''}`);
-        children.forEach((child, childIndex) => labels.set(child.tempId, `${index + 1}${String.fromCharCode(98 + childIndex)}`));
-    });
+        const label = `${number}${children.length > 0 ? 'a' : ''}`;
+        labels.set(row.tempId, label);
+        children.forEach((child, childIndex) => labels.set(child.tempId, `${number}${String.fromCharCode(98 + childIndex)}`));
+        (charges.get(row.tempId) ?? []).forEach((charge, k) => labels.set(charge.tempId, `${label}·${k + 1}`));
+    }
     return labels;
 }
 
