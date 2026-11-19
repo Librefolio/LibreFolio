@@ -197,14 +197,6 @@ async def test_complete_e2e_flow_justetf(test_server):  # noqa: C901 — sequent
         asset = assets[0]
 
         print_info(f"  Asset currency: {asset.get('currency')}")
-        if asset.get("classification_params"):
-            cp = asset["classification_params"]
-            if cp.get("short_description"):
-                print_info(f"  Description: {cp['short_description'][:80]}...")
-            if cp.get("sector_area"):
-                print_info(f"  Sector: {cp['sector_area']}")
-            if cp.get("geographic_area"):
-                print_info(f"  Geo: {list(cp['geographic_area'].get('distribution', {}).keys())[:5]}...")
 
         # =====================================================================
         # STEP 5: REFRESH PRICES
@@ -373,11 +365,6 @@ async def test_complete_e2e_flow_yfinance(test_server):
         asset = response.json()[0]
         print_success(f"  Asset: {asset.get('display_name')}")
         print_success(f"  Currency: {asset.get('currency')}")
-
-        if asset.get("classification_params"):
-            cp = asset["classification_params"]
-            if cp.get("sector_area"):
-                print_success(f"  Sector: {cp['sector_area']}")
 
         print("\n" + "=" * 60)
         print_success("🎉 YFINANCE E2E FLOW COMPLETED!")
