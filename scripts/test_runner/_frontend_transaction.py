@@ -247,6 +247,18 @@ def front_tx_charges_write(verbose: bool = False, ui: bool = False, headed: bool
     return _run_playwright("transactions/tx-charges-write.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_bulk_charges_grid(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """The Bulk groups a parent's linked charges under it: chip, indented rows, entry read, paging (project 66, F7-c1)."""
+    print_section("Frontend TX Bulk Charges Grid Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-bulk-charges-grid.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_crud_full(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Full CRUD lifecycle E2E tests for transactions."""
     print_section("Frontend TX CRUD Full Lifecycle Tests")
@@ -796,6 +808,14 @@ def populate_registry(registry: dict) -> None:
         name="TX Charges Write Tests",
         desc="Project 66 F7-b: in the form the Bulk hosts, a new BUY with a FEE and a TAX saved linked; on a saved BUY the FEE note changed, the TAX unlinked, the FEE deleted — read back by id",
         tests="transactions/tx-charges-write.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-bulk-charges-grid",
+        front_tx_bulk_charges_grid,
+        name="TX Bulk Charges Grid Tests",
+        desc="Project 66 F7-c1: in the Bulk a saved BUY's FEE and TAX are read on entry and grouped under it (chip with the count, closed; open when brought with the parent), indented rows without checkbox, double-click opens the charge's Form, an open group never split by a page, an unlinked TAX a top-level row «unlink»",
+        tests="transactions/tx-bulk-charges-grid.spec.ts",
     )
     add_test(cat, "tx-crud-full", front_tx_crud_full, name="TX CRUD Full Lifecycle Tests", desc="Full CRUD lifecycle: standalone, paired, split, promote, bulk, suggest, cash sign", tests="transactions/tx-crud-full.spec.ts")
     add_test(cat, "tx-commit-all-types", front_tx_commit_all_types, name="TX Commit All Types Tests", desc="End-to-end commit for every TX type: standalone + paired create, edit, delete", tests="transactions/tx-commit-all-types.spec.ts")

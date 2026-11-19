@@ -24,96 +24,23 @@
  * is the form's business (`saved-<id>`, `new-<n>`, and the Bulk's own keys from F7-b). Inside a row the controls are
  * matched by testid prefix.
  *
- * Every test works on an account of its own (a disposable user, a broker it owns, funded by its own DEPOSIT), so no
- * other spec sees its rows. The verdict is the server, read back by id (`GET /transactions?ids=…`); the Bulk's grid
+ * Every test works on an account of its own (a disposable user, a broker it owns, funded by its own DEPOSIT —
+ * `../fixtures/linked-charges.ts`, shared with `tx-bulk-charges-grid.spec.ts`), so no other spec sees its rows. The verdict is the server, read back by id (`GET /transactions?ids=…`); the Bulk's grid
  * is not counted (which rows it shows for the charges moves between lots, §11.1). The afterEach deletes whatever of
  * the test's rows is still there, then the account.
  */
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
-import {daysAgoIso} from '../fixtures/dates';
 import {optionsClosed} from '../fixtures/probe';
-import {uniqueSuffix} from '../fixtures/unique';
-import {createOwnedBroker, type OwnedBroker} from '../fixtures/onboarding-accounts';
-import {cleanupOwnedAccount, commitCreates, emptyOwnedAccount, jsonFrom, openOwnedAccount, seededAssetId, type OwnedAccount} from '../fixtures/owned-pair';
+import {cleanupOwnedAccount, emptyOwnedAccount} from '../fixtures/owned-pair';
+import {COMMIT_PATH, openFundedAccount, readByIds, seedLinkedBuy, type ChargeTx, type CommitBody, type LinkedBuy} from '../fixtures/linked-charges';
 
 test.setTimeout(90_000);
 
-const API = '/api/v1';
-const COMMIT_PATH = `${API}/transactions/commit`;
-
-/** A transaction read back by id, reduced to what this spec checks. */
-type Tx = {
-    id: number;
-    type: string;
-    broker_id: number;
-    asset_id?: number | null;
-    date: string;
-    quantity: string;
-    cash?: {code: string; amount: string} | null;
-    description?: string | null;
-    parent_transaction_id?: number | null;
-    charges_count?: number;
-};
-type CommitResult = {operation: string; index: number; ids?: number[]; status?: string};
-type CommitBody = {committed?: boolean; issues?: unknown[]; results?: CommitResult[]};
-
-/** A funded broker with a BUY and its FEE and TAX, linked, on one asset and date. */
-type Seeded = {broker: OwnedBroker; assetId: number; marker: string; buyId: number; feeId: number; taxId: number};
-
-/** These transactions as the server has them now; an id that no longer exists is simply absent. */
-async function readByIds(page: Page, ids: number[]): Promise<Map<number, Tx>> {
-    if (ids.length === 0) return new Map();
-    const query = ids.map((id) => `ids=${id}`).join('&');
-    const rows = await jsonFrom<Tx[]>(await page.request.get(`${API}/transactions?${query}`), `read transactions ${ids.join(',')}`);
-    return new Map(rows.map((tx) => [tx.id, tx] as const));
-}
-
-/** Open a disposable account with one broker it owns, funded by its own DEPOSIT. */
-async function openFundedAccount(page: Page, request: Parameters<typeof openOwnedAccount>[1], owned: OwnedAccount, committed: number[], tag: string): Promise<{broker: OwnedBroker; assetId: number; marker: string}> {
-    const marker = `ChgW ${uniqueSuffix()}`;
-    await openOwnedAccount(page, request, owned, tag);
-    const broker = await createOwnedBroker(page, tag, owned.brokerIds);
-    const assetId = await seededAssetId(page, 'ETH-USD');
-    // Fund the broker first: a BUY and its charges take cash out of it.
-    const [depositId] = await commitCreates(page, [{broker_id: broker.id, type: 'DEPOSIT', date: daysAgoIso(10), cash: {code: 'USD', amount: '1000'}, description: `Deposit ${marker}`}], 'fund the broker');
-    committed.push(depositId);
-    return {broker, assetId, marker};
-}
-
-/** A funded account with a BUY and a FEE and a TAX committed linked to it (`ref` / `parent_ref`), the link read back. */
-async function seedLinkedBuy(page: Page, request: Parameters<typeof openOwnedAccount>[1], owned: OwnedAccount, committed: number[], tag: string): Promise<Seeded> {
-    const {broker, assetId, marker} = await openFundedAccount(page, request, owned, committed, tag);
-    const date = daysAgoIso(5);
-    const charge = {broker_id: broker.id, asset_id: assetId, date, quantity: '0', parent_ref: 'p'};
-    const body = await jsonFrom<CommitBody>(
-        await page.request.post(COMMIT_PATH, {
-            data: {
-                creates: [
-                    {ref: 'p', broker_id: broker.id, asset_id: assetId, type: 'BUY', date, quantity: '10', cash: {code: 'USD', amount: '-100'}, description: `Buy ${marker}`},
-                    {...charge, type: 'FEE', cash: {code: 'USD', amount: '-5'}, description: `Fee ${marker}`},
-                    {...charge, type: 'TAX', cash: {code: 'USD', amount: '-2'}, description: `Tax ${marker}`},
-                ],
-            },
-        }),
-        'commit the BUY with its linked charges',
-    );
-    expect(body.committed, `rolled back: ${JSON.stringify(body.issues ?? [])}`).toBe(true);
-    const idAt = (index: number): number => {
-        const id = body.results?.find((item) => item.operation === 'create' && item.index === index)?.ids?.[0];
-        if (typeof id !== 'number') throw new Error(`no id for create #${index}: ${JSON.stringify(body.results)}`);
-        return id;
-    };
-    const [buyId, feeId, taxId] = [idAt(0), idAt(1), idAt(2)];
-    committed.push(buyId, feeId, taxId);
-
-    // The premise, read back rather than inferred: both charges point at the BUY, which counts two.
-    const back = await readByIds(page, [buyId, feeId, taxId]);
-    expect([back.get(feeId)?.parent_transaction_id ?? null, back.get(taxId)?.parent_transaction_id ?? null], 'premise: the FEE and the TAX are linked to the BUY').toEqual([buyId, buyId]);
-    expect(back.get(buyId)?.charges_count, 'premise: the BUY counts two charges').toBe(2);
-    return {broker, assetId, marker, buyId, feeId, taxId};
-}
+/** The shapes this spec reads (`../fixtures/linked-charges.ts`). */
+type Tx = ChargeTx;
+type Seeded = LinkedBuy;
 
 /** Pick the option `value` in the select opened by `trigger`, and prove the list is gone (option testids are shared). */
 async function pickOption(page: Page, trigger: Locator, value: string | number): Promise<void> {
@@ -228,7 +155,7 @@ test.describe('Transaction form in the Bulk — write the linked charges', () =>
     });
 
     test('Create: a new BUY with a FEE and a TAX added in its form is saved as one parent with its two charges', async ({page, request}) => {
-        const {broker, assetId, marker} = await openFundedAccount(page, request, owned, committedIds, 'chgw1');
+        const {broker, assetId, marker} = await openFundedAccount(page, request, owned, committedIds, 'chgw1', 'ChgW');
 
         await navigateTo(page, '/transactions');
         await waitForSettled(page.getByTestId('transactions-page'), 20_000);
@@ -314,7 +241,7 @@ test.describe('Transaction form in the Bulk — write the linked charges', () =>
     });
 
     test('Reopen: the FEE note changed in the BUY form is saved, the FEE stays linked, the BUY is unchanged', async ({page, request}) => {
-        const s = await seedLinkedBuy(page, request, owned, committedIds, 'chgw2');
+        const s = await seedLinkedBuy(page, request, owned, committedIds, 'chgw2', 'ChgW');
         const before = unchangedFields((await readByIds(page, [s.buyId])).get(s.buyId));
 
         const form = await editFromTable(page, s);
@@ -338,7 +265,7 @@ test.describe('Transaction form in the Bulk — write the linked charges', () =>
     });
 
     test('Unlink: the TAX unlinked in the BUY form survives with no parent, the FEE stays linked', async ({page, request}) => {
-        const s = await seedLinkedBuy(page, request, owned, committedIds, 'chgw3');
+        const s = await seedLinkedBuy(page, request, owned, committedIds, 'chgw3', 'ChgW');
 
         const form = await editFromTable(page, s);
         const section = await loadedCharges(form, s);
@@ -361,7 +288,7 @@ test.describe('Transaction form in the Bulk — write the linked charges', () =>
     });
 
     test('Delete: the FEE trashed in the BUY form is deleted, the TAX stays linked', async ({page, request}) => {
-        const s = await seedLinkedBuy(page, request, owned, committedIds, 'chgw4');
+        const s = await seedLinkedBuy(page, request, owned, committedIds, 'chgw4', 'ChgW');
 
         const form = await editFromTable(page, s);
         const section = await loadedCharges(form, s);
