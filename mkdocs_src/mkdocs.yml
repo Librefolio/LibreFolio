@@ -145,6 +145,7 @@ plugins:
             Banco Central de la República Argentina (BCRA): Banco Central de la República Argentina (BCRA)
             National Bank of Romania (BNR): National Bank of Romania (BNR)
             Bank of Israel (BOI): Bank of Israel (BOI)
+            Narodowy Bank Polski (NBP): Narodowy Bank Polski (NBP)
             Banca d'Italia (BDI): Banca d'Italia (BDI)
             Banco Central do Brasil (BCB): Banco Central do Brasil (BCB)
             # Developer provider entries — kept in English per dev-manual policy
@@ -174,6 +175,7 @@ plugins:
             BCRA Tech: BCRA Tech
             BNR Tech: BNR Tech
             BOI Tech: BOI Tech
+            NBP Tech: NBP Tech
             BDI Tech: BDI Tech
             BCB Tech: BCB Tech
             # Developer transaction section — kept in English per dev-manual policy
@@ -448,6 +450,7 @@ plugins:
             Banco Central de la República Argentina (BCRA): Banco Central de la República Argentina (BCRA)
             National Bank of Romania (BNR): National Bank of Romania (BNR)
             Bank of Israel (BOI): Bank of Israel (BOI)
+            Narodowy Bank Polski (NBP): Narodowy Bank Polski (NBP)
             Banca d'Italia (BDI): Banca d'Italia (BDI)
             Banco Central do Brasil (BCB): Banco Central do Brasil (BCB)
             # Developer provider entries — kept in English per dev-manual policy
@@ -477,6 +480,7 @@ plugins:
             BCRA Tech: BCRA Tech
             BNR Tech: BNR Tech
             BOI Tech: BOI Tech
+            NBP Tech: NBP Tech
             BDI Tech: BDI Tech
             BCB Tech: BCB Tech
             # Developer transaction section — kept in English per dev-manual policy
@@ -752,6 +756,7 @@ plugins:
             Banco Central de la República Argentina (BCRA): Banco Central de la República Argentina (BCRA)
             National Bank of Romania (BNR): National Bank of Romania (BNR)
             Bank of Israel (BOI): Bank of Israel (BOI)
+            Narodowy Bank Polski (NBP): Narodowy Bank Polski (NBP)
             Banca d'Italia (BDI): Banca d'Italia (BDI)
             Banco Central do Brasil (BCB): Banco Central do Brasil (BCB)
             # Developer provider entries — kept in English per dev-manual policy
@@ -781,6 +786,7 @@ plugins:
             BCRA Tech: BCRA Tech
             BNR Tech: BNR Tech
             BOI Tech: BOI Tech
+            NBP Tech: NBP Tech
             BDI Tech: BDI Tech
             BCB Tech: BCB Tech
             # Developer transaction section — kept in English per dev-manual policy
@@ -1129,6 +1135,7 @@ nav:
               - Banco Central de la República Argentina (BCRA): user/fx/providers/bcra.md
               - National Bank of Romania (BNR): user/fx/providers/bnr.md
               - Bank of Israel (BOI): user/fx/providers/boi.md
+              - Narodowy Bank Polski (NBP): user/fx/providers/nbp.md
               - Banca d'Italia (BDI): user/fx/providers/bdi.md
               - Banco Central do Brasil (BCB): user/fx/providers/bcb.md
           - 🔎 Pair Detail:
@@ -1407,6 +1414,7 @@ nav:
                   - BCRA Tech: developer/backend/fx/providers/bcra.md
                   - BNR Tech: developer/backend/fx/providers/bnr.md
                   - BOI Tech: developer/backend/fx/providers/boi.md
+                  - NBP Tech: developer/backend/fx/providers/nbp.md
                   - BDI Tech: developer/backend/fx/providers/bdi.md
                   - BCB Tech: developer/backend/fx/providers/bcb.md
           - "🕐 Scheduler (Daemon)": developer/backend/scheduler.md
