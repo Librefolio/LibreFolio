@@ -110,4 +110,74 @@ test.describe('«Ultime variazioni» on the Profilo tab (plan 68, E6a)', () => {
             await page.request.delete(`${API_BASE}/assets?asset_ids=${assetId}`);
         }
     });
+
+    test('the TER card opens its «Storia del dato»: the chart and every row of the voice, and «Dimentica» there puts the card back (E6b)', async ({page}) => {
+        test.setTimeout(60_000);
+        const name = `E2E profile history ${uniqueToken(8)}`;
+        const created = await page.request.post(`${API_BASE}/assets`, {data: [{display_name: name, currency: 'EUR', asset_type: 'ETF', profile: {ter: '0.0022'}}]});
+        expect(created.status(), `POST ${API_BASE}/assets: ${await created.text()}`).toBe(201);
+        const assetId = ((await created.json()) as {results: Array<{asset_id: number}>}).results[0].asset_id;
+        try {
+            const patched = await page.request.patch(`${API_BASE}/assets`, {data: [{asset_id: assetId, profile: {ter: '0.0019'}}]});
+            expect(patched.status(), `PATCH ${API_BASE}/assets: ${await patched.text()}`).toBe(200);
+            const read = await page.request.post(`${API_BASE}/assets/profile/query`, {data: [{asset_id: assetId, date_range: {start: todayIso()}, keys: [], changes: {key: 'ter'}}]});
+            const [latest] = ((await read.json()) as {items: Array<{changes: {items: Change[]}}>}).items[0].changes.items;
+
+            await goToAssetDetailPage(page, String(assetId));
+            await page.getByTestId('asset-detail-tab-profile').click();
+            const tab = page.getByTestId('asset-profile-tab');
+            await expect(tab).toHaveAttribute('data-status', 'ready', {timeout: 15_000});
+            const value = page.getByTestId('profile-key-figure-ter-value');
+            const shownBefore = (await value.textContent())?.trim() ?? '';
+
+            await page.getByTestId('profile-key-figure-ter-history').click();
+            const history = page.getByTestId('profile-history');
+            await expect(history).toHaveAttribute('data-status', 'ready', {timeout: 10_000});
+            await expect(history).toHaveAttribute('data-voice', 'ter');
+            // Two values of the same day: one step, the later; the voice's rows are both in the table, without «Dato»
+            await expect(page.getByTestId('profile-history-chart')).toHaveAttribute('data-hand-count', '1');
+            await expect(history.locator('[data-testid^="profile-change-what-"]')).toHaveCount(2);
+            await expect(history.getByTestId('dt-header-voice')).toHaveCount(0);
+
+            await history.getByTestId(`row-actions-${latest.id}`).click();
+            await page.getByTestId(`profile-change-forget-${latest.id}`).click();
+            await expect(page.getByTestId('profile-changes-confirm')).toBeVisible();
+            await page.getByTestId('confirm-modal-confirm').click();
+
+            await expect(history.getByTestId(`profile-change-what-${latest.id}`)).toHaveCount(0, {timeout: 10_000});
+            await expect(history).toHaveAttribute('data-status', 'ready', {timeout: 10_000});
+            await page.getByTestId('profile-history-close').click();
+            await expect(history).toHaveCount(0);
+            await expect(tab).toHaveAttribute('data-busy', 'false', {timeout: 10_000});
+            await expect(value).not.toHaveText(shownBefore, {timeout: 10_000});
+        } finally {
+            await page.request.delete(`${API_BASE}/assets?asset_ids=${assetId}`);
+        }
+    });
+
+    test('a detail row of a text voice opens its history: the window, no chart, its rows (E6b)', async ({page}) => {
+        test.setTimeout(60_000);
+        const name = `E2E profile history text ${uniqueToken(8)}`;
+        const created = await page.request.post(`${API_BASE}/assets`, {data: [{display_name: name, currency: 'EUR', asset_type: 'ETF', profile: {index_name: 'FTSE All-World'}}]});
+        expect(created.status(), `POST ${API_BASE}/assets: ${await created.text()}`).toBe(201);
+        const assetId = ((await created.json()) as {results: Array<{asset_id: number}>}).results[0].asset_id;
+        try {
+            await goToAssetDetailPage(page, String(assetId));
+            await page.getByTestId('asset-detail-tab-profile').click();
+            await expect(page.getByTestId('asset-profile-tab')).toHaveAttribute('data-status', 'ready', {timeout: 15_000});
+
+            await page.getByTestId('profile-detail-index_name-history').click();
+            const history = page.getByTestId('profile-history');
+            await expect(history).toHaveAttribute('data-status', 'ready', {timeout: 10_000});
+            await expect(history).toHaveAttribute('data-voice', 'index_name');
+            await expect(page.getByTestId('profile-history-chart'), 'a text has no chart').toHaveCount(0);
+            await expect(history.locator('[data-testid^="profile-change-what-"]')).toHaveCount(1);
+            // The identifiers (ISIN, ticker) are no voices of the profile: their rows open no history
+            await expect(page.getByTestId('profile-detail-isin')).toBeVisible();
+            await expect(page.getByTestId('profile-detail-isin-history')).toHaveCount(0);
+            await expect(page.getByTestId('profile-detail-ticker-history')).toHaveCount(0);
+        } finally {
+            await page.request.delete(`${API_BASE}/assets?asset_ids=${assetId}`);
+        }
+    });
 });
