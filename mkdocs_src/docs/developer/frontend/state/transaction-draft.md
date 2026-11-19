@@ -393,8 +393,9 @@ the pairs' code is untouched. The pure half lives in `bulk/bulkCharges.ts`:
   the picker or a suggestion, and after a row reset or «Reset all». The charges read join as unchanged edit rows
   marked `loadedWithParent`, adopted by their parent. Under a parent already «del» they are unlinked. Each read
   carries a generation number, bumped on every open, reset and «Reset all», and a stale answer is dropped. While a
-  read is in flight «Save all» is off. If it fails, an error toast is raised and «del» on that parent is off, with
-  the reason in its menu. The parent's form waits for the same read rather than asking again.
+  read is in flight «Save all» is off. If it fails, an error toast names the parents and says that «Reset row» reads
+  again, and «del» on that parent is off, with the reason in its menu; «Reset row» shows on that parent even
+  untouched. The parent's form waits for the same read rather than asking again.
 - **The close guard's baseline.** `initialOpsKey` is the key of `baselineOps`, the rows the editor opened on. The
   charges read are added to both, so an editor nobody changed closes without asking.
 
@@ -422,11 +423,13 @@ The title counts the top-level rows, as a pair already counts as one. The grid d
   markup and label of the transactions table's chip. A click, caught in the capture phase, opens and closes the
   group. It marks the group as changed when one of its charges is not unchanged; the parent's own status stays its
   own.
-- **The indented row.** It shows `↳` with `data-charge-of`, and keeps its `#id` and its status. It adds the badge
-  `tx-bulk-charge-state` (`linked` / `unlink` / `del`). It has no checkbox. Its menu offers «Edit row», «Delete» and
+- **The indented row.** It shows `↳` with `data-charge-of`, and keeps its `#id`. Its Status cell holds one chip: a
+  charge «del» shows the row's «🔴 del», a charge «unlink» shows «Unlink» in place of «edit», a linked charge keeps
+  the row's status with 🔗 beside it. The charge's state (`linked` / `unlink` / `del`) rides on a wrapper,
+  `tx-bulk-charge-state`, that draws nothing. It has no checkbox. Its menu offers «Edit row», «Delete» and
   «Restore» (no clone, split, remove or reset), and keeps the ⋮ button, the only way to it on touch; a double-click
   opens its own form too.
-- **A charge unlinked from a parent that stays** is a top-level row, with the badge `unlink`.
+- **A charge unlinked from a parent that stays** is a top-level row, with the chip «Unlink».
 - **When a group opens by itself.** The parent is «del», the charges came in the intent with their parent, or a charge
   was created or linked in the parent's form, or a parent was picked after its charges were already rows. Charges the
   workspace read itself start closed. A group never closes

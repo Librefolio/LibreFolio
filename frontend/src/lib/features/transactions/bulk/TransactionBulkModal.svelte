@@ -1942,7 +1942,8 @@
                 id: 'status',
                 header: () => $t('common.status'),
                 type: 'text',
-                width: 70,
+                // 66 F7-c1: 84, not 70 — the charge chip «Desenlazar» (ES, the longest) fits whole.
+                width: 84,
                 sortable: false,
                 filterable: false,
                 // Bugfix-3 §U14: hidden by default — operations are atomic and
@@ -1960,7 +1961,7 @@
                     const charge = chargeState(row);
                     const statusHtml =
                         charge === 'unlink'
-                            ? `<span data-testid="tx-bulk-row-status" data-status="${st}" class="px-1.5 py-0.5 text-[10px] rounded border border-lf-info-line bg-lf-card text-lf-info">${escapeHtml($t('transactions.form.charges.unlink'))}</span>`
+                            ? `<span data-testid="tx-bulk-row-status" data-status="${st}" class="px-1.5 py-0.5 text-[10px] rounded border border-lf-info-line bg-lf-info-soft text-lf-info-on-soft">${escapeHtml($t('transactions.form.charges.unlink'))}</span>`
                             : st === 'new'
                               ? '<span data-testid="tx-bulk-row-status" data-status="new" class="px-1.5 py-0.5 text-[10px] rounded bg-lf-success-soft text-lf-success-on-soft">new</span>'
                               : st === 'edited'
@@ -2440,7 +2441,8 @@
             icon: Undo2,
             label: () => $t('transactions.bulk.resetRow'),
             onClick: (row: PendingOp) => resetRow(row.tempId),
-            visible: (row: PendingOp) => !indentedIds.has(row.tempId) && row.op === 'edit' && (deriveStatus(row) === 'edited' || deriveStatus(row) === 'delete'),
+            // 66 F7-c1: also on an untouched parent whose charges could not be read: the reset reads them again (the toast says so).
+            visible: (row: PendingOp) => !indentedIds.has(row.tempId) && row.op === 'edit' && (deriveStatus(row) === 'edited' || deriveStatus(row) === 'delete' || (chargesReadFailed.has(row.txId) && parentChargesMissing(row))),
         },
     ]);
 
@@ -2876,7 +2878,7 @@
             for (const id of parentIds) chargesReads.delete(id);
             if (rows === null) {
                 chargesReadFailed = new Set([...chargesReadFailed, ...parentIds]);
-                notify({name: 'tx.bulk.charges.read-failed', detail: {parentIds}, toast: {variant: 'error', message: $t('transactions.chargesDelete.loadFailed')}});
+                notify({name: 'tx.bulk.charges.read-failed', detail: {parentIds}, toast: {variant: 'error', message: $t('transactions.bulk.chargesReadFailed', {values: {ids: shortIdList(parentIds)}})}});
                 return false;
             }
             addLoadedCharges(rows);
@@ -2884,6 +2886,15 @@
         })();
         for (const id of parentIds) chargesReads.set(id, read);
         return read;
+    }
+
+    /** 66 F7-c1: a toast names at most three parents (`#1, #2, #3 +4`): a read may cover up to 100. */
+    function shortIdList(ids: readonly number[]): string {
+        const shown = ids
+            .slice(0, 3)
+            .map((id) => `#${id}`)
+            .join(', ');
+        return ids.length > 3 ? `${shown} +${ids.length - 3}` : shown;
     }
 
     /**

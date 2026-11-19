@@ -2269,6 +2269,13 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
                 'an error toast',
             ).toBe(true),
         );
+        // Its message is the catalogue's, naming the parent whose read failed as #<id> (it says «Reset row» reads again).
+        const expected = get(_)('transactions.bulk.chargesReadFailed', {values: {ids: `#${BUY.id}`}});
+        expect(expected, 'premise: the catalogue holds the key').not.toBe('transactions.bulk.chargesReadFailed');
+        expect(
+            toasts.show.mock.calls.filter((call) => call[0] === 'error').map((call) => call[1]),
+            'the error toast names the parent whose charges could not be read',
+        ).toContain(expected);
 
         await openMenu(gridRow(BUY.id));
         const del = screen.getByTestId('context-menu-action-mark-delete');
@@ -2743,5 +2750,80 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
             expect(chargeOfCell(gridRow(charge.id)), `the ${charge.type} is indented under the BUY`).toBe(buyRowId());
             expect(chargeState(gridRow(charge.id)), `the ${charge.type} still says «unlink»`).toBe('unlink');
         }
+    });
+
+    // -----------------------------------------------------------------------
+    // The Status cell of a charge row: one chip (consultant's correction to C14, 19/11)
+    // -----------------------------------------------------------------------
+
+    it('the Status cell of a charge row holds one chip, inside the charge wrapper: «del» → delete, «unlink» → edited, linked → its status and 🔗', async () => {
+        await openLoaded();
+        await openBuyForm(2);
+        // The TAX unlinked (a top-level row «unlink»), a new FEE created (linked, it opens the group).
+        await push(buyPayload({_charges: [...handedDrafts().map((draft): ChargeDraft => (draft.id === TAX.id ? {...draft, state: 'unlink'} : draft)), newDraft('FEE', '2', 'F7c1 new fee')]}));
+        expect(theChip(), 'premise: the group is open').toHaveAttribute('aria-expanded', 'true');
+        await rowAction(gridRow(FEE.id), 'mark-delete');
+
+        const scene: Array<[string, HTMLElement, string, string]> = [
+            ['the saved FEE «del», indented', gridRow(FEE.id), 'del', 'delete'],
+            ['the TAX «unlink», top-level', gridRow(TAX.id), 'unlink', 'edited'],
+            ['the new FEE, linked', gridRowDescribed('F7c1 new fee'), 'linked', 'new'],
+        ];
+        expect(chargeOfCell(scene[0][1]), 'premise: the FEE is indented').toBe(buyRowId());
+        expect(chargeOfCell(scene[1][1]), 'premise: the TAX is top-level').toBeNull();
+        expect(chargeOfCell(scene[2][1]), 'premise: the new FEE is indented').toBe(buyRowId());
+
+        for (const [label, row, state, status] of scene) {
+            const cell = row.querySelector<HTMLElement>('td[data-column-id="status"]');
+            if (!cell) throw new Error(`${label}: no Status cell`);
+            const chips = cell.querySelectorAll('[data-testid="tx-bulk-row-status"]');
+            expect(chips, `${label}: exactly one status chip`).toHaveLength(1);
+            const wrapper = cell.querySelector('[data-testid="tx-bulk-charge-state"]');
+            expect(wrapper, `${label}: the charge wrapper is in the Status cell`).not.toBeNull();
+            expect(wrapper!.contains(chips[0]), `${label}: the chip is inside the charge wrapper`).toBe(true);
+            expect(wrapper, `${label}: the wrapper's state`).toHaveAttribute('data-state', state);
+            expect(chips[0], `${label}: the chip says the row's own status`).toHaveAttribute('data-status', status);
+            expect(cell.querySelector('.flex-col'), `${label}: nothing stacked in the cell`).toBeNull();
+            if (state === 'linked') expect(wrapper!.textContent ?? '', `${label}: 🔗 beside the chip`).toContain('🔗');
+            else expect(wrapper!.textContent ?? '', `${label}: no 🔗 on a charge that is not linked`).not.toContain('🔗');
+        }
+    });
+
+    // -----------------------------------------------------------------------
+    // «Reset row» on an untouched parent whose read failed (coordinator, 19/11)
+    // -----------------------------------------------------------------------
+
+    it('an untouched parent whose read failed offers «Reset row», and choosing it reads the charges again: the chip appears, «del» comes on', async () => {
+        readMock().mockImplementation((async () => {
+            throw new Error('network down');
+        }) as never);
+        await openBuyAndDeposit();
+        await waitFor(() => expect(readAskedFor(BUY.id), 'premise: the read went out').toBe(true));
+        await settle();
+        expect(rowStatus(gridRow(BUY.id)), 'premise: the parent is untouched').toBe('original');
+        expect(chip(), 'premise: no charge held').toBeNull();
+
+        answerChargesRead([FEE, TAX]);
+        const before = readMock().mock.calls.length;
+        await openMenu(gridRow(BUY.id));
+        expect(screen.getByTestId('context-menu-action-reset'), 'an untouched parent whose read failed offers «Reset row»').toBeInTheDocument();
+        await clickCollectingErrors(screen.getByTestId('context-menu-action-reset'));
+
+        await waitFor(() => expect(readMock().mock.calls.length, '«Reset row» reads the charges again').toBeGreaterThan(before));
+        await waitFor(() => expect(theChip(), 'the chip appears with the two charges').toHaveAttribute('data-charges-count', '2'));
+        expect(rowStatus(gridRow(BUY.id)), 'the parent is still untouched').toBe('original');
+        await openMenu(gridRow(BUY.id));
+        expect(screen.getByTestId('context-menu-action-mark-delete'), '«del» is on again').toBeEnabled();
+        expect(screen.queryByTestId('context-menu-action-reset'), 'and, read, the untouched parent no longer offers «Reset row»').toBeNull();
+    });
+
+    it('an untouched parent whose read succeeded offers no «Reset row»', async () => {
+        await openLoaded();
+        expect(rowStatus(gridRow(BUY.id)), 'premise: the parent is untouched').toBe('original');
+
+        await openMenu(gridRow(BUY.id));
+
+        expect(screen.getByTestId('context-menu-action-mark-delete'), 'barrier: the menu is drawn, «del» on').toBeEnabled();
+        expect(screen.queryByTestId('context-menu-action-reset'), 'nothing to reset').toBeNull();
     });
 });
