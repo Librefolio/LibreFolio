@@ -112,13 +112,16 @@ class AskResult:
 @dataclass(frozen=True, slots=True)
 class AssetRefreshResult:
     """What ``refresh_assets`` did for one asset: the voices written, every enricher's outcome, the reads deferred
-    (``RATE_LIMITED``, for the scheduler's second round), or why nothing was read (``error``)."""
+    (``RATE_LIMITED``, for the scheduler's second round), or why nothing was read (``error``). ``enrichers_read`` counts
+    the enrichers this round read for it (a cached read included): zero when every one bound is turned off, not
+    installed or not configured (E6c2, PROF 19/11: «Aggiorna» says so; the weekly job still skips them silently)."""
 
     asset_id: int
     written: list[str] = field(default_factory=list)
     outcomes: list[ReadOutcome] = field(default_factory=list)
     deferred: list[ReadOutcome] = field(default_factory=list)
     error: str | None = None
+    enrichers_read: int = 0
 
 
 _read_cache = get_ttl_cache("enricher_read", maxsize=2000, ttl=READ_CACHE_TTL)
@@ -473,9 +476,10 @@ async def _save_asset(session: AsyncSession, asset_id: int, outcomes: list[ReadO
     except Exception as error:  # noqa: BLE001 — isolation boundary: one asset that cannot be saved never stops the others
         await session.rollback()
         logger.warning("Profile refresh of an asset failed: nothing saved for it", asset_id=asset_id, exc_info=error)
-        return AssetRefreshResult(asset_id=asset_id, outcomes=outcomes, error=type(error).__name__)
+        return AssetRefreshResult(asset_id=asset_id, outcomes=outcomes, error=type(error).__name__, enrichers_read=len({outcome.code for outcome in outcomes}))
     deferred = [outcome for outcome in kept if outcome.error_code == RATE_LIMITED]
-    return AssetRefreshResult(asset_id=asset_id, written=[row.key for row in written], outcomes=kept, deferred=deferred)
+    read = {outcome.code for outcome in kept} | {outcome.code for outcome in carried if outcome.code in order}
+    return AssetRefreshResult(asset_id=asset_id, written=[row.key for row in written], outcomes=kept, deferred=deferred, enrichers_read=len(read))
 
 
 # =============================================================================

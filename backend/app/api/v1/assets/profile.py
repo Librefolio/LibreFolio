@@ -100,7 +100,7 @@ async def refresh_profile(asset_ids: List[int], session: AsyncSession = Depends(
     """«Aggiorna»: read the enrichers of those assets and save what changed, as the weekly read does (a read younger than
     30 minutes is reused). Inactive assets are read too. An asset that does not exist gets ``error``."""
     results = await refresh_assets(session, asset_ids)
-    return FAProfileRefreshResponse(results=[FAProfileRefreshResult(asset_id=result.asset_id, written=result.written, outcomes=[_read_outcome(outcome) for outcome in result.outcomes], error=result.error) for result in results])
+    return FAProfileRefreshResponse(results=[FAProfileRefreshResult(asset_id=result.asset_id, written=result.written, outcomes=[_read_outcome(outcome) for outcome in result.outcomes], error=result.error, enrichers_read=result.enrichers_read) for result in results])
 
 
 # =============================================================================
