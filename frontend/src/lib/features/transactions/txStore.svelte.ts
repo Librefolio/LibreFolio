@@ -40,6 +40,22 @@ export function txStoreSetAll(main: TXReadItem[], partners: TXReadItem[]): void 
     _version++;
 }
 
+/**
+ * Add rows the page did not load (project 66, F6: the charges of a parent being deleted, read with `parent_ids`), so
+ * the Bulk can resolve them. A row already in the store is kept: the page's own row wins. A later `txStoreSetAll`
+ * drops them with the rest.
+ */
+export function txStoreAddExtras(rows: TXReadItem[]): void {
+    let added = false;
+    for (const r of rows) {
+        if (_map.has(r.id)) continue;
+        if (!added) _map = new Map(_map);
+        _map.set(r.id, r);
+        added = true;
+    }
+    if (added) _version++;
+}
+
 /** Get a single transaction by ID. */
 export function txStoreGet(id: number): TXReadItem | undefined {
     return _map.get(id);
