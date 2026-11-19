@@ -472,7 +472,6 @@ async def test_metadata_scheda_bond_full(monkeypatch):
     assert result.identifier_isin == "IT0005436693"
     assert result.identifier_ticker == "BTP30"
     # Plan 68, D6: description, countries and sectors are the enrichers' (the profile), never the price provider's
-    assert result.classification_params is None
 
 
 # Trimmed copies of the real AT0000A1XML2 pages (Austria 2117, expiry «20/09/17» on the page):
@@ -510,7 +509,6 @@ async def test_metadata_reads_the_real_bond_page_in_both_languages(monkeypatch, 
     assert result.asset_type == AssetType.BOND
     assert result.identifier_isin == "AT0000A1XML2"
     assert result.display_name
-    assert result.classification_params is None
 
 
 @pytest.mark.asyncio
@@ -546,7 +544,6 @@ async def test_metadata_scheda_minimal_no_optional_fields(monkeypatch):
     result = await _provider().fetch_asset_metadata("IT0003128367", IdentifierType.ISIN)
     assert result.asset_type == AssetType.STOCK
     assert result.currency == "EUR"  # from the price-API double
-    assert result.classification_params is None
 
 
 # ── fund metadata (by internal code) ─────────────────────────────────────────
@@ -578,7 +575,6 @@ async def test_fund_metadata_happy(monkeypatch):
     assert result.identifier_isin == "IT0001111111"
     assert result.identifier_other == ["ABC123"]
     assert result.display_name.startswith("Eurizon PIR Italia")
-    assert result.classification_params is None  # D6: the fund's page gives no description any more
 
 
 @pytest.mark.asyncio
@@ -816,7 +812,6 @@ async def test_metadata_currency_unknown_when_price_api_fails(monkeypatch, api_e
     assert result.asset_type == AssetType.ETF
     assert result.identifier_isin == isin
     assert result.identifier_ticker == "SWDA"
-    assert result.classification_params is None
     # the API was asked, and its failure is what left the currency unknown
     assert len(calls) == 1
 

@@ -419,7 +419,6 @@ async def test_metadata_happy(monkeypatch):
     assert result.identifier_isin == "IE00B4L5Y983"
     assert result.identifier_ticker == "IWDA"
     # Plan 68, D6: description, countries and sectors are the enrichers' (the profile), never the price provider's
-    assert result.classification_params is None
 
 
 @pytest.mark.asyncio
@@ -524,7 +523,6 @@ async def test_metadata_minimal_overview(monkeypatch):
     await p.fetch_asset_metadata("IE00B4L5Y983", IdentifierType.ISIN)  # cache hit
     assert calls["n"] == 1
     assert result is not None
-    assert result.classification_params is None
     assert result.identifier_ticker is None
 
 

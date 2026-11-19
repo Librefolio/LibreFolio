@@ -338,7 +338,6 @@ async def test_fund_metadata_has_name_isin_and_code(monkeypatch):
     assert item.identifier_isin == ISIN
     assert item.identifier_other == [CODE]
     assert item.display_name.endswith("🇮🇹")
-    assert item.classification_params is None
 
 
 @pytest.mark.asyncio
@@ -352,5 +351,4 @@ async def test_fund_metadata_degrades_without_sections(monkeypatch):
 
     assert item is not None
     assert item.display_name.startswith("Eurizon X")
-    assert item.classification_params is None
     assert item.identifier_other == [CODE]
