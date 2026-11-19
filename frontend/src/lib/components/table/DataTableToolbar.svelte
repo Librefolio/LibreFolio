@@ -12,7 +12,8 @@
     `role="toolbar"`; `Esc` deselects only while the focus is inside it. It sits over the content and under the dialogs and the mobile sidebar.
 
   In both: `data-testid="selection-toolbar"` with `data-selected-count`, the count button `selection-toolbar-clear`,
-  one `toolbar-action-<id>` per action.
+  one `toolbar-action-<id>` per action. A disabled action with a `hint` shows the hint as its tooltip (the label stays its
+  name) and publishes its `reason` code as `data-disabled-reason`.
 -->
 <script lang="ts">
     import {onDestroy} from 'svelte';
@@ -34,6 +35,10 @@
         iconClass?: string;
         /** Disable the button */
         disabled?: boolean;
+        /** Why a disabled action is off: its tooltip while disabled (the label stays its name). Ignored when enabled. */
+        hint?: string | (() => string);
+        /** A code for why a disabled action is off, published as `data-disabled-reason` (tests read it, not the text). */
+        reason?: string;
     }
 
     interface Props {
@@ -54,6 +59,11 @@
 
     function getActionLabel(action: BulkActionInfo): string {
         return resolve(action.label);
+    }
+
+    /** The tooltip: the hint of a disabled action that has one, the label otherwise. */
+    function getTooltip(action: BulkActionInfo): string {
+        return (action.disabled && resolve(action.hint)) || getActionLabel(action);
     }
 
     function getShownLabel(action: BulkActionInfo): string {
@@ -100,8 +110,9 @@
         class:danger={action.variant === 'danger'}
         onclick={action.onClick}
         disabled={action.disabled}
-        title={name}
+        title={getTooltip(action)}
         aria-label={name}
+        data-disabled-reason={action.disabled && action.reason ? action.reason : undefined}
         data-primary={action.primary ? 'true' : 'false'}
         data-danger={action.variant === 'danger' ? 'true' : 'false'}
         data-testid="toolbar-action-{action.id}"
@@ -139,8 +150,8 @@
                 {@render countButton()}
                 <div class="bulk-actions">
                     {#each bulkActions as action}
-                        <Tooltip text={getActionLabel(action)}>
-                            <button type="button" class="bulk-btn" class:danger={action.variant === 'danger'} onclick={action.onClick} disabled={action.disabled} data-testid="toolbar-action-{action.id}">
+                        <Tooltip text={getTooltip(action)}>
+                            <button type="button" class="bulk-btn" class:danger={action.variant === 'danger'} onclick={action.onClick} disabled={action.disabled} data-disabled-reason={action.disabled && action.reason ? action.reason : undefined} data-testid="toolbar-action-{action.id}">
                                 <action.icon size={16} class={action.iconClass || ''} />
                             </button>
                         </Tooltip>
