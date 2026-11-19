@@ -123,6 +123,7 @@ SHIPPED_FLAGS = {
     "BCRP": True,
     "TRM": True,
     "CBC": True,
+    "CBK": True,
     "CBN": True,
     "MANUAL": False,
     "MOCKFX": False,

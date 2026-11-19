@@ -113,7 +113,7 @@ RESETS = {
 #: The shipped providers that reach an external service, and those that do not (U2/U3 pins of their flags).
 ASSET_CALLING = ("yfinance", "justetf", "borsa_italiana", "css_scraper")
 ASSET_LOCAL = ("scheduled_investment", "mockprov")
-FX_CALLING = ("ECB", "FED", "BOE", "SNB", "BDI", "BCB", "NORGES", "NBU", "BOC", "BANXICO", "CNB", "SARB", "BCRP", "TRM", "CBC", "CBN")
+FX_CALLING = ("ECB", "FED", "BOE", "SNB", "BDI", "BCB", "NORGES", "NBU", "BOC", "BANXICO", "CNB", "SARB", "BCRP", "TRM", "CBC", "CBK", "CBN")
 FX_LOCAL = ("MANUAL", "MOCKFX", "MOCKFX_FAIL")
 #: The calling FX providers with a required field of their own (BANXICO's token, lane 75 L21): they may be unconfigured.
 FX_KEYED = ("BANXICO",)
