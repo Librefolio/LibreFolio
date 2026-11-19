@@ -231,6 +231,12 @@
           "changed": "Modifié de {from} à {to}.",
           "refilled": "Valeur à nouveau donnée : {to}."
         }
+      },
+      "history": {
+        "byHand": "saisi à la main",
+        "valuesInPercent": "valeurs en %",
+        "writeHint": "Pour saisir une nouvelle valeur : «{action}»",
+        "loadFailed": "Impossible de lire l’historique de cette donnée."
       }
     }
   }
