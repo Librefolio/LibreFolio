@@ -136,9 +136,11 @@ describe('variant inline (the default)', () => {
  * and `reason?: string`, published as `data-disabled-reason` on `toolbar-action-<id>` while it is disabled. Both are
  * optional and additive: an action without them renders exactly as before (the shared bar of every other page).
  *
- * The tooltip is asserted on the channel each variant uses today: the floating bar's `title` (its `aria-label` is the
- * label, the button's name), the inline bar's `Tooltip` (`tooltip-content`, opened by a click on its trigger, the
- * wrapper around the icon button). The texts are the test's own: nothing here is translated.
+ * The tooltip is asserted on the channel each case uses: an action that is not «disabled with a hint» keeps the floating
+ * bar's `title` (its `aria-label` is the label, the button's name) and the inline bar's `Tooltip` (`tooltip-content`,
+ * opened by a click on its trigger, the wrapper around the icon button). A disabled action with a hint shows the hint in
+ * the shared `Tooltip` in both variants, opened by a click on the button itself, and has no native `title` (66 F7: the
+ * block below pins that contract). The texts are the test's own: nothing here is translated.
  */
 describe('hint and reason of an action (66 F6)', () => {
     const LABEL = 'Link the charges';
@@ -174,20 +176,23 @@ describe('hint and reason of an action (66 F6)', () => {
             }
         });
 
-        it('a disabled action with a hint: the title is the hint, the name stays the label, the reason is published', () => {
+        // 66 F7: was «the title is the hint» on a natively disabled button; the hint now goes through the shared Tooltip.
+        it('a disabled action with a hint: aria-disabled, the name stays the label, no title, the reason is published', () => {
             render(DataTableToolbar, {selectedCount: 3, bulkActions: [linkAction({disabled: true, hint: HINT, reason: REASON})], variant: 'floating'});
 
             const button = screen.getByTestId('toolbar-action-link-charges');
-            expect(button).toBeDisabled();
-            expect(button).toHaveAttribute('title', HINT);
+            expect(button).toHaveAttribute('aria-disabled', 'true');
+            expect(button).not.toHaveAttribute('disabled');
+            expect(button).not.toHaveAttribute('title');
             expect(button).toHaveAttribute('aria-label', LABEL);
             expect(button).toHaveAttribute('data-disabled-reason', REASON);
         });
 
-        it('a hint given as a function is read like a string', () => {
+        it('a hint given as a function is read like a string', async () => {
             render(DataTableToolbar, {selectedCount: 3, bulkActions: [linkAction({disabled: true, hint: () => HINT, reason: REASON})], variant: 'floating'});
 
-            expect(screen.getByTestId('toolbar-action-link-charges')).toHaveAttribute('title', HINT);
+            await fireEvent.click(screen.getByTestId('toolbar-action-link-charges'));
+            expect((await screen.findByTestId('tooltip-content')).textContent?.trim()).toBe(HINT);
         });
 
         it('an enabled action with a hint: the hint is not shown, the title is the label, no data-disabled-reason', () => {
@@ -219,11 +224,13 @@ describe('hint and reason of an action (66 F6)', () => {
             expect(await inlineTooltipText('delete')).toBe('Delete');
         });
 
+        // 66 F7: was `toBeDisabled()` (native `disabled`); a disabled action with a hint is now aria-disabled.
         it('a disabled action with a hint: the tooltip is the hint, the hint is not the name, the reason is published', async () => {
             render(DataTableToolbar, {selectedCount: 3, bulkActions: [linkAction({disabled: true, hint: () => HINT, reason: REASON})]});
 
             const button = screen.getByTestId('toolbar-action-link-charges');
-            expect(button).toBeDisabled();
+            expect(button).toHaveAttribute('aria-disabled', 'true');
+            expect(button).not.toHaveAttribute('disabled');
             expect(button).toHaveAttribute('data-disabled-reason', REASON);
             expect([null, LABEL], 'the name, if any, stays the label').toContain(button.getAttribute('aria-label'));
             expect(await inlineTooltipText('link-charges')).toBe(HINT);
@@ -238,4 +245,143 @@ describe('hint and reason of an action (66 F6)', () => {
             expect(await inlineTooltipText('link-charges')).toBe(LABEL);
         });
     });
+});
+
+// ---------------------------------------------------------------------------
+// 66 F7 — a disabled action with a reason stays reachable: aria-disabled, the shared Tooltip, no action
+// ---------------------------------------------------------------------------
+
+/**
+ * A disabled action with a non-empty `hint`, in both variants:
+ *  - the button is `aria-disabled="true"` and has no native `disabled` — a natively disabled button takes no focus and no
+ *    click, so its reason would be out of reach on touch and from the keyboard (precedent: CorrelationHeatmap's
+ *    unavailable orderings);
+ *  - it sits in the shared `Tooltip` (`interactiveChild`), whose text is the hint: a click (or a tap) on the button opens
+ *    it, and the action's `onClick` is NOT called;
+ *  - Enter and Space on the focused button do not call `onClick` either;
+ *  - `data-disabled-reason` is published as before; in the floating bar the name (`aria-label`) stays the label and there
+ *    is no native `title` any more (the Tooltip replaces it).
+ * Unchanged: a disabled action without a hint (or with an empty one) keeps the native `disabled`; an enabled action has
+ * neither, runs its `onClick` on a click and ignores its hint.
+ *
+ * jsdom never turns a keydown into a click (a browser does, for Enter and Space on a focused button), so here the click
+ * stands for the keyboard activation; the key events are a guard against a keydown handler that would run the action.
+ * The real keyboard path is proved in the browser by `e2e/transactions/tx-charges-link-delete.spec.ts`.
+ */
+describe('a disabled action with a hint stays reachable (66 F7)', () => {
+    const LABEL = 'Link the charges';
+    const HINT = 'The charges are on another broker';
+    const REASON = 'brokerMismatch';
+    const ID = 'link-charges';
+
+    function mount(floating: boolean, extra: Record<string, unknown>) {
+        const onClick = vi.fn();
+        render(DataTableToolbar, {
+            selectedCount: 3,
+            bulkActions: [{id: ID, icon: Pencil, label: LABEL, onClick, ...extra}],
+            ...(floating ? {variant: 'floating' as const} : {}),
+        });
+        return {onClick, button: screen.getByTestId(`toolbar-action-${ID}`)};
+    }
+
+    /** The texts of the tooltips open right now (portaled to the body). */
+    function openTooltipTexts(): string[] {
+        return screen.queryAllByRole('tooltip').map((node) => node.textContent?.trim() ?? '');
+    }
+
+    for (const floating of [true, false]) {
+        const variant = floating ? 'floating' : 'inline';
+
+        describe(`variant ${variant}`, () => {
+            it.each([
+                {form: 'string', hint: HINT},
+                {form: 'function', hint: () => HINT},
+            ])('is aria-disabled, not natively disabled, focusable, and keeps its reason and name (hint as a $form)', ({hint}) => {
+                const {button} = mount(floating, {disabled: true, hint, reason: REASON});
+
+                expect(button).toHaveAttribute('aria-disabled', 'true');
+                expect(button, 'a natively disabled button takes no focus and no click').not.toHaveAttribute('disabled');
+                expect(button.tabIndex, 'the button is taken out of the tab order').not.toBe(-1);
+                button.focus();
+                expect(document.activeElement, 'the button cannot take the keyboard focus').toBe(button);
+                expect(button).toHaveAttribute('data-disabled-reason', REASON);
+                expect(button.getAttribute('title'), 'the hint is still a native title').not.toBe(HINT);
+                if (floating) {
+                    expect(button, 'the floating bar still has a native title: the Tooltip replaces it').not.toHaveAttribute('title');
+                    expect(button).toHaveAttribute('aria-label', LABEL);
+                } else {
+                    expect([null, LABEL], 'the name, if any, stays the label').toContain(button.getAttribute('aria-label'));
+                }
+            });
+
+            it.each([
+                {form: 'string', hint: HINT},
+                {form: 'function', hint: () => HINT},
+            ])('a click on the button opens the shared Tooltip with the hint and does not run the action (hint as a $form)', async ({hint}) => {
+                const {button, onClick} = mount(floating, {disabled: true, hint, reason: REASON});
+
+                await fireEvent.click(button);
+                const tooltip = await screen.findByRole('tooltip');
+                expect(tooltip).toHaveAttribute('data-testid', 'tooltip-content');
+                expect(tooltip.textContent?.trim()).toBe(HINT);
+                expect(onClick, 'a click on a disabled action ran it').not.toHaveBeenCalled();
+            });
+
+            // A finger: touchstart and touchend on the button (they bubble to the Tooltip's wrapper, which opens and pins on
+            // touchstart), then the click a browser derives from the tap. That click must neither close the reason nor run
+            // the action.
+            it('a tap (touchstart, touchend, then the derived click) opens the shared Tooltip with the hint and does not run the action', async () => {
+                const {button, onClick} = mount(floating, {disabled: true, hint: HINT, reason: REASON});
+
+                await fireEvent.touchStart(button);
+                await fireEvent.touchEnd(button);
+                expect(openTooltipTexts(), 'the touch did not open the reason').toEqual([HINT]);
+                await fireEvent.click(button);
+                const tooltip = await screen.findByRole('tooltip');
+                expect(tooltip).toHaveAttribute('data-testid', 'tooltip-content');
+                expect(openTooltipTexts(), 'the click derived from the tap closed the reason').toEqual([HINT]);
+                expect(onClick, 'a tap on a disabled action ran it').not.toHaveBeenCalled();
+            });
+
+            it('Enter and Space on the focused button do not run the action', async () => {
+                const {button, onClick} = mount(floating, {disabled: true, hint: HINT, reason: REASON});
+
+                button.focus();
+                expect(document.activeElement, 'the button cannot take the keyboard focus').toBe(button);
+                for (const key of ['Enter', ' ']) {
+                    await fireEvent.keyDown(button, {key});
+                    await fireEvent.keyUp(button, {key});
+                }
+                expect(onClick, 'a key on a disabled action ran it').not.toHaveBeenCalled();
+            });
+
+            it.each([
+                {form: 'no hint', extra: {}},
+                {form: 'an empty hint', extra: {hint: ''}},
+                {form: 'an empty hint function', extra: {hint: () => ''}},
+            ])('unchanged: a disabled action with $form keeps the native disabled, not aria-disabled', ({extra}) => {
+                const {button} = mount(floating, {disabled: true, reason: REASON, ...extra});
+
+                // No click here: a browser dispatches no click to a natively disabled button, jsdom does (and Svelte's
+                // delegated handler runs), so a click would test jsdom, not the bar.
+                expect(button).toBeDisabled();
+                expect(button).not.toHaveAttribute('aria-disabled');
+            });
+
+            it.each([
+                {form: 'without a hint', extra: {}},
+                {form: 'with a hint', extra: {hint: HINT, reason: REASON}},
+            ])('unchanged: an enabled action $form is neither disabled nor aria-disabled, runs on a click and never shows the hint', async ({extra}) => {
+                const {button, onClick} = mount(floating, {disabled: false, ...extra});
+
+                expect(button).toBeEnabled();
+                expect(button).not.toHaveAttribute('aria-disabled');
+                expect(button).not.toHaveAttribute('data-disabled-reason');
+                await fireEvent.click(button);
+                expect(onClick).toHaveBeenCalledTimes(1);
+                expect(button.getAttribute('title')).not.toBe(HINT);
+                expect(openTooltipTexts()).not.toContain(HINT);
+            });
+        });
+    }
 });

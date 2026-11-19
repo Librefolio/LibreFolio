@@ -6,7 +6,9 @@
  *     the panel `tx-charges-modal` (one column per transaction) → «Link» commits `updates[{id, parent_transaction_id}]`;
  *     the BUY then carries the badge `tx-charges-badge-<id>` and the charges fold under it.
  *   - «Link» is off, with the code `data-disabled-reason="otherBroker"`, when the FEE sits on another broker the user
- *     owns; it is not there at all when the selection holds no charge (two parents).
+ *     owns; it is not there at all when the selection holds no charge (two parents). Off, it stays reachable (66 F7):
+ *     `aria-disabled`, its reason in the shared Tooltip; on a phone (375 × 812, touch) the bar keeps one row inside the
+ *     screen and a finger tap on «Link» opens the reason without running it.
  *   - Deleting the BUY (row trash or selection bar) while its charges are not all selected opens the panel V1:
  *     «Delete all (3)» → the Bulk with the three rows marked delete; «Keep the charges» → the Bulk with the BUY
  *     alone marked delete and the banner `tx-bulk-unlink-hint` naming the charges, which survive unlinked.
@@ -102,6 +104,72 @@ async function seedBuyWithCharges(page: Page, request: Parameters<typeof openOwn
     const expected = linked ? buyId : null;
     expect([parentOf.get(feeId) ?? null, parentOf.get(taxId) ?? null], `premise: the FEE and the TAX are ${linked ? 'linked to the BUY' : 'unlinked'}`).toEqual([expected, expected]);
     return {broker, assetId, depositId, buyId, feeId, taxId};
+}
+
+/**
+ * A second broker the user owns, funded too, with a FEE on the same asset and date as the BUY of `s`: only the broker
+ * differs, so «Link» for BUY + this FEE is off with the reason `otherBroker`. Returns the FEE's id.
+ */
+async function seedFeeOnOtherBroker(page: Page, owned: OwnedAccount, committed: number[], s: Seeded, tag: string): Promise<number> {
+    const other = await createOwnedBroker(page, tag, owned.brokerIds);
+    const [otherDeposit, otherFee] = await commitCreates(
+        page,
+        [
+            {broker_id: other.id, type: 'DEPOSIT', date: daysAgoIso(10), cash: {code: 'USD', amount: '100'}, description: `Deposit other ${s.buyId}`},
+            {broker_id: other.id, asset_id: s.assetId, type: 'FEE', date: daysAgoIso(5), quantity: '0', cash: {code: 'USD', amount: '-5'}, description: `Fee other ${s.buyId}`},
+        ],
+        'fund the other broker and add its FEE',
+    );
+    committed.push(otherDeposit, otherFee);
+    return otherFee;
+}
+
+type Box = {left: number; top: number; right: number; bottom: number; width: number; height: number};
+/** The floating bar as drawn: its box, each action button's box (the `-label` spans excluded), the viewport. */
+type BarLayout = {innerWidth: number; innerHeight: number; scrollWidth: number; bar: Box; buttons: Array<{id: string; ariaDisabled: boolean} & Box>};
+
+/** Wait for the bar's entrance animation (a 0.16 s rise) to end: a box read mid-rise is not where the bar rests. */
+async function barAtRest(bar: Locator): Promise<void> {
+    await bar.evaluate((el) => Promise.all(el.getAnimations({subtree: true}).map((a) => a.finished.then(() => undefined))));
+}
+
+/** Read the bar's layout in one go (`boundingBox` does not retry, and several reads could straddle a re-render). */
+async function readBarLayout(bar: Locator): Promise<BarLayout> {
+    return bar.evaluate((root) => {
+        const box = (el: Element) => {
+            const r = el.getBoundingClientRect();
+            return {left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height};
+        };
+        return {
+            innerWidth: window.innerWidth,
+            innerHeight: window.innerHeight,
+            scrollWidth: document.documentElement.scrollWidth,
+            bar: box(root),
+            buttons: [...root.querySelectorAll<HTMLButtonElement>('button[data-testid^="toolbar-action-"]')].map((b) => ({
+                id: (b.dataset.testid ?? '').replace('toolbar-action-', ''),
+                ariaDisabled: b.getAttribute('aria-disabled') === 'true',
+                ...box(b),
+            })),
+        };
+    });
+}
+
+/**
+ * 66 F7: the disabled «Link» sits in the Tooltip's wrapper, the other actions do not; the wrapper must not move it off
+ * the bar's row or change its height. Every action button has the top of «Link» (±1 px), and «Link» has the height of
+ * every enabled action (±1 px). Soft, with the whole layout in the message, so one run reports every facet.
+ */
+function expectOneRow(layout: BarLayout): void {
+    const dump = JSON.stringify(layout);
+    const link = layout.buttons.find((b) => b.id === 'link-charges');
+    const enabled = layout.buttons.filter((b) => !b.ariaDisabled && b.id !== 'link-charges');
+    // The barrier: «Link», off, and at least one enabled action to compare it with are in the bar.
+    expect(link, `the bar has no «Link» button: ${dump}`).toBeDefined();
+    expect(link?.ariaDisabled, `«Link» is not aria-disabled: ${dump}`).toBe(true);
+    expect(enabled.length, `the bar has no enabled action to compare «Link» with: ${dump}`).toBeGreaterThan(0);
+    if (!link) return;
+    for (const b of layout.buttons) expect.soft(Math.abs(b.top - link.top), `${b.id}: top ${b.top} vs «Link» ${link.top} — not on one row: ${dump}`).toBeLessThanOrEqual(1);
+    for (const b of enabled) expect.soft(Math.abs(b.height - link.height), `«Link» height ${link.height} vs ${b.id} ${b.height}: ${dump}`).toBeLessThanOrEqual(1);
 }
 
 /** Open /transactions at `query` and wait until every load wave is in. */
@@ -267,17 +335,7 @@ test.describe('Transactions table — link charges and delete a parent with char
 
     test('Link: off with reason otherBroker for a FEE on another broker; absent when the selection has no charge', async ({page, request}) => {
         const s = await seedBuyWithCharges(page, request, owned, committedIds, 'chgl2', false);
-        // A second broker the user owns, funded too, with a FEE on the same asset and date as the BUY: only the broker differs.
-        const other = await createOwnedBroker(page, 'chgl2-b', owned.brokerIds);
-        const [otherDeposit, otherFee] = await commitCreates(
-            page,
-            [
-                {broker_id: other.id, type: 'DEPOSIT', date: daysAgoIso(10), cash: {code: 'USD', amount: '100'}, description: `Deposit other ${s.buyId}`},
-                {broker_id: other.id, asset_id: s.assetId, type: 'FEE', date: daysAgoIso(5), quantity: '0', cash: {code: 'USD', amount: '-5'}, description: `Fee other ${s.buyId}`},
-            ],
-            'fund the other broker and add its FEE',
-        );
-        committedIds.push(otherDeposit, otherFee);
+        const otherFee = await seedFeeOnOtherBroker(page, owned, committedIds, s, 'chgl2-b');
 
         await openTable(page);
         await expect(txRow(page, s.buyId)).toBeVisible({timeout: 8_000});
@@ -289,13 +347,45 @@ test.describe('Transactions table — link charges and delete a parent with char
         const bar = await expectSelection(page, 2);
         const link = bar.getByTestId('toolbar-action-link-charges');
         await expect(link, 'the selection bar offers no «Link» for a BUY + a FEE').toBeVisible({timeout: 5_000});
-        await expect(link).toBeDisabled();
+        // Off, but reachable (66 F7): `aria-disabled`, not the native `disabled` that takes neither focus nor click, so
+        // the reason opens on a tap and from the keyboard. Playwright 1.61's `toBeDisabled()` counts both, so it cannot
+        // tell them apart: the attributes can.
+        await expect(link).toHaveAttribute('aria-disabled', 'true');
+        await expect(link).not.toHaveAttribute('disabled');
         await expect(link).toHaveAttribute('data-disabled-reason', 'otherBroker');
-        // The page's bar is the floating variant: its tooltip is the native `title`, which names the offending FEE
-        // by id (the id, never the translated words). Hovering the disabled button lands on it: it is the hover target.
-        await expect(link).toHaveAttribute('title', new RegExp(`#${otherFee}\\b`));
+        // The reason is in the shared Tooltip, not in a native `title` any more.
+        await expect(link).not.toHaveAttribute('title');
+        // The Tooltip's wrapper keeps «Link» on the bar's row, at the height of its enabled neighbours.
+        await barAtRest(bar);
+        const layout = await readBarLayout(bar);
+        console.log(`Bar layout — desktop: ${JSON.stringify(layout)}`);
+        expectOneRow(layout);
+
+        // The tooltip that names the offending FEE by id (the id, never the translated words). It is portaled to the
+        // body and `tooltip-content` names every tooltip, so it is filtered by the id, not scoped under the bar.
+        const reason = page.getByTestId('tooltip-content').filter({hasText: new RegExp(`#${otherFee}\\b`)});
+        const panel = page.getByTestId('tx-charges-modal');
+
+        // Keyboard first, before the pointer comes near the bar (a hover alone opens the tooltip after 500 ms, which
+        // would prove nothing about the key): Enter on the focused button opens the reason and does not run «Link».
+        await link.focus();
+        await expect(link, 'the disabled «Link» cannot take the keyboard focus').toBeFocused();
+        await page.keyboard.press('Enter');
+        await expect(reason, 'Enter on the disabled «Link» did not open its reason').toBeVisible({timeout: 5_000});
+        // The barrier is the open tooltip: the activation was handled, and the panel opens synchronously from `onClick`.
+        await expect(panel, 'Enter on the disabled «Link» opened the panel').toBeHidden();
+        // A second activation closes the pinned tooltip (Escape is not used: in the floating bar it clears the selection).
+        await page.keyboard.press('Enter');
+        await expect(reason).toBeHidden({timeout: 5_000});
+
+        // Pointer: the click opens the reason, the panel stays shut. `force` because Playwright 1.61's click waits for the
+        // element to be enabled and counts `aria-disabled="true"` as disabled; `force` also skips the hit-target check,
+        // so the hover (which does not wait for enabled) proves first that the button is what the pointer lands on.
         await link.hover();
         await expect.poll(() => link.evaluate((el) => el.matches(':hover')), {message: 'the disabled «Link» is not the hover target'}).toBe(true);
+        await link.click({force: true});
+        await expect(reason, 'a click on the disabled «Link» did not open its reason').toBeVisible({timeout: 5_000});
+        await expect(panel, 'a click on the disabled «Link» opened the panel').toBeHidden();
 
         // BUY + DEPOSIT: two parents and no charge — «Link» is not offered at all. The barrier: the bar is there,
         // holds the two rows and offers «Delete»; only then does the absence of «Link» mean something.
@@ -465,5 +555,115 @@ test.describe('Transactions table — link charges and delete a parent with char
         expect(after.get(s.taxId)?.parent_transaction_id ?? null).toBeNull();
         // Unlinked, the TAX is a row of its own in the table again.
         await expect(txRow(page, s.taxId)).toBeVisible({timeout: 8_000});
+    });
+
+    // 66 F7 on a phone: a context of its own (375 × 812, a touch screen), nested so it keeps this block's cleanup.
+    test.describe('on a phone', () => {
+        test.use({viewport: {width: 375, height: 812}, isMobile: true, hasTouch: true});
+        // Infrastructure, not data: both projects of playwright.config.ts run Chromium, so this never skips there.
+        test.skip(({browserName}) => browserName !== 'chromium', 'isMobile and the touch screen are Chromium emulation here');
+
+        test('Link off on a phone: the bar fits on one row in the screen, and a tap on «Link» opens its reason without running it', async ({page, request}, testInfo) => {
+            const s = await seedBuyWithCharges(page, request, owned, committedIds, 'chgl7', false);
+            const otherFee = await seedFeeOnOtherBroker(page, owned, committedIds, s, 'chgl7-b');
+
+            await openTable(page);
+            // The premise: the page sees the phone this test is about — a touch screen, drawn below 640 px (icons only).
+            const device = await page.evaluate(() => ({touchPoints: navigator.maxTouchPoints, phone: window.matchMedia('(max-width: 639px)').matches}));
+            expect(device.touchPoints, 'the page must see a touch screen (hasTouch)').toBeGreaterThan(0);
+            expect(device.phone, 'the page must be drawn at phone width, below 640 px').toBe(true);
+            await expect(txRow(page, s.buyId)).toBeVisible({timeout: 8_000});
+            await expect(txRow(page, otherFee)).toBeVisible({timeout: 8_000});
+
+            await ensureChecked(page, s.buyId);
+            await ensureChecked(page, otherFee);
+            const bar = await expectSelection(page, 2);
+            const link = bar.getByTestId('toolbar-action-link-charges');
+            await expect(link).toBeVisible({timeout: 5_000});
+            await expect(link).toHaveAttribute('aria-disabled', 'true');
+            await expect(link).toHaveAttribute('data-disabled-reason', 'otherBroker');
+
+            // Layout: one row, «Link» as tall as its neighbours, the bar inside the screen, nothing scrolls sideways.
+            await barAtRest(bar);
+            const layout = await readBarLayout(bar);
+            await testInfo.attach('selection-bar-phone', {body: await page.screenshot(), contentType: 'image/png'});
+            const dump = JSON.stringify(layout);
+            console.log(`Bar layout — phone: ${dump}`);
+            expectOneRow(layout);
+            expect.soft(layout.bar.left, `the bar starts left of the screen: ${dump}`).toBeGreaterThanOrEqual(0);
+            expect.soft(layout.bar.top, `the bar starts above the screen: ${dump}`).toBeGreaterThanOrEqual(0);
+            expect.soft(layout.bar.right, `the bar ends right of the screen: ${dump}`).toBeLessThanOrEqual(layout.innerWidth);
+            expect.soft(layout.bar.bottom, `the bar ends below the screen: ${dump}`).toBeLessThanOrEqual(layout.innerHeight);
+            expect.soft(layout.scrollWidth, `the page scrolls sideways: ${dump}`).toBeLessThanOrEqual(layout.innerWidth);
+
+            // Touch: a finger on the centre of «Link» — the browser's own touch input (touchstart, touchend and the click
+            // it derives), not `locator.tap`, which waits for an enabled element and would need `force`.
+            const linkBox = layout.buttons.find((b) => b.id === 'link-charges');
+            if (!linkBox) throw new Error(`no «Link» in the bar layout: ${dump}`);
+            const x = linkBox.left + linkBox.width / 2;
+            const y = linkBox.top + linkBox.height / 2;
+            // `touchscreen.tap` checks nothing: prove first that the point is «Link» and nothing above it.
+            const hit = await page.evaluate(([px, py]) => document.elementFromPoint(px, py)?.closest('[data-testid="toolbar-action-link-charges"]') != null, [x, y] as const);
+            expect(hit, `the centre of «Link» (${x}, ${y}) is covered by another element`).toBe(true);
+            // The tooltip opens on touchstart, before the browser derives the click from the tap: an open tooltip alone
+            // does not prove the click has arrived. Count the clicks that reach «Link» (capture phase, on the document).
+            await page.evaluate(() => {
+                const root = document.documentElement;
+                root.dataset.lfLinkClicks = '0';
+                document.addEventListener(
+                    'click',
+                    (event) => {
+                        if ((event.target as Element | null)?.closest?.('[data-testid="toolbar-action-link-charges"]')) root.dataset.lfLinkClicks = String(Number(root.dataset.lfLinkClicks ?? '0') + 1);
+                    },
+                    true,
+                );
+            });
+            await page.touchscreen.tap(x, y);
+            await expect.poll(() => page.evaluate(() => Number(document.documentElement.dataset.lfLinkClicks ?? '0')), {message: 'the tap derived no click on «Link»', timeout: 5_000}).toBe(1);
+
+            const reason = page.getByTestId('tooltip-content').filter({hasText: new RegExp(`#${otherFee}\\b`)});
+            await expect(reason, 'a tap on the disabled «Link» did not open its reason, or its click closed it').toBeVisible({timeout: 5_000});
+            // The tooltip is drawn at (0, 0) until its first frame positions it (clamped 10 px inside the screen), so (0, 0)
+            // is not «inside»: wait for the positioned box, then require it whole on the screen.
+            const tipVerdict = async (): Promise<string> => {
+                const r = await reason.evaluate((el) => {
+                    const b = el.getBoundingClientRect();
+                    return {left: b.left, top: b.top, right: b.right, bottom: b.bottom, vw: window.innerWidth, vh: window.innerHeight};
+                });
+                if (r.left === 0 && r.top === 0) return `not positioned yet: ${JSON.stringify(r)}`;
+                return r.left >= 0 && r.top >= 0 && r.right <= r.vw && r.bottom <= r.vh ? 'inside' : `outside the screen: ${JSON.stringify(r)}`;
+            };
+            await expect.poll(tipVerdict, {message: 'the reason is not whole on the screen', timeout: 5_000}).toBe('inside');
+            // The barrier is the derived click, counted above, with the tooltip still open: the panel would open
+            // synchronously from `onClick`.
+            await expect(page.getByTestId('tx-charges-modal'), 'a tap on the disabled «Link» opened the panel').toBeHidden();
+
+            // Observation, not a contract (66 F7 question 3): Escape with the reason pinned open. The bar clears the
+            // selection on Escape while the focus is inside it; what happens to the pinned tooltip is what is recorded.
+            const observe = async (step: string): Promise<void> => {
+                const state = await page.evaluate(
+                    ([buy, fee]) => ({
+                        active: document.activeElement?.getAttribute('data-testid') ?? document.activeElement?.tagName ?? null,
+                        bar: document.querySelector('[data-testid="selection-toolbar"]') != null,
+                        tooltips: document.querySelectorAll('[data-testid="tooltip-content"]').length,
+                        buyCheckbox: document.querySelector(`[data-testid="dt-row-checkbox-tx-${buy}"]`)?.getAttribute('data-state') ?? null,
+                        feeCheckbox: document.querySelector(`[data-testid="dt-row-checkbox-tx-${fee}"]`)?.getAttribute('data-state') ?? null,
+                    }),
+                    [s.buyId, otherFee] as const,
+                );
+                const line = `Escape observation — ${step}: ${JSON.stringify(state)}`;
+                console.log(line);
+                testInfo.annotations.push({type: 'escape-observation', description: line});
+            };
+            await observe('after the tap');
+            if (!(await link.evaluate((el) => el === document.activeElement))) {
+                await link.focus();
+                await observe('after focusing «Link»');
+            }
+            await page.keyboard.press('Escape');
+            // The bar's documented answer to Escape with the focus inside it is to clear the selection: that is the barrier.
+            await expect(bar, 'Escape in the bar did not clear the selection').toBeHidden({timeout: 5_000});
+            await observe('after Escape');
+        });
     });
 });
