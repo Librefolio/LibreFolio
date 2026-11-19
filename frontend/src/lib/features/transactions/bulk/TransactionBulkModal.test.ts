@@ -48,7 +48,8 @@ import {schemas} from '$lib/api/generated';
 import {currentLanguage} from '$lib/stores/app/language';
 import {ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
 import {ensureTypesLoaded, isTypesLoaded} from '$lib/features/transactions/transactionTypeStore';
-import {txStoreInvalidate, txStoreSetAll} from '$lib/features/transactions/txStore.svelte';
+import {txStoreGet, txStoreInvalidate, txStoreSetAll} from '$lib/features/transactions/txStore.svelte';
+import {mergeBrokers, resetBrokerStore} from '$lib/stores/reference/brokerStore';
 import type {TransactionCreateItem} from '$lib/types';
 import type {TXReadItem} from '../types';
 import type {ChargeDraft} from '../form/txCharges';
@@ -3225,12 +3226,680 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
             const column = (th: HTMLElement) => th.getAttribute('data-testid')!.slice('dt-header-'.length);
             const typeCell = (th: HTMLElement) => (table.querySelector(`tbody tr[data-row-id="type"] td[data-column-id="${column(th)}"]`)?.textContent ?? '').trim();
             expect(ths[0].textContent ?? '').toContain(`#${PARENT_A.id}`);
-            expect(ths[1].textContent ?? '').toContain(get(_)('transactions.bulk.stateNew'));
             expect(typeCell(ths[1]), 'A’s new FEE under A').toBe(get(_)('transactions.types.FEE'));
             expect(ths[2].textContent ?? '').toContain(`#${PARENT_B.id}`);
-            expect(ths[3].textContent ?? '').toContain(get(_)('transactions.bulk.stateNew'));
             expect(typeCell(ths[3]), 'B’s new TAX under B').toBe(get(_)('transactions.types.TAX'));
+            // Re-targeted in F7-d (§22.1, §23.1): a new row is named by its Bulk label, so the two new charges are told apart.
+            expect((ths[1].textContent ?? '').trim(), 'the two new charges are told apart').not.toBe((ths[3].textContent ?? '').trim());
             for (const th of ths) expect(th.textContent ?? '', 'no TX #0').not.toContain('#0');
+        });
+    });
+
+    // -----------------------------------------------------------------------
+    // 66 F7-d (contract 66-F7 §20, corrected by §21, §22)
+    // -----------------------------------------------------------------------
+
+    /**
+     * F7-d inside the Bulk:
+     *   - §20.2: a delete intent carries `chargeIds` (the charges chosen with their parent on the page); the Bulk marks
+     *     them `byParentChoice`, so «Restore» on the parent takes them back too (deviation 1 of C15);
+     *   - §20.3 + §21.1: a delete request while another waits leaves out the rows the first holds; the guard is released
+     *     in `finally`, a cut wait included;
+     *   - §20.4 + §21.4 + §22.4: «Open» in the nested Form (`onOpenTransaction`) moves the Form to that row, adding a
+     *     saved row absent from the Bulk (store first, then the server); the row it adds joins the close guard's baseline;
+     *   - §20.5 + §21.2 + §22.1: U3, «Link» in the selection group of the toolbar (`tx-bulk-link-charges`), its panel
+     *     (`TxChargesActionModal`, `mode="link"`), and the payload «Save all» sends.
+     *
+     * The Form is a probe: «Open» is the probe's `onOpenTransaction`, called as the real Form calls it after its own
+     * discard confirmation. A read by id goes through the same mocked `query_transactions_api_v1_transactions_get` as the
+     * charges read, with `ids` instead of `parent_ids` (the page's `fetchTransactionById` does so today).
+     */
+    describe('66 F7-d: chargeIds, the delete guard, «Open» and «Link» inside the Bulk', () => {
+        const PANEL = 'tx-charges-modal-content';
+        /** A saved BUY with one charge, absent from the Bulk until «Open» brings it. */
+        const BUY_S: TXReadItem = {...SAVED_BUY, id: 91_801, charges_count: 1, description: 'F7d parent'};
+        const FEE_S: TXReadItem = {...FEE, id: 91_802, parent_transaction_id: BUY_S.id, description: 'F7d fee'};
+        /** A saved BUY with no charge, and a saved FEE linked to nothing, on the same broker and asset. */
+        const BUY_L: TXReadItem = {...SAVED_BUY, id: 91_811, charges_count: 0, description: 'F7d lone buy'};
+        const BUY_L2: TXReadItem = {...SAVED_BUY, id: 91_813, date: '2026-09-15', charges_count: 0, description: 'F7d lone buy 2'};
+        const FREE: TXReadItem = {...FEE, id: 91_812, parent_transaction_id: null, description: 'F7d free fee'};
+        /** A saved BUY A with its FEE, and a saved BUY B with none: the FEE unlinked from A here and linked to B. */
+        const PARENT_A: TXReadItem = {...SAVED_BUY, id: 91_821, charges_count: 1, description: 'F7d parent A'};
+        const FEE_A: TXReadItem = {...FEE, id: 91_822, parent_transaction_id: PARENT_A.id, description: 'F7d fee of A'};
+        const PARENT_B: TXReadItem = {...SAVED_BUY, id: 91_831, date: '2026-09-16', charges_count: 0, description: 'F7d parent B'};
+
+        type IdsArgs = {queries?: {parent_ids?: number[]; ids?: number[]}} | undefined;
+        type HeldById = {ids: number[]; resolve: (rows: TXReadItem[]) => void; reject: (error: unknown) => void};
+        let heldById: HeldById[] = [];
+
+        beforeEach(() => {
+            heldById = [];
+            // «Link» reads the user's right to edit a row's broker, as the page does: broker 77 is the user's own.
+            mergeBrokers([{id: 77, name: 'F7d broker', user_role: 'OWNER'}]);
+        });
+
+        afterEach(() => {
+            resetBrokerStore();
+        });
+
+        /**
+         * One responder for both kinds of read: `parent_ids` answers from `charges`, `ids` from `byId` (`'hold'`: held
+         * in `heldById` until the test answers; `'fail'`: rejected).
+         */
+        function answerReads(charges: TXReadItem[], byId: TXReadItem[] | 'hold' | 'fail' = []): void {
+            readMock().mockImplementation(((args: IdsArgs) => {
+                const ids = args?.queries?.ids;
+                if (ids) {
+                    if (byId === 'fail') return Promise.reject(new Error('network down'));
+                    if (byId === 'hold') return new Promise<TXReadItem[]>((resolve, reject) => heldById.push({ids, resolve, reject}));
+                    return Promise.resolve(byId.filter((row) => ids.includes(row.id)));
+                }
+                return Promise.resolve(chargesOf(args?.queries?.parent_ids ?? [], charges));
+            }) as never);
+        }
+
+        /** Whether the editor read these ids (`ids`, not `parent_ids`). */
+        function readById(id: number): boolean {
+            return readMock().mock.calls.some((call) => ((call[0] as IdsArgs)?.queries?.ids ?? []).includes(id));
+        }
+
+        /** «Open» in the nested Form: the probe's `onOpenTransaction`, which TBM must hand its Form. */
+        async function openFromForm(id: number): Promise<void> {
+            const onOpen = formProbe().onOpenTransaction;
+            expect(onOpen, 'TBM hands its nested Form onOpenTransaction (§20.4)').toBeTypeOf('function');
+            (onOpen as (id: number) => void)(id);
+            flushSync();
+            await settle();
+        }
+
+        /** The Form is open on the saved row `txId`. */
+        async function formOn(txId: number): Promise<void> {
+            await waitFor(() => {
+                expect(formProbe().open, 'the Form is open').toBe(true);
+                expect(formRow()?.id, `the Form shows #${txId}`).toBe(txId);
+            });
+        }
+
+        /** The Form opened on a saved row from its menu. */
+        async function openRowForm(txId: number): Promise<void> {
+            await rowAction(gridRow(txId), 'edit-single');
+            await formOn(txId);
+        }
+
+        /** The events of the app's ring buffer after `since` with this name (`notify`, the machine half). */
+        function eventsSince(since: number, name: string): Array<{name: string; detail?: Record<string, unknown>}> {
+            const lf = (window as unknown as {__lf?: {events?: Array<{seq: number; name: string; detail?: Record<string, unknown>}>}}).__lf;
+            return (lf?.events ?? []).filter((event) => event.seq > since && event.name === name);
+        }
+
+        function eventSeq(): number {
+            const lf = (window as unknown as {__lf?: {seq?: () => number}}).__lf;
+            return lf?.seq?.() ?? 0;
+        }
+
+        /** Tick a row's checkbox, whatever state it is in; ends checked. */
+        async function tickRow(row: HTMLElement): Promise<void> {
+            const box = rowCheckbox(row);
+            if (!box) throw new Error('the row has no checkbox');
+            if (box.getAttribute('data-state') !== 'checked') {
+                await fireEvent.click(box);
+                await settle();
+            }
+            expect(rowCheckbox(row)).toHaveAttribute('data-state', 'checked');
+        }
+
+        async function deleteSelected(): Promise<void> {
+            await fireEvent.click(screen.getByTestId('tx-bulk-delete-selected'));
+            await settle();
+        }
+
+        async function saveAll(): Promise<Payload> {
+            const {commitTransactions} = await api();
+            const commit = screen.getByTestId('tx-bulk-commit');
+            expect(commit, '«Save all» is on').not.toBeDisabled();
+            await fireEvent.click(commit);
+            await settle();
+            await waitFor(() => expect(commitTransactions, 'Save all committed').toHaveBeenCalledTimes(1));
+            return commitTransactions.mock.calls[0]?.[0] as Payload;
+        }
+
+        /** «+ Add row», and the row the Form pushes back; ends on the Form closed. */
+        async function addRow(payload: Record<string, unknown>): Promise<void> {
+            await fireEvent.click(screen.getByTestId('tx-bulk-add-row'));
+            await settle();
+            await waitFor(() => expect(formProbe().open, '«Add row» opens the Form').toBe(true));
+            await push(payload);
+        }
+
+        /** A new charge typed on its own in the Form (not in a parent's charges section). */
+        function chargePayload(type: 'FEE' | 'TAX', description: string, over: Record<string, unknown> = {}): Record<string, unknown> {
+            return {broker_id: 77, type, date: '2026-09-13', quantity: '0', asset_id: 101, cash: {code: 'EUR', amount: '-1.500000'}, description, ...over};
+        }
+
+        /** A DEPOSIT typed in the Form. */
+        function depositPayload(description: string): Record<string, unknown> {
+            return {broker_id: 77, type: 'DEPOSIT', date: '2026-09-14', quantity: '0', asset_id: null, cash: {code: 'EUR', amount: '50.000000'}, description};
+        }
+
+        /** The one create of this type in a body. */
+        function onlyCreateOf(body: Payload, type: string): Record<string, unknown> {
+            const found = (body.creates ?? []).filter((create) => create.type === type);
+            expect(found, `one ${type} create`).toHaveLength(1);
+            return found[0];
+        }
+
+        /** The updates of a body for this id. */
+        function updatesOf(body: Payload, id: number): Array<Record<string, unknown>> {
+            return (body.updates ?? []).filter((update) => update.id === id);
+        }
+
+        /** The grid row id (tempId) of a row. */
+        function rowIdOf(row: HTMLElement): string {
+            const id = row.getAttribute('data-row-id');
+            if (!id) throw new Error('the row publishes no data-row-id');
+            return id;
+        }
+
+        // -------------------------------------------------------------------
+        // §20.2 — the delete intent carries chargeIds
+        // -------------------------------------------------------------------
+
+        describe('§20.2: a delete intent with chargeIds', () => {
+            /** The editor opened by a delete intent on the BUY and its charges, all three in the store. */
+            async function openDeleteIntent(intent: Record<string, unknown>): Promise<void> {
+                txStoreSetAll([BUY, FEE, TAX], []);
+                answerChargesRead([FEE, TAX]);
+                mountEditor(intent as WorkspaceIntent);
+                await waitFor(() => expect(rowsOf(BUY.id), 'premise: the BUY is on screen').toHaveLength(1));
+                await settle();
+                expect(rowStatus(gridRow(BUY.id)), 'premise: the BUY is marked for deletion').toBe('delete');
+            }
+
+            it('«Delete all» from the page: the charges «del» under the BUY; «Restore» on the BUY restores them too, and Save all goes off', async () => {
+                await openDeleteIntent({action: 'delete', txIds: [BUY.id, FEE.id, TAX.id], unlinkIds: [], chargeIds: [FEE.id, TAX.id]});
+                await waitFor(() => expect(chargeState(gridRow(FEE.id)), 'premise: the FEE is «del» under the BUY').toBe('del'));
+                expect(chargeState(gridRow(TAX.id)), 'premise: the TAX is «del» under the BUY').toBe('del');
+
+                await rowAction(gridRow(BUY.id), 'mark-delete');
+
+                expect(rowStatus(gridRow(BUY.id)), 'the BUY is restored').toBe('original');
+                expect(chargeState(gridRow(FEE.id)), 'the FEE chosen with the BUY comes back linked').toBe('linked');
+                expect(chargeState(gridRow(TAX.id)), 'the TAX chosen with the BUY comes back linked').toBe('linked');
+                expect(screen.getByTestId('tx-bulk-commit'), 'nothing left to save').toBeDisabled();
+            });
+
+            it('a charge the user selected on the page (in txIds, not in chargeIds) stays «del» when the BUY is restored', async () => {
+                await openDeleteIntent({action: 'delete', txIds: [BUY.id, FEE.id, TAX.id], unlinkIds: [], chargeIds: [TAX.id]});
+                await waitFor(() => expect(chargeState(gridRow(FEE.id))).toBe('del'));
+
+                await rowAction(gridRow(BUY.id), 'mark-delete');
+
+                expect(rowStatus(gridRow(BUY.id))).toBe('original');
+                expect(chargeState(gridRow(TAX.id)), 'the TAX chosen with the BUY comes back').toBe('linked');
+                // A charge restored under a parent that is no longer «del» is under it: its own «del» stays, the user asked for it.
+                expect(chargeState(gridRow(FEE.id)), 'the FEE the user selected stays «del»').toBe('del');
+                const body = await validateNow();
+                expect(body.deletes ?? []).toEqual([FEE.id]);
+            });
+
+            it('guard: «Keep» from the page (unlinkIds with chargeIds) — unchanged: «unlink» under the BUY, and «Restore» links them again', async () => {
+                await openDeleteIntent({action: 'delete', txIds: [BUY.id], unlinkIds: [FEE.id, TAX.id], chargeIds: [FEE.id, TAX.id]});
+                await waitFor(() => expect(chargeState(gridRow(FEE.id))).toBe('unlink'));
+                expect(chargeState(gridRow(TAX.id))).toBe('unlink');
+
+                await rowAction(gridRow(BUY.id), 'mark-delete');
+
+                expect(chargeState(gridRow(FEE.id))).toBe('linked');
+                expect(chargeState(gridRow(TAX.id))).toBe('linked');
+                expect(screen.getByTestId('tx-bulk-commit')).toBeDisabled();
+            });
+        });
+
+        // -------------------------------------------------------------------
+        // §20.3 + §21.1 — a delete request while another waits
+        // -------------------------------------------------------------------
+
+        describe('§21.1: a delete request while another waits for a read', () => {
+            /** The BUY's read lands with no charge left (its charges were deleted elsewhere): «del» needs no choice. */
+            async function releaseEmpty(at: number): Promise<void> {
+                const read = heldReads[at];
+                if (!read) throw new Error(`no charges read #${at} was made (made: ${heldReads.length})`);
+                read.resolve([]);
+                await settle();
+            }
+
+            it('two «Delete selected» on the same rows during the wait: the rows end «del» once, not toggled back', async () => {
+                holdChargesReads();
+                await openBuyAndDeposit();
+                await waitFor(() => expect(readAskedFor(BUY.id)).toBe(true));
+                await tickRow(gridRow(BUY.id));
+                await tickRow(gridRow(DEP.id));
+
+                await deleteSelected();
+                await deleteSelected();
+                expect(rowStatus(gridRow(DEP.id)), 'premise: waiting for the read, nothing done yet').toBe('original');
+                await releaseEmpty(0);
+
+                expect(screen.queryByTestId(PANEL), 'no linked charge: no panel').toBeNull();
+                expect(rowStatus(gridRow(BUY.id)), 'the BUY «del» once').toBe('delete');
+                expect(rowStatus(gridRow(DEP.id)), 'the DEPOSIT «del» once').toBe('delete');
+            });
+
+            it('guard: «Delete» on a row the waiting request does not hold proceeds at once', async () => {
+                const DEP2: TXReadItem = {...DEP, id: 91_714, description: 'F7d deposit 2'};
+                holdChargesReads();
+                txStoreSetAll([BUY, DEP, DEP2], []);
+                mountEditor({action: 'edit', txIds: [BUY.id, DEP.id, DEP2.id]});
+                await waitFor(() => expect(readAskedFor(BUY.id)).toBe(true));
+                await tickRow(gridRow(BUY.id));
+                await tickRow(gridRow(DEP.id));
+                await deleteSelected();
+                expect(rowStatus(gridRow(DEP.id)), 'premise: the selection waits').toBe('original');
+
+                await rowAction(gridRow(DEP2.id), 'mark-delete');
+
+                expect(rowStatus(gridRow(DEP2.id)), 'the unrelated row does not wait').toBe('delete');
+                expect(rowStatus(gridRow(DEP.id)), 'the waiting rows still wait').toBe('original');
+            });
+
+            it('guard: after a wait cut by «Reset all», a new request on a row the cut one held works (the guard was released)', async () => {
+                holdChargesReads();
+                await openBuyAndDeposit();
+                await waitFor(() => expect(readAskedFor(BUY.id)).toBe(true));
+                // A new row keeps its tempId across «Reset all»: the guard is the only thing that could still hold it.
+                await addRow(depositPayload('F7d new deposit'));
+                // «Reset all» is offered once a saved row is changed: the DEPOSIT «del».
+                await rowAction(gridRow(DEP.id), 'mark-delete');
+                await tickRow(gridRow(BUY.id));
+                await tickRow(gridRowDescribed('F7d new deposit'));
+                await deleteSelected();
+                expect(
+                    gridRows().some((row) => rowDescription(row) === 'F7d new deposit'),
+                    'premise: waiting, the new row is still there',
+                ).toBe(true);
+
+                expect(await clickCollectingErrors(screen.getByTestId('tx-bulk-reset-all'))).toEqual([]);
+                for (let at = 0; at < heldReads.length; at++) await releaseEmpty(at);
+                expect(
+                    gridRows().some((row) => rowDescription(row) === 'F7d new deposit'),
+                    'the cut request removed nothing',
+                ).toBe(true);
+
+                await tickRow(gridRowDescribed('F7d new deposit'));
+                await deleteSelected();
+
+                expect(
+                    gridRows().filter((row) => rowDescription(row) === 'F7d new deposit'),
+                    'the new request removes the new row',
+                ).toHaveLength(0);
+            });
+        });
+
+        // -------------------------------------------------------------------
+        // §20.4 + §21.4 + §22.4 — «Open» in the nested Form
+        // -------------------------------------------------------------------
+
+        describe('§20.4: «Open» in the nested Form', () => {
+            it('a saved row present in the Bulk: the Form moves to it, highlighting the row the user came from', async () => {
+                await openLoaded();
+                await openBuyForm(2);
+
+                await openFromForm(FEE.id);
+
+                await formOn(FEE.id);
+                expect(formProbe().highlightTxId, 'the row the user came from').toBe(BUY.id);
+            });
+
+            it('a charge under a closed group: the group opens, so the row is on screen when the Form closes', async () => {
+                await openLoaded();
+                expect(rowsOf(FEE.id), 'premise: the group is closed').toHaveLength(0);
+                await openBuyForm(2);
+
+                await openFromForm(FEE.id);
+
+                await formOn(FEE.id);
+                expect(rowsOf(FEE.id), 'the FEE is on screen under its BUY').toHaveLength(1);
+                expect(chargeOfCell(gridRow(FEE.id))).toBe(buyRowId());
+            });
+
+            it('a parent absent from the Bulk, held by the store: added as a saved row, its charge adopted and shown; the Form moves to it; no server read', async () => {
+                txStoreSetAll([BUY_S, FEE_S, DEP], []);
+                answerReads([FEE_S]);
+                mountEditor({action: 'edit', txIds: [FEE_S.id, DEP.id]});
+                await waitFor(() => expect(rowsOf(FEE_S.id), 'premise: the FEE is on screen').toHaveLength(1));
+                expect(rowsOf(BUY_S.id), 'premise: its BUY is not in the Bulk').toHaveLength(0);
+                await openRowForm(FEE_S.id);
+
+                await openFromForm(BUY_S.id);
+
+                await formOn(BUY_S.id);
+                expect(formProbe().highlightTxId, 'the row the user came from').toBe(FEE_S.id);
+                expect(rowsOf(BUY_S.id), 'the BUY is a row of the Bulk').toHaveLength(1);
+                expect(rowStatus(gridRow(BUY_S.id)), 'a saved row, unchanged').toBe('original');
+                expect(chargeOfCell(gridRow(FEE_S.id)), 'the FEE sits under it: the user brought it, the group is open').toBe(rowIdOf(gridRow(BUY_S.id)));
+                expect(readById(BUY_S.id), 'the store had it: nothing read by id').toBe(false);
+            });
+
+            it('a parent the store does not hold: read from the server by id, added to the store and to the Bulk, then opened', async () => {
+                txStoreSetAll([FEE_S, DEP], []);
+                answerReads([FEE_S], [BUY_S]);
+                mountEditor({action: 'edit', txIds: [FEE_S.id, DEP.id]});
+                await waitFor(() => expect(rowsOf(FEE_S.id)).toHaveLength(1));
+                await openRowForm(FEE_S.id);
+
+                await openFromForm(BUY_S.id);
+
+                expect(readById(BUY_S.id), 'read from the server by id').toBe(true);
+                await formOn(BUY_S.id);
+                expect(txStoreGet(BUY_S.id)?.id, 'the row read is in the store').toBe(BUY_S.id);
+                expect(rowsOf(BUY_S.id), 'the BUY is a row of the Bulk').toHaveLength(1);
+                expect(chargeOfCell(gridRow(FEE_S.id))).toBe(rowIdOf(gridRow(BUY_S.id)));
+            });
+
+            it('a target marked «del»: the «restore and edit» confirmation first (the double-click entry); confirmed, the Form moves to it restored', async () => {
+                await openLoaded();
+                await openBuyForm(2);
+                await push(buyPayload({_charges: handedDrafts().map((draft): ChargeDraft => (draft.id === FEE.id ? {...draft, state: 'delete'} : draft))}));
+                await openBuyForm(2);
+
+                await openFromForm(FEE.id);
+
+                const message = await screen.findByTestId('confirm-modal-message');
+                expect(message, 'the «restore and edit» question').toHaveTextContent(get(_)('transactions.bulk.confirmEditDeleteMessage'));
+                expect(formRow()?.id, 'the Form has not moved yet').toBe(BUY.id);
+                await fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
+                await settle();
+                await formOn(FEE.id);
+                expect(rowsOf(FEE.id), 'the FEE is on screen').toHaveLength(1);
+                expect(chargeState(gridRow(FEE.id)), 'restored').toBe('linked');
+            });
+
+            it('a failed read: an error notification tx.form.open.failed, and nothing changes', async () => {
+                txStoreSetAll([FEE_S, DEP], []);
+                answerReads([FEE_S], 'fail');
+                mountEditor({action: 'edit', txIds: [FEE_S.id, DEP.id]});
+                await waitFor(() => expect(rowsOf(FEE_S.id)).toHaveLength(1));
+                await openRowForm(FEE_S.id);
+                const toasts = await toastsMock();
+                toasts.show.mockClear();
+                const since = eventSeq();
+
+                await openFromForm(BUY_S.id);
+
+                await waitFor(() => expect(readById(BUY_S.id), 'premise: the read by id was made').toBe(true));
+                await settle();
+                expect(eventsSince(since, 'tx.form.open.failed'), 'one tx.form.open.failed event').toHaveLength(1);
+                expect(
+                    toasts.show.mock.calls.filter((call) => call[0] === 'error'),
+                    'an error toast',
+                ).toHaveLength(1);
+                expect(formRow()?.id, 'the Form stays on the FEE').toBe(FEE_S.id);
+                expect(rowsOf(BUY_S.id), 'no row added').toHaveLength(0);
+            });
+
+            it('a late answer after the Form moved to another row: nothing happens', async () => {
+                txStoreSetAll([FEE_S, DEP], []);
+                answerReads([FEE_S], 'hold');
+                mountEditor({action: 'edit', txIds: [FEE_S.id, DEP.id]});
+                await waitFor(() => expect(rowsOf(FEE_S.id)).toHaveLength(1));
+                await openRowForm(FEE_S.id);
+                await openFromForm(BUY_S.id);
+                await waitFor(() => expect(heldById.length, 'premise: the read by id is in flight').toBe(1));
+                (formProbe().onClose as () => void)();
+                flushSync();
+                await settle();
+                await openRowForm(DEP.id);
+
+                heldById[0].resolve([BUY_S]);
+                await settle();
+
+                expect(formRow()?.id, 'the Form stays on the DEPOSIT').toBe(DEP.id);
+                expect(rowsOf(BUY_S.id), 'no row added').toHaveLength(0);
+            });
+
+            it('a late answer after the Bulk closed: nothing happens', async () => {
+                txStoreSetAll([FEE_S, DEP], []);
+                answerReads([FEE_S], 'hold');
+                const {rerender, onClose} = mountEditor({action: 'edit', txIds: [FEE_S.id, DEP.id]});
+                await waitFor(() => expect(rowsOf(FEE_S.id)).toHaveLength(1));
+                await openRowForm(FEE_S.id);
+                await openFromForm(BUY_S.id);
+                await waitFor(() => expect(heldById.length, 'premise: the read by id is in flight').toBe(1));
+                await rerender({open: false, intent: {action: 'edit', txIds: [FEE_S.id, DEP.id]}, onClose});
+                await settle();
+                const since = eventSeq();
+
+                heldById[0].resolve([BUY_S]);
+                await settle();
+
+                expect(formProbe().open, 'no Form opens for a closed Bulk').toBe(false);
+                expect(eventsSince(since, 'tx.form.open.failed'), 'and no error').toHaveLength(0);
+            });
+
+            // §22.4: a row «Open» brings in is navigation, not a change: it joins the close guard's baseline.
+            it('a row brought by «Open», looked at and closed: closing the Bulk asks nothing', async () => {
+                txStoreSetAll([BUY_S, FEE_S, DEP], []);
+                answerReads([FEE_S]);
+                const {onClose} = mountEditor({action: 'edit', txIds: [FEE_S.id, DEP.id]});
+                await waitFor(() => expect(rowsOf(FEE_S.id)).toHaveLength(1));
+                await openRowForm(FEE_S.id);
+                await openFromForm(BUY_S.id);
+                await formOn(BUY_S.id);
+                expect(rowsOf(BUY_S.id), 'premise: the BUY joined the Bulk').toHaveLength(1);
+                (formProbe().onClose as () => void)();
+                flushSync();
+                await settle();
+
+                await closeEditor();
+
+                expect(screen.queryByTestId('confirm-modal-confirm'), 'no «Discard changes?»').toBeNull();
+                expect(onClose, 'the Bulk closes at once').toHaveBeenCalledTimes(1);
+            });
+
+            it('a row brought by «Open» and then edited: closing the Bulk asks', async () => {
+                txStoreSetAll([BUY_S, FEE_S, DEP], []);
+                answerReads([FEE_S]);
+                const {onClose} = mountEditor({action: 'edit', txIds: [FEE_S.id, DEP.id]});
+                await waitFor(() => expect(rowsOf(FEE_S.id)).toHaveLength(1));
+                await openRowForm(FEE_S.id);
+                await openFromForm(BUY_S.id);
+                await formOn(BUY_S.id);
+                await push(buyPayload({description: 'F7d parent edited', _charges: handedDrafts()}));
+                expect(rowStatus(gridRow(BUY_S.id)), 'premise: the BUY is edited').toBe('edited');
+
+                await closeEditor();
+
+                expect(screen.queryByTestId('confirm-modal-confirm'), '«Discard changes?»').not.toBeNull();
+                expect(onClose).not.toHaveBeenCalled();
+            });
+        });
+
+        // -------------------------------------------------------------------
+        // §20.5 + §21.2 + §22.1 — U3, «Link» in the toolbar
+        // -------------------------------------------------------------------
+
+        describe('§20.5: «Link» in the Bulk toolbar (U3)', () => {
+            function linkButton(): HTMLElement | null {
+                return screen.queryByTestId('tx-bulk-link-charges');
+            }
+
+            /** «Link», on; click; ends on the panel open in link mode. */
+            async function openLinkPanel(): Promise<HTMLElement> {
+                const button = linkButton();
+                expect(button, 'the selection offers «Link» (tx-bulk-link-charges)').not.toBeNull();
+                expect(button, '«Link» is on').not.toHaveAttribute('aria-disabled', 'true');
+                await fireEvent.click(button!);
+                await settle();
+                const content = await screen.findByTestId(PANEL);
+                expect(content).toHaveAttribute('data-mode', 'link');
+                return content;
+            }
+
+            /** The panel's confirm; ends on the panel gone. */
+            async function confirmLink(content: HTMLElement): Promise<void> {
+                await fireEvent.click(within(content).getByTestId('tx-charges-modal-confirm'));
+                await settle();
+                await waitFor(() => expect(screen.queryByTestId(PANEL), 'the panel closed').toBeNull());
+            }
+
+            /** Select the rows, «Link», confirm; ends on the selection empty. */
+            async function link(rows: HTMLElement[]): Promise<void> {
+                for (const row of rows) await tickRow(row);
+                await confirmLink(await openLinkPanel());
+                expect(screen.queryByTestId('tx-bulk-delete-selected'), 'the selection is empty').toBeNull();
+            }
+
+            it('a parent and a free charge selected: «Link» is in the toolbar, on; a parent and a DEPOSIT: no «Link»', async () => {
+                txStoreSetAll([BUY_L, FREE, DEP], []);
+                answerReads([]);
+                mountEditor({action: 'edit', txIds: [BUY_L.id, FREE.id, DEP.id]});
+                await waitFor(() => expect(rowsOf(DEP.id)).toHaveLength(1));
+
+                await tickRow(gridRow(BUY_L.id));
+                await tickRow(gridRow(DEP.id));
+                expect(linkButton(), 'no charge selected: no «Link»').toBeNull();
+                await fireEvent.click(rowCheckbox(gridRow(DEP.id))!);
+                await settle();
+                await tickRow(gridRow(FREE.id));
+
+                expect(linkButton(), '«Link» is offered').not.toBeNull();
+                expect(linkButton()).not.toHaveAttribute('aria-disabled', 'true');
+            });
+
+            it('a parent «del» in the selection: «Link» off, aria-disabled, data-reason deleted; a click opens no panel', async () => {
+                txStoreSetAll([BUY_L, FREE], []);
+                answerReads([]);
+                mountEditor({action: 'edit', txIds: [BUY_L.id, FREE.id]});
+                await waitFor(() => expect(rowsOf(FREE.id)).toHaveLength(1));
+                await rowAction(gridRow(BUY_L.id), 'mark-delete');
+                expect(rowStatus(gridRow(BUY_L.id)), 'premise').toBe('delete');
+                await tickRow(gridRow(BUY_L.id));
+                await tickRow(gridRow(FREE.id));
+
+                const button = linkButton();
+                expect(button, '«Link» is there, off').not.toBeNull();
+                expect(button).toHaveAttribute('aria-disabled', 'true');
+                expect(button).toHaveAttribute('data-reason', 'deleted');
+                await fireEvent.click(button!);
+                await settle();
+                expect(screen.queryByTestId(PANEL), 'off: no panel').toBeNull();
+            });
+
+            it('two parents and a charge: «Link» off, data-reason twoParents', async () => {
+                txStoreSetAll([BUY_L, BUY_L2, FREE], []);
+                answerReads([]);
+                mountEditor({action: 'edit', txIds: [BUY_L.id, BUY_L2.id, FREE.id]});
+                await waitFor(() => expect(rowsOf(FREE.id)).toHaveLength(1));
+                for (const id of [BUY_L.id, BUY_L2.id, FREE.id]) await tickRow(gridRow(id));
+
+                expect(linkButton(), '«Link» is there, off').not.toBeNull();
+                expect(linkButton()).toHaveAttribute('aria-disabled', 'true');
+                expect(linkButton()).toHaveAttribute('data-reason', 'twoParents');
+            });
+
+            it('new BUY + new FEE: confirm puts the FEE under the BUY, the group open; «Save all» sends the FEE with parent_ref = the BUY’s ref', async () => {
+                mountEditor({action: 'create'});
+                await waitFor(() => expect(formProbe().open, 'a create intent opens the Form').toBe(true));
+                await push(buyPayload({description: 'F7d new buy'}));
+                await addRow(chargePayload('FEE', 'F7d new fee'));
+                expect(chargeOfCell(gridRowDescribed('F7d new fee')), 'premise: the FEE is a top-level row').toBeNull();
+
+                await link([gridRowDescribed('F7d new buy'), gridRowDescribed('F7d new fee')]);
+
+                expect(chargeOfCell(gridRowDescribed('F7d new fee')), 'the FEE sits under the BUY, the group open').toBe(rowIdOf(gridRowDescribed('F7d new buy')));
+                const body = await saveAll();
+                const buy = onlyCreateOf(body, 'BUY');
+                const fee = onlyCreateOf(body, 'FEE');
+                expect(typeof buy.ref, 'the new BUY carries a ref').toBe('string');
+                expect(fee.parent_ref).toBe(buy.ref);
+                expect(fee).not.toHaveProperty('parent_transaction_id');
+                expect(fee, 'linked here, it keeps its own values').toMatchObject({broker_id: 77, asset_id: 101, date: '2026-09-13'});
+            });
+
+            it('saved BUY + saved free FEE: one update of the FEE with parent_transaction_id = the BUY', async () => {
+                txStoreSetAll([BUY_L, FREE], []);
+                answerReads([]);
+                mountEditor({action: 'edit', txIds: [BUY_L.id, FREE.id]});
+                await waitFor(() => expect(rowsOf(FREE.id)).toHaveLength(1));
+
+                await link([gridRow(BUY_L.id), gridRow(FREE.id)]);
+
+                expect(chargeOfCell(gridRow(FREE.id))).toBe(rowIdOf(gridRow(BUY_L.id)));
+                const body = await saveAll();
+                const updates = updatesOf(body, FREE.id);
+                expect(updates, 'one update of the FEE').toHaveLength(1);
+                expect(updates[0]).toMatchObject({parent_transaction_id: BUY_L.id});
+                expect(updates[0]).not.toHaveProperty('parent_ref');
+                expect(updatesOf(body, BUY_L.id), 'the BUY sends nothing').toEqual([]);
+            });
+
+            it('saved BUY + new FEE: the FEE create names the BUY by parent_transaction_id', async () => {
+                txStoreSetAll([BUY_L, DEP], []);
+                answerReads([]);
+                mountEditor({action: 'edit', txIds: [BUY_L.id, DEP.id]});
+                await waitFor(() => expect(rowsOf(DEP.id)).toHaveLength(1));
+                await addRow(chargePayload('FEE', 'F7d new fee'));
+
+                await link([gridRow(BUY_L.id), gridRowDescribed('F7d new fee')]);
+
+                const fee = onlyCreateOf(await saveAll(), 'FEE');
+                expect(fee.parent_transaction_id).toBe(BUY_L.id);
+                expect(fee).not.toHaveProperty('parent_ref');
+            });
+
+            it('new BUY + saved free FEE: the FEE update names the BUY by parent_ref', async () => {
+                txStoreSetAll([FREE, DEP], []);
+                answerReads([]);
+                mountEditor({action: 'edit', txIds: [FREE.id, DEP.id]});
+                await waitFor(() => expect(rowsOf(DEP.id)).toHaveLength(1));
+                await addRow(buyPayload({description: 'F7d new buy'}));
+
+                await link([gridRowDescribed('F7d new buy'), gridRow(FREE.id)]);
+
+                const body = await saveAll();
+                const buy = onlyCreateOf(body, 'BUY');
+                const updates = updatesOf(body, FREE.id);
+                expect(updates, 'one update of the FEE').toHaveLength(1);
+                expect(updates[0].parent_ref).toBe(buy.ref);
+                expect(updates[0]).not.toHaveProperty('parent_transaction_id');
+            });
+
+            it('a FEE unlinked from A in this Bulk, then linked to B: ONE update, parent_transaction_id = B', async () => {
+                txStoreSetAll([PARENT_A, FEE_A, PARENT_B], []);
+                answerReads([FEE_A]);
+                mountEditor({action: 'edit', txIds: [PARENT_A.id, FEE_A.id, PARENT_B.id]});
+                await waitFor(() => expect(rowsOf(PARENT_B.id)).toHaveLength(1));
+                await rowAction(gridRow(PARENT_A.id), 'edit-single');
+                await waitForParentForm(PARENT_A.id, 1);
+                await push(buyPayload({description: PARENT_A.description, _charges: handedDrafts().map((draft): ChargeDraft => ({...draft, state: 'unlink'}))}));
+                expect(chargeOfCell(gridRow(FEE_A.id)), 'premise: the FEE is a top-level row, unlinked from A').toBeNull();
+
+                await link([gridRow(PARENT_B.id), gridRow(FEE_A.id)]);
+
+                expect(chargeOfCell(gridRow(FEE_A.id)), 'the FEE sits under B').toBe(rowIdOf(gridRow(PARENT_B.id)));
+                const body = await saveAll();
+                const updates = updatesOf(body, FEE_A.id);
+                expect(updates, 'one update of the FEE, A → B').toHaveLength(1);
+                expect(updates[0]).toMatchObject({parent_transaction_id: PARENT_B.id});
+            });
+
+            // §22.1: a new row is named by its Bulk label, so two new charges are told apart in the panel's columns.
+            it('the panel names two new charges apart: their column headers differ, and none says #0', async () => {
+                mountEditor({action: 'create'});
+                await waitFor(() => expect(formProbe().open).toBe(true));
+                await push(buyPayload({description: 'F7d new buy'}));
+                await addRow(chargePayload('FEE', 'F7d new fee'));
+                await addRow(chargePayload('TAX', 'F7d new tax'));
+                for (const description of ['F7d new buy', 'F7d new fee', 'F7d new tax']) await tickRow(gridRowDescribed(description));
+
+                const content = await openLinkPanel();
+
+                const table = within(content).getByTestId('tx-charges-modal-table');
+                const headers = [...table.querySelectorAll<HTMLElement>('thead th[data-testid^="dt-header-"]')].filter((th) => th.getAttribute('data-testid') !== 'dt-header-field').map((th) => (th.textContent ?? '').trim());
+                expect(headers, 'one column per row: the BUY and the two charges').toHaveLength(3);
+                expect(new Set(headers).size, `the three columns are told apart: ${JSON.stringify(headers)}`).toBe(3);
+                for (const header of headers) expect(header, 'no TX #0').not.toContain('#0');
+            });
         });
     });
 });

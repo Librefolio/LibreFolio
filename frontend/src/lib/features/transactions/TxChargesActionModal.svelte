@@ -6,6 +6,8 @@
     Delete all (N)»; the choice goes to the Bulk. The Bulk opens it too (66 F7-c2), with new charges (id 0) among them.
   «Before» is a DataTable with one column per transaction (positional ids `c0…`, nothing tied to a transaction id is
   stored) and a minimum width per column: on a phone the table pans sideways.
+  Every row is named by one reference (`txRowRef`, 66 F7-d): `#123` for a saved one; for a new one the caller's
+  (`parentRefs`/`chargeRefs`: the Bulk passes its row labels), or «new».
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
@@ -18,6 +20,7 @@
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {formatTxQuantity, formatTxCash} from './txDisplayHelpers';
     import type {TXReadItem} from './types';
+    import {txRowRef} from './chargeLinkRules';
 
     interface Props {
         open: boolean;
@@ -38,9 +41,13 @@
         onCancel: () => void;
         /** Stacking level: above the Bulk when the Bulk opens it (66 F7-c2). */
         zIndex?: number;
+        /** How the caller names each parent and charge, in the same order (66 F7-d: the Bulk names a new row by its
+         *  label). Absent or empty at an index: `#id`, or «new» for a row not saved yet. */
+        parentRefs?: (string | null)[];
+        chargeRefs?: (string | null)[];
     }
 
-    let {open, mode, parents, charges, loading = false, onConfirm, onChoose, counts, onCancel, zIndex = 50}: Props = $props();
+    let {open, mode, parents, charges, loading = false, onConfirm, onChoose, counts, onCancel, zIndex = 50, parentRefs, chargeRefs}: Props = $props();
 
     type Field = 'date' | 'type' | 'cash' | 'quantity' | 'broker';
     interface FieldRow {
@@ -48,21 +55,26 @@
     }
     const FIELDS: FieldRow[] = [{field: 'date'}, {field: 'type'}, {field: 'cash'}, {field: 'quantity'}, {field: 'broker'}];
 
+    /** The one reference of a row (`txRowRef`): the caller's label for a new row, `#id` for a saved one. */
+    const refOf = (tx: TXReadItem, given: string | null | undefined): string => (tx.id > 0 ? txRowRef(tx.id, null, $t) : given || txRowRef(null, null, $t));
+
     /** Each parent followed by its charges; a charge of no listed parent (link mode) after them, in order. Grouped by
-     *  object, never by id: in the Bulk two new charges both have id 0 (66 F7-c2). */
+     *  object, never by id: in the Bulk two new charges both have id 0 (66 F7-c2). Each with its reference. */
     let columnsTx = $derived.by(() => {
-        const out: TXReadItem[] = [];
-        const placed = new Set<TXReadItem>();
-        for (const p of parents) {
-            out.push(p);
-            for (const c of charges) {
-                if (c.parent_transaction_id === p.id && !placed.has(c)) {
-                    out.push(c);
-                    placed.add(c);
+        const out: {tx: TXReadItem; ref: string}[] = [];
+        const placed = new Set<number>();
+        parents.forEach((p, pi) => {
+            out.push({tx: p, ref: refOf(p, parentRefs?.[pi])});
+            charges.forEach((c, ci) => {
+                if (c.parent_transaction_id === p.id && !placed.has(ci)) {
+                    out.push({tx: c, ref: refOf(c, chargeRefs?.[ci])});
+                    placed.add(ci);
                 }
-            }
-        }
-        for (const c of charges) if (!placed.has(c)) out.push(c);
+            });
+        });
+        charges.forEach((c, ci) => {
+            if (!placed.has(ci)) out.push({tx: c, ref: refOf(c, chargeRefs?.[ci])});
+        });
         return out;
     });
 
@@ -81,10 +93,10 @@
     let columns = $derived.by((): ColumnDef<FieldRow>[] => [
         {id: 'field', header: '', type: 'text', width: 110, minWidth: 90, sortable: false, filterable: false, resizable: false, cell: (r) => fieldLabel(r.field)},
         ...columnsTx.map(
-            (tx, i): ColumnDef<FieldRow> => ({
+            ({tx, ref}, i): ColumnDef<FieldRow> => ({
                 id: `c${i}`,
-                // A transaction not saved yet (the Bulk's new charges, 66 F7-c2) has no #id: «new».
-                header: tx.id > 0 ? `TX #${tx.id}` : $t('transactions.bulk.stateNew') || 'new',
+                // A transaction not saved yet (the Bulk's new rows, 66 F7-c2) has no #id: its label, or «new» (66 F7-d).
+                header: tx.id > 0 ? `TX ${ref}` : ref,
                 type: 'text',
                 width: 150,
                 minWidth: 130,
@@ -107,11 +119,12 @@
     let keepCount = $derived(counts?.keep ?? chargeCount);
     let allCount = $derived(counts?.all ?? total);
     let firstParent = $derived(parents[0] ?? null);
+    let firstParentRef = $derived(firstParent ? refOf(firstParent, parentRefs?.[0]) : '');
 
     let title = $derived.by(() => {
         if (mode === 'link') return $t('transactions.chargesLink.title') || 'Link the charges';
         if (parents.length > 1) return $t('transactions.chargesDelete.titleMany', {values: {n: parents.length}}) || `Delete ${parents.length} transactions with charges?`;
-        return firstParent ? $t('transactions.chargesDelete.title', {values: {type: typeLabel(firstParent.type), id: firstParent.id}}) || `Delete ${typeLabel(firstParent.type)} #${firstParent.id}?` : '';
+        return firstParent ? $t('transactions.chargesDelete.title', {values: {type: typeLabel(firstParent.type), ref: firstParentRef}}) || `Delete ${typeLabel(firstParent.type)} ${firstParentRef}?` : '';
     });
 </script>
 
@@ -160,7 +173,7 @@
 
             {#if mode === 'link' && firstParent}
                 <div class="rounded-lg border border-lf-success-line bg-lf-success-soft p-3 text-sm text-lf-success-on-soft" data-testid="tx-charges-modal-target">
-                    {$t('transactions.chargesLink.target', {values: {type: typeLabel(firstParent.type), id: firstParent.id, n: chargeCount}}) || `${typeLabel(firstParent.type)} #${firstParent.id} with ${chargeCount} linked charges`}
+                    {$t('transactions.chargesLink.target', {values: {type: typeLabel(firstParent.type), ref: firstParentRef, n: chargeCount}}) || `${typeLabel(firstParent.type)} ${firstParentRef} with ${chargeCount} linked charges`}
                 </div>
                 <p class="text-xs text-lf-muted flex items-start gap-1.5">
                     <span>⚠️</span>
