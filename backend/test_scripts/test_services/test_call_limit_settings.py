@@ -113,10 +113,10 @@ RESETS = {
 #: The shipped providers that reach an external service, and those that do not (U2/U3 pins of their flags).
 ASSET_CALLING = ("yfinance", "justetf", "borsa_italiana", "css_scraper")
 ASSET_LOCAL = ("scheduled_investment", "mockprov")
-FX_CALLING = ("ECB", "FED", "BOE", "SNB", "BDI", "BCB", "NORGES", "NBU", "BOC", "BANXICO", "CNB", "SARB", "BCRP", "TRM", "CBC", "CBK", "CBN", "RBI", "BOG", "BCRA", "BNR", "BOI", "NBP")
+FX_CALLING = ("ECB", "FED", "BOE", "SNB", "BDI", "BCB", "NORGES", "NBU", "BOC", "BANXICO", "CNB", "SARB", "BCRP", "TRM", "CBC", "CBK", "CBN", "RBI", "BOG", "BCRA", "BNR", "BOI", "NBP", "BOK")
 FX_LOCAL = ("MANUAL", "MOCKFX", "MOCKFX_FAIL")
-#: The calling FX providers with a required field of their own (BANXICO's token, lane 75 L21): they may be unconfigured.
-FX_KEYED = ("BANXICO",)
+#: The calling FX providers with a required field of their own (BANXICO's token, lane 75 L21; BOK's key, L26): they may be unconfigured.
+FX_KEYED = ("BANXICO", "BOK")
 MOCKCOUNT_MODULE = "backend.app.services.asset_source_providers.mockcount.plugin"
 YF_DAY_VARIABLE = env_name("asset", "yfinance", "call_limit_day")
 YF_HOUR_VARIABLE = env_name("asset", "yfinance", "call_limit_hour")
