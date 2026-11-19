@@ -65,7 +65,7 @@ def _voice(key: str, shape: ProfileShape, **fields: Any) -> FAProfileVoice:
 
 
 _VOICES: tuple[FAProfileVoice, ...] = (
-    # Classification: today's classification_params, moved here (A4 copies them)
+    # Classification: what the old classification_params held (migration 006 copies it, A4, then drops the column, D7b)
     _voice("geography", ProfileShape.MAP, topic=_T.COUNTRIES, map_keys=ProfileMapKeys.COUNTRY, groups=_CLASSIFICATION),
     _voice("sector", ProfileShape.MAP, topic=_T.SECTORS, map_keys=ProfileMapKeys.SECTOR, groups=(ProfileGroup.CLASSIFICATION, ProfileGroup.COMPANY)),
     _voice("description", ProfileShape.TEXT, topic=_T.DESCRIPTION),
