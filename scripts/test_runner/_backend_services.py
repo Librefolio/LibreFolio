@@ -68,6 +68,7 @@ AI_EXPORT_PURE_TEST_PATHS = (
 PROVIDER_ERROR_TEST_PATHS = (
     "backend/test_scripts/test_services/test_borsa_italiana_errors.py",
     "backend/test_scripts/test_services/test_fx_parse_errors.py",
+    "backend/test_scripts/test_services/test_fx_banxico.py",
     "backend/test_scripts/test_services/test_fx_bcb.py",
     "backend/test_scripts/test_services/test_fx_bdi.py",
     "backend/test_scripts/test_services/test_fx_boc.py",
