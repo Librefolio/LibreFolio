@@ -414,6 +414,49 @@ test.describe('Settings › Plugins — read only', () => {
 });
 
 // =============================================================================
+// 1b. The menu (project 76, S1b): «All», «To configure» and the families, on the real page
+// =============================================================================
+
+test.describe('Settings › Plugins — the menu (76 S1b)', () => {
+    test('a family shows its plugins alone and its count is the forms shown; on a phone the «Category» dropdown does the same', async ({page}) => {
+        await login(page, TEST_USER);
+        const tab = await openPluginsTab(page);
+        const forms = tab.locator('[data-testid^="plugin-settings-form-"]');
+        const sections = tab.getByTestId('plugin-settings-family');
+        /** The forms shown are as many as the entry's count says: the count read from the page, never a fixed number. */
+        const countIsShown = async (entry: Locator) => {
+            const count = Number(await entry.getAttribute('data-count'));
+            expect(count, `${await entry.getAttribute('data-testid')}: a count`).toBeGreaterThan(0);
+            await expect(forms).toHaveCount(count);
+        };
+
+        const all = tab.getByTestId('plugin-settings-category-all');
+        await expect(all, '«All» is the first choice').toHaveAttribute('aria-pressed', 'true');
+        await countIsShown(all);
+
+        const prices = tab.getByTestId('plugin-settings-category-asset');
+        await prices.click();
+        await expect(prices).toHaveAttribute('aria-pressed', 'true');
+        await expect(sections.and(tab.locator('[data-family="asset"]')), 'the price sources are shown').toHaveCount(1);
+        await expect(tab.locator('[data-testid="plugin-settings-family"]:not([data-family="asset"])'), 'no other family').toHaveCount(0);
+        await countIsShown(prices);
+
+        // A phone: the sidebar hides, the «Category» dropdown above the page chooses
+        await page.setViewportSize({width: 375, height: 812});
+        await expect(tab.getByRole('navigation'), 'the sidebar is the desktop’s').toBeHidden();
+        await tab.getByTestId('plugin-settings-mobile-category-trigger').click();
+        const menu = tab.getByTestId('plugin-settings-mobile-category-menu');
+        await expect(menu).toBeVisible();
+        const rates = menu.getByTestId('plugin-settings-mobile-category-fx');
+        const ratesCount = Number(await rates.getAttribute('data-count'));
+        await rates.click();
+        await expect(menu, 'a choice closes the dropdown').toBeHidden();
+        await expect(tab.locator('[data-testid="plugin-settings-family"]:not([data-family="fx"])'), 'only the exchange-rate sources').toHaveCount(0);
+        await expect(forms).toHaveCount(ratesCount);
+    });
+});
+
+// =============================================================================
 // 2–3. «Configure» on mockprov, from the asset dialog
 // =============================================================================
 

@@ -135,3 +135,35 @@ describe('SettingsCategoryNav — the phone dropdown', () => {
         remove.mockRestore();
     });
 });
+
+describe('SettingsCategoryNav — counts and dots (76 S1b, the Plugins menu)', () => {
+    const COUNTED = [
+        {id: 'all', label: 'All', count: 3},
+        {id: 'asset', icon: User, label: 'Prices', count: 2, dot: true},
+        {id: 'fx', icon: Globe, label: 'FX rates', count: 0},
+    ];
+
+    it('shows each count, publishes it as data-count, and the dot with its label for screen readers', () => {
+        mount({entries: COUNTED, selected: 'all', dotLabel: 'Has plugins to configure'});
+        expect(['all', 'asset', 'fx'].map((key) => [screen.getByTestId(`nav-category-${key}`).getAttribute('data-count'), screen.getByTestId(`nav-category-${key}`).textContent?.replace(/\s+/g, ' ').trim()])).toEqual([
+            ['3', 'All 3'],
+            ['2', 'Prices Has plugins to configure 2'],
+            ['0', 'FX rates 0'],
+        ]);
+        expect(within(screen.getByTestId('nav-category-asset')).getByTestId('nav-category-dot')).toBeInTheDocument();
+        expect(within(screen.getByTestId('nav-category-fx')).queryByTestId('nav-category-dot')).toBeNull();
+    });
+
+    it('draws the same counts and dot in the phone dropdown', async () => {
+        mount({mode: 'phone', entries: COUNTED, selected: 'all', triggerLabel: 'All', dotLabel: 'Has plugins to configure'});
+        await fireEvent.click(screen.getByTestId('nav-mobile-category-trigger'));
+        expect(screen.getByTestId('nav-mobile-category-asset')).toHaveAttribute('data-count', '2');
+        expect(within(screen.getByTestId('nav-mobile-category-asset')).getByTestId('nav-mobile-category-dot')).toBeInTheDocument();
+    });
+
+    it('draws no count and no data-count for an entry without one (Global settings, Preferences)', () => {
+        mount();
+        expect(screen.getByTestId('nav-category-profile')).not.toHaveAttribute('data-count');
+        expect(screen.getByTestId('nav-category-profile').textContent?.trim()).toBe('Profile');
+    });
+});

@@ -637,3 +637,125 @@ describe('PluginSettingsTab — shared settings groups (G3)', () => {
         ]);
     });
 });
+
+// =====================================================================================================================
+// The menu (project 76, S1b; mock S0 approved by the developer on 19/11): «All», «To configure» and the families, with
+// counts and a dot, in the sidebar and in the phone dropdown (the shared SettingsCategoryNav, prefix plugin-settings).
+describe('PluginSettingsTab — the menu (76 S1b)', () => {
+    const SHARED = plugin('group', 'coingecko', {plugin_name: 'CoinGecko', fields: [{...nickname(), key: 'api_key', scope: 'system'}], used_by: [{family: 'asset', plugin_code: 'justetf', plugin_name: 'justETF'}]} as Partial<PluginSettingsEntry>);
+    const READER = plugin('asset', 'justetf', {groups: ['coingecko']} as Partial<PluginSettingsEntry>);
+    const ANSWER = () => [READER, BORSA, ECB, MOCKFX, SHARED];
+    const sidebarItem = (key: string) => screen.getByTestId(`plugin-settings-category-${key}`);
+
+    const scrolled = vi.fn();
+    beforeEach(() => {
+        scrolled.mockReset();
+        Element.prototype.scrollIntoView = scrolled;
+    });
+    afterEach(() => {
+        delete (Element.prototype as {scrollIntoView?: unknown}).scrollIntoView;
+    });
+
+    it('PST-28: lists «All», «To configure» and each family present, with their counts and a dot where something is to configure; «All» selected', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        const nav = within(tab()).getByRole('navigation');
+        expect(
+            within(nav)
+                .getAllByRole('button')
+                .map((button) => [button.getAttribute('data-testid'), button.getAttribute('data-count'), button.getAttribute('aria-pressed')]),
+        ).toEqual([
+            ['plugin-settings-category-all', '5', 'true'],
+            ['plugin-settings-category-unconfigured', '3', 'false'],
+            ['plugin-settings-category-asset', '2', 'false'],
+            ['plugin-settings-category-fx', '2', 'false'],
+            ['plugin-settings-category-group', '1', 'false'],
+        ]);
+        expect(within(sidebarItem('asset')).getByTestId('plugin-settings-category-dot')).toBeInTheDocument();
+        expect(within(sidebarItem('all')).queryByTestId('plugin-settings-category-dot')).toBeNull();
+        expect(sidebarItem('asset')).toHaveTextContent('pluginSettings.menu.asset');
+        expect(groups(), '«All»: every family, as before').toEqual([
+            {family: 'asset', plugins: ['justetf', 'borsa_italiana']},
+            {family: 'fx', plugins: ['ecb', 'mockfx']},
+            {family: 'group', plugins: ['coingecko']},
+        ]);
+    });
+
+    it('PST-29: a family shows its section alone; «All» brings every section back', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        await fireEvent.click(sidebarItem('fx'));
+        expect(groups()).toEqual([{family: 'fx', plugins: ['ecb', 'mockfx']}]);
+        expect(sidebarItem('fx')).toHaveAttribute('aria-pressed', 'true');
+
+        await fireEvent.click(sidebarItem('all'));
+        expect(groups().map((group) => group.family)).toEqual(['asset', 'fx', 'group']);
+    });
+
+    it('PST-30: «To configure» shows the entries not configured, under their families', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        await fireEvent.click(sidebarItem('unconfigured'));
+        expect(groups()).toEqual([
+            {family: 'asset', plugins: ['justetf']},
+            {family: 'fx', plugins: ['mockfx']},
+            {family: 'group', plugins: ['coingecko']},
+        ]);
+    });
+
+    it('PST-31: «open» on a group while a family hides it shows the group first, then brings its form into view', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+        await fireEvent.click(sidebarItem('asset'));
+        expect(document.getElementById(groupFormId('coingecko')), 'premise: the filter hides the group').toBeNull();
+
+        await fireEvent.click(within(form('justetf')).getByTestId('plugin-settings-open-group'));
+
+        await waitFor(() => expect(scrolled).toHaveBeenCalled());
+        expect(sidebarItem('group')).toHaveAttribute('aria-pressed', 'true');
+        expect(document.getElementById(groupFormId('coingecko'))).not.toBeNull();
+        await waitFor(() => expect(document.activeElement).toBe(within(form('coingecko')).getByRole('heading', {level: 4})));
+    });
+
+    it('PST-32: «To configure» stays chosen when its last entry is configured, with 0 and a line that says so', async () => {
+        const onlyOne = plugin('fx', 'mockfx');
+        fake.fetchAll.mockResolvedValueOnce([BORSA, onlyOne]);
+        fake.save.mockResolvedValueOnce({kind: 'saved'});
+        fake.fetchEntry.mockResolvedValueOnce(plugin('fx', 'mockfx', {configured: true, fields: [{...nickname(), value: 'someone', is_set: true, source: 'db'}]}));
+        render(PluginSettingsTab);
+        await loaded();
+        await fireEvent.click(sidebarItem('unconfigured'));
+
+        await fireEvent.input(within(form('mockfx')).getByTestId('plugin-setting-input'), {target: {value: 'someone'}});
+        await fireEvent.click(within(form('mockfx')).getByTestId('plugin-settings-save'));
+
+        await waitFor(() => expect(sidebarItem('unconfigured')).toHaveAttribute('data-count', '0'));
+        expect(sidebarItem('unconfigured')).toHaveAttribute('aria-pressed', 'true');
+        expect(groups()).toEqual([]);
+        expect(screen.getByTestId('plugin-settings-nothing-unconfigured')).toHaveTextContent('pluginSettings.menu.nothingUnconfigured');
+    });
+
+    it('PST-33: the phone dropdown offers the same entries, and a choice filters the page', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        await fireEvent.click(screen.getByTestId('plugin-settings-mobile-category-trigger'));
+        const menu = screen.getByTestId('plugin-settings-mobile-category-menu');
+        expect(
+            within(menu)
+                .getAllByRole('button')
+                .map((button) => button.getAttribute('data-testid')),
+        ).toEqual(['plugin-settings-mobile-category-all', 'plugin-settings-mobile-category-unconfigured', 'plugin-settings-mobile-category-asset', 'plugin-settings-mobile-category-fx', 'plugin-settings-mobile-category-group']);
+        await fireEvent.click(screen.getByTestId('plugin-settings-mobile-category-group'));
+        expect(groups()).toEqual([{family: 'group', plugins: ['coingecko']}]);
+        expect(screen.getByTestId('plugin-settings-mobile-category-trigger')).toHaveTextContent('pluginSettings.menu.group');
+    });
+});
