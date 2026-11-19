@@ -208,14 +208,13 @@ async def _deposit(session, broker: Broker, *, amount: str, currency: str, day: 
     await session.flush()
 
 
-async def _make_asset(session, *, currency: str, ticker: str, asset_type: AssetType = AssetType.STOCK, quote_base_quantity: int = 1, classification_params: str | None = None) -> Asset:
+async def _make_asset(session, *, currency: str, ticker: str, asset_type: AssetType = AssetType.STOCK, quote_base_quantity: int = 1) -> Asset:
     asset = Asset(
         display_name=f"AssetFxIntg_{ticker}_{utcnow().timestamp()}",
         identifier_ticker=ticker,
         currency=currency,
         asset_type=asset_type,
         quote_base_quantity=quote_base_quantity,
-        classification_params=classification_params,
     )
     session.add(asset)
     await session.flush()
@@ -534,12 +533,7 @@ async def scenario(session, test_user) -> Scenario:
     await _deposit(session, broker1, amount="5000", currency="EUR", day=PERIOD_START)
     await _deposit(session, broker2, amount="5000", currency="EUR", day=PERIOD_START)
 
-    usd_asset = await _make_asset(
-        session,
-        currency="USD",
-        ticker="AFIUSDA",
-        classification_params='{"short_description": "<script>alert(1)</script> normal text \u00e9\u00e8 \u2603", "geographic_area": null, "sector_area": null}',
-    )
+    usd_asset = await _make_asset(session, currency="USD", ticker="AFIUSDA")
     await _buy(session, broker1, usd_asset, quantity="10", amount="-900", currency="EUR", day=PERIOD_START)
     await _sell(session, broker1, usd_asset, quantity="-4", amount="410", currency="EUR", day=date(2025, 9, 5))
     await _buy(session, broker2, usd_asset, quantity="5", amount="-480", currency="EUR", day=date(2025, 9, 2))
@@ -1292,29 +1286,15 @@ def _assert_only_tables(payload: dict, *filled: str) -> None:
 class TestAssetIdentityV2:
     @pytest.mark.asyncio
     async def test_identity_is_version_2_without_classification(self, session, test_user, scenario):
-        """The scenario's USD asset has only `classification_params` (a description) and no profile row: identity v2
-        builds, with every identity field and no `classification` (before D5: version 1 with the classification)."""
+        """The scenario's USD asset has no profile row: identity v2 builds, with every identity field and no
+        `classification` (before D5: version 1 with the classification, from the old column)."""
         context = _asset_context(session, scenario, asset_id=scenario.usd_asset.id, user_id=test_user.id)
         envelope = await context.resolve("asset.identity", required=True)
 
         assert envelope.component_version == 2
         assert "classification" not in envelope.payload
-        assert "<script>" not in json.dumps(envelope.payload)
         assert envelope.payload["asset_id"] == scenario.usd_asset.id
         assert envelope.payload["identifiers"]["ticker"] == "AFIUSDA"
-
-    @pytest.mark.asyncio
-    async def test_identity_never_reads_classification_params(self, session, test_user):
-        """`classification_params` is not read by the AI Export any more: an asset whose column holds text that is not a
-        classification at all still builds identity v2 (before D5 the metadata load parsed it and failed).
-        The model's validator does not run on a table model, so the text reaches the database as written."""
-        asset = await _make_asset(session, currency="EUR", ticker="AFIBADCL", classification_params="not a classification {")
-        scope = _asset_scope(user_id=test_user.id, asset_id=asset.id, start=WINDOW_START, end=WINDOW_END)
-        envelope = await _context(session, scope).resolve("asset.identity", required=True)
-
-        assert envelope.component_version == 2
-        assert "classification" not in envelope.payload
-        assert envelope.payload["asset_id"] == asset.id
 
 
 class TestAssetProfileComponent:
