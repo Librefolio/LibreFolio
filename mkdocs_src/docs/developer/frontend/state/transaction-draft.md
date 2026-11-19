@@ -387,15 +387,60 @@ the pairs' code is untouched. The pure half lives in `bulk/bulkCharges.ts`:
   `parent_transaction_id`, merged in `collectCreate` / `collectUpdate`. So the three places that build a payload see
   the same thing: the nested form's context, «Validate now» and «Save all».
 - **The parent's form.** It receives its charges as drafts (`chargeDraftsFor`, as `_charges`, with
-  `allowChargeEdits`), read first with `parent_ids` when the workspace does not hold them all. Its answer goes back
-  onto the operations (`applyChargeDrafts`), one way: nothing typed is lost.
+  `allowChargeEdits`). Its answer goes back onto the operations (`applyChargeDrafts`), one way: nothing typed is lost.
+- **Reading the charges on entry.** A saved parent whose `charges_count` is higher than the charges the workspace
+  holds has them read (`GET /transactions?parent_ids=…`, batched). This happens when it enters: with the intent, from
+  the picker or a suggestion, and after a row reset or «Reset all». The charges read join as unchanged edit rows
+  marked `loadedWithParent`, adopted by their parent. Under a parent already «del» they are unlinked. Each read
+  carries a generation number, bumped on every open, reset and «Reset all», and a stale answer is dropped. While a
+  read is in flight «Save all» is off. If it fails, an error toast is raised and «del» on that parent is off, with
+  the reason in its menu. The parent's form waits for the same read rather than asking again.
+- **The close guard's baseline.** `initialOpsKey` is the key of `baselineOps`, the rows the editor opened on. The
+  charges read are added to both, so an editor nobody changed closes without asking.
+
+```mermaid
+flowchart LR
+    E[Saved parent enters] --> M{charges_count above<br/>the charges held?}
+    M -- no --> D[Done]
+    M -- yes --> R[Read parent_ids]
+    R -- answer, same generation --> A[Add as loadedWithParent edits,<br/>adopt; into baselineOps too]
+    R -- stale generation --> X[Dropped]
+    R -- failure --> F[Error toast;<br/>«del» on the parent off]
+```
+
+**The grid groups the charges under their parent (BK2).** `visibleOps` still holds every row; it feeds the labels.
+The title counts the top-level rows, as a pair already counts as one. The grid draws `gridRows`, built in three steps:
+
+1. The top-level rows are `visibleOps` without the charges that sit under their parent (`isUnderParent`).
+2. `foldBulkCharges` puts each open parent's charges right after it, in the order of the operations.
+3. The date column sorts with a constant, so the table keeps this order in both directions. The header only sets
+   `dateSortDirection`.
+
+`DataTable` gets `opensPage`, so a charge never starts a page. The rest of the grid:
+
+- **The chip.** The parent's Type cell carries the chip «N charges» (`tx-bulk-charges-toggle-<tempId>`), with the
+  markup and label of the transactions table's chip. A click, caught in the capture phase, opens and closes the
+  group. It marks the group as changed when one of its charges is not unchanged; the parent's own status stays its
+  own.
+- **The indented row.** It shows `↳` with `data-charge-of`, and keeps its `#id` and its status. It adds the badge
+  `tx-bulk-charge-state` (`linked` / `unlink` / `del`). It has no checkbox. Its menu offers «Edit row», «Delete» and
+  «Restore» (no clone, split, remove or reset), and keeps the ⋮ button, the only way to it on touch; a double-click
+  opens its own form too.
+- **A charge unlinked from a parent that stays** is a top-level row, with the badge `unlink`.
+- **When a group opens by itself.** The parent is «del», the charges came in the intent with their parent, or a charge
+  was created or linked in the parent's form, or a parent was picked after its charges were already rows. Charges the
+  workspace read itself start closed. A group never closes
+  by itself.
+- **Labels.** A charge under its parent takes no number: its label is `<parent>·k` (`buildBulkRowLabels`), so an
+  issue on it names a row in the banner. The highlight and the jump use `rowAnchor`, and a jump to a charge in a
+  closed group opens the group first.
+- **«Remove from batch»** on a parent takes along the charges read with it that are still unchanged.
 
 **Deleting a parent and keeping its charges.** The panel that asks what to do with the charges of a deleted parent
 (`TxChargesActionModal`, «Keep the charges» / «Delete all») opens the workspace with `unlinkIds`. These are the
-charges that stay: rows with `parentUnlink`. A parent marked for deletion in the workspace unlinks the saved charges it
-owns that are neither deleted nor unlinked, so no charge stays linked to a deleted parent. «Restore» on the parent
-takes back every «del» and «scollega» of its charges. Until the charges are drawn under their parent, a banner
-(`tx-bulk-unlink-hint`) names the unlinked ones.
+charges that stay: rows with `parentUnlink`, shown indented under their parent «del» with the state `unlink`. A parent
+marked for deletion in the workspace unlinks the saved charges it owns that are neither deleted nor unlinked, so no
+charge stays linked to a deleted parent. «Restore» on the parent takes back every «del» and «scollega» of its charges.
 
 ---
 
