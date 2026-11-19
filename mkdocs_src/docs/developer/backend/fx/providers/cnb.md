@@ -80,7 +80,10 @@ Measured on 2026-11-19 on the real files (five currencies):
 | 14 days | 1 (2 across New Year) | 0.15 s |
 | `"min"` (1991 onward) | 36 | 25.6 s, pause included |
 
-Both stay well under the 120 s the core gives one leg (`fx/sync.py`). The CNB documents no request limit.
+A sync waits for the provider's whole answer: the core's 120 s wait on a route's legs (`fx/sync.py`) starts only after
+every provider of the sync has answered, so it never cuts a slow fetch (lane 75, L25c). A sync started from the
+interface waits up to 120 s for its answer (`FX_SYNC_TIMEOUT_MS`, or a sync window's longer **Timeout**; see [Architecture](../architecture.md)): both times
+above stay well under it. The CNB documents no request limit.
 
 ### 🚨 Errors
 
