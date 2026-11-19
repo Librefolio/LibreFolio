@@ -457,6 +457,68 @@ test.describe('Settings › Plugins — the menu (76 S1b)', () => {
 });
 
 // =============================================================================
+// 1c. The «Calls» boxes by the width of their card (project 76, S1c; the developer, 19/11)
+// =============================================================================
+
+test.describe('Settings › Plugins — the «Calls» boxes follow their card (76 S1c)', () => {
+    /** Each window's box of justETF's «Calls» block: the box, its window name, its count and its limit's input. */
+    async function calls(page: Page) {
+        const block = page.getByTestId('plugin-settings-form-justetf').getByTestId('plugin-settings-calls');
+        await expect(block.getByTestId('plugin-settings-calls-input'), 'an administrator edits the five limits').toHaveCount(5);
+        return block.getByTestId('plugin-settings-calls-window').evaluateAll((boxes) =>
+            boxes.map((box) => {
+                const rect = (element: Element | null) => {
+                    const r = element!.getBoundingClientRect();
+                    return {left: r.left, top: r.top, right: r.right, bottom: r.bottom};
+                };
+                return {
+                    window: box.getAttribute('data-window'),
+                    box: rect(box),
+                    name: rect(box.firstElementChild),
+                    count: rect(box.querySelector('[data-testid="plugin-settings-calls-count"]')),
+                    input: rect(box.querySelector('[data-testid="plugin-settings-calls-input"]')),
+                };
+            }),
+        );
+    }
+    type Box = Awaited<ReturnType<typeof calls>>[number];
+    const sameRow = (a: {top: number; bottom: number}, b: {top: number; bottom: number}) => a.top < b.bottom && b.top < a.bottom;
+    /** How many boxes share the first box's row, then the next, …: the grid's rows. */
+    const rows = (boxes: Box[]) => {
+        const out: number[] = [];
+        let top = Number.NaN;
+        for (const box of boxes) {
+            if (Math.abs(box.box.top - top) <= 2) out[out.length - 1] += 1;
+            else {
+                out.push(1);
+                top = box.box.top;
+            }
+        }
+        return out;
+    };
+    /** A box as wide as its card's grid allows: the count on the window's row, the limit below. */
+    const countBesideNameLimitBelow = (box: Box) => sameRow(box.name, box.count) && box.count.left > box.name.right && box.input.top >= box.name.bottom - 1;
+    /** One row: the window, the count, the limit. */
+    const allOnOneRow = (box: Box) => sameRow(box.name, box.count) && sameRow(box.name, box.input) && box.input.left > box.count.left;
+
+    test('desktop five in a row; beside the menu at 768 three and two; on a phone one per row, all on its line', async ({page}) => {
+        await login(page, TEST_ADMIN);
+        await openPluginsTab(page);
+
+        await expect.poll(async () => rows(await calls(page)), {message: '1280: five boxes in a row'}).toEqual([5]);
+        for (const box of await calls(page)) expect(countBesideNameLimitBelow(box), `1280 ${box.window}: the count on the window's row, the limit below — ${JSON.stringify(box)}`).toBe(true);
+
+        await page.setViewportSize({width: 768, height: 1024});
+        await expect.poll(async () => rows(await calls(page)), {message: '768, the menu beside the card: three, then two'}).toEqual([3, 2]);
+        for (const box of await calls(page)) expect(countBesideNameLimitBelow(box), `768 ${box.window} — ${JSON.stringify(box)}`).toBe(true);
+
+        await page.setViewportSize({width: 390, height: 844});
+        await expect.poll(async () => rows(await calls(page)), {message: '390: one box per row'}).toEqual([1, 1, 1, 1, 1]);
+        for (const box of await calls(page)) expect(allOnOneRow(box), `390 ${box.window}: the window, the count and the limit on one line — ${JSON.stringify(box)}`).toBe(true);
+    });
+});
+
+// =============================================================================
 // 2–3. «Configure» on mockprov, from the asset dialog
 // =============================================================================
 
