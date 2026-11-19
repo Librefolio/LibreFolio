@@ -1014,6 +1014,7 @@ nav:
               - Signals: user/assets/detail/signals.md
               - Measures: user/assets/detail/measures.md
               - Classification: user/assets/detail/classification.md
+              - Profile: user/assets/detail/profile.md
               - Data Editor: user/assets/detail/data-editor.md
               - Events: user/assets/detail/events.md
           - 🔌 Providers:
