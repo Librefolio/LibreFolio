@@ -10,6 +10,9 @@
   the open dropdown, `{testIdPrefix}-mobile-category-trigger` and `{testIdPrefix}-mobile-category-menu`; its selected
   state as `aria-pressed`. `key` is the entry's `testKey`, else its `id` (Preferences' «All» has the id '' and the key
   `all`). The classes are the ones the two copies had, moved as they were. Colours are roles only.
+
+  The Plugins menu (S1b) adds a count after the label (`data-count`, muted unless selected; a whole entry at 0 muted)
+  and an amber dot for «something to configure», the look of `TabBar`'s dot, named by `dotLabel` (screen readers, title).
 -->
 <script lang="ts">
     import type {Component, ComponentType} from 'svelte';
@@ -29,6 +32,10 @@
         /** None for «All». */
         icon?: NavIcon | null;
         label: string;
+        /** Shown after the label, and published as `data-count` (the Plugins menu, S1b); none on the other pages. */
+        count?: number;
+        /** Something in it needs attention: an amber dot, named for screen readers by `dotLabel`. */
+        dot?: boolean;
     }
 
     interface Props {
@@ -41,9 +48,11 @@
         /** The phone trigger's text and icon: each page decides what an unknown selection shows. */
         triggerLabel?: string;
         triggerIcon?: NavIcon | null;
+        /** What the dot means, for screen readers. */
+        dotLabel?: string;
     }
 
-    let {mode, entries, selected, onselect, testIdPrefix, triggerLabel = '', triggerIcon = null}: Props = $props();
+    let {mode, entries, selected, onselect, testIdPrefix, triggerLabel = '', triggerIcon = null, dotLabel = ''}: Props = $props();
 
     let showDropdown = $state(false);
     let dropdownRef: HTMLDivElement | null = $state(null);
@@ -102,6 +111,7 @@
                             type="button"
                             onclick={() => choose(entry.id)}
                             data-testid="{testIdPrefix}-mobile-category-{keyOf(entry)}"
+                            data-count={entry.count}
                             aria-pressed={selected === entry.id ? 'true' : 'false'}
                             class="w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors
                                    {selected === entry.id ? 'bg-lf-selected text-lf-link font-medium' : 'text-lf-secondary hover:bg-lf-hover'}"
@@ -111,6 +121,12 @@
                                 <Icon size={16} class={selected === entry.id ? 'text-lf-link' : 'text-lf-muted'} />
                             {/if}
                             <span class="flex-1">{entry.label}</span>
+                            {#if entry.dot}
+                                <span class="size-2 shrink-0 rounded-full bg-lf-warning" data-testid="{testIdPrefix}-mobile-category-dot" title={dotLabel}><span class="sr-only">{dotLabel}</span></span>
+                            {/if}
+                            {#if entry.count !== undefined}
+                                <span class="text-xs tabular-nums {selected === entry.id ? '' : 'text-lf-muted'}">{entry.count}</span>
+                            {/if}
                             {#if selected === entry.id}
                                 <ChevronRight size={16} />
                             {/if}
@@ -129,15 +145,22 @@
                     type="button"
                     onclick={() => onselect(entry.id)}
                     data-testid="{testIdPrefix}-category-{keyOf(entry)}"
+                    data-count={entry.count}
                     aria-pressed={selected === entry.id ? 'true' : 'false'}
                     class="w-full flex items-center px-3 py-2 text-sm rounded-lg transition-colors
-                        {selected === entry.id ? 'bg-lf-checked text-lf-on-checked' : 'text-lf-secondary hover:bg-lf-hover'}"
+                        {selected === entry.id ? 'bg-lf-checked text-lf-on-checked' : entry.count === 0 ? 'text-lf-muted hover:bg-lf-hover' : 'text-lf-secondary hover:bg-lf-hover'}"
                 >
                     {#if entry.icon}
                         {@const Icon = entry.icon}
                         <Icon size={16} class="mr-2" />
                     {/if}
                     <span class="flex-1 text-left">{entry.label}</span>
+                    {#if entry.dot}
+                        <span class="ml-1.5 size-2 shrink-0 rounded-full bg-lf-warning" data-testid="{testIdPrefix}-category-dot" title={dotLabel}><span class="sr-only">{dotLabel}</span></span>
+                    {/if}
+                    {#if entry.count !== undefined}
+                        <span class="ml-2 text-xs tabular-nums {selected === entry.id ? '' : 'text-lf-muted'}">{entry.count}</span>
+                    {/if}
                     {#if selected === entry.id}
                         <ChevronRight size={16} />
                     {/if}
