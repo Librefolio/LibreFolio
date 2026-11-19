@@ -649,8 +649,10 @@
     }
 
     async function handleLinkedPairClick(row: TXReadItem) {
-        if (row.related_transaction_id == null) return;
-        const partnerId = row.related_transaction_id;
+        // A pair's partner, or (F5) the parent of a linked charge.
+        const parentId = (row.parent_transaction_id ?? 0) > 0 ? row.parent_transaction_id! : null;
+        const partnerId = row.related_transaction_id ?? parentId;
+        if (partnerId == null) return;
 
         // Try current page first (fast path).
         let el = findPartnerElement(partnerId);
@@ -665,6 +667,12 @@
         el = findPartnerElement(partnerId);
         if (el) {
             pulseElement(el);
+            return;
+        }
+        // F5: a parent the filters hide (a filter on the type) opens in the view window instead.
+        if (parentId !== null) {
+            const parent = mainRows.find((r) => r.id === parentId);
+            if (parent) handleViewRow(parent);
         }
     }
 
