@@ -140,6 +140,7 @@ plugins:
             Central Bank of the Republic of China (Taiwan) (CBC): Central Bank of the Republic of China (Taiwan) (CBC)
             Central Bank of Nigeria (CBN): Central Bank of Nigeria (CBN)
             Central Bank of Kenya (CBK): Central Bank of Kenya (CBK)
+            Reserve Bank of India (RBI): Reserve Bank of India (RBI)
             Banca d'Italia (BDI): Banca d'Italia (BDI)
             Banco Central do Brasil (BCB): Banco Central do Brasil (BCB)
             # Developer provider entries — kept in English per dev-manual policy
@@ -164,6 +165,7 @@ plugins:
             CBC Tech: CBC Tech
             CBN Tech: CBN Tech
             CBK Tech: CBK Tech
+            RBI Tech: RBI Tech
             BDI Tech: BDI Tech
             BCB Tech: BCB Tech
             # Developer transaction section — kept in English per dev-manual policy
@@ -433,6 +435,7 @@ plugins:
             Central Bank of the Republic of China (Taiwan) (CBC): Central Bank of the Republic of China (Taiwan) (CBC)
             Central Bank of Nigeria (CBN): Central Bank of Nigeria (CBN)
             Central Bank of Kenya (CBK): Central Bank of Kenya (CBK)
+            Reserve Bank of India (RBI): Reserve Bank of India (RBI)
             Banca d'Italia (BDI): Banca d'Italia (BDI)
             Banco Central do Brasil (BCB): Banco Central do Brasil (BCB)
             # Developer provider entries — kept in English per dev-manual policy
@@ -457,6 +460,7 @@ plugins:
             CBC Tech: CBC Tech
             CBN Tech: CBN Tech
             CBK Tech: CBK Tech
+            RBI Tech: RBI Tech
             BDI Tech: BDI Tech
             BCB Tech: BCB Tech
             # Developer transaction section — kept in English per dev-manual policy
@@ -727,6 +731,7 @@ plugins:
             Central Bank of the Republic of China (Taiwan) (CBC): Central Bank of the Republic of China (Taiwan) (CBC)
             Central Bank of Nigeria (CBN): Central Bank of Nigeria (CBN)
             Central Bank of Kenya (CBK): Central Bank of Kenya (CBK)
+            Reserve Bank of India (RBI): Reserve Bank of India (RBI)
             Banca d'Italia (BDI): Banca d'Italia (BDI)
             Banco Central do Brasil (BCB): Banco Central do Brasil (BCB)
             # Developer provider entries — kept in English per dev-manual policy
@@ -751,6 +756,7 @@ plugins:
             CBC Tech: CBC Tech
             CBN Tech: CBN Tech
             CBK Tech: CBK Tech
+            RBI Tech: RBI Tech
             BDI Tech: BDI Tech
             BCB Tech: BCB Tech
             # Developer transaction section — kept in English per dev-manual policy
@@ -1094,6 +1100,7 @@ nav:
               - Central Bank of the Republic of China (Taiwan) (CBC): user/fx/providers/cbc.md
               - Central Bank of Nigeria (CBN): user/fx/providers/cbn.md
               - Central Bank of Kenya (CBK): user/fx/providers/cbk.md
+              - Reserve Bank of India (RBI): user/fx/providers/rbi.md
               - Banca d'Italia (BDI): user/fx/providers/bdi.md
               - Banco Central do Brasil (BCB): user/fx/providers/bcb.md
           - 🔎 Pair Detail:
@@ -1367,6 +1374,7 @@ nav:
                   - CBC Tech: developer/backend/fx/providers/cbc.md
                   - CBN Tech: developer/backend/fx/providers/cbn.md
                   - CBK Tech: developer/backend/fx/providers/cbk.md
+                  - RBI Tech: developer/backend/fx/providers/rbi.md
                   - BDI Tech: developer/backend/fx/providers/bdi.md
                   - BCB Tech: developer/backend/fx/providers/bcb.md
           - "🕐 Scheduler (Daemon)": developer/backend/scheduler.md
