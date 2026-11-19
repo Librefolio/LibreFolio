@@ -122,6 +122,17 @@ flowchart LR
 - **The page** (`get_asset_url`): `https://www.coingecko.com/en/coins/<id>`, built from the id alone, with no I/O; an
   id CoinGecko cannot have has none.
 
+## 🖼️ The Provider's Icon
+
+`get_icon` is CoinGecko's own favicon by URL, `https://www.coingecko.com/favicon.ico`, as Yahoo's, justETF's and Borsa
+Italiana's icons are theirs: it follows CoinGecko's own updates, and no file is bundled (the developer's choice, P1b-b).
+
+- **What it costs:** a browser that shows the icon asks coingecko.com for that image, as it asks the other providers'
+  hosts for theirs.
+- **The coins' logos are another thing:** the metadata links each coin's logo from CoinGecko's image host (above).
+- **In the gallery** the CoinGecko search shot lets that one image through; any other request to a CoinGecko host is
+  still aborted and fails the shot (`e2e/fixtures/galleryCoinGecko.ts`).
+
 ## 🏷️ Attribution
 
 CoinGecko's terms ask for every price it gives to be shown with «Powered by CoinGecko», prominent, linked to its site.

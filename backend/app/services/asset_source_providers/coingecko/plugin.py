@@ -145,6 +145,11 @@ class CoinGeckoProvider(AssetSourceProvider):
         return "CoinGecko"
 
     @property
+    def get_icon(self) -> str:
+        # CoinGecko's own favicon, by URL, as the other providers' icons: it follows CoinGecko's updates (P1b-b)
+        return "https://www.coingecko.com/favicon.ico"
+
+    @property
     def provider_help_url(self) -> str:
         # Its page in the user guide (P6): the key, the year of history, the credits, the attribution
         return "/mkdocs/user/assets/providers/coingecko/"
