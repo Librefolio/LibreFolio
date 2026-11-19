@@ -607,7 +607,8 @@
         "ratesCaveat": "È un'approssimazione al primo ordine: vale per piccoli movimenti e non conta le cedole che nel frattempo arrivano.",
         "ratesMissing": "Tassi in salita o in discesa: nessuna duration nel profilo di questo titolo.",
         "ratesMissingLink": "Apri il Profilo",
-        "ratesPointsUnit": "punti"
+        "ratesPointsUnit": "punti",
+        "ratesStale": "Duration confermata il {date}, non aggiornata."
       },
       "backtestNotice": "Con una fetta attiva, questi numeri sono ricostruiti sulla composizione di oggi: dicono come *sarebbe* andata, non come è andata davvero.",
       "notice": {

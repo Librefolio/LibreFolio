@@ -137,17 +137,18 @@ An asset has at most one provider; tick **No Provider** if you will enter its pr
 ## ⚖️ Check the provider's data {: #provider-data-comparison }
 
 LibreFolio compares the provider's details with your form after you pick a **Search Online**
-result, and when you click **Ask Provider**: at the top of **Asset Details** for everything, next
-to **Identifiers** or in a distribution editor for that part only. It needs a provider and an
-identifier.
+result, and when you click **Ask Provider**: at the top of **Asset Details** for everything, or
+next to **Identifiers** for the codes only. It needs a provider and an identifier.
 
 - Empty fields are filled in, and the provider's extra codes join **Other identifiers**.
-- *Provider has no data for: …* names a missing sector or geographic breakdown; *All data matches
-  provider* means there is nothing to review.
+- *All data matches provider* means there is nothing to review.
 - Anything that differs opens the **Provider Data Comparison** dialog.
 
+The description, the sectors and the countries are not compared here: they belong to the asset's
+profile, which its enrichers fill (see [Set the description, sectors and countries](#set-sector-and-country-distributions)).
+
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="assets" data-name="create-provider-compare" alt="The Provider Data Comparison dialog over the Add Asset form: the TICKER row asking which code is the main one, with the provider's code chosen over the one already saved, which is kept as an alternate; the Type row with its current and provider values as icon badges; the Sector Distribution row, current against provider; and Select All, Deselect All, Cancel and Apply Selected">
+    <img class="gallery-img" data-category="assets" data-name="create-provider-compare" alt="The Provider Data Comparison dialog over the Add Asset form: the TICKER row asking which code is the main one, with the provider's code chosen over the one already saved, which is kept as an alternate; the Type row with its current and provider values as icon badges; and Select All, Deselect All, Cancel and Apply Selected">
 </div>
 
 Each row of the dialog shows your **Current Value** next to the **Provider Value**, and starts
@@ -289,25 +290,35 @@ To sell before maturity, the bond is converted to the market code. Keep both cod
 When an import brings the CUM code for an asset that holds the market one, LibreFolio asks which
 code should lead and keeps the other under **Other identifiers**.
 
-## 🗺️ Set sector and country distributions
+## 🗺️ Set the description, sectors and countries {: #set-sector-and-country-distributions }
 
-Providers fill in the sector and geographic breakdowns when they can; for other assets, set them
-yourself. They feed the dashboard's allocation charts and the AI Export.
+The description and the sector and geographic breakdowns are part of the asset's **profile**. The
+asset's enrichers fill them when they can; for other assets, set them yourself. The breakdowns feed
+the dashboard's allocation charts and the AI Export.
 
-In the asset form, expand **More Info**: under **Classification**, **Sector Distribution** and
-**Geographic Distribution** list one row per sector or country, with its weight in percent.
+- **The description** is the **Description** field of the asset form. What you type there is
+  saved with the asset, as a change to its profile.
+- **The sectors and the countries** are in the **Profile data** window:
+    - in the asset form, click the **Profile data** row. The window opens over the form;
+      **Keep the changes** hands your changes back to the form, which saves them with the asset,
+      and the row counts them until then;
+    - on the asset page, click **Edit data** in the **Profile** tab. There **Save all** saves them
+      at once.
+
+In the window, **Sector Distribution** and **Geographic Distribution** each list one row per sector
+or country, with its weight in percent.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-assets-distribution-editors" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
-    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="distribution-editor-sector" data-title="🏭 Sector Distribution" alt="Sector distribution editor in the asset modal">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="distribution-editor-geographic" data-title="🌍 Geographic Distribution" alt="Geographic distribution editor in the asset modal">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="distribution-editor-sector" data-title="🏭 Sector Distribution" alt="Sector distribution editor in the Profile data window">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="distribution-editor-geographic" data-title="🌍 Geographic Distribution" alt="Geographic distribution editor in the Profile data window">
 </div>
 
 - **Add sector** / **Add country** adds a row: pick the entry, then type its weight.
 - The **Total** turns green at 100%, amber when something is missing, red when you go over.
 - **Balance to 100%**, a row action, moves the whole gap into that row. **Balance selected rows**
   shares it among the selected rows, in proportion to their weights.
-- **Remove** deletes a row, **Ask Provider** fetches the provider's breakdown, and **Import CSV**
-  loads one from a file.
+- **Remove** deletes a row, **Ask the source** fetches the enrichers' breakdown, and **Import CSV**
+  loads one from a file. Removing the last row clears the breakdown when you save.
 
 ### 📥 Import a distribution from CSV {: #importing-a-distribution-csv }
 

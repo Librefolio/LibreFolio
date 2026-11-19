@@ -70,6 +70,8 @@ class RateShockAnalytic(RiskAnalytic):
                 modified_duration=duration,
                 duration_read_on=classification.modified_duration_read_on,
                 duration_source=classification.modified_duration_source,
+                duration_confirmed_on=classification.modified_duration_confirmed_on,
+                duration_stale=classification.modified_duration_stale,
                 scenarios=[RiskRateShockScenario(yield_change=change, price_change=duration_price_change(duration, change)) for change in params.yield_changes],
             ),
             method="modified_duration_first_order",

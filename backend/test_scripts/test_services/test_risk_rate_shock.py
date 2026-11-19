@@ -189,3 +189,38 @@ async def test_through_the_service_no_duration_is_unavailable_with_its_reason_on
     assert result.output is None
     assert result.error.code == RiskErrorCode.DATA_UNAVAILABLE
     assert result.error.details == {"reason": "no_modified_duration"}
+
+
+# D1d (plan 68): the duration's «non aggiornato» reaches the scenario; the risk decides what to do with it
+
+
+def test_the_scenario_carries_when_the_duration_was_confirmed_and_whether_it_is_stale():
+    stale = RiskAssetClassification(
+        asset_class="BOND",
+        modified_duration=1.8,
+        modified_duration_read_on=date(2026, 9, 1),
+        modified_duration_source="borsa_italiana",
+        modified_duration_confirmed_on=date(2026, 9, 18),
+        modified_duration_stale=True,
+    )
+    output = RateShockAnalytic().compute(RateShockParams(yield_changes=list(STEPS)), _bond_context(stale)).output
+    assert (output.duration_confirmed_on, output.duration_stale) == (date(2026, 9, 18), True)
+
+    unknown = RiskAssetClassification(asset_class="BOND", modified_duration=1.8, modified_duration_read_on=date(2026, 9, 1), modified_duration_source="borsa_italiana")
+    output = RateShockAnalytic().compute(RateShockParams(yield_changes=list(STEPS)), _bond_context(unknown)).output
+    assert (output.duration_confirmed_on, output.duration_stale) == (None, False), "no signal: never called stale"
+
+
+@pytest.mark.asyncio
+async def test_the_duration_says_when_now_was_confirmed_and_whether_it_is_stale(tmp_path):
+    """The BTP's «now» (1.8, read 08/11, no enricher state: confirmed that day): 32 days later it is stale, 10 days later
+    not. A day held by an older reading is not «now»: no signal."""
+    async with _bond_book(tmp_path) as (engine, ids):
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            later = await risk_scope_module.load_asset_classifications(session, (ids["btp"],), date(2026, 11, 18), today=date(2026, 12, 10))
+            soon = await risk_scope_module.load_asset_classifications(session, (ids["btp"],), date(2026, 11, 18), today=date(2026, 11, 18))
+            older = await risk_scope_module.load_asset_classifications(session, (ids["btp"],), date(2026, 10, 15), today=date(2026, 12, 10))
+
+    assert (later[ids["btp"]].modified_duration_confirmed_on, later[ids["btp"]].modified_duration_stale) == (date(2026, 11, 8), True)
+    assert (soon[ids["btp"]].modified_duration_confirmed_on, soon[ids["btp"]].modified_duration_stale) == (date(2026, 11, 8), False)
+    assert (older[ids["btp"]].modified_duration, older[ids["btp"]].modified_duration_confirmed_on, older[ids["btp"]].modified_duration_stale) == (pytest.approx(1.95), None, False)

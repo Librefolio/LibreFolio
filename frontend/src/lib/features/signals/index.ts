@@ -62,7 +62,7 @@ export {getLocalSignalDefinitions, getRegisteredSignalTypes, createSignal, creat
 export {mapBackendSignalDefinition, mergeSignalDefinitions, signalCodeToType} from './catalogMapper';
 export {mapSignalParamsSchema, UnsupportedSignalSchemaError} from './schemaMapper';
 export {renderBackendSignalResult, renderedSignalPointCount, type BackendSignalRendererOptions, type BackendSignalRenderOutcome} from './backendRenderer';
-export {buildBackendSignalRequestPlan, type BackendSignalRequestPlan} from './requestBuilder';
+export {buildBackendSignalRequestPlan, readsRiskFreeRate, type BackendSignalRequestPlan} from './requestBuilder';
 export {mapSignalInstanceResults, SignalResultState, type SignalInstanceResult, type SignalInstanceStatus} from './resultMapper';
 export {getBackendSignalProblem, getSignalProblem, getSignalProblemSeverity, type SignalProblem, type SignalProblemCode, type SignalProblemSeverity} from './signalProblem';
 export {resolveSignalPreview, type BackendPreviewState, type SignalPreviewResolution} from './previewPolicy';

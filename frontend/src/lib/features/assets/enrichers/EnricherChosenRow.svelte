@@ -216,10 +216,13 @@
                 </div>
                 <label class="block">
                     <span class="block text-xs text-lf-secondary mb-1">{$t('assets.enrichers.identifier')}</span>
+                    <!-- Committed at every key (E7c): «Usa questi arricchitori» clicked right after typing finds the window valid,
+                         no click lost; trimmed once the field lets the focus go -->
                     <input
                         type="text"
                         class="w-full px-2 py-1.5 text-sm font-mono rounded-md border border-lf-input bg-lf-field text-lf-primary placeholder:text-lf-placeholder focus:outline-none focus:border-lf-focus"
                         value={row.binding.identifier}
+                        oninput={(event) => setBinding({identifier: event.currentTarget.value})}
                         onchange={(event) => setBinding({identifier: event.currentTarget.value.trim()})}
                         data-testid="enricher-identifier-{row.code}"
                     />

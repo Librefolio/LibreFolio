@@ -237,3 +237,19 @@ describe('a value as the tab writes it', () => {
         expect(tab.formatProfileValue(byKey('ter'), null, context)).toBe('');
     });
 });
+
+describe('«non aggiornato» (D1d)', () => {
+    const DURATION = {key: 'modified_duration', shape: 'number'} as unknown as ProfileVoice;
+    const step = (extra: Partial<ProfileStep>) => ({date: '2026-09-01', through: '2026-11-18', value: '1.8', source: 'borsa_italiana', update_id: 1, ...extra}) as ProfileStep;
+
+    it('gives the confirmation day of a value the backend calls stale', () => {
+        expect(tab.staleSince(tab.profileCell(DURATION, [step({confirmed_on: '2026-09-18', stale: true})]))).toBe('2026-09-18');
+    });
+
+    it('gives nothing for a fresh value, a step with no signal, an emptied voice or no step', () => {
+        expect(tab.staleSince(tab.profileCell(DURATION, [step({confirmed_on: '2026-11-10', stale: false})]))).toBeNull();
+        expect(tab.staleSince(tab.profileCell(DURATION, [step({})]))).toBeNull();
+        expect(tab.staleSince(tab.profileCell(DURATION, [step({value: null, confirmed_on: '2026-09-18', stale: true})]))).toBeNull();
+        expect(tab.staleSince(tab.profileCell(DURATION, []))).toBeNull();
+    });
+});

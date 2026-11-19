@@ -14,8 +14,10 @@ history and instrument details from its public website — no account or API key
   description. Indices are left out, as you cannot buy them. No result?
   LibreFolio also looks for a matching Borsa Italiana page on the web, unless your administrator
   has turned this off.
-- **Details**: name, type, currency, a sector and a description (market, issuer, maturity, coupon);
-  the ticker for stocks; for funds, the ISIN, the fund's features and its costs.
+- **Details**: name, type and currency; the ticker for stocks; the ISIN for funds. The description,
+  the sector and the country, and a bond's coupons and maturity, are the asset's
+  [profile data](../detail/classification.md), which the Borsa Italiana enricher
+  reads from the same pages.
 
 It covers what Borsa Italiana lists — Italian stocks, ETFs and ETCs (ETFplus), bonds (MOT,
 ExtraMOT, EuroTLX) and closed-end funds (MIV) — plus mutual funds and SICAVs.
@@ -28,9 +30,6 @@ ExtraMOT, EuroTLX) and closed-end funds (MIV) — plus mutual funds and SICAVs.
 - **Type**: ETFs, ETCs and ETNs all arrive as plain **ETF**. If you know what the fund holds,
   refine it (for example **Equity ETF** or **Commodity ETF**): a later
   [check against the provider's data](../create-edit.md#provider-data-comparison) keeps your choice.
-- **Bonds** get the sector **Government Bonds** or **Corporate Bonds** (supranational issuers:
-  **Financials**) and, when the issuer is recognised, its country — *United States of America*
-  becomes **USA**.
 
 ## ✏️ Set It Up
 

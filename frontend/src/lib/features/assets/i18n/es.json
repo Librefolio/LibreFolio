@@ -85,7 +85,18 @@
       "lastPrice": "Último Precio",
       "quoteBaseQuantity": "Unidades/precio",
       "txCount": "Tx",
-      "txCountTooltip": "Transacciones que usan este activo. Verde: en brókers de los que eres propietario. Azul: solo en brókers de otros usuarios. Gris: ninguna — activo guardado pero sin usar."
+      "txCountTooltip": "Transacciones que usan este activo. Verde: en brókers de los que eres propietario. Azul: solo en brókers de otros usuarios. Gris: ninguna — activo guardado pero sin usar.",
+      "risk": {
+        "maxDrawdown": "Drawdown máx.",
+        "volatility": "Volatilidad",
+        "annualReturn": "Rentabilidad anual",
+        "sharpe": "Sharpe",
+        "sortino": "Sortino",
+        "worstDay": "Peor día",
+        "bestDay": "Mejor día",
+        "rally": "Mayor subida",
+        "hint": "Medido sobre este activo solo, en el periodo y la moneda de esta página, a tu tasa libre de riesgo: la misma cifra que la pestaña Riesgo del activo con los mismos ajustes."
+      }
     },
     "empty": {
       "noAssets": "Sin activos",
@@ -234,7 +245,16 @@
         "removeTitle": "¿Quitar el proveedor?",
         "removeMessage": "Quitar el proveedor elimina {what}. {unlinked} Los precios ya guardados se conservan, igual que los eventos manuales. Esta acción no se puede deshacer. ¿Continuar?",
         "removeConfirm": "Quitar proveedor"
-      }
+      },
+      "enrichersButton": "Enriquecedores",
+      "enrichersFound": "{count, plural, one {# enriquecedor encontrado} other {# enriquecedores encontrados}}: {names}. Se guardarán con el activo.",
+      "enrichersSearching": "Buscando los enriquecedores que conocen este activo…",
+      "enrichersNone": "Ningún enriquecedor conoce este activo.",
+      "enrichersRefused": "Demasiadas solicitudes a las fuentes: en espera, la búsqueda se reanuda sola en un momento.",
+      "enrichersError": "No se pudieron buscar los enriquecedores: elígelos a mano.",
+      "enrichersReview": "Revisar o cambiar",
+      "enrichersReading": "Sus datos se están leyendo ahora.",
+      "enrichersReadingWaiting": "Demasiadas solicitudes: sus datos se leerán solos en un momento."
     },
     "provider": {
       "assignment": "Asignación de Proveedor",
@@ -375,8 +395,7 @@
       "currentValue": "Valor actual",
       "providerValue": "Valor del proveedor",
       "applySelected": "Aplicar seleccionados ({count}/{total})",
-      "allMatch": "Todos los datos coinciden con el proveedor",
-      "noDistributionData": "El proveedor no tiene datos para: {fields}"
+      "allMatch": "Todos los datos coinciden con el proveedor"
     },
     "distribution": {
       "total": "Total",

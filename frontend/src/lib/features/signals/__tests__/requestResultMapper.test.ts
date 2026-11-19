@@ -3,7 +3,7 @@ import {describe, expect, it} from 'vitest';
 import type {BackendSignalResult} from '../backendTypes';
 import {backendSignalSchemas} from '../backendTypes';
 import type {SignalConfig, SignalDefinition} from '../ChartSignal';
-import {buildBackendSignalRequestPlan} from '../requestBuilder';
+import {buildBackendSignalRequestPlan, readsRiskFreeRate} from '../requestBuilder';
 import {riskFreeRate} from '$lib/features/risk/riskFreeRateStore.svelte';
 import {mapSignalInstanceResults, SignalResultState} from '../resultMapper';
 
@@ -134,6 +134,20 @@ describe('backend signal request/result mapping', () => {
         } finally {
             riskFreeRate.set(0);
         }
+    });
+
+    // RN-21 «A»: the chart asks its signals again when the rate changes only if one of them reads it.
+    it('says whether the chart’s signals read the rate: a bound parameter yes, others and unknown types no', () => {
+        const sharpeDefinition: SignalDefinition = {
+            ...backendDefinition,
+            type: 'risk-rolling-sharpe',
+            backendSignalCode: 'RISK_ROLLING_SHARPE',
+            paramDescriptors: [{key: 'risk_free_annual_rate', label: 'Risk-free rate', type: 'number', control: 'risk_free_rate', default: 0}],
+        };
+        const definitions = [backendDefinition, localDefinition, sharpeDefinition];
+        expect(readsRiskFreeRate([config('ema-a', 'ema'), config('sharpe-a', 'risk-rolling-sharpe', {window: 90})], definitions)).toBe(true);
+        expect(readsRiskFreeRate([config('ema-a', 'ema'), config('linear-a', 'linear'), config('unknown-a', 'removed-signal')], definitions)).toBe(false);
+        expect(readsRiskFreeRate([], definitions)).toBe(false);
     });
 
     it('maps mixed local/backend/unavailable configs in input order', () => {

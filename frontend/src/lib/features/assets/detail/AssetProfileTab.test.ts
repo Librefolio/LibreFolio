@@ -156,4 +156,15 @@ describe('AssetProfileTab', () => {
         await fireEvent.click(screen.getByTestId('asset-profile-edit'));
         expect(onedit).toHaveBeenCalledOnce();
     });
+
+    it('says «non aggiornato» on the card and the detail of a stale voice, and only there (D1d)', async () => {
+        const stale = {...step('0.0019'), confirmed_on: '2026-09-18', stale: true} as ProfileStep;
+        const fresh = {...step('Vanguard'), confirmed_on: '2026-11-10', stale: false} as ProfileStep;
+        store.readAssetProfile.mockResolvedValue({...FOUND, voices: {...FOUND.voices, ter: [stale], fund_provider: [fresh]}});
+        render(AssetProfileTab, {props: {assetId: 7, period: PERIOD, isin: null, ticker: null}});
+        await waitFor(() => expect(screen.getByTestId('asset-profile-tab')).toHaveAttribute('data-status', 'ready'));
+        expect(screen.getByTestId('profile-key-figure-ter')).toHaveAttribute('data-stale', 'true');
+        expect(screen.getByTestId('profile-key-figure-ter-stale')).toHaveTextContent('18');
+        expect(screen.getByTestId('profile-detail-fund_provider')).toHaveAttribute('data-stale', 'false');
+    });
 });

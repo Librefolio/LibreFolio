@@ -85,7 +85,18 @@
       "lastPrice": "Ultimo Prezzo",
       "quoteBaseQuantity": "Unità/prezzo",
       "txCount": "Mov.",
-      "txCountTooltip": "Transazioni che usano questo asset. Verde: in broker di cui sei owner. Blu: solo in broker di altri utenti. Grigio: nessuna — asset salvato ma mai usato."
+      "txCountTooltip": "Transazioni che usano questo asset. Verde: in broker di cui sei owner. Blu: solo in broker di altri utenti. Grigio: nessuna — asset salvato ma mai usato.",
+      "risk": {
+        "maxDrawdown": "Max drawdown",
+        "volatility": "Volatilità",
+        "annualReturn": "Rendimento annuo",
+        "sharpe": "Sharpe",
+        "sortino": "Sortino",
+        "worstDay": "Giorno peggiore",
+        "bestDay": "Giorno migliore",
+        "rally": "Risalita più ampia",
+        "hint": "Misurato su questo asset da solo, sul periodo e nella valuta di questa pagina, al tuo tasso privo di rischio: la stessa cifra della scheda Rischio dell'asset con le stesse impostazioni."
+      }
     },
     "empty": {
       "noAssets": "Nessun asset",
@@ -234,7 +245,16 @@
         "removeTitle": "Togliere il provider?",
         "removeMessage": "Togliere il provider cancella {what}. {unlinked} I prezzi già salvati restano, come gli eventi manuali. L'operazione non è reversibile. Continuare?",
         "removeConfirm": "Togli provider"
-      }
+      },
+      "enrichersButton": "Arricchitori",
+      "enrichersFound": "{count, plural, one {# arricchitore trovato} other {# arricchitori trovati}}: {names}. Verranno salvati con l'asset.",
+      "enrichersSearching": "Cerco gli arricchitori che conoscono l'asset…",
+      "enrichersNone": "Nessun arricchitore conosce questo asset.",
+      "enrichersRefused": "Troppe richieste alle fonti: in attesa, la ricerca riparte da sola fra poco.",
+      "enrichersError": "Non è stato possibile cercare gli arricchitori: sceglili a mano.",
+      "enrichersReview": "Controlla o cambia",
+      "enrichersReading": "I loro dati si stanno leggendo adesso.",
+      "enrichersReadingWaiting": "Troppe richieste: i loro dati si leggeranno da soli fra poco."
     },
     "provider": {
       "assignment": "Assegnazione Provider",
@@ -375,8 +395,7 @@
       "currentValue": "Valore Attuale",
       "providerValue": "Valore Provider",
       "applySelected": "Applica Selezionati ({count}/{total})",
-      "allMatch": "Tutti i dati corrispondono al provider",
-      "noDistributionData": "Il provider non ha dati per: {fields}"
+      "allMatch": "Tutti i dati corrispondono al provider"
     },
     "distribution": {
       "total": "Totale",

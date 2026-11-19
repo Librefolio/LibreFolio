@@ -404,6 +404,9 @@
       "createServes": "{n} transazioni",
       "createHint": "Inserisci per ogni evento un valore maggiore di 0, con al massimo 6 decimali.",
       "createConfirm": "{n, plural, one {Crea # evento} other {Crea # eventi}}"
+    },
+    "docsHelp": {
+      "list": "Ogni movimento dei broker a cui hai accesso, dal più recente: acquisti, vendite, dividendi, commissioni, trasferimenti e liquidità. Le tue posizioni e il rendimento si calcolano a partire da questi. Qui li aggiungi, importi, filtri o modifichi."
     }
   }
 }

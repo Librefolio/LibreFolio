@@ -89,9 +89,6 @@
     "recheckOpeningsTip": "Re-check broker opening dates and re-select rows that just became importable.",
     "selectVisible": "Select visible",
     "selectVisibleTip": "Select the selectable rows on the current page (leaves other pages unchanged).",
-    "createAsset": {
-      "identifiedNames": "Identified names/identifiers:"
-    },
     "todoBlockerCommitHint": "Complete all required fields before saving",
     "todoWarningVerifyHint": "{n, plural, one {# auto-derived field to verify before saving} other {# auto-derived fields to verify before saving}}",
     "todoWarningConfirmTitle": "Verify auto-derived fields?",

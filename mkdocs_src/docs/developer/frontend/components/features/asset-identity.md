@@ -158,7 +158,7 @@ provider context is still current:
 field `identifier_<type>` plus the codes the chooser offered (trimmed, upper-cased, deduplicated),
 and `asksSameQuestion()` removes a row only when its field is that field **and** its provider value
 is one of those codes. A provider value the chooser never offered is a new question and still reaches
-the user; a name, currency or distribution row is never removed.
+the user; a name, type or currency row is never removed.
 
 The sequence in the modal:
 
@@ -191,10 +191,13 @@ applying its writes in order, from the `patch_data` of the probe's `metadata` op
   A refinement (`ETF` → `ETF_STOCK`) is still a row;
 - a case-only difference, or a currency the user never picked (`currencyUserSet`), is auto-filled
   instead of shown;
-- `identifier_other` is merged additively (`mergeOtherIdentifiers()`), never a row; a description
-  pre-filled by the import wizard is merged too — provider text first, the report's names after;
-- a missing sector or geographic block raises the `noDistributionData` toast, and no row with
-  nothing missing raises `allMatch`.
+- `identifier_other` is merged additively (`mergeOtherIdentifiers()`), never a row;
+- no row raises `allMatch`.
+
+A price provider gives no description, sectors or countries (plan 68, D6), and since D7a no asset
+response carries the old `classification_params`: the description, the sectors and the countries
+are the asset's profile, which its enrichers fill and the **Profile data** window
+compares («Ask the source»). The comparison's scopes are `'all'` and `'identifiers'`.
 
 On **Apply Selected**, a ticked field edited since the differences were computed (while the
 comparison was held or open) sends it back to a fresh `'all'` read instead of overwriting the

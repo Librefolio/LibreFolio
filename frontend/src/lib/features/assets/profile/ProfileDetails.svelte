@@ -5,7 +5,8 @@
 
   The identity group adds the asset's ISIN and ticker: identifiers of the asset, not voices of the profile. A row
   publishes `data-state` (`value`, `emptied`, `unavailable`); a row with a value opens the voice's history (E6) when the
-  page handles it.
+  page handles it. A stale value (D1d) adds «confermato il …, non aggiornato» under it, in the warning role, and
+  `data-stale="true"`.
 
   Pattern: Svelte 5 Runes, Tailwind CSS 4, colour roles only.
 -->
@@ -17,6 +18,8 @@
         groups: DetailGroup[];
         /** The text of each voice with a value, by key (`formatProfileValue`). */
         texts: Record<string, string>;
+        /** «Confermato il …, non aggiornato» (D1d) of each stale voice, by key. */
+        staleTexts?: Record<string, string>;
         isin: string | null;
         ticker: string | null;
         /** The asset's other identifiers (CUSIP, FIGI…), label and value, shown after the ISIN and the ticker when present. */
@@ -25,7 +28,7 @@
         onhistory?: (key: string) => void;
     }
 
-    let {groups, texts, isin, ticker, otherIdentifiers = [], onhistory}: Props = $props();
+    let {groups, texts, staleTexts = {}, isin, ticker, otherIdentifiers = [], onhistory}: Props = $props();
 
     const left = $derived(groups.filter((group) => group.group !== 'bond'));
     const right = $derived(groups.filter((group) => group.group === 'bond'));
@@ -47,7 +50,8 @@
                 <dl class="divide-y divide-lf-subtle">
                     {#each group.cells as cell (cell.key)}
                         {@const text = cell.state === 'value' ? (texts[cell.key] ?? '') : ''}
-                        <div class="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 py-2 text-sm" data-testid="profile-detail-{cell.key}" data-state={cell.state}>
+                        {@const stale = text === '' ? '' : (staleTexts[cell.key] ?? '')}
+                        <div class="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 py-2 text-sm" data-testid="profile-detail-{cell.key}" data-state={cell.state} data-stale={stale ? 'true' : 'false'}>
                             <!-- The company's sector is its one sector («Settore»), not the classification's map -->
                             <dt class="text-lf-secondary">{group.group === 'company' && cell.key === 'sector' ? $t('assets.profile.tab.companySector') : $t(`assets.profile.voices.${cell.key}`)}</dt>
                             <dd class="min-w-0 break-words text-lf-primary">
@@ -57,6 +61,9 @@
                                     <button type="button" class="text-left hover:underline focus-visible:outline-2 focus-visible:outline-lf-focus rounded" data-testid="profile-detail-{cell.key}-history" onclick={() => onhistory?.(cell.key)}>{text}</button>
                                 {:else}
                                     {text}
+                                {/if}
+                                {#if stale}
+                                    <p class="text-xs text-lf-warning" data-testid="profile-detail-{cell.key}-stale">{stale}</p>
                                 {/if}
                             </dd>
                         </div>

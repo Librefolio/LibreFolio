@@ -1,7 +1,8 @@
 # <img src="https://www.justetf.com/android-chrome-144x144.png?v2" alt=""> justETF
 
 justETF prices European ETFs by their ISIN, in euros, US dollars, Swiss francs or British pounds.
-It also brings each fund's description and its country and sector breakdowns.
+A fund's description and its country and sector breakdowns come from its
+[profile data](../detail/classification.md), which the justETF enricher reads.
 
 ## 🔍 What It Offers
 
@@ -10,8 +11,7 @@ It also brings each fund's description and its country and sector breakdowns.
 - **History**: daily closing prices in the currency you choose.
 - **Dividends**: the distributions shown in the fund's chart become dividend events.
 - **Search**: by name, ticker, WKN or ISIN, among the ETFs listed on justETF.
-- **Details**: a description with the TER and the distribution policy, the country and sector
-  breakdowns, the ISIN and the ticker.
+- **Details**: the type, the ISIN and the ticker.
 
 ## ✏️ Set It Up
 

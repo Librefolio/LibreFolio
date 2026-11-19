@@ -404,6 +404,9 @@
       "createServes": "{n} transacciones",
       "createHint": "Introduce para cada evento un valor mayor que 0, con 6 decimales como máximo.",
       "createConfirm": "{n, plural, one {Crear # evento} other {Crear # eventos}}"
+    },
+    "docsHelp": {
+      "list": "Cada movimiento de los brókeres a los que tienes acceso, del más reciente al más antiguo: compras, ventas, dividendos, comisiones, transferencias y liquidez. Tus posiciones y tu rendimiento se calculan a partir de ellos. Aquí los añades, importas, filtras o editas."
     }
   }
 }

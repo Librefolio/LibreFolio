@@ -484,7 +484,7 @@ class ProbeHistoryResult(BaseProbeOperationResult):
 class ProbeMetadataResult(BaseProbeOperationResult):
     """Result of metadata probe operation."""
 
-    patch_data: Optional[dict] = Field(None, description="Asset metadata patch (identifiers, asset_type, classification, etc.)")
+    patch_data: Optional[dict] = Field(None, description="Asset metadata patch: asset_type, currency, display_name and identifiers (never the description, sectors or countries)")
     quote_base_suggestion: Optional[FAQuoteBaseSuggestion] = Field(None, description="The plugin's quote base suggestion (Z-32 d), beside the patch and never inside it; null when it suggests nothing")
 
 

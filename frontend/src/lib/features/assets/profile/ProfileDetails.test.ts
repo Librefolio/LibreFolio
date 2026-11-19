@@ -95,4 +95,12 @@ describe('ProfileDetails', () => {
         render(ProfileDetails, {props: {groups: GROUPS, texts: TEXTS, isin: null, ticker: null}});
         expect(screen.queryByTestId('profile-detail-fund_provider-history')).toBeNull();
     });
+
+    it('says «non aggiornato» under a row it is given that line for, and publishes it (D1d)', () => {
+        render(ProfileDetails, {props: {groups: GROUPS, texts: TEXTS, staleTexts: {fund_provider: 'Confirmed on 18/09/2026, not up to date'}, isin: null, ticker: null}});
+        expect(screen.getByTestId('profile-detail-fund_provider')).toHaveAttribute('data-stale', 'true');
+        expect(screen.getByTestId('profile-detail-fund_provider-stale')).toHaveTextContent('Confirmed on 18/09/2026, not up to date');
+        expect(screen.getByTestId('profile-detail-legal_form')).toHaveAttribute('data-stale', 'false');
+        expect(screen.queryByTestId('profile-detail-legal_form-stale')).toBeNull();
+    });
 });

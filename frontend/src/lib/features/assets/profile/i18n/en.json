@@ -187,7 +187,11 @@
         "ticker": "Ticker",
         "dataSince": "from {date}",
         "beforeProfile": "value from before the profile",
-        "companySector": "Sector"
+        "companySector": "Sector",
+        "staleConfirmed": "Confirmed on {date}, not up to date"
+      },
+      "row": {
+        "pending": "{count, plural, one {# change waiting} other {# changes waiting}}"
       }
     }
   }
