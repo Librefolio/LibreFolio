@@ -21,13 +21,18 @@
  * bases, so the chains at four steps multiply (~200 000 for EUR→USD). The printed line also gives the chains per group
  * (the route picker draws the first 200 of a group, L2d).
  *
+ * The depth rule of the route picker (L20b, developer decision Q6): the last block measures `findRoutePaths` — the first
+ * level with a chain, then up to the next one — on the same pairs, checks it against the unpruned depth-4 search cut at
+ * the depth read from that search's own chain lengths, and prints the depth, the chains and the time, level detection
+ * included. Every provider of the fixtures is configured, so the configured graph is the full one.
+ *
  * Run with the measurements printed:
  * `node_modules/.bin/vitest run --reporter=verbose --silent=false src/lib/utils/currency/currencyGraph.scale.test.ts`
  */
 import type {MultiDirectedGraph} from 'graphology';
 import {beforeAll, describe, expect, it} from 'vitest';
 
-import {buildCurrencyGraph, findAllPaths, type ChainStep, type EdgeAttributes, type ProviderInfo} from './currencyGraph';
+import {buildCurrencyGraph, findAllPaths, findRoutePaths, routeSearchDepth, type ChainStep, type EdgeAttributes, type ProviderInfo} from './currencyGraph';
 import {UNIVERSE, WAVE2_SIZES, todayProviders, wave1PlusCbrProviders, wave1Providers, wave2Providers} from './currencyGraph.scaleFixture';
 
 type CurrencyGraph = ReturnType<typeof buildCurrencyGraph>;
@@ -217,6 +222,43 @@ for (const [scenario, providers, pairs, maxMs] of SCENARIOS) {
                 const overPage = [2, 3, 4].filter((length) => byLength[length - 1] > CHAIN_PAGE);
                 const line = `${source}→${target}: ${paths.length} chains (by length 1/2/3/4: ${byLength.join('/')}; groups over ${CHAIN_PAGE}: ${overPage.join(',') || 'none'}), median ${ms.toFixed(1)} ms (unpruned ${unprunedMs.toFixed(1)} ms)`;
                 console.log(`[scale] ${scenario}: ${line}`);
+                expect(ms, line).toBeLessThan(maxMs);
+            },
+            60_000,
+        );
+    });
+}
+
+/** The rule's depth read from the chains themselves: the second distinct length, the cap with one, 0 with none. */
+function depthFromChains(chains: ChainStep[][]): number {
+    const lengths = [...new Set(chains.map((chain) => chain.length))].sort((a, b) => a - b);
+    if (lengths.length === 0) return 0;
+    return lengths.length >= 2 ? lengths[1] : DEPTH;
+}
+
+for (const [scenario, providers, pairs, maxMs] of SCENARIOS) {
+    describe(`currencyGraph depth rule (L20b, Q6), ${scenario}`, () => {
+        let graph: CurrencyGraph;
+
+        beforeAll(() => {
+            graph = buildCurrencyGraph(providers(), [...UNIVERSE]);
+        });
+
+        it.each(pairs)(
+            'offers from %s to %s the chains of the first level and the next one, the unpruned search cut at that depth',
+            (source, target) => {
+                const unpruned = findAllPathsUnpruned(graph, source, target, DEPTH);
+                const depth = depthFromChains(unpruned);
+                let routes = findRoutePaths(graph, graph, source, target);
+                expect(routeSearchDepth(graph, graph, source, target), `${source}→${target}: the depth of the rule`).toBe(depth);
+                expect(routes, `${source}→${target}: the unpruned chains up to the depth, same order`).toEqual(unpruned.filter((chain) => chain.length <= depth));
+
+                const ms = medianMs(() => {
+                    routes = findRoutePaths(graph, graph, source, target);
+                });
+                const byLength = [1, 2, 3, 4].map((length) => routes.filter((path) => path.length === length).length);
+                const line = `${source}→${target}: depth ${depth}, ${routes.length} chains (by length 1/2/3/4: ${byLength.join('/')}), median ${ms.toFixed(2)} ms with the level detection (depth 4 before: ${unpruned.length} chains)`;
+                console.log(`[rule] ${scenario}: ${line}`);
                 expect(ms, line).toBeLessThan(maxMs);
             },
             60_000,
