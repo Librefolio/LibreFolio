@@ -444,6 +444,35 @@ test.describe('Transactions table — link charges and delete a parent with char
         expect(left, 'the batch deletes the BUY and its two charges, nothing else').toEqual([s.depositId]);
     });
 
+    // 66 F7-d (§20.2, §21.8): the page's «Delete all» hands the Bulk the charges it chose (`chargeIds`), so «Restore» on
+    // the BUY takes them back too: the BUY and both charges are as saved, and there is nothing left to save.
+    test('Delete all from the page, then «Restore» on the BUY in the Bulk: the charges come back linked and Save all is off', async ({page, request}) => {
+        const s = await seedBuyWithCharges(page, request, owned, committedIds, 'chgl7', true);
+
+        await openTable(page);
+        await expect(txRow(page, s.buyId).getByTestId(`tx-charges-badge-${s.buyId}`)).toBeVisible({timeout: 8_000});
+        await deleteFromRow(page, s.buyId);
+        const panel = await expectDeletePanel(page, s);
+        await panel.getByTestId('tx-charges-modal-all').click();
+        await expect(panel).toBeHidden({timeout: 5_000});
+        const bulk = await expectBulkOpen(page);
+        await expectChargeUnder(page, s.feeId, s.buyId, 'del');
+        await expectChargeUnder(page, s.taxId, s.buyId, 'del');
+
+        // «Restore» is the BUY's own «Delete» toggle, in its row menu.
+        const buyRowId = await bulkRow(page, s.buyId).getAttribute('data-row-id');
+        await bulk.getByTestId(`row-actions-${buyRowId}`).click();
+        const restore = page.getByTestId('context-menu-action-mark-delete');
+        await expect(restore).toBeVisible({timeout: 5_000});
+        await restore.click();
+        await waitForSettled(bulk.getByTestId('tx-bulk-modal-root'));
+
+        await expect(bulkRow(page, s.buyId).getByTestId('tx-bulk-row-status'), 'the BUY is restored').toHaveAttribute('data-status', 'original', {timeout: 5_000});
+        await expectChargeUnder(page, s.feeId, s.buyId, 'linked');
+        await expectChargeUnder(page, s.taxId, s.buyId, 'linked');
+        await expect(bulk.getByTestId('tx-bulk-commit'), 'nothing left to save').toBeDisabled();
+    });
+
     test('Delete from the selection bar: «Keep the charges», the Bulk names them, the BUY goes and they stay unlinked', async ({page, request}) => {
         const s = await seedBuyWithCharges(page, request, owned, committedIds, 'chgl4', true);
 

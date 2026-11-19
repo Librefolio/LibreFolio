@@ -271,6 +271,18 @@ def front_tx_bulk_charges_delete(verbose: bool = False, ui: bool = False, headed
     return _run_playwright("transactions/tx-bulk-charges-delete.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_bulk_charges_link(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """«Link» a parent and its charges inside the Bulk (U3), and «Open» a parent from its charge's form (project 66, F7-d)."""
+    print_section("Frontend TX Bulk Charges Link Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-bulk-charges-link.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_crud_full(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Full CRUD lifecycle E2E tests for transactions."""
     print_section("Frontend TX CRUD Full Lifecycle Tests")
@@ -836,6 +848,14 @@ def populate_registry(registry: dict) -> None:
         name="TX Bulk Charges Delete Tests",
         desc="Project 66 F7-c2: in the Bulk, «Delete» on a saved BUY with FEE+TAX opens the panel before marking; Cancel changes nothing; Keep → the BUY goes, its charges stay unlinked; Delete all → all three go; on a phone by tap — read back by id",
         tests="transactions/tx-bulk-charges-delete.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-bulk-charges-link",
+        front_tx_bulk_charges_link,
+        name="TX Bulk Charges Link Tests",
+        desc="Project 66 F7-d: in the Bulk, «Link» a new BUY + new FEE and a saved BUY + saved free FEE (also by tap on a phone), saved and read back by id; «Open» from a FEE's form to its parent absent from the Bulk adds the parent",
+        tests="transactions/tx-bulk-charges-link.spec.ts",
     )
     add_test(cat, "tx-crud-full", front_tx_crud_full, name="TX CRUD Full Lifecycle Tests", desc="Full CRUD lifecycle: standalone, paired, split, promote, bulk, suggest, cash sign", tests="transactions/tx-crud-full.spec.ts")
     add_test(cat, "tx-commit-all-types", front_tx_commit_all_types, name="TX Commit All Types Tests", desc="End-to-end commit for every TX type: standalone + paired create, edit, delete", tests="transactions/tx-commit-all-types.spec.ts")

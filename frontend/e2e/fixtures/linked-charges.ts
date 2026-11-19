@@ -11,6 +11,8 @@
  * - {@link openFundedAccount}: the account, its broker and the funding DEPOSIT (ten days ago, 1000 USD).
  * - {@link seedLinkedBuy}: the same, plus the BUY (five days ago) and its FEE and TAX, the link read back by id as the
  *   premise: both charges point at the BUY, which counts two.
+ * - {@link seedBuyAndFreeFee}: a funded account with a BUY and a FEE on the same broker, asset and date, NOT linked
+ *   (F7-d, «Link» inside the Bulk); the absence of a link read back by id as the premise.
  * - {@link readByIds}: the server's state of some ids; an id that no longer exists is simply absent.
  *
  * Cleanup stays with the spec (its afterEach deletes what of its ids is left, then `cleanupOwnedAccount`): every id
@@ -43,6 +45,8 @@ export type CommitBody = {committed?: boolean; issues?: unknown[]; results?: Com
 
 /** A funded account: its broker, the asset the seed trades, the marker in every description, the funding DEPOSIT. */
 export type FundedAccount = {broker: OwnedBroker; assetId: number; marker: string; depositId: number};
+/** A funded account with a BUY and a FEE on one broker, asset and date, not linked. */
+export type BuyAndFreeFee = FundedAccount & {buyId: number; feeId: number};
 /** A funded account with a BUY and its FEE and TAX, linked, on one asset and date. */
 export type LinkedBuy = FundedAccount & {buyId: number; feeId: number; taxId: number};
 
@@ -98,4 +102,26 @@ export async function seedLinkedBuy(page: Page, request: APIRequestContext, owne
     expect([back.get(feeId)?.parent_transaction_id ?? null, back.get(taxId)?.parent_transaction_id ?? null], 'premise: the FEE and the TAX are linked to the BUY').toEqual([buyId, buyId]);
     expect(back.get(buyId)?.charges_count, 'premise: the BUY counts two charges').toBe(2);
     return {...funded, buyId, feeId, taxId};
+}
+
+/** A funded account with a BUY and a FEE committed apart: same broker, asset and date, the FEE linked to nothing. */
+export async function seedBuyAndFreeFee(page: Page, request: APIRequestContext, owned: OwnedAccount, committed: number[], tag: string, prefix: string): Promise<BuyAndFreeFee> {
+    const funded = await openFundedAccount(page, request, owned, committed, tag, prefix);
+    const {broker, assetId, marker} = funded;
+    const date = daysAgoIso(5);
+    const [buyId, feeId] = await commitCreates(
+        page,
+        [
+            {broker_id: broker.id, asset_id: assetId, type: 'BUY', date, quantity: '10', cash: {code: 'USD', amount: '-100'}, description: `Buy ${marker}`},
+            {broker_id: broker.id, asset_id: assetId, type: 'FEE', date, quantity: '0', cash: {code: 'USD', amount: '-5'}, description: `Fee ${marker}`},
+        ],
+        'commit a BUY and a FEE linked to nothing',
+    );
+    committed.push(buyId, feeId);
+
+    // The premise, read back rather than inferred: the FEE has no parent, the BUY no charge.
+    const back = await readByIds(page, [buyId, feeId]);
+    expect(back.get(feeId)?.parent_transaction_id ?? null, 'premise: the FEE is linked to nothing').toBeNull();
+    expect(back.get(buyId)?.charges_count ?? 0, 'premise: the BUY counts no charge').toBe(0);
+    return {...funded, buyId, feeId};
 }
