@@ -1,5 +1,5 @@
 /**
- * currencyGraph at the catalogue size expected after wave 1 of lane 75 (FX central banks) — lots L2 and L2b.
+ * currencyGraph at the catalogue size expected after wave 1 and wave 2 of lane 75 (FX central banks) — lots L2, L2b, L20.
  *
  * The route picker (`FxProviderSelect`) offers one route per path `findAllPaths` returns, at depth 4. L2 measured the
  * search on a synthetic catalogue the size of the real one after wave 1 (~180 currencies, ~550 edges): the unpruned
@@ -10,10 +10,16 @@
  * - the fixture's shape (provider sizes, distinct currencies, MANUAL adding no edge, every pair reachable), so a wrong
  *   fixture cannot hide a wrong result;
  * - **the pruned search returns exactly the chains, in exactly the order, of the algorithm before L2b**, kept below as
- *   `findAllPathsUnpruned`, on a sample of pairs of today's catalogue (S0) and of wave 1 (S1, S2), and at depths 1-4;
- * - a very wide bound on the time (500 ms per pair, median of 5), against a gross regression only. The time is printed
- *   (`[scale]`), never held to a tight bound: a time assertion fails under load (lane 75, developer threshold
- *   rewritten in L2b — the number of chains is the catalogues', not the code's, so it is no threshold either).
+ *   `findAllPathsUnpruned`, on a sample of pairs of today's catalogue (S0), of wave 1 (S1, S2) and of wave 2 (S3), and at depths 1-4;
+ * - a very wide bound on the time (500 ms per pair, median of 5; 2 000 ms in scenario 3), against a gross regression
+ *   only. The time is printed (`[scale]`), never held to a tight bound: a time assertion fails under load (lane 75,
+ *   developer threshold rewritten in L2b — the number of chains is the catalogues', not the code's, so it is no
+ *   threshold either). The L2 threshold (< 50 ms per pair) is a verdict read from the printed lines, in the lane's
+ *   checkpoint, not an assertion here.
+ *
+ * Scenario 3 (L20) adds the sixteen central banks of wave 2 at their planned sizes: no new currency, but sixteen new
+ * bases, so the chains at four steps multiply (~200 000 for EUR→USD). The printed line also gives the chains per group
+ * (the route picker draws the first 200 of a group, L2d).
  *
  * Run with the measurements printed:
  * `node_modules/.bin/vitest run --reporter=verbose --silent=false src/lib/utils/currency/currencyGraph.scale.test.ts`
@@ -22,12 +28,21 @@ import type {MultiDirectedGraph} from 'graphology';
 import {beforeAll, describe, expect, it} from 'vitest';
 
 import {buildCurrencyGraph, findAllPaths, type ChainStep, type EdgeAttributes, type ProviderInfo} from './currencyGraph';
-import {UNIVERSE, todayProviders, wave1PlusCbrProviders, wave1Providers} from './currencyGraph.scaleFixture';
+import {UNIVERSE, WAVE2_SIZES, todayProviders, wave1PlusCbrProviders, wave1Providers, wave2Providers} from './currencyGraph.scaleFixture';
 
 type CurrencyGraph = ReturnType<typeof buildCurrencyGraph>;
 
 /** Against a gross regression only: the pruned search runs in tens of ms at worst (L2b checkpoint). */
 const MAX_MS = 500;
+
+/**
+ * Scenario 3 builds up to ~200 000 chains for one pair: ~150 ms on a quiet machine (L20 checkpoint), so 500 ms would
+ * leave only a 3x margin and fail under the load of parallel lanes. The bound stays against a gross regression only.
+ */
+const MAX_MS_WAVE2 = 2_000;
+
+/** The route picker draws the first CHAIN_PAGE chains of an open group (`FxProviderSelect`, decision b1, L2d). */
+const CHAIN_PAGE = 200;
 
 /** The depth the app searches at (`currencyGraphStore.findConversionPaths` default). */
 const DEPTH = 4;
@@ -103,10 +118,25 @@ const TODAY_PAIRS: [string, string][] = [
     ['CHF', 'NOK'],
 ];
 
-const SCENARIOS: [string, () => ProviderInfo[], [string, string][]][] = [
-    ['scenario 0 — today', todayProviders, TODAY_PAIRS],
-    ['scenario 1 — wave 1', wave1Providers, PAIRS],
-    ['scenario 2 — wave 1 + CBR', wave1PlusCbrProviders, PAIRS],
+/**
+ * Pairs of wave 2 (L20): the plan's five (EUR→NGN, KES→USD, CZK→JPY, ZAR→KRW, MXN→INR), NOK→USD to compare with wave 1,
+ * and EUR→USD, the largest count of a sample of 300 pairs between 25 hubs (~200 000 chains).
+ */
+const WAVE2_PAIRS: [string, string][] = [
+    ['EUR', 'NGN'],
+    ['KES', 'USD'],
+    ['CZK', 'JPY'],
+    ['ZAR', 'KRW'],
+    ['MXN', 'INR'],
+    ['NOK', 'USD'],
+    ['EUR', 'USD'],
+];
+
+const SCENARIOS: [string, () => ProviderInfo[], [string, string][], number][] = [
+    ['scenario 0 — today', todayProviders, TODAY_PAIRS, MAX_MS],
+    ['scenario 1 — wave 1', wave1Providers, PAIRS, MAX_MS],
+    ['scenario 2 — wave 1 + CBR', wave1PlusCbrProviders, PAIRS, MAX_MS],
+    ['scenario 3 — wave 1 + wave 2', wave2Providers, WAVE2_PAIRS, MAX_MS_WAVE2],
 ];
 
 describe('currencyGraph scale fixture — the catalogue after wave 1', () => {
@@ -139,7 +169,30 @@ describe('currencyGraph scale fixture — the catalogue after wave 1', () => {
     });
 });
 
-for (const [scenario, providers, pairs] of SCENARIOS) {
+describe('currencyGraph scale fixture — the catalogue after wave 2', () => {
+    it('adds the sixteen banks of wave 2 at their planned sizes, on wave 1 without CBR', () => {
+        const wave1Codes = wave1Providers().map((p) => p.code);
+        const added = wave2Providers().filter((p) => !wave1Codes.includes(p.code));
+        expect(Object.fromEntries(added.map((p) => [p.code, p.target_currencies.length]))).toEqual(WAVE2_SIZES);
+        expect(wave2Providers().map((p) => p.code)).not.toContain('CBR');
+    });
+
+    it('brings no new currency: every base and target is in the universe, no base among its own targets', () => {
+        const universe = new Set(UNIVERSE);
+        for (const p of wave2Providers()) {
+            for (const code of [...p.base_currencies, ...p.target_currencies]) expect(universe.has(code), `${p.code}: ${code}`).toBe(true);
+            expect(p.target_currencies, `${p.code} lists its own base`).not.toContain(p.base_currency);
+            expect(new Set(p.target_currencies).size, `${p.code} lists a target twice`).toBe(p.target_currencies.length);
+        }
+    });
+
+    it('builds one edge per provider and target, MANUAL aside', () => {
+        const edges = wave2Providers().reduce((sum, p) => sum + (p.code === 'MANUAL' ? 0 : p.target_currencies.length), 0);
+        expect(buildCurrencyGraph(wave2Providers(), [...UNIVERSE]).size).toBe(edges);
+    });
+});
+
+for (const [scenario, providers, pairs, maxMs] of SCENARIOS) {
     describe(`currencyGraph at scale, ${scenario}`, () => {
         let graph: CurrencyGraph;
 
@@ -161,9 +214,10 @@ for (const [scenario, providers, pairs] of SCENARIOS) {
                 });
                 const unprunedMs = medianMs(() => findAllPathsUnpruned(graph, source, target, DEPTH), 3);
                 const byLength = [1, 2, 3, 4].map((length) => paths.filter((path) => path.length === length).length);
-                const line = `${source}→${target}: ${paths.length} chains (by length 1/2/3/4: ${byLength.join('/')}), median ${ms.toFixed(1)} ms (unpruned ${unprunedMs.toFixed(1)} ms)`;
+                const overPage = [2, 3, 4].filter((length) => byLength[length - 1] > CHAIN_PAGE);
+                const line = `${source}→${target}: ${paths.length} chains (by length 1/2/3/4: ${byLength.join('/')}; groups over ${CHAIN_PAGE}: ${overPage.join(',') || 'none'}), median ${ms.toFixed(1)} ms (unpruned ${unprunedMs.toFixed(1)} ms)`;
                 console.log(`[scale] ${scenario}: ${line}`);
-                expect(ms, line).toBeLessThan(MAX_MS);
+                expect(ms, line).toBeLessThan(maxMs);
             },
             60_000,
         );
