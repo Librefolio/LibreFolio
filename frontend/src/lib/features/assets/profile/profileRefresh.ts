@@ -4,7 +4,9 @@
  * a voice off screen), so a toast is always owed:
  * - voices written → success with their count; nothing written → info;
  * - a source that failed (`error`, a refusal for too many requests included; a «not found» is no failure) → warning;
- * - the call failing, or the asset unknown → error.
+ * - the call failing, or the asset unknown → error;
+ * - no enricher read (`enrichers_read` 0: every one bound is turned off, not installed or not configured; E6c2, PROF
+ *   19/11) → a warning that nothing was read, never «nothing changed».
  * Each outcome is also the structured event the tests read: `asset.profile.refreshed` or `asset.profile.refreshFailed`.
  */
 import {notify} from '$lib/stores/app/notify.svelte';
@@ -12,7 +14,7 @@ import {refreshAssetProfile} from './profileStore';
 
 type Translate = (key: string, values?: Record<string, string | number>) => string;
 
-export type ProfileRefreshOutcome = 'written' | 'unchanged' | 'partial' | 'failed';
+export type ProfileRefreshOutcome = 'written' | 'unchanged' | 'partial' | 'none' | 'failed';
 
 /** «Aggiorna» one asset; tell the user how it went. The asset's profile reads are forgotten either way. */
 export async function refreshProfile(assetId: number, translate: Translate): Promise<ProfileRefreshOutcome> {
@@ -29,13 +31,16 @@ export async function refreshProfile(assetId: number, translate: Translate): Pro
     if (result.error) return failed();
     const written = result.written ?? [];
     const sourcesFailed = (result.outcomes ?? []).filter((outcome) => outcome.status === 'error').map((outcome) => outcome.code);
-    const outcome: ProfileRefreshOutcome = sourcesFailed.length ? 'partial' : written.length ? 'written' : 'unchanged';
+    const enrichersRead = result.enrichers_read ?? 0;
+    const outcome: ProfileRefreshOutcome = enrichersRead === 0 ? 'none' : sourcesFailed.length ? 'partial' : written.length ? 'written' : 'unchanged';
     const toast =
-        outcome === 'partial'
-            ? {variant: 'warning' as const, message: translate('assets.profile.refresh.partial', {count: sourcesFailed.length, written: written.length})}
-            : outcome === 'written'
-              ? {variant: 'success' as const, message: translate('assets.profile.refresh.written', {count: written.length})}
-              : {variant: 'info' as const, message: translate('assets.profile.refresh.unchanged')};
-    notify({name: 'asset.profile.refreshed', detail: {asset_id: assetId, written, failed: sourcesFailed}, toast});
+        outcome === 'none'
+            ? {variant: 'warning' as const, message: translate('assets.profile.refresh.noneActive')}
+            : outcome === 'partial'
+              ? {variant: 'warning' as const, message: translate('assets.profile.refresh.partial', {count: sourcesFailed.length, written: written.length})}
+              : outcome === 'written'
+                ? {variant: 'success' as const, message: translate('assets.profile.refresh.written', {count: written.length})}
+                : {variant: 'info' as const, message: translate('assets.profile.refresh.unchanged')};
+    notify({name: 'asset.profile.refreshed', detail: {asset_id: assetId, written, failed: sourcesFailed, enrichers_read: enrichersRead}, toast});
     return outcome;
 }
