@@ -132,6 +132,7 @@ plugins:
             Norges Bank (NORGES): Norges Bank (NORGES)
             National Bank of Ukraine (NBU): National Bank of Ukraine (NBU)
             Bank of Canada (BOC): Bank of Canada (BOC)
+            Banco de México (BANXICO): Banco de México (BANXICO)
             Banca d'Italia (BDI): Banca d'Italia (BDI)
             Banco Central do Brasil (BCB): Banco Central do Brasil (BCB)
             # Developer provider entries — kept in English per dev-manual policy
@@ -148,6 +149,7 @@ plugins:
             NORGES Tech: NORGES Tech
             NBU Tech: NBU Tech
             BOC Tech: BOC Tech
+            BANXICO Tech: BANXICO Tech
             BDI Tech: BDI Tech
             BCB Tech: BCB Tech
             # Developer transaction section — kept in English per dev-manual policy
@@ -409,6 +411,7 @@ plugins:
             Norges Bank (NORGES): Norges Bank (NORGES)
             National Bank of Ukraine (NBU): National Bank of Ukraine (NBU)
             Bank of Canada (BOC): Bank of Canada (BOC)
+            Banco de México (BANXICO): Banco de México (BANXICO)
             Banca d'Italia (BDI): Banca d'Italia (BDI)
             Banco Central do Brasil (BCB): Banco Central do Brasil (BCB)
             # Developer provider entries — kept in English per dev-manual policy
@@ -425,6 +428,7 @@ plugins:
             NORGES Tech: NORGES Tech
             NBU Tech: NBU Tech
             BOC Tech: BOC Tech
+            BANXICO Tech: BANXICO Tech
             BDI Tech: BDI Tech
             BCB Tech: BCB Tech
             # Developer transaction section — kept in English per dev-manual policy
@@ -687,6 +691,7 @@ plugins:
             Norges Bank (NORGES): Norges Bank (NORGES)
             National Bank of Ukraine (NBU): National Bank of Ukraine (NBU)
             Bank of Canada (BOC): Bank of Canada (BOC)
+            Banco de México (BANXICO): Banco de México (BANXICO)
             Banca d'Italia (BDI): Banca d'Italia (BDI)
             Banco Central do Brasil (BCB): Banco Central do Brasil (BCB)
             # Developer provider entries — kept in English per dev-manual policy
@@ -703,6 +708,7 @@ plugins:
             NORGES Tech: NORGES Tech
             NBU Tech: NBU Tech
             BOC Tech: BOC Tech
+            BANXICO Tech: BANXICO Tech
             BDI Tech: BDI Tech
             BCB Tech: BCB Tech
             # Developer transaction section — kept in English per dev-manual policy
@@ -1038,6 +1044,7 @@ nav:
               - Norges Bank (NORGES): user/fx/providers/norges.md
               - National Bank of Ukraine (NBU): user/fx/providers/nbu.md
               - Bank of Canada (BOC): user/fx/providers/boc.md
+              - Banco de México (BANXICO): user/fx/providers/banxico.md
               - Banca d'Italia (BDI): user/fx/providers/bdi.md
               - Banco Central do Brasil (BCB): user/fx/providers/bcb.md
           - 🔎 Pair Detail:
@@ -1303,6 +1310,7 @@ nav:
                   - NORGES Tech: developer/backend/fx/providers/norges.md
                   - NBU Tech: developer/backend/fx/providers/nbu.md
                   - BOC Tech: developer/backend/fx/providers/boc.md
+                  - BANXICO Tech: developer/backend/fx/providers/banxico.md
                   - BDI Tech: developer/backend/fx/providers/bdi.md
                   - BCB Tech: developer/backend/fx/providers/bcb.md
           - "🕐 Scheduler (Daemon)": developer/backend/scheduler.md
