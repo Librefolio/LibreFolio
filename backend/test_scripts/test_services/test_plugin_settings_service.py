@@ -599,6 +599,9 @@ async def test_each_entry_of_the_catalogue_carries_its_plugins_icon(engine: Asyn
     assert set(SHIPPED_ICONS) <= set(icons), f"the full catalogue lists {sorted(icons)}"
     assert {code: icons[code] for code in SHIPPED_ICONS} == SHIPPED_ICONS
     assert mockprov.icon_url is None
+    # Developer, 19/11: the CoinGecko group shows the icon of the plugin that reads it, CoinGecko's favicon
+    group = next(plugin for plugin in everything.plugins if plugin.family == "group" and plugin.plugin_code == "coingecko")
+    assert group.icon_url == SHIPPED_ICONS["coingecko"]
 
 
 # =============================================================================
@@ -1426,7 +1429,7 @@ def test_g2_the_schema_knows_groups_and_who_uses_them():
 
 @pytest.mark.asyncio
 async def test_g2_a_group_is_a_catalogue_entry(engine: AsyncEngine, people: dict[str, User], g2):
-    """B: family ``group``, its name as the code, its label as the name, its label key, no icon, its fields as declared, no groups of its own."""
+    """B: family ``group``, its name as the code, its label as the name, its label key, no icon (its reader has none), its fields as declared, no groups of its own."""
     group = _g2_group()
     g2("asset", _g2_plugin("g2_reader"))
 
@@ -1437,6 +1440,26 @@ async def test_g2_a_group_is_a_catalogue_entry(engine: AsyncEngine, people: dict
     token, tier = _by_key(entry)["token"], _by_key(entry)["tier"]
     assert (token.secret, token.scope.value, token.required, token.value, token.is_set, token.editable) == (True, "system", True, None, False, True)
     assert (tier.value, tier.source.value, tier.editable) == ("free", "default", True)
+
+
+@pytest.mark.asyncio
+async def test_g2_a_group_shows_the_icon_of_the_plugin_that_reads_it(engine: AsyncEngine, people: dict[str, User], g2):
+    """B (developer, 19/11, «si usa il favicon del plugin, e vale per tutti»): a group has no icon of its own, so its
+    entry carries the icon of the plugin that reads it, as that plugin's own entry carries it. With several readers,
+    the first that has one, in the order of ``used_by`` (the families in their order, then the codes); none when no
+    reader has one."""
+    _g2_group()
+    _g2_group(G2_B)
+    g2("asset", _g2_plugin("g2_iconless"))
+    g2("fx", _g2_plugin("g2_fx_reader", icon=FX_ICON))
+    g2("asset", _g2_plugin("g2_b_reader", groups=(G2_B,), get_icon=ASSET_ICON))
+
+    a_entry, b_entry = await _entry(engine, people["admin"], G2_A), await _entry(engine, people["admin"], G2_B)
+    reader = await _entry(engine, people["admin"], "g2_b_reader")
+
+    assert [user.plugin_code for user in a_entry.used_by] == ["g2_iconless", "g2_fx_reader"]
+    assert a_entry.icon_url == FX_ICON, "the asset reader has no icon: the FX reader's"
+    assert (b_entry.icon_url, reader.icon_url) == (ASSET_ICON, ASSET_ICON), "the group's icon is its reader's own"
 
 
 @pytest.mark.asyncio
