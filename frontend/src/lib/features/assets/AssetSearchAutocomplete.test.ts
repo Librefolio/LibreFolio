@@ -200,6 +200,26 @@ describe('AssetSearchAutocomplete — providers', () => {
         expect(screen.queryByTestId('asset-search-provider-nosearch')).toBeNull();
         expect(screen.queryByTestId('asset-search-provider-mockprov')).toBeNull();
     });
+
+    // MOB (lane 76's triage): the chips arrive after the window opens and move the form down; the root says when the
+    // list is in, so a reader of the layout (settleModal) can wait for it
+    it('publishes the load of the provider list: pending, then ready', async () => {
+        let answer!: (value: unknown) => void;
+        listProviders.mockReturnValue(new Promise((done) => (answer = done)) as never);
+        render(AssetSearchAutocomplete, {onselect: vi.fn()});
+        const root = document.querySelector('[data-search-autocomplete]')!;
+        expect(root).toHaveAttribute('data-providers', 'pending');
+        answer(PROVIDERS);
+        await waitFor(() => expect(root).toHaveAttribute('data-providers', 'ready'));
+        expect(screen.getByTestId('asset-search-provider-alpha')).toBeInTheDocument();
+    });
+
+    it('publishes a failed load of the provider list as failed: finished, no chips', async () => {
+        listProviders.mockRejectedValue(new Error('network') as never);
+        render(AssetSearchAutocomplete, {onselect: vi.fn()});
+        const root = document.querySelector('[data-search-autocomplete]')!;
+        await waitFor(() => expect(root).toHaveAttribute('data-providers', 'failed'));
+    });
 });
 
 describe('AssetSearchAutocomplete — streamed search', () => {

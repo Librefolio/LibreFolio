@@ -16,6 +16,8 @@
   - «Can't find it? Let us know» after every search (P20): a report of the search, sent from the user's own client
     through the instance's support address (assetSearchReport.ts)
   - Event onselect(result)
+  - The root publishes the load of the provider list, `data-providers` (`pending`, `ready`, `failed`): the chips arrive
+    after the window opens and move what is under them, so a reader of the layout waits for it (MOB, lane 76's triage)
   Svelte 5 runes.
 -->
 <script lang="ts">
@@ -103,6 +105,8 @@
     let providers: ProviderInfo[] = $state([]);
     let selectedProviders: Set<string> = $state(new Set());
     let providersLoaded = $state(false);
+    /** The list could not be read: finished all the same, without chips. */
+    let providersFailed = $state(false);
     let showResults = $state(false);
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
     /** Monotonic search ID to ignore stale responses */
@@ -224,6 +228,7 @@
             console.error('Failed to load providers:', e);
             // Finished, badly. Still mark it: a query held back waiting for
             // providers must not spin forever on a list that will never come.
+            providersFailed = true;
             providersLoaded = true;
         }
     }
@@ -560,7 +565,7 @@
     });
 </script>
 
-<div class="space-y-2" data-search-autocomplete>
+<div class="space-y-2" data-search-autocomplete data-providers={!providersLoaded ? 'pending' : providersFailed ? 'failed' : 'ready'}>
     <!-- Section label (hidden when parent renders it externally) -->
     {#if !hideTitle}
         <div class="flex items-center gap-2 text-xs font-semibold text-lf-muted uppercase tracking-wider">
