@@ -1,0 +1,11 @@
+{
+  "signals": {
+    "riskRollingOmega": {
+      "name": "Guadagni / perdite mobili (Omega)",
+      "description": "Su una finestra mobile, i guadagni sopra l'obiettivo divisi per le perdite sotto: sopra 1 la finestra ha guadagnato più di quanto ha perso.",
+      "output": "Omega",
+      "outputDescription": "Somma dei rendimenti sopra l'obiettivo divisa per la somma degli scarti sotto.",
+      "referenceEven": "Guadagni = perdite"
+    }
+  }
+}

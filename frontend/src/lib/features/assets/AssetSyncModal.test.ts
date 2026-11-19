@@ -268,6 +268,17 @@ describe('AssetSyncModal — mapping the response into rows', () => {
         expect(rowOf('2')).not.toHaveTextContent('4↓');
     });
 
+    it('carries the first day the source has prices for into the row (76 P2b)', async () => {
+        respondWith({asset_id: 1, status: 'ok', points_fetched: 364, points_changed: 364, history_starts: '2025-11-18'}, {asset_id: 2, status: 'ok', points_fetched: 10, points_changed: 2});
+        mount({assets: [asset(1), asset(2)]});
+
+        await startSync();
+        await settled();
+
+        expect(within(rowOf('1')).getByTestId('sync-row-history-starts')).toHaveAttribute('data-date', '2025-11-18');
+        expect(within(rowOf('2')).queryByTestId('sync-row-history-starts')).toBeNull();
+    });
+
     it('names a row it has no asset for by its id', async () => {
         // The backend answered about an asset the caller never listed — the lookup
         // misses and the row still has to identify itself.

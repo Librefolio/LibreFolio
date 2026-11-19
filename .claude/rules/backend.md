@@ -85,6 +85,7 @@ layer — its boundaries, imports and guards — are in `financial-math.instruct
 | A trade's unit price on the quote's axis (`unit_price_on_quote_axis`, read by `price_marks.py` for a trade's mark); amount ↔ unit price at a given scale (the transaction form computes its own in the browser since W5-9) | `services/financial_math/trade_amount.py` |
 | The orientation of a stored FX rate (a pair read from source to destination, either way); the unit rates a calculation reads by day, kept as steps and answered on the asked days only (`AskedDayRates`, P3) | `services/financial_math/fx_rates.py` |
 | Day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360), simple interest, daily compounding over a span in closed form, a bond's annual coupon from its period coupon (`annual_coupon_rate`) | `services/financial_math/interest.py` |
+| A bond's first-order price change from its modified duration, −D_mod × Δy (`duration_price_change`, the rates scenario of an asset, RN-25) | `services/financial_math/bond_duration.py` |
 | Daily price mark of an asset for valuation | `services/financial_math/price_marks.py` |
 | A series as steps (date … through): the value of a day, a window, the steps of the change rows | `services/financial_math/series_steps.py` |
 | Yield on Cost | `services/financial_math/yield_on_cost.py` |
@@ -109,7 +110,7 @@ code grows: when it does, move the code and update this table in the same change
 belongs to a service layer, such as `financial_math/` (developer decision D-P7, 2026-10-12). Its folders group them by
 type: `utils/asset/` (sectors, geographic areas, identifiers, display-name locale), `utils/fx/` (currencies),
 `utils/runtime/` (version, client network address, TTL caches, sliding-window rate limits in `rate_window.py`, pauses
-after a remote's «too many requests» in `cooldown.py`, the causes of an exception and the «reported» mark in
+after a remote's «too many requests» in `cooldown.py`, the minimum interval between two calls of a plugin to its site in `pacing.py`, the causes of an exception and the «reported» mark in
 `errors.py`); `datetime_utils`, `json_utils` and `decimal_utils` stay
 at the root. The truncation to the database precision reads the models, so it lives in `db/precision.py`.
 

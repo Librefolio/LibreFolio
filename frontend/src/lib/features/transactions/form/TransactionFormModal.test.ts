@@ -1712,6 +1712,40 @@ describe('TransactionFormModal — the asset of a saved transaction is locked (#
 });
 
 /**
+ * RN-12 — the asset field on the shared asset panel keeps «New asset».
+ *
+ * A1 moves the form's asset field from `AssetSelect` onto `AssetPickerPanel`; it removes no flow (the consultant,
+ * 17/11/2026, on Q13's correction): the foot of the list still opens the asset creation the form has today.
+ */
+describe('TransactionFormModal — «New asset» from the asset field (RN-12)', () => {
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        guideAnchors.clear();
+        resetGuideState();
+        vi.mocked(zodiosApi.get_transaction_types_api_v1_transactions_types_get).mockResolvedValue(validMinimalTXTypesResponse);
+        await setupI18n();
+        await ensureTypesLoaded();
+    });
+
+    afterEach(() => {
+        cleanup();
+        guideAnchors.clear();
+        resetGuideState();
+    });
+
+    it('opens the asset creation from the foot of the asset list', async () => {
+        mount({mode: 'create', items: [txRow()]});
+        await fireEvent.click(await screen.findByTestId('tx-form-asset-trigger'));
+        expect(screen.queryByTestId('asset-modal-form')).toBeNull();
+
+        await fireEvent.click(await screen.findByTestId('tx-form-asset-create-new'));
+
+        expect(await screen.findByTestId('asset-modal-form')).toBeInTheDocument();
+        expect(screen.getByTestId('tx-form-asset-trigger')).toHaveAttribute('aria-expanded', 'false');
+    });
+});
+
+/**
  * #58 — the broker of a saved transaction is fixed too.
  *
  * `broker_id` is no more in the backend's update than `asset_id`: a broker changed on a saved row in the editor's

@@ -66,10 +66,20 @@
         error: string;
     }
 
-    type PluginSystem = 'asset' | 'fx' | 'brim' | 'signals' | 'risk' | 'tools';
+    type PluginSystem = 'asset' | 'enricher' | 'fx' | 'brim' | 'signals' | 'risk' | 'tools';
+
+    /** An installed enricher (`GET /assets/enrichers`, plan 68): what the inventory shows of it. */
+    interface EnricherInfo {
+        code: string;
+        name: string;
+        icon?: string | null;
+        help_url?: string | null;
+    }
 
     const PLUGIN_SYSTEMS: Array<{system: PluginSystem; labelKey: string}> = [
         {system: 'asset', labelKey: 'settings.pluginSystemAsset'},
+        // The enrichers (plan 68): the backend reports their failures under «enricher» since B1 (76 plan §3.10, C68)
+        {system: 'enricher', labelKey: 'settings.pluginSystemEnricher'},
         {system: 'fx', labelKey: 'settings.pluginSystemFx'},
         {system: 'brim', labelKey: 'settings.pluginSystemBrim'},
         {system: 'signals', labelKey: 'settings.pluginSystemSignals'},
@@ -84,6 +94,7 @@
     let assetProviders: ProviderInfo[] = [];
     let fxProviders: ProviderInfo[] = [];
     let importPlugins: ProviderInfo[] = [];
+    let installedEnrichers: EnricherInfo[] = [];
     let pluginDiscoveryFailures: PluginDiscoveryFailureInfo[] = [];
     let installedSignals: SignalDefinition[] = [];
     let sharePlatform: SocialPlatform | null = null;
@@ -131,7 +142,7 @@
         currentLocale = (localStorage.getItem('librefolio-locale') as SupportedLocale) || 'en';
 
         try {
-            const [sysInfo, assetProv, fxProv, brimPlugins, pluginDiagnostics, assetSignalCatalog, fxSignalCatalog] = await Promise.all([
+            const [sysInfo, assetProv, fxProv, brimPlugins, pluginDiagnostics, assetSignalCatalog, fxSignalCatalog, enricherCatalog] = await Promise.all([
                 zodiosApi.get_system_info_api_v1_system_info_get(),
                 zodiosApi.list_providers_api_v1_assets_provider_get().catch(() => []),
                 zodiosApi.list_providers_api_v1_fx_providers_get().catch(() => []),
@@ -139,12 +150,14 @@
                 zodiosApi.get_plugin_diagnostics_api_v1_system_plugin_diagnostics_get().catch(() => []),
                 zodiosApi.list_asset_signal_catalog_api_v1_assets_prices_signals_get().catch(() => ({items: []})),
                 zodiosApi.list_fx_signal_catalog_api_v1_fx_currencies_signals_get().catch(() => ({items: []})),
+                zodiosApi.list_enrichers_api_v1_assets_enrichers_get().catch(() => ({enrichers: []})),
             ]);
             // Without a valid session the answer is the version only (GET /system/info): no report to show.
             systemInfo = 'python_version' in sysInfo ? (sysInfo as SystemInfo) : null;
             assetProviders = assetProv as ProviderInfo[];
             fxProviders = fxProv as ProviderInfo[];
             importPlugins = brimPlugins as ProviderInfo[];
+            installedEnrichers = ((enricherCatalog as {enrichers?: EnricherInfo[]} | undefined)?.enrichers ?? []) as EnricherInfo[];
             pluginDiscoveryFailures = pluginDiagnostics as PluginDiscoveryFailureInfo[];
             installedSignals = buildInstalledSignals(assetSignalCatalog as BackendSignalCatalogResponse, fxSignalCatalog as BackendSignalCatalogResponse);
         } catch (e) {
@@ -241,6 +254,9 @@ ${fxProviders.map((p) => `  - ${p.name}`).join('\n')}
 
 Import Plugins:
 ${importPlugins.map((p) => `  - ${p.name}`).join('\n')}
+
+Enrichers:
+${installedEnrichers.map((p) => `  - ${p.name}`).join('\n')}
 
 Generated: ${new Date().toISOString()}
 `;
@@ -534,6 +550,39 @@ Generated: ${new Date().toISOString()}
                                 {/if}
                                 <div class="min-w-0">
                                     <p class="text-sm font-medium text-lf-primary truncate">{brimPluginName(p, $_)}</p>
+                                    <p class="text-xs text-lf-muted truncate">{p.code}</p>
+                                </div>
+                            </svelte:element>
+                        {/each}
+                    </div>
+                </details>
+            {/if}
+
+            <!-- Enrichers (plan 68; 76 plan §3.10, C68) -->
+            {#if installedEnrichers.length > 0}
+                <details class="mb-3 group" data-testid="about-installed-enrichers">
+                    <summary class="flex items-center justify-between cursor-pointer select-none p-3 bg-lf-panel rounded-lg hover:bg-lf-neutral transition-colors">
+                        <span class="text-sm font-medium text-lf-secondary">{$_('settings.enrichers')} ({installedEnrichers.length})</span>
+                        <ChevronDown size={16} class="text-lf-muted transition-transform group-open:rotate-180" />
+                    </summary>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3 pl-1">
+                        {#each installedEnrichers as p}
+                            <svelte:element
+                                this={p.help_url ? 'a' : 'div'}
+                                href={p.help_url || undefined}
+                                target={p.help_url ? '_blank' : undefined}
+                                rel={p.help_url ? 'noopener noreferrer' : undefined}
+                                class="flex items-center gap-3 p-3 bg-lf-card border border-lf-subtle rounded-lg shadow-sm {p.help_url ? 'hover:border-lf-focus hover:shadow-md cursor-pointer transition-all' : ''}"
+                            >
+                                {#if p.icon && !failedIconUrls.has(p.icon)}
+                                    <img src={p.icon} alt={p.name} class="w-8 h-8 rounded object-contain shrink-0 bg-lf-panel p-0.5" onerror={() => p.icon && markIconFailed(p.icon)} />
+                                {:else}
+                                    <div class="w-8 h-8 rounded bg-lf-panel text-lf-secondary flex items-center justify-center text-xs font-bold shrink-0">
+                                        {codeInitials(p.code)}
+                                    </div>
+                                {/if}
+                                <div class="min-w-0">
+                                    <p class="text-sm font-medium text-lf-primary truncate">{p.name}</p>
                                     <p class="text-xs text-lf-muted truncate">{p.code}</p>
                                 </div>
                             </svelte:element>

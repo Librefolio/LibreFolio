@@ -1,12 +1,18 @@
 <!--
   AssetModalDetails — the identity of the asset in AssetModal: icon, name, type, quote base quantity, currency, the
   user's URL and the short description. The fields are bound to the modal's state; edits are reported back so the
-  modal can track what the user changed by hand.
+  modal can track what the user changed by hand. The description is the profile's (plan 68, E9): the field shows the
+  value it is given and reports what the user types (`ondescriptioninput`), the modal keeps it as a pending change.
+  Beside «Chiedi al Provider», «Arricchitori» (plan 68, E8a) with the count of the enrichers chosen (`data-count`), and
+  under the header the line that says what «Riconosci» found (`data-state`: running, found, none, refused, error), with
+  «Controlla o cambia». «Arricchitori» is never off: from the import wizard the window opens without a price provider.
   Svelte 5 runes.
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {ExternalLink, Info, Loader2, RefreshCw, Upload} from 'lucide-svelte';
+    import {ExternalLink, Info, Layers, Loader2, RefreshCw, Upload} from 'lucide-svelte';
+    import type {EnrichersBanner} from './enrichers/enrichersEditState';
+    import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {AssetTypeSelect, CurrencySearchSelect} from '$lib/components/ui/select';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import AssetIcon from './AssetIcon.svelte';
@@ -20,7 +26,8 @@
         /** The provider's suggestion behind the quote base (Z-32 d), shown under the field; null for none. */
         quoteBaseSuggestion?: {provider: string; currency: string | null; quantity: number} | null;
         providerUserUrl: string;
-        shortDescription: string;
+        /** The description shown: the profile's, the one waiting else «Adesso»'s. */
+        description: string;
         currency: string;
         iconUrl: string | null;
         hasProvider: boolean;
@@ -34,7 +41,14 @@
         onaskprovider: () => void;
         onpickicon: () => void;
         oncurrencychange: (currency: string) => void;
-        ondescriptionedit: () => void;
+        /** What the user typed in the description. */
+        ondescriptioninput: (text: string) => void;
+        /** How many enrichers the asset has (plan 68, E8a). */
+        enricherCount?: number;
+        /** What «Riconosci» found, said under the header; null when it did not run. */
+        enrichersBanner?: EnrichersBanner | null;
+        /** Opens the enrichers' window over this one; without it, no button. */
+        onenrichers?: () => void;
     }
 
     let {
@@ -42,7 +56,7 @@
         assetType = $bindable(),
         quoteBaseQuantity = $bindable(),
         providerUserUrl = $bindable(),
-        shortDescription = $bindable(),
+        description,
         currency,
         iconUrl,
         hasProvider,
@@ -55,7 +69,10 @@
         onaskprovider,
         onpickicon,
         oncurrencychange,
-        ondescriptionedit,
+        ondescriptioninput,
+        enricherCount = 0,
+        enrichersBanner = null,
+        onenrichers,
     }: Props = $props();
 
     /** Drops the decimals the user typed, once they have moved on. */
@@ -75,8 +92,8 @@
 
 <!-- Asset Details -->
 <div class="space-y-3" use:guideAnchor={'asset.identity'} data-testid="asset-tour-identity">
-    <div class="flex items-center justify-between">
-        <div class="text-xs font-semibold text-lf-muted uppercase tracking-wider">
+    <div class="flex flex-wrap items-center gap-2">
+        <div class="mr-auto text-xs font-semibold text-lf-muted uppercase tracking-wider">
             {$t('assets.modal.assetDetails')}
         </div>
         <!-- Ask Provider global button -->
@@ -98,7 +115,35 @@
             {/if}
             <span class="hidden sm:inline">{$t('assets.identifiers.askProvider')}</span>
         </button>
+        {#if onenrichers}
+            <!-- «Arricchitori» keeps its label on the phone too: two mute icons side by side read as nothing (PROF §10.2) -->
+            <button
+                type="button"
+                onclick={onenrichers}
+                data-testid="asset-modal-enrichers"
+                data-count={enricherCount}
+                class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md bg-lf-card border border-lf-subtle text-lf-secondary hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-lf-focus transition-colors"
+            >
+                <Layers size={12} />
+                <span>{$t('assets.modal.enrichersButton')}</span>
+                <span class="rounded-full bg-lf-success-soft px-1.5 text-[10px] font-semibold text-lf-success-on-soft tabular-nums">{enricherCount}</span>
+            </button>
+        {/if}
     </div>
+    {#if enrichersBanner}
+        <div data-testid="asset-modal-enrichers-banner" data-state={enrichersBanner.state} data-reading={enrichersBanner.reading}>
+            <InfoBanner variant={enrichersBanner.state === 'refused' || enrichersBanner.state === 'error' ? 'warning' : 'info'}>
+                <p class="flex flex-wrap items-center gap-x-2">
+                    {#if enrichersBanner.state === 'running' || enrichersBanner.reading === 'running'}<Loader2 size={12} class="animate-spin" />{/if}
+                    <span>{enrichersBanner.text}</span>
+                    {#if enrichersBanner.readingText}<span data-testid="asset-modal-enrichers-reading">{enrichersBanner.readingText}</span>{/if}
+                    {#if onenrichers && enrichersBanner.state !== 'running'}
+                        <button type="button" class="font-medium underline focus-visible:outline-2 focus-visible:outline-lf-focus rounded" data-testid="asset-modal-enrichers-review" onclick={onenrichers}>{$t('assets.modal.enrichersReview')}</button>
+                    {/if}
+                </p>
+            </InfoBanner>
+        </div>
+    {/if}
 
     <!-- Grid: Icon on left, form fields on right -->
     <div class="grid grid-cols-[auto_1fr] gap-4 items-center">
@@ -258,8 +303,8 @@
     <textarea
         id="asset-description"
         data-testid="asset-modal-description"
-        bind:value={shortDescription}
-        oninput={ondescriptionedit}
+        value={description}
+        oninput={(event) => ondescriptioninput(event.currentTarget.value)}
         rows={2}
         placeholder={$t('assets.modal.descriptionPlaceholder')}
         class="w-full px-3 py-2 text-sm border border-lf-input hover:border-lf-input-hover rounded-lg

@@ -18,7 +18,6 @@ Yahoo choose the listing. Never read: the ISIN Yahoo gives for a ticker (wrong f
 
 from __future__ import annotations
 
-import time
 from collections.abc import Iterable, Iterator, Mapping
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
@@ -40,6 +39,7 @@ from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.platform.provider_registry import register_provider
 from backend.app.utils.asset.geo import normalize_country_to_iso3
 from backend.app.utils.asset.sector import validate_sector
+from backend.app.utils.runtime.pacing import Pacer
 
 try:
     import yfinance as yf
@@ -49,6 +49,11 @@ except ImportError:  # pragma: no cover — the library is in the lock; without 
 logger = get_logger(__name__)
 
 PROVIDER_NAME = "Yahoo Finance"
+
+#: One pace for every call of this plugin to Yahoo, whatever read, «Riconosci» or search it comes from (plan 68, C5;
+#: the round-30 rule: the plugin paces its own calls). Module level: the registry builds a new instance for every call,
+#: so a pacer on ``self`` would never be shared. Per process (``utils/runtime/pacing.py``).
+_PACER = Pacer(0.5)
 #: The error code of a read the library or the site failed (not a refusal for too many requests).
 SOURCE_ERROR = "SOURCE_ERROR"
 _TICKER = "TICKER"
@@ -177,6 +182,12 @@ def fund_info_voices(info: Mapping[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in voices.items() if value is not None}
 
 
+def _info(ticker: Any) -> Any:
+    """``ticker.info``, the call that reaches Yahoo, after the plugin's pace."""
+    _PACER.wait()
+    return ticker.info
+
+
 def _found(info: Any) -> bool:
     """An ``info`` of a listing Yahoo knows: a quote type and a name (an unknown ticker answers an almost empty dict)."""
     return isinstance(info, Mapping) and bool(_text(info.get("quoteType"))) and bool(_text(info.get("longName")) or _text(info.get("shortName")))
@@ -194,9 +205,6 @@ class YahooFinanceEnricher(EnricherPlugin):
     voices = {AssetType.STOCK: _STOCK_VOICES, **dict.fromkeys(_FUND_TYPES, _FUND_VOICES)}
     #: The main source for shares; after justETF and Borsa Italiana for funds.
     default_priority = {asset_type: 10 if asset_type == AssetType.STOCK else 20 if asset_type in _FUND_TYPES else None for asset_type in AssetType}
-
-    #: The wait between two tickers inside one read: the plugin paces its own calls (plan, round 30).
-    pause_seconds: float = 0.5
 
     def page_url(self, binding: EnricherBinding) -> str | None:
         return f"https://finance.yahoo.com/quote/{binding.identifier}"
@@ -218,7 +226,7 @@ class YahooFinanceEnricher(EnricherPlugin):
         if binding.identifier_type != _TICKER or not _text(binding.identifier):
             return EnricherRecognition(found=False)
         try:
-            info = self._ticker(binding.identifier).info
+            info = _info(self._ticker(binding.identifier))
         except ValueError:  # «Invalid ISIN number» and the like: Yahoo does not know it
             return EnricherRecognition(found=False)
         if not _found(info):
@@ -229,6 +237,7 @@ class YahooFinanceEnricher(EnricherPlugin):
     def _fund_sectors(self, ticker: Any, symbol: str) -> dict[str, str] | None:
         """The sector breakdown from ``funds_data``; a failure other than a refusal costs only this voice."""
         try:
+            _PACER.wait()
             weightings = ticker.funds_data.sector_weightings
         except Exception as error:  # noqa: BLE001 — isolation boundary: the fund's info voices still go out
             if rate_limited_from_exception(error, PROVIDER_NAME) is not None:
@@ -253,7 +262,6 @@ class YahooFinanceEnricher(EnricherPlugin):
     def read(self, bindings: list[EnricherBinding], keys: Iterable[str] | None = None) -> Iterator[EnricherReadItem]:
         wanted = None if keys is None else frozenset(keys)
         refused = False
-        called = False
         for index, binding in enumerate(bindings):
             symbol = _text(binding.identifier) if binding.identifier_type == _TICKER else None
             if symbol is None:
@@ -262,12 +270,9 @@ class YahooFinanceEnricher(EnricherPlugin):
             if refused:
                 yield EnricherReadItem(index=index, status=EnricherReadStatus.ERROR, error_code=RATE_LIMITED)
                 continue
-            if called and self.pause_seconds > 0:
-                time.sleep(self.pause_seconds)
-            called = True
             try:
                 ticker = self._ticker(symbol)
-                info = ticker.info
+                info = _info(ticker)
                 if not _found(info):
                     yield EnricherReadItem(index=index, status=EnricherReadStatus.NOT_FOUND)
                     continue

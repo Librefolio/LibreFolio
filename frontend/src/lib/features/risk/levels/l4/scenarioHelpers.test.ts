@@ -7,7 +7,7 @@ import type {RiskAnalyticResult} from '$lib/features/risk/riskStore.svelte';
 
 import {degradedResults, resultErrorCodes, resultReasons, type RiskResultWarning} from '../levelHelpers';
 import * as scenarioHelpers from './scenarioHelpers';
-import {replayOptions, shockOptions, shockScenario, tornadoRows} from './scenarioHelpers';
+import {rateShockAvailability, replayOptions, shockOptions, shockScenario, tornadoRows} from './scenarioHelpers';
 
 /** A scenario catalogue entry, shaped like the API's. */
 function entry(scenario: Record<string, unknown>) {
@@ -1239,5 +1239,30 @@ describe('formatReplayDate and formatReplayShare', () => {
         expect(intlShare(0.125, 'it')).not.toBe(intlShare(0.125, 'en'));
         expect(replayBlock.formatReplayDate('2020-03-09', 'it')).not.toBe(replayBlock.formatReplayDate('2020-03-09', 'en'));
         expect(replayBlock.formatReplayShare(0.125, 'it')).not.toBe(replayBlock.formatReplayShare(0.125, 'en'));
+    });
+});
+
+// RN-25 (the consultant, 18/11/2026): the asset's rates scenario is offered where its profile holds a duration,
+// whatever the type; a bond without one says so in one line; any other asset without one shows nothing.
+describe('rateShockAvailability', () => {
+    const answered = (status: string, details?: Record<string, unknown>) => ({instance_id: 'rates', analytic_code: 'rate_shock', status, ...(details ? {error: {code: 'data_unavailable', message: 'x', details}} : {})}) as unknown as RiskAnalyticResult;
+
+    it('offers the tool when the answer came back, on any asset type', () => {
+        expect(rateShockAvailability(answered('ok'), 'BOND')).toBe('tool');
+        expect(rateShockAvailability(answered('ok'), 'ETF')).toBe('tool');
+    });
+
+    it('says a bond has no duration, and keeps silent on any other type', () => {
+        const none = answered('unavailable', {reason: 'no_modified_duration'});
+        expect(rateShockAvailability(none, 'BOND')).toBe('missing');
+        expect(rateShockAvailability(none, 'ETF')).toBe('none');
+        expect(rateShockAvailability(none, 'STOCK')).toBe('none');
+        expect(rateShockAvailability(none, null)).toBe('none');
+    });
+
+    it('shows nothing for no answer, or an answer that failed for another reason', () => {
+        expect(rateShockAvailability(null, 'BOND')).toBe('none');
+        expect(rateShockAvailability(answered('unavailable', {reason: 'something_else'}), 'BOND')).toBe('none');
+        expect(rateShockAvailability(answered('failed'), 'BOND')).toBe('none');
     });
 });

@@ -82,9 +82,12 @@ vi.mock('$lib/api', () => ({
     },
     ApiError: class ApiError extends Error {},
 }));
-vi.mock('$lib/utils/providerHelpers', () => ({
+vi.mock('$lib/utils/providerHelpers', async () => ({
     ensureAssetProvidersCached: vi.fn(() => Promise.resolve()),
     getAssetProviderIconUrl: vi.fn(() => null),
+    // The plugin card's attribution line (76 P4): no provider here asks for one
+    assetProvidersVersion: (await import('svelte/store')).writable(0),
+    getAssetProviderAttribution: vi.fn(() => null),
 }));
 // P20: the instance as the component reads it, set per case before the mount. By default a self-hosted instance whose
 // configuration has loaded, with no support address: the one that falls back to a public GitHub issue (N61).
@@ -105,6 +108,12 @@ vi.mock('$lib/features/instance/instanceConfig.svelte', () => ({
     },
 }));
 vi.mock('$lib/utils/clipboard', () => ({writeTextToClipboard: vi.fn(() => Promise.resolve())}));
+// N3a: the viewer's role decides the case of the «to configure» window; a member unless a case says otherwise.
+const viewer = vi.hoisted(() => ({admin: false}));
+vi.mock('$lib/stores/app/auth', async () => {
+    const {readable} = await import('svelte/store');
+    return {auth: {subscribe: (run: (value: unknown) => void) => readable({user: {is_superuser: viewer.admin}}).subscribe(run)}};
+});
 // The outcome of a copy is one notify() — name, detail, toast — asserted on its structured half.
 vi.mock('$lib/stores/app/notify.svelte', () => ({notify: vi.fn()}));
 // The toast is a field of notify(): the store is mocked only to prove that no toast is shown besides.
@@ -123,6 +132,7 @@ import {writeTextToClipboard} from '$lib/utils/clipboard';
 import {APP_VERSION} from '$lib/version';
 import {buildSearchReport, type ProviderOutcome, type SearchReportContext} from './assetSearchReport';
 import {GITHUB_NEW_ISSUE_URL, reportHref} from '$lib/features/support/supportChannel';
+import {getAssetProviderAttribution} from '$lib/utils/providerHelpers';
 
 const listProviders = vi.mocked(zodiosApi.list_providers_api_v1_assets_provider_get);
 const restSearch = vi.mocked(zodiosApi.search_assets_via_providers_api_v1_assets_provider_search_get);
@@ -1505,5 +1515,185 @@ describe('AssetSearchAutocomplete — the quote base a provider suggests reaches
 
         // RED today: the REST mapping drops the field too.
         expect(await pick(onselect, result.identifier)).toHaveProperty('quote_base_suggestion', suggestion);
+    });
+});
+
+// =========================================================================
+// Project 76, N3a — a provider that is not configured is switched off before any search (mock section 1.1)
+// =========================================================================
+
+describe('AssetSearchAutocomplete — a provider to configure is switched off (76 N3a)', () => {
+    /** Beta, not configured: a required setting has no value for the caller (N1). */
+    const UNCONFIGURED = PROVIDERS.map((p) => (p.code === 'beta' ? {...p, configured: false, missing_settings: ['api_key'], missing_reason: 'missing_fields', invalid_variables: []} : {...p, configured: true}));
+    const chip = (code: string) => screen.getByTestId(`asset-search-provider-${code}`);
+    const fetchCalls = () => (global.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    const chipCodes = () => screen.queryAllByTestId(/^asset-search-provider-/).map((element) => element.getAttribute('data-testid')!.replace('asset-search-provider-', ''));
+
+    beforeEach(() => {
+        viewer.admin = false;
+        listProviders.mockResolvedValue(UNCONFIGURED as never);
+    });
+
+    afterEach(() => {
+        settingsRead.mockReset();
+        settingsWrite.mockReset();
+    });
+
+    it('N3-1: its chip is drawn switched off, in its place, and is not selected; a configured one is as today', async () => {
+        await mountReady();
+        expect(chip('beta')).toHaveAttribute('data-configured', 'false');
+        expect(chip('beta')).toHaveAttribute('aria-disabled', 'true');
+        expect(chip('beta')).toHaveAttribute('data-selected', 'false');
+        expect(chip('beta')).not.toBeDisabled();
+        expect(chip('alpha')).toHaveAttribute('data-configured', 'true');
+        expect(chip('alpha')).toHaveAttribute('data-selected', 'true');
+        expect(chipCodes(), 'the order of the list, switched off in place').toEqual(['alpha', 'beta']);
+    });
+
+    it('N3-2: the search never asks it', async () => {
+        await mountReady();
+        await type('apple');
+        await waitFor(() => expect(state()).toBe('results'));
+        const url = String(fetchCalls().at(-1)?.[0]);
+        expect(url).toContain('providers=alpha');
+        expect(url).not.toContain('beta');
+    });
+
+    it('N3-3: a touch opens the common window and searches nothing; the chip stays off', async () => {
+        await mountReady();
+        await type('apple');
+        await waitFor(() => expect(state()).toBe('results'));
+        const searchesBefore = fetchCalls().length;
+
+        await fireEvent.click(chip('beta'));
+
+        const window = await screen.findByTestId('plugin-not-configured-modal');
+        expect(window).toHaveAttribute('data-plugin', 'beta');
+        expect(window).toHaveAttribute('data-case', 'missing_member');
+        expect(chip('beta')).toHaveAttribute('data-selected', 'false');
+        expect(fetchCalls(), 'touching a switched-off chip searches nothing').toHaveLength(searchesBefore);
+    });
+
+    it('N3-4: an administrator configures it from the window: the list is read again, the chip lights up, selected, and the search runs again with it', async () => {
+        viewer.admin = true;
+        let configured = false;
+        listProviders.mockImplementation(async () => (configured ? PROVIDERS.map((p) => ({...p, configured: true})) : UNCONFIGURED) as never);
+        settingsRead.mockImplementation(
+            async () =>
+                ({
+                    plugins: [
+                        {
+                            family: 'asset',
+                            plugin_code: 'beta',
+                            plugin_name: 'Beta',
+                            configured,
+                            fields: [{key: 'api_key', type: 'string', scope: 'system', secret: true, required: true, label: 'API key', description: '', options: [], is_set: configured, source: configured ? 'db' : 'none', locked: false, editable: true, problem: null, updated_at: null}],
+                        },
+                    ],
+                }) as never,
+        );
+        settingsWrite.mockImplementation(async () => {
+            configured = true;
+            return {results: [{family: 'asset', plugin_code: 'beta', field_key: 'api_key', scope: 'system', success: true, error_code: null, message: null}], success_count: 1} as never;
+        });
+        await mountReady();
+        await type('apple');
+        await waitFor(() => expect(state()).toBe('results'));
+        const listsBefore = listProviders.mock.calls.length;
+
+        await fireEvent.click(chip('beta'));
+        const window = await screen.findByTestId('plugin-not-configured-modal');
+        expect(window).toHaveAttribute('data-case', 'missing_admin');
+        await fireEvent.click(within(window).getByTestId('plugin-not-configured-configure'));
+        const form = await within(await screen.findByTestId('plugin-settings-modal')).findByTestId('plugin-settings-form-beta');
+        const searchesBefore = fetchCalls().length;
+        await fireEvent.input(within(form).getByTestId('plugin-setting-secret-input'), {target: {value: 'sk-beta-00000001'}});
+        await fireEvent.click(within(form).getByTestId('plugin-settings-save'));
+
+        await waitFor(() => expect(listProviders.mock.calls.length).toBeGreaterThan(listsBefore));
+        await waitFor(() => expect(chip('beta')).toHaveAttribute('data-configured', 'true'));
+        expect(chip('beta')).toHaveAttribute('data-selected', 'true');
+        await waitFor(() => expect(fetchCalls().length).toBeGreaterThan(searchesBefore));
+        expect(String(fetchCalls().at(-1)?.[0])).toContain('beta');
+    });
+
+    it("N3-6: a save whose list cannot be read again still lights the chip, from the saved plugin's own state", async () => {
+        viewer.admin = true;
+        let configured = false;
+        let listsAnswered = 0;
+        listProviders.mockImplementation(async () => {
+            listsAnswered += 1;
+            if (listsAnswered > 1) throw new Error('list down');
+            return UNCONFIGURED as never;
+        });
+        settingsRead.mockImplementation(
+            async () =>
+                ({
+                    plugins: [
+                        {
+                            family: 'asset',
+                            plugin_code: 'beta',
+                            plugin_name: 'Beta',
+                            configured,
+                            fields: [{key: 'api_key', type: 'string', scope: 'system', secret: true, required: true, label: 'API key', description: '', options: [], is_set: configured, source: configured ? 'db' : 'none', locked: false, editable: true, problem: null, updated_at: null}],
+                        },
+                    ],
+                }) as never,
+        );
+        settingsWrite.mockImplementation(async () => {
+            configured = true;
+            return {results: [{family: 'asset', plugin_code: 'beta', field_key: 'api_key', scope: 'system', success: true, error_code: null, message: null}], success_count: 1} as never;
+        });
+        await mountReady();
+
+        await fireEvent.click(chip('beta'));
+        await fireEvent.click(within(await screen.findByTestId('plugin-not-configured-modal')).getByTestId('plugin-not-configured-configure'));
+        const form = await within(await screen.findByTestId('plugin-settings-modal')).findByTestId('plugin-settings-form-beta');
+        await fireEvent.input(within(form).getByTestId('plugin-setting-secret-input'), {target: {value: 'sk-beta-00000002'}});
+        await fireEvent.click(within(form).getByTestId('plugin-settings-save'));
+
+        await waitFor(() => expect(listsAnswered, 'barrier: the list was asked again, and failed').toBeGreaterThan(1));
+        await waitFor(() => expect(chip('beta')).toHaveAttribute('data-configured', 'true'));
+        expect(chip('beta')).toHaveAttribute('data-selected', 'true');
+    });
+
+    it('N3-5: a list without the readiness fields (an older server) switches nothing off', async () => {
+        listProviders.mockResolvedValue(PROVIDERS as never);
+        await mountReady();
+        expect(chip('beta')).toHaveAttribute('data-configured', 'true');
+        expect(chip('beta')).toHaveAttribute('data-selected', 'true');
+    });
+});
+
+// Project 76, P4b (the consultant's rule, 18/11): wherever a provider's data is on screen and the provider has an
+// attribution, its line is there. Search rows are the provider's data too (names, ids): the line goes under the
+// results when such a provider answered with at least one row.
+describe("AssetSearchAutocomplete — a provider's attribution under its results (76 P4b)", () => {
+    const ATTRIBUTION = {text: 'Powered by Alpha', url: 'https://alpha.example/'};
+
+    afterEach(() => {
+        vi.mocked(getAssetProviderAttribution).mockImplementation(() => null);
+    });
+
+    it('shows the line of a provider with an attribution that answered with a row', async () => {
+        vi.mocked(getAssetProviderAttribution).mockImplementation((code: string | null | undefined) => (code === 'alpha' ? ATTRIBUTION : null));
+        await mountReady();
+        await type('apple');
+        await waitFor(() => expect(state()).toBe('results'));
+
+        const note = await screen.findByTestId('asset-search-attribution');
+        const links = within(note).getAllByTestId('provider-attribution-link');
+        expect(links.map((link) => link.getAttribute('data-provider'))).toEqual(['alpha']);
+        expect(links[0]).toHaveAttribute('href', ATTRIBUTION.url);
+    });
+
+    it('shows nothing when that provider gave no row', async () => {
+        vi.mocked(getAssetProviderAttribution).mockImplementation((code: string | null | undefined) => (code === 'alpha' ? ATTRIBUTION : null));
+        global.fetch = vi.fn(async () => sseResponse([{event: 'provider_results', results: [R2]}, {event: 'done'}])) as never;
+        await mountReady();
+        await type('microsoft');
+        await waitFor(() => expect(state()).toBe('results'));
+
+        expect(screen.queryByTestId('asset-search-attribution')).toBeNull();
     });
 });

@@ -34,6 +34,8 @@ from __future__ import annotations
 import ast
 import json
 import uuid
+from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -45,8 +47,7 @@ setup_test_database()
 
 # populate_mock_data configures the test database again when imported and builds a lazy NullPool
 # engine: the import opens no connection. Nothing below hands it a path outside tmp_path.
-from backend.app.db.models import Asset, Broker
-from backend.app.schemas.assets.metadata import FAClassificationParams
+from backend.app.db.models import Asset, AssetType, Broker
 from backend.app.services.assets.profile.catalogue import normalize_value
 from backend.test_scripts.test_db import populate_mock_data
 from backend.test_scripts.test_db.populate_mock_data import reset_broker_reports
@@ -551,8 +552,13 @@ def _mock_dict_literals(key: str) -> list[dict]:
     return [{k.value: v for k, v in zip(node.keys, node.values, strict=True) if isinstance(k, ast.Constant)} for node in ast.walk(tree) if isinstance(node, ast.Dict) and any(isinstance(k, ast.Constant) and k.value == key for k in node.keys)]
 
 
+#: The parts of a mock classification and the profile voices they become (plan 68, A4; migration 006).
+_VOICE_OF_PART = {"short_description": "description", "geographic_area": "geography", "sector_area": "sector"}
+
+
 def test_every_mock_asset_classification_validates_against_the_model():
-    """C6-6 (C-51): not one mock asset writes a shape the model refuses; the failures are named."""
+    """C6-6 (C-51): not one mock asset writes a shape the profile's catalogue refuses; the failures are named. Since plan
+    68 D7a the old container's model is gone: each part is checked as the voice it becomes."""
     assets = _mock_dict_literals("classification_params")
     assert len(assets) >= 10, "the mock assets were not found: update this test"
 
@@ -562,7 +568,9 @@ def test_every_mock_asset_classification_validates_against_the_model():
         if not (isinstance(params, ast.Call) and params.args):
             continue
         try:
-            FAClassificationParams.model_validate(ast.literal_eval(params.args[0]))
+            # Read as the mirror reads the JSON the seed writes: the weights as Decimals
+            for part, value in json.loads(json.dumps(ast.literal_eval(params.args[0])), parse_float=Decimal).items():
+                normalize_value(_VOICE_OF_PART[part], value if part == "short_description" else value["distribution"])
         except ValueError as exc:
             refused[ast.literal_eval(entry["display_name"])] = str(exc).splitlines()[0]
 
@@ -589,6 +597,52 @@ def test_every_mock_asset_classification_is_mirrored_into_the_profile():
         got = {row.key: json.loads(row.value) for row in rows}
         assert got == expected, f"{name}: profile rows {got} != {expected}"
         assert all(row.asset_id == 7 and row.source == "legacy" and row.read_on is not None for row in rows), f"{name}: {rows}"
+
+
+def test_the_mock_legacy_rows_are_dated_on_the_assets_first_day():
+    """Plan 68, A4b: migration 006 dates each ``legacy`` row on its asset's first day — the earliest of the day of its
+    ``created_at``, its first price and its first transaction; with neither, the day of ``created_at``. The mock data
+    mirrors it, after the prices and the transactions are in: ``date_legacy_profile_rows``."""
+    from sqlalchemy import text  # noqa: PLC0415 — an in-memory database of this test only
+    from sqlmodel import Session, SQLModel, create_engine  # noqa: PLC0415
+
+    redate = getattr(populate_mock_data, "date_legacy_profile_rows", None)
+    assert redate is not None, "populate_mock_data has no date_legacy_profile_rows: the mock legacy rows stay on the populate day"
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    stamp = "2026-11-10 09:30:00.000000"
+    with Session(engine) as session:
+        session.add(Broker(id=1, name="First day broker"))
+        session.flush()
+        for asset_id in (1, 2, 3):
+            session.add(Asset(id=asset_id, display_name=f"A{asset_id}", currency="EUR", asset_type=AssetType.ETF, created_at=datetime(2026, 11, 10, 9, 30, tzinfo=UTC), updated_at=datetime(2026, 11, 10, 9, 30, tzinfo=UTC)))
+            session.flush()
+            session.exec(text(f"INSERT INTO asset_profile_updates (asset_id, key, value, source, read_on, created_at) VALUES ({asset_id}, 'description', '\"d\"', 'legacy', '2026-11-17', '{stamp}')"))
+        session.exec(text(f"INSERT INTO price_history (asset_id, date, close, currency, source_plugin_key, fetched_at) VALUES (1, '2021-03-01', 100, 'EUR', 'manual', '{stamp}')"))
+        session.exec(text(f"INSERT INTO price_history (asset_id, date, close, currency, source_plugin_key, fetched_at) VALUES (2, '2021-03-01', 100, 'EUR', 'manual', '{stamp}')"))
+        session.exec(text(f"INSERT INTO transactions (broker_id, asset_id, type, date, quantity, amount, currency, created_at, updated_at) VALUES (1, 2, 'BUY', '2019-06-14', 1, -100, 'EUR', '{stamp}', '{stamp}')"))
+        session.exec(text(f"INSERT INTO asset_profile_updates (asset_id, key, value, source, read_on, created_at) VALUES (3, 'ter', '\"0.002\"', 'justetf', '2026-11-17', '{stamp}')"))
+        session.commit()
+        redate(session)
+        days = {(row[0], row[1]): row[2] for row in session.exec(text("SELECT asset_id, source, read_on FROM asset_profile_updates"))}
+    assert days[(1, "legacy")] == "2021-03-01", f"first price before created_at: {days}"
+    assert days[(2, "legacy")] == "2019-06-14", f"a transaction before everything: {days}"
+    assert days[(3, "legacy")] == "2026-11-10", f"neither price nor transaction: the created_at day: {days}"
+    assert days[(3, "justetf")] == "2026-11-17", f"a row of a source is never redated: {days}"
+
+
+def test_the_mock_legacy_rows_are_dated_after_the_prices_and_transactions():
+    """The populate run calls ``date_legacy_profile_rows`` after every step that writes prices or transactions."""
+    tree = ast.parse(Path(populate_mock_data.__file__).read_text(encoding="utf-8"))
+    order: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id.startswith(("populate_", "date_legacy_", "link_", "create_split", "add_balance")):
+            order.append((node.lineno, node.func.id))
+    calls = [name for _, name in sorted(order)]
+    assert "date_legacy_profile_rows" in calls, f"the populate run never redates the legacy rows: {calls}"
+    position = calls.index("date_legacy_profile_rows")
+    for writer in ("populate_price_history", "populate_transactions", "populate_wac_test_transactions", "create_split_transaction", "add_balance_safe_cash_prefunds"):
+        assert writer in calls and calls.index(writer) < position, f"{writer} must run before date_legacy_profile_rows: {calls}"
 
 
 def test_every_mock_broker_key_is_a_field_of_the_broker_model():

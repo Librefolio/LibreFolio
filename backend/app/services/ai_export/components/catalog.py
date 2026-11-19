@@ -3,7 +3,7 @@
 `ALL_FOUNDATION_COMPONENTS` retains the frozen fail-closed placeholder tuple as
 the metadata validation baseline used by domain-fragment tests. Production
 `build_component_registry()` returns `ALL_COMPONENTS`: the same canonical order
-with all 67 IDs replaced by the reviewed Portfolio/Broker/Asset/FX builders.
+with all 68 IDs replaced by the reviewed Portfolio/Broker/Asset/FX builders.
 
 Both replacement fragments validate exact version/domain/dependency/period/
 aggregator parity against the placeholders before the central tuple is created.
@@ -152,7 +152,8 @@ _BROKER_COMPONENTS: tuple[ComponentSpec, ...] = (
 # -- Asset ------------------------------------------------------------------------
 
 _ASSET_COMPONENTS: tuple[ComponentSpec, ...] = (
-    _component(Domain.ASSET, "identity", "Asset identity", period_behavior=PeriodBehavior.NONE),
+    _component(Domain.ASSET, "identity", "Asset identity", version=2, period_behavior=PeriodBehavior.NONE),
+    _component(Domain.ASSET, "profile", "Asset profile: its voices as dated facts", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.ASSET, "market_snapshot", "Current market snapshot", dependencies=("asset.identity",), period_behavior=PeriodBehavior.AS_OF),
     _component(Domain.ASSET, "position_scope", "Position scope across brokers", period_behavior=PeriodBehavior.AS_OF),
     _component(Domain.ASSET, "provenance", "Semantics and provenance", version=2, period_behavior=PeriodBehavior.NONE),
@@ -216,15 +217,15 @@ def _build_integrated_components() -> tuple[ComponentSpec, ...]:
 
 ALL_COMPONENTS: tuple[ComponentSpec, ...] = _build_integrated_components()
 
-if len(ALL_FOUNDATION_COMPONENTS) != 67:
-    raise ComponentRegistryError(f"ALL_FOUNDATION_COMPONENTS must contain exactly 67 components, got {len(ALL_FOUNDATION_COMPONENTS)}")
-if len(ALL_REAL_COMPONENTS) != 67:
-    raise ComponentRegistryError(f"ALL_REAL_COMPONENTS must contain exactly 67 components, got {len(ALL_REAL_COMPONENTS)}")
-if len(ALL_COMPONENTS) != 67:
-    raise ComponentRegistryError(f"ALL_COMPONENTS must contain exactly 67 components, got {len(ALL_COMPONENTS)}")
+if len(ALL_FOUNDATION_COMPONENTS) != 68:
+    raise ComponentRegistryError(f"ALL_FOUNDATION_COMPONENTS must contain exactly 68 components, got {len(ALL_FOUNDATION_COMPONENTS)}")
+if len(ALL_REAL_COMPONENTS) != 68:
+    raise ComponentRegistryError(f"ALL_REAL_COMPONENTS must contain exactly 68 components, got {len(ALL_REAL_COMPONENTS)}")
+if len(ALL_COMPONENTS) != 68:
+    raise ComponentRegistryError(f"ALL_COMPONENTS must contain exactly 68 components, got {len(ALL_COMPONENTS)}")
 
 
 def build_component_registry() -> ComponentRegistry:
-    """Build the production registry containing all 67 real component specs."""
+    """Build the production registry containing all 68 real component specs."""
 
     return ComponentRegistry(ALL_COMPONENTS)

@@ -286,6 +286,9 @@ plugins:
             Volatility: Volatilità
             "Current Drawdown": "Drawdown attuale"
             Worst Realization: Peggior Realizzazione
+            "📈 How Does It Move?": "📈 Come si Muove?"
+            "Gains Against Losses (Omega)": "Guadagni contro Perdite (Omega)"
+            The Shape of the Days: La Forma dei Giorni
             "🧩 Am I Diversified?": "🧩 Sono Diversificato?"
             Correlation: Correlazione
             Risk Contribution: Contributo al Rischio
@@ -561,6 +564,9 @@ plugins:
             Volatility: Volatilité
             "Current Drawdown": "Repli actuel"
             Worst Realization: Pire Réalisation
+            "📈 How Does It Move?": "📈 Comment Évolue-t-il ?"
+            "Gains Against Losses (Omega)": "Gains contre Pertes (Omega)"
+            The Shape of the Days: La Forme des Journées
             "🧩 Am I Diversified?": "🧩 Suis-je Diversifié ?"
             Correlation: Corrélation
             Risk Contribution: Contribution au Risque
@@ -836,6 +842,9 @@ plugins:
             Volatility: Volatilidad
             "Current Drawdown": "Caída actual"
             Worst Realization: Peor Realización
+            "📈 How Does It Move?": "📈 ¿Cómo se Mueve?"
+            "Gains Against Losses (Omega)": "Ganancias frente a Pérdidas (Omega)"
+            The Shape of the Days: La Forma de los Días
             "🧩 Am I Diversified?": "🧩 ¿Estoy Diversificado?"
             Correlation: Correlación
             Risk Contribution: Contribución al Riesgo
@@ -1014,6 +1023,7 @@ nav:
               - CSS Scraper: user/assets/providers/css-scraper.md
               - Scheduled Investment: user/assets/providers/scheduled-investment.md
               - Borsa Italiana: user/assets/providers/borsa-italiana.md
+              - CoinGecko: user/assets/providers/coingecko.md
       - 💱 FX Rates:
           - Overview: user/fx/index.md
           - Adding a Pair: user/fx/add-pair.md
@@ -1050,6 +1060,7 @@ nav:
           - Profile: user/settings/profile.md
           - User Preferences: user/settings/preferences.md
           - Plugins: user/settings/plugins.md
+          - CoinGecko Key: user/settings/coingecko-key.md
           - About: user/settings/about.md
       - 🧩 Misc:
           - Image Crop: user/misc/image-crop.md
@@ -1183,6 +1194,9 @@ nav:
                   - Value at Risk: financial-theory/technical-analysis/risk-metrics/value-at-risk.md
                   - Conditional Value at Risk: financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md
                   - Worst Realization: financial-theory/technical-analysis/risk-metrics/worst-realization.md
+              - "📈 How Does It Move?":
+                  - The Shape of the Days: financial-theory/technical-analysis/risk-metrics/return-shape.md
+                  - "Gains Against Losses (Omega)": financial-theory/technical-analysis/risk-metrics/omega-ratio.md
               - "🧩 Am I Diversified?":
                   - Correlation: financial-theory/technical-analysis/risk-metrics/correlation.md
                   - Risk Contribution: financial-theory/technical-analysis/risk-metrics/risk-contribution.md
@@ -1222,6 +1236,7 @@ nav:
                   - BRIM Plugin Guide: developer/architecture/patterns/brim_plugin_guide.md
                   - Asset Plugin Guide: developer/architecture/patterns/asset_plugin_guide.md
                   - FX Plugin Guide: developer/architecture/patterns/fx_plugin_guide.md
+                  - Enricher Plugin Guide: developer/architecture/patterns/enricher_plugin_guide.md
                   - Plugin Settings: developer/architecture/patterns/plugin_settings.md
                   - Signal Plugin Guide: developer/architecture/patterns/signal_plugin_guide.md
                   - Tool Plugin Guide: developer/architecture/patterns/tool_plugins.md
@@ -1273,6 +1288,7 @@ nav:
                   - CSS Scraper Tech: developer/backend/assets/provider_cssscraper.md
                   - Scheduled Investment Tech: developer/backend/assets/provider_scheduled_investment.md
                   - Borsa Italiana Tech: developer/backend/assets/provider_borsa_italiana.md
+                  - CoinGecko Tech: developer/backend/assets/provider_coingecko.md
               - Events: developer/backend/assets/events.md
           - "💱 FX (Currency)":
               - Architecture: developer/backend/fx/architecture.md

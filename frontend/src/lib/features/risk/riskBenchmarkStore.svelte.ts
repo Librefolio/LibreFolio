@@ -28,9 +28,14 @@ function storageKey(): string {
     return `lf_${getClientSessionUserId() ?? 'anon'}_${STORAGE_BASE_KEY}`;
 }
 
-let assetId = $state<number | null>(null);
-/** The key the current value was hydrated from, so a user switch re-reads. */
-let hydratedKey: string | null = null;
+/**
+ * The choice, cached per storage key in a plain variable, never in a `$state`: a page may read it inside a `$derived`,
+ * and the first read — the one that loads the stored choice — may not write reactive state there (Svelte forbids it:
+ * `state_unsafe_mutation`). What tells a reader to read again is `revision`, written only by `set` and by the session
+ * reset, outside any derivation (the fix of `riskFreeRateStore`, RN-21).
+ */
+let cache: {key: string; assetId: number | null} | null = null;
+let revision = $state(0);
 
 /** A stored id, or null for anything that is not a usable asset id. */
 function parse(raw: string | null): number | null {
@@ -43,36 +48,40 @@ function parse(raw: string | null): number | null {
     return parsed;
 }
 
-function hydrate(): void {
-    if (!browser) return;
-    const key = storageKey();
-    if (hydratedKey === key) return;
-    hydratedKey = key;
+function readStored(key: string): number | null {
+    if (!browser) return null;
     try {
-        assetId = parse(localStorage.getItem(key));
+        return parse(localStorage.getItem(key));
     } catch {
         // A browser with storage disabled is not a broken app: it is an app
         // without persistence, which still has to render.
-        assetId = null;
+        return null;
     }
+}
+
+function current(): {key: string; assetId: number | null} {
+    const key = storageKey();
+    if (cache?.key !== key) cache = {key, assetId: readStored(key)};
+    return cache;
 }
 
 export const riskBenchmark = {
     /** The shared benchmark, or null when the reader has never chosen one. */
     get assetId(): number | null {
-        hydrate();
-        return assetId;
+        void revision;
+        return current().assetId;
     },
 
     /** Choose the benchmark for every scope at once. */
     set(next: number | null): void {
-        hydrate();
         const value = Number.isInteger(next) && (next as number) > 0 ? next : null;
-        assetId = value;
+        const key = current().key;
+        cache = {key, assetId: value};
+        revision += 1;
         if (!browser) return;
         try {
-            if (value === null) localStorage.removeItem(storageKey());
-            else localStorage.setItem(storageKey(), String(value));
+            if (value === null) localStorage.removeItem(key);
+            else localStorage.setItem(key, String(value));
         } catch {
             // Persistence is best-effort; the in-memory choice still holds for
             // this session, and both pages still agree, which is the point.
@@ -115,7 +124,6 @@ export async function resolveRiskBenchmark(): Promise<RiskBenchmarkResolution> {
 }
 
 registerClientSessionReset('riskBenchmarkStore', () => {
-    hydratedKey = null;
-    assetId = null;
-    hydrate();
+    cache = null;
+    revision += 1;
 });

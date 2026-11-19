@@ -22,10 +22,7 @@ from backend.app.schemas.assets.assets import (
     FAinfoResponse,
 )
 from backend.app.schemas.assets.enrichers import FAAssetEnrichers
-from backend.app.schemas.assets.metadata import (
-    FAAssetMetadataResponse,
-    FAClassificationParams,
-)
+from backend.app.schemas.assets.metadata import FAAssetMetadataResponse
 from backend.app.services.assets.base import AssetSourceError
 from backend.app.services.assets.crud import AssetCRUDService
 from backend.app.services.enrichers.bindings import AssetEnricherRow, load_enrichers
@@ -51,7 +48,7 @@ async def create_assets_bulk(
     """
     Create multiple assets in bulk (partial success allowed).
 
-    Creates asset records with optional classification metadata.
+    Creates asset records, with their enrichers and profile values when given (plan 68).
     Provider assignment can be done separately via POST /assets/provider.
 
     **Request Example**:
@@ -62,9 +59,10 @@ async def create_assets_bulk(
         "currency": "USD",
         "asset_type": "STOCK",
         "icon_url": "https://example.com/aapl.png",
-        "classification_params": {
-          "sector": "Technology",
-          "geographic_area": {"USA": "1.0"}
+        "profile": {
+          "description": "Consumer electronics",
+          "sector": {"Technology": "1"},
+          "geography": {"USA": "1"}
         }
       }
     ]
@@ -152,22 +150,22 @@ async def patch_assets_bulk(
       {
         "asset_id": 1,
         "display_name": "Apple Inc. - Updated",
-        "classification_params": {
-          "sector": "Technology",
-          "short_description": "New description"
+        "profile": {
+          "description": "New description",
+          "sector": {"Technology": "1"}
         }
       },
       {
         "asset_id": 2,
-        "classification_params": null,
+        "profile": {"description": null},
         "active": false
       }
     ]
     ```
 
-    **Classification Params Optimization**:
-    - If None: Clears metadata (DB column set to NULL)
-    - If present: Only non-null subfields saved to DB (JSON optimization)
+    **Profile**: the description, the countries and the sectors are voices of the asset profile (plan 68): a value is
+    written by the caller, `null` leaves the voice empty on purpose, an absent voice is untouched. The old
+    `classification_params` is refused (422).
 
     **Response Fields**:
     - `committed`: true only when every item was saved
@@ -221,7 +219,6 @@ async def list_assets(
 
     **Response Fields**:
     - `provider_code`: Provider code string if assigned (e.g. 'yfinance'), null otherwise
-    - `has_metadata`: True if asset has classification metadata
     - `identifier`: Asset identifier (ticker, ISIN, etc.) if provider assigned
     - `identifier_type`: Type of identifier (TICKER, ISIN, UUID, OTHER)
 
@@ -362,11 +359,11 @@ async def read_assets_bulk(
     _current_user: User = Depends(get_current_user),
 ):
     """
-    Bulk read assets with classification metadata (preserves request order).
+    Bulk read assets (preserves request order).
 
-    Fetches basic asset information along with parsed classification_params
-    for multiple assets in a single request. Assets not found are silently
-    skipped.
+    Fetches basic asset information, its provider and its enrichers for multiple assets in a single request. Assets not
+    found are silently skipped. The description, the countries and the sectors are read from the asset profile
+    (`POST /assets/profile/query`).
 
     **Request query**:
     ```json
@@ -382,13 +379,6 @@ async def read_assets_bulk(
         "identifier": "AAPL",
         "currency": "USD",
         "asset_type": "stock",
-        "classification_params": {
-          "sector": "Technology",
-          "short_description": "Consumer electronics",
-          "geographic_area": {
-            "USA": "1.0000"
-          }
-        },
         "provider_code": null
       },
       {
@@ -397,21 +387,10 @@ async def read_assets_bulk(
         "identifier": "VOO",
         "currency": "USD",
         "asset_type": "etf",
-        "classification_params": {
-          "geographic_area": {
-            "USA": "1.0000"
-          }
-        },
         "provider_code": "yfinance"
       }
     ]
     ```
-
-    **Classification Params**:
-    - Parsed from JSON stored in database
-    - May be null if no metadata set
-    - Geographic area contains ISO-3166-A3 codes
-    - Weights are Decimal strings (4 decimal places)
 
     Args:
         asset_ids: Bulk read request with list of asset IDs
@@ -448,18 +427,6 @@ async def read_assets_bulk(
             if not asset:
                 continue
 
-            # Parse classification params
-            classification_params = None
-            if asset.classification_params:
-                try:
-                    classification_params = FAClassificationParams.model_validate_json(asset.classification_params)
-                except Exception as e:
-                    logger.exception(
-                        f"Failed to parse classification_params for asset {asset.id}: {e}",
-                        extra={"asset_id": asset.id, "error": str(e)},
-                    )
-                    # Skip invalid JSON
-
             responses.append(
                 FAAssetMetadataResponse(
                     asset_id=asset.id,
@@ -468,7 +435,6 @@ async def read_assets_bulk(
                     icon_url=asset.icon_url,
                     asset_type=asset.asset_type,
                     quote_base_quantity=asset.quote_base_quantity,
-                    classification_params=classification_params,
                     provider_code=provider_map.get(asset.id),
                     enrichers=_asset_enrichers(enricher_rows.get(asset.id)),
                 )

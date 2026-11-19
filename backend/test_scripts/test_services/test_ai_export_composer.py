@@ -341,7 +341,8 @@ class TestFoundationCatalogComposition:
 def test_production_component_registry_contains_only_real_specs():
     registry = build_component_registry()
 
-    assert len(registry) == 67
+    # D5 (plan 68): asset.profile is the 68th component (before D5: 67)
+    assert len(registry) == 68
     assert registry.canonical_order == tuple(spec.component_id for spec in ALL_FOUNDATION_COMPONENTS)
     assert all(registry.get(component_id).output_model is not FoundationComponentPayload for component_id in registry.canonical_order)
 

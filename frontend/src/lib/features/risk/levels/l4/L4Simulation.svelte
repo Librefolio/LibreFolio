@@ -18,6 +18,10 @@
     import {DEFAULT_SIMULATION_MODE, SIMULATION_MODES, simulationModeSpec, type SimulationMode} from './simulationModes';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {RISK_OVERLAY_COLORS} from '$lib/theme/chartTheme';
+    import {currentLanguage} from '$lib/stores/app/language';
+    import {calendarLengthText} from '../../assetSetLevels';
+    import {dayFormatter} from '../../eligibility';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     /**
      * L4 rung 3 — simulation: a probabilistic model, on the model's assumptions.
@@ -29,7 +33,7 @@
      */
     interface Props {
         controller: RiskPanelController;
-        /** Anchor for the cone's dates: the simulation starts where history ends. */
+        /** The cone's anchor when an answer does not say where its history ends (one from before RN-16). */
         dateEnd: string;
     }
 
@@ -86,7 +90,27 @@
         }),
     );
 
-    let coneData = $derived.by<LineDataPoint[]>(() => (output?.percentile_bands ?? []).map((point) => ({date: addDays(dateEnd, point.day), value: point.p50 * 100})));
+    /**
+     * The history the simulation was estimated on (RN-16, developer's Q4 c): its own — all the common history, the most
+     * recent observations that fit — never the page's period. The line says how long, from when to when, and whether a
+     * longer history was left out; the cone starts where that history ends.
+     */
+    let formatDay = $derived(dayFormatter(uiLocale()));
+    let estimation = $derived.by(() => {
+        if (!output?.estimation_start || !output.estimation_end || !output.estimation_observations) return null;
+        return {
+            length: calendarLengthText(output.estimation_start, output.estimation_end, $t, $currentLanguage, output.estimation_observations),
+            start: formatDay(output.estimation_start),
+            end: formatDay(output.estimation_end),
+            count: output.estimation_observations,
+            truncated: output.history_truncated === true,
+        };
+    });
+    /** Q5 a: fewer paths than asked when the request did not fit, and said. */
+    let pathsReduced = $derived(output && output.requested_path_count != null && output.path_count < output.requested_path_count ? {used: output.path_count, requested: output.requested_path_count} : null);
+    let coneStart = $derived(output?.estimation_end ?? dateEnd);
+
+    let coneData = $derived.by<LineDataPoint[]>(() => (output?.percentile_bands ?? []).map((point) => ({date: addDays(coneStart, point.day), value: point.p50 * 100})));
 
     let coneOverlay = $derived.by<RenderedSignal[]>(() => {
         if (!output) return [];
@@ -211,6 +235,19 @@
     </div>
 
     {#if output}
+        {#if estimation}
+            <p class="text-xs text-lf-muted" data-testid="risk-simulation-estimation" data-truncated={estimation.truncated}>
+                {$t('risk.simulation.estimation', {values: {length: estimation.length, start: estimation.start, end: estimation.end, count: estimation.count}})}
+                {#if estimation.truncated}
+                    {$t('risk.simulation.estimationTruncated', {values: {count: estimation.count}})}
+                {/if}
+            </p>
+        {/if}
+        {#if pathsReduced}
+            <p class="text-xs text-lf-muted" data-testid="risk-simulation-paths-reduced" data-used={pathsReduced.used} data-requested={pathsReduced.requested}>
+                {$t('risk.simulation.pathsReduced', {values: {used: pathsReduced.used, requested: pathsReduced.requested}})}
+            </p>
+        {/if}
         <div class="flex flex-wrap gap-4 text-sm" data-testid="risk-simulation-terminal">
             <span class="text-lf-secondary">{$t('risk.metrics.terminalMean')}: <strong class="tabular-nums">{signedPercent(output.terminal_mean_return)}</strong></span>
             <span class="text-lf-secondary">{$t('risk.metrics.probabilityOfLoss')}: <strong class="tabular-nums">{formatPercent(output.probability_of_loss, {scale: 100, signed: false, digits: 1})}</strong></span>

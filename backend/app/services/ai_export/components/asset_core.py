@@ -28,21 +28,22 @@ see the plan's Phase 0 AI Export refinement workstream E2 section.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import json
+from collections.abc import Mapping, Sequence
 from decimal import Decimal
 
+from backend.app.logging_config import get_logger
+from backend.app.schemas.assets.profile import FAProfileVoice, ProfileShape
 from backend.app.schemas.common import Currency, DateRangeModel
 from backend.app.services.ai_export.components.asset_payloads import (
     AssetAggregateCoverage,
     AssetBrokerCostValuePl,
     AssetBrokerPeriodPerformance,
     AssetBrokerPosition,
-    AssetClassification,
     AssetCostValuePlPayload,
     AssetCoverageOmission,
     AssetFxConversionDirection,
     AssetFxConversionProvenance,
-    AssetGeographicWeight,
     AssetIdentifiers,
     AssetIdentityPayload,
     AssetLotCustodyRow,
@@ -56,21 +57,31 @@ from backend.app.services.ai_export.components.asset_payloads import (
     AssetPositionScopeBroker,
     AssetPositionScopePayload,
     AssetPriceObservation,
+    AssetProfileAmountRow,
+    AssetProfileCouponRow,
+    AssetProfileEmptiedRow,
+    AssetProfileFreshnessRow,
+    AssetProfilePayload,
+    AssetProfilePercentageRow,
+    AssetProfileThinnedVoice,
+    AssetProfileValueRow,
+    AssetProfileWeightRow,
     AssetProvenancePayload,
     AssetProviderAssignmentInfo,
-    AssetSectorWeight,
     AssetValuationSourceSemantic,
 )
 from backend.app.services.ai_export.components.asset_resources import (
     ASSET_LOTS_RESOURCE,
     ASSET_MARKET_PRICES_RESOURCE,
     ASSET_METADATA_RESOURCE,
+    ASSET_PROFILE_RESOURCE,
     ASSET_REPORT_RESOURCE,
     AssetMetadataResource,
     all_open_holdings,
     load_asset_lots,
     load_asset_market_prices,
     load_asset_metadata,
+    load_asset_profile,
     load_asset_report,
     market_snapshot_from_price_result,
     scoped_contributions,
@@ -80,8 +91,12 @@ from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import Domain, PeriodBehavior
 from backend.app.services.ai_export.dependencies import BuildContext
+from backend.app.services.assets.profile.catalogue import CATALOGUE
+from backend.app.services.assets.profile.store import ProfileStep
 from backend.app.services.financial_math.valuation import compute_holding_value
 from backend.app.services.portfolio.lots_analysis_service import analysis_failure_codes
+
+logger = get_logger(__name__)
 
 # =============================================================================
 # Static methodology text for asset.provenance (never user/provider content)
@@ -125,18 +140,6 @@ async def _require_asset_metadata(context: BuildContext) -> AssetMetadataResourc
 
 async def _build_identity(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> AssetIdentityPayload:
     metadata = await _require_asset_metadata(context)
-
-    classification = metadata.classification
-    geographic_area: tuple[AssetGeographicWeight, ...] = ()
-    sector_area: tuple[AssetSectorWeight, ...] = ()
-    short_description: str | None = None
-    if classification is not None:
-        short_description = classification.short_description
-        if classification.geographic_area is not None:
-            geographic_area = tuple(AssetGeographicWeight(area=area, weight=weight) for area, weight in sorted(classification.geographic_area.distribution.items()))
-        if classification.sector_area is not None:
-            sector_area = tuple(AssetSectorWeight(sector=sector, weight=weight) for sector, weight in sorted(classification.sector_area.distribution.items()))
-
     return AssetIdentityPayload(
         asset_id=metadata.asset_id,
         display_name=metadata.display_name,
@@ -152,11 +155,71 @@ async def _build_identity(context: BuildContext, dependencies: Mapping[str, Sect
             figi=metadata.identifier_figi,
             other=metadata.identifier_other,
         ),
-        classification=AssetClassification(
-            short_description=short_description,
-            geographic_area=geographic_area,
-            sector_area=sector_area,
-        ),
+    )
+
+
+# =============================================================================
+# asset.profile
+# =============================================================================
+
+
+def _profile_rows(asset_id: int, voice: FAProfileVoice, steps: Sequence[ProfileStep], rows: dict[str, list]) -> None:
+    """Append the rows of ``steps`` of one voice to the table of its shape (an emptied step to ``emptied``).
+
+    A stored value its shape cannot read (a row written before a catalogue rule was tightened: the store hands it back
+    as its own text) is a ``values`` row with that text: the component is required, it never fails on one row.
+    """
+    for step in steps:
+        common = {"voice": voice.key, "date": step.date, "through": step.through, "source": step.source}
+        try:
+            _shape_rows(voice, step, common, rows)
+        except (ArithmeticError, AttributeError, KeyError, TypeError, ValueError) as error:
+            logger.warning("AI Export asset.profile: a stored value its shape cannot read, exported as text", asset_id=asset_id, voice=voice.key, update_id=step.update_id, exc_info=error)
+            text = step.value if isinstance(step.value, str) else json.dumps(step.value, ensure_ascii=False)
+            rows["values"].append(AssetProfileValueRow(**common, value=text))
+
+
+def _shape_rows(voice: FAProfileVoice, step: ProfileStep, common: dict, rows: dict[str, list]) -> None:
+    """The rows of one step, in the table of its voice's shape."""
+    if step.value is None:
+        rows["emptied"].append(AssetProfileEmptiedRow(**common))
+    elif voice.shape is ProfileShape.PERCENTAGE:
+        rows["percentages"].append(AssetProfilePercentageRow(**common, value_ratio=Decimal(step.value)))
+    elif voice.shape is ProfileShape.AMOUNT:
+        rows["amounts"].append(AssetProfileAmountRow(**common, amount=Decimal(step.value["amount"]), currency=step.value["currency"]))
+    elif voice.shape is ProfileShape.MAP:
+        # Built whole before appending: a step that fails half-way leaves no partial rows behind
+        rows["weights"].extend([AssetProfileWeightRow(**common, key=key, weight=Decimal(weight)) for key, weight in sorted(step.value.items())])
+    elif voice.shape is ProfileShape.TABLE:
+        rows["coupon_schedule"].extend([AssetProfileCouponRow(**common, from_date=row["from"], to_date=row["to"], rate_ratio=Decimal(row["rate"])) for row in step.value])
+    else:
+        rows["values"].append(AssetProfileValueRow(**common, value=str(step.value), unit=voice.unit))
+
+
+async def _build_profile(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> AssetProfilePayload:
+    metadata = await _require_asset_metadata(context)
+    scope = context.scope
+    assert scope is not None
+    profile = await context.db_resource(ASSET_PROFILE_RESOURCE, load_asset_profile(scope))
+    rows: dict[str, list] = {"percentages": [], "amounts": [], "values": [], "weights": [], "coupon_schedule": [], "emptied": []}
+    thinned: list[AssetProfileThinnedVoice] = []
+    for key, voice in CATALOGUE.items():
+        steps = profile.steps.get(key)
+        if not steps:
+            continue
+        if (voice.volatile or voice.shape is ProfileShape.MAP) and len(steps) > 2:
+            # A voice that changes at every read, or a map refreshed with every holdings report: its first and last
+            # step tell where the window starts and ends, the count says how often it moved in between
+            thinned.append(AssetProfileThinnedVoice(voice=key, changes_in_window=len(steps) - 1))
+            steps = (steps[0], steps[-1])
+        _profile_rows(metadata.asset_id, voice, steps, rows)
+    return AssetProfilePayload(
+        asset_id=metadata.asset_id,
+        no_profile_data=profile.history_starts_on is None,
+        history_starts_on=profile.history_starts_on,
+        **{table: tuple(table_rows) for table, table_rows in rows.items()},
+        thinned=tuple(thinned),
+        freshness=tuple(AssetProfileFreshnessRow(voice=voice, confirmed_on=now.confirmed_on, stale=now.stale) for voice, now in sorted(profile.freshness.items())),
     )
 
 
@@ -607,12 +670,22 @@ async def _build_lot_detail(context: BuildContext, dependencies: Mapping[str, Se
 
 ASSET_IDENTITY_SPEC = ComponentSpec(
     component_id="asset.identity",
-    version=1,
+    version=2,  # v2 (plan 68, D5): no classification; the profile is its own component, asset.profile
     domains=frozenset({Domain.ASSET}),
     output_model=AssetIdentityPayload,
     builder=_build_identity,
     dependencies=(),
     period_behavior=PeriodBehavior.NONE,
+)
+
+ASSET_PROFILE_SPEC = ComponentSpec(
+    component_id="asset.profile",
+    version=1,
+    domains=frozenset({Domain.ASSET}),
+    output_model=AssetProfilePayload,
+    builder=_build_profile,
+    dependencies=(),
+    period_behavior=PeriodBehavior.WINDOWED,
 )
 
 ASSET_MARKET_SNAPSHOT_SPEC = ComponentSpec(
@@ -706,6 +779,7 @@ ASSET_LOT_DETAIL_SPEC = ComponentSpec(
 
 ASSET_CORE_COMPONENTS: tuple[ComponentSpec, ...] = (
     ASSET_IDENTITY_SPEC,
+    ASSET_PROFILE_SPEC,
     ASSET_MARKET_SNAPSHOT_SPEC,
     ASSET_POSITION_SCOPE_SPEC,
     ASSET_PROVENANCE_SPEC,
@@ -731,5 +805,6 @@ __all__ = [
     "ASSET_PERFORMANCE_SPEC",
     "ASSET_POSITIONS_BY_BROKER_SPEC",
     "ASSET_POSITION_SCOPE_SPEC",
+    "ASSET_PROFILE_SPEC",
     "ASSET_PROVENANCE_SPEC",
 ]

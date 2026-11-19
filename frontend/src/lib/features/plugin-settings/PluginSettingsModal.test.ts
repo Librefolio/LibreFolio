@@ -74,6 +74,7 @@ function nickname(): SettingField {
         description: '',
         label_key: null,
         description_key: null,
+        missing_key: null,
         options: [],
         min_length: null,
         max_length: null,
@@ -475,6 +476,20 @@ describe('PluginSettingsModal — shared settings groups (G3)', () => {
         expect(wrappers()).toEqual([]);
         expect(within(modal()).getAllByTestId(/^plugin-settings-form-/)).toHaveLength(1);
         expect(within(modal()).getByTestId('plugin-settings-form-mock')).toHaveAttribute('data-family', 'group');
+    });
+
+    it('PSM-19: a plugin that reads a group owning a call count (a call_usage of its own) says its calls count there, with «open» to that group’s form (project 76, U5)', async () => {
+        const usage = {family: 'group', plugin_code: 'mock', windows: [{window: 'month' as const, count: 9, limit: 9500, resets_at: '2026-12-01T00:00:00Z', full: false}]};
+        serve([mockprov({configured: true, groups: ['mock', 'crypto_keys']}), group('mock', {call_usage: usage}), group('crypto_keys')]);
+        mount({pluginCode: 'mockprov'});
+        await waitFor(() => expect(wrappers()).toHaveLength(2));
+
+        const rows = within(within(modal()).getByTestId('plugin-settings-form-mockprov')).getAllByTestId('plugin-settings-calls-on-group');
+        expect(rows.map((row) => row.getAttribute('data-group'))).toEqual(['mock']);
+        await fireEvent.click(within(rows[0]).getByTestId('plugin-settings-calls-open-group'));
+        await waitFor(() => expect(scrolled).toHaveBeenCalled());
+        expect((scrolled.mock.contexts as Element[]).every((element) => wrapperOf('mock').contains(element))).toBe(true);
+        expect(within(wrapperOf('mock')).getByTestId('plugin-settings-calls'), 'the group’s card has the block').toBeInTheDocument();
     });
 
     it('PSM-17: a re-opening reads the groups again, and shows none of the previous plugin’s groups while the new one loads', async () => {

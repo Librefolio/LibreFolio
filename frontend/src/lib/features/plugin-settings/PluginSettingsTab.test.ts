@@ -78,6 +78,7 @@ function nickname(): SettingField {
         description: '',
         label_key: null,
         description_key: null,
+        missing_key: null,
         options: [],
         min_length: null,
         max_length: null,
@@ -576,6 +577,24 @@ describe('PluginSettingsTab — shared settings groups (G3)', () => {
         expect(rows.map((row) => row.getAttribute('data-group'))).toEqual(['alpha', 'hidden']);
         const opens = rows.map((row) => within(row).queryAllByTestId('plugin-settings-open-group').length);
         expect(opens, 'alpha: one button; hidden: none').toEqual([1, 0]);
+    });
+
+    it('PST-27: a reader of a group that owns a call count (a call_usage of its own) says its calls count there, with «open»; a reader of a group without one does not (project 76, U5)', async () => {
+        const usage = {family: 'group', plugin_code: 'alpha', windows: [{window: 'day' as const, count: 3, limit: null, resets_at: '2026-11-19T00:00:00Z', full: false}]};
+        fake.fetchAll.mockResolvedValueOnce([reader('alpha', 'beta'), sharedGroup('alpha', 'Alpha keys', {call_usage: usage}), BETA]);
+
+        render(PluginSettingsTab);
+
+        await loaded();
+        const rows = within(form('justetf')).getAllByTestId('plugin-settings-calls-on-group');
+        expect(
+            rows.map((row) => row.getAttribute('data-group')),
+            'alpha owns a count, beta does not',
+        ).toEqual(['alpha']);
+        expect(rows[0].textContent).toContain('pluginSettings.group.countsOn {group=Alpha keys}');
+        await fireEvent.click(within(rows[0]).getByTestId('plugin-settings-calls-open-group'));
+        await waitFor(() => expect(scrolled).toHaveBeenCalled());
+        expect((scrolled.mock.contexts as Element[]).every((element) => anchor('alpha')!.contains(element))).toBe(true);
     });
 
     it('PST-26: a save in a group’s form reads again the plugins that read it: a reader unconfigured for want of the group’s key turns configured, without reloading the page', async () => {

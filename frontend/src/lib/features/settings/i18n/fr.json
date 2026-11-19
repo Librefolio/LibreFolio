@@ -491,6 +491,8 @@
       "about": "Quelle version de LibreFolio tourne ici, ce qui a changé et sa licence.",
       "users": "Les comptes de cette instance : qui peut se connecter, qui est administrateur, et les liens d'invitation.",
       "security": "Comment cette instance protège les connexions : les contrôles qu'elle effectue et quoi corriger quand l'un échoue."
-    }
+    },
+    "pluginSystemEnricher": "Enrichisseurs",
+    "enrichers": "Enrichisseurs"
   }
 }

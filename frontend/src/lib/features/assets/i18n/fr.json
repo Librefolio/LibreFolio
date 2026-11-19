@@ -7,11 +7,7 @@
     "editData": "Modifier prix et événements",
     "pricesTab": "Prix",
     "eventsTab": "Événements",
-    "metadata": "Métadonnées et classification",
-    "editViaModal": "Modifier dans la modale",
     "displayCurrency": "Convertir en",
-    "noIdentifiers": "Aucun identifiant configuré",
-    "noClassification": "Aucune donnée de classification",
     "noDataScheduled": "Configurez le calendrier des intérêts via Modifier pour générer les prix",
     "syncPrices": "Synchroniser les prix",
     "recalculate": "Recalculer",
@@ -75,8 +71,8 @@
     "docsHelp": {
       "header": "Un actif en détail : son graphique de prix et ses signaux, ses mesures, ses événements et sa classification, avec la source de ses prix et vos transactions.",
       "measures": "Choisissez deux jours sur le graphique et lisez de combien l'actif, et les lignes tracées avec lui, ont changé entre les deux.",
-      "metadata": "Ce qu'est l'actif : sa description, ses secteurs et pays, ses identifiants, et le fournisseur qui donne ses prix.",
-      "dataEditor": "Corrigez et complétez à la main les données de l'actif : ses prix quotidiens et ses événements, comme les dividendes et les divisions."
+      "dataEditor": "Corrigez et complétez à la main les données de l'actif : ses prix quotidiens et ses événements, comme les dividendes et les divisions.",
+      "profile": "Ce qu'est l'actif : ses pays et secteurs, sa description, ses chiffres clés et ses détails, lus par ses enrichisseurs ou saisis à la main."
     }
   },
   "assets": {
@@ -89,7 +85,18 @@
       "lastPrice": "Dernier Prix",
       "quoteBaseQuantity": "Unités/cotation",
       "txCount": "Tx",
-      "txCountTooltip": "Transactions utilisant cet actif. Vert : dans des courtiers que vous possédez. Bleu : uniquement dans les courtiers d'autres utilisateurs. Gris : aucune — actif enregistré mais jamais utilisé."
+      "txCountTooltip": "Transactions utilisant cet actif. Vert : dans des courtiers que vous possédez. Bleu : uniquement dans les courtiers d'autres utilisateurs. Gris : aucune — actif enregistré mais jamais utilisé.",
+      "risk": {
+        "maxDrawdown": "Drawdown max",
+        "volatility": "Volatilité",
+        "annualReturn": "Rendement annuel",
+        "sharpe": "Sharpe",
+        "sortino": "Sortino",
+        "worstDay": "Pire jour",
+        "bestDay": "Meilleur jour",
+        "rally": "Plus forte hausse",
+        "hint": "Mesuré sur cet actif seul, sur la période et dans la devise de cette page, à votre taux sans risque : le même chiffre que l'onglet Risque de l'actif avec les mêmes réglages."
+      }
     },
     "empty": {
       "noAssets": "Aucun actif",
@@ -238,7 +245,16 @@
         "removeTitle": "Retirer le fournisseur ?",
         "removeMessage": "Retirer le fournisseur supprime {what}. {unlinked} Les prix déjà enregistrés sont conservés, ainsi que les événements manuels. Cette action est irréversible. Continuer ?",
         "removeConfirm": "Retirer le fournisseur"
-      }
+      },
+      "enrichersButton": "Enrichisseurs",
+      "enrichersFound": "{count, plural, one {# enrichisseur trouvé} other {# enrichisseurs trouvés}} : {names}. Ils seront enregistrés avec l'actif.",
+      "enrichersSearching": "Recherche des enrichisseurs qui connaissent cet actif…",
+      "enrichersNone": "Aucun enrichisseur ne connaît cet actif.",
+      "enrichersRefused": "Trop de demandes aux sources : en attente, la recherche reprend d'elle-même dans un instant.",
+      "enrichersError": "Impossible de rechercher les enrichisseurs : choisissez-les à la main.",
+      "enrichersReview": "Vérifier ou modifier",
+      "enrichersReading": "Leurs données sont en cours de lecture.",
+      "enrichersReadingWaiting": "Trop de demandes : leurs données seront lues d'elles-mêmes dans un instant."
     },
     "provider": {
       "assignment": "Attribution du Fournisseur",
@@ -249,8 +265,12 @@
       "providerUrl": "URL Fournisseur",
       "identifier": "Identifiant",
       "identifierType": "Type d'Identifiant",
-      "lastFetch": "Derniere mise a jour",
-      "neverFetched": "Jamais execute"
+      "inputType": {
+        "PROVIDER_ID": "ID du fournisseur"
+      },
+      "inputTypePlaceholder": {
+        "PROVIDER_ID": "ex. bitcoin"
+      }
     },
     "schedule": {
       "title": "Calendrier d'intérêts",
@@ -375,8 +395,7 @@
       "currentValue": "Valeur actuelle",
       "providerValue": "Valeur du fournisseur",
       "applySelected": "Appliquer la selection ({count}/{total})",
-      "allMatch": "Toutes les donnees correspondent au fournisseur",
-      "noDistributionData": "Le fournisseur n'a pas de données pour : {fields}"
+      "allMatch": "Toutes les donnees correspondent au fournisseur"
     },
     "distribution": {
       "total": "Total",
@@ -539,6 +558,9 @@
     "PROVIDER_ERROR": "Le fournisseur a échoué : {detail}",
     "PROBE_RATE_LIMITED": "Trop de vérifications : réessayez à {time}",
     "PROBE_RATE_LIMITED_DAY": "Trop de vérifications : réessayez le {time}",
-    "PROBE_RATE_LIMITED_NO_TIME": "Trop de vérifications : réessayez dans une minute"
+    "PROBE_RATE_LIMITED_NO_TIME": "Trop de vérifications : réessayez dans une minute",
+    "PLAN_REQUIRED": "Cette requête nécessite une offre payante du fournisseur.",
+    "WRONG_PLAN": "La clé du fournisseur ne correspond pas à l'offre choisie (Demo ou Pro) : vérifiez l'offre dans Paramètres › Plugins.",
+    "INVALID_API_KEY": "Le fournisseur a refusé la clé API : vérifiez-la dans Paramètres › Plugins."
   }
 }

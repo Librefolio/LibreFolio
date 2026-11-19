@@ -1,10 +1,11 @@
 # 🛡️ Risk Tab
 
-The **Risk** tab of the [Dashboard](index.md) shows how risky your portfolio is, through four plain questions — from what really happened to what could happen. It sits between **Positions & Analysis** and **Transactions**, and every broker's page has the same tab for that broker alone.
+The **Risk** tab of the [Dashboard](index.md) shows how risky your portfolio is, through plain questions — from what really happened to what could happen. It sits between **Positions & Analysis** and **Transactions**, and every broker's page has the same tab for that broker alone.
 
 Each block below follows one pattern: what it answers, a screenshot, its tools and how to read them.
 
 - 📉 **[How Much Can It Hurt?](#how-much-can-it-hurt)** — the losses your portfolio actually went through
+- 📈 **[How Does It Move?](#how-does-it-move)** — the positive twin of the first: the best moments of the period, and what the days were like
 - 🧩 **[Am I as Diversified as I Think?](#diversification)** — which holdings carry the risk, and which move together
 - ⚖️ **[Am I Being Paid for This Risk?](#being-paid)** — return against risk, holding by holding and against a benchmark
 - 🔮 **[What If…?](#what-if)** — a past crisis, a shock you choose, or a simulation
@@ -24,6 +25,7 @@ How much could you lose, and how bad has it already been? Every figure here is s
 
 - **A bad day**, **Thirty bad days** — your average loss on the worst 5% of days, or of 30-day stretches → [Conditional Value at Risk](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
 - **VaR threshold** — on *Distribution of daily returns*: the daily loss that only the worst 5% of days went beyond; a dashed line marks it on the chart, and hovering a bar tells how many days fell in it and whether it lies beyond the threshold; the wheel or two fingers zoom into the chart, and with many bars a slider appears under it → [Value at Risk](../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md)
+- **The best days** — on the same chart, the right tail in green: the gain that only the best 5% of days went beyond, the mirror of the VaR threshold; the line under the chart says where it starts, and hovering a green bar says it is among the best days
 - **The worst day** — under *A bad day*: the single worst day of the period, and when it was → [Worst Realization](../../financial-theory/technical-analysis/risk-metrics/worst-realization.md)
 - **The worst 30 days** — under *Thirty bad days*: the worst 30-day stretch the portfolio really went through, and when it was. *Thirty bad days* itself is an average of the worst 5%, which no single stretch ever printed
 - **The worst fall** — the deepest drop from a high to a later low, when it began and ended, and how long it lasted → [Max Drawdown](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
@@ -39,6 +41,30 @@ How much could you lose, and how bad has it already been? Every figure here is s
 - **Every card has the same shape**: a title and a subtitle, the percentage with its amount, then detail rows with the name on the left and the figure on the right. A date is written the way your language writes it.
 - **Below the peak, today** appears only while your portfolio is below its last high.
 - **The ? and ⓘ icons** next to a figure open its theory page.
+
+---
+
+## 📈 How Does It Move? {: #how-does-it-move }
+
+The other side of *How much can it hurt?*: the best moments of the period, and what the days were like. Each card is the green twin of a red one above, measured on the same days.
+
+**Tools shown**
+
+- **The best day** — the best single day of the period, and when it was; under it, the **Average day**: the average up day and the average down day → [Best Day](../../financial-theory/technical-analysis/risk-metrics/return-shape.md#best-day), [Average Day](../../financial-theory/technical-analysis/risk-metrics/return-shape.md#average-day)
+- **Thirty good days** — the best 30 days the portfolio really went through, from one day to another, and when: the twin of *The worst 30 days*. It can be negative: a portfolio that only fell still has a best stretch → [Best 30 Days](../../financial-theory/technical-analysis/risk-metrics/return-shape.md#best-30-days)
+- **The largest rally** — the largest rise from a low to a later high, when it began and ended, and how long it lasted: the twin of *The worst fall*. Under it, the **Positive streak**: the longest run of days in a row with a gain → [Largest Rally](../../financial-theory/technical-analysis/risk-metrics/return-shape.md#largest-rally), [Positive Streak](../../financial-theory/technical-analysis/risk-metrics/return-shape.md#positive-streak)
+- **What the days were like** — **gains against losses** (Omega): for every 1 lost on the bad days, how many were gained on the good ones (*1.25×* means 1.25 gained for every 1 lost; a bad day is one below your risk-free rate, 0% until you set one) → [Gains Against Losses (Omega)](../../financial-theory/technical-analysis/risk-metrics/omega-ratio.md). Under it:
+    - **Positive days** — the share of the days with a gain; a day at exactly zero does not count → [Positive Days](../../financial-theory/technical-analysis/risk-metrics/return-shape.md#positive-days)
+    - **Semi-deviation** — how much the portfolio swings on the way down, on a yearly basis, written beside the whole swing it is part of: *9.8% downward · out of a 13.9% swing over the period* means the falls weigh less than the rises. Both come from the same days as the cards → [Downside Deviation](../../financial-theory/technical-analysis/risk-metrics/sortino-ratio.md#downside-deviation)
+    - **Below the peak, on average** — how far below its highest level the portfolio stood on an average day: the whole time spent under a peak, not only the worst fall → [Below the Peak, on Average](../../financial-theory/technical-analysis/risk-metrics/return-shape.md#average-drawdown)
+    - **Extreme days** — how much more often very large days, up or down, came than a bell curve would give: *1×* is the bell curve, above it the tails are fatter → [Extreme Days](../../financial-theory/technical-analysis/risk-metrics/return-shape.md#extreme-days)
+
+**How to read it**
+
+- **The amount** beside the best day, the thirty good days and the largest rally is that gain applied to your net worth today; the largest rally says so, as the worst fall does.
+- **A dash says why**: a period with no gaining day has no best day, no average up day and no streak; one with no losing day has no average down day; one with no day below your risk-free rate has no gains against losses; the line under the figure gives the reason.
+- **A rally of 0.0%**, with no dates, means the portfolio never rose from a low in the period: a measured zero, not a missing figure.
+- **Volatility, annual return, Sharpe and Sortino** are not repeated here: they are in the table of *Am I being paid for this risk?*, measured on the portfolio as you hold it today, while this block reads the period as you lived it; the swing beside the semi-deviation can therefore differ from that table's volatility, and the semi-deviation's tooltip says so. On an asset's page the two are the same series.
 
 ---
 
@@ -61,7 +87,7 @@ Owning many holdings is not the same as being diversified. This block shows whic
 **How to read it**
 
 - **A long red bar** to the right marks a holding that carries more of your risk than its weight suggests; when one stands out, the sentence under the title names it.
-- **In the matrix**, blue pairs move together, so holding both adds little; red pairs move in opposite directions and cushion each other.
+- **In the matrix**, blue pairs move together, so holding both adds little; red pairs move in opposite directions and cushion each other. Its five order buttons — by similarity, type, sector, region and name — are always there; one your holdings have no data for is greyed out and says why when tapped.
 - **Hover a square** for its value in words. The lists *The most alike* and *The ones that offset* pick out the pairs worth a look.
 
 ---
@@ -89,7 +115,7 @@ Risk is worth taking only if it pays. This block sets the return of your portfol
 - **Choose a benchmark** in **Compared with** — a tracker of a broad world index is the most meaningful. It applies to every Risk page, and adds the **Beta** and **Correlation** columns.
 - **Above the dashed line**, a dot was better paid for its risk than the benchmark — or, with no benchmark, than your portfolio.
 - **Click** a column title to sort the table, or a row to find its dot in the chart.
-- **The Portfolio row** replays today's holdings, at today's weights, over the period — the title says *on the current composition* — so it is not the history of your trades. Returns come from prices only, without dividends or coupons for now.
+- **The Portfolio row** (*Portfolio, today's holdings*) replays today's holdings, at today's weights, over the period — the title says *on the current composition* — so it is not the history of your trades. Returns come from prices only, without dividends or coupons for now.
 
 ---
 
@@ -116,7 +142,7 @@ What would a past crisis, or a shock you imagine, do to the portfolio you hold t
 
 !!! note "The simulation depends on the history it reads"
 
-    Its outcome depends heavily on how much history the period holds compared with the horizon — see [What the Simulation Does Not Yet Do](../../financial-theory/technical-analysis/risk-metrics/simulation-modes.md#why-beta).
+    It does not read the page's period: it uses all the history your holdings share, up to today, and the result says which dates and how many observations. A holding with less history than the horizon stays out — its weight counts as cash, and the result names it — unless none of them reaches the horizon: then all take part, and when their shared history is shorter than the horizon an amber line says so — see [How Much History the Simulation Reads](../../financial-theory/technical-analysis/risk-metrics/simulation-modes.md#why-beta).
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="The What if…? Simulation box: the model warning, the five modes with Reshuffled history recommended, horizon, paths and seed, and after Simulate the terminal figures, the cone and What this simulation assumed" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -148,6 +174,7 @@ A risk figure is only as good as the prices behind it. When data is missing or o
 - **The Dashboard's tab covers your whole portfolio** — every broker you own with a share above 0% — over the Dashboard's date range and currency. It ignores the broker filter: a subtitle says so, and the amounts under the percentages are hidden while a filter is on.
 - **On a broker's page**, the tab shows the same blocks for that broker alone.
 - **Changing the period or the currency** recalculates every block and clears the What If…? results: run them again.
+- **The risk-free rate**, under the line with the period and the currency, is what you could earn without taking risk: 0% until you set it, applied when you press Enter or leave the field. Sharpe and Sortino count the return above it; **Gains / losses** and the semi-deviation count from it, and their sentences name the rate they used. It is one value for every risk page. The ⓘ beside it suggests where to read one: the latest yield of a short government bill → [Sharpe Ratio](../../financial-theory/technical-analysis/risk-metrics/sharpe-ratio.md)
 - **Calculation details**, folded at the bottom of each block, shows how much data the figures rest on.
 
 ---

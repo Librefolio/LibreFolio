@@ -46,6 +46,14 @@ vi.mock('$lib/stores/reference/fxRoutesStore', () => ({
     getConfiguredCurrencySet: vi.fn(() => new Set(['EUR', 'USD'])),
 }));
 
+vi.mock('$lib/stores/reference/assetStore', () => ({assetStoreVersion: writable(0), ensureAssetsLoaded: vi.fn(async () => undefined), getAssetInfo: vi.fn(() => null)}));
+// Project 76, P4: the provider list, stubbed with CoinGecko's attribution; the asset store is not read here.
+vi.mock('$lib/utils/providerHelpers', () => ({
+    assetProvidersVersion: writable(0),
+    ensureAssetProvidersCached: vi.fn(async () => undefined),
+    getAssetProviderAttribution: vi.fn((code: string | null | undefined) => (code === 'coingecko' ? {text: 'Powered by CoinGecko', url: 'https://www.coingecko.com/'} : null)),
+}));
+
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import AssetPriceSummary from './AssetPriceSummary.svelte';
 
@@ -101,5 +109,34 @@ describe('AssetPriceSummary — the price and its absolute Δ keep their signifi
 
     it('guard: Δs of 1.5, -12.5 and 0 read (+1.50), (-12.50) and (0.00) — the zero with no sign — as today', () => {
         expect({rise: deltaFor(1.5), fall: deltaFor(-12.5), flat: deltaFor(0)}).toEqual({rise: '(+1.50)', fall: '(-12.50)', flat: '(0.00)'});
+    });
+});
+
+// Project 76, P4: CoinGecko's terms ask «Powered by CoinGecko», linked to its site, with every price it gives.
+describe("AssetPriceSummary — the provider's attribution under the price (76 P4)", () => {
+    const mountWith = (providerCode: string | null, layoutMode: 'oneRow' | 'denseRow' = 'oneRow', filtersStacked = false) =>
+        render(AssetPriceSummary, {lastPrice: 1, deltaPercent: null, deltaAbs: null, displayCurrency: 'USD', assetCurrency: 'USD', layoutMode, filtersStacked, providerCode}).container;
+
+    it.each<[string, 'oneRow' | 'denseRow', boolean]>([
+        ['one row', 'oneRow', false],
+        ['beside the picker', 'denseRow', false],
+        ['stacked', 'denseRow', true],
+    ])('shows the linked line for a CoinGecko asset, %s', (_label, layoutMode, filtersStacked) => {
+        const summary = mountWith('coingecko', layoutMode, filtersStacked);
+        const link = within(summary).getByTestId('provider-attribution-link');
+        expect(link).toHaveAttribute('href', 'https://www.coingecko.com/');
+        expect(link.textContent?.trim()).toBe('Powered by CoinGecko');
+        // Under the price, not beside it: the line and the price share a column, the line after the price
+        const column = within(summary).getByTestId('asset-price-attribution').parentElement as HTMLElement;
+        expect(column.className).toContain('flex-col');
+        const price = within(column).getByTestId('asset-detail-live-price');
+        expect(price.compareDocumentPosition(within(column).getByTestId('asset-price-attribution')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it.each<[string, string | null]>([
+        ['a provider that asks none', 'yfinance'],
+        ['an asset with no provider', null],
+    ])('shows nothing for %s', (_label, providerCode) => {
+        expect(within(mountWith(providerCode)).queryByTestId('asset-price-attribution')).toBeNull();
     });
 });

@@ -23,8 +23,8 @@ directly as a section payload; that is the job of the builders in
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from datetime import date as Date
 from decimal import Decimal
 
@@ -32,7 +32,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetProviderAssignment
-from backend.app.schemas.assets.metadata import FAClassificationParams
 from backend.app.schemas.common import Currency, DateRangeModel, OpenDateRangeModel
 from backend.app.schemas.portfolio.lots import LotAnalysisType, LotsAnalysisResponse
 from backend.app.schemas.portfolio.report import PortfolioReportQuery, PortfolioReportResponse
@@ -40,6 +39,8 @@ from backend.app.schemas.prices import FAPriceQueryItem, FAPriceQueryResult
 from backend.app.services.ai_export.components.resources import PriceResultsResource
 from backend.app.services.ai_export.components.types import BuildScope, ResourceKey
 from backend.app.services.assets.manager import AssetSourceManager
+from backend.app.services.assets.profile.freshness import VoiceFreshness, holding_now, voice_freshness
+from backend.app.services.assets.profile.store import ProfileStep, first_read_days, profile_today, read_steps
 from backend.app.services.financial_math.fifo.models import LotMatchingMethod
 from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio.portfolio_service import PortfolioService
@@ -78,7 +79,6 @@ class AssetMetadataResource:
     identifier_sedol: str | None
     identifier_figi: str | None
     identifier_other: tuple[str, ...]
-    classification: FAClassificationParams | None
     provider_code: str | None
     provider_identifier: str | None
     provider_identifier_type: str | None
@@ -98,10 +98,6 @@ def load_asset_metadata(scope: BuildScope):
         if asset is None:
             raise AssetNotFoundError(f"Asset {scope.asset_id} not found")
 
-        classification: FAClassificationParams | None = None
-        if asset.classification_params:
-            classification = FAClassificationParams.model_validate_json(asset.classification_params)
-
         assignment_stmt = select(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == scope.asset_id)
         assignment = (await session.execute(assignment_stmt)).scalars().first()
 
@@ -118,7 +114,6 @@ def load_asset_metadata(scope: BuildScope):
             identifier_sedol=asset.identifier_sedol,
             identifier_figi=asset.identifier_figi,
             identifier_other=tuple(asset.identifier_other or ()),
-            classification=classification,
             provider_code=assignment.provider_code if assignment else None,
             provider_identifier=assignment.identifier if assignment else None,
             provider_identifier_type=(str(assignment.identifier_type.value if hasattr(assignment.identifier_type, "value") else assignment.identifier_type) if assignment else None),
@@ -314,7 +309,36 @@ def load_asset_lots(scope: BuildScope):
     return _load
 
 
+@dataclass(frozen=True, slots=True)
+class AssetProfileResource:
+    """The asset's profile in the export period (plan 68, D5): each voice's steps, never carried back, and the first day
+    its profile has (None: no row at all)."""
+
+    steps: Mapping[str, tuple[ProfileStep, ...]]
+    history_starts_on: Date | None
+    # D1d: for the volatile voices whose last step in the window holds «now», how fresh «now» is
+    freshness: Mapping[str, VoiceFreshness] = field(default_factory=dict)
+
+
+def load_asset_profile(scope: BuildScope):
+    """Builds the `db_resource` loader for `ASSET_PROFILE_RESOURCE`: the steps of every voice in
+    ``[period_start, period_end]``, facts only (no carry-back, plan I18), and how fresh «now» is for the volatile voices
+    whose last step in the window holds it (D1d)."""
+
+    async def _load(session: AsyncSession) -> AssetProfileResource:
+        asset_id: int = scope.asset_id  # type: ignore[assignment]  # ASSET scope guarantees asset_id is set
+        window = DateRangeModel(start=scope.period_start, end=scope.period_end)
+        steps = (await read_steps(session, [asset_id], window)).get(asset_id, {})
+        first = (await first_read_days(session, [asset_id])).get(asset_id)
+        known = (await voice_freshness(session, [asset_id], today=await profile_today(session))).get(asset_id, {})
+        fresh = {voice: now for voice, voice_steps in steps.items() if (now := holding_now(known.get(voice), voice_steps)) is not None}
+        return AssetProfileResource(steps={voice: tuple(voice_steps) for voice, voice_steps in steps.items()}, history_starts_on=first, freshness=fresh)
+
+    return _load
+
+
 ASSET_METADATA_RESOURCE = ResourceKey("asset.core.metadata", AssetMetadataResource)
+ASSET_PROFILE_RESOURCE = ResourceKey("asset.core.profile", AssetProfileResource)
 ASSET_REPORT_RESOURCE = ResourceKey("asset.core.report", PortfolioReportResponse)
 ASSET_LOTS_RESOURCE = ResourceKey("asset.core.lots", LotsAnalysisResponse)
 ASSET_MARKET_PRICES_RESOURCE = ResourceKey(

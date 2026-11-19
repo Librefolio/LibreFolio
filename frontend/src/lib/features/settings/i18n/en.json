@@ -491,6 +491,8 @@
       "about": "Which version of LibreFolio runs here, what changed in it, and its licence.",
       "users": "The accounts of this instance: who can sign in, who is an administrator, and the invitation links.",
       "security": "How this instance protects sign-ins and connections: the checks it runs, and what to fix when one fails."
-    }
+    },
+    "pluginSystemEnricher": "Enrichers",
+    "enrichers": "Enrichers"
   }
 }

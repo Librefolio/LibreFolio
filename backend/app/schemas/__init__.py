@@ -53,7 +53,6 @@ if TYPE_CHECKING:
         BaseDistribution,
         # Metadata & classification
         FAAssetMetadataResponse,
-        FAClassificationParams,
         FAGeographicArea,
         FASectorArea,
     )
@@ -303,7 +302,6 @@ __all__ = [  # noqa: RUF022 — grouped by domain with section comments; sorting
     # Assets: Metadata & classification
     "FAGeographicArea",
     "FASectorArea",
-    "FAClassificationParams",
     "FAAssetMetadataResponse",
     "FABulkAssetPatchResponse",
     "FAAssetPatchResult",
@@ -471,7 +469,6 @@ _EXPORT_GROUPS = {
     "assets.metadata": (
         "BaseDistribution",
         "FAAssetMetadataResponse",
-        "FAClassificationParams",
         "FAGeographicArea",
         "FASectorArea",
     ),

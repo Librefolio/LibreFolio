@@ -1,5 +1,7 @@
 import type {BackendSignalRequest} from './backendTypes';
 import type {SignalConfig, SignalDefinition} from './ChartSignal';
+import {annualRiskFreeRate} from '$lib/features/risk/riskFreeRate';
+import {riskFreeRate} from '$lib/features/risk/riskFreeRateStore.svelte';
 
 export interface BackendSignalRequestPlan {
     requests: BackendSignalRequest[];
@@ -9,8 +11,17 @@ export interface BackendSignalRequestPlan {
     instanceAliases: Map<string, string[]>;
 }
 
-function backendParams(params: Record<string, unknown>): Record<string, unknown> {
-    return Object.fromEntries(Object.entries(params).filter(([key]) => !key.startsWith('_')));
+/**
+ * The parameters sent to the backend: the config's own, without the private ones (`_…`), and every parameter the
+ * catalog binds to the reader's risk-free rate (`x-control: "risk_free_rate"`, RN-21) set from the one shared value —
+ * a value the chart once saved there is left in the config and no longer read (the consultant, 17/11/2026).
+ */
+function backendParams(params: Record<string, unknown>, definition: SignalDefinition): Record<string, unknown> {
+    const sent = Object.fromEntries(Object.entries(params).filter(([key]) => !key.startsWith('_')));
+    for (const descriptor of definition.paramDescriptors) {
+        if (descriptor.control === 'risk_free_rate') sent[descriptor.key] = annualRiskFreeRate(riskFreeRate.percent);
+    }
+    return sent;
 }
 
 function stableJson(value: unknown): string {
@@ -64,7 +75,7 @@ export function buildBackendSignalRequestPlan(configs: SignalConfig[], definitio
         }
 
         backendConfigs.push(config);
-        const params = backendParams(config.params);
+        const params = backendParams(config.params, definition);
         const requestKey = `${definition.backendSignalCode}:${stableJson(params)}`;
         const canonicalInstanceId = canonicalByRequestKey.get(requestKey);
 

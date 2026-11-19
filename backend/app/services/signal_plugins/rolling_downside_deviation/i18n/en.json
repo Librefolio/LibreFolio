@@ -1,0 +1,10 @@
+{
+  "signals": {
+    "riskRollingDownsideDeviation": {
+      "name": "Rolling Semi-deviation",
+      "description": "Annualized volatility of the returns below the target over a rolling window: the Sortino's denominator, to read beside the volatility.",
+      "output": "Semi-deviation",
+      "outputDescription": "Annualized root-mean-square shortfall below the target, in percentage points."
+    }
+  }
+}

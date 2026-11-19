@@ -2,8 +2,7 @@
  * assetMetadataComparison — pure unit tests for the decision half of AssetModal's "Ask Provider".
  *
  * `compareMetadata` turns the provider's `patch_data` and a snapshot of the form into the ordered writes the modal
- * applies (actions), the rows of the comparison dialog (differences) and the distributions the provider does not
- * report (missingFields). Every branch is driven here with a fixed snapshot, fixed labels and a `manuallyChanged`
+ * applies (actions) and the rows of the comparison dialog (differences). Every branch is driven here with a fixed snapshot, fixed labels and a `manuallyChanged`
  * built from the set of fields the user edited while the request was in flight.
  *
  * The quote base (Z-32 d, the last blocks): on a full comparison only, right after the currency row, one row when the
@@ -12,20 +11,22 @@
  * action, always checked, noted by the caller's label for its source: `LABELS.quoteBaseNote` is a fake that spells the
  * source out, so a case sees which note was asked for. The snapshot holds a quote base of 1 by default — the blank
  * form's — so an answer with no type and no suggestion changes nothing on an empty form. RED until the row exists.
+ *
+ * The description, the sectors and the countries are the profile's (plan 68, E9): a provider's `classification_params`
+ * is not compared any more, and there is no «missing distribution» to report.
  */
 import {describe, expect, it, vi} from 'vitest';
 import {IDENTIFIER_TYPES} from '$lib/utils/assetTypes';
 import {compareMetadata, type ComparisonLabels, type ComparisonScope, type ComparisonSnapshot, type MetadataComparison} from './assetMetadataComparison';
 import type {QuoteBaseSource, QuoteBaseSuggestion} from './assetFormState';
-import type {Distribution} from './assetPayload';
 
 /** The note the caller writes for a quote base proposal — a fake that spells its source out, so a case sees which note was asked for. */
 function noteOf(source: QuoteBaseSource): string {
     return source.kind === 'suggestion' ? `note(suggestion ${source.quantity} ${source.quoteCurrency ?? '—'})` : `note(typeDefault ${source.assetType} ${source.quantity})`;
 }
 
-/** The caller's labels. `description` is not 'Description' on purpose: the row once showed that English literal in every language (X-R11). */
-const LABELS: ComparisonLabels = {name: 'Name', type: 'Type', currency: 'Currency', description: 'Desc', sector: 'Sector', geographic: 'Geo', quoteBase: 'QuoteBase', quoteBaseNote: noteOf};
+/** The caller's labels. */
+const LABELS: ComparisonLabels = {name: 'Name', type: 'Type', currency: 'Currency', icon: 'Icon', quoteBase: 'QuoteBase', quoteBaseNote: noteOf};
 
 /** `manuallyChanged` for a request during which the user edited exactly `fields`. */
 const editedDuring = (fields: string[]) => (field: string) => fields.includes(field);
@@ -38,11 +39,8 @@ function snapshot(overrides: Partial<ComparisonSnapshot> = {}): ComparisonSnapsh
         assetType: '',
         currency: '',
         currencyUserSet: false,
+        iconUrl: '',
         quoteBaseQuantity: 1,
-        shortDescription: '',
-        descriptionFromPrefill: false,
-        sectorDistribution: {},
-        geographicDistribution: {},
         ...overrides,
     };
 }
@@ -93,34 +91,32 @@ const FULL_PATCH = {
 
 describe('compareMetadata — scope', () => {
     it.each<[ComparisonScope, string[]]>([
-        ['all', ['identifier_isin', 'identifier_other', 'display_name', 'asset_type', 'currency', 'short_description', 'sector_area', 'geographic_area']],
+        ['all', ['identifier_isin', 'identifier_other', 'display_name', 'asset_type', 'currency']],
         ['identifiers', ['identifier_isin', 'identifier_other']],
-        ['sector', ['sector_area']],
-        ['geographic', ['geographic_area']],
     ])('scope %s compares only its own fields', (scope, fields) => {
         // A BOND at 100: the full answer agrees on the quote base too, so no row is left to blur the scope (Z-32 d).
         const result = compare(FULL_PATCH, {scope, form: {quoteBaseQuantity: 100}});
         expect(result.actions.map((a) => a.field)).toEqual(fields);
         expect(result.differences).toEqual([]);
-        expect(result.missingFields).toEqual([]);
     });
+});
 
-    it.each<[ComparisonScope, string[]]>([
-        ['all', ['Sector', 'Geo']],
-        ['identifiers', []],
-        ['sector', ['Sector']],
-        ['geographic', ['Geo']],
-    ])('scope %s reports as missing only its own distributions', (scope, missing) => {
-        expect(compare({display_name: 'BTP Valore 2028'}, {scope}).missingFields).toEqual(missing);
+describe('compareMetadata — the classification is the profile’s (plan 68, E9)', () => {
+    it('never reads a provider’s description, sectors or countries, and reports nothing missing', () => {
+        // FULL_PATCH carries all three; a form holding other values must not get a row for them either
+        const result = compare(FULL_PATCH, {form: {quoteBaseQuantity: 100}});
+        const classification = ['short_description', 'sector_area', 'geographic_area'];
+        expect(result.actions.filter((a) => classification.includes(a.field))).toEqual([]);
+        expect(result.differences.filter((d) => classification.includes(d.field))).toEqual([]);
+        expect(Object.keys(result).sort()).toEqual(['actions', 'differences']);
     });
 });
 
 describe('compareMetadata — order', () => {
-    it('emits the actions in field order: identifiers (enum order), OTHER, name, type, currency, description, sector, geographic', () => {
+    it('emits the actions in field order: identifiers (enum order), OTHER, name, type, currency', () => {
         const result = compareMetadata(
             {
                 // Listed backwards on purpose: the order is the comparison's, not the payload's.
-                classification_params: {geographic_area: {distribution: {ITA: 1}}, sector_area: {Government: '1'}, short_description: 'Italian government bond'},
                 currency: 'USD',
                 asset_type: 'ETF',
                 display_name: 'BTP Valore',
@@ -138,10 +134,6 @@ describe('compareMetadata — order', () => {
                 assetType: 'ETF_BOND',
                 currency: 'EUR',
                 currencyUserSet: false,
-                shortDescription: 'BTP VALORE 2028',
-                descriptionFromPrefill: true,
-                sectorDistribution: {},
-                geographicDistribution: {ITA: 1},
             }),
             'all',
             editedDuring([]),
@@ -158,18 +150,13 @@ describe('compareMetadata — order', () => {
             {kind: 'fill', field: 'display_name', value: 'BTP Valore'},
             {kind: 'agree', field: 'asset_type'},
             {kind: 'fill', field: 'currency', value: 'USD'},
-            {kind: 'mergeDescription', field: 'short_description', value: 'Italian government bond\n\nBTP VALORE 2028'},
-            {kind: 'fillDistribution', field: 'sector_area', value: {Government: 1}},
-            {kind: 'agree', field: 'geographic_area'},
         ]);
         expect(result.differences).toEqual([]);
-        expect(result.missingFields).toEqual([]);
     });
 
     it('lists the dialog rows in the same field order, each with its label', () => {
         const result = compareMetadata(
             {
-                classification_params: {geographic_area: {distribution: {USA: 1}}, sector_area: {distribution: {Technology: 1}}, short_description: 'Apple designs consumer electronics.'},
                 currency: 'USD',
                 asset_type: 'STOCK',
                 display_name: 'Apple Inc.',
@@ -187,10 +174,6 @@ describe('compareMetadata — order', () => {
                 assetType: 'ETF',
                 currency: 'EUR',
                 currencyUserSet: true,
-                shortDescription: 'My own notes',
-                descriptionFromPrefill: false,
-                sectorDistribution: {Health: 1},
-                geographicDistribution: {ITA: 1},
             }),
             'all',
             editedDuring([]),
@@ -207,13 +190,9 @@ describe('compareMetadata — order', () => {
             stringRow('display_name', 'Name', 'Apple', 'Apple Inc.'),
             stringRow('asset_type', 'Type', 'ETF', 'STOCK'),
             stringRow('currency', 'Currency', 'EUR', 'USD'),
-            stringRow('short_description', LABELS.description, 'My own notes', 'Apple designs consumer electronics.'),
-            {field: 'sector_area', label: 'Sector', type: 'distribution', currentValue: {Health: 1}, providerValue: {Technology: 1}, selected: true},
-            {field: 'geographic_area', label: 'Geo', type: 'distribution', currentValue: {ITA: 1}, providerValue: {USA: 1}, selected: true},
         ]);
         // OTHER never makes a dialog row: it is merged.
         expect(result.actions).toEqual([{kind: 'mergeOther', field: 'identifier_other', values: ['APC.DE']}]);
-        expect(result.missingFields).toEqual([]);
     });
 });
 
@@ -263,6 +242,35 @@ describe('compareMetadata — a string field', () => {
             actions: [],
             differences: [{field: 'display_name', label: 'Name', type: 'string', currentValue: 'Apple', providerValue: 'Apple Inc.', selected: true}],
         });
+    });
+});
+
+// Project 76, P3 (the consultant's answer): the provider's logo is a field like the others, for every provider. An empty
+// icon is filled; a different one is a choice, never overwritten in silence — not even when only the case differs, since
+// a URL's path is case-sensitive.
+describe('compareMetadata — the icon', () => {
+    const LOGO = 'https://coin-images.coingecko.com/coins/images/1/large/bitcoin.png';
+
+    it('fills an empty icon', () => {
+        expect(forField(compare({icon_url: LOGO}), 'icon_url')).toEqual({actions: [{kind: 'fill', field: 'icon_url', value: LOGO}], differences: []});
+    });
+
+    it('agrees with the same icon', () => {
+        expect(forField(compare({icon_url: LOGO}, {form: {iconUrl: LOGO}}), 'icon_url')).toEqual({actions: [{kind: 'agree', field: 'icon_url'}], differences: []});
+    });
+
+    it.each<[string, string]>([
+        ['another icon', 'https://example.org/my-icon.png'],
+        ['the same address in another case', LOGO.toUpperCase()],
+    ])('asks about %s, with its label', (_label, current) => {
+        expect(forField(compare({icon_url: LOGO}, {form: {iconUrl: current}}), 'icon_url')).toEqual({
+            actions: [],
+            differences: [{field: 'icon_url', label: 'Icon', type: 'string', currentValue: current, providerValue: LOGO, selected: true}],
+        });
+    });
+
+    it('is compared in the scope «all» only', () => {
+        expect(forField(compare({icon_url: LOGO}, {scope: 'identifiers'}), 'icon_url')).toEqual(NOTHING);
     });
 });
 
@@ -361,116 +369,12 @@ describe('compareMetadata — OTHER identifiers', () => {
     });
 
     it('never merges into OTHER identifiers the user edited', () => {
-        expect(compare({identifier_other: ['APC.DE']}, {scope: 'identifiers', touched: ['identifier_other']})).toEqual({actions: [], differences: [], missingFields: []});
-    });
-});
-
-describe('compareMetadata — the description', () => {
-    const provider = (shortDescription: unknown) => ({classification_params: {short_description: shortDescription}});
-
-    it('is compared only on a full comparison carrying a provider description', () => {
-        expect(forField(compare(provider('Apple designs consumer electronics.'), {scope: 'sector'}), 'short_description')).toEqual(NOTHING);
-        expect(forField(compare(provider('Apple designs consumer electronics.'), {scope: 'identifiers'}), 'short_description')).toEqual(NOTHING);
-        expect(forField(compare(provider('')), 'short_description')).toEqual(NOTHING);
-        expect(forField(compare({classification_params: {}}), 'short_description')).toEqual(NOTHING);
-        expect(forField(compare({classification_params: null}), 'short_description')).toEqual(NOTHING);
-        expect(forField(compare({}), 'short_description')).toEqual(NOTHING);
-    });
-
-    it('merges the provider description over a broker-import prefill: provider first, then the trimmed prefill', () => {
-        const result = compare(provider('Apple designs consumer electronics.'), {form: {shortDescription: '  APPLE INC / AAPL  ', descriptionFromPrefill: true}});
-        expect(forField(result, 'short_description')).toEqual({
-            actions: [{kind: 'mergeDescription', field: 'short_description', value: 'Apple designs consumer electronics.\n\nAPPLE INC / AAPL'}],
-            differences: [],
-        });
-    });
-
-    it('keeps the provider description alone when it already contains the prefill', () => {
-        const result = compare(provider('Apple Inc. (AAPL) designs consumer electronics.'), {form: {shortDescription: ' Apple Inc. (AAPL) ', descriptionFromPrefill: true}});
-        expect(forField(result, 'short_description').actions).toEqual([{kind: 'mergeDescription', field: 'short_description', value: 'Apple Inc. (AAPL) designs consumer electronics.'}]);
-    });
-
-    it('agrees with a prefill equal to the provider description (no merge)', () => {
-        const result = compare(provider('Apple designs consumer electronics.'), {form: {shortDescription: 'Apple designs consumer electronics.', descriptionFromPrefill: true}});
-        expect(forField(result, 'short_description')).toEqual({actions: [{kind: 'agree', field: 'short_description'}], differences: []});
-    });
-
-    it('fills, without merging, a prefill that differs from the provider only by surrounding blanks', () => {
-        const result = compare(provider('Apple designs consumer electronics.'), {form: {shortDescription: '  Apple designs consumer electronics.  ', descriptionFromPrefill: true}});
-        expect(forField(result, 'short_description')).toEqual({actions: [{kind: 'fill', field: 'short_description', value: 'Apple designs consumer electronics.'}], differences: []});
-    });
-
-    it('fills an empty prefilled description through the plain compare', () => {
-        const result = compare(provider('Apple designs consumer electronics.'), {form: {shortDescription: '', descriptionFromPrefill: true}});
-        expect(forField(result, 'short_description')).toEqual({actions: [{kind: 'fill', field: 'short_description', value: 'Apple designs consumer electronics.'}], differences: []});
-    });
-
-    it("asks about a prefill the user touched, under the caller's label like every other row (X-R11)", () => {
-        const result = compare(provider('Apple designs consumer electronics.'), {form: {shortDescription: 'APPLE INC / AAPL', descriptionFromPrefill: true}, touched: ['short_description']});
-        expect(forField(result, 'short_description')).toEqual({
-            actions: [],
-            differences: [{field: 'short_description', label: LABELS.description, type: 'string', currentValue: 'APPLE INC / AAPL', providerValue: 'Apple designs consumer electronics.', selected: true}],
-        });
-    });
-
-    it('compares a description the user typed (no prefill) like any other field', () => {
-        const typed = (shortDescription: string) => forField(compare(provider('Apple designs consumer electronics.'), {form: {shortDescription, descriptionFromPrefill: false}}), 'short_description');
-        expect(typed('My own notes')).toEqual({
-            actions: [],
-            differences: [{field: 'short_description', label: LABELS.description, type: 'string', currentValue: 'My own notes', providerValue: 'Apple designs consumer electronics.', selected: true}],
-        });
-        expect(typed('')).toEqual({actions: [{kind: 'fill', field: 'short_description', value: 'Apple designs consumer electronics.'}], differences: []});
-        expect(typed('Apple designs consumer electronics.')).toEqual({actions: [{kind: 'agree', field: 'short_description'}], differences: []});
-    });
-});
-
-describe.each<[string, 'sector_area' | 'geographic_area', 'sector' | 'geographic', string]>([
-    ['sector', 'sector_area', 'sector', 'Sector'],
-    ['geographic', 'geographic_area', 'geographic', 'Geo'],
-])('compareMetadata — the %s distribution', (_name, field, scope, label) => {
-    const provider = (area: unknown) => ({classification_params: {[field]: area}});
-    const form = (distribution: Distribution): Partial<ComparisonSnapshot> => (field === 'sector_area' ? {sectorDistribution: distribution} : {geographicDistribution: distribution});
-
-    it('fills an empty, untouched distribution with the normalized provider weights', () => {
-        expect(compare(provider({distribution: {A: '0.25', B: 0.75}}), {scope})).toEqual({actions: [{kind: 'fillDistribution', field, value: {A: 0.25, B: 0.75}}], differences: [], missingFields: []});
-    });
-
-    it('reads a bare weight map as well as a {distribution} wrapper', () => {
-        expect(compare(provider({A: '0.5', B: '0.5'}), {scope}).actions).toEqual([{kind: 'fillDistribution', field, value: {A: 0.5, B: 0.5}}]);
-    });
-
-    it('asks when the form holds a different distribution', () => {
-        expect(compare(provider({distribution: {A: 1}}), {scope, form: form({B: 1})})).toEqual({
-            actions: [],
-            differences: [{field, label, type: 'distribution', currentValue: {B: 1}, providerValue: {A: 1}, selected: true}],
-            missingFields: [],
-        });
-    });
-
-    it('asks when the user emptied the distribution during the request', () => {
-        expect(compare(provider({distribution: {A: 1}}), {scope, touched: [field]}).differences).toEqual([{field, label, type: 'distribution', currentValue: {}, providerValue: {A: 1}, selected: true}]);
-    });
-
-    it('agrees with the same weights, in any key order and given as strings', () => {
-        expect(compare(provider({distribution: {B: '0.6', A: 0.4}}), {scope, form: form({A: 0.4, B: 0.6})})).toEqual({actions: [{kind: 'agree', field}], differences: [], missingFields: []});
-    });
-
-    it('says nothing about the same weights on a touched distribution', () => {
-        expect(compare(provider({distribution: {A: 1}}), {scope, form: form({A: 1}), touched: [field]})).toEqual({actions: [], differences: [], missingFields: []});
-    });
-
-    it('reports the distribution as missing when the provider has none', () => {
-        const answers = [{}, {classification_params: null}, {classification_params: {}}, provider(null)];
-        expect(answers.map((patchData) => compare(patchData, {scope}))).toEqual(answers.map(() => ({actions: [], differences: [], missingFields: [label]})));
-    });
-
-    it('throws on a weight that is not a number', () => {
-        expect(() => compare(provider({distribution: {A: 'abc'}}), {scope})).toThrow('Invalid distribution weight.');
+        expect(compare({identifier_other: ['APC.DE']}, {scope: 'identifiers', touched: ['identifier_other']})).toEqual({actions: [], differences: []});
     });
 });
 
 describe('compareMetadata — purity', () => {
-    it('never writes into the payload, the snapshot or the quote base suggestion, and fills with a copy of the provider weights', () => {
+    it('never writes into the payload, the snapshot or the quote base suggestion', () => {
         // Built fresh on each call, so the frozen copy shares nothing with the one it is compared against.
         const buildPatch = () => ({
             identifier_isin: 'IT0005557006',
@@ -485,7 +389,7 @@ describe('compareMetadata — purity', () => {
                 geographic_area: {distribution: {ITA: 1}},
             },
         });
-        const buildForm = () => snapshot({identifiers: {ISIN: 'IT0005556990'}, displayName: 'btp valore 2028', shortDescription: 'BTP VALORE', descriptionFromPrefill: true, geographicDistribution: {ITA: 0.5, FRA: 0.5}});
+        const buildForm = () => snapshot({identifiers: {ISIN: 'IT0005556990'}, displayName: 'btp valore 2028'});
         // The third input since Z-32 d: the plugin's suggestion for the line. The form holds the blank 1, so it makes a row.
         const buildSuggestion = () => ({quantity: 100, quote_currency: 'EUR'});
         const patchData = deepFreeze(buildPatch());
@@ -494,16 +398,12 @@ describe('compareMetadata — purity', () => {
 
         const result = compareMetadata(patchData, form, 'all', editedDuring([]), LABELS, suggestion);
 
-        // Writes of every kind were decided, plus three dialog rows — none of them into the inputs.
-        expect(result.actions.map((a) => a.kind)).toEqual(['fill', 'mergeOther', 'fill', 'fill', 'fill', 'mergeDescription', 'fillDistribution']);
-        expect(result.differences.map((d) => d.field)).toEqual(['identifier_isin', 'quote_base_quantity', 'geographic_area']);
+        // Writes of every kind were decided, plus two dialog rows — none of them into the inputs.
+        expect(result.actions.map((a) => a.kind)).toEqual(['fill', 'mergeOther', 'fill', 'fill', 'fill']);
+        expect(result.differences.map((d) => d.field)).toEqual(['identifier_isin', 'quote_base_quantity']);
         expect(patchData).toEqual(buildPatch());
         expect(form).toEqual(buildForm());
         expect(suggestion).toEqual(buildSuggestion());
-        // The filled distribution is a new object: the form never aliases the provider's answer.
-        const fill = result.actions.find((a) => a.kind === 'fillDistribution');
-        expect(fill).toEqual({kind: 'fillDistribution', field: 'sector_area', value: {Government: 1}});
-        expect(fill?.kind === 'fillDistribution' && fill.value).not.toBe(patchData.classification_params.sector_area.distribution);
     });
 });
 
@@ -586,18 +486,13 @@ describe('compareMetadata — the quote base (Z-32 d)', () => {
     it.each<[ComparisonScope, number]>([
         ['all', 1],
         ['identifiers', 0],
-        ['sector', 0],
-        ['geographic', 0],
     ])('scope %s: %i quote base row — only a full comparison proposes one', (scope, rows) => {
         expect(forField(compare({}, {scope, form: {assetType: 'STOCK', quoteBaseQuantity: 1}, suggestion: PENCE}), 'quote_base_quantity').differences).toHaveLength(rows);
     });
 
-    it('lists the quote base row right after the currency row, before the description', () => {
-        const result = compare(
-            {display_name: 'Apple Inc.', asset_type: 'STOCK', currency: 'USD', classification_params: {short_description: 'Apple designs consumer electronics.'}},
-            {form: {displayName: 'Apple', assetType: 'ETF', currency: 'EUR', currencyUserSet: true, shortDescription: 'My own notes', quoteBaseQuantity: 100}},
-        );
-        expect(result.differences.map((d) => d.field)).toEqual(['display_name', 'asset_type', 'currency', 'quote_base_quantity', 'short_description']);
+    it('lists the quote base row right after the currency row, the last one', () => {
+        const result = compare({display_name: 'Apple Inc.', asset_type: 'STOCK', currency: 'USD'}, {form: {displayName: 'Apple', assetType: 'ETF', currency: 'EUR', currencyUserSet: true, quoteBaseQuantity: 100}});
+        expect(result.differences.map((d) => d.field)).toEqual(['display_name', 'asset_type', 'currency', 'quote_base_quantity']);
     });
 
     it('notes the row with what the caller’s label says for its source — nothing included', () => {

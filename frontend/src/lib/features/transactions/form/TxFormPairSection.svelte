@@ -9,7 +9,7 @@
     import {ArrowRight, ArrowDown, Info} from 'lucide-svelte';
     import {getRoleIcon, getRoleIconColor} from '$lib/utils/broker/brokerRoleHelpers';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
-    import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
+    import TxFormAssetField from '$lib/features/transactions/form/TxFormAssetField.svelte';
     import BrokerSearchSelect from '$lib/components/ui/select/BrokerSearchSelect.svelte';
     import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
@@ -190,16 +190,7 @@
     {#if pairLayout === 'transfer_asset'}
         <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-asset-wrap">
             <span class="text-xs text-lf-muted">{$t('common.asset')} *</span>
-            <TxCellMark cell="asset" marks={markedCells}
-                ><AssetSelect
-                    bind:value={draft.asset_id}
-                    disabled={isReadonly || rowSaved}
-                    onchange={setAsset}
-                    testid="tx-form-asset"
-                    createLabel={isReadonly || rowSaved ? undefined : $t('assets.create') || 'New asset'}
-                    onCreateNew={isReadonly || rowSaved ? undefined : () => (createAssetOpen = true)}
-                /></TxCellMark
-            >
+            <TxCellMark cell="asset" marks={markedCells}><TxFormAssetField value={draft.asset_id} disabled={isReadonly || rowSaved} onchange={setAsset} onCreateNew={isReadonly || rowSaved ? undefined : () => (createAssetOpen = true)} /></TxCellMark>
         </div>
         <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-quantity-wrap">
             <span class="text-xs text-lf-muted">

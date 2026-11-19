@@ -65,15 +65,18 @@ def _params_to_store(raw_params: object) -> object:
 def _is_parametric(code: str) -> bool:
     """Whether the provider ``code`` invents its series from the assignment's params (PARAMETRIC_GENERATION).
 
-    A fact about the stored assignment: read even when the instance's allow-list switches the provider off (X1), so
-    leaving it still wipes the invented series."""
-    plugin_class = AssetProviderRegistry.registered_plugin(code)
-    if plugin_class is None:
-        return False
-    try:
-        return plugin_class().provider_kind == FAProviderKind.PARAMETRIC_GENERATION
-    except Exception:  # noqa: BLE001 — a provider that cannot be built has no kind to read: not parametric, as an unknown code
-        return False
+    A fact about the stored assignment: the served instance answers it, and when the instance's allow-list switches the
+    provider off (X1) its registered class does, so leaving it still wipes the invented series."""
+    instance = AssetProviderRegistry.get_provider_instance(code)
+    if instance is None:
+        plugin_class = AssetProviderRegistry.registered_plugin(code)
+        if plugin_class is None:
+            return False
+        try:
+            instance = plugin_class()
+        except Exception:  # noqa: BLE001 — a provider that cannot be built has no kind to read: not parametric, as an unknown code
+            return False
+    return instance.provider_kind == FAProviderKind.PARAMETRIC_GENERATION
 
 
 def _wipe_reason(stored_code: str, stored_params: object, code: str, params: object) -> str:

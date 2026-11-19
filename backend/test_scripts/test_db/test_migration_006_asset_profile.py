@@ -60,9 +60,11 @@ The contract pinned here:
     ``classification_params`` (read with ``parse_float=Decimal``: JSON numbers as ``populate_mock_data`` writes them,
     strings as the app writes them), each part becomes a row of ``asset_profile_updates``, ``source='legacy'``,
     ``user_id`` and ``source_date`` NULL: ``short_description`` (non-empty text) → ``description``,
-    ``geographic_area.distribution`` → ``geography``, ``sector_area.distribution`` → ``sector``. ``read_on`` is the day
-    of the upgrade in ``scheduler_timezone`` (the ``global_settings`` row; none, or not a zone → UTC); one
-    ``created_at`` for the run. Skipped, that asset or that voice only: a column NULL, ``''``, ``'{}'``, not JSON, not
+    ``geographic_area.distribution`` → ``geography``, ``sector_area.distribution`` → ``sector``. ``read_on`` is the
+    asset's first day (A4b, PROF's decision of round 43): the earliest of the day of its ``created_at``, its first
+    ``price_history`` day and its first ``transactions`` day — imported prices and back-dated transactions often go back
+    years before ``created_at``; with neither, the day of ``created_at``. 1.3 held these values as true on every day, so
+    the profile does too; never the day of the upgrade. One ``created_at`` for the run. Skipped, that asset or that voice only: a column NULL, ``''``, ``'{}'``, not JSON, not
     an object; a description that is not a non-empty text; a distribution absent, not an object, empty, with a negative
     weight, a weight that is not a number, or a sum farther than 0.01 from 1. Each copied value reads back as the store
     reads it — ``normalize_value(key, json.loads(row.value))`` — equal to ``normalize_value(key, the part)``. Run
@@ -105,7 +107,6 @@ from decimal import Decimal
 from pathlib import Path
 from types import ModuleType
 from typing import Any, NoReturn, Optional
-from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import create_engine
@@ -988,8 +989,7 @@ LEGACY = "legacy"
 #: Where each voice sits in ``classification_params``.
 PATH_OF_VOICE = {"description": ("short_description",), "geography": ("geographic_area", "distribution"), "sector": ("sector_area", "distribution")}
 #: Two zones 26 hours apart: their dates always differ, and at any hour at least one differs from UTC's.
-FAR_EAST, FAR_WEST = "Pacific/Kiritimati", "Etc/GMT+12"
-INSERT_SETTING = "INSERT INTO global_settings (key, value, value_type, description, updated_at, updated_by_user_id) VALUES ('scheduler_timezone', ?, 'str', NULL, ?, NULL)"
+INSERT_TRANSACTION = "INSERT INTO transactions (broker_id, asset_id, type, date, quantity, amount, currency, created_at, updated_at) VALUES (1, ?, 'BUY', ?, 1, -100, 'EUR', ?, ?)"
 INSERT_CLASSIFIED = "INSERT INTO assets (id, display_name, currency, classification_params, asset_type, active, created_at, updated_at) VALUES (?, ?, 'EUR', ?, 'ETF', 1, ?, ?)"
 
 
@@ -1100,8 +1100,11 @@ def _assert_copy_ran(rows: list[dict[str, Any]], where: str) -> None:
     assert reason is None, reason
 
 
-def _today_in(zone: str) -> date:
-    return datetime.now(ZoneInfo(zone)).date()
+#: The first day of each asset of the classified install (``_populate_classified``): the fully classified one has
+#: prices from 2 November, before its ``created_at`` (``STAMP``, 10 November); the others have no price and no
+#: transaction, so their day is the day of their ``created_at``.
+CREATED_DAY = date(2026, 11, 10)
+FIRST_DAY = {FULL: date(2026, 11, 2)}
 
 
 @dataclass(frozen=True)
@@ -1115,12 +1118,6 @@ class ClassifiedUpgrade:
     days: set[date]
     violations: list[tuple[Any, ...]]
     integrity: list[tuple[Any, ...]]
-
-
-@pytest.fixture(autouse=True)
-def _no_timezone_variable(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``LIBREFOLIO_DEFAULT_TIMEZONE`` stands behind ``scheduler_timezone`` in the app: never here, the copy reads the row."""
-    monkeypatch.delenv("LIBREFOLIO_DEFAULT_TIMEZONE", raising=False)
 
 
 @pytest.fixture(scope="module")
@@ -1188,23 +1185,21 @@ def classified_downgrade(classified_upgrade: ClassifiedUpgrade, tmp_path_factory
     )
 
 
-def _with_zone(at_005: Path, target: Path, zone: Optional[str]) -> Path:
-    """A 1.3 install at 005 with one described asset and, unless ``zone`` is None, that ``scheduler_timezone`` row."""
+def _read_on_of_one_asset(at_005: Path, target: Path, created: str, prices: tuple[str, ...], transactions: tuple[str, ...]) -> list[date]:
+    """A 1.3 install at 005 with one described asset created at ``created``, those price and transaction days, upgraded
+    to 006: the ``read_on`` of its profile rows."""
     db = _copy(at_005, target)
     with _foreign_keys_on(db) as conn:
-        conn.execute(INSERT_CLASSIFIED, (1, "Zone probe ETF", '{"short_description":"Zone probe"}', STAMP, STAMP))
-        if zone is not None:
-            conn.execute(INSERT_SETTING, (zone, STAMP))
+        conn.execute("INSERT INTO brokers (id, name, created_at, updated_at) VALUES (1, 'First Day Broker', ?, ?)", (STAMP, STAMP))
+        conn.execute(INSERT_CLASSIFIED, (1, "First day ETF", '{"short_description":"First day probe"}', created, created))
+        conn.executemany(
+            "INSERT INTO price_history (asset_id, date, close, currency, source_plugin_key, fetched_at) VALUES (1, ?, 100, 'EUR', 'manual', ?)",
+            [(day, STAMP) for day in prices],
+        )
+        conn.executemany(INSERT_TRANSACTION, [(1, day, STAMP, STAMP) for day in transactions])
         conn.commit()
-    return db
-
-
-def _read_on_after_upgrade(db: Path, zone: str) -> tuple[list[date], set[date]]:
-    """The ``read_on`` of every profile row after ``upgrade 006``, and the dates ``zone`` had around the run."""
-    first = _today_in(zone)
     _migrate(db, "upgrade", REV_006)
-    last = _today_in(zone)
-    return [date.fromisoformat(str(row["read_on"])) for row in _profile_rows(db)], {first, last}
+    return [date.fromisoformat(str(row["read_on"])) for row in _profile_rows(db)]
 
 
 # --- the step ----------------------------------------------------------------------------------------------------------
@@ -1272,17 +1267,18 @@ def test_the_mock_data_floats_and_services_read_back_as_known_maps(classified_up
     assert found == {"geography": {"USA": "1.0000"}, "sector": {"Other": "0.1500", "Technology": "0.8500"}}, f"the mock-data maps read back as {found}"
 
 
-def test_every_legacy_row_has_no_author_no_source_date_the_upgrade_day_and_one_created_at(classified_upgrade: ClassifiedUpgrade) -> None:
-    """Every row of the copy: ``source='legacy'``, ``user_id`` and ``source_date`` NULL, ``read_on`` the day of the
-    upgrade in UTC (no ``scheduler_timezone`` row), and one ``created_at`` for the whole run."""
+def test_every_legacy_row_has_no_author_no_source_date_the_assets_first_day_and_one_created_at(classified_upgrade: ClassifiedUpgrade) -> None:
+    """Every row of the copy: ``source='legacy'``, ``user_id`` and ``source_date`` NULL, ``read_on`` its asset's first day
+    (A4b: the fully classified asset's first price, before its ``created_at``; the others' ``created_at`` day, having
+    neither price nor transaction), and one ``created_at`` for the whole run."""
     rows = classified_upgrade.profile
     _assert_copy_ran(rows, "the classified install upgraded")
     expected = sum(len(case.copied) for case in LEGACY_CASES)
     assert len(rows) == expected, f"the copy writes {expected} rows, found {len(rows)}"
     wrong = [row for row in rows if (row["source"], row["user_id"], row["source_date"]) != (LEGACY, None, None)]
     assert wrong == [], f"a legacy row has no author and no source date: {wrong[:3]}"
-    days = {date.fromisoformat(str(row["read_on"])) for row in rows}
-    assert len(days) == 1 and days <= classified_upgrade.days, f"read_on must be the UTC day of the upgrade {sorted(classified_upgrade.days)}: {sorted(days)}"
+    wrong_days = [(row["asset_id"], row["key"], row["read_on"]) for row in rows if date.fromisoformat(str(row["read_on"])) != FIRST_DAY.get(row["asset_id"], CREATED_DAY)]
+    assert wrong_days == [], f"read_on must be the asset's first day (first price {FIRST_DAY}, else the created_at day {CREATED_DAY}): {wrong_days}"
     stamps = {row["created_at"] for row in rows}
     assert len(stamps) == 1, f"one created_at for the run, found {sorted(stamps)}"
 
@@ -1299,27 +1295,23 @@ def test_the_classified_upgrade_keeps_every_other_row_and_no_violation(classifie
     assert classified_upgrade.integrity == [("ok",)], f"integrity_check: {classified_upgrade.integrity}"
 
 
-# --- read_on in the scheduler's time zone ------------------------------------------------------------------------------
+# --- read_on: the asset's first day (A4b) ------------------------------------------------------------------------------
 
 
-def test_read_on_is_the_upgrade_day_in_the_scheduler_timezone(at_005: Path, tmp_path: Path) -> None:
-    """With ``scheduler_timezone`` saved, ``read_on`` is the day of the upgrade in that zone: two installs in zones 26
-    hours apart get two different days, each its zone's."""
-    found: dict[str, tuple[list[date], set[date]]] = {}
-    for zone in (FAR_EAST, FAR_WEST):
-        found[zone] = _read_on_after_upgrade(_with_zone(at_005, tmp_path / zone.replace("/", "-") / "app.db", zone), zone)
-    for zone, (days, around) in found.items():
-        assert len(days) == 1, f"red until A4: in {zone} the described asset must get one legacy row: read_on {days}"
-        assert days[0] in around, f"in {zone} read_on must be the zone's day of the upgrade {sorted(around)}: {days[0]}"
-    assert found[FAR_EAST][0] != found[FAR_WEST][0], f"two zones 26 hours apart must give two days: {found}"
-
-
-@pytest.mark.parametrize("zone", [pytest.param(None, id="no-row"), pytest.param("Not/AZone", id="not-a-zone")])
-def test_read_on_is_the_utc_day_without_a_valid_scheduler_timezone(at_005: Path, tmp_path: Path, zone: Optional[str]) -> None:
-    """No ``scheduler_timezone`` row, or one that names no zone: ``read_on`` is the day of the upgrade in UTC."""
-    days, around = _read_on_after_upgrade(_with_zone(at_005, tmp_path / "app.db", zone), "UTC")
-    assert len(days) == 1, f"red until A4: the described asset must get one legacy row: read_on {days}"
-    assert days[0] in around, f"read_on must be the UTC day of the upgrade {sorted(around)}: {days[0]}"
+@pytest.mark.parametrize(
+    ("created", "prices", "transactions", "expected"),
+    [
+        pytest.param("2026-11-10 09:30:00.000000", ("2021-03-01", "2026-11-03"), (), date(2021, 3, 1), id="prices-before-creation"),
+        pytest.param("2026-11-10 09:30:00.000000", ("2021-03-01",), ("2019-06-14",), date(2019, 6, 14), id="a-transaction-before-everything"),
+        pytest.param("2026-11-10 09:30:00.000000", (), (), date(2026, 11, 10), id="no-price-no-transaction"),
+        pytest.param("2018-01-05 23:59:59.000000", ("2021-03-01",), ("2022-02-02",), date(2018, 1, 5), id="created-first"),
+    ],
+)
+def test_read_on_is_the_assets_first_day(at_005: Path, tmp_path: Path, created: str, prices: tuple[str, ...], transactions: tuple[str, ...], expected: date) -> None:
+    """``read_on`` is the earliest of the day of ``created_at``, the first price and the first transaction; with neither
+    price nor transaction, the day of ``created_at``. Never the day of the upgrade."""
+    days = _read_on_of_one_asset(at_005, tmp_path / "app.db", created, prices, transactions)
+    assert days == [expected], f"the described asset gets one legacy row on its first day {expected}: {days}"
 
 
 # --- run again ---------------------------------------------------------------------------------------------------------

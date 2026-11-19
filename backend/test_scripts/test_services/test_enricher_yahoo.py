@@ -10,8 +10,9 @@ What it promises, pinned here with no network:
    share), the ETF family (``ETF`` and every ``ETF_*``) and ``FUND`` at degree 20 (after justETF and Borsa Italiana),
    every other type ``None`` (``CRYPTO``, ``COMMODITY``, ``BOND`` among them). Voices: a share ``sector``, ``industry``,
    ``issuer_country``, ``market_cap``, ``description``; a fund ``ter``, ``fund_provider``, ``inception_date``,
-   ``sector``, ``description``. ``page_url`` ``https://finance.yahoo.com/quote/<ticker>``. A pause between two tickers
-   of one ``read``, ``pause_seconds``, greater than 0 by default (the tests set it to 0, never wait). ``test_cases``: a
+   ``sector``, ``description``. ``page_url`` ``https://finance.yahoo.com/quote/<ticker>``. C5: one module-level ``Pacer``
+   spaces every call to Yahoo (``.info``, ``funds_data``), whatever read or «Riconosci» it comes from (the tests replace
+   it with one on a fake clock: no test waits). ``test_cases``: a
    ``STOCK`` and an ETF, both ``TICKER``. ``yfinance`` imported at module level as ``yf``; nothing imported from the price
    plugin of the same name.
 
@@ -72,7 +73,7 @@ import copy
 import importlib
 import importlib.util
 import json
-import time
+import threading
 from collections.abc import Iterator
 from decimal import Decimal
 from pathlib import Path
@@ -97,7 +98,9 @@ from backend.app.services.enrichers.base import (
     EnricherTerms,
 )
 from backend.app.services.enrichers.registry import EnricherRegistry
+from backend.app.services.plugin_settings.call_limits import CALL_LIMIT_KEYS
 from backend.app.utils.asset.sector import validate_sector
+from backend.app.utils.runtime.pacing import Pacer
 
 PLUGIN_MODULE = "backend.app.services.enricher_providers.yahoo_finance.plugin"
 CODE = "yfinance"
@@ -381,9 +384,7 @@ def yahoo(yh: ModuleType, monkeypatch: pytest.MonkeyPatch) -> FakeYahoo:
 
 @pytest.fixture
 def plugin(yh: ModuleType, yahoo: FakeYahoo):
-    instance = yh.YahooFinanceEnricher()
-    instance.pause_seconds = 0
-    return instance
+    return yh.YahooFinanceEnricher()
 
 
 def _ticker(symbol: str) -> EnricherBinding:
@@ -478,7 +479,9 @@ def test_declarations(yh):
     assert cls.name == "Yahoo Finance"
     assert cls.terms is EnricherTerms.PRICE_SOURCE
     assert cls.accepted_identifier_types == ("TICKER",), "the ticker only: an ISIN would let Yahoo pick the listing"
-    assert tuple(cls.settings_fields) == (), "no settings"
+    own = tuple(field.key for field in cls.settings_fields if field.key not in CALL_LIMIT_KEYS)
+    assert own == (), "no settings of its own"
+    assert tuple(field.key for field in cls.settings_fields if field.key in CALL_LIMIT_KEYS) == CALL_LIMIT_KEYS, "it calls a source: the core gives it the five call limits (76 U4)"
     assert not getattr(cls, "test_only", False), "a real enricher, served outside test mode"
     instance = cls()
     assert instance.params_schema == [], "no extra parameters of a binding"
@@ -536,8 +539,9 @@ def test_page_url(plugin, yahoo, symbol):
     assert yahoo.constructed == [], "the page needs no call"
 
 
-def test_pause_between_tickers_is_positive_by_default(yh):
-    assert yh.YahooFinanceEnricher().pause_seconds > 0
+def test_the_pace_between_calls_is_positive(pace):
+    """C5: the module's pace (the ``pace`` fixture checks it is a module-level Pacer) waits more than nothing."""
+    assert pace.interval > 0
 
 
 def test_test_cases_for_the_external_suite(plugin):
@@ -1073,23 +1077,17 @@ def test_read_every_recording_in_one_call(plugin, yahoo):
     assert sorted(yahoo.symbols_read) == sorted(binding.identifier for binding in bindings)
 
 
-def test_read_pauses_between_tickers(plugin, yahoo, monkeypatch):
-    """``pause_seconds`` between two tickers of one read: three shares, two pauses, none before the first."""
-    pauses: list[float] = []
-    monkeypatch.setattr(time, "sleep", pauses.append)
-    plugin.pause_seconds = 7.25
+def test_read_paces_between_tickers(plugin, yahoo, pace):
+    """C5: the module's pace between two calls to Yahoo: three shares, two waits of the interval, none before the first."""
     bindings = [_offer(yahoo, name)[0] for name in ("enel", "apple", "asml")]
     items = _by_index(list(plugin.read(bindings)), 3)
     assert all(item.status == EnricherReadStatus.OK for item in items.values())
-    assert [pause for pause in pauses if pause == 7.25] == [7.25, 7.25], f"two pauses of pause_seconds: {pauses}"
+    assert pace.slept == [pace.interval, pace.interval], f"two waits of the interval: {pace.slept}"
 
 
-def test_read_with_no_pause_never_sleeps(plugin, yahoo, monkeypatch):
-    pauses: list[float] = []
-    monkeypatch.setattr(time, "sleep", pauses.append)
-    bindings = [_offer(yahoo, name)[0] for name in ("enel", "apple")]
-    assert len(list(plugin.read(bindings))) == 2
-    assert [pause for pause in pauses if pause > 0] == [], f"pause_seconds 0 never waits: {pauses}"
+def test_a_single_call_never_waits(plugin, yahoo, pace):
+    assert len(list(plugin.read([_offer(yahoo, "enel")[0]]))) == 1
+    assert pace.slept == [], f"one call, no wait: {pace.slept}"
 
 
 def test_raw_values_are_never_floats(plugin, yahoo):
@@ -1102,3 +1100,55 @@ def test_raw_values_are_never_floats(plugin, yahoo):
         assert floats == {}, f"{name}: floats among the raw values: {floats}"
         if "ter" in values:
             assert Decimal(str(values["ter"])) == Decimal(EXPECTED_STORED[name]["ter"]), f"{name}: the raw TER is the exact fraction"
+
+
+# =============================================================================
+# C5: one pace for every call of the plugin, whatever read it comes from
+# =============================================================================
+
+
+class FakePace:
+    """The module's ``_PACER`` replaced by one on a fake clock that only moves when it sleeps: no test ever waits, and
+    the waits are recorded. ``interval`` is the plugin's own."""
+
+    def __init__(self, interval: float) -> None:
+        self.interval = interval
+        self.now = 1000.0
+        self.slept: list[float] = []
+        self._lock = threading.Lock()
+
+    def clock(self) -> float:
+        with self._lock:
+            return self.now
+
+    def sleep(self, seconds: float) -> None:
+        with self._lock:
+            self.slept.append(seconds)
+            self.now += seconds
+
+
+@pytest.fixture(autouse=True)
+def pace(monkeypatch: pytest.MonkeyPatch) -> FakePace:
+    """Every test of this file runs on the fake pace: the module must hold its ``_PACER`` (C5)."""
+    module = importlib.import_module(PLUGIN_MODULE)
+    real = module._PACER
+    assert isinstance(real, Pacer) and real.interval_seconds > 0, "the plugin paces its calls with a module-level Pacer"
+    fake = FakePace(real.interval_seconds)
+    monkeypatch.setattr(module, "_PACER", Pacer(real.interval_seconds, clock=fake.clock, sleep=fake.sleep), raising=True)
+    return fake
+
+
+def test_two_reads_share_one_pace(yh, yahoo, pace):
+    """Two reads from two instances (as the registry builds them): the second waits the plugin's interval."""
+    first, second = yh.YahooFinanceEnricher(), yh.YahooFinanceEnricher()
+    assert list(first.read([_offer(yahoo, "enel")[0]]))[0].status == EnricherReadStatus.OK
+    calls_before = len(pace.slept)
+    assert list(second.read([_offer(yahoo, "apple")[0]]))[0].status == EnricherReadStatus.OK
+    assert pace.interval in pace.slept[calls_before:], f"the second read waited the interval: {pace.slept}"
+
+
+def test_recognize_is_paced_with_the_reads(yh, yahoo, pace, plugin):
+    binding = _offer(yahoo, "enel")[0]
+    plugin.recognize(binding)
+    list(plugin.read([binding]))
+    assert pace.interval in pace.slept, f"recognize and read share the pace: {pace.slept}"

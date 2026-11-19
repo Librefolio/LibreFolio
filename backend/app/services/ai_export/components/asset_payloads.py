@@ -52,20 +52,6 @@ class AssetComponentModel(StrictModel):
 # =============================================================================
 
 
-class AssetGeographicWeight(AssetComponentModel):
-    """One geographic-area weight, verbatim from `Asset.classification_params`."""
-
-    area: str
-    weight: SafeDecimal
-
-
-class AssetSectorWeight(AssetComponentModel):
-    """One sector weight, verbatim from `Asset.classification_params`."""
-
-    sector: str
-    weight: SafeDecimal
-
-
 class AssetIdentifiers(AssetComponentModel):
     """Every identifier column recorded for this asset - factual data, never a link-out."""
 
@@ -77,23 +63,12 @@ class AssetIdentifiers(AssetComponentModel):
     other: tuple[str, ...] = ()
 
 
-class AssetClassification(AssetComponentModel):
-    """Structured classification plus the free-text provider/user description, kept as data only.
-
-    `short_description` is never interpreted, templated or used for control
-    flow anywhere in this runtime - it is carried through verbatim, exactly
-    like every other field here, even if it contains adversarial content
-    (e.g. markup or script-like text): this component only ever describes
-    data, it does not render or execute it.
-    """
-
-    short_description: str | None = None
-    geographic_area: tuple[AssetGeographicWeight, ...] = ()
-    sector_area: tuple[AssetSectorWeight, ...] = ()
-
-
 class AssetIdentityPayload(AssetComponentModel):
-    """`asset.identity` payload: point-in-time identity/classification/currency facts."""
+    """`asset.identity` payload: point-in-time identity and currency facts.
+
+    Version 2 (plan 68, D5): no classification any more. The description, countries and sectors are voices of the
+    asset's profile, exported with their dates by `asset.profile`.
+    """
 
     asset_id: int
     display_name: str
@@ -102,7 +77,126 @@ class AssetIdentityPayload(AssetComponentModel):
     quote_base_quantity: int
     active: bool
     identifiers: AssetIdentifiers
-    classification: AssetClassification
+
+
+# =============================================================================
+# asset.profile
+# =============================================================================
+
+
+#: What a row's ``source`` says (plan 68, D5): without it «legacy» would read like a stale source.
+PROFILE_SOURCE_SEMANTICS = "source legacy = the asset's value before the profile existed, copied when the profile was introduced; " "source user = written by hand; any other source = the code of the data source (enricher) that read it."
+
+
+class AssetProfilePercentageRow(AssetComponentModel):
+    """One step of a percentage voice (TER, yields, coupon rate…): ``value_ratio`` is a fraction (0.0022 = 0.22 %)."""
+
+    voice: str
+    date: Date
+    through: Date
+    source: str
+    value_ratio: SafeDecimal
+
+
+class AssetProfileAmountRow(AssetComponentModel):
+    """One step of an amount voice (fund size, market cap…), in the currency the source gave."""
+
+    voice: str
+    date: Date
+    through: Date
+    source: str
+    amount: SafeDecimal
+    currency: str
+
+
+class AssetProfileValueRow(AssetComponentModel):
+    """One step of a number, date, text, choice, country or currency voice, as its stored text.
+
+    A text (the description) is carried through verbatim, even if it contains markup or script-like content: this
+    component only describes data, it never renders or executes it.
+    """
+
+    voice: str
+    date: Date
+    through: Date
+    source: str
+    value: str
+    unit: str | None = None
+
+
+class AssetProfileWeightRow(AssetComponentModel):
+    """One key of a map voice (countries, sectors) in one step: its weight, a fraction of 1."""
+
+    voice: str
+    date: Date
+    through: Date
+    source: str
+    key: str
+    weight: SafeDecimal
+
+
+class AssetProfileCouponRow(AssetComponentModel):
+    """One row of the coupon schedule in one step: the rate (a fraction) from ``from_date`` to ``to_date``."""
+
+    voice: str
+    date: Date
+    through: Date
+    source: str
+    from_date: Date
+    to_date: Date
+    rate_ratio: SafeDecimal
+
+
+class AssetProfileEmptiedRow(AssetComponentModel):
+    """A step whose value was emptied on purpose by the user: distinct from a voice with no rows (absent)."""
+
+    voice: str
+    date: Date
+    through: Date
+    source: str
+
+
+class AssetProfileThinnedVoice(AssetComponentModel):
+    """A voice whose rows were thinned to its first and last step of the window: one that changes at every read (the
+    catalogue's ``volatile``) or a map (countries, sectors, refreshed with every holdings report). ``changes_in_window``
+    is how many times it changed inside the window (its steps there, minus one)."""
+
+    voice: str
+    changes_in_window: int
+
+
+class AssetProfileFreshnessRow(AssetComponentModel):
+    """How fresh «now» is for a voice that changes at every read, when its last step in the window holds «now» (plan 68,
+    D1d):
+    ``confirmed_on`` the day it was last confirmed (its source last gave it; else the day it was read or written by
+    hand), ``stale`` that day is more than 30 days ago («non aggiornato»)."""
+
+    voice: str
+    confirmed_on: Date
+    stale: bool
+
+
+class AssetProfilePayload(AssetComponentModel):
+    """`asset.profile` payload (plan 68, D5): the asset's profile voices as facts, one row per step in the period.
+
+    Steps hold from ``date`` to ``through`` (both included), never carried back before the first row: a window before
+    ``history_starts_on`` has no row. ``no_profile_data`` says the asset has no profile row at all. One table per shape
+    of value; a voice the asset has no row of is absent. ``freshness`` (D1d): for the volatile voices whose last step
+    holds «now», when it was last confirmed and whether that is stale; none for a window that ends before «now» was read.
+    """
+
+    asset_id: int
+    no_profile_data: bool
+    history_starts_on: Date | None = None
+    source_semantics: str = PROFILE_SOURCE_SEMANTICS
+    percentages: tuple[AssetProfilePercentageRow, ...] = ()
+    amounts: tuple[AssetProfileAmountRow, ...] = ()
+    values: tuple[AssetProfileValueRow, ...] = ()
+    weights: tuple[AssetProfileWeightRow, ...] = ()
+    coupon_schedule: tuple[AssetProfileCouponRow, ...] = ()
+    emptied: tuple[AssetProfileEmptiedRow, ...] = ()
+    thinned: tuple[AssetProfileThinnedVoice, ...] = ()
+    freshness: tuple[AssetProfileFreshnessRow, ...] = ()
 
 
 # =============================================================================
@@ -542,13 +636,11 @@ __all__ = [
     "AssetBrokerCostValuePl",
     "AssetBrokerPeriodPerformance",
     "AssetBrokerPosition",
-    "AssetClassification",
     "AssetComponentModel",
     "AssetCostValuePlPayload",
     "AssetCoverageOmission",
     "AssetFxConversionDirection",
     "AssetFxConversionProvenance",
-    "AssetGeographicWeight",
     "AssetIdentifiers",
     "AssetIdentityPayload",
     "AssetLotCustodyRow",
@@ -561,8 +653,15 @@ __all__ = [
     "AssetPositionValuationSource",
     "AssetPositionsByBrokerPayload",
     "AssetPriceObservation",
+    "AssetProfileAmountRow",
+    "AssetProfileCouponRow",
+    "AssetProfileEmptiedRow",
+    "AssetProfilePayload",
+    "AssetProfilePercentageRow",
+    "AssetProfileThinnedVoice",
+    "AssetProfileValueRow",
+    "AssetProfileWeightRow",
     "AssetProvenancePayload",
     "AssetProviderAssignmentInfo",
-    "AssetSectorWeight",
     "AssetValuationSourceSemantic",
 ]

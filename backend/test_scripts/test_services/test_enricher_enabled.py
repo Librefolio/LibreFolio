@@ -1164,3 +1164,32 @@ async def test_b2b_the_routes_tell_what_readiness_may_tell(profile: str, told: l
     if LOCKED_KEY not in told:
         assert LOCKED_KEY not in refused[1]["message"], f"the locked field is not told: {refused}"
     assert keyed.recognized == [] and keyed.searched == []
+
+
+# ============================================================================
+# E7 (residue of B2): the catalogue says whether each enricher is configured, for the enrichers' window
+# ============================================================================
+
+
+@pytest.mark.parametrize(("profile", "told"), [("managed", [KEY]), ("selfhosted", [KEY, LOCKED_KEY])])
+@pytest.mark.asyncio
+async def test_e7_the_catalogue_says_configured_and_what_is_missing(profile: str, told: list[str], routes: Any, fake: Callable[..., Fake], monkeypatch: pytest.MonkeyPatch) -> None:
+    """``GET /assets/enrichers`` lists a not-configured enricher (a turned-off one not at all, B2) with
+    ``configured=false`` and ``missing_settings`` as the call's coded 422 names them (managed: never the field a
+    variable locks); one without settings is configured; once its key is set the keyed one is configured too. The
+    enrichers' window (E7) draws it off, with «Configura», from these two fields."""
+    keyed = fake("cat", fields=(KEY_FIELD, LOCKED_FIELD))
+    plain = fake("catplain")
+    monkeypatch.setenv(env_name(FAMILY, keyed.code, LOCKED_KEY), "zz")
+    monkeypatch.setenv("LIBREFOLIO_PROFILE", profile)
+    assert await plugins_readiness(FAMILY, [keyed.code], user_id=None) == {keyed.code: PluginReadiness(False, tuple(told))}, "barrier"
+
+    by_code = {info.code: info for info in (await asyncio.wait_for(routes.list_enrichers(USER), DEADLINE)).enrichers}
+
+    assert (by_code[keyed.code].configured, by_code[keyed.code].missing_settings) == (False, told)
+    assert (by_code[plain.code].configured, by_code[plain.code].missing_settings) == (True, [])
+
+    monkeypatch.setenv(keyed.variable, KEY_VALUE)
+    monkeypatch.setenv(env_name(FAMILY, keyed.code, LOCKED_KEY), "eu")
+    again = {info.code: info for info in (await asyncio.wait_for(routes.list_enrichers(USER), DEADLINE)).enrichers}
+    assert (again[keyed.code].configured, again[keyed.code].missing_settings) == (True, [])

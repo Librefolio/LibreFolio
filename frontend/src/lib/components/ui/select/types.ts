@@ -25,6 +25,14 @@ export interface SelectOption {
     searchText?: string;
     /** Disable this option */
     disabled?: boolean;
+    /**
+     * An option that must be set up before it can be chosen (project 76, N3b: a provider that is not configured).
+     * Unlike `disabled` it stays reachable, by the pointer and the keyboard, so choosing it can say why: the select
+     * calls its `onneedssetup` instead of changing the value, and never makes it the value.
+     */
+    needsSetup?: boolean;
+    /** The tooltip of an option that needs setting up: why it cannot be chosen yet. */
+    needsSetupHint?: string;
     /** Optional icon (emoji, symbol, or icon name) */
     icon?: string;
     /** Custom data payload for rendering via snippet */

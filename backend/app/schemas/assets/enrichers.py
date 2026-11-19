@@ -63,6 +63,8 @@ class FAEnricherInfo(StrictModel):
     supports_search: bool = False
     voices: Dict[AssetType, List[str]] = Field(default_factory=dict, description="Per asset type, the voices it can fill")
     default_priority: Dict[AssetType, Optional[int]] = Field(..., description="Per asset type, its degree (lower first); null for a type it does not cover")
+    configured: bool = Field(True, description="False when a required setting of the enricher has no value: every read, test and search would answer NOT_CONFIGURED (plan 68, B2; the rule of plan 76, N1). The enrichers' window draws it off, with «Configure»")
+    missing_settings: List[str] = Field(default_factory=list, description="The settings to set, as the NOT_CONFIGURED refusal names them: in the managed profile a field an environment variable locks is never named (decision N2)")
 
 
 class FAEnrichersCatalogue(StrictModel):

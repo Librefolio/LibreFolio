@@ -28,7 +28,7 @@ import gettext
 import re
 from collections.abc import Iterable, Iterator, Mapping
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from functools import lru_cache
 from typing import Any
 
@@ -51,6 +51,7 @@ from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.financial_math.interest import annual_coupon_rate
 from backend.app.services.platform.provider_registry import register_provider
 from backend.app.utils.asset.sector import validate_sector
+from backend.app.utils.runtime.pacing import Pacer
 
 try:
     from borsa_italiana_scraping import Sessione, cerca, ottieni_dati_fondo, ottieni_scheda
@@ -72,6 +73,12 @@ except ImportError:  # pragma: no cover — the library is in the lock; without 
 
 
 logger = get_logger(__name__)
+
+#: One pace for every call of this plugin to borsaitaliana.it, whatever read, «Riconosci» or search it comes from (plan
+#: 68, C5; the round-30 rule: the plugin paces its own calls). The library paces the requests inside one session only;
+#: this paces two reads at once. Module level: the registry builds a new instance for every call, so a pacer on
+#: ``self`` would never be shared. Per process (``utils/runtime/pacing.py``).
+_PACER = Pacer(1.0)
 
 #: The error code of a read the library or the site failed (not a refusal for too many requests).
 SOURCE_ERROR = "SOURCE_ERROR"
@@ -105,9 +112,11 @@ _BOND_VOICES = frozenset(
     }
 )
 _STOCK_VOICES = frozenset({"sector", "legal_form"})
-#: A fund page gives little that is the profile's: its currency and its launch date. Not written: «Gestione» (the
-#: management fee, not the TER), the fund's assets (no unit), the management company (not on the recorded page).
-_FUND_VOICES = frozenset({"fund_currency", "inception_date"})
+#: A fund page gives little that is the profile's: its currency, its launch date and its management fee («Gestione», C2e:
+#: only a part of the TER, so ``management_fee`` and never ``ter``). Not written: the fund's assets (no unit), the
+#: management company (not on the recorded page).
+_FUND_VOICES = frozenset({"fund_currency", "inception_date", "management_fee"})
+_FUND_FEE = "gestione"
 #: The identifier type of a fund: Borsa Italiana's internal code (``1FADB716664``), the one its fund page is reached by
 #: (searching by ISIN does not find funds); the price assignment stores it as ``codice_fondo``.
 FUND_CODE = "BI_FUND_CODE"
@@ -354,10 +363,31 @@ def _launch_date(value: Any) -> date | None:
         return None
 
 
+def _management_fee(text: Any) -> str | None:
+    """«Gestione» («0.4», «0,40», «0.4%»: a percentage per year) as a fraction («0.004»); None when it is not a
+    non-negative number (N.D., empty, a text)."""
+    if not isinstance(text, str):
+        return None
+    cleaned = text.strip().removesuffix("%").strip().replace(",", ".")
+    try:
+        value = Decimal(cleaned)
+    except InvalidOperation:  # parsing probe: a text that is no number is no fee
+        return None
+    if not value.is_finite() or value < 0:
+        return None
+    return str(value / 100)
+
+
 def fund_voices(fund: Any) -> dict[str, Any]:
-    """The catalogue voices of a fund page: its currency and its launch date («Data di partenza»)."""
+    """The catalogue voices of a fund page: its currency, its launch date («Data di partenza») and its management fee
+    («Gestione», C2e)."""
     characteristics = {str(key).strip().lower(): value for key, value in (fund.caratteristiche or {}).items()}
-    voices = {"fund_currency": _text(fund.valuta), "inception_date": _launch_date(characteristics.get(_FUND_LAUNCH))}
+    costs = {str(key).strip().lower(): value for key, value in (fund.costi or {}).items()}
+    voices = {
+        "fund_currency": _text(fund.valuta),
+        "inception_date": _launch_date(characteristics.get(_FUND_LAUNCH)),
+        "management_fee": _management_fee(costs.get(_FUND_FEE)),
+    }
     return {key: value for key, value in voices.items() if value is not None}
 
 
@@ -440,12 +470,14 @@ class BorsaItalianaEnricher(EnricherPlugin):
         if ottieni_scheda is None:
             raise RuntimeError("borsa-italiana-scraping is not installed")
         params = binding.params
+        _PACER.wait()
         return ottieni_scheda(binding.identifier, params.get("mic"), _language(binding), sessione=session, platform=params.get("platform"))
 
     @staticmethod
     def _fund(code: str, session: Any = None) -> Any:
         if ottieni_dati_fondo is None:
             raise RuntimeError("borsa-italiana-scraping is not installed")
+        _PACER.wait()
         return ottieni_dati_fondo(code, sessione=session)
 
     def recognize(self, binding: EnricherBinding) -> EnricherRecognition:
@@ -523,6 +555,7 @@ class BorsaItalianaEnricher(EnricherPlugin):
             raise RuntimeError("borsa-italiana-scraping is not installed")
         session = Sessione()
         try:
+            _PACER.wait()
             hits = cerca(query, lingua="it", sessione=session)
         finally:
             session.chiudi()

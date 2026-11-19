@@ -1,6 +1,7 @@
 import type {BackendSignalResult} from './backendTypes';
 import type {SignalConfig} from './ChartSignal';
 import type {BackendSignalRequestPlan} from './requestBuilder';
+import {recordAnsweredParams} from './answeredParams.svelte';
 
 export type SignalInstanceStatus = BackendSignalResult['status'] | 'local' | 'missing';
 
@@ -87,6 +88,8 @@ export class SignalResultState {
     apply(requestVersion: number, results: SignalInstanceResult[]): boolean {
         if (requestVersion !== this.requestVersion) return false;
         this.current = results;
+        // What each answer was computed with, for the controls that say a value the backend chose (RN-21).
+        recordAnsweredParams(results);
         return true;
     }
 

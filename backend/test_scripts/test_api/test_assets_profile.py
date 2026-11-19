@@ -5,8 +5,10 @@ Test Suite: reading and forgetting the asset profile through the routes (project
    each with every field of ``FAProfileVoice`` as the catalogue holds it.
 2. ``POST /assets/profile/query`` (body: a JSON list of items ``{asset_id, keys?, date_range, changes?}``): one result per
    item, in request order, under an ``as_of`` (aware UTC, the server's time before the read).
-   - ``voices``: per voice, the steps ``{date, through, value, source, update_id}`` in ``date_range`` (two days, one day
-     with ``end`` absent, or ``start: "min"``); ``keys`` restricts, absent is every voice with rows; an asset with no
+   - ``voices``: per voice, the steps ``{date, through, value, source, update_id, opened_on, source_date}`` in
+     ``date_range`` (two days, one day with ``end`` absent, or ``start: "min"``). ``date`` is cut to the range;
+     ``opened_on`` is the true ``read_on`` of the row that opens the step and ``source_date`` its date at the source, both
+     never cut (D1c: the tab's «dati al»); ``keys`` restricts, absent is every voice with rows; an asset with no
      rows answers ``voices: {}``; one that does not exist answers ``error`` «Asset not found» in its item (D1b).
    - ``changes``: absent → ``null``; ``{}`` → the «Ultime variazioni» panel (a volatile voice shows only its ``user``
      rows and the first source row after one; the others every row); ``{"key": k}`` → every row of ``k``, volatile too.
@@ -142,11 +144,11 @@ async def _delete_assets(client: httpx.AsyncClient, asset_ids: list[int]) -> Non
         await client.delete(f"{API_BASE}/assets", params={"asset_ids": asset_ids}, timeout=TIMEOUT)
 
 
-async def _seed(asset_id: int, key: str, value: Any, source: str, read_on: date, *, user_id: int | None = None, created_at: datetime = SEEDED_AT) -> int:
+async def _seed(asset_id: int, key: str, value: Any, source: str, read_on: date, *, user_id: int | None = None, created_at: datetime = SEEDED_AT, source_date: date | None = None) -> int:
     """One profile row straight on the lane database, its value in stored form as JSON text: its id."""
     stored = None if value is None else json.dumps(_stored(key, value), separators=(",", ":"))
     async with AsyncSession(get_async_engine()) as session:
-        record = AssetProfileUpdate(asset_id=asset_id, key=key, value=stored, source=source, user_id=user_id, read_on=read_on, created_at=created_at)
+        record = AssetProfileUpdate(asset_id=asset_id, key=key, value=stored, source=source, user_id=user_id, read_on=read_on, created_at=created_at, source_date=source_date)
         session.add(record)
         await session.commit()
         await session.refresh(record)
@@ -299,6 +301,29 @@ async def test_two_reads_on_two_days_are_two_steps(test_server):
             ], result
             assert result["changes"] is None, f"no changes asked: none answered: {result}"
             print_success("two steps, date … through, value, source, update_id")
+        finally:
+            await _delete_assets(client, [asset_id])
+
+
+@pytest.mark.asyncio
+async def test_a_step_says_its_true_day_and_its_source_date_though_the_range_cuts_it(test_server):
+    """D1c (PROF, 17/11): a step that began before the range has ``date`` = the range's first day, ``opened_on`` = the
+    ``read_on`` of its row and ``source_date`` = the row's date at the source; a row with no source date answers null."""
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        asset_id = await _create(client, "OPENED_ON")
+        try:
+            dated = await _seed(asset_id, "ter", TER_A, SOURCE, RANGE_START - timedelta(days=20), source_date=RANGE_START - timedelta(days=50))
+            undated = await _seed(asset_id, "ter", TER_B, SOURCE, TER_B_DAY)
+            await _assert_seeded(asset_id, [dated, undated])
+
+            steps = (await _query_one(client, _ask(asset_id, keys=["ter"])))["voices"]["ter"]
+
+            assert [(step["update_id"], step["date"], step.get("opened_on"), step.get("source_date")) for step in steps] == [
+                (dated, RANGE_START.isoformat(), (RANGE_START - timedelta(days=20)).isoformat(), (RANGE_START - timedelta(days=50)).isoformat()),
+                (undated, TER_B_DAY.isoformat(), TER_B_DAY.isoformat(), None),
+            ], steps
+            print_success("opened_on and source_date are never cut by the range")
         finally:
             await _delete_assets(client, [asset_id])
 
@@ -634,5 +659,48 @@ async def test_forget_without_as_of_is_refused(test_server):
 
             assert resp.status_code == 422, f"as_of is required: {resp.status_code} {resp.text}"
             assert first in await _row_ids(asset_id), "nothing deleted"
+        finally:
+            await _delete_assets(client, [asset_id])
+
+
+# =============================================================================
+# D1d: «adesso» non aggiornato
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_the_last_step_of_a_volatile_voice_says_when_it_was_confirmed_and_whether_it_is_stale(test_server):
+    """Rows with no enricher bound: the confirmation is the «now» row's own day. A gross yield read 100 days ago, then
+    40 days ago, is stale; a duration written by hand 5 days ago is not; a TER carries no signal. The signal sits on the
+    last step when it holds «now», whatever day the range ends on: the browser's yesterday too. A range that ends before
+    «now» was read carries none. Days from the test's UTC today; the server's (the scheduler's zone) may differ by one
+    day, and the answer stays the same."""
+    today = datetime.now(UTC).date()
+    async with httpx.AsyncClient() as client:
+        user_id = await _login(client)
+        asset_id = await _create(client, "STALE")
+        try:
+            ids = [
+                await _seed(asset_id, "yield_gross", "0.0352", SOURCE, today - timedelta(days=100)),
+                await _seed(asset_id, "yield_gross", "0.0361", SOURCE, today - timedelta(days=40)),
+                await _seed(asset_id, "modified_duration", "1.8", USER, today - timedelta(days=5), user_id=user_id),
+                await _seed(asset_id, "ter", TER_A, SOURCE, today - timedelta(days=400)),
+            ]
+            await _assert_seeded(asset_id, ids)
+
+            yesterday = await _query_one(client, _ask(asset_id, _span(today - timedelta(days=120), today - timedelta(days=1))))
+            before = await _query_one(client, _ask(asset_id, _span(today - timedelta(days=120), today - timedelta(days=60))))
+
+            signal = {key: (voice[-1].get("confirmed_on"), voice[-1].get("stale")) for key, voice in yesterday["voices"].items()}
+            assert signal == {
+                "yield_gross": ((today - timedelta(days=40)).isoformat(), True),
+                "modified_duration": ((today - timedelta(days=5)).isoformat(), False),
+                "ter": (None, None),
+            }, yesterday
+            assert all(point.get("confirmed_on") is None and point.get("stale") is None for point in yesterday["voices"]["yield_gross"][:-1]), "only the last step"
+            assert {key: (voice[-1].get("confirmed_on"), voice[-1].get("stale")) for key, voice in before["voices"].items()} == {
+                "yield_gross": (None, None),
+                "ter": (None, None),
+            }, f"a range that ends before «now» was read carries no signal: {before}"
         finally:
             await _delete_assets(client, [asset_id])

@@ -29,6 +29,9 @@ from backend.app.services.enrichers.base import EnricherPlugin
 from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.utils.datetime_utils import utcnow
 
+#: The field of a state entry holding, voice → the moment (UTC ISO) of the enricher's last read that gave it (D1d).
+CONFIRMED_FIELD = "confirmed"
+
 
 @dataclass(frozen=True, slots=True)
 class AssetEnricherRow:
@@ -81,16 +84,27 @@ async def save_config(session: AsyncSession, asset_id: int, config: Mapping[str,
     await session.execute(statement.execution_options(synchronize_session=False))
 
 
+def _with_confirmations(previous: Any, entry: Mapping[str, Any]) -> dict[str, Any]:
+    """``entry``, its ``confirmed`` map laid over the one ``previous`` held: a read that failed, or gave fewer voices,
+    never forgets when a voice was last given (D1d)."""
+    merged = dict(entry)
+    kept = previous.get(CONFIRMED_FIELD) if isinstance(previous, Mapping) else None
+    if isinstance(kept, Mapping) and kept:
+        merged[CONFIRMED_FIELD] = {**kept, **dict(entry.get(CONFIRMED_FIELD) or {})}
+    return merged
+
+
 async def update_state(session: AsyncSession, asset_id: int, entries: Mapping[str, Mapping[str, Any]]) -> None:
     """Set the ``state`` of those enrichers of the asset (the others stay); ``config`` is not touched. Not committed.
 
     The state is read again under the write lock and only its column is written: a ``config`` the user saved meanwhile
-    stays as the user saved it.
+    stays as the user saved it. An entry's ``confirmed`` map (voice → the moment of the last read that gave it) is
+    merged into the stored one, never replaced.
     """
     await begin_writes(session, AssetEnrichers)
     await _ensure_row(session, asset_id)
-    current = (await session.execute(select(AssetEnrichers.state).where(AssetEnrichers.asset_id == asset_id))).scalar_one()
-    state = {**_loads(current), **{code: dict(entry) for code, entry in entries.items()}}
+    current = _loads((await session.execute(select(AssetEnrichers.state).where(AssetEnrichers.asset_id == asset_id))).scalar_one())
+    state = {**current, **{code: _with_confirmations(current.get(code), entry) for code, entry in entries.items()}}
     statement = update(AssetEnrichers).where(AssetEnrichers.asset_id == asset_id).values(state=_dumps(state), updated_at=utcnow())
     await session.execute(statement.execution_options(synchronize_session=False))
 

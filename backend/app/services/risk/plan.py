@@ -27,8 +27,26 @@ def is_historical_replay_plan(plan: AnalyticPlan) -> bool:
     return plan.request.analytic_code == "stress" and getattr(plan.params, "method", None) == RiskStressMethod.HISTORICAL_REPLAY
 
 
+def is_simulation_plan(plan: AnalyticPlan) -> bool:
+    """The simulation prepares its own history (RN-16, developer's Q4 c): all the common history, never the period."""
+    return plan.request.analytic_code == "simulation"
+
+
 def is_hypothetical_plan(plan: AnalyticPlan) -> bool:
     return plan.request.analytic_code == "stress" and getattr(plan.params, "method", None) == RiskStressMethod.HYPOTHETICAL
+
+
+def reads_no_price_series(plan: AnalyticPlan) -> bool:
+    """Whether the plan's figures come from no price series: the hypothetical stress (shocks on today's weights) and the
+    rates scenario (the profile's duration, RN-25). The series' data quality, history warnings and exclusions are not
+    theirs."""
+    return is_hypothetical_plan(plan) or plan.request.analytic_code == "rate_shock"
+
+
+def reads_asset_profile(plan: AnalyticPlan) -> bool:
+    """Whether the plan reads the assets' profile: the hypothetical stress (countries and sectors, D3) and the rates
+    scenario (the modified duration, RN-25)."""
+    return is_hypothetical_plan(plan) or plan.request.analytic_code == "rate_shock"
 
 
 def is_geography_hypothetical_plan(plan: AnalyticPlan) -> bool:

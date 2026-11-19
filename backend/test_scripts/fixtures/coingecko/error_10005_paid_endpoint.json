@@ -1,0 +1,15 @@
+{
+  "recorded": "2026-11-17, coingecko-sdk 5.1.0, Demo key (removed): project 76 P0",
+  "request": {
+    "endpoint": "/coins/top_gainers_losers",
+    "vs_currency": "usd"
+  },
+  "status": 401,
+  "body": {
+    "status": {
+      "timestamp": "2026-11-17T13:58:58.506+00:00",
+      "error_code": 10005,
+      "error_message": "This request is limited to PRO API subscribers. Please visit https://www.coingecko.com/en/api/pricing to subscribe to our API plan to access exclusive endpoints."
+    }
+  }
+}

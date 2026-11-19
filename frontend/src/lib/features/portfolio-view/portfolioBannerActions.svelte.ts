@@ -18,7 +18,7 @@ import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
 import {invalidate} from '$lib/stores/portfolio/portfolioStore.svelte';
 import {invalidateFxRoutes} from '$lib/stores/reference/fxRoutesStore';
 import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
-import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
+import {buildAssetSyncToast, buildFxSyncToast, historyStartsSummary} from '$lib/utils/sync/syncToastHelpers';
 import {buildMissingFxRatesSyncRequest} from '$lib/utils/sync/syncRange';
 import {fxPairHtml} from '$lib/utils/providerHelpers';
 import {extractErrorMessage} from '$lib/utils/trySave';
@@ -181,11 +181,16 @@ export class PortfolioBannerActions {
                 assetIds.map((asset_id) => ({asset_id, date_range: {start: 'resume', end: inputs.periodEnd()}})),
                 {timeout: 120 * 1000},
             );
-            for (const result of ((response as any)?.results ?? []) as any[]) {
+            const results = ((response as any)?.results ?? []) as any[];
+            // Many assets: their first-day lines become one (project 76, P2b), not one long line in each toast
+            const many = results.length > 1;
+            for (const result of results) {
                 const name = assetNames[assetIds.indexOf(result?.asset_id)] ?? `#${result?.asset_id}`;
-                const toast = buildAssetSyncToast(result, escapeHtml(name), inputs.translate);
+                const toast = buildAssetSyncToast(result, escapeHtml(name), inputs.translate, {historyNote: !many});
                 toasts[toast.variant](toast.message);
             }
+            const summary = many ? historyStartsSummary(results, inputs.translate) : '';
+            if (summary) toasts.info(summary);
             invalidate();
             // The open lots and risk panels ask again too, as after «Aggiorna»: new prices change their figures.
             inputs.onDataChanged();

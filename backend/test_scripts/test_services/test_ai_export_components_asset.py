@@ -39,19 +39,18 @@ import pytest
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from backend.app.schemas.assets.metadata import FAClassificationParams
 from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio.lots import LotAnalysisType, LotCustodySummarySchema, LotsAnalysisMetadata, LotsAnalysisResponse, LotSummarySchema
 from backend.app.schemas.portfolio.report import PortfolioReportMetadata, PortfolioReportResponse
 from backend.app.schemas.portfolio.summary import AssetPeriodContribution, PortfolioHolding, PortfolioSummary, PositionsContribution
 from backend.app.schemas.portfolio.yield_on_cost import YieldOnCostProvenance, YieldOnCostResult, YieldOnCostStatus
 from backend.app.schemas.prices import FAPricePoint, FAPriceQueryResult
-from backend.app.services.ai_export.components import asset_core
+from backend.app.services.ai_export.components import asset_core, asset_payloads
 from backend.app.services.ai_export.components.asset_payloads import AssetLotCustodyRow, AssetLotDetailPayload, AssetLotDetailRow
 from backend.app.services.ai_export.components.asset_resources import AssetMetadataResource, AssetNotFoundError
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.resources import PriceResultsResource
-from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
+from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain, PeriodBehavior
 from backend.app.services.ai_export.dependencies import (
     BuildContext,
     RequiredComponentBuildError,
@@ -102,10 +101,7 @@ def _make_context(scope: BuildScope, session: AsyncSession) -> BuildContext:
     return BuildContext(REGISTRY, request_id=scope.request_id, scope=scope, bucket_plan=bucket_plan, session=session)
 
 
-def _metadata(*, short_description: str | None = None, geographic_area=None, sector_area=None, provider_code: str | None = None, **overrides) -> AssetMetadataResource:
-    classification = None
-    if short_description is not None or geographic_area is not None or sector_area is not None:
-        classification = FAClassificationParams(short_description=short_description, geographic_area=geographic_area, sector_area=sector_area)
+def _metadata(*, provider_code: str | None = None, **overrides) -> AssetMetadataResource:
     defaults = {
         "asset_id": ASSET_ID,
         "display_name": "Test Asset",
@@ -119,7 +115,6 @@ def _metadata(*, short_description: str | None = None, geographic_area=None, sec
         "identifier_sedol": None,
         "identifier_figi": None,
         "identifier_other": (),
-        "classification": classification,
         "provider_code": provider_code,
         "provider_identifier": "TST" if provider_code else None,
         "provider_identifier_type": "TICKER" if provider_code else None,
@@ -1193,15 +1188,114 @@ class TestMemoization:
 
 class TestMaliciousTextRemainsData:
     @pytest.mark.asyncio
-    async def test_short_description_is_passed_through_verbatim(self, monkeypatch):
+    async def test_identity_v2_exports_no_classification_even_when_the_asset_has_one(self, monkeypatch):
+        """D5 (plan 68): `asset.identity` v2 carries no `classification` — the description, countries and sectors
+        are profile voices now, exported by `asset.profile` (where the free-text `description` keeps the «verbatim,
+        never interpreted» guarantee: `test_ai_export_components_asset_fx_integration.py`). The asset's metadata
+        resource has no classification (D7a), and the identity payload declares none.
+
+        Before D5: `payload["classification"]["short_description"]` was the text, verbatim."""
         scope = _scope()
-        payload_text = "<script>alert('xss')</script>; DROP TABLE assets; --"
-        _patch_metadata(monkeypatch, _metadata(short_description=payload_text))
+        _patch_metadata(monkeypatch, _metadata())
+        assert "classification" not in AssetMetadataResource.__dataclass_fields__
         context = _make_context(scope, _make_async_session())
 
         envelope = await context.resolve("asset.identity", required=True)
 
-        assert envelope.payload["classification"]["short_description"] == payload_text
+        assert "classification" not in envelope.payload
+        assert "classification" not in asset_payloads.AssetIdentityPayload.model_fields
+        # Everything else of the identity is unchanged.
+        assert envelope.payload["asset_id"] == ASSET_ID
+        assert envelope.payload["identifiers"]["ticker"] == "TST"
+
+
+# =============================================================================
+# D5 (plan 68): asset.identity v2, asset.profile v1 — the specs and the typed failure
+# =============================================================================
+
+
+def _profile_spec():
+    """`asset_core.ASSET_PROFILE_SPEC`, read by name so that its absence reds the tests that need it, not the file."""
+    spec = getattr(asset_core, "ASSET_PROFILE_SPEC", None)
+    assert spec is not None, "asset_core.ASSET_PROFILE_SPEC is missing (D5: asset.profile v1)"
+    return spec
+
+
+class TestIdentityV2AndProfileSpecs:
+    def test_identity_component_is_versioned_v2_in_registry_and_placeholder(self):
+        """D5: the identity payload loses `classification`, so `asset.identity` moves to version 2 on the real spec
+        AND the frozen catalog placeholder (before D5: 1 and 1). The catalog is imported here, so a parity failure on
+        import reds this test only."""
+        from backend.app.services.ai_export.components import catalog  # noqa: PLC0415 — test-local: a real/placeholder parity failure on import must red this test only
+
+        placeholder = next(spec for spec in catalog.ALL_FOUNDATION_COMPONENTS if spec.component_id == "asset.identity")
+        assert (asset_core.ASSET_IDENTITY_SPEC.version, placeholder.version) == (2, 2)
+
+    def test_profile_spec_is_an_asset_core_component_with_the_contract_metadata(self):
+        from backend.app.services.ai_export.components import catalog  # noqa: PLC0415 — test-local: a real/placeholder parity failure on import must red this test only
+
+        spec = _profile_spec()
+        assert spec in asset_core.ASSET_CORE_COMPONENTS
+        payload_model = getattr(asset_payloads, "AssetProfilePayload", None)
+        assert payload_model is not None, "asset_payloads.AssetProfilePayload is missing"
+        assert spec.output_model is payload_model
+        assert (spec.component_id, spec.version, spec.domains, spec.dependencies, spec.period_behavior) == (
+            "asset.profile",
+            1,
+            frozenset({Domain.ASSET}),
+            (),
+            PeriodBehavior.WINDOWED,
+        )
+        placeholder = next((p for p in catalog.ALL_FOUNDATION_COMPONENTS if p.component_id == "asset.profile"), None)
+        assert placeholder is not None, "components.catalog has no asset.profile placeholder"
+        assert (placeholder.version, placeholder.domains, placeholder.dependencies, placeholder.period_behavior) == (1, frozenset({Domain.ASSET}), (), PeriodBehavior.WINDOWED)
+
+    def test_profile_payload_is_strict_and_flat(self):
+        """The top-level fields of the contract, and nothing else: unknown fields are refused (strict model)."""
+        payload_model = getattr(asset_payloads, "AssetProfilePayload", None)
+        assert payload_model is not None, "asset_payloads.AssetProfilePayload is missing"
+        thinned_model = getattr(asset_payloads, "AssetProfileThinnedVoice", None)
+        assert thinned_model is not None, "asset_payloads.AssetProfileThinnedVoice is missing"
+        assert set(payload_model.model_fields) == {
+            "asset_id",
+            "no_profile_data",
+            "history_starts_on",
+            "source_semantics",
+            "percentages",
+            "amounts",
+            "values",
+            "weights",
+            "coupon_schedule",
+            "emptied",
+            "thinned",
+            "freshness",
+        }
+        assert set(thinned_model.model_fields) == {"voice", "changes_in_window"}
+        freshness_model = getattr(asset_payloads, "AssetProfileFreshnessRow", None)
+        assert freshness_model is not None, "asset_payloads.AssetProfileFreshnessRow is missing (D1d)"
+        assert set(freshness_model.model_fields) == {"voice", "confirmed_on", "stale"}
+        with pytest.raises(ValidationError):
+            thinned_model.model_validate({"voice": "ter", "changes_in_window": 2, "extra": 1})
+
+    @pytest.mark.asyncio
+    async def test_profile_of_a_missing_asset_is_the_typed_not_found_failure(self, monkeypatch):
+        """Like every other asset component, `asset.profile` resolves the asset first: a missing asset is the typed
+        `AssetNotFoundError`, never an empty profile."""
+        assert _profile_spec() in asset_core.ASSET_CORE_COMPONENTS
+        scope = _scope()
+        _patch_metadata(monkeypatch, AssetNotFoundError(f"Asset {ASSET_ID} not found"))
+        context = _make_context(scope, _make_async_session())
+
+        with pytest.raises(RequiredComponentBuildError) as exc_info:
+            await context.resolve("asset.profile", required=True)
+
+        # The chain: RequiredComponentBuildError.cause → ResourceLoadError.cause → AssetNotFoundError
+        chain = []
+        error: BaseException | None = exc_info.value
+        while error is not None and len(chain) < 10:
+            chain.append(error)
+            error = getattr(error, "cause", None) or error.__cause__
+        assert any(isinstance(link, AssetNotFoundError) for link in chain), [type(link).__name__ for link in chain]
 
 
 # =============================================================================

@@ -42,7 +42,7 @@ import dataclasses
 import json
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, tzinfo
 from typing import Any
 
 from sqlalchemy import delete, func, select, update
@@ -122,7 +122,9 @@ class ProfileRow:
 class ProfileStep:
     """One step of a voice: from ``date`` to ``through`` (both included) the value is ``value``, given by ``source``.
 
-    ``update_id`` is the row the step starts with.
+    ``update_id`` is the row the step starts with. ``date`` is cut to the range read; ``opened_on`` (that row's
+    ``read_on``) and ``source_date`` (its date at the source) never are: they say when the value was really read, and of
+    what day the source says it is (D1c, the tab's «dati al»).
     """
 
     date: date
@@ -130,6 +132,8 @@ class ProfileStep:
     value: Any
     source: str
     update_id: int
+    opened_on: date | None = None
+    source_date: date | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -213,10 +217,15 @@ _ORDER = (AssetProfileUpdate.asset_id, AssetProfileUpdate.key, AssetProfileUpdat
 # =============================================================================
 
 
+async def profile_zone(session: AsyncSession) -> tzinfo:
+    """The scheduler's time zone (``scheduler_timezone``; UTC when it is not set or not valid): the calendar of the
+    profile's days."""
+    return zoneinfo_or_utc(await get_setting_value(session, SETTINGS_REGISTRY.global_.SCHEDULER_TIMEZONE.key))
+
+
 async def profile_today(session: AsyncSession, now: datetime | None = None) -> date:
     """Today in the scheduler's time zone (``scheduler_timezone``; UTC when it is not set or not valid)."""
-    name = await get_setting_value(session, SETTINGS_REGISTRY.global_.SCHEDULER_TIMEZONE.key)
-    return (now or utcnow()).astimezone(zoneinfo_or_utc(name)).date()
+    return (now or utcnow()).astimezone(await profile_zone(session)).date()
 
 
 async def _rows_of(session: AsyncSession, asset_ids: Sequence[int], keys: Sequence[str] | None, *, until: date | None = None) -> list[AssetProfileUpdate]:
@@ -240,6 +249,17 @@ async def current_rows(session: AsyncSession, asset_id: int, keys: Iterable[str]
     """«Now» of each voice of ``asset_id`` (of ``keys``, or all): its last row in (``read_on``, ``id``) order."""
     records = await _rows_of(session, [asset_id], _checked_keys(keys))
     return {key: _row(record) for key, record in _last_by_key(records).items()}
+
+
+async def current_rows_of(session: AsyncSession, asset_ids: Sequence[int], keys: Iterable[str] | None = None) -> dict[int, dict[str, ProfileRow]]:
+    """«Now» of each voice of each asset (of ``keys``, or all); an asset with no row is left out."""
+    asset_ids = list(dict.fromkeys(asset_ids))
+    if not asset_ids:
+        return {}
+    by_asset: dict[int, list[AssetProfileUpdate]] = {}
+    for record in await _rows_of(session, asset_ids, _checked_keys(keys)):
+        by_asset.setdefault(record.asset_id, []).append(record)
+    return {asset_id: {key: _row(record) for key, record in _last_by_key(records).items()} for asset_id, records in by_asset.items()}
 
 
 # =============================================================================
@@ -304,6 +324,11 @@ async def _first_days(session: AsyncSession, asset_ids: Sequence[int], keys: Seq
         statement = statement.where(AssetProfileUpdate.key.in_(keys))
     rows = (await session.execute(statement.group_by(AssetProfileUpdate.asset_id))).all()
     return {asset_id: first for asset_id, first in rows if first is not None}
+
+
+async def first_read_days(session: AsyncSession, asset_ids: Sequence[int], keys: Iterable[str] | None = None) -> dict[int, date]:
+    """The first ``read_on`` of each asset among ``keys`` (all voices when None); an asset with no row is left out."""
+    return await _first_days(session, list(dict.fromkeys(asset_ids)), _checked_keys(keys))
 
 
 def _last_of_each_day(records: Sequence[AssetProfileUpdate]) -> list[AssetProfileUpdate]:
@@ -372,7 +397,7 @@ def _asset_steps(records: Sequence[AssetProfileUpdate], start: date, end: date, 
 
 
 def _step(record: AssetProfileUpdate, first: date, through: date) -> ProfileStep:
-    return ProfileStep(date=first, through=through, value=_value(record), source=record.source, update_id=record.id)
+    return ProfileStep(date=first, through=through, value=_value(record), source=record.source, update_id=record.id, opened_on=record.read_on, source_date=record.source_date)
 
 
 async def rows_fingerprint(session: AsyncSession, asset_ids: Iterable[int], keys: Iterable[str]) -> tuple[int, int, datetime | None]:

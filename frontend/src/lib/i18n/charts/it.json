@@ -98,7 +98,8 @@
       "riskFreeAnnualRate": "Tasso annuo privo di rischio",
       "comparisonAsset": "Asset di confronto",
       "window": "Finestra",
-      "fullHistory": "Storia completa"
+      "fullHistory": "Storia completa",
+      "targetAnnualReturn": "Rendimento annuo obiettivo"
     },
     "yAxisScale": "Scala Asse Y",
     "yAxisScaleDesc": "Controllo intervallo asse primario",
@@ -201,7 +202,8 @@
       "riskWindow": "Numero di osservazioni preparate dei rendimenti giornalieri in ogni finestra mobile.",
       "riskFreeAnnualRate": "Tasso annuo effettivo privo di rischio usato solo per calcolare lo Sharpe.",
       "comparisonAsset": "Asset salvato usato come serie reale di confronto per il beta.",
-      "riskFullHistory": "Misura il drawdown rispetto al picco più alto di tutta la storia disponibile, non solo della finestra visibile. Disattiva per una vista più veloce relativa alla finestra."
+      "riskFullHistory": "Misura il drawdown rispetto al picco più alto di tutta la storia disponibile, non solo della finestra visibile. Disattiva per una vista più veloce relativa alla finestra.",
+      "targetAnnualReturn": "Rendimento annuo con cui si misurano i giorni, come per il Sortino: contano come perdite solo i rendimenti sotto. 0 conta ogni perdita."
     },
     "units": {
       "days": "giorni",
@@ -231,6 +233,10 @@
       "blocked": "Non disponibili",
       "isMainAsset": "È l'asset del grafico",
       "alreadyCompared": "Già confrontato in un altro segnale"
+    },
+    "riskFreeRate": {
+      "uses": "usa il tuo tasso privo di rischio: {rate}",
+      "where": "Un tasso solo per tutte le pagine del rischio e per questi segnali: si cambia sotto la riga del periodo di una scheda Rischio."
     }
   }
 }

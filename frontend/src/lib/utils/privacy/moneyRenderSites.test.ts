@@ -85,7 +85,7 @@ const SRC = resolve(process.cwd(), 'src');
  * The redundancy would be worse than noise — deleting one of those entries to expose
  * it to the gate again would then have no effect at all.
  */
-const SAFE_CALL = /formatCurrencyAmountPlain|formatCurrencyAmountHtml|formatCurrencyCodeHtml|formatCurrencyCode\b|formatScopedCurrencyAmount\b|formatCurrencyAmount\b|maskable\(|maskFormattedNumber\(/;
+const SAFE_CALL = /formatCurrencyAmountPlain|formatCurrencyAmountHtml|formatCurrencyCodeHtml|formatCurrencyCode\b|formatCurrencyAmount\b|maskable\(|maskFormattedNumber\(/;
 const FORM_A = /style\s*:\s*['"]currency['"]/;
 const TEMPLATE_LITERAL = /`[^`]*`/g;
 const INTERPOLATION = /\$\{([^}]*)\}/g;

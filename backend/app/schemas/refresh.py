@@ -144,6 +144,10 @@ class FARefreshResult(StrictModel):
     error_code: Optional[str] = Field(None, description="'RATE_LIMITED' when the provider refused for too many requests or is paused: the item failed, or saved only part of the data")
     retry_after: Optional[float] = Field(None, ge=0, description="With RATE_LIMITED: seconds until the provider may be called again")
     elapsed_ms: Optional[int] = Field(None, ge=0, description="Backend sync time for this asset in ms")
+    history_starts: Optional[date] = Field(
+        None,
+        description="The first day the provider has prices for, when the range asked started earlier: the days before are imported by hand (Import prices). None otherwise (project 76, P2b)",
+    )
     # I-bis #24 (2026-04-24) — delta payload for targeted frontend refresh.
     # Populated with the subset of ``FAPricePoint`` rows that were actually
     # inserted or updated (not every fetched point). Capped at

@@ -9,7 +9,6 @@ SQLModel table=True skips validation on __init__).
 Covers:
 - _validate_currency_field() — shared currency validator
 - Asset.validate_currency, validate_identifier_isin, validate_identifier_ticker
-- Asset.validate_classification_params
 - FxRate.validate_currencies (base, quote)
 - FxConversionRoute.validate_currencies
 - PriceHistory.validate_currency
@@ -289,36 +288,6 @@ class TestFxConversionRouteProperties:
         assert r.is_chain is True
         assert type(r.providers_used) is set
         assert r.providers_used == {"MANUAL", "MOCKFX"}
-
-
-# ============================================================================
-# Asset VALIDATE_CLASSIFICATION_PARAMS
-# ============================================================================
-
-
-class TestAssetValidateClassificationParams:
-    """Tests for Asset.validate_classification_params (6 stmts at 0%)."""
-
-    def test_none_passthrough(self):
-        result = Asset.validate_classification_params(None)
-        assert result is None
-
-    def test_dict_serialized_to_json(self):
-        result = Asset.validate_classification_params({"short_description": "Test"})
-        assert isinstance(result, str)
-        assert "Test" in result
-
-    def test_empty_dict_serialized(self):
-        result = Asset.validate_classification_params({})
-        assert isinstance(result, str)
-
-    def test_fa_classification_params_object(self):
-        from backend.app.schemas.assets.metadata import FAClassificationParams  # noqa: PLC0415 — test setup — imports after sys.path/db config
-
-        params = FAClassificationParams(short_description="Hello")
-        result = Asset.validate_classification_params(params)
-        assert isinstance(result, str)
-        assert "Hello" in result
 
 
 # ============================================================================

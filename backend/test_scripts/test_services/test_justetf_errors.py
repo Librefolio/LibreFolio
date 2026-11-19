@@ -418,10 +418,7 @@ async def test_metadata_happy(monkeypatch):
     assert result.currency == "CHF"  # user's chosen currency, not fund NAV currency
     assert result.identifier_isin == "IE00B4L5Y983"
     assert result.identifier_ticker == "IWDA"
-    sd = result.classification_params.short_description
-    assert "TER: 0.2%" in sd and "Distribution: Accumulating" in sd
-    assert result.classification_params.geographic_area is not None
-    assert result.classification_params.sector_area is not None
+    # Plan 68, D6: description, countries and sectors are the enrichers' (the profile), never the price provider's
 
 
 @pytest.mark.asyncio
@@ -510,7 +507,7 @@ async def test_history_intraday_error_is_swallowed(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_metadata_minimal_overview(monkeypatch):
-    """An overview with no optional fields yields a patch with empty classification.
+    """An overview with no optional fields yields a patch with no ticker and no classification.
 
     Also exercises the overview cache: the second call must not re-scrape.
     """
@@ -526,29 +523,7 @@ async def test_metadata_minimal_overview(monkeypatch):
     await p.fetch_asset_metadata("IE00B4L5Y983", IdentifierType.ISIN)  # cache hit
     assert calls["n"] == 1
     assert result is not None
-    assert result.classification_params.short_description is None
-    assert result.classification_params.geographic_area is None
-    assert result.classification_params.sector_area is None
     assert result.identifier_ticker is None
-
-
-@pytest.mark.asyncio
-async def test_metadata_long_description_truncated(monkeypatch):
-    long_desc = "x" * 600
-    monkeypatch.setattr(je, "get_etf_overview", lambda isin, include_gettex=False: {"description": long_desc}, raising=False)
-    result = await _provider().fetch_asset_metadata("IE00B4L5Y983", IdentifierType.ISIN)
-    sd = result.classification_params.short_description
-    assert len(sd) == 500 and sd.endswith("...")
-
-
-@pytest.mark.asyncio
-async def test_metadata_unknown_sector_maps_to_other(monkeypatch):
-    overview = {"sectors": [{"name": "Definitely Not A Real Sector", "percentage": 100}]}
-    monkeypatch.setattr(je, "get_etf_overview", lambda isin, include_gettex=False: overview, raising=False)
-    # Unknown sector triggers the warn-and-map branch; still produces a sector area.
-    result = await _provider().fetch_asset_metadata("IE00B4L5Y983", IdentifierType.ISIN)
-    assert result is not None
-    assert result.classification_params.sector_area is not None
 
 
 # ── «too many requests» (X-RL X3): the library says it only in its message ──

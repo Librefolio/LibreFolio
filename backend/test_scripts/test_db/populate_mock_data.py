@@ -44,7 +44,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
-from sqlalchemy import create_engine, func
+from sqlalchemy import create_engine, func, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 from sqlmodel import Session, delete, select
@@ -784,8 +784,28 @@ def _legacy_profile_rows(asset: Asset) -> list[AssetProfileUpdate]:
             print(f"  ⚠️  {asset.display_name}: {voice} not copied to the profile ({error.reason})")
             continue
         if stored is not None:
+            # The populate day for now: date_legacy_profile_rows moves it to the asset's first day once prices and
+            # transactions are in, as migration 006 dates them (A4b)
             rows.append(AssetProfileUpdate(asset_id=asset.id, key=voice, value=json.dumps(stored, ensure_ascii=False, separators=(",", ":")), source="legacy", read_on=date.today()))
     return rows
+
+
+def date_legacy_profile_rows(session: Session) -> None:
+    """The ``legacy`` profile rows on their asset's first day, as migration 006 dates them (plan 68, A4b): the earliest of
+    the day of its ``created_at``, its first price and its first transaction; with neither, the day of ``created_at``.
+    Run after every step that writes prices or transactions. A row of a source or of a user is never moved."""
+    first_days = session.exec(text("""
+            SELECT a.id,
+                   min(date(a.created_at),
+                       coalesce((SELECT min(p.date) FROM price_history p WHERE p.asset_id = a.id), '9999-12-31'),
+                       coalesce((SELECT min(t.date) FROM transactions t WHERE t.asset_id = a.id), '9999-12-31'))
+            FROM assets a
+            WHERE a.id IN (SELECT DISTINCT asset_id FROM asset_profile_updates WHERE source = 'legacy')
+            """)).all()
+    for asset_id, day in first_days:
+        session.exec(text("UPDATE asset_profile_updates SET read_on = :day WHERE asset_id = :asset AND source = 'legacy'").bindparams(day=str(day)[:10], asset=asset_id))
+    session.commit()
+    print(f"  ✅ legacy profile rows of {len(first_days)} assets dated on their first day")
 
 
 def populate_assets(session: Session):
@@ -1085,6 +1105,13 @@ def populate_assets(session: Session):
     session.add_all(profile_rows)
     session.commit()
     print(f"  ✅ {len(profile_rows)} legacy profile rows")
+
+    # The modified duration of one bond, as the Borsa Italiana enricher reads it (plan 70, RN-25): the rates scenario of
+    # its Risk tab reads it. The other seeded bond, BTP Più, keeps none: its tab says the profile has no duration.
+    bond = session.exec(select(Asset).where(Asset.display_name == "BTP Italia 2028")).one()
+    session.add(AssetProfileUpdate(asset_id=bond.id, key="modified_duration", value=json.dumps(normalize_value("modified_duration", "2.15")), source="borsa_italiana", read_on=date.today()))
+    session.commit()
+    print("  ✅ BTP Italia 2028: modified duration 2.15 years in the profile")
 
 
 def populate_asset_provider_assignments(session: Session):
@@ -3953,6 +3980,7 @@ def main():  # noqa: C901 — sequential populate step driver
             link_transactions_to_events(session)
             create_split_transaction(session)
             add_balance_safe_cash_prefunds(session)
+            date_legacy_profile_rows(session)  # after every price and transaction (A4b)
             populate_fx_rates(session)
             populate_fx_currency_pair_sources(session)
             configure_user_avatars(session)

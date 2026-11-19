@@ -71,7 +71,7 @@ Abstract base class for all asset pricing plugins, defined in
 | `accepted_identifier_types` | — | `[TICKER, ISIN]` | Input types accepted by this provider |
 | `supports_history` | — | `True` | `False` for current-price-only providers |
 | `search()` | — | raises `NOT_SUPPORTED` | Search for assets by name/ticker/ISIN |
-| `fetch_asset_metadata()` | — | `None` | Fetch asset metadata (type, sector, identifiers) |
+| `fetch_asset_metadata()` | — | `None` | Fetch asset metadata (type, currency, name, identifiers; never the profile, plan 68 D6) |
 | `cooldown_scope()` | — | `None` | The part of the provider a pause after «too many requests» covers (the CSS Scraper: the page's host); `None` pauses the whole provider. See [Provider Pauses](#provider-pauses) |
 | `provider_help_url` | — | `None` | URL to the provider's documentation page |
 
@@ -238,6 +238,19 @@ own `FAPricePoint` refused such a day, so its whole history download failed (wit
 value either, the item failed with *No price data available from provider*), and an open, high,
 low or volume of exactly `-1` was stored as an erased value.
 {: #discarded-provider-days }
+
+A source may have no prices before some day: CoinGecko's Demo plan answers the last 365 days
+only. Its `get_history_value()` then says so in `FAHistoricalData.history_starts`, the first
+day it has prices for (project 76, P2b). The refresh copies that day into the asset's
+`FARefreshResult.history_starts` **only when the range asked started earlier**, a `"min"`
+start included (so a `resume` of an asset with no price yet, as after its creation); a range
+inside the source's window, or a provider that sets no day, leaves it `null`. It is no error:
+the status is the one the prices decide, and a range wholly before that day, which brings
+nothing, is `failed` and still carries it (the fetch hands it to the persist step beside its
+error). The interface adds one translated line to the sync row and to the sync toasts
+(`prices.sync.historyStarts`), whatever the status: the days before are loaded by hand, with
+*Import CSV* in the asset's price editor.
+{: #history-starts }
 
 `bulk_upsert_prices()` writes `open`, `high`, `low` and `close` through
 `truncate_priceHistory()` (`backend/app/db/precision.py`): 12 decimal places, then 15
@@ -1378,8 +1391,8 @@ The family and the `INDEX` rule are not in `crud.py`: they are the pure function
   announces a save that did not happen.
 - Without issues the items are applied by `_apply_patch_item()`: the rules of an explicit `null`
   (`CLEARED_BY_NULL` clears the icon, the user URL and an identifier; for any other field a `null`
-  is ignored), the shallow merge of `classification_params` and the replacement of
-  `identifier_other`, then a flush. This is the single place a later feature hooks its own write into
+  is ignored) and the replacement of `identifier_other`, then a flush; the item's `profile` and
+  `enrichers` are written beside it, in the same transaction (plan 68). This is the single place a later feature hooks its own write into
   the same transaction.
 - The currency change (N68) follows the *result*: the assets whose stored currency now differs lose
   their prices and non-`SPLIT` events, in the same transaction ([Market-Data

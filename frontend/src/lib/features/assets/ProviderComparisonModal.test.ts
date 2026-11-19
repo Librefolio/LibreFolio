@@ -40,9 +40,9 @@
  *     test itself passed in as `currentValue`/`providerValue`.
  *   - CSS classes. The checked state is the `<input>`'s own `checked`, and the
  *     apply button's availability is its `disabled` — both semantic, neither a class.
- *   - the sector label's localisation. `formatDistKey` runs `$t` for `sector_area`;
- *     the test asserts the stable `data-dist-key`/`data-dist-pct`, never the
- *     rendered sector name, which is a translation.
+ *   - the sector label's text. `formatDistKey` runs `$t` for the profile's `sector`
+ *     voice; the one test of that branch compares the label with the catalogue's own
+ *     entry, read from the loaded store, never with a translation written here.
  *
  * **`data-dist-pct` is a handle, not a rendering** (M-18 follow-up, 13/10/2026). Since M-18 the
  * share shown beside a distribution key is written in the interface locale (`formatPercent`:
@@ -57,12 +57,18 @@
 import {describe, expect, it, vi} from 'vitest';
 import type {Mock} from 'vitest';
 import {get} from 'svelte/store';
-import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {_} from '$lib/i18n';
 import {currentLanguage} from '$lib/stores/app/language';
 import {uiLocale} from '$lib/stores/app/uiLocale';
-import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+import {getAssetTypeIconUrl, sectorI18nKey} from '$lib/utils/assetTypes';
 import {formatPercent} from '$lib/utils/core/formatPercent';
+// Project 76, P4b: the provider list, stubbed with one attribution; the asset store is not read here.
+vi.mock('$lib/utils/providerHelpers', async () => ({
+    assetProvidersVersion: (await import('svelte/store')).writable(0),
+    ensureAssetProvidersCached: vi.fn(async () => undefined),
+    getAssetProviderAttribution: vi.fn((code: string | null | undefined) => (code === 'coingecko' ? {text: 'Powered by CoinGecko', url: 'https://www.coingecko.com/'} : null)),
+}));
 import ProviderComparisonModal, {type DiffItem} from './ProviderComparisonModal.svelte';
 
 /** A plain string-valued difference. `label` is arbitrary — never asserted on. */
@@ -137,12 +143,12 @@ describe('ProviderComparisonModal — grouping', () => {
     it('places each field in its configured section, Other last, in config order', async () => {
         await setupI18n();
         // One field per section, plus an unmatched one that must fall through to Other.
-        mount([stringDiff('currency', 'USD', 'EUR'), stringDiff('identifier_isin', 'IT0001', 'IT0002'), stringDiff('sector_area', 'x', 'y'), stringDiff('made_up_field', '1', '2')]);
+        mount([stringDiff('currency', 'USD', 'EUR'), stringDiff('identifier_isin', 'IT0001', 'IT0002'), stringDiff('made_up_field', '1', '2')]);
         await settled();
 
-        // Identifiers first, then asset details, then classification, then Other —
+        // Identifiers first, then asset details, then Other —
         // asserted on the stable i18n keys, never the rendered titles.
-        expect(sectionOrder()).toEqual(['common.identifiers', 'assets.modal.assetDetails', 'common.classification', '__other__']);
+        expect(sectionOrder()).toEqual(['common.identifiers', 'assets.modal.assetDetails', '__other__']);
         expect(card('currency')).toBeInTheDocument();
         expect(card('made_up_field')).toBeInTheDocument();
     });
@@ -218,6 +224,70 @@ describe('ProviderComparisonModal — selection and the apply payload', () => {
     });
 });
 
+describe('ProviderComparisonModal — the asset profile (plan 68, E10b)', () => {
+    /** A profile voice as the profile window passes it: a voice key, a group of the «Profilo» tab, the source's name. */
+    function profileDiff(field: string, group: {key: string; title: string}, extra: Partial<DiffItem> = {}): DiffItem {
+        return {...stringDiff(field, '0,20 %', '0,22 %'), group, sourceLabel: 'justETF', ...extra};
+    }
+    const FUND = {key: 'fund', title: 'Fund title'};
+    const KEY_FIGURES = {key: 'key_figures', title: 'Key figures title'};
+    const label = (box: HTMLElement) => within(box).getByTestId(/^comparison-(current|provider)-label-/);
+
+    it('takes a title and a description from the caller (the profile: «Confronto con le fonti»), and keeps the defaults without', async () => {
+        await setupI18n();
+        mount([profileDiff('ter', KEY_FIGURES)], {title: 'Compare with the sources', description: 'The sources gave other values.'});
+        await settled();
+        expect(screen.getByTestId('comparison-title')).toHaveTextContent(/^Compare with the sources$/);
+        expect(screen.getByTestId('comparison-intro')).toHaveTextContent(/^The sources gave other values\.$/);
+        cleanup();
+
+        mount([stringDiff('currency', 'USD', 'EUR')]);
+        await settled();
+        expect(screen.getByTestId('comparison-title')).toHaveTextContent(get(_)('assets.comparison.title'));
+        expect(screen.getByTestId('comparison-intro')).toHaveTextContent(get(_)('assets.comparison.description'));
+    });
+
+    it('names the source above its value instead of «provider value», and keeps the default without a name', async () => {
+        await setupI18n();
+        mount([profileDiff('ter', KEY_FIGURES), stringDiff('currency', 'USD', 'EUR')]);
+        await settled();
+
+        expect(label(screen.getByTestId('comparison-provider-ter'))).toHaveTextContent(/^justETF$/);
+        expect(label(screen.getByTestId('comparison-provider-currency'))).toHaveTextContent(get(_)('assets.comparison.providerValue'));
+    });
+
+    it('says what the current value is when the caller names it, and keeps the default without', async () => {
+        await setupI18n();
+        mount([profileDiff('ter', KEY_FIGURES, {currentLabel: 'Yours, pending'}), stringDiff('currency', 'USD', 'EUR')]);
+        await settled();
+
+        expect(label(screen.getByTestId('comparison-current-ter'))).toHaveTextContent(/^Yours, pending$/);
+        expect(label(screen.getByTestId('comparison-current-currency'))).toHaveTextContent(get(_)('assets.comparison.currentValue'));
+    });
+
+    it('groups the profile voices by their group, in the order they come, after the asset sections and before Other', async () => {
+        await setupI18n();
+        mount([profileDiff('fund_provider', FUND), stringDiff('currency', 'USD', 'EUR'), profileDiff('ter', KEY_FIGURES), profileDiff('fund_domicile', FUND), stringDiff('made_up_field', '1', '2')]);
+        await settled();
+
+        expect(sectionOrder()).toEqual(['assets.modal.assetDetails', 'profile:fund', 'profile:key_figures', '__other__']);
+        const fundGroup = document.querySelector<HTMLElement>('[data-testid="comparison-group"][data-section="profile:fund"]');
+        expect(fundGroup).toHaveTextContent('Fund title');
+        expect(card('fund_provider')).toBeInTheDocument();
+        expect(card('fund_domicile')).toBeInTheDocument();
+    });
+
+    it('hands the voice keys back on apply, as any other row', async () => {
+        await setupI18n();
+        const {onapply} = mount([profileDiff('ter', KEY_FIGURES), profileDiff('fund_provider', FUND)]);
+        await settled();
+
+        await fireEvent.click(screen.getByTestId('comparison-apply'));
+
+        expect(lastApply(onapply)?.fields.sort()).toEqual(['fund_provider', 'ter']);
+    });
+});
+
 describe('ProviderComparisonModal — value rendering', () => {
     it('shows the stored value on the left and the provider value on the right', async () => {
         await setupI18n();
@@ -273,16 +343,30 @@ describe('ProviderComparisonModal — value rendering', () => {
         expect(within(screen.getByTestId('comparison-provider-geographic_area')).getAllByTestId('comparison-dist-entry')).toHaveLength(1);
     });
 
-    it('runs the sector localisation branch without leaking a translation into the assertion', async () => {
+    it("names the sectors of the profile's `sector` voice in the interface language (plan 68, D7a)", async () => {
+        await inLanguage('it', async () => {
+            // The profile's sector voice (ProfileEditModal: `field` is the voice key, `group` its tab group) goes
+            // through formatDistKey's $t path. Before D7a only the old `sector_area` did, and the profile's sectors
+            // were shown by their stored English names.
+            mount([{...distDiff('sector', {Technology: 0.7, Energy: 0.3}, {Technology: 1}), group: {key: 'classification', title: 'g'}}]);
+            await settled();
+
+            const entries = within(screen.getByTestId('comparison-current-sector')).getAllByTestId('comparison-dist-entry');
+            expect(entries.map((e) => e.getAttribute('data-dist-key'))).toEqual(['Technology', 'Energy']);
+            expect(entries.map((e) => e.getAttribute('data-dist-pct'))).toEqual(['70.00%', '30.00%']);
+            const catalogue = get(_);
+            const expected = ['Technology', 'Energy'].map((name) => catalogue(`sectors.${sectorI18nKey(name)}`));
+            expect(expected, 'barrier: the Italian catalogue names these sectors otherwise than their stored key').not.toEqual(['Technology', 'Energy']);
+            expect(entries.map((e) => e.querySelector('span')?.textContent?.trim())).toEqual(expected);
+        });
+    });
+
+    it('has no classification section any more: the old provider fields fall under Other (plan 68, D7a)', async () => {
         await setupI18n();
-        // sector_area DOES go through formatDistKey's $t path; we assert only the
-        // stable key/pct, which the localisation cannot move.
-        mount([distDiff('sector_area', {TECHNOLOGY: 0.7, ENERGY: 0.3}, {TECHNOLOGY: 1})]);
+        mount([stringDiff('short_description', 'a', 'b'), distDiff('sector_area', {X: 1}, {X: 1}), distDiff('geographic_area', {X: 1}, {X: 1})]);
         await settled();
 
-        const entries = within(screen.getByTestId('comparison-current-sector_area')).getAllByTestId('comparison-dist-entry');
-        expect(entries.map((e) => e.getAttribute('data-dist-key'))).toEqual(['TECHNOLOGY', 'ENERGY']);
-        expect(entries.map((e) => e.getAttribute('data-dist-pct'))).toEqual(['70.00%', '30.00%']);
+        expect(sectionOrder()).toEqual(['__other__']);
     });
 
     it('draws an asset_type value as the badge of the asset cards: its icon and its catalogue name, not the raw code (K17)', async () => {
@@ -531,12 +615,12 @@ describe('ProviderComparisonModal — the quote base row and its note (Z-32 d)',
 
     it('groups quote_base_quantity with the asset details — name, type, currency — never under Other', async () => {
         await setupI18n();
-        mount([stringDiff('currency', 'EUR', 'GBP'), stringDiff('quote_base_quantity', '1', '100'), stringDiff('short_description', 'a', 'b')]);
+        mount([stringDiff('currency', 'EUR', 'GBP'), stringDiff('quote_base_quantity', '1', '100'), stringDiff('made_up_field', 'a', 'b')]);
         await settled();
 
         // RED today: the field is in no section, so it falls through to Other.
         expect(sectionOf('quote_base_quantity')).toBe('assets.modal.assetDetails');
-        expect(sectionOrder()).toEqual(['assets.modal.assetDetails', 'common.classification']);
+        expect(sectionOrder()).toEqual(['assets.modal.assetDetails', '__other__']);
     });
 
     it('starts the quote base row checked, like every row, and hands it back on apply (guard)', async () => {
@@ -547,5 +631,25 @@ describe('ProviderComparisonModal — the quote base row and its note (Z-32 d)',
         expect(screen.getByTestId('comparison-checkbox-quote_base_quantity')).toBeChecked();
         await fireEvent.click(screen.getByTestId('comparison-apply'));
         expect(lastApply(onapply)).toEqual({fields: ['quote_base_quantity'], resolutions: {}});
+    });
+});
+
+// Project 76, P4b (the consultant's rule, 18/11): the window compares the provider's own data, so a provider with an
+// attribution has its line in the window's footer.
+describe("ProviderComparisonModal — the provider's attribution (76 P4b)", () => {
+    it('shows the line of a provider with an attribution', async () => {
+        mount([stringDiff('display_name', 'BTC', 'Bitcoin')], {providerCodes: ['coingecko']});
+        await settled();
+        const note = screen.getByTestId('comparison-attribution');
+        expect(within(note).getByTestId('provider-attribution-link')).toHaveAttribute('data-provider', 'coingecko');
+    });
+
+    it.each<[string, Record<string, unknown>]>([
+        ['a provider that asks none', {providerCodes: ['yfinance']}],
+        ['a caller that names no provider (the profile window)', {}],
+    ])('shows nothing for %s', async (_label, props) => {
+        mount([stringDiff('display_name', 'BTC', 'Bitcoin')], props);
+        await settled();
+        expect(screen.queryByTestId('comparison-attribution')).toBeNull();
     });
 });

@@ -1,10 +1,13 @@
 /**
  * Group E — real ImportWizard asset-inspector persistence and nested dialogs.
  *
- * E1-001: stored metadata + quote base survive a manual edit, including inactive assets.
- * E1-002: explicit, offline Ask Provider distributions survive PATCH, GET and reopen;
- *         the quote base row it also proposes (Z-32 d) is cancelled, the stored base kept.
- * E1-003: clearing description preserves sector/geographic; whole classification can still be nulled.
+ * E1-001: the stored profile (description, sectors, countries: plan 68 E9) and the quote base survive a manual edit,
+ *         including inactive assets; the description field shows the profile's, the panels of the profile window its
+ *         sectors and countries.
+ * E1-002: Ask Provider leaves the classification alone (plan 68 E9: sectors and countries are the profile's): the
+ *         provider's distributions fill nothing; the quote base row it proposes (Z-32 d) is cancelled, the stored base
+ *         kept, the form left clean and the reopen reads nothing again.
+ * E1-003: clearing the description empties the profile's description alone; sectors and countries stay.
  * E2-001: a currency change with market data asks the server's dry run first (GET .../market-data/summary), then the
  *         confirm modal is actionable above the inspector; nothing is written before the confirm, cancel is inert, and
  *         confirm sends ONE PATCH (N68: the PATCH itself deletes the inspected asset's own prices and non-SPLIT events;
@@ -12,9 +15,8 @@
  * E2-002: provider comparison is actionable above the inspector and saves the selection.
  *
  * Pre-E1/E2 baseline (independent U1 probe work may be present): FAinfoResponse
- * carries quote_base_quantity, but not
- * classification_params. Quote-base assertions are preservation checks, not a claim
- * that the summary omits it. Currency confirmation was a raw z50 dialog; comparison
+ * carries quote_base_quantity. Quote-base assertions are preservation checks, not a claim
+ * that the summary omits it. Since plan 68 D7a no asset response carries a classification. Currency confirmation was a raw z50 dialog; comparison
  * was z70 beneath the z90 inspector. Overlay tests assert hit-testing, not z constants.
  *
  * Each test owns its broker, inline seven-column Generic CSV, assets and price rows.
@@ -38,6 +40,7 @@ import {waitForParseVerdict, waitForSettled} from '../fixtures/app-events';
 import {optionsClosed} from '../fixtures/probe';
 import {TEST_USER} from '../fixtures/test-users';
 import {uniqueSuffix, uniqueToken} from '../fixtures/unique';
+import {todayIso} from '../fixtures/dates';
 
 const API = '/api/v1';
 const TEST_PORT = process.env.TEST_PORT || '6041';
@@ -45,18 +48,12 @@ const UI_TIMEOUT = 10_000;
 const PROVIDER = 'mockprov';
 
 type Distribution = Record<string, number | string>;
-type Classification = {
-    short_description?: string | null;
-    sector_area?: {distribution: Distribution} | null;
-    geographic_area?: {distribution: Distribution} | null;
-};
 type AssetMetadata = {
     asset_id: number;
     display_name: string;
     currency: string;
     asset_type: string;
     quote_base_quantity: number;
-    classification_params: Classification | null;
     provider_code: string | null;
 };
 type OwnedAsset = {
@@ -65,7 +62,6 @@ type OwnedAsset = {
     ticker: string;
     active: boolean;
     quoteBase: number;
-    classification: Classification | null;
 };
 type ProbeRequest = {
     provider_code: string;
@@ -245,13 +241,12 @@ const test = base.extend<{owned: Owned}>({
 
 test.setTimeout(120_000);
 
-async function createAsset(page: Page, owned: Owned, label: string, options: {classification?: Classification | null; quoteBase?: number; active?: boolean; provider?: boolean} = {}): Promise<OwnedAsset> {
+async function createAsset(page: Page, owned: Owned, label: string, options: {profile?: Record<string, unknown>; quoteBase?: number; active?: boolean; provider?: boolean} = {}): Promise<OwnedAsset> {
     const name = `Inspector ${label} ${owned.suffix}`;
     const ticker = `GE${uniqueToken(14)}`;
     const active = options.active ?? true;
     const quoteBase = options.quoteBase ?? 100;
-    const classification = options.classification ?? null;
-    const data = {display_name: name, identifier_ticker: ticker, currency: 'EUR', asset_type: 'ETF', quote_base_quantity: quoteBase, active, classification_params: classification};
+    const data = {display_name: name, identifier_ticker: ticker, currency: 'EUR', asset_type: 'ETF', quote_base_quantity: quoteBase, active, ...(options.profile ? {profile: options.profile} : {})};
     schemas.FAAssetCreateItem.parse(data);
     const response = await jsonFrom<{results: Array<{asset_id: number | null; display_name: string; success: boolean}>}>(await page.request.post(`${API}/assets`, {data: [data]}), 'create owned asset');
     const created = response.results.find((item) => item.display_name === name);
@@ -262,7 +257,7 @@ async function createAsset(page: Page, owned: Owned, label: string, options: {cl
         const assignment = await jsonFrom<{results: BulkResult[]}>(await page.request.post(`${API}/assets/provider`, {data: [{asset_id: id, provider_code: PROVIDER, identifier: ticker, identifier_type: 'TICKER', provider_params: null}]}), 'assign offline provider');
         expect(assignment.results.find((item) => item.asset_id === id)?.success).toBe(true);
     }
-    return {id, name, ticker, active, quoteBase, classification};
+    return {id, name, ticker, active, quoteBase};
 }
 
 async function readMetadata(page: Page, assetId: number): Promise<AssetMetadata> {
@@ -273,15 +268,28 @@ async function readMetadata(page: Page, assetId: number): Promise<AssetMetadata>
     return item;
 }
 
-function normalizedClassification(value: Classification | null | undefined) {
-    if (value == null) return null;
-    const distribution = (block: {distribution: Distribution} | null | undefined) => (block ? Object.fromEntries(Object.entries(block.distribution).map(([key, weight]) => [key, Number(weight)])) : null);
-    return {short_description: value.short_description ?? null, sector: distribution(value.sector_area), geographic: distribution(value.geographic_area)};
+/** The profile's description, sectors and countries of an owned asset today, as the profile's API answers them (plan 68, E9). */
+type ProfileToday = {description: string | null; sector: Record<string, number> | null; geography: Record<string, number> | null};
+
+async function readProfile(page: Page, assetId: number): Promise<ProfileToday> {
+    const body = await jsonFrom<{items: Array<{asset_id: number; voices?: Record<string, Array<{value: unknown}>>}>}>(
+        await page.request.post(`${API}/assets/profile/query`, {data: [{asset_id: assetId, date_range: {start: todayIso()}, keys: ['description', 'sector', 'geography']}]}),
+        'read the profile of today',
+    );
+    const voices = body.items.find((item) => item.asset_id === assetId)?.voices ?? {};
+    const last = (key: string) => voices[key]?.at(-1)?.value ?? null;
+    const map = (value: unknown) => (value !== null && typeof value === 'object' ? Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, weight]) => [key, Number(weight)])) : null);
+    const description = last('description');
+    return {description: typeof description === 'string' ? description : null, sector: map(last('sector')), geography: map(last('geography'))};
 }
 
-function expectMetadata(metadata: AssetMetadata, asset: OwnedAsset, name = asset.name, currency = 'EUR', classification = asset.classification): void {
+/** A profile written on creation: a description, two sectors, two countries (weights as the API takes them, decimal text). */
+function storedProfile(suffix: string) {
+    return {description: `Stored description ${suffix}`, sector: {Technology: '0.6', Financials: '0.4'}, geography: {USA: '0.75', ITA: '0.25'}};
+}
+
+function expectMetadata(metadata: AssetMetadata, asset: OwnedAsset, name = asset.name, currency = 'EUR'): void {
     expect(metadata).toMatchObject({asset_id: asset.id, display_name: name, currency, asset_type: 'ETF', quote_base_quantity: asset.quoteBase});
-    expect(normalizedClassification(metadata.classification_params)).toEqual(normalizedClassification(classification));
 }
 
 async function expectActivePersisted(page: Page, owned: Owned, asset: OwnedAsset): Promise<void> {
@@ -398,13 +406,18 @@ async function openInspector(page: Page, button: Locator, expectedName: string):
     await expect(page.getByTestId('asset-modal-display-name')).toHaveValue(expectedName, {timeout: UI_TIMEOUT});
 }
 
-async function expandClassification(page: Page): Promise<void> {
-    const toggle = page.getByTestId('asset-modal-more-info');
-    await expect(toggle).toHaveAttribute('data-expanded', /^(true|false)$/);
-    if ((await toggle.getAttribute('data-expanded')) !== 'true') await toggle.click();
-    await expect(toggle).toHaveAttribute('data-expanded', 'true');
-    await expect(page.getByTestId('distribution-editor-sector')).toBeVisible();
-    await expect(page.getByTestId('distribution-editor-geographic')).toBeVisible();
+/** The sectors and the countries are the profile's (plan 68, E9): their editors are the panels of the profile window. */
+async function openProfilePanels(page: Page): Promise<void> {
+    await page.getByTestId('asset-modal-profile-row').click();
+    await expect(page.getByTestId('profile-edit-modal')).toBeVisible({timeout: UI_TIMEOUT});
+    await expect(page.getByTestId('distribution-editor-sector')).toBeVisible({timeout: UI_TIMEOUT});
+    await expect(page.getByTestId('distribution-editor-geographic')).toBeVisible({timeout: UI_TIMEOUT});
+}
+
+/** Close the profile window keeping nothing: the asset window stays as it was. */
+async function closeProfilePanels(page: Page): Promise<void> {
+    await page.getByTestId('profile-edit-cancel').click();
+    await expect(page.getByTestId('profile-edit-modal')).toBeHidden({timeout: UI_TIMEOUT});
 }
 
 async function expectDistribution(page: Page, kind: 'sector' | 'geographic', distribution: Distribution): Promise<void> {
@@ -447,8 +460,8 @@ function isPatchFor(response: Response, assetId: number): boolean {
     return Array.isArray(payload) && payload.some((item) => item.asset_id === assetId);
 }
 
-function patchItem(response: Response, assetId: number): Record<string, unknown> & {classification_params?: Classification | null} {
-    const payload = response.request().postDataJSON() as Array<Record<string, unknown> & {classification_params?: Classification | null}>;
+function patchItem(response: Response, assetId: number): Record<string, unknown> {
+    const payload = response.request().postDataJSON() as Array<Record<string, unknown>>;
     expect(payload).toHaveLength(1);
     const item = payload.find((entry) => entry.asset_id === assetId);
     if (!item) throw new Error(`Save did not PATCH the owned asset ${assetId}: ${JSON.stringify(payload)}`);
@@ -499,76 +512,54 @@ function expectNoImplicitProviderIO(owned: Owned, probeCount: number): void {
 }
 
 test.describe('Group E — import asset inspector', () => {
-    test('E1-001: inactive inspector hydrates and preserves metadata on a manual name save', async ({page, owned}, testInfo) => {
-        const classification: Classification = {
-            short_description: `Stored description ${owned.suffix}`,
-            sector_area: {distribution: {Technology: 0.6, Financials: 0.4}},
-            geographic_area: {distribution: {USA: 0.75, ITA: 0.25}},
-        };
-        const asset = await createAsset(page, owned, 'stored', {classification, quoteBase: 100, active: false});
-        const persistedBefore = await readMetadata(page, asset.id);
-        expectMetadata(persistedBefore, asset);
+    test('E1-001: inactive inspector hydrates and preserves the profile on a manual name save', async ({page, owned}, testInfo) => {
+        const profile = storedProfile(owned.suffix);
+        const asset = await createAsset(page, owned, 'stored', {profile, quoteBase: 100, active: false});
+        expectMetadata(await readMetadata(page, asset.id), asset);
+        const profileBefore = await readProfile(page, asset.id);
+        expect(profileBefore).toEqual({description: profile.description, sector: {Technology: 0.6, Financials: 0.4}, geography: {USA: 0.75, ITA: 0.25}});
         await expectActivePersisted(page, owned, asset);
         const inspector = await openWizardForExistingAsset(page, owned, asset);
         await openInspector(page, inspector, asset.name);
-        // openInspector already waited for data-snapshot-ready. Observe the initialized
-        // fields without asserting yet: the baseline's blank description must not stop
-        // the test BEFORE it demonstrates the destructive name-only PATCH and real GET.
-        const openedDescription = await page.getByTestId('asset-modal-description').inputValue();
-        const openedQuoteBase = await page.getByTestId('asset-modal-quote-base-quantity').inputValue();
+        // The description field shows the profile's, read when the window opens in edit mode
+        await expect(page.getByTestId('asset-modal-description')).toHaveValue(profile.description, {timeout: UI_TIMEOUT});
+        await expect(page.getByTestId('asset-modal-quote-base-quantity')).toHaveValue('100');
 
         const editedName = `${asset.name} edited`;
         await page.getByTestId('asset-modal-display-name').fill(editedName);
         await expect(page.getByTestId('asset-modal-display-name')).toHaveValue(editedName);
         await expectFrontmost(page.getByTestId('asset-modal-save'), 'Name-only Save');
         const [response, patch] = await Promise.all([page.waitForResponse((candidate) => isPatchFor(candidate, asset.id), {timeout: UI_TIMEOUT}), saveInspector(page, asset)]);
-        const persistedAfter = await readMetadata(page, asset.id);
-        await openInspector(page, inspector, editedName);
-        const reopenedDescription = await page.getByTestId('asset-modal-description').inputValue();
+        const profileAfter = await readProfile(page, asset.id);
         await testInfo.attach('summary-name-edit-persistence.json', {
             contentType: 'application/json',
-            body: JSON.stringify(
-                {
-                    asset_id: asset.id,
-                    persisted_before: persistedBefore,
-                    opened_form: {description: openedDescription, quote_base_quantity: openedQuoteBase},
-                    patch_status: response.status(),
-                    patch_request: patch,
-                    patch_response: await response.json(),
-                    persisted_after: persistedAfter,
-                    reopened_form: {description: reopenedDescription},
-                },
-                null,
-                2,
-            ),
+            body: JSON.stringify({asset_id: asset.id, profile_before: profileBefore, patch_status: response.status(), patch_request: patch, patch_response: await response.json(), profile_after: profileAfter}, null, 2),
         });
 
-        // The primary baseline failure is now DB data loss, with the actual successful
-        // PATCH and both metadata GETs retained above, not merely an empty UI field.
-        expect(normalizedClassification(persistedAfter.classification_params), 'REAL metadata GET after a name-only inspector save must retain all three classification fields').toEqual(normalizedClassification(classification));
-        expectMetadata(persistedAfter, asset, editedName);
+        // A name-only save touches neither the profile nor the old classification
         expect(patch).toMatchObject({asset_id: asset.id, display_name: editedName, quote_base_quantity: 100, active: false});
         expect(patch).not.toHaveProperty('classification_params');
-        expect(openedDescription).toBe(classification.short_description);
-        expect(openedQuoteBase).toBe('100');
+        expect(patch).not.toHaveProperty('profile');
+        expect(profileAfter, 'the profile after a name-only inspector save').toEqual(profileBefore);
+        expectMetadata(await readMetadata(page, asset.id), asset, editedName);
         await expectActivePersisted(page, owned, asset);
-        await expect(page.getByTestId('asset-modal-description')).toHaveValue(classification.short_description!);
+
+        await openInspector(page, inspector, editedName);
+        await expect(page.getByTestId('asset-modal-description')).toHaveValue(profile.description, {timeout: UI_TIMEOUT});
         await expect(page.getByTestId('asset-modal-quote-base-quantity')).toHaveValue('100');
         await expect(page.getByTestId('asset-active-toggle')).toHaveAttribute('aria-checked', 'false');
-        await expandClassification(page);
-        await expectDistribution(page, 'sector', classification.sector_area!.distribution);
-        await expectDistribution(page, 'geographic', classification.geographic_area!.distribution);
+        await openProfilePanels(page);
+        await expectDistribution(page, 'sector', profile.sector);
+        await expectDistribution(page, 'geographic', profile.geography);
+        await closeProfilePanels(page);
         await closeUnchangedInspector(page);
         expectNoImplicitProviderIO(owned, 0);
     });
 
-    test('E1-002: Ask Provider distributions survive real save and reopen without refetch', async ({page, owned}) => {
+    test('E1-002: Ask Provider fills no distribution, and a cancelled quote base leaves the asset as it was', async ({page, owned}) => {
         const asset = await createAsset(page, owned, 'provider', {provider: true, quoteBase: 25});
-        const classification: Classification = {
-            sector_area: {distribution: {Technology: 0.7, Financials: 0.3}},
-            geographic_area: {distribution: {USA: 0.6, ITA: 0.4}},
-        };
-        const providerPatch = {asset_id: 0, classification_params: classification};
+        // A price provider answers with the asset's identity only (plan 68, D6 and D7a): nothing of the profile
+        const providerPatch = {asset_id: 0};
         schemas.FAAssetPatchItem.parse(providerPatch);
         owned.metadata.set(asset.ticker, providerPatch);
         const before = await readMetadata(page, asset.id);
@@ -576,22 +567,11 @@ test.describe('Group E — import asset inspector', () => {
         expect(before.provider_code).toBe(PROVIDER);
         const inspector = await openWizardForExistingAsset(page, owned, asset);
         await openInspector(page, inspector, asset.name);
-        await expandClassification(page);
-        await expect(page.getByTestId('distribution-add-sector')).toBeVisible();
-        await expect(page.getByTestId('distribution-add-geographic')).toBeVisible();
-        await expect(page.getByTestId('distribution-editor-sector').getByRole('textbox')).toHaveCount(0);
-        await expect(page.getByTestId('distribution-editor-geographic').getByRole('textbox')).toHaveCount(0);
         expectNoImplicitProviderIO(owned, 0);
 
-        // Global Ask Provider covers both empty distributions in one dry-run request;
-        // no per-section button handles are required in the baseline build.
+        // Z-32 (d): the quote base is compared with the ladder. No suggestion and no type from the provider, so the
+        // ETF's default, 1, differs from the stored 25: the only row, checked, no note (only BOND's default has one).
         await page.getByTestId('asset-modal-ask-provider').click();
-        await expectDistribution(page, 'sector', classification.sector_area!.distribution);
-        await expectDistribution(page, 'geographic', classification.geographic_area!.distribution);
-        // Z-32 (d): the quote base is compared with the ladder too. No suggestion and no type
-        // from the provider, so the ETF's default, 1, differs from the stored 25: one row, checked
-        // like every row (developer's decision Q-Q5 (a)), no note (only BOND's default has one).
-        // The distributions above were actions, filled before the dialog opened over the Save.
         const comparison = page.getByTestId('comparison-modal');
         await expect(comparison).toBeVisible({timeout: UI_TIMEOUT});
         await expect(comparison.getByTestId('comparison-body')).toHaveAttribute('data-total-count', '1');
@@ -605,68 +585,46 @@ test.describe('Group E — import asset inspector', () => {
         await comparison.getByTestId('comparison-cancel').click();
         await expect(comparison).toBeHidden({timeout: UI_TIMEOUT});
         await expect(page.getByTestId('asset-modal-quote-base-quantity')).toHaveValue('25');
-        // A probe is a dry run. Only the user's real Save may persist its proposal.
-        expect((await readMetadata(page, asset.id)).classification_params).toBeNull();
-        const patch = await saveInspector(page, asset);
-        expect(patch.quote_base_quantity).toBe(25);
-        expect(normalizedClassification(patch.classification_params)).toEqual(normalizedClassification(classification));
-        expectMetadata(await readMetadata(page, asset.id), asset, asset.name, 'EUR', classification);
+        // The provider's distributions filled nothing: no profile change waits, and the form is clean
+        await expect(page.getByTestId('asset-modal-profile-row')).toHaveAttribute('data-count', '0');
+        await closeUnchangedInspector(page);
+        expectMetadata(await readMetadata(page, asset.id), asset);
+        expect(await readProfile(page, asset.id)).toEqual({description: null, sector: null, geography: null});
         const expectedProbe: ProbeRequest = {provider_code: PROVIDER, identifier: asset.ticker, identifier_type: 'TICKER', provider_params: null, operations: ['metadata']};
         expect(owned.probes.map((request) => ({...request, provider_params: request.provider_params ?? null}))).toEqual([expectedProbe]);
 
         const beforeReopen = owned.probes.length;
         await openInspector(page, inspector, asset.name);
         await expect(page.getByTestId('asset-modal-quote-base-quantity')).toHaveValue('25');
-        await expandClassification(page);
-        await expectDistribution(page, 'sector', classification.sector_area!.distribution);
-        await expectDistribution(page, 'geographic', classification.geographic_area!.distribution);
         await closeUnchangedInspector(page);
         expectNoImplicitProviderIO(owned, beforeReopen);
     });
 
-    test('E1-003: clearing description keeps the other classification fields intact', async ({page, owned}) => {
-        const classification: Classification = {
-            short_description: `Stored description ${owned.suffix}`,
-            sector_area: {distribution: {Technology: 0.6, Financials: 0.4}},
-            geographic_area: {distribution: {USA: 0.75, ITA: 0.25}},
-        };
-        const asset = await createAsset(page, owned, 'clear-description', {classification, quoteBase: 100, active: false});
-        expectMetadata(await readMetadata(page, asset.id), asset);
+    test('E1-003: clearing the description empties the profile’s description alone', async ({page, owned}) => {
+        const profile = storedProfile(owned.suffix);
+        const asset = await createAsset(page, owned, 'clear-description', {profile, quoteBase: 100, active: false});
         await expectActivePersisted(page, owned, asset);
 
         const inspector = await openWizardForExistingAsset(page, owned, asset);
         await openInspector(page, inspector, asset.name);
-        await expect(page.getByTestId('asset-modal-description')).toHaveValue(classification.short_description!);
-        await expandClassification(page);
-        await expectDistribution(page, 'sector', classification.sector_area!.distribution);
-        await expectDistribution(page, 'geographic', classification.geographic_area!.distribution);
+        await expect(page.getByTestId('asset-modal-description')).toHaveValue(profile.description, {timeout: UI_TIMEOUT});
 
         await page.getByTestId('asset-modal-description').fill('');
         await expect(page.getByTestId('asset-modal-description')).toHaveValue('');
         const patch = await saveInspector(page, asset);
-        expect(patch).toMatchObject({asset_id: asset.id, classification_params: {short_description: null}});
-        expect(patch.classification_params).toEqual({short_description: null});
-        const cleared = await readMetadata(page, asset.id);
-        expectMetadata(cleared, asset, asset.name, 'EUR', {
-            sector_area: classification.sector_area,
-            geographic_area: classification.geographic_area,
-        });
-        expect(cleared.classification_params?.short_description).toBeNull();
+        // Emptied on purpose: the profile's description goes to null, and nothing else is sent for the profile
+        expect(patch).toMatchObject({asset_id: asset.id, profile: {description: null}});
+        expect(patch.profile).toEqual({description: null});
+        expect(patch).not.toHaveProperty('classification_params');
+        expect(await readProfile(page, asset.id)).toEqual({description: null, sector: {Technology: 0.6, Financials: 0.4}, geography: {USA: 0.75, ITA: 0.25}});
 
         await openInspector(page, inspector, asset.name);
         await expect(page.getByTestId('asset-modal-description')).toHaveValue('');
-        await expandClassification(page);
-        await expectDistribution(page, 'sector', classification.sector_area!.distribution);
-        await expectDistribution(page, 'geographic', classification.geographic_area!.distribution);
+        await openProfilePanels(page);
+        await expectDistribution(page, 'sector', profile.sector);
+        await expectDistribution(page, 'geographic', profile.geography);
+        await closeProfilePanels(page);
         await closeUnchangedInspector(page);
-
-        const totalClear = {asset_id: asset.id, classification_params: null};
-        schemas.FAAssetPatchItem.parse(totalClear);
-        const totalClearResponse = await jsonFrom<{results: BulkResult[]}>(await page.request.patch(`${API}/assets`, {data: [totalClear]}), 'clear classification_params via real API');
-        expect(totalClearResponse.results.find((item) => item.asset_id === asset.id)?.success).toBe(true);
-        const wiped = await readMetadata(page, asset.id);
-        expectMetadata(wiped, asset, asset.name, 'EUR', null);
-        expect(wiped.classification_params).toBeNull();
         expectNoImplicitProviderIO(owned, 0);
     });
 

@@ -113,6 +113,7 @@ const api = {
     fx: () => vi.mocked(zodiosApi.list_providers_api_v1_fx_providers_get as never) as ReturnType<typeof vi.fn>,
     brim: () => vi.mocked(zodiosApi.list_plugins_api_v1_brokers_import_plugins_get as never) as ReturnType<typeof vi.fn>,
     diag: () => vi.mocked(zodiosApi.get_plugin_diagnostics_api_v1_system_plugin_diagnostics_get as never) as ReturnType<typeof vi.fn>,
+    enrichers: () => vi.mocked(zodiosApi.list_enrichers_api_v1_assets_enrichers_get as never) as ReturnType<typeof vi.fn>,
     assetSignals: () => vi.mocked(zodiosApi.list_asset_signal_catalog_api_v1_assets_prices_signals_get as never) as ReturnType<typeof vi.fn>,
     fxSignals: () => vi.mocked(zodiosApi.list_fx_signal_catalog_api_v1_fx_currencies_signals_get as never) as ReturnType<typeof vi.fn>,
 };
@@ -199,6 +200,7 @@ beforeEach(() => {
     api.fx().mockResolvedValue([] as never);
     api.brim().mockResolvedValue([] as never);
     api.diag().mockResolvedValue([] as never);
+    api.enrichers().mockResolvedValue({enrichers: [], default_order: {}} as never);
     api.assetSignals().mockResolvedValue({items: []} as never);
     api.fxSignals().mockResolvedValue({items: []} as never);
     registeredSignals.mockReturnValue([]);
@@ -675,6 +677,74 @@ describe('AboutTab — the installed signals', () => {
 });
 
 // =========================================================================
+describe('AboutTab — the enrichers (76 plan §3.10, lot C68)', () => {
+    const enrichersHeader = /settings\.enrichers/;
+    const enricher = (code: string, name: string, extra: Record<string, unknown> = {}) => ({code, name, terms: 'open', accepted_identifier_types: ['ISIN'], default_priority: {}, ...extra});
+
+    it('has its own card in the plugin diagnostics, healthy when nothing failed to load', async () => {
+        await mount();
+
+        expect(diagnosticsFor('enricher')).toHaveAttribute('data-status', 'ok');
+        expect(diagnosticsFor('enricher')).toHaveAttribute('data-failures', '0');
+        expect(diagnosticsFor('enricher')).toHaveTextContent('settings.pluginSystemEnricher');
+    });
+
+    it('shows an enricher that failed to load on its card, and only there', async () => {
+        api.diag().mockResolvedValue([{system: 'enricher', filename: 'broken_enricher.py', error: 'ImportError: no module named justetf_scraping'}] as never);
+        await mount();
+
+        expect(diagnosticsFor('enricher')).toHaveAttribute('data-status', 'failed');
+        expect(diagnosticsFor('enricher')).toHaveAttribute('data-failures', '1');
+        expect(diagnosticsFor('enricher')).toHaveTextContent('broken_enricher.py');
+        expect(diagnosticsFor('asset')).toHaveAttribute('data-status', 'ok');
+    });
+
+    it('lists the installed enrichers under the installed plugins, with their count, name and code', async () => {
+        api.enrichers().mockResolvedValue({enrichers: [enricher('justetf', 'justETF'), enricher('yfinance', 'Yahoo Finance')], default_order: {}} as never);
+        await mount();
+
+        const section = screen.getByTestId('about-installed-enrichers');
+        expect(section).toHaveTextContent(enrichersHeader);
+        expect(section).toHaveTextContent('(2)');
+        expect(section).toHaveTextContent('justETF');
+        expect(section).toHaveTextContent('yfinance');
+    });
+
+    it('links an enricher to its help page when it declares one, and renders the others as plain boxes', async () => {
+        api.enrichers().mockResolvedValue({enrichers: [enricher('justetf', 'justETF', {help_url: 'https://help.test/justetf'}), enricher('borsa_italiana', 'Borsa Italiana')], default_order: {}} as never);
+        await mount();
+
+        expect(screen.getByText('justETF').closest('a')).toHaveAttribute('href', 'https://help.test/justetf');
+        expect(screen.getByText('Borsa Italiana').closest('a')).toBeNull();
+    });
+
+    it('omits the section when no enricher is installed, or when the list cannot be read', async () => {
+        api.enrichers().mockResolvedValue({enrichers: [enricher('justetf', 'justETF')], default_order: {}} as never);
+        const installed = await mount();
+        expect(screen.getByTestId('about-installed-enrichers')).toBeInTheDocument();
+        installed.unmount();
+
+        api.enrichers().mockResolvedValue({enrichers: [], default_order: {}} as never);
+        const empty = await mount();
+        expect(screen.queryByTestId('about-installed-enrichers')).toBeNull();
+        empty.unmount();
+
+        api.enrichers().mockRejectedValue(new Error('offline'));
+        await mount();
+        expect(screen.queryByTestId('about-installed-enrichers')).toBeNull();
+    });
+
+    it('names the enrichers in the report copied for an issue', async () => {
+        api.enrichers().mockResolvedValue({enrichers: [enricher('justetf', 'justETF')], default_order: {}} as never);
+        await mount();
+
+        await fireEvent.click(copyButton());
+
+        await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+        expect(writeText.mock.calls[0][0]).toContain('Enrichers:\n  - justETF');
+    });
+});
+
 describe('AboutTab — the plugin discovery report', () => {
     it('reports all six systems as healthy when nothing failed to load', async () => {
         await mount();

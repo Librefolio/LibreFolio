@@ -47,6 +47,8 @@ LEGACY_CODES = {
 RISK_CODES = {
     "RISK_DRAWDOWN",
     "RISK_ROLLING_BETA",
+    "RISK_ROLLING_DOWNSIDE_DEVIATION",
+    "RISK_ROLLING_OMEGA",
     "RISK_ROLLING_SHARPE",
     "RISK_ROLLING_VOLATILITY",
 }
@@ -150,6 +152,14 @@ EXPECTED_SEMANTIC_IDS = {
         "rolling_beta",
         ["rolling_beta.value"],
     ),
+    "RISK_ROLLING_DOWNSIDE_DEVIATION": (
+        "rolling_downside_deviation",
+        ["rolling_downside_deviation.value"],
+    ),
+    "RISK_ROLLING_OMEGA": (
+        "rolling_omega_ratio",
+        ["rolling_omega_ratio.value"],
+    ),
     "RISK_ROLLING_SHARPE": (
         "rolling_sharpe_ratio",
         ["rolling_sharpe_ratio.value"],
@@ -178,6 +188,10 @@ EXPECTED_RISK_DOCS_PATHS = {
     "RISK_DRAWDOWN": "financial-theory/technical-analysis/risk-metrics/current-drawdown/",
     "RISK_ROLLING_VOLATILITY": "financial-theory/technical-analysis/risk-metrics/volatility/",
     "RISK_ROLLING_SHARPE": "financial-theory/technical-analysis/risk-metrics/sharpe-ratio/",
+    # The semi-deviation is explained in the Sortino page's own section (the «How does it move?» page links it there);
+    # Omega has its page since RN-24.
+    "RISK_ROLLING_DOWNSIDE_DEVIATION": "financial-theory/technical-analysis/risk-metrics/sortino-ratio/",
+    "RISK_ROLLING_OMEGA": "financial-theory/technical-analysis/risk-metrics/omega-ratio/",
     "RISK_ROLLING_BETA": "financial-theory/technical-analysis/risk-metrics/beta-active-return/",
     "ASSET_CALENDAR_ROLLING_RETURN": "financial-theory/fundamentals/returns/",
 }
@@ -196,6 +210,8 @@ EXPECTED_IMPLEMENTATION_VERSIONS = {
     "RISK_ROLLING_BETA": "1.1.0",
     "RISK_ROLLING_SHARPE": "1.1.0",
     "RISK_ROLLING_VOLATILITY": "1.1.0",
+    "RISK_ROLLING_DOWNSIDE_DEVIATION": "1.0.0",
+    "RISK_ROLLING_OMEGA": "1.0.0",
     # Decision 29 publishes the calendar return without changing a single value: no bump.
     CALENDAR_CODE: "1.4.0",
 }
@@ -243,6 +259,8 @@ EXPECTED_PARAM_UNITS = {
     "RISK_ROLLING_BETA": {"window": RISK_WINDOW, "comparison_asset_id": (None, "signals.tooltips.comparisonAsset")},
     "RISK_ROLLING_SHARPE": {"window": RISK_WINDOW, "risk_free_annual_rate": (None, "signals.tooltips.riskFreeAnnualRate")},
     "RISK_ROLLING_VOLATILITY": {"window": RISK_WINDOW},
+    "RISK_ROLLING_DOWNSIDE_DEVIATION": {"window": RISK_WINDOW, "target_annual_return": (None, "signals.tooltips.targetAnnualReturn")},
+    "RISK_ROLLING_OMEGA": {"window": RISK_WINDOW, "target_annual_return": (None, "signals.tooltips.targetAnnualReturn")},
     CALENDAR_CODE: {"window_days": ("days", "signals.riskRollingReturn.windowTooltip")},
 }
 # The four UI catalogues, merged from their sources (scripts/i18n_catalog.py) without the English fallback.
@@ -280,10 +298,10 @@ def default_requests() -> list[SignalRequest]:
     ]
 
 
-def test_registry_has_twenty_two_complete_definitions():
+def test_registry_has_twenty_four_complete_definitions():
     definitions = SignalPluginRegistry.list_definitions()
     assert {definition.signal_code for definition in definitions} == ALL_CODES
-    assert len(definitions) == 22
+    assert len(definitions) == 24
 
     for definition in definitions:
         assert definition.implementation_version
@@ -409,6 +427,27 @@ def _declared_param_units(signal_code: str) -> dict[str, tuple[str | None, str |
     """(x-suffix, x-tooltip-key) of every param, read from the schema the catalog serves."""
     properties = SignalPluginRegistry.get_plugin(signal_code).catalog_definition().params_schema.get("properties", {})
     return {key: (schema.get("x-suffix"), schema.get("x-tooltip-key")) for key, schema in properties.items()}
+
+
+# The parameters a semantic control fills (`x-control`): the frontend draws them without a number field. The comparison
+# asset is a picker; the risk-free rate (RN-21, the consultant, 17/11/2026) is the reader's one rate, shared with the
+# risk pages, so the chart shows it and never a second field that could say another figure.
+EXPECTED_SEMANTIC_CONTROLS = {
+    "RISK_ROLLING_BETA": {"comparison_asset_id": "comparison_asset"},
+    "RISK_ROLLING_SHARPE": {"risk_free_annual_rate": "risk_free_rate"},
+    "RISK_ROLLING_DOWNSIDE_DEVIATION": {"target_annual_return": "risk_free_rate"},
+    "RISK_ROLLING_OMEGA": {"target_annual_return": "risk_free_rate"},
+}
+
+
+def _declared_semantic_controls(signal_code: str) -> dict[str, str]:
+    properties = SignalPluginRegistry.get_plugin(signal_code).catalog_definition().params_schema.get("properties", {})
+    return {key: schema["x-control"] for key, schema in properties.items() if "x-control" in schema}
+
+
+@pytest.mark.parametrize("signal_code", sorted(EXPECTED_PARAM_UNITS))
+def test_semantic_controls_are_pinned(signal_code):
+    assert _declared_semantic_controls(signal_code) == EXPECTED_SEMANTIC_CONTROLS.get(signal_code, {})
 
 
 def _translation(catalog: dict, dotted_key: str) -> object:

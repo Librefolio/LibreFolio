@@ -54,8 +54,9 @@
     import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import type {RiskAnalyticResult} from '$lib/features/risk/riskStore.svelte';
+    import {usedRiskFreeRate} from './riskFreeRate';
 
-    import {assetSetCalculationWindow, buildAssetSetBenchmarkPoint, buildAssetSetChartPoints, buildAssetSetPaidRows, calendarLength, withBenchmarkRow, type AssetSetPaidRow} from './assetSetLevels';
+    import {assetSetCalculationWindow, buildAssetSetBenchmarkPoint, buildAssetSetChartPoints, buildAssetSetPaidRows, calendarLengthText, withBenchmarkRow, type AssetSetPaidRow} from './assetSetLevels';
     import {dayFormatter} from './eligibility';
     import RiskReturnLevel from './RiskReturnLevel.svelte';
     import {uiLocale} from '$lib/stores/app/uiLocale';
@@ -129,13 +130,11 @@
     let rows = $derived(withBenchmarkRow(assetRows, benchmarkApplies ? benchmarkPoint : null));
 
     /**
-     * The lab charges every ratio against a zero risk-free rate (it has no control to set
-     * one: `appliedRiskFreePercent: 0` in its controllers, and the comparison's Sharpe is
-     * charged the same), so the line through the benchmark starts there too. Passed
-     * explicitly rather than left to the chart's default, so it stays right if the lab
-     * ever gains a rate.
+     * The line through the benchmark starts at the rate its answers were charged (RN-21: the reader's risk-free rate,
+     * echoed by the engine), the comparison's first, then the KPI's; 0 when neither names one. Never the field's value:
+     * between a change and the new answers, the two differ.
      */
-    const LAB_RISK_FREE_RATE = 0;
+    let lineRate = $derived(usedRiskFreeRate(comparison) ?? usedRiskFreeRate(kpi) ?? 0);
 
     let hasAnyFigure = $derived(assetRows.some((row) => row.volatility !== null || row.expectedReturn !== null));
 
@@ -152,15 +151,7 @@
      * as a count of days (the developer's review, round 4). Zero parts are left out, and the
      * rest are joined the way the reader's language joins a list.
      */
-    let periodLength = $derived.by(() => {
-        if (calculationWindow === null) return '';
-        const {years, months, days} = calendarLength(calculationWindow.start, calculationWindow.end);
-        const parts = [years > 0 ? $t('risk.assetSet.levels.l3.period.years', {values: {count: years}}) : null, months > 0 ? $t('risk.assetSet.levels.l3.period.months', {values: {count: months}}) : null, days > 0 ? $t('risk.assetSet.levels.l3.period.days', {values: {count: days}}) : null].filter(
-            (part): part is string => part !== null,
-        );
-        if (parts.length === 0) return $t('risk.assetSet.levels.l3.period.days', {values: {count: calculationWindow.days}});
-        return new Intl.ListFormat($currentLanguage, {style: 'long', type: 'conjunction'}).format(parts);
-    });
+    let periodLength = $derived(calculationWindow === null ? '' : calendarLengthText(calculationWindow.start, calculationWindow.end, $t, $currentLanguage, calculationWindow.days));
     /** The first line: the window, and — only when it is shorter — the period that was asked for. */
     let periodWindowText = $derived.by(() => {
         if (calculationWindow === null) return '';
@@ -197,7 +188,7 @@
             {rows}
             {points}
             capabilities={{ratios: true, benchmark: benchmarkApplies}}
-            riskFreeRate={LAB_RISK_FREE_RATE}
+            riskFreeRate={lineRate}
             {assetIcons}
             testIdPrefix="risk-asset-set-l3"
             storageKey="risk-asset-set-l3"

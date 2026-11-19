@@ -74,7 +74,78 @@
     "group": {
       "usedBy": "Partagés par : {plugins}",
       "inGroup": "Utilise aussi les paramètres partagés de {group}",
-      "open": "Ouvrir"
+      "open": "Ouvrir",
+      "coingecko": {
+        "name": "CoinGecko",
+        "label": {
+          "api_key": "Clé API",
+          "plan": "Offre"
+        },
+        "about": "Le compte CoinGecko partagé par les plugins CoinGecko : sa clé API et son offre.",
+        "description": {
+          "api_key": "La clé d'un compte CoinGecko. Une clé Demo gratuite suffit.",
+          "plan": "L'offre de la clé : une clé Demo répond sur l'API publique, une clé payante sur l'API Pro."
+        },
+        "missing": {
+          "api_key": "la clé API"
+        },
+        "option": {
+          "plan": {
+            "demo": "Demo (gratuite)",
+            "pro": "Pro (payante)"
+          }
+        },
+        "callsNote": "Le mois de CoinGecko peut recommencer un autre jour : ceci est le décompte de LibreFolio."
+      },
+      "countsOn": "Ses appels comptent sur {group} : le compteur et les limites s'y trouvent."
+    },
+    "notConfigured": {
+      "tooltip": "{provider} doit être configuré",
+      "invalidAdmin": "La variable d'environnement {variable} a une valeur non valide : elle doit être corrigée sur le serveur.",
+      "invalidLimitAdmin": "La variable d'environnement {variable} a une valeur non valide (il faut un entier ≥ 0, ou rien) : elle doit être corrigée sur le serveur. Tant qu'elle ne l'est pas, {provider} est arrêté.",
+      "invalidMember": "{provider} est arrêté : un de ses paramètres sur le serveur n'est pas valide. Prévenez l'administrateur.",
+      "managed": "{provider} n'est pas disponible sur cette instance : sa configuration est gérée par le fournisseur du service. Contactez l'assistance.",
+      "readOnlyIntro": "Les paramètres, en lecture seule :",
+      "readOnlyLink": "Paramètres › Plugins",
+      "missingAdmin": "{provider} doit être configuré : {count, plural, one {il manque ce paramètre} other {il manque ces paramètres}} : {fields}.",
+      "missingMember": "{provider} doit être configuré : demandez à un administrateur de définir {count, plural, one {ce paramètre} other {ces paramètres}} : {fields}.",
+      "missingAdminGeneric": "{provider} doit être configuré : il manque un paramètre obligatoire.",
+      "missingMemberGeneric": "{provider} doit être configuré : demandez à un administrateur de définir ses paramètres obligatoires.",
+      "missingAdminPhrase": "{provider} doit être configuré : {fields} {count, plural, one {manque} other {manquent}}.",
+      "missingMemberPhrase": "{provider} doit être configuré : demandez à un administrateur de définir {fields}."
+    },
+    "calls": {
+      "title": "Appels",
+      "window": {
+        "minute": "Minute",
+        "hour": "Heure",
+        "day": "Jour",
+        "week": "Semaine",
+        "month": "Mois"
+      },
+      "noLimit": "Aucune limite",
+      "noLimitInline": "aucune limite",
+      "limitOf": "Limite — {window}",
+      "utcNote": "Fenêtres calendaires en UTC : le jour recommence à 00:00 UTC, la semaine le lundi, le mois le 1er. Compteurs lus au chargement de la page.",
+      "full": {
+        "minute": "Limite par minute atteinte : {count} sur {limit}. Reprise à {time} UTC.",
+        "hour": "Limite horaire atteinte : {count} sur {limit}. Reprise à {time} UTC.",
+        "day": "Limite journalière atteinte : {count} sur {limit}. Reprise le {date} à {time} UTC.",
+        "week": "Limite hebdomadaire atteinte : {count} sur {limit}. Reprise le {date} à {time} UTC.",
+        "month": "Limite mensuelle atteinte : {count} sur {limit}. Reprise le {date} à {time} UTC."
+      },
+      "stopped": {
+        "minute": "Arrêté : la limite par minute est 0, aucun appel ne part tant qu'un administrateur ne la change pas.",
+        "hour": "Arrêté : la limite horaire est 0, aucun appel ne part tant qu'un administrateur ne la change pas.",
+        "day": "Arrêté : la limite journalière est 0, aucun appel ne part tant qu'un administrateur ne la change pas.",
+        "week": "Arrêté : la limite hebdomadaire est 0, aucun appel ne part tant qu'un administrateur ne la change pas.",
+        "month": "Arrêté : la limite mensuelle est 0, aucun appel ne part tant qu'un administrateur ne la change pas."
+      },
+      "managedFull": "Limite de l'instance atteinte : reprise le {date} à {time} UTC.",
+      "managedFullAt": "Limite de l'instance atteinte : reprise à {time} UTC.",
+      "adminOnly": "Seul un administrateur peut changer les limites.",
+      "invalid": "valeur non valide",
+      "invalidBy": "{variable} : valeur non valide"
     }
   }
 }

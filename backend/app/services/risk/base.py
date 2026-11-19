@@ -65,10 +65,11 @@ class RiskUnavailableError(ValueError):
 # answers RESOURCE_LIMIT, without a remedy nobody has checked. A refusal is built by `resource_limit_error()` alone, so
 # the remedies the backend can name are exactly the values of this table.
 REMEDY_BY_METRIC: dict[str, str] = {
-    "portfolio_cells": "paths_or_horizon",
-    "stochastic_cells": "paths_or_horizon",
-    "history_cells": "period",
-    "observations": "period",
+    # RN-16: the paths fall to the fewest that fit before a simulation is refused (Q5 a), so the cure left is a
+    # shorter horizon; and the history keeps the most recent observations that fit (Q4 c), so `history_cells` and
+    # `observations` — defences a user never reaches — name no remedy: no period the user picks moves them.
+    "portfolio_cells": "horizon",
+    "stochastic_cells": "horizon",
     "assets": "positions",
     "sobol_dimension": "horizon_or_sampling",
     "price_item_days": "period_or_assets",
@@ -104,12 +105,21 @@ class RiskHistoricalReplayContext:
 
 @dataclass(frozen=True, slots=True)
 class RiskAssetClassification:
-    """Canonical classification inputs consumed by hypothetical stress."""
+    """Canonical classification inputs consumed by hypothetical stress, and the duration the rates scenario reads."""
 
     asset_class: str
     sector_exposures: Optional[Mapping[str, float]] = None
     geography_exposures: Optional[Mapping[str, float]] = None
     metadata_error: Optional[str] = None
+    # RN-25: the profile's modified duration holding the analysis day, the day it was read and its source; the rates
+    # scenario reads them. None when the profile has none, or none readable.
+    modified_duration: Optional[float] = None
+    modified_duration_read_on: Optional[date] = None
+    modified_duration_source: Optional[str] = None
+    # D1d: when the duration is the profile's «now», the day it was last confirmed and whether that is more than 30 days
+    # ago («non aggiornato»); None and False when the analysis day is held by an older reading.
+    modified_duration_confirmed_on: Optional[date] = None
+    modified_duration_stale: bool = False
 
 
 @dataclass(frozen=True, slots=True)

@@ -74,7 +74,78 @@
     "group": {
       "usedBy": "Shared by: {plugins}",
       "inGroup": "Also uses the shared settings of {group}",
-      "open": "Open"
+      "open": "Open",
+      "coingecko": {
+        "name": "CoinGecko",
+        "label": {
+          "api_key": "API key",
+          "plan": "Plan"
+        },
+        "about": "The CoinGecko account the CoinGecko plugins share: its API key and its plan.",
+        "description": {
+          "api_key": "The key of a CoinGecko account. A free Demo key is enough.",
+          "plan": "The plan of the key: a Demo key answers on the public API, a paid key on the Pro API."
+        },
+        "missing": {
+          "api_key": "the API key"
+        },
+        "option": {
+          "plan": {
+            "demo": "Demo (free)",
+            "pro": "Pro (paid)"
+          }
+        },
+        "callsNote": "CoinGecko's month may start again on another day: this is LibreFolio's count."
+      },
+      "countsOn": "Its calls count on {group}: the counter and the limits are there."
+    },
+    "notConfigured": {
+      "tooltip": "{provider} needs configuring",
+      "invalidAdmin": "The environment variable {variable} has an invalid value: it must be fixed on the server.",
+      "invalidLimitAdmin": "The environment variable {variable} has an invalid value (it needs an integer ≥ 0, or nothing): it must be fixed on the server. Until it is fixed, {provider} is stopped.",
+      "invalidMember": "{provider} is stopped: one of its settings on the server is invalid. Tell the administrator.",
+      "managed": "{provider} is not available on this instance: its configuration is managed by the service provider. Contact support.",
+      "readOnlyIntro": "The settings, read-only:",
+      "readOnlyLink": "Settings › Plugins",
+      "missingAdmin": "{provider} needs configuring: {count, plural, one {this setting is missing} other {these settings are missing}}: {fields}.",
+      "missingMember": "{provider} needs configuring: ask an administrator to set {count, plural, one {this setting} other {these settings}}: {fields}.",
+      "missingAdminGeneric": "{provider} needs configuring: a required setting is missing.",
+      "missingMemberGeneric": "{provider} needs configuring: ask an administrator to set its required settings.",
+      "missingAdminPhrase": "{provider} needs configuring: {fields} {count, plural, one {is} other {are}} missing.",
+      "missingMemberPhrase": "{provider} needs configuring: ask an administrator to set {fields}."
+    },
+    "calls": {
+      "title": "Calls",
+      "window": {
+        "minute": "Minute",
+        "hour": "Hour",
+        "day": "Day",
+        "week": "Week",
+        "month": "Month"
+      },
+      "noLimit": "No limit",
+      "noLimitInline": "no limit",
+      "limitOf": "Limit — {window}",
+      "utcNote": "Calendar windows in UTC: the day starts again at 00:00 UTC, the week on Monday, the month on the 1st. Counts read when the page loads.",
+      "full": {
+        "minute": "Per-minute limit reached: {count} of {limit}. Resumes at {time} UTC.",
+        "hour": "Hourly limit reached: {count} of {limit}. Resumes at {time} UTC.",
+        "day": "Daily limit reached: {count} of {limit}. Resumes on {date} at {time} UTC.",
+        "week": "Weekly limit reached: {count} of {limit}. Resumes on {date} at {time} UTC.",
+        "month": "Monthly limit reached: {count} of {limit}. Resumes on {date} at {time} UTC."
+      },
+      "stopped": {
+        "minute": "Stopped: the per-minute limit is 0, no call goes out until an administrator changes it.",
+        "hour": "Stopped: the hourly limit is 0, no call goes out until an administrator changes it.",
+        "day": "Stopped: the daily limit is 0, no call goes out until an administrator changes it.",
+        "week": "Stopped: the weekly limit is 0, no call goes out until an administrator changes it.",
+        "month": "Stopped: the monthly limit is 0, no call goes out until an administrator changes it."
+      },
+      "managedFull": "Instance limit reached: resumes on {date} at {time} UTC.",
+      "managedFullAt": "Instance limit reached: resumes at {time} UTC.",
+      "adminOnly": "Only an administrator can change the limits.",
+      "invalid": "invalid value",
+      "invalidBy": "{variable}: invalid value"
     }
   }
 }

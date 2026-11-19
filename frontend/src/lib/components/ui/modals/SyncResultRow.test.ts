@@ -454,3 +454,27 @@ describe('SyncResultRow — the elapsed time in the UI language (M-18)', () => {
         expect(shownTimes(), 'it → en in place — today’s text again').toEqual(ENGLISH);
     });
 });
+
+// =========================================================================
+// Project 76, P2b — the first day the source has prices for
+// =========================================================================
+
+describe('SyncResultRow — the first day the source has prices for (76 P2b)', () => {
+    it('says from which day the source has prices, and that the days before are imported by hand, on any status', async () => {
+        const {get: read} = await import('svelte/store');
+        const {_} = await import('$lib/i18n');
+        const {formatDay} = await import('$lib/utils/core/formatAxisDate');
+        mount(res('bitcoin', 'ok', {points_fetched: 364, points_changed: 364, history_starts: '2025-11-18'}));
+
+        const note = within(rowOf('bitcoin')).getByTestId('sync-row-history-starts');
+        expect(note).toHaveAttribute('data-date', '2025-11-18');
+        const expected = read(_)('prices.sync.historyStarts', {values: {date: formatDay('2025-11-18')}});
+        expect(expected, 'premise: the catalogue has the text').not.toBe('prices.sync.historyStarts');
+        expect(note.textContent?.trim()).toBe(expected);
+    });
+
+    it('says nothing when the outcome has no first day', async () => {
+        mount(res('pepe', 'ok', {points_fetched: 10, points_changed: 10}));
+        expect(within(rowOf('pepe')).queryByTestId('sync-row-history-starts')).toBeNull();
+    });
+});

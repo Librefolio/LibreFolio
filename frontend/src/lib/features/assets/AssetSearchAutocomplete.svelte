@@ -7,6 +7,8 @@
   - Dropdown results with provider_url link
   - Loading, empty, error states
   - A provider that must be configured first (NOT_CONFIGURED) says so, with «Configure» (CP11)
+  - A provider the list says is not configured is switched off before any search: its chip stays in place, dashed, out
+    of the search; a touch opens the common window (project 76, N3a), and a save there reads the list again
   - The legend of 👑 (the fund's own currency) when a result shows it
   - Premium sources first (F21): when a premium provider took part in the search, its results come in a Premium
     section, and the others in a closed community section that warns before it shows them; otherwise the list is as
@@ -20,12 +22,14 @@
     import {_ as t} from '$lib/i18n';
     import {untrack} from 'svelte';
     import {zodiosApi} from '$lib/api';
-    import {AlertTriangle, ChevronDown, ChevronRight, ExternalLink, Loader2, Search} from 'lucide-svelte';
+    import {AlertTriangle, ChevronDown, ChevronRight, ExternalLink, Loader2, Search, SlidersHorizontal} from 'lucide-svelte';
     import AssetIcon from './AssetIcon.svelte';
     import {ensureAssetProvidersCached, getAssetProviderIconUrl} from '$lib/utils/providerHelpers';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {isOutsideClick} from '$lib/utils/core/clickOutside';
     import PluginSettingsModal from '$lib/features/plugin-settings/PluginSettingsModal.svelte';
+    import PluginNotConfiguredModal from '$lib/features/plugin-settings/PluginNotConfiguredModal.svelte';
+    import {needsSetup, type ProviderReadiness} from '$lib/features/plugin-settings/notConfigured';
     import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
     import {selfHostedConfirmed} from '$lib/features/instance/profile';
     import {currentLanguage} from '$lib/stores/app/language';
@@ -35,6 +39,7 @@
     import {hasPremium, orderSearchResults, splitSearchResults, type ProviderTier} from './assetSearchSections';
     import {buildSearchReport, type ProviderOutcome, type SearchReportContext} from './assetSearchReport';
     import {reportHref, supportChannel, type SupportChannel} from '$lib/features/support/supportChannel';
+    import ProviderAttributionNote from './ProviderAttributionNote.svelte';
 
     // =========================================================================
     // Types
@@ -54,7 +59,7 @@
         via_web?: boolean;
     }
 
-    interface ProviderInfo {
+    interface ProviderInfo extends ProviderReadiness {
         code: string;
         name: string;
         supports_search: boolean;
@@ -117,6 +122,8 @@
     let notConfigured = $state<string[]>([]);
     /** The provider whose settings «Configure» opened; null when the dialog is closed. */
     let configuring = $state<string | null>(null);
+    /** The switched-off provider whose «to configure» window is open (N3a); null when closed. */
+    let settingUp = $state<ProviderInfo | null>(null);
     /** The query and the providers of the last search that ran, and what each provider answered: the report (P20). */
     let searchedQuery = $state<string | null>(null);
     let searchedCodes = $state<string[]>([]);
@@ -202,13 +209,17 @@
         }
     });
 
+    async function readProviders(): Promise<ProviderInfo[]> {
+        const response = (await zodiosApi.list_providers_api_v1_assets_provider_get()) as any;
+        return (Array.isArray(response) ? response : []).filter((p: ProviderInfo) => p.code !== 'mockprov');
+    }
+
     async function loadProviders() {
         try {
-            const response = (await zodiosApi.list_providers_api_v1_assets_provider_get()) as any;
-            const items: ProviderInfo[] = (Array.isArray(response) ? response : []).filter((p: ProviderInfo) => p.code !== 'mockprov');
+            const items = await readProviders();
             providers = items;
-            // Select all searchable providers by default
-            selectedProviders = new Set(items.filter((p) => p.supports_search).map((p) => p.code));
+            // Select every searchable provider by default, but one that is not configured (N3a): it would not search
+            selectedProviders = new Set(items.filter((p) => p.supports_search && !needsSetup(p)).map((p) => p.code));
             providersLoaded = true;
         } catch (e: any) {
             console.error('Failed to load providers:', e);
@@ -489,7 +500,34 @@
         onselect?.(result);
     }
 
+    /**
+     * After a save in the «to configure» window (N3a): read the list again. A provider configured now lights up and is
+     * selected; one that is not any more leaves the selection; the user's other choices stay. The search runs again.
+     * When the list cannot be read again, the saved plugin's own state (`configured`) lights the chip: a save that
+     * worked is never silent (the API client already logs the failed read).
+     */
+    async function providersConfigured(code: string, savedConfigured: boolean): Promise<void> {
+        let items: ProviderInfo[];
+        try {
+            items = await readProviders();
+        } catch {
+            items = providers.map((p) => (p.code === code && savedConfigured ? {...p, configured: true, missing_settings: [], missing_reason: null, invalid_variables: []} : p));
+        }
+        providers = items;
+        const next = new Set([...selectedProviders].filter((selected) => !needsSetup(items.find((p) => p.code === selected))));
+        const fresh = items.find((p) => p.code === code);
+        if (fresh && fresh.supports_search && !needsSetup(fresh)) next.add(code);
+        selectedProviders = next;
+        if (query.trim().length > 0) executeSearch(query);
+    }
+
     function toggleProvider(code: string) {
+        const provider = providers.find((p) => p.code === code);
+        if (needsSetup(provider)) {
+            // Switched off: a touch says why, never searches (N3a)
+            settingUp = provider ?? null;
+            return;
+        }
         const next = new Set(selectedProviders);
         if (next.has(code)) next.delete(code);
         else next.add(code);
@@ -561,19 +599,40 @@
         <div class="flex items-center gap-2 flex-wrap">
             <span class="text-xs text-lf-muted">{$t('common.providers')}:</span>
             {#each searchableProviders as prov}
-                <button
-                    type="button"
-                    onclick={() => toggleProvider(prov.code)}
-                    data-testid="asset-search-provider-{prov.code}"
-                    data-selected={selectedProviders.has(prov.code)}
-                    class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border transition-all
-                               {selectedProviders.has(prov.code) ? 'bg-lf-selected border-lf-focus/40 text-lf-link' : 'bg-lf-panel/50 border-lf-subtle text-lf-muted opacity-60'}"
-                >
-                    {#if prov.icon_url}
-                        <img src={prov.icon_url} alt="" class="w-3.5 h-3.5 rounded-sm object-contain {selectedProviders.has(prov.code) ? '' : 'grayscale opacity-50'}" />
-                    {/if}
-                    <span>{prov.name}</span>
-                </button>
+                {#if needsSetup(prov)}
+                    <!-- Switched off (N3a): reachable, so a touch can say why; never in the search -->
+                    <button
+                        type="button"
+                        onclick={() => toggleProvider(prov.code)}
+                        aria-disabled="true"
+                        data-testid="asset-search-provider-{prov.code}"
+                        data-selected="false"
+                        data-configured="false"
+                        title={$t('pluginSettings.notConfigured.tooltip', {values: {provider: prov.name}})}
+                        class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border border-dashed border-lf-input bg-lf-card text-lf-muted transition-all"
+                    >
+                        {#if prov.icon_url}
+                            <img src={prov.icon_url} alt="" class="w-3.5 h-3.5 rounded-sm object-contain grayscale" />
+                        {/if}
+                        <span>{prov.name}</span>
+                        <SlidersHorizontal aria-hidden="true" class="text-lf-warning" size={12} />
+                    </button>
+                {:else}
+                    <button
+                        type="button"
+                        onclick={() => toggleProvider(prov.code)}
+                        data-testid="asset-search-provider-{prov.code}"
+                        data-selected={selectedProviders.has(prov.code)}
+                        data-configured="true"
+                        class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border transition-all
+                                   {selectedProviders.has(prov.code) ? 'bg-lf-selected border-lf-focus/40 text-lf-link' : 'bg-lf-panel/50 border-lf-subtle text-lf-muted opacity-60'}"
+                    >
+                        {#if prov.icon_url}
+                            <img src={prov.icon_url} alt="" class="w-3.5 h-3.5 rounded-sm object-contain {selectedProviders.has(prov.code) ? '' : 'grayscale opacity-50'}" />
+                        {/if}
+                        <span>{prov.name}</span>
+                    </button>
+                {/if}
             {/each}
         </div>
     {/if}
@@ -665,6 +724,8 @@
                 {#if crownShown}
                     <p class="border-t border-lf-subtle px-3 py-1.5 text-xs text-lf-muted" data-testid="asset-search-crown-legend">{$t('assets.search.crownLegend')}</p>
                 {/if}
+                <!-- The line a provider's terms ask for, when it answered with a row: its names and ids are its data (76 P4b) -->
+                <ProviderAttributionNote providerCodes={orderedResults.map((result) => result.provider_code)} align="end" testId="asset-search-attribution" extraClass="px-3 py-1.5" />
             {/if}
             {#if reportPlacement === 'bottom' && channel}
                 {@render reportRow(channel)}
@@ -749,4 +810,9 @@
 {#if configuring !== null}
     <!-- «Configure» (CP11): the provider's settings; a save searches again. -->
     <PluginSettingsModal family="asset" onClose={() => (configuring = null)} onSaved={configured} open={true} pluginCode={configuring} pluginName={providerName(configuring)} />
+{/if}
+
+{#if settingUp !== null}
+    <!-- A switched-off chip (N3a): why it cannot search; a save in «Configure» reads the list again. -->
+    <PluginNotConfiguredModal family="asset" onClose={() => (settingUp = null)} onSaved={(fresh) => settingUp && void providersConfigured(settingUp.code, fresh.configured)} open={true} pluginCode={settingUp.code} pluginName={settingUp.name} readiness={settingUp} />
 {/if}

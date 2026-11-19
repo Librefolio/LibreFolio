@@ -9,18 +9,13 @@ from __future__ import annotations
 import asyncio
 from datetime import date
 from decimal import Decimal
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from backend.app.db import IdentifierType
 from backend.app.db.models import AssetType, ProviderInputType
 from backend.app.logging_config import get_logger
 from backend.app.schemas.assets.assets import FAAssetPatchItem
 from backend.app.schemas.assets.events import FAAssetEventPoint
-from backend.app.schemas.assets.metadata import (
-    FAClassificationParams,
-    FAGeographicArea,
-    FASectorArea,
-)
 from backend.app.schemas.common import Currency as CurrencyAmount
 from backend.app.schemas.prices import (
     FACurrentValue,
@@ -31,7 +26,6 @@ from backend.app.services.assets.base import ASSET_HISTORY_MIN_FALLBACK, AssetHi
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.platform.provider_registry import register_provider
 from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType
-from backend.app.utils.asset.sector import validate_sector
 from backend.app.utils.runtime.cache import get_ttl_cache
 
 try:
@@ -142,26 +136,6 @@ def shutdown_live_feeds() -> None:  # pragma: no cover
             t.join(timeout=3)
         _live_quote_threads.clear()
     logger.debug("All JustETF live quote feeds stopped")
-
-
-def _country_name_to_iso3(country_name: str) -> Optional[str]:  # pragma: no cover
-    """
-    Convert country name to ISO 3166-1 alpha-3 code.
-    Uses pycountry via geo_normalization utility.
-    Returns "Other" for the "other" category (truthy, so it's preserved in distribution).
-    Returns None if not found.
-    """
-    # Preserve "Other" category — normalize_country_keys handles it downstream
-    if country_name.lower() == "other":
-        return "Other"
-
-    try:
-        from backend.app.utils.asset.geo import normalize_country_to_iso3  # noqa: PLC0415 — lazy import / avoid circular
-
-        return normalize_country_to_iso3(country_name)
-    except (ValueError, ImportError) as e:
-        logger.debug(f"Could not normalize country '{country_name}': {e}")
-        return None
 
 
 @register_provider(AssetProviderRegistry)
@@ -537,13 +511,14 @@ class JustETFProvider(AssetSourceProvider):
                 {"currency": currency, "supported": list(self.SUPPORTED_CURRENCIES)},
             )
 
-    async def fetch_asset_metadata(  # noqa: C901 — flat metadata mapping with guarded sections
+    async def fetch_asset_metadata(
         self,
         identifier: str,
         identifier_type: IdentifierType,
         provider_params: Dict | None = None,
     ) -> FAAssetPatchItem | None:
-        """Fetch asset metadata from JustETF using get_etf_overview."""
+        """Fetch asset metadata from JustETF using get_etf_overview: the type, the chosen currency, the ISIN and the
+        ticker. Description, countries and sectors are the profile's, read by the justETF enricher (plan 68, D6)."""
         self._check_availability()
         if identifier_type != IdentifierType.ISIN:
             return None
@@ -559,92 +534,6 @@ class JustETFProvider(AssetSourceProvider):
             else:
                 overview = cached
 
-            # Build description
-            description_parts = []
-
-            if overview.get("description"):
-                description_parts.append(overview["description"])
-
-            ter = overview.get("ter")
-            if ter:
-                description_parts.append(f"TER: {ter}%")
-
-            dist_policy = overview.get("distribution_policy")
-            if dist_policy:
-                description_parts.append(f"Distribution: {dist_policy}")
-
-            short_description = " | ".join(description_parts) if description_parts else None
-            if short_description and len(short_description) > 500:
-                short_description = short_description[:497] + "..."
-
-            # Build geographic area from countries
-            geographic_area = None
-            countries = overview.get("countries", [])
-            if countries:
-                distribution = {}
-                total = Decimal("0")
-                for country in countries:
-                    country_name = country.get("name")
-                    percentage = country.get("percentage")
-                    if country_name and percentage is not None:
-                        iso3 = _country_name_to_iso3(country_name)
-                        if iso3:  # Skip unknown countries (None), keep "Other"
-                            weight = Decimal(str(percentage)) / Decimal("100")
-                            distribution[iso3] = weight
-                            total += weight
-
-                # Only create geographic_area if we have valid data
-                if distribution and total > Decimal("0"):
-                    # Renormalize to sum to 1.0
-                    distribution = {k: v / total for k, v in distribution.items()}
-                    try:
-                        geographic_area = FAGeographicArea(distribution=distribution)
-                    except Exception as e:
-                        logger.warning(f"Could not create FAGeographicArea for {identifier}: {e}")
-
-            # Build sector distribution using FASectorArea
-            sector_area = None
-            sectors = overview.get("sectors", [])
-            if sectors:
-                sector_distribution = {}
-                sector_total = Decimal("0")
-                for sector_item in sectors:
-                    sector_name = sector_item.get("name")
-                    percentage = sector_item.get("percentage")
-                    if sector_name and percentage is not None:
-                        weight = Decimal(str(percentage)) / Decimal("100")
-                        # Accumulate if sector appears multiple times
-                        if sector_name in sector_distribution:
-                            sector_distribution[sector_name] += weight
-                        else:
-                            sector_distribution[sector_name] = weight
-                        sector_total += weight
-
-                if sector_distribution and sector_total > Decimal("0"):
-                    # Renormalize to sum to 1.0
-                    sector_distribution = {k: v / sector_total for k, v in sector_distribution.items()}
-                    # Log warning for unknown sectors before normalization
-                    for sector_name in sector_distribution:
-                        if not validate_sector(sector_name):
-                            logger.warning(
-                                "Unknown sector from provider, mapped to Other",
-                                provider_code="justetf",
-                                identifier=identifier,
-                                original_sector=sector_name,
-                                mapped_to="Other",
-                            )
-                    try:
-                        # FASectorArea will normalize sector names using FinancialSector enum
-                        sector_area = FASectorArea(distribution=sector_distribution)
-                    except Exception as e:
-                        logger.warning(f"Could not create FASectorArea for {identifier}: {e}")
-
-            classification = FAClassificationParams(
-                short_description=short_description,
-                geographic_area=geographic_area,
-                sector_area=sector_area,
-            )
-
             # Return the currency from provider_params (user's choice).
             # fund_currency from overview is the NAV denomination (e.g. USD) — informational only.
             selected_currency = self._get_currency(provider_params)
@@ -658,7 +547,6 @@ class JustETFProvider(AssetSourceProvider):
                 currency=selected_currency,
                 asset_type=AssetType.ETF,
                 icon_url=None,
-                classification_params=classification,
                 active=None,
                 identifier_isin=identifier,  # ISIN is the search key for JustETF
                 identifier_ticker=ticker_val if ticker_val else None,

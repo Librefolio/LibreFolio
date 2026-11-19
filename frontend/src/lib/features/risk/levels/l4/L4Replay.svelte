@@ -10,7 +10,7 @@
     import {buildHistoricalReplayParameters} from '$lib/features/risk/riskRequest';
     import type {RiskPanelController} from '$lib/features/risk/riskPanelController.svelte';
 
-    import {formatCurrencyAmount} from '../../riskAnalysisHelpers';
+    import {amountOnValue, formatCurrencyAmount} from '../../riskAnalysisHelpers';
     import AssetChip from '../../AssetChip.svelte';
     import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {warningSentence} from '../warningSentence';
@@ -62,20 +62,20 @@
          * `metadata` is fail-closed, because a caller cannot forget it; a prop
          * alone is fail-open, so a future mount on `asset_set` that omits it
          * brings the euros back. **What is returned**: `''` makes the amount
-         * absent, which is right everywhere, whereas the `—` of
-         * `formatScopedCurrencyAmount` is right inside a card and wrong inside a
-         * sentence — "would have ended the period at −12.30% —" reads as a
+         * absent, which is right everywhere, whereas a card's `—` is wrong inside
+         * a sentence — "would have ended the period at −12.30% —" reads as a
          * number that failed to load, not as one that does not apply.
          *
-         * So the default is derived from the payload and the prop is an explicit
-         * override. The condition is the one `formatScopedCurrencyAmount`
-         * already uses, reused rather than restated, so the guards across the
-         * subsystem converge on the same predicate even where the string differs.
+         * So the default is derived from the payload (the scope is a portfolio)
+         * and the prop is an explicit override. On one asset the money comes
+         * from `scopeValue` instead, your position (Q17 A1, RN-17).
          */
         showMoney?: boolean;
+        /** Your position's value on one asset (Q17 A1): the sentence's money is the return times it; none when null. */
+        scopeValue?: number | null;
     }
 
-    let {controller, assetNames, currency, dateStart, dateEnd, showMoney: showMoneyOverride}: Props = $props();
+    let {controller, assetNames, currency, dateStart, dateEnd, showMoney: showMoneyOverride, scopeValue = null}: Props = $props();
 
     let presetId = $state('');
     /**
@@ -99,6 +99,18 @@
     let output = $derived(riskOutput(result, schemas.RiskStressOutput));
     let scopeKind = $derived(singleValue(riskMetadata(result)?.scope) ?? '');
     let showMoney = $derived(showMoneyOverride ?? scopeKind === 'portfolio');
+    /**
+     * One asset (RN-17, Q16-6): the answer is the sentence alone. A bar chart of one row at 100 % — its weight, its
+     * contribution, its impact all equal to the total — says nothing the sentence does not. Read off the answer's
+     * metadata, like the money: fail-closed.
+     */
+    let oneAsset = $derived(scopeKind === 'asset');
+
+    /** On one asset you own, the money on your position: the return times its value (Q17 A1); nothing otherwise. */
+    function positionAmount(fraction: number): string {
+        const amount = amountOnValue(fraction, scopeValue);
+        return amount === null ? '' : formatCurrencyAmount(String(amount), currency);
+    }
     let rows = $derived(tornadoRows(output));
     let exclusions = $derived(replayExclusions(result));
     let suggestion = $derived(replaySuggestion(result));
@@ -271,15 +283,17 @@
         {#if output.portfolio_return != null}
             {@const total = output.portfolio_return}
             <p class="text-sm text-lf-secondary" data-testid="risk-replay-total">
-                {$t('risk.levels.l4.replayTotal', {
+                {$t(oneAsset ? 'risk.levels.l4.replayTotalAsset' : 'risk.levels.l4.replayTotal', {
                     values: {
                         percent: `${total < 0 ? '−' : '+'}${formatPercent(Math.abs(total), {scale: 100, signed: false})}`,
-                        amount: !showMoney || output.impact_amount == null ? '' : formatCurrencyAmount(output.impact_amount, currency),
+                        amount: oneAsset ? positionAmount(total) : !showMoney || output.impact_amount == null ? '' : formatCurrencyAmount(output.impact_amount, currency),
                     },
                 })}
             </p>
         {/if}
-        <TornadoChart {rows} label={rowLabel} amount={rowAmount} testId="risk-replay-tornado" />
+        {#if !oneAsset}
+            <TornadoChart {rows} label={rowLabel} amount={rowAmount} testId="risk-replay-tornado" />
+        {/if}
     {:else if nothingLeft}
         <div class="space-y-2 rounded-lg bg-lf-warning-soft p-3 text-xs text-lf-warning-on-soft" data-testid="risk-replay-nothing">
             <p class="font-medium">{$t('risk.levels.l4.replayNothing')}</p>

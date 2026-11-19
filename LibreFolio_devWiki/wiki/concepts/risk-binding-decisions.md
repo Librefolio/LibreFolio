@@ -36,11 +36,12 @@ the entry point for whoever resumes Risk after release 1.2 (D382). The full reco
 | D373 | The data-quality banner, with «Sync», in the Lab too; Asset Detail stays as it is |
 | D374 | A discarded answer is asked again up to 3 times in all (`RISK_DISCARD_ATTEMPTS`) — [[problems/discarded-risk-answer-read-as-empty]] |
 | D375 | Allocation history by type: one area per family, subtypes only in the tooltip |
-| D379 | A simulation that is too large says so, with a cure that really works |
+| D379 | A simulation that is too large says so, with a cure that really works (since RN-16, 17/11/2026: above the path budgets the paths fall to the largest power of two that fits first; refused only below 1 024, the cure a shorter horizon) |
 | D380, D381 | The histogram: Sturges when the IQR is 0; the Freedman–Diaconis width computed, not built; never «−0.0%» nor «−0,00 €» |
 | D382 | The pause until after 1.2 |
 | D383 | The box of a level's notices is the same everywhere (Dashboard, broker, Lab) |
 | D384 | The broker preset in the Lab asks once |
+| Lab split (02/10/2026), RN-19 (17/11/2026) | In the Lab one row, one window: L1° never asks with the benchmark, and a table that reads analytics of L1° gets its own instances in L1°'s request — the move table's KPI (`base-historical-asset_set_kpi-move`) beside L3°'s. So a request's analytic belongs to a level by its **instance**, not its code |
 | 1.2 CHANGELOG | In the Lab only percentages, and no verdict on the selection as a whole; what cannot be measured shows a dash that says why, never a zero |
 
 > 2026-11-07 lint: D71's open point — whether the colours match across charts — was settled for the Dashboard on
@@ -59,3 +60,4 @@ Checked on the code at `102edada4`: D374 (`RISK_DISCARD_ATTEMPTS = 3` in `riskSt
 | The full decision records | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/04-decisioni-e-questioni-aperte.md` |
 | D374 | `frontend/src/lib/features/risk/riskStore.svelte.ts` |
 | D380, D381 | `backend/app/services/risk/metrics.py` |
+| One row, one window (RN-19) | `frontend/src/lib/features/risk/riskAnalysisHelpers.ts` (`ASSET_SET_MOVE_KPI_INSTANCE`) |
