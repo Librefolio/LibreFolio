@@ -288,7 +288,9 @@ A FEE or a TAX can point at the transaction it belongs to (project 66; the backe
     - A failed fetch shows a toast and opens no picker. Changing the form's broker or asset drops what was picked.
 - **«Open»** (`onOpenTransaction`): the host shows the other transaction in the same modal, in the same mode, and passes
   `highlightTxId` so the charge the user came from is highlighted in its parent's section. With unsaved changes the
-  existing discard confirmation comes first. The transactions page and the portfolio views wire it in read-only.
+  existing discard confirmation comes first. The transactions page and the portfolio views wire it in read-only; the
+  bulk workspace wires it too, and brings the target into the batch as a row ([«Open» in the
+  workspace](../../state/transaction-draft.md#workspace-intent)).
 - **The unsaved-changes baseline** (`baselineKey()`) includes the charges; a charge row without an amount is a local
   error that blocks «Apply».
 
