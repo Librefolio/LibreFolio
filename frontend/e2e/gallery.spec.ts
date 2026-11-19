@@ -131,6 +131,7 @@ import {
     settlePacShot,
 } from './fixtures/galleryPac';
 import {closeProviderCompare, fitScreenToCompareDialog, mockProviderCompare, openProviderCompare, restoreCompareScreen, settleProviderCompareShot} from './fixtures/galleryProviderCompare';
+import {serveGalleryEnrichers} from './fixtures/galleryEnrichers';
 import {expectGalleryEmailStatus, serveGalleryEmailStatus} from './fixtures/galleryEmail';
 import {expectGalleryBackupReady, serveGalleryBackupJob} from './fixtures/galleryBackup';
 import {openAiExportPanel, selectAiExportSelection} from './ai-export/helpers';
@@ -5619,6 +5620,8 @@ test.describe('Gallery Screenshots', () => {
         // Gallery target: Apple Inc. — has 30 days of price history from db populate. Its exact display name: the detail shots
         // find its card by its id, read by this name (openGalleryAsset).
         const GALLERY_ASSET = 'Apple Inc.';
+        // The seeded fund whose profile has a history (populate_mock_data.py, PROFILE_HISTORY_FUND; plan 68, E12)
+        const GALLERY_PROFILE_FUND = 'Amundi Core MSCI World UCITS ETF Acc';
 
         test('Asset list page', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
@@ -6414,6 +6417,74 @@ test.describe('Gallery Screenshots', () => {
                     // page's end allows (plan 56, class B).
                     await frameTarget(page, classification, `${viewport}/${lang}/${theme}/assets/detail-classification`);
                     await screenshot(page, viewport, lang, theme, 'assets', 'detail-classification');
+                }
+            }
+        });
+
+        test('Asset detail profile: latest changes, the history of the data, the enrichers window (plan 68, E12)', async ({page}, testInfo) => {
+            // The seeded fund with a profile history (populate_mock_data.py, PROFILE_HISTORY_FUND): its TER read by justETF,
+            // corrected by hand, read again; its fund size read three times; its enrichers justETF and Borsa Italiana. The
+            // real enrichers' catalogue is served (galleryEnrichers.ts): a lane serves only mockenrich. Read only: windows
+            // opened and closed, nothing forgotten, refreshed or saved.
+            test.setTimeout(300_000);
+            const viewport = getViewport(testInfo);
+            await serveGalleryEnrichers(page);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
+                for (const theme of THEMES) {
+                    await goToAssetsPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    await openGalleryAsset(page, GALLERY_PROFILE_FUND);
+                    await page.getByTestId('asset-detail-tab-profile').click();
+                    await expect(page.getByTestId('asset-profile-tab')).toHaveAttribute('data-status', 'ready', {timeout: 15_000});
+
+                    // 1. «Ultime variazioni», opened: the TER's steps as sentences, the hand-written one with its author
+                    await page.getByTestId('profile-changes-toggle').click();
+                    const changes = page.getByTestId('profile-changes-panel');
+                    await expect(changes).toHaveAttribute('data-status', 'ready', {timeout: 10_000});
+                    await expect(changes.locator('[data-testid^="profile-change-who-"][data-source="user"]').first(), 'the correction by hand is listed').toBeVisible();
+                    await imagesSettled(changes);
+                    await frameTarget(page, changes, `${viewport}/${lang}/${theme}/assets/detail-profile-changes`);
+                    await screenshot(page, viewport, lang, theme, 'assets', 'detail-profile-changes');
+
+                    // 2. «Storia del dato» of the TER: three steps, one by hand, drawn
+                    await page.getByTestId('profile-key-figure-ter-history').click();
+                    const history = page.getByTestId('profile-history');
+                    await expect(history).toHaveAttribute('data-status', 'ready', {timeout: 10_000});
+                    const chart = page.getByTestId('profile-history-chart');
+                    await expect(chart, 'the three steps of the TER').toHaveAttribute('data-point-count', '3');
+                    await expect(chart, 'one of them written by hand').toHaveAttribute('data-hand-count', '1');
+                    await chartsDrawn(history, 'the history chart of the TER');
+                    await imagesSettled(history);
+                    if (viewport === 'desktop') await fitScreenToDialog(page, page.getByTestId('profile-history-modal'), `desktop/${lang}/${theme}/assets/detail-profile-history`);
+                    await screenshot(page, viewport, lang, theme, 'assets', 'detail-profile-history');
+                    await restoreTallScreen(page);
+                    await page.getByTestId('profile-history-close').click();
+                    await expect(history).toHaveCount(0);
+
+                    // 3. The enrichers window, over the asset window: justETF first, Borsa Italiana second, with their last read
+                    const editBtn = page.getByTestId('asset-detail-edit-btn');
+                    await expect(editBtn).toBeEnabled({timeout: 10_000});
+                    await editBtn.click();
+                    await expect(page.getByTestId('asset-modal-form')).toBeVisible({timeout: 5_000});
+                    await page.getByTestId('asset-modal-enrichers').click();
+                    const enrichers = page.getByTestId('enrichers-modal');
+                    await expect(enrichers).toBeVisible({timeout: 10_000});
+                    await expect(enrichers.getByTestId('enricher-row-justetf')).toHaveAttribute('data-position', '1');
+                    await expect(enrichers.getByTestId('enricher-row-justetf')).toHaveAttribute('data-last-read', 'ok');
+                    await expect(enrichers.getByTestId('enricher-row-borsa_italiana')).toHaveAttribute('data-availability', 'ok');
+                    await imagesSettled(enrichers);
+                    if (viewport === 'desktop') await fitScreenToDialog(page, enrichers, `desktop/${lang}/${theme}/assets/enrichers-window`);
+                    await screenshot(page, viewport, lang, theme, 'assets', 'enrichers-window');
+                    await restoreTallScreen(page);
+                    await enrichers.getByTestId('enrichers-cancel').click();
+                    await expect(enrichers).toBeHidden({timeout: 5_000});
+                    await page.getByTestId('asset-modal-cancel').click();
+                    await expect(page.getByTestId('asset-modal-form')).toBeHidden({timeout: 5_000});
                 }
             }
         });

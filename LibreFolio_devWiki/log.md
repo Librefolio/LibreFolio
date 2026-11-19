@@ -4093,3 +4093,8 @@ Filed: [[decisions/risk-answers-four-questions]], [[features/F-111]].
 Project 70, RN-16b: the developer's «per ora B» in `simulation_participants`, and the one-holding window fix; F-111's
 history.
 Filed: [[features/F-111]].
+
+## [2026-11-19] file | Asset profile and enrichers; a layout read before a late list
+Project 68 (F1b): the subsystem's entity page (profile store, bindings, read and merge, the weekly job, «Aggiorna» with
+`enrichers_read`, the «Profilo» tab and its windows), and the MOB problem from lane 76's triage.
+Filed: [[entities/asset-profile-enrichers]], [[problems/layout-read-before-a-late-list]].

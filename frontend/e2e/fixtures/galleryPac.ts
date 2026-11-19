@@ -56,6 +56,8 @@
  * section from its title.
  */
 
+import {closeSync, openSync, rmSync, writeSync} from 'node:fs';
+import path from 'node:path';
 import type {APIResponse} from '@playwright/test';
 import {expect, type Locator, type Page} from './playwright';
 import {navigateTo} from './auth-helpers';
@@ -70,7 +72,7 @@ export const PAC_URL = '/tools/pac_allocator';
 const PAC_BROKER_NAMES = {ib: 'Interactive Brokers', degiro: 'DEGIRO'} as const;
 const PAC_ASSET_NAMES = {apple: 'Apple Inc.', microsoft: 'Microsoft Corporation'} as const;
 
-/** Apple and Microsoft are both 100% USA in the seed (populate_mock_data.py, `classification_params`). */
+/** Apple and Microsoft are both 100% USA in the seed (populate_mock_data.py, their `legacy` profile rows). */
 const SEEDED_COUNTRY = 'USA';
 
 /**
@@ -132,6 +134,17 @@ const READ_TIMEOUT = 20_000;
  * assertion then names. The engine needs milliseconds for a draft this size.
  */
 const CALCULATION_TIMEOUT = 75_000;
+/**
+ * The Tool platform admits one batch per user at a time (backend services/tools/executor.py, `_admit`: a second batch of the same
+ * user is refused, 429 `queue_full`). The gallery's projects calculate as the same `TEST_ADMIN`, in parallel workers, so one
+ * calculation at a time per lane: a lock file in the lane's data directory (playwright.config.ts exports it), taken before the
+ * click and released when the planner is no longer busy. The wait for it is a calculation's budget plus a margin. The name
+ * carries the Playwright runner's pid, the parent of every worker of this run: a file left by an earlier, killed run never
+ * blocks this one, and no lock is ever taken over.
+ */
+const TOOL_BATCH_LOCK = path.join(process.env.LIBREFOLIO_TEST_DATA_DIR ?? '.', `.gallery-tool-batch.${process.ppid}.lock`);
+const TOOL_BATCH_LOCK_WAIT = CALCULATION_TIMEOUT + 15_000;
+const TOOL_BATCH_LOCK_POLL = 200;
 /**
  * The result's Exposures: the world map, read once per page — a static file of the app (`/data/world.json`, about 1 MB), no
  * third-party host — then each chart's first drawing, its animation included (chartReady.ts). The budget the shot's settle gives
@@ -807,18 +820,46 @@ export async function framePacTargets(page: Page, draft: PacDraft): Promise<Loca
 // ---------------------------------------------------------------------------
 
 /**
+ * Run `work` holding this run's Tool batch lock (see `TOOL_BATCH_LOCK`): the file is created exclusively, with the worker's pid
+ * for whoever reads it, waited for by polling and removed when `work` ends, whatever its outcome.
+ */
+async function withToolBatchLock<T>(work: () => Promise<T>): Promise<T> {
+    const deadline = Date.now() + TOOL_BATCH_LOCK_WAIT;
+    for (;;) {
+        try {
+            const fd = openSync(TOOL_BATCH_LOCK, 'wx');
+            writeSync(fd, String(process.pid));
+            closeSync(fd);
+            break;
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+            if (Date.now() > deadline) throw new Error(`another worker held the Tool batch lock for over ${TOOL_BATCH_LOCK_WAIT} ms (${TOOL_BATCH_LOCK})`);
+            await new Promise((resolve) => setTimeout(resolve, TOOL_BATCH_LOCK_POLL));
+        }
+    }
+    try {
+        return await work();
+    } finally {
+        rmSync(TOOL_BATCH_LOCK, {force: true});
+    }
+}
+
+/**
  * Calculate the complete draft from its Review and end on a plan: the copied facts read again and nothing missing from them,
  * the result current (not stale), state `ready_incumbent`. A no-op, an infeasible draft or a tool error fails here, named.
+ * The click and the wait run under the lane's Tool batch lock: the other project calculates as the same user.
  */
 export async function calculatePacPlan(page: Page): Promise<Locator> {
     const review = (await goToPacStep(page, 'review')).getByTestId('pac-planner-review');
     await expect(review.getByTestId('pac-planner-review-problems')).toHaveCount(0);
     const calculate = review.getByTestId('pac-planner-calculate');
     await expect(calculate).toBeEnabled();
-    await calculate.click();
     const planner = page.getByTestId('pac-planner');
-    await expect(planner).toHaveAttribute('data-view', 'result');
-    await expect(planner, 'the calculation is still running').toHaveAttribute('data-busy', 'false', {timeout: CALCULATION_TIMEOUT});
+    await withToolBatchLock(async () => {
+        await calculate.click();
+        await expect(planner).toHaveAttribute('data-view', 'result');
+        await expect(planner, 'the calculation is still running').toHaveAttribute('data-busy', 'false', {timeout: CALCULATION_TIMEOUT});
+    });
     await expect(planner, 'the calculation did not end on a plan').toHaveAttribute('data-state', 'ready_incumbent');
     const result = planner.getByTestId('pac-planner-result');
     await expect(result).toHaveAttribute('data-state', 'ready_incumbent');

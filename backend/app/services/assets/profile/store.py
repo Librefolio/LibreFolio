@@ -138,11 +138,15 @@ class ProfileStep:
 
 @dataclass(frozen=True, slots=True)
 class ProfileChange:
-    """A row of «Ultime variazioni»: the row, and the voice's value before it (``has_previous`` False for its first)."""
+    """A row of «Ultime variazioni»: the row, and the voice's value before it (``has_previous`` False for its first).
+
+    ``before`` is the voice's row before it, from the whole history (hidden rows included): who wrote that value and
+    when, for «Cosa è cambiato» (plan 68, E6a). None for the voice's first row."""
 
     row: ProfileRow
     previous: Any
     has_previous: bool
+    before: ProfileRow | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -460,7 +464,8 @@ async def recent_changes(session: AsyncSession, asset_id: int, *, key: str | Non
         previous[record.key] = record
         if key is None and not _shown_in_panel(record, before):
             continue
-        changes.append(ProfileChange(row=_row(record), previous=_row(before).value if before is not None else None, has_previous=before is not None))
+        prior = _row(before) if before is not None else None
+        changes.append(ProfileChange(row=_row(record), previous=prior.value if prior is not None else None, has_previous=prior is not None, before=prior))
     # Newest first, across voices: (read_on, id) descending
     changes.sort(key=lambda change: (change.row.read_on, change.row.id), reverse=True)
     first = page * page_size

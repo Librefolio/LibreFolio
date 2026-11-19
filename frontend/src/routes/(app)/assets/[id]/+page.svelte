@@ -40,7 +40,10 @@
     import AssetDetailHeader from '$lib/features/assets/detail/AssetDetailHeader.svelte';
     import AssetProfileTab from '$lib/features/assets/detail/AssetProfileTab.svelte';
     import AssetProfileEditor from '$lib/features/assets/detail/AssetProfileEditor.svelte';
+    import ProfileHistoryModal from '$lib/features/assets/profile/ProfileHistoryModal.svelte';
     import {invalidateAssetProfile} from '$lib/features/assets/profile/profileStore';
+    import {refreshProfile} from '$lib/features/assets/profile/profileRefresh';
+    import {assetLastRead} from '$lib/features/assets/enrichers/enrichersEditState';
     import AssetDetailToolbarActions from '$lib/features/assets/detail/AssetDetailToolbarActions.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import FxPairAddModal from '$lib/features/fx/FxPairAddModal.svelte';
@@ -192,6 +195,8 @@
     let profileRefreshKey = $state(0);
     /** «Modifica i dati» of the «Profilo» tab (plan 68, E9b2): the profile window in save mode. */
     let profileEditOpen = $state(false);
+    /** The voice whose «Storia del dato» is open (plan 68, E6b); null when closed. */
+    let profileHistoryKey = $state<string | null>(null);
     // The dots (plan 68, E3): «Panoramica» without a price provider, «Profilo» without an enricher — both once known.
     let assetDetailTabs = $derived([
         {id: 'overview', label: $t('risk.assetDetail.overviewTab'), icon: ChartLine, testId: 'asset-detail-tab-overview', dot: providerAssignmentLoaded && providerAssignment === null ? {label: $t('risk.assetDetail.overviewNoPriceProvider')} : undefined},
@@ -358,9 +363,27 @@
         }));
     });
     let editModalOpen = $state(false);
+    /** This opening of the asset window starts with the enrichers' window on top (the «Profilo» tab's «Configura», E6c). */
+    let editModalEnrichers = $state(false);
 
     // Edit data — computed on-demand when modal opens (NOT $derived, to avoid effect loops)
     let editDataForModal = $state<ReturnType<typeof buildEditData>>(null);
+
+    /** Open the asset window; `withEnrichers` for this opening only, so every other way in opens it plain. */
+    function openAssetEdit(withEnrichers = false): void {
+        editDataForModal = buildEditData();
+        editModalEnrichers = withEnrichers;
+        editModalOpen = true;
+    }
+
+    /** «Aggiorna» of the «Profilo» tab (E6c): read the enrichers again; the tab, and the last read of its hint, follow. */
+    async function refreshAssetEnrichers(): Promise<void> {
+        const id = data.assetId;
+        await refreshProfile(id, (key, values) => $t(key, {values}));
+        if (id !== data.assetId) return;
+        profileRefreshKey += 1;
+        await loadAssetEnrichers();
+    }
 
     // Cross-domain data for signals
     let allConfiguredFxSlugs: string[] = $state([]);
@@ -2473,10 +2496,7 @@
                 onaiexportprepare={handleAssetAiExport}
                 onaiexportcopied={handleAssetAiExportCopied}
                 editDisabled={!assetInfo || !enrichersLoaded}
-                onedit={() => {
-                    editDataForModal = buildEditData();
-                    editModalOpen = true;
-                }}
+                onedit={() => openAssetEdit()}
                 {syncBlocked}
                 {syncDisabledReason}
                 {syncing}
@@ -2754,27 +2774,13 @@
                                     <Pencil class="inline mr-1" size={14} />
                                     {$t('fxDetail.insertManually')}
                                 </button>
-                                <button
-                                    class="px-4 py-2 text-sm bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                    disabled={!assetInfo}
-                                    onclick={() => {
-                                        editDataForModal = buildEditData();
-                                        editModalOpen = true;
-                                    }}
-                                >
+                                <button class="px-4 py-2 text-sm bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled={!assetInfo} onclick={() => openAssetEdit()}>
                                     {$t('common.edit')}
                                 </button>
                             </div>
                         {:else if isParametric}
                             <p class="text-lf-muted mb-3">{$t('assetDetail.noDataScheduled')}</p>
-                            <button
-                                class="px-4 py-2 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                disabled={!assetInfo}
-                                onclick={() => {
-                                    editDataForModal = buildEditData();
-                                    editModalOpen = true;
-                                }}>{$t('common.edit')}</button
-                            >
+                            <button class="px-4 py-2 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled={!assetInfo} onclick={() => openAssetEdit()}>{$t('common.edit')}</button>
                         {:else}
                             <p class="text-lf-muted mb-3">{$t('assetDetail.noData')}</p>
                             <div class="flex items-center gap-2 justify-center">
@@ -2932,8 +2938,24 @@
                 {otherIdentifiers}
                 refreshKey={profileRefreshKey}
                 onedit={() => (profileEditOpen = true)}
+                onhistory={(key) => (profileHistoryKey = key)}
+                enrichers={assetEnricherCount === null ? null : {count: assetEnricherCount, lastRead: assetEnrichers ? assetLastRead(assetEnrichers.config, assetEnrichers.state) : null}}
+                onrefresh={refreshAssetEnrichers}
+                onconfigure={() => openAssetEdit(true)}
             />
             <AssetProfileEditor bind:open={profileEditOpen} assetId={data.assetId} assetName={assetInfo.display_name} onsaved={() => (profileRefreshKey += 1)} />
+            <ProfileHistoryModal
+                open={profileHistoryKey !== null}
+                assetId={data.assetId}
+                assetName={assetInfo.display_name}
+                voiceKey={profileHistoryKey}
+                refreshKey={profileRefreshKey}
+                onchanged={() => {
+                    invalidateAssetProfile(data.assetId);
+                    profileRefreshKey += 1;
+                }}
+                onclose={() => (profileHistoryKey = null)}
+            />
         {:else}
             <div class="flex min-h-48 items-center justify-center" data-testid="asset-detail-profile-loading">
                 <RefreshCw size={24} class="animate-spin text-lf-link" />
@@ -2953,7 +2975,7 @@
     <!-- AssetModal for editing -->
     <!-- ======================================================================= -->
     {#if assetInfo}
-        <AssetModal bind:open={editModalOpen} editMode={true} editData={editDataForModal} onupdated={() => void pageBusy.track('asset-reload', () => handleAssetUpdated())} onclose={() => (editModalOpen = false)} />
+        <AssetModal bind:open={editModalOpen} editMode={true} editData={editDataForModal} enrichersOnOpen={editModalEnrichers} onupdated={() => void pageBusy.track('asset-reload', () => handleAssetUpdated())} onclose={() => (editModalOpen = false)} />
 
         <!-- FX Pair Add Modal (opened from FX warning or banner) -->
         {@const fxCreateDefaults = fxPairCreateDefaults(fxPairCreateSlug, assetInfo.currency, displayCurrency)}

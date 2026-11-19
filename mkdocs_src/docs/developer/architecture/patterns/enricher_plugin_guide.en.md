@@ -348,7 +348,9 @@ Around your `read`, the core:
 
 - **Skips an enricher that is not served or not configured.** Not installed, test-only outside test mode, turned off
   by `LIBREFOLIO_ENRICHERS_ENABLED`, or a required setting empty: the weekly read and «Refresh» leave its binding and
-  state as they are and do not read it, so its voices go to the next enricher of the asset's order.
+  state as they are and do not read it, so its voices go to the next enricher of the asset's order. Each result counts
+  the enrichers it did read (`enrichers_read`): the weekly job skips in silence, «Refresh» tells the user when that
+  count is zero («no active enricher: nothing was read»).
 - **Caches each read for 30 minutes** (named cache `enricher_read`, `READ_CACHE_TTL`), keyed by enricher and the whole
   binding, parameters included. Only `OK` and `NOT_FOUND` are kept, never an error or a refusal. A read of some voices
   never answers a later request for more.
@@ -397,6 +399,37 @@ source that never gave the voice, counts from the row's `read_on`. Nothing is wr
   fresh or stale.
 
 So a source that goes silent shows up within a month, while one that gives the same figure every week keeps it fresh.
+
+### 🧾 Latest Changes and «Dimentica» {: #changes }
+
+`POST /assets/profile/query` with `changes` adds one page of changes (twenty, newest first in (`read_on`, `id`) order):
+`changes: {}` is the «Latest changes» panel of the «Profile» tab — a volatile voice only with the rows written by hand
+and the source row that replaces one —, `changes: {"key": k}` every row of one voice («History of the data»). Each change
+(`FAProfileChange`) carries:
+
+- the row: `value`, `source`, `read_on`, `source_date`, and for a value written by hand its author, `user_id`,
+  `user_name` (the username, never the email) and `user_avatar_url`;
+- the voice's row before it, from the whole history: `previous` (the value), `previous_source`, `previous_user_id`,
+  `previous_user_name`, `previous_read_on`, `previous_source_date` — all null for the voice's first row.
+
+The frontend writes «What changed» from them (`frontend/src/lib/features/assets/profile/profileChanges.ts`): first
+value, written by hand, corrected by hand, back to a source after a hand correction, new data date of a breakdown, up,
+down, changed, left empty. «Dimentica» (`DELETE /assets/profile`) sends back the `as_of` of the read that showed the
+rows: a row written after it is refused whole (409 `PROFILE_UPDATES_NEWER`), so a page never forgets what it has not
+shown. The panel (`ProfileChangesPanel.svelte`) and the table it shares with the history window
+(`ProfileChangesTable.svelte`) ask before forgetting, then read the tab again.
+
+«History of the data» (`ProfileHistoryModal.svelte`) opens from a key figure card's clock, a detail row, or the same
+clock (`ProfileHistoryClock.svelte`) beside the titles of the countries, the sectors and the description. For a voice
+whose value is a number it draws the voice from its first day (`start: "min"`), a point where each step starts in its
+source's colour (`profileHistory.ts`, `ProfileHistoryChart.svelte`); under it, the same table with every row of that
+voice (`changes: {"key": k}`), without the voice column.
+
+«Refresh» («Aggiorna», `profileRefresh.ts`) sits beside «Edit data» when the asset has bindings: it calls
+`POST /assets/profile/refresh` for that asset, never the prices, and its hint says the latest `read_at` of the enrichers
+still bound (`assetLastRead`). Every outcome is a toast and the event `asset.profile.refreshed`, because what a refresh
+writes is often invisible; with `enrichers_read` at zero the toast says nothing was read, never «nothing changed». Without bindings the tab shows «No enricher configured», whose «Configure» opens the asset
+window with `enrichersOnOpen`: the enrichers' window on top, for that opening only.
 
 ---
 

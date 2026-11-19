@@ -838,7 +838,7 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
         - currency, display_name, the identifiers (ISIN, ticker…)
 
         Never the description, the countries or the sectors: they are the asset's profile, which the enrichers read
-        (plan 68, D6). ``classification_params`` stays unset.
+        (plan 68, D6): the patch item has no field for them.
 
         Args:
             identifier: Asset identifier for provider

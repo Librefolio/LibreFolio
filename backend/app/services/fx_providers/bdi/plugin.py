@@ -96,7 +96,12 @@ class BDIProvider(FXRateProvider):
 
     @property
     def icon(self) -> str | None:
-        return "https://www.bancaditalia.it/application/themes/bdi2/img/favicon.png"
+        # An exception among the FX providers, which give their bank's icon URL (developer decision, 19/11/2026): the
+        # bank serves its favicon with «Cross-Origin-Resource-Policy: same-origin», so a browser refuses to show it on
+        # any other site. We serve a copy, taken once from
+        # https://www.bancaditalia.it/application/themes/bdi2/img/favicon.png, from the frontend's static icons
+        # (``frontend/static/icons/fx/bdi.png``, copied into the user guide by ``dev.py mkdocs build``).
+        return "/icons/fx/bdi.png"
 
     @property
     def docs_url(self) -> str | None:

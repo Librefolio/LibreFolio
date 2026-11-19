@@ -14,8 +14,7 @@ column.
   report is a new object, and its current geography is Japan.
 - ``test_a_forgotten_profile_row_is_seen_by_the_next_report`` — the only geography row deleted: a new object, the
   geography Unknown.
-- ``test_the_old_column_alone_no_longer_moves_the_key`` — ``classification_params`` written alone (the engine no longer
-  reads it): the cached object. Red until D2b, where the column was in the key.
+- (``test_the_old_column_alone_no_longer_moves_the_key`` went with the column, plan 68 D7b.)
 
 The book, on a private SQLite file under ``tmp_path`` (the app schema, NullPool, disposed after): a user, one broker at
 100 %, a DEPOSIT and a BUY of one EUR ETF with a close, its geography «all USA» read on the BUY's day. Isolation: PURE
@@ -56,7 +55,6 @@ EUR = "EUR"
 D0, D1 = date(2025, 9, 1), date(2025, 9, 3)
 END = date(2025, 9, 15)
 ZERO = Decimal("0")
-LEGACY_CLASSIFICATION = '{"geographic_area":{"distribution":{"ITA":"1.0"}},"sector_area":{"distribution":{"Energy":"1.0"}}}'
 
 
 def _clear_portfolio_caches() -> None:
@@ -161,17 +159,3 @@ class TestTheReportCacheFollowsTheProfile:
         served_from_cache = after is before
         assert not served_from_cache, "a forgotten profile row must not be answered by the report cached before it"
         assert _geography(after) == {"Unknown"}, f"no geography left: {_geography(after)}"
-
-    @pytest.mark.asyncio
-    async def test_the_old_column_alone_no_longer_moves_the_key(self, tmp_path):
-        async with _book(tmp_path) as book:
-            before = await _report(book)
-            async with AsyncSession(book.engine, expire_on_commit=False) as session:
-                asset = await session.get(Asset, book.asset_id)
-                assert asset is not None
-                asset.classification_params = LEGACY_CLASSIFICATION
-                await session.commit()
-            after = await _report(book)
-        served_from_cache = after is before
-        assert served_from_cache, "classification_params is no longer read by the report: it must not move the key"
-        assert _geography(after) == {"USA"}

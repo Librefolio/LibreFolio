@@ -7,7 +7,9 @@
  * - the composition shown is the one of the day chosen in «dati al»: by default the newest day a composition changed in
  *   the period; choosing an older day draws that day's countries and sectors;
  * - a part with no composition that day says so (`data-state="unavailable"`) and draws no chart;
- * - with no composition in the period there is no «dati al» to choose.
+ * - with no composition in the period there is no «dati al» to choose;
+ * - E6b2: beside the title of each part, the clock of the cards opens that voice's history (`onhistory`), when the voice
+ *   has rows in the period and the page handles it.
  *
  * How it is tested: the real component, real i18n; the two charts stood in by recorders of their props.
  */
@@ -106,5 +108,22 @@ describe('ProfileClassification', () => {
         expect(screen.queryByTestId('profile-classification-day')).toBeNull();
         expect(screen.getByTestId('profile-classification-geography')).toHaveAttribute('data-state', 'unavailable');
         expect(charts.maps).toHaveLength(0);
+    });
+
+    it('opens the history of countries and sectors from the clock beside their titles (E6b2)', async () => {
+        const onhistory = vi.fn();
+        render(ProfileClassification, {props: {voices: VOICES, onhistory}});
+        await fireEvent.click(screen.getByTestId('profile-classification-geography-history'));
+        await fireEvent.click(screen.getByTestId('profile-classification-sector-history'));
+        expect(onhistory.mock.calls).toEqual([['geography'], ['sector']]);
+    });
+
+    it('has no clock for a voice with no rows in the period, nor when the page does not handle it', () => {
+        const view = render(ProfileClassification, {props: {voices: {geography: VOICES.geography}, onhistory: vi.fn()}});
+        expect(screen.getByTestId('profile-classification-geography-history')).toBeInTheDocument();
+        expect(screen.queryByTestId('profile-classification-sector-history')).toBeNull();
+        view.unmount();
+        render(ProfileClassification, {props: {voices: VOICES}});
+        expect(screen.queryByTestId('profile-classification-geography-history')).toBeNull();
     });
 });

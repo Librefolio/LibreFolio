@@ -510,16 +510,61 @@ describe('EventReconciliationModal — the event and the creation of the missing
         expect(row(12), 'the list is not read again: nothing was created').toHaveAttribute('data-status', 'none');
     });
 
-    it('«Create events» on a selection with no row that misses its event says so and opens nothing', async () => {
+    // SEL-0 (the developer, 19/11/2026): an action no selected row can take is not offered — lane 66's rule for «Link»
+    // (`linkSelection`: hidden / disabled with its reason / on). Here each action acts on the rows of the selection that
+    // can take it, so there is no disabled state: an action is there when at least one selected row can take it.
+    it('a selection of rows that all miss their event offers «Create events» only', async () => {
+        serve([item(12, 'none'), item(14, 'none')]);
+        mount();
+        await listed();
+
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-12'));
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-14'));
+
+        expect(await screen.findByTestId('selection-bar-action-create')).toBeInTheDocument();
+        expect(screen.queryByTestId('selection-bar-action-link')).toBeNull();
+    });
+
+    it('a selection of rows that all have their one event offers «Link selected» only', async () => {
         serve([item(11, 'unique')]);
         mount();
         await listed();
 
         await fireEvent.click(screen.getByTestId('dt-row-checkbox-11'));
+
+        expect(await screen.findByTestId('selection-bar-action-link')).toBeInTheDocument();
+        expect(screen.queryByTestId('selection-bar-action-create')).toBeNull();
+        expect(screen.queryByTestId('event-reconciliation-create-modal')).toBeNull();
+    });
+
+    it('a mixed selection offers both, each on the rows that can take it; rows with several events offer neither', async () => {
+        serve([item(11, 'unique'), item(12, 'none'), item(13, 'several')]);
+        mount();
+        await listed();
+
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-11'));
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-12'));
+        expect(await screen.findByTestId('selection-bar-action-link')).toBeInTheDocument();
+        expect(screen.getByTestId('selection-bar-action-create')).toBeInTheDocument();
+
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-11'));
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-12'));
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-13'));
+        await waitFor(() => expect(screen.queryByTestId('selection-bar-action-create')).toBeNull());
+        expect(screen.queryByTestId('selection-bar-action-link')).toBeNull();
+    });
+
+    it('«Create events» on a mixed selection opens the dialog for the rows that miss their event only', async () => {
+        serve([item(11, 'unique'), item(12, 'none')]);
+        mount();
+        await listed();
+
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-11'));
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-12'));
         await fireEvent.click(await screen.findByTestId('selection-bar-action-create'));
 
-        expect(screen.getByTestId('event-reconciliation-notice')).toBeInTheDocument();
-        expect(screen.queryByTestId('event-reconciliation-create-modal')).toBeNull();
+        expect(await screen.findByTestId('event-reconciliation-create-row-12')).toBeInTheDocument();
+        expect(screen.queryByTestId('event-reconciliation-create-row-11')).toBeNull();
     });
 
     it('«Link selected» links the unique rows of the selection in ONE commit and leaves the others', async () => {

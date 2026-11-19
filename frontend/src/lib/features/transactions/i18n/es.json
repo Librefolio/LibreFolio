@@ -396,8 +396,6 @@
       "linkSelected": "Vincular los seleccionados",
       "createSelected": "Crear los eventos",
       "createOne": "Crear evento",
-      "nothingToLink": "Selecciona filas con un evento ese día para vincularlas.",
-      "nothingToCreate": "Selecciona filas sin evento ese día para crear sus eventos.",
       "createTitle": "Crear los eventos que faltan",
       "createIntro": "Revisa el tipo e introduce el valor de cada evento, en la moneda del activo. Los eventos se crean el día de la transacción; luego vincúlalos.",
       "createValue": "Valor",

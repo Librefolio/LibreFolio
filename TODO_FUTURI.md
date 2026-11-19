@@ -1001,6 +1001,28 @@ backend c'è già: `PortfolioRiskScope.asset_ids` e `sliced_asset_ids`, pesi rin
 manca l'interfaccia e la scelta dell'indice di confronto. In modo storico una fetta non può leggere il TWRR e usa la
 composizione di oggi: va detto nella pagina.
 
+## 📉 Tassi in salita o in discesa sul portafoglio e sul broker (corsia 70, RN-25, 18/11/2026)
+
+**Data aggiunta**: 19 Novembre 2026 · **Status**: 📋 FUTURO — da riparlarne · **Priorità**: 🔽 Bassa
+**Origine**: proposta della corsia 70 dopo RN-25; il developer: «non credo di aver capito l'idea ma appuntala, in futuro
+ne riparliamo».
+
+RN-25 porta lo scenario «tassi in salita» su un asset solo, dalla duration modificata del profilo (variazione del prezzo
+≈ −D_mod × Δy, al primo ordine, tassi su o giù). La versione per portafoglio e broker è la somma pesata sulle
+obbligazioni possedute. Servono una regola per le posizioni senza duration (lasciate fuori e nominate, come nel
+replay) e l'indicazione di quanta parte del portafoglio la cifra copre. La convessità resta fuori finché una fonte non
+la dà.
+
+## 🪙 Prezzi piccolissimi delle cripto (corsia 76, P2c, 18/11/2026)
+
+**Data aggiunta**: 19 Novembre 2026 · **Status**: 📋 FUTURO — da analizzare · **Priorità**: ⏬ Bassissima
+**Origine**: domanda 8 del recap del 17/11; il developer: «per ora appuntiamocelo e mettiamolo in todo_futuro come una
+cosa da analizzare a bassissima priorità».
+
+Il database tiene i prezzi a 12 decimali. PEPE (3,5e-6) resta con 7 cifre significative, con un errore sotto 0,001 € su
+un miliardo di monete; una moneta sotto 1e-12 diventerebbe 0 e sarebbe scartata, sotto ~1e-9 perde precisione. Idea
+(P2c, ~0,5 giorni): un parametro «prezzo per N unità», come i pence di Yahoo, solo per le monete sotto ~1e-9.
+
 ## 🔍 Da approfondire: XERJ, ricerca locale per gli agenti
 
 **Data aggiunta**: 16 Novembre 2026 (decisione del developer) · **Status**: ⏳ IN ATTESA che diventi stabile ·

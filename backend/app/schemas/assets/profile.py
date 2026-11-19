@@ -172,6 +172,7 @@ class FAProfileRefreshResult(StrictModel):
     written: List[str] = Field(default_factory=list)
     outcomes: List[FAProfileReadOutcome] = Field(default_factory=list)
     error: Optional[str] = Field(None, description="Why nothing was read (an asset that does not exist)")
+    enrichers_read: int = Field(0, ge=0, description="How many enrichers this refresh read for the asset: 0 when none bound can be used here (turned off, not installed, not configured)")
 
 
 class FAProfileRefreshResponse(StrictModel):
@@ -237,9 +238,16 @@ class FAProfileChange(StrictModel):
     has_previous: bool
     source: str = Field(..., description="An enricher's code, user, or legacy")
     user_id: Optional[int] = Field(None, description="Who wrote a user row; null for the sources and for a deleted user")
+    user_name: Optional[str] = Field(None, description="The username of who wrote a user row (never the email); null for the sources and for a deleted user")
+    user_avatar_url: Optional[str] = Field(None, description="The avatar of who wrote a user row, when it has one")
     read_on: date
     source_date: Optional[date] = None
     created_at: datetime
+    previous_source: Optional[str] = Field(None, description="Who gave the value before (an enricher's code, user, legacy); null for the voice's first row")
+    previous_user_id: Optional[int] = Field(None, description="Who wrote the value before, when it was written by hand")
+    previous_user_name: Optional[str] = Field(None, description="The username of who wrote the value before, when it was written by hand")
+    previous_read_on: Optional[date] = Field(None, description="The day of the value before")
+    previous_source_date: Optional[date] = Field(None, description="The source's own date of the value before («prima, del 31 agosto»)")
 
 
 class FAProfileChangesPage(StrictModel):

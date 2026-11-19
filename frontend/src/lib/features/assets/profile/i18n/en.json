@@ -188,10 +188,67 @@
         "dataSince": "from {date}",
         "beforeProfile": "value from before the profile",
         "companySector": "Sector",
-        "staleConfirmed": "Confirmed on {date}, not up to date"
+        "staleConfirmed": "Confirmed on {date}, not up to date",
+        "noEnrichersText": "The data on this tab was written by hand or arrived when the asset was created: nothing keeps it up to date.",
+        "configureHint": "Opens the asset window, with the enrichers window on top"
       },
       "row": {
         "pending": "{count, plural, one {# change waiting} other {# changes waiting}}"
+      },
+      "changes": {
+        "title": "Latest changes",
+        "columns": {
+          "when": "When",
+          "voice": "Data",
+          "what": "What changed",
+          "who": "Who"
+        },
+        "forget": "Forget",
+        "forgetSelected": "{count, plural, one {Forget # change} other {Forget # changes}}",
+        "confirmTitle": "Forget these changes?",
+        "confirmMessage": "{count, plural, one {# change leaves the history, as if it had never been written. This cannot be undone.} other {# changes leave the history, as if they had never been written. This cannot be undone.}}",
+        "forgotten": "{count, plural, one {# change forgotten} other {# changes forgotten}}",
+        "newer": "The data changed in the meantime: the list was read again. Choose again.",
+        "notFound": "Some of these changes no longer exist: the list was read again.",
+        "forgetFailed": "The changes could not be forgotten.",
+        "loadFailed": "The changes could not be read.",
+        "empty": "No change yet.",
+        "range": "{from}–{to} of {total}",
+        "previousPage": "Previous page",
+        "nextPage": "Next page",
+        "who": {
+          "deletedUser": "a deleted user"
+        },
+        "what": {
+          "first": "First value read: {to}.",
+          "firstByHand": "Written by hand: {to}.",
+          "firstLegacy": "Carried over from LibreFolio 1.3: {to}.",
+          "emptied": "Left empty on purpose.",
+          "emptiedBySource": "The source no longer gives it.",
+          "byHand": "Corrected by hand: from {from} to {to}.",
+          "backFromHand": "Back to {to}: on {date} {name} had corrected it by hand to {from}, but {source} says {to}.",
+          "newSourceDate": "Now the data of {date} (before, of {previousDate}).",
+          "up": "Up from {from} to {to}.",
+          "down": "Down from {from} to {to}.",
+          "changed": "Changed from {from} to {to}.",
+          "refilled": "Value given again: {to}."
+        }
+      },
+      "history": {
+        "byHand": "written by hand",
+        "valuesInPercent": "values in %",
+        "writeHint": "To write a new value: «{action}»",
+        "loadFailed": "The history of this data could not be read."
+      },
+      "refresh": {
+        "button": "Refresh",
+        "hint": "Reads this asset's enrichers again · last read: {date}",
+        "hintNever": "Reads this asset's enrichers again · never read yet",
+        "written": "{count, plural, one {# data item updated} other {# data items updated}}",
+        "unchanged": "Enrichers read again: nothing changed",
+        "partial": "{count, plural, one {# source did not answer} other {# sources did not answer}}; {written, plural, one {# data item updated} other {# data items updated}}. The weekly read will try again.",
+        "failed": "The enrichers could not be read. Try again later.",
+        "noneActive": "No active enricher: nothing was read. The enrichers of this asset are turned off or not configured on this instance."
       }
     }
   }

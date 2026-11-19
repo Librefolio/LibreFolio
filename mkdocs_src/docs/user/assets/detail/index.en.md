@@ -6,7 +6,7 @@ Click an asset on the [Assets page](../index.md) to open its own page: its price
     <img class="gallery-img" data-category="assets" data-name="detail-chart" alt="Asset Detail Page" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-The page has two tabs: **Overview**, described below, and **[Risk & Scenarios](#risk-scenarios)**.
+The page has three tabs: **Overview**, described below, **[Profile](profile.md)** and **[Risk & Scenarios](#risk-scenarios)**.
 
 ---
 
@@ -33,6 +33,10 @@ Click two points of the chart to read the change between them.
 ### 🗂️ [Classification](classification.md)
 
 The sector and country breakdown, at the top of the **Profile** tab, with the asset's description, key figures and details.
+
+### 👤 [Profile](profile.md)
+
+The **Profile** tab as a whole: what the asset is, the enrichers that read it once a week, **Refresh**, **Edit data**, the latest changes and the history of each item.
 
 ### 📅 [Events](events.md)
 
