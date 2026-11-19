@@ -183,14 +183,22 @@ async def test_sarb_a_currency_outside_the_series_is_empty_and_not_asked(monkeyp
 
 
 @pytest.mark.asyncio
-async def test_sarb_rub_is_not_served_yet(monkeypatch: pytest.MonkeyPatch):
-    """RUB (``EXCB110D``) is published by the bank but pending a developer decision: ``[]`` and no request."""
-    asked = _route(monkeypatch, sarb_mod, lambda request: _json(USD_FEED))
+async def test_sarb_serves_rub_as_roubles_per_rand(monkeypatch: pytest.MonkeyPatch):
+    """RUB (``EXCB110D``, «Russia: Rouble per Rand») is served since the developer's answer to Q3 (19/11/2026): one
+    request on its series, ``(d, "ZAR", "RUB", v)``, never inverted."""
+    rub = _feed(_row("2026-11-19", "4.7549", "Russia: Rouble per Rand"))
+    asked = _route(monkeypatch, sarb_mod, _by_code({"EXCB110D": rub}))
 
     rates = await SARBProvider().fetch_rates(RANGE, ["RUB"])
 
-    assert rates == {"RUB": []}
-    assert asked == []
+    assert rates == {"RUB": [(date(2026, 11, 19), "ZAR", "RUB", Decimal("4.7549"))]}
+    assert [_code_of(request) for request in asked] == ["EXCB110D"]
+
+
+def test_sarb_note_names_the_rouble_neutrally_in_every_language():
+    """The note says where the rouble rate comes from, in the four languages (Q3: a neutral note)."""
+    for language, text in SARBProvider().warning_i18n.items():
+        assert "RUB" in text, f"{language}: the note does not name RUB"
 
 
 @pytest.mark.asyncio
@@ -366,13 +374,13 @@ async def test_sarb_every_series_unreachable_is_a_service_error(monkeypatch: pyt
 
 @pytest.mark.asyncio
 async def test_sarb_catalogue_is_the_series_plus_zar_without_a_request(monkeypatch: pytest.MonkeyPatch):
-    """25 sorted codes (24 series and ZAR), and not one request made."""
+    """26 sorted codes (25 series and ZAR), RUB among them, and not one request made."""
     asked = _route(monkeypatch, sarb_mod, lambda request: _json("[]"))
 
     currencies = await SARBProvider().get_supported_currencies()
 
     assert currencies == sorted([*sarb_mod.SERIES, "ZAR"])
-    assert len(currencies) == 25 and "RUB" not in currencies
+    assert len(currencies) == 26 and "RUB" in currencies
     assert asked == []
     assert SARBProvider().fallback_currencies == currencies
 
@@ -386,8 +394,8 @@ def test_sarb_identity_urls_and_series_table():
     assert provider.docs_url == "/mkdocs/user/fx/providers/sarb/"
     assert sarb_mod.SERIES_URL == SERIES_URL
     assert SARBProvider.FIRST_DAY == date(2010, 1, 1)
-    assert len(sarb_mod.SERIES) == 24
-    assert "RUB" not in sarb_mod.SERIES
+    assert len(sarb_mod.SERIES) == 25
+    assert sarb_mod.SERIES["RUB"] == ("EXCB110D", False)
     assert {c for c, (_, per_unit) in sarb_mod.SERIES.items() if per_unit} == {"USD", "GBP", "EUR"}
     assert sarb_mod.SERIES["USD"] == ("EXCX135D", True)
     assert sarb_mod.SERIES["GBP"] == ("EXCZ001D", True)
