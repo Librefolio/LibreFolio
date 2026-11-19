@@ -81,6 +81,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 ### 🐛 Corrections
 
+- « Relier les événements » (Transactions) n'affiche « Lier la sélection » que si une ligne sélectionnée a un événement ce jour-là, et « Créer les événements » que si l'une n'en a pas ; chacun agit sur ses propres lignes.
 - Page FX, période « Tout » : une paire ajoutée entre-temps ne fait plus retélécharger tout l'historique de toutes les paires ; les paires déjà connues partent de leur premier jour.
 - Dans le résultat du PAC, les barres d'exposition dessinent chaque secteur dans sa couleur : les secteurs dont le nom contient une espace (Health Care, Real Estate, Consumer Discretionary…) étaient dessinés dans le gris de « Non classé ».
 - Se déconnecter pendant qu'une page charge encore ramène toujours à la page de connexion simple, au lieu de proposer de revenir à cette page.

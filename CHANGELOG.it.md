@@ -81,6 +81,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 ### 🐛 Corretto
 
+- «Ricollega eventi» (Transazioni) mostra «Collega i selezionati» solo se una riga selezionata ha un evento quel giorno, e «Crea gli eventi» solo se una non ne ha; ciascuno agisce sulle sue righe.
 - Pagina FX, periodo «Tutti»: una coppia aggiunta nel frattempo non fa più riscaricare a tutte le coppie l'intera storia; le coppie già note partono dal loro primo giorno.
 - Nel risultato del PAC le barre dell'esposizione disegnano ogni settore nel suo colore: i settori con uno spazio nel nome (Health Care, Real Estate, Consumer Discretionary…) erano disegnati nel grigio di «Non classificato».
 - Uscire mentre una pagina sta ancora caricando riporta sempre alla pagina d'accesso semplice, invece di proporre di tornare a quella pagina.

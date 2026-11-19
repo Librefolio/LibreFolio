@@ -81,6 +81,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 ### 🐛 Corregido
 
+- «Reenlazar eventos» (Transacciones) muestra «Vincular los seleccionados» solo si una fila seleccionada tiene un evento ese día, y «Crear los eventos» solo si una no lo tiene; cada uno actúa sobre sus filas.
 - Página FX, periodo «Todo»: un par añadido entretanto ya no hace volver a descargar todo el historial de todos los pares; los pares ya conocidos empiezan desde su primer día.
 - En el resultado del PAC, las barras de exposición dibujan cada sector con su color: los sectores con un espacio en el nombre (Health Care, Real Estate, Consumer Discretionary…) se dibujaban en el gris de «Sin clasificar».
 - Cerrar sesión mientras una página aún carga lleva siempre a la página de inicio de sesión sencilla, en lugar de proponer volver a esa página.
