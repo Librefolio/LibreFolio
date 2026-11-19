@@ -190,7 +190,8 @@
         "confirmTitle": "Salvare date anteriori al 1900?",
         "confirmMessage": "{n} righe hanno una data anteriore al 1° gennaio 1900. Salvarle così?",
         "confirmProceed": "Sì, le date sono giuste"
-      }
+      },
+      "unlinkHint": "Queste spese restano, non più collegate: {list}"
     },
     "commit": {
       "serverError": "Salvataggio impossibile — errore del server"
@@ -444,6 +445,35 @@
       "createServes": "{n} transazioni",
       "createHint": "Inserisci per ogni evento un valore maggiore di 0, con al massimo 6 decimali.",
       "createConfirm": "{n, plural, one {Crea # evento} other {Crea # eventi}}"
+    },
+    "chargesLink": {
+      "action": "Collega le spese",
+      "actionShort": "Collega",
+      "title": "Collega le spese",
+      "subtitle": "{n} righe separate → 1 {type} con le sue spese",
+      "target": "{type} #{id} con {n, plural, one {# spesa collegata} other {# spese collegate}}",
+      "note": "Le spese restano transazioni a sé: cambia solo il collegamento.",
+      "confirm": "Collega",
+      "failed": "Collegamento delle spese non riuscito",
+      "reason": {
+        "twoParents": "Scegli una sola transazione: {type} #{id} è la seconda",
+        "paired": "{type} #{id} è metà di una coppia: prima dividi la coppia",
+        "linked": "{type} #{id} è collegata a un'altra transazione: prima scollegala",
+        "otherBroker": "{type} #{id} è su un altro broker",
+        "otherAsset": "{type} #{id} ha un altro asset",
+        "noAsset": "{type} #{id} non ha un asset, e la transazione sì"
+      }
+    },
+    "chargesDelete": {
+      "title": "Eliminare {type} #{id}?",
+      "titleMany": "Eliminare {n} transazioni con spese?",
+      "lead": "{n, plural, one {Ha # spesa collegata.} other {Ha # spese collegate.}}",
+      "keep": "Tieni le spese",
+      "keepAfter": "{n, plural, one {la spesa resta, come riga a sé non più collegata} other {le # spese restano, come righe a sé non più collegate}}",
+      "allShort": "Elimina tutto",
+      "allAfter": "non resta nessuna delle {n} righe",
+      "all": "Elimina tutto ({n})",
+      "loadFailed": "Impossibile leggere le spese di questa transazione"
     }
   }
 }

@@ -190,7 +190,8 @@
         "confirmTitle": "Save dates before 1900?",
         "confirmMessage": "{n} rows are dated before 1 January 1900. Save them as they are?",
         "confirmProceed": "Yes, the dates are right"
-      }
+      },
+      "unlinkHint": "These charges stay, no longer linked: {list}"
     },
     "commit": {
       "serverError": "Save failed — server error"
@@ -444,6 +445,35 @@
       "createServes": "{n} transactions",
       "createHint": "Enter a value above 0, with at most 6 decimals, for every event.",
       "createConfirm": "{n, plural, one {Create # event} other {Create # events}}"
+    },
+    "chargesLink": {
+      "action": "Link the charges",
+      "actionShort": "Link",
+      "title": "Link the charges",
+      "subtitle": "{n} separate rows → 1 {type} with its charges",
+      "target": "{type} #{id} with {n, plural, one {# linked charge} other {# linked charges}}",
+      "note": "The charges stay transactions of their own: only the link changes.",
+      "confirm": "Link",
+      "failed": "Linking the charges failed",
+      "reason": {
+        "twoParents": "Choose one transaction only: {type} #{id} is a second one",
+        "paired": "{type} #{id} is half of a pair: split the pair first",
+        "linked": "{type} #{id} is linked to another transaction: unlink it first",
+        "otherBroker": "{type} #{id} is on another broker",
+        "otherAsset": "{type} #{id} has another asset",
+        "noAsset": "{type} #{id} has no asset, and the transaction has one"
+      }
+    },
+    "chargesDelete": {
+      "title": "Delete {type} #{id}?",
+      "titleMany": "Delete {n} transactions with charges?",
+      "lead": "{n, plural, one {It has # linked charge.} other {It has # linked charges.}}",
+      "keep": "Keep the charges",
+      "keepAfter": "{n, plural, one {the charge stays, as a row of its own no longer linked} other {the # charges stay, as rows of their own no longer linked}}",
+      "allShort": "Delete all",
+      "allAfter": "none of the {n} rows stays",
+      "all": "Delete all ({n})",
+      "loadFailed": "Could not read the charges of this transaction"
     }
   }
 }

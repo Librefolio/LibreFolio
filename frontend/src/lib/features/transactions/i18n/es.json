@@ -190,7 +190,8 @@
         "confirmTitle": "¿Guardar fechas anteriores a 1900?",
         "confirmMessage": "{n} filas tienen una fecha anterior al 1 de enero de 1900. ¿Guardarlas tal cual?",
         "confirmProceed": "Sí, las fechas son correctas"
-      }
+      },
+      "unlinkHint": "Estos gastos quedan, ya no vinculados: {list}"
     },
     "commit": {
       "serverError": "Guardado imposible — error del servidor"
@@ -444,6 +445,35 @@
       "createServes": "{n} transacciones",
       "createHint": "Introduce para cada evento un valor mayor que 0, con 6 decimales como máximo.",
       "createConfirm": "{n, plural, one {Crear # evento} other {Crear # eventos}}"
+    },
+    "chargesLink": {
+      "action": "Vincular los gastos",
+      "actionShort": "Vincular",
+      "title": "Vincular los gastos",
+      "subtitle": "{n} filas separadas → 1 {type} con sus gastos",
+      "target": "{type} #{id} con {n, plural, one {# gasto vinculado} other {# gastos vinculados}}",
+      "note": "Los gastos siguen siendo transacciones propias: solo cambia el vínculo.",
+      "confirm": "Vincular",
+      "failed": "No se pudieron vincular los gastos",
+      "reason": {
+        "twoParents": "Elige una sola transacción: {type} #{id} es la segunda",
+        "paired": "{type} #{id} es parte de un par: primero separa el par",
+        "linked": "{type} #{id} está vinculada a otra transacción: primero desvincúlala",
+        "otherBroker": "{type} #{id} está en otro bróker",
+        "otherAsset": "{type} #{id} tiene otro activo",
+        "noAsset": "{type} #{id} no tiene activo, y la transacción sí"
+      }
+    },
+    "chargesDelete": {
+      "title": "¿Eliminar {type} #{id}?",
+      "titleMany": "¿Eliminar {n} transacciones con gastos?",
+      "lead": "{n, plural, one {Tiene # gasto vinculado.} other {Tiene # gastos vinculados.}}",
+      "keep": "Conservar los gastos",
+      "keepAfter": "{n, plural, one {el gasto queda, como fila propia ya no vinculada} other {los # gastos quedan, como filas propias ya no vinculadas}}",
+      "allShort": "Eliminar todo",
+      "allAfter": "no queda ninguna de las {n} filas",
+      "all": "Eliminar todo ({n})",
+      "loadFailed": "No se pudieron leer los gastos de esta transacción"
     }
   }
 }

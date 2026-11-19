@@ -190,7 +190,8 @@
         "confirmTitle": "Enregistrer des dates antérieures à 1900 ?",
         "confirmMessage": "{n} lignes ont une date antérieure au 1er janvier 1900. Les enregistrer telles quelles ?",
         "confirmProceed": "Oui, les dates sont correctes"
-      }
+      },
+      "unlinkHint": "Ces frais restent, plus liés : {list}"
     },
     "commit": {
       "serverError": "Sauvegarde impossible — erreur serveur"
@@ -444,6 +445,35 @@
       "createServes": "{n} transactions",
       "createHint": "Saisissez pour chaque événement une valeur supérieure à 0, avec 6 décimales au plus.",
       "createConfirm": "{n, plural, one {Créer # événement} many {Créer # événements} other {Créer # événements}}"
+    },
+    "chargesLink": {
+      "action": "Lier les frais",
+      "actionShort": "Lier",
+      "title": "Lier les frais",
+      "subtitle": "{n} lignes séparées → 1 {type} avec ses frais",
+      "target": "{type} #{id} avec {n, plural, one {# frais lié} other {# frais liés}}",
+      "note": "Les frais restent des transactions à part : seul le lien change.",
+      "confirm": "Lier",
+      "failed": "La liaison des frais a échoué",
+      "reason": {
+        "twoParents": "Choisissez une seule transaction : {type} #{id} est la deuxième",
+        "paired": "{type} #{id} fait partie d'une paire : séparez d'abord la paire",
+        "linked": "{type} #{id} est liée à une autre transaction : déliez-la d'abord",
+        "otherBroker": "{type} #{id} est chez un autre courtier",
+        "otherAsset": "{type} #{id} a un autre actif",
+        "noAsset": "{type} #{id} n'a pas d'actif, et la transaction en a un"
+      }
+    },
+    "chargesDelete": {
+      "title": "Supprimer {type} #{id} ?",
+      "titleMany": "Supprimer {n} transactions avec des frais ?",
+      "lead": "{n, plural, one {Elle a # frais lié.} other {Elle a # frais liés.}}",
+      "keep": "Garder les frais",
+      "keepAfter": "{n, plural, one {le frais reste, comme ligne à part plus liée} other {les # frais restent, comme lignes à part plus liées}}",
+      "allShort": "Tout supprimer",
+      "allAfter": "aucune des {n} lignes ne reste",
+      "all": "Tout supprimer ({n})",
+      "loadFailed": "Impossible de lire les frais de cette transaction"
     }
   }
 }
