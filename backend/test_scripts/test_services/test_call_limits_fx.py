@@ -122,6 +122,7 @@ SHIPPED_FLAGS = {
     "SARB": True,
     "BCRP": True,
     "TRM": True,
+    "CBC": True,
     "MANUAL": False,
     "MOCKFX": False,
     "MOCKFX_FAIL": False,
