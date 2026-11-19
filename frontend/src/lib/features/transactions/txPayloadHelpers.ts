@@ -530,13 +530,10 @@ export interface ResolvedOp {
  * (split-queued rows have type stripped, promote-queued rows are skipped).
  * The resolveOps() caller has already applied these rules — this function just assembles.
  *
- * Omits empty arrays from the output (e.g. no `creates` key if none exist).
- *
- * `chargeUnlinks` (project 66, F6): charges unlinked from their parent in this batch («Keep the charges» after deleting
- * the parent). Each becomes `parent_transaction_id: 0` on its update — joined to the charge's own update when the batch
- * edits it, a new `{id, parent_transaction_id: 0}` otherwise — and nothing when the batch deletes it.
+ * Omits empty arrays from the output (e.g. no `creates` key if none exist). The items pass through as resolved: a linked
+ * charge's `ref`, `parent_ref` and `parent_transaction_id` (project 66, F7-b) ride on its own create or update.
  */
-export function buildBatchPayload(input: {ops: ResolvedOp[]; splits?: {id_a: number; id_b: number}[]; promotes?: Record<string, unknown>[]; chargeUnlinks?: number[]}): Record<string, unknown> {
+export function buildBatchPayload(input: {ops: ResolvedOp[]; splits?: {id_a: number; id_b: number}[]; promotes?: Record<string, unknown>[]}): Record<string, unknown> {
     const creates: Record<string, unknown>[] = [];
     const updates: Record<string, unknown>[] = [];
     const deletes: number[] = [];
@@ -551,18 +548,6 @@ export function buildBatchPayload(input: {ops: ResolvedOp[]; splits?: {id_a: num
         } else if (op.intent === 'delete') {
             if (op.deleteId != null) deletes.push(op.deleteId);
             if (op.partnerDeleteId != null) deletes.push(op.partnerDeleteId);
-        }
-    }
-
-    if (input.chargeUnlinks && input.chargeUnlinks.length > 0) {
-        const deleted = new Set(deletes);
-        const seen = new Set<number>();
-        for (const id of input.chargeUnlinks) {
-            if (deleted.has(id) || seen.has(id)) continue;
-            seen.add(id);
-            const at = updates.findIndex((u) => u.id === id);
-            if (at >= 0) updates[at] = {...updates[at], parent_transaction_id: 0};
-            else updates.push({id, parent_transaction_id: 0});
         }
     }
 

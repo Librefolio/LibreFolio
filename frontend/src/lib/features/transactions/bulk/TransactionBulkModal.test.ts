@@ -51,6 +51,7 @@ import {ensureTypesLoaded, isTypesLoaded} from '$lib/features/transactions/trans
 import {txStoreInvalidate, txStoreSetAll} from '$lib/features/transactions/txStore.svelte';
 import type {TransactionCreateItem} from '$lib/types';
 import type {TXReadItem} from '../types';
+import type {ChargeDraft} from '../form/txCharges';
 
 const {probe, typesLoad} = vi.hoisted(() => ({
     /** The props the editor hands its two nested modals, recorded at mount. */
@@ -173,6 +174,39 @@ const TYPES_RESPONSE = schemas.TXTypesResponse.parse({
             cash_sign: 'negative',
             event_compatible: false,
             cost_basis_mode: 'forbidden',
+            charge_role: 'parent',
+        },
+        // 66 F7-b: the two charge types, as TX_TYPE_METADATA declares them. Without them a FEE or a TAX row reads the
+        // fallback rule, and the sign of its cash in a body would mean nothing.
+        {
+            code: 'FEE',
+            name: 'Fee',
+            description: 'Fee or commission (trading or account)',
+            icon_slug: 'fee',
+            doc_slug: 'fee',
+            asset_mode: 'optional',
+            cash_mode: 'required',
+            quantity_mode: 'forbidden',
+            requires_link: false,
+            quantity_sign: 'zero',
+            cash_sign: 'negative',
+            event_compatible: false,
+            charge_role: 'charge',
+        },
+        {
+            code: 'TAX',
+            name: 'Tax',
+            description: 'Tax payment (capital gain or stamp duty)',
+            icon_slug: 'tax',
+            doc_slug: 'fee',
+            asset_mode: 'optional',
+            cash_mode: 'required',
+            quantity_mode: 'forbidden',
+            requires_link: false,
+            quantity_sign: 'zero',
+            cash_sign: 'negative',
+            event_compatible: false,
+            charge_role: 'charge',
         },
         {
             code: 'DEPOSIT',
@@ -1234,9 +1268,11 @@ describe('TransactionBulkModal — D-P4: the date-before-1900 banner and its Sav
 
 /**
  * «Keep the charges» (V1) opens the editor with `{action: 'delete', txIds: [parent], unlinkIds: [charges]}`. The contract
- * (66-F6 §3, choice A):
- *   - the parent is the only row, marked for deletion; the charges are NOT rows of the grid;
- *   - a banner `tx-bulk-unlink-hint` names the charges that stay, by their `#id` (provisional until F7's indented rows);
+ * (66-F6 §3, choice A; re-targeted by 66-F7 §10-§11 in F7-b — same behaviour, new mechanism: each charge kept is an
+ * operation of its own, `chargeOf` the parent and `parentUnlink`, instead of the `chargeUnlinks` list):
+ *   - the parent is a row, marked for deletion; since F7-b (§11.1: no operation that writes is invisible) each charge kept
+ *     is a row too, «edited» by its unlink alone (§11.3) — F6 had them off the grid;
+ *   - a banner `tx-bulk-unlink-hint` names the charges that stay, by their `#id` (provisional until F7-c's indented rows);
  *   - the batch unlinks them in the same request as the deletion: `updates` `{id, parent_transaction_id: 0}` beside
  *     `deletes: [parent]`, in the three places that build a payload — the nested Form's bulk context
  *     (`getBulkContextExcluding`), «Validate now» and «Save all»;
@@ -1322,18 +1358,27 @@ describe('TransactionBulkModal — 66 F6: delete a parent, keep its charges (unl
         expect(rowStatus(gridRow(PARENT.id)), 'premise: the parent is restored').toBe('original');
     }
 
+    /** Invariant 1 of 66-F7 §3: every id once across the updates and the deletes. */
+    function expectIdsOnce(payload: Payload): void {
+        const ids = [...(payload.updates ?? []).map((update) => update.id as number), ...(payload.deletes ?? [])];
+        expect(
+            ids.filter((id, at) => ids.indexOf(id) !== at),
+            'every id once across updates and deletes',
+        ).toEqual([]);
+    }
+
     const EXPECTED_UNLINKS = [
         {id: FEE.id, parent_transaction_id: 0},
         {id: TAX.id, parent_transaction_id: 0},
     ];
 
-    it('the parent is the only row; the banner names the charges that stay by their #id', async () => {
+    // Re-targeted in F7-b (§11.1, §11.3): F6 kept the charges off the grid; now each is a row of its own, edited by its
+    // unlink alone. The banner stays until F7-c.
+    it('the parent is a row marked for deletion, each charge kept a row «edited» by its unlink; the banner names them by their #id', async () => {
         await openDelete({action: 'delete', txIds: [PARENT.id], unlinkIds: [FEE.id, TAX.id]} as WorkspaceIntent);
 
-        expect(
-            gridRows().filter((row) => [FEE.id, TAX.id].some((id) => idCellText(row).includes(`#${id}`))),
-            'the charges are not rows of the grid',
-        ).toEqual([]);
+        expect(rowStatus(gridRow(FEE.id)), 'F7-b: the FEE kept is a row, edited by its unlink').toBe('edited');
+        expect(rowStatus(gridRow(TAX.id)), 'F7-b: the TAX kept is a row, edited by its unlink').toBe('edited');
         const banner = screen.getByTestId('tx-bulk-unlink-hint');
         expect(banner.textContent).toContain(`#${FEE.id}`);
         expect(banner.textContent).toContain(`#${TAX.id}`);
@@ -1347,6 +1392,7 @@ describe('TransactionBulkModal — 66 F6: delete a parent, keep its charges (unl
         expect(payload.deletes).toEqual([PARENT.id]);
         expect(payload.updates ?? []).toEqual(expect.arrayContaining(EXPECTED_UNLINKS));
         expect(unlinksOf(payload), 'each charge unlinked once').toHaveLength(2);
+        expectIdsOnce(payload);
     });
 
     it('the nested Form validates against the same batch: its bulk context carries the unlinks', async () => {
@@ -1366,6 +1412,7 @@ describe('TransactionBulkModal — 66 F6: delete a parent, keep its charges (unl
         expect(payload.deletes).toEqual([PARENT.id]);
         expect(payload.updates ?? []).toEqual(expect.arrayContaining(EXPECTED_UNLINKS));
         expect(unlinksOf(payload), 'each charge unlinked once').toHaveLength(2);
+        expectIdsOnce(payload);
     });
 
     it('«Restore» on the parent takes the unlinks back: no banner, no update to 0, the parent no longer deleted', async () => {
@@ -1389,5 +1436,348 @@ describe('TransactionBulkModal — 66 F6: delete a parent, keep its charges (unl
         expect(validated).toEqual({deletes: [PARENT.id]});
         const committed = await saveAll();
         expect(committed).toEqual({deletes: [PARENT.id]});
+    });
+});
+
+// ---------------------------------------------------------------------------
+// 66 F7-b — the charges are operations of the Bulk (model H): the parent's form, the payload, the reset, the close guard
+// ---------------------------------------------------------------------------
+
+/**
+ * Contract 66-F7 §10, corrected by §11. A charge brought into the Bulk is an operation of its own, owned by its parent
+ * (`chargeOf`); in F7-b it stays a visible row of the grid (§11.1). The parent's form receives its charges as drafts
+ * (`_charges` on the row it opens on, always — `[]` too — with `allowChargeEdits`), and its answer goes back onto the
+ * operations (`applyChargeDrafts`). Asserted on what the editor really sends: the bodies of «Validate now» and «Save all»
+ * (the mocked `validateTransactions` / `commitTransactions`) and the nested Form's bulk context, and on the props the
+ * editor hands its Form (the probe).
+ *
+ * The drafts pushed back are always the ones the probe was handed, modified: a key the editor did not make cannot match.
+ *
+ * Before opening a saved parent with `charges_count > 0` and no charge in the Bulk, the editor reads its charges
+ * (`GET /transactions?parent_ids=…`, the same call the Form makes, `query_transactions_api_v1_transactions_get`): stubbed
+ * here to answer by `parent_ids` from the rows given.
+ */
+describe('TransactionBulkModal — 66 F7-b: the charges as operations of the Bulk', () => {
+    const BUY: TXReadItem = {...SAVED_BUY, id: 91_601, charges_count: 2, description: 'F7b parent'};
+    const FEE: TXReadItem = {
+        id: 91_602,
+        broker_id: 77,
+        asset_id: 101,
+        type: 'FEE',
+        date: BUY.date,
+        quantity: '0',
+        cash: {code: 'EUR', amount: '-1.500000'},
+        related_transaction_id: null,
+        partner_broker_id: null,
+        parent_transaction_id: BUY.id,
+        tags: [],
+        description: 'F7b fee',
+        cost_basis_override: null,
+        asset_event_id: null,
+    };
+    const TAX: TXReadItem = {...FEE, id: 91_603, type: 'TAX', cash: {code: 'EUR', amount: '-0.500000'}, description: 'F7b tax'};
+    /** A saved BUY with no charge. */
+    const LONE_BUY: TXReadItem = {...SAVED_BUY, id: 91_611, charges_count: 0, description: 'F7b lone parent'};
+
+    // The charges read answers through a mockImplementation, which `vi.clearAllMocks()` keeps: reset it after each case.
+    afterEach(() => {
+        vi.mocked(zodiosApi.query_transactions_api_v1_transactions_get).mockReset();
+    });
+
+    type Payload = {creates?: Array<Record<string, unknown>>; updates?: Array<Record<string, unknown>>; deletes?: number[]};
+    type FormRow = TXReadItem & {_charges?: ChargeDraft[]};
+
+    const api = async () => vi.mocked(await import('$lib/features/transactions/txCommitApi'));
+
+    /** The charges read answers by `parent_ids`, from these rows. */
+    function answerChargesRead(rows: TXReadItem[]): void {
+        vi.mocked(zodiosApi.query_transactions_api_v1_transactions_get).mockImplementation((async (args: {queries?: {parent_ids?: number[]}} | undefined) => {
+            const parents = args?.queries?.parent_ids ?? [];
+            return rows.filter((row) => row.parent_transaction_id != null && parents.includes(row.parent_transaction_id));
+        }) as never);
+    }
+
+    /** The row the Form is open on, as the editor hands it. */
+    function formRow(): FormRow | undefined {
+        return (formProbe().items as FormRow[] | null)?.[0];
+    }
+
+    /** The drafts the editor handed the Form, or a failure. */
+    function handedDrafts(): ChargeDraft[] {
+        const drafts = formRow()?._charges;
+        if (!Array.isArray(drafts)) throw new Error('the editor handed the Form no _charges');
+        return drafts;
+    }
+
+    /** Wait for the Form open on `txId` (0 for a new row) with `count` drafts handed. */
+    async function waitForParentForm(txId: number, count: number): Promise<void> {
+        await waitFor(() => {
+            expect(formProbe().open, 'the Form is open').toBe(true);
+            expect(formRow()?.id, 'on the parent').toBe(txId);
+            expect(formRow()?._charges, 'the editor hands the Form the parent’s charges as drafts (_charges)').toHaveLength(count);
+        });
+    }
+
+    /** The saved BUY of this describe as the Form pushes it back unchanged (signed values, W-B65), with `over` applied. */
+    function buyPayload(over: Record<string, unknown> = {}): Record<string, unknown> {
+        return {
+            broker_id: BUY.broker_id,
+            type: 'BUY',
+            date: BUY.date,
+            quantity: '1.000000',
+            asset_id: BUY.asset_id,
+            cash: {code: 'EUR', amount: '-10.000000'},
+            description: BUY.description,
+            _cost_basis_mode: 'auto',
+            _wac_currency_hint: null,
+            ...over,
+        };
+    }
+
+    /** A new charge as the Form adds it (`newCharge`), with an amount and a note typed. */
+    function newDraft(type: 'FEE' | 'TAX', amount: string, description: string): ChargeDraft {
+        return {key: 'new-1', id: null, type, cash: {amount, code: 'EUR'}, description, original: null, state: 'linked'};
+    }
+
+    /** «Apply» in the Form: the payload pushed back; ends on the Form closed. */
+    async function push(payload: Record<string, unknown>): Promise<void> {
+        (formProbe().onPushDraft as (payload: Record<string, unknown>) => void)(payload);
+        flushSync();
+        await settle();
+        expect(formProbe().open, 'Apply closes the Form').toBe(false);
+    }
+
+    /** The row's own action, through its right-click menu. */
+    async function rowAction(row: HTMLElement, action: string): Promise<void> {
+        await fireEvent.contextMenu(row, {clientX: 10, clientY: 10});
+        const thrown = await clickCollectingErrors(await screen.findByTestId(`context-menu-action-${action}`));
+        expect(thrown, `${action} throws nothing`).toEqual([]);
+    }
+
+    async function validateNow(): Promise<Payload> {
+        const {validateTransactions} = await api();
+        const before = validateTransactions.mock.calls.length;
+        await fireEvent.click(screen.getByTestId('tx-bulk-validate-now'));
+        await settle();
+        await waitFor(() => expect(validateTransactions.mock.calls.length, 'a validate run went out').toBeGreaterThan(before));
+        return validateTransactions.mock.calls.at(-1)?.[0] as Payload;
+    }
+
+    async function saveAll(): Promise<Payload> {
+        const {commitTransactions} = await api();
+        await fireEvent.click(screen.getByTestId('tx-bulk-commit'));
+        await settle();
+        await waitFor(() => expect(commitTransactions, 'Save all committed').toHaveBeenCalledTimes(1));
+        return commitTransactions.mock.calls[0]?.[0] as Payload;
+    }
+
+    function bulkContext(): Payload {
+        return (formProbe().getBulkContext as () => Payload)();
+    }
+
+    /** Invariant 1 of §3: every id once across the updates and the deletes. */
+    function expectIdsOnce(payload: Payload, where: string): void {
+        const ids = [...(payload.updates ?? []).map((update) => update.id as number), ...(payload.deletes ?? [])];
+        expect(
+            ids.filter((id, at) => ids.indexOf(id) !== at),
+            `${where}: every id once across updates and deletes`,
+        ).toEqual([]);
+    }
+
+    /** The one create of this type in a body, or a failure saying how many. */
+    function onlyCreate(payload: Payload, type: string, where: string): Record<string, unknown> {
+        const found = (payload.creates ?? []).filter((create) => create.type === type);
+        expect(found, `${where}: one ${type} create`).toHaveLength(1);
+        return found[0];
+    }
+
+    /** The editor on an edit intent of the saved BUY, its two charges in the store and behind the read; ends on its Form open. */
+    async function openSavedParent(): Promise<void> {
+        txStoreSetAll([BUY, FEE, TAX], []);
+        answerChargesRead([FEE, TAX]);
+        mountEditor({action: 'edit', txIds: [BUY.id]});
+        await waitForParentForm(BUY.id, 2);
+    }
+
+    // -----------------------------------------------------------------------
+    // 2 — the round trip with the parent's form, on the real bodies
+    // -----------------------------------------------------------------------
+
+    it('the Form of a saved parent gets allowChargeEdits and its saved charges as drafts: original from the store, state linked', async () => {
+        await openSavedParent();
+
+        expect(formProbe().allowChargeEdits, 'the Bulk saves the charges the Form edits').toBe(true);
+        const drafts = handedDrafts();
+        const fee = drafts.find((draft) => draft.key === `saved-${FEE.id}`);
+        const tax = drafts.find((draft) => draft.key === `saved-${TAX.id}`);
+        expect(fee, 'the FEE, keyed by its id').toMatchObject({id: FEE.id, type: 'FEE', description: 'F7b fee', state: 'linked', original: {type: 'FEE', description: 'F7b fee'}});
+        expect(tax, 'the TAX, keyed by its id').toMatchObject({id: TAX.id, type: 'TAX', description: 'F7b tax', state: 'linked', original: {type: 'TAX', description: 'F7b tax'}});
+    });
+
+    it('a new FEE, the TAX note changed and the FEE unlinked in the parent’s Form: one create under the parent, two updates, in Validate and in Save all', async () => {
+        await openSavedParent();
+        const drafts = handedDrafts().map((draft): ChargeDraft => {
+            if (draft.id === TAX.id) return {...draft, description: 'F7b tax note changed'};
+            if (draft.id === FEE.id) return {...draft, state: 'unlink'};
+            return draft;
+        });
+
+        await push(buyPayload({_charges: [...drafts, newDraft('FEE', '2', 'F7b new fee')]}));
+
+        // §11.1: every operation that writes is a row.
+        expect(rowStatus(gridRow(TAX.id)), 'the TAX is a row, edited').toBe('edited');
+        expect(rowStatus(gridRow(FEE.id)), 'the FEE is a row, edited by its unlink').toBe('edited');
+        expect(rowStatus(gridRowDescribed('F7b new fee')), 'the new FEE is a row, new').toBe('new');
+
+        const validated = await validateNow();
+        const committed = await saveAll();
+        for (const [where, body] of [
+            ['validate', validated],
+            ['commit', committed],
+        ] as const) {
+            const create = onlyCreate(body, 'FEE', where);
+            expect(create, `${where}: the new FEE names its saved parent by id and takes its broker, asset and date`).toMatchObject({
+                broker_id: BUY.broker_id,
+                asset_id: BUY.asset_id,
+                date: BUY.date,
+                parent_transaction_id: BUY.id,
+                cash: {code: 'EUR', amount: '-2'},
+                description: 'F7b new fee',
+            });
+            expect(create, `${where}: a saved parent is named by id, never by ref`).not.toHaveProperty('parent_ref');
+            expect(body.updates ?? [], `${where}: the TAX sends its note only`).toContainEqual({id: TAX.id, description: 'F7b tax note changed'});
+            expect(body.updates ?? [], `${where}: the FEE sends its unlink only`).toContainEqual({id: FEE.id, parent_transaction_id: 0});
+            expect(
+                (body.updates ?? []).filter((update) => update.id === BUY.id),
+                `${where}: the parent itself did not change`,
+            ).toEqual([]);
+            expect(body.deletes ?? [], `${where}: nothing deleted`).toEqual([]);
+            expectIdsOnce(body, where);
+        }
+    });
+
+    // -----------------------------------------------------------------------
+    // 3 — a new parent with a new charge: ref / parent_ref, and the charge follows the parent's date
+    // -----------------------------------------------------------------------
+
+    it('a new BUY with a new FEE from its Form: the BUY carries a ref, the FEE names it by parent_ref, and follows the BUY’s date when it changes', async () => {
+        mountEditor({action: 'create'});
+        await waitFor(() => expect(formProbe().open, 'a create intent opens the Form').toBe(true));
+        expect(formProbe().allowChargeEdits, 'the Form of a new row in the Bulk edits charges too').toBe(true);
+
+        await push(buyPayload({description: 'F7b new buy', date: '2026-09-13', _charges: [newDraft('FEE', '1.25', 'F7b new fee')]}));
+        expect(rowStatus(gridRowDescribed('F7b new buy')), 'premise: the new BUY is a row').toBe('new');
+        expect(rowStatus(gridRowDescribed('F7b new fee')), 'the new FEE is a row').toBe('new');
+
+        const first = await validateNow();
+        const buy = onlyCreate(first, 'BUY', 'validate');
+        const fee = onlyCreate(first, 'FEE', 'validate');
+        expect(typeof buy.ref, 'the new parent carries a ref').toBe('string');
+        expect((buy.ref as string).length, 'a ref of at most 36 characters (the schema’s limit)').toBeGreaterThan(0);
+        expect((buy.ref as string).length).toBeLessThanOrEqual(36);
+        expect(fee, 'the new FEE names the new BUY by its ref, with its broker, asset and date').toMatchObject({parent_ref: buy.ref, broker_id: 77, asset_id: 101, date: '2026-09-13'});
+        expect(fee, 'a new parent is named by ref, never by id').not.toHaveProperty('parent_transaction_id');
+
+        // The user changes the BUY's date in its Form; the FEE was never opened on its own, so it follows (§11.4).
+        await rowAction(gridRowDescribed('F7b new buy'), 'edit-single');
+        await waitForParentForm(0, 1);
+        const handed = handedDrafts();
+        expect(handed[0], 'the new FEE comes back as a draft of its parent, keyed by its operation').toMatchObject({id: null, original: null, description: 'F7b new fee', state: 'linked'});
+        expect(handed[0].key.startsWith('op-'), `the key names the operation: ${handed[0].key}`).toBe(true);
+        await push(buyPayload({description: 'F7b new buy', date: '2026-09-20', _charges: handed}));
+
+        const context = bulkContext();
+        expect(onlyCreate(context, 'FEE', 'bulk context'), 'the Form’s bulk context: the FEE follows the BUY’s new date').toMatchObject({date: '2026-09-20'});
+        const second = await validateNow();
+        expect(onlyCreate(second, 'FEE', 'validate'), 'validate: the FEE follows the BUY’s new date').toMatchObject({date: '2026-09-20', parent_ref: onlyCreate(second, 'BUY', 'validate').ref});
+        const committed = await saveAll();
+        const committedBuy = onlyCreate(committed, 'BUY', 'commit');
+        expect(committedBuy).toMatchObject({date: '2026-09-20'});
+        expect(onlyCreate(committed, 'FEE', 'commit'), 'commit: the FEE follows the BUY’s new date, and names it by ref').toMatchObject({date: '2026-09-20', parent_ref: committedBuy.ref});
+    });
+
+    // -----------------------------------------------------------------------
+    // 4 — a reset of the parent keeps its charges attached (§11.2)
+    // -----------------------------------------------------------------------
+
+    it.each([
+        ['the row’s Reset', 'row'],
+        ['Reset all', 'all'],
+    ] as const)('%s on the parent keeps its charges attached: the new FEE still names it, its Form still lists all three', async (_label, how) => {
+        await openSavedParent();
+        await push(buyPayload({description: 'F7b parent edited', _charges: [...handedDrafts(), newDraft('FEE', '2', 'F7b new fee')]}));
+        expect(rowStatus(gridRow(BUY.id)), 'premise: the parent is edited, so it can be reset').toBe('edited');
+
+        if (how === 'row') await rowAction(gridRow(BUY.id), 'reset');
+        else expect(await clickCollectingErrors(screen.getByTestId('tx-bulk-reset-all')), 'Reset all throws nothing').toEqual([]);
+
+        expect({status: rowStatus(gridRow(BUY.id)), description: rowDescription(gridRow(BUY.id))}, 'the parent is back as saved').toEqual({status: 'original', description: 'F7b parent'});
+        const body = await validateNow();
+        expect(onlyCreate(body, 'FEE', 'validate'), 'the new FEE still names its parent, and takes its broker, asset and date').toMatchObject({
+            parent_transaction_id: BUY.id,
+            broker_id: BUY.broker_id,
+            asset_id: BUY.asset_id,
+            date: BUY.date,
+        });
+        expect(
+            (body.updates ?? []).filter((update) => update.id === BUY.id),
+            'the parent sends nothing',
+        ).toEqual([]);
+
+        // chargeOf followed the parent's new tempId: its Form finds all three of its charges.
+        await rowAction(gridRow(BUY.id), 'edit-single');
+        await waitForParentForm(BUY.id, 3);
+        const keys = handedDrafts().map((draft) => draft.key);
+        expect(keys).toEqual(expect.arrayContaining([`saved-${FEE.id}`, `saved-${TAX.id}`]));
+        expect(
+            handedDrafts().filter((draft) => draft.id === null && draft.description === 'F7b new fee'),
+            'the new FEE is still the parent’s',
+        ).toHaveLength(1);
+    });
+
+    // -----------------------------------------------------------------------
+    // 5 — opening the parent's Form and leaving it changes nothing (§11.6)
+    // -----------------------------------------------------------------------
+
+    it.each([
+        ['Cancel', 'cancel'],
+        ['Apply with nothing changed', 'apply'],
+    ] as const)('%s on the Form of a saved parent whose charges were read: Save all stays off and closing asks nothing', async (_label, how) => {
+        const {onClose} = await (async () => {
+            txStoreSetAll([BUY, FEE, TAX], []);
+            answerChargesRead([FEE, TAX]);
+            const mounted = mountEditor({action: 'edit', txIds: [BUY.id]});
+            await waitForParentForm(BUY.id, 2);
+            return mounted;
+        })();
+        // Presence barrier: the charges were read and are operations of the Bulk — rows, unchanged (§11.1).
+        await waitFor(() => expect(rowStatus(gridRow(FEE.id)), 'the FEE read for the Form is a row, unchanged').toBe('original'));
+        expect(rowStatus(gridRow(TAX.id)), 'the TAX read for the Form is a row, unchanged').toBe('original');
+
+        if (how === 'cancel') {
+            (formProbe().onClose as () => void)();
+            flushSync();
+            await settle();
+        } else {
+            await push(buyPayload({_charges: handedDrafts()}));
+        }
+
+        expect(formProbe().open, 'premise: the Form is closed').toBe(false);
+        expect(rowStatus(gridRow(BUY.id)), 'the parent is unchanged').toBe('original');
+        expect(screen.getByTestId('tx-bulk-commit'), 'nothing to save: Save all stays off').toBeDisabled();
+        await fireEvent.click(screen.getByTestId('tx-bulk-close'));
+        await settle();
+        expect(screen.queryByTestId('confirm-modal-confirm'), 'no «Discard changes?»: the rows read for the Form are no change').toBeNull();
+        expect(onClose, 'the editor closes at once').toHaveBeenCalledTimes(1);
+    });
+
+    it('the Form of a saved parent with no charge gets _charges = [] (never reads on its own) and allowChargeEdits', async () => {
+        txStoreSetAll([LONE_BUY], []);
+        answerChargesRead([]);
+        mountEditor({action: 'edit', txIds: [LONE_BUY.id]});
+
+        await waitForParentForm(LONE_BUY.id, 0);
+        expect(handedDrafts()).toEqual([]);
+        expect(formProbe().allowChargeEdits).toBe(true);
     });
 });
