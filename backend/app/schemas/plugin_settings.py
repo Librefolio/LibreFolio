@@ -153,7 +153,7 @@ class PluginSettingsPluginRead(StrictModel):
     family: PluginSettingFamily
     plugin_code: str
     plugin_name: str
-    icon_url: str | None = Field(None, description="The plugin's icon, as its family's provider list publishes it (a remote URL or a path of this instance); null when it has none, and the app shows a neutral icon")
+    icon_url: str | None = Field(None, description="The plugin's icon, as its family's provider list publishes it (a remote URL or a path of this instance); for a shared group, the icon of the first plugin that reads it; null when there is none, and the app shows a neutral icon")
     configured: bool = Field(
         ...,
         description="Every required field has a usable value and no environment variable is invalid: otherwise the plugin answers its calls with NOT_CONFIGURED. Judged on every field, the ones not listed here too, and for a plugin on the fields of the groups it reads",

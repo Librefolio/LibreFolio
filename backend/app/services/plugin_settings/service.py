@@ -200,10 +200,15 @@ def _switched_off_group(group: SettingsGroup) -> bool:
     return False
 
 
-def _group_users(group: SettingsGroup) -> list[PluginSettingsPluginRef]:
-    """The plugins of every family that read ``group``, as their entries name them. A test-only plugin only for a
-    test-only group: a group users see never names a plugin they cannot."""
+def _group_readers(group: SettingsGroup) -> tuple[list[PluginSettingsPluginRef], str | None]:
+    """The plugins of every family that read ``group``, as their entries name them, and the group's icon.
+
+    A test-only plugin only for a test-only group: a group users see never names a plugin they cannot. A group has no
+    icon of its own: it shows the icon of the plugin that reads it (developer, 19/11, for every group), the first
+    reader that has one, in the order of the list; none when no reader has one.
+    """
     users = []
+    icon = None
     for family, registry in FAMILY_REGISTRIES.items():
         for code in registry.list_plugin_codes():
             plugin_class = registry.get_plugin(code)
@@ -211,8 +216,10 @@ def _group_users(group: SettingsGroup) -> list[PluginSettingsPluginRef]:
                 continue
             if getattr(plugin_class, "test_only", False) and not group.test_only:
                 continue
-            users.append(PluginSettingsPluginRef(family=family, plugin_code=code, plugin_name=_plugin_identity(family, plugin_class, code)[0]))
-    return users
+            name, reader_icon = _plugin_identity(family, plugin_class, code)
+            users.append(PluginSettingsPluginRef(family=family, plugin_code=code, plugin_name=name))
+            icon = icon or reader_icon
+    return users, icon
 
 
 def _is_managed() -> bool:
@@ -344,16 +351,17 @@ async def read_catalogue(session: AsyncSession, user: User, *, family: str | Non
         fields = [_field_read(state, is_admin=user.is_superuser) for state in states if not (managed and state.locked)]
         group_usage = _usage(GROUP_FAMILY, group.name, states, counts[(GROUP_FAMILY, group.name)], now, managed) if counts is not None and (GROUP_FAMILY, group.name) in counts else None
         if fields or group_usage is not None:
+            used_by, icon = _group_readers(group)
             entries.append(
                 PluginSettingsPluginRead(
                     family=GROUP_FAMILY,
                     plugin_code=group.name,
                     plugin_name=group.label,
                     name_key=group.label_key,
-                    icon_url=None,
+                    icon_url=icon,
                     configured=not missing_field_keys(states),
                     fields=fields,
-                    used_by=_group_users(group),
+                    used_by=used_by,
                     call_usage=group_usage,
                     reason=readiness_reason(states, {}),
                 )
