@@ -457,6 +457,63 @@ test.describe('Settings › Plugins — the menu (76 S1b)', () => {
 });
 
 // =============================================================================
+// 1d. The search (project 76, S2b): the developer's examples, on the real catalogue
+// =============================================================================
+
+test.describe('Settings › Plugins — the search (76 S2b)', () => {
+    test('«swiss» finds the SNB by its description; «gecko daily limit» finds the CoinGecko account alone; the counts follow', async ({page}) => {
+        await login(page, TEST_ADMIN);
+        const tab = await openPluginsTab(page);
+        const search = tab.getByTestId('plugin-settings-search');
+        const forms = tab.locator('[data-testid^="plugin-settings-form-"]');
+        const all = tab.getByTestId('plugin-settings-category-all');
+
+        await search.fill('swiss');
+        await expect(tab.locator('[data-testid="plugin-settings-family"][data-family="fx"]').getByTestId('plugin-settings-form-SNB'), 'the SNB, named «Swiss National Bank»').toBeVisible();
+        await expect(forms).toHaveCount(Number(await all.getAttribute('data-count')));
+
+        // Every word in the same card: the reader «CoinGecko» has no limit of its own, its account (the group) has
+        await search.fill('gecko daily limit');
+        await expect(tab.locator('[data-testid="plugin-settings-family"][data-family="group"]').getByTestId('plugin-settings-form-coingecko')).toBeVisible();
+        await expect(tab.locator('[data-testid="plugin-settings-family"]:not([data-family="group"])'), 'the reader is not shown').toHaveCount(0);
+        await expect(all).toHaveAttribute('data-count', '1');
+        await expect(tab.getByTestId('plugin-settings-category-asset'), 'the family stays in the menu, with 0').toHaveAttribute('data-count', '0');
+
+        // A typo finds nothing (no tolerance, the developer's rule)
+        await search.fill('geko');
+        await expect(tab.getByTestId('plugin-settings-no-matches')).toBeVisible();
+        await expect(forms).toHaveCount(0);
+
+        await search.fill('');
+        await expect(forms).toHaveCount(Number(await all.getAttribute('data-count')));
+    });
+});
+
+// =============================================================================
+// 1e. The address (project 76, S2c): ?family= and ?q=
+// =============================================================================
+
+test.describe('Settings › Plugins — the address (76 S2c)', () => {
+    test('a link with ?family=fx&q=swiss opens the page filtered; a choice is a step of the history, Back returns', async ({page}) => {
+        await login(page, TEST_USER);
+        await navigateTo(page, '/settings/plugins?family=fx&q=swiss');
+        const tab = page.getByTestId('plugin-settings-tab');
+        await waitForSettled(tab);
+
+        await expect(tab.getByTestId('plugin-settings-category-fx')).toHaveAttribute('aria-pressed', 'true');
+        await expect(tab.getByTestId('plugin-settings-search')).toHaveValue('swiss');
+        await expect(tab.locator('[data-testid="plugin-settings-family"][data-family="fx"]').getByTestId('plugin-settings-form-SNB')).toBeVisible();
+
+        await tab.getByTestId('plugin-settings-category-all').click();
+        await expect(page).toHaveURL(/\/settings\/plugins\?q=swiss$/);
+        await page.goBack();
+        await expect(page).toHaveURL(/\/settings\/plugins\?family=fx&q=swiss$/);
+        await expect(tab.getByTestId('plugin-settings-category-fx'), 'Back brings the choice back').toHaveAttribute('aria-pressed', 'true');
+        await expect(tab.getByTestId('plugin-settings-search')).toHaveValue('swiss');
+    });
+});
+
+// =============================================================================
 // 1c. The «Calls» boxes by the width of their card (project 76, S1c; the developer, 19/11)
 // =============================================================================
 

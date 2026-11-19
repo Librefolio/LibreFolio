@@ -145,7 +145,29 @@
       "managedFullAt": "Límite de la instancia alcanzado: se reanuda a las {time} UTC.",
       "adminOnly": "Solo un administrador puede cambiar los límites.",
       "invalid": "valor no válido",
-      "invalidBy": "{variable}: valor no válido"
+      "invalidBy": "{variable}: valor no válido",
+      "limitField": {
+        "minute": {
+          "label": "Límite por minuto",
+          "description": "El máximo de llamadas que esta instancia hace al servicio en un minuto (UTC). Vacío: sin límite; 0: detenido."
+        },
+        "hour": {
+          "label": "Límite por hora",
+          "description": "El máximo de llamadas que esta instancia hace al servicio en una hora (UTC). Vacío: sin límite; 0: detenido."
+        },
+        "day": {
+          "label": "Límite diario",
+          "description": "El máximo de llamadas que esta instancia hace al servicio en un día (UTC, de calendario). Vacío: sin límite; 0: detenido."
+        },
+        "week": {
+          "label": "Límite semanal",
+          "description": "El máximo de llamadas que esta instancia hace al servicio en una semana (UTC, desde el lunes). Vacío: sin límite; 0: detenido."
+        },
+        "month": {
+          "label": "Límite mensual",
+          "description": "El máximo de llamadas que esta instancia hace al servicio en un mes (UTC, desde el día 1). Vacío: sin límite; 0: detenido."
+        }
+      }
     },
     "menu": {
       "all": "Todos",
@@ -157,6 +179,12 @@
       "group": "Compartidos",
       "hasUnconfigured": "Contiene plugins por configurar",
       "nothingUnconfigured": "Todos los plugins están configurados."
+    },
+    "search": {
+      "placeholder": "Buscar plugins o ajustes...",
+      "noMatchAll": "Ningún plugin coincide con «{query}».",
+      "noMatchFamily": "Ningún plugin de «{family}» coincide con «{query}».",
+      "searchAll": "Buscar en todas las familias ({count})"
     }
   }
 }

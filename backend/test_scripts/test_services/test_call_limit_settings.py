@@ -365,7 +365,9 @@ def _counter_selects(engine: AsyncEngine) -> tuple[list[str], Any]:
 
 def test_u4_the_core_declares_five_optional_integer_limit_fields():
     """1: the keys in window order; each field an optional system integer, no default, minimum 0, never secret, the
-    English label «Calls per <window>», a description, no i18n key yet; valid for every family that holds settings."""
+    English label «Calls per <window>», a description, and since S2a (project 76, search) their i18n keys
+    ``pluginSettings.calls.limitField.<window>.label`` / ``.description``, so the search finds «Limite giornaliero»;
+    valid for every family that holds settings."""
     print_section("U4 1: the core fields")
     from backend.app.services.plugin_settings import call_limits
 
@@ -378,7 +380,8 @@ def test_u4_the_core_declares_five_optional_integer_limit_fields():
         assert shape == (SettingType.INTEGER, SettingScope.SYSTEM, False, None, 0, None, False, None), f"{declared.key}: {shape}"
         assert declared.label == LABELS[declared.key]
         assert isinstance(declared.description, str) and declared.description.strip(), f"{declared.key}: no description"
-        assert (declared.label_key, declared.description_key) == (None, None), "i18n keys come with U5's interface"
+        window = declared.key.removeprefix("call_limit_")
+        assert (declared.label_key, declared.description_key) == (f"pluginSettings.calls.limitField.{window}.label", f"pluginSettings.calls.limitField.{window}.description"), declared.key
     for family in ("asset", "fx", "group"):
         validate_declaration(fields, family=family)
     print_success("five fields, valid for asset, fx and group")

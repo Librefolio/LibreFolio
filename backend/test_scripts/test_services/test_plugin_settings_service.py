@@ -604,6 +604,29 @@ async def test_each_entry_of_the_catalogue_carries_its_plugins_icon(engine: Asyn
     assert group.icon_url == SHIPPED_ICONS["coingecko"]
 
 
+@pytest.mark.asyncio
+async def test_s2a_each_entry_carries_its_plugins_description_for_the_search(engine: AsyncEngine, people: dict[str, User]):
+    """76 S2a (the developer, 19/11: «si anche descrizione»): the search of the Plugins tab reads each card's description,
+    so the catalogue carries it as the plugin publishes it. An exchange-rate source its English text and its
+    translations (``description_i18n``: «svizzera» finds the SNB in Italian); an import plugin its English text; a shared
+    group its text and its key; a price source and an enricher none of their own (their lists compose a generic one)."""
+    from backend.app.services.fx_providers.snb.plugin import SNBProvider  # noqa: PLC0415
+    from backend.app.services.plugin_settings.groups.coingecko import COINGECKO_GROUP  # noqa: PLC0415
+
+    everything = await _catalogue(engine, people["alice"])
+    by = {(entry.family, entry.plugin_code): entry for entry in everything.plugins}
+
+    snb = by[("fx", "SNB")]
+    assert (snb.description, snb.description_i18n) == (SNBProvider().description, SNBProvider().description_i18n)
+    assert "svizzera" in snb.description_i18n["it"].lower()
+    group = by[("group", "coingecko")]
+    assert (group.description, group.description_key, group.description_i18n) == (COINGECKO_GROUP.description, COINGECKO_GROUP.description_key, {})
+    brim = next(entry for entry in everything.plugins if entry.family == "brim")
+    assert brim.description and brim.description_key is None
+    justetf = by[("asset", "justetf")]
+    assert (justetf.description, justetf.description_key, justetf.description_i18n) == (None, None, {})
+
+
 # =============================================================================
 # 2. WRITES AND READS
 # =============================================================================
@@ -1015,7 +1038,8 @@ async def test_in_the_managed_profile_configured_counts_a_hidden_field_without_n
         # Project 76, G2 adds the groups a plugin reads, the plugins a group serves and a group's name key: none of them
         # names a field, missing or not; U4's call_usage holds counts and limits by window, no field's name either; U5b's
         # reason is one of two words (missing_fields, invalid_locked_setting), never a field's name
-        assert set(entry.model_dump()) == {"family", "plugin_code", "plugin_name", "icon_url", "configured", "fields", "groups", "used_by", "name_key", "call_usage", "reason"}, "the entry has no place for a missing field's name"
+        # S2a's description, description_key and description_i18n are the plugin's own text, never a field's name
+        assert set(entry.model_dump()) == {"family", "plugin_code", "plugin_name", "icon_url", "configured", "fields", "groups", "used_by", "name_key", "call_usage", "reason", "description", "description_key", "description_i18n"}, "the entry has no place for a missing field's name"
         assert entry.reason in (None, "missing_fields", "invalid_locked_setting"), name
         assert "region" not in shown.lower() and REGION_VARIABLE not in shown and "atlantis" not in shown, f"{name}: the hidden field shows: {shown}"
     print_success(f"region hidden for everyone, configured={configured}, named nowhere")

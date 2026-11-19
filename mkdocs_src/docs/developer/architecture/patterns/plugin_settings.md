@@ -908,7 +908,9 @@ Project 76, U4. The instance's limits on the calls a plugin makes to its externa
 settings the **core** declares, not the plugin (`services/plugin_settings/call_limits.py`):
 `call_limit_minute`, `call_limit_hour`, `call_limit_day`, `call_limit_week`, `call_limit_month`.
 They are optional system integers with no default and a minimum of 0. Empty means no limit; 0 stops
-the plugin.
+the plugin. Their label and description have i18n keys (`pluginSettings.calls.limitField.<window>.label` /
+`.description`, «Limite giornaliero»…, S2a), which the search of the Plugins tab reads; the boxes show the window's
+name.
 
 - **Who gets them**: whoever owns the count, by the rule of `call_counter.call_owner`.
   `AbstractPluginRegistry.register` adds the missing keys (`with_call_limits`) to a plugin that
@@ -1034,7 +1036,7 @@ sees: [Search Preferences](../../../user/settings/plugins.md#search-preferences)
 
 | Endpoint | Caller | What it does |
 |----------|--------|--------------|
-| `GET /api/v1/settings/plugins` | Any signed-in user | Every plugin that declares settings, with `configured` (see [NOT_CONFIGURED](#not-configured)), its `icon_url` (the icon its family's provider list publishes: the `get_icon` property of a price provider, `icon` of an exchange-rate provider, `icon_url` of an import plugin; null without one) and each field as the caller sees it: its declaration (type, scope, labels and i18n keys, bounds, options, default) and its state (`value` for a plain field, `is_set`, `source`: `env`, `db`, `default` or `none`, `locked`, `editable`, `problem`, `updated_at`; `env_variable` for administrators). Filters: `family`, `plugin_code`. The plugins come first, then the shared groups (`family: "group"`, with `used_by`, and as `icon_url` the icon of the first plugin of `used_by` that has one: a group has no icon of its own, decided 19/11); a plugin lists the groups it reads in `groups` ([Shared Groups](#groups)). |
+| `GET /api/v1/settings/plugins` | Any signed-in user | Every plugin that declares settings, with `configured` (see [NOT_CONFIGURED](#not-configured)), its `icon_url` (the icon its family's provider list publishes: the `get_icon` property of a price provider, `icon` of an exchange-rate provider, `icon_url` of an import plugin; null without one) and each field as the caller sees it: its declaration (type, scope, labels and i18n keys, bounds, options, default) and its state (`value` for a plain field, `is_set`, `source`: `env`, `db`, `default` or `none`, `locked`, `editable`, `problem`, `updated_at`; `env_variable` for administrators). Filters: `family`, `plugin_code`. Each entry also carries the plugin's own `description` (English), `description_key` (a group's) and `description_i18n` (the translations an exchange-rate source has), read for the search of the Plugins tab (project 76, S2a; none for a price source or an enricher, whose lists compose a generic text). The plugins come first, then the shared groups (`family: "group"`, with `used_by`, and as `icon_url` the icon of the first plugin of `used_by` that has one: a group has no icon of its own, decided 19/11); a plugin lists the groups it reads in `groups` ([Shared Groups](#groups)). |
 | `PATCH /api/v1/settings/plugins/bulk` | Any signed-in user; `system` fields need an administrator | Writes 1 to 100 items, all or nothing. Each item names `family`, `plugin_code`, `field_key` and `scope` (a shared group: `family: "group"`, `plugin_code` its name, `scope: "system"`), and gives exactly one of `value` (a plain field), `secret_value` (a secret field) and `clear: true` (deletes the saved value, so the default applies again). |
 
 A write checks every item before writing anything, then writes them all in one transaction:
@@ -1109,6 +1111,20 @@ manual, [Plugin Settings](../../../user/settings/plugins.md); the code is in
   (`data-count`) and an amber dot where an entry is to configure. `pluginMenu()` builds the entries and `filterByMenu()`
   the shown list (`pluginSettingsForm.ts`). With «To configure» chosen and nothing left, the tab says so
   (`plugin-settings-nothing-unconfigured`). **Open** on a group the choice hides selects `group` first.
+- **The search (S2b, the developer's rules of 19/11).** `plugin-settings-search` keeps the cards in which every word
+  is found (`searchWords()`, `entryMatches()`: lower case, accents removed, substrings, no typo tolerance), reading
+  `entrySearchText()`: the title, `plugin_name`, `plugin_code`, the description (`description_i18n[language]`, else the
+  group's `description_key`, else `description`) and each field's `fieldLabel()` and `fieldDescription()`; never a value,
+  a count or a limit. The menu's counts are `pluginMenu(entries, selected, matching)`: the entries and dots by the
+  totals, the counts by the matches. Nothing found: `plugin-settings-no-matches` (`common.noMatchesTitle`,
+  `pluginSettings.search.noMatchAll` / `noMatchFamily`) and, within a choice with matches elsewhere,
+  `plugin-settings-search-all`.
+- **The address (S2c).** `?family=` (`unconfigured` or a family) and `?q=`: `readPluginsAddress()` reads them (an unknown
+  family is «All») whenever `$page.url` changes; `pluginsHref()` writes them (`settingsTabHref('plugins', …)`; «All» and
+  an empty search write nothing), a choice with `goto` as a new history step, typing with `replaceState`. The tab keeps
+  the addresses it wrote until they land, so a late echo never takes back what was typed since. The N3 window's
+  read-only link is `pluginsHref(family, pluginCode)`; **Open** on a hidden group clears the search and chooses
+  `group`.
 - **Configure on a plugin with groups** shows, below the plugin's form, one form per group it reads
   (`plugin-settings-modal-group`, each read with `fetchPluginEntry('group', name)`): «Configure» from
   the search row or the provider panel thus shows the key where it is missing: a plugin unconfigured

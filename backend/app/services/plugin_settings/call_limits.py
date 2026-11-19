@@ -25,7 +25,8 @@ _WINDOWS = ("minute", "hour", "day", "week", "month")
 #: The keys of the five fields, in window order.
 CALL_LIMIT_KEYS: tuple[str, ...] = tuple(f"call_limit_{window}" for window in _WINDOWS)
 
-#: The five fields. The i18n keys of their labels come with U5's interface.
+#: The five fields. Their translated label and description (project 76, S2a) let the search of the Plugins tab find
+#: «Limite giornaliero»; the boxes themselves show the window's name.
 CALL_LIMIT_FIELDS: tuple[PluginSettingField, ...] = tuple(
     PluginSettingField(
         key=f"call_limit_{window}",
@@ -33,6 +34,8 @@ CALL_LIMIT_FIELDS: tuple[PluginSettingField, ...] = tuple(
         scope=SettingScope.SYSTEM,
         label=f"Calls per {window}",
         description=f"The most calls this instance makes to the service in one {window} (UTC, calendar). Empty: no limit; 0: stopped.",
+        label_key=f"pluginSettings.calls.limitField.{window}.label",
+        description_key=f"pluginSettings.calls.limitField.{window}.description",
         required=False,
         default=None,
         minimum=0,

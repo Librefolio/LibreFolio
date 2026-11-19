@@ -159,7 +159,7 @@ describe('B — missing fields, another user', () => {
         await waitFor(() => expect(message().textContent).toContain('pluginSettings.notConfigured.missingMember {count=2, fields=API key, Plan, provider=Keyed}'));
         expect(screen.queryByTestId('plugin-not-configured-configure')).toBeNull();
         const link = screen.getByTestId('plugin-not-configured-settings-link');
-        expect(link).toHaveAttribute('href', '/settings/plugins');
+        expect(link, 'the page filtered on the plugin (76 S2c)').toHaveAttribute('href', '/settings/plugins?family=asset&q=keyed');
         expect(link).toHaveAttribute('target', '_blank');
     });
 });

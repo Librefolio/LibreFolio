@@ -32,6 +32,7 @@
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import {tick} from 'svelte';
 
 const fake = vi.hoisted(() => ({
     /** `key`, or `key {name=value, …}` when handed values, so that what the tab hands a form (a group's label) is readable. */
@@ -59,6 +60,14 @@ vi.mock('$lib/i18n', async (importOriginal) => {
     return {...(await importOriginal<typeof import('$lib/i18n')>()), _: readable(fake.translate)};
 });
 vi.mock('$lib/stores/app/notify.svelte', () => ({notify: fake.notify}));
+// The page the tab is open on, held by the test, and the navigation it asks for (S2c: ?family= and ?q=)
+const pageStore = await vi.hoisted(async () => {
+    const {writable: hoistedWritable} = await import('svelte/store');
+    return hoistedWritable({url: new URL('http://librefolio.test/settings/plugins')});
+});
+const goto = vi.hoisted(() => vi.fn(async () => undefined));
+vi.mock('$app/stores', () => ({page: {subscribe: pageStore.subscribe}}));
+vi.mock('$app/navigation', () => ({goto}));
 
 import PluginSettingsTab from './PluginSettingsTab.svelte';
 import type {PluginSettingsEntry, SettingField, SettingsFamily} from './pluginSettingsApi';
@@ -164,6 +173,8 @@ beforeAll(async () => {
 
 beforeEach(() => {
     for (const mock of Object.values(fake)) if (typeof mock === 'function' && 'mockReset' in mock) mock.mockReset();
+    goto.mockClear();
+    pageStore.set({url: new URL('http://librefolio.test/settings/plugins')});
 });
 
 afterEach(() => {
@@ -757,5 +768,143 @@ describe('PluginSettingsTab — the menu (76 S1b)', () => {
         await fireEvent.click(screen.getByTestId('plugin-settings-mobile-category-group'));
         expect(groups()).toEqual([{family: 'group', plugins: ['coingecko']}]);
         expect(screen.getByTestId('plugin-settings-mobile-category-trigger')).toHaveTextContent('pluginSettings.menu.group');
+    });
+});
+
+// =====================================================================================================================
+// The search (project 76, S2b; the developer's rules of 19/11): exact words, all in the same card, names of the fields
+// and descriptions, never the numbers; the menu's counts follow it, its entries stay (with 0).
+describe('PluginSettingsTab — the search (76 S2b)', () => {
+    const SNB = plugin('fx', 'snb', {plugin_name: 'Swiss National Bank', configured: true, description: 'Swiss National Bank — monthly averages.'} as Partial<PluginSettingsEntry>);
+    const ANSWER = () => [JUSTETF, BORSA, ECB, SNB];
+    const search = () => screen.getByTestId('plugin-settings-search');
+    const sidebarItem = (key: string) => screen.getByTestId(`plugin-settings-category-${key}`);
+    const type = async (text: string) => fireEvent.input(search(), {target: {value: text}});
+
+    it('PST-34: shows the cards whose texts hold every word; the counts follow, the entries stay with 0', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        await type('swiss monthly');
+        expect(groups()).toEqual([{family: 'fx', plugins: ['snb']}]);
+        expect(['all', 'asset', 'fx'].map((key) => sidebarItem(key).getAttribute('data-count'))).toEqual(['1', '0', '1']);
+
+        await type('');
+        expect(groups().map((group) => group.plugins.length)).toEqual([2, 2]);
+        expect(sidebarItem('all')).toHaveAttribute('data-count', '4');
+    });
+
+    it('PST-35: nothing matches anywhere: the empty state names the search, no section is drawn', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        await type('kraken');
+        expect(groups()).toEqual([]);
+        expect(screen.getByTestId('plugin-settings-no-matches')).toHaveTextContent('pluginSettings.search.noMatchAll {query=kraken}');
+        expect(screen.queryByTestId('plugin-settings-search-all')).toBeNull();
+    });
+
+    it('PST-36: within a family with matches elsewhere, a link searches every family', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+        await fireEvent.click(sidebarItem('asset'));
+
+        await type('swiss');
+        expect(groups()).toEqual([]);
+        expect(screen.getByTestId('plugin-settings-no-matches')).toHaveTextContent('pluginSettings.search.noMatchFamily {family=pluginSettings.menu.asset, query=swiss}');
+        await fireEvent.click(screen.getByTestId('plugin-settings-search-all'));
+        expect(sidebarItem('all')).toHaveAttribute('aria-pressed', 'true');
+        expect(groups()).toEqual([{family: 'fx', plugins: ['snb']}]);
+        expect(search(), 'the search stays').toHaveValue('swiss');
+    });
+
+    it('PST-37: the search box is labelled and keeps its text across a choice of the menu', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        expect(search()).toHaveAttribute('placeholder', 'pluginSettings.search.placeholder');
+        expect(search()).toHaveAttribute('aria-label', 'pluginSettings.search.placeholder');
+        await type('bank');
+        await fireEvent.click(sidebarItem('fx'));
+        expect(search()).toHaveValue('bank');
+        expect(groups()).toEqual([{family: 'fx', plugins: ['snb']}]);
+    });
+});
+
+// =====================================================================================================================
+// The address (project 76, S2c): the menu's choice and the search are read from ?family= and ?q=, and written there —
+// a choice as a new step of the history, the search in place while typing.
+describe('PluginSettingsTab — the address (76 S2c)', () => {
+    const SNB = plugin('fx', 'snb', {plugin_name: 'Swiss National Bank', configured: true, description: 'Swiss National Bank.'} as Partial<PluginSettingsEntry>);
+    const ANSWER = () => [JUSTETF, BORSA, ECB, SNB];
+    const search = () => screen.getByTestId('plugin-settings-search');
+    const sidebarItem = (key: string) => screen.getByTestId(`plugin-settings-category-${key}`);
+    const at = (query: string) => pageStore.set({url: new URL(`http://librefolio.test/settings/plugins${query}`)});
+
+    it('PST-38: opens on the family and the search the address names', async () => {
+        at('?family=fx&q=swiss');
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        expect(sidebarItem('fx')).toHaveAttribute('aria-pressed', 'true');
+        expect(search()).toHaveValue('swiss');
+        expect(groups()).toEqual([{family: 'fx', plugins: ['snb']}]);
+        expect(goto, 'reading the address writes nothing').not.toHaveBeenCalled();
+    });
+
+    it('PST-39: a choice of the menu is a new step of the history; typing replaces the address in place', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        await fireEvent.click(sidebarItem('asset'));
+        expect(goto).toHaveBeenLastCalledWith('/settings/plugins?family=asset', expect.objectContaining({replaceState: false, noScroll: true, keepFocus: true}));
+        await fireEvent.input(search(), {target: {value: 'borsa'}});
+        expect(goto).toHaveBeenLastCalledWith('/settings/plugins?family=asset&q=borsa', expect.objectContaining({replaceState: true, noScroll: true, keepFocus: true}));
+    });
+
+    it('PST-40: Back or Forward (the address changes under the page) brings the choice and the search with it', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        at('?family=fx');
+        await waitFor(() => expect(sidebarItem('fx')).toHaveAttribute('aria-pressed', 'true'));
+        at('?q=borsa');
+        await waitFor(() => expect(sidebarItem('all')).toHaveAttribute('aria-pressed', 'true'));
+        expect(search()).toHaveValue('borsa');
+        expect(groups()).toEqual([{family: 'asset', plugins: ['borsa_italiana']}]);
+    });
+
+    it('PST-42: typing fast, the address of an earlier keystroke arriving late does not take back what was typed since', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        await fireEvent.input(search(), {target: {value: 'bo'}});
+        await fireEvent.input(search(), {target: {value: 'bor'}});
+        // The navigation of «bo» lands now: it is the page's own echo, not a new address
+        at('?q=bo');
+        await tick();
+        expect(search()).toHaveValue('bor');
+        at('?q=bor');
+        await tick();
+        expect(search()).toHaveValue('bor');
+        // A real change of address afterwards is read as before
+        at('?q=ecb');
+        await waitFor(() => expect(search()).toHaveValue('ecb'));
+    });
+
+    it('PST-41: a family the menu does not know opens «All»', async () => {
+        at('?family=crypto');
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+        expect(sidebarItem('all')).toHaveAttribute('aria-pressed', 'true');
     });
 });
