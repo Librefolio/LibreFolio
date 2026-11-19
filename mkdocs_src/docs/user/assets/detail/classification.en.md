@@ -1,6 +1,6 @@
 # 🗂️ Classification
 
-The **Profile** tab of the asset page opens with the asset's **sector** and **geographic** distribution, when this data is in the asset's profile (set by hand or read by its enrichers). Below it come the description, the key figures and the details.
+The **Profile** tab of the asset page opens with the asset's **sector** and **geographic** distribution, when this data is in the asset's profile (set by hand or read by its enrichers). Below it come the description, the key figures and the details. The 🕘 clock beside the title of each chart, and of the description, opens its **history**: every change of that data, with who made it.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="assets" data-name="detail-classification" alt="Asset Classification Panel" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
