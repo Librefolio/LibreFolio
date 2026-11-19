@@ -145,7 +145,29 @@
       "managedFullAt": "Instance limit reached: resumes at {time} UTC.",
       "adminOnly": "Only an administrator can change the limits.",
       "invalid": "invalid value",
-      "invalidBy": "{variable}: invalid value"
+      "invalidBy": "{variable}: invalid value",
+      "limitField": {
+        "minute": {
+          "label": "Minute limit",
+          "description": "The most calls this instance makes to the service in one minute (UTC). Empty: no limit; 0: stopped."
+        },
+        "hour": {
+          "label": "Hourly limit",
+          "description": "The most calls this instance makes to the service in one hour (UTC). Empty: no limit; 0: stopped."
+        },
+        "day": {
+          "label": "Daily limit",
+          "description": "The most calls this instance makes to the service in one day (UTC, calendar). Empty: no limit; 0: stopped."
+        },
+        "week": {
+          "label": "Weekly limit",
+          "description": "The most calls this instance makes to the service in one week (UTC, from Monday). Empty: no limit; 0: stopped."
+        },
+        "month": {
+          "label": "Monthly limit",
+          "description": "The most calls this instance makes to the service in one month (UTC, from the 1st). Empty: no limit; 0: stopped."
+        }
+      }
     },
     "menu": {
       "all": "All",
