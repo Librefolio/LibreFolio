@@ -18,6 +18,7 @@ def front_fx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
         "src/lib/stores/__tests__/EditBuffer.test.ts",
         "src/lib/stores/__tests__/TimeSeriesStore.test.ts",
         "src/lib/features/fx/fxStoreRegistry.test.ts",
+        "src/lib/features/signals/countedQueue.test.ts",
         "src/lib/stores/currencyGraphStore.test.ts",
         # Lane 75 L20b: the route search in a Web Worker (decision Q6).
         "src/lib/workers/__tests__/currencyRoutes.worker.test.ts",
