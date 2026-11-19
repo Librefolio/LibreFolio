@@ -75,16 +75,49 @@ export interface PluginMenuItem {
 }
 
 /** The menu: «All», «To configure» (when something is, or when it is the entry selected), then each family that has
- * entries, or is the entry selected, in `FAMILY_ORDER`, with its count and its dot. */
-export function pluginMenu(entries: readonly PluginSettingsEntry[], selected: PluginMenuId = 'all'): PluginMenuItem[] {
+ * entries, or is the entry selected, in `FAMILY_ORDER`, with its dot. Which entries are listed, and the dots, go by
+ * every entry; the counts by `shown`, the entries the search shows (S2b, the developer's C: they stay, with 0). */
+export function pluginMenu(entries: readonly PluginSettingsEntry[], selected: PluginMenuId = 'all', shown: readonly PluginSettingsEntry[] = entries): PluginMenuItem[] {
     const unconfigured = entries.filter((entry) => !entry.configured).length;
-    const items: PluginMenuItem[] = [{id: 'all', count: entries.length, dot: false}];
-    if (unconfigured > 0 || selected === 'unconfigured') items.push({id: 'unconfigured', count: unconfigured, dot: false});
+    const items: PluginMenuItem[] = [{id: 'all', count: shown.length, dot: false}];
+    if (unconfigured > 0 || selected === 'unconfigured') items.push({id: 'unconfigured', count: shown.filter((entry) => !entry.configured).length, dot: false});
     for (const family of FAMILY_ORDER) {
         const own = entries.filter((entry) => entry.family === family);
-        if (own.length > 0 || selected === family) items.push({id: family, count: own.length, dot: own.some((entry) => !entry.configured)});
+        if (own.length > 0 || selected === family) items.push({id: family, count: shown.filter((entry) => entry.family === family).length, dot: own.some((entry) => !entry.configured)});
     }
     return items;
+}
+
+// =============================================================================
+// The search of the Plugins tab (project 76, S2b; the developer's rules of 19/11)
+// =============================================================================
+
+/** Lower case, without accents: what the search compares. */
+function normalised(text: string): string {
+    return text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+}
+
+/** The words of a query, normalised; none for a blank one. */
+export function searchWords(query: string): string[] {
+    return normalised(query)
+        .split(/\s+/)
+        .filter((word) => word.length > 0);
+}
+
+/** What the search reads of a card: its name and code, its description (in the language of the interface, else its key
+ * or its English text), and each field's name and description — never a value, a count or a limit (the developer). */
+export function entrySearchText(entry: PluginSettingsEntry, t: Translate, language: string): string {
+    const english = entry.description ?? '';
+    const description = entry.description_i18n?.[language] ?? (entry.description_key ? translateOr(t, entry.description_key, english) : english);
+    const texts = [entryTitle(entry, t), entry.plugin_name, entry.plugin_code, description, ...entry.fields.flatMap((field) => [fieldLabel(field, t), fieldDescription(field, t)])];
+    return normalised(texts.join('\n'));
+}
+
+/** Every word is in the card's texts, as it is written (no tolerance for typos); no word: every card. */
+export function entryMatches(entry: PluginSettingsEntry, words: readonly string[], t: Translate, language: string): boolean {
+    if (words.length === 0) return true;
+    const text = entrySearchText(entry, t, language);
+    return words.every((word) => text.includes(word));
 }
 
 /** The entries the menu's selection shows, in the answer's order. */
