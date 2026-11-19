@@ -115,6 +115,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/transactions/txDisplayHelpers.test.ts",
             "src/lib/features/transactions/txTableRows.test.ts",
             "src/lib/features/transactions/chargeLinkRules.test.ts",
+            "src/lib/features/transactions/chargesDeleteFlow.svelte.test.ts",
             "src/lib/features/transactions/txStore.test.ts",
             "src/lib/features/transactions/commitRefusal.test.ts",
             "src/lib/features/transactions/resolveBrimNotice.test.ts",

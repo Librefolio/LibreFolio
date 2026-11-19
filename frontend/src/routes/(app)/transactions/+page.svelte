@@ -25,7 +25,8 @@
     import PromoteMergeModal from '$lib/features/transactions/bulk/PromoteMergeModal.svelte';
     import TransactionActionModal from '$lib/features/transactions/TransactionActionModal.svelte';
     import TxChargesActionModal from '$lib/features/transactions/TxChargesActionModal.svelte';
-    import {linkSelection, linkCommit, deletePlan, deleteIntent, type DeletePlanEntry} from '$lib/features/transactions/chargeLinkRules';
+    import {linkSelection, linkCommit, txRowRef} from '$lib/features/transactions/chargeLinkRules';
+    import {createChargesDeleteFlow} from '$lib/features/transactions/chargesDeleteFlow.svelte';
     import EventReconciliationModal from '$lib/features/transactions/EventReconciliationModal.svelte';
     import TransactionBulkModal from '$lib/features/transactions/bulk/TransactionBulkModal.svelte';
     import TransactionFormModal from '$lib/features/transactions/form/TransactionFormModal.svelte';
@@ -39,7 +40,7 @@
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {getBrokerRole} from '$lib/stores/reference/brokerStore';
-    import {txStoreSetAll, txStoreGet, txStoreCanEdit, txStoreAddExtras} from '$lib/features/transactions/txStore.svelte';
+    import {txStoreSetAll, txStoreGet, txStoreCanEdit} from '$lib/features/transactions/txStore.svelte';
     import {guardEditableRows} from '$lib/features/transactions/bulk/selectionGuards';
     import {promoteNotesDiverge} from '$lib/features/transactions/bulk/promoteHelpers';
     import {invalidate as invalidatePortfolioCache} from '$lib/stores/portfolio/portfolioStore.svelte';
@@ -344,60 +345,17 @@
     // 66 F6 — a parent with charges: the V1 panel («Keep the charges» / «Delete all») before the Bulk
     // =========================================================================
 
-    /** The open V1 panel: the ids the user chose to delete and the parents whose charges are not all among them. */
-    let chargesDelete = $state<{ids: number[]; plan: DeletePlanEntry[]} | null>(null);
-
     /**
-     * Delete `rows` through the Bulk, as today; when a parent among them has charges left out of the selection, the
-     * V1 panel asks first. The charges are read with `parent_ids` and added to the store, so the Bulk resolves them
-     * even when the list does not show them (filters, dates).
+     * Delete `rows` through the Bulk, as today; when a parent among them has charges left out of the selection, the V1
+     * panel asks first (`chargesDeleteFlow.svelte.ts`, shared with the broker's Transactions tab).
      */
-    async function startDelete(rows: TXReadItem[]) {
-        const ids = rows.map((r) => r.id);
-        const parents = rows.filter((r) => (r.charges_count ?? 0) > 0);
-        if (parents.length === 0) {
-            openBulk({action: 'delete', txIds: ids});
-            return;
-        }
-        let charges: TXReadItem[];
-        try {
-            charges = (await zodiosApi.query_transactions_api_v1_transactions_get({queries: {parent_ids: parents.map((p) => p.id)}} as never)) as TXReadItem[];
-        } catch {
-            toasts.error($_('transactions.chargesDelete.loadFailed') || 'Could not read the charges of this transaction');
-            return;
-        }
-        const byParent = new Map<number, TXReadItem[]>();
-        for (const c of charges) {
-            const parentId = c.parent_transaction_id ?? 0;
-            if (parentId <= 0) continue;
-            const list = byParent.get(parentId);
-            if (list) list.push(c);
-            else byParent.set(parentId, [c]);
-        }
-        const plan = deletePlan(rows, byParent);
-        if (plan.length === 0) {
-            openBulk({action: 'delete', txIds: ids});
-            return;
-        }
-        txStoreAddExtras(charges);
-        chargesDelete = {ids, plan};
-    }
+    const chargesDelete = createChargesDeleteFlow({
+        openBulk: (intent) => openBulk(intent),
+        onReadFailed: () => toasts.error($_('transactions.chargesDelete.loadFailed') || 'Could not read the charges of this transaction'),
+    });
 
-    /** The panel's numbers come from the same intent the Bulk receives: a mixed selection counts right. */
-    let chargesDeleteCounts = $derived(
-        chargesDelete
-            ? {
-                  keep: deleteIntent(chargesDelete.ids, chargesDelete.plan, 'keep').unlinkIds.length,
-                  all: deleteIntent(chargesDelete.ids, chargesDelete.plan, 'all').txIds.length,
-              }
-            : undefined,
-    );
-
-    function chooseDelete(choice: 'keep' | 'all') {
-        const pending = chargesDelete;
-        chargesDelete = null;
-        if (!pending) return;
-        openBulk({action: 'delete', ...deleteIntent(pending.ids, pending.plan, choice)});
+    function startDelete(rows: TXReadItem[]): Promise<void> {
+        return chargesDelete.start(rows);
     }
 
     // =========================================================================
@@ -487,7 +445,7 @@
         void $typesVersion;
         return linkSelection(selectedRows, {roleOf: (type) => getTypeRule(type).chargeRole, canEdit: (brokerId) => canEditBroker(brokerId)});
     });
-    let linkHint = $derived(linkState.kind === 'disabled' ? $_(`transactions.chargesLink.reason.${linkState.reason}`, {values: {type: $_(`transactions.types.${linkState.params.type}`) || linkState.params.type, id: linkState.params.id}}) : '');
+    let linkHint = $derived(linkState.kind === 'disabled' ? $_(`transactions.chargesLink.reason.${linkState.reason}`, {values: {type: $_(`transactions.types.${linkState.params.type}`) || linkState.params.type, ref: txRowRef(linkState.params.id, null, $_)}}) : '');
     let chargesLinkOpen = $state(false);
     let linking = $state(false);
 
@@ -1009,7 +967,15 @@
     }}
 />
 <TxChargesActionModal open={chargesLinkOpen && linkState.kind === 'ok'} mode="link" parents={linkState.kind === 'ok' ? [linkState.parent] : []} charges={linkState.kind === 'ok' ? linkState.charges : []} loading={linking} onConfirm={confirmLink} onCancel={() => (chargesLinkOpen = false)} />
-<TxChargesActionModal open={chargesDelete != null} mode="deleteParent" parents={chargesDelete?.plan.map((e) => e.parent) ?? []} charges={chargesDelete?.plan.flatMap((e) => e.charges) ?? []} counts={chargesDeleteCounts} onChoose={chooseDelete} onCancel={() => (chargesDelete = null)} />
+<TxChargesActionModal
+    open={chargesDelete.panel != null}
+    mode="deleteParent"
+    parents={chargesDelete.panel?.plan.map((e) => e.parent) ?? []}
+    charges={chargesDelete.panel?.plan.flatMap((e) => e.charges) ?? []}
+    counts={chargesDelete.counts}
+    onChoose={chargesDelete.choose}
+    onCancel={chargesDelete.cancel}
+/>
 <PromoteMergeModal
     open={promoteMergeOpen}
     txA={promoteMergeData?.txA}
