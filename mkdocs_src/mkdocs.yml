@@ -135,6 +135,7 @@ plugins:
             Banco de México (BANXICO): Banco de México (BANXICO)
             Czech National Bank (CNB): Czech National Bank (CNB)
             South African Reserve Bank (SARB): South African Reserve Bank (SARB)
+            Banco Central de Reserva del Perú (BCRP): Banco Central de Reserva del Perú (BCRP)
             Banca d'Italia (BDI): Banca d'Italia (BDI)
             Banco Central do Brasil (BCB): Banco Central do Brasil (BCB)
             # Developer provider entries — kept in English per dev-manual policy
@@ -154,6 +155,7 @@ plugins:
             BANXICO Tech: BANXICO Tech
             CNB Tech: CNB Tech
             SARB Tech: SARB Tech
+            BCRP Tech: BCRP Tech
             BDI Tech: BDI Tech
             BCB Tech: BCB Tech
             # Developer transaction section — kept in English per dev-manual policy
@@ -418,6 +420,7 @@ plugins:
             Banco de México (BANXICO): Banco de México (BANXICO)
             Czech National Bank (CNB): Czech National Bank (CNB)
             South African Reserve Bank (SARB): South African Reserve Bank (SARB)
+            Banco Central de Reserva del Perú (BCRP): Banco Central de Reserva del Perú (BCRP)
             Banca d'Italia (BDI): Banca d'Italia (BDI)
             Banco Central do Brasil (BCB): Banco Central do Brasil (BCB)
             # Developer provider entries — kept in English per dev-manual policy
@@ -437,6 +440,7 @@ plugins:
             BANXICO Tech: BANXICO Tech
             CNB Tech: CNB Tech
             SARB Tech: SARB Tech
+            BCRP Tech: BCRP Tech
             BDI Tech: BDI Tech
             BCB Tech: BCB Tech
             # Developer transaction section — kept in English per dev-manual policy
@@ -702,6 +706,7 @@ plugins:
             Banco de México (BANXICO): Banco de México (BANXICO)
             Czech National Bank (CNB): Czech National Bank (CNB)
             South African Reserve Bank (SARB): South African Reserve Bank (SARB)
+            Banco Central de Reserva del Perú (BCRP): Banco Central de Reserva del Perú (BCRP)
             Banca d'Italia (BDI): Banca d'Italia (BDI)
             Banco Central do Brasil (BCB): Banco Central do Brasil (BCB)
             # Developer provider entries — kept in English per dev-manual policy
@@ -721,6 +726,7 @@ plugins:
             BANXICO Tech: BANXICO Tech
             CNB Tech: CNB Tech
             SARB Tech: SARB Tech
+            BCRP Tech: BCRP Tech
             BDI Tech: BDI Tech
             BCB Tech: BCB Tech
             # Developer transaction section — kept in English per dev-manual policy
@@ -1059,6 +1065,7 @@ nav:
               - Banco de México (BANXICO): user/fx/providers/banxico.md
               - Czech National Bank (CNB): user/fx/providers/cnb.md
               - South African Reserve Bank (SARB): user/fx/providers/sarb.md
+              - Banco Central de Reserva del Perú (BCRP): user/fx/providers/bcrp.md
               - Banca d'Italia (BDI): user/fx/providers/bdi.md
               - Banco Central do Brasil (BCB): user/fx/providers/bcb.md
           - 🔎 Pair Detail:
@@ -1327,6 +1334,7 @@ nav:
                   - BANXICO Tech: developer/backend/fx/providers/banxico.md
                   - CNB Tech: developer/backend/fx/providers/cnb.md
                   - SARB Tech: developer/backend/fx/providers/sarb.md
+                  - BCRP Tech: developer/backend/fx/providers/bcrp.md
                   - BDI Tech: developer/backend/fx/providers/bdi.md
                   - BCB Tech: developer/backend/fx/providers/bcb.md
           - "🕐 Scheduler (Daemon)": developer/backend/scheduler.md
