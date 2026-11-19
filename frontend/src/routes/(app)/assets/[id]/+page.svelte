@@ -40,6 +40,7 @@
     import AssetDetailHeader from '$lib/features/assets/detail/AssetDetailHeader.svelte';
     import AssetProfileTab from '$lib/features/assets/detail/AssetProfileTab.svelte';
     import AssetProfileEditor from '$lib/features/assets/detail/AssetProfileEditor.svelte';
+    import ProfileHistoryModal from '$lib/features/assets/profile/ProfileHistoryModal.svelte';
     import {invalidateAssetProfile} from '$lib/features/assets/profile/profileStore';
     import AssetDetailToolbarActions from '$lib/features/assets/detail/AssetDetailToolbarActions.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
@@ -192,6 +193,8 @@
     let profileRefreshKey = $state(0);
     /** «Modifica i dati» of the «Profilo» tab (plan 68, E9b2): the profile window in save mode. */
     let profileEditOpen = $state(false);
+    /** The voice whose «Storia del dato» is open (plan 68, E6b); null when closed. */
+    let profileHistoryKey = $state<string | null>(null);
     // The dots (plan 68, E3): «Panoramica» without a price provider, «Profilo» without an enricher — both once known.
     let assetDetailTabs = $derived([
         {id: 'overview', label: $t('risk.assetDetail.overviewTab'), icon: ChartLine, testId: 'asset-detail-tab-overview', dot: providerAssignmentLoaded && providerAssignment === null ? {label: $t('risk.assetDetail.overviewNoPriceProvider')} : undefined},
@@ -2932,8 +2935,21 @@
                 {otherIdentifiers}
                 refreshKey={profileRefreshKey}
                 onedit={() => (profileEditOpen = true)}
+                onhistory={(key) => (profileHistoryKey = key)}
             />
             <AssetProfileEditor bind:open={profileEditOpen} assetId={data.assetId} assetName={assetInfo.display_name} onsaved={() => (profileRefreshKey += 1)} />
+            <ProfileHistoryModal
+                open={profileHistoryKey !== null}
+                assetId={data.assetId}
+                assetName={assetInfo.display_name}
+                voiceKey={profileHistoryKey}
+                refreshKey={profileRefreshKey}
+                onchanged={() => {
+                    invalidateAssetProfile(data.assetId);
+                    profileRefreshKey += 1;
+                }}
+                onclose={() => (profileHistoryKey = null)}
+            />
         {:else}
             <div class="flex min-h-48 items-center justify-center" data-testid="asset-detail-profile-loading">
                 <RefreshCw size={24} class="animate-spin text-lf-link" />

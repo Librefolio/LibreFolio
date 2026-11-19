@@ -417,6 +417,11 @@ rows: a row written after it is refused whole (409 `PROFILE_UPDATES_NEWER`), so 
 shown. The panel (`ProfileChangesPanel.svelte`) and the table it shares with the history window
 (`ProfileChangesTable.svelte`) ask before forgetting, then read the tab again.
 
+«History of the data» (`ProfileHistoryModal.svelte`) opens from a key figure card's clock or a detail row. For a voice
+whose value is a number it draws the voice from its first day (`start: "min"`), a point where each step starts in its
+source's colour (`profileHistory.ts`, `ProfileHistoryChart.svelte`); under it, the same table with every row of that
+voice (`changes: {"key": k}`), without the voice column.
+
 ---
 
 ## 🌐 API Routes {: #api }
