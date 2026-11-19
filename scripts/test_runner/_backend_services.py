@@ -567,9 +567,9 @@ def services_provider_attribution(verbose: bool = False, test_names: list = None
 
 
 def services_coingecko_search(verbose: bool = False, test_names: list = None) -> bool:
-    """Test the CoinGecko provider's search, metadata and page, and the PROVIDER_ID input type (project 76, P3)."""
+    """Test the CoinGecko provider's search, metadata and page, and the COINGECKO_ID input type (project 76, P3)."""
     print_section("Services: CoinGecko Search")
-    print_info("Testing: asset_source_providers/coingecko/plugin.py (search, fetch_asset_metadata, get_asset_url), db/models.py ProviderInputType.PROVIDER_ID, assets/base.py")
+    print_info("Testing: asset_source_providers/coingecko/plugin.py (search, fetch_asset_metadata, get_asset_url), db/models.py ProviderInputType.COINGECKO_ID, assets/base.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_coingecko_search.py", test_names)
     return run_command(cmd, "CoinGecko search tests", verbose=verbose)
 
@@ -3177,7 +3177,7 @@ Note: No backend server required.
         "coingecko-search",
         services_coingecko_search,
         name="CoinGecko Search",
-        desc="P3: the id travels as PROVIDER_ID, reaching the plugin as OTHER (the reverse map unchanged); search asks /search, coins only by market cap rank (no rank last, in order), rows OTHER, Name (SYMBOL), CRYPTO, the preferred currency as currency and vs_currency, a blank query asks nothing; metadata from /coins/{id} with the P0 flags: name, CRYPTO, logo, the symbol as ticker (left out when too long), coingecko:<id> among the other identifiers; the page; search on, NOT_CONFIGURED without a key; the real path: PROVIDER_ID saved and kept, OTHER received, prices stored, a service search counted on the group",
+        desc="P3: the id travels as COINGECKO_ID, reaching the plugin as OTHER (the reverse map unchanged); search asks /search, coins only by market cap rank (no rank last, in order), rows OTHER, Name (SYMBOL), CRYPTO, the preferred currency as currency and vs_currency, a blank query asks nothing; metadata from /coins/{id} with the P0 flags: name, CRYPTO, logo, the symbol as ticker (left out when too long), coingecko:<id> among the other identifiers; the page; search on, NOT_CONFIGURED without a key; the real path: COINGECKO_ID saved and kept, OTHER received, prices stored, a service search counted on the group",
         # PURE: the real coingecko-sdk on an httpx.MockTransport (the P0 recordings); private SQLite files behind the
         # settings, the counter and the session; no shared database, no server.
         isolation="pure",
