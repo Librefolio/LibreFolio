@@ -19,11 +19,13 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
-    import {findPromoteMatch, ensureTypesLoaded, typesVersion} from '$lib/features/transactions/transactionTypeStore';
+    import {findPromoteMatch, ensureTypesLoaded, typesVersion, getTypeRule} from '$lib/features/transactions/transactionTypeStore';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import type {FilterValue} from '$lib/components/table/types';
     import PromoteMergeModal from '$lib/features/transactions/bulk/PromoteMergeModal.svelte';
     import TransactionActionModal from '$lib/features/transactions/TransactionActionModal.svelte';
+    import TxChargesActionModal from '$lib/features/transactions/TxChargesActionModal.svelte';
+    import {linkSelection, linkCommit, deletePlan, deleteIntent, type DeletePlanEntry} from '$lib/features/transactions/chargeLinkRules';
     import EventReconciliationModal from '$lib/features/transactions/EventReconciliationModal.svelte';
     import TransactionBulkModal from '$lib/features/transactions/bulk/TransactionBulkModal.svelte';
     import TransactionFormModal from '$lib/features/transactions/form/TransactionFormModal.svelte';
@@ -37,7 +39,7 @@
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {getBrokerRole} from '$lib/stores/reference/brokerStore';
-    import {txStoreSetAll, txStoreGet, txStoreCanEdit} from '$lib/features/transactions/txStore.svelte';
+    import {txStoreSetAll, txStoreGet, txStoreCanEdit, txStoreAddExtras} from '$lib/features/transactions/txStore.svelte';
     import {guardEditableRows} from '$lib/features/transactions/bulk/selectionGuards';
     import {promoteNotesDiverge} from '$lib/features/transactions/bulk/promoteHelpers';
     import {invalidate as invalidatePortfolioCache} from '$lib/stores/portfolio/portfolioStore.svelte';
@@ -335,7 +337,67 @@
         if (selectedRows.length === 0) return;
         const editableRows = guardViewerOnly(selectedRows);
         if (!editableRows) return;
-        openBulk({action: 'delete', txIds: editableRows.map((r) => r.id)});
+        await startDelete(editableRows);
+    }
+
+    // =========================================================================
+    // 66 F6 — a parent with charges: the V1 panel («Keep the charges» / «Delete all») before the Bulk
+    // =========================================================================
+
+    /** The open V1 panel: the ids the user chose to delete and the parents whose charges are not all among them. */
+    let chargesDelete = $state<{ids: number[]; plan: DeletePlanEntry[]} | null>(null);
+
+    /**
+     * Delete `rows` through the Bulk, as today; when a parent among them has charges left out of the selection, the
+     * V1 panel asks first. The charges are read with `parent_ids` and added to the store, so the Bulk resolves them
+     * even when the list does not show them (filters, dates).
+     */
+    async function startDelete(rows: TXReadItem[]) {
+        const ids = rows.map((r) => r.id);
+        const parents = rows.filter((r) => (r.charges_count ?? 0) > 0);
+        if (parents.length === 0) {
+            openBulk({action: 'delete', txIds: ids});
+            return;
+        }
+        let charges: TXReadItem[];
+        try {
+            charges = (await zodiosApi.query_transactions_api_v1_transactions_get({queries: {parent_ids: parents.map((p) => p.id)}} as never)) as TXReadItem[];
+        } catch {
+            toasts.error($_('transactions.chargesDelete.loadFailed') || 'Could not read the charges of this transaction');
+            return;
+        }
+        const byParent = new Map<number, TXReadItem[]>();
+        for (const c of charges) {
+            const parentId = c.parent_transaction_id ?? 0;
+            if (parentId <= 0) continue;
+            const list = byParent.get(parentId);
+            if (list) list.push(c);
+            else byParent.set(parentId, [c]);
+        }
+        const plan = deletePlan(rows, byParent);
+        if (plan.length === 0) {
+            openBulk({action: 'delete', txIds: ids});
+            return;
+        }
+        txStoreAddExtras(charges);
+        chargesDelete = {ids, plan};
+    }
+
+    /** The panel's numbers come from the same intent the Bulk receives: a mixed selection counts right. */
+    let chargesDeleteCounts = $derived(
+        chargesDelete
+            ? {
+                  keep: deleteIntent(chargesDelete.ids, chargesDelete.plan, 'keep').unlinkIds.length,
+                  all: deleteIntent(chargesDelete.ids, chargesDelete.plan, 'all').txIds.length,
+              }
+            : undefined,
+    );
+
+    function chooseDelete(choice: 'keep' | 'all') {
+        const pending = chargesDelete;
+        chargesDelete = null;
+        if (!pending) return;
+        openBulk({action: 'delete', ...deleteIntent(pending.ids, pending.plan, choice)});
     }
 
     // =========================================================================
@@ -415,6 +477,38 @@
                     style: 'display:inline-block;vertical-align:middle;margin-right:2px;border-radius:2px',
                 }),
         };
+    }
+
+    // =========================================================================
+    // 66 F6 — «Link the charges» from the selection bar (Z): one parent + N charges, saved after the confirmation
+    // =========================================================================
+
+    let linkState = $derived.by(() => {
+        void $typesVersion;
+        return linkSelection(selectedRows, {roleOf: (type) => getTypeRule(type).chargeRole, canEdit: (brokerId) => canEditBroker(brokerId)});
+    });
+    let linkHint = $derived(linkState.kind === 'disabled' ? $_(`transactions.chargesLink.reason.${linkState.reason}`, {values: {type: $_(`transactions.types.${linkState.params.type}`) || linkState.params.type, id: linkState.params.id}}) : '');
+    let chargesLinkOpen = $state(false);
+    let linking = $state(false);
+
+    async function confirmLink() {
+        if (linkState.kind !== 'ok') return;
+        const {parent, charges} = linkState;
+        linking = true;
+        try {
+            const result = await commitTransactions(linkCommit(parent, charges), {fallback: $_('transactions.chargesLink.failed') || 'Linking the charges failed'});
+            if (result.committed) {
+                chargesLinkOpen = false;
+                // The parent's badge shows the outcome: an event, no toast.
+                notify({name: 'tx.charges.linked', detail: {parent: parent.id, charges: charges.map((c) => c.id)}});
+                clearSelection();
+                await pageBusy.track('tx-reload', () => reload({soft: true}));
+            } else {
+                toasts.error(commitRefusalMessage(result, $_('transactions.chargesLink.failed') || 'Linking the charges failed', $_, issueContext()));
+            }
+        } finally {
+            linking = false;
+        }
     }
 
     async function confirmPromote() {
@@ -738,7 +832,7 @@
      * the user cannot access — surfaced inline by the row validation.
      */
     function handleDeleteRow(row: TXReadItem) {
-        openBulk({action: 'delete', txIds: [row.id]});
+        void startDelete([row]);
     }
     function handlePageChange(page: number) {
         filters = {...filters, page};
@@ -787,6 +881,20 @@
                         {id: 'edit', icon: Pencil, label: () => $_('common.edit') || 'Edit', primary: true, onClick: () => onEditBulk()},
                         {id: 'clone', icon: Copy, label: () => $_('transactions.actions.clone') || 'Clone', onClick: () => onCloneBulk()},
                         ...(promoteMatch ? [{id: 'promote', icon: Link2, label: () => `🔗 ${$_('transactions.actions.promotePair') || 'Link as pair'}`, onClick: () => onPromotePair()}] : []),
+                        ...(linkState.kind !== 'hidden'
+                            ? [
+                                  {
+                                      id: 'link-charges',
+                                      icon: Link2,
+                                      label: () => $_('transactions.chargesLink.action') || 'Link the charges',
+                                      shortLabel: () => $_('transactions.chargesLink.actionShort') || 'Link',
+                                      onClick: () => (chargesLinkOpen = true),
+                                      disabled: linkState.kind === 'disabled',
+                                      hint: linkHint,
+                                      reason: linkState.kind === 'disabled' ? linkState.reason : undefined,
+                                  },
+                              ]
+                            : []),
                         {id: 'delete', icon: Trash2, label: () => $_('common.delete') || 'Delete', variant: 'danger', onClick: () => onBulkDelete()},
                     ]}
                     onClearSelection={clearSelection}
@@ -900,6 +1008,8 @@
         promoteTarget = null;
     }}
 />
+<TxChargesActionModal open={chargesLinkOpen && linkState.kind === 'ok'} mode="link" parents={linkState.kind === 'ok' ? [linkState.parent] : []} charges={linkState.kind === 'ok' ? linkState.charges : []} loading={linking} onConfirm={confirmLink} onCancel={() => (chargesLinkOpen = false)} />
+<TxChargesActionModal open={chargesDelete != null} mode="deleteParent" parents={chargesDelete?.plan.map((e) => e.parent) ?? []} charges={chargesDelete?.plan.flatMap((e) => e.charges) ?? []} counts={chargesDeleteCounts} onChoose={chooseDelete} onCancel={() => (chargesDelete = null)} />
 <PromoteMergeModal
     open={promoteMergeOpen}
     txA={promoteMergeData?.txA}
