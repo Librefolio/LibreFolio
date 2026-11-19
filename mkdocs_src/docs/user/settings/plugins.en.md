@@ -35,6 +35,19 @@ Each entry shows how many plugins it holds; an amber dot marks a family with a p
 menu is the **Category** list above the page. **Open** on a plugin's shared settings row shows them even when the menu
 hides them.
 
+### 🔎 Search {: #search }
+
+The **Search plugins or settings** field above the cards keeps the cards that hold **every word** you type, in any of
+their texts: the plugin's name and code, its description, and the names and descriptions of its settings, in the
+language of the page. Capitals and accents do not matter; the words must be written as they are (*gecko*, not *geko*).
+Numbers are never searched: a count or a limit is not a word.
+
+- *swiss* finds the **Swiss National Bank**, whose description says so (*svizzera* in Italian);
+- *gecko daily limit* finds only the **CoinGecko** account card: the CoinGecko price plugin has no limit of its own.
+
+The menu's numbers follow the search, and its entries stay (with 0). When nothing matches, the page says so; within a
+choice of the menu, a link searches every family.
+
 ## 🧾 One Plugin, One Form {: #form }
 
 Each plugin has a form of its own: its icon and name (a puzzle piece when the plugin has no icon), a

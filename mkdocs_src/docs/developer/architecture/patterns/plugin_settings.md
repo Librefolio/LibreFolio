@@ -1111,6 +1111,14 @@ manual, [Plugin Settings](../../../user/settings/plugins.md); the code is in
   (`data-count`) and an amber dot where an entry is to configure. `pluginMenu()` builds the entries and `filterByMenu()`
   the shown list (`pluginSettingsForm.ts`). With «To configure» chosen and nothing left, the tab says so
   (`plugin-settings-nothing-unconfigured`). **Open** on a group the choice hides selects `group` first.
+- **The search (S2b, the developer's rules of 19/11).** `plugin-settings-search` keeps the cards in which every word
+  is found (`searchWords()`, `entryMatches()`: lower case, accents removed, substrings, no typo tolerance), reading
+  `entrySearchText()`: the title, `plugin_name`, `plugin_code`, the description (`description_i18n[language]`, else the
+  group's `description_key`, else `description`) and each field's `fieldLabel()` and `fieldDescription()`; never a value,
+  a count or a limit. The menu's counts are `pluginMenu(entries, selected, matching)`: the entries and dots by the
+  totals, the counts by the matches. Nothing found: `plugin-settings-no-matches` (`common.noMatchesTitle`,
+  `pluginSettings.search.noMatchAll` / `noMatchFamily`) and, within a choice with matches elsewhere,
+  `plugin-settings-search-all`.
 - **Configure on a plugin with groups** shows, below the plugin's form, one form per group it reads
   (`plugin-settings-modal-group`, each read with `fetchPluginEntry('group', name)`): «Configure» from
   the search row or the provider panel thus shows the key where it is missing: a plugin unconfigured
