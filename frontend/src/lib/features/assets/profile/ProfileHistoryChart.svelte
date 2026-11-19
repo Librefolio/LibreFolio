@@ -4,7 +4,8 @@
   of points it draws (`data-point-count`) and how many were written by hand (`data-hand-count`).
 
   The colours are roles, read on the chart's own element at each draw: the line is the price line's, a hand-written
-  point the info role, the axes the price axes' neutrals. A theme switch, or the Designer Lab, draws it again.
+  point the info role, the axes the price axes' neutrals. A theme switch, or the Designer Lab, draws it again. Like every
+  chart of the app it says when it has drawn (`data-chart-ready`, `attachChartReady`; E12, the gallery waits for it).
 
   Pattern: Svelte 5 Runes, ECharts, colour roles only.
 -->
@@ -16,6 +17,7 @@
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from '$lib/components/charts/echartsAnimationConfig';
     import {buildTooltipTheme} from '$lib/components/charts/echartsTooltipHelpers';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
+    import {attachChartReady} from '$lib/utils/chartReady';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {PRICE_SERIES, chartNeutrals} from '$lib/theme/chartTheme';
     import {chartRoles} from '$lib/theme/roleColors';
@@ -64,7 +66,10 @@
 
     function render(): void {
         if (!container) return;
-        if (!chart) chart = echarts.init(container, CHART_INIT_THEME, chartInitOptions(container));
+        if (!chart) {
+            chart = echarts.init(container, CHART_INIT_THEME, chartInitOptions(container));
+            attachChartReady(chart, container, testId);
+        }
         resizeWatcher.observe(container);
         const roles = chartRoles(dark, container);
         const axes = chartNeutrals(dark, container).priceAxis;

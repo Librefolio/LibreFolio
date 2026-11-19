@@ -109,6 +109,8 @@ describe('ProfileHistoryModal', () => {
         const chart = screen.getByTestId('profile-history-chart');
         expect(chart).toHaveAttribute('data-point-count', '3');
         expect(chart).toHaveAttribute('data-hand-count', '1');
+        // E12: the chart says when it has drawn (chartReady.ts), like every chart of the app: the gallery waits for it
+        await waitFor(() => expect(chart).toHaveAttribute('data-chart-ready', 'false'));
         expect(screen.getByTestId('profile-change-what-3')).toBeInTheDocument();
         expect(screen.queryByTestId('dt-header-voice')).toBeNull();
     });

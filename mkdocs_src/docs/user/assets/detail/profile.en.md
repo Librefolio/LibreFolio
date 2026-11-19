@@ -77,6 +77,10 @@ number of enrichers chosen. It opens the **Asset enrichers** window:
   asset type*…); **+** adds one back.
 - **Use these enrichers** hands the list back to the asset form. Nothing is saved until you save the asset.
 
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" loading="lazy" data-category="assets" data-name="enrichers-window" alt="The Asset enrichers window: justETF first, Borsa Italiana second, each with its last read, and Yahoo Finance not in the list" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+
 **At creation**, as soon as the form holds a complete **ISIN**, LibreFolio **recognizes** by itself which enrichers
 know the asset: a line under the form's header says what it found (for example *2 enrichers found: justETF, Borsa Italiana.
 They will be saved with the asset.*) with **Check or change**. It then asks them for their data and fills the empty profile items of the form
@@ -174,6 +178,10 @@ The values that change at every read (fund size, market capitalisation, gross an
 accrued interest) appear here only when written by hand, and with the read that replaced them: their other steps are in
 their [history](#data-history).
 
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" loading="lazy" data-category="assets" data-name="detail-profile-changes" alt="The Latest changes panel: the annual cost read by justETF, corrected by hand, then read again" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+
 **Forget** removes a change as if it had never been made: the item goes back to the value it had before. Use it on one
 row (its menu) or on the rows you select (**Forget 2 changes**). LibreFolio asks first, as it cannot be undone.
 
@@ -187,6 +195,10 @@ too.
   value, coloured by who gave it — a source, or a value written by hand.
 - Below, the same table as **Latest changes**, with every change of this one item, and the same **Forget**.
 - Text, countries and sectors have the table only.
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" loading="lazy" data-category="assets" data-name="detail-profile-history" alt="The history of the annual cost: a stepped chart with a dot for each new value, the one written by hand in its own colour, and every change below" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 To write a new value, close the window and use **Edit data**.
 
