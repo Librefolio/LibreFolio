@@ -332,6 +332,18 @@ def front_asset_profile_edit(verbose: bool = False, ui: bool = False, headed: bo
     return _run_playwright("assets/asset-profile-edit.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_asset_profile_changes(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the «Ultime variazioni» E2E tests (plan 68, E6a): the panel of the Profilo tab and «Dimentica»."""
+    print_section("Frontend Asset Profile Changes Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("assets/asset-profile-changes.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_asset_profile_create(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the new asset's profile E2E tests (plan 68, E8b2): a whole ISIN, «Riconosci», the automatic «Chiedi», the creation."""
     print_section("Frontend Asset Profile Create Tests")
@@ -432,6 +444,14 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "asset-modal", front_asset_modal, name="Asset Modal", desc="Create/edit modal, provider, distributions", tests="assets/asset-modal.spec.ts")
     add_test(cat, "asset-data-editor", front_asset_data_editor, name="Asset Data Editor", desc="Prices/Events tabs, CSV import", tests="assets/asset-data-editor.spec.ts")
     add_test(cat, "asset-classification", front_asset_classification, name="Asset Classification", desc="Distribution editors round-trip (geo, sector)", tests="assets/asset-classification.spec.ts")
+    add_test(
+        cat,
+        "asset-profile-changes",
+        front_asset_profile_changes,
+        name="Asset Profile Changes",
+        desc="Plan 68 E6a: «Ultime variazioni» of the Profilo tab, folded and closed; the changes by hand with their author; «Dimentica» after a confirmation puts «now» back to the value before",
+        tests="assets/asset-profile-changes.spec.ts",
+    )
     add_test(cat, "asset-profile-edit", front_asset_profile_edit, name="Asset Profile Edit", desc="Plan 68 E8b2: the «Dati del profilo» row of the asset window opens the profile window; a value kept there waits, is counted and is saved with the asset", tests="assets/asset-profile-edit.spec.ts")
     add_test(
         cat,
