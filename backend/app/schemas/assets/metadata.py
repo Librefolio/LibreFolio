@@ -3,7 +3,8 @@ Asset classification and metadata schemas (FA).
 
 - ``BaseDistribution``: the shared validation of a weight distribution; ``FAGeographicArea`` (ISO-3166-A3 country codes)
   and ``FASectorArea`` (standard sectors) extend it.
-- ``FAClassificationParams``: the classification metadata of an asset (all fields optional, for partial updates).
+  The asset profile's catalogue validates its ``geography`` and ``sector`` maps with them (plan 68); the old container
+  ``FAClassificationParams`` is gone (D7a).
 - ``FAAssetMetadataResponse``: an asset with its metadata fields (GET and PATCH responses, bulk reads).
 """
 
@@ -230,32 +231,6 @@ class FASectorArea(BaseDistribution):
         return cls._validate_and_normalize_weights(normalized_sectors)
 
 
-class FAClassificationParams(StrictModel):
-    """
-    Asset classification metadata.
-
-    All fields optional (partial updates supported via PATCH).
-    geographic_area and sector_area are indivisible blocks (full replace on update, no merge).
-
-    Validation:
-    - geographic_area: ISO-3166-A3 codes, weights must sum to 1.0 (±1e-6)
-    - sector_area: Standard FinancialSector enum values, weights must sum to 1.0 (±1e-6)
-    - Weights quantized to 4 decimals (ROUND_HALF_EVEN)
-    - Automatic renormalization if sum != 1.0
-
-    Examples:
-        >>> params = FAClassificationParams(
-        ...     short_description="Apple Inc. - Technology company",
-        ...     geographic_area=FAGeographicArea(distribution={"USA": Decimal("0.6"), "EUR": Decimal("0.4")}),
-        ...     sector_area=FASectorArea(distribution={"Technology": Decimal("1.0")})
-        ... )
-    """
-
-    short_description: Optional[str] = None
-    geographic_area: Optional[FAGeographicArea] = None
-    sector_area: Optional[FASectorArea] = None
-
-
 class FAAssetMetadataResponse(StrictModel):
     """
     Asset with metadata fields.
@@ -268,7 +243,6 @@ class FAAssetMetadataResponse(StrictModel):
     - currency: Asset currency code
     - icon_url: Asset icon URL (optional)
     - asset_type: Asset type (STOCK, BOND, ETF, etc.)
-    - classification_params: Optional classification metadata
     - provider_code: Provider code if assigned (e.g. 'yfinance'), None otherwise
     """
 
@@ -278,6 +252,5 @@ class FAAssetMetadataResponse(StrictModel):
     icon_url: Optional[str] = None
     asset_type: Optional[str] = None
     quote_base_quantity: Optional[int] = Field(1, description="How many units the raw market quote refers to")
-    classification_params: Optional[FAClassificationParams] = None
     provider_code: Optional[str] = Field(None, description="Provider code if assigned (e.g. 'yfinance')")
     enrichers: Optional[FAAssetEnrichers] = Field(None, description="The asset's enrichers: bindings in their order, and what each last read (plan 68, B3); null when it has none")

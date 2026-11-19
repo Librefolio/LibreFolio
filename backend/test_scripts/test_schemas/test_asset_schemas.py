@@ -14,19 +14,21 @@ Tests cover:
 - FAScheduledInvestmentSchedule: period ordering, overlaps, gaps detection
 - FAGeographicArea: country normalization, weight validation
 - FASectorArea: sector normalization, weight validation
-- FAClassificationParams: integration and serialization
+- the old container ``classification_params`` and ``has_metadata`` are gone (plan 68, D7a)
 """
 
-import json
+import importlib
 from datetime import date
 from decimal import Decimal
 
 import pytest
 from pydantic import ValidationError
 
+import backend.app.schemas as schemas
+from backend.app.schemas.assets import assets as asset_schemas
+from backend.app.schemas.assets import metadata
 from backend.app.schemas.assets.assets import FAAssetCreateItem
 from backend.app.schemas.assets.metadata import (
-    FAClassificationParams,
     FAGeographicArea,
     FASectorArea,
 )
@@ -643,52 +645,6 @@ class TestFASectorArea:
 
 
 # ============================================================================
-# TESTS: FAClassificationParams Integration
-# ============================================================================
-
-
-class TestFAClassificationParams:
-    """Tests for FAClassificationParams with new sector_area field."""
-
-    def test_with_sector_area(self):
-        """Should accept sector_area field."""
-        params = FAClassificationParams(
-            short_description="Test asset",
-            sector_area=FASectorArea(distribution={"Technology": Decimal("1.0")}),
-        )
-        assert params.sector_area is not None
-        assert params.sector_area.distribution["Technology"] == Decimal("1.0")
-
-    def test_with_geographic_area(self):
-        """Should accept geographic_area field."""
-        params = FAClassificationParams(geographic_area=FAGeographicArea(distribution={"USA": Decimal("1.0")}))
-        assert params.geographic_area is not None
-        assert params.geographic_area.distribution["USA"] == Decimal("1.0")
-
-    def test_with_both_areas(self):
-        """Should accept both sector_area and geographic_area."""
-        params = FAClassificationParams(
-            short_description="Multi-region tech fund",
-            geographic_area=FAGeographicArea(distribution={"USA": Decimal("0.6"), "DEU": Decimal("0.4")}),
-            sector_area=FASectorArea(distribution={"Technology": Decimal("0.7"), "Financials": Decimal("0.3")}),
-        )
-        assert params.geographic_area is not None
-        assert params.sector_area is not None
-
-    def test_all_fields_optional(self):
-        """All fields should be optional."""
-        params = FAClassificationParams()
-        assert params.short_description is None
-        assert params.geographic_area is None
-        assert params.sector_area is None
-
-    def test_old_sector_field_rejected(self):
-        """Old 'sector' field should be rejected (extra='forbid')."""
-        with pytest.raises(ValidationError):  # extra='forbid' raises ValidationError
-            FAClassificationParams(sector="Technology")
-
-
-# ============================================================================
 # TESTS: Weight Quantization
 # ============================================================================
 
@@ -707,78 +663,6 @@ class TestWeightQuantization:
         geo = FAGeographicArea(distribution={"USA": Decimal("1.0")})
         for _key, value in geo.distribution.items():
             assert value == value.quantize(Decimal("0.0001"))
-
-
-# ============================================================================
-# TESTS: Geographic Area Integration (Serialization)
-# ============================================================================
-
-
-class TestGeographicAreaSerialization:
-    """Test for FAGeographicArea serialization/deserialization."""
-
-    def test_classification_params_with_geographic_area(self):
-        """Test FAClassificationParams creation with FAGeographicArea."""
-        geo = FAGeographicArea(distribution={"USA": Decimal("0.6"), "DEU": Decimal("0.4")})
-        params = FAClassificationParams(
-            short_description="Test Company",
-            geographic_area=geo,
-            sector_area=FASectorArea(distribution={"Technology": Decimal("1.0")}),
-        )
-        assert params.geographic_area is not None
-        assert params.geographic_area.distribution["USA"] == Decimal("0.6000")
-        assert params.geographic_area.distribution["DEU"] == Decimal("0.4000")
-
-    def test_serialize_classification_params(self):
-        """Test serialization to JSON with FAGeographicArea."""
-        geo = FAGeographicArea(distribution={"USA": Decimal("0.7"), "GBR": Decimal("0.3")})
-        params = FAClassificationParams(
-            geographic_area=geo,
-            sector_area=FASectorArea(distribution={"Technology": Decimal("1.0")}),
-        )
-        json_str = params.model_dump_json(exclude_none=True)
-        data = json.loads(json_str)
-
-        assert "geographic_area" in data
-        assert isinstance(data["geographic_area"], dict)
-        assert "distribution" in data["geographic_area"]
-        assert "USA" in data["geographic_area"]["distribution"]
-
-    def test_deserialize_classification_params(self):
-        """Test deserialization from JSON with nested FAGeographicArea."""
-        json_str = '{"geographic_area":{"distribution":{"USA":"0.6000","ITA":"0.4000"}},"sector_area":{"distribution":{"Technology":"1.0000"}}}'
-        params = FAClassificationParams.model_validate_json(json_str)
-
-        assert params is not None
-        assert params.geographic_area is not None
-        assert isinstance(params.geographic_area, FAGeographicArea)
-        assert params.geographic_area.distribution["USA"] == Decimal("0.6000")
-        assert params.geographic_area.distribution["ITA"] == Decimal("0.4000")
-
-    def test_round_trip_serialization(self):
-        """Test round-trip: serialize → deserialize → serialize."""
-        geo = FAGeographicArea(distribution={"USA": Decimal("0.5"), "FRA": Decimal("0.5")})
-        original = FAClassificationParams(
-            geographic_area=geo,
-            sector_area=FASectorArea(distribution={"Financials": Decimal("1.0")}),
-        )
-        json_str1 = original.model_dump_json(exclude_none=True)
-        parsed = FAClassificationParams.model_validate_json(json_str1)
-        json_str2 = parsed.model_dump_json(exclude_none=True)
-
-        data1 = json.loads(json_str1)
-        data2 = json.loads(json_str2)
-        assert data1 == data2
-
-    def test_none_geographic_area(self):
-        """Test that None geographic_area works correctly."""
-        params = FAClassificationParams(sector_area=FASectorArea(distribution={"Technology": Decimal("1.0")}))
-        json_str = params.model_dump_json(exclude_none=True)
-        data = json.loads(json_str)
-
-        assert "geographic_area" not in data
-        parsed = FAClassificationParams.model_validate_json(json_str)
-        assert parsed.geographic_area is None
 
 
 # ============================================================================
@@ -879,3 +763,36 @@ class TestFAProviderConfigBase:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
+
+
+# ============================================================================
+# TESTS: the old container is gone (plan 68, D7a)
+# ============================================================================
+
+
+class TestClassificationParamsGone:
+    """Plan 68, D7a: the description, the countries and the sectors of an asset live in its profile. The old container
+    ``classification_params`` and the flag ``has_metadata`` leave every schema of the API: a client that still sends the
+    container is refused (422), never silently ignored."""
+
+    @pytest.mark.parametrize("model", ["FAAssetCreateItem", "FAAssetPatchItem"])
+    def test_create_and_patch_items_refuse_the_container(self, model):
+        fields = {"display_name": "VWCE", "currency": "EUR"} if model == "FAAssetCreateItem" else {"asset_id": 1}
+        with pytest.raises(ValidationError, match="extra_forbidden|Extra inputs"):
+            getattr(asset_schemas, model)(**fields, classification_params={"short_description": "A fund"})
+
+    @pytest.mark.parametrize(
+        ("module", "model", "field"),
+        [
+            ("backend.app.schemas.assets.assets", "FAAssetCreateItem", "classification_params"),
+            ("backend.app.schemas.assets.assets", "FAAssetPatchItem", "classification_params"),
+            ("backend.app.schemas.assets.assets", "FAinfoResponse", "has_metadata"),
+            ("backend.app.schemas.assets.metadata", "FAAssetMetadataResponse", "classification_params"),
+        ],
+    )
+    def test_no_schema_declares_the_old_fields(self, module, model, field):
+        assert field not in getattr(importlib.import_module(module), model).model_fields
+
+    def test_the_container_model_is_gone(self):
+        assert not hasattr(metadata, "FAClassificationParams")
+        assert "FAClassificationParams" not in schemas.__all__
