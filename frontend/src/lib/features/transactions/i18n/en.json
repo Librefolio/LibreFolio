@@ -191,7 +191,8 @@
         "confirmMessage": "{n} rows are dated before 1 January 1900. Save them as they are?",
         "confirmProceed": "Yes, the dates are right"
       },
-      "chargesReadFailed": "Could not read the linked charges of {ids}. «Reset row» on the row reads them again."
+      "chargesReadFailed": "Could not read the linked charges of {ids}. «Reset row» on the row reads them again.",
+      "deleteSkippedUnread": "{n, plural, one {# transaction was not deleted: its linked charges could not be read. «Reset row» reads them again.} other {# transactions were not deleted: their linked charges could not be read. «Reset row» reads them again.}}"
     },
     "commit": {
       "serverError": "Save failed — server error"

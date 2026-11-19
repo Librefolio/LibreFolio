@@ -191,7 +191,8 @@
         "confirmMessage": "{n} lignes ont une date antérieure au 1er janvier 1900. Les enregistrer telles quelles ?",
         "confirmProceed": "Oui, les dates sont correctes"
       },
-      "chargesReadFailed": "Impossible de lire les frais liés de {ids}. «Réinitialiser la ligne» les relit."
+      "chargesReadFailed": "Impossible de lire les frais liés de {ids}. «Réinitialiser la ligne» les relit.",
+      "deleteSkippedUnread": "{n, plural, one {# transaction n’a pas été supprimée : ses frais liés n’ont pas pu être lus. «Réinitialiser la ligne» les relit.} other {# transactions n’ont pas été supprimées : leurs frais liés n’ont pas pu être lus. «Réinitialiser la ligne» les relit.}}"
     },
     "commit": {
       "serverError": "Sauvegarde impossible — erreur serveur"
