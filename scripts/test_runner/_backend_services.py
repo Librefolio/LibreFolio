@@ -77,6 +77,7 @@ PROVIDER_ERROR_TEST_PATHS = (
     "backend/test_scripts/test_services/test_fx_bdi.py",
     "backend/test_scripts/test_services/test_fx_boc.py",
     "backend/test_scripts/test_services/test_fx_boe_quotes.py",
+    "backend/test_scripts/test_services/test_fx_bog.py",
     "backend/test_scripts/test_services/test_fx_cnb.py",
     "backend/test_scripts/test_services/test_fx_fed_quotes.py",
     "backend/test_scripts/test_services/test_fx_nbu.py",
