@@ -396,8 +396,6 @@
       "linkSelected": "Collega i selezionati",
       "createSelected": "Crea gli eventi",
       "createOne": "Crea evento",
-      "nothingToLink": "Seleziona righe con un evento quel giorno per collegarle.",
-      "nothingToCreate": "Seleziona righe senza evento quel giorno per crearne gli eventi.",
       "createTitle": "Crea gli eventi mancanti",
       "createIntro": "Controlla il tipo e inserisci il valore di ogni evento, nella valuta dell’asset. Gli eventi sono creati nel giorno della transazione; poi collegali.",
       "createValue": "Valore",

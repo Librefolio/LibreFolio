@@ -66,8 +66,6 @@
     let selectedRows = $derived(rows.filter((row) => selectedIds.includes(String(row.transactionId))));
     /** The rows the creation dialog is open for (none: closed). */
     let creating = $state<ReconciliationRow[] | null>(null);
-    /** What a bulk action found nothing to act on, said once. */
-    let notice = $state<'nothingToLink' | 'nothingToCreate' | null>(null);
 
     async function load() {
         const mine = ++generation;
@@ -105,7 +103,6 @@
             displayedIds = null;
             selectedIds = [];
             creating = null;
-            notice = null;
         }
     });
 
@@ -114,7 +111,6 @@
         if (busy || toLink.length === 0) return;
         linking = new Set([key]);
         linkFailed = false;
-        notice = null;
         try {
             const outcome = await linkReconciliation(toLink);
             if (!outcome.linked) {
@@ -230,15 +226,10 @@
         },
     ]);
 
-    /** Open the creation dialog for the rows that miss their event (the `none` ones). */
+    /** Open the creation dialog for the rows that miss their event (the `none` ones): the action is offered only when there is one. */
     function openCreate(candidates: ReconciliationRow[]) {
         const missing = candidates.filter((row) => row.status === 'none');
-        if (missing.length === 0) {
-            notice = 'nothingToCreate';
-            return;
-        }
-        notice = null;
-        creating = missing;
+        if (missing.length > 0) creating = missing;
     }
 
     /** The events were created: read the list again, where those rows now have an event. */
@@ -248,19 +239,24 @@
         await load();
     }
 
-    /** The selection's actions, on the rows selected now. */
+    /**
+     * The selection's actions, on the rows selected now. An action no selected row can take is not offered (SEL-0, the
+     * developer, 19/11/2026; lane 66's rule for «Link»: hidden / disabled with its reason / on): «Link selected» needs a
+     * row with its one event, «Create events» a row that misses it. Each acts on the rows that can take it, so neither is
+     * ever disabled; rows with several events offer neither.
+     */
     let selectionActions = $derived([
-        {
-            id: 'link',
-            icon: Link2,
-            label: () => $t('transactions.reconcile.linkSelected'),
-            onClick: () => {
-                const ready = uniqueRows(selectedRows);
-                if (ready.length === 0) notice = 'nothingToLink';
-                else void link(ready, 'all');
-            },
-        },
-        {id: 'create', icon: Plus, label: () => $t('transactions.reconcile.createSelected'), onClick: () => openCreate(selectedRows)},
+        ...(uniqueRows(selectedRows).length > 0
+            ? [
+                  {
+                      id: 'link',
+                      icon: Link2,
+                      label: () => $t('transactions.reconcile.linkSelected'),
+                      onClick: () => void link(uniqueRows(selectedRows), 'all'),
+                  },
+              ]
+            : []),
+        ...(selectedRows.some((row) => row.status === 'none') ? [{id: 'create', icon: Plus, label: () => $t('transactions.reconcile.createSelected'), onClick: () => openCreate(selectedRows)}] : []),
     ]);
 </script>
 
@@ -286,9 +282,6 @@
             {:else}
                 {#if linkFailed}
                     <p class="text-lf-danger" data-testid="event-reconciliation-error">{$t('transactions.reconcile.linkError')}</p>
-                {/if}
-                {#if notice}
-                    <p class="text-lf-warning" data-testid="event-reconciliation-notice">{notice === 'nothingToLink' ? $t('transactions.reconcile.nothingToLink') : $t('transactions.reconcile.nothingToCreate')}</p>
                 {/if}
                 <div class="flex items-center gap-2 min-h-8">
                     <SelectionBar actions={selectionActions} selectedCount={selectedIds.length} onClearSelection={() => tableRef?.clearSelection()} />

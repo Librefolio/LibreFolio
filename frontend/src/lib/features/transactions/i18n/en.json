@@ -396,8 +396,6 @@
       "linkSelected": "Link selected",
       "createSelected": "Create events",
       "createOne": "Create event",
-      "nothingToLink": "Select rows with one event that day to link them.",
-      "nothingToCreate": "Select rows with no event that day to create their events.",
       "createTitle": "Create the missing events",
       "createIntro": "Check the type and enter the value of each event, in the asset’s currency. The events are created on the day of the transaction; then link them.",
       "createValue": "Value",
