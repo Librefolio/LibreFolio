@@ -85,6 +85,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixed
 
+- FX page: after one comparison load failed, the comparison no longer stops updating; the next loads still run.
 - The Banca d'Italia icon now shows in the route window, in the plugin settings and in the user guide: the bank's site does not let other sites show its icon, so LibreFolio serves a copy.
 - «Relink events» (Transactions) shows «Link selected» only when a selected row has one event that day, and «Create events» only when one has none; each acts on its own rows.
 - FX page, period «All»: a pair added meanwhile no longer sends every pair back to download its whole history; the pairs already known start from their first day.

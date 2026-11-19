@@ -85,6 +85,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 ### 🐛 Corregido
 
+- Página FX: tras un fallo en una carga de la comparación, la comparación ya no deja de actualizarse; las cargas siguientes se ejecutan igualmente.
 - El icono de la Banca d'Italia ahora se ve en la ventana de rutas, en la configuración de los plugins y en la guía de usuario: el sitio del banco no deja que otros sitios muestren su icono, así que LibreFolio sirve una copia.
 - «Reenlazar eventos» (Transacciones) muestra «Vincular los seleccionados» solo si una fila seleccionada tiene un evento ese día, y «Crear los eventos» solo si una no lo tiene; cada uno actúa sobre sus filas.
 - Página FX, periodo «Todo»: un par añadido entretanto ya no hace volver a descargar todo el historial de todos los pares; los pares ya conocidos empiezan desde su primer día.

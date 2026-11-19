@@ -85,6 +85,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 ### 🐛 Corrections
 
+- Page FX : après l'échec d'un chargement de la comparaison, la comparaison ne cesse plus de se mettre à jour ; les chargements suivants partent quand même.
 - L'icône de la Banca d'Italia s'affiche désormais dans la fenêtre des routes, dans les paramètres des plugins et dans le guide utilisateur : le site de la banque ne laisse pas d'autres sites afficher son icône, LibreFolio en sert donc une copie.
 - « Relier les événements » (Transactions) n'affiche « Lier la sélection » que si une ligne sélectionnée a un événement ce jour-là, et « Créer les événements » que si l'une n'en a pas ; chacun agit sur ses propres lignes.
 - Page FX, période « Tout » : une paire ajoutée entre-temps ne fait plus retélécharger tout l'historique de toutes les paires ; les paires déjà connues partent de leur premier jour.
