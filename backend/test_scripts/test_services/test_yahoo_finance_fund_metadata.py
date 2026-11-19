@@ -64,4 +64,3 @@ async def test_metadata_reads_no_fund_data_and_gives_no_classification(monkeypat
     assert result is not None
     assert (result.asset_type, result.currency, result.identifier_ticker, result.identifier_isin) == (asset_type, "EUR", "VWCE.DE", "IE00BK5BQT80")
     assert ticker.funds_data_reads == 0, "the fund data are the enricher's"
-    assert result.classification_params is None

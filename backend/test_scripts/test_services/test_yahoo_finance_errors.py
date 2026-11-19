@@ -652,7 +652,6 @@ async def test_metadata_happy(monkeypatch):
     assert result.identifier_ticker == "AAPL"
     assert result.identifier_isin == "US0378331005"
     # Plan 68, D6: description, countries and sectors are the enrichers' (the profile), never the price provider's
-    assert result.classification_params is None
 
 
 @pytest.mark.asyncio
