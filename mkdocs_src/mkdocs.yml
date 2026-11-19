@@ -146,6 +146,7 @@ plugins:
             National Bank of Romania (BNR): National Bank of Romania (BNR)
             Bank of Israel (BOI): Bank of Israel (BOI)
             Narodowy Bank Polski (NBP): Narodowy Bank Polski (NBP)
+            Bank of Korea (BOK): Bank of Korea (BOK)
             Banca d'Italia (BDI): Banca d'Italia (BDI)
             Banco Central do Brasil (BCB): Banco Central do Brasil (BCB)
             # Developer provider entries — kept in English per dev-manual policy
@@ -176,6 +177,7 @@ plugins:
             BNR Tech: BNR Tech
             BOI Tech: BOI Tech
             NBP Tech: NBP Tech
+            BOK Tech: BOK Tech
             BDI Tech: BDI Tech
             BCB Tech: BCB Tech
             # Developer transaction section — kept in English per dev-manual policy
@@ -451,6 +453,7 @@ plugins:
             National Bank of Romania (BNR): National Bank of Romania (BNR)
             Bank of Israel (BOI): Bank of Israel (BOI)
             Narodowy Bank Polski (NBP): Narodowy Bank Polski (NBP)
+            Bank of Korea (BOK): Bank of Korea (BOK)
             Banca d'Italia (BDI): Banca d'Italia (BDI)
             Banco Central do Brasil (BCB): Banco Central do Brasil (BCB)
             # Developer provider entries — kept in English per dev-manual policy
@@ -481,6 +484,7 @@ plugins:
             BNR Tech: BNR Tech
             BOI Tech: BOI Tech
             NBP Tech: NBP Tech
+            BOK Tech: BOK Tech
             BDI Tech: BDI Tech
             BCB Tech: BCB Tech
             # Developer transaction section — kept in English per dev-manual policy
@@ -757,6 +761,7 @@ plugins:
             National Bank of Romania (BNR): National Bank of Romania (BNR)
             Bank of Israel (BOI): Bank of Israel (BOI)
             Narodowy Bank Polski (NBP): Narodowy Bank Polski (NBP)
+            Bank of Korea (BOK): Bank of Korea (BOK)
             Banca d'Italia (BDI): Banca d'Italia (BDI)
             Banco Central do Brasil (BCB): Banco Central do Brasil (BCB)
             # Developer provider entries — kept in English per dev-manual policy
@@ -787,6 +792,7 @@ plugins:
             BNR Tech: BNR Tech
             BOI Tech: BOI Tech
             NBP Tech: NBP Tech
+            BOK Tech: BOK Tech
             BDI Tech: BDI Tech
             BCB Tech: BCB Tech
             # Developer transaction section — kept in English per dev-manual policy
@@ -1136,6 +1142,7 @@ nav:
               - National Bank of Romania (BNR): user/fx/providers/bnr.md
               - Bank of Israel (BOI): user/fx/providers/boi.md
               - Narodowy Bank Polski (NBP): user/fx/providers/nbp.md
+              - Bank of Korea (BOK): user/fx/providers/bok.md
               - Banca d'Italia (BDI): user/fx/providers/bdi.md
               - Banco Central do Brasil (BCB): user/fx/providers/bcb.md
           - 🔎 Pair Detail:
@@ -1415,6 +1422,7 @@ nav:
                   - BNR Tech: developer/backend/fx/providers/bnr.md
                   - BOI Tech: developer/backend/fx/providers/boi.md
                   - NBP Tech: developer/backend/fx/providers/nbp.md
+                  - BOK Tech: developer/backend/fx/providers/bok.md
                   - BDI Tech: developer/backend/fx/providers/bdi.md
                   - BCB Tech: developer/backend/fx/providers/bcb.md
           - "🕐 Scheduler (Daemon)": developer/backend/scheduler.md
