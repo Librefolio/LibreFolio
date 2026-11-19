@@ -139,6 +139,14 @@ plugins:
             TRM Colombia (TRM): TRM Colombia (TRM)
             Central Bank of the Republic of China (Taiwan) (CBC): Central Bank of the Republic of China (Taiwan) (CBC)
             Central Bank of Nigeria (CBN): Central Bank of Nigeria (CBN)
+            Central Bank of Kenya (CBK): Central Bank of Kenya (CBK)
+            Reserve Bank of India (RBI): Reserve Bank of India (RBI)
+            Bank of Ghana (BOG): Bank of Ghana (BOG)
+            Banco Central de la República Argentina (BCRA): Banco Central de la República Argentina (BCRA)
+            National Bank of Romania (BNR): National Bank of Romania (BNR)
+            Bank of Israel (BOI): Bank of Israel (BOI)
+            Narodowy Bank Polski (NBP): Narodowy Bank Polski (NBP)
+            Bank of Korea (BOK): Bank of Korea (BOK)
             Banca d'Italia (BDI): Banca d'Italia (BDI)
             Banco Central do Brasil (BCB): Banco Central do Brasil (BCB)
             # Developer provider entries — kept in English per dev-manual policy
@@ -162,6 +170,14 @@ plugins:
             TRM Tech: TRM Tech
             CBC Tech: CBC Tech
             CBN Tech: CBN Tech
+            CBK Tech: CBK Tech
+            RBI Tech: RBI Tech
+            BOG Tech: BOG Tech
+            BCRA Tech: BCRA Tech
+            BNR Tech: BNR Tech
+            BOI Tech: BOI Tech
+            NBP Tech: NBP Tech
+            BOK Tech: BOK Tech
             BDI Tech: BDI Tech
             BCB Tech: BCB Tech
             # Developer transaction section — kept in English per dev-manual policy
@@ -430,6 +446,14 @@ plugins:
             TRM Colombia (TRM): TRM Colombia (TRM)
             Central Bank of the Republic of China (Taiwan) (CBC): Central Bank of the Republic of China (Taiwan) (CBC)
             Central Bank of Nigeria (CBN): Central Bank of Nigeria (CBN)
+            Central Bank of Kenya (CBK): Central Bank of Kenya (CBK)
+            Reserve Bank of India (RBI): Reserve Bank of India (RBI)
+            Bank of Ghana (BOG): Bank of Ghana (BOG)
+            Banco Central de la República Argentina (BCRA): Banco Central de la República Argentina (BCRA)
+            National Bank of Romania (BNR): National Bank of Romania (BNR)
+            Bank of Israel (BOI): Bank of Israel (BOI)
+            Narodowy Bank Polski (NBP): Narodowy Bank Polski (NBP)
+            Bank of Korea (BOK): Bank of Korea (BOK)
             Banca d'Italia (BDI): Banca d'Italia (BDI)
             Banco Central do Brasil (BCB): Banco Central do Brasil (BCB)
             # Developer provider entries — kept in English per dev-manual policy
@@ -453,6 +477,14 @@ plugins:
             TRM Tech: TRM Tech
             CBC Tech: CBC Tech
             CBN Tech: CBN Tech
+            CBK Tech: CBK Tech
+            RBI Tech: RBI Tech
+            BOG Tech: BOG Tech
+            BCRA Tech: BCRA Tech
+            BNR Tech: BNR Tech
+            BOI Tech: BOI Tech
+            NBP Tech: NBP Tech
+            BOK Tech: BOK Tech
             BDI Tech: BDI Tech
             BCB Tech: BCB Tech
             # Developer transaction section — kept in English per dev-manual policy
@@ -722,6 +754,14 @@ plugins:
             TRM Colombia (TRM): TRM Colombia (TRM)
             Central Bank of the Republic of China (Taiwan) (CBC): Central Bank of the Republic of China (Taiwan) (CBC)
             Central Bank of Nigeria (CBN): Central Bank of Nigeria (CBN)
+            Central Bank of Kenya (CBK): Central Bank of Kenya (CBK)
+            Reserve Bank of India (RBI): Reserve Bank of India (RBI)
+            Bank of Ghana (BOG): Bank of Ghana (BOG)
+            Banco Central de la República Argentina (BCRA): Banco Central de la República Argentina (BCRA)
+            National Bank of Romania (BNR): National Bank of Romania (BNR)
+            Bank of Israel (BOI): Bank of Israel (BOI)
+            Narodowy Bank Polski (NBP): Narodowy Bank Polski (NBP)
+            Bank of Korea (BOK): Bank of Korea (BOK)
             Banca d'Italia (BDI): Banca d'Italia (BDI)
             Banco Central do Brasil (BCB): Banco Central do Brasil (BCB)
             # Developer provider entries — kept in English per dev-manual policy
@@ -745,6 +785,14 @@ plugins:
             TRM Tech: TRM Tech
             CBC Tech: CBC Tech
             CBN Tech: CBN Tech
+            CBK Tech: CBK Tech
+            RBI Tech: RBI Tech
+            BOG Tech: BOG Tech
+            BCRA Tech: BCRA Tech
+            BNR Tech: BNR Tech
+            BOI Tech: BOI Tech
+            NBP Tech: NBP Tech
+            BOK Tech: BOK Tech
             BDI Tech: BDI Tech
             BCB Tech: BCB Tech
             # Developer transaction section — kept in English per dev-manual policy
@@ -1087,6 +1135,14 @@ nav:
               - TRM Colombia (TRM): user/fx/providers/trm.md
               - Central Bank of the Republic of China (Taiwan) (CBC): user/fx/providers/cbc.md
               - Central Bank of Nigeria (CBN): user/fx/providers/cbn.md
+              - Central Bank of Kenya (CBK): user/fx/providers/cbk.md
+              - Reserve Bank of India (RBI): user/fx/providers/rbi.md
+              - Bank of Ghana (BOG): user/fx/providers/bog.md
+              - Banco Central de la República Argentina (BCRA): user/fx/providers/bcra.md
+              - National Bank of Romania (BNR): user/fx/providers/bnr.md
+              - Bank of Israel (BOI): user/fx/providers/boi.md
+              - Narodowy Bank Polski (NBP): user/fx/providers/nbp.md
+              - Bank of Korea (BOK): user/fx/providers/bok.md
               - Banca d'Italia (BDI): user/fx/providers/bdi.md
               - Banco Central do Brasil (BCB): user/fx/providers/bcb.md
           - 🔎 Pair Detail:
@@ -1359,6 +1415,14 @@ nav:
                   - TRM Tech: developer/backend/fx/providers/trm.md
                   - CBC Tech: developer/backend/fx/providers/cbc.md
                   - CBN Tech: developer/backend/fx/providers/cbn.md
+                  - CBK Tech: developer/backend/fx/providers/cbk.md
+                  - RBI Tech: developer/backend/fx/providers/rbi.md
+                  - BOG Tech: developer/backend/fx/providers/bog.md
+                  - BCRA Tech: developer/backend/fx/providers/bcra.md
+                  - BNR Tech: developer/backend/fx/providers/bnr.md
+                  - BOI Tech: developer/backend/fx/providers/boi.md
+                  - NBP Tech: developer/backend/fx/providers/nbp.md
+                  - BOK Tech: developer/backend/fx/providers/bok.md
                   - BDI Tech: developer/backend/fx/providers/bdi.md
                   - BCB Tech: developer/backend/fx/providers/bcb.md
           - "🕐 Scheduler (Daemon)": developer/backend/scheduler.md

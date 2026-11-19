@@ -16,12 +16,13 @@ The **South African Reserve Bank (SARB)** provider retrieves the daily exchange 
 
 ## 💰 Supported Currencies
 
-A fixed list of 24 currencies, all against ZAR:
+A fixed list of 25 currencies, all against ZAR:
 
 - **Major**: USD 🇺🇸, EUR 🇪🇺, GBP 🇬🇧, JPY 🇯🇵, CHF 🇨🇭, AUD 🇦🇺, CAD 🇨🇦, NZD 🇳🇿
 - **European**: DKK 🇩🇰, NOK 🇳🇴, SEK 🇸🇪
 - **Asia and Middle East**: CNY 🇨🇳, HKD 🇭🇰, INR 🇮🇳, ILS 🇮🇱, KRW 🇰🇷, TWD 🇹🇼, THB 🇹🇭
 - **Africa and Latin America**: BWP 🇧🇼, KES 🇰🇪, MWK 🇲🇼, MZN 🇲🇿, ZMW 🇿🇲, BRL 🇧🇷
+- **Other**: RUB 🇷🇺 (the rate the SARB publishes, roubles per rand)
 
 ## 📝 Important Notes
 
