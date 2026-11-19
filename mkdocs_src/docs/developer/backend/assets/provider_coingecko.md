@@ -30,8 +30,8 @@ The code lives in `backend/app/services/asset_source_providers/coingecko/`:
         long the core keeps a current price before asking again.
     - `preferred_currency`: the user's own, default EUR. It is the currency of the search's rows, and nothing else.
 - **The identifier** is CoinGecko's own id (`bitcoin`, `usd-coin`, `pepe`), not a ticker. Its input type is
-  `PROVIDER_ID`, which reaches the plugin as `IdentifierType.OTHER`.
-    - A search row is typed `OTHER`. Choosing it gives the assignment `PROVIDER_ID` and adds `coingecko:<id>` to the
+  `COINGECKO_ID`, which reaches the plugin as `IdentifierType.OTHER`.
+    - A search row is typed `OTHER`. Choosing it gives the assignment `COINGECKO_ID` and adds `coingecko:<id>` to the
         asset's other identifiers.
     - The asset's ticker is the coin's symbol (`BTC`), from the metadata.
     - An id that does not start with a letter or a digit, holds anything but letters, digits, dots, dashes and
@@ -155,7 +155,7 @@ the key in the environment.
 |---|---|
 | `services coingecko-provider` | The group, the settings, the currencies, the SDK's door and its errors |
 | `services coingecko-prices` | Current prices, in bulk, the history and its edges, the Demo year, freshness, the real path's count on the group |
-| `services coingecko-search` | `PROVIDER_ID`, search, metadata, page; an assignment saved and priced through the real path |
+| `services coingecko-search` | `COINGECKO_ID`, search, metadata, page; an assignment saved and priced through the real path |
 | `services refresh-history-starts` | The first day in the refresh's outcome |
 | `services provider-attribution` | The attribution model and CoinGecko's |
 | `external asset-providers --providers coingecko` | The generic external tests. They skip without a key, and reach the real CoinGecko only with the key in the environment |
