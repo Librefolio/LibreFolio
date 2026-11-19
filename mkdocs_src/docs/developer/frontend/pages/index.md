@@ -187,7 +187,10 @@ frontend/src/routes/
   Transactions and Info
 - Transactions tab: the broker's transactions, its report files (*Uploaded Reports* →
   **BrokerImportFilesModal**), a link to the Transactions page, and — for owners and editors —
-  import and new transaction through the bulk workspace, with this broker pre-selected
+  import and new transaction through the bulk workspace, with this broker pre-selected. «Delete» on a row or the
+  selection asks about a parent's linked charges first, through the same flow as the Transactions page
+  (`chargesDeleteFlow.svelte.ts`, see
+  [Deleting a parent and keeping its charges](../state/transaction-draft.md#workspace-intent))
 - Info tab: broker details and the embedded sharing panel
   ([BrokerSharingPanel](../components/features/brokers/modals.md#broker-sharing-panel))
 
@@ -205,6 +208,21 @@ frontend/src/routes/
 - **Relink events** (`tx-reconcile-events-button`) opens `EventReconciliationModal`: the dividends, interest and
   adjustments without an asset event, each with the event of the same day the server found; see
   [Event Reconciliation](../../backend/transactions/service.md#event-reconciliation)
+- **Linked charges** (`TransactionsTable`, rules in `lib/features/transactions/txTableRows.ts`): a FEE or TAX linked
+  to a parent folds under it. The parent shows the badge «N charges» and a 🔗, and both open or close the group.
+    - Each open charge shows `↳`, and its 🔗 leads to the parent: the page scrolls to it, or opens it read-only when
+      the filters hide it.
+    - The charges stay folded under any filter that is not on the type: the filters read the parent and the rows on
+      their own, and a charge follows its parent. The table then pages the rows itself, and a page never splits an open
+      group.
+    - A sort, or a filter on the type, makes the table flat. Every charge is then a row of its own with `↳`, and the
+      `DataTable` filters, sorts and pages.
+    - Pairs keep their own rules: legs side by side and ghost partners, with no filter and no sort.
+    - **Link** in the selection bar (one parent and its charges) follows `linkSelection` of
+      `lib/features/transactions/chargeLinkRules.ts`; it saves at once (`linkCommit`) after the `TxChargesActionModal`
+      confirmation. **Delete** goes through `createChargesDeleteFlow` (`chargesDeleteFlow.svelte.ts`): a parent whose
+      charges are not all selected opens the same panel («Keep the charges» / «Delete all») before the bulk workspace
+      ([Deleting a parent and keeping its charges](../state/transaction-draft.md#workspace-intent)).
 
 ### 💼 Assets (`/assets`)
 

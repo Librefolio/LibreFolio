@@ -23,7 +23,7 @@
     import ContextMenu from '$lib/components/ui/ContextMenu.svelte';
     import type {ContextMenuItem} from '$lib/components/ui/ContextMenu.svelte';
     import type {BulkAction, ColumnDef, ColumnWidthsState, FilterValue, FooterCellContent, FooterCells, PaginationState, RowAction, RowActions, SelectionState, SortState, VisibilityState} from './types';
-    import {compareRowsByColumn, matchesColumnFilter, reorderKeepingAbsent, withNewColumns} from './dataTableLogic';
+    import {compareRowsByColumn, matchesColumnFilter, paginateFlat, reorderKeepingAbsent, withNewColumns} from './dataTableLogic';
     import {clearTimer} from '$lib/utils/core/clearTimer';
 
     interface Props {
@@ -117,6 +117,13 @@
         alwaysShowPagination?: boolean;
         /** Optional aggregate footer. Receives selected rows, or filtered rows when nothing is selected. */
         footerCells?: FooterCells<T>;
+        /**
+         * Optional (66 F7-c1): whether a row may start a page. With it the pages come from `paginateFlat` — fixed size,
+         * but a row for which it is false joins the page of the row before it, overflowing it (a parent's charges stay
+         * on its page) — and `navigateToRowId`, `getPageRowIds` and the pager follow those pages. Without it the pages
+         * are the fixed slices they always were.
+         */
+        opensPage?: (row: T) => boolean;
     }
 
     let {
@@ -166,6 +173,7 @@
         getRowHref,
         alwaysShowPagination = false,
         footerCells,
+        opensPage,
     }: Props = $props();
 
     /** Dataset used for computing filter boundaries (min/max, currency ranges). */
@@ -374,9 +382,13 @@
         return [...filteredData].sort((a, b) => compareRowsByColumn(column, a, b, sortState!.direction));
     });
 
+    // The pages cut by `opensPage` (66 F7-c1); null without it, when the pages are fixed slices.
+    let flatPages = $derived(enablePagination && opensPage ? paginateFlat(sortedData, pagination.pageSize, opensPage) : null);
+
     // Paginated data
     let paginatedData = $derived.by(() => {
         if (!enablePagination) return sortedData;
+        if (flatPages) return flatPages[Math.min(pagination.pageIndex, flatPages.length - 1)];
         const start = pagination.pageIndex * pagination.pageSize;
         return sortedData.slice(start, start + pagination.pageSize);
     });
@@ -874,6 +886,10 @@
     export function navigateToRowId(rowId: string, {scroll = true, highlight = true}: {scroll?: boolean; highlight?: boolean} = {}) {
         const index = sortedData.findIndex((row) => getRowId(row) === rowId);
         if (index < 0) return;
+        if (flatPages) {
+            navigateToFlatPage(flatPages, rowId, {scroll, highlight});
+            return;
+        }
         if (enablePagination) {
             const targetPage = Math.floor(index / pagination.pageSize);
             if (pagination.pageIndex !== targetPage) {
@@ -894,6 +910,21 @@
                 const rows = root.querySelectorAll('.datatable tbody tr');
                 const positionInPage = enablePagination ? index % pagination.pageSize : index;
                 const targetRow = rows[positionInPage];
+                targetRow?.scrollIntoView({behavior: 'smooth', block: 'center'});
+            });
+    }
+
+    /** `navigateToRowId` over the pages cut by `opensPage`: the page that holds the row, and that row scrolled. */
+    function navigateToFlatPage(pages: T[][], rowId: string, {scroll, highlight}: {scroll: boolean; highlight: boolean}) {
+        const targetPage = pages.findIndex((page) => page.some((row) => getRowId(row) === rowId));
+        if (targetPage >= 0 && pagination.pageIndex !== targetPage) pagination = {...pagination, pageIndex: targetPage};
+        if (highlight) highlightedRowId = rowId;
+        if (!scroll) return;
+        import('svelte')
+            .then(({tick}) => tick())
+            .then(() => {
+                const root = containerEl ?? document;
+                const targetRow = [...root.querySelectorAll('.datatable tbody tr[data-row-id]')].find((tr) => tr.getAttribute('data-row-id') === rowId);
                 targetRow?.scrollIntoView({behavior: 'smooth', block: 'center'});
             });
     }
@@ -1217,7 +1248,15 @@
 
     <!-- Pagination - show only when enabled and items exceed smallest page size (or alwaysShowPagination) -->
     {#if enablePagination && filteredData.length > 0 && (alwaysShowPagination || filteredData.length > Math.min(...pageSizeOptions.filter((x) => x > 0)))}
-        <DataTablePagination pageIndex={pagination.pageIndex} pageSize={pagination.pageSize} totalItems={filteredData.length} {pageSizeOptions} onPageChange={handlePageChange} onPageSizeChange={handlePageSizeChange} />
+        <DataTablePagination
+            pageIndex={flatPages ? Math.min(pagination.pageIndex, flatPages.length - 1) : pagination.pageIndex}
+            pageSize={pagination.pageSize}
+            totalItems={filteredData.length}
+            pageCount={flatPages?.length}
+            {pageSizeOptions}
+            onPageChange={handlePageChange}
+            onPageSizeChange={handlePageSizeChange}
+        />
     {/if}
 </div>
 

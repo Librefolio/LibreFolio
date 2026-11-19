@@ -4,6 +4,7 @@
     import {goto, replaceState} from '$app/navigation';
     import {page} from '$app/stores';
     import {_} from '$lib/i18n';
+    import {notify} from '$lib/stores/app/notify.svelte';
     import {Plus, Upload, Pencil, Copy, Trash2, RefreshCw, Link2, Unlink} from 'lucide-svelte';
     import PageBackButton from '$lib/components/layout/PageBackButton.svelte';
 
@@ -18,11 +19,14 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
-    import {findPromoteMatch, ensureTypesLoaded, typesVersion} from '$lib/features/transactions/transactionTypeStore';
+    import {findPromoteMatch, ensureTypesLoaded, typesVersion, getTypeRule} from '$lib/features/transactions/transactionTypeStore';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import type {FilterValue} from '$lib/components/table/types';
     import PromoteMergeModal from '$lib/features/transactions/bulk/PromoteMergeModal.svelte';
     import TransactionActionModal from '$lib/features/transactions/TransactionActionModal.svelte';
+    import TxChargesActionModal from '$lib/features/transactions/TxChargesActionModal.svelte';
+    import {linkSelection, linkCommit, txRowRef} from '$lib/features/transactions/chargeLinkRules';
+    import {createChargesDeleteFlow} from '$lib/features/transactions/chargesDeleteFlow.svelte';
     import EventReconciliationModal from '$lib/features/transactions/EventReconciliationModal.svelte';
     import TransactionBulkModal from '$lib/features/transactions/bulk/TransactionBulkModal.svelte';
     import TransactionFormModal from '$lib/features/transactions/form/TransactionFormModal.svelte';
@@ -241,6 +245,8 @@
     let formOpen = $state(false);
     let formMode = $state<'create' | 'edit' | 'view'>('create');
     let formItems = $state<FormModalItems | null>(null);
+    /** Project 66 (F3): the transaction the user came from with «Open», highlighted in the form. */
+    let formHighlightId = $state<number | null>(null);
     let highlightDrivenViewTxId = $state<number | null>(null);
     let lastHighlightParam = $state<string | null>(null);
     let highlightConsumeSeq = 0;
@@ -333,7 +339,24 @@
         if (selectedRows.length === 0) return;
         const editableRows = guardViewerOnly(selectedRows);
         if (!editableRows) return;
-        openBulk({action: 'delete', txIds: editableRows.map((r) => r.id)});
+        await startDelete(editableRows);
+    }
+
+    // =========================================================================
+    // 66 F6 — a parent with charges: the V1 panel («Keep the charges» / «Delete all») before the Bulk
+    // =========================================================================
+
+    /**
+     * Delete `rows` through the Bulk, as today; when a parent among them has charges left out of the selection, the V1
+     * panel asks first (`chargesDeleteFlow.svelte.ts`, shared with the broker's Transactions tab).
+     */
+    const chargesDelete = createChargesDeleteFlow({
+        openBulk: (intent) => openBulk(intent),
+        onReadFailed: () => toasts.error($_('transactions.chargesDelete.loadFailed') || 'Could not read the charges of this transaction'),
+    });
+
+    function startDelete(rows: TXReadItem[]): Promise<void> {
+        return chargesDelete.start(rows);
     }
 
     // =========================================================================
@@ -413,6 +436,38 @@
                     style: 'display:inline-block;vertical-align:middle;margin-right:2px;border-radius:2px',
                 }),
         };
+    }
+
+    // =========================================================================
+    // 66 F6 — «Link the charges» from the selection bar (Z): one parent + N charges, saved after the confirmation
+    // =========================================================================
+
+    let linkState = $derived.by(() => {
+        void $typesVersion;
+        return linkSelection(selectedRows, {roleOf: (type) => getTypeRule(type).chargeRole, canEdit: (brokerId) => canEditBroker(brokerId)});
+    });
+    let linkHint = $derived(linkState.kind === 'disabled' ? $_(`transactions.chargesLink.reason.${linkState.reason}`, {values: {type: $_(`transactions.types.${linkState.params.type}`) || linkState.params.type, ref: txRowRef(linkState.params.id, null, $_)}}) : '');
+    let chargesLinkOpen = $state(false);
+    let linking = $state(false);
+
+    async function confirmLink() {
+        if (linkState.kind !== 'ok') return;
+        const {parent, charges} = linkState;
+        linking = true;
+        try {
+            const result = await commitTransactions(linkCommit(parent, charges), {fallback: $_('transactions.chargesLink.failed') || 'Linking the charges failed'});
+            if (result.committed) {
+                chargesLinkOpen = false;
+                // The parent's badge shows the outcome: an event, no toast.
+                notify({name: 'tx.charges.linked', detail: {parent: parent.id, charges: charges.map((c) => c.id)}});
+                clearSelection();
+                await pageBusy.track('tx-reload', () => reload({soft: true}));
+            } else {
+                toasts.error(commitRefusalMessage(result, $_('transactions.chargesLink.failed') || 'Linking the charges failed', $_, issueContext()));
+            }
+        } finally {
+            linking = false;
+        }
     }
 
     async function confirmPromote() {
@@ -647,8 +702,10 @@
     }
 
     async function handleLinkedPairClick(row: TXReadItem) {
-        if (row.related_transaction_id == null) return;
-        const partnerId = row.related_transaction_id;
+        // A pair's partner, or (F5) the parent of a linked charge.
+        const parentId = (row.parent_transaction_id ?? 0) > 0 ? row.parent_transaction_id! : null;
+        const partnerId = row.related_transaction_id ?? parentId;
+        if (partnerId == null) return;
 
         // Try current page first (fast path).
         let el = findPartnerElement(partnerId);
@@ -663,6 +720,12 @@
         el = findPartnerElement(partnerId);
         if (el) {
             pulseElement(el);
+            return;
+        }
+        // F5: a parent the filters hide (a filter on the type) opens in the view window instead.
+        if (parentId !== null) {
+            const parent = mainRows.find((r) => r.id === parentId);
+            if (parent) handleViewRow(parent);
         }
     }
 
@@ -675,9 +738,26 @@
     }
 
     function handleViewRow(row: TXReadItem) {
+        formHighlightId = null;
         formMode = 'view';
         formItems = resolveFormItemsForView(row, txStoreGet as (id: number) => TXReadItem | undefined, getBrokerRole);
         formOpen = true;
+    }
+
+    /** «Open» in the form (project 66, F3): the same modal shows that transaction, in the same mode, and highlights the
+     *  one the user came from. */
+    async function handleFormOpenTransaction(id: number) {
+        const from = formItems?.[0] && 'id' in formItems[0] ? (formItems[0] as TXReadItem).id : null;
+        const row = findLoadedTransaction(id) ?? (await fetchTransactionById(id));
+        // A late answer: the modal was closed, or it shows another transaction by now.
+        const shown = formItems?.[0] && 'id' in formItems[0] ? (formItems[0] as TXReadItem).id : null;
+        if (!formOpen || shown !== from) return;
+        if (!row) {
+            notify({name: 'tx.form.open.failed', detail: {id}, toast: {variant: 'error', message: $_('transactions.form.openFailed')}});
+            return;
+        }
+        formHighlightId = from;
+        formItems = resolveFormItemsForView(row, txStoreGet as (id: number) => TXReadItem | undefined, getBrokerRole);
     }
 
     function handleFormClose() {
@@ -711,7 +791,7 @@
      * the user cannot access — surfaced inline by the row validation.
      */
     function handleDeleteRow(row: TXReadItem) {
-        openBulk({action: 'delete', txIds: [row.id]});
+        void startDelete([row]);
     }
     function handlePageChange(page: number) {
         filters = {...filters, page};
@@ -760,6 +840,20 @@
                         {id: 'edit', icon: Pencil, label: () => $_('common.edit') || 'Edit', primary: true, onClick: () => onEditBulk()},
                         {id: 'clone', icon: Copy, label: () => $_('transactions.actions.clone') || 'Clone', onClick: () => onCloneBulk()},
                         ...(promoteMatch ? [{id: 'promote', icon: Link2, label: () => `🔗 ${$_('transactions.actions.promotePair') || 'Link as pair'}`, onClick: () => onPromotePair()}] : []),
+                        ...(linkState.kind !== 'hidden'
+                            ? [
+                                  {
+                                      id: 'link-charges',
+                                      icon: Link2,
+                                      label: () => $_('transactions.chargesLink.action') || 'Link the charges',
+                                      shortLabel: () => $_('transactions.chargesLink.actionShort') || 'Link',
+                                      onClick: () => (chargesLinkOpen = true),
+                                      disabled: linkState.kind === 'disabled',
+                                      hint: linkHint,
+                                      reason: linkState.kind === 'disabled' ? linkState.reason : undefined,
+                                  },
+                              ]
+                            : []),
                         {id: 'delete', icon: Trash2, label: () => $_('common.delete') || 'Delete', variant: 'danger', onClick: () => onBulkDelete()},
                     ]}
                     onClearSelection={clearSelection}
@@ -844,6 +938,8 @@
     canEdit={formCanEdit}
     onClose={handleFormClose}
     onCommitted={handleFormCommitted}
+    onOpenTransaction={handleFormOpenTransaction}
+    highlightTxId={formHighlightId}
     onSwitchToEdit={() => {
         highlightDrivenViewTxId = null;
         formOpen = false;
@@ -871,6 +967,16 @@
         promoteConfirmOpen = false;
         promoteTarget = null;
     }}
+/>
+<TxChargesActionModal open={chargesLinkOpen && linkState.kind === 'ok'} mode="link" parents={linkState.kind === 'ok' ? [linkState.parent] : []} charges={linkState.kind === 'ok' ? linkState.charges : []} loading={linking} onConfirm={confirmLink} onCancel={() => (chargesLinkOpen = false)} />
+<TxChargesActionModal
+    open={chargesDelete.panel != null}
+    mode="deleteParent"
+    parents={chargesDelete.panel?.plan.map((e) => e.parent) ?? []}
+    charges={chargesDelete.panel?.plan.flatMap((e) => e.charges) ?? []}
+    counts={chargesDelete.counts}
+    onChoose={chargesDelete.choose}
+    onCancel={chargesDelete.cancel}
 />
 <PromoteMergeModal
     open={promoteMergeOpen}

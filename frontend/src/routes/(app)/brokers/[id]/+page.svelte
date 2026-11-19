@@ -21,6 +21,8 @@
     import PortfolioView from '$lib/features/portfolio-view/PortfolioView.svelte';
     import TransactionsTable from '$lib/features/transactions/TransactionsTable.svelte';
     import TransactionBulkModal, {type WorkspaceIntent} from '$lib/features/transactions/bulk/TransactionBulkModal.svelte';
+    import TxChargesActionModal from '$lib/features/transactions/TxChargesActionModal.svelte';
+    import {createChargesDeleteFlow} from '$lib/features/transactions/chargesDeleteFlow.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import {txStoreSetAll, txStoreCanEdit} from '$lib/features/transactions/txStore.svelte';
@@ -156,10 +158,16 @@
         openBulkIntent({action: 'clone', txIds: txSelectedRows.map((r) => r.id)});
     }
 
+    /** «Delete» from the bar or a row's menu: a parent with charges asks first, as on the Transactions page (66 F7-d). */
+    const chargesDelete = createChargesDeleteFlow({
+        openBulk: (intent) => openBulkIntent(intent),
+        onReadFailed: () => toasts.error($_('transactions.chargesDelete.loadFailed') || 'Could not read the charges of this transaction'),
+    });
+
     function deleteSelectedTx() {
         if (txSelectedRows.length === 0) return;
         const rows = editableTxSelection();
-        if (rows) openBulkIntent({action: 'delete', txIds: rows.map((r) => r.id)});
+        if (rows) void chargesDelete.start(rows);
     }
 
     /** The workspace saved something: the rows the selection pointed at may have changed or gone, and the page asks again. */
@@ -180,7 +188,7 @@
         onSelectionChange: (rows: TXReadItem[]) => (txSelectedRows = rows),
         onEditRow: (row: TXReadItem) => openBulkIntent({action: 'edit', txIds: [row.id]}),
         onCloneRow: (row: TXReadItem) => openBulkIntent({action: 'clone', txIds: [row.id]}),
-        onDeleteRow: (row: TXReadItem) => openBulkIntent({action: 'delete', txIds: [row.id]}),
+        onDeleteRow: (row: TXReadItem) => void chargesDelete.start([row]),
         onFiltersChange: (filters: Record<string, FilterValue>) => (txColumnFilters = filters),
         // The bulk workspace reads the originals of a selected row from the store (FB-17), as the Transactions page fills it.
         onLoaded: (mainRows: TXReadItem[], partnerRows: TXReadItem[]) => txStoreSetAll(mainRows, partnerRows),
@@ -409,6 +417,15 @@
             bulkIntent = undefined;
         }}
         onCommitted={handleBulkCommitted}
+    />
+    <TxChargesActionModal
+        open={chargesDelete.panel != null}
+        mode="deleteParent"
+        parents={chargesDelete.panel?.plan.map((e) => e.parent) ?? []}
+        charges={chargesDelete.panel?.plan.flatMap((e) => e.charges) ?? []}
+        counts={chargesDelete.counts}
+        onChoose={chargesDelete.choose}
+        onCancel={chargesDelete.cancel}
     />
 
     <BrokerImportFilesModal open={importFilesModalOpen} brokerId={broker.id} brokerName={broker.name} onClose={() => (importFilesModalOpen = false)} />

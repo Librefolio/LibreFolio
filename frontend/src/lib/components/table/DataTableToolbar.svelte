@@ -12,7 +12,8 @@
     `role="toolbar"`; `Esc` deselects only while the focus is inside it. It sits over the content and under the dialogs and the mobile sidebar.
 
   In both: `data-testid="selection-toolbar"` with `data-selected-count`, the count button `selection-toolbar-clear`,
-  one `toolbar-action-<id>` per action.
+  one `toolbar-action-<id>` per action. A disabled action with a `hint` shows the hint as its tooltip (the label stays its
+  name) and publishes its `reason` code as `data-disabled-reason`.
 -->
 <script lang="ts">
     import {onDestroy} from 'svelte';
@@ -34,6 +35,10 @@
         iconClass?: string;
         /** Disable the button */
         disabled?: boolean;
+        /** Why a disabled action is off: its tooltip while disabled (the label stays its name). Ignored when enabled. */
+        hint?: string | (() => string);
+        /** A code for why a disabled action is off, published as `data-disabled-reason` (tests read it, not the text). */
+        reason?: string;
     }
 
     interface Props {
@@ -54,6 +59,25 @@
 
     function getActionLabel(action: BulkActionInfo): string {
         return resolve(action.label);
+    }
+
+    /** The tooltip: the hint of a disabled action that has one, the label otherwise. */
+    function getTooltip(action: BulkActionInfo): string {
+        return (action.disabled && resolve(action.hint)) || getActionLabel(action);
+    }
+
+    /**
+     * A disabled action that says why (66 F7): `aria-disabled`, not the native `disabled`, so it keeps the focus, the
+     * tap and the click that open its reason in the shared Tooltip (a natively disabled button gets none of them, and
+     * a phone shows no `title`). Its own click never runs the action. Without a hint the native `disabled` stays.
+     */
+    function offWithReason(action: BulkActionInfo): boolean {
+        return !!action.disabled && !!resolve(action.hint);
+    }
+
+    function runAction(action: BulkActionInfo) {
+        if (action.disabled) return;
+        action.onClick();
     }
 
     function getShownLabel(action: BulkActionInfo): string {
@@ -92,16 +116,29 @@
 {/snippet}
 
 {#snippet floatingAction(action: BulkActionInfo)}
+    {#if offWithReason(action)}
+        <Tooltip text={getTooltip(action)} interactiveChild>
+            {@render floatingButton(action)}
+        </Tooltip>
+    {:else}
+        {@render floatingButton(action)}
+    {/if}
+{/snippet}
+
+{#snippet floatingButton(action: BulkActionInfo)}
     {@const name = getActionLabel(action)}
+    {@const reachable = offWithReason(action)}
     <button
         type="button"
         class="act"
         class:primary={action.primary}
         class:danger={action.variant === 'danger'}
-        onclick={action.onClick}
-        disabled={action.disabled}
-        title={name}
+        onclick={() => runAction(action)}
+        disabled={action.disabled && !reachable}
+        aria-disabled={reachable ? 'true' : undefined}
+        title={reachable ? undefined : getTooltip(action)}
         aria-label={name}
+        data-disabled-reason={action.disabled && action.reason ? action.reason : undefined}
         data-primary={action.primary ? 'true' : 'false'}
         data-danger={action.variant === 'danger' ? 'true' : 'false'}
         data-testid="toolbar-action-{action.id}"
@@ -139,8 +176,18 @@
                 {@render countButton()}
                 <div class="bulk-actions">
                     {#each bulkActions as action}
-                        <Tooltip text={getActionLabel(action)}>
-                            <button type="button" class="bulk-btn" class:danger={action.variant === 'danger'} onclick={action.onClick} disabled={action.disabled} data-testid="toolbar-action-{action.id}">
+                        {@const reachable = offWithReason(action)}
+                        <Tooltip text={getTooltip(action)} interactiveChild={reachable}>
+                            <button
+                                type="button"
+                                class="bulk-btn"
+                                class:danger={action.variant === 'danger'}
+                                onclick={() => runAction(action)}
+                                disabled={action.disabled && !reachable}
+                                aria-disabled={reachable ? 'true' : undefined}
+                                data-disabled-reason={action.disabled && action.reason ? action.reason : undefined}
+                                data-testid="toolbar-action-{action.id}"
+                            >
                                 <action.icon size={16} class={action.iconClass || ''} />
                             </button>
                         </Tooltip>
@@ -217,7 +264,7 @@
         transition: all 0.15s;
     }
 
-    .bulk-btn:hover {
+    .bulk-btn:hover:not([aria-disabled='true']) {
         background: var(--lf-surface-neutral);
         color: var(--lf-text-primary);
     }
@@ -226,9 +273,14 @@
         color: var(--lf-danger);
     }
 
-    .bulk-btn.danger:hover {
+    .bulk-btn.danger:hover:not([aria-disabled='true']) {
         background: var(--lf-danger-soft);
         color: var(--lf-danger-on-soft);
+    }
+
+    .bulk-btn[aria-disabled='true'] {
+        opacity: 0.5;
+        cursor: not-allowed;
     }
 
     /* ===== floating variant ===== */
@@ -307,12 +359,13 @@
         transition: background-color 0.15s;
     }
 
-    .act:hover:not(:disabled) {
+    .act:hover:not(:disabled):not([aria-disabled='true']) {
         background: var(--lf-surface-hover);
         color: var(--lf-text-primary);
     }
 
-    .act:disabled {
+    .act:disabled,
+    .act[aria-disabled='true'] {
         opacity: 0.5;
         cursor: not-allowed;
     }
@@ -322,7 +375,7 @@
         color: var(--lf-on-action);
     }
 
-    .act.primary:hover:not(:disabled) {
+    .act.primary:hover:not(:disabled):not([aria-disabled='true']) {
         background: var(--lf-action-hover);
         color: var(--lf-on-action);
     }
@@ -331,7 +384,7 @@
         color: var(--lf-danger);
     }
 
-    .act.danger:hover:not(:disabled) {
+    .act.danger:hover:not(:disabled):not([aria-disabled='true']) {
         background: var(--lf-danger-soft);
         color: var(--lf-danger-on-soft);
     }

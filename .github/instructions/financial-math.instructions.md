@@ -51,7 +51,8 @@ lives where, inside and outside the layer, is in `backend.instructions.md`, sect
    your case differs. Never keep a local or partial copy elsewhere, and report any copy you find.
 6. **The frontend computes none of these quantities.** Interactive measures (the measuring tool, what-if, and the
    aggregates of the lots the user chooses, D-MF6(b), and the trade amount of the transaction form, `txTradeAmount.ts`:
-   one product or quotient on exact decimals) are the only exceptions, and each must be declared where it lives.
+   one product or quotient on exact decimals, and the total of a parent with its linked charges, one sum per currency)
+   are the only exceptions, and each must be declared where it lives.
 7. **Change Decimal precision or rounding only inside `decimal.localcontext()`**, never by mutating `getcontext()`.
    The portfolio replay runs in a worker thread under a copy of the request's context (J-45, `portfolio/engine.py`),
    and that copy shares the same `decimal.Context` object: a `getcontext().prec = …` in the replay would change the

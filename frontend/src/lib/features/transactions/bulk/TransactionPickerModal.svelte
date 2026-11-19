@@ -29,16 +29,28 @@
         includeIds?: Set<number>;
         onAdd: (rows: TXReadItem[]) => void;
         onClose: () => void;
+        /** Project 66 (F4): list these rows instead of the page's store; «Add» then never adds a pair partner. */
+        rows?: TXReadItem[];
+        /** Replaces the header text. */
+        title?: string;
+        /** Replaces the footer note: `short` on a phone, `long` from a tablet. */
+        filterLabel?: {short: string; long: string};
+        /** Replaces the Add button text. */
+        addLabel?: (n: number) => string;
+        /** With 1, «Add» needs exactly one selected row. */
+        maxSelect?: number;
+        /** Above the modal that hosts the picker. */
+        zIndex?: number;
     }
 
-    let {open = $bindable(false), excludeIds = new Set(), includeIds, onAdd, onClose}: Props = $props();
+    let {open = $bindable(false), excludeIds = new Set(), includeIds, onAdd, onClose, rows, title, filterLabel, addLabel, maxSelect, zIndex = 50}: Props = $props();
 
     let selectedRows = $state<TXReadItem[]>([]);
     let pickerPage = $state(1);
     let pickerPageSize = $state(20);
 
     /** Read all transactions from txStore — reactive via Svelte 5 fine-grained tracking. */
-    let allRows = $derived(txStoreGetAll());
+    let allRows = $derived(rows ?? txStoreGetAll());
 
     /** Brokers from store (for TransactionsTable compatibility). */
     let brokers = $derived(getAccessibleBrokers() as BrokerLike[]);
@@ -106,8 +118,17 @@
         selectedRows = rows;
     }
 
+    let canAdd = $derived(selectedRows.length > 0 && (maxSelect == null || selectedRows.length <= maxSelect));
+    let addText = $derived(addLabel ? addLabel(selectedRows.length) : $t('transactions.picker.addN', {values: {n: selectedRows.length}}) || `Add ${selectedRows.length} selected`);
+
     function handleAdd() {
-        if (selectedRows.length === 0) return;
+        if (!canAdd) return;
+        if (rows) {
+            // Rows handed in (F4): no pair partner to add.
+            onAdd([...selectedRows]);
+            selectedRows = [];
+            return;
+        }
 
         // Auto-include partners of selected paired transactions
         const toAdd: TXReadItem[] = [...selectedRows];
@@ -133,13 +154,13 @@
     }
 </script>
 
-<ModalBase {open} maxWidth="5xl" onRequestClose={handleClose} testId="tx-picker-modal">
+<ModalBase {open} maxWidth="5xl" onRequestClose={handleClose} testId="tx-picker-modal" {zIndex}>
     <div class="flex flex-col max-h-[80vh]" data-testid="tx-picker-content">
         <!-- Header -->
         <div class="flex items-center justify-between px-6 py-4 border-b border-lf-subtle">
             <h3 class="text-lg font-semibold text-lf-primary flex items-center gap-2">
                 <Search size={20} />
-                {$t('transactions.picker.title') || 'Select transactions to add'}
+                {title ?? ($t('transactions.picker.title') || 'Select transactions to add')}
             </h3>
             <button class="text-lf-muted hover:text-lf-secondary" onclick={handleClose} data-testid="tx-picker-close">
                 <X size={20} />
@@ -172,23 +193,23 @@
 
         <!-- Info + Footer -->
         <div class="px-6 py-4 border-t border-lf-subtle flex items-center justify-between gap-4">
-            <p class="text-xs text-lf-muted">
-                {$t('transactions.picker.pairedNote') || 'Selecting a paired transaction auto-adds its partner.'}
-            </p>
+            {#if filterLabel}
+                <p class="text-xs text-lf-muted min-w-0 truncate" data-testid="tx-picker-filter-label">
+                    <span class="sm:hidden">{filterLabel.short}</span><span class="hidden sm:inline">{filterLabel.long}</span>
+                </p>
+            {:else}
+                <p class="text-xs text-lf-muted">
+                    {$t('transactions.picker.pairedNote') || 'Selecting a paired transaction auto-adds its partner.'}
+                </p>
+            {/if}
             <div class="flex gap-3">
                 <button class="px-4 py-2 text-sm text-lf-secondary bg-lf-panel rounded-lg hover:bg-lf-neutral transition inline-flex items-center gap-1.5" onclick={handleClose} data-testid="tx-picker-cancel" title={$t('common.cancel') || 'Cancel'}>
                     <X size={15} />
                     <span class="hidden sm:inline">{$t('common.cancel') || 'Cancel'}</span>
                 </button>
-                <button
-                    class="px-4 py-2 text-sm text-lf-on-action bg-lf-action rounded-lg hover:bg-lf-action-hover transition flex items-center gap-1.5 disabled:opacity-50"
-                    disabled={selectedRows.length === 0}
-                    onclick={handleAdd}
-                    data-testid="tx-picker-add"
-                    title={$t('transactions.picker.addN', {values: {n: selectedRows.length}}) || `Add ${selectedRows.length} selected`}
-                >
+                <button class="px-4 py-2 text-sm text-lf-on-action bg-lf-action rounded-lg hover:bg-lf-action-hover transition flex items-center gap-1.5 disabled:opacity-50" disabled={!canAdd} onclick={handleAdd} data-testid="tx-picker-add" title={addText}>
                     <Plus size={15} />
-                    <span class="hidden sm:inline">{$t('transactions.picker.addN', {values: {n: selectedRows.length}}) || `Add ${selectedRows.length} selected`}</span>
+                    <span class="hidden sm:inline">{addText}</span>
                 </button>
             </div>
         </div>

@@ -13,11 +13,14 @@
         pageSizeOptions: number[];
         onPageChange: (pageIndex: number) => void;
         onPageSizeChange: (pageSize: number) => void;
+        /** The number of pages, when the table cut them itself and they are not `ceil(totalItems / pageSize)` (66 F7-c1:
+         *  `DataTable`'s `opensPage`, a group overflowing a page). Absent: computed from the items, as always. */
+        pageCount?: number;
     }
 
-    let {pageIndex, pageSize, totalItems, pageSizeOptions, onPageChange, onPageSizeChange}: Props = $props();
+    let {pageIndex, pageSize, totalItems, pageSizeOptions, onPageChange, onPageSizeChange, pageCount}: Props = $props();
 
-    let totalPages = $derived(Math.max(1, Math.ceil(totalItems / pageSize)));
+    let totalPages = $derived(pageCount !== undefined ? Math.max(1, pageCount) : Math.max(1, Math.ceil(totalItems / pageSize)));
     let currentPage = $derived(pageIndex + 1);
     let canPrevPage = $derived(pageIndex > 0);
     let canNextPage = $derived(pageIndex < totalPages - 1);

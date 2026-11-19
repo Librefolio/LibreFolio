@@ -17,6 +17,9 @@ export interface TXReadItem {
     cash?: {code: string; amount: string} | null;
     related_transaction_id?: number | null;
     partner_broker_id?: number | null;
+    /** Linked charges (project 66): the parent a FEE or TAX belongs to, and how many charges point at this row. */
+    parent_transaction_id?: number | null;
+    charges_count?: number;
     tags?: string[] | null;
     description?: string | null;
     cost_basis_override?: {code: string; amount: string} | string | null;

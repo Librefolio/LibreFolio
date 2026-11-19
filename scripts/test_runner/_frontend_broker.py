@@ -5,7 +5,7 @@ import subprocess
 from . import _common
 from ._common import PROJECT_ROOT, Colors, _get_category_tests_for_all, _run_test_suite, print_error, print_header, print_section, print_success
 from ._coverage import vitest_env
-from ._frontend_common import _ensure_frontend_build, _ensure_test_users, _run_playwright, reset_setup_scope
+from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright, reset_setup_scope
 
 
 def front_broker_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -73,6 +73,18 @@ def front_broker_tx_actions(verbose: bool = False, ui: bool = False, headed: boo
     if not _ensure_test_users():
         return False
     return _run_playwright("brokers/broker-transactions-actions.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_broker_tx_charges_delete(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """«Delete» on a parent with charges from the broker's Transactions tab asks first: the panel V1 before the Bulk (project 66, F7-d)."""
+    print_section("Frontend Broker Transactions Charges Delete Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("brokers/broker-tx-charges-delete.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_broker_page_roles(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -175,6 +187,14 @@ def populate_registry(registry: dict) -> None:
         name="Broker Transactions Actions Tests",
         desc="Transactions tab on the broker page: selection bar (Edit/Clone/Delete) and row actions for who can edit, none for a viewer, no Split, rows the user cannot edit left out with a warning",
         tests="brokers/broker-transactions-actions.spec.ts",
+    )
+    add_test(
+        cat,
+        "broker-tx-charges-delete",
+        front_broker_tx_charges_delete,
+        name="Broker Transactions Charges Delete Tests",
+        desc="Project 66 F7-d: on the broker's Transactions tab, «Delete» on a BUY with FEE+TAX (row menu or bar) opens the panel before the Bulk; Keep → the BUY goes, its charges stay unlinked; Delete all → all three go — read back by id",
+        tests="brokers/broker-tx-charges-delete.spec.ts",
     )
     add_test(
         cat,
