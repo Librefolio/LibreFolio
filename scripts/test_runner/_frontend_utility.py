@@ -148,6 +148,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/risk/matrixMetadata.test.ts",
             "src/lib/features/risk/assetSetLevels.test.ts",
             "src/lib/features/risk/moveFigures.test.ts",
+            "src/lib/features/risk/assetListRisk.test.ts",
             "src/lib/features/risk/assetSetI18n.test.ts",
             "src/lib/features/risk/warningTranslatorSites.test.ts",
             "src/nativeDateInput.gate.test.ts",
