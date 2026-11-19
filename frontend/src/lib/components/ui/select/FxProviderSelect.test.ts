@@ -27,7 +27,7 @@
  * the test spells out itself — never by position in the list.
  */
 import {beforeEach, describe, expect, it, vi} from 'vitest';
-import type {ComponentProps} from 'svelte';
+import {tick, type ComponentProps} from 'svelte';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import type {ChainStep, ProviderInfo} from '$lib/utils/currency/currencyGraph';
 import {findConversionPaths, getCachedFxProviders, refreshFxProviderReadiness} from '$lib/stores/currencyGraphStore';
@@ -548,5 +548,42 @@ describe('FxProviderSelect — a route through a provider to configure (76 N3c)'
         await waitFor(() => expect(chainRow(picker)).not.toBeNull());
         expect(chainRow(picker)).toHaveAttribute('data-needs-setup', 'false');
         expect(refreshFxProviderReadiness, 'the readiness is read again when the picker opens').toHaveBeenCalled();
+    });
+
+    it('lane 75 L20b: an answer that arrives after a newer request is ignored — only the latest pair is drawn', async () => {
+        await setupI18n();
+        const deferred = <T>() => {
+            let resolve!: (value: T) => void;
+            const promise = new Promise<T>((res) => (resolve = res));
+            return {promise, resolve};
+        };
+        const first = deferred<ChainStep[][]>();
+        const second = deferred<ChainStep[][]>();
+        const OLD_PAIR: ChainStep[] = [{from: 'EUR', to: 'GBP', provider: 'ECB'}];
+        const NEW_PAIR: ChainStep[] = [{from: 'USD', to: 'GBP', provider: 'FED'}];
+        vi.mocked(getCachedFxProviders).mockReturnValue([ECB, FED, BOE, MANUAL]);
+        vi.mocked(findConversionPaths)
+            .mockReset()
+            .mockImplementationOnce(() => first.promise)
+            .mockImplementationOnce(() => second.promise);
+
+        const {rerender} = mount();
+        await waitFor(() => expect(findConversionPaths).toHaveBeenCalledTimes(1));
+        // The pair changes while the first search is still running.
+        await rerender({baseCurrency: 'USD'});
+        await waitFor(() => expect(findConversionPaths).toHaveBeenCalledTimes(2));
+        expect(vi.mocked(findConversionPaths).mock.calls[1].slice(0, 2)).toEqual(['USD', 'GBP']);
+
+        // The answers come back in REVERSE order: the newer one first, the stale one last.
+        second.resolve([NEW_PAIR]);
+        await second.promise;
+        first.resolve([OLD_PAIR]);
+        await first.promise;
+        // The component's own continuation on each promise was registered first, so it has run; flush the DOM.
+        await tick();
+
+        const picker = await openPicker();
+        expect(within(picker).getByTestId('fx-route-direct-FED')).toBeInTheDocument();
+        expect(within(picker).queryByTestId('fx-route-direct-ECB'), 'the stale pair EUR→GBP must not be drawn').toBeNull();
     });
 });
