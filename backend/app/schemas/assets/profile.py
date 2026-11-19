@@ -220,6 +220,11 @@ class FAProfileStepPoint(StepSpan):
     update_id: int
     opened_on: date_type = Field(..., description="The read_on of the row that opens the step: the day it was really read, never cut to the range")
     source_date: Optional[date_type] = Field(None, description="The day the source says the value is of («data at 30/09»), when it says one")
+    confirmed_on: Optional[date_type] = Field(
+        None,
+        description="D1d, a volatile voice's last step when it holds «now»: the day «now» was last confirmed (its source last gave the voice, else the row's day); null elsewhere",
+    )
+    stale: Optional[bool] = Field(None, description="D1d, with confirmed_on: the confirmation is more than 30 days old («non aggiornato»); null elsewhere")
 
 
 class FAProfileChange(StrictModel):

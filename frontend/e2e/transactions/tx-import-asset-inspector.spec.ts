@@ -15,9 +15,8 @@
  * E2-002: provider comparison is actionable above the inspector and saves the selection.
  *
  * Pre-E1/E2 baseline (independent U1 probe work may be present): FAinfoResponse
- * carries quote_base_quantity, but not
- * classification_params. Quote-base assertions are preservation checks, not a claim
- * that the summary omits it. Currency confirmation was a raw z50 dialog; comparison
+ * carries quote_base_quantity. Quote-base assertions are preservation checks, not a claim
+ * that the summary omits it. Since plan 68 D7a no asset response carries a classification. Currency confirmation was a raw z50 dialog; comparison
  * was z70 beneath the z90 inspector. Overlay tests assert hit-testing, not z constants.
  *
  * Each test owns its broker, inline seven-column Generic CSV, assets and price rows.
@@ -49,18 +48,12 @@ const UI_TIMEOUT = 10_000;
 const PROVIDER = 'mockprov';
 
 type Distribution = Record<string, number | string>;
-type Classification = {
-    short_description?: string | null;
-    sector_area?: {distribution: Distribution} | null;
-    geographic_area?: {distribution: Distribution} | null;
-};
 type AssetMetadata = {
     asset_id: number;
     display_name: string;
     currency: string;
     asset_type: string;
     quote_base_quantity: number;
-    classification_params: Classification | null;
     provider_code: string | null;
 };
 type OwnedAsset = {
@@ -69,7 +62,6 @@ type OwnedAsset = {
     ticker: string;
     active: boolean;
     quoteBase: number;
-    classification: Classification | null;
 };
 type ProbeRequest = {
     provider_code: string;
@@ -249,13 +241,12 @@ const test = base.extend<{owned: Owned}>({
 
 test.setTimeout(120_000);
 
-async function createAsset(page: Page, owned: Owned, label: string, options: {classification?: Classification | null; profile?: Record<string, unknown>; quoteBase?: number; active?: boolean; provider?: boolean} = {}): Promise<OwnedAsset> {
+async function createAsset(page: Page, owned: Owned, label: string, options: {profile?: Record<string, unknown>; quoteBase?: number; active?: boolean; provider?: boolean} = {}): Promise<OwnedAsset> {
     const name = `Inspector ${label} ${owned.suffix}`;
     const ticker = `GE${uniqueToken(14)}`;
     const active = options.active ?? true;
     const quoteBase = options.quoteBase ?? 100;
-    const classification = options.classification ?? null;
-    const data = {display_name: name, identifier_ticker: ticker, currency: 'EUR', asset_type: 'ETF', quote_base_quantity: quoteBase, active, classification_params: classification, ...(options.profile ? {profile: options.profile} : {})};
+    const data = {display_name: name, identifier_ticker: ticker, currency: 'EUR', asset_type: 'ETF', quote_base_quantity: quoteBase, active, ...(options.profile ? {profile: options.profile} : {})};
     schemas.FAAssetCreateItem.parse(data);
     const response = await jsonFrom<{results: Array<{asset_id: number | null; display_name: string; success: boolean}>}>(await page.request.post(`${API}/assets`, {data: [data]}), 'create owned asset');
     const created = response.results.find((item) => item.display_name === name);
@@ -266,7 +257,7 @@ async function createAsset(page: Page, owned: Owned, label: string, options: {cl
         const assignment = await jsonFrom<{results: BulkResult[]}>(await page.request.post(`${API}/assets/provider`, {data: [{asset_id: id, provider_code: PROVIDER, identifier: ticker, identifier_type: 'TICKER', provider_params: null}]}), 'assign offline provider');
         expect(assignment.results.find((item) => item.asset_id === id)?.success).toBe(true);
     }
-    return {id, name, ticker, active, quoteBase, classification};
+    return {id, name, ticker, active, quoteBase};
 }
 
 async function readMetadata(page: Page, assetId: number): Promise<AssetMetadata> {
@@ -275,12 +266,6 @@ async function readMetadata(page: Page, assetId: number): Promise<AssetMetadata>
     if (!item) throw new Error(`Owned asset ${assetId} missing from the real metadata endpoint`);
     schemas.FAAssetMetadataResponse.parse(item);
     return item;
-}
-
-function normalizedClassification(value: Classification | null | undefined) {
-    if (value == null) return null;
-    const distribution = (block: {distribution: Distribution} | null | undefined) => (block ? Object.fromEntries(Object.entries(block.distribution).map(([key, weight]) => [key, Number(weight)])) : null);
-    return {short_description: value.short_description ?? null, sector: distribution(value.sector_area), geographic: distribution(value.geographic_area)};
 }
 
 /** The profile's description, sectors and countries of an owned asset today, as the profile's API answers them (plan 68, E9). */
@@ -303,9 +288,8 @@ function storedProfile(suffix: string) {
     return {description: `Stored description ${suffix}`, sector: {Technology: '0.6', Financials: '0.4'}, geography: {USA: '0.75', ITA: '0.25'}};
 }
 
-function expectMetadata(metadata: AssetMetadata, asset: OwnedAsset, name = asset.name, currency = 'EUR', classification = asset.classification): void {
+function expectMetadata(metadata: AssetMetadata, asset: OwnedAsset, name = asset.name, currency = 'EUR'): void {
     expect(metadata).toMatchObject({asset_id: asset.id, display_name: name, currency, asset_type: 'ETF', quote_base_quantity: asset.quoteBase});
-    expect(normalizedClassification(metadata.classification_params)).toEqual(normalizedClassification(classification));
 }
 
 async function expectActivePersisted(page: Page, owned: Owned, asset: OwnedAsset): Promise<void> {
@@ -476,8 +460,8 @@ function isPatchFor(response: Response, assetId: number): boolean {
     return Array.isArray(payload) && payload.some((item) => item.asset_id === assetId);
 }
 
-function patchItem(response: Response, assetId: number): Record<string, unknown> & {classification_params?: Classification | null} {
-    const payload = response.request().postDataJSON() as Array<Record<string, unknown> & {classification_params?: Classification | null}>;
+function patchItem(response: Response, assetId: number): Record<string, unknown> {
+    const payload = response.request().postDataJSON() as Array<Record<string, unknown>>;
     expect(payload).toHaveLength(1);
     const item = payload.find((entry) => entry.asset_id === assetId);
     if (!item) throw new Error(`Save did not PATCH the owned asset ${assetId}: ${JSON.stringify(payload)}`);
@@ -574,12 +558,8 @@ test.describe('Group E — import asset inspector', () => {
 
     test('E1-002: Ask Provider fills no distribution, and a cancelled quote base leaves the asset as it was', async ({page, owned}) => {
         const asset = await createAsset(page, owned, 'provider', {provider: true, quoteBase: 25});
-        // The provider still answers with a classification: the comparison must not read it (plan 68, E9)
-        const classification: Classification = {
-            sector_area: {distribution: {Technology: 0.7, Financials: 0.3}},
-            geographic_area: {distribution: {USA: 0.6, ITA: 0.4}},
-        };
-        const providerPatch = {asset_id: 0, classification_params: classification};
+        // A price provider answers with the asset's identity only (plan 68, D6 and D7a): nothing of the profile
+        const providerPatch = {asset_id: 0};
         schemas.FAAssetPatchItem.parse(providerPatch);
         owned.metadata.set(asset.ticker, providerPatch);
         const before = await readMetadata(page, asset.id);

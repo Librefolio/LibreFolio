@@ -289,7 +289,7 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
     - current_min_refresh_seconds: how long a current value stays fresh (project 76; default two minutes)
     - search(): Search for assets by query
     - validate_params(): Validate provider-specific parameters
-    - fetch_asset_metadata(): Fetch asset metadata (type, sector, etc.)
+    - fetch_asset_metadata(): Fetch asset metadata (type, currency, name, identifiers)
 
     Providers auto-register via @register_provider(AssetProviderRegistry) decorator.
     """
@@ -835,8 +835,10 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
 
         Override this method if your provider can fetch:
         - asset_type: Stock, ETF, Bond, etc.
-        - short_description: Brief description of the asset
-        - classification_params: Sector, geographic distribution, etc.
+        - currency, display_name, the identifiers (ISIN, ticker…)
+
+        Never the description, the countries or the sectors: they are the asset's profile, which the enrichers read
+        (plan 68, D6). ``classification_params`` stays unset.
 
         Args:
             identifier: Asset identifier for provider
@@ -847,10 +849,7 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
             FAAssetPatchItem with metadata fields populated:
             - asset_id: Set to 0 (placeholder, core will set real ID)
             - asset_type: AssetType enum if known
-            - classification_params: FAClassificationParams with:
-              - sector: Primary sector (e.g., 'Technology')
-              - geographic_area: FAGeographicArea with distribution dict
-              - short_description: Brief description
+            - currency, display_name, identifier_* when the source states them
 
             Return None if:
             - Metadata fetching not supported by this provider

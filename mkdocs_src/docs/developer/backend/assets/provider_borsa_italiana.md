@@ -77,12 +77,11 @@ The provider captures the internal code into `provider_params.codice_fondo` at a
     - **Name**: from `<h1>` tag on the page, appended with language flag emoji (e.g., `"ENEL S.p.A. 🇬🇧"`).
     - **Type**: mapped from instrument type field (e.g., `obbligazione` → BOND, `azione` → STOCK, `etf` → ETF). `etc/etn` also maps to ETF, so ETFs, ETCs and ETNs all arrive as plain `ETF` — the frontend provider-data comparison treats a stored ETF subtype (e.g. `ETF_STOCK`) as agreeing with it (`isFamilyOnlyProposal` in `frontend/src/lib/utils/assetTypes.ts`). Fund labels (`fondi comuni`, `fondo chiuso`, `closed-end fund`, …) → FUND; other `obbligazione…` / `bond…` labels fall back to BOND by prefix; unknown labels → no type.
     - **Currency**: from the chart API that prices the asset, not from the scheda; left unset when unknown — see [Currency](#currency).
-    - **Description**: assembled from page description, market, issuer, maturity date, coupon rate, structure, tipology, coupon frequency.
     - **Ticker**: if available on the page (mainly for stocks).
-    - **Geographic Area**: inferred from issuer name via `_ISSUER_TO_COUNTRY` (exact match, then substring), e.g. "Republic of Italy" → `ITA`, "United States of America" → `USA`.
-    - **Sector**: inferred from `settore` (stocks) or `tipologia` (bonds) fields. Bond `tipologia` goes through `_TIPOLOGIA_TO_SECTOR` (EN + IT labels): government paper → `Government Bonds`, corporate → `Corporate Bonds`, supranational → `Financials`; an unmapped tipologia yields no sector. The mapping only shapes the metadata offered: values already stored on an asset change only through the provider-data comparison.
-- Bond-specific fields available in the raw data: `cedola_annua`, `scadenza`, `emittente`, `rendimento_lordo`, `struttura_bond`, `frequenza_cedola`.
-- **Funds** (when `provider_params.codice_fondo` is set): funds are not on the XMIL scheda, so metadata is built from the **fund detail page** by internal code instead. The `short_description` is assembled from the fund **name**, the real **ISIN**, and the non-`N.D.` entries scraped from the page's **Caratteristiche**, **Società di Gestione** and **Costi** sections (e.g. `… | ISIN: LU2178929613 | Classe: P | Grado di Rischio: 3 | Categoria Assogestioni: Bilanciati | Costi — Gestione: 1.3 …`). The internal code is persisted in `identifier_other` as a JSON-list entry (`["2FADB…"]`). The section fields are read defensively, so metadata degrades to just *name + ISIN* if the installed scraping library predates the enriched `DatiFondo`.
+- No description, countries or sectors: they are the asset's profile, which the Borsa Italiana enricher reads from the
+  same pages (`backend/app/services/enricher_providers/borsa_italiana/`: the bond's sentence, coupons, maturity, issuer,
+  the share's sector).
+- **Funds** (when `provider_params.codice_fondo` is set): funds are not on the XMIL scheda, so metadata is built from the **fund detail page** by internal code instead: the fund **name**, its **currency** and the real **ISIN**. The internal code is persisted in `identifier_other` as a JSON-list entry (`["2FADB…"]`).
 
 ### 🔗 `get_asset_url`
 

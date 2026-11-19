@@ -20,6 +20,9 @@ A profile value ``{"from": "<code>"}`` or ``{"from": "<code>", "seen": <value>}`
 5. **Dry run** (``commit=False``, ``POST /assets/validate``): the same issues and warnings, nothing written.
 6. **POST** takes ``{"from"}`` with the item's ``enrichers``; a refused one fails that item (asset not created), the
    other items are created.
+7. **A batch rolled back while applying** (``patchFailed`` on another item, which only the flush reveals) writes no
+   profile row (plan 68, D7a: the case the old double-write suite pinned through
+   ``classification_params``).
 
 The synthetic enrichers are classes registered on ``EnricherRegistry`` under ``lab_from_*`` codes (removed with their
 claims at teardown), answering from a table identifier → values (filtered to the ``keys`` asked) or an outcome, and
@@ -614,3 +617,24 @@ async def test_post_takes_a_from_with_the_items_enrichers_and_a_refused_one_fail
     for item in items[1:]:
         assert await _asset_id_named(engine, item["display_name"]) is None, f"a refused item creates no asset: {item['display_name']}"
     assert missing in a.identifiers_read(), f"the not-found binding was read: {a.calls}"
+
+
+async def test_a_batch_rolled_back_writes_no_profile_row(engine) -> None:
+    """Item 0 writes a description by hand; item 1 empties its asset's name, which the checks let through and the flush
+    refuses (NOT NULL): ``patchFailed`` on item 1, the batch rolled back, and neither asset gets a profile row. Barrier:
+    item 0 alone commits and writes its row."""
+    print_section("D7a: a batch rolled back writes no profile row")
+    author = await _user(engine)
+    sound = await _asset(engine, "rollback-sound")
+    other = await _asset(engine, "rollback-other")
+
+    alone = await _patch(engine, [{"asset_id": sound, "profile": {"description": "Written by hand"}}], user_id=author)
+    after_alone = await _rows(engine, sound)
+    assert alone.committed and [(row["key"], row["source"]) for row in after_alone] == [("description", "user")], f"barrier: item 0 alone writes its row: {after_alone}"
+
+    batch = await _patch(engine, [{"asset_id": sound, "profile": {"description": "Written again"}}, {"asset_id": other, "display_name": "", "profile": {"description": "Never saved"}}], user_id=author)
+
+    assert batch.committed is False and [(issue.asset_id, issue.index, str(issue.code)) for issue in batch.issues] == [(other, 1, "patchFailed")], f"the batch is rolled back on item 1: {batch.issues}"
+    assert _new(after_alone, await _rows(engine, sound)) == [], "a rolled-back batch writes no profile row for item 0"
+    assert await _rows(engine, other) == [], "nor for item 1"
+    print_success("a batch rolled back on patchFailed writes no profile row")

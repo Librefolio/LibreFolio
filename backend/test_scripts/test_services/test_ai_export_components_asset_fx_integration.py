@@ -33,7 +33,7 @@ import asyncio
 import dataclasses
 import json
 import sys
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -1211,7 +1211,8 @@ class TestMaliciousTextAndJsonSafety:
 WINDOW_START = date(2025, 9, 1)
 WINDOW_END = date(2025, 9, 30)
 
-#: The tables of `asset.profile`, each one a flat list of rows.
+#: The tables of `asset.profile` built from the steps, each one a flat list of rows. `freshness` (D1d) is not one of
+#: them: it follows «now», and is asserted where a test is about it.
 PROFILE_TABLES = ("percentages", "amounts", "values", "weights", "coupon_schedule", "emptied", "thinned")
 STEP_KEYS = {"voice", "date", "through", "source"}
 
@@ -1454,6 +1455,27 @@ class TestAssetProfileComponent:
             ("ter", "2025-09-20", "2025-09-30", "user"),
         ]
         _assert_only_tables(payload, "percentages", "values", "emptied")
+
+    @pytest.mark.asyncio
+    async def test_a_window_holding_now_says_how_fresh_it_is_for_the_volatile_voices(self, session, test_user):
+        """D1d: a gross yield read 100 then 40 days ago (no enricher state: confirmed the day of «now») is stale, a fund
+        size read 5 days ago is not, a TER carries no signal. A window ending yesterday still holds «now»; one that ends
+        before «now» was read says nothing. Days from the test's UTC today; the profile's today may differ by one day."""
+        today = datetime.now(UTC).date()
+        asset = await _profile_asset(session, "AFIPFRS")
+        await _profile_row(session, asset, "yield_gross", "0.0352", day=today - timedelta(days=100))
+        await _profile_row(session, asset, "yield_gross", "0.0361", day=today - timedelta(days=40))
+        await _profile_row(session, asset, "fund_size", {"amount": "5000000", "currency": "EUR"}, day=today - timedelta(days=5))
+        await _profile_row(session, asset, "ter", "0.0022", day=today - timedelta(days=400))
+
+        payload = await _resolve_profile(session, test_user, asset, start=today - timedelta(days=120), end=today - timedelta(days=1))
+        before = await _resolve_profile(session, test_user, asset, start=today - timedelta(days=120), end=today - timedelta(days=60))
+
+        assert sorted((row["voice"], row["confirmed_on"], row["stale"]) for row in payload["freshness"]) == [
+            ("fund_size", (today - timedelta(days=5)).isoformat(), False),
+            ("yield_gross", (today - timedelta(days=40)).isoformat(), True),
+        ], payload["freshness"]
+        assert before["freshness"] == [], "a window that ends before «now» was read says nothing"
 
     @pytest.mark.asyncio
     async def test_a_volatile_voice_with_four_steps_keeps_its_first_and_last_and_is_thinned(self, session, test_user):

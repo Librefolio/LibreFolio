@@ -24,7 +24,7 @@ directly as a section payload; that is the job of the builders in
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date as Date
 from decimal import Decimal
 
@@ -39,7 +39,8 @@ from backend.app.schemas.prices import FAPriceQueryItem, FAPriceQueryResult
 from backend.app.services.ai_export.components.resources import PriceResultsResource
 from backend.app.services.ai_export.components.types import BuildScope, ResourceKey
 from backend.app.services.assets.manager import AssetSourceManager
-from backend.app.services.assets.profile.store import ProfileStep, first_read_days, read_steps
+from backend.app.services.assets.profile.freshness import VoiceFreshness, holding_now, voice_freshness
+from backend.app.services.assets.profile.store import ProfileStep, first_read_days, profile_today, read_steps
 from backend.app.services.financial_math.fifo.models import LotMatchingMethod
 from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio.portfolio_service import PortfolioService
@@ -315,18 +316,23 @@ class AssetProfileResource:
 
     steps: Mapping[str, tuple[ProfileStep, ...]]
     history_starts_on: Date | None
+    # D1d: for the volatile voices whose last step in the window holds «now», how fresh «now» is
+    freshness: Mapping[str, VoiceFreshness] = field(default_factory=dict)
 
 
 def load_asset_profile(scope: BuildScope):
     """Builds the `db_resource` loader for `ASSET_PROFILE_RESOURCE`: the steps of every voice in
-    ``[period_start, period_end]``, facts only (no carry-back, plan I18)."""
+    ``[period_start, period_end]``, facts only (no carry-back, plan I18), and how fresh «now» is for the volatile voices
+    whose last step in the window holds it (D1d)."""
 
     async def _load(session: AsyncSession) -> AssetProfileResource:
         asset_id: int = scope.asset_id  # type: ignore[assignment]  # ASSET scope guarantees asset_id is set
         window = DateRangeModel(start=scope.period_start, end=scope.period_end)
         steps = (await read_steps(session, [asset_id], window)).get(asset_id, {})
         first = (await first_read_days(session, [asset_id])).get(asset_id)
-        return AssetProfileResource(steps={voice: tuple(voice_steps) for voice, voice_steps in steps.items()}, history_starts_on=first)
+        known = (await voice_freshness(session, [asset_id], today=await profile_today(session))).get(asset_id, {})
+        fresh = {voice: now for voice, voice_steps in steps.items() if (now := holding_now(known.get(voice), voice_steps)) is not None}
+        return AssetProfileResource(steps={voice: tuple(voice_steps) for voice, voice_steps in steps.items()}, history_starts_on=first, freshness=fresh)
 
     return _load
 

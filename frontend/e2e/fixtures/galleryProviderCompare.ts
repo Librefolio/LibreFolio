@@ -63,9 +63,6 @@ export const COMPARE_FUND = {
     providerTicker: 'NWGE.MI',
     searchType: 'ETF',
     providerType: 'ETF_STOCK',
-    /** The provider's split, three sectors (FinancialSector names, so every language translates them). */
-    sectors: {Technology: '0.45', Financials: '0.30', 'Health Care': '0.25'},
-    countries: {USA: '0.68', JPN: '0.06', GBR: '0.04', Other: '0.22'},
 } as const;
 
 /** The two rows the dialog opens with, in its own order (ProviderComparisonModal.svelte, `DIFF_FIELD_SECTIONS`). */
@@ -126,11 +123,6 @@ function metadataPatch() {
         asset_type: COMPARE_FUND.providerType,
         icon_url: null,
         quote_base_quantity: null,
-        classification_params: {
-            short_description: 'Global developed-market equities, physically replicated, accumulating.',
-            geographic_area: {distribution: {...COMPARE_FUND.countries}},
-            sector_area: {distribution: {...COMPARE_FUND.sectors}},
-        },
         active: null,
         is_benchmark: null,
         user_url: null,
@@ -294,8 +286,6 @@ export async function openProviderCompare(page: Page, motionSettled: MotionSettl
     const providerType = body.getByTestId('comparison-provider-asset_type').getByTestId('comparison-type-badge');
     await expect(currentType).toHaveAttribute('data-type', COMPARE_FUND.searchType);
     await expect(providerType).toHaveAttribute('data-type', COMPARE_FUND.providerType);
-    // The provider's description and split are left to the profile (plan 68, E9): no row for them
-    await expect(body.locator('[data-testid="comparison-card"][data-field="sector_area"]')).toHaveCount(0);
 
     // The form behind it settled: the details read, the connection test passed (its status icon is in the dimmed form).
     await expect(form).toHaveAttribute('data-busy', 'false');

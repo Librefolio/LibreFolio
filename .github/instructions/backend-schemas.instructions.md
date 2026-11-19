@@ -11,7 +11,7 @@ backend/app/schemas/
 ├── common.py          # Shared base classes (Currency, BackwardFillInfo, BaseBulkResponse, etc.)
 ├── assets/            # Asset schemas, one module per theme (C3):
 │   ├── assets.py      #   the asset and its CRUD (FAAssetCreateItem, FAinfoResponse, patch, merge, etc.)
-│   ├── metadata.py    #   distributions, classification, metadata (FAClassificationParams, FAGeographicArea, etc.)
+│   ├── metadata.py    #   distributions (FAGeographicArea, FASectorArea: the profile's maps), FAAssetMetadataResponse
 │   ├── scheduled_investment.py  # financial enums and the interest schedule (FAScheduledInvestmentSchedule, etc.)
 │   ├── events.py      #   asset events (FAAssetEventPoint, event CRUD)
 │   ├── profile.py     #   the asset profile: the catalogue voice and its value shapes (FAProfileVoice, ProfileShape, …)

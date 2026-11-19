@@ -197,7 +197,6 @@ type SyntheticAsset = {
     currency: string;
     asset_type: string;
     active: boolean;
-    has_metadata: boolean;
     provider_code: string | null;
     tx_count: number;
     tx_count_own: number;
@@ -305,7 +304,6 @@ async function installAssetFxRetryFixture(page: Page) {
         currency: 'EUR',
         asset_type: 'STOCK',
         active: true,
-        has_metadata: false,
         provider_code: null,
         tx_count: 0,
         tx_count_own: 0,
@@ -362,7 +360,6 @@ async function installAssetFxRetryFixture(page: Page) {
                     currency: peer.currency,
                     asset_type: peer.asset_type,
                     active: true,
-                    has_metadata: false,
                     provider_code: null,
                     tx_count: 0,
                     tx_count_own: 0,
@@ -553,7 +550,6 @@ async function installFxComparisonSyncFixture(page: Page) {
         currency: 'GBP',
         asset_type: 'STOCK',
         active: true,
-        has_metadata: false,
         provider_code: 'MOCKASSET',
         tx_count: 0,
         tx_count_own: 0,
@@ -564,7 +560,6 @@ async function installFxComparisonSyncFixture(page: Page) {
         currency: 'CAD',
         asset_type: 'STOCK',
         active: true,
-        has_metadata: false,
         provider_code: 'MOCKASSET',
         tx_count: 0,
         tx_count_own: 0,

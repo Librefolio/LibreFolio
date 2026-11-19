@@ -24,7 +24,7 @@
     import ProfileDetails from '$lib/features/assets/profile/ProfileDetails.svelte';
     import ProfileKeyFigureCard from '$lib/features/assets/profile/ProfileKeyFigureCard.svelte';
     import {loadProfileCatalogue, readAssetProfile, type ProfileVoice, type ProfileVoices} from '$lib/features/assets/profile/profileStore';
-    import {detailGroups, formatProfileValue, keyFigureCards, profileCell, profileReadRange, type PagePeriod, type ProfileCell, type ProfileFormatContext} from '$lib/features/assets/profile/profileTabState';
+    import {detailGroups, formatProfileDay, formatProfileValue, keyFigureCards, profileCell, profileReadRange, staleSince, type PagePeriod, type ProfileCell, type ProfileFormatContext} from '$lib/features/assets/profile/profileTabState';
 
     interface Props {
         assetId: number;
@@ -97,6 +97,15 @@
         }
         return result;
     });
+    /** «Confermato il …, non aggiornato» of every stale cell, by key (D1d). */
+    const staleTexts = $derived.by(() => {
+        const result: Record<string, string> = {};
+        for (const cell of [...cards, ...groups.flatMap((group) => group.cells)]) {
+            const day = staleSince(cell);
+            if (day) result[cell.key] = $t('assets.profile.tab.staleConfirmed', {values: {date: formatProfileDay(day, context.locale)}});
+        }
+        return result;
+    });
 </script>
 
 <div class="flex flex-col gap-4 text-lf-primary" data-testid="asset-profile-tab" data-status={status} data-busy={status === 'loading' ? 'true' : 'false'} aria-busy={status === 'loading'}>
@@ -130,14 +139,14 @@
             </div>
             <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 {#each cards as card (card.key)}
-                    <ProfileKeyFigureCard {card} text={texts[card.key] ?? ''} {onhistory} />
+                    <ProfileKeyFigureCard {card} text={texts[card.key] ?? ''} staleText={staleTexts[card.key]} {onhistory} />
                 {/each}
             </div>
         </section>
 
         <section class="rounded-xl border border-lf-subtle bg-lf-card p-4 shadow-sm shadow-lf-shadow-card">
             <h3 class="mb-3 text-xs font-semibold uppercase tracking-wide text-lf-muted">{$t('assets.profile.tab.details')}</h3>
-            <ProfileDetails {groups} {texts} {isin} {ticker} {otherIdentifiers} {onhistory} />
+            <ProfileDetails {groups} {texts} {staleTexts} {isin} {ticker} {otherIdentifiers} {onhistory} />
         </section>
     {/if}
 </div>

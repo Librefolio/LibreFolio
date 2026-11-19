@@ -53,12 +53,11 @@ The provider supports 4 currencies via JustETF's chart API (`load_chart(isin, cu
 
 - Uses `get_etf_overview(isin, include_gettex=False)` for detailed profile data.
 - Extracts:
-    - **Description**: `description + TER + distribution_policy`
-    - **Geographic Area**: `countries[]` → normalized to ISO 3166-1 alpha-3 codes via `normalize_country_to_iso3()`, renormalized to sum to 1.0
-    - **Sector Area**: `sectors[]` → validated against `FinancialSector` enum, unknown sectors logged and mapped to "Other"
     - **Currency**: from `provider_params["currency"]` (user's chosen price currency)
     - **Identifiers**: `identifier_isin` (input ISIN), `identifier_ticker` (if available)
 - `asset_type` is always `ETF`.
+- No description, countries or sectors: they are the asset's profile, which the justETF enricher reads
+  (`backend/app/services/enricher_providers/justetf/`).
 
 ### 🔗 `get_asset_url`
 

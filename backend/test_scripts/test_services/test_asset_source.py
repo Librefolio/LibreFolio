@@ -52,9 +52,8 @@ from backend.app.db.models import (
     User,
 )
 from backend.app.db.session import get_async_engine
-from backend.app.schemas import FAGeographicArea, FASectorArea, SignalVolumeKind
+from backend.app.schemas import SignalVolumeKind
 from backend.app.schemas.assets.assets import FAAssetCreateItem, FAAssetPatchItem
-from backend.app.schemas.assets.metadata import FAClassificationParams
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.prices import AssetBackwardFillInfo, FAAssetDelete, FAPricePoint, FAPriceQueryItem, FAUpsert
 from backend.app.schemas.provider import (
@@ -74,6 +73,7 @@ from backend.app.services.assets import search as search_module
 from backend.app.services.assets.base import AssetSourceProvider
 from backend.app.services.assets.crud import AssetCRUDService
 from backend.app.services.assets.manager import AssetSourceManager
+from backend.app.services.assets.profile.store import current_rows
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.assets.search import AssetSearchService
 from backend.app.services.financial_math.interest import calculate_day_count_fraction
@@ -1342,7 +1342,7 @@ def test_provider_param_helpers_and_identifier_mapping():
 
 @pytest.mark.asyncio
 async def test_create_assets_bulk_with_duplicate_and_metadata():
-    """Create path persists metadata while duplicate rows fail without aborting the batch."""
+    """Create path writes the profile while duplicate rows fail without aborting the batch."""
     print_section("Test 21: create_assets_bulk partial success")
 
     timestamp = int(time.time() * 1000)
@@ -1356,11 +1356,7 @@ async def test_create_assets_bulk_with_duplicate_and_metadata():
                 asset_type=AssetType.ETF,
                 quote_base_quantity=0,
                 identifier_ticker="cbt",
-                classification_params=FAClassificationParams(
-                    short_description="Created from bulk test",
-                    sector_area=FASectorArea(distribution={"Technology": Decimal("1.0")}),
-                    geographic_area=FAGeographicArea(distribution={"USA": Decimal("1.0")}),
-                ),
+                profile={"description": "Created from bulk test", "sector": {"Technology": "1"}, "geography": {"USA": "1"}},
             ),
             FAAssetCreateItem(
                 display_name=display_name,
@@ -1376,13 +1372,14 @@ async def test_create_assets_bulk_with_duplicate_and_metadata():
         assert "already exists" in response.results[1].message
 
         created = (await session.execute(select(Asset).where(Asset.id == response.results[0].asset_id))).scalar_one()
-        created_meta = json.loads(created.classification_params)
+        profile = await current_rows(session, created.id)
 
         assert created.currency == "USD"
         assert created.quote_base_quantity == 1
         assert created.identifier_ticker == "CBT"
-        assert created_meta["short_description"] == "Created from bulk test"
-        assert created_meta["sector_area"]["distribution"]["Technology"] == "1.0000"
+        # Plan 68, D7a: the description and the weights live in the asset's profile, written with the asset
+        assert profile["description"].value == "Created from bulk test"
+        assert Decimal(profile["sector"].value["Technology"]) == 1
         print_success("✓ Bulk create keeps successful asset and isolates duplicate failure")
 
 
@@ -1560,7 +1557,7 @@ async def test_probe_provider_config_history_and_metadata():
     assert "→" in response.history.date_range
     assert response.metadata is not None and response.metadata.success is True
     assert response.metadata.patch_data is not None
-    assert response.metadata.patch_data["classification_params"]["short_description"].startswith("Mock test asset PROBE_ME")
+    assert response.metadata.patch_data.get("classification_params") is None, "D6: the provider gives no classification"
     print_success("✓ Probe history + metadata paths both succeeded")
 
 

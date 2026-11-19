@@ -194,8 +194,9 @@ applying its writes in order, from the `patch_data` of the probe's `metadata` op
 - `identifier_other` is merged additively (`mergeOtherIdentifiers()`), never a row;
 - no row raises `allMatch`.
 
-The provider's `classification_params` is not read (plan 68, E9): the description, the sectors and
-the countries are the asset's profile, which its enrichers fill and the **Profile data** window
+A price provider gives no description, sectors or countries (plan 68, D6), and since D7a no asset
+response carries the old `classification_params`: the description, the sectors and the countries
+are the asset's profile, which its enrichers fill and the **Profile data** window
 compares («Ask the source»). The comparison's scopes are `'all'` and `'identifiers'`.
 
 On **Apply Selected**, a ticked field edited since the differences were computed (while the
