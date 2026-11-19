@@ -16,6 +16,7 @@ import type {TXReadItem} from '../types';
 import type {PendingOp} from './txBulkTypes';
 import {chargesFromRows, type ChargeDraft, type ChargeType} from '../form/txCharges';
 import {exactDecimalEqual} from '../txPayloadHelpers';
+import {linkSelection, type LinkOptions, type LinkReason} from '../chargeLinkRules';
 
 type StoreGet = (id: number) => TXReadItem | undefined;
 type ChargeFlag = 'chargeOf' | 'parentUnlink' | 'parentLinkId' | 'followsParent' | 'byParentChoice';
@@ -349,13 +350,15 @@ export function planBulkDelete(ops: readonly PendingOp[], selectedTempIds: reado
 }
 
 /**
- * Rows leaving the Bulk: each with its pair's hidden half; a parent's new charges leave with it, its saved charges stay,
- * owned by nobody (§11.2). The one removal of the Bulk (`removeRow`, and the plan's removals).
+ * Rows leaving the Bulk: each with its pair's hidden half; a parent's new charges born in its form and never opened on
+ * their own (`followsParent`) leave with it (§12.4, narrowed by 66 F7-d §21.3); every other charge stays — a new one
+ * linked with «Link» or opened alone as a new row of its own, a saved one owned by nobody (§11.2). The one removal of
+ * the Bulk (`removeRow`, and the plan's removals).
  */
 export function withoutRows(ops: readonly PendingOp[], tempIds: Iterable<string>): PendingOp[] {
     const named = new Set(tempIds);
     const removed = new Set(ops.filter((op) => named.has(op.tempId) || (op.pairedWith !== undefined && named.has(op.pairedWith))).map((op) => op.tempId));
-    return ops.filter((op) => !removed.has(op.tempId) && !(op.op === 'create' && op.chargeOf !== undefined && removed.has(op.chargeOf))).map((op) => (op.chargeOf !== undefined && removed.has(op.chargeOf) ? without(op, 'chargeOf') : op));
+    return ops.filter((op) => !removed.has(op.tempId) && !(op.op === 'create' && op.followsParent && op.chargeOf !== undefined && removed.has(op.chargeOf))).map((op) => (op.chargeOf !== undefined && removed.has(op.chargeOf) ? without(op, 'chargeOf', 'followsParent') : op));
 }
 
 /**
@@ -419,4 +422,79 @@ export function applyDeleteChoice(ops: readonly PendingOp[], plan: BulkDeletePla
         return next ? [next] : [];
     });
     return plan.removals.length > 0 ? withoutRows(out, plan.removals) : out;
+}
+
+// ---------------------------------------------------------------------------
+// F7-d — U3, «Link» on the Bulk's selection (contract 66-F7 §20.5, corrected by §21.2, §22.2, §23.4)
+// ---------------------------------------------------------------------------
+
+/** Why «Link» in the Bulk is off: the page's reasons, and a row marked for deletion in the selection. */
+export type BulkLinkReason = LinkReason | 'deleted';
+
+/** What «Link» does with the Bulk's selection; `params` names the first row that breaks the rule. */
+export type BulkLinkSelection = {kind: 'hidden'} | {kind: 'disabled'; reason: BulkLinkReason; params: {op: PendingOp; type: string}} | {kind: 'ok'; parent: PendingOp; charges: PendingOp[]};
+
+/**
+ * «Link» on the selected rows of the Bulk, by the page's rules (`linkSelection`) read on mirror rows:
+ *   - the values are the operation's (broker, asset, type, date); a create has a negative synthetic id;
+ *   - the parent is the one in the Bulk (`chargeOf`), or `parentLinkId`, or the saved one — none after `parentUnlink`
+ *     (an unlink already done here: «unlink first» is satisfied);
+ *   - a pair is the Bulk's (`pairedWith`), as the payload sends it: a new pair counts, a saved pair split here does not
+ *     (§23.4, corrected after the advisor's review).
+ * Every `hidden` outcome of `linkSelection` wins; then a selected row marked for deletion turns «Link» off (`deleted`:
+ * the backend refuses a deleted parent, and linking a deleted charge means nothing); then the page's reasons.
+ */
+export function bulkLinkSelection(rows: readonly PendingOp[], ops: readonly PendingOp[], get: StoreGet, opts: LinkOptions): BulkLinkSelection {
+    const synthetic = new Map<string, number>();
+    for (const op of [...ops, ...rows]) if (!synthetic.has(op.tempId)) synthetic.set(op.tempId, -(synthetic.size + 1));
+    const mirrorId = (op: PendingOp): number => (op.op === 'edit' ? op.txId : synthetic.get(op.tempId)!);
+    const parentIdOf = (op: PendingOp): number | null => {
+        if (op.parentUnlink) return null;
+        const owner = ownerOf(op, ops);
+        if (owner) return mirrorId(owner);
+        if (op.parentLinkId !== undefined) return op.parentLinkId;
+        return savedParentId(op, get);
+    };
+    // Rule 8 (`charges.py`, `row_is_paired`): a leg of a pair is neither a parent nor a charge. The pair is the Bulk's,
+    // as the payload sends it: a hidden half names its visible one (`pairedWith`). A new pair counts; a saved pair split
+    // here does not (the batch splits it before it links the charges).
+    const pairIdOf = (op: PendingOp): number | null => {
+        const partner = op.pairedWith !== undefined ? ops.find((d) => d.tempId === op.pairedWith) : ops.find((d) => d.pairedWith === op.tempId);
+        if (!partner) return op.pairedWith !== undefined ? -1 : null;
+        return mirrorId(partner);
+    };
+    const byMirror = new Map<TXReadItem, PendingOp>();
+    const mirrors = rows.map((op): TXReadItem => {
+        const saved = op.op === 'edit' ? get(op.txId) : undefined;
+        const mirror: TXReadItem = {
+            ...(saved ?? {}),
+            id: mirrorId(op),
+            broker_id: op.fields.broker_id,
+            asset_id: op.fields.asset_id ?? null,
+            type: op.fields.type,
+            date: op.fields.date,
+            related_transaction_id: pairIdOf(op),
+            parent_transaction_id: parentIdOf(op),
+        } as TXReadItem;
+        byMirror.set(mirror, op);
+        return mirror;
+    });
+    const result = linkSelection(mirrors, opts);
+    if (result.kind === 'hidden') return result;
+    const deleted = rows.find((op) => op.op === 'edit' && op.markedDelete);
+    if (deleted) return {kind: 'disabled', reason: 'deleted', params: {op: deleted, type: deleted.fields.type}};
+    if (result.kind === 'disabled') {
+        const op = rows[mirrors.findIndex((m) => m.id === result.params.id)] ?? rows[0];
+        return {kind: 'disabled', reason: result.reason, params: {op, type: op.fields.type}};
+    }
+    return {kind: 'ok', parent: byMirror.get(result.parent)!, charges: result.charges.map((c) => byMirror.get(c)!)};
+}
+
+/**
+ * The confirmation of «Link» in the Bulk: each charge is owned by the parent (`chargeOf`), its earlier link choices
+ * dropped (`parentUnlink`, `parentLinkId`, `byParentChoice`); `followsParent` is kept as it is. A new array.
+ */
+export function linkInBulk(ops: readonly PendingOp[], parent: PendingOp, charges: readonly PendingOp[]): PendingOp[] {
+    const ids = new Set(charges.map((c) => c.tempId));
+    return ops.map((op) => (ids.has(op.tempId) && op !== parent ? {...without(op, 'parentUnlink', 'parentLinkId', 'byParentChoice'), chargeOf: parent.tempId} : op));
 }

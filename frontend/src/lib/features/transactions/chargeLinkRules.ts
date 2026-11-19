@@ -94,9 +94,11 @@ export function deletePlan(selected: TXReadItem[], chargesByParent: Map<number, 
 
 /**
  * What the Bulk receives after the panel: `all` deletes the selection and every charge of the plan; `keep` deletes the
- * selection and unlinks the plan's charges that are not selected (a selected charge is deleted, as asked).
+ * selection and unlinks the plan's charges that are not selected (a selected charge is deleted, as asked). `chargeIds`
+ * are those charges with either choice (66 F7-d): the Bulk marks them as the parent's choice, so «Restore» on the parent
+ * takes them back.
  */
-export function deleteIntent(selectedIds: number[], plan: DeletePlanEntry[], choice: 'all' | 'keep'): {txIds: number[]; unlinkIds: number[]} {
+export function deleteIntent(selectedIds: number[], plan: DeletePlanEntry[], choice: 'all' | 'keep'): {txIds: number[]; unlinkIds: number[]; chargeIds: number[]} {
     const txIds = [...new Set(selectedIds)];
     const chosen = new Set(txIds);
     const rest: number[] = [];
@@ -105,5 +107,16 @@ export function deleteIntent(selectedIds: number[], plan: DeletePlanEntry[], cho
             if (!chosen.has(c.id) && !rest.includes(c.id)) rest.push(c.id);
         }
     }
-    return choice === 'all' ? {txIds: [...txIds, ...rest], unlinkIds: []} : {txIds, unlinkIds: rest};
+    return choice === 'all' ? {txIds: [...txIds, ...rest], unlinkIds: [], chargeIds: [...rest]} : {txIds, unlinkIds: rest, chargeIds: [...rest]};
+}
+
+/**
+ * How a text names a row (66 F7-d): `#123` for a saved one; for a new one its label in the Bulk (`transactions.bulk.rowRef`,
+ * «row 3» — no `#`, which in the Bulk's banners already means a row), or «new» without one. The one helper of the
+ * disabled reasons of «Link», the panel's title and its column headers.
+ */
+export function txRowRef(id: number | null | undefined, label: string | null | undefined, translate: (key: string, options?: {values: Record<string, string | number>}) => string): string {
+    if (id != null && id > 0) return `#${id}`;
+    if (label) return translate('transactions.bulk.rowRef', {values: {n: label}}) || label;
+    return translate('transactions.bulk.stateNew') || 'new';
 }

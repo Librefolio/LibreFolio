@@ -14,7 +14,9 @@
  *   linkSelection(rows: TXReadItem[], opts: {roleOf: (type: string) => LinkRole; canEdit: (brokerId: number) => boolean}): LinkSelection
  *   linkCommit(parent: TXReadItem, charges: TXReadItem[]): {updates: {id: number; parent_transaction_id: number}[]}
  *   deletePlan(selected: TXReadItem[], chargesByParent: Map<number, TXReadItem[]>): {parent: TXReadItem; charges: TXReadItem[]}[]
- *   deleteIntent(selectedIds: number[], plan: {parent: TXReadItem; charges: TXReadItem[]}[], choice: 'all' | 'keep'): {txIds: number[]; unlinkIds: number[]}
+ *   deleteIntent(selectedIds: number[], plan: {parent: TXReadItem; charges: TXReadItem[]}[], choice: 'all' | 'keep'): {txIds: number[]; unlinkIds: number[]; chargeIds: number[]}
+ *       66 F7-d (contract 66-F7 §20.2): `chargeIds` = the plan's charges that are not selected, with both choices — the
+ *       Bulk marks them `byParentChoice`, so «Restore» on the parent takes them back.
  *
  * linkSelection, decided here where the contract leaves room:
  *   - every `hidden` condition wins over every `disabled` reason (the button is not there at all);
@@ -416,9 +418,42 @@ describe('deleteIntent', () => {
         expect(new Set(keep.unlinkIds).size).toBe(keep.unlinkIds.length);
     });
 
+    // Re-targeted in F7-d (§20.2, §21.7): the intent carries `chargeIds` too, empty without a plan.
     it('an empty plan changes nothing', () => {
         const {buy, other} = planOf();
-        expect(deleteIntent([buy.id, other.id], [], 'all')).toEqual({txIds: [buy.id, other.id], unlinkIds: []});
-        expect(deleteIntent([buy.id, other.id], [], 'keep')).toEqual({txIds: [buy.id, other.id], unlinkIds: []});
+        expect(deleteIntent([buy.id, other.id], [], 'all')).toEqual({txIds: [buy.id, other.id], unlinkIds: [], chargeIds: []});
+        expect(deleteIntent([buy.id, other.id], [], 'keep')).toEqual({txIds: [buy.id, other.id], unlinkIds: [], chargeIds: []});
+    });
+
+    // 66 F7-d (§20.2): the charges of the choice, whatever the choice — the Bulk marks them `byParentChoice`.
+    it("'all': chargeIds are the plan's charges that are not selected", () => {
+        const {buy, fee, taxCharge, other, plan} = planOf();
+        const intent = deleteIntent([buy.id, other.id], plan, 'all') as ReturnType<typeof deleteIntent> & {chargeIds?: number[]};
+        expect(intent.chargeIds, 'deleteIntent returns chargeIds').toBeDefined();
+        expect(sorted(intent.chargeIds ?? [])).toEqual(sorted([fee.id, taxCharge.id]));
+    });
+
+    it("'keep': chargeIds are the plan's charges that are not selected, the same as unlinkIds", () => {
+        const {buy, fee, taxCharge, other, plan} = planOf();
+        const intent = deleteIntent([buy.id, other.id], plan, 'keep') as ReturnType<typeof deleteIntent> & {chargeIds?: number[]};
+        expect(intent.chargeIds, 'deleteIntent returns chargeIds').toBeDefined();
+        expect(sorted(intent.chargeIds ?? [])).toEqual(sorted([fee.id, taxCharge.id]));
+        expect(sorted(intent.chargeIds ?? [])).toEqual(sorted(intent.unlinkIds));
+    });
+
+    it('a charge the user selected is not in chargeIds, with either choice: it was asked for, not chosen with the parent', () => {
+        const {buy, fee, taxCharge, plan} = planOf();
+        for (const choice of ['all', 'keep'] as const) {
+            const intent = deleteIntent([buy.id, fee.id], plan, choice) as ReturnType<typeof deleteIntent> & {chargeIds?: number[]};
+            expect(intent.chargeIds, `${choice}: only the TAX left out of the selection`).toEqual([taxCharge.id]);
+        }
+    });
+
+    it('several parents: chargeIds cover every unselected charge of the plan once', () => {
+        const a = planOf();
+        const b = planOf();
+        const plan = [...a.plan, ...b.plan];
+        const intent = deleteIntent([a.buy.id, b.buy.id, b.taxCharge.id], plan, 'all') as ReturnType<typeof deleteIntent> & {chargeIds?: number[]};
+        expect(sorted(intent.chargeIds ?? [])).toEqual(sorted([a.fee.id, a.taxCharge.id, b.fee.id]));
     });
 });
