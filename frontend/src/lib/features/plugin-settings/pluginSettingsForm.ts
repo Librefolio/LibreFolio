@@ -9,6 +9,7 @@
  */
 import {ArrowRightLeft, ChartColumn, Coins, IdCard, Share2, SlidersHorizontal, Wrench} from 'lucide-svelte';
 import {translateOr, type Translate} from '$lib/utils/core/translateOr';
+import {settingsTabHref} from '$lib/features/settings/settingsPaths';
 import type {PlainValue, PluginSettingsEntry, PluginSettingWriteItem, PluginSettingWriteResult, SettingField, SettingOption, SettingsFamily} from './pluginSettingsApi';
 
 // =============================================================================
@@ -111,6 +112,28 @@ export function entrySearchText(entry: PluginSettingsEntry, t: Translate, langua
     const description = entry.description_i18n?.[language] ?? (entry.description_key ? translateOr(t, entry.description_key, english) : english);
     const texts = [entryTitle(entry, t), entry.plugin_name, entry.plugin_code, description, ...entry.fields.flatMap((field) => [fieldLabel(field, t), fieldDescription(field, t)])];
     return normalised(texts.join('\n'));
+}
+
+// =============================================================================
+// The address of the Plugins tab (project 76, S2c): ?family= and ?q=
+// =============================================================================
+
+export const PLUGINS_FAMILY_PARAM = 'family';
+export const PLUGINS_QUERY_PARAM = 'q';
+
+/** The menu's choice and the search an address names; a family the menu does not know, or none, is «All». */
+export function readPluginsAddress(params: URLSearchParams): {selected: PluginMenuId; query: string} {
+    const family = params.get(PLUGINS_FAMILY_PARAM) ?? '';
+    const selected = family === 'unconfigured' || (FAMILY_ORDER as readonly string[]).includes(family) ? (family as PluginMenuId) : 'all';
+    return {selected, query: params.get(PLUGINS_QUERY_PARAM) ?? ''};
+}
+
+/** The tab's address for a choice and a search: «All» and an empty search write nothing. */
+export function pluginsHref(selected: PluginMenuId, query: string): string {
+    const params: Record<string, string> = {};
+    if (selected !== 'all') params[PLUGINS_FAMILY_PARAM] = selected;
+    if (query.trim() !== '') params[PLUGINS_QUERY_PARAM] = query;
+    return settingsTabHref('plugins', Object.keys(params).length > 0 ? params : undefined);
 }
 
 /** Every word is in the card's texts, as it is written (no tolerance for typos); no word: every card. */

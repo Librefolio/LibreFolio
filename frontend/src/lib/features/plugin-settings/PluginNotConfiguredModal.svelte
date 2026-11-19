@@ -16,13 +16,12 @@
 <script lang="ts">
     import {_, locale} from '$lib/i18n';
     import {translateOr} from '$lib/utils/core/translateOr';
-    import {SETTINGS_TAB_PATHS} from '$lib/features/settings/settingsPaths';
     import {auth} from '$lib/stores/app/auth';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import PluginSettingsModal from './PluginSettingsModal.svelte';
     import {fetchPluginEntry, type PluginSettingsEntry, type SettingField, type SettingsFamily} from './pluginSettingsApi';
-    import {fieldLabel, LINK_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, SECONDARY_BUTTON_CLASS} from './pluginSettingsForm';
+    import {fieldLabel, LINK_BUTTON_CLASS, pluginsHref, PRIMARY_BUTTON_CLASS, SECONDARY_BUTTON_CLASS} from './pluginSettingsForm';
     import {notConfiguredCase, type NotConfiguredCase, type ProviderReadiness} from './notConfigured';
 
     interface Props {
@@ -134,7 +133,7 @@
             {#if kase === 'missing_member'}
                 <p class="text-xs text-lf-secondary">
                     {$_('pluginSettings.notConfigured.readOnlyIntro')}
-                    <a class={LINK_BUTTON_CLASS} data-testid="plugin-not-configured-settings-link" href={SETTINGS_TAB_PATHS.plugins} rel="noopener" target="_blank">{$_('pluginSettings.notConfigured.readOnlyLink')}</a>
+                    <a class={LINK_BUTTON_CLASS} data-testid="plugin-not-configured-settings-link" href={pluginsHref(family, pluginCode)} rel="noopener" target="_blank">{$_('pluginSettings.notConfigured.readOnlyLink')}</a>
                 </p>
             {/if}
             {#if kase !== 'managed'}

@@ -16,9 +16,15 @@
   description, the names and descriptions of its fields, never a number — as written (case and accents aside, no
   tolerance for typos). The menu's counts follow it; its entries stay, with 0. With nothing found, the empty state of the
   Assets and FX pages, and within a choice a link to search every family.
+
+  The address (S2c): the choice and the search are read from `?family=` and `?q=` (a link from outside opens the page
+  filtered; Back and Forward bring them back) and written there, a choice as a new step of the history, the search in
+  place while typing. «All» and an empty search write nothing.
 -->
 <script lang="ts">
-    import {onMount, tick} from 'svelte';
+    import {onMount, tick, untrack} from 'svelte';
+    import {goto} from '$app/navigation';
+    import {page} from '$app/stores';
     import {Puzzle, Search} from 'lucide-svelte';
     import {currentLanguage} from '$lib/stores/app/language';
     import {_} from '$lib/i18n';
@@ -26,7 +32,7 @@
     import SettingsCategoryNav from '$lib/features/settings/SettingsCategoryNav.svelte';
     import PluginSettingsForm from './PluginSettingsForm.svelte';
     import {fetchPluginEntry, fetchPluginSettings, type PluginSettingsEntry} from './pluginSettingsApi';
-    import {entryMatches, entryTitle, FAMILY_ICONS, FAMILY_TITLE_KEYS, filterByMenu, groupByFamily, groupFormId, MENU_ICONS, MENU_TITLE_KEYS, NOTE_CLASSES, pluginMenu, type PluginMenuId, searchWords} from './pluginSettingsForm';
+    import {entryMatches, entryTitle, FAMILY_ICONS, FAMILY_TITLE_KEYS, filterByMenu, groupByFamily, groupFormId, MENU_ICONS, MENU_TITLE_KEYS, NOTE_CLASSES, pluginMenu, type PluginMenuId, pluginsHref, readPluginsAddress, searchWords} from './pluginSettingsForm';
 
     let entries = $state<PluginSettingsEntry[]>([]);
     let loading = $state(true);
@@ -41,6 +47,44 @@
     const matching = $derived(entries.filter((entry) => entryMatches(entry, words, $_, $currentLanguage)));
     const navEntries = $derived(pluginMenu(entries, selected, matching).map((item) => ({id: item.id, icon: MENU_ICONS[item.id], label: $_(MENU_TITLE_KEYS[item.id]), count: item.count, dot: item.dot})));
     const shown = $derived(filterByMenu(matching, selected));
+
+    /** The addresses this page wrote and has not seen land yet: when one lands it is the page's own echo, not a new
+     * address, and reading it would take back what was typed since (a fast typist, navigations landing late). */
+    const written = new Set<string>();
+
+    // The address names the choice and the search (S2c): read on open and whenever it changes (Back, Forward, a link)
+    $effect(() => {
+        const url = $page.url;
+        const here = url.pathname + url.search;
+        if (written.has(here)) {
+            written.delete(here);
+            return;
+        }
+        written.clear();
+        const named = readPluginsAddress(url.searchParams);
+        untrack(() => {
+            if (named.selected !== selected) selected = named.selected;
+            if (named.query !== query) query = named.query;
+        });
+    });
+
+    /** Write the choice and the search into the address: a choice as a new step of the history, typing in place. */
+    function writeAddress(replace: boolean): void {
+        const target = pluginsHref(selected, query);
+        if (target === $page.url.pathname + $page.url.search) return;
+        written.add(target);
+        void goto(target, {replaceState: replace, noScroll: true, keepFocus: true});
+    }
+
+    function choose(id: PluginMenuId): void {
+        selected = id;
+        writeAddress(false);
+    }
+
+    function typed(text: string): void {
+        query = text;
+        writeAddress(true);
+    }
     const groups = $derived(groupByFamily(shown));
     /** The shared groups this tab lists (project 76): their names for the plugins' «in the group» rows, and the ones a
      * plugin can bring into view. A group the tab does not list (a test-only one) is named, with no button. */
@@ -52,7 +96,9 @@
     /** Bring a shared group's form into view, and the focus to its heading; first the groups, when the menu's choice hides it. */
     async function openGroup(name: string): Promise<void> {
         if (!document.getElementById(groupFormId(name))) {
-            selected = 'group';
+            // The groups, the search cleared (mock S0): the group's form is shown whatever was typed
+            query = '';
+            choose('group');
             await tick();
         }
         const target = document.getElementById(groupFormId(name));
@@ -107,11 +153,11 @@
 
 <section aria-busy={loading} class="text-lf-primary" data-busy={loading ? 'true' : 'false'} data-testid="plugin-settings-tab">
     {#if !loadFailed && entries.length > 0}
-        <SettingsCategoryNav dotLabel={$_('pluginSettings.menu.hasUnconfigured')} entries={navEntries} mode="phone" onselect={(id) => (selected = id as PluginMenuId)} {selected} testIdPrefix="plugin-settings" triggerIcon={MENU_ICONS[selected]} triggerLabel={$_(MENU_TITLE_KEYS[selected])} />
+        <SettingsCategoryNav dotLabel={$_('pluginSettings.menu.hasUnconfigured')} entries={navEntries} mode="phone" onselect={(id) => choose(id as PluginMenuId)} {selected} testIdPrefix="plugin-settings" triggerIcon={MENU_ICONS[selected]} triggerLabel={$_(MENU_TITLE_KEYS[selected])} />
     {/if}
     <div class="flex flex-col gap-4 sm:flex-row sm:gap-6">
         {#if !loadFailed && entries.length > 0}
-            <SettingsCategoryNav dotLabel={$_('pluginSettings.menu.hasUnconfigured')} entries={navEntries} mode="sidebar" onselect={(id) => (selected = id as PluginMenuId)} {selected} testIdPrefix="plugin-settings" />
+            <SettingsCategoryNav dotLabel={$_('pluginSettings.menu.hasUnconfigured')} entries={navEntries} mode="sidebar" onselect={(id) => choose(id as PluginMenuId)} {selected} testIdPrefix="plugin-settings" />
         {/if}
         <div class="min-w-0 flex-1 space-y-6">
             <header class="flex items-start justify-between gap-4">
@@ -132,7 +178,7 @@
                         aria-label={$_('pluginSettings.search.placeholder')}
                         class="w-full rounded-lg border border-lf-input bg-lf-field py-1.5 pl-8 pr-3 text-sm text-lf-primary placeholder:text-lf-placeholder hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus"
                         data-testid="plugin-settings-search"
-                        oninput={(event) => (query = event.currentTarget.value)}
+                        oninput={(event) => typed(event.currentTarget.value)}
                         placeholder={$_('pluginSettings.search.placeholder')}
                         type="search"
                         value={query}
@@ -156,7 +202,7 @@
                             {selected === 'all' ? $_('pluginSettings.search.noMatchAll', {values: {query: query.trim()}}) : $_('pluginSettings.search.noMatchFamily', {values: {family: $_(MENU_TITLE_KEYS[selected]), query: query.trim()}})}
                         </p>
                         {#if selected !== 'all' && matching.length > 0}
-                            <button class="mt-3 text-sm text-lf-link hover:underline" data-testid="plugin-settings-search-all" onclick={() => (selected = 'all')} type="button">
+                            <button class="mt-3 text-sm text-lf-link hover:underline" data-testid="plugin-settings-search-all" onclick={() => choose('all')} type="button">
                                 {$_('pluginSettings.search.searchAll', {values: {count: matching.length}})}
                             </button>
                         {/if}
