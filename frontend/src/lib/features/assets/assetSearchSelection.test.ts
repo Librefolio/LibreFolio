@@ -110,14 +110,14 @@ describe('searchResultIdentifier', () => {
     });
 });
 
-// Project 76, P3 (the consultant's rule, corrected 18/11): a provider that accepts PROVIDER_ID (CoinGecko) has its own
+// Project 76, P3 (the consultant's rule, corrected 18/11): a provider that accepts COINGECKO_ID (CoinGecko) has its own
 // code typed OTHER in a search row. For such a provider only, OTHER is a list that grows: the code is written as
-// `<provider>:<code>` (`coingecko:bitcoin`), never in conflict, and the assignment takes PROVIDER_ID. Every other
+// `<provider>:<code>` (`coingecko:bitcoin`), never in conflict, and the assignment takes COINGECKO_ID. Every other
 // provider's OTHER row stays exactly as before (Borsa Italiana's fallback: one OTHER row, the server reads OTHER as URL).
-const COINGECKO = {code: 'coingecko', acceptedTypes: ['PROVIDER_ID']};
+const COINGECKO = {code: 'coingecko', acceptedTypes: ['COINGECKO_ID']};
 const BORSA_ITALIANA = {code: 'borsa_italiana', acceptedTypes: ['ISIN']};
 
-describe("searchResultIdentifier — a provider's own code (OTHER, PROVIDER_ID)", () => {
+describe("searchResultIdentifier — a provider's own code (OTHER, COINGECKO_ID)", () => {
     it('adds `<provider>:<code>` beside the OTHER rows already there, with no conflict, the ticker row untouched', () => {
         const rows = deepFreeze([row('TICKER', 'BTC'), row('OTHER', 'broker-label')]);
         const next = rowsOf(searchResultIdentifier(rows, 'OTHER', ' bitcoin ', COINGECKO));
@@ -150,9 +150,9 @@ describe('searchResultAssignmentType', () => {
         expect(searchResultAssignmentType('TICKER', ['TICKER', 'ISIN'])).toBe('TICKER');
     });
 
-    it('gives OTHER the PROVIDER_ID of a provider that accepts it', () => {
-        expect(searchResultAssignmentType('OTHER', ['PROVIDER_ID'])).toBe('PROVIDER_ID');
-        expect(searchResultAssignmentType('other', ['TICKER', 'PROVIDER_ID'])).toBe('PROVIDER_ID');
+    it('gives OTHER the COINGECKO_ID of a provider that accepts it', () => {
+        expect(searchResultAssignmentType('OTHER', ['COINGECKO_ID'])).toBe('COINGECKO_ID');
+        expect(searchResultAssignmentType('other', ['TICKER', 'COINGECKO_ID'])).toBe('COINGECKO_ID');
     });
 
     it('leaves OTHER as it is for any other provider (Borsa Italiana), or an unknown one: the server reads it as URL, as before', () => {

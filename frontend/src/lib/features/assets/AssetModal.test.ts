@@ -1718,7 +1718,7 @@ describe('AssetModal — the quote base: the plugin’s suggestion, else the typ
 });
 
 // Project 76, P3 (the consultant's rule): a CoinGecko result is typed OTHER, CoinGecko's own code. Choosing it gives the
-// assignment the provider's first accepted type (PROVIDER_ID) from the first read on — never OTHER, which the server
+// assignment the provider's first accepted type (COINGECKO_ID) from the first read on — never OTHER, which the server
 // reads as URL — and writes `coingecko:<id>` among the other identifiers. The search is the real AssetSearchAutocomplete
 // over a streamed answer, as in the blocks above; the provider list is the cache's (`getAssetProviderAcceptedTypes`).
 describe("AssetModal — a provider's own code from the search (76 P3)", () => {
@@ -1732,8 +1732,8 @@ describe("AssetModal — a provider's own code from the search (76 P3)", () => {
         vi.mocked(getAssetProviderParamKeys).mockReset();
     });
 
-    it('gives the assignment PROVIDER_ID from the first read, its own params only, coingecko:bitcoin among the other identifiers, and the logo', async () => {
-        vi.mocked(getAssetProviderAcceptedTypes).mockImplementation((code: string | null | undefined) => (code === 'coingecko' ? ['PROVIDER_ID', 'TICKER'] : []));
+    it('gives the assignment COINGECKO_ID from the first read, its own params only, coingecko:bitcoin among the other identifiers, and the logo', async () => {
+        vi.mocked(getAssetProviderAcceptedTypes).mockImplementation((code: string | null | undefined) => (code === 'coingecko' ? ['COINGECKO_ID', 'TICKER'] : []));
         vi.mocked(getAssetProviderParamKeys).mockImplementation((code: string | null | undefined) => (code === 'coingecko' ? ['vs_currency'] : null));
         // The connection test passes; the metadata read brings the logo, the symbol and the id among the other identifiers
         vi.mocked(zodiosApi.probe_provider_config_api_v1_assets_provider_probe_post).mockImplementation((async (body: {operations: string[]}) => {
@@ -1744,7 +1744,7 @@ describe("AssetModal — a provider's own code from the search (76 P3)", () => {
         // Two accepted types on the panel's own list: with one, the panel would rewrite the type itself and hide what the
         // modal sent first
         vi.mocked(zodiosApi.list_providers_api_v1_assets_provider_get).mockResolvedValue([
-            {code: 'coingecko', name: 'CoinGecko', description: 'Synthetic searchable provider metadata', kind: 'online_scraper', supports_search: true, params_schema: [], accepted_identifier_types: ['PROVIDER_ID', 'TICKER']},
+            {code: 'coingecko', name: 'CoinGecko', description: 'Synthetic searchable provider metadata', kind: 'online_scraper', supports_search: true, params_schema: [], accepted_identifier_types: ['COINGECKO_ID', 'TICKER']},
         ] as never);
         const encoder = new TextEncoder();
         const events = [{event: 'provider_results', provider_code: 'coingecko', results: [COIN]}, {event: 'done'}];
@@ -1775,7 +1775,7 @@ describe("AssetModal — a provider's own code from the search (76 P3)", () => {
 
         const probe = vi.mocked(zodiosApi.probe_provider_config_api_v1_assets_provider_probe_post);
         await waitFor(() => expect(probe).toHaveBeenCalled());
-        expect((probe.mock.calls[0][0] as {identifier_type: string}).identifier_type, 'the first read already asks as PROVIDER_ID').toBe('PROVIDER_ID');
+        expect((probe.mock.calls[0][0] as {identifier_type: string}).identifier_type, 'the first read already asks as COINGECKO_ID').toBe('COINGECKO_ID');
         // Its own params only: no `currency` beside `vs_currency`, which its schema does not have (the consultant, 18/11)
         expect((probe.mock.calls[0][0] as {provider_params: unknown}).provider_params).toStrictEqual({vs_currency: 'EUR'});
         expect(nameInput()).toHaveValue('Bitcoin (BTC)');
