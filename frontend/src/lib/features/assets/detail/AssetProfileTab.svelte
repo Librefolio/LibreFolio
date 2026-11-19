@@ -12,11 +12,16 @@
     there reads the tab again.
   - Seams: `onedit` («Modifica i dati»: the page opens `AssetProfileEditor`, the profile window in save mode, E9b2),
     `onhistory` (the history of a voice, E6). Without them, no button.
+  - The asset's enrichers (E6c, `enrichers`: how many, and the last read). With some, «Aggiorna» beside «Modifica i dati»
+    (`onrefresh`: the page reads them again and saves, I13; only the icon on a phone; its hint says the last read): it is
+    busy (`data-state="running"`) until the page is done, and never on the next asset. With none, on top, the box
+    «Nessun arricchitore configurato» and its «Configura» (`onconfigure`: the page opens the asset window with the
+    enrichers' window on top). Not known yet (`null`): neither.
 
   Pattern: Svelte 5 Runes, Tailwind CSS 4, colour roles only.
 -->
 <script lang="ts">
-    import {Pencil} from 'lucide-svelte';
+    import {Layers, Pencil, RefreshCw} from 'lucide-svelte';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/app/language';
     import {uiLocale} from '$lib/stores/app/uiLocale';
@@ -43,9 +48,30 @@
         onedit?: () => void;
         /** The history of a voice (E6); without it, no clock and no clickable row. */
         onhistory?: (key: string) => void;
+        /** The asset's enrichers (E6c): how many are bound, and the day of the last read (`null`: never). `null`: not known yet. */
+        enrichers?: {count: number; lastRead: string | null} | null;
+        /** «Aggiorna» (E6c): the page reads the enrichers again; the button is busy until it resolves. */
+        onrefresh?: () => Promise<unknown>;
+        /** «Configura» of the box without enrichers (E6c). */
+        onconfigure?: () => void;
     }
 
-    let {assetId, period, isin, ticker, otherIdentifiers = [], refreshKey = 0, onedit, onhistory}: Props = $props();
+    let {assetId, period, isin, ticker, otherIdentifiers = [], refreshKey = 0, onedit, onhistory, enrichers = null, onrefresh, onconfigure}: Props = $props();
+
+    /** The asset whose «Aggiorna» is running: the button is busy for that asset only, never for the next one. */
+    let refreshingFor = $state<number | null>(null);
+    const refreshing = $derived(refreshingFor !== null && refreshingFor === assetId);
+
+    async function refresh(): Promise<void> {
+        if (!onrefresh || refreshing) return;
+        const id = assetId;
+        refreshingFor = id;
+        try {
+            await onrefresh();
+        } finally {
+            if (refreshingFor === id) refreshingFor = null;
+        }
+    }
 
     type Status = 'loading' | 'ready' | 'failed' | 'missing';
     let status = $state<Status>('loading');
@@ -88,6 +114,8 @@
         return {translate: (key: string) => translate(key), locale: uiLocale(), countryName: (iso3: string) => getCountryInfo(iso3).name};
     });
 
+    const refreshHint = $derived(enrichers?.lastRead ? $t('assets.profile.refresh.hint', {values: {date: formatProfileDay(enrichers.lastRead, uiLocale())}}) : $t('assets.profile.refresh.hintNever'));
+
     const cards = $derived(keyFigureCards(catalogue, voices));
     const voicesByKey = $derived(Object.fromEntries(catalogue.map((voice) => [voice.key, voice])));
     const groups = $derived(detailGroups(catalogue, voices));
@@ -120,6 +148,25 @@
             {status === 'failed' ? $t('assets.profile.tab.loadFailed') : $t('assets.profile.tab.missing')}
         </div>
     {:else}
+        {#if enrichers?.count === 0 && onconfigure}
+            <section class="flex flex-col gap-3 rounded-xl border border-lf-subtle bg-lf-card p-4 shadow-sm shadow-lf-shadow-card sm:flex-row sm:items-center" data-testid="asset-profile-no-enrichers">
+                <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-lf-panel text-lf-muted" aria-hidden="true"><Layers size={18} /></span>
+                <div class="min-w-0 flex-1 text-sm">
+                    <p class="font-semibold text-lf-primary">{$t('risk.assetDetail.profileNoEnrichers')}</p>
+                    <p class="text-lf-secondary">{$t('assets.profile.tab.noEnrichersText')}</p>
+                </div>
+                <button
+                    type="button"
+                    class="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-lf-action px-3 py-1.5 text-sm font-medium text-lf-on-action hover:bg-lf-action-hover focus-visible:outline-2 focus-visible:outline-lf-focus"
+                    title={$t('assets.profile.tab.configureHint')}
+                    data-testid="asset-profile-configure"
+                    onclick={() => onconfigure?.()}
+                >
+                    <Layers size={14} />
+                    {$t('assets.enrichers.configure')}
+                </button>
+            </section>
+        {/if}
         <section class="rounded-xl border border-lf-subtle bg-lf-card p-4 shadow-sm shadow-lf-shadow-card">
             <ProfileClassification {voices} />
         </section>
@@ -136,12 +183,36 @@
         <section class="flex flex-col gap-3" data-testid="asset-profile-key-figures">
             <div class="flex flex-wrap items-center justify-between gap-2">
                 <h3 class="text-xs font-semibold uppercase tracking-wide text-lf-muted">{$t('assets.profile.tab.data')}</h3>
-                {#if onedit}
-                    <button type="button" class="inline-flex items-center gap-1.5 rounded-lg border border-lf-subtle bg-lf-card px-2.5 py-1 text-xs text-lf-secondary hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-lf-focus" data-testid="asset-profile-edit" onclick={() => onedit?.()}>
-                        <Pencil size={13} />
-                        {$t('assets.profile.tab.editData')}
-                    </button>
-                {/if}
+                <div class="flex items-center gap-2">
+                    {#if onrefresh && enrichers && enrichers.count > 0}
+                        <button
+                            type="button"
+                            class="inline-flex items-center gap-1.5 rounded-lg border border-lf-subtle bg-lf-card px-2.5 py-1 text-xs text-lf-secondary hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-lf-focus disabled:cursor-wait disabled:opacity-60"
+                            aria-label={`${$t('assets.profile.refresh.button')} · ${refreshHint}`}
+                            title={refreshHint}
+                            disabled={refreshing}
+                            aria-busy={refreshing}
+                            data-state={refreshing ? 'running' : 'idle'}
+                            data-last-read={enrichers.lastRead ?? ''}
+                            data-testid="asset-profile-refresh"
+                            onclick={() => void refresh()}
+                        >
+                            <RefreshCw size={13} class={refreshing ? 'animate-spin' : ''} />
+                            <span class="hidden sm:inline">{$t('assets.profile.refresh.button')}</span>
+                        </button>
+                    {/if}
+                    {#if onedit}
+                        <button
+                            type="button"
+                            class="inline-flex items-center gap-1.5 rounded-lg border border-lf-subtle bg-lf-card px-2.5 py-1 text-xs text-lf-secondary hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-lf-focus"
+                            data-testid="asset-profile-edit"
+                            onclick={() => onedit?.()}
+                        >
+                            <Pencil size={13} />
+                            {$t('assets.profile.tab.editData')}
+                        </button>
+                    {/if}
+                </div>
             </div>
             <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 {#each cards as card (card.key)}
