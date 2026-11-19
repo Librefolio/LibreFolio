@@ -364,11 +364,22 @@ export type WorkspaceIntent =
   | { action: 'create'; }                      // Open empty grid to add new rows
   | { action: 'import'; }                      // Mount BRIM wizard to parse files
   | { action: 'edit'; txIds: number[]; }       // Edit specific existing rows
-  | { action: 'delete'; txIds: number[]; }     // Pre-mark specific rows for deletion
+  | { action: 'delete'; txIds: number[]; unlinkIds?: number[]; } // Pre-mark rows for deletion
   | { action: 'clone'; txIds: number[]; };     // Copy existing rows, keeping their dates
 ```
 
 Upon receiving the intent, `TransactionBulkModal` resolves the actual row data directly from `txStore` (the Single Source of Truth) using the provided transaction IDs. This ensures the modal always operates on the most up-to-date ledger state.
+
+An id that `txStore` does not hold is left out. A caller that needs rows the page did not load adds them first with
+`txStoreAddExtras(rows)`: a row already in the store is kept, and the next `txStoreSetAll` drops the extras.
+
+**Deleting a parent and keeping its charges** (linked charges, project 66). The panel that asks what to do with the
+charges of a deleted parent (`TxChargesActionModal`, «Keep the charges» / «Delete all») opens the workspace with
+`unlinkIds`: the charges that stay, unlinked. They are not rows of the grid: a banner (`tx-bulk-unlink-hint`) names
+them. `buildBatchPayload({chargeUnlinks})` (`txPayloadHelpers.ts`) turns each into `parent_transaction_id: 0` on its
+update — joined to the charge's own update when the batch edits it, nothing when the batch deletes it — in the three
+places that build a payload (the nested form's context, «Validate now», «Save all»). An unlink counts only while its
+parent is still marked for deletion: «Restore» on the parent takes the unlinks back.
 
 ---
 
