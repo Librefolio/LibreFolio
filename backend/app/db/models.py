@@ -794,9 +794,8 @@ class Asset(SQLModel, table=True):
     - Provider handles both current and historical data fetching
     - Provider assignment includes identifier, identifier_type, and provider_params
 
-    Classification and metadata fields:
-    - classification_params: the old JSON of description, countries and sectors. Since plan 68 D7a nothing reads or
-      writes it (the asset profile holds them); the column goes in D7b
+    The description, the countries and the sectors are the asset's profile (``AssetProfileUpdate``, plan 68); the old
+    ``classification_params`` column is dropped by migration 006 (D7b).
 
     Notes:
     - display_name must be unique to avoid user confusion
@@ -816,8 +815,6 @@ class Asset(SQLModel, table=True):
     currency: str = Field(nullable=False, description="Asset original currency")  # ISO 4217
     icon_url: Optional[str] = Field(default=None, description="URL to asset icon (local or remote)")
 
-    # The old classification JSON, unused since plan 68 D7a (removed in D7b)
-    classification_params: Optional[str] = Field(default=None, sa_column=Column(Text))
     asset_type: AssetType = Field(default=AssetType.OTHER)
     quote_base_quantity: Optional[int] = Field(default=1, description="How many units the raw market quote refers to (e.g. 100 for bonds quoted on base 100)")
 

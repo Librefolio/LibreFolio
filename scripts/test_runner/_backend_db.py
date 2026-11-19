@@ -266,7 +266,9 @@ def db_migration_006_asset_profile(verbose: bool = False, test_names: list = Non
     """Test the asset_profile step of migration 006_release_1_4_0_schema (project 68, lot A2), on temporary databases only."""
     print_section("DB Test: Migration 006, step asset_profile")
     print_info("This test works on temporary databases only: the test database is not touched")
-    print_info("Testing: asset_profile_updates and asset_enrichers as the contract states them; FKs at work; 1.3 data kept; models = migration; downgrade; idempotence; the profile reads use the index; no redundant index; A4: the legacy copy of classification_params and its downgrade")
+    print_info(
+        "Testing: asset_profile_updates and asset_enrichers as the contract states them; FKs at work; 1.3 data kept; models = migration; downgrade; idempotence; the profile reads use the index; no redundant index; A4: the legacy copy of classification_params and its downgrade; step drop_classification_params (D7b): the column dropped after the copy, added back last on the way down"
+    )
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_migration_006_asset_profile.py", test_names)
     return run_command(cmd, "Migration 006 asset profile tests", verbose=verbose)
@@ -468,7 +470,7 @@ Note: No backend server required. Tests operate directly on test DB.
         "migration-006-asset-profile",
         db_migration_006_asset_profile,
         name="Migration 006 Asset Profile",
-        desc="006_release_1_4_0_schema, step asset_profile (project 68, A2): asset_profile_updates and asset_enrichers with their columns, FKs (CASCADE, SET NULL) and the one index; a populated 1.3 database keeps its rows; models = migration; downgrade and up again; idempotence; the profile reads search through the index; no redundant index; step asset_profile_legacy_copy (A4): classification_params copied as legacy rows (description, geography, sector; JSON numbers and strings; the voices today's rules refuse skipped, the others kept), read_on the upgrade day in scheduler_timezone (UTC without a valid one), one created_at, nothing added when run again, downgrade rebuilds the column from the last rows",
+        desc="006_release_1_4_0_schema, step asset_profile (project 68, A2): asset_profile_updates and asset_enrichers with their columns, FKs (CASCADE, SET NULL) and the one index; a populated 1.3 database keeps its rows; models = migration; downgrade and up again; idempotence; the profile reads search through the index; no redundant index; step asset_profile_legacy_copy (A4): classification_params copied as legacy rows (description, geography, sector; JSON numbers and strings; the voices today's rules refuse skipped, the others kept), read_on the upgrade day in scheduler_timezone (UTC without a valid one), one created_at, nothing added when run again, downgrade rebuilds the column from the last rows; step drop_classification_params (D7b): no column at 006, the model neither, the copy before the drop; back at 005 the column last, TEXT, nullable",
         prereq="None (temporary databases)",
         isolation="pure",
     )
