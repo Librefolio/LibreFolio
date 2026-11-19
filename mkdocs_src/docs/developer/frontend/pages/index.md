@@ -205,6 +205,16 @@ frontend/src/routes/
 - **Relink events** (`tx-reconcile-events-button`) opens `EventReconciliationModal`: the dividends, interest and
   adjustments without an asset event, each with the event of the same day the server found; see
   [Event Reconciliation](../../backend/transactions/service.md#event-reconciliation)
+- **Linked charges** (`TransactionsTable`, rules in `lib/features/transactions/txTableRows.ts`): a FEE or TAX linked
+  to a parent folds under it. The parent shows the badge «N charges» and a 🔗, and both open or close the group.
+    - Each open charge shows `↳`, and its 🔗 leads to the parent: the page scrolls to it, or opens it read-only when
+      the filters hide it.
+    - The charges stay folded under any filter that is not on the type: the filters read the parent and the rows on
+      their own, and a charge follows its parent. The table then pages the rows itself, and a page never splits an open
+      group.
+    - A sort, or a filter on the type, makes the table flat. Every charge is then a row of its own with `↳`, and the
+      `DataTable` filters, sorts and pages.
+    - Pairs keep their own rules: legs side by side and ghost partners, with no filter and no sort.
 
 ### 💼 Assets (`/assets`)
 

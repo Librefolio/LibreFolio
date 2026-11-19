@@ -342,7 +342,7 @@ The main fields; `lib/components/table/types.ts` has the full interface.
 The filter of a `date` column (`DataTableColumnFilter.svelte`) is a `DateRangePicker` without
 presets (`compact`, `stacked`), and it applies a `DateFilter`, `{type: 'date', from?, to?}`
 (`types.ts`). Either end may stay blank: `matchesColumnFilter` (`dataTableLogic.ts`) drops a row only
-before `from` or after `to`, as does `TransactionsTable`'s own pre-filter, so a date in «From» alone
+before `from` or after `to` (`TransactionsTable` filters its folded rows with the same function), so a date in «From» alone
 keeps the rows from that day on, and one in «To» alone the rows up to that day. In the URL the filter
 reads `from,to`, either side empty (`lib/features/files/urlFilters.ts`); the Transactions page keeps its own
 `date_start` and `date_end` (`lib/features/transactions/filterState.ts`).
