@@ -69,6 +69,9 @@ export type PendingOp = ({op: 'create'} | {op: 'edit'; txId: number; markedDelet
     /** Project 66 (F7-c1): a saved charge the Bulk read itself when its parent entered (`charges_count`), unchanged when
      *  read. Its group starts closed, and «Remove from batch» on the parent takes it along while it is unchanged. */
     loadedWithParent?: true;
+    /** Project 66 (F7-c2): the «del» or «scollega» on this charge was set by its parent's delete choice (the panel V1,
+     *  or the page's «Keep the charges»). «Restore» on the parent undoes only those; one set by hand stays. */
+    byParentChoice?: true;
 };
 
 /** Single source of truth: WAC results per auto-op (keyed by tempId).

@@ -18,7 +18,7 @@ import {chargesFromRows, type ChargeDraft, type ChargeType} from '../form/txChar
 import {exactDecimalEqual} from '../txPayloadHelpers';
 
 type StoreGet = (id: number) => TXReadItem | undefined;
-type ChargeFlag = 'chargeOf' | 'parentUnlink' | 'parentLinkId' | 'followsParent';
+type ChargeFlag = 'chargeOf' | 'parentUnlink' | 'parentLinkId' | 'followsParent' | 'byParentChoice';
 
 /** What the payload of a charge carries to name its parent: a create of the batch by its `ref`, or a saved id (0 =
  *  unlink). Never both (`chargeParentTwice`). */
@@ -274,4 +274,149 @@ export function chargeParentFields(op: PendingOp, ops: readonly PendingOp[], get
 export function parentNeedsRef(op: PendingOp, ops: readonly PendingOp[]): boolean {
     if (op.op !== 'create') return false;
     return ops.some((other) => other !== op && other.chargeOf === op.tempId);
+}
+
+// ---------------------------------------------------------------------------
+// F7-c2 — deleting a parent inside the Bulk: the panel V1 (contract 66-F7 §17, corrected by §18, §19)
+// ---------------------------------------------------------------------------
+
+/** Whether a charge's read is still pending (`loading`) or failed (`failed`) for this saved row; `null` when read. */
+export type ChargesUnread = 'loading' | 'failed' | null;
+
+/** One decision for «Delete» and «Delete selected», taken on the state before any of it (`planBulkDelete`). */
+export interface BulkDeletePlan {
+    /** Saved selected rows that flip: «del», or restored. */
+    toggles: {tempId: string; deleted: boolean}[];
+    /** New selected rows, which leave the Bulk. */
+    removals: string[];
+    /** Parents going «del» that have linked charges: they wait for the user's choice. */
+    needsChoice: string[];
+    /** Parents going «del» whose charges are being read. */
+    waiting: string[];
+    /** Parents going «del» whose charges could not be read. */
+    skipped: string[];
+    /** The panel's numbers: the charges «Keep» keeps, the rows «Delete all» deletes or removes. */
+    counts: {keep: number; all: number};
+}
+
+/** The charges still linked to a parent (§17.1): under it, not «del», not unlinked; new ones included; in ops order. */
+export function linkedChargesOf(parent: PendingOp, ops: readonly PendingOp[]): PendingOp[] {
+    return ops.filter((op) => op !== parent && op.chargeOf === parent.tempId && !op.parentUnlink && !(op.op === 'edit' && op.markedDelete) && isUnderParent(op, ops));
+}
+
+/**
+ * The plan of a delete on these selected rows (a single «Delete» is a selection of one). A saved row flips; a new one
+ * leaves; a saved row going «del» whose charges are not read (`unread`) waits or is skipped; a parent going «del» with
+ * linked charges asks for a choice — its charges that are selected themselves toggle on their own instead (the choice on
+ * the row wins over the cascade). The counts are the page's (66 F6): «Keep» = the linked charges of the parents asking;
+ * «Delete all» = those parents, those charges and every other selected row going «del» or leaving.
+ */
+export function planBulkDelete(ops: readonly PendingOp[], selectedTempIds: readonly string[], unread: (op: PendingOp) => ChargesUnread): BulkDeletePlan {
+    const selected = new Set(selectedTempIds);
+    const plan: BulkDeletePlan = {toggles: [], removals: [], needsChoice: [], waiting: [], skipped: [], counts: {keep: 0, all: 0}};
+    const seen = new Set<string>();
+    for (const tempId of selectedTempIds) {
+        if (seen.has(tempId)) continue;
+        seen.add(tempId);
+        const op = ops.find((o) => o.tempId === tempId);
+        if (!op) continue;
+        if (op.op === 'create') {
+            plan.removals.push(tempId);
+            continue;
+        }
+        const deleted = !op.markedDelete;
+        if (deleted) {
+            const state = unread(op);
+            if (state === 'loading') {
+                plan.waiting.push(tempId);
+                continue;
+            }
+            if (state === 'failed') {
+                plan.skipped.push(tempId);
+                continue;
+            }
+            const linked = linkedChargesOf(op, ops).filter((c) => !selected.has(c.tempId));
+            if (linked.length > 0) {
+                plan.needsChoice.push(tempId);
+                plan.counts.keep += linked.length;
+                continue;
+            }
+        }
+        plan.toggles.push({tempId, deleted});
+    }
+    plan.counts.all = plan.needsChoice.length + plan.counts.keep + plan.toggles.filter((t) => t.deleted).length + plan.removals.length;
+    return plan;
+}
+
+/**
+ * Rows leaving the Bulk: each with its pair's hidden half; a parent's new charges leave with it, its saved charges stay,
+ * owned by nobody (§11.2). The one removal of the Bulk (`removeRow`, and the plan's removals).
+ */
+export function withoutRows(ops: readonly PendingOp[], tempIds: Iterable<string>): PendingOp[] {
+    const named = new Set(tempIds);
+    const removed = new Set(ops.filter((op) => named.has(op.tempId) || (op.pairedWith !== undefined && named.has(op.pairedWith))).map((op) => op.tempId));
+    return ops.filter((op) => !removed.has(op.tempId) && !(op.op === 'create' && op.chargeOf !== undefined && removed.has(op.chargeOf))).map((op) => (op.chargeOf !== undefined && removed.has(op.chargeOf) ? without(op, 'chargeOf') : op));
+}
+
+/**
+ * The plan and the user's choice onto the operations; a new array, the input untouched. `choice` matters only when
+ * the plan has parents asking for one.
+ *   - «keep»: each such parent «del»; its saved linked charges unlinked (`parentUnlink` + `byParentChoice`); a `linkNew`
+ *     one (linked here, never saved under it: `get`) only loses its local link; its new ones become rows of their own,
+ *     with the broker, asset and date they followed;
+ *   - «all»: each such parent «del»; its saved linked charges «del» (`byParentChoice`); its new ones leave;
+ *   - a toggle flips its row: a restored parent takes back what a choice set on its charges (`byParentChoice`), a
+ *     charge unlinked by hand stays; a charge restored under a parent still «del» is unlinked, never linked to it;
+ *   - the removals leave (`withoutRows`).
+ */
+export function applyDeleteChoice(ops: readonly PendingOp[], plan: BulkDeletePlan, choice: 'keep' | 'all', get: StoreGet): PendingOp[] {
+    const replaced = new Map<string, PendingOp | null>();
+    const ownToggle = new Set([...plan.toggles.map((t) => t.tempId), ...plan.removals]);
+    for (const parentId of plan.needsChoice) {
+        const parent = ops.find((op) => op.tempId === parentId);
+        if (!parent || parent.op !== 'edit') continue;
+        replaced.set(parentId, {...parent, markedDelete: true});
+        for (const charge of linkedChargesOf(parent, ops)) {
+            if (ownToggle.has(charge.tempId)) continue;
+            if (charge.op === 'create') {
+                if (choice === 'all') {
+                    replaced.set(charge.tempId, null);
+                    continue;
+                }
+                const own = without(charge, 'chargeOf', 'followsParent');
+                const {broker_id, asset_id, date} = parent.fields;
+                replaced.set(charge.tempId, charge.followsParent ? {...own, fields: {...own.fields, broker_id, asset_id, date}} : own);
+                continue;
+            }
+            if (choice === 'all') {
+                replaced.set(charge.tempId, {...without(charge, 'parentUnlink'), markedDelete: true, byParentChoice: true} as PendingOp);
+            } else if (savedParentId(charge, get) !== parent.txId) {
+                replaced.set(charge.tempId, without(charge, 'chargeOf'));
+            } else {
+                replaced.set(charge.tempId, {...charge, parentUnlink: true, byParentChoice: true});
+            }
+        }
+    }
+    const restored = new Set(plan.toggles.filter((t) => !t.deleted).map((t) => t.tempId));
+    for (const {tempId, deleted} of plan.toggles) {
+        const op = ops.find((o) => o.tempId === tempId);
+        if (!op || op.op !== 'edit') continue;
+        if (deleted) {
+            replaced.set(tempId, {...op, markedDelete: true});
+            continue;
+        }
+        const owner = op.chargeOf !== undefined ? ops.find((o) => o.tempId === op.chargeOf) : undefined;
+        const ownerStaysDeleted = owner?.op === 'edit' && owner.markedDelete && !restored.has(owner.tempId);
+        replaced.set(tempId, ownerStaysDeleted ? ({...op, markedDelete: false, parentUnlink: true} as PendingOp) : {...op, markedDelete: false});
+        for (const charge of ops) {
+            if (charge.chargeOf !== tempId || !charge.byParentChoice || charge.op !== 'edit' || replaced.has(charge.tempId)) continue;
+            replaced.set(charge.tempId, {...without(charge, 'parentUnlink', 'byParentChoice'), markedDelete: false} as PendingOp);
+        }
+    }
+    const out = ops.flatMap((op) => {
+        if (!replaced.has(op.tempId)) return [op];
+        const next = replaced.get(op.tempId);
+        return next ? [next] : [];
+    });
+    return plan.removals.length > 0 ? withoutRows(out, plan.removals) : out;
 }

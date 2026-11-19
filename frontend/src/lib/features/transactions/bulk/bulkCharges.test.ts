@@ -883,3 +883,251 @@ describe('rowAnchor — the row on screen that stands for an operation', () => {
         expect(rowAnchor(dangling, [dangling], new Set())).toBe('t-512');
     });
 });
+
+// ---------------------------------------------------------------------------
+// F7-c2 — linkedChargesOf, planBulkDelete, applyDeleteChoice (contract 66-F7 §17, corrected by §18)
+// ---------------------------------------------------------------------------
+
+/**
+ * The shapes pinned here (the implementer follows them):
+ *
+ *   linkedChargesOf(parent, ops): PendingOp[]
+ *       the operations with `chargeOf` = parent.tempId for which `isUnderParent` holds, not `markedDelete`, without
+ *       `parentUnlink`; new ones included; in the order of `ops`.
+ *
+ *   planBulkDelete(ops, selectedTempIds, unread): BulkDeletePlan
+ *       unread(op) → 'loading' | 'failed' | null, asked only of a saved row about to go «del»;
+ *       BulkDeletePlan = {
+ *           toggles: {tempId: string; deleted: boolean}[];  // saved selected rows that flip («del» ↔ restored)
+ *           removals: string[];                              // new selected rows, which leave the Bulk
+ *           needsChoice: string[];                           // parents going «del» that have linked charges
+ *           waiting: string[];                               // parents going «del» whose read is in flight
+ *           skipped: string[];                               // parents going «del» whose read failed
+ *           counts: {keep: number; all: number};
+ *       }
+ *       Every decision is taken on the state before any of them. A waiting or skipped parent is in no toggle.
+ *       counts, as the page's panel counts its intent (66 F6): `keep` = the linked charges of the parents in
+ *       needsChoice (they survive «Keep»); `all` = every row «Delete all» deletes or removes: those parents, their
+ *       linked charges, and the other selected rows going «del» or leaving. A restore counts in neither.
+ *
+ *   applyDeleteChoice(ops, plan, choice, get): PendingOp[]
+ *       `get` is the store's read (`txStoreGet`): a saved charge linked here to a parent that is not its saved one
+ *       (`linkNew`) is told apart by its saved `parent_transaction_id`. `choice` is ignored when needsChoice is empty.
+ *       - toggles and removals applied;
+ *       - «keep»: each parent «del»; its saved linked charges `parentUnlink` + `byParentChoice`; its new ones on their
+ *         own (no `chargeOf`, no `followsParent`) with the broker, asset and date they followed; a `linkNew` one only
+ *         loses `chargeOf` (it never had this parent saved: nothing to send);
+ *       - «all»: each parent «del»; its saved linked charges `markedDelete` + `byParentChoice` (a `linkNew` too); its
+ *         new ones leave the Bulk;
+ *       - a parent restored: its charges marked `byParentChoice` get back as they were (no `markedDelete`, no
+ *         `parentUnlink`, no `byParentChoice`); a charge unlinked by hand stays unlinked.
+ *
+ * RED until `bulkCharges.ts` exports them and `PendingOp` gains `byParentChoice?: true`.
+ */
+type Unread = 'loading' | 'failed' | null;
+type BulkDeletePlan = {
+    toggles: {tempId: string; deleted: boolean}[];
+    removals: string[];
+    needsChoice: string[];
+    waiting: string[];
+    skipped: string[];
+    counts: {keep: number; all: number};
+};
+type LinkedChargesOf = (parent: PendingOp, ops: readonly PendingOp[]) => PendingOp[];
+type PlanBulkDelete = (ops: readonly PendingOp[], selectedTempIds: readonly string[], unread: (op: PendingOp) => Unread) => BulkDeletePlan;
+type ApplyDeleteChoice = (ops: readonly PendingOp[], plan: BulkDeletePlan, choice: 'keep' | 'all', get: (id: number) => TXReadItem | undefined) => PendingOp[];
+
+function c2<T>(name: string): T {
+    const fn = (bulkChargesModule as unknown as Record<string, unknown>)[name];
+    expect(fn, `bulkCharges exports ${name}`).toBeTypeOf('function');
+    return fn as T;
+}
+const linkedChargesOf: LinkedChargesOf = (parent, ops) => c2<LinkedChargesOf>('linkedChargesOf')(parent, ops);
+const planBulkDelete: PlanBulkDelete = (ops, selected, unread) => c2<PlanBulkDelete>('planBulkDelete')(ops, selected, unread);
+const applyDeleteChoice: ApplyDeleteChoice = (ops, plan, choice, g) => c2<ApplyDeleteChoice>('applyDeleteChoice')(ops, plan, choice, g);
+const allRead = (): Unread => null;
+type WithChoice = PendingOp & {byParentChoice?: true};
+
+describe('linkedChargesOf — the charges still linked to a parent', () => {
+    it('saved and new charges under the parent, in ops order; not «del», not unlinked, not another parent’s', () => {
+        const ops = [
+            editOp(BUY_A),
+            editOp(TAX_A, {chargeOf: 't-501'}),
+            editOp(FEE_A, {chargeOf: 't-501', markedDelete: true}),
+            createOp('n-fee', fieldsOf(FEE_A), {chargeOf: 't-501', followsParent: true}),
+            editOp(FEE_FREE, {chargeOf: 't-501', parentUnlink: true}),
+            editOp(BUY_B),
+            editOp(FEE_B, {chargeOf: 't-511'}),
+        ];
+        expect(tempIds(linkedChargesOf(ops[0], ops))).toEqual(['t-503', 'n-fee']);
+        expect(tempIds(linkedChargesOf(ops[5], ops))).toEqual(['t-512']);
+    });
+
+    it('under a parent already «del» a «scollega» charge is under it but not linked: excluded', () => {
+        const ops = [editOp(BUY_A, {markedDelete: true}), editOp(FEE_A, {chargeOf: 't-501', parentUnlink: true}), editOp(TAX_A, {chargeOf: 't-501'})];
+        expect(tempIds(linkedChargesOf(ops[0], ops))).toEqual(['t-503']);
+    });
+
+    it('a row with no charge: none', () => {
+        const ops = [editOp(BUY_A), editOp(FEE_FREE)];
+        expect(linkedChargesOf(ops[0], ops)).toEqual([]);
+    });
+});
+
+describe('planBulkDelete — one plan for «Delete» and «Delete selected»', () => {
+    const buyA = editOp(BUY_A);
+    const feeA = editOp(FEE_A, {chargeOf: 't-501'});
+    const taxA = editOp(TAX_A, {chargeOf: 't-501'});
+    const free = editOp(FEE_FREE);
+
+    it('a single parent with linked charges asks for a choice: keep = 2 charges, all = parent + 2', () => {
+        const ops = [buyA, feeA, taxA, free];
+        const plan = planBulkDelete(ops, ['t-501'], allRead);
+        expect(plan.needsChoice).toEqual(['t-501']);
+        expect(plan.waiting).toEqual([]);
+        expect(plan.skipped).toEqual([]);
+        expect(plan.counts).toEqual({keep: 2, all: 3});
+    });
+
+    it('a row with no linked charge needs no choice: it toggles', () => {
+        const plan = planBulkDelete([buyA, free], ['t-520'], allRead);
+        expect(plan.needsChoice).toEqual([]);
+        expect(plan.toggles).toEqual([{tempId: 't-520', deleted: true}]);
+    });
+
+    it('a selected row already «del» toggles back without asking, and counts in nothing', () => {
+        const ops = [editOp(BUY_A, {markedDelete: true}), editOp(FEE_A, {chargeOf: 't-501', parentUnlink: true, byParentChoice: true} as never), free];
+        const plan = planBulkDelete(ops, ['t-501'], allRead);
+        expect(plan.needsChoice).toEqual([]);
+        expect(plan.toggles).toEqual([{tempId: 't-501', deleted: false}]);
+        expect(plan.counts).toEqual({keep: 0, all: 0});
+    });
+
+    it('a selection mixing a parent, an unrelated row and a new row: one choice; all counts every row that goes', () => {
+        const fresh = createOp('n-dep', {...fieldsOf(FEE_FREE), type: 'DEPOSIT' as DraftFields['type']});
+        const ops = [buyA, feeA, taxA, free, fresh];
+        const plan = planBulkDelete(ops, ['t-501', 't-520', 'n-dep'], allRead);
+        expect(plan.needsChoice).toEqual(['t-501']);
+        expect(plan.toggles).toContainEqual({tempId: 't-520', deleted: true});
+        expect(plan.removals).toEqual(['n-dep']);
+        expect(plan.counts, 'keep: the 2 charges; all: BUY + 2 charges + the free FEE + the new row').toEqual({keep: 2, all: 5});
+    });
+
+    it('a parent whose read is in flight waits; one whose read failed is skipped; neither toggles', () => {
+        const ops = [buyA, feeA, editOp(BUY_B), free];
+        const unread = (op: PendingOp): Unread => (op.tempId === 't-501' ? 'loading' : op.tempId === 't-511' ? 'failed' : null);
+        const plan = planBulkDelete(ops, ['t-501', 't-511', 't-520'], unread);
+        expect(plan.waiting).toEqual(['t-501']);
+        expect(plan.skipped).toEqual(['t-511']);
+        expect(plan.needsChoice).toEqual([]);
+        expect(plan.toggles).toEqual([{tempId: 't-520', deleted: true}]);
+    });
+
+    it('unread is asked only of rows going «del»: a parent being restored never waits', () => {
+        const ops = [editOp(BUY_A, {markedDelete: true}), free];
+        const plan = planBulkDelete(ops, ['t-501'], () => 'loading');
+        expect(plan.waiting).toEqual([]);
+        expect(plan.toggles).toEqual([{tempId: 't-501', deleted: false}]);
+    });
+
+    it('a top-level charge of the parent (unlinked by hand), selected with it: its own toggle, outside the parent’s choice', () => {
+        const unlinked = editOp(TAX_A, {chargeOf: 't-501', parentUnlink: true});
+        const ops = [buyA, feeA, unlinked];
+        const plan = planBulkDelete(ops, ['t-501', 't-503'], allRead);
+        expect(plan.needsChoice).toEqual(['t-501']);
+        expect(plan.toggles).toContainEqual({tempId: 't-503', deleted: true});
+        expect(plan.counts, 'keep: the FEE alone; all: BUY + FEE + the TAX deleted anyway').toEqual({keep: 1, all: 3});
+    });
+});
+
+describe('applyDeleteChoice — the choice onto the operations', () => {
+    const buyA = editOp(BUY_A);
+    const feeA = editOp(FEE_A, {chargeOf: 't-501'});
+    const taxA = editOp(TAX_A, {chargeOf: 't-501'});
+
+    it('«keep»: parent «del»; saved charges unlinked, marked byParentChoice, still under the parent', () => {
+        const ops = [buyA, feeA, taxA];
+        const out = applyDeleteChoice(ops, planBulkDelete(ops, ['t-501'], allRead), 'keep', get) as WithChoice[];
+        expect(byTempId(out, 't-501')).toMatchObject({markedDelete: true});
+        for (const id of ['t-502', 't-503']) {
+            expect(byTempId(out, id), id).toMatchObject({chargeOf: 't-501', parentUnlink: true, byParentChoice: true, markedDelete: false});
+            expect(isUnderParent(byTempId(out, id), out), `${id} sits under the parent «del»`).toBe(true);
+        }
+    });
+
+    it('«all»: parent «del»; saved charges «del», marked byParentChoice', () => {
+        const ops = [buyA, feeA, taxA];
+        const out = applyDeleteChoice(ops, planBulkDelete(ops, ['t-501'], allRead), 'all', get) as WithChoice[];
+        expect(byTempId(out, 't-501')).toMatchObject({markedDelete: true});
+        for (const id of ['t-502', 't-503']) expect(byTempId(out, id), id).toMatchObject({markedDelete: true, byParentChoice: true});
+        expect(
+            out.some((op) => op.tempId === 't-502' && op.parentUnlink),
+            '«del» wins over «scollega»',
+        ).toBe(false);
+    });
+
+    it('«keep» on a new charge: a row of its own, no chargeOf nor followsParent, with the broker, asset and date it followed', () => {
+        const parent = editOp(BUY_A);
+        const stale = createOp('n-fee', {...fieldsOf(FEE_A), date: '2025-01-01', broker_id: 1, asset_id: null}, {chargeOf: 't-501', followsParent: true});
+        const ops = [parent, stale];
+        const out = applyDeleteChoice(ops, planBulkDelete(ops, ['t-501'], allRead), 'keep', get);
+        const kept = byTempId(out, 'n-fee');
+        expect(kept.chargeOf, 'on its own').toBeUndefined();
+        expect(kept.followsParent, 'no longer follows').toBeUndefined();
+        expect({broker_id: kept.fields.broker_id, asset_id: kept.fields.asset_id, date: kept.fields.date}, 'the values it followed, frozen').toEqual({broker_id: parent.fields.broker_id, asset_id: parent.fields.asset_id, date: parent.fields.date});
+    });
+
+    it('«all» on a new charge: it leaves the Bulk', () => {
+        const ops = [buyA, createOp('n-fee', fieldsOf(FEE_A), {chargeOf: 't-501', followsParent: true})];
+        const out = applyDeleteChoice(ops, planBulkDelete(ops, ['t-501'], allRead), 'all', get);
+        expect(out.some((op) => op.tempId === 'n-fee')).toBe(false);
+    });
+
+    it('a linkNew charge (linked here, saved under no parent): «keep» only drops the local link; «all» marks it «del»', () => {
+        const linked = editOp(FEE_FREE, {chargeOf: 't-501'});
+        const ops = [buyA, linked];
+        const kept = byTempId(applyDeleteChoice(ops, planBulkDelete(ops, ['t-501'], allRead), 'keep', get), 't-520') as WithChoice;
+        expect(kept.chargeOf, 'the local link is gone').toBeUndefined();
+        expect(kept.parentUnlink, 'nothing to send: it never had this parent saved').toBeUndefined();
+        expect(chargeParentFields(kept, [buyA, kept], get), 'the payload names no parent').toBeNull();
+        const gone = byTempId(applyDeleteChoice(ops, planBulkDelete(ops, ['t-501'], allRead), 'all', get), 't-520') as WithChoice;
+        expect(gone).toMatchObject({markedDelete: true, byParentChoice: true});
+    });
+
+    it('the toggles and removals of the plan are applied with the choice', () => {
+        const free = editOp(FEE_FREE);
+        const fresh = createOp('n-dep', fieldsOf(FEE_FREE));
+        const ops = [buyA, feeA, free, fresh];
+        const out = applyDeleteChoice(ops, planBulkDelete(ops, ['t-501', 't-520', 'n-dep'], allRead), 'keep', get);
+        expect(byTempId(out, 't-520')).toMatchObject({markedDelete: true});
+        expect(out.some((op) => op.tempId === 'n-dep')).toBe(false);
+    });
+
+    it('restoring the parent undoes only what the choice set: a charge unlinked by hand before stays unlinked', () => {
+        const byHand = editOp(TAX_A, {chargeOf: 't-501', parentUnlink: true});
+        const before = [buyA, feeA, byHand];
+        const deleted = applyDeleteChoice(before, planBulkDelete(before, ['t-501'], allRead), 'keep', get);
+        const restored = applyDeleteChoice(deleted, planBulkDelete(deleted, ['t-501'], allRead), 'keep', get) as WithChoice[];
+        expect(byTempId(restored, 't-501')).toMatchObject({markedDelete: false});
+        const fee = byTempId(restored, 't-502') as WithChoice;
+        expect(fee.parentUnlink, 'the FEE the choice unlinked is linked again').toBeUndefined();
+        expect(fee.byParentChoice, 'and no longer marked').toBeUndefined();
+        expect(byTempId(restored, 't-503'), 'the TAX unlinked by hand stays unlinked').toMatchObject({parentUnlink: true});
+    });
+
+    it('restoring after «all»: the saved charges come back linked; a new one removed does not come back', () => {
+        const before = [buyA, feeA, createOp('n-fee', fieldsOf(FEE_A), {chargeOf: 't-501', followsParent: true})];
+        const deleted = applyDeleteChoice(before, planBulkDelete(before, ['t-501'], allRead), 'all', get);
+        const restored = applyDeleteChoice(deleted, planBulkDelete(deleted, ['t-501'], allRead), 'all', get) as WithChoice[];
+        expect(byTempId(restored, 't-502')).toMatchObject({markedDelete: false});
+        expect((byTempId(restored, 't-502') as WithChoice).byParentChoice).toBeUndefined();
+        expect(restored.some((op) => op.tempId === 'n-fee')).toBe(false);
+    });
+
+    it('does not mutate its input', () => {
+        const ops = [buyA, feeA, taxA];
+        const copy = snapshot(ops);
+        applyDeleteChoice(ops, planBulkDelete(ops, ['t-501'], allRead), 'keep', get);
+        expect(ops).toEqual(copy);
+    });
+});
