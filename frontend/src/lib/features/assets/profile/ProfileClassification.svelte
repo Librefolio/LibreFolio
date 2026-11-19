@@ -6,7 +6,8 @@
   composition drawn is the one of that day (`compositionAt`). The chooser shows only with two days or more; the label
   of the day shown is always there (`compositionLabel`, PROF 17/11): the source's date, else the day of the read, and no
   date for a value from before the profile; it publishes `data-kind` and `data-day`. A part with no composition that day
-  says so and draws no chart; each part publishes `data-state` (`value`, `unavailable`).
+  says so and draws no chart; each part publishes `data-state` (`value`, `unavailable`). Beside each part's title, the
+  clock of the cards opens that voice's history (`onhistory`, E6b2), when the voice has rows in the period.
 
   Pattern: Svelte 5 Runes, Tailwind CSS 4, colour roles only.
 -->
@@ -17,14 +18,17 @@
     import GeographyMap from '$lib/components/charts/GeographyMap.svelte';
     import {currentLanguage} from '$lib/stores/app/language';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import ProfileHistoryClock from './ProfileHistoryClock.svelte';
     import type {ProfileVoices} from './profileStore';
     import {compositionAt, compositionDays, compositionLabel, formatProfileDay, type CompositionLabel} from './profileTabState';
 
     interface Props {
         voices: ProfileVoices;
+        /** Opens a voice's history (E6b2); without it, no clock. */
+        onhistory?: (key: string) => void;
     }
 
-    let {voices}: Props = $props();
+    let {voices, onhistory}: Props = $props();
 
     const days = $derived(compositionDays(voices));
     let chosen = $state<string | null>(null);
@@ -67,7 +71,10 @@
     </div>
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div class="rounded-lg bg-lf-panel p-3" data-testid="profile-classification-geography" data-state={geography ? 'value' : 'unavailable'}>
-            <h4 class="mb-2 text-xs font-medium text-lf-muted">{$t('assets.profile.voices.geography')}</h4>
+            <div class="mb-2 flex items-start justify-between gap-2">
+                <h4 class="text-xs font-medium text-lf-muted">{$t('assets.profile.voices.geography')}</h4>
+                {#if onhistory && voices.geography?.length}<ProfileHistoryClock voiceKey="geography" testId="profile-classification-geography-history" {onhistory} />{/if}
+            </div>
             {#if geography}
                 <GeographyMap data={geography} height="280px" language={$currentLanguage} />
             {:else}
@@ -75,7 +82,10 @@
             {/if}
         </div>
         <div class="rounded-lg bg-lf-panel p-3" data-testid="profile-classification-sector" data-state={sectors ? 'value' : 'unavailable'}>
-            <h4 class="mb-2 text-xs font-medium text-lf-muted">{$t('assets.profile.voices.sector')}</h4>
+            <div class="mb-2 flex items-start justify-between gap-2">
+                <h4 class="text-xs font-medium text-lf-muted">{$t('assets.profile.voices.sector')}</h4>
+                {#if onhistory && voices.sector?.length}<ProfileHistoryClock voiceKey="sector" testId="profile-classification-sector-history" {onhistory} />{/if}
+            </div>
             {#if sectors}
                 <AllocationPieChart data={sectors} height="280px" />
             {:else}
