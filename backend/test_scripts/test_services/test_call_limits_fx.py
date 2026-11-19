@@ -128,6 +128,7 @@ SHIPPED_FLAGS = {
     "RBI": True,
     "BOG": True,
     "BCRA": True,
+    "BNR": True,
     "MANUAL": False,
     "MOCKFX": False,
     "MOCKFX_FAIL": False,
