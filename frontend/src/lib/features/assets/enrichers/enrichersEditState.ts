@@ -221,6 +221,17 @@ function lastRead(entry: EnricherReadState | undefined): LastRead | null {
     return {day: String(entry.read_at).slice(0, 10), status: String(entry.status), errorCode: entry.error_code ?? null};
 }
 
+/**
+ * The last read of an asset (E6c, the hint of «Aggiorna»): the latest day an enricher still bound was read, whatever the
+ * outcome; `state` keeps the reads of enrichers removed since (B3), which do not count. `null`: never read.
+ */
+export function assetLastRead(config: Record<string, unknown>, state: Record<string, EnricherReadState>): string | null {
+    const days = Object.keys(config)
+        .map((code) => lastRead(state[code])?.day ?? null)
+        .filter((day): day is string => day !== null);
+    return days.length ? days.reduce((latest, day) => (day > latest ? day : latest)) : null;
+}
+
 function fillsOf(info: EnricherInfo | null | undefined, assetType: string): string[] {
     return [...((info?.voices as Record<string, string[]> | undefined)?.[assetType] ?? [])];
 }

@@ -239,3 +239,22 @@ describe('what an enricher fills, in topics (E7b)', () => {
         expect(state.topicsOf([], VOICES)).toEqual({topics: [], more: 0});
     });
 });
+
+describe('the last read of the asset (E6c)', () => {
+    const config = {justetf: {identifier_type: 'ISIN', identifier: 'IE00B4L5Y983'}, yahoo: {identifier_type: 'TICKER', identifier: 'SWDA.MI'}};
+
+    it('is the latest read of the enrichers still bound, a not-found included', () => {
+        const read = {justetf: {read_at: '2026-11-01T03:00:00+00:00', status: 'ok'}, yahoo: {read_at: '2026-11-08T03:00:00+00:00', status: 'not_found'}};
+        expect(state.assetLastRead(config, read)).toBe('2026-11-08');
+    });
+
+    it('ignores the state of an enricher no longer bound', () => {
+        const read = {justetf: {read_at: '2026-11-01T03:00:00+00:00', status: 'ok'}, borsa_italiana: {read_at: '2026-11-15T03:00:00+00:00', status: 'ok'}};
+        expect(state.assetLastRead(config, read)).toBe('2026-11-01');
+    });
+
+    it('is null for an asset never read', () => {
+        expect(state.assetLastRead(config, {})).toBeNull();
+        expect(state.assetLastRead({}, {justetf: {read_at: '2026-11-01T03:00:00+00:00', status: 'ok'}})).toBeNull();
+    });
+});
