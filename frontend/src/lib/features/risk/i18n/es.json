@@ -607,7 +607,8 @@
         "ratesCaveat": "Una aproximación de primer orden: vale para movimientos pequeños y no cuenta los cupones cobrados mientras tanto.",
         "ratesMissing": "Tipos al alza o a la baja: ninguna duración en el perfil de este título.",
         "ratesMissingLink": "Abrir el Perfil",
-        "ratesPointsUnit": "puntos"
+        "ratesPointsUnit": "puntos",
+        "ratesStale": "Duración confirmada el {date}, sin actualizar."
       },
       "backtestNotice": "Con un subconjunto activo, estas cifras se reconstruyen sobre la composición de hoy: dicen cómo *habría* ido, no cómo fue en realidad.",
       "notice": {

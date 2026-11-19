@@ -70,12 +70,14 @@ from sqlalchemy.pool import NullPool
 from backend.app.db import session as db_session
 from backend.app.db.base import SQLModel
 from backend.test_scripts.test_db.alembic_harness import (
+    _assert_dropped_columns_back,
     _connect,
     _copy,
     _create_all,
     _foreign_keys_on,
     _index_list,
     _integrity,
+    _kept_columns,
     _migrate,
     _revision,
     _row_changes,
@@ -83,6 +85,7 @@ from backend.test_scripts.test_db.alembic_harness import (
     _scripts,
     _table_info,
     _violations,
+    _without_dropped_columns,
 )
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -430,7 +433,8 @@ def test_r1_the_children_of_some_parents_are_searched_through_the_partial_index(
 
 
 def test_r1_a_populated_1_3_database_keeps_its_rows_and_every_transaction_has_no_parent(populated_1_3: Path, tmp_path: Path) -> None:
-    """Every table the 1.3 install had is there, every row identical on the columns it had; every transaction has
+    """Every table the 1.3 install had is there, every row identical on the columns it had but those 006 drops
+    (``alembic_harness.DROPPED_AT_006``: ``assets.classification_params``, plan 68 D7b); every transaction has
     ``parent_transaction_id`` NULL; no foreign-key violation, integrity ``ok``."""
     print_section("A populated 1.3 database upgraded to 006")
     db = _copy(populated_1_3, tmp_path / "app.db")
@@ -441,7 +445,7 @@ def test_r1_a_populated_1_3_database_keeps_its_rows_and_every_transaction_has_no
     _assert_column(db)
     lost = sorted(set(before) - set(after))
     assert lost == [], f"the upgrade lost the tables {lost}"
-    changes = _row_changes(before, after, set(before) - BOOKKEEPING, columns_of=before)
+    changes = _row_changes(before, after, set(before) - BOOKKEEPING, columns_of=_kept_columns(before))
     assert not changes, f"the upgrade changed rows: {changes}"
     assert _children(db) == [(1, None), (2, None), (3, None), (4, None)], f"every transaction must have no parent: {_children(db)}"
     assert _violations(db) == [] and _integrity(db) == [("ok",)], f"violations {_violations(db)}, integrity {_integrity(db)}"
@@ -498,7 +502,8 @@ def test_r1_the_models_and_the_migration_build_the_same_objects(fresh_006: Path,
 def test_r1_the_downgrade_of_a_new_database_removes_the_index_then_the_column_and_leaves_005(fresh_006: Path, at_005: Path, tmp_path: Path) -> None:
     """``downgrade 005`` of a new database at 006: the index and the column are gone, and every object of
     ``sqlite_master`` is what a new database at 005 holds (SQL compared without whitespace: ``DROP COLUMN`` edits the
-    table's text); ``transactions`` has the columns, foreign keys and indexes it has at 005."""
+    table's text; and without the columns 006 drops, which its downgrade adds back last, checked apart);
+    ``transactions`` has the columns, foreign keys and indexes it has at 005."""
     db = _copy(fresh_006, tmp_path / "app.db")
     _assert_column(db)
 
@@ -509,7 +514,8 @@ def test_r1_the_downgrade_of_a_new_database_removes_the_index_then_the_column_an
     assert _index_row(db, INDEX) is None, f"the downgrade must drop {INDEX}"
     assert _table_info(db, TABLE) == _table_info(at_005, TABLE), "transactions must have the columns it has at 005"
     assert _index_list(db, TABLE) == _index_list(at_005, TABLE), "transactions must have the indexes it has at 005"
-    expected, found = _objects(at_005), _objects(db)
+    _assert_dropped_columns_back(db)
+    expected, found = _without_dropped_columns(_objects(at_005)), _without_dropped_columns(_objects(db))
     assert found == expected, f"every object must be as at 005: missing {sorted(set(expected) - set(found))}, unexpected {sorted(set(found) - set(expected))}"
     changes = _row_changes(_rows(at_005), _rows(db), set(_rows(at_005)) - BOOKKEEPING, columns_of=_rows(at_005))
     assert not changes, f"the downgrade of a new database changed rows: {changes}"
@@ -608,7 +614,8 @@ def test_r1_a_downgrade_finding_the_column_already_gone_completes_to_005(fresh_0
     _migrate(db, "downgrade", REV_005)
 
     assert _revision(db) == REV_005
-    expected, found = _objects(at_005), _objects(db)
+    _assert_dropped_columns_back(db)
+    expected, found = _without_dropped_columns(_objects(at_005)), _without_dropped_columns(_objects(db))
     assert found == expected, f"every object must be as at 005: missing {sorted(set(expected) - set(found))}, unexpected {sorted(set(found) - set(expected))}"
 
 

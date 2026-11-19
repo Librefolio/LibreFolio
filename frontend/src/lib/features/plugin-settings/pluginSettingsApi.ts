@@ -78,7 +78,12 @@ export interface PluginSettingsEntry {
     /** The calls counted and the limits, on the entry that owns the count (project 76, U4); absent elsewhere, and when the
      * server could not read the counts. */
     call_usage?: CallUsage;
+    /** Why it is not configured, the boundary check's own reason (project 76, U5b); absent when configured. */
+    reason?: ReadinessReason | null;
 }
+
+/** The reason of the readiness check (N1/N2): a value to set, or a variable locking a field with an invalid value. */
+export type ReadinessReason = 'missing_fields' | 'invalid_locked_setting';
 
 /** The windows of the call counter, shortest first: calendar windows, UTC (project 76, U4). */
 export const CALL_WINDOWS = ['minute', 'hour', 'day', 'week', 'month'] as const;
@@ -257,6 +262,8 @@ export function entryOf(raw: unknown): PluginSettingsEntry {
         name_key: textOrNull(entry.name_key),
         // No block, no key: an entry without usage is exactly what it was before U4
         ...(usage ? {call_usage: usage} : {}),
+        // No reason, no key either (U5b): a configured entry is exactly what it was
+        ...(entry.reason === 'missing_fields' || entry.reason === 'invalid_locked_setting' ? {reason: entry.reason} : {}),
     };
 }
 

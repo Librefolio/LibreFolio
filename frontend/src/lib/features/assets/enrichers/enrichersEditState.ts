@@ -66,6 +66,17 @@ export interface EnrichersContext {
 }
 
 /** Whether the instance can use a chosen enricher. */
+/**
+ * The line under the asset window's header: what «Riconosci» found (`state`, `text`) and, once it found some, what the
+ * automatic «Chiedi» is doing with them (`reading`: asking now, or waiting out a 429; plan 68 E9b2).
+ */
+export interface EnrichersBanner {
+    state: 'running' | 'found' | 'none' | 'refused' | 'error';
+    text: string;
+    reading: 'running' | 'waiting' | 'none';
+    readingText: string | null;
+}
+
 export type Availability = 'ok' | 'not_configured' | 'off';
 
 /** What is wrong with a binding. */
@@ -208,6 +219,17 @@ export function draftIssues(draft: EnrichersDraft, context: EnrichersContext): R
 function lastRead(entry: EnricherReadState | undefined): LastRead | null {
     if (!entry || !entry.read_at || !entry.status) return null;
     return {day: String(entry.read_at).slice(0, 10), status: String(entry.status), errorCode: entry.error_code ?? null};
+}
+
+/**
+ * The last read of an asset (E6c, the hint of «Aggiorna»): the latest day an enricher still bound was read, whatever the
+ * outcome; `state` keeps the reads of enrichers removed since (B3), which do not count. `null`: never read.
+ */
+export function assetLastRead(config: Record<string, unknown>, state: Record<string, EnricherReadState>): string | null {
+    const days = Object.keys(config)
+        .map((code) => lastRead(state[code])?.day ?? null)
+        .filter((day): day is string => day !== null);
+    return days.length ? days.reduce((latest, day) => (day > latest ? day : latest)) : null;
 }
 
 function fillsOf(info: EnricherInfo | null | undefined, assetType: string): string[] {

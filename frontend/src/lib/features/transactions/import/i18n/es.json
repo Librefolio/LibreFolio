@@ -89,9 +89,6 @@
     "recheckOpeningsTip": "Vuelve a comprobar las fechas de apertura de los brókeres y reselecciona las filas que ya se pueden importar.",
     "selectVisible": "Seleccionar visibles",
     "selectVisibleTip": "Selecciona las filas seleccionables de la página actual (no afecta a otras páginas).",
-    "createAsset": {
-      "identifiedNames": "Nombres/identificadores detectados:"
-    },
     "todoBlockerCommitHint": "Complete todos los campos requeridos antes de guardar",
     "todoWarningVerifyHint": "{n, plural, one {# campo auto-derivado a verificar antes de guardar} other {# campos auto-derivados a verificar antes de guardar}}",
     "todoWarningConfirmTitle": "¿Verificar los campos auto-derivados?",

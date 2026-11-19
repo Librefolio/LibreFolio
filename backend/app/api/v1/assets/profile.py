@@ -8,6 +8,7 @@ The profile is written through ``POST`` and ``PATCH /assets`` (one door to write
 - ``ask`` reads the enrichers without saving, ``refresh`` («Aggiorna») saves as the weekly read does (B5a).
 """
 
+from collections.abc import Sequence
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -16,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.assets.providers import enforce_probe_limit
 from backend.app.api.v1.auth import get_current_user
-from backend.app.db.models import Asset, AssetType, User
+from backend.app.db.models import Asset, AssetType, User, UserSettings
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.assets.profile import (
     FAProfileAskRequest,
@@ -37,7 +38,8 @@ from backend.app.schemas.assets.profile import (
     FAProfileStepPoint,
 )
 from backend.app.services.assets.profile.catalogue import CATALOGUE
-from backend.app.services.assets.profile.store import CHANGES_PAGE_SIZE, ProfileChangesPage, ProfileUpdatesNewer, ProfileUpdatesNotFound, forget_updates, read_steps, recent_changes
+from backend.app.services.assets.profile.freshness import VoiceFreshness, holding_now, voice_freshness
+from backend.app.services.assets.profile.store import CHANGES_PAGE_SIZE, ProfileChangesPage, ProfileStep, ProfileUpdatesNewer, ProfileUpdatesNotFound, forget_updates, profile_today, read_steps, recent_changes
 from backend.app.services.enrichers.bindings import load_enrichers
 from backend.app.services.enrichers.refresh import ReadOutcome, refresh_assets
 from backend.app.services.enrichers.refresh import ask_profile as read_and_merge
@@ -98,7 +100,7 @@ async def refresh_profile(asset_ids: List[int], session: AsyncSession = Depends(
     """«Aggiorna»: read the enrichers of those assets and save what changed, as the weekly read does (a read younger than
     30 minutes is reused). Inactive assets are read too. An asset that does not exist gets ``error``."""
     results = await refresh_assets(session, asset_ids)
-    return FAProfileRefreshResponse(results=[FAProfileRefreshResult(asset_id=result.asset_id, written=result.written, outcomes=[_read_outcome(outcome) for outcome in result.outcomes], error=result.error) for result in results])
+    return FAProfileRefreshResponse(results=[FAProfileRefreshResult(asset_id=result.asset_id, written=result.written, outcomes=[_read_outcome(outcome) for outcome in result.outcomes], error=result.error, enrichers_read=result.enrichers_read) for result in results])
 
 
 # =============================================================================
@@ -124,22 +126,53 @@ def _unknown_voice(items: List[FAProfileQueryItem]) -> str | None:
     return None
 
 
-def _changes_page(page: ProfileChangesPage, number: int, size: int) -> FAProfileChangesPage:
-    items = [
-        FAProfileChange(
-            id=change.row.id,
-            key=change.row.key,
-            value=change.row.value,
-            previous=change.previous,
-            has_previous=change.has_previous,
-            source=change.row.source,
-            user_id=change.row.user_id,
-            read_on=change.row.read_on,
-            source_date=change.row.source_date,
-            created_at=change.row.created_at,
+def _step_points(steps: Sequence[ProfileStep], now: VoiceFreshness | None) -> List[FAProfileStepPoint]:
+    """The steps of one voice; the last one says how fresh «now» is when ``now`` is given (D1d)."""
+    points = [FAProfileStepPoint(date=step.date, through=step.through, value=step.value, source=step.source, update_id=step.update_id, opened_on=step.opened_on, source_date=step.source_date) for step in steps]
+    if now is not None and points:
+        points[-1] = points[-1].model_copy(update={"confirmed_on": now.confirmed_on, "stale": now.stale})
+    return points
+
+
+async def _authors(session: AsyncSession, page: ProfileChangesPage) -> dict[int, tuple[str, str | None]]:
+    """The username and avatar of every author a page names (its rows' and the rows' before them), in one query."""
+    ids = {row.user_id for change in page.items for row in (change.row, change.before) if row is not None and row.user_id is not None}
+    if not ids:
+        return {}
+    statement = select(User.id, User.username, UserSettings.avatar_url).outerjoin(UserSettings, UserSettings.user_id == User.id).where(User.id.in_(ids))
+    return {user_id: (username, avatar_url) for user_id, username, avatar_url in (await session.execute(statement)).all()}
+
+
+async def _changes_page(session: AsyncSession, page: ProfileChangesPage, number: int, size: int) -> FAProfileChangesPage:
+    authors = await _authors(session, page)
+
+    def name(user_id: int | None) -> str | None:
+        return authors[user_id][0] if user_id in authors else None
+
+    items = []
+    for change in page.items:
+        row, before = change.row, change.before
+        items.append(
+            FAProfileChange(
+                id=row.id,
+                key=row.key,
+                value=row.value,
+                previous=change.previous,
+                has_previous=change.has_previous,
+                source=row.source,
+                user_id=row.user_id,
+                user_name=name(row.user_id),
+                user_avatar_url=authors[row.user_id][1] if row.user_id in authors else None,
+                read_on=row.read_on,
+                source_date=row.source_date,
+                created_at=row.created_at,
+                previous_source=before.source if before is not None else None,
+                previous_user_id=before.user_id if before is not None else None,
+                previous_user_name=name(before.user_id) if before is not None else None,
+                previous_read_on=before.read_on if before is not None else None,
+                previous_source_date=before.source_date if before is not None else None,
+            )
         )
-        for change in page.items
-    ]
     return FAProfileChangesPage(items=items, total=page.total, page=number, page_size=size)
 
 
@@ -148,6 +181,9 @@ async def query_profile(items: List[FAProfileQueryItem], session: AsyncSession =
     """The voices of each asset as steps in its ``date_range`` (never carried back before the first row), and a page of
     changes when ``changes`` is given. An asset with no rows answers no voice; one that does not exist answers ``error``
     «Asset not found» in its item, and the other items are read (D1b).
+
+    The last step of a volatile voice, when it holds «now», says when «now» was last confirmed and whether that is
+    more than 30 days ago (``confirmed_on``, ``stale``: D1d, ``services/assets/profile/freshness.py``).
 
     ``as_of`` is taken before the read: «Dimentica» sends it back, so a row written after it is never forgotten by a page
     that has not shown it. A voice the catalogue does not list is refused (422 ``PROFILE_VOICE_UNKNOWN``) before any read.
@@ -163,17 +199,20 @@ async def query_profile(items: List[FAProfileQueryItem], session: AsyncSession =
     as_of = utcnow()
     asked = list(dict.fromkeys(item.asset_id for item in items))
     existing = set((await session.execute(select(Asset.id).where(Asset.id.in_(asked)))).scalars().all()) if asked else set()
+    today = await profile_today(session, as_of)
+    asked_keys = None if any(item.keys is None for item in items) else {key for item in items for key in item.keys or ()}
+    fresh = await voice_freshness(session, [asset_id for asset_id in asked if asset_id in existing], today=today, keys=asked_keys)
     results: List[FAProfileQueryResult] = []
     for item in items:
         if item.asset_id not in existing:
             results.append(FAProfileQueryResult(asset_id=item.asset_id, error=ASSET_NOT_FOUND))
             continue
         steps = (await read_steps(session, [item.asset_id], item.date_range, item.keys)).get(item.asset_id, {})
-        voices = {key: [FAProfileStepPoint(date=step.date, through=step.through, value=step.value, source=step.source, update_id=step.update_id, opened_on=step.opened_on, source_date=step.source_date) for step in voice_steps] for key, voice_steps in steps.items()}
+        voices = {key: _step_points(voice_steps, holding_now(fresh.get(item.asset_id, {}).get(key), voice_steps)) for key, voice_steps in steps.items()}
         changes = None
         if item.changes is not None:
             page = await recent_changes(session, item.asset_id, key=item.changes.key, page=item.changes.page)
-            changes = _changes_page(page, item.changes.page, CHANGES_PAGE_SIZE)
+            changes = await _changes_page(session, page, item.changes.page, CHANGES_PAGE_SIZE)
         results.append(FAProfileQueryResult(asset_id=item.asset_id, voices=voices, changes=changes))
     return FAProfileQueryResponse(as_of=as_of, items=results)
 

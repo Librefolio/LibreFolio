@@ -26,6 +26,8 @@
     import {formatFixed, priceFractionDigits} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {SIGN_TEXT} from '$lib/theme/toneClasses';
+    import {ASSET_LIST_RISK_COLUMNS, type AssetListRiskColumn, type AssetListRiskFigures} from '$lib/features/risk/assetListRisk';
+    import {translateErrorCode} from '$lib/features/risk/levels/levelHelpers';
 
     // =========================================================================
     // Types
@@ -76,9 +78,14 @@
         storageKey?: string;
         /** The usage panel this table shows: its row order is published for the detail page's prev/next. */
         browseSegment?: AssetPanelId;
+        /**
+         * RN-23: each row's risk figures, measured on its own asset over the page's period and currency (`assetListRisk.ts`). Absent: no
+         * risk columns; a row not in the map yet shows «…» and sorts last.
+         */
+        riskFigures?: ReadonlyMap<number, AssetListRiskFigures>;
     }
 
-    let {data = [], loading = false, visiblePeriods = [], livePriceMap = new Map(), dateStart, dateEnd, onedit, onsync, onrefresh, ondelete, onmerge, onselectionchange, registerTable, clearSelectionToken = 0, onColumnResize, storageKey = 'assetsTable', browseSegment}: Props = $props();
+    let {data = [], loading = false, visiblePeriods = [], livePriceMap = new Map(), dateStart, dateEnd, onedit, onsync, onrefresh, ondelete, onmerge, onselectionchange, registerTable, clearSelectionToken = 0, onColumnResize, storageKey = 'assetsTable', browseSegment, riskFigures}: Props = $props();
 
     // The owner gets this table's DataTable by callback, not through `bind:this` on a record: that binding was left empty after the
     // panels re-mounted, and the column menu and the width mirror then had no table to act on.
@@ -158,6 +165,45 @@
     // =========================================================================
     // Columns
     // =========================================================================
+
+    // RN-23 — the risk columns: the max drawdown shown, the others in the column menu. A figure the engine could not give is «—» with
+    // its reason (Q20); a row still being measured is «…»; both sort last (a null value), never as a zero.
+    const RISK_PERCENT_SIGNED: ReadonlySet<AssetListRiskColumn> = new Set(['maxDrawdown', 'annualReturn', 'worstDay', 'bestDay', 'rally']);
+    const RISK_RATIO: ReadonlySet<AssetListRiskColumn> = new Set(['sharpe', 'sortino']);
+
+    function riskFigureText(column: AssetListRiskColumn, value: number): string {
+        if (RISK_RATIO.has(column)) return formatFixed(value, 2);
+        return formatPercent(value, {scale: 100, signed: RISK_PERCENT_SIGNED.has(column)});
+    }
+
+    function riskCell(column: AssetListRiskColumn, row: AssetRow): string {
+        const figures = riskFigures?.get(row.id);
+        if (!figures) return `<span class="text-lf-muted" data-testid="asset-risk-cell" data-column="${column}" data-state="pending">…</span>`;
+        const value = figures.values[column];
+        if (value === null) {
+            const code = figures.reasons[column] ?? 'unknown';
+            const reason = translateErrorCode(code, $t, 'risk.errors.unknown');
+            return `<span class="text-lf-muted" title="${escapeHtml(reason)}" data-testid="asset-risk-cell" data-column="${column}" data-state="blank" data-reason="${escapeHtml(code)}">—</span>`;
+        }
+        return `<span class="font-mono tabular-nums text-lf-primary" data-testid="asset-risk-cell" data-column="${column}" data-state="value" data-value="${value}">${escapeHtml(riskFigureText(column, value))}</span>`;
+    }
+
+    function riskColumns(): ColumnDef<AssetRow>[] {
+        if (!riskFigures) return [];
+        return ASSET_LIST_RISK_COLUMNS.map((column, index) => ({
+            id: `risk_${column}`,
+            header: () => $t(`assets.table.risk.${column}`),
+            headerTooltip: () => $t('assets.table.risk.hint'),
+            cell: (row: AssetRow) => ({type: 'html' as const, html: riskCell(column, row)}),
+            type: 'number' as const,
+            getValue: (row: AssetRow) => riskFigures?.get(row.id)?.values[column] ?? null,
+            width: 100,
+            minWidth: 70,
+            align: 'right' as const,
+            filterable: false,
+            hiddenByDefault: index > 0,
+        }));
+    }
 
     let columns = $derived<ColumnDef<AssetRow>[]>(
         (void $assetProvidersVersion, // trigger re-derive when asset provider icons are cached
@@ -290,6 +336,7 @@
                 width: 80,
                 minWidth: 60,
             })),
+            ...riskColumns(),
             {
                 id: 'provider',
                 header: () => $t('common.provider'),

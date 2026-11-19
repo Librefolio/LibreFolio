@@ -607,7 +607,8 @@
         "ratesCaveat": "Une approximation au premier ordre : elle vaut pour de petits mouvements et ne compte pas les coupons reçus entre-temps.",
         "ratesMissing": "Taux en hausse ou en baisse : aucune duration dans le profil de ce titre.",
         "ratesMissingLink": "Ouvrir le Profil",
-        "ratesPointsUnit": "points"
+        "ratesPointsUnit": "points",
+        "ratesStale": "Duration confirmée le {date}, pas à jour."
       },
       "backtestNotice": "Avec un sous-ensemble actif, ces chiffres sont reconstruits à partir de la composition actuelle : ils disent ce qui *se serait* passé, pas ce qui s’est réellement passé.",
       "notice": {

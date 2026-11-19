@@ -25,6 +25,7 @@ import type {RiskAnalyticResult} from '$lib/features/risk/riskStore.svelte';
 import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import L4Rates from './L4Rates.svelte';
+import {dayFormatter} from '../../eligibility';
 
 const STEPS = [0.005, 0.01, 0.02, -0.005, -0.01, -0.02];
 
@@ -118,5 +119,28 @@ describe('L4Rates', () => {
     it('always carries the first-order caveat', () => {
         render(L4Rates, {props: {result: answer(), currency: 'EUR', scopeValue: null}});
         expect(text('risk-rates-caveat')).toBe(get(_)('risk.levels.l4.ratesCaveat'));
+    });
+
+    // D1c (plan 68 D1d): a «now» duration the source has not confirmed for more than 30 days is said not up to date, with
+    // the day of its last confirmation, as the Profile says it; a fresh one, or one held by an older reading, says nothing.
+    it('says the duration is not up to date when the profile marks it stale, with the day it was last confirmed', () => {
+        const stale = answer();
+        Object.assign(stale.output as Record<string, unknown>, {duration_confirmed_on: '2026-09-01', duration_stale: true});
+        render(L4Rates, {props: {result: stale, currency: 'EUR', scopeValue: null}});
+        expect(root()).toHaveAttribute('data-stale', 'true');
+        expect(text('risk-rates-stale')).toBe(get(_)('risk.levels.l4.ratesStale', {values: {date: dayFormatter()('2026-09-01')}}));
+    });
+
+    it('says nothing of freshness when the duration is up to date or held by an older reading', () => {
+        const fresh = answer();
+        Object.assign(fresh.output as Record<string, unknown>, {duration_confirmed_on: '2026-11-10', duration_stale: false});
+        render(L4Rates, {props: {result: fresh, currency: 'EUR', scopeValue: null}});
+        expect(root()).toHaveAttribute('data-stale', 'false');
+        expect(screen.queryByTestId('risk-rates-stale')).toBeNull();
+        cleanup();
+        // An older reading holds the analysis day: no confirmation day, never stale (the backend's rule).
+        render(L4Rates, {props: {result: answer(), currency: 'EUR', scopeValue: null}});
+        expect(root()).toHaveAttribute('data-stale', 'false');
+        expect(screen.queryByTestId('risk-rates-stale')).toBeNull();
     });
 });

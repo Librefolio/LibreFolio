@@ -34,7 +34,7 @@ other identifiers.
 By hand, in **Provider Assignment**:
 
 1. Choose **CoinGecko** as **Provider**.
-2. Type the coin's **Provider ID**: CoinGecko's own name for it, such as `bitcoin`, `ethereum` or `usd-coin`. It is the
+2. Type the coin's **CoinGecko ID**: CoinGecko's own name for it, such as `bitcoin`, `ethereum` or `usd-coin`. It is the
    last part of the coin's address on coingecko.com (`coingecko.com/en/coins/bitcoin`).
 3. In **Price currency**, pick the asset's own currency (EUR by default). It must be the currency of the asset: a
    price in another one is not stored.

@@ -607,7 +607,8 @@
         "ratesCaveat": "A first-order approximation: it holds for small moves and does not count the coupons received meanwhile.",
         "ratesMissing": "Rates rising or falling: no duration in the profile of this security.",
         "ratesMissingLink": "Open the Profile",
-        "ratesPointsUnit": "points"
+        "ratesPointsUnit": "points",
+        "ratesStale": "Duration confirmed on {date}, not up to date."
       },
       "backtestNotice": "With a slice active, these figures are rebuilt from today’s composition: they say how it *would* have gone, not how it actually went.",
       "notice": {

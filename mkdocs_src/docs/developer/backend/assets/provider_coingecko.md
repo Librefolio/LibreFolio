@@ -30,8 +30,8 @@ The code lives in `backend/app/services/asset_source_providers/coingecko/`:
         long the core keeps a current price before asking again.
     - `preferred_currency`: the user's own, default EUR. It is the currency of the search's rows, and nothing else.
 - **The identifier** is CoinGecko's own id (`bitcoin`, `usd-coin`, `pepe`), not a ticker. Its input type is
-  `PROVIDER_ID`, which reaches the plugin as `IdentifierType.OTHER`.
-    - A search row is typed `OTHER`. Choosing it gives the assignment `PROVIDER_ID` and adds `coingecko:<id>` to the
+  `COINGECKO_ID`, which reaches the plugin as `IdentifierType.OTHER`.
+    - A search row is typed `OTHER`. Choosing it gives the assignment `COINGECKO_ID` and adds `coingecko:<id>` to the
         asset's other identifiers.
     - The asset's ticker is the coin's symbol (`BTC`), from the metadata.
     - An id that does not start with a letter or a digit, holds anything but letters, digits, dots, dashes and
@@ -122,6 +122,17 @@ flowchart LR
 - **The page** (`get_asset_url`): `https://www.coingecko.com/en/coins/<id>`, built from the id alone, with no I/O; an
   id CoinGecko cannot have has none.
 
+## 🖼️ The Provider's Icon
+
+`get_icon` is CoinGecko's own favicon by URL, `https://www.coingecko.com/favicon.ico`, as Yahoo's, justETF's and Borsa
+Italiana's icons are theirs: it follows CoinGecko's own updates, and no file is bundled (the developer's choice, P1b-b).
+
+- **What it costs:** a browser that shows the icon asks coingecko.com for that image, as it asks the other providers'
+  hosts for theirs.
+- **The coins' logos are another thing:** the metadata links each coin's logo from CoinGecko's image host (above).
+- **In the gallery** the CoinGecko search shot lets that one image through; any other request to a CoinGecko host is
+  still aborted and fails the shot (`e2e/fixtures/galleryCoinGecko.ts`).
+
 ## 🏷️ Attribution
 
 CoinGecko's terms ask for every price it gives to be shown with «Powered by CoinGecko», prominent, linked to its site.
@@ -144,7 +155,7 @@ the key in the environment.
 |---|---|
 | `services coingecko-provider` | The group, the settings, the currencies, the SDK's door and its errors |
 | `services coingecko-prices` | Current prices, in bulk, the history and its edges, the Demo year, freshness, the real path's count on the group |
-| `services coingecko-search` | `PROVIDER_ID`, search, metadata, page; an assignment saved and priced through the real path |
+| `services coingecko-search` | `COINGECKO_ID`, search, metadata, page; an assignment saved and priced through the real path |
 | `services refresh-history-starts` | The first day in the refresh's outcome |
 | `services provider-attribution` | The attribution model and CoinGecko's |
 | `external asset-providers --providers coingecko` | The generic external tests. They skip without a key, and reach the real CoinGecko only with the key in the environment |

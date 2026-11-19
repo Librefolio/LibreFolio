@@ -348,7 +348,9 @@ Around your `read`, the core:
 
 - **Skips an enricher that is not served or not configured.** Not installed, test-only outside test mode, turned off
   by `LIBREFOLIO_ENRICHERS_ENABLED`, or a required setting empty: the weekly read and «Refresh» leave its binding and
-  state as they are and do not read it, so its voices go to the next enricher of the asset's order.
+  state as they are and do not read it, so its voices go to the next enricher of the asset's order. Each result counts
+  the enrichers it did read (`enrichers_read`): the weekly job skips in silence, «Refresh» tells the user when that
+  count is zero («no active enricher: nothing was read»).
 - **Caches each read for 30 minutes** (named cache `enricher_read`, `READ_CACHE_TTL`), keyed by enricher and the whole
   binding, parameters included. Only `OK` and `NOT_FOUND` are kept, never an error or a refusal. A read of some voices
   never answers a later request for more.
@@ -356,6 +358,11 @@ Around your `read`, the core:
   true; a full window refuses that binding and the rest as `RATE_LIMITED` before your `read` is called.
 - **Merges voice by voice**: for each voice, the first enricher of the asset's order whose read gave it wins. An
   enricher that failed leaves the voice to the next one; the others' values are kept beside it.
+- **Records what each read confirmed.** The saved reads write each enricher's `state` in `asset_enrichers`: `read_at`,
+  `status`, `error_code`, `retry_after`, `voices` (how many it gave) and `confirmed`, voice → the moment of the last
+  read that gave it. `confirmed` is merged, never replaced: a failed read, or a read of fewer voices, keeps the
+  confirmations it did not renew. A voice held for the [second round](#too-many-requests) is confirmed too: the source
+  gave it, and the retry does not read that source again.
 
 The default order of an asset's enrichers (`default_order()` in `bindings.py`) is by `default_priority` (lower first),
 then the enricher with the same code as the asset's price provider, then the order in which «Recognize» answered
@@ -373,6 +380,56 @@ The weekly job handles a refusal in two rounds:
    from the read cache), nothing is held any more, and no further retry is set — one retry at most.
 
 «Refresh» and «Ask» do not retry: the refused binding's outcome says `RATE_LIMITED`, with `retry_after`.
+
+### 🕰️ «Now» Not Up to Date {: #stale }
+
+A read that gives the same value writes no row, so a row says when a value changed, not when a source last confirmed
+it. For the voices the catalogue marks `volatile` (fund size, market cap, gross and net yield, modified duration, accrued
+interest), «now» is **stale** when its last confirmation is more than 30 days old (`STALE_AFTER_DAYS`,
+`backend/app/services/assets/profile/freshness.py`). The last confirmation is the `confirmed` moment of the source that
+wrote «now», as a day in the scheduler's time zone and never before the row's `read_on`; a value written by hand, or a
+source that never gave the voice, counts from the row's `read_on`. Nothing is written for it:
+
+- `POST /assets/profile/query` puts `confirmed_on` and `stale` on a volatile voice's last step when that step holds
+  «now» (it reaches the day of the «now» row, whatever day the range ends on); the «Profile» tab writes «Confirmed on
+  …, not up to date» under a stale value.
+- The rates scenario of the Risk tab gets `duration_confirmed_on` and `duration_stale` beside the duration it used, when
+  the analysis day is held by «now».
+- AI Export's `asset.profile` adds a `freshness` row for each volatile voice whose last step in the window holds «now»,
+  fresh or stale.
+
+So a source that goes silent shows up within a month, while one that gives the same figure every week keeps it fresh.
+
+### 🧾 Latest Changes and «Dimentica» {: #changes }
+
+`POST /assets/profile/query` with `changes` adds one page of changes (twenty, newest first in (`read_on`, `id`) order):
+`changes: {}` is the «Latest changes» panel of the «Profile» tab — a volatile voice only with the rows written by hand
+and the source row that replaces one —, `changes: {"key": k}` every row of one voice («History of the data»). Each change
+(`FAProfileChange`) carries:
+
+- the row: `value`, `source`, `read_on`, `source_date`, and for a value written by hand its author, `user_id`,
+  `user_name` (the username, never the email) and `user_avatar_url`;
+- the voice's row before it, from the whole history: `previous` (the value), `previous_source`, `previous_user_id`,
+  `previous_user_name`, `previous_read_on`, `previous_source_date` — all null for the voice's first row.
+
+The frontend writes «What changed» from them (`frontend/src/lib/features/assets/profile/profileChanges.ts`): first
+value, written by hand, corrected by hand, back to a source after a hand correction, new data date of a breakdown, up,
+down, changed, left empty. «Dimentica» (`DELETE /assets/profile`) sends back the `as_of` of the read that showed the
+rows: a row written after it is refused whole (409 `PROFILE_UPDATES_NEWER`), so a page never forgets what it has not
+shown. The panel (`ProfileChangesPanel.svelte`) and the table it shares with the history window
+(`ProfileChangesTable.svelte`) ask before forgetting, then read the tab again.
+
+«History of the data» (`ProfileHistoryModal.svelte`) opens from a key figure card's clock, a detail row, or the same
+clock (`ProfileHistoryClock.svelte`) beside the titles of the countries, the sectors and the description. For a voice
+whose value is a number it draws the voice from its first day (`start: "min"`), a point where each step starts in its
+source's colour (`profileHistory.ts`, `ProfileHistoryChart.svelte`); under it, the same table with every row of that
+voice (`changes: {"key": k}`), without the voice column.
+
+«Refresh» («Aggiorna», `profileRefresh.ts`) sits beside «Edit data» when the asset has bindings: it calls
+`POST /assets/profile/refresh` for that asset, never the prices, and its hint says the latest `read_at` of the enrichers
+still bound (`assetLastRead`). Every outcome is a toast and the event `asset.profile.refreshed`, because what a refresh
+writes is often invisible; with `enrichers_read` at zero the toast says nothing was read, never «nothing changed». Without bindings the tab shows «No enricher configured», whose «Configure» opens the asset
+window with `enrichersOnOpen`: the enrichers' window on top, for that opening only.
 
 ---
 
@@ -601,7 +658,8 @@ sets the variable until the administrator lists it.
 | `./dev.py test services enricher-contracts` | What the registry refuses at registration, every discovered enricher's declarations, the test enricher |
 | `./dev.py test services enricher-recognize` | The «Recognize» cascade |
 | `./dev.py test services enricher-bindings` | The bindings: `config` kept in the order given, `state` written apart |
-| `./dev.py test services enricher-refresh` | Read, cache, merge and save; unanswered bindings, `RATE_LIMITED` |
+| `./dev.py test services enricher-refresh` | Read, cache, merge and save; unanswered bindings, `RATE_LIMITED`; the `confirmed` map |
+| `./dev.py test services asset-profile-freshness` | «Now» not up to date: the confirmation, the 30 days, the voices that never age |
 | `./dev.py test services scheduler-profile-read` | The weekly job: its round, the held voices, the one retry |
 | `./dev.py test services enricher-justetf`, `enricher-borsa-italiana`, `enricher-yahoo` | Each shipped plugin against recorded pages (fixtures under `backend/test_scripts/test_services/fixtures/`), no network |
 | `./dev.py test services enricher-enabled` | `LIBREFOLIO_ENRICHERS_ENABLED` |

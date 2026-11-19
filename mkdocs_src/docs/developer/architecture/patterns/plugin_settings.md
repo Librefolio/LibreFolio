@@ -726,6 +726,9 @@ current key. The same rule serves both sides:
 - **The catalogue**: `configured` is `not missing_field_keys(states)`, judged on every field of the
   plugin, the ones the managed profile hides included: a yes or a no, which names none of them. The
   interface shows it as the badge **Configured** or **To configure** ([The Interface](#interface)).
+  Since U5b the entry also carries `reason` (`missing_fields`, `invalid_locked_setting`, or null when
+  configured), the readiness check's own (`readiness_reason()`, shared with `plugins_readiness()`), so
+  the catalogue and the boundary always agree on why.
 - **Before a call** (project 76, N1): `plugins_readiness(family, codes, user_id=…)` in `readiness.py`
   answers, for each plugin asked, a `PluginReadiness(configured, missing)`: the plugin's fields and the
   fields of the groups it reads, these as `<group>.<field>`, judged for that caller. It reads the rows
@@ -942,9 +945,13 @@ the plugin.
   hoster's limits stay invisible, the usage block does not (the same for a credit-sharing group). If
   the counts cannot be read, `call_usage` is null with one warning, never an error, and such an entry
   is not listed until they can.
-- **The interface does not show them yet**: the frontend's `pluginSettingsApi` leaves out
-  `CALL_LIMIT_KEYS`, an entry they alone filled, and an entry listed only for its usage block, until
-  U5 brings the «Calls» section.
+- **Every entry carries `reason`** (U5b): the readiness check's own reason, through the same function
+  (`readiness.readiness_reason`), so the catalogue and the boundary always agree. It is
+  `missing_fields`, `invalid_locked_setting` or null when configured, and it names no field.
+- **The interface** (U5): `PluginCallUsage.svelte` draws the five windows of `call_usage`, with the
+  limit fields as inputs an administrator saves with the card (`callUsage.ts` holds the rules). In the
+  managed profile, an entry whose `reason` is `invalid_locked_setting` shows the managed text on top,
+  the same for every user, with no button.
 - **For the tests**: `mockcount` is a test-only asset double that is counted (a class of its own, no
   plugin imports another: 100 USD every day, as mockprov),
   with the five fields. Only a suite that owns its limits uses it.
@@ -1023,7 +1030,7 @@ sees: [Search Preferences](../../../user/settings/plugins.md#search-preferences)
 
 | Endpoint | Caller | What it does |
 |----------|--------|--------------|
-| `GET /api/v1/settings/plugins` | Any signed-in user | Every plugin that declares settings, with `configured` (see [NOT_CONFIGURED](#not-configured)), its `icon_url` (the icon its family's provider list publishes: the `get_icon` property of a price provider, `icon` of an exchange-rate provider, `icon_url` of an import plugin; null without one) and each field as the caller sees it: its declaration (type, scope, labels and i18n keys, bounds, options, default) and its state (`value` for a plain field, `is_set`, `source`: `env`, `db`, `default` or `none`, `locked`, `editable`, `problem`, `updated_at`; `env_variable` for administrators). Filters: `family`, `plugin_code`. The plugins come first, then the shared groups (`family: "group"`, with `used_by`); a plugin lists the groups it reads in `groups` ([Shared Groups](#groups)). |
+| `GET /api/v1/settings/plugins` | Any signed-in user | Every plugin that declares settings, with `configured` (see [NOT_CONFIGURED](#not-configured)), its `icon_url` (the icon its family's provider list publishes: the `get_icon` property of a price provider, `icon` of an exchange-rate provider, `icon_url` of an import plugin; null without one) and each field as the caller sees it: its declaration (type, scope, labels and i18n keys, bounds, options, default) and its state (`value` for a plain field, `is_set`, `source`: `env`, `db`, `default` or `none`, `locked`, `editable`, `problem`, `updated_at`; `env_variable` for administrators). Filters: `family`, `plugin_code`. The plugins come first, then the shared groups (`family: "group"`, with `used_by`, and as `icon_url` the icon of the first plugin of `used_by` that has one: a group has no icon of its own, decided 19/11); a plugin lists the groups it reads in `groups` ([Shared Groups](#groups)). |
 | `PATCH /api/v1/settings/plugins/bulk` | Any signed-in user; `system` fields need an administrator | Writes 1 to 100 items, all or nothing. Each item names `family`, `plugin_code`, `field_key` and `scope` (a shared group: `family: "group"`, `plugin_code` its name, `scope: "system"`), and gives exactly one of `value` (a plain field), `secret_value` (a secret field) and `clear: true` (deletes the saved value, so the default applies again). |
 
 A write checks every item before writing anything, then writes them all in one transaction:
@@ -1082,7 +1089,8 @@ manual, [Plugin Settings](../../../user/settings/plugins.md); the code is in
   `pluginSettings.saved`; a refusal or a failure raises one. The events name fields, never a value.
 - **Shared groups (project 76, G3).** The groups ([Shared Groups](#groups)) are a section of
   their own, **Shared settings** (`group`, icon `Share2`), after every family; each group's form
-  carries its translated name (`name_key`, `entryTitle()`), a line *Shared by* naming the plugins
+  carries its translated name (`name_key`, `entryTitle()`), the icon of the plugin that reads it
+  (`icon_url`; `Share2` when no reader has one), a line *Shared by* naming the plugins
   that read it (`used_by`), and sits at the element id `groupFormId(name)`. A plugin that reads a
   group shows a row *Also uses the shared settings of …* per group, with **Open**, which brings the
   group's form into view and moves the focus to its heading (only for a group the page shows: the

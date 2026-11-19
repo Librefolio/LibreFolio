@@ -24,7 +24,8 @@ from backend.app.schemas.risk.scope import AssetRiskScope, AssetSetRiskScope, Po
 from backend.app.schemas.risk.series import PreparedAssetSeriesSet
 from backend.app.services.assets import price_query
 from backend.app.services.assets.price_query import PriceQueryOperations
-from backend.app.services.assets.profile.store import ProfileStep, read_steps
+from backend.app.services.assets.profile.freshness import voice_freshness
+from backend.app.services.assets.profile.store import ProfileStep, profile_today, read_steps
 from backend.app.services.financial_math.weights import share_of
 from backend.app.services.market_series import prepare_asset_series_set, prepare_asset_series_set_from_readings
 from backend.app.services.portfolio.portfolio_service import PortfolioService
@@ -340,13 +341,16 @@ async def load_asset_classifications(
     db: AsyncSession,
     asset_ids: tuple[int, ...],
     day: date,
+    *,
+    today: Optional[date] = None,
 ) -> dict[int, RiskAssetClassification]:
     """Each asset's class and its countries and sectors on ``day``, the analysis day (plan 68, D3).
 
     Countries and sectors come from the asset profile, the step holding ``day``, the first value carried back when the
-    profile starts later (plan I18, «for a date we do not have, the oldest we have»). ``classification_params`` is not
-    read. An asset with no row of a voice has no exposure there. The modified duration (RN-25) is read the same way,
-    with the day its value was read and its source.
+    profile starts later (plan I18, «for a date we do not have, the oldest we have»). An asset with no row of a voice
+    has no exposure there. The modified duration (RN-25) is read the same way, with the day its value was read and its
+    source; when that value is the profile's «now», the day it was last confirmed and whether that is more than 30 days
+    before ``today`` (D1d; the profile's today when not given).
     """
     if not asset_ids:
         return {}
@@ -354,12 +358,16 @@ async def load_asset_classifications(
     steps = await read_steps(db, list(asset_ids), DateRangeModel(start=day), _EXPOSURE_VOICES, carry_back=True)
     # The duration from its first reading, not clipped to the day: the page says the day its value was read (RN-25).
     duration_steps = await read_steps(db, list(asset_ids), MinStartDateRangeModel(start="min", end=max(day, latest_range_end())), (_DURATION_VOICE,))
+    fresh = await voice_freshness(db, list(asset_ids), today=today if today is not None else await profile_today(db), keys=(_DURATION_VOICE,))
     classifications: dict[int, RiskAssetClassification] = {}
     for asset_id, asset_type in result.all():
         voices = steps.get(int(asset_id), {})
         sector, sector_unreadable = _exposures(int(asset_id), "sector", voices)
         geography, geography_unreadable = _exposures(int(asset_id), "geography", voices)
-        duration, duration_step = _duration(int(asset_id), duration_steps.get(int(asset_id), {}).get(_DURATION_VOICE, []), day)
+        voice_steps = duration_steps.get(int(asset_id), {}).get(_DURATION_VOICE, [])
+        duration, duration_step = _duration(int(asset_id), voice_steps, day)
+        # The signal belongs to «now» only: the step holding the day is the voice's last one
+        now = fresh.get(int(asset_id), {}).get(_DURATION_VOICE) if duration_step is not None and duration_step is voice_steps[-1] else None
         classifications[int(asset_id)] = RiskAssetClassification(
             asset_class=(asset_type.value if hasattr(asset_type, "value") else str(asset_type)),
             sector_exposures=sector,
@@ -368,6 +376,8 @@ async def load_asset_classifications(
             modified_duration=duration,
             modified_duration_read_on=duration_step.date if duration_step is not None else None,
             modified_duration_source=duration_step.source if duration_step is not None else None,
+            modified_duration_confirmed_on=now.confirmed_on if now is not None else None,
+            modified_duration_stale=now.stale if now is not None else False,
         )
     return classifications
 

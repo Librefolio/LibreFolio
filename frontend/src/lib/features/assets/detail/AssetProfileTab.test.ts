@@ -8,7 +8,10 @@
  *   or `refreshKey` changes; a slower, older answer never replaces a newer one;
  * - it publishes its loading (`data-busy`, `aria-busy`) and its outcome (`data-status`: ready, failed, missing);
  * - the cards and the details come from the catalogue, the description from its voice;
- * - «Modifica i dati» is there only when the page handles it (E8).
+ * - «Modifica i dati» is there only when the page handles it (E8);
+ * - E6b2: the clock beside «Descrizione» opens its history, when it has rows and the page handles it;
+ * - E6c: with enrichers, «Aggiorna» beside it says the last read and is busy while the page refreshes (never on the next
+ *   asset); without any, the box «Nessun arricchitore configurato» with «Configura»; enrichers not known yet, neither.
  *
  * How it is tested: the real tab and its parts, real i18n; the profile memory faked (`profileStore`), the charts stood in.
  */
@@ -155,5 +158,84 @@ describe('AssetProfileTab', () => {
         await waitFor(() => expect(screen.getByTestId('asset-profile-tab')).toHaveAttribute('data-status', 'ready'));
         await fireEvent.click(screen.getByTestId('asset-profile-edit'));
         expect(onedit).toHaveBeenCalledOnce();
+    });
+
+    it('says «non aggiornato» on the card and the detail of a stale voice, and only there (D1d)', async () => {
+        const stale = {...step('0.0019'), confirmed_on: '2026-09-18', stale: true} as ProfileStep;
+        const fresh = {...step('Vanguard'), confirmed_on: '2026-11-10', stale: false} as ProfileStep;
+        store.readAssetProfile.mockResolvedValue({...FOUND, voices: {...FOUND.voices, ter: [stale], fund_provider: [fresh]}});
+        render(AssetProfileTab, {props: {assetId: 7, period: PERIOD, isin: null, ticker: null}});
+        await waitFor(() => expect(screen.getByTestId('asset-profile-tab')).toHaveAttribute('data-status', 'ready'));
+        expect(screen.getByTestId('profile-key-figure-ter')).toHaveAttribute('data-stale', 'true');
+        expect(screen.getByTestId('profile-key-figure-ter-stale')).toHaveTextContent('18');
+        expect(screen.getByTestId('profile-detail-fund_provider')).toHaveAttribute('data-stale', 'false');
+    });
+
+    it('offers «Aggiorna» with the last read when the asset has enrichers, busy while the page refreshes (E6c)', async () => {
+        const done = deferred<void>();
+        const onrefresh = vi.fn(() => done.promise);
+        render(AssetProfileTab, {props: {assetId: 7, period: PERIOD, isin: null, ticker: null, onedit: vi.fn(), enrichers: {count: 2, lastRead: '2026-11-08'}, onrefresh, onconfigure: vi.fn()}});
+        await waitFor(() => expect(screen.getByTestId('asset-profile-tab')).toHaveAttribute('data-status', 'ready'));
+        expect(screen.queryByTestId('asset-profile-no-enrichers')).toBeNull();
+        const button = screen.getByTestId('asset-profile-refresh');
+        expect(button).toHaveAttribute('data-last-read', '2026-11-08');
+        expect(button).toHaveAttribute('data-state', 'idle');
+        expect(button.getAttribute('aria-label'), 'the accessible name starts with the visible label').toMatch(/^Refresh · /);
+        expect(button.getAttribute('title')).toContain('2026');
+
+        await fireEvent.click(button);
+        expect(onrefresh).toHaveBeenCalledOnce();
+        expect(button).toHaveAttribute('data-state', 'running');
+        expect(button).toBeDisabled();
+        done.resolve();
+        await waitFor(() => expect(button).toHaveAttribute('data-state', 'idle'));
+        expect(button).not.toBeDisabled();
+    });
+
+    it('says «mai letto» in the hint of an asset never read', async () => {
+        render(AssetProfileTab, {props: {assetId: 7, period: PERIOD, isin: null, ticker: null, enrichers: {count: 1, lastRead: null}, onrefresh: vi.fn(async () => undefined)}});
+        await waitFor(() => expect(screen.getByTestId('asset-profile-tab')).toHaveAttribute('data-status', 'ready'));
+        expect(screen.getByTestId('asset-profile-refresh')).toHaveAttribute('data-last-read', '');
+    });
+
+    it('does not carry a running «Aggiorna» to the next asset', async () => {
+        const onrefresh = vi.fn(() => new Promise<void>(() => undefined));
+        const props = {period: PERIOD, isin: null, ticker: null, enrichers: {count: 1, lastRead: null}, onrefresh};
+        const view = render(AssetProfileTab, {props: {assetId: 7, ...props}});
+        await waitFor(() => expect(screen.getByTestId('asset-profile-tab')).toHaveAttribute('data-status', 'ready'));
+        await fireEvent.click(screen.getByTestId('asset-profile-refresh'));
+        expect(screen.getByTestId('asset-profile-refresh')).toHaveAttribute('data-state', 'running');
+        await view.rerender({assetId: 8, ...props});
+        await waitFor(() => expect(screen.getByTestId('asset-profile-refresh')).toHaveAttribute('data-state', 'idle'));
+    });
+
+    it('without enrichers shows the box with «Configura» and no «Aggiorna»; before they are known, neither (E6c)', async () => {
+        const onconfigure = vi.fn();
+        const view = render(AssetProfileTab, {props: {assetId: 7, period: PERIOD, isin: null, ticker: null, enrichers: {count: 0, lastRead: null}, onrefresh: vi.fn(), onconfigure}});
+        await waitFor(() => expect(screen.getByTestId('asset-profile-tab')).toHaveAttribute('data-status', 'ready'));
+        expect(screen.queryByTestId('asset-profile-refresh')).toBeNull();
+        await fireEvent.click(screen.getByTestId('asset-profile-configure'));
+        expect(onconfigure).toHaveBeenCalledOnce();
+        view.unmount();
+
+        render(AssetProfileTab, {props: {assetId: 7, period: PERIOD, isin: null, ticker: null, enrichers: null, onrefresh: vi.fn(), onconfigure}});
+        await waitFor(() => expect(screen.getByTestId('asset-profile-tab')).toHaveAttribute('data-status', 'ready'));
+        expect(screen.queryByTestId('asset-profile-refresh')).toBeNull();
+        expect(screen.queryByTestId('asset-profile-no-enrichers')).toBeNull();
+    });
+
+    it('opens the history of the description from the clock beside its title (E6b2)', async () => {
+        const onhistory = vi.fn();
+        const view = render(AssetProfileTab, {props: {assetId: 7, period: PERIOD, isin: null, ticker: null, onhistory}});
+        await waitFor(() => expect(screen.getByTestId('asset-profile-tab')).toHaveAttribute('data-status', 'ready'));
+        await fireEvent.click(screen.getByTestId('asset-profile-description-history'));
+        expect(onhistory).toHaveBeenCalledWith('description');
+        expect(screen.getByTestId('profile-classification-geography-history'), 'the tab hands the clock to the classification').toBeInTheDocument();
+        view.unmount();
+
+        store.readAssetProfile.mockResolvedValue({...FOUND, voices: {ter: [step('0.0019')]}});
+        render(AssetProfileTab, {props: {assetId: 7, period: PERIOD, isin: null, ticker: null, onhistory}});
+        await waitFor(() => expect(screen.getByTestId('asset-profile-tab')).toHaveAttribute('data-status', 'ready'));
+        expect(screen.queryByTestId('asset-profile-description-history'), 'no rows, no history').toBeNull();
     });
 });

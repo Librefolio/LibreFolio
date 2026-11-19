@@ -82,22 +82,22 @@ class ProviderInputType(StrEnum):
     - ISIN: An ISIN code (e.g., IE00B4L5Y983)
     - URL: A full URL to scrape (e.g., https://example.com/price)
     - AUTO_GENERATED: No user input needed — identifier is auto-generated (e.g., UUID)
-    - PROVIDER_ID: The provider's own code for the asset, no official identifier (e.g., CoinGecko's «bitcoin»;
-      project 76, P3)
+    - COINGECKO_ID: CoinGecko's own code for a coin, no official identifier (e.g., «bitcoin»; project 76, P3).
+      Named after CoinGecko on purpose (developer, 19/11): a generic name stays free for the future
 
     Mapping to stored IdentifierType:
     - TICKER → IdentifierType.TICKER
     - ISIN → IdentifierType.ISIN
     - URL → IdentifierType.OTHER
     - AUTO_GENERATED → IdentifierType.UUID
-    - PROVIDER_ID → IdentifierType.OTHER
+    - COINGECKO_ID → IdentifierType.OTHER
     """
 
     TICKER = "TICKER"
     ISIN = "ISIN"
     URL = "URL"
     AUTO_GENERATED = "AUTO_GENERATED"
-    PROVIDER_ID = "PROVIDER_ID"
+    COINGECKO_ID = "COINGECKO_ID"
 
 
 class IdentifierType(StrEnum):
@@ -794,12 +794,11 @@ class Asset(SQLModel, table=True):
     - Provider handles both current and historical data fetching
     - Provider assignment includes identifier, identifier_type, and provider_params
 
-    Classification and metadata fields:
-    - classification_params: JSON containing ClassificationParamsModel structure
+    The description, the countries and the sectors are the asset's profile (``AssetProfileUpdate``, plan 68); the old
+    ``classification_params`` column is dropped by migration 006 (D7b).
 
     Notes:
     - display_name must be unique to avoid user confusion
-    - Validation is done via ClassificationParamsModel Pydantic model when loaded
     """
 
     __tablename__ = "assets"
@@ -816,8 +815,6 @@ class Asset(SQLModel, table=True):
     currency: str = Field(nullable=False, description="Asset original currency")  # ISO 4217
     icon_url: Optional[str] = Field(default=None, description="URL to asset icon (local or remote)")
 
-    # Classification and metadata (JSON TEXT)
-    classification_params: Optional[str] = Field(default=None, sa_column=Column(Text))
     asset_type: AssetType = Field(default=AssetType.OTHER)
     quote_base_quantity: Optional[int] = Field(default=1, description="How many units the raw market quote refers to (e.g. 100 for bonds quoted on base 100)")
 
@@ -871,17 +868,6 @@ class Asset(SQLModel, table=True):
     def validate_identifier_other(cls, v: Any) -> Optional[List[str]]:
         """Coerce str/list/None into a clean, de-duplicated soft-identifier list."""
         return normalize_other_identifiers(v)
-
-    @field_validator("classification_params")
-    def validate_classification_params(cls, v):
-        # Lazy import to avoid circular dependency
-        from backend.app.schemas.assets.metadata import FAClassificationParams  # noqa: PLC0415 — avoid circular import
-
-        if v is None:
-            return v
-        if isinstance(v, FAClassificationParams):
-            return v.model_dump_json(exclude_none=True)
-        return FAClassificationParams(**v).model_dump_json(exclude_none=True)
 
 
 # ============================================================================
@@ -1316,7 +1302,7 @@ class AssetProviderAssignment(SQLModel, table=True):
         nullable=True,
         description="Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.). NULL for AUTO_GENERATED providers.",
     )
-    identifier_type: ProviderInputType = Field(nullable=False, description="Provider input type (TICKER, ISIN, URL, AUTO_GENERATED, PROVIDER_ID)")
+    identifier_type: ProviderInputType = Field(nullable=False, description="Provider input type (TICKER, ISIN, URL, AUTO_GENERATED, COINGECKO_ID)")
     provider_params: Optional[str] = Field(
         default=None,
         sa_column=Column(Text),

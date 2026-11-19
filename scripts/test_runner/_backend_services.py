@@ -567,9 +567,9 @@ def services_provider_attribution(verbose: bool = False, test_names: list = None
 
 
 def services_coingecko_search(verbose: bool = False, test_names: list = None) -> bool:
-    """Test the CoinGecko provider's search, metadata and page, and the PROVIDER_ID input type (project 76, P3)."""
+    """Test the CoinGecko provider's search, metadata and page, and the COINGECKO_ID input type (project 76, P3)."""
     print_section("Services: CoinGecko Search")
-    print_info("Testing: asset_source_providers/coingecko/plugin.py (search, fetch_asset_metadata, get_asset_url), db/models.py ProviderInputType.PROVIDER_ID, assets/base.py")
+    print_info("Testing: asset_source_providers/coingecko/plugin.py (search, fetch_asset_metadata, get_asset_url), db/models.py ProviderInputType.COINGECKO_ID, assets/base.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_coingecko_search.py", test_names)
     return run_command(cmd, "CoinGecko search tests", verbose=verbose)
 
@@ -1738,13 +1738,13 @@ def services_asset_profile_store(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "Asset profile store tests", verbose=verbose)
 
 
-def services_asset_profile_double_write(verbose: bool = False, test_names: list = None) -> bool:
-    """Run the double write of classification_params into the asset profile by POST/PATCH /assets (project 68, lot A4)."""
-    print_section("Services: Asset Profile Double Write")
-    print_info("Testing: AssetCRUDService.create_assets_bulk / patch_assets_bulk with user_id")
-    print_info("Tests: user rows by the author on create; only the voices a patch touches; null sector, null classification; same value; read_on never before now; dry run and rolled-back batch write nothing")
-    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_profile_double_write.py", test_names)
-    return run_command(cmd, "Asset profile double write tests", verbose=verbose)
+def services_asset_profile_freshness(verbose: bool = False, test_names: list = None) -> bool:
+    """Run «now» not up to date for the volatile voices of the asset profile (project 68, lot D1d)."""
+    print_section("Services: Asset Profile Freshness")
+    print_info("Testing: backend/app/services/assets/profile/freshness.py")
+    print_info("Tests: the last confirmation from the enrichers' state, the 30 days, by hand and old states count from the row, the voices that never age, the scheduler's zone, the signal only on a step reaching today")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_profile_freshness.py", test_names)
+    return run_command(cmd, "Asset profile freshness tests", verbose=verbose)
 
 
 def services_asset_profile_from(verbose: bool = False, test_names: list = None) -> bool:
@@ -3177,7 +3177,7 @@ Note: No backend server required.
         "coingecko-search",
         services_coingecko_search,
         name="CoinGecko Search",
-        desc="P3: the id travels as PROVIDER_ID, reaching the plugin as OTHER (the reverse map unchanged); search asks /search, coins only by market cap rank (no rank last, in order), rows OTHER, Name (SYMBOL), CRYPTO, the preferred currency as currency and vs_currency, a blank query asks nothing; metadata from /coins/{id} with the P0 flags: name, CRYPTO, logo, the symbol as ticker (left out when too long), coingecko:<id> among the other identifiers; the page; search on, NOT_CONFIGURED without a key; the real path: PROVIDER_ID saved and kept, OTHER received, prices stored, a service search counted on the group",
+        desc="P3: the id travels as COINGECKO_ID, reaching the plugin as OTHER (the reverse map unchanged); search asks /search, coins only by market cap rank (no rank last, in order), rows OTHER, Name (SYMBOL), CRYPTO, the preferred currency as currency and vs_currency, a blank query asks nothing; metadata from /coins/{id} with the P0 flags: name, CRYPTO, logo, the symbol as ticker (left out when too long), coingecko:<id> among the other identifiers; the page; search on, NOT_CONFIGURED without a key; the real path: COINGECKO_ID saved and kept, OTHER received, prices stored, a service search counted on the group",
         # PURE: the real coingecko-sdk on an httpx.MockTransport (the P0 recordings); private SQLite files behind the
         # settings, the counter and the session; no shared database, no server.
         isolation="pure",
@@ -4122,12 +4122,11 @@ Note: No backend server required.
     )
     add_test(
         cat,
-        "asset-profile-double-write",
-        services_asset_profile_double_write,
-        name="Asset Profile Double Write",
-        desc="Project 68 A4: until D7, classification_params sent to create_assets_bulk / patch_assets_bulk (keyword user_id) is also written into the profile in the same transaction: source user, user_id the author, read_on today in scheduler_timezone and never before the voice's now; POST: three rows for description, geography and sector, none without classification; PATCH: only the voices it touches (sector alone: one row, even when the profile's geography differs from the column), sector_area null a NULL row, classification_params null NULL rows for the voices with a value only, the value now (another spelling) no row; the dry run (commit=False) and a batch rolled back on patchFailed write none; a patch that does not touch the classification writes none; a description of spaces counts as empty (no row on POST, an empty row on PATCH)",
-        # PURE: every database is a private SQLite file under tmp_path built with create_all; no session on the lane DB,
-        # no server, no network.
+        "asset-profile-freshness",
+        services_asset_profile_freshness,
+        name="Asset Profile Freshness",
+        desc="Project 68 D1d: a volatile voice's «now» is stale when its last confirmation is more than 30 days old (31 stale, 30 and 29 not); the confirmation is the confirmed moment of the source that wrote now, in the scheduler's zone, never before the row's read_on; by hand, a source without the voice, another source, an old state: the row's read_on; the now row is the last; TER and maps never answer; reaching_today only on a last step reaching today",
+        # PURE: every database is a private SQLite file under tmp_path built with create_all; every day passed in.
         isolation="pure",
     )
     add_test(
@@ -4146,7 +4145,7 @@ Note: No backend server required.
         "asset-profile-merge",
         services_asset_profile_merge,
         name="Asset Profile Merge",
-        desc="Project 68 A5: merge_assets moves to the target every voice the source holds now with a non-empty value and the target has no row of, whole, by changing only asset_id (same row ids, read_on, source, user_id, source_date, created_at, NULL rows of its history included), seen by current_rows and read_steps of the target; a voice both hold keeps the target's rows only, a voice empty now on the source is not moved, a voice the target emptied on purpose stays the target's and empty (no mixing of histories); until D7 a moved description / geography / sector sets that part of the target's classification_params from the moved value, never from the source's column, the other parts and a shared voice's part kept; the source's asset_enrichers row deleted, the target's unchanged (or still none); dry_run moves and deletes nothing; no profile or enrichers row points at the source afterwards; delete_assets_bulk deletes the asset's profile rows and enrichers row and leaves another asset's (guard: ON DELETE CASCADE)",
+        desc="Project 68 A5: merge_assets moves to the target every voice the source holds now with a non-empty value and the target has no row of, whole, by changing only asset_id (same row ids, read_on, source, user_id, source_date, created_at, NULL rows of its history included), seen by current_rows and read_steps of the target; a voice both hold keeps the target's rows only, a voice empty now on the source is not moved, a voice the target emptied on purpose stays the target's and empty (no mixing of histories); the source's asset_enrichers row deleted, the target's unchanged (or still none); dry_run moves and deletes nothing; no profile or enrichers row points at the source afterwards; delete_assets_bulk deletes the asset's profile rows and enrichers row and leaves another asset's (guard: ON DELETE CASCADE)",
         # PURE: every database is a private SQLite file under tmp_path built with create_all; no session on the lane DB,
         # no server, no network.
         isolation="pure",

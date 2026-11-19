@@ -1,0 +1,180 @@
+/**
+ * assetProfileDraft (plan 68, E8b): the profile's pending changes as the asset window holds them, without a DOM.
+ *
+ * Pinned (plan E8, PROF §14.8; the advisor's review of the E8b design):
+ * - the «Dati del profilo» row counts every pending change, the automatic fills too (as the mock), and names them in the
+ *   catalogue's order;
+ * - the automatic «Chiedi» starts only at creation, with the enrichers settled — «Riconosci» done or a list the user
+ *   applied — never on the proposal still growing, never in edit mode, never in the tour's preview, never without an
+ *   enricher; one question per (type, list);
+ * - its answer fills the empty voices only: a voice the user wrote always wins, and a difference is dropped (the
+ *   comparison window is the user's own «Chiedi»); a later answer replaces the fills the user did not touch;
+ * - a fill whose source left the list is dropped (the creation would refuse the whole asset: «not an enricher of this
+ *   asset»);
+ * - the automatic fills alone are not the user's changes (they must not ask to discard anything);
+ * - a pending change the window would refuse (a broker file's prefill can be wrong) blocks the save;
+ * - the description field of the asset window is a view of the profile's description (E9): the waiting value, else
+ *   «Adesso»'s; typing «Adesso»'s value again, exactly, takes the change back (a blank being typed is never eaten),
+ *   emptying an existing one sends null.
+ */
+import {describe, expect, it} from 'vitest';
+import * as draft from './assetProfileDraft';
+import {profilePatch, type AskAnswer, type PendingChanges, type PendingVoice} from './profileEditState';
+import type {ProfileStep, ProfileVoice} from './profileStore';
+
+function voice(key: string, shape: string, extra: Partial<ProfileVoice> = {}): ProfileVoice {
+    return {key, shape, sign: null, unit: null, groups: [], key_figure: false, charted: false, volatile: false, choices: [], map_keys: null, topic: 'structure', ...extra} as ProfileVoice;
+}
+
+const CATALOGUE: ProfileVoice[] = [voice('geography', 'map', {map_keys: 'country'}), voice('ter', 'percentage', {sign: 'non_negative'}), voice('fund_provider', 'text'), voice('fund_domicile', 'country'), voice('inception_date', 'date')];
+const JUSTETF = {identifier_type: 'ISIN', identifier: 'IE00BK5BQT80'};
+const fill = (key: string, value: unknown, source = 'justetf'): PendingVoice => ({key, kind: 'source', value, source, seen: value, origin: 'source'});
+const typed = (key: string, value: unknown): PendingVoice => ({key, kind: 'value', value, origin: 'new'});
+const answer = (voices: Record<string, unknown>, source = 'justetf'): AskAnswer => ({voices: Object.fromEntries(Object.entries(voices).map(([key, value]) => [key, {value, source}])), outcomes: [{code: source, status: 'ok'}]});
+
+describe('the «Dati del profilo» row', () => {
+    it('counts every pending change, the fills too, and names them in the catalogue order', () => {
+        const pending: PendingChanges = {fund_domicile: fill('fund_domicile', 'IRL'), ter: typed('ter', '0.002'), unknown_voice: typed('unknown_voice', 'x')};
+        expect(draft.profileRowSummary(pending, CATALOGUE)).toEqual({count: 3, keys: ['ter', 'fund_domicile', 'unknown_voice']});
+        expect(draft.profileRowSummary({}, CATALOGUE)).toEqual({count: 0, keys: []});
+    });
+});
+
+describe('when the automatic «Chiedi» starts', () => {
+    const base = {editMode: false, tourPreview: false, assetType: 'ETF', enrichers: {justetf: JUSTETF}, settled: true};
+
+    it('asks with the type and the settled list at creation', () => {
+        expect(draft.autoAskRequest(base)).toEqual({asset_type: 'ETF', enrichers: {justetf: JUSTETF}});
+    });
+
+    it('waits while the list is still growing, and asks nothing in edit mode, in the preview or without an enricher', () => {
+        expect(draft.autoAskRequest({...base, settled: false})).toBeNull();
+        expect(draft.autoAskRequest({...base, editMode: true})).toBeNull();
+        expect(draft.autoAskRequest({...base, tourPreview: true})).toBeNull();
+        expect(draft.autoAskRequest({...base, enrichers: {}})).toBeNull();
+        expect(draft.autoAskRequest({...base, assetType: ''})).toBeNull();
+    });
+
+    it('keys a question by the type and the list, in its order', () => {
+        const one = draft.autoAskKey({asset_type: 'ETF', enrichers: {justetf: JUSTETF, yahoo_finance: {identifier_type: 'TICKER', identifier: 'VWCE'}}});
+        const reordered = draft.autoAskKey({asset_type: 'ETF', enrichers: {yahoo_finance: {identifier_type: 'TICKER', identifier: 'VWCE'}, justetf: JUSTETF}});
+        expect(one).not.toBe(reordered);
+        expect(one).toBe(draft.autoAskKey({asset_type: 'ETF', enrichers: {justetf: {...JUSTETF}, yahoo_finance: {identifier_type: 'TICKER', identifier: 'VWCE'}}}));
+    });
+});
+
+describe('what the answer does to the pending changes', () => {
+    it('fills the empty voices «dalla fonte», keeps what the user wrote, and drops a difference', () => {
+        const pending: PendingChanges = {ter: typed('ter', '0.002')};
+        const {pending: next, auto} = draft.mergeAutoFills(pending, {}, answer({ter: '0.0022', fund_provider: 'Vanguard'}), {});
+        expect(next.ter).toEqual(typed('ter', '0.002'));
+        expect(next.fund_provider).toEqual(fill('fund_provider', 'Vanguard'));
+        expect(Object.keys(auto)).toEqual(['fund_provider']);
+    });
+
+    it('replaces, on a later answer, the fills the user did not touch, and keeps the one the user changed', () => {
+        const first = draft.mergeAutoFills({}, {}, answer({fund_provider: 'Vanguard', fund_domicile: 'IRL'}), {});
+        const touched: PendingChanges = {...first.pending, fund_domicile: typed('fund_domicile', 'LUX')};
+        const second = draft.mergeAutoFills(touched, first.auto, answer({fund_provider: 'Vanguard Group'}), {});
+        expect(second.pending.fund_provider).toEqual(fill('fund_provider', 'Vanguard Group'));
+        expect(second.pending.fund_domicile).toEqual(typed('fund_domicile', 'LUX'));
+        expect(Object.keys(second.auto)).toEqual(['fund_provider']);
+    });
+
+    it('fills nothing over a value «Adesso» already holds', () => {
+        const {pending} = draft.mergeAutoFills({}, {}, answer({fund_provider: 'Vanguard'}), {fund_provider: {value: 'Vanguard Asset Management', source: 'user'}});
+        expect(pending).toEqual({});
+    });
+});
+
+describe('the fills of a source that left the list', () => {
+    it('are dropped, and the other changes stay', () => {
+        const pending: PendingChanges = {fund_provider: fill('fund_provider', 'Vanguard', 'justetf'), fund_domicile: fill('fund_domicile', 'IRL', 'yahoo_finance'), ter: typed('ter', '0.002')};
+        expect(Object.keys(draft.withoutFillsOutside(pending, {justetf: JUSTETF}))).toEqual(['fund_provider', 'ter']);
+    });
+});
+
+describe('the changes that count as the user’s', () => {
+    it('leaves out the automatic fills the user did not touch', () => {
+        const auto = {fund_provider: fill('fund_provider', 'Vanguard')};
+        const pending: PendingChanges = {...auto, ter: typed('ter', '0.002')};
+        expect(Object.keys(draft.userChanges(pending, auto))).toEqual(['ter']);
+        expect(Object.keys(draft.userChanges({...pending, fund_provider: typed('fund_provider', 'Vanguard Group')}, auto))).toEqual(['fund_provider', 'ter']);
+    });
+});
+
+describe('a pending change the window would refuse', () => {
+    it('blocks the save: a number that is no number, a date that is no date', () => {
+        expect(draft.profileBlocksSave({ter: typed('ter', '0.002'), inception_date: typed('inception_date', '2019-07-23')}, CATALOGUE)).toBe(false);
+        expect(draft.profileBlocksSave({ter: typed('ter', 'abc')}, CATALOGUE)).toBe(true);
+        expect(draft.profileBlocksSave({inception_date: typed('inception_date', '23/07/2019')}, CATALOGUE)).toBe(true);
+    });
+
+    it('does not judge a voice the catalogue does not list, nor a fill or an emptied voice', () => {
+        expect(draft.profileBlocksSave({unknown_voice: typed('unknown_voice', 'x'), fund_provider: fill('fund_provider', 'Vanguard'), ter: {key: 'ter', kind: 'emptied', origin: 'new'}}, CATALOGUE)).toBe(false);
+    });
+});
+
+describe('«Adesso» in edit mode (E8b2)', () => {
+    const step = (value: unknown, source: string, date = '2026-11-18'): ProfileStep => ({date, through: date, value, source, update_id: 1, opened_on: date, source_date: null}) as ProfileStep;
+
+    it("is each voice's step of today: its value and who gave it, an emptied voice as null", () => {
+        expect(
+            draft.currentFromRead({
+                ter: [step('0.0019', 'justetf')],
+                fund_provider: [step('Vanguard', 'user')],
+                withholding_tax: [step(null, 'user')],
+            }),
+        ).toEqual({ter: {value: '0.0019', source: 'justetf'}, fund_provider: {value: 'Vanguard', source: 'user'}, withholding_tax: {value: null, source: 'user'}});
+    });
+
+    it('takes the last step when the read holds several, and leaves out a voice without one', () => {
+        expect(draft.currentFromRead({ter: [step('0.0022', 'legacy', '2026-11-01'), step('0.0019', 'justetf')], sector: []})).toEqual({ter: {value: '0.0019', source: 'justetf'}});
+        expect(draft.currentFromRead({})).toEqual({});
+    });
+});
+
+describe('the description field of the asset window (E9)', () => {
+    const now = (value: unknown, source = 'user') => ({description: {value, source}});
+
+    it('shows the waiting value, else «Adesso»’s, else nothing', () => {
+        expect(draft.descriptionShown({}, {})).toBe('');
+        expect(draft.descriptionShown({}, now('Global equity fund', 'justetf'))).toBe('Global equity fund');
+        expect(draft.descriptionShown({}, now(null))).toBe('');
+        expect(draft.descriptionShown({description: typed('description', 'My notes')}, now('Global equity fund'))).toBe('My notes');
+        expect(draft.descriptionShown({description: fill('description', 'From the source')}, {})).toBe('From the source');
+        expect(draft.descriptionShown({description: {key: 'description', kind: 'emptied', origin: 'new'}}, now('Global equity fund'))).toBe('');
+    });
+
+    it('writes what the user types as a value of theirs, leaving the other voices alone', () => {
+        const pending: PendingChanges = {ter: typed('ter', '0.0019')};
+        expect(draft.withDescription(pending, now('Global equity fund'), 'My notes')).toEqual({ter: typed('ter', '0.0019'), description: typed('description', 'My notes')});
+        expect(pending).toEqual({ter: typed('ter', '0.0019')});
+    });
+
+    it('takes the change back when the user types «Adesso»’s value again, exactly', () => {
+        expect(draft.withDescription({description: typed('description', 'My notes')}, now('Global equity fund'), 'Global equity fund')).toEqual({});
+        // At creation «Adesso» is empty: an empty field, or blanks alone, is no change
+        expect(draft.withDescription({description: typed('description', 'x')}, {}, '   ')).toEqual({});
+    });
+
+    it('never eats a blank the user is typing after «Adesso»’s value: the field shows what waits (E9b)', () => {
+        // The field is a view of the pending change: were «Global equity fund » taken back, the field would show «Adesso»
+        // again and the blank before the next word would vanish under the user's cursor
+        const pending = draft.withDescription({}, now('Global equity fund'), 'Global equity fund ');
+        expect(pending).toEqual({description: typed('description', 'Global equity fund ')});
+        expect(draft.descriptionShown(pending, now('Global equity fund'))).toBe('Global equity fund ');
+    });
+
+    it('empties on purpose a description that exists: the save sends null', () => {
+        const pending = draft.withDescription({}, now('Global equity fund'), '');
+        expect(pending).toEqual({description: {key: 'description', kind: 'emptied', origin: 'new'}});
+        expect(profilePatch(pending)).toEqual({description: null});
+    });
+
+    it('makes a source fill the user’s once they change it', () => {
+        const pending = draft.withDescription({description: fill('description', 'From the source')}, {}, 'From the source, and mine');
+        expect(pending).toEqual({description: typed('description', 'From the source, and mine')});
+        expect(draft.userChanges(pending, {description: fill('description', 'From the source')})).toEqual(pending);
+    });
+});

@@ -15,14 +15,17 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {flushSync} from 'svelte';
 
 const readAssetsBulk = vi.hoisted(() => vi.fn());
+const queryProfile = vi.hoisted(() => vi.fn());
 
-vi.mock('$lib/api', () => ({zodiosApi: {read_assets_bulk_api_v1_assets_get: readAssetsBulk}}));
+vi.mock('$lib/api', () => ({zodiosApi: {read_assets_bulk_api_v1_assets_get: readAssetsBulk, query_profile_api_v1_assets_profile_query_post: queryProfile}}));
 vi.mock('$lib/stores/reference/countryStore', () => ({ensureCountriesLoaded: vi.fn(async () => undefined)}));
 
 import {effectRoot} from '$test/runes.svelte';
 import {createMatrixMetadata} from './matrixMetadata.svelte';
+import {todayIso} from '$lib/utils/dateOnly';
 
-const ROWS = [{asset_id: 7, asset_type: 'ETF', classification_params: {sector_area: {distribution: {Technology: '1'}}, geographic_area: null}}];
+const ROWS = [{asset_id: 7, asset_type: 'ETF'}];
+const PROFILE = {as_of: '2026-11-17T10:00:00Z', items: [{asset_id: 7, voices: {sector: [{date: '2026-11-17', through: '2026-11-17', value: {Technology: '1'}, source: 'justetf', update_id: 1, opened_on: '2026-11-01'}]}}]};
 
 const stops: (() => void)[] = [];
 
@@ -36,6 +39,7 @@ function mount(assetIds: number[]) {
 
 beforeEach(() => {
     readAssetsBulk.mockReset();
+    queryProfile.mockReset().mockResolvedValue(PROFILE);
 });
 
 afterEach(() => {
@@ -62,6 +66,25 @@ describe('createMatrixMetadata — the state of the read', () => {
         answer(ROWS);
         await vi.waitFor(() => expect(metadata.status).toBe('ready'));
         expect(metadata.types.get(7)).toBe('ETF');
+        expect(metadata.sectors.get(7)).toEqual({Technology: 1});
+    });
+
+    it('reads the sectors and countries from the profile, today, the two maps only, one item per asset (plan 68, E5)', async () => {
+        readAssetsBulk.mockResolvedValue([...ROWS, {asset_id: 9, asset_type: 'STOCK'}]);
+        const {metadata} = mount([9, 7]);
+        await vi.waitFor(() => expect(metadata.status).toBe('ready'));
+        expect(queryProfile).toHaveBeenCalledTimes(1);
+        const items = queryProfile.mock.calls[0][0] as Array<{asset_id: number; date_range: {start: string; end?: string}; keys: string[]}>;
+        expect(items.map((item) => item.asset_id)).toEqual([7, 9]);
+        expect(items.every((item) => item.date_range.start === todayIso() && item.date_range.end === undefined)).toBe(true);
+        expect(items.every((item) => JSON.stringify(item.keys) === JSON.stringify(['geography', 'sector']))).toBe(true);
+    });
+
+    it('is failed when the profile read fails', async () => {
+        readAssetsBulk.mockResolvedValue(ROWS);
+        queryProfile.mockRejectedValue(new Error('invented: the profile read failed'));
+        const {metadata} = mount([7]);
+        await vi.waitFor(() => expect(metadata.status).toBe('failed'));
     });
 
     it('is failed, with three empty maps, when the read fails', async () => {
@@ -84,7 +107,7 @@ describe('createMatrixMetadata — the state of the read', () => {
         await vi.waitFor(() => expect(readAssetsBulk).toHaveBeenCalledTimes(2));
         expect(metadata.status).toBe('loading');
 
-        answer([...ROWS, {asset_id: 8, asset_type: 'STOCK', classification_params: null}]);
+        answer([...ROWS, {asset_id: 8, asset_type: 'STOCK'}]);
         await vi.waitFor(() => expect(metadata.status).toBe('ready'));
         expect(metadata.types.get(8)).toBe('STOCK');
     });

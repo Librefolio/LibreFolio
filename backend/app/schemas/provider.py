@@ -253,7 +253,7 @@ class FAProviderConfigBase(StrictModel):
 
     provider_code: str = Field(..., description="Provider code (yfinance, cssscraper, scheduled_investment, etc.)")
     identifier: str = Field(..., description="Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.)")
-    identifier_type: str = Field(..., description="Provider input type (TICKER, ISIN, URL, AUTO_GENERATED, PROVIDER_ID) — mapped to IdentifierType on save")
+    identifier_type: str = Field(..., description="Provider input type (TICKER, ISIN, URL, AUTO_GENERATED, COINGECKO_ID) — mapped to IdentifierType on save")
     provider_params: Optional[dict[str, Any]] = Field(None, description="Provider-specific configuration (JSON)")
 
     @field_validator("provider_params", mode="before")
@@ -484,7 +484,7 @@ class ProbeHistoryResult(BaseProbeOperationResult):
 class ProbeMetadataResult(BaseProbeOperationResult):
     """Result of metadata probe operation."""
 
-    patch_data: Optional[dict] = Field(None, description="Asset metadata patch (identifiers, asset_type, classification, etc.)")
+    patch_data: Optional[dict] = Field(None, description="Asset metadata patch: asset_type, currency, display_name and identifiers (never the description, sectors or countries)")
     quote_base_suggestion: Optional[FAQuoteBaseSuggestion] = Field(None, description="The plugin's quote base suggestion (Z-32 d), beside the patch and never inside it; null when it suggests nothing")
 
 

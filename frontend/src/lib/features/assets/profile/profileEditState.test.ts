@@ -153,6 +153,18 @@ describe('the profile of PATCH /assets', () => {
         expect(state.panelWeights({Financials: '0.4000', Technology: '0.6000'})).toEqual({Financials: 0.4, Technology: 0.6});
         expect(state.panelWeights(null)).toBeNull();
     });
+
+    it('never sends a map empty: an emptied panel empties on purpose a map «Adesso» holds, and is no change over none (E9b)', () => {
+        // The backend refuses an empty map: the last row taken out of a panel must leave as null, or as nothing at all
+        const now = {geography: {value: {USA: '0.75', ITA: '0.25'}, source: 'user'}};
+        const other = {sector: state.pendingFromPanel('sector', {Technology: 1}, 'new')};
+        expect(state.withPanel(other, 'geography', {}, now)).toEqual({...other, geography: {key: 'geography', kind: 'emptied', origin: 'new'}});
+        expect(state.profilePatch(state.withPanel({}, 'geography', {}, now))).toEqual({geography: null});
+        // Nothing stored: an empty panel is no change, and a change waiting there is taken back
+        expect(state.withPanel({...other, geography: state.pendingFromPanel('geography', {USA: 1}, 'new')}, 'geography', {}, {})).toEqual(other);
+        // Weights are a value, as before
+        expect(state.withPanel({}, 'geography', {USA: 1}, now)).toEqual({geography: state.pendingFromPanel('geography', {USA: 1}, 'new')});
+    });
 });
 
 describe('the comparison after «Chiedi»', () => {

@@ -5,7 +5,8 @@
  * - **The period** is the one chosen at the top of the asset page (I16): two days, or `start: 'min'` for «Tutti», up to
  *   the page's last day. The backend clips every voice's steps to it.
  * - **A voice's value** is its last step in the period: `value`, `emptied` on purpose (a null value), or `unavailable`
- *   (no step).
+ *   (no step). A value that changes at every read and was last confirmed more than 30 days ago is «non aggiornato»: the
+ *   backend says so on the last step (D1d), `staleSince` gives the day.
  * - **Where a voice goes** comes from the catalogue, never from a list here: `key_figure` makes a card, `charted` gives
  *   it a chart of its steps, `groups` place it in the details (the fund, the company, the identity, the bond). A voice
  *   with no group has no cell (the issuer's LEI, the voices other lanes read).
@@ -65,6 +66,15 @@ export function profileCell(voice: ProfileVoice, steps: readonly ProfileStep[] |
     return {key: voice.key, voice, state, step: last};
 }
 
+/**
+ * «Non aggiornato» (D1d): the day «now» of a voice was last confirmed, when the backend says it is more than 30 days ago
+ * (`stale` on the last step); null for a fresh value, a step with no signal, an emptied voice or no step.
+ */
+export function staleSince(cell: ProfileCell): string | null {
+    const step = cell.step;
+    return cell.state === 'value' && step?.stale === true && step.confirmed_on ? String(step.confirmed_on) : null;
+}
+
 // =============================================================================
 // Key figures
 // =============================================================================
@@ -82,7 +92,7 @@ export interface KeyFigureCard extends ProfileCell {
 }
 
 /** The number a chart draws for one stored value: a percentage in percent, an amount by its number; null otherwise. */
-function chartNumber(voice: ProfileVoice, value: unknown): number | null {
+export function chartNumber(voice: ProfileVoice, value: unknown): number | null {
     if (value === null || value === undefined) return null;
     let text: string | null = null;
     if (voice.shape === 'percentage') text = fractionToPercent(String(value));

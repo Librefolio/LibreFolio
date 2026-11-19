@@ -153,7 +153,7 @@ class PluginSettingsPluginRead(StrictModel):
     family: PluginSettingFamily
     plugin_code: str
     plugin_name: str
-    icon_url: str | None = Field(None, description="The plugin's icon, as its family's provider list publishes it (a remote URL or a path of this instance); null when it has none, and the app shows a neutral icon")
+    icon_url: str | None = Field(None, description="The plugin's icon, as its family's provider list publishes it (a remote URL or a path of this instance); for a shared group, the icon of the first plugin that reads it; null when there is none, and the app shows a neutral icon")
     configured: bool = Field(
         ...,
         description="Every required field has a usable value and no environment variable is invalid: otherwise the plugin answers its calls with NOT_CONFIGURED. Judged on every field, the ones not listed here too, and for a plugin on the fields of the groups it reads",
@@ -163,6 +163,10 @@ class PluginSettingsPluginRead(StrictModel):
     used_by: list[PluginSettingsPluginRef] = Field(default_factory=list, description="For a group: the plugins that read it")
     name_key: str | None = Field(None, description="For a group: the i18n key of its name; plugin_name is the English fallback")
     call_usage: PluginCallUsage | None = Field(None, description="The calls counted and the limits, on the entry that owns the count (project 76, U4); null elsewhere, and when the counts cannot be read")
+    reason: Literal["missing_fields", "invalid_locked_setting"] | None = Field(
+        None,
+        description="Why it is not configured, the reason of the boundary's own check (N1/N2): `missing_fields` (a value to set) or `invalid_locked_setting` (an environment variable that locks a field has an invalid value, fixed on the server); null when configured (project 76, U5b)",
+    )
 
 
 class PluginSettingsCatalogResponse(StrictModel):

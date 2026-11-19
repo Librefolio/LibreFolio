@@ -13,6 +13,9 @@
  *   - maps `call_usage` into the entry, its windows checked and put in window order; no block (or a null one, or one
  *     that is not a block) leaves no `call_usage` key, so an entry without usage is exactly what it was before U4.
  *
+ * From U5b it also maps `reason`, the readiness check's own (`missing_fields` | `invalid_locked_setting`); any other
+ * value, or none, leaves no `reason` key.
+ *
  * Mocks: the read alias is spied on the real generated client (`spyOnApi`), as in `pluginSettingsApi.test.ts`; the
  * last block fakes only the transport (`axiosInstance.defaults.adapter`) to go through the generated schema.
  *
@@ -214,6 +217,32 @@ describe('U5: the call_usage block is mapped into the entry', () => {
         const entries = await fetchPluginSettings();
 
         expect(entries.every((narrowed) => !('call_usage' in narrowed))).toBe(true);
+    });
+});
+
+describe('U5b: the readiness reason is mapped into the entry', () => {
+    it('the two reasons the server knows come through', async () => {
+        readAlias().mockResolvedValueOnce(
+            answered({
+                plugins: [
+                    {...YFINANCE, configured: false, reason: 'invalid_locked_setting'},
+                    {...ECB, configured: false, reason: 'missing_fields'},
+                ],
+            }),
+        );
+
+        const [yahoo, ecb] = await fetchPluginSettings();
+
+        expect(yahoo.reason).toBe('invalid_locked_setting');
+        expect(ecb.reason).toBe('missing_fields');
+    });
+
+    it('no reason, a null one or an unknown one: the entry has no reason key', async () => {
+        readAlias().mockResolvedValueOnce(answered({plugins: [YFINANCE, {...ECB, reason: null}, {...JUSTETF_RAW, reason: 'something_else'}]}));
+
+        const entries = await fetchPluginSettings();
+
+        expect(entries.every((narrowed) => !('reason' in narrowed))).toBe(true);
     });
 });
 

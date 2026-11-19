@@ -427,6 +427,7 @@ async def test_an_invalid_variable_leaves_the_plugin_not_configured_even_for_an_
 #: The icons of the shipped plugins that declare settings, today: what their ``get_icon`` gives, and ``GET /assets/provider`` publishes.
 SHIPPED_ICONS = {
     "borsa_italiana": "https://www.borsaitaliana.it/media-rwd/assets/images/favicon.ico",
+    "coingecko": "https://www.coingecko.com/favicon.ico",
     "justetf": "https://www.justetf.com/android-chrome-144x144.png?v2",
 }
 STAND_IN_CODE = "stand_in"
@@ -570,7 +571,7 @@ def test_every_settings_family_has_its_icon_attribute():
 
 
 def test_the_plugins_of_the_catalogue_carry_their_icons(monkeypatch: pytest.MonkeyPatch):
-    """1: ``_plugins``, no database: justetf and borsa_italiana with their own icons; mockprov, named, with none; MOCKFX,
+    """1: ``_plugins``, no database: justetf, borsa_italiana and coingecko with their own icons; mockprov, named, with none; MOCKFX,
     named, with none, then with the ``icon`` it is given here — the FX family's icon reaches the catalogue too."""
     print_section("1: the icons of the catalogue's plugins")
     listed = {(plugin.family, plugin.code): plugin.icon_url for plugin in service._plugins(None, None)}
@@ -584,19 +585,23 @@ def test_the_plugins_of_the_catalogue_carry_their_icons(monkeypatch: pytest.Monk
     assert {code: listed[("asset", code)] for code in SHIPPED_ICONS} == SHIPPED_ICONS
     assert (mockprov.family, mockprov.code, mockprov.icon_url) == ("asset", "mockprov", None)
     assert (mockfx.family, mockfx.icon_url, mockfx_with_an_icon.icon_url) == ("fx", None, FX_ICON)
-    print_success("justetf and borsa_italiana with their icons; mockprov none; MOCKFX's own icon reaches it")
+    print_success("justetf, borsa_italiana and coingecko with their icons; mockprov none; MOCKFX's own icon reaches it")
 
 
 @pytest.mark.asyncio
 async def test_each_entry_of_the_catalogue_carries_its_plugins_icon(engine: AsyncEngine, people: dict[str, User]):
-    """1: ``read_catalogue`` puts each plugin's icon in its entry: justetf's and borsa_italiana's own, none for mockprov."""
+    """1: ``read_catalogue`` puts each plugin's icon in its entry: justetf's, borsa_italiana's and coingecko's own, none for mockprov."""
     everything = await _catalogue(engine, people["alice"])
     mockprov = await _entry(engine, people["alice"], "mockprov")
 
-    icons = {plugin.plugin_code: plugin.icon_url for plugin in everything.plugins}
+    # By the asset family's entries: the shared group «coingecko» has the same code as its reader, and no icon of its own
+    icons = {plugin.plugin_code: plugin.icon_url for plugin in everything.plugins if plugin.family == "asset"}
     assert set(SHIPPED_ICONS) <= set(icons), f"the full catalogue lists {sorted(icons)}"
     assert {code: icons[code] for code in SHIPPED_ICONS} == SHIPPED_ICONS
     assert mockprov.icon_url is None
+    # Developer, 19/11: the CoinGecko group shows the icon of the plugin that reads it, CoinGecko's favicon
+    group = next(plugin for plugin in everything.plugins if plugin.family == "group" and plugin.plugin_code == "coingecko")
+    assert group.icon_url == SHIPPED_ICONS["coingecko"]
 
 
 # =============================================================================
@@ -1008,8 +1013,10 @@ async def test_in_the_managed_profile_configured_counts_a_hidden_field_without_n
         assert [field.key for field in entry.fields] == [key for key in MOCKPROV_KEYS if key != "region"], name
         assert entry.configured is configured, name
         # Project 76, G2 adds the groups a plugin reads, the plugins a group serves and a group's name key: none of them
-        # names a field, missing or not; U4's call_usage holds counts and limits by window, no field's name either
-        assert set(entry.model_dump()) == {"family", "plugin_code", "plugin_name", "icon_url", "configured", "fields", "groups", "used_by", "name_key", "call_usage"}, "the entry has no place for a missing field's name"
+        # names a field, missing or not; U4's call_usage holds counts and limits by window, no field's name either; U5b's
+        # reason is one of two words (missing_fields, invalid_locked_setting), never a field's name
+        assert set(entry.model_dump()) == {"family", "plugin_code", "plugin_name", "icon_url", "configured", "fields", "groups", "used_by", "name_key", "call_usage", "reason"}, "the entry has no place for a missing field's name"
+        assert entry.reason in (None, "missing_fields", "invalid_locked_setting"), name
         assert "region" not in shown.lower() and REGION_VARIABLE not in shown and "atlantis" not in shown, f"{name}: the hidden field shows: {shown}"
     print_success(f"region hidden for everyone, configured={configured}, named nowhere")
 
@@ -1422,7 +1429,7 @@ def test_g2_the_schema_knows_groups_and_who_uses_them():
 
 @pytest.mark.asyncio
 async def test_g2_a_group_is_a_catalogue_entry(engine: AsyncEngine, people: dict[str, User], g2):
-    """B: family ``group``, its name as the code, its label as the name, its label key, no icon, its fields as declared, no groups of its own."""
+    """B: family ``group``, its name as the code, its label as the name, its label key, no icon (its reader has none), its fields as declared, no groups of its own."""
     group = _g2_group()
     g2("asset", _g2_plugin("g2_reader"))
 
@@ -1433,6 +1440,26 @@ async def test_g2_a_group_is_a_catalogue_entry(engine: AsyncEngine, people: dict
     token, tier = _by_key(entry)["token"], _by_key(entry)["tier"]
     assert (token.secret, token.scope.value, token.required, token.value, token.is_set, token.editable) == (True, "system", True, None, False, True)
     assert (tier.value, tier.source.value, tier.editable) == ("free", "default", True)
+
+
+@pytest.mark.asyncio
+async def test_g2_a_group_shows_the_icon_of_the_plugin_that_reads_it(engine: AsyncEngine, people: dict[str, User], g2):
+    """B (developer, 19/11, «si usa il favicon del plugin, e vale per tutti»): a group has no icon of its own, so its
+    entry carries the icon of the plugin that reads it, as that plugin's own entry carries it. With several readers,
+    the first that has one, in the order of ``used_by`` (the families in their order, then the codes); none when no
+    reader has one."""
+    _g2_group()
+    _g2_group(G2_B)
+    g2("asset", _g2_plugin("g2_iconless"))
+    g2("fx", _g2_plugin("g2_fx_reader", icon=FX_ICON))
+    g2("asset", _g2_plugin("g2_b_reader", groups=(G2_B,), get_icon=ASSET_ICON))
+
+    a_entry, b_entry = await _entry(engine, people["admin"], G2_A), await _entry(engine, people["admin"], G2_B)
+    reader = await _entry(engine, people["admin"], "g2_b_reader")
+
+    assert [user.plugin_code for user in a_entry.used_by] == ["g2_iconless", "g2_fx_reader"]
+    assert a_entry.icon_url == FX_ICON, "the asset reader has no icon: the FX reader's"
+    assert (b_entry.icon_url, reader.icon_url) == (ASSET_ICON, ASSET_ICON), "the group's icon is its reader's own"
 
 
 @pytest.mark.asyncio

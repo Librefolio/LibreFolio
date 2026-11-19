@@ -23,6 +23,7 @@
     import {fetchPluginEntry, savePluginSettings, type PluginSettingsEntry, type SettingField} from './pluginSettingsApi';
     import PluginCallUsage from './PluginCallUsage.svelte';
     import {cardProblem, hasCallBlock, ownFields} from './callUsage';
+    import {managedConfirmed} from '$lib/features/instance/profile';
     import {
         chosen,
         cleared,
@@ -90,7 +91,7 @@
     const editable = $derived(entry.fields.some((field) => field.editable));
     /** The plugin's own fields: the call limits are the «Calls» block's. */
     const fields = $derived(ownFields(entry));
-    const problemOnTop = $derived(cardProblem(entry, entryTitle(entry, $_)));
+    const problemOnTop = $derived(cardProblem(entry, entryTitle(entry, $_), managedConfirmed()));
 
     function update(key: string, next: FormState): void {
         form = next;
@@ -165,7 +166,7 @@
             {#if showIcon}
                 <img alt="" class="h-5 w-5 shrink-0 rounded-sm object-contain" data-testid="plugin-settings-plugin-icon" onerror={() => (failedIconUrl = entry.icon_url)} referrerpolicy="no-referrer" src={entry.icon_url} />
             {:else if entry.family === 'group'}
-                <!-- A shared group has no icon of its own: the icon of its section -->
+                <!-- A shared group whose readers have no icon: the icon of its section -->
                 <Share2 aria-hidden="true" class="h-5 w-5 shrink-0 text-lf-muted" data-testid="plugin-settings-plugin-icon-fallback" />
             {:else}
                 <Puzzle aria-hidden="true" class="h-5 w-5 shrink-0 text-lf-muted" data-testid="plugin-settings-plugin-icon-fallback" />

@@ -33,7 +33,22 @@
     import IdentifierPrimaryChooser from '$lib/features/assets/IdentifierPrimaryChooser.svelte';
     import {pendingIdentifier, needsPrimaryChoice, mergeOther, demotedValues} from '$lib/features/assets/identifierQuestions';
     import {assertPatchCommitted} from '$lib/features/assets/assetPatchResult';
-    import {clusterSignature, electPrimary, groupExtractedAssets, groupSignature, memberKey, orderedIdentifiers, representativeMap, representativeOf, type AssetGroup, type ExtractedAsset, type GroupOverride, type IdentifierKind, type PrimaryMap, type SimilarityLink} from '$lib/features/assets/assetGrouping';
+    import {
+        clusterSignature,
+        electPrimary,
+        groupExtractedAssets,
+        groupSignature,
+        memberKey,
+        orderedIdentifiers,
+        representativeMap,
+        representativeOf,
+        type AssetGroup,
+        type ExtractedAsset,
+        type GroupOverride,
+        type IdentifierKind,
+        type PrimaryMap,
+        type SimilarityLink,
+    } from '$lib/features/assets/assetGrouping';
     import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
     import {getTransactionTypeIconUrl, getTypeRule, ensureTypesLoaded, TX_TYPES} from '$lib/features/transactions/transactionTypeStore';
 
@@ -4852,7 +4867,8 @@ ${arrow}<span>${label}</span></span>`,
     <!-- The name elected (or typed) on the unification step, or the raw extraction if nobody ruled. -->
     {@const _createName = _createRes?.groupNames[0] || _createRes?.extractedName || ''}
     {@const _createOther = createOtherFor(_createRes, _createIsin, _createSymbol)}
-    {@const _createDesc = _createRes ? [$t('importWizard.createAsset.identifiedNames'), ..._createNames.map((n) => `• ${n}`), _createSymbol ? `Ticker: ${_createSymbol}` : '', _createIsin ? `ISIN: ${_createIsin}` : ''].filter((l) => l !== '').join('\n') : ''}
+    <!-- The names the files found are the asset's OTHER identifiers (createOtherFor), not its description: that is the
+         source's or the user's (plan 68, E9) -->
     <AssetModal
         open={true}
         editMode={false}
@@ -4862,7 +4878,6 @@ ${arrow}<span>${label}</span></span>`,
                   identifier_ticker: _createSymbol ?? undefined,
                   identifier_isin: _createIsin ?? undefined,
                   identifier_other: _createOther.length > 0 ? _createOther : undefined,
-                  classification_params: _createDesc ? {short_description: _createDesc} : undefined,
               }
             : null}
         initialSearchBadges={_createRes ? [...(_createSymbol ? [{label: `Ticker: ${_createSymbol}`, value: _createSymbol}] : []), ...(_createIsin ? [{label: `ISIN: ${_createIsin}`, value: _createIsin}] : []), ...(_createName ? [{label: _createName, value: _createName}] : [])] : []}
@@ -4938,7 +4953,6 @@ ${arrow}<span>${label}</span></span>`,
         prefillData={{
             display_name: fixCreateAssetQuery,
             identifier_isin: _fixIsin ?? undefined,
-            classification_params: _fixDesc ? {short_description: _fixDesc} : undefined,
         }}
         initialSearchBadges={_fixHints.slice(0, 8).map((h) => ({label: h, value: h}))}
         searchHints={_fixHints}

@@ -525,6 +525,31 @@ async def test_changes_of_one_voice_list_every_row_even_volatile(test_server):
 
 
 @pytest.mark.asyncio
+async def test_a_change_names_its_author_and_the_row_before_it(test_server):
+    """Plan 68, E6a: a change written by hand names its author (``user_name``, the username, never the email); the
+    source row after it says who wrote the value before, and when (``previous_source``, ``previous_user_id``,
+    ``previous_user_name``, ``previous_read_on``, ``previous_source_date``); a voice's first row has none of them."""
+    async with httpx.AsyncClient() as client:
+        user_id = await _login(client)
+        username = (await client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)).json()["user"]["username"]
+        asset_id = await _create(client, "AUTHOR")
+        try:
+            ter_first, _ = await _seed_ter(asset_id)
+            yields = await _seed_yield(asset_id, user_id)
+
+            items = {change["id"]: change for change in (await _query_one(client, _ask(asset_id, changes={})))["changes"]["items"]}
+
+            by_hand, after = items[yields[2]], items[yields[3]]
+            assert (by_hand["user_id"], by_hand["user_name"]) == (user_id, username), f"the author by name: {by_hand}"
+            assert "@" not in str(by_hand["user_name"]), "never the email"
+            assert (after["user_name"], after["previous_source"], after["previous_user_id"], after["previous_user_name"], after["previous_read_on"]) == (None, USER, user_id, username, YIELD_ROWS[2][2].isoformat()), f"the row before it: {after}"
+            first = items[ter_first]
+            assert [first[field] for field in ("previous_source", "previous_user_id", "previous_user_name", "previous_read_on", "previous_source_date")] == [None] * 5, f"a first row has no row before it: {first}"
+        finally:
+            await _delete_assets(client, [asset_id])
+
+
+@pytest.mark.asyncio
 async def test_changes_are_not_filtered_by_the_date_range(test_server):
     async with httpx.AsyncClient() as client:
         await _login(client)
@@ -659,5 +684,48 @@ async def test_forget_without_as_of_is_refused(test_server):
 
             assert resp.status_code == 422, f"as_of is required: {resp.status_code} {resp.text}"
             assert first in await _row_ids(asset_id), "nothing deleted"
+        finally:
+            await _delete_assets(client, [asset_id])
+
+
+# =============================================================================
+# D1d: «adesso» non aggiornato
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_the_last_step_of_a_volatile_voice_says_when_it_was_confirmed_and_whether_it_is_stale(test_server):
+    """Rows with no enricher bound: the confirmation is the «now» row's own day. A gross yield read 100 days ago, then
+    40 days ago, is stale; a duration written by hand 5 days ago is not; a TER carries no signal. The signal sits on the
+    last step when it holds «now», whatever day the range ends on: the browser's yesterday too. A range that ends before
+    «now» was read carries none. Days from the test's UTC today; the server's (the scheduler's zone) may differ by one
+    day, and the answer stays the same."""
+    today = datetime.now(UTC).date()
+    async with httpx.AsyncClient() as client:
+        user_id = await _login(client)
+        asset_id = await _create(client, "STALE")
+        try:
+            ids = [
+                await _seed(asset_id, "yield_gross", "0.0352", SOURCE, today - timedelta(days=100)),
+                await _seed(asset_id, "yield_gross", "0.0361", SOURCE, today - timedelta(days=40)),
+                await _seed(asset_id, "modified_duration", "1.8", USER, today - timedelta(days=5), user_id=user_id),
+                await _seed(asset_id, "ter", TER_A, SOURCE, today - timedelta(days=400)),
+            ]
+            await _assert_seeded(asset_id, ids)
+
+            yesterday = await _query_one(client, _ask(asset_id, _span(today - timedelta(days=120), today - timedelta(days=1))))
+            before = await _query_one(client, _ask(asset_id, _span(today - timedelta(days=120), today - timedelta(days=60))))
+
+            signal = {key: (voice[-1].get("confirmed_on"), voice[-1].get("stale")) for key, voice in yesterday["voices"].items()}
+            assert signal == {
+                "yield_gross": ((today - timedelta(days=40)).isoformat(), True),
+                "modified_duration": ((today - timedelta(days=5)).isoformat(), False),
+                "ter": (None, None),
+            }, yesterday
+            assert all(point.get("confirmed_on") is None and point.get("stale") is None for point in yesterday["voices"]["yield_gross"][:-1]), "only the last step"
+            assert {key: (voice[-1].get("confirmed_on"), voice[-1].get("stale")) for key, voice in before["voices"].items()} == {
+                "yield_gross": (None, None),
+                "ter": (None, None),
+            }, f"a range that ends before «now» was read carries no signal: {before}"
         finally:
             await _delete_assets(client, [asset_id])

@@ -40,10 +40,10 @@
  *     same asset, day and type share it), the value suggested from the transaction's cash, ONE `POST /assets/events` (mode
  *     `create`), then the rows are `unique` and nothing is linked until the user links them; a refusal (here: an event that
  *     appeared behind the dialog's back, 409) keeps the dialog open and creates nothing;
- *   - «Link selected» links the selected unique rows only, and a selection with nothing to act on says so (`-notice`).
+ *   - «Link selected» links the selected unique rows only; an action no selected row can take is not offered (SEL-0).
  * Each FB-19 test seeds its own account, brokers, assets and events (the helpers below), like the N68 ones.
  *
- * Key data-testids: tx-reconcile-events-button, event-reconciliation-modal|-loading|-empty|-error|-close|-link-all|-notice|-table,
+ * Key data-testids: tx-reconcile-events-button, event-reconciliation-modal|-loading|-empty|-error|-close|-link-all|-table,
  * event-reconciliation-row-{id} [data-status, data-candidate-count], event-reconciliation-link-{id}, event-reconciliation-create-{id},
  * event-reconciliation-create-modal|-row-{id} [data-transactions]|-type-{id}|-amount-{id}|-confirm|-cancel|-error,
  * dt-row-checkbox-{id}, selection-bar-action-link|-create, col-filter-trigger-{column}, filter-enum-option-{value},
@@ -590,7 +590,7 @@ test.describe('Event reconciliation — filters (FB-19)', () => {
 });
 
 test.describe('Event reconciliation — selection (FB-19)', () => {
-    test('link selected links the selected unique rows only; a selection with nothing to act on says so and sends nothing', async ({page, request}) => {
+    test('link selected links the selected unique rows only; an action no selected row can take is not offered', async ({page, request}) => {
         const world = await seedWorld(page, request);
         await openReconciliation(page);
         await expect(row(page, world.uniqueA.tx)).toHaveAttribute('data-status', 'unique', {timeout: UI_TIMEOUT});
@@ -611,25 +611,22 @@ test.describe('Event reconciliation — selection (FB-19)', () => {
         // The link cleared the selection.
         await expect(page.getByTestId(`dt-row-checkbox-${world.none.tx}`)).toHaveAttribute('data-state', 'unchecked');
 
-        // Only a none row: nothing to link, said, and no request.
+        // Only a none row: «Link selected» is not offered (SEL-0: an action no selected row can take is not there), «Create
+        // events» is; cancelling the dialog creates nothing.
         await setSelected(page, world.none.tx, true);
-        await expect(page.getByTestId('event-reconciliation-notice')).toHaveCount(0);
-        await page.getByTestId('selection-bar-action-link').click();
-        await expect(page.getByTestId('event-reconciliation-notice')).toBeVisible({timeout: UI_TIMEOUT});
-        expect(commits, 'nothing to link sends no commit').toHaveLength(1);
-
-        // Opening the creation dialog for it clears the notice; cancelling creates nothing.
+        await expect(page.getByTestId('selection-bar-action-create')).toBeVisible({timeout: UI_TIMEOUT});
+        await expect(page.getByTestId('selection-bar-action-link')).toHaveCount(0);
         await page.getByTestId('selection-bar-action-create').click();
         await expectCreateModalOpen(page, 1);
-        await expect(page.getByTestId('event-reconciliation-notice')).toHaveCount(0);
         await page.getByTestId('event-reconciliation-create-cancel').click();
         await expect(createModal(page)).toBeHidden({timeout: UI_TIMEOUT});
+        expect(commits, 'nothing was linked meanwhile').toHaveLength(1);
 
-        // Only a unique row: nothing to create, said, and no dialog.
+        // Only a unique row: «Create events» is not offered, «Link selected» is.
         await setSelected(page, world.none.tx, false);
         await setSelected(page, world.uniqueB.tx, true);
-        await page.getByTestId('selection-bar-action-create').click();
-        await expect(page.getByTestId('event-reconciliation-notice')).toBeVisible({timeout: UI_TIMEOUT});
+        await expect(page.getByTestId('selection-bar-action-link')).toBeVisible({timeout: UI_TIMEOUT});
+        await expect(page.getByTestId('selection-bar-action-create')).toHaveCount(0);
         await expect(createModal(page)).toHaveCount(0);
         expect(await linkedEventOf(page, world.uniqueB.tx)).toBeNull();
     });

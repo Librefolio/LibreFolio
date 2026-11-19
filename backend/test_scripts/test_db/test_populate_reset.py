@@ -35,6 +35,7 @@ import ast
 import json
 import uuid
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -47,7 +48,6 @@ setup_test_database()
 # populate_mock_data configures the test database again when imported and builds a lazy NullPool
 # engine: the import opens no connection. Nothing below hands it a path outside tmp_path.
 from backend.app.db.models import Asset, AssetType, Broker
-from backend.app.schemas.assets.metadata import FAClassificationParams
 from backend.app.services.assets.profile.catalogue import normalize_value
 from backend.test_scripts.test_db import populate_mock_data
 from backend.test_scripts.test_db.populate_mock_data import reset_broker_reports
@@ -532,7 +532,7 @@ def test_a_symlink_to_a_folder_is_removed_as_a_link(data_dir: Path, tmp_path: Pa
 # ---------------------------------------------------------------------------
 
 
-def _mock_classification_params() -> dict[str, dict]:
+def _mock_classifications() -> dict[str, dict]:
     """``display_name`` -> the dict the mock asset passes to ``json.dumps`` (read as source, never run)."""
     tree = ast.parse(Path(populate_mock_data.__file__).read_text(encoding="utf-8"))
     found: dict[str, dict] = {}
@@ -540,7 +540,7 @@ def _mock_classification_params() -> dict[str, dict]:
         if not isinstance(node, ast.Dict):
             continue
         entries = {k.value: v for k, v in zip(node.keys, node.values, strict=True) if isinstance(k, ast.Constant)}
-        name, params = entries.get("display_name"), entries.get("classification_params")
+        name, params = entries.get("display_name"), entries.get(populate_mock_data.LEGACY_CLASSIFICATION_KEY)
         if isinstance(name, ast.Constant) and isinstance(params, ast.Call) and params.args:
             found[name.value] = ast.literal_eval(params.args[0])
     return found
@@ -552,35 +552,42 @@ def _mock_dict_literals(key: str) -> list[dict]:
     return [{k.value: v for k, v in zip(node.keys, node.values, strict=True) if isinstance(k, ast.Constant)} for node in ast.walk(tree) if isinstance(node, ast.Dict) and any(isinstance(k, ast.Constant) and k.value == key for k in node.keys)]
 
 
+#: The parts of a mock classification and the profile voices they become (plan 68, A4; migration 006).
+_VOICE_OF_PART = {"short_description": "description", "geographic_area": "geography", "sector_area": "sector"}
+
+
 def test_every_mock_asset_classification_validates_against_the_model():
-    """C6-6 (C-51): not one mock asset writes a shape the model refuses; the failures are named."""
-    assets = _mock_dict_literals("classification_params")
+    """C6-6 (C-51): not one mock asset writes a shape the profile's catalogue refuses; the failures are named. Since plan
+    68 D7a the old container's model is gone: each part is checked as the voice it becomes."""
+    assets = _mock_dict_literals(populate_mock_data.LEGACY_CLASSIFICATION_KEY)
     assert len(assets) >= 10, "the mock assets were not found: update this test"
 
     refused = {}
     for entry in assets:
-        params = entry["classification_params"]
+        params = entry[populate_mock_data.LEGACY_CLASSIFICATION_KEY]
         if not (isinstance(params, ast.Call) and params.args):
             continue
         try:
-            FAClassificationParams.model_validate(ast.literal_eval(params.args[0]))
+            # Read as the mirror reads the JSON the seed writes: the weights as Decimals
+            for part, value in json.loads(json.dumps(ast.literal_eval(params.args[0])), parse_float=Decimal).items():
+                normalize_value(_VOICE_OF_PART[part], value if part == "short_description" else value["distribution"])
         except ValueError as exc:
             refused[ast.literal_eval(entry["display_name"])] = str(exc).splitlines()[0]
 
-    assert not refused, f"mock assets whose classification_params the model refuses: {refused}"
+    assert not refused, f"mock assets whose classification the profile catalogue refuses: {refused}"
 
 
 def test_every_mock_asset_classification_is_mirrored_into_the_profile():
     """Plan 68, D2: since the portfolio engine reads countries and sectors from the profile only, a populated database
-    holds the ``legacy`` profile rows migration 006 would copy from ``classification_params``: one per part present
+    holds the ``legacy`` profile rows migration 006 would copy from the old column: one per part present
     (description, geography, sector), in the catalogue's stored form. Without them every mock allocation is Unknown."""
     mirror = getattr(populate_mock_data, "_legacy_profile_rows", None)
     assert mirror is not None, "populate_mock_data has no _legacy_profile_rows: the mock classifications never reach the profile"
-    mocks = _mock_classification_params()
+    mocks = _mock_classifications()
     assert len(mocks) >= 10, "the mock assets were not found: update this test"
     parts = {"short_description": "description", "geographic_area": "geography", "sector_area": "sector"}
     for name, params in mocks.items():
-        rows = mirror(Asset(id=7, display_name=name, currency="EUR", classification_params=json.dumps(params)))
+        rows = mirror(Asset(id=7, display_name=name, currency="EUR"), json.dumps(params))
         expected = {}
         for part, voice in parts.items():
             if params.get(part) is None:

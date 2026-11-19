@@ -85,7 +85,18 @@
       "lastPrice": "Dernier Prix",
       "quoteBaseQuantity": "Unités/cotation",
       "txCount": "Tx",
-      "txCountTooltip": "Transactions utilisant cet actif. Vert : dans des courtiers que vous possédez. Bleu : uniquement dans les courtiers d'autres utilisateurs. Gris : aucune — actif enregistré mais jamais utilisé."
+      "txCountTooltip": "Transactions utilisant cet actif. Vert : dans des courtiers que vous possédez. Bleu : uniquement dans les courtiers d'autres utilisateurs. Gris : aucune — actif enregistré mais jamais utilisé.",
+      "risk": {
+        "maxDrawdown": "Drawdown max",
+        "volatility": "Volatilité",
+        "annualReturn": "Rendement annuel",
+        "sharpe": "Sharpe",
+        "sortino": "Sortino",
+        "worstDay": "Pire jour",
+        "bestDay": "Meilleur jour",
+        "rally": "Plus forte hausse",
+        "hint": "Mesuré sur cet actif seul, sur la période et dans la devise de cette page, à votre taux sans risque : le même chiffre que l'onglet Risque de l'actif avec les mêmes réglages."
+      }
     },
     "empty": {
       "noAssets": "Aucun actif",
@@ -234,7 +245,16 @@
         "removeTitle": "Retirer le fournisseur ?",
         "removeMessage": "Retirer le fournisseur supprime {what}. {unlinked} Les prix déjà enregistrés sont conservés, ainsi que les événements manuels. Cette action est irréversible. Continuer ?",
         "removeConfirm": "Retirer le fournisseur"
-      }
+      },
+      "enrichersButton": "Enrichisseurs",
+      "enrichersFound": "{count, plural, one {# enrichisseur trouvé} other {# enrichisseurs trouvés}} : {names}. Ils seront enregistrés avec l'actif.",
+      "enrichersSearching": "Recherche des enrichisseurs qui connaissent cet actif…",
+      "enrichersNone": "Aucun enrichisseur ne connaît cet actif.",
+      "enrichersRefused": "Trop de demandes aux sources : en attente, la recherche reprend d'elle-même dans un instant.",
+      "enrichersError": "Impossible de rechercher les enrichisseurs : choisissez-les à la main.",
+      "enrichersReview": "Vérifier ou modifier",
+      "enrichersReading": "Leurs données sont en cours de lecture.",
+      "enrichersReadingWaiting": "Trop de demandes : leurs données seront lues d'elles-mêmes dans un instant."
     },
     "provider": {
       "assignment": "Attribution du Fournisseur",
@@ -246,10 +266,10 @@
       "identifier": "Identifiant",
       "identifierType": "Type d'Identifiant",
       "inputType": {
-        "PROVIDER_ID": "ID du fournisseur"
+        "COINGECKO_ID": "ID CoinGecko"
       },
       "inputTypePlaceholder": {
-        "PROVIDER_ID": "ex. bitcoin"
+        "COINGECKO_ID": "ex. bitcoin"
       }
     },
     "schedule": {
@@ -375,8 +395,7 @@
       "currentValue": "Valeur actuelle",
       "providerValue": "Valeur du fournisseur",
       "applySelected": "Appliquer la selection ({count}/{total})",
-      "allMatch": "Toutes les donnees correspondent au fournisseur",
-      "noDistributionData": "Le fournisseur n'a pas de données pour : {fields}"
+      "allMatch": "Toutes les donnees correspondent au fournisseur"
     },
     "distribution": {
       "total": "Total",

@@ -33,7 +33,7 @@ import asyncio
 import dataclasses
 import json
 import sys
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -208,14 +208,13 @@ async def _deposit(session, broker: Broker, *, amount: str, currency: str, day: 
     await session.flush()
 
 
-async def _make_asset(session, *, currency: str, ticker: str, asset_type: AssetType = AssetType.STOCK, quote_base_quantity: int = 1, classification_params: str | None = None) -> Asset:
+async def _make_asset(session, *, currency: str, ticker: str, asset_type: AssetType = AssetType.STOCK, quote_base_quantity: int = 1) -> Asset:
     asset = Asset(
         display_name=f"AssetFxIntg_{ticker}_{utcnow().timestamp()}",
         identifier_ticker=ticker,
         currency=currency,
         asset_type=asset_type,
         quote_base_quantity=quote_base_quantity,
-        classification_params=classification_params,
     )
     session.add(asset)
     await session.flush()
@@ -534,12 +533,7 @@ async def scenario(session, test_user) -> Scenario:
     await _deposit(session, broker1, amount="5000", currency="EUR", day=PERIOD_START)
     await _deposit(session, broker2, amount="5000", currency="EUR", day=PERIOD_START)
 
-    usd_asset = await _make_asset(
-        session,
-        currency="USD",
-        ticker="AFIUSDA",
-        classification_params='{"short_description": "<script>alert(1)</script> normal text \u00e9\u00e8 \u2603", "geographic_area": null, "sector_area": null}',
-    )
+    usd_asset = await _make_asset(session, currency="USD", ticker="AFIUSDA")
     await _buy(session, broker1, usd_asset, quantity="10", amount="-900", currency="EUR", day=PERIOD_START)
     await _sell(session, broker1, usd_asset, quantity="-4", amount="410", currency="EUR", day=date(2025, 9, 5))
     await _buy(session, broker2, usd_asset, quantity="5", amount="-480", currency="EUR", day=date(2025, 9, 2))
@@ -1211,7 +1205,8 @@ class TestMaliciousTextAndJsonSafety:
 WINDOW_START = date(2025, 9, 1)
 WINDOW_END = date(2025, 9, 30)
 
-#: The tables of `asset.profile`, each one a flat list of rows.
+#: The tables of `asset.profile` built from the steps, each one a flat list of rows. `freshness` (D1d) is not one of
+#: them: it follows «now», and is asserted where a test is about it.
 PROFILE_TABLES = ("percentages", "amounts", "values", "weights", "coupon_schedule", "emptied", "thinned")
 STEP_KEYS = {"voice", "date", "through", "source"}
 
@@ -1291,29 +1286,15 @@ def _assert_only_tables(payload: dict, *filled: str) -> None:
 class TestAssetIdentityV2:
     @pytest.mark.asyncio
     async def test_identity_is_version_2_without_classification(self, session, test_user, scenario):
-        """The scenario's USD asset has only `classification_params` (a description) and no profile row: identity v2
-        builds, with every identity field and no `classification` (before D5: version 1 with the classification)."""
+        """The scenario's USD asset has no profile row: identity v2 builds, with every identity field and no
+        `classification` (before D5: version 1 with the classification, from the old column)."""
         context = _asset_context(session, scenario, asset_id=scenario.usd_asset.id, user_id=test_user.id)
         envelope = await context.resolve("asset.identity", required=True)
 
         assert envelope.component_version == 2
         assert "classification" not in envelope.payload
-        assert "<script>" not in json.dumps(envelope.payload)
         assert envelope.payload["asset_id"] == scenario.usd_asset.id
         assert envelope.payload["identifiers"]["ticker"] == "AFIUSDA"
-
-    @pytest.mark.asyncio
-    async def test_identity_never_reads_classification_params(self, session, test_user):
-        """`classification_params` is not read by the AI Export any more: an asset whose column holds text that is not a
-        classification at all still builds identity v2 (before D5 the metadata load parsed it and failed).
-        The model's validator does not run on a table model, so the text reaches the database as written."""
-        asset = await _make_asset(session, currency="EUR", ticker="AFIBADCL", classification_params="not a classification {")
-        scope = _asset_scope(user_id=test_user.id, asset_id=asset.id, start=WINDOW_START, end=WINDOW_END)
-        envelope = await _context(session, scope).resolve("asset.identity", required=True)
-
-        assert envelope.component_version == 2
-        assert "classification" not in envelope.payload
-        assert envelope.payload["asset_id"] == asset.id
 
 
 class TestAssetProfileComponent:
@@ -1454,6 +1435,27 @@ class TestAssetProfileComponent:
             ("ter", "2025-09-20", "2025-09-30", "user"),
         ]
         _assert_only_tables(payload, "percentages", "values", "emptied")
+
+    @pytest.mark.asyncio
+    async def test_a_window_holding_now_says_how_fresh_it_is_for_the_volatile_voices(self, session, test_user):
+        """D1d: a gross yield read 100 then 40 days ago (no enricher state: confirmed the day of «now») is stale, a fund
+        size read 5 days ago is not, a TER carries no signal. A window ending yesterday still holds «now»; one that ends
+        before «now» was read says nothing. Days from the test's UTC today; the profile's today may differ by one day."""
+        today = datetime.now(UTC).date()
+        asset = await _profile_asset(session, "AFIPFRS")
+        await _profile_row(session, asset, "yield_gross", "0.0352", day=today - timedelta(days=100))
+        await _profile_row(session, asset, "yield_gross", "0.0361", day=today - timedelta(days=40))
+        await _profile_row(session, asset, "fund_size", {"amount": "5000000", "currency": "EUR"}, day=today - timedelta(days=5))
+        await _profile_row(session, asset, "ter", "0.0022", day=today - timedelta(days=400))
+
+        payload = await _resolve_profile(session, test_user, asset, start=today - timedelta(days=120), end=today - timedelta(days=1))
+        before = await _resolve_profile(session, test_user, asset, start=today - timedelta(days=120), end=today - timedelta(days=60))
+
+        assert sorted((row["voice"], row["confirmed_on"], row["stale"]) for row in payload["freshness"]) == [
+            ("fund_size", (today - timedelta(days=5)).isoformat(), False),
+            ("yield_gross", (today - timedelta(days=40)).isoformat(), True),
+        ], payload["freshness"]
+        assert before["freshness"] == [], "a window that ends before «now» was read says nothing"
 
     @pytest.mark.asyncio
     async def test_a_volatile_voice_with_four_steps_keeps_its_first_and_last_and_is_thinned(self, session, test_user):

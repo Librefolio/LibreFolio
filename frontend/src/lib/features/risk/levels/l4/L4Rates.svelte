@@ -6,7 +6,9 @@
      * the current-composition wave, from the duration of the asset's profile; this box says which duration it used
      * (source, day, years), lets the reader choose rates up or down by half a point, one point or two (the consultant,
      * 18/11/2026), and reads the figure of that move from the answer: the page computes nothing. The money is the
-     * figure on the position the page states (`amountOnValue`, as the shock's), absent when it states none.
+     * figure on the position the page states (`amountOnValue`, as the shock's), absent when it states none. A «now»
+     * duration the source has not confirmed for more than 30 days (plan 68 D1d, `duration_stale`) is said not up to date,
+     * with the day of its last confirmation, in the warning role, as the Profile says it (D1c).
      */
     import {onMount} from 'svelte';
 
@@ -50,6 +52,8 @@
         });
     });
 
+    let staleLine = $derived(output?.duration_stale && output.duration_confirmed_on ? $t('risk.levels.l4.ratesStale', {values: {date: dayFormatter()(String(output.duration_confirmed_on))}}) : '');
+
     let percent = $derived(scenario === null ? '—' : `${scenario.price_change < 0 ? MINUS : '+'}${formatPercent(Math.abs(scenario.price_change), {scale: 100, signed: false, trim: true})}`);
     let amount = $derived.by(() => {
         const value = scenario === null ? null : amountOnValue(scenario.price_change, scopeValue);
@@ -63,8 +67,11 @@
 </script>
 
 {#if output}
-    <div class="space-y-2" data-testid={testId} data-direction={direction} data-step={step} data-source={output.duration_source} data-duration={output.modified_duration}>
+    <div class="space-y-2" data-testid={testId} data-direction={direction} data-step={step} data-source={output.duration_source} data-duration={output.modified_duration} data-stale={staleLine ? 'true' : 'false'}>
         <p class="text-xs text-lf-muted" data-testid="{testId}-source">{sourceLine}</p>
+        {#if staleLine}
+            <p class="text-xs text-lf-warning" data-testid="{testId}-stale">{staleLine}</p>
+        {/if}
         <div class="flex flex-wrap items-center gap-2 text-sm text-lf-secondary">
             <div class="inline-flex overflow-hidden rounded-lg border border-lf-input" role="group">
                 <button type="button" class="px-2.5 py-1 text-xs {direction === 'up' ? 'bg-lf-checked text-lf-on-checked' : 'text-lf-secondary hover:bg-lf-hover'}" aria-pressed={direction === 'up'} onclick={() => (direction = 'up')} data-testid="{testId}-up">

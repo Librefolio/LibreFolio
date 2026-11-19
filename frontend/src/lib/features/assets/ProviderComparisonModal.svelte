@@ -33,7 +33,7 @@
     // =========================================================================
 
     export interface DiffItem {
-        field: string; // "currency", "identifier_isin", "sector_area", etc.
+        field: string; // "currency", "identifier_isin", a profile voice ("sector"), etc.
         label: string; // Localized label
         type: 'string' | 'distribution';
         currentValue: any;
@@ -98,10 +98,6 @@
         {
             titleKey: 'assets.modal.assetDetails',
             fields: ['display_name', 'asset_type', 'currency', 'quote_base_quantity'],
-        },
-        {
-            titleKey: 'common.classification',
-            fields: ['short_description', 'sector_area', 'geographic_area'],
         },
     ];
 
@@ -281,9 +277,9 @@
         return s.length > max ? s.slice(0, max) + '…' : s;
     }
 
-    /** Format a distribution key with i18n for sector fields */
+    /** A distribution key in the interface language: the sectors of the profile's `sector` voice (plan 68, D7a). */
     function formatDistKey(key: string, field: string): string {
-        if (field === 'sector_area') {
+        if (field === 'sector') {
             const i18nKey = `sectors.${sectorI18nKey(key)}`;
             const localized = $t(i18nKey);
             return localized !== i18nKey ? localized : key;

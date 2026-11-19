@@ -3,8 +3,9 @@
  *
  * matrixMetadata — the pure half of the module (node env, no jsdom).
  *
- * The module turns one bulk read of the asset metadata into the three maps the
- * correlation matrix groups by — type, dominant sector, dominant area. Its two
+ * The module turns two reads into the three maps the correlation matrix groups by:
+ * the asset rows give the type, the profile (plan 68, E5: `POST /assets/profile/query`,
+ * today, the last step) gives the dominant sector and area. Its two
  * other exports are covered elsewhere: `loadMatrixMetadata` (the read) and
  * `createMatrixMetadata` (the rune factory) run end to end in
  * `e2e/portfolio/risk-lab.spec.ts`, in "the matrix offers type, sector and area
@@ -18,157 +19,110 @@
  * to `node` because no rune runs here: only the factory uses runes, and it is
  * not exercised.
  *
- * Fixtures carry weights as Decimal strings, the way the backend serialises them
- * (`FASectorArea_Output` types a weight as a string), plus one numeric case,
- * because the input schema accepts both.
+ * Fixtures carry weights as Decimal strings, the way the profile stores a map.
  */
 import {describe, expect, it} from 'vitest';
 
-import {assetIdsKey, distributionOf, EMPTY_MATRIX_METADATA, matrixMetadataFromRows, type MatrixMetadataRow} from './matrixMetadata.svelte';
+import {assetIdsKey, EMPTY_MATRIX_METADATA, matrixMetadataFromReads, profileDistribution, type MatrixMetadataRow, type MatrixProfileItem} from './matrixMetadata.svelte';
 
-const TECH_AREA = {distribution: {Technology: '0.7000', 'Health Care': '0.2000', Other: '0.1000'}};
+// The profile's stored form of a map (plan 68, E5): weights as Decimal strings, keyed by sector or by ISO country
+const TECH_MAP = {Technology: '0.7', 'Health Care': '0.2', Other: '0.1'};
 const TECH = {Technology: 0.7, 'Health Care': 0.2, Other: 0.1};
-const USA_AREA = {distribution: {USA: '0.8000', Other: '0.2000'}};
+const USA_MAP = {USA: '0.8', Other: '0.2'};
 const USA = {USA: 0.8, Other: 0.2};
 
-describe('distributionOf', () => {
+/** One item of `POST /assets/profile/query` as the matrix reads it: the steps of the two maps, the last one is today's. */
+function profile(asset_id: number, voices: {sector?: unknown; geography?: unknown}): MatrixProfileItem {
+    const steps = (value: unknown) => [{date: '2026-11-17', through: '2026-11-17', value, source: 'justetf', update_id: 1, opened_on: '2026-11-01'}];
+    return {asset_id, voices: Object.fromEntries(Object.entries(voices).map(([key, value]) => [key, steps(value)]))};
+}
+
+describe('profileDistribution', () => {
     it.each([
-        ['a missing area', undefined],
-        ['a null area', null],
-        ['an area without a distribution', {}],
-        ['a null distribution', {distribution: null}],
-        ['an empty distribution', {distribution: {}}],
-        ['an empty list', []],
-        ['a list holding null', [null]],
-    ])('is null for %s', (_case, area) => {
-        expect(distributionOf(area)).toBeNull();
+        ['a missing value', undefined],
+        ['an emptied value', null],
+        ['an empty map', {}],
+        ['a list', [TECH_MAP]],
+        ['a text', 'Technology'],
+    ])('is null for %s', (_case, value) => {
+        expect(profileDistribution(value)).toBeNull();
     });
 
     it.each([
         ['a word', 'n/a'],
         ['an empty string', ''],
-        ['a blank string', '   '],
         ['null', null],
         ['a boolean', true],
-        ['NaN', Number.NaN],
-        ['an infinite number', Number.POSITIVE_INFINITY],
         ['"Infinity"', 'Infinity'],
     ])('is null when one weight is unusable (%s), however good the others are', (_case, weight) => {
-        // One bad weight costs the whole distribution: a partial one would put the
-        // asset in a group its stored data never named.
-        expect(distributionOf({distribution: {Technology: '0.6000', Financials: weight}})).toBeNull();
+        // One bad weight costs the whole distribution: a partial one would put the asset in a group its data never named.
+        expect(profileDistribution({Technology: '0.6', Financials: weight})).toBeNull();
     });
 
-    it('reads a valid distribution key by key, the stored Decimal strings as numbers', () => {
-        expect(distributionOf(TECH_AREA)).toEqual(TECH);
-    });
-
-    it('takes numeric weights as they are', () => {
-        expect(distributionOf({distribution: {USA: 1}})).toEqual({USA: 1});
-    });
-
-    it('does not rescale: the weights stay the stored ones, whatever they sum to', () => {
-        // Dominance is `dominantExposure`'s question and the tooltip prints these
-        // shares as they are, so they must not be scaled to 1 here.
-        expect(distributionOf({distribution: {Technology: '0.3000', Energy: '0.2000'}})).toEqual({Technology: 0.3, Energy: 0.2});
-    });
-
-    it('reads a list-wrapped area through safeScalar, that is its first entry', () => {
-        expect(distributionOf([USA_AREA])).toEqual(USA);
-    });
-
-    it('reads position 0 only: a list whose first entry is null holds no distribution', () => {
-        expect(distributionOf([null, USA_AREA])).toBeNull();
+    it('reads a stored map key by key, the Decimal strings as numbers, without rescaling', () => {
+        expect(profileDistribution(TECH_MAP)).toEqual(TECH);
+        expect(profileDistribution({Technology: '0.3', Energy: '0.2'})).toEqual({Technology: 0.3, Energy: 0.2});
     });
 });
 
-describe('matrixMetadataFromRows', () => {
-    it('reads the type through safeString: a string, a one-element list, and null for anything else', () => {
-        const {types} = matrixMetadataFromRows([{asset_id: 1, asset_type: 'stock'}, {asset_id: 2, asset_type: ['etf']}, {asset_id: 3}, {asset_id: 4, asset_type: null}, {asset_id: 5, asset_type: []}, {asset_id: 6, asset_type: 42}]);
+describe('matrixMetadataFromReads', () => {
+    it('reads the type through safeString from the asset rows: a string, a one-element list, and null for anything else', () => {
+        const {types} = matrixMetadataFromReads([{asset_id: 1, asset_type: 'stock'}, {asset_id: 2, asset_type: ['etf']}, {asset_id: 3}, {asset_id: 4, asset_type: null}, {asset_id: 6, asset_type: 42}], []);
         expect(types).toEqual(
             new Map<number, string | null>([
                 [1, 'stock'],
                 [2, 'etf'],
                 [3, null],
                 [4, null],
-                [5, null],
                 [6, null],
             ]),
         );
     });
 
-    it("reads each row's sector and area on their own, and null for the one a row lacks", () => {
-        const {sectors, regions} = matrixMetadataFromRows([
-            {asset_id: 10, classification_params: {sector_area: TECH_AREA, geographic_area: USA_AREA}},
-            {asset_id: 11, classification_params: {sector_area: TECH_AREA}},
-            {asset_id: 12, classification_params: {sector_area: null, geographic_area: USA_AREA}},
-            {asset_id: 13, classification_params: {short_description: 'described, never classified'}},
-        ]);
+    it("reads each asset's sectors and countries from its profile, today's step, and null for the one it lacks", () => {
+        const rows: MatrixMetadataRow[] = [{asset_id: 10}, {asset_id: 11}, {asset_id: 12}, {asset_id: 13}];
+        const {sectors, regions} = matrixMetadataFromReads(rows, [profile(10, {sector: TECH_MAP, geography: USA_MAP}), profile(11, {sector: TECH_MAP}), profile(12, {sector: null, geography: USA_MAP})]);
         expect(sectors.get(10)).toEqual(TECH);
         expect(regions.get(10)).toEqual(USA);
         expect(sectors.get(11)).toEqual(TECH);
         expect(regions.get(11)).toBeNull();
         expect(sectors.get(12)).toBeNull();
         expect(regions.get(12)).toEqual(USA);
+        // No profile item at all: present as null, like every other asset the read answered for
+        expect(sectors.has(13)).toBe(true);
         expect(sectors.get(13)).toBeNull();
         expect(regions.get(13)).toBeNull();
     });
 
-    it.each([
-        ['missing', {asset_id: 20, asset_type: 'stock'}],
-        ['null', {asset_id: 20, asset_type: 'stock', classification_params: null}],
-        ['a list holding null', {asset_id: 20, asset_type: 'stock', classification_params: [null]}],
-    ])('maps a row whose classification_params is %s to null in both maps, and keeps its type', (_case, row) => {
-        const {types, sectors, regions} = matrixMetadataFromRows([row]);
-        expect(types.get(20)).toBe('stock');
-        // Present as null, like every other row: the read answered for this asset, and it has no areas.
-        expect(sectors.has(20)).toBe(true);
-        expect(sectors.get(20)).toBeNull();
-        expect(regions.has(20)).toBe(true);
-        expect(regions.get(20)).toBeNull();
-    });
-
-    it('reads a list-wrapped classification through its first entry', () => {
-        const {sectors, regions} = matrixMetadataFromRows([{asset_id: 30, classification_params: [{sector_area: TECH_AREA, geographic_area: USA_AREA}]}]);
-        expect(sectors.get(30)).toEqual(TECH);
-        expect(regions.get(30)).toEqual(USA);
-    });
-
-    it('drops an unusable distribution to null and leaves the rest of the row alone', () => {
-        const {types, sectors, regions} = matrixMetadataFromRows([{asset_id: 40, asset_type: 'etf', classification_params: {sector_area: {distribution: {Technology: 'n/a'}}, geographic_area: USA_AREA}}]);
-        expect(types.get(40)).toBe('etf');
-        expect(sectors.get(40)).toBeNull();
-        expect(regions.get(40)).toEqual(USA);
+    it('takes the last step of a voice', () => {
+        // The steps as the API answers them, whole; the module reads only their values
+        const steps = [
+            {date: '2026-01-01', through: '2026-06-30', value: {Energy: '1'}, source: 'legacy', update_id: 1, opened_on: '2026-01-01'},
+            {date: '2026-07-01', through: '2026-11-17', value: TECH_MAP, source: 'justetf', update_id: 2, opened_on: '2026-07-01'},
+        ];
+        const item: MatrixProfileItem = {asset_id: 20, voices: {sector: steps}};
+        expect(matrixMetadataFromReads([{asset_id: 20}], [item]).sectors.get(20)).toEqual(TECH);
     });
 
     it('keys all three maps by asset id, never by position, and gives them the same keys', () => {
-        // Ids out of order, and rows with and without each part: every map must
-        // still hold every row, since the matrix looks all three up by id.
-        const rows: MatrixMetadataRow[] = [{asset_id: 42, asset_type: 'stock', classification_params: {sector_area: TECH_AREA}}, {asset_id: 7}, {asset_id: 19, asset_type: ['etf'], classification_params: {geographic_area: USA_AREA}}];
-        const {types, sectors, regions} = matrixMetadataFromRows(rows);
+        const rows: MatrixMetadataRow[] = [{asset_id: 42, asset_type: 'stock'}, {asset_id: 7}, {asset_id: 19, asset_type: ['etf']}];
+        const {types, sectors, regions} = matrixMetadataFromReads(rows, [profile(19, {geography: USA_MAP}), profile(42, {sector: TECH_MAP})]);
         const ids = new Set([42, 7, 19]);
         expect(new Set(types.keys())).toEqual(ids);
         expect(new Set(sectors.keys())).toEqual(ids);
         expect(new Set(regions.keys())).toEqual(ids);
-        expect(types.get(42)).toBe('stock');
         expect(sectors.get(42)).toEqual(TECH);
-        expect(types.get(19)).toBe('etf');
         expect(regions.get(19)).toEqual(USA);
         expect(types.get(7)).toBeNull();
     });
 
-    it('keeps the last reading of a row the read repeats', () => {
-        const {types, sectors, regions} = matrixMetadataFromRows([
-            {asset_id: 50, asset_type: 'stock', classification_params: {sector_area: TECH_AREA}},
-            {asset_id: 50, asset_type: 'etf', classification_params: {geographic_area: USA_AREA}},
-        ]);
-        expect(types).toEqual(new Map([[50, 'etf']]));
-        expect(sectors).toEqual(new Map([[50, null]]));
-        expect(regions).toEqual(new Map([[50, USA]]));
+    it('ignores a profile item that answered an error, and one for an asset the rows do not hold', () => {
+        const {sectors} = matrixMetadataFromReads([{asset_id: 30}], [{asset_id: 30, error: 'Asset not found'}, profile(31, {sector: TECH_MAP})]);
+        expect(sectors).toEqual(new Map([[30, null]]));
     });
 
     it('gives three empty maps for no rows, the same shape as EMPTY_MATRIX_METADATA', () => {
-        const metadata = matrixMetadataFromRows([]);
+        const metadata = matrixMetadataFromReads([], []);
         for (const map of [metadata.types, metadata.sectors, metadata.regions, EMPTY_MATRIX_METADATA.types, EMPTY_MATRIX_METADATA.sectors, EMPTY_MATRIX_METADATA.regions]) {
             expect(map.size).toBe(0);
         }

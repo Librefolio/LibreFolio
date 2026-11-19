@@ -63,10 +63,12 @@ The window lists your **dividends, interest and adjustments** that have an asset
 | What you see | Meaning | What you can do |
 |--------------|---------|-----------------|
 | **One event that day** | Exactly one event of the same asset, on the same day, of the matching type | **Link** the row |
-| **No event that day** | The asset has no such event on that day | Nothing here: add the event, or link another one in the transaction |
+| **No event that day** | The asset has no such event on that day | **Create event**: enter its value, then link the row; or, when the event is on another day, link it in the transaction (below) |
 | **N events that day** | More than one candidate | Nothing here: LibreFolio never guesses. Choose the right one in the transaction |
 
 **Link every row with one event** links all the rows of the first kind at once, in a single save: if any is refused, none is linked. Nothing is linked unless you click.
+
+To act on several rows, tick them: **Link selected** appears when at least one of them has its one event, **Create events** when at least one has none, and each acts only on the rows it fits. An action none of the selected rows can take is not shown.
 
 !!! info "The event must be on the same date"
 
