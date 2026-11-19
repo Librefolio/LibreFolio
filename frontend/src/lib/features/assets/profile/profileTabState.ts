@@ -92,7 +92,7 @@ export interface KeyFigureCard extends ProfileCell {
 }
 
 /** The number a chart draws for one stored value: a percentage in percent, an amount by its number; null otherwise. */
-function chartNumber(voice: ProfileVoice, value: unknown): number | null {
+export function chartNumber(voice: ProfileVoice, value: unknown): number | null {
     if (value === null || value === undefined) return null;
     let text: string | null = null;
     if (voice.shape === 'percentage') text = fractionToPercent(String(value));
