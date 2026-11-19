@@ -18,8 +18,11 @@ The `DataTable` is a powerful, generic table component built with Svelte 5 Runes
 - **Selection**: Row selection with checkboxes, "Select All" on the current page, and a
   "show selected only" filter in the checkbox header.
   The pages act on the selection through `DataTableToolbar` (`lib/components/table/`), the selection bar:
-  one `toolbar-action-<id>` per action. An action can be `disabled`; with a `hint` its tooltip says why
-  (the label stays its name), and its `reason` code is published as `data-disabled-reason` for the tests.
+  one `toolbar-action-<id>` per action. An action can be `disabled`. A disabled action with a `hint` says why
+  in the shared `Tooltip`, in both variants of the bar. Its button carries `aria-disabled="true"` instead of the
+  native `disabled`, so it keeps the focus, the tap and the click that open the reason; a phone shows no `title`.
+  Its click never runs the action. The label stays the action's name, and the `reason` code is published as
+  `data-disabled-reason` for the tests. A disabled action without a `hint` keeps the native `disabled`.
 - **Column Management**: Resize columns by dragging a header cell's right edge, with a mouse, a
   finger or a pen — see [Column resize](#column-resize); show/hide and drag-to-reorder through
   `ColumnVisibilityToggle`, which the caller places in its own toolbar and hands the table instance
