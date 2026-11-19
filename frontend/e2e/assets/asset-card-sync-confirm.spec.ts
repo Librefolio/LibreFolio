@@ -28,7 +28,6 @@ const ASSET = {
     currency: 'EUR',
     asset_type: 'STOCK',
     active: true,
-    has_metadata: false,
     provider_code: 'mockprov',
     tx_count: 0,
     tx_count_own: 0,
