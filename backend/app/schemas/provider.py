@@ -253,7 +253,7 @@ class FAProviderConfigBase(StrictModel):
 
     provider_code: str = Field(..., description="Provider code (yfinance, cssscraper, scheduled_investment, etc.)")
     identifier: str = Field(..., description="Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.)")
-    identifier_type: str = Field(..., description="Provider input type (TICKER, ISIN, URL, AUTO_GENERATED, PROVIDER_ID) — mapped to IdentifierType on save")
+    identifier_type: str = Field(..., description="Provider input type (TICKER, ISIN, URL, AUTO_GENERATED, COINGECKO_ID) — mapped to IdentifierType on save")
     provider_params: Optional[dict[str, Any]] = Field(None, description="Provider-specific configuration (JSON)")
 
     @field_validator("provider_params", mode="before")

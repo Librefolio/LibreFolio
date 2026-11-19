@@ -166,9 +166,9 @@ class CoinGeckoProvider(AssetSourceProvider):
 
     @property
     def accepted_identifier_types(self) -> list:
-        # The CoinGecko id («bitcoin») is CoinGecko's own code, not a ticker: PROVIDER_ID, which reaches the plugin as
+        # The CoinGecko id («bitcoin») is CoinGecko's own code, not a ticker: COINGECKO_ID, which reaches the plugin as
         # OTHER (the consultant's rule, P3). The asset's ticker is the symbol (BTC), from the metadata.
-        return [ProviderInputType.PROVIDER_ID]
+        return [ProviderInputType.COINGECKO_ID]
 
     @property
     def params_schema(self) -> list[dict]:
