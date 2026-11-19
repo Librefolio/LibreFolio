@@ -59,7 +59,7 @@ engine — those live in the core.
 9. **Metadata is the asset's identity, never its profile.** `fetch_asset_metadata` gives the
    type, currency, name and identifiers. The description, the countries, the sectors and every
    other descriptive figure (TER, coupons, maturity…) are the asset's **profile**, read by an
-   **enricher** (skill `enricher-plugin`); `classification_params` stays unset. A source that
+   **enricher** (skill `enricher-plugin`); the patch item has no field for them. A source that
    has both writes two plugins, one in each family, with no import between them.
 
 ## 🛠️ Rough shape of the work
