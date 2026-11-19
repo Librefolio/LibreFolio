@@ -3138,3 +3138,66 @@ test.describe('Asset list — the risk columns (RN-23)', () => {
         await expect(cell(root, apple, 'maxDrawdown')).toHaveAttribute('data-state', 'value');
     });
 });
+
+/**
+ * «A2» (RN-21) — a card's signal bound to the reader's risk-free rate follows it. The lab, on this page's correlation tab,
+ * has the rate field: a rate changed there asks again the cards whose signals read it, so a card never shows a Rolling
+ * Sharpe at the old rate. The rate lives in the browser per context: this test leaves nothing behind.
+ */
+test.describe('Asset list — a card signal bound to the risk-free rate follows it («A2», RN-21)', () => {
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    interface SignalAsk {
+        signal_code?: string;
+        params?: Record<string, unknown>;
+    }
+
+    /** The rates a request asks a Rolling Sharpe with, when it is a card load (`POST /assets/prices/query`). */
+    function sharpeRatesOf(request: Request): number[] {
+        if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/v1/assets/prices/query') return [];
+        let body: unknown;
+        try {
+            body = request.postDataJSON();
+        } catch {
+            return [];
+        }
+        const rates: number[] = [];
+        for (const item of Array.isArray(body) ? body : []) {
+            for (const signal of ((item as {signals?: SignalAsk[]}).signals ?? []) as SignalAsk[]) {
+                if (signal.signal_code === 'RISK_ROLLING_SHARPE' && typeof signal.params?.risk_free_annual_rate === 'number') rates.push(signal.params.risk_free_annual_rate);
+            }
+        }
+        return rates;
+    }
+
+    test('changing the rate in the lab asks the card’s rolling Sharpe again, with the new rate', async ({page}) => {
+        await goToAssetsPage(page);
+        const appleId = await assetIdByName(page, 'Apple Inc.');
+        const sharpe = {id: 'e2e-a2-sharpe', signalType: 'risk-rolling-sharpe', params: {window: 20}, style: {color: '#f59e0b', lineWidth: 2, lineType: 'solid', markerStart: null, markerEnd: null}};
+        await seedChartComparisons(page, [[`asset-${appleId}`, [sharpe as unknown as Parameters<typeof seedChartComparisons>[1][number][1][number]]]]);
+        const rates: number[] = [];
+        page.on('request', (request: Request) => rates.push(...sharpeRatesOf(request)));
+
+        await goToAssetsPage(page);
+        await page.getByTestId('view-mode-grid').click();
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+        await expect.poll(() => rates.length, {message: 'the card never asked its rolling Sharpe', timeout: 15_000}).toBeGreaterThan(0);
+        expect(
+            rates.every((rate) => rate === 0),
+            `premise: a fresh reader's rate is 0, asked ${JSON.stringify(rates)}`,
+        ).toBe(true);
+
+        await page.getByTestId('assets-tab-correlation').click();
+        const field = page.getByTestId('asset-global-risk-panel').getByTestId('risk-free-rate');
+        await expect(field, 'the lab shows the rate field only once its opening selection is analysed (the seeded holdings)').toBeVisible({timeout: 20_000});
+        // The answer to the card load at the new rate: the engine must accept it, not only receive it.
+        const answeredAtNewRate = page.waitForResponse((response) => sharpeRatesOf(response.request()).includes(0.025), {timeout: 15_000});
+        await field.fill('2.5');
+        await field.press('Enter');
+
+        await expect.poll(() => rates.includes(0.025), {message: `the card did not ask its rolling Sharpe at the new rate, asked ${JSON.stringify(rates)}`, timeout: 15_000}).toBe(true);
+        expect((await answeredAtNewRate).status(), 'the card load at the new rate was refused').toBe(200);
+    });
+});
