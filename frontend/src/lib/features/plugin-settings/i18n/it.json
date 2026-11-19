@@ -146,6 +146,17 @@
       "adminOnly": "Solo un amministratore può cambiare i limiti.",
       "invalid": "valore non valido",
       "invalidBy": "{variable}: valore non valido"
+    },
+    "menu": {
+      "all": "Tutti",
+      "asset": "Prezzi",
+      "fx": "Cambi",
+      "brim": "Importazioni",
+      "tool": "Strumenti",
+      "enricher": "Profilo asset",
+      "group": "Condivise",
+      "hasUnconfigured": "Contiene plugin da configurare",
+      "nothingUnconfigured": "Tutti i plugin sono configurati."
     }
   }
 }
