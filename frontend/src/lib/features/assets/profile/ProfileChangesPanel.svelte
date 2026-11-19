@@ -14,11 +14,11 @@
 <script lang="ts">
     import {ChevronDown, ChevronRight} from 'lucide-svelte';
     import {_ as t} from '$lib/i18n';
-    import {notify} from '$lib/stores/app/notify.svelte';
     import ProfileChangesTable from './ProfileChangesTable.svelte';
     import type {ProfileChange} from './profileChanges';
     import {loadEnricherNames} from './profileSources';
-    import {forgetProfileRows, readAssetProfile, type ProfileVoice} from './profileStore';
+    import {forgetChanges} from './profileForget';
+    import {readAssetProfile, type ProfileVoice} from './profileStore';
 
     interface Props {
         assetId: number;
@@ -92,16 +92,7 @@
     });
 
     async function forget(ids: number[]): Promise<void> {
-        try {
-            const outcome = await forgetProfileRows(assetId, ids, asOf);
-            if (outcome.kind === 'forgotten') {
-                notify({name: 'asset.profile.changes.forgotten', detail: {asset_id: assetId, deleted: outcome.deleted}, toast: {variant: 'success', message: $t('assets.profile.changes.forgotten', {values: {count: outcome.deleted}})}});
-            } else {
-                notify({name: 'asset.profile.changes.refused', detail: {asset_id: assetId, reason: outcome.kind, update_ids: outcome.updateIds}, toast: {variant: 'warning', message: $t(outcome.kind === 'newer' ? 'assets.profile.changes.newer' : 'assets.profile.changes.notFound')}});
-            }
-        } catch {
-            notify({name: 'asset.profile.changes.forgetFailed', detail: {asset_id: assetId}, toast: {variant: 'error', message: $t('assets.profile.changes.forgetFailed')}});
-        }
+        await forgetChanges(assetId, ids, asOf, (key, values) => $t(key, {values}));
         // Whatever the answer, the profile may have changed: the cards and this page read again
         onchanged?.();
         again += 1;
