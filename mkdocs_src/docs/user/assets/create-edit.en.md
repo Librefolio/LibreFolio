@@ -294,7 +294,8 @@ code should lead and keeps the other under **Other identifiers**.
 
 The description and the sector and geographic breakdowns are part of the asset's **profile**. The
 asset's enrichers fill them when they can; for other assets, set them yourself. The breakdowns feed
-the dashboard's allocation charts and the AI Export.
+the dashboard's allocation charts and the AI Export. To choose the enrichers (the **Enrichers**
+button beside **Ask Provider**) and for the rest of the profile, see [Profile](detail/profile.md).
 
 - **The description** is the **Description** field of the asset form. What you type there is
   saved with the asset, as a change to its profile.
@@ -446,5 +447,6 @@ trigger it.
 ## 🔗 Related
 
 - 📊 **[Asset Detail Page](detail/index.md)** — View and analyze asset data
+- 👤 **[Profile](detail/profile.md)** — The asset's profile and its enrichers
 - 🔌 **[Providers](providers/index.md)** — Available pricing providers
 - 🧬 **[Asset Identity](../../developer/frontend/components/features/asset-identity.md)** — For developers: how identifiers, provider comparisons and merges work
