@@ -259,6 +259,18 @@ def front_tx_bulk_charges_grid(verbose: bool = False, ui: bool = False, headed: 
     return _run_playwright("transactions/tx-bulk-charges-grid.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_bulk_charges_delete(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """«Delete» on a parent with charges inside the Bulk asks first: the panel V1, Keep / Delete all / Cancel (project 66, F7-c2)."""
+    print_section("Frontend TX Bulk Charges Delete Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-bulk-charges-delete.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_crud_full(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Full CRUD lifecycle E2E tests for transactions."""
     print_section("Frontend TX CRUD Full Lifecycle Tests")
@@ -816,6 +828,14 @@ def populate_registry(registry: dict) -> None:
         name="TX Bulk Charges Grid Tests",
         desc="Project 66 F7-c1: in the Bulk a saved BUY's FEE and TAX are read on entry and grouped under it (chip with the count, closed; open when brought with the parent), indented rows without checkbox, double-click opens the charge's Form, an open group never split by a page, an unlinked TAX a top-level row «unlink»",
         tests="transactions/tx-bulk-charges-grid.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-bulk-charges-delete",
+        front_tx_bulk_charges_delete,
+        name="TX Bulk Charges Delete Tests",
+        desc="Project 66 F7-c2: in the Bulk, «Delete» on a saved BUY with FEE+TAX opens the panel before marking; Cancel changes nothing; Keep → the BUY goes, its charges stay unlinked; Delete all → all three go; on a phone by tap — read back by id",
+        tests="transactions/tx-bulk-charges-delete.spec.ts",
     )
     add_test(cat, "tx-crud-full", front_tx_crud_full, name="TX CRUD Full Lifecycle Tests", desc="Full CRUD lifecycle: standalone, paired, split, promote, bulk, suggest, cash sign", tests="transactions/tx-crud-full.spec.ts")
     add_test(cat, "tx-commit-all-types", front_tx_commit_all_types, name="TX Commit All Types Tests", desc="End-to-end commit for every TX type: standalone + paired create, edit, delete", tests="transactions/tx-commit-all-types.spec.ts")
