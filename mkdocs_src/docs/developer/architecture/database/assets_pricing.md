@@ -20,7 +20,6 @@ erDiagram
         string asset_type "VARCHAR(32), AssetType value"
         string currency
         bool is_benchmark "shared, default false"
-        json classification_params
     }
 
     PRICE_HISTORY {
@@ -62,9 +61,9 @@ erDiagram
 
 Global definition of a financial instrument. `display_name` is unique; the identifier columns (`identifier_isin`, `identifier_ticker`, …) are indexed but not unique. Each asset belongs to an [Asset Type](../../../financial-theory/instruments/asset-types/index.md).
 
-- 📋 **`classification_params`** (JSON): Stores flexible metadata like Sector, Geography, and Industry without requiring schema changes.
-    - **Distributions** (`FAClassificationParams.geographic_area` and `.sector_area`, `backend/app/schemas/assets/metadata.py:235-258`) store their weights as **fractions** that sum to exactly 1, with 4 decimals. The UI works in percent: the distribution editor and the distribution CSV import accept a total within 0.005 points of 100, and divide each weight by 100 before saving (`DistributionEditor.svelte:132,192`, `DistributionDataImportModal.svelte:35,42`).
-    - **Backend check.** `BaseDistribution._validate_and_normalize_weights` (`metadata.py:54-133`) rejects a sum farther than 0.01 from 1. Otherwise it renormalizes the weights, quantizes them to 4 decimals with `ROUND_HALF_EVEN`, and puts the rounding residue on the smallest weight.
+- 📋 **Description, countries and sectors** are not columns of `assets`: they are voices of the asset profile (`asset_profile_updates`, one row per change, with its source and its day). The old `classification_params` JSON column was copied into the profile and dropped by `006_release_1_4_0_schema` (plan 68, steps `asset_profile_legacy_copy` and `drop_classification_params`).
+    - **Distributions** (the voices `geography` and `sector`) store their weights as **fractions** that sum to exactly 1, with 4 decimals. The UI works in percent: the distribution editor and the distribution CSV import accept a total within 0.005 points of 100, and divide each weight by 100 before saving.
+    - **Backend check.** The profile catalogue validates a map with `FAGeographicArea` and `FASectorArea` (`backend/app/schemas/assets/metadata.py`): `BaseDistribution._validate_and_normalize_weights` rejects a sum farther than 0.01 from 1. Otherwise it renormalizes the weights, quantizes them to 4 decimals with `ROUND_HALF_EVEN`, and puts the rounding residue on the smallest weight.
 - 💰 **`currency`**: The asset's native currency (e.g., USD for Apple, EUR for ASML).
 - 🏷️ **`asset_type`**: One `AssetType` value — see [Asset types and subtypes](#asset-types) below.
 - ⭐ **`is_benchmark`** (`BOOLEAN NOT NULL DEFAULT 0`): The asset is offered as a comparison benchmark. The risk benchmark selector (`BenchmarkSelect.svelte`) and the chart's comparison-asset picker (`SignalAssetParamControl.svelte`) list flagged assets in a section of their own, apart from the other assets; `GET /api/v1/assets/query?is_benchmark=true|false` filters on the flag (omitted = both).
