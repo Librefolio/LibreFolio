@@ -192,6 +192,45 @@
       },
       "row": {
         "pending": "{count, plural, one {# modification en attente} other {# modifications en attente}}"
+      },
+      "changes": {
+        "title": "Dernières modifications",
+        "columns": {
+          "when": "Quand",
+          "voice": "Donnée",
+          "what": "Ce qui a changé",
+          "who": "Qui"
+        },
+        "forget": "Oublier",
+        "forgetSelected": "{count, plural, one {Oublier # modification} other {Oublier # modifications}}",
+        "confirmTitle": "Oublier ces modifications ?",
+        "confirmMessage": "{count, plural, one {# modification quitte l’historique, comme si elle n’avait jamais été écrite. C’est irréversible.} other {# modifications quittent l’historique, comme si elles n’avaient jamais été écrites. C’est irréversible.}}",
+        "forgotten": "{count, plural, one {# modification oubliée} other {# modifications oubliées}}",
+        "newer": "Les données ont changé entre-temps : la liste a été relue. Choisissez à nouveau.",
+        "notFound": "Certaines de ces modifications n’existent plus : la liste a été relue.",
+        "forgetFailed": "Impossible d’oublier les modifications.",
+        "loadFailed": "Impossible de lire les modifications.",
+        "empty": "Aucune modification pour l’instant.",
+        "range": "{from}–{to} sur {total}",
+        "previousPage": "Page précédente",
+        "nextPage": "Page suivante",
+        "who": {
+          "deletedUser": "un utilisateur supprimé"
+        },
+        "what": {
+          "first": "Première valeur lue : {to}.",
+          "firstByHand": "Saisi à la main : {to}.",
+          "firstLegacy": "Repris de LibreFolio 1.3 : {to}.",
+          "emptied": "Laissé vide exprès.",
+          "emptiedBySource": "La source ne le donne plus.",
+          "byHand": "Corrigé à la main : de {from} à {to}.",
+          "backFromHand": "Revenu à {to} : le {date}, {name} l’avait corrigé à la main à {from}, mais {source} indique {to}.",
+          "newSourceDate": "Ce sont maintenant les données du {date} (avant, du {previousDate}).",
+          "up": "En hausse de {from} à {to}.",
+          "down": "En baisse de {from} à {to}.",
+          "changed": "Modifié de {from} à {to}.",
+          "refilled": "Valeur à nouveau donnée : {to}."
+        }
       }
     }
   }
