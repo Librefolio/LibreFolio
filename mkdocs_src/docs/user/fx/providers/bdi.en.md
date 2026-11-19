@@ -1,4 +1,4 @@
-# <img src="https://www.bancaditalia.it/application/themes/bdi2/img/favicon.png" alt=""> Banca d'Italia (BDI)
+# ![](../../../static/icons/fx/bdi.png) Banca d'Italia (BDI)
 
 The **Banca d'Italia (BDI)** provider retrieves the daily exchange rates the Banca d'Italia publishes for about 150 currencies, quoted against the euro (EUR). It covers almost every currency in the world, so a currency no other provider in LibreFolio offers, such as the Nigerian naira or the Kenyan shilling, reaches the euro in one step.
 
