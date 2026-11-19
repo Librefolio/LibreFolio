@@ -129,6 +129,7 @@ SHIPPED_FLAGS = {
     "BOG": True,
     "BCRA": True,
     "BNR": True,
+    "BOI": True,
     "MANUAL": False,
     "MOCKFX": False,
     "MOCKFX_FAIL": False,
