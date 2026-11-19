@@ -33,7 +33,7 @@ _PROFILE_VOICES = ("sector", "geography")
 async def load_profile_classifications(session: AsyncSession, asset_ids: Iterable[int], day: date) -> dict[int, dict[str, Any]]:
     """Each asset's sector and geography on ``day``, the planner's day (plan 68, D4): voice → the stored value of the step
     holding it, the first value carried back when the profile starts later; ``None`` for a voice emptied on purpose. An
-    asset with no row is left out; ``classification_params`` is not read."""
+    asset with no row is left out."""
     ids = sorted(set(asset_ids))
     if not ids:
         return {}

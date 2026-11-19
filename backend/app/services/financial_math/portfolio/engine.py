@@ -449,7 +449,7 @@ class PortfolioCalculationEngine:
 
         The first value is carried back to ``date_from`` (plan I18: «for a date we do not have, the oldest we have»); a
         voice emptied on purpose is a step with no weights. An asset with no row of either voice maps to ``None``: its
-        value is unknown in both dimensions. ``classification_params`` is not read.
+        value is unknown in both dimensions.
         """
         ids = sorted(set(asset_ids))
         if not ids:

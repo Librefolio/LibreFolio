@@ -347,10 +347,10 @@ async def load_asset_classifications(
     """Each asset's class and its countries and sectors on ``day``, the analysis day (plan 68, D3).
 
     Countries and sectors come from the asset profile, the step holding ``day``, the first value carried back when the
-    profile starts later (plan I18, «for a date we do not have, the oldest we have»). ``classification_params`` is not
-    read. An asset with no row of a voice has no exposure there. The modified duration (RN-25) is read the same way,
-    with the day its value was read and its source; when that value is the profile's «now», the day it was last
-    confirmed and whether that is more than 30 days before ``today`` (D1d; the profile's today when not given).
+    profile starts later (plan I18, «for a date we do not have, the oldest we have»). An asset with no row of a voice
+    has no exposure there. The modified duration (RN-25) is read the same way, with the day its value was read and its
+    source; when that value is the profile's «now», the day it was last confirmed and whether that is more than 30 days
+    before ``today`` (D1d; the profile's today when not given).
     """
     if not asset_ids:
         return {}
