@@ -121,6 +121,7 @@ SHIPPED_FLAGS = {
     "CNB": True,
     "SARB": True,
     "BCRP": True,
+    "TRM": True,
     "MANUAL": False,
     "MOCKFX": False,
     "MOCKFX_FAIL": False,
