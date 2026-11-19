@@ -532,7 +532,7 @@ def test_a_symlink_to_a_folder_is_removed_as_a_link(data_dir: Path, tmp_path: Pa
 # ---------------------------------------------------------------------------
 
 
-def _mock_classification_params() -> dict[str, dict]:
+def _mock_classifications() -> dict[str, dict]:
     """``display_name`` -> the dict the mock asset passes to ``json.dumps`` (read as source, never run)."""
     tree = ast.parse(Path(populate_mock_data.__file__).read_text(encoding="utf-8"))
     found: dict[str, dict] = {}
@@ -540,7 +540,7 @@ def _mock_classification_params() -> dict[str, dict]:
         if not isinstance(node, ast.Dict):
             continue
         entries = {k.value: v for k, v in zip(node.keys, node.values, strict=True) if isinstance(k, ast.Constant)}
-        name, params = entries.get("display_name"), entries.get("classification_params")
+        name, params = entries.get("display_name"), entries.get(populate_mock_data.LEGACY_CLASSIFICATION_KEY)
         if isinstance(name, ast.Constant) and isinstance(params, ast.Call) and params.args:
             found[name.value] = ast.literal_eval(params.args[0])
     return found
@@ -559,12 +559,12 @@ _VOICE_OF_PART = {"short_description": "description", "geographic_area": "geogra
 def test_every_mock_asset_classification_validates_against_the_model():
     """C6-6 (C-51): not one mock asset writes a shape the profile's catalogue refuses; the failures are named. Since plan
     68 D7a the old container's model is gone: each part is checked as the voice it becomes."""
-    assets = _mock_dict_literals("classification_params")
+    assets = _mock_dict_literals(populate_mock_data.LEGACY_CLASSIFICATION_KEY)
     assert len(assets) >= 10, "the mock assets were not found: update this test"
 
     refused = {}
     for entry in assets:
-        params = entry["classification_params"]
+        params = entry[populate_mock_data.LEGACY_CLASSIFICATION_KEY]
         if not (isinstance(params, ast.Call) and params.args):
             continue
         try:
@@ -574,20 +574,20 @@ def test_every_mock_asset_classification_validates_against_the_model():
         except ValueError as exc:
             refused[ast.literal_eval(entry["display_name"])] = str(exc).splitlines()[0]
 
-    assert not refused, f"mock assets whose classification_params the model refuses: {refused}"
+    assert not refused, f"mock assets whose classification the profile catalogue refuses: {refused}"
 
 
 def test_every_mock_asset_classification_is_mirrored_into_the_profile():
     """Plan 68, D2: since the portfolio engine reads countries and sectors from the profile only, a populated database
-    holds the ``legacy`` profile rows migration 006 would copy from ``classification_params``: one per part present
+    holds the ``legacy`` profile rows migration 006 would copy from the old column: one per part present
     (description, geography, sector), in the catalogue's stored form. Without them every mock allocation is Unknown."""
     mirror = getattr(populate_mock_data, "_legacy_profile_rows", None)
     assert mirror is not None, "populate_mock_data has no _legacy_profile_rows: the mock classifications never reach the profile"
-    mocks = _mock_classification_params()
+    mocks = _mock_classifications()
     assert len(mocks) >= 10, "the mock assets were not found: update this test"
     parts = {"short_description": "description", "geographic_area": "geography", "sector_area": "sector"}
     for name, params in mocks.items():
-        rows = mirror(Asset(id=7, display_name=name, currency="EUR", classification_params=json.dumps(params)))
+        rows = mirror(Asset(id=7, display_name=name, currency="EUR"), json.dumps(params))
         expected = {}
         for part, voice in parts.items():
             if params.get(part) is None:
