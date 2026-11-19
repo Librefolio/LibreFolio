@@ -222,6 +222,18 @@ def front_tx_charges_table(verbose: bool = False, ui: bool = False, headed: bool
     return _run_playwright("transactions/tx-charges-table.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_charges_link_delete(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Link charges from the table's selection bar, delete a parent with charges (project 66, F6)."""
+    print_section("Frontend TX Charges Link and Delete Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-charges-link-delete.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_crud_full(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Full CRUD lifecycle E2E tests for transactions."""
     print_section("Frontend TX CRUD Full Lifecycle Tests")
@@ -763,6 +775,7 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "tx-split-promote", front_tx_split_promote, name="TX Split & Promote Tests", desc="Split paired, promote standalone, merge modal, guards, non-regression", tests="transactions/tx-split-promote.spec.ts")
     add_test(cat, "tx-charges-view", front_tx_charges_view, name="TX Linked Charges View Tests", desc="Project 66 F2: a BUY with a FEE and a TAX linked, opened read-only: the section lists the two charges with their notes and the total charged", tests="transactions/tx-charges-view.spec.ts")
     add_test(cat, "tx-charges-table", front_tx_charges_table, name="TX Linked Charges Table Tests", desc="Project 66 F5: charges folded under the BUY, kept under a broker filter, on their own under types=FEE, flat under a sort", tests="transactions/tx-charges-table.spec.ts")
+    add_test(cat, "tx-charges-link-delete", front_tx_charges_link_delete, name="TX Charges Link and Delete Tests", desc="Project 66 F6: link BUY+FEE+TAX from the bar, otherBroker off, delete with all/keep, no panel if all selected", tests="transactions/tx-charges-link-delete.spec.ts")
     add_test(cat, "tx-crud-full", front_tx_crud_full, name="TX CRUD Full Lifecycle Tests", desc="Full CRUD lifecycle: standalone, paired, split, promote, bulk, suggest, cash sign", tests="transactions/tx-crud-full.spec.ts")
     add_test(cat, "tx-commit-all-types", front_tx_commit_all_types, name="TX Commit All Types Tests", desc="End-to-end commit for every TX type: standalone + paired create, edit, delete", tests="transactions/tx-commit-all-types.spec.ts")
     add_test(cat, "tx-bulk-suggest-ux", front_tx_bulk_suggest_ux, name="TX Bulk Suggest UX Tests", desc="Split badge, type preview, undo split, suggest banner, ActionModal AFTER rows", tests="transactions/tx-bulk-suggest-ux.spec.ts")
