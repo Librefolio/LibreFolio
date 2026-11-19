@@ -35,6 +35,7 @@ import ast
 import json
 import uuid
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -47,7 +48,6 @@ setup_test_database()
 # populate_mock_data configures the test database again when imported and builds a lazy NullPool
 # engine: the import opens no connection. Nothing below hands it a path outside tmp_path.
 from backend.app.db.models import Asset, AssetType, Broker
-from backend.app.schemas.assets.metadata import FAClassificationParams
 from backend.app.services.assets.profile.catalogue import normalize_value
 from backend.test_scripts.test_db import populate_mock_data
 from backend.test_scripts.test_db.populate_mock_data import reset_broker_reports
@@ -552,8 +552,13 @@ def _mock_dict_literals(key: str) -> list[dict]:
     return [{k.value: v for k, v in zip(node.keys, node.values, strict=True) if isinstance(k, ast.Constant)} for node in ast.walk(tree) if isinstance(node, ast.Dict) and any(isinstance(k, ast.Constant) and k.value == key for k in node.keys)]
 
 
+#: The parts of a mock classification and the profile voices they become (plan 68, A4; migration 006).
+_VOICE_OF_PART = {"short_description": "description", "geographic_area": "geography", "sector_area": "sector"}
+
+
 def test_every_mock_asset_classification_validates_against_the_model():
-    """C6-6 (C-51): not one mock asset writes a shape the model refuses; the failures are named."""
+    """C6-6 (C-51): not one mock asset writes a shape the profile's catalogue refuses; the failures are named. Since plan
+    68 D7a the old container's model is gone: each part is checked as the voice it becomes."""
     assets = _mock_dict_literals("classification_params")
     assert len(assets) >= 10, "the mock assets were not found: update this test"
 
@@ -563,7 +568,9 @@ def test_every_mock_asset_classification_validates_against_the_model():
         if not (isinstance(params, ast.Call) and params.args):
             continue
         try:
-            FAClassificationParams.model_validate(ast.literal_eval(params.args[0]))
+            # Read as the mirror reads the JSON the seed writes: the weights as Decimals
+            for part, value in json.loads(json.dumps(ast.literal_eval(params.args[0])), parse_float=Decimal).items():
+                normalize_value(_VOICE_OF_PART[part], value if part == "short_description" else value["distribution"])
         except ValueError as exc:
             refused[ast.literal_eval(entry["display_name"])] = str(exc).splitlines()[0]
 
