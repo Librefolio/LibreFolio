@@ -12,7 +12,8 @@
  *   `missing` result, distinct from an asset without rows (`voices: {}`);
  * - «Dimentica» sends `[{asset_id, update_ids, as_of}]` and forgets that asset's reads on success; a refusal 409
  *   `PROFILE_UPDATES_NEWER` or 404 `PROFILE_UPDATES_NOT_FOUND` is a typed result (with the ids), never a throw, and
- *   forgets the asset's reads too (the page reloads); any other error is thrown as it came.
+ *   forgets the asset's reads too (the page reloads); any other error is thrown as it came;
+ * - «Aggiorna» (E6c) sends `[asset_id]`, answers that asset's result and forgets its reads, whatever the server says.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
@@ -21,15 +22,17 @@ const mocks = vi.hoisted(() => ({
         profile_catalogue_api_v1_assets_profile_catalogue_get: vi.fn(),
         query_profile_api_v1_assets_profile_query_post: vi.fn(),
         forget_profile_api_v1_assets_profile_delete: vi.fn(),
+        refresh_profile_api_v1_assets_profile_refresh_post: vi.fn(),
     },
 }));
 vi.mock('$lib/api', () => ({zodiosApi: mocks.api}));
 
-import {clearProfileMemory, forgetProfileRows, invalidateAssetProfile, loadProfileCatalogue, profileVoice, readAssetProfile} from './profileStore';
+import {clearProfileMemory, forgetProfileRows, invalidateAssetProfile, loadProfileCatalogue, profileVoice, readAssetProfile, refreshAssetProfile} from './profileStore';
 
 const catalogueCall = mocks.api.profile_catalogue_api_v1_assets_profile_catalogue_get;
 const queryCall = mocks.api.query_profile_api_v1_assets_profile_query_post;
 const forgetCall = mocks.api.forget_profile_api_v1_assets_profile_delete;
+const refreshCall = mocks.api.refresh_profile_api_v1_assets_profile_refresh_post;
 
 const TER = {key: 'ter', shape: 'percentage', sign: 'non_negative', unit: null, groups: ['key_figures'], key_figure: true, charted: true, volatile: false, choices: [], map_keys: null};
 const GEO = {key: 'geography', shape: 'map', sign: null, unit: null, groups: ['classification'], key_figure: false, charted: false, volatile: false, choices: [], map_keys: 'country'};
@@ -162,5 +165,30 @@ describe('«Dimentica»', () => {
         forgetCall.mockRejectedValue(failure);
 
         await expect(forgetProfileRows(7, [11], AS_OF)).rejects.toBe(failure);
+    });
+});
+
+describe('«Aggiorna» (E6c)', () => {
+    it('sends the asset, answers its result and forgets its reads', async () => {
+        queryCall.mockResolvedValue(answer(7));
+        const result = {asset_id: 7, written: ['ter'], outcomes: [{code: 'mockenrich', identifier_type: 'ISIN', identifier: 'X', status: 'ok', voices: ['ter'], error_code: null, retry_after: null, from_cache: false}], error: null};
+        refreshCall.mockResolvedValue({results: [result]});
+        await readAssetProfile(7, RANGE);
+
+        await expect(refreshAssetProfile(7)).resolves.toEqual(result);
+        expect(refreshCall).toHaveBeenCalledWith([7]);
+        await readAssetProfile(7, RANGE);
+        expect(queryCall, 'the read after «Aggiorna» asks the server again').toHaveBeenCalledTimes(2);
+    });
+
+    it('forgets the reads when the call fails too, and throws', async () => {
+        queryCall.mockResolvedValue(answer(7));
+        const failure = axiosRefusal(500, {request_id: 'r1'});
+        refreshCall.mockRejectedValue(failure);
+        await readAssetProfile(7, RANGE);
+
+        await expect(refreshAssetProfile(7)).rejects.toBe(failure);
+        await readAssetProfile(7, RANGE);
+        expect(queryCall).toHaveBeenCalledTimes(2);
     });
 });
