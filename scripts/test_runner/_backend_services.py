@@ -81,6 +81,7 @@ PROVIDER_ERROR_TEST_PATHS = (
     "backend/test_scripts/test_services/test_fx_fed_quotes.py",
     "backend/test_scripts/test_services/test_fx_nbu.py",
     "backend/test_scripts/test_services/test_fx_norges.py",
+    "backend/test_scripts/test_services/test_fx_rbi.py",
     "backend/test_scripts/test_services/test_fx_sarb.py",
     "backend/test_scripts/test_services/test_fx_trm.py",
     "backend/test_scripts/test_services/test_justetf_errors.py",
