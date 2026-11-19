@@ -231,6 +231,12 @@
           "changed": "Changed from {from} to {to}.",
           "refilled": "Value given again: {to}."
         }
+      },
+      "history": {
+        "byHand": "written by hand",
+        "valuesInPercent": "values in %",
+        "writeHint": "To write a new value: «{action}»",
+        "loadFailed": "The history of this data could not be read."
       }
     }
   }
