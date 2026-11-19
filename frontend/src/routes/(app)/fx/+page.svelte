@@ -38,6 +38,7 @@
     import {firstDateOf, forgetFirstDate, isFirstDateKnown, rememberFirstDate, rememberNoSeries} from '$lib/stores/firstSeriesDates';
     import {onPricesCaughtUp} from '$lib/features/price-refresh/onPricesCaughtUp';
     import {comparisonTargetFromStore, ensureComparisonSeries} from '$lib/features/signals/comparisonSeries';
+    import {countedQueue} from '$lib/features/signals/countedQueue';
     import {comparisonTargetIds} from '$lib/utils/reducedPriceQuery';
     import {todayIso} from '$lib/utils/dateOnly';
     import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/features/signals';
@@ -1065,7 +1066,9 @@
      */
     let comparisonSeriesVersion = $state(0);
     let comparisonSeriesLoading = $state(0);
-    let comparisonSeriesChain: Promise<void> = Promise.resolve();
+    /** One load at a time; a load that is not silent counts from its call (FB-7e): queued behind a silent one (a price
+     * catch-up), the page says busy for the whole wait — a settings save and its preview start such loads. */
+    const comparisonSeriesQueue = countedQueue((delta) => (comparisonSeriesLoading += delta));
 
     /**
      * The daily series of the assets the cards compare (`comparisonSeries.ts`): one request for all of them, only for the
@@ -1074,11 +1077,10 @@
      */
     function fetchComparisonSeries(extraIds: readonly number[] = [], silent = false): Promise<void> {
         // One at a time: a call that follows another finds what it loaded in the cache, and asks nothing twice.
-        comparisonSeriesChain = comparisonSeriesChain.then(() => loadComparisonSeries(extraIds, silent));
-        return comparisonSeriesChain;
+        return comparisonSeriesQueue.run(() => loadComparisonSeries(extraIds), !silent);
     }
 
-    async function loadComparisonSeries(extraIds: readonly number[], silent: boolean) {
+    async function loadComparisonSeries(extraIds: readonly number[]) {
         const sessionGeneration = getClientSessionGeneration();
         const ids = new Set(extraIds);
         for (const pair of pairs) {
@@ -1090,12 +1092,7 @@
         });
         if (assets.length === 0) return;
         const range = {start: dateStart, end: dateEnd};
-        if (!silent) comparisonSeriesLoading++;
-        try {
-            await ensureComparisonSeries(assets, range);
-        } finally {
-            if (!silent) comparisonSeriesLoading--;
-        }
+        await ensureComparisonSeries(assets, range);
         if (pageAlive && isClientSessionCurrent(sessionGeneration)) comparisonSeriesVersion++;
     }
 
