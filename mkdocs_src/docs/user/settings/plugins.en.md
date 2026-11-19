@@ -21,6 +21,20 @@ and the central banks of the exchange rates, show their **Calls** block alone. A
 to your installation may ask for more. The tab also has a **Tools** group, for the [Tools](../tools/index.md) that have settings of their own; none of them does yet, so you will not see it today. When no plugin asks for anything, the tab says *No installed
 plugin asks for settings.*
 
+## 🧭 The Menu {: #menu }
+
+On the left of the tab, as in **Global Settings**, a menu chooses what the page shows:
+
+- **All**, every plugin;
+- **To configure**, only the plugins that still miss something (it appears when one does);
+- one family: **Prices**, **FX rates**, **Imports** (the broker import plugins, with the Transactions icon), **Tools**,
+  **Asset profile** and **Shared** (a settings card several plugins share, such as the
+  [CoinGecko account](coingecko-key.md)).
+
+Each entry shows how many plugins it holds; an amber dot marks a family with a plugin to configure. On a phone the
+menu is the **Category** list above the page. **Open** on a plugin's shared settings row shows them even when the menu
+hides them.
+
 ## 🧾 One Plugin, One Form {: #form }
 
 Each plugin has a form of its own: its icon and name (a puzzle piece when the plugin has no icon), a

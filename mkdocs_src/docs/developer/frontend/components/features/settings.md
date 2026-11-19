@@ -240,9 +240,13 @@ The category menu of a settings page, written once (project 76, lot S1a): `Setti
 - **What it publishes.** `{testIdPrefix}-category-{key}` in the sidebar, `{testIdPrefix}-mobile-category-{key}` in
   the dropdown, `{testIdPrefix}-mobile-category-trigger` and `-menu`, and `aria-pressed` on every entry. `key` is the
   entry's `testKey`, else its `id`: Preferences' «All» has the id `''` and the key `all`. The prefixes are `settings`
-  (Preferences) and `global-settings`.
+  (Preferences), `global-settings` and `plugin-settings` (Settings › Plugins).
+- **Counts and dots (S1b, the Plugins menu).** An entry may carry `count`, shown after its label and published as
+  `data-count` (muted unless selected; a whole entry at 0 muted), and `dot`, an amber dot with the look of `TabBar`'s,
+  named by the `dotLabel` prop. Global settings and Preferences pass neither.
 - **Tests.** `SettingsCategoryNav.test.ts` (the component); the pages' own `SettingsLayout.test.ts` and
-  `GlobalSettingsTab.test.ts` were kept unchanged through the extraction.
+  `GlobalSettingsTab.test.ts` were kept unchanged through the extraction; the Plugins menu in `PluginSettingsTab.test.ts`
+  (PST-28…33).
 
 ### 🎨 PreferencesTab
 
