@@ -863,6 +863,24 @@ test.describe('Asset Risk tab — the rates scenario from the profile’s durati
         return asset;
     }
 
+    /**
+     * A test lane serves only `mockenrich` (`dev.py server --test`, plan 68 E8a): no suite reaches the real sites. So
+     * `GET /assets/enrichers` does not list the seeded duration's source, and the box could only show its code. The real
+     * answer, with that source added under the name it declares, lets the line be checked for the name; the rest of the
+     * catalogue is untouched and the risk engine is not mocked.
+     */
+    async function nameTheSource(page: Page, code: string, name: string): Promise<void> {
+        await page.route(/\/api\/v1\/assets\/enrichers(?:\?|$)/, async (route) => {
+            const response = await route.fetch();
+            const body = schemas.FAEnrichersCatalogue.parse(await response.json());
+            if (!body.enrichers.some((enricher) => enricher.code === code)) {
+                expect(body.enrichers.length, 'barrier: the lane serves at least one enricher to copy the shape of').toBeGreaterThan(0);
+                body.enrichers.push({...body.enrichers[0], code, name});
+            }
+            await route.fulfill({response, json: body});
+        });
+    }
+
     /** L4's rates tool on screen, whether it was left open or is offered. */
     async function openRates(panel: Locator): Promise<Locator> {
         const level4 = await openLevel4Drawer(panel);
@@ -877,6 +895,7 @@ test.describe('Asset Risk tab — the rates scenario from the profile’s durati
 
     test('a bond with a duration: the rates box says its source and moves the price both ways, by every step', async ({page}) => {
         const bond = await seeded(page, 'BTP Italia 2028');
+        await nameTheSource(page, 'borsa_italiana', 'Borsa Italiana');
         const asked: Array<Record<string, unknown>> = [];
         page.on('request', (request) => {
             if (request.method() !== 'POST' || !request.url().includes('/api/v1/risk/query')) return;
@@ -895,6 +914,7 @@ test.describe('Asset Risk tab — the rates scenario from the profile’s durati
         // names the source by the enricher's name, never by its code.
         await expect(rates).toHaveAttribute('data-duration', '2.15');
         await expect(rates).toHaveAttribute('data-source', 'borsa_italiana');
+        await expect(rates.getByTestId('risk-rates-source')).toContainText('Borsa Italiana');
         await expect(rates.getByTestId('risk-rates-source')).not.toHaveText(/borsa_italiana/);
         await expect(rates.getByTestId('risk-rates-caveat')).toBeVisible();
 
