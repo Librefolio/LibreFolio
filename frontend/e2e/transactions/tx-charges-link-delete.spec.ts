@@ -11,6 +11,8 @@
  *     «Delete all (3)» → the Bulk with the three rows marked delete; «Keep the charges» → the Bulk with the BUY
  *     alone marked delete and the banner `tx-bulk-unlink-hint` naming the charges, which survive unlinked.
  *   - The BUY selected together with all its charges: no panel, the Bulk opens directly (today's behaviour).
+ *   - A mixed selection (BUY + its FEE + an unrelated row, the TAX left out): the panel counts what the page's intent
+ *     deletes («Delete all (4)», one charge kept), not «parents + their charges» (3 and 2); «Keep» unlinks the TAX alone.
  *
  * Every test works on an account of its own (a disposable user, brokers it owns, funded by its own DEPOSIT), so no
  * other spec sees its rows and no row of another spec reaches its table. Rows are located by
@@ -145,15 +147,16 @@ async function deleteFromRow(page: Page, id: number): Promise<void> {
 }
 
 /** The panel V1 for the BUY: its table names the BUY and its two charges, and it offers the two ways out. */
-async function expectDeletePanel(page: Page, s: Seeded): Promise<Locator> {
+async function expectDeletePanel(page: Page, s: Seeded, all = 3): Promise<Locator> {
     const modal = page.getByTestId('tx-charges-modal');
     await expect(modal, 'the panel «delete a parent with charges» did not open').toBeVisible({timeout: 8_000});
     const table = modal.getByTestId('tx-charges-modal-table');
     await expect(table).toBeVisible({timeout: 5_000});
     for (const id of [s.buyId, s.feeId, s.taxId]) await expect(table).toContainText(`#${id}`);
     await expect(modal.getByTestId('tx-charges-modal-keep')).toBeVisible();
-    // «Delete all (N)»: N counts the BUY and its two charges. A number, never the label.
-    await expect(modal.getByTestId('tx-charges-modal-all')).toContainText(/\b3\b/);
+    // «Delete all (N)»: N counts what the choice deletes (the BUY and its two charges, plus any other selected row).
+    // A number, never the label.
+    await expect(modal.getByTestId('tx-charges-modal-all')).toContainText(new RegExp(`\\b${all}\\b`));
     return modal;
 }
 
@@ -288,6 +291,11 @@ test.describe('Transactions table — link charges and delete a parent with char
         await expect(link, 'the selection bar offers no «Link» for a BUY + a FEE').toBeVisible({timeout: 5_000});
         await expect(link).toBeDisabled();
         await expect(link).toHaveAttribute('data-disabled-reason', 'otherBroker');
+        // The page's bar is the floating variant: its tooltip is the native `title`, which names the offending FEE
+        // by id (the id, never the translated words). Hovering the disabled button lands on it: it is the hover target.
+        await expect(link).toHaveAttribute('title', new RegExp(`#${otherFee}\\b`));
+        await link.hover();
+        await expect.poll(() => link.evaluate((el) => el.matches(':hover')), {message: 'the disabled «Link» is not the hover target'}).toBe(true);
 
         // BUY + DEPOSIT: two parents and no charge — «Link» is not offered at all. The barrier: the bar is there,
         // holds the two rows and offers «Delete»; only then does the absence of «Link» mean something.
@@ -397,5 +405,65 @@ test.describe('Transactions table — link charges and delete a parent with char
         expect(sorted(payload.deletes ?? [])).toEqual(sorted([s.buyId, s.feeId, s.taxId]));
         const left = (await readByIds(page, [s.depositId, s.buyId, s.feeId, s.taxId])).map((tx) => tx.id);
         expect(left).toEqual([s.depositId]);
+    });
+
+    test('Delete a mixed selection (BUY + FEE + an unrelated row, TAX left out): the panel counts 4, «Keep» unlinks the TAX alone', async ({page, request}) => {
+        const s = await seedBuyWithCharges(page, request, owned, committedIds, 'chgl6', true);
+        // X: an unrelated row on the same broker. Not the funding DEPOSIT: the TAX survives and needs the cash.
+        const [xId] = await commitCreates(page, [{broker_id: s.broker.id, type: 'DEPOSIT', date: daysAgoIso(8), cash: {code: 'USD', amount: '50'}, description: `Deposit X ${s.buyId}`}], 'add the unrelated row X');
+        committedIds.push(xId);
+
+        await openTable(page);
+        const badge = txRow(page, s.buyId).getByTestId(`tx-charges-badge-${s.buyId}`);
+        await expect(badge).toBeVisible({timeout: 8_000});
+        // Open the fold so the FEE is a row that can be ticked.
+        if ((await badge.getAttribute('data-expanded')) !== 'true') await badge.click();
+        await expect(badge).toHaveAttribute('data-expanded', 'true');
+        await expect(txRow(page, s.feeId)).toBeVisible({timeout: 5_000});
+        await expect(txRow(page, s.taxId)).toBeVisible();
+        await expect(txRow(page, xId)).toBeVisible({timeout: 8_000});
+
+        for (const id of [s.buyId, s.feeId, xId]) await ensureChecked(page, id);
+        // The premise, checked rather than inferred: ticking the parent did not tick its TAX along.
+        await expect(page.getByTestId('tx-table').getByTestId(`dt-row-checkbox-tx-${s.taxId}`)).toHaveAttribute('data-state', 'unchecked');
+        const bar = await expectSelection(page, 3);
+        const del = bar.getByTestId('toolbar-action-delete');
+        await expect(del).toBeEnabled({timeout: 5_000});
+        await del.click();
+
+        // The numbers come from the intent the Bulk receives, not from «parents + their charges»: «Delete all» deletes
+        // BUY, FEE, X and the TAX (4, where parents + charges says 3); «Keep» unlinks the TAX alone (1, where it says 2).
+        const panel = await expectDeletePanel(page, s, 4);
+        await expect(panel.getByTestId('tx-charges-modal-all-after')).toContainText(/\b4\b/);
+        // keepAfter is a plural whose singular form prints no digit in any language: with one charge kept the line
+        // holds no number, with two it says «2». Barrier first: «Delete all» above already shows the panel's counts.
+        const keepAfter = panel.getByTestId('tx-charges-modal-keep-after');
+        await expect(keepAfter).toBeVisible();
+        await expect(keepAfter, 'the panel counts two kept charges: it ignored the selected FEE').not.toContainText(/\d/);
+
+        await panel.getByTestId('tx-charges-modal-keep').click();
+        await expect(panel).toBeHidden({timeout: 5_000});
+
+        await expectBulkOpen(page);
+        // BUY, FEE and X marked delete; the banner names the TAX, which stays, and not the FEE, which goes.
+        await expect(bulkDeletedRows(page)).toHaveCount(3, {timeout: 8_000});
+        const hint = page.getByTestId('tx-bulk-unlink-hint');
+        await expect(hint, 'the Bulk shows no unlink banner for the kept TAX').toBeVisible({timeout: 8_000});
+        await expect(hint).toContainText(new RegExp(`#${s.taxId}\\b`));
+        await expect(hint).not.toContainText(new RegExp(`#${s.feeId}\\b`));
+
+        const {payload, committed} = await commitBulk(page);
+        expect(committed, `the delete-and-unlink batch rolled back (payload=${JSON.stringify(payload)})`).toBe(true);
+        expect(sorted(payload.deletes ?? [])).toEqual(sorted([s.buyId, s.feeId, xId]));
+        const unlinks = (payload.updates ?? []).filter((u) => u.parent_transaction_id === 0).map((u) => u.id);
+        expect(unlinks, 'the batch unlinks the TAX alone (parent_transaction_id: 0)').toEqual([s.taxId]);
+
+        for (const id of [s.buyId, s.feeId, xId]) await expect(txRow(page, id)).toHaveCount(0, {timeout: 8_000});
+        // On the server: BUY, FEE and X are gone; the funding DEPOSIT and the TAX remain, the TAX linked to nothing.
+        const after = new Map((await readByIds(page, [s.depositId, s.buyId, s.feeId, xId, s.taxId])).map((tx) => [tx.id, tx] as const));
+        expect(sorted([...after.keys()]), 'the batch deletes BUY, FEE and X, nothing else').toEqual(sorted([s.depositId, s.taxId]));
+        expect(after.get(s.taxId)?.parent_transaction_id ?? null).toBeNull();
+        // Unlinked, the TAX is a row of its own in the table again.
+        await expect(txRow(page, s.taxId)).toBeVisible({timeout: 8_000});
     });
 });
