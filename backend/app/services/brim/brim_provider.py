@@ -594,9 +594,12 @@ class BRIMProvider(PluginSettingsMixin, ABC):
         place they live), read on the incoming rows: a leg of a pair is a row with a ``link_uuid``.
 
         - **Valid link:** the charge is created with ``parent_ref`` = the parent's ``ref`` (the parent is named first
-          when it has none, ``_ensure_ref``) and **always** the parent's broker and asset (rule 3: without them the
-          commit would refuse it). A fake asset id is fine: the core maps both rows to the same real asset.
-        - **No valid link** (a parent that is not a parent type, a leg of a pair, a tax on a fee…): the charge is
+          when it has none, ``_ensure_ref``) and the parent's broker.
+        - **The asset is filled only when missing** (rule 3, consultant 20/11): a charge without one takes the parent's
+          (a fake id is fine: the core maps both rows to the same real asset); an asset the plugin passed is never
+          changed nor removed, so a charge with an asset other than the parent's is not linked. The check runs after
+          the fill, on the charge's real values: a reimport keeps finding the rows an earlier version saved.
+        - **No valid link** (a parent that is not a parent type, a leg of a pair, a tax on a fee, another asset…): the charge is
           created free, with the values the plugin passed (a broker it left out is the parent's), as before the link
           existed, and the parent stays unnamed.
           Never an error for the user: the parent's type comes from the file (D10).
@@ -610,14 +613,19 @@ class BRIMProvider(PluginSettingsMixin, ABC):
             raise ValueError(f"_create_linked_charge creates a FEE or a TAX, not {charge_type!r}")
         if not any(tx is parent for tx in transactions):
             raise ValueError("_create_linked_charge: the parent must be a row of this output (transactions)")
-        charge_view = _link_view(charge_type, parent.broker_id, parent.asset_id, kwargs.get("link_uuid"))
+        # The asset is filled only when the plugin left it out (or None): never changed, never removed.
+        charge_asset = kwargs.get("asset_id")
+        if charge_asset is None:
+            charge_asset = parent.asset_id
+        charge_view = _link_view(charge_type, parent.broker_id, charge_asset, kwargs.get("link_uuid"))
         parent_view = _link_view(parent.type, parent.broker_id, parent.asset_id, parent.link_uuid)
-        if charge_link_issue(cast(Any, charge_view), cast(Any, parent_view), 0) is not None:
-            logger.debug("BRIM charge created without its link", provider=self.provider_code, row=row_num, parent_type=str(parent.type))
+        issue = charge_link_issue(cast(Any, charge_view), cast(Any, parent_view), 0)
+        if issue is not None:
+            logger.debug("BRIM charge created without its link", provider=self.provider_code, row=row_num, parent_type=str(parent.type), code=issue[1])
             # Free: the plugin's own values; a broker it left out is the parent's (the same file, the same broker).
             return self._create_transaction(row_num, transactions, validation_issues, context=context, **{"broker_id": parent.broker_id, **kwargs})
         parent_ref = self._ensure_ref(parent, transactions)
-        linked = {**kwargs, "broker_id": parent.broker_id, "asset_id": parent.asset_id, "parent_ref": parent_ref}
+        linked = {**kwargs, "broker_id": parent.broker_id, "asset_id": charge_asset, "parent_ref": parent_ref}
         return self._create_transaction(row_num, transactions, validation_issues, context=context, **linked)
 
     @staticmethod

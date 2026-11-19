@@ -6,9 +6,11 @@ Written red-first, before the code (contract ``66-P1a-contract.md``, §4 as corr
 - ``_create_linked_charge(row_num, transactions, validation_issues, parent, *, context=None, **kwargs)``: a FEE or a TAX
   that belongs to ``parent``, a row the plugin already created. The link is judged by ``charge_link_issue``
   (``services/transactions/charges.py``) on a view of the incoming rows, ``related_transaction_id`` read from
-  ``link_uuid``. A valid link gives the charge ``parent_ref = parent.ref`` (the parent named first when it has no name)
-  and the parent's broker and asset, whatever asset the kwargs carried; an invalid one (a parent ADJUSTMENT, a
-  CASH_TRANSFER, a leg of a pair, a FEE) gives a free charge with the plugin's own values and no issue (§6.1). A charge
+  ``link_uuid``. The charge's asset is filled with the parent's **only when it is missing** (contract §9): never changed,
+  never removed, and the link is judged after the filling, on the charge's real values. A valid link gives the charge
+  ``parent_ref = parent.ref`` (the parent named first when it has no name) and the parent's broker; an invalid one (a
+  parent ADJUSTMENT, a CASH_TRANSFER, a leg of a pair, a FEE, a charge whose own asset differs from the parent's) gives a
+  free charge with the plugin's own values, the parent's broker when it has none, and no issue (§6.1, §7.2). A charge
   type other than FEE or TAX is a programming error: ``ValueError``. An invalid item is an issue and ``None``, as with
   ``_create_transaction``.
 - ``_ensure_ref(parent, transactions)``: the name of a parent, ``r<n>`` with n = 1 + its position in ``transactions``
@@ -123,7 +125,8 @@ def _link(provider: BRIMProvider, transactions: List[TXCreateItem], parent: TXCr
 
 
 class TestLinkedChargeValid:
-    """A charge under a parent type: ``parent_ref`` is the parent's name, broker and asset are the parent's."""
+    """A charge under a parent type: ``parent_ref`` is the parent's name, the broker is the parent's, a missing asset is
+    the parent's."""
 
     def test_fee_under_buy_with_fake_asset(self, provider):
         transactions: List[TXCreateItem] = []
@@ -152,29 +155,6 @@ class TestLinkedChargeValid:
 
         assert fee is not None
         assert (fee.parent_ref, fee.asset_id) == (buy.ref, FAKE_A)
-
-    def test_different_asset_in_kwargs_is_overridden(self, provider):
-        transactions: List[TXCreateItem] = []
-        sell = _add_parent(provider, transactions, TransactionType.SELL)
-
-        tax = _link(provider, transactions, sell, **_charge_kwargs(TransactionType.TAX, asset_id=FAKE_B))
-
-        assert tax is not None
-        assert tax.parent_ref == sell.ref and sell.ref
-        assert tax.asset_id == FAKE_A, f"the parent's asset wins over the kwargs' (rule 3); got {tax.asset_id}"
-
-    @pytest.mark.parametrize("own_asset", [None, FAKE_B], ids=["kwargs-without-asset", "kwargs-with-asset"])
-    def test_parent_without_asset_gives_charge_without_asset(self, provider, own_asset):
-        """A DEPOSIT has no asset: its charge has none either, even when the plugin passed one."""
-        transactions: List[TXCreateItem] = []
-        deposit = _add_parent(provider, transactions, TransactionType.DEPOSIT)
-
-        fee = _link(provider, transactions, deposit, **_charge_kwargs(asset_id=own_asset))
-
-        assert fee is not None
-        assert fee.parent_ref == deposit.ref and deposit.ref
-        assert fee.asset_id is None, f"a parent without asset gives a charge without asset; got {fee.asset_id}"
-        assert fee.broker_id == deposit.broker_id
 
     def test_parent_named_by_the_plugin_keeps_its_name(self, provider):
         transactions: List[TXCreateItem] = []
@@ -221,6 +201,51 @@ class TestLinkedChargeValid:
         assert fee.broker_id == BROKER_ID, f"the parent's broker wins; got {fee.broker_id}"
         assert fee.parent_ref == buy.ref and buy.ref
         assert fee.asset_id == FAKE_A
+
+
+# ─── _create_linked_charge: the asset is filled only when missing (contract §9) ───────────────────────────────────────
+
+_ABSENT = object()  # the kwargs carry no asset_id key at all
+
+#: The table of contract §9: (charge's asset in the kwargs, parent type, expected linked?, expected charge asset).
+#: BUY and SELL carry FAKE_A (asset Y); DEPOSIT carries none. FAKE_B is the charge's own asset X.
+ASSET_RULE = [
+    pytest.param(_ABSENT, TransactionType.BUY, True, FAKE_A, id="absent-under-Y-linked-takes-Y"),
+    pytest.param(None, TransactionType.BUY, True, FAKE_A, id="none-under-Y-linked-takes-Y"),
+    pytest.param(FAKE_A, TransactionType.BUY, True, FAKE_A, id="Y-under-Y-linked-keeps-Y"),
+    pytest.param(FAKE_B, TransactionType.SELL, False, FAKE_B, id="X-under-Y-free-keeps-X"),
+    pytest.param(FAKE_B, TransactionType.DEPOSIT, False, FAKE_B, id="X-under-no-asset-free-keeps-X"),
+    pytest.param(_ABSENT, TransactionType.DEPOSIT, True, None, id="absent-under-no-asset-linked-without-asset"),
+    pytest.param(None, TransactionType.DEPOSIT, True, None, id="none-under-no-asset-linked-without-asset"),
+]
+
+
+@pytest.mark.parametrize(("own_asset", "parent_type", "linked", "expected_asset"), ASSET_RULE)
+def test_asset_is_filled_only_when_missing(provider, own_asset, parent_type, linked, expected_asset):
+    """Contract §9 (consultant, P1a-b): the helper fills the charge's asset with the parent's only when it is missing;
+    it never changes it and never removes it, and ``charge_link_issue`` judges the charge's real values after the
+    filling. A charge with its own asset X under a parent with asset Y, or under a parent without asset, is free: it
+    keeps X, gets no ``parent_ref``, leaves the parent unnamed, and is no issue for the user."""
+    transactions: List[TXCreateItem] = []
+    parent = _add_parent(provider, transactions, parent_type)
+    kwargs = _charge_kwargs()
+    if own_asset is not _ABSENT:
+        kwargs["asset_id"] = own_asset
+    issues: List[BRIMValidationIssue] = []
+
+    fee = _link(provider, transactions, parent, issues, **kwargs)
+
+    assert fee is not None and issues == [], f"the charge is created, no issue; got {issues}"
+    assert transactions[-1] is fee and len(transactions) == 2
+    assert fee.asset_id == expected_asset, f"asset {expected_asset} expected; got {fee.asset_id}"
+    assert fee.broker_id == parent.broker_id
+    if linked:
+        assert parent.ref, "a linked charge names its parent"
+        assert fee.parent_ref == parent.ref
+    else:
+        assert not fee.parent_ref, f"a charge whose own asset is not the parent's stays free; got parent_ref {fee.parent_ref!r}"
+        assert parent.ref is None, f"no link, no name; the {parent_type.value} parent got {parent.ref!r}"
+    assert charge_link_structure_problems(transactions) == []
 
 
 # ─── _create_linked_charge: an invalid link gives a free charge (§6.1) ────────────────────────────────────────────────
