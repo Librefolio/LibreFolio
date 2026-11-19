@@ -188,7 +188,9 @@
         "dataSince": "depuis le {date}",
         "beforeProfile": "valeur d'avant le profil",
         "companySector": "Secteur",
-        "staleConfirmed": "Confirmé le {date}, pas à jour"
+        "staleConfirmed": "Confirmé le {date}, pas à jour",
+        "noEnrichersText": "Les données de cet onglet ont été saisies à la main ou sont arrivées à la création de l'actif : rien ne les met à jour.",
+        "configureHint": "Ouvre la fenêtre de l'actif, avec celle des enrichisseurs par-dessus"
       },
       "row": {
         "pending": "{count, plural, one {# modification en attente} other {# modifications en attente}}"
@@ -237,6 +239,15 @@
         "valuesInPercent": "valeurs en %",
         "writeHint": "Pour saisir une nouvelle valeur : «{action}»",
         "loadFailed": "Impossible de lire l’historique de cette donnée."
+      },
+      "refresh": {
+        "button": "Actualiser",
+        "hint": "Relit les enrichisseurs de cet actif · dernière lecture : {date}",
+        "hintNever": "Relit les enrichisseurs de cet actif · jamais lu jusqu'ici",
+        "written": "{count, plural, one {# donnée mise à jour} other {# données mises à jour}}",
+        "unchanged": "Enrichisseurs relus : aucune donnée n'a changé",
+        "partial": "{count, plural, one {# source n'a pas répondu} other {# sources n'ont pas répondu}} ; {written, plural, one {# donnée mise à jour} other {# données mises à jour}}. La lecture hebdomadaire réessaiera.",
+        "failed": "Impossible de lire les enrichisseurs. Réessayez plus tard."
       }
     }
   }

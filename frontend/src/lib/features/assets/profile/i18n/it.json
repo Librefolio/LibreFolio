@@ -188,7 +188,9 @@
         "dataSince": "dal {date}",
         "beforeProfile": "valore di prima del profilo",
         "companySector": "Settore",
-        "staleConfirmed": "Confermato il {date}, non aggiornato"
+        "staleConfirmed": "Confermato il {date}, non aggiornato",
+        "noEnrichersText": "I dati di questa scheda sono quelli scritti a mano o arrivati alla creazione dell'asset: nessuno li aggiorna.",
+        "configureHint": "Apre la finestra dell'asset, con quella degli arricchitori sopra"
       },
       "row": {
         "pending": "{count, plural, one {# modifica in attesa} other {# modifiche in attesa}}"
@@ -237,6 +239,15 @@
         "valuesInPercent": "valori in %",
         "writeHint": "Per scrivere un valore nuovo: «{action}»",
         "loadFailed": "Non è stato possibile leggere la storia di questo dato."
+      },
+      "refresh": {
+        "button": "Aggiorna",
+        "hint": "Rilegge gli arricchitori di questo asset · ultima lettura: {date}",
+        "hintNever": "Rilegge gli arricchitori di questo asset · mai letto finora",
+        "written": "{count, plural, one {# dato aggiornato} other {# dati aggiornati}}",
+        "unchanged": "Arricchitori riletti: nessun dato è cambiato",
+        "partial": "{count, plural, one {# fonte non ha risposto} other {# fonti non hanno risposto}}; {written, plural, one {# dato aggiornato} other {# dati aggiornati}}. Ci riproverà la lettura settimanale.",
+        "failed": "Non è stato possibile leggere gli arricchitori. Riprova più tardi."
       }
     }
   }
