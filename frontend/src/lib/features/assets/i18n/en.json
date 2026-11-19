@@ -266,10 +266,10 @@
       "identifier": "Identifier",
       "identifierType": "Identifier Type",
       "inputType": {
-        "PROVIDER_ID": "Provider ID"
+        "COINGECKO_ID": "CoinGecko ID"
       },
       "inputTypePlaceholder": {
-        "PROVIDER_ID": "e.g. bitcoin"
+        "COINGECKO_ID": "e.g. bitcoin"
       }
     },
     "schedule": {

@@ -266,10 +266,10 @@
       "identifier": "Identificador",
       "identifierType": "Tipo de Identificador",
       "inputType": {
-        "PROVIDER_ID": "ID del proveedor"
+        "COINGECKO_ID": "ID de CoinGecko"
       },
       "inputTypePlaceholder": {
-        "PROVIDER_ID": "p. ej. bitcoin"
+        "COINGECKO_ID": "p. ej. bitcoin"
       }
     },
     "schedule": {

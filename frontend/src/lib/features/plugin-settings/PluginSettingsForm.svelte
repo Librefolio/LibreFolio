@@ -166,7 +166,7 @@
             {#if showIcon}
                 <img alt="" class="h-5 w-5 shrink-0 rounded-sm object-contain" data-testid="plugin-settings-plugin-icon" onerror={() => (failedIconUrl = entry.icon_url)} referrerpolicy="no-referrer" src={entry.icon_url} />
             {:else if entry.family === 'group'}
-                <!-- A shared group has no icon of its own: the icon of its section -->
+                <!-- A shared group whose readers have no icon: the icon of its section -->
                 <Share2 aria-hidden="true" class="h-5 w-5 shrink-0 text-lf-muted" data-testid="plugin-settings-plugin-icon-fallback" />
             {:else}
                 <Puzzle aria-hidden="true" class="h-5 w-5 shrink-0 text-lf-muted" data-testid="plugin-settings-plugin-icon-fallback" />
