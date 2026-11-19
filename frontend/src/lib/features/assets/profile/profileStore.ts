@@ -156,7 +156,7 @@ export async function refreshAssetProfile(assetId: number): Promise<ProfileRefre
     try {
         const response = await zodiosApi.refresh_profile_api_v1_assets_profile_refresh_post([assetId]);
         const result = response.results.find((item) => item.asset_id === assetId);
-        return result ?? {asset_id: assetId, written: [], outcomes: [], error: 'missing'};
+        return result ?? {asset_id: assetId, written: [], outcomes: [], error: 'missing', enrichers_read: 0};
     } finally {
         invalidateAssetProfile(assetId);
     }
