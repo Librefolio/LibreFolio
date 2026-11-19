@@ -82,6 +82,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 ### 🐛 Corretto
 
+- L'icona di Banca d'Italia ora si vede nella finestra delle route, nelle impostazioni dei plugin e nella guida utente: il sito della banca non lascia mostrare la sua icona da altri siti, quindi LibreFolio ne serve una copia.
 - «Ricollega eventi» (Transazioni) mostra «Collega i selezionati» solo se una riga selezionata ha un evento quel giorno, e «Crea gli eventi» solo se una non ne ha; ciascuno agisce sulle sue righe.
 - Pagina FX, periodo «Tutti»: una coppia aggiunta nel frattempo non fa più riscaricare a tutte le coppie l'intera storia; le coppie già note partono dal loro primo giorno.
 - Nel risultato del PAC le barre dell'esposizione disegnano ogni settore nel suo colore: i settori con uno spazio nel nome (Health Care, Real Estate, Consumer Discretionary…) erano disegnati nel grigio di «Non classificato».

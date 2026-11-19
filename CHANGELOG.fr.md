@@ -82,6 +82,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 ### 🐛 Corrections
 
+- L'icône de la Banca d'Italia s'affiche désormais dans la fenêtre des routes, dans les paramètres des plugins et dans le guide utilisateur : le site de la banque ne laisse pas d'autres sites afficher son icône, LibreFolio en sert donc une copie.
 - « Relier les événements » (Transactions) n'affiche « Lier la sélection » que si une ligne sélectionnée a un événement ce jour-là, et « Créer les événements » que si l'une n'en a pas ; chacun agit sur ses propres lignes.
 - Page FX, période « Tout » : une paire ajoutée entre-temps ne fait plus retélécharger tout l'historique de toutes les paires ; les paires déjà connues partent de leur premier jour.
 - Dans le résultat du PAC, les barres d'exposition dessinent chaque secteur dans sa couleur : les secteurs dont le nom contient une espace (Health Care, Real Estate, Consumer Discretionary…) étaient dessinés dans le gris de « Non classé ».
