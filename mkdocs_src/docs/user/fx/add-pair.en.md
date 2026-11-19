@@ -21,7 +21,9 @@ Click **Add conversion route** to see every way the providers can produce this r
 
 - 🔗 **Direct conversion (1 step)** — one provider publishes the pair;
 - 🔀 **Chain conversion** — steps through other currencies, grouped by number of steps; a large group shows its
-  first 200 routes and a **Show more** button for the others;
+  first 200 routes and a **Show more** button for the others. The window offers the shortest routes and the next
+  length after them: with a direct route, the chains of 2 steps; with chains of 2 steps at best, those of 3; and so
+  on, up to 4 steps. Every extra step is one more conversion and one more source that must publish on the same day;
 - 🚫 **Not usable** — providers that cannot reach this pair.
 
 Filter with the search box (provider, currency or country), then click a route to add it.
