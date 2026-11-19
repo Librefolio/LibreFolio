@@ -247,7 +247,8 @@
         "written": "{count, plural, one {# dato actualizado} other {# datos actualizados}}",
         "unchanged": "Enriquecedores leídos de nuevo: ningún dato ha cambiado",
         "partial": "{count, plural, one {# fuente no respondió} other {# fuentes no respondieron}}; {written, plural, one {# dato actualizado} other {# datos actualizados}}. La lectura semanal lo volverá a intentar.",
-        "failed": "No se pudieron leer los enriquecedores. Inténtelo más tarde."
+        "failed": "No se pudieron leer los enriquecedores. Inténtelo más tarde.",
+        "noneActive": "Ningún enriquecedor activo: no se ha leído nada. Los enriquecedores de este activo están desactivados o sin configurar en esta instancia."
       }
     }
   }
