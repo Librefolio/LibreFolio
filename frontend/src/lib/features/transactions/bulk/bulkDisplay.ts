@@ -195,6 +195,8 @@ export interface GuardKeyRow {
     createdSeq: number;
     txId?: number;
     pairedWith?: string;
+    /** 66 F7-b: the parent operation a linked charge belongs to, by `tempId` (named like `pairedWith`). */
+    chargeOf?: string;
     link_uuid?: string | null;
 }
 
@@ -215,8 +217,8 @@ function sortedKeys(value: unknown): unknown {
  * seeded. A reset rebuilds the saved rows from the ledger under new identities, and nothing the user sees changes,
  * so the key reads what survives a reset and nothing else:
  * - `tempId` and `createdSeq` are dropped;
- * - `pairedWith` names the row it points at: `tx:<txId>` for a saved row, `new:<tempId>` for a new one, which no
- *   reset regenerates;
+ * - `pairedWith` and `chargeOf` (66 F7-b) name the row they point at: `tx:<txId>` for a saved row, `new:<tempId>` for a
+ *   new one, which no reset regenerates;
  * - `link_uuid` names its group: the sorted references of the rows that share it, `null` when there is none;
  * - object keys are sorted at every depth, so the order a row was built in does not count. Array order does.
  */
@@ -229,10 +231,11 @@ export function serializeOps(rows: readonly GuardKeyRow[]): string {
     return JSON.stringify(
         rows.map((row) => {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const {tempId: _tempId, createdSeq: _createdSeq, pairedWith, link_uuid, ...rest} = row;
+            const {tempId: _tempId, createdSeq: _createdSeq, pairedWith, chargeOf, link_uuid, ...rest} = row;
             return sortedKeys({
                 ...rest,
                 pairedWith: pairedWith === undefined ? undefined : (refs.get(pairedWith) ?? pairedWith),
+                chargeOf: chargeOf === undefined ? undefined : (refs.get(chargeOf) ?? chargeOf),
                 link_uuid: link_uuid ? [...(groups.get(link_uuid) ?? [])].sort() : null,
             });
         }),

@@ -52,6 +52,20 @@ export type PendingOp = ({op: 'create'} | {op: 'edit'; txId: number; markedDelet
     /** Cached WAC result from validate — transient, not sent to backend */ _wacCache?: WacResultEntry | null;
     /** Currency hint for WAC target — null = backend decides */ wacCurrencyHint?: string | null;
     /** BRIM import field todos — blocker severity prevents commit until resolved */ todos?: ImportTodo[];
+    /**
+     * Project 66 (F7-b, model H): this row is a linked charge (a FEE or a TAX) owned by the parent operation with this
+     * `tempId`. Never `pairedWith`: a charge is a row of its own. It names its owner, not the link sent: unlinking keeps
+     * it (`parentUnlink`), and «sits under its parent» is `isUnderParent` (`bulkCharges.ts`).
+     */
+    chargeOf?: string;
+    /** Project 66 (F7-b): «unlink» — the payload sends `parent_transaction_id: 0` for this saved charge. */
+    parentUnlink?: boolean;
+    /** Project 66 (F7-b): linked to a saved parent that is not in the Bulk (`_parent_link` from the charge's form);
+     *  `adoptCharges` turns it into `chargeOf` once that parent arrives. */
+    parentLinkId?: number;
+    /** Project 66 (F7-b): a create born in its parent's form. Until it is opened on its own, the payload takes the
+     *  parent's broker, asset and date at batch time. */
+    followsParent?: boolean;
 };
 
 /** Single source of truth: WAC results per auto-op (keyed by tempId).
