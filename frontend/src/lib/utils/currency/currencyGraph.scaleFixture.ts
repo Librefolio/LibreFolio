@@ -1,5 +1,6 @@
 /**
- * A fake FX provider catalogue the size the real one reaches after wave 1 of lane 75 (central banks).
+ * A fake FX provider catalogue the size the real one reaches after wave 1 of lane 75 (central banks), and after wave 2
+ * (scenario 3, L20).
  *
  * Synthetic, not captured: the sizes and bases follow the lane plan, the currency lists are drawn from one ranked
  * universe so the overlaps look like the real ones. The majors come first, so every provider covers them; the long
@@ -77,6 +78,58 @@ export function wave1Providers(): ProviderInfo[] {
 /** Scenario 2: scenario 1 plus CBR (base RUB, ~54). */
 export function wave1PlusCbrProviders(): ProviderInfo[] {
     return [...wave1Providers(), provider('CBR', 'RUB', firstCodes('RUB', 54))];
+}
+
+/**
+ * The target count of each bank wave 2 adds (lane 75, plan of wave 2, L20), as the plan sizes them. An upper bound: RBI
+ * and BNR count RUB, which they leave out until the developer answers Q3; NBP counts table A (32, daily) and table B
+ * (116, weekly), one provider.
+ */
+export const WAVE2_SIZES: Readonly<Record<string, number>> = {
+    BANXICO: 6,
+    CNB: 30,
+    RIKSBANK: 29,
+    SARB: 25,
+    BOK: 53,
+    BCRP: 1,
+    TRM: 1,
+    CBC: 1,
+    CBN: 11,
+    CBK: 21,
+    RBI: 7,
+    BOG: 19,
+    BNR: 36,
+    BOI: 14,
+    NBP: 148,
+    BCRA: 39,
+};
+
+/**
+ * Scenario 3: scenario 1 (wave 1, CBR still suspended) plus the sixteen banks of wave 2. Each has its country's currency
+ * as base. The banks whose list the plan gives are listed whole (BANXICO, RBI, and the three that publish only USD);
+ * the others cover the first codes of the universe, as the providers of wave 1 do.
+ */
+export function wave2Providers(): ProviderInfo[] {
+    const ranked = (code: string, base: string) => provider(code, base, firstCodes(base, WAVE2_SIZES[code]));
+    return [
+        ...wave1Providers(),
+        provider('BANXICO', 'MXN', ['USD', 'EUR', 'JPY', 'GBP', 'CNY', 'XDR']),
+        ranked('CNB', 'CZK'),
+        ranked('RIKSBANK', 'SEK'),
+        ranked('SARB', 'ZAR'),
+        ranked('BOK', 'KRW'),
+        provider('BCRP', 'PEN', ['USD']),
+        provider('TRM', 'COP', ['USD']),
+        provider('CBC', 'TWD', ['USD']),
+        ranked('CBN', 'NGN'),
+        ranked('CBK', 'KES'),
+        provider('RBI', 'INR', ['USD', 'GBP', 'EUR', 'JPY', 'AED', 'IDR', 'RUB']),
+        ranked('BOG', 'GHS'),
+        ranked('BNR', 'RON'),
+        ranked('BOI', 'ILS'),
+        ranked('NBP', 'PLN'),
+        ranked('BCRA', 'ARS'),
+    ];
 }
 
 /**

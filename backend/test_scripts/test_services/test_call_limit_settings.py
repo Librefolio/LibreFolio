@@ -113,8 +113,10 @@ RESETS = {
 #: The shipped providers that reach an external service, and those that do not (U2/U3 pins of their flags).
 ASSET_CALLING = ("yfinance", "justetf", "borsa_italiana", "css_scraper")
 ASSET_LOCAL = ("scheduled_investment", "mockprov")
-FX_CALLING = ("ECB", "FED", "BOE", "SNB", "BDI", "BCB", "NORGES", "NBU", "BOC")
+FX_CALLING = ("ECB", "FED", "BOE", "SNB", "BDI", "BCB", "NORGES", "NBU", "BOC", "BANXICO", "CNB", "SARB", "BCRP", "TRM", "CBC", "CBN")
 FX_LOCAL = ("MANUAL", "MOCKFX", "MOCKFX_FAIL")
+#: The calling FX providers with a required field of their own (BANXICO's token, lane 75 L21): they may be unconfigured.
+FX_KEYED = ("BANXICO",)
 MOCKCOUNT_MODULE = "backend.app.services.asset_source_providers.mockcount.plugin"
 YF_DAY_VARIABLE = env_name("asset", "yfinance", "call_limit_day")
 YF_HOUR_VARIABLE = env_name("asset", "yfinance", "call_limit_hour")
@@ -720,7 +722,8 @@ def test_u4_plugin_may_be_unconfigured_is_true_only_for_a_group_a_required_field
 
 def test_u4_the_shipped_providers_with_only_optional_fields_are_cleared(discovered: None, monkeypatch: pytest.MonkeyPatch):
     """5: every shipped calling provider (core fields, and optional user fields of justetf and borsa_italiana) → False;
-    mockprov, which reads a group, → True; yfinance with its day limit variable set (even invalid) → True."""
+    BANXICO, whose token is required, and mockprov, which reads a group, → True; yfinance with its day limit variable
+    set (even invalid) → True."""
     from backend.app.services.plugin_settings.readiness import plugin_may_be_unconfigured
 
     asset_storage, fx_storage = AssetProviderRegistry._get_storage(), FXProviderRegistry._get_storage()
@@ -728,7 +731,7 @@ def test_u4_the_shipped_providers_with_only_optional_fields_are_cleared(discover
     for code in ASSET_CALLING:
         assert plugin_may_be_unconfigured("asset", code, asset_storage[code]) is False, f"asset/{code}"
     for code in FX_CALLING:
-        assert plugin_may_be_unconfigured("fx", code, fx_storage[code]) is False, f"fx/{code}"
+        assert plugin_may_be_unconfigured("fx", code, fx_storage[code]) is (code in FX_KEYED), f"fx/{code}"
     assert plugin_may_be_unconfigured("asset", "mockprov", asset_storage["mockprov"]) is True
     monkeypatch.setenv(YF_DAY_VARIABLE, "abc")
     assert plugin_may_be_unconfigured("asset", "yfinance", asset_storage["yfinance"]) is True

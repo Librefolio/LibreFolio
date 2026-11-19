@@ -19,6 +19,9 @@ def front_fx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
         "src/lib/stores/__tests__/TimeSeriesStore.test.ts",
         "src/lib/features/fx/fxStoreRegistry.test.ts",
         "src/lib/stores/currencyGraphStore.test.ts",
+        # Lane 75 L20b: the route search in a Web Worker (decision Q6).
+        "src/lib/workers/__tests__/currencyRoutes.worker.test.ts",
+        "src/lib/workers/__tests__/currencyRoutesPool.test.ts",
         # K step 12b: one global font rule for flags ('LF Flags'), no emoji font ahead of text.
         "src/flagFont.gate.test.ts",
     ]
@@ -249,7 +252,7 @@ def populate_registry(registry: dict) -> None:
         front_fx_unit,
         test_names=False,
         name="FX Unit Tests",
-        desc="Vitest unit tests: EditBuffer, TimeSeriesStore, fxStoreRegistry, currencyGraphStore (an incomplete graph is not cached, B-4), flag font gate (static/lf-flags.css, LF Flags-first stacks, no emoji family named in src/offline.html)",
+        desc="Vitest unit tests: EditBuffer, TimeSeriesStore, fxStoreRegistry, currencyGraphStore (an incomplete graph is not cached, B-4; the depth rule of Q6), the route-search worker and its pool (L20b), flag font gate (static/lf-flags.css, LF Flags-first stacks, no emoji family named in src/offline.html)",
         tests="vitest",
     )
     add_test(cat, "fx-list", front_fx_list, name="FX List Page", desc="List page navigation, cards, filters", tests="fx/fx-list.spec.ts")

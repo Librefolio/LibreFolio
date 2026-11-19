@@ -113,3 +113,67 @@ describe("the providers' readiness (76 N3c)", () => {
         expect(store.getCachedFxProviders().find((p) => p.code === 'KEYFX')?.configured).toBe(false);
     });
 });
+
+describe('findConversionPaths applies the depth rule (lane 75, L20b, decision Q6)', () => {
+    // EUR→RON: direct (ECB), 2 steps (EUR→USD by ECB, USD→RON by FED), 3 steps (EUR→GBP by BOE, GBP→CHF by SNB, CHF→RON by SNB2).
+    const provider = (code: string, base: string, targets: string[], extra: Record<string, unknown> = {}) => ({code, name: code, base_currency: base, base_currencies: [base], target_currencies: targets, currencies_unavailable: false, ...extra});
+    const ECB_RON = provider('ECB', 'EUR', ['RON', 'USD']);
+    const FED_RON = provider('FED', 'USD', ['RON']);
+    const THREE_STEPS = [provider('BOE', 'EUR', ['GBP']), provider('SNB', 'GBP', ['CHF']), provider('SNB2', 'CHF', ['RON'])];
+
+    it('returns only the direct and 2-step chains when a 3-step chain also exists', async () => {
+        api.list_providers_api_v1_fx_providers_get.mockResolvedValue([ECB_RON, FED_RON, ...THREE_STEPS]);
+        const store = await freshStore();
+
+        const paths = await store.findConversionPaths('EUR', 'RON');
+
+        expect(paths.map((path) => path.length)).toEqual([1, 2]);
+        expect(paths[0]).toEqual([{from: 'EUR', to: 'RON', provider: 'ECB'}]);
+        expect(paths[1]).toEqual([
+            {from: 'EUR', to: 'USD', provider: 'ECB'},
+            {from: 'USD', to: 'RON', provider: 'FED'},
+        ]);
+    });
+
+    it('keeps the signature: a third argument caps the depth', async () => {
+        api.list_providers_api_v1_fx_providers_get.mockResolvedValue([ECB_RON, FED_RON, ...THREE_STEPS]);
+        const store = await freshStore();
+
+        const paths = await store.findConversionPaths('EUR', 'RON', 1);
+
+        expect(paths).toEqual([[{from: 'EUR', to: 'RON', provider: 'ECB'}]]);
+    });
+
+    it('an unconfigured provider does not set the levels, but its routes are still returned', async () => {
+        // Configured: 2 and 3 steps → depth 3. Read from the full graph the levels would be 1 and 2 → depth 2 and the
+        // 3-step chain would be missing. The unconfigured KEYFX direct route is returned all the same.
+        const KEYFX = provider('KEYFX', 'EUR', ['RON'], {configured: false, missing_settings: ['api_key'], missing_reason: 'missing_fields'});
+        api.list_providers_api_v1_fx_providers_get.mockResolvedValue([KEYFX, provider('ECB', 'EUR', ['USD']), FED_RON, ...THREE_STEPS]);
+        const store = await freshStore();
+
+        const paths = await store.findConversionPaths('EUR', 'RON');
+
+        expect(paths.map((path) => path.length)).toEqual([1, 2, 3]);
+        expect(paths[0], 'the unconfigured provider route is returned').toEqual([{from: 'EUR', to: 'RON', provider: 'KEYFX'}]);
+    });
+
+    it('configured 3 and 4 steps give depth 4 even though the only direct route is unconfigured', async () => {
+        // Read from the full graph the levels would be 1 and 3 → depth 3, and the 4-step chain would be missing.
+        const KEYFX = provider('KEYFX', 'EUR', ['RON'], {configured: false});
+        const FOUR_STEPS = [provider('Q1', 'EUR', ['AUD']), provider('Q2', 'AUD', ['NZD']), provider('Q3', 'NZD', ['CAD']), provider('Q4', 'CAD', ['RON'])];
+        api.list_providers_api_v1_fx_providers_get.mockResolvedValue([KEYFX, ...THREE_STEPS, ...FOUR_STEPS]);
+        const store = await freshStore();
+
+        const paths = await store.findConversionPaths('EUR', 'RON');
+
+        expect(paths.map((path) => path.length)).toEqual([1, 3, 4]);
+        expect(paths[0][0].provider).toBe('KEYFX');
+    });
+
+    it('returns [] when no chain exists in either graph', async () => {
+        api.list_providers_api_v1_fx_providers_get.mockResolvedValue([provider('ECB', 'EUR', ['USD'])]);
+        const store = await freshStore();
+
+        expect(await store.findConversionPaths('EUR', 'RON')).toEqual([]);
+    });
+});
