@@ -180,4 +180,35 @@ test.describe('«Ultime variazioni» on the Profilo tab (plan 68, E6a)', () => {
             await page.request.delete(`${API_BASE}/assets?asset_ids=${assetId}`);
         }
     });
+
+    test('the clocks beside the countries and «Descrizione» open their history: the window with only the table (E6b2)', async ({page}) => {
+        test.setTimeout(60_000);
+        const name = `E2E profile history map ${uniqueToken(8)}`;
+        const created = await page.request.post(`${API_BASE}/assets`, {data: [{display_name: name, currency: 'EUR', asset_type: 'ETF', profile: {geography: {USA: '0.6', JPN: '0.4'}, description: 'A fund of the test.'}}]});
+        expect(created.status(), `POST ${API_BASE}/assets: ${await created.text()}`).toBe(201);
+        const assetId = ((await created.json()) as {results: Array<{asset_id: number}>}).results[0].asset_id;
+        try {
+            await goToAssetDetailPage(page, String(assetId));
+            await page.getByTestId('asset-detail-tab-profile').click();
+            await expect(page.getByTestId('asset-profile-tab')).toHaveAttribute('data-status', 'ready', {timeout: 15_000});
+            // No sectors written: no clock beside them
+            await expect(page.getByTestId('profile-classification-sector-history')).toHaveCount(0);
+
+            const history = page.getByTestId('profile-history');
+            for (const [clock, voice] of [
+                ['profile-classification-geography-history', 'geography'],
+                ['asset-profile-description-history', 'description'],
+            ] as const) {
+                await page.getByTestId(clock).click();
+                await expect(history).toHaveAttribute('data-status', 'ready', {timeout: 10_000});
+                await expect(history).toHaveAttribute('data-voice', voice);
+                await expect(page.getByTestId('profile-history-chart'), 'a map or a text has no chart').toHaveCount(0);
+                await expect(history.locator('[data-testid^="profile-change-what-"]')).toHaveCount(1);
+                await page.getByTestId('profile-history-close').click();
+                await expect(history).toHaveCount(0);
+            }
+        } finally {
+            await page.request.delete(`${API_BASE}/assets?asset_ids=${assetId}`);
+        }
+    });
 });

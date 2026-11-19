@@ -26,6 +26,7 @@ vi.mock('echarts', () => ({init: () => ({setOption: vi.fn(), resize: vi.fn(), di
 const CATALOGUE = [
     {key: 'yield_gross', shape: 'percentage', groups: ['bond'], volatile: true},
     {key: 'description', shape: 'text', groups: ['identity'], volatile: false},
+    {key: 'geography', shape: 'map', groups: ['classification'], volatile: false, map_keys: 'country'},
 ];
 
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
@@ -112,9 +113,9 @@ describe('ProfileHistoryModal', () => {
         expect(screen.queryByTestId('dt-header-voice')).toBeNull();
     });
 
-    it('draws no chart for a voice that is not a number', async () => {
-        readAssetProfile.mockImplementation(answer('description', [9]));
-        mount('description');
+    it.each(['description', 'geography'])('draws no chart for %s, a voice that is not a number: only its table (E6b2)', async (key) => {
+        readAssetProfile.mockImplementation(answer(key, [9]));
+        mount(key);
         await waitFor(() => expect(screen.getByTestId('profile-history')).toHaveAttribute('data-status', 'ready'));
         expect(screen.queryByTestId('profile-history-chart')).toBeNull();
         expect(screen.getByTestId('profile-change-what-9')).toBeInTheDocument();
