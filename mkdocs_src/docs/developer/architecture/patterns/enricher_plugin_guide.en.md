@@ -422,6 +422,12 @@ whose value is a number it draws the voice from its first day (`start: "min"`), 
 source's colour (`profileHistory.ts`, `ProfileHistoryChart.svelte`); under it, the same table with every row of that
 voice (`changes: {"key": k}`), without the voice column.
 
+«Refresh» («Aggiorna», `profileRefresh.ts`) sits beside «Edit data» when the asset has bindings: it calls
+`POST /assets/profile/refresh` for that asset, never the prices, and its hint says the latest `read_at` of the enrichers
+still bound (`assetLastRead`). Every outcome is a toast and the event `asset.profile.refreshed`, because what a refresh
+writes is often invisible. Without bindings the tab shows «No enricher configured», whose «Configure» opens the asset
+window with `enrichersOnOpen`: the enrichers' window on top, for that opening only.
+
 ---
 
 ## 🌐 API Routes {: #api }

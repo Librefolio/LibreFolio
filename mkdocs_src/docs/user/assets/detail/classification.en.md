@@ -37,7 +37,7 @@ A **pie chart** showing the percentage breakdown by country or region (e.g., Uni
 
 Classification data is part of the asset's profile, and can be set in two ways:
 
-1. **From its sources**: the asset's enrichers (justETF, Yahoo Finance, Borsa Italiana…) read the sector and geographic data and fill the profile
+1. **From its sources**: the asset's enrichers (justETF, Yahoo Finance, Borsa Italiana…) read the sector and geographic data and fill the profile. They read again every week; **Refresh**, beside **Edit data** in the **Profile** tab, reads them now (its tooltip says when they last read). An asset without enrichers shows the box **No enricher configured** instead: its **Configure** opens the asset form with the enrichers window on top
 2. **By hand**: **Edit data** in the **Profile** tab, or the **Profile data** row of the asset form (✏️), opens the **Profile data** window, where each distribution has its own editor
 
 ---
