@@ -10,7 +10,6 @@ Tests:
 """
 
 import asyncio
-import json
 import sys
 import time
 import uuid
@@ -73,7 +72,7 @@ from backend.app.services.assets import search as search_module
 from backend.app.services.assets.base import AssetSourceProvider
 from backend.app.services.assets.crud import AssetCRUDService
 from backend.app.services.assets.manager import AssetSourceManager
-from backend.app.services.assets.profile.store import current_rows
+from backend.app.services.assets.profile.store import USER_SOURCE, ProfileWrite, current_rows, profile_today, write_values
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.assets.search import AssetSearchService
 from backend.app.services.financial_math.interest import calculate_day_count_fraction
@@ -409,7 +408,7 @@ async def test_bulk_assign_providers():
 
 @pytest.mark.asyncio
 async def test_assign_does_not_modify_metadata(asset_ids: list[int]):
-    """Test that provider assignment does NOT auto-populate metadata (removed in C2R2)."""
+    """Test that provider assignment does NOT auto-populate the profile (removed in C2R2; plan 68: the profile)."""
     print_section("Test 6a: Assign Does Not Modify Metadata")
 
     timestamp = int(time.time() * 1000)
@@ -420,7 +419,6 @@ async def test_assign_does_not_modify_metadata(asset_ids: list[int]):
             currency="USD",
             asset_type=AssetType.STOCK,
             active=True,
-            classification_params=None,
         )
         session.add(test_asset)
         await session.commit()
@@ -439,23 +437,18 @@ async def test_assign_does_not_modify_metadata(asset_ids: list[int]):
         assert result.success, f"Assignment failed: {result.message}"
 
         await session.refresh(test_asset)
-        assert test_asset.classification_params is None, f"classification_params should be None after assign (no auto-populate), " f"got: {test_asset.classification_params}"
-        print_success("✓ Assignment does not auto-populate metadata")
+        rows = await current_rows(session, test_asset.id)
+        assert rows == {}, f"no profile row after assign (no auto-populate), got: {rows}"
+        print_success("✓ Assignment does not auto-populate the profile")
 
 
 @pytest.mark.asyncio
 async def test_assign_preserves_existing_metadata(asset_ids: list[int]):
-    """Test that provider assignment preserves pre-existing metadata."""
+    """Test that provider assignment preserves the asset's profile (plan 68: the profile replaced the old column)."""
     print_section("Test 6b: Assign Preserves Existing Metadata")
 
     timestamp = int(time.time() * 1000)
-    pre_existing = json.dumps(
-        {
-            "sector_area": {"distribution": {"Healthcare": 1.0}},
-            "geographic_area": {"distribution": {"DEU": 0.5, "FRA": 0.5}},
-            "short_description": "Pre-existing description",
-        }
-    )
+    pre_existing = {"sector": {"Health Care": "1"}, "geography": {"DEU": "0.5", "FRA": "0.5"}, "description": "Pre-existing description"}
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         test_asset = Asset(
@@ -463,11 +456,14 @@ async def test_assign_preserves_existing_metadata(asset_ids: list[int]):
             currency="USD",
             asset_type=AssetType.STOCK,
             active=True,
-            classification_params=pre_existing,
         )
         session.add(test_asset)
+        await session.flush()
+        await write_values(session, test_asset.id, [ProfileWrite(key=key, value=value, source=USER_SOURCE) for key, value in pre_existing.items()], today=await profile_today(session))
         await session.commit()
         await session.refresh(test_asset)
+        before = await current_rows(session, test_asset.id)
+        assert set(before) == set(pre_existing), f"barrier: the three voices are stored: {before}"
 
         item = FAProviderAssignmentItem(
             asset_id=test_asset.id,
@@ -481,11 +477,8 @@ async def test_assign_preserves_existing_metadata(asset_ids: list[int]):
         assert results[0].success
 
         await session.refresh(test_asset)
-        assert test_asset.classification_params == pre_existing, "classification_params should be unchanged after assign"
-        metadata = json.loads(test_asset.classification_params)
-        assert "Healthcare" in metadata["sector_area"]["distribution"]
-        assert "DEU" in metadata["geographic_area"]["distribution"]
-        print_success("✓ Pre-existing metadata preserved after assignment")
+        assert await current_rows(session, test_asset.id) == before, "the profile is unchanged after assign"
+        print_success("✓ Pre-existing profile preserved after assignment")
 
 
 @pytest.mark.asyncio
