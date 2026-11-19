@@ -8,15 +8,15 @@ Today ``PortfolioCalculationEngine`` (``financial_math/portfolio/engine.py``, st
   carry_back=True)`` and returns ``{asset_id: {voice: [ClassificationStep(date, through, weights)]}}``: every asset id
   asked is a key, an asset with no profile rows maps to ``None``; ``weights`` are the stored map's Decimals, or None for
   a row that emptied the voice;
-- the engine no longer reads ``Asset.classification_params`` for allocations: an asset that has them but no profile
-  rows is "Unknown" in both dimensions;
+- the engine no longer reads ``Asset.classification_params`` for allocations (the column is gone since D7b): an asset
+  without profile rows is "Unknown" in both dimensions;
 - ``calculate`` hands those steps to the builder: a geography that changes on a quiet day changes the allocation on that
   very day, in a segment of its own.
 
 The builder's side (pure) is pinned in ``test_financial_math/test_asset_allocation.py`` (section 4).
 
 The book (a private SQLite file, the app schema; one user owning 100 % of one broker; EUR, no FX): a deposit on D0; on
-D1 P (an ETF with profile rows) bought 10 at 100 and C (a stock with ``classification_params`` only) 5 at 100, closes
+D1 P (an ETF with profile rows) bought 10 at 100 and C (a stock without profile rows) 5 at 100, closes
 P 110 and C 90 on D1. P's geography: all USA read on D1, 60 % USA and 40 % Japan read on CHANGE (no movement, no
 quote that day); P's sector Technology read on D1; a TER row that the loader must not return. N has nothing at all; E
 (not held) has Italy read on D1 and an emptied geography (NULL row) on CHANGE.
@@ -62,7 +62,6 @@ pytestmark = pytest.mark.asyncio
 EUR = "EUR"
 D0, D1, CHANGE, END = date(2025, 6, 2), date(2025, 6, 3), date(2025, 6, 10), date(2025, 6, 20)
 P_VALUE, C_VALUE = Decimal("1100"), Decimal("450")  # 10 P at 110, 5 C at 90
-LEGACY_CLASSIFICATION = '{"geographic_area":{"distribution":{"USA":"1.0"}},"sector_area":{"distribution":{"Energy":"1.0"}}}'
 
 
 @dataclass(frozen=True)
@@ -107,7 +106,7 @@ async def _private_book(directory: Path) -> AsyncIterator[_Book]:
             user = User(username=f"d2_cls_{tag}", email=f"d2_cls_{tag}@test.com", hashed_password="fakehash", is_active=True)
             broker = Broker(name=f"D2 classification {tag}")
             p = Asset(display_name=f"D2 P {tag}", currency=EUR, asset_type=AssetType.ETF)
-            c = Asset(display_name=f"D2 C {tag}", currency=EUR, asset_type=AssetType.STOCK, classification_params=LEGACY_CLASSIFICATION)
+            c = Asset(display_name=f"D2 C {tag}", currency=EUR, asset_type=AssetType.STOCK)
             n = Asset(display_name=f"D2 N {tag}", currency=EUR, asset_type=AssetType.STOCK)
             e = Asset(display_name=f"D2 E {tag}", currency=EUR, asset_type=AssetType.ETF)
             session.add_all([user, broker, p, c, n, e])
@@ -167,7 +166,7 @@ class TestTheLoader:
             loaded = await _load(book, [book.p_id, book.c_id, book.n_id, book.e_id])
         assert set(loaded) == {book.p_id, book.c_id, book.n_id, book.e_id}
         assert loaded[book.n_id] is None, "no profile rows: None"
-        assert loaded[book.c_id] is None, "classification_params alone are not read: None"
+        assert loaded[book.c_id] is None, "an asset without profile rows: None"
 
     async def test_two_geography_rows_are_two_steps_carried_back_to_date_from(self, tmp_path):
         async with _private_book(tmp_path) as book:
@@ -189,8 +188,8 @@ class TestTheLoader:
 
 
 class TestTheEngineAllocation:
-    async def test_classification_params_alone_are_unknown(self, tmp_path):
-        """C has classification_params (USA, Energy) and no profile row: its value goes to Unknown in both dimensions."""
+    async def test_an_asset_without_profile_rows_is_unknown(self, tmp_path):
+        """C has no profile row: its value goes to Unknown in both dimensions."""
         async with _private_book(tmp_path) as book:
             result = await _calculate(book)
         for day in _days(D1, END):
