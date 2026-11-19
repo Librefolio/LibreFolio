@@ -16,7 +16,7 @@ history and instrument details from its public website — no account or API key
   has turned this off.
 - **Details**: name, type and currency; the ticker for stocks; the ISIN for funds. The description,
   the sector and the country, and a bond's coupons and maturity, are the asset's
-  [profile data](../detail/classification.md), which the Borsa Italiana enricher
+  [profile data](../detail/profile.md), which the Borsa Italiana enricher
   reads from the same pages.
 
 It covers what Borsa Italiana lists — Italian stocks, ETFs and ETCs (ETFplus), bonds (MOT,

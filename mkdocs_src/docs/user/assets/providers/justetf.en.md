@@ -2,7 +2,7 @@
 
 justETF prices European ETFs by their ISIN, in euros, US dollars, Swiss francs or British pounds.
 A fund's description and its country and sector breakdowns come from its
-[profile data](../detail/classification.md), which the justETF enricher reads.
+[profile data](../detail/profile.md), which the justETF enricher reads.
 
 ## 🔍 What It Offers
 

@@ -67,7 +67,7 @@
                 {/each}
             </select>
         {/if}
-        <DocsLink path="user/assets/detail/classification/" label={$t('assetDetail.docsHelp.profile')} icon="book" size={16} testId="asset-profile-docs" />
+        <DocsLink path="user/assets/detail/profile/" label={$t('assetDetail.docsHelp.profile')} icon="book" size={16} testId="asset-profile-docs" />
     </div>
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div class="rounded-lg bg-lf-panel p-3" data-testid="profile-classification-geography" data-state={geography ? 'value' : 'unavailable'}>
