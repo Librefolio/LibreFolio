@@ -26,10 +26,12 @@ Measured on 19/11/2026:
 - RUB (``EXCB110D``, «Russia: Rouble per Rand»): served since the developer's answer to Q3 (19/11/2026, lane 75): the
   rouble published by a bank other than the Central Bank of Russia (CBR, suspended by D4) is a route like the others,
   with a neutral note saying where it comes from.
-- Budget: one request per currency with ``PAUSE_SECONDS`` between two (D9). A series from 1970 is ~4 MB in ~7 s, from
-  2000 ~3.3 s, from 2010 ~1.5 s: with 25 currencies a history from 1970 would take ~3 minutes, over the 120 s the core
-  gives a leg. ``FIRST_DAY`` is 2010-01-01: ``"min"`` for 24 of them took 68.9 s (25 with RUB: ~72 s, estimated), 14 days for two currencies 2.0 s
-  (19/11/2026); a route usually asks one to three currencies. The ECB and BDI hold the older ZAR history.
+- Budget: one request per currency, at most ``MAX_PARALLEL`` (3) at once (consultant 75, 19/11/2026), with
+  ``PAUSE_SECONDS`` between two starts. A series from 1970 is ~4 MB in ~7 s, from 2000 ~3.3 s, from 2010 ~1.5 s (19/11
+  afternoon); the same evening every request took 20-35 s whatever its range. ``FIRST_DAY`` is 2010-01-01 so that a first
+  sync of many currencies stays short: one at a time, ``"min"`` for 24 currencies took 68.9 s; three at a time it is about
+  a third. The sync waits for a slow provider (its 120 s wait on a leg starts only after every provider answered, lane
+  75 L25c): a slow SARB makes the sync slow, it does not switch route. The ECB and BDI hold the older ZAR history.
 """
 
 import asyncio
@@ -41,7 +43,7 @@ from typing import Literal
 import httpx
 
 from backend.app.logging_config import get_logger
-from backend.app.services.fx.base import FXProviderStartDate, FXRateProvider, FXServiceError, raise_if_fx_rate_limited
+from backend.app.services.fx.base import FXProviderStartDate, FXRateLimitedError, FXRateProvider, FXServiceError, raise_if_fx_rate_limited, raise_longest_refusal
 from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.platform.provider_registry import register_provider
 
@@ -84,6 +86,10 @@ class _SeriesFailed(Exception):
     """One currency's series could not be read: that currency is skipped, the others go on."""
 
 
+class _NotAsked(Exception):
+    """A series queued behind a refusal for too many requests: never asked (the call is refused as a whole)."""
+
+
 @register_provider(FXProviderRegistry)
 class SARBProvider(FXRateProvider):
     """
@@ -97,10 +103,13 @@ class SARBProvider(FXRateProvider):
     Update frequency: every South African business day, after about 10:30 SAST.
     """
 
-    #: The first day asked: a later start than the series' own, so that 25 currencies fit the core's 120 s.
+    #: The first day asked: a later start than the series' own, so that a first sync of many currencies stays short.
     FIRST_DAY = date(2010, 1, 1)
     #: Pause between two requests of one call (D9: an explicit, slow pace).
     PAUSE_SECONDS = 0.3
+    #: Series asked at once (consultant 75, 19/11/2026: the bank publishes no limit, and at slow times every request took
+    #: 20-35 s; a route usually asks one to three SARB currencies, so three at once keep it to one round).
+    MAX_PARALLEL = 3
 
     @property
     def code(self) -> str:
@@ -164,7 +173,8 @@ class SARBProvider(FXRateProvider):
 
     async def fetch_rates(self, date_range: tuple[FXProviderStartDate, date], currencies: list[str], base_currency: str | None = None) -> dict[str, list[tuple[date, str, str, Decimal]]]:
         """
-        Fetch each asked currency's series, one request per currency, in series with a pause. A «Rand per X» series
+        Fetch each asked currency's series, one request per currency, at most ``MAX_PARALLEL`` at once with a pause
+        between two starts. A «Rand per X» series
         gives ``(day, CUR, 'ZAR', ZAR per 1 CUR)``, a «X per Rand» one ``(day, 'ZAR', CUR, CUR per 1 ZAR)``.
 
         Every value keeps its day (D2). A row that is no positive number loses its day only (X-R50). A currency whose
@@ -172,7 +182,8 @@ class SARBProvider(FXRateProvider):
 
         Raises:
             ValueError: base_currency is neither None nor ZAR
-            FXRateLimitedError: the bank refused for too many requests (no further currency is asked)
+            FXRateLimitedError: the bank refused for too many requests (the series not started yet are never asked,
+                the longest ``Retry-After`` of the call is kept, as in BOE)
             FXServiceError: every asked series failed
         """
         if base_currency is not None and base_currency != self.base_currency:
@@ -186,18 +197,46 @@ class SARBProvider(FXRateProvider):
         if not wanted or request_start > end_date:
             return results
 
+        outcomes = await self._fetch_all(wanted, request_start, end_date)
+        raise_longest_refusal(outcomes)  # a currency refused for too many requests: the whole call is refused, as in BOE
+
         failures: list[str] = []
-        for index, currency in enumerate(wanted):
-            if index:
-                await asyncio.sleep(self.PAUSE_SECONDS)
-            try:
-                results[currency] = await self._fetch_one(currency, request_start, end_date)
-            except _SeriesFailed as failed:
-                logger.warning(f"SARB fetch failed for {currency}, skipping: {failed}")
-                failures.append(f"{currency}: {failed}")
+        for currency, outcome in zip(wanted, outcomes, strict=True):
+            if isinstance(outcome, _SeriesFailed):
+                logger.warning(f"SARB fetch failed for {currency}, skipping: {outcome}")
+                failures.append(f"{currency}: {outcome}")
+            elif isinstance(outcome, BaseException):
+                raise outcome
+            else:
+                results[currency] = outcome
         if len(failures) == len(wanted):
             raise FXServiceError(f"SARB API error for every asked series: {'; '.join(failures)}")
         return results
+
+    async def _fetch_all(self, wanted: list[str], start: date, end: date) -> list[object]:
+        """Each currency's rows or exception, in ``wanted`` order: at most ``MAX_PARALLEL`` series at once, ``PAUSE_SECONDS``
+        between two starts; after a refusal for too many requests the series not started yet are never asked."""
+        in_flight = asyncio.Semaphore(self.MAX_PARALLEL)
+        pacing = asyncio.Lock()
+        started = 0
+        refused = False
+
+        async def fetch(currency: str) -> list[tuple[date, str, str, Decimal]]:
+            nonlocal started, refused
+            async with in_flight:
+                async with pacing:
+                    if refused:
+                        raise _NotAsked(currency)
+                    if started:
+                        await asyncio.sleep(self.PAUSE_SECONDS)
+                    started += 1
+                try:
+                    return await self._fetch_one(currency, start, end)
+                except FXRateLimitedError:
+                    refused = True
+                    raise
+
+        return await asyncio.gather(*(fetch(currency) for currency in wanted), return_exceptions=True)
 
     async def _fetch_one(self, currency: str, start: date, end: date) -> list[tuple[date, str, str, Decimal]]:
         """One currency's rows, oldest first; ``_SeriesFailed`` when its answer is not the series' JSON list."""
