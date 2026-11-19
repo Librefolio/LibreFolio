@@ -185,6 +185,7 @@ The source of truth is the `Props` interface of `lib/components/table/DataTable.
 | `defaultPageSize` | `number` | `10` | Page size until the user picks one (the stored choice wins). |
 | `pageSizeOptions` | `number[]` | `[10, 25, 50, 100, 0]` | Choices of the page-size menu; `0` means "all" (shown as ∞). |
 | `alwaysShowPagination` | `boolean` | `false` | Show the bar whenever there is at least one row. |
+| `opensPage` | `(row: T) => boolean` | — | Whether a row may start a page. With it, a row that returns `false` joins the page of the row before it (see [Pagination](#pagination)). |
 
 `enableColumnVisibility` is accepted but not read: column visibility is driven from outside, through
 `ColumnVisibilityToggle` and the [public methods](#public-methods).
@@ -300,6 +301,15 @@ scrollable modal the menu is not clipped by the modal's overflow and every optio
 
 Short tables can offer smaller steps: the bulk editor and the import wizard pass
 `pageSizeOptions={[5, 10, 25, 50, 0]}`-style lists.
+
+**Groups that never split (`opensPage`).** Pages are fixed slices of the sorted rows. With the
+optional `opensPage` prop they come from `paginateFlat` (`dataTableLogic.ts`) instead: a page still
+closes at the page size, but never before a row for which `opensPage` returns `false`. That row
+joins the page of the row before it, which then holds more rows than the page size. The bulk
+editor passes it so a parent's linked charges stay on the parent's page. With the prop,
+`navigateToRowId`, `getPageRowIds` and the pager (`DataTablePagination`'s optional `pageCount`)
+follow those pages. Without it nothing changes. The transactions table pages its flat mode with the
+same `paginateFlat`.
 
 ## 🧭 Public methods {: #public-methods }
 

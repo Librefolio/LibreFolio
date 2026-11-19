@@ -5,6 +5,7 @@
  * (project 66, lot F5) and slices them into pages here, so the rules can be tested without mounting the table.
  */
 import type {TXReadItem} from './types';
+import {paginateFlat} from '$lib/components/table/dataTableLogic';
 
 /** Display row = TXReadItem + decoration metadata for adjacency rendering. */
 export interface DisplayRow {
@@ -107,20 +108,8 @@ function follows(row: DisplayRow): boolean {
  */
 export function paginateRows(rows: DisplayRow[], pageSize: number, grouped: boolean): DisplayRow[][] {
     const result: DisplayRow[][] = [];
-    if (!grouped) {
-        if (pageSize <= 0) return rows.length > 0 ? [rows] : [[]];
-        let page: DisplayRow[] = [];
-        for (const row of rows) {
-            if (page.length >= pageSize && row.chargeOfId == null) {
-                result.push(page);
-                page = [];
-            }
-            page.push(row);
-        }
-        if (page.length > 0) result.push(page);
-        if (result.length === 0) result.push([]);
-        return result;
-    }
+    // Flat mode: a charge under its open parent never opens a page (`paginateFlat`, shared with the Bulk's grid).
+    if (!grouped) return paginateFlat(rows, pageSize, (row) => row.chargeOfId == null);
     // Grouped mode — pair-never-split paginator.
     let buf: DisplayRow[] = [];
     for (let i = 0; i < rows.length; i++) {

@@ -351,3 +351,61 @@ describe('paginateRows — grouped mode with an open parent', () => {
         ]);
     });
 });
+
+// ---------------------------------------------------------------------------
+// 3. Lot 66 F7-c1 — the flat branch is `paginateFlat` (one implementation, D2; contract 66-F7 §14.4)
+// ---------------------------------------------------------------------------
+
+describe('paginateRows — flat mode with an open parent (characterization, green before F7-c1)', () => {
+    it('a charge under its open parent at the page boundary overflows the full page', () => {
+        const parent = row(tx(100, 'BUY'), {chargeCount: 2});
+        const under = [101, 102].map((id) => row(tx(id, 'FEE', {parent_transaction_id: 100}), {isChargeRow: true, chargeOfId: 100, followTx: parent.tx}));
+
+        expect(pageIds(txRows.paginateRows([standalone(1), parent, ...under, standalone(2)], 2, false))).toEqual([[1, 100, 101, 102], [2]]);
+    });
+
+    it('a parent arriving on a full page starts the next one with its open charges', () => {
+        const parent = row(tx(100, 'BUY'), {chargeCount: 1});
+        const under = row(tx(101, 'FEE', {parent_transaction_id: 100}), {isChargeRow: true, chargeOfId: 100, followTx: parent.tx});
+
+        expect(pageIds(txRows.paginateRows([standalone(1), standalone(2), parent, under, standalone(3)], 2, false))).toEqual([[1, 2], [100, 101], [3]]);
+    });
+});
+
+type PaginateFlat = <R>(rows: readonly R[], pageSize: number, opensPage: (row: R) => boolean) => R[][];
+
+describe('paginateRows — flat mode is paginateFlat(rows, size, r => r.chargeOfId == null)', () => {
+    /** `paginateFlat` from the table's own module, where the component can import it without reaching into `features`. */
+    async function paginateFlat(): Promise<PaginateFlat> {
+        const mod = (await import('$lib/components/table/dataTableLogic')) as unknown as {paginateFlat?: PaginateFlat};
+        expect(mod.paginateFlat, 'components/table/dataTableLogic exports paginateFlat').toBeTypeOf('function');
+        return mod.paginateFlat!;
+    }
+
+    /** Every shape the flat branch meets: plain rows, a pair (two independent rows in flat mode), open groups at every
+     *  position, a lone charge, a group first in the list. */
+    function shapes(): DisplayRow[][] {
+        const parent = row(tx(100, 'BUY'), {chargeCount: 2});
+        const under = [101, 102].map((id) => row(tx(id, 'TAX', {parent_transaction_id: 100}), {isChargeRow: true, chargeOfId: 100, followTx: parent.tx}));
+        const lone = row(tx(201, 'FEE', {parent_transaction_id: 200}), {isChargeRow: true, chargeOfId: null});
+        const [g, r] = pair(11, 12);
+        return [
+            [],
+            [1, 2, 3, 4, 5].map((id) => standalone(id)),
+            [standalone(1), g, r, standalone(2)],
+            [standalone(1), parent, ...under, standalone(2)],
+            [standalone(1), standalone(2), parent, ...under, standalone(3)],
+            [parent, ...under, standalone(1), standalone(2), standalone(3)],
+            [standalone(1), lone, standalone(2), parent, ...under],
+        ];
+    }
+
+    it.each([1, 2, 3, 5, 0, -1, 999999])('page size %s: identical pages, row for row', async (size) => {
+        const flat = await paginateFlat();
+        for (const rows of shapes()) {
+            const viaRows = txRows.paginateRows(rows, size, false);
+            const viaFlat = flat(rows, size, (d: DisplayRow) => d.chargeOfId == null);
+            expect(pageIds(viaFlat), `rows ${JSON.stringify(ids(rows))}`).toEqual(pageIds(viaRows));
+        }
+    });
+});
