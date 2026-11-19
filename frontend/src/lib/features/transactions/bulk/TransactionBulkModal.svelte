@@ -90,7 +90,8 @@
     import TransactionPickerModal from './TransactionPickerModal.svelte';
     import ImportWizardModal from '../import/ImportWizardModal.svelte';
     import {txStoreGet, txStoreCount, txStoreAddExtras} from '$lib/features/transactions/txStore.svelte';
-    import {adoptCharges, applyChargeDrafts, chargeDraftsFor, chargeParentFields, foldBulkCharges, isUnderParent, parentNeedsRef, remapChargeOf, rowAnchor} from './bulkCharges';
+    import {adoptCharges, applyChargeDrafts, chargeDraftsFor, chargeParentFields, foldBulkCharges, isUnderParent, parentNeedsRef, remapChargeOf, rowAnchor, applyDeleteChoice, linkedChargesOf, planBulkDelete, withoutRows, type BulkDeletePlan, type ChargesUnread} from './bulkCharges';
+    import TxChargesActionModal from '../TxChargesActionModal.svelte';
     import type {ChargeDraft} from '../form/txCharges';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
@@ -566,7 +567,8 @@
         }
         next = adoptCharges(collapsePairedOps(next), txStoreGet);
         if (unlinkIds.size === 0) return next;
-        return next.map((op) => (op.op === 'edit' && unlinkIds.has(op.txId) && !op.markedDelete ? {...op, parentUnlink: true} : op));
+        // The page's «Keep the charges» is the parent's choice: «Restore» on the parent takes it back (`byParentChoice`).
+        return next.map((op) => (op.op === 'edit' && unlinkIds.has(op.txId) && !op.markedDelete ? {...op, parentUnlink: true, byParentChoice: true} : op));
     }
 
     /** Schedule auto-open of the nested FormModal based on the mode. */
@@ -984,82 +986,132 @@
         // 66 F7-c1 (§14.2): the charges the Bulk read itself for this parent leave with it while nobody changed them.
         const takenAlong = new Set(ops.filter((d) => d.loadedWithParent && d.chargeOf !== undefined && removed.has(d.chargeOf) && deriveStatus(d) === 'original').map((d) => d.tempId));
         // 66 F7-b (§11.2): no `chargeOf` left dangling. The parent's new charges leave with it; its saved charges stay,
-        // owned by nobody (an unlink typed on them stays theirs).
-        ops = ops
-            .filter((d) => !removed.has(d.tempId) && !takenAlong.has(d.tempId) && !(d.op === 'create' && d.chargeOf !== undefined && removed.has(d.chargeOf)))
-            .map((d) => {
-                if (d.chargeOf === undefined || !removed.has(d.chargeOf)) return d;
-                const next = {...d};
-                delete next.chargeOf;
-                return next;
-            });
+        // owned by nobody (an unlink typed on them stays theirs): `withoutRows`.
+        ops = withoutRows(
+            ops.filter((d) => !takenAlong.has(d.tempId)),
+            removed,
+        );
     }
 
-    /**
-     * «Delete selected»: each saved row toggles, each new row leaves. Every toggle is decided on the state before any of
-     * them, and the user's choice on each selected row wins over the cascade of a selected parent (`setRowDeleted`), so
-     * the order of the selection does not matter (66 F7-b).
-     */
-    function toggleDeleteRows(rows: readonly PendingOp[]) {
-        // 66 F7-c1 (§14.2): a parent whose charges are not read yet, or could not be, is not marked «del».
-        rows = rows.filter((r) => {
-            const current = ops.find((d) => d.tempId === r.tempId);
-            return !(current?.op === 'edit' && !current.markedDelete && chargesUnreadReason(current) !== null);
-        });
-        const desired = new Map<string, boolean>();
-        for (const r of rows) {
-            const current = ops.find((d) => d.tempId === r.tempId);
-            if (current?.op === 'edit') desired.set(current.tempId, !current.markedDelete);
-        }
-        for (const r of rows) if (!desired.has(r.tempId)) removeRow(r.tempId);
-        for (const [tempId, deleted] of desired) setRowDeleted(tempId, deleted);
-        ops = ops.map((d) => (d.op === 'edit' && desired.has(d.tempId) && d.markedDelete !== desired.get(d.tempId) ? {...d, markedDelete: desired.get(d.tempId)!} : d));
-    }
-
-    /** Mark an existing row for deletion (toggle). */
-    function markDelete(tempId: string) {
-        const target = ops.find((d) => d.tempId === tempId);
-        if (!target || target.op !== 'edit') return; // can't mark-delete a create — just remove it
-        // 66 F7-c1 (§14.2): «del» on a parent waits for its charges to be read (the menu says why).
-        if (!target.markedDelete && chargesUnreadReason(target) !== null) return;
-        setRowDeleted(tempId, !target.markedDelete);
+    /** 66 F7-c1/F7-c2: whether the charges of this saved row are being read, or could not be read. */
+    function chargesUnread(row: PendingOp): ChargesUnread {
+        if (row.op !== 'edit') return null;
+        if (chargesInFlight.has(row.txId)) return 'loading';
+        if (chargesReadFailed.has(row.txId) && parentChargesMissing(row)) return 'failed';
+        return null;
     }
 
     /** 66 F7-c1 (§14.2): why «del» on this saved parent is off — its charges are being read, or could not be — or
      *  `null` when it is not. */
     function chargesUnreadReason(row: PendingOp): string | null {
-        if (row.op !== 'edit') return null;
-        if (chargesInFlight.has(row.txId)) return $t('transactions.form.charges.loading');
-        if (chargesReadFailed.has(row.txId) && parentChargesMissing(row)) return $t('transactions.chargesDelete.loadFailed');
+        const state = chargesUnread(row);
+        if (state === 'loading') return $t('transactions.form.charges.loading');
+        if (state === 'failed') return $t('transactions.chargesDelete.loadFailed');
         return null;
     }
 
+    /** 66 F7-c2: the panel V1 open inside the Bulk — the plan it decides, and what it shows. */
+    let deletePanel = $state<{plan: BulkDeletePlan; parents: TXReadItem[]; charges: TXReadItem[]; fromSelection: boolean} | null>(null);
+
+    /** A row as the panel shows it: the editor's values, signed as the ledger holds them. */
+    function panelItem(op: PendingOp, parentTxId?: number): TXReadItem {
+        const item = opToTxLike(op);
+        const {signedQty, signedCash} = applySignRules(item.quantity, item.cash, getTypeRule(op.fields.type));
+        return {...item, quantity: signedQty, cash: signedCash, ...(parentTxId !== undefined ? {parent_transaction_id: parentTxId} : {})};
+    }
+
     /**
-     * Mark a saved row for deletion, or restore it. 66 F7-b: a parent marked for deletion leaves no charge linked to it
-     * (the backend refuses that batch, `chargesDeleteIncomplete`): each saved charge it owns that is neither deleted nor
-     * unlinked is unlinked, the non-destructive choice. Restoring the parent takes back every «del» and «scollega» of its
-     * charges: everything as it was (§10, §11.8).
+     * 66 F7-c2 (§17, §18, §19): «Delete» (one row) and «Delete selected» go through one plan (`planBulkDelete`). A parent
+     * going «del» with linked charges asks first, in the panel V1, once for every such parent; nothing is marked before
+     * the choice. A parent whose charges are being read is waited for; a reset, «Reset all» or the Bulk closed meanwhile
+     * cancels the wait. A parent whose read failed is skipped, with a warning; the other rows proceed.
      */
-    function setRowDeleted(tempId: string, deleted: boolean) {
-        const target = ops.find((d) => d.tempId === tempId);
-        const owner = target?.chargeOf !== undefined ? ops.find((d) => d.tempId === target.chargeOf) : undefined;
-        // A charge restored under a parent still marked for deletion cannot stay linked to it: it is unlinked (§5).
-        const unlinkOnRestore = !deleted && owner?.op === 'edit' && owner.markedDelete;
+    async function requestDelete(tempIds: readonly string[], fromSelection: boolean) {
+        const generation = chargesLoadGeneration;
+        let plan = planBulkDelete(ops, tempIds, chargesUnread);
+        while (plan.waiting.length > 0) {
+            const reads = plan.waiting.map((id) => ops.find((d) => d.tempId === id)).map((d) => (d?.op === 'edit' ? chargesReads.get(d.txId) : undefined));
+            await Promise.all(reads.map((read) => read ?? Promise.resolve(false)));
+            await tick();
+            if (generation !== chargesLoadGeneration || !open) return;
+            // The rows taken at the click, resolved again (§19.7): a row gone meanwhile is simply not there.
+            const next = planBulkDelete(ops, tempIds, chargesUnread);
+            if (next.waiting.length > 0 && reads.every((read) => read === undefined)) return;
+            plan = next;
+        }
+        if (plan.skipped.length > 0) {
+            notify({
+                name: 'tx.bulk.delete.skipped-unread',
+                detail: {rowIds: plan.skipped},
+                toast: {variant: 'warning', message: $t('transactions.bulk.deleteSkippedUnread', {values: {n: plan.skipped.length}})},
+            });
+        }
+        if (plan.needsChoice.length === 0) {
+            applyDelete(plan, 'keep', fromSelection);
+            return;
+        }
+        const parents = plan.needsChoice.map((id) => ops.find((d) => d.tempId === id)).filter((d): d is PendingOp => d?.op === 'edit');
+        const own = new Set([...plan.toggles.map((t) => t.tempId), ...plan.removals]);
+        deletePanel = {
+            plan,
+            parents: parents.map((p) => panelItem(p)),
+            charges: parents.flatMap((p) =>
+                linkedChargesOf(p, ops)
+                    .filter((c) => !own.has(c.tempId))
+                    .map((c) => panelItem(c, p.op === 'edit' ? p.txId : undefined)),
+            ),
+            fromSelection,
+        };
+    }
+
+    /** The plan and the choice onto the rows: the groups of the parents gone «del» open, and a selection that asked is
+     *  emptied (§19.5). */
+    function applyDelete(plan: BulkDeletePlan, choice: 'keep' | 'all', fromSelection: boolean) {
+        const deleted = [...plan.needsChoice, ...plan.toggles.filter((t) => t.deleted).map((t) => t.tempId)];
+        ops = applyDeleteChoice(ops, plan, choice, txStoreGet);
         // 66 F7-c1 (§14.7): a parent marked «del» opens its group, so its charges' state is on screen.
-        // Any charge it owns, unlinked top-level rows included: under a parent «del» they go back under it.
-        if (deleted && !expandedParents.has(tempId) && ops.some((d) => d.chargeOf === tempId)) expandedParents = new Set([...expandedParents, tempId]);
-        ops = ops.map((d) => {
-            if (d.tempId === tempId) {
-                if (d.op !== 'edit') return d;
-                return unlinkOnRestore ? {...d, markedDelete: false, parentUnlink: true} : {...d, markedDelete: deleted};
-            }
-            if (d.chargeOf !== tempId || d.op !== 'edit') return d;
-            if (deleted) return d.markedDelete || d.parentUnlink ? d : {...d, parentUnlink: true};
-            if (!d.markedDelete && !d.parentUnlink) return d;
-            const next = {...d, markedDelete: false};
-            delete next.parentUnlink;
-            return next;
-        });
+        const opened = deleted.filter((id) => !expandedParents.has(id) && ops.some((d) => d.chargeOf === id));
+        if (opened.length > 0) expandedParents = new Set([...expandedParents, ...opened]);
+        if (fromSelection) {
+            tableRef?.clearSelection();
+            bulkTableSelectedRows = [];
+        }
+    }
+
+    function chooseDelete(choice: 'keep' | 'all') {
+        const panel = deletePanel;
+        deletePanel = null;
+        if (panel) applyDelete(panel.plan, choice, panel.fromSelection);
+    }
+
+    /** «Cancel» or Esc on the panel: nothing changes, the selection is kept (§18.5). */
+    function cancelDelete() {
+        deletePanel = null;
+    }
+
+    /** «Delete» on one row, through the same plan as «Delete selected». */
+    function markDelete(tempId: string) {
+        const target = ops.find((d) => d.tempId === tempId);
+        if (!target || target.op !== 'edit') return; // can't mark-delete a create — just remove it
+        // 66 F7-c1 (§14.2): «del» on a parent waits for its charges to be read (the menu says why).
+        if (!target.markedDelete && chargesUnreadReason(target) !== null) return;
+        void requestDelete([tempId], false);
+    }
+
+    /**
+     * Mark a saved row for deletion, or restore it, without asking: a restore (a row reset, «Restore and edit»), or a
+     * deletion whose choice is known. 66 F7-c2: a parent «del» no longer unlinks its charges by itself; restoring it
+     * takes back only what a delete choice set on them (`byParentChoice`); a charge restored under a parent still «del»
+     * is unlinked (`applyDeleteChoice`).
+     */
+    function setRowDeleted(tempId: string, deleted: boolean, choice: 'keep' | 'all' = 'keep') {
+        const target = ops.find((d) => d.tempId === tempId);
+        if (!target || target.op !== 'edit' || target.markedDelete === deleted) return;
+        applyDelete(
+            planBulkDelete(ops, [tempId], () => null),
+            choice,
+            false,
+        );
     }
 
     /** Clone a row as a new row. */
@@ -2929,7 +2981,7 @@
         return next.map((op) => {
             if (!addedIds.has(op.tempId) || op.chargeOf === undefined) return op;
             const owner = next.find((p) => p.tempId === op.chargeOf);
-            return owner?.op === 'edit' && owner.markedDelete ? {...op, parentUnlink: true} : op;
+            return owner?.op === 'edit' && owner.markedDelete ? {...op, parentUnlink: true, byParentChoice: true} : op;
         });
     }
 
@@ -3188,7 +3240,11 @@
         icon: Trash2,
         label: () => $t('transactions.bulk.deleteSelected') || 'Delete selected',
         variant: 'danger' as const,
-        onClick: (rows: PendingOp[]) => toggleDeleteRows(rows),
+        onClick: (rows: PendingOp[]) =>
+            void requestDelete(
+                rows.map((row) => row.tempId),
+                true,
+            ),
     });
     let bulkActionsForTable = $derived([bulkDeleteSelected] as never);
 
@@ -3845,10 +3901,12 @@
         bulkTableSelectedRows = ops.filter((d) => idSet.has(d.tempId));
     }
 
+    /** «Delete selected» (66 F7-c2): the rows taken at the click; the selection empties once the choice is made. */
     function executeBulkDeleteOnSelected() {
-        toggleDeleteRows(bulkTableSelectedRows);
-        tableRef?.clearSelection();
-        bulkTableSelectedRows = [];
+        void requestDelete(
+            bulkTableSelectedRows.map((row) => row.tempId),
+            true,
+        );
     }
 </script>
 
@@ -4136,6 +4194,9 @@
 />
 
 <!-- Plan B Step 9: PickerModal for adding existing DB transactions -->
+<!-- 66 F7-c2: the panel V1 inside the Bulk — what to do with the linked charges of the parents being deleted. -->
+<TxChargesActionModal open={deletePanel != null} mode="deleteParent" parents={deletePanel?.parents ?? []} charges={deletePanel?.charges ?? []} counts={deletePanel?.plan.counts} onChoose={chooseDelete} onCancel={cancelDelete} zIndex={70} />
+
 <TransactionPickerModal open={pickerOpen} excludeIds={pickerExcludeIds} onAdd={handlePickerAdd} onClose={() => (pickerOpen = false)} />
 
 <!-- BUG-C7: Suggest picker — opens PickerModal filtered to importable candidates -->

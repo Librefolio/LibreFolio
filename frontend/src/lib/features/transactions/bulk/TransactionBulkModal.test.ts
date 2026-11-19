@@ -2321,10 +2321,13 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
         expect(readAskedFor(BUY.id), 'all its charges are held: no read').toBe(false);
     });
 
-    it('the parent marked «del»: the group opens, its charges sit under it «unlink» (the F7-b interim); «del» was on for a parent read', async () => {
+    // Re-targeted in F7-c2 (§17.5, §17.9): the F7-b interim is gone — the parent goes «del» through the panel, «Keep».
+    it('the parent marked «del» through the panel, «Keep»: the group opens, its charges sit under it «unlink»; «del» was on for a parent read', async () => {
         await openLoaded();
 
         await rowAction(gridRow(BUY.id), 'mark-delete');
+        await fireEvent.click(await screen.findByTestId('tx-charges-modal-keep'));
+        await settle();
 
         expect(rowStatus(gridRow(BUY.id)), 'the parent is marked').toBe('delete');
         expect(theChip(), 'a parent «del» opens its group').toHaveAttribute('aria-expanded', 'true');
@@ -2607,7 +2610,10 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
 
     it('«Restore» from the menu of a saved charge under a parent «del»: «unlink», not linked; the batch still unlinks it', async () => {
         await openLoaded();
+        // Re-targeted in F7-c2 (§17.9): the parent goes «del» through the panel, «Keep».
         await rowAction(gridRow(BUY.id), 'mark-delete');
+        await fireEvent.click(await screen.findByTestId('tx-charges-modal-keep'));
+        await settle();
         expect(chargeState(gridRow(FEE.id)), 'premise: the FEE sits under the parent «del», unlinked').toBe('unlink');
         await rowAction(gridRow(FEE.id), 'mark-delete');
         expect(chargeState(gridRow(FEE.id)), 'premise: the FEE is marked «del»').toBe('del');
@@ -2825,5 +2831,406 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
 
         expect(screen.getByTestId('context-menu-action-mark-delete'), 'barrier: the menu is drawn, «del» on').toBeEnabled();
         expect(screen.queryByTestId('context-menu-action-reset'), 'nothing to reset').toBeNull();
+    });
+
+    // =======================================================================
+    // 66 F7-c2 — the V1 panel inside the Bulk (contract 66-F7 §12, §16.4, §17 corrected by §18)
+    // =======================================================================
+
+    /**
+     * «Delete» on a saved parent that has linked charges (`linkedChargesOf`) opens `TxChargesActionModal` in
+     * `deleteParent` mode BEFORE marking anything; «Keep» / «Delete all» / «Cancel» (or Esc, which closes the panel only)
+     * decide. «Delete selected» asks once for every selected parent, after the reads in flight land; a parent whose read
+     * failed is skipped with a warning toast (`transactions.bulk.deleteSkippedUnread`, `{n}`). The F7-b interim (a parent
+     * «del» unlinks its charges by itself) is gone; the delete intent from the page (§15.1) is not this path.
+     * The panel's counts are read as the catalogue renders them for the expected numbers, never as words.
+     */
+    describe('66 F7-c2: the delete panel inside the Bulk', () => {
+        const PANEL = 'tx-charges-modal-content';
+        const FREE: TXReadItem = {...FEE, id: 91_731, parent_transaction_id: null, description: 'F7c2 free fee'};
+        const PARENT_A: TXReadItem = {...SAVED_BUY, id: 91_741, charges_count: 0, description: 'F7c2 parent A'};
+        const PARENT_B: TXReadItem = {...SAVED_BUY, id: 91_751, date: '2026-09-16', charges_count: 0, description: 'F7c2 parent B'};
+
+        /** The panel, open in deleteParent mode. */
+        async function panel(): Promise<HTMLElement> {
+            const content = await screen.findByTestId(PANEL);
+            expect(content).toHaveAttribute('data-mode', 'deleteParent');
+            return content;
+        }
+
+        /** Click a panel button (keep / all / cancel); ends on the panel gone. */
+        async function choose(button: 'keep' | 'all' | 'cancel'): Promise<void> {
+            const content = await panel();
+            await fireEvent.click(within(content).getByTestId(`tx-charges-modal-${button}`));
+            await settle();
+            await waitFor(() => expect(screen.queryByTestId(PANEL), 'the panel closed').toBeNull());
+        }
+
+        /** Tick a row's checkbox. */
+        async function tick(row: HTMLElement): Promise<void> {
+            const box = rowCheckbox(row);
+            if (!box) throw new Error('the row has no checkbox');
+            await fireEvent.click(box);
+            await settle();
+        }
+
+        /** «Delete selected» in the selection toolbar. */
+        async function deleteSelected(): Promise<void> {
+            await fireEvent.click(screen.getByTestId('tx-bulk-delete-selected'));
+            await settle();
+        }
+
+        /** The one create of this type in a body. */
+        function onlyCreateOf(body: Payload, type: string): Record<string, unknown> {
+            const found = (body.creates ?? []).filter((create) => create.type === type);
+            expect(found, `one ${type} create`).toHaveLength(1);
+            return found[0];
+        }
+
+        /** The kept-charges count and the all count the panel shows, read against the catalogue. */
+        function expectCounts(content: HTMLElement, keep: number, all: number): void {
+            expect(within(content).getByTestId('tx-charges-modal-keep-after')).toHaveTextContent(get(_)('transactions.chargesDelete.keepAfter', {values: {n: keep}}));
+            expect(within(content).getByTestId('tx-charges-modal-all-after')).toHaveTextContent(get(_)('transactions.chargesDelete.allAfter', {values: {n: all}}));
+        }
+
+        // -------------------------------------------------------------------
+        // Single «Delete» (row menu)
+        // -------------------------------------------------------------------
+
+        it('«Delete» on a saved parent with linked charges opens the panel before marking: the parent is not «del» while it is open; counts 2 / 3', async () => {
+            await openLoaded();
+
+            await rowAction(gridRow(BUY.id), 'mark-delete');
+
+            const content = await panel();
+            expect(rowStatus(gridRow(BUY.id)), 'nothing marked yet').toBe('original');
+            expectCounts(content, 2, 3);
+            for (const id of ['keep', 'all', 'cancel']) expect(within(content).getByTestId(`tx-charges-modal-${id}`)).toBeInTheDocument();
+        });
+
+        it('«Delete» on a row with no linked charge marks it at once, no panel', async () => {
+            await openLoaded();
+
+            await rowAction(gridRow(DEP.id), 'mark-delete');
+
+            expect(rowStatus(gridRow(DEP.id))).toBe('delete');
+            expect(screen.queryByTestId(PANEL)).toBeNull();
+        });
+
+        it('«Cancel» changes nothing: the parent unmarked, its charges linked, the Bulk open', async () => {
+            const {onClose} = await openLoaded();
+            await rowAction(gridRow(BUY.id), 'mark-delete');
+
+            await choose('cancel');
+
+            expect(rowStatus(gridRow(BUY.id))).toBe('original');
+            expect(theChip()).toHaveAttribute('data-charges-count', '2');
+            expect(theChip(), 'no charge changed').not.toHaveAttribute('data-charges-modified', 'true');
+            expect(screen.getByTestId('tx-bulk-modal')).toBeInTheDocument();
+            expect(onClose).not.toHaveBeenCalled();
+        });
+
+        it('Esc closes the panel only: nothing changes and the Bulk stays open', async () => {
+            const {onClose} = await openLoaded();
+            await rowAction(gridRow(BUY.id), 'mark-delete');
+            await panel();
+
+            await fireEvent.keyDown(screen.getByTestId('tx-charges-modal'), {key: 'Escape'});
+            await settle();
+
+            await waitFor(() => expect(screen.queryByTestId(PANEL)).toBeNull());
+            expect(rowStatus(gridRow(BUY.id))).toBe('original');
+            expect(screen.getByTestId('tx-bulk-modal')).toBeInTheDocument();
+            expect(onClose, 'Esc on the panel does not close the Bulk').not.toHaveBeenCalled();
+        });
+
+        it('«Keep»: the parent «del», its saved charges unlinked under it; the batch deletes the parent and unlinks both', async () => {
+            await openLoaded();
+            await rowAction(gridRow(BUY.id), 'mark-delete');
+
+            await choose('keep');
+
+            expect(rowStatus(gridRow(BUY.id))).toBe('delete');
+            for (const charge of [FEE, TAX]) expect(chargeState(gridRow(charge.id)), charge.type).toBe('unlink');
+            const body = await validateNow();
+            expect(body.deletes ?? []).toEqual([BUY.id]);
+            expect(body.updates ?? []).toEqual(
+                expect.arrayContaining([
+                    {id: FEE.id, parent_transaction_id: 0},
+                    {id: TAX.id, parent_transaction_id: 0},
+                ]),
+            );
+        });
+
+        it('«Delete all»: the parent and its saved charges «del», all three in the deletes', async () => {
+            await openLoaded();
+            await rowAction(gridRow(BUY.id), 'mark-delete');
+
+            await choose('all');
+
+            expect(rowStatus(gridRow(BUY.id))).toBe('delete');
+            for (const charge of [FEE, TAX]) expect(chargeState(gridRow(charge.id)), charge.type).toBe('del');
+            const body = await validateNow();
+            expect([...(body.deletes ?? [])].sort((a, b) => a - b)).toEqual([BUY.id, FEE.id, TAX.id]);
+            expect(
+                (body.updates ?? []).filter((u) => u.parent_transaction_id === 0),
+                'nothing unlinked',
+            ).toEqual([]);
+        });
+
+        it('«Keep» with a new charge: it becomes a new row of its own, top-level, with the date it followed; no parent sent', async () => {
+            await openLoaded();
+            await openBuyForm(2);
+            await push(buyPayload({date: '2026-09-20', _charges: [...handedDrafts(), newDraft('FEE', '2', 'F7c2 new fee')]}));
+            expect(chargeOfCell(gridRowDescribed('F7c2 new fee')), 'premise: the new FEE is under the BUY').toBe(buyRowId());
+            await rowAction(gridRow(BUY.id), 'mark-delete');
+            expectCounts(await panel(), 3, 4);
+
+            await choose('keep');
+
+            const fresh = gridRowDescribed('F7c2 new fee');
+            expect(chargeOfCell(fresh), 'on its own, top-level').toBeNull();
+            expect(rowStatus(fresh)).toBe('new');
+            const body = await validateNow();
+            const create = onlyCreateOf(body, 'FEE');
+            expect(create, 'the date it followed, frozen').toMatchObject({date: '2026-09-20', broker_id: BUY.broker_id, asset_id: BUY.asset_id});
+            expect(create).not.toHaveProperty('parent_transaction_id');
+            expect(create).not.toHaveProperty('parent_ref');
+        });
+
+        it('«Delete all» with a new charge: it leaves the Bulk, and «Restore» on the parent does not bring it back', async () => {
+            await openLoaded();
+            await openBuyForm(2);
+            await push(buyPayload({_charges: [...handedDrafts(), newDraft('FEE', '2', 'F7c2 new fee')]}));
+            await rowAction(gridRow(BUY.id), 'mark-delete');
+
+            await choose('all');
+
+            expect(
+                gridRows().filter((row) => rowDescription(row) === 'F7c2 new fee'),
+                'the new charge left',
+            ).toHaveLength(0);
+            await rowAction(gridRow(BUY.id), 'mark-delete');
+            expect(rowStatus(gridRow(BUY.id)), 'restored').toBe('original');
+            expect(
+                gridRows().filter((row) => rowDescription(row) === 'F7c2 new fee'),
+                'and it does not come back',
+            ).toHaveLength(0);
+            for (const charge of [FEE, TAX]) expect(chargeState(gridRow(charge.id)), `${charge.type} linked again`).toBe('linked');
+            expect((await validateNow()).creates ?? []).toEqual([]);
+        });
+
+        it('a linkNew charge with «Keep» only loses the local link: no parent_transaction_id is sent for it', async () => {
+            txStoreSetAll([BUY, DEP, FREE], []);
+            answerChargesRead([FEE, TAX]);
+            mountEditor({action: 'edit', txIds: [BUY.id, DEP.id]});
+            await waitFor(() => expect(chip(), 'premise: the charges are read').not.toBeNull());
+            await openBuyForm(2);
+            const linkNew: ChargeDraft = {key: `saved-${FREE.id}`, id: FREE.id, type: 'FEE', cash: {amount: '1.5', code: 'EUR'}, description: FREE.description ?? '', original: null, state: 'linked', linkNew: true};
+            await push(buyPayload({_charges: [...handedDrafts(), linkNew]}));
+            expect(chargeOfCell(gridRow(FREE.id)), 'premise: the free FEE is linked here').toBe(buyRowId());
+            await rowAction(gridRow(BUY.id), 'mark-delete');
+
+            await choose('keep');
+
+            expect(chargeOfCell(gridRow(FREE.id)), 'top-level again').toBeNull();
+            const body = await validateNow();
+            expect(
+                (body.updates ?? []).filter((u) => u.id === FREE.id && 'parent_transaction_id' in u),
+                'nothing about a parent it never had saved',
+            ).toEqual([]);
+            expect(body.deletes ?? []).toEqual([BUY.id]);
+        });
+
+        it('«Restore» after «Keep» undoes only what the panel set: a charge unlinked by hand before stays unlinked', async () => {
+            await openLoaded();
+            await openBuyForm(2);
+            await push(buyPayload({_charges: handedDrafts().map((draft): ChargeDraft => (draft.id === TAX.id ? {...draft, state: 'unlink'} : draft))}));
+            expect(chargeOfCell(gridRow(TAX.id)), 'premise: the TAX is unlinked by hand, top-level').toBeNull();
+            await rowAction(gridRow(BUY.id), 'mark-delete');
+            expectCounts(await panel(), 1, 2);
+            await choose('keep');
+            expect(chargeState(gridRow(FEE.id))).toBe('unlink');
+
+            await rowAction(gridRow(BUY.id), 'mark-delete');
+
+            expect(rowStatus(gridRow(BUY.id))).toBe('original');
+            expect(chargeState(gridRow(FEE.id)), 'the FEE the panel unlinked is linked again').toBe('linked');
+            expect(chargeState(gridRow(TAX.id)), 'the TAX unlinked by hand stays unlinked').toBe('unlink');
+            const body = await validateNow();
+            expect(body.updates ?? []).toContainEqual({id: TAX.id, parent_transaction_id: 0});
+            expect((body.updates ?? []).filter((u) => u.id === FEE.id && u.parent_transaction_id === 0)).toEqual([]);
+            expect(body.deletes ?? []).toEqual([]);
+        });
+
+        // -------------------------------------------------------------------
+        // «Delete selected»
+        // -------------------------------------------------------------------
+
+        it('«Delete selected» with a parent and an unrelated row: one panel; the unrelated row waits for the choice; «Cancel» changes nothing and keeps the selection', async () => {
+            await openLoaded();
+            await tick(gridRow(BUY.id));
+            await tick(gridRow(DEP.id));
+
+            await deleteSelected();
+
+            const content = await panel();
+            expectCounts(content, 2, 4);
+            expect(rowStatus(gridRow(DEP.id)), 'the unrelated row waits for the choice').toBe('original');
+            await choose('cancel');
+            expect(rowStatus(gridRow(BUY.id))).toBe('original');
+            expect(rowStatus(gridRow(DEP.id))).toBe('original');
+            expect(screen.getByTestId('tx-bulk-delete-selected'), 'the selection is kept').toBeInTheDocument();
+
+            await deleteSelected();
+            await choose('keep');
+
+            expect(rowStatus(gridRow(BUY.id))).toBe('delete');
+            expect(rowStatus(gridRow(DEP.id))).toBe('delete');
+            for (const charge of [FEE, TAX]) expect(chargeState(gridRow(charge.id)), charge.type).toBe('unlink');
+        });
+
+        it('«Delete selected» on a row already «del» restores it without asking', async () => {
+            await openLoaded();
+            await rowAction(gridRow(DEP.id), 'mark-delete');
+            expect(rowStatus(gridRow(DEP.id)), 'premise').toBe('delete');
+            await tick(gridRow(DEP.id));
+
+            await deleteSelected();
+
+            expect(screen.queryByTestId(PANEL)).toBeNull();
+            expect(rowStatus(gridRow(DEP.id))).toBe('original');
+        });
+
+        it('a top-level charge selected with its parent: its own toggle wins; the panel asks for the linked FEE alone', async () => {
+            await openLoaded();
+            await openBuyForm(2);
+            await push(buyPayload({_charges: handedDrafts().map((draft): ChargeDraft => (draft.id === TAX.id ? {...draft, state: 'unlink'} : draft))}));
+            await tick(gridRow(BUY.id));
+            await tick(gridRow(TAX.id));
+
+            await deleteSelected();
+
+            expectCounts(await panel(), 1, 3);
+            await choose('keep');
+            expect(rowStatus(gridRow(BUY.id))).toBe('delete');
+            expect(chargeState(gridRow(FEE.id)), 'the linked FEE kept').toBe('unlink');
+            expect(rowStatus(gridRow(TAX.id)), 'the TAX the user selected is deleted').toBe('delete');
+        });
+
+        it('a selected parent whose read is in flight: nothing happens until it lands, then the panel asks', async () => {
+            holdChargesReads();
+            await openBuyAndDeposit();
+            await waitFor(() => expect(readAskedFor(BUY.id)).toBe(true));
+            await tick(gridRow(BUY.id));
+            await tick(gridRow(DEP.id));
+
+            await deleteSelected();
+
+            expect(screen.queryByTestId(PANEL), 'waiting for the read').toBeNull();
+            expect(rowStatus(gridRow(DEP.id)), 'nothing done yet').toBe('original');
+            await releaseRead(0);
+            await panel();
+            await choose('keep');
+            expect(rowStatus(gridRow(BUY.id))).toBe('delete');
+            expect(rowStatus(gridRow(DEP.id))).toBe('delete');
+        });
+
+        it('a wait cut short by closing the Bulk: when the read lands nothing happens', async () => {
+            holdChargesReads();
+            const {rerender, onClose} = await openBuyAndDeposit();
+            await waitFor(() => expect(readAskedFor(BUY.id)).toBe(true));
+            await tick(gridRow(BUY.id));
+            await tick(gridRow(DEP.id));
+            await deleteSelected();
+            expect(rowStatus(gridRow(DEP.id)), 'premise: waiting for the read, nothing done yet').toBe('original');
+
+            await rerender({open: false, intent: {action: 'edit', txIds: [BUY.id, DEP.id]}, onClose});
+            await settle();
+            heldReads[0].resolve([FEE, TAX]);
+            await settle();
+
+            expect(screen.queryByTestId(PANEL), 'no panel for a closed Bulk').toBeNull();
+        });
+
+        it('a wait cut short by «Reset all»: when the reads land nothing is marked and no panel opens', async () => {
+            const DEP2: TXReadItem = {...DEP, id: 91_712, description: 'F7c2 deposit 2'};
+            holdChargesReads();
+            txStoreSetAll([BUY, DEP, DEP2], []);
+            mountEditor({action: 'edit', txIds: [BUY.id, DEP.id, DEP2.id]});
+            await waitFor(() => expect(readAskedFor(BUY.id)).toBe(true));
+            await rowAction(gridRow(DEP2.id), 'mark-delete');
+            await tick(gridRow(BUY.id));
+            await tick(gridRow(DEP.id));
+            await deleteSelected();
+            expect(rowStatus(gridRow(DEP.id)), 'premise: waiting for the read, nothing done yet').toBe('original');
+            expect(screen.queryByTestId(PANEL), 'premise: no panel yet').toBeNull();
+
+            expect(await clickCollectingErrors(screen.getByTestId('tx-bulk-reset-all'))).toEqual([]);
+            await releaseRead(0);
+            for (let at = 1; at < heldReads.length; at++) await releaseRead(at);
+
+            expect(screen.queryByTestId(PANEL), 'the wait was cancelled by the reset').toBeNull();
+            expect(rowStatus(gridRow(DEP.id)), 'nothing marked').toBe('original');
+            expect(rowStatus(gridRow(BUY.id))).toBe('original');
+        });
+
+        it('a selected parent whose read failed is skipped: the others proceed, and a warning toast says how many were skipped', async () => {
+            readMock().mockImplementation((async () => {
+                throw new Error('network down');
+            }) as never);
+            await openBuyAndDeposit();
+            await waitFor(() => expect(readAskedFor(BUY.id)).toBe(true));
+            await settle();
+            await tick(gridRow(BUY.id));
+            await tick(gridRow(DEP.id));
+            const toasts = await toastsMock();
+            toasts.show.mockClear();
+
+            await deleteSelected();
+
+            expect(screen.queryByTestId(PANEL), 'no panel: the only parent was skipped').toBeNull();
+            expect(rowStatus(gridRow(BUY.id)), 'the parent stays as it is').toBe('original');
+            expect(rowStatus(gridRow(DEP.id)), 'the other row proceeds').toBe('delete');
+            const expected = get(_)('transactions.bulk.deleteSkippedUnread', {values: {n: 1}});
+            expect(expected, 'premise: the catalogue holds transactions.bulk.deleteSkippedUnread').not.toBe('transactions.bulk.deleteSkippedUnread');
+            expect(
+                toasts.show.mock.calls.filter((call) => call[0] === 'warning').map((call) => call[1]),
+                'a warning toast counts the skipped parent',
+            ).toContain(expected);
+        });
+
+        it('two saved parents, each with one new charge, selected together: one panel, each new charge under its own parent', async () => {
+            txStoreSetAll([PARENT_A, PARENT_B], []);
+            mountEditor({action: 'edit', txIds: [PARENT_A.id, PARENT_B.id]});
+            await waitFor(() => expect(rowsOf(PARENT_B.id)).toHaveLength(1));
+            for (const [parent, type, note] of [
+                [PARENT_A, 'FEE', 'F7c2 new fee A'],
+                [PARENT_B, 'TAX', 'F7c2 new tax B'],
+            ] as const) {
+                await rowAction(gridRow(parent.id), 'edit-single');
+                await waitForParentForm(parent.id, 0);
+                await push(buyPayload({description: parent.description, date: parent.date, _charges: [newDraft(type, '2', note)]}));
+            }
+            await tick(gridRow(PARENT_A.id));
+            await tick(gridRow(PARENT_B.id));
+
+            await deleteSelected();
+
+            const content = await panel();
+            expectCounts(content, 2, 4);
+            const table = within(content).getByTestId('tx-charges-modal-table');
+            const ths = [...table.querySelectorAll<HTMLElement>('thead th[data-testid^="dt-header-"]')].filter((th) => th.getAttribute('data-testid') !== 'dt-header-field');
+            expect(ths, 'two parents + two new charges').toHaveLength(4);
+            const column = (th: HTMLElement) => th.getAttribute('data-testid')!.slice('dt-header-'.length);
+            const typeCell = (th: HTMLElement) => (table.querySelector(`tbody tr[data-row-id="type"] td[data-column-id="${column(th)}"]`)?.textContent ?? '').trim();
+            expect(ths[0].textContent ?? '').toContain(`#${PARENT_A.id}`);
+            expect(ths[1].textContent ?? '').toContain(get(_)('transactions.bulk.stateNew'));
+            expect(typeCell(ths[1]), 'A’s new FEE under A').toBe(get(_)('transactions.types.FEE'));
+            expect(ths[2].textContent ?? '').toContain(`#${PARENT_B.id}`);
+            expect(ths[3].textContent ?? '').toContain(get(_)('transactions.bulk.stateNew'));
+            expect(typeCell(ths[3]), 'B’s new TAX under B').toBe(get(_)('transactions.types.TAX'));
+            for (const th of ths) expect(th.textContent ?? '', 'no TX #0').not.toContain('#0');
+        });
     });
 });

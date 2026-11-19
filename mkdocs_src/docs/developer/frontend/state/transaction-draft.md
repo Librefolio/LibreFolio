@@ -439,11 +439,30 @@ The title counts the top-level rows, as a pair already counts as one. The grid d
   closed group opens the group first.
 - **«Remove from batch»** on a parent takes along the charges read with it that are still unchanged.
 
-**Deleting a parent and keeping its charges.** The panel that asks what to do with the charges of a deleted parent
-(`TxChargesActionModal`, «Keep the charges» / «Delete all») opens the workspace with `unlinkIds`. These are the
-charges that stay: rows with `parentUnlink`, shown indented under their parent «del» with the state `unlink`. A parent
-marked for deletion in the workspace unlinks the saved charges it owns that are neither deleted nor unlinked, so no
-charge stays linked to a deleted parent. «Restore» on the parent takes back every «del» and «scollega» of its charges.
+**Deleting a parent and keeping its charges.** The same panel, `TxChargesActionModal` («Keep the charges» / «Delete
+all» / «Cancel»), asks on the transactions page and inside the workspace. The page's choice opens the workspace with
+`unlinkIds`: the charges that stay are rows with `parentUnlink`, indented under their parent «del» with the state
+`unlink`. Charges the workspace reads itself under a parent already «del» are unlinked the same way.
+
+Inside the workspace, «Delete» on a row and «Delete selected» go through one plan, `planBulkDelete` in
+`bulk/bulkCharges.ts`. It is decided on the state before anything changes:
+
+- a saved row flips («del» or restored), and a new row leaves;
+- a parent going «del» that still has linked charges (`linkedChargesOf`, new ones included) waits for the panel. One
+  panel asks for every such parent, and its counts come from the plan;
+- a parent whose charges are still being read is waited for. A reset, «Reset all» or closing the workspace cancels
+  the wait;
+- a parent whose read failed is skipped, and a warning toast (`transactions.bulk.deleteSkippedUnread`) says how many.
+
+`applyDeleteChoice` then applies the plan and the choice. With «Keep», saved charges get `parentUnlink`; a charge
+linked only here loses its local link; new charges become rows of their own, with the broker, asset and date they
+followed. With «Delete all», saved charges are «del» and new ones leave. «Cancel» or Esc changes nothing and keeps the
+selection.
+
+Every mark the choice sets carries `byParentChoice`, and so does the page's «Keep». «Restore» on the parent (or a row
+reset) takes back only those marks, so a charge unlinked by hand stays unlinked. The page's «Delete all» does not mark
+its charges `byParentChoice` yet, so «Restore» on the parent leaves them «del»: each is restored on its own. A charge restored under a parent still
+«del» is unlinked, never linked to it.
 
 ---
 
