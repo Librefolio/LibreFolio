@@ -110,7 +110,7 @@
 
     /** WorkspaceIntent — declarative API for opening the BulkModal.
      *  +page passes only action + txIds; BulkModal resolves data from txStore. */
-    export type WorkspaceIntent = {action: 'create'} | {action: 'import'} | {action: 'edit'; txIds: number[]} | {action: 'delete'; txIds: number[]} | {action: 'clone'; txIds: number[]};
+    export type WorkspaceIntent = {action: 'create'} | {action: 'import'} | {action: 'edit'; txIds: number[]} | {action: 'delete'; txIds: number[]; unlinkIds?: number[]} | {action: 'clone'; txIds: number[]};
 
     interface Props {
         open: boolean;
@@ -1091,7 +1091,7 @@
      */
     function getBulkContextExcluding(excludeTempId: string | null): {creates: Record<string, unknown>[]; updates: Record<string, unknown>[]; deletes: number[]} {
         const resolved = resolveOps({excludeTempId});
-        const result = buildBatchPayload({ops: resolved});
+        const result = buildBatchPayload({ops: resolved, chargeUnlinks});
         return {
             creates: (result.creates as Record<string, unknown>[]) ?? [],
             updates: (result.updates as Record<string, unknown>[]) ?? [],
@@ -1310,6 +1310,7 @@
                 ops: resolved,
                 splits: pendingSplits.length > 0 ? pendingSplits.map((s) => ({id_a: s.id_a, id_b: s.id_b})) : undefined,
                 promotes: pendingPromotes.length > 0 ? pendingPromotes : undefined,
+                chargeUnlinks,
             });
             upgradeAutoToDetail(payload);
             const sentKey = lastDraftKey;
@@ -1567,6 +1568,7 @@
                 ops: resolved,
                 splits: pendingSplits.length > 0 ? pendingSplits.map((s) => ({id_a: s.id_a, id_b: s.id_b})) : undefined,
                 promotes: pendingPromotes.length > 0 ? pendingPromotes : undefined,
+                chargeUnlinks,
             });
 
             const opsMap = buildOpsIndexMap(resolved);
@@ -2256,6 +2258,28 @@
     let deleteCount = $derived(visibleOps.filter((d) => deriveStatus(d) === 'delete').length);
     /** B23: true when at least one paired row is marked for deletion — show split hint. */
     let hasPairedDelete = $derived(visibleOps.some((d) => deriveStatus(d) === 'delete' && getPartnerOp(d.tempId) != null));
+
+    /**
+     * «Keep the charges» (project 66, F6, panel V1): the charges unlinked from their parent in this batch. One counts
+     * while its parent is still marked for deletion; «Restore» on the parent takes it back (everything as it was).
+     * Until F7 they are not rows of the Bulk: a banner names them (BK2 draws them under the parent).
+     */
+    let chargeUnlinks = $derived.by((): number[] => {
+        const ids = intent?.action === 'delete' ? (intent.unlinkIds ?? []) : [];
+        if (ids.length === 0) return [];
+        return ids.filter((id) => {
+            const parentId = txStoreGet(id)?.parent_transaction_id ?? 0;
+            return parentId > 0 && ops.some((o) => o.op === 'edit' && o.txId === parentId && o.markedDelete);
+        });
+    });
+    let unlinkList = $derived(
+        chargeUnlinks
+            .map((id) => {
+                const tx = txStoreGet(id);
+                return tx ? `${$t(`transactions.types.${tx.type}`) || tx.type} #${id}` : `#${id}`;
+            })
+            .join(', '),
+    );
     let actionCount = $derived(newCount + editedCount + deleteCount + pendingSplits.length + pendingPromotes.length);
     let hasTodoBlockers = $derived(ops.some((op) => op.todos?.some((t) => t.severity === 'blocker')));
     /** Blocker todos with their row position, so the banner can name the offending rows.
@@ -3307,6 +3331,7 @@
             {bannerSuggestions}
             {fieldIssues}
             {hasPairedDelete}
+            {unlinkList}
             {hasWacFxIssues}
             {mergeAllPairs}
             {resolverCtx}

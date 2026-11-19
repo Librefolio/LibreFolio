@@ -1227,3 +1227,167 @@ describe('TransactionBulkModal — D-P4: the date-before-1900 banner and its Sav
         expect(commit).not.toHaveBeenCalled();
     });
 });
+
+// ---------------------------------------------------------------------------
+// 66 F6 (choice A) — delete a parent and keep its charges: `unlinkIds` on the delete intent
+// ---------------------------------------------------------------------------
+
+/**
+ * «Keep the charges» (V1) opens the editor with `{action: 'delete', txIds: [parent], unlinkIds: [charges]}`. The contract
+ * (66-F6 §3, choice A):
+ *   - the parent is the only row, marked for deletion; the charges are NOT rows of the grid;
+ *   - a banner `tx-bulk-unlink-hint` names the charges that stay, by their `#id` (provisional until F7's indented rows);
+ *   - the batch unlinks them in the same request as the deletion: `updates` `{id, parent_transaction_id: 0}` beside
+ *     `deletes: [parent]`, in the three places that build a payload — the nested Form's bulk context
+ *     (`getBulkContextExcluding`), «Validate now» and «Save all»;
+ *   - «Restore» on the parent (the row's mark-delete toggle) takes the unlinks back: banner gone, no update to 0, and the
+ *     parent no longer deleted;
+ *   - a delete intent without `unlinkIds` is today's: no banner, no updates.
+ *
+ * Payloads are read from the mocked `validateTransactions` / `commitTransactions` (the last call, after the click that
+ * sends it) and from the Form probe's `getBulkContext`. Rows are found by the `#id` their ID cell shows.
+ */
+describe('TransactionBulkModal — 66 F6: delete a parent, keep its charges (unlinkIds)', () => {
+    const PARENT: TXReadItem = {...SAVED_BUY, id: 91_501, charges_count: 2, description: 'F6 parent'};
+    const FEE: TXReadItem = {
+        id: 91_502,
+        broker_id: 77,
+        asset_id: null,
+        type: 'FEE',
+        date: PARENT.date,
+        quantity: '0',
+        cash: {code: 'EUR', amount: '-1.500000'},
+        related_transaction_id: null,
+        partner_broker_id: null,
+        parent_transaction_id: PARENT.id,
+        tags: [],
+        description: 'F6 fee',
+        cost_basis_override: null,
+        asset_event_id: null,
+    };
+    const TAX: TXReadItem = {...FEE, id: 91_503, type: 'TAX', cash: {code: 'EUR', amount: '-0.500000'}, description: 'F6 tax'};
+
+    type Payload = {creates?: unknown[]; updates?: Array<Record<string, unknown>>; deletes?: number[]};
+
+    const api = async () => vi.mocked(await import('$lib/features/transactions/txCommitApi'));
+
+    /** The editor opened by the delete intent on the parent, the charges in the store beside it. */
+    async function openDelete(intent: WorkspaceIntent): Promise<void> {
+        txStoreSetAll([PARENT, FEE, TAX], []);
+        mountEditor(intent);
+        await waitFor(() =>
+            expect(
+                gridRows().some((row) => idCellText(row).includes(`#${PARENT.id}`)),
+                'premise: the parent is on screen',
+            ).toBe(true),
+        );
+        await settle();
+        expect(rowStatus(gridRow(PARENT.id)), 'premise: the parent is marked for deletion').toBe('delete');
+    }
+
+    /** The updates of a payload that unlink a charge (`parent_transaction_id: 0`), by id. */
+    function unlinksOf(payload: Payload | undefined): Array<Record<string, unknown>> {
+        return (payload?.updates ?? []).filter((update) => update.parent_transaction_id === 0);
+    }
+
+    /** «Validate now», and the payload it sent. */
+    async function validateNow(): Promise<Payload> {
+        const {validateTransactions} = await api();
+        const before = validateTransactions.mock.calls.length;
+        await fireEvent.click(screen.getByTestId('tx-bulk-validate-now'));
+        await settle();
+        await waitFor(() => expect(validateTransactions.mock.calls.length, 'a validate run went out').toBeGreaterThan(before));
+        return validateTransactions.mock.calls.at(-1)?.[0] as Payload;
+    }
+
+    /** «Save all», and the payload it committed. */
+    async function saveAll(): Promise<Payload> {
+        const {commitTransactions} = await api();
+        await fireEvent.click(screen.getByTestId('tx-bulk-commit'));
+        await settle();
+        await waitFor(() => expect(commitTransactions, 'Save all committed').toHaveBeenCalledTimes(1));
+        return commitTransactions.mock.calls[0]?.[0] as Payload;
+    }
+
+    /** The nested Form's bulk context: the batch as the Form validates it. */
+    function bulkContext(): Payload {
+        return (formProbe().getBulkContext as () => Payload)();
+    }
+
+    /** «Restore» on the parent: the row's mark-delete toggle, through its right-click menu. */
+    async function restoreParent(): Promise<void> {
+        await fireEvent.contextMenu(gridRow(PARENT.id), {clientX: 10, clientY: 10});
+        const thrown = await clickCollectingErrors(await screen.findByTestId('context-menu-action-mark-delete'));
+        expect(thrown, 'Restore throws nothing').toEqual([]);
+        expect(rowStatus(gridRow(PARENT.id)), 'premise: the parent is restored').toBe('original');
+    }
+
+    const EXPECTED_UNLINKS = [
+        {id: FEE.id, parent_transaction_id: 0},
+        {id: TAX.id, parent_transaction_id: 0},
+    ];
+
+    it('the parent is the only row; the banner names the charges that stay by their #id', async () => {
+        await openDelete({action: 'delete', txIds: [PARENT.id], unlinkIds: [FEE.id, TAX.id]} as WorkspaceIntent);
+
+        expect(
+            gridRows().filter((row) => [FEE.id, TAX.id].some((id) => idCellText(row).includes(`#${id}`))),
+            'the charges are not rows of the grid',
+        ).toEqual([]);
+        const banner = screen.getByTestId('tx-bulk-unlink-hint');
+        expect(banner.textContent).toContain(`#${FEE.id}`);
+        expect(banner.textContent).toContain(`#${TAX.id}`);
+    });
+
+    it('«Validate now» sends the deletion and the unlinks in one batch', async () => {
+        await openDelete({action: 'delete', txIds: [PARENT.id], unlinkIds: [FEE.id, TAX.id]} as WorkspaceIntent);
+
+        const payload = await validateNow();
+
+        expect(payload.deletes).toEqual([PARENT.id]);
+        expect(payload.updates ?? []).toEqual(expect.arrayContaining(EXPECTED_UNLINKS));
+        expect(unlinksOf(payload), 'each charge unlinked once').toHaveLength(2);
+    });
+
+    it('the nested Form validates against the same batch: its bulk context carries the unlinks', async () => {
+        await openDelete({action: 'delete', txIds: [PARENT.id], unlinkIds: [FEE.id, TAX.id]} as WorkspaceIntent);
+
+        const context = bulkContext();
+
+        expect(context.deletes).toEqual([PARENT.id]);
+        expect(context.updates ?? []).toEqual(expect.arrayContaining(EXPECTED_UNLINKS));
+    });
+
+    it('«Save all» commits the deletion and the unlinks in one batch', async () => {
+        await openDelete({action: 'delete', txIds: [PARENT.id], unlinkIds: [FEE.id, TAX.id]} as WorkspaceIntent);
+
+        const payload = await saveAll();
+
+        expect(payload.deletes).toEqual([PARENT.id]);
+        expect(payload.updates ?? []).toEqual(expect.arrayContaining(EXPECTED_UNLINKS));
+        expect(unlinksOf(payload), 'each charge unlinked once').toHaveLength(2);
+    });
+
+    it('«Restore» on the parent takes the unlinks back: no banner, no update to 0, the parent no longer deleted', async () => {
+        await openDelete({action: 'delete', txIds: [PARENT.id], unlinkIds: [FEE.id, TAX.id]} as WorkspaceIntent);
+        expect.soft(screen.queryByTestId('tx-bulk-unlink-hint'), 'premise: the banner is there').not.toBeNull();
+
+        await restoreParent();
+
+        expect(screen.queryByTestId('tx-bulk-unlink-hint'), 'the banner is gone').toBeNull();
+        const payload = await validateNow();
+        expect(unlinksOf(payload), 'no charge is unlinked').toEqual([]);
+        expect(payload.deletes ?? [], 'the parent is not deleted').not.toContain(PARENT.id);
+        expect(unlinksOf(bulkContext()), 'nor in the Form bulk context').toEqual([]);
+    });
+
+    it('a delete intent without unlinkIds is today: no banner, the deletion alone, no updates', async () => {
+        await openDelete({action: 'delete', txIds: [PARENT.id]});
+
+        expect(screen.queryByTestId('tx-bulk-unlink-hint')).toBeNull();
+        const validated = await validateNow();
+        expect(validated).toEqual({deletes: [PARENT.id]});
+        const committed = await saveAll();
+        expect(committed).toEqual({deletes: [PARENT.id]});
+    });
+});
