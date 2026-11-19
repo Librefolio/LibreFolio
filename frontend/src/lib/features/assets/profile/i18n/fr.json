@@ -247,7 +247,8 @@
         "written": "{count, plural, one {# donnée mise à jour} other {# données mises à jour}}",
         "unchanged": "Enrichisseurs relus : aucune donnée n'a changé",
         "partial": "{count, plural, one {# source n'a pas répondu} other {# sources n'ont pas répondu}} ; {written, plural, one {# donnée mise à jour} other {# données mises à jour}}. La lecture hebdomadaire réessaiera.",
-        "failed": "Impossible de lire les enrichisseurs. Réessayez plus tard."
+        "failed": "Impossible de lire les enrichisseurs. Réessayez plus tard.",
+        "noneActive": "Aucun enrichisseur actif : rien n'a été lu. Les enrichisseurs de cet actif sont désactivés ou non configurés sur cette instance."
       }
     }
   }

@@ -172,6 +172,7 @@ class FAProfileRefreshResult(StrictModel):
     written: List[str] = Field(default_factory=list)
     outcomes: List[FAProfileReadOutcome] = Field(default_factory=list)
     error: Optional[str] = Field(None, description="Why nothing was read (an asset that does not exist)")
+    enrichers_read: int = Field(0, ge=0, description="How many enrichers this refresh read for the asset: 0 when none bound can be used here (turned off, not installed, not configured)")
 
 
 class FAProfileRefreshResponse(StrictModel):

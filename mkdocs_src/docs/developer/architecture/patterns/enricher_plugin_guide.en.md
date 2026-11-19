@@ -348,7 +348,9 @@ Around your `read`, the core:
 
 - **Skips an enricher that is not served or not configured.** Not installed, test-only outside test mode, turned off
   by `LIBREFOLIO_ENRICHERS_ENABLED`, or a required setting empty: the weekly read and «Refresh» leave its binding and
-  state as they are and do not read it, so its voices go to the next enricher of the asset's order.
+  state as they are and do not read it, so its voices go to the next enricher of the asset's order. Each result counts
+  the enrichers it did read (`enrichers_read`): the weekly job skips in silence, «Refresh» tells the user when that
+  count is zero («no active enricher: nothing was read»).
 - **Caches each read for 30 minutes** (named cache `enricher_read`, `READ_CACHE_TTL`), keyed by enricher and the whole
   binding, parameters included. Only `OK` and `NOT_FOUND` are kept, never an error or a refusal. A read of some voices
   never answers a later request for more.
@@ -426,7 +428,7 @@ voice (`changes: {"key": k}`), without the voice column.
 «Refresh» («Aggiorna», `profileRefresh.ts`) sits beside «Edit data» when the asset has bindings: it calls
 `POST /assets/profile/refresh` for that asset, never the prices, and its hint says the latest `read_at` of the enrichers
 still bound (`assetLastRead`). Every outcome is a toast and the event `asset.profile.refreshed`, because what a refresh
-writes is often invisible. Without bindings the tab shows «No enricher configured», whose «Configure» opens the asset
+writes is often invisible; with `enrichers_read` at zero the toast says nothing was read, never «nothing changed». Without bindings the tab shows «No enricher configured», whose «Configure» opens the asset
 window with `enrichersOnOpen`: the enrichers' window on top, for that opening only.
 
 ---

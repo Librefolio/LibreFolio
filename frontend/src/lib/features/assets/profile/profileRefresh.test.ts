@@ -3,7 +3,9 @@
  * invisible (nothing changed, or a voice off screen), so a toast is always owed:
  * - voices written → success with their count; nothing written → info;
  * - a source that failed (`error`, a refusal for too many requests included) → warning: the read is partial;
- * - the call failing, or the asset unknown → error.
+ * - the call failing, or the asset unknown → error;
+ * - E6c2 (PROF 19/11): no enricher read (`enrichers_read` 0: every one bound is off, not installed or not configured) →
+ *   a warning that nothing was read, never «nothing changed».
  * Each outcome is also the event the tests read: `asset.profile.refreshed` (with the voices written and the sources that
  * failed) or `asset.profile.refreshFailed`.
  */
@@ -31,30 +33,40 @@ beforeEach(() => vi.clearAllMocks());
 
 describe('refreshProfile', () => {
     it('tells how many voices it wrote', async () => {
-        mocks.refreshAssetProfile.mockResolvedValue({asset_id: 7, written: ['ter', 'fund_size'], outcomes: [outcome('justetf', 'ok')], error: null});
+        mocks.refreshAssetProfile.mockResolvedValue({asset_id: 7, written: ['ter', 'fund_size'], outcomes: [outcome('justetf', 'ok')], error: null, enrichers_read: 1});
 
         await expect(refreshProfile(7, translate)).resolves.toBe('written');
         expect(mocks.refreshAssetProfile).toHaveBeenCalledWith(7);
         const [event] = events();
         expect(event.name).toBe('asset.profile.refreshed');
-        expect(event.detail).toEqual({asset_id: 7, written: ['ter', 'fund_size'], failed: []});
+        expect(event.detail).toEqual({asset_id: 7, written: ['ter', 'fund_size'], failed: [], enrichers_read: 1});
         expect(event.toast).toEqual({variant: 'success', message: 'assets.profile.refresh.written {"count":2}'});
     });
 
     it('says so when nothing changed: a source that does not know the asset is no failure', async () => {
-        mocks.refreshAssetProfile.mockResolvedValue({asset_id: 7, written: [], outcomes: [outcome('justetf', 'ok'), outcome('yahoo', 'not_found')], error: null});
+        mocks.refreshAssetProfile.mockResolvedValue({asset_id: 7, written: [], outcomes: [outcome('justetf', 'ok'), outcome('yahoo', 'not_found')], error: null, enrichers_read: 1});
 
         await expect(refreshProfile(7, translate)).resolves.toBe('unchanged');
         expect(events()[0].toast?.variant).toBe('info');
     });
 
     it('warns when a source failed, the voices written still counted', async () => {
-        mocks.refreshAssetProfile.mockResolvedValue({asset_id: 7, written: ['ter'], outcomes: [outcome('justetf', 'ok'), outcome('yahoo', 'error', 'RATE_LIMITED')], error: null});
+        mocks.refreshAssetProfile.mockResolvedValue({asset_id: 7, written: ['ter'], outcomes: [outcome('justetf', 'ok'), outcome('yahoo', 'error', 'RATE_LIMITED')], error: null, enrichers_read: 1});
 
         await expect(refreshProfile(7, translate)).resolves.toBe('partial');
         const [event] = events();
-        expect(event.detail).toEqual({asset_id: 7, written: ['ter'], failed: ['yahoo']});
+        expect(event.detail).toEqual({asset_id: 7, written: ['ter'], failed: ['yahoo'], enrichers_read: 1});
         expect(event.toast?.variant).toBe('warning');
+    });
+
+    it('says nothing was read when no enricher bound could be read (E6c2)', async () => {
+        mocks.refreshAssetProfile.mockResolvedValue({asset_id: 7, written: [], outcomes: [], error: null, enrichers_read: 0});
+
+        await expect(refreshProfile(7, translate)).resolves.toBe('none');
+        const [event] = events();
+        expect(event.name).toBe('asset.profile.refreshed');
+        expect(event.detail).toEqual({asset_id: 7, written: [], failed: [], enrichers_read: 0});
+        expect(event.toast).toEqual({variant: 'warning', message: 'assets.profile.refresh.noneActive'});
     });
 
     it.each([
