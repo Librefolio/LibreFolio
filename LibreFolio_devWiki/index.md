@@ -329,6 +329,7 @@
 | [[problems/pipefail-makes-grep-q-pipe-guards-unreliable]] | **Shell.** Under `pipefail`, `if ! producer \| grep -q X` can fire though X is there: grep exits early, the producer dies of SIGPIPE (141). Capture first, then test. | accepted | shell, ci, pipefail |
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/layout-read-before-a-late-list]] | **Lane 68 MOB (19/11).** `asset-mobile-layout` red in the whole spec, green alone: one fixed probe point fell in a gap, and the layout was read before the provider chips arrived (+102 px). The search publishes `data-providers`; `settleModal` waits for it; control B probes a column. | resolved | testing, e2e, layout, published-state |
 | [[problems/core-ignorecase-hides-a-test-file]] | **Wave 6.** `core.ignorecase=true` confused `backupList.test.ts` with `BackupList.test.ts`; a registered test was never committed, and `git status` said nothing. | resolved | git, test-runner |
 | [[problems/history-rewrite-publish-tags-before-branches]] | **History rewrite.** Forced pushes of branches started a nightly build before the rewritten tags arrived: tags first, branches second. | resolved | git, ci |
 | [[problems/svelte5-derived-stale-over-non-reactive-cache]] | **A, A-CL1 (19/10).** The changelog opened from Settings › About stayed «loading»: its `$derived` read the translations through `peek()` on a plain-`Map` module cache, so a window closed mid-load and reopened after the cache filled kept its stale `undefined`; the cache is a `SvelteMap`, and one window, the Sidebar's, serves both versions (`3335a6097`) | resolved | frontend, svelte5, reactivity, cache, changelog |
@@ -529,6 +530,7 @@
 
 | Page | Summary |
 |------|---------|
+| [[entities/asset-profile-enrichers]] | Project 68 (1.4): the asset profile as a history of steps (catalogue, store, «Dimentica» with `as_of`) and the enrichers that read it (ordered bindings `config`/`state`, read-and-merge with a 30-min cache, weekly job, «Aggiorna» with `enrichers_read`, «Chiedi»); the «Profilo» tab, «Ultime variazioni», «Storia del dato» |
 | [[entities/native-cash]] | `financial_math/native_cash.py` — every broker's cash in its own currencies: `compute_native_cash()` (one `convert_bulk`), `NativeCash` (`value_at`, `balances`, `flows`, `exchange_results`, `rate_change_days`, `missing_conversions`), `effective_share()`, `CONVERSION_DUST`; read by the engine, the service and AI Export |
 | [[entities/asset-sources-package]] | `asset_sources/` — asset pricing split by responsibility (core, crud, manager, metadata, price_query, price_store, provider_management, refresh, search) behind the permanent `asset_source.py` facade (SP08, 2026-09-11) |
 | [[entities/transaction-batch-pipeline]] | `execute_batch` as an orchestrator over 13 ordered stages (`transaction_batch_stages.py`) sharing a `TransactionBatchContext`; the caller owns the DB transaction (SP16, 2026-09-11) |
