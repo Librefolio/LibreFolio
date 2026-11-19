@@ -51,10 +51,12 @@ import {
     FAMILY_ICONS,
     FAMILY_ORDER,
     FAMILY_TITLE_KEYS,
+    entryMatches,
     filterByMenu,
     MENU_ICONS,
     MENU_TITLE_KEYS,
     pluginMenu,
+    searchWords,
     fieldDescription,
     fieldLabel,
     groupByFamily,
@@ -329,6 +331,68 @@ describe("pluginMenu, filterByMenu — the menu of the Plugins tab (76 S1b, the 
 
     it('draws the import sources with the Transactions icon (the developer, 19/11: what they import)', () => {
         expect(FAMILY_ICONS.brim).toBe(ArrowRightLeft);
+    });
+});
+
+// --- The search (project 76, S2b) ------------------------------------------------------------------------------------
+
+describe("searchWords, entryMatches — the search of the Plugins tab (76 S2b, the developer's rules of 19/11)", () => {
+    const t = (key: string): string =>
+        ({
+            'pluginSettings.calls.limitField.day.label': 'Limite giornaliero',
+            'pluginSettings.group.coingecko.about': "L'account CoinGecko condiviso dai plugin CoinGecko",
+        })[key] ?? key;
+    const DAY_LIMIT = field({key: 'call_limit_day', type: 'integer', scope: 'system', label: 'Calls per day', label_key: 'pluginSettings.calls.limitField.day.label', value: 2000, is_set: true, source: 'db'});
+    const GROUP = entry([DAY_LIMIT], {family: 'group', plugin_code: 'coingecko', plugin_name: 'CoinGecko', description: 'The CoinGecko account the CoinGecko plugins share.', description_key: 'pluginSettings.group.coingecko.about', configured: false});
+    const READER = entry([field({key: 'current_refresh_minutes', label: 'Price refresh', description: 'How long a current price stays fresh.'})], {plugin_code: 'coingecko', plugin_name: 'CoinGecko', configured: false});
+    const SNB = entry([], {family: 'fx', plugin_code: 'SNB', plugin_name: 'Swiss National Bank', description: 'Swiss National Bank — monthly averages.', description_i18n: {it: 'Banca Nazionale Svizzera — medie mensili.'}});
+
+    it('splits on blanks, in lower case, without accents', () => {
+        expect(searchWords('  Gecko   LÍMITE ')).toEqual(['gecko', 'limite']);
+        expect(searchWords('   ')).toEqual([]);
+    });
+
+    it('wants every word in the same card, in any of its texts: «gecko limite giornaliero» is the group, not its reader', () => {
+        const words = searchWords('gecko limite giornaliero');
+        expect(entryMatches(GROUP, words, t, 'it')).toBe(true);
+        expect(entryMatches(READER, words, t, 'it')).toBe(false);
+        expect(entryMatches(READER, searchWords('gecko'), t, 'it'), 'one word: both CoinGecko cards').toBe(true);
+    });
+
+    it("reads the description in the language of the interface, else in English, else the group's key", () => {
+        expect(entryMatches(SNB, searchWords('svizzera'), t, 'it')).toBe(true);
+        expect(entryMatches(SNB, searchWords('svizzera'), t, 'fr'), 'no French text: the English one').toBe(false);
+        expect(entryMatches(SNB, searchWords('monthly'), t, 'fr')).toBe(true);
+        expect(entryMatches(GROUP, searchWords('condiviso'), t, 'it')).toBe(true);
+    });
+
+    it("reads the plugin's code and the fields' descriptions", () => {
+        expect(entryMatches(SNB, searchWords('snb'), t, 'it')).toBe(true);
+        expect(entryMatches(READER, searchWords('fresh'), t, 'it')).toBe(true);
+    });
+
+    it('never the numbers: a value is not searched', () => {
+        expect(entryMatches(GROUP, searchWords('2000'), t, 'it')).toBe(false);
+    });
+
+    it('exact words, no tolerance: «geko» does not find «CoinGecko»', () => {
+        expect(entryMatches(GROUP, searchWords('geko'), t, 'it')).toBe(false);
+    });
+
+    it('no word: every card', () => {
+        expect(entryMatches(READER, [], t, 'it')).toBe(true);
+    });
+
+    it("the menu counts what the search shows; its entries and dots stay by the totals (the developer's C)", () => {
+        const OK_FX = entry([], {family: 'fx', plugin_code: 'ecb', configured: true});
+        const all = frozen([READER, GROUP, OK_FX]);
+        expect(pluginMenu(all, 'all', [GROUP])).toStrictEqual([
+            {id: 'all', count: 1, dot: false},
+            {id: 'unconfigured', count: 1, dot: false},
+            {id: 'asset', count: 0, dot: true},
+            {id: 'fx', count: 0, dot: false},
+            {id: 'group', count: 1, dot: true},
+        ]);
     });
 });
 

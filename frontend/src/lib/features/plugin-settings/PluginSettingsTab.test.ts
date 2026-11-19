@@ -759,3 +759,67 @@ describe('PluginSettingsTab — the menu (76 S1b)', () => {
         expect(screen.getByTestId('plugin-settings-mobile-category-trigger')).toHaveTextContent('pluginSettings.menu.group');
     });
 });
+
+// =====================================================================================================================
+// The search (project 76, S2b; the developer's rules of 19/11): exact words, all in the same card, names of the fields
+// and descriptions, never the numbers; the menu's counts follow it, its entries stay (with 0).
+describe('PluginSettingsTab — the search (76 S2b)', () => {
+    const SNB = plugin('fx', 'snb', {plugin_name: 'Swiss National Bank', configured: true, description: 'Swiss National Bank — monthly averages.'} as Partial<PluginSettingsEntry>);
+    const ANSWER = () => [JUSTETF, BORSA, ECB, SNB];
+    const search = () => screen.getByTestId('plugin-settings-search');
+    const sidebarItem = (key: string) => screen.getByTestId(`plugin-settings-category-${key}`);
+    const type = async (text: string) => fireEvent.input(search(), {target: {value: text}});
+
+    it('PST-34: shows the cards whose texts hold every word; the counts follow, the entries stay with 0', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        await type('swiss monthly');
+        expect(groups()).toEqual([{family: 'fx', plugins: ['snb']}]);
+        expect(['all', 'asset', 'fx'].map((key) => sidebarItem(key).getAttribute('data-count'))).toEqual(['1', '0', '1']);
+
+        await type('');
+        expect(groups().map((group) => group.plugins.length)).toEqual([2, 2]);
+        expect(sidebarItem('all')).toHaveAttribute('data-count', '4');
+    });
+
+    it('PST-35: nothing matches anywhere: the empty state names the search, no section is drawn', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        await type('kraken');
+        expect(groups()).toEqual([]);
+        expect(screen.getByTestId('plugin-settings-no-matches')).toHaveTextContent('pluginSettings.search.noMatchAll {query=kraken}');
+        expect(screen.queryByTestId('plugin-settings-search-all')).toBeNull();
+    });
+
+    it('PST-36: within a family with matches elsewhere, a link searches every family', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+        await fireEvent.click(sidebarItem('asset'));
+
+        await type('swiss');
+        expect(groups()).toEqual([]);
+        expect(screen.getByTestId('plugin-settings-no-matches')).toHaveTextContent('pluginSettings.search.noMatchFamily {family=pluginSettings.menu.asset, query=swiss}');
+        await fireEvent.click(screen.getByTestId('plugin-settings-search-all'));
+        expect(sidebarItem('all')).toHaveAttribute('aria-pressed', 'true');
+        expect(groups()).toEqual([{family: 'fx', plugins: ['snb']}]);
+        expect(search(), 'the search stays').toHaveValue('swiss');
+    });
+
+    it('PST-37: the search box is labelled and keeps its text across a choice of the menu', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        expect(search()).toHaveAttribute('placeholder', 'pluginSettings.search.placeholder');
+        expect(search()).toHaveAttribute('aria-label', 'pluginSettings.search.placeholder');
+        await type('bank');
+        await fireEvent.click(sidebarItem('fx'));
+        expect(search()).toHaveValue('bank');
+        expect(groups()).toEqual([{family: 'fx', plugins: ['snb']}]);
+    });
+});
