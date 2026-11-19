@@ -10,9 +10,9 @@
   Pattern: Svelte 5 Runes, Tailwind CSS 4, colour roles only.
 -->
 <script lang="ts">
-    import {History} from 'lucide-svelte';
     import {_ as t} from '$lib/i18n';
     import PriceChartCompact from '$lib/components/charts/PriceChartCompact.svelte';
+    import ProfileHistoryClock from './ProfileHistoryClock.svelte';
     import type {KeyFigureCard} from './profileTabState';
 
     interface Props {
@@ -35,16 +35,7 @@
     <div class="flex items-start justify-between gap-2">
         <p class="text-xs font-medium uppercase tracking-wide text-lf-muted line-clamp-2">{label}</p>
         {#if onhistory && card.state !== 'unavailable'}
-            <button
-                type="button"
-                class="shrink-0 rounded text-lf-muted hover:text-lf-primary focus-visible:outline-2 focus-visible:outline-lf-focus"
-                aria-label={$t('assets.profile.tab.history', {values: {voice: label}})}
-                title={$t('assets.profile.tab.history', {values: {voice: label}})}
-                data-testid="profile-key-figure-{card.key}-history"
-                onclick={() => onhistory?.(card.key)}
-            >
-                <History size={15} />
-            </button>
+            <ProfileHistoryClock voiceKey={card.key} testId="profile-key-figure-{card.key}-history" {onhistory} />
         {/if}
     </div>
     {#if shown}
