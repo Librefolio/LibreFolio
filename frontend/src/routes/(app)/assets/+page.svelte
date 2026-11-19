@@ -71,7 +71,7 @@
     import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
     import {todayIso} from '$lib/utils/dateOnly';
-    import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/features/signals';
+    import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, readsRiskFreeRate, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/features/signals';
     import {fxPointToLineDataPoint, renderBackendResults, renderCalendarComparisons, renderCalendarPairComparisons, renderLocalSignals, type SignalDataSources} from '$lib/features/signals/chartSignalRendering';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
@@ -868,6 +868,31 @@
             return;
         }
         untrack(() => void loadRiskColumns(query, assetKey.split(',').map(Number), refresh));
+    });
+
+    /**
+     * RN-21 «A2»: a card's signal bound to the reader's risk-free rate (`x-control: "risk_free_rate"`) is asked with the rate
+     * when the card's request is built. The lab, on this page's correlation tab, has the rate field: when the reader changes
+     * the rate there, the cards whose signals read it ask again (those in the rolling-return view ask no such signal), so
+     * none keeps a line at the old rate. A rate set on another page is read at the next load. A session change (logout,
+     * another account) also changes the value read, but it is not the reader's choice and the page is leaving: it asks
+     * nothing then. The risk columns follow the rate on their own (it is part of their question).
+     */
+    let cardsRiskFreePercent = untrack(() => riskFreeRate.percent);
+    let cardsRiskFreeSession = getClientSessionGeneration();
+    $effect(() => {
+        const percent = riskFreeRate.percent;
+        if (percent === cardsRiskFreePercent) return;
+        cardsRiskFreePercent = percent;
+        const session = getClientSessionGeneration();
+        if (session !== cardsRiskFreeSession) {
+            cardsRiskFreeSession = session;
+            return;
+        }
+        untrack(() => {
+            const only = new Set(assets.filter((asset) => cardPrimaryView(asset.id) !== 'calendar-return' && readsRiskFreeRate(getSettingsForPair(`asset-${asset.id}`, 'assets').signals, signalDefinitions)).map((asset) => asset.id));
+            if (only.size > 0) void pageBusy.track('assets-risk-free-rate', () => fetchPriceSeries(only));
+        });
     });
 
     /** The Δ columns of every listed asset up to the end of the range, and each card's Δ over the range, from the backend (X-R53, X-R59). */

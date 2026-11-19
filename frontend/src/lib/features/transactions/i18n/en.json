@@ -404,6 +404,9 @@
       "createServes": "{n} transactions",
       "createHint": "Enter a value above 0, with at most 6 decimals, for every event.",
       "createConfirm": "{n, plural, one {Create # event} other {Create # events}}"
+    },
+    "docsHelp": {
+      "list": "Every movement of the brokers you can access, newest first: purchases, sales, dividends, fees, transfers and cash. Your positions and performance are computed from them. Add, import, filter or edit them here."
     }
   }
 }

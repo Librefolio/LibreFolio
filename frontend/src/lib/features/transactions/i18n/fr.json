@@ -404,6 +404,9 @@
       "createServes": "{n} transactions",
       "createHint": "Saisissez pour chaque événement une valeur supérieure à 0, avec 6 décimales au plus.",
       "createConfirm": "{n, plural, one {Créer # événement} many {Créer # événements} other {Créer # événements}}"
+    },
+    "docsHelp": {
+      "list": "Chaque mouvement des courtiers auxquels vous avez accès, du plus récent au plus ancien : achats, ventes, dividendes, frais, transferts et liquidités. Vos positions et votre performance en sont calculées. Ajoutez-les, importez-les, filtrez-les ou modifiez-les ici."
     }
   }
 }

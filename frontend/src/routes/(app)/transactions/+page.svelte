@@ -32,6 +32,7 @@
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import {canEditBroker, canEditPaired} from '$lib/stores/reference/brokerStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
@@ -796,6 +797,7 @@
                 <Plus size={15} />
                 <span class="hidden sm:inline">{$_('transactions.addTransaction')}</span>
             </button>
+            <DocsLink path="user/transactions/" label={$_('transactions.docsHelp.list')} icon="book" size={16} testId="transactions-docs" />
         </div>
     </div>
 
