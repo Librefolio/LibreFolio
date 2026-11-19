@@ -1119,6 +1119,12 @@ manual, [Plugin Settings](../../../user/settings/plugins.md); the code is in
   totals, the counts by the matches. Nothing found: `plugin-settings-no-matches` (`common.noMatchesTitle`,
   `pluginSettings.search.noMatchAll` / `noMatchFamily`) and, within a choice with matches elsewhere,
   `plugin-settings-search-all`.
+- **The address (S2c).** `?family=` (`unconfigured` or a family) and `?q=`: `readPluginsAddress()` reads them (an unknown
+  family is «All») whenever `$page.url` changes; `pluginsHref()` writes them (`settingsTabHref('plugins', …)`; «All» and
+  an empty search write nothing), a choice with `goto` as a new history step, typing with `replaceState`. The tab keeps
+  the addresses it wrote until they land, so a late echo never takes back what was typed since. The N3 window's
+  read-only link is `pluginsHref(family, pluginCode)`; **Open** on a hidden group clears the search and chooses
+  `group`.
 - **Configure on a plugin with groups** shows, below the plugin's form, one form per group it reads
   (`plugin-settings-modal-group`, each read with `fetchPluginEntry('group', name)`): «Configure» from
   the search row or the provider panel thus shows the key where it is missing: a plugin unconfigured

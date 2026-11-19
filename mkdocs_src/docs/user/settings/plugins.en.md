@@ -48,6 +48,10 @@ Numbers are never searched: a count or a limit is not a word.
 The menu's numbers follow the search, and its entries stay (with 0). When nothing matches, the page says so; within a
 choice of the menu, a link searches every family.
 
+The page's address keeps the choice and the search, as in `…/settings/plugins?family=fx&q=swiss`: you can bookmark it or
+send it, and **Back** returns to the previous choice. The link of the *to configure* window opens the page on its
+plugin.
+
 ## 🧾 One Plugin, One Form {: #form }
 
 Each plugin has a form of its own: its icon and name (a puzzle piece when the plugin has no icon), a
