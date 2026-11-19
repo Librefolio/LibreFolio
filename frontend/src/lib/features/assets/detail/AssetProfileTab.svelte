@@ -8,7 +8,8 @@
     dropped.
   - It publishes its loading (`data-busy`, `aria-busy`) and its outcome (`data-status`: loading, ready, failed, missing).
   - What goes where comes from the catalogue (`profileTabState`); the parts are `ProfileClassification`,
-    `ProfileKeyFigureCard` and `ProfileDetails`.
+    `ProfileKeyFigureCard`, `ProfileDetails` and, last, «Ultime variazioni» (`ProfileChangesPanel`, E6a): a «Dimentica»
+    there reads the tab again.
   - Seams: `onedit` («Modifica i dati»: the page opens `AssetProfileEditor`, the profile window in save mode, E9b2),
     `onhistory` (the history of a voice, E6). Without them, no button.
 
@@ -20,6 +21,7 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {ensureCountriesLoaded, getCountryInfo} from '$lib/stores/reference/countryStore';
+    import ProfileChangesPanel from '$lib/features/assets/profile/ProfileChangesPanel.svelte';
     import ProfileClassification from '$lib/features/assets/profile/ProfileClassification.svelte';
     import ProfileDetails from '$lib/features/assets/profile/ProfileDetails.svelte';
     import ProfileKeyFigureCard from '$lib/features/assets/profile/ProfileKeyFigureCard.svelte';
@@ -51,11 +53,14 @@
     let voices = $state<ProfileVoices>({});
     /** The read whose answer the tab still waits for: an older one that arrives later is dropped. */
     let latest = 0;
+    /** Bumped after a «Dimentica» of the changes panel: the tab reads again (the memory is already forgotten). */
+    let forgotten = $state(0);
 
     $effect(() => {
         const id = assetId;
         const range = profileReadRange({start: period.start, end: period.end, all: period.all});
         void refreshKey;
+        void forgotten;
         const mine = ++latest;
         status = 'loading';
         Promise.all([loadProfileCatalogue(), readAssetProfile(id, range)]).then(
@@ -84,6 +89,7 @@
     });
 
     const cards = $derived(keyFigureCards(catalogue, voices));
+    const voicesByKey = $derived(Object.fromEntries(catalogue.map((voice) => [voice.key, voice])));
     const groups = $derived(detailGroups(catalogue, voices));
     const description = $derived.by((): ProfileCell | null => {
         const voice = catalogue.find((entry) => entry.key === 'description');
@@ -148,5 +154,8 @@
             <h3 class="mb-3 text-xs font-semibold uppercase tracking-wide text-lf-muted">{$t('assets.profile.tab.details')}</h3>
             <ProfileDetails {groups} {texts} {staleTexts} {isin} {ticker} {otherIdentifiers} {onhistory} />
         </section>
+    {/if}
+    {#if status !== 'failed'}
+        <ProfileChangesPanel {assetId} voices={voicesByKey} {refreshKey} onchanged={() => (forgotten += 1)} />
     {/if}
 </div>
