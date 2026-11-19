@@ -190,7 +190,8 @@
         "confirmTitle": "Save dates before 1900?",
         "confirmMessage": "{n} rows are dated before 1 January 1900. Save them as they are?",
         "confirmProceed": "Yes, the dates are right"
-      }
+      },
+      "chargesReadFailed": "Could not read the linked charges of {ids}. «Reset row» on the row reads them again."
     },
     "commit": {
       "serverError": "Save failed — server error"
