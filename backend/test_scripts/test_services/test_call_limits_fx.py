@@ -126,6 +126,7 @@ SHIPPED_FLAGS = {
     "CBK": True,
     "CBN": True,
     "RBI": True,
+    "BOG": True,
     "MANUAL": False,
     "MOCKFX": False,
     "MOCKFX_FAIL": False,
