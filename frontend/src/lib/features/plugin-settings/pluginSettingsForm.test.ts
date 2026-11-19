@@ -56,6 +56,8 @@ import {
     MENU_ICONS,
     MENU_TITLE_KEYS,
     pluginMenu,
+    pluginsHref,
+    readPluginsAddress,
     searchWords,
     fieldDescription,
     fieldLabel,
@@ -393,6 +395,35 @@ describe("searchWords, entryMatches — the search of the Plugins tab (76 S2b, t
             {id: 'fx', count: 0, dot: false},
             {id: 'group', count: 1, dot: true},
         ]);
+    });
+});
+
+// --- The address (project 76, S2c) -----------------------------------------------------------------------------------
+
+describe("readPluginsAddress, pluginsHref — the menu's choice and the search in the page's address (76 S2c)", () => {
+    it('reads ?family= and ?q=; a family the menu does not know, or none, is «All»', () => {
+        expect(readPluginsAddress(new URLSearchParams('family=fx&q=svizzera'))).toStrictEqual({selected: 'fx', query: 'svizzera'});
+        expect(readPluginsAddress(new URLSearchParams('family=unconfigured'))).toStrictEqual({selected: 'unconfigured', query: ''});
+        expect(readPluginsAddress(new URLSearchParams('family=crypto&q='))).toStrictEqual({selected: 'all', query: ''});
+        expect(readPluginsAddress(new URLSearchParams(''))).toStrictEqual({selected: 'all', query: ''});
+    });
+
+    it('writes only what is chosen: «All» and an empty search write nothing', () => {
+        expect(pluginsHref('all', '')).toBe('/settings/plugins');
+        expect(pluginsHref('fx', '')).toBe('/settings/plugins?family=fx');
+        expect(pluginsHref('all', 'gecko limite')).toBe('/settings/plugins?q=gecko+limite');
+        expect(pluginsHref('asset', 'coingecko')).toBe('/settings/plugins?family=asset&q=coingecko');
+        expect(pluginsHref('all', '   ')).toBe('/settings/plugins');
+    });
+
+    it('reads back what it writes', () => {
+        for (const [selected, query] of [
+            ['group', 'chiave'],
+            ['all', 'swiss bank'],
+            ['unconfigured', ''],
+        ] as const) {
+            expect(readPluginsAddress(new URL(pluginsHref(selected, query), 'http://librefolio.test').searchParams)).toStrictEqual({selected, query});
+        }
     });
 });
 

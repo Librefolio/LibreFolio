@@ -490,6 +490,30 @@ test.describe('Settings › Plugins — the search (76 S2b)', () => {
 });
 
 // =============================================================================
+// 1e. The address (project 76, S2c): ?family= and ?q=
+// =============================================================================
+
+test.describe('Settings › Plugins — the address (76 S2c)', () => {
+    test('a link with ?family=fx&q=swiss opens the page filtered; a choice is a step of the history, Back returns', async ({page}) => {
+        await login(page, TEST_USER);
+        await navigateTo(page, '/settings/plugins?family=fx&q=swiss');
+        const tab = page.getByTestId('plugin-settings-tab');
+        await waitForSettled(tab);
+
+        await expect(tab.getByTestId('plugin-settings-category-fx')).toHaveAttribute('aria-pressed', 'true');
+        await expect(tab.getByTestId('plugin-settings-search')).toHaveValue('swiss');
+        await expect(tab.locator('[data-testid="plugin-settings-family"][data-family="fx"]').getByTestId('plugin-settings-form-SNB')).toBeVisible();
+
+        await tab.getByTestId('plugin-settings-category-all').click();
+        await expect(page).toHaveURL(/\/settings\/plugins\?q=swiss$/);
+        await page.goBack();
+        await expect(page).toHaveURL(/\/settings\/plugins\?family=fx&q=swiss$/);
+        await expect(tab.getByTestId('plugin-settings-category-fx'), 'Back brings the choice back').toHaveAttribute('aria-pressed', 'true');
+        await expect(tab.getByTestId('plugin-settings-search')).toHaveValue('swiss');
+    });
+});
+
+// =============================================================================
 // 1c. The «Calls» boxes by the width of their card (project 76, S1c; the developer, 19/11)
 // =============================================================================
 
