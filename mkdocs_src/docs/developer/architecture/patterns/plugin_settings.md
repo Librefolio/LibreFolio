@@ -949,7 +949,11 @@ the plugin.
   (`readiness.readiness_reason`), so the catalogue and the boundary always agree. It is
   `missing_fields`, `invalid_locked_setting` or null when configured, and it names no field.
 - **The interface** (U5): `PluginCallUsage.svelte` draws the five windows of `call_usage`, with the
-  limit fields as inputs an administrator saves with the card (`callUsage.ts` holds the rules). In the
+  limit fields as inputs an administrator saves with the card (`callUsage.ts` holds the rules). The boxes follow the
+  width of the block, not of the window (S1c, container queries, the block is the `@container`): under 24rem one per
+  line, the window, the count and the limit on it; from 24rem three and two, from 40rem five in a row, each with the
+  count on the window's line and the limit below. So the «Configure» dialog and the page beside the menu get three and
+  two. In the
   managed profile, an entry whose `reason` is `invalid_locked_setting` shows the managed text on top,
   the same for every user, with no button.
 - **For the tests**: `mockcount` is a test-only asset double that is counted (a class of its own, no

@@ -155,7 +155,8 @@ work: **JustETF** and **Borsa Italiana** are always **Configured**.
 
 Every plugin that calls an outside service has a **Calls** block in its form, after its own settings: how many calls
 this LibreFolio has made to that service, and how many it may make. It has five boxes, **Minute**, **Hour**, **Day**,
-**Week** and **Month**, side by side (one under the other on a phone). Each shows the calls of the current window and
+**Week** and **Month**: five side by side on a wide screen, three and two where the card is narrower, one per line on
+a phone. Each shows the calls of the current window and
 its limit, *412 / 2,000*, or the calls alone and *No limit*.
 
 - **Calendar windows, in UTC**: the day starts again at 00:00 UTC, the week on Monday, the month on the 1st. The
