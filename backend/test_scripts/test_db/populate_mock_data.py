@@ -808,6 +808,51 @@ def date_legacy_profile_rows(session: Session) -> None:
     print(f"  ✅ legacy profile rows of {len(first_days)} assets dated on their first day")
 
 
+#: The fund whose profile has a history of its own (plan 68, E12): the gallery's «Profilo» tab, «Ultime variazioni» and
+#: «Storia del dato» read it. No test reads its profile; the offline gallery reads only its name and price.
+PROFILE_HISTORY_FUND = "Amundi Core MSCI World UCITS ETF Acc"
+
+
+def populate_profile_history(session: Session) -> None:
+    """A fund's profile with a history (plan 68, E12), as the enrichers and a user would have written it, dated on its
+    first price day and after: the TER read by justETF, corrected by hand, then read again; the fund size read three
+    times; the fund's enrichers (justETF, then Borsa Italiana) with the state of a read this morning, so «Aggiorna» says
+    when and the fund size is confirmed. The enrichers are bound but not served on a lane (``LIBREFOLIO_ENRICHERS_ENABLED``
+    is ``mockenrich`` there): nothing ever reads them. Run after ``date_legacy_profile_rows``."""
+    from backend.app.db.models import AssetEnrichers  # noqa: PLC0415 — the bindings' table, read only by this step
+
+    print("\n🧾 Profile history of one fund...")
+    fund = session.exec(select(Asset).where(Asset.display_name == PROFILE_HISTORY_FUND)).one()
+    user = session.exec(select(User).where(User.username == "e2e_test_user")).one()
+    first_price = session.exec(text("SELECT min(date) FROM price_history WHERE asset_id = :asset").bindparams(asset=fund.id)).one()[0]
+    today = date.today()
+    # Its first price day (the seed's prices go back up to three years); never later than 120 days ago, before the steps below
+    first = min(date.fromisoformat(str(first_price)[:10]) if first_price else today, today - timedelta(days=120))
+
+    def row(key: str, value: object, source: str, day: date, user_id: int | None = None) -> AssetProfileUpdate:
+        return AssetProfileUpdate(asset_id=fund.id, key=key, value=json.dumps(normalize_value(key, value)), source=source, user_id=user_id, read_on=day, source_date=None if source == "user" else day)
+
+    session.add_all(
+        [
+            row("ter", "0.0020", "justetf", first),
+            row("ter", "0.0018", "user", today - timedelta(days=60), user_id=user.id),
+            row("ter", "0.0017", "justetf", today - timedelta(days=30)),
+            row("fund_size", {"amount": "412000000", "currency": "EUR"}, "justetf", today - timedelta(days=90)),
+            row("fund_size", {"amount": "468000000", "currency": "EUR"}, "justetf", today - timedelta(days=45)),
+            row("fund_size", {"amount": "523000000", "currency": "EUR"}, "justetf", today - timedelta(days=7)),
+        ]
+    )
+    read_at = datetime.combine(today, datetime.min.time()).replace(hour=3).isoformat() + "+00:00"
+    config = {"justetf": {"identifier_type": "ISIN", "identifier": fund.identifier_isin}, "borsa_italiana": {"identifier_type": "ISIN", "identifier": fund.identifier_isin}}
+    state = {
+        "justetf": {"read_at": read_at, "status": "ok", "error_code": None, "retry_after": None, "voices": 2, "confirmed": {"ter": read_at, "fund_size": read_at}},
+        "borsa_italiana": {"read_at": read_at, "status": "not_found", "error_code": None, "retry_after": None, "voices": 0, "confirmed": {}},
+    }
+    session.add(AssetEnrichers(asset_id=fund.id, config=json.dumps(config), state=json.dumps(state)))
+    session.commit()
+    print(f"  ✅ {PROFILE_HISTORY_FUND}: TER and fund size with a history, bound to justETF and Borsa Italiana")
+
+
 def populate_assets(session: Session):
     """Create asset records."""
     print("\n📈 Creating Assets...")
@@ -3981,6 +4026,7 @@ def main():  # noqa: C901 — sequential populate step driver
             create_split_transaction(session)
             add_balance_safe_cash_prefunds(session)
             date_legacy_profile_rows(session)  # after every price and transaction (A4b)
+            populate_profile_history(session)  # after the legacy rows are dated (E12)
             populate_fx_rates(session)
             populate_fx_currency_pair_sources(session)
             configure_user_avatars(session)
