@@ -525,6 +525,31 @@ async def test_changes_of_one_voice_list_every_row_even_volatile(test_server):
 
 
 @pytest.mark.asyncio
+async def test_a_change_names_its_author_and_the_row_before_it(test_server):
+    """Plan 68, E6a: a change written by hand names its author (``user_name``, the username, never the email); the
+    source row after it says who wrote the value before, and when (``previous_source``, ``previous_user_id``,
+    ``previous_user_name``, ``previous_read_on``, ``previous_source_date``); a voice's first row has none of them."""
+    async with httpx.AsyncClient() as client:
+        user_id = await _login(client)
+        username = (await client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)).json()["user"]["username"]
+        asset_id = await _create(client, "AUTHOR")
+        try:
+            ter_first, _ = await _seed_ter(asset_id)
+            yields = await _seed_yield(asset_id, user_id)
+
+            items = {change["id"]: change for change in (await _query_one(client, _ask(asset_id, changes={})))["changes"]["items"]}
+
+            by_hand, after = items[yields[2]], items[yields[3]]
+            assert (by_hand["user_id"], by_hand["user_name"]) == (user_id, username), f"the author by name: {by_hand}"
+            assert "@" not in str(by_hand["user_name"]), "never the email"
+            assert (after["user_name"], after["previous_source"], after["previous_user_id"], after["previous_user_name"], after["previous_read_on"]) == (None, USER, user_id, username, YIELD_ROWS[2][2].isoformat()), f"the row before it: {after}"
+            first = items[ter_first]
+            assert [first[field] for field in ("previous_source", "previous_user_id", "previous_user_name", "previous_read_on", "previous_source_date")] == [None] * 5, f"a first row has no row before it: {first}"
+        finally:
+            await _delete_assets(client, [asset_id])
+
+
+@pytest.mark.asyncio
 async def test_changes_are_not_filtered_by_the_date_range(test_server):
     async with httpx.AsyncClient() as client:
         await _login(client)

@@ -188,10 +188,66 @@
         "dataSince": "desde el {date}",
         "beforeProfile": "valor de antes del perfil",
         "companySector": "Sector",
-        "staleConfirmed": "Confirmado el {date}, sin actualizar"
+        "staleConfirmed": "Confirmado el {date}, sin actualizar",
+        "noEnrichersText": "Los datos de esta pestaña se escribieron a mano o llegaron al crear el activo: nada los mantiene actualizados.",
+        "configureHint": "Abre la ventana del activo, con la de los enriquecedores encima"
       },
       "row": {
         "pending": "{count, plural, one {# cambio pendiente} other {# cambios pendientes}}"
+      },
+      "changes": {
+        "title": "Últimos cambios",
+        "columns": {
+          "when": "Cuándo",
+          "voice": "Dato",
+          "what": "Qué cambió",
+          "who": "Quién"
+        },
+        "forget": "Olvidar",
+        "forgetSelected": "{count, plural, one {Olvidar # cambio} other {Olvidar # cambios}}",
+        "confirmTitle": "¿Olvidar estos cambios?",
+        "confirmMessage": "{count, plural, one {# cambio sale del historial, como si nunca se hubiera escrito. No se puede deshacer.} other {# cambios salen del historial, como si nunca se hubieran escrito. No se puede deshacer.}}",
+        "forgotten": "{count, plural, one {# cambio olvidado} other {# cambios olvidados}}",
+        "newer": "Los datos cambiaron mientras tanto: la lista se ha vuelto a leer. Elige de nuevo.",
+        "notFound": "Algunos de estos cambios ya no existen: la lista se ha vuelto a leer.",
+        "forgetFailed": "No se pudieron olvidar los cambios.",
+        "loadFailed": "No se pudieron leer los cambios.",
+        "empty": "Todavía ningún cambio.",
+        "range": "{from}–{to} de {total}",
+        "previousPage": "Página anterior",
+        "nextPage": "Página siguiente",
+        "who": {
+          "deletedUser": "un usuario eliminado"
+        },
+        "what": {
+          "first": "Primer valor leído: {to}.",
+          "firstByHand": "Escrito a mano: {to}.",
+          "firstLegacy": "Recuperado de LibreFolio 1.3: {to}.",
+          "emptied": "Dejado vacío a propósito.",
+          "emptiedBySource": "La fuente ya no lo da.",
+          "byHand": "Corregido a mano: de {from} a {to}.",
+          "backFromHand": "Vuelve a {to}: el {date} {name} lo había corregido a mano a {from}, pero {source} dice {to}.",
+          "newSourceDate": "Ahora son los datos del {date} (antes, del {previousDate}).",
+          "up": "Sube de {from} a {to}.",
+          "down": "Baja de {from} a {to}.",
+          "changed": "Cambiado de {from} a {to}.",
+          "refilled": "Valor dado de nuevo: {to}."
+        }
+      },
+      "history": {
+        "byHand": "escrito a mano",
+        "valuesInPercent": "valores en %",
+        "writeHint": "Para escribir un valor nuevo: «{action}»",
+        "loadFailed": "No se pudo leer el historial de este dato."
+      },
+      "refresh": {
+        "button": "Actualizar",
+        "hint": "Vuelve a leer los enriquecedores de este activo · última lectura: {date}",
+        "hintNever": "Vuelve a leer los enriquecedores de este activo · nunca leído hasta ahora",
+        "written": "{count, plural, one {# dato actualizado} other {# datos actualizados}}",
+        "unchanged": "Enriquecedores leídos de nuevo: ningún dato ha cambiado",
+        "partial": "{count, plural, one {# fuente no respondió} other {# fuentes no respondieron}}; {written, plural, one {# dato actualizado} other {# datos actualizados}}. La lectura semanal lo volverá a intentar.",
+        "failed": "No se pudieron leer los enriquecedores. Inténtelo más tarde."
       }
     }
   }

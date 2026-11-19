@@ -11,7 +11,9 @@
  *   answer changes nothing;
  * - «Crea Asset» sends the list (`enrichers`, in its order); answers still in flight are dropped (no background work);
  * - an edit sends `enrichers` only when the list changed (absent means unchanged);
- * - the window gets the asset, the list, the answers and the codes still asked, and hands the list back (`onapply`).
+ * - the window gets the asset, the list, the answers and the codes still asked, and hands the list back (`onapply`);
+ * - E6c: opened with `enrichersOnOpen` (the «Configura» of the «Profilo» tab), the enrichers' window is already on top;
+ *   opened without it, it is not, even right after a window opened with it.
  *
  * How it is tested: the real asset window, real i18n; the API a spy per method (as `AssetModal.test.ts`); «Riconosci»'s
  * stream (`recognizeStream`) faked; the enrichers' window stood in by a recorder of its props.
@@ -198,5 +200,20 @@ describe('in edit mode', () => {
         await waitFor(() => expect(patchFn()).toHaveBeenCalled());
         const sent = (patchFn().mock.calls[0][0] as Array<Record<string, unknown>>)[0];
         expect(Object.keys(sent.enrichers as object)).toEqual(['yahoo_finance', 'justetf']);
+    });
+
+    it('opens with the enrichers window on top when asked (the tab\u2019s «Configura», E6c), and only then', async () => {
+        const bare = {...EDIT, enrichers: {config: {}, state: {}}};
+        const view = render(AssetModal, {open: true, editMode: true, editData: bare, enrichersOnOpen: true, onupdated: vi.fn()});
+        await waitFor(() => expect(screen.getByTestId('stand-in-enrichers-window')).toBeInTheDocument());
+        expect(zodiosApi.list_enrichers_api_v1_assets_enrichers_get, 'the window gets its catalogue').toHaveBeenCalled();
+
+        // The stand-in leaves its element behind: count the mounts of the window instead
+        const mounted = windowStandIn.mounts.length;
+        await view.rerender({open: false, editMode: true, editData: bare, enrichersOnOpen: false, onupdated: vi.fn()});
+        await view.rerender({open: true, editMode: true, editData: bare, enrichersOnOpen: false, onupdated: vi.fn()});
+        await waitFor(() => expect(button()).toHaveAttribute('data-count', '0'));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(windowStandIn.mounts.length, 'opened without it, no enrichers window').toBe(mounted);
     });
 });

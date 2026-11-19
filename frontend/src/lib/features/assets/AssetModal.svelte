@@ -167,6 +167,11 @@
         importNotices?: Array<{kind: string; reason: string}>;
         /** Asset-global only; contextual creation keeps its existing plain success toast. */
         linkCreatedAsset?: boolean;
+        /**
+         * Edit mode: open with the enrichers' window already on top (plan 68 E6c, the «Configura» of the «Profilo» tab).
+         * Read when the window opens; the caller sets it for that opening only.
+         */
+        enrichersOnOpen?: boolean;
         /** The asset exists. `detail.syncing`: its one price sync started, and `onsynced` will tell how it ended. */
         oncreated?: (assetId: number, detail?: {syncing: boolean}) => void;
         /** The one price sync after a creation ended (O-20): its result for the asset, or null when the request failed.
@@ -191,6 +196,7 @@
         reuseAllowKeyMerge = true,
         importNotices = [],
         linkCreatedAsset = false,
+        enrichersOnOpen = false,
         oncreated,
         onsynced,
         onupdated,
@@ -718,6 +724,7 @@
                     providerExpanded = true;
                 }
                 resetEnrichers(editMode && editData ? (editData.enrichers ?? null) : null, editMode);
+                if (editMode && enrichersOnOpen && !tourPreview) openEnrichers();
                 resetProfile();
                 initialSnapshot = buildFormSnapshot();
                 // The description field shows «Adesso»'s description: the profile of today is read at once in edit mode

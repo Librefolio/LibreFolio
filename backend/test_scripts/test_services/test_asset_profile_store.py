@@ -145,10 +145,11 @@ async def _seed(
     raw_text: Any = _FROM_VALUE,
     user_id: int | None = None,
     created_at: datetime | None = None,
+    source_date: date | None = None,
 ) -> int:
     """One row written as the model writes it, without the store: ``value`` in its stored form, or ``raw_text`` verbatim."""
     stored = (None if value is None else json.dumps(normalize_value(key, value))) if raw_text is _FROM_VALUE else raw_text
-    fields: dict[str, Any] = {"asset_id": asset_id, "key": key, "value": stored, "source": source, "user_id": user_id, "read_on": read_on}
+    fields: dict[str, Any] = {"asset_id": asset_id, "key": key, "value": stored, "source": source, "user_id": user_id, "read_on": read_on, "source_date": source_date}
     if created_at is not None:
         fields["created_at"] = created_at
     async with AsyncSession(engine, expire_on_commit=False) as session:
@@ -978,3 +979,23 @@ async def test_the_panel_leaves_out_the_source_rows_of_a_volatile_voice(engine: 
     assert _listed(history) == [(hidden_third, "0.033", True), (after_hand, "0.03", True), (by_hand, "0.032", True), (hidden_second, "0.031", True), (hidden_first, None, False)]
     assert history.total == 5
     assert [change.row.id for change in (await _changes(engine, asset, key="ter")).items] == [ter_second, ter_first]
+
+
+async def test_each_change_carries_the_row_before_it(engine: AsyncEngine) -> None:
+    """Plan 68, E6a: «Cosa è cambiato» says who wrote the value before and when («Tornato a 0,14 %: il 2 novembre Anna
+    l'aveva corretto a mano…», «Ora sono i dati del 30 settembre (prima, del 31 agosto)»), so each change carries the
+    voice's row before it — its source, author, day and source date — from the whole history, hidden rows included;
+    the voice's first row has none."""
+    asset, alice = await _asset(engine), await _user(engine)
+    first = await _seed(engine, asset, "geography", {"USA": "1"}, "justetf", D("2026-09-01"), source_date=D("2026-08-31"))
+    second = await _seed(engine, asset, "geography", {"USA": "0.6", "JPN": "0.4"}, "justetf", D("2026-10-01"), source_date=D("2026-09-30"))
+    by_hand = await _seed(engine, asset, "ter", TER_019, "user", D("2026-11-02"), user_id=alice)
+    back = await _seed(engine, asset, "ter", TER_022, "justetf", D("2026-11-08"))
+
+    page = await _changes(engine, asset)
+    before = {change.row.id: change.before for change in page.items}
+
+    assert before[first] is None, "the voice's first row has no row before it"
+    assert (before[second].id, before[second].source, before[second].source_date) == (first, "justetf", D("2026-08-31"))
+    assert (before[back].id, before[back].source, before[back].user_id, before[back].read_on) == (by_hand, "user", alice, D("2026-11-02"))
+    assert before[by_hand] is None, "the TER's first row"

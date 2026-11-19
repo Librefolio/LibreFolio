@@ -10,6 +10,8 @@
  * - «Dimentica» (`DELETE /assets/profile`) sends the `as_of` of the read the page shows: the server refuses, whole, rows
  *   written after it (409 `PROFILE_UPDATES_NEWER`) or not of that asset (404 `PROFILE_UPDATES_NOT_FOUND`). Those two
  *   are typed results, never a throw, so the page can say «reload» and read again.
+ * - «Aggiorna» (`POST /assets/profile/refresh`, E6c) reads the asset's enrichers again and saves what changed; the
+ *   asset's reads are forgotten either way.
  *
  * Plain module, no runes: nothing here is reactive; a component keeps what it reads in its own state.
  */
@@ -36,6 +38,9 @@ export type ProfileChangesPage = z.infer<typeof schemas.FAProfileChangesPage>;
 export type AssetProfileRead = {kind: 'found'; asOf: string; voices: ProfileVoices; changes: ProfileChangesPage | null} | {kind: 'missing'; asOf: string};
 
 /** What «Dimentica» did: the rows are gone, or the server refused them all (`newer`: reload the page; `not_found`). */
+/** «Aggiorna» for one asset: the voices written and how each enricher's read went (E6c). */
+export type ProfileRefreshResult = z.infer<typeof schemas.FAProfileRefreshResult>;
+
 export type ProfileForgetOutcome = {kind: 'forgotten'; deleted: number} | {kind: 'newer' | 'not_found'; updateIds: number[]};
 
 export interface ProfileReadOptions {
@@ -138,6 +143,20 @@ export async function forgetProfileRows(assetId: number, updateIds: number[], as
         const refused = refusal(error);
         if (refused === null) throw error;
         return refused;
+    } finally {
+        invalidateAssetProfile(assetId);
+    }
+}
+
+/**
+ * «Aggiorna» (E6c): read the asset's enrichers again and save what changed, as the weekly read does. The asset's reads are
+ * forgotten whatever the server answers: the tab reads again. An error is thrown as it came.
+ */
+export async function refreshAssetProfile(assetId: number): Promise<ProfileRefreshResult> {
+    try {
+        const response = await zodiosApi.refresh_profile_api_v1_assets_profile_refresh_post([assetId]);
+        const result = response.results.find((item) => item.asset_id === assetId);
+        return result ?? {asset_id: assetId, written: [], outcomes: [], error: 'missing'};
     } finally {
         invalidateAssetProfile(assetId);
     }

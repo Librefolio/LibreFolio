@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.assets.providers import enforce_probe_limit
 from backend.app.api.v1.auth import get_current_user
-from backend.app.db.models import Asset, AssetType, User
+from backend.app.db.models import Asset, AssetType, User, UserSettings
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.assets.profile import (
     FAProfileAskRequest,
@@ -134,22 +134,45 @@ def _step_points(steps: Sequence[ProfileStep], now: VoiceFreshness | None) -> Li
     return points
 
 
-def _changes_page(page: ProfileChangesPage, number: int, size: int) -> FAProfileChangesPage:
-    items = [
-        FAProfileChange(
-            id=change.row.id,
-            key=change.row.key,
-            value=change.row.value,
-            previous=change.previous,
-            has_previous=change.has_previous,
-            source=change.row.source,
-            user_id=change.row.user_id,
-            read_on=change.row.read_on,
-            source_date=change.row.source_date,
-            created_at=change.row.created_at,
+async def _authors(session: AsyncSession, page: ProfileChangesPage) -> dict[int, tuple[str, str | None]]:
+    """The username and avatar of every author a page names (its rows' and the rows' before them), in one query."""
+    ids = {row.user_id for change in page.items for row in (change.row, change.before) if row is not None and row.user_id is not None}
+    if not ids:
+        return {}
+    statement = select(User.id, User.username, UserSettings.avatar_url).outerjoin(UserSettings, UserSettings.user_id == User.id).where(User.id.in_(ids))
+    return {user_id: (username, avatar_url) for user_id, username, avatar_url in (await session.execute(statement)).all()}
+
+
+async def _changes_page(session: AsyncSession, page: ProfileChangesPage, number: int, size: int) -> FAProfileChangesPage:
+    authors = await _authors(session, page)
+
+    def name(user_id: int | None) -> str | None:
+        return authors[user_id][0] if user_id in authors else None
+
+    items = []
+    for change in page.items:
+        row, before = change.row, change.before
+        items.append(
+            FAProfileChange(
+                id=row.id,
+                key=row.key,
+                value=row.value,
+                previous=change.previous,
+                has_previous=change.has_previous,
+                source=row.source,
+                user_id=row.user_id,
+                user_name=name(row.user_id),
+                user_avatar_url=authors[row.user_id][1] if row.user_id in authors else None,
+                read_on=row.read_on,
+                source_date=row.source_date,
+                created_at=row.created_at,
+                previous_source=before.source if before is not None else None,
+                previous_user_id=before.user_id if before is not None else None,
+                previous_user_name=name(before.user_id) if before is not None else None,
+                previous_read_on=before.read_on if before is not None else None,
+                previous_source_date=before.source_date if before is not None else None,
+            )
         )
-        for change in page.items
-    ]
     return FAProfileChangesPage(items=items, total=page.total, page=number, page_size=size)
 
 
@@ -189,7 +212,7 @@ async def query_profile(items: List[FAProfileQueryItem], session: AsyncSession =
         changes = None
         if item.changes is not None:
             page = await recent_changes(session, item.asset_id, key=item.changes.key, page=item.changes.page)
-            changes = _changes_page(page, item.changes.page, CHANGES_PAGE_SIZE)
+            changes = await _changes_page(session, page, item.changes.page, CHANGES_PAGE_SIZE)
         results.append(FAProfileQueryResult(asset_id=item.asset_id, voices=voices, changes=changes))
     return FAProfileQueryResponse(as_of=as_of, items=results)
 
