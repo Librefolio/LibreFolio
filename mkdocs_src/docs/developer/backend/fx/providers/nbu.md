@@ -8,7 +8,7 @@
 | **API Format** | JSON list, one object per day, one request per currency |
 | **API Key** | Not required |
 | **Terms** | [bank.gov.ua/en/useterms](https://bank.gov.ua/en/useterms): further use of the bank's materials needs a reference to the source |
-| **Currencies** | Discovered at runtime by `get_supported_currencies()`: on 2026-11-16, 40 plus UAH. `GET /fx/providers` caches the list for 24 h (`backend/app/services/fx/catalog.py`) |
+| **Currencies** | Discovered at runtime by `get_supported_currencies()`: on 2026-11-16, 40 plus UAH; with the SDR (`XDR`) served since 2026-11-20, 41 plus UAH. `GET /fx/providers` caches the list for 24 h (`backend/app/services/fx/catalog.py`) |
 | **Update Frequency** | Daily: a rate set on a business day is valid from the next day; weekends and holidays have rows too |
 | **Historical Data** | From 1996-09-02, the first day of the hryvnia |
 | **API Docs** | [NBU open data API](https://bank.gov.ua/en/open-data/api-dev) |
@@ -76,7 +76,7 @@ day has come.
 
 ### 💰 Supported Currencies
 
-On 2026-11-16, 40 currencies plus UAH: AED 🇦🇪, AUD 🇦🇺, AZN 🇦🇿, BDT 🇧🇩, CAD 🇨🇦, CHF 🇨🇭, CNY 🇨🇳, CZK 🇨🇿, DKK 🇩🇰,
+On 2026-11-16, 40 currencies plus UAH, and since 2026-11-20 the SDR as well (`XDR`, the IMF's unit of account, a basket of USD, EUR, CNY, JPY and GBP: 60.7444 UAH per 1 XDR on 2026-11-19): AED 🇦🇪, AUD 🇦🇺, AZN 🇦🇿, BDT 🇧🇩, CAD 🇨🇦, CHF 🇨🇭, CNY 🇨🇳, CZK 🇨🇿, DKK 🇩🇰,
 DZD 🇩🇿, EGP 🇪🇬, EUR 🇪🇺, GBP 🇬🇧, GEL 🇬🇪, HKD 🇭🇰, HUF 🇭🇺, IDR 🇮🇩, ILS 🇮🇱, INR 🇮🇳, JPY 🇯🇵, KRW 🇰🇷, KZT 🇰🇿, LBP 🇱🇧,
 MDL 🇲🇩, MXN 🇲🇽, MYR 🇲🇾, NOK 🇳🇴, NZD 🇳🇿, PLN 🇵🇱, RON 🇷🇴, RSD 🇷🇸, SAR 🇸🇦, SEK 🇸🇪, SGD 🇸🇬, THB 🇹🇭, TND 🇹🇳, TRY 🇹🇷,
 USD 🇺🇸, VND 🇻🇳, ZAR 🇿🇦.
@@ -88,7 +88,7 @@ Beyond the ECB provider's list, NBU quotes AED, AZN, BDT, EGP, GEL, KZT, LBP, MD
 `get_supported_currencies()` asks `NBUStatService/v1/statdirectory/exchange?json`, the day's rates. On 2026-11-16 the
 answer listed 45 entries, and the plugin keeps the currencies only:
 
-- **Not currencies** (`NOT_CURRENCIES`): the four metals `XAU`, `XAG`, `XPT`, `XPD` and the IMF's SDR `XDR`.
+- **Not currencies** (`NOT_CURRENCIES`): the four metals `XAU`, `XAG`, `XPT`, `XPD`. The IMF's SDR `XDR` is served.
 - **UAH**, the base, is always added.
 
 An answer with no currency left raises `FXServiceError`. Right after a restart, while the first discovery is slow or

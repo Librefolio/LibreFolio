@@ -64,10 +64,10 @@ class NBUProvider(FXRateProvider):
     FIRST_DAY = date(1996, 9, 2)
     #: Pause between two requests of one call (D9: an explicit, slow pace).
     PAUSE_SECONDS = 0.3
-    #: Entries of the catalogue that are no currency: the four metals and the IMF's SDR.
-    NOT_CURRENCIES = frozenset({"XAU", "XAG", "XPT", "XPD", "XDR"})
+    #: Entries of the catalogue that are no currency: the four metals (the IMF's SDR is served, Q7 of lane 75).
+    NOT_CURRENCIES = frozenset({"XAU", "XAG", "XPT", "XPD"})
 
-    # What the catalogue returned on 2026-11-16, without metals and SDR, plus UAH. Listed while the first discovery
+    # What the catalogue returned on 2026-11-16, without the metals, plus UAH. Listed while the first discovery
     # after a restart is slow or fails; the live list replaces it as soon as one arrives.
     FALLBACK_CURRENCIES = (
         "AED",
@@ -110,6 +110,7 @@ class NBUProvider(FXRateProvider):
         "UAH",
         "USD",
         "VND",
+        "XDR",
         "ZAR",
     )
 
@@ -169,7 +170,7 @@ class NBUProvider(FXRateProvider):
         return list(self.FALLBACK_CURRENCIES)
 
     async def get_supported_currencies(self) -> list[str]:
-        """The currencies of the day's rates (metals and SDR dropped), plus UAH."""
+        """The currencies of the day's rates (metals dropped, the SDR kept), plus UAH."""
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(self.CATALOG_URL, params={"json": ""})
