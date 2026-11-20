@@ -5,21 +5,23 @@
 
   - Columns: «Quando» (the day of the row), «Dato» (`showVoice`, the panel only), «Cosa è cambiato» (`profileChanges`,
     its kind on `data-kind`), «Chi» (the author of a value written by hand, or the source).
-  - «Dimentica» of one row (its menu) and of the rows chosen (the selection bar) asks first: the change leaves the
-    history and does not come back. On confirm, `onforget(ids)`.
-  - The server pages by twenty: the pager shows the range (`data-from`, `data-to`, `data-total`) and asks the host for
-    another page (`onpage`).
+  - «Dimentica» of one row (its menu) and of the rows chosen asks first: the change leaves the history and does not come
+    back. On confirm, `onforget(ids)`. The rows chosen are the table's selection panel (77 SEL-D): the bar at the top,
+    «Dimentica» with the number of rows it takes, the dock when the top leaves the view.
+  - The server pages by twenty: the pager is the table's balloon (`DataTablePagination` on the server's total, under the
+    actions in the dock), its range on `profile-changes-pager` (`data-from`, `data-to`, `data-total`); it asks the host
+    for another page (`onpage`).
 
   Pattern: Svelte 5 Runes, DataTable, colour roles only.
 -->
 <script lang="ts">
-    import {Trash2, ChevronLeft, ChevronRight} from 'lucide-svelte';
+    import {Trash2} from 'lucide-svelte';
     import {_ as t} from '$lib/i18n';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {currentLanguage} from '$lib/stores/app/language';
     import {ensureCountriesLoaded, getCountryInfo} from '$lib/stores/reference/countryStore';
-    import {type ColumnDef, ConfirmModal, DataTable, type RowAction} from '$lib/components/table';
-    import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
+    import {type BulkAction, type ColumnDef, ConfirmModal, DataTable, type RowAction} from '$lib/components/table';
+    import DataTablePagination from '$lib/components/table/DataTablePagination.svelte';
     import ProfileChangeWhat from './ProfileChangeWhat.svelte';
     import ProfileChangeWho from './ProfileChangeWho.svelte';
     import {changeSentence, text, type ProfileChange} from './profileChanges';
@@ -135,18 +137,24 @@
             },
         },
     ]);
-    /** The rows chosen, by id: the selection bar forgets them together. */
-    let chosen = $state<number[]>([]);
-    const bulkActions = $derived([{id: 'forget', icon: Trash2, variant: 'danger' as const, label: () => $t('assets.profile.changes.forgetSelected', {values: {count: chosen.length}}), onClick: () => (asking = [...chosen])}]);
+    /** The selection panel's action: «Dimentica» on the rows chosen, with their number (77 SEL-D). */
+    const bulkActions: BulkAction<ProfileChange>[] = [
+        {
+            id: 'forget',
+            icon: Trash2,
+            variant: 'danger',
+            label: () => $t('assets.profile.changes.forget'),
+            onClick: (chosen) => {
+                asking = chosen.map((row) => row.id);
+            },
+        },
+    ];
 
     // Another page: the rows chosen on this one are dropped, so «Dimentica» never reaches rows no longer shown
     let shownPage = -1;
     $effect(() => {
         const current = page;
-        if (shownPage !== -1 && current !== shownPage) {
-            chosen = [];
-            drawn += 1;
-        }
+        if (shownPage !== -1 && current !== shownPage) drawn += 1;
         shownPage = current;
     });
 
@@ -159,7 +167,6 @@
             await onforget(ids);
         } finally {
             forgetting = false;
-            chosen = [];
             drawn += 1;
         }
     }
@@ -170,16 +177,12 @@
 </script>
 
 <div class="flex flex-col gap-2 text-lf-primary" data-testid="profile-changes-table" data-busy={busy || forgetting ? 'true' : 'false'} aria-busy={busy || forgetting}>
-    {#if chosen.length > 0}
-        <DataTableToolbar
-            selectedCount={chosen.length}
-            {bulkActions}
-            onClearSelection={() => {
-                chosen = [];
-                drawn += 1;
-            }}
-        />
-    {/if}
+    {#snippet pager(docked: boolean)}
+        <!-- The table's balloon on the server's pages; its range on stable handles. -->
+        <div class="contents" data-testid="profile-changes-pager" data-from={from} data-to={to} data-total={total} data-page={page}>
+            <DataTablePagination pageIndex={page} pageSize={PAGE_SIZE} totalItems={total} pageSizeOptions={[PAGE_SIZE]} {docked} onPageChange={(next) => !busy && onpage(next)} onPageSizeChange={() => {}} />
+        </div>
+    {/snippet}
     {#key drawn}
         <DataTable
             data={rows}
@@ -188,7 +191,9 @@
             {storageKey}
             selectionMode="multi"
             {rowActions}
-            onSelectionChange={(ids) => (chosen = ids.map(Number))}
+            {bulkActions}
+            selectionPanel={true}
+            pager={total > 0 ? pager : undefined}
             enableSorting={false}
             enableColumnFilters={false}
             enableColumnVisibility={false}
@@ -197,17 +202,6 @@
             emptyMessage={$t('assets.profile.changes.empty')}
         />
     {/key}
-    {#if total > 0}
-        <div class="flex items-center justify-end gap-2 text-xs text-lf-muted" data-testid="profile-changes-pager" data-from={from} data-to={to} data-total={total} data-page={page}>
-            <span>{$t('assets.profile.changes.range', {values: {from: String(from), to: String(to), total: String(total)}})}</span>
-            <button type="button" class="rounded p-1 hover:bg-lf-hover disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-lf-focus" data-testid="profile-changes-prev" aria-label={$t('assets.profile.changes.previousPage')} disabled={page <= 0 || busy} onclick={() => onpage(page - 1)}>
-                <ChevronLeft size={14} />
-            </button>
-            <button type="button" class="rounded p-1 hover:bg-lf-hover disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-lf-focus" data-testid="profile-changes-next" aria-label={$t('assets.profile.changes.nextPage')} disabled={page >= last || busy} onclick={() => onpage(page + 1)}>
-                <ChevronRight size={14} />
-            </button>
-        </div>
-    {/if}
 </div>
 
 <ConfirmModal
