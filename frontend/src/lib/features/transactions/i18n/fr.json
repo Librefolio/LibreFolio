@@ -256,7 +256,8 @@
       "promoteSubtitle": "Sélectionnez la transaction de destination",
       "target": "Destination",
       "descriptionTooLong": "La description fusionnée dépasse {max} caractères : raccourcissez-la pour confirmer.",
-      "mergeAllLeftTooLong": "{count, plural, one {# paire est restée} other {# paires sont restées}} à fusionner à la main : la description fusionnée dépasserait {max} caractères."
+      "mergeAllLeftTooLong": "{count, plural, one {# paire est restée} other {# paires sont restées}} à fusionner à la main : la description fusionnée dépasserait {max} caractères.",
+      "chargesBlock": "{type} {ref} a des frais liés : déliez-les d'abord"
     },
     "validate": {
       "now": "Valider maintenant",

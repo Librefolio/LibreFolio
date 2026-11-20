@@ -256,7 +256,8 @@
       "promoteSubtitle": "2 standalone → 1 paired",
       "target": "Target",
       "descriptionTooLong": "The merged description is over {max} characters: shorten it to confirm.",
-      "mergeAllLeftTooLong": "{count, plural, one {# pair was left} other {# pairs were left}} to merge by hand: the combined description would be over {max} characters."
+      "mergeAllLeftTooLong": "{count, plural, one {# pair was left} other {# pairs were left}} to merge by hand: the combined description would be over {max} characters.",
+      "chargesBlock": "{type} {ref} has linked charges: unlink them first"
     },
     "validate": {
       "now": "Validate now",
