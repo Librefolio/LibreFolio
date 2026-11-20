@@ -46,6 +46,7 @@
     "nonIsoReportCurrency": "Este informe convierte a «{value}», que no es un código de divisa ISO (equivale a {suggestion}) — elige {suggestion} como «Divisa predeterminada» en Configuración › Preferencias",
     "nonIsoReportCurrencyUnknown": "Este informe convierte a «{value}», que no es un código de divisa ISO — vuelve a elegir la «Divisa predeterminada» en Configuración › Preferencias",
     "staleFx": "{count} tipos de cambio sin actualizar, el más antiguo desde hace {days} días — sincroniza los tipos para actualizar los totales",
-    "staleFxAfterSync": "El proveedor aún no tiene tipos más recientes para {pairs}: inténtalo más tarde."
+    "staleFxAfterSync": "El proveedor aún no tiene tipos más recientes para {pairs}: inténtalo más tarde.",
+    "assetCostLinkedParentAfterRange": "{economic_type} de {target_amount} {target_currency} del {as_of_date} está vinculada a una transacción del {parent_date}, después del final del análisis — sin asignar hasta que el análisis llegue a esa fecha"
   }
 }
