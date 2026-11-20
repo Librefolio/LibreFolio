@@ -12,7 +12,7 @@
  *
  * testids relied on: broker-detail-page · broker-tab-transazioni · broker-transactions-tab · broker-transactions ·
  * tx-table · tr[data-row-id="tx-<id>"] · row-actions-tx-<id> · context-menu · context-menu-action-delete ·
- * dt-row-checkbox-tx-<id> · broker-transactions-actions · selection-toolbar · toolbar-action-delete · tx-charges-modal ·
+ * dt-row-checkbox-tx-<id> · selection-toolbar · toolbar-action-delete · tx-charges-modal ·
  * tx-charges-modal-content[data-mode] · tx-charges-modal-keep · tx-charges-modal-all · tx-bulk-modal ·
  * tx-bulk-modal-root · tx-bulk-commit.
  * The verdict is the server, read back by id.
@@ -119,7 +119,7 @@ test.describe('Broker page, Transactions tab — «Delete» on a parent with cha
         await expect(checkbox).toHaveAttribute('data-state', 'unchecked');
         await checkbox.click();
         await expect(checkbox).toHaveAttribute('data-state', 'checked');
-        const bar = page.getByTestId('broker-transactions-actions').getByTestId('selection-toolbar');
+        const bar = txTable(page).getByTestId('selection-toolbar');
         await expect(bar).toHaveAttribute('data-selected-count', '1', {timeout: 5_000});
         await bar.getByTestId('toolbar-action-delete').click();
 

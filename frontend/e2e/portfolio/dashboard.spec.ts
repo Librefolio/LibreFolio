@@ -2754,3 +2754,20 @@ test.describe('Dashboard «All» period (FB-7)', () => {
         expect(answeredFrom, 'the «All» report starts on the first movement').toBe(dates[0]);
     });
 });
+
+// 77 SEL-B (Q-SEL-16): the dashboard's Transactions tab is read-only — the page passes no writer — so nothing would act on a
+// selection: its rows have no checkboxes, and its table no selection bar.
+test.describe('Dashboard — the Transactions tab has no checkboxes (77 SEL-B)', () => {
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('no row has a checkbox and the table has no selection bar or hint', async ({page}) => {
+        await page.goto('/dashboard?tab=transazioni');
+        const tab = page.getByTestId('dashboard-transactions-tab');
+        await expect(tab.locator('tbody tr[data-row-id]').first()).toBeVisible({timeout: 30_000});
+        await expect(tab.getByTestId('dt-select-header')).toHaveCount(0);
+        await expect(tab.locator('[data-testid^="dt-row-checkbox-"]')).toHaveCount(0);
+        await expect(tab.getByTestId('dt-selection-top')).toHaveCount(0);
+    });
+});

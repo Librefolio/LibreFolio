@@ -6,7 +6,7 @@ The **Transactions** tab of a broker lists its transactions, newest first, for t
     <img class="gallery-img" data-category="brokers" data-name="transactions-tab" alt="Broker Transactions Tab">
 </div>
 
-Above the list you find **Uploaded Reports**, **View in Transactions** and the column picker. Owners and Editors also get **Import**, **Add Transaction** and, once you tick rows, the bar to edit, clone or delete them. A Viewer sees the table, the uploaded reports and **View in Transactions**.
+Above the list you find **Uploaded Reports**, **View in Transactions** and the column picker. Owners and Editors also get **Import**, **Add Transaction** and, once you tick rows, the bar above the table to edit, clone or delete them. A Viewer sees the table without checkboxes, the uploaded reports and **View in Transactions**.
 
 ---
 
