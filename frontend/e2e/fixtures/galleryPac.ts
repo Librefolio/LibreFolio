@@ -99,6 +99,11 @@ export const PAC_SCENARIO = {
     targets: {apple: '30', microsoft: '30', bond: '40'},
     /** The Review is shot with the target total at 90%: one field still to complete. */
     incompleteBondTarget: '30',
+    /**
+     * The result's two market data typed by hand ({@link pinPacMarketData}), at values the engine proved optimal in repeated
+     * runs (checked on 20/11/2026: Apple 280 $ with EUR/USD 1.12). A data pin, not part of the story the shots tell.
+     */
+    resultMarketData: {applePrice: '280', eurUsd: '1.12'},
 } as const;
 
 /** Database ids of what the draft copies, found by name — never assumed from the populate order. */
@@ -496,6 +501,31 @@ export async function buildPacDraft(page: Page, ids: PacIds): Promise<PacDraft> 
     await expect(review.getByTestId('pac-planner-review-problems'), 'the draft is not complete').toHaveCount(0);
     await expect(review.getByTestId('pac-planner-calculate')).toBeEnabled();
     return {ids, keys};
+}
+
+/**
+ * The result's data pin (coordinator, 20/11/2026): Apple's price and EUR/USD typed by hand, for the «PAC allocator result»
+ * shots only. The two are the draft's only market data copied from LibreFolio (DEGIRO's cash is copied too, but the plan
+ * spends the amount typed), and the mock data draw them up to the day of the populate (`populate_mock_data.py`,
+ * `date.today()`). On some days the PAC's chain of pinned objectives slips inside
+ * SCIP's tolerance and the result is «not proven» (known defect GPAC-b; its test is lot 0b,
+ * `test_pac_planner_solver.py::test_a_pinned_objective_never_slips`; its repair is SLIP, the PAC's objective function).
+ * Typed here, the result is the same every day. When SLIP lands, decide whether this pin can go.
+ */
+export async function pinPacMarketData(page: Page, draft: PacDraft): Promise<void> {
+    const pinned = PAC_SCENARIO.resultMarketData;
+    await goToPacStep(page, 'assets');
+    const apple = assetCard(page, draft.keys.apple);
+    await apple.getByTestId('pac-planner-asset-price-mode-manual').click();
+    await expect(apple).toHaveAttribute('data-price-mode', 'manual');
+    await typeValue(apple.getByTestId('pac-planner-asset-price-input'), pinned.applePrice);
+
+    await goToPacStep(page, 'fx');
+    const pair = page.getByTestId('pac-planner-fx').locator('[data-testid="pac-planner-fx-pair"][data-pair="EUR/USD"]');
+    await pair.getByTestId('pac-planner-fx-mode-manual').click();
+    await expect(pair).toHaveAttribute('data-mode', 'manual');
+    await typeValue(pair.getByTestId('pac-planner-fx-rate'), pinned.eurUsd);
+    await expect(pair).toHaveAttribute('data-rate', 'set');
 }
 
 // ---------------------------------------------------------------------------
