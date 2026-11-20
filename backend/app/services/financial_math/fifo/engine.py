@@ -125,6 +125,8 @@ class FifoLotEngine:
         self.replay_until = replay_until
         self.matching_method = LotMatchingMethod(matching_method)
         self._tx_by_id = {tx.id: tx for tx in normalized}
+        # Project 66 (M2): the income events by id, the parents a linked charge can follow onto the lots that earned them.
+        self._income_by_id = {event.transaction_id: event for event in self.economic_events if event.economic_type in ("DIVIDEND", "INTEREST")}
         self._issues: list[FifoDataQualityIssue] = []
         self._lots: dict[int, FifoLot] = {}
         self._intervals: list[FragmentInterval] = []
@@ -1006,10 +1008,14 @@ class FifoLotEngine:
     # ------------------------------------------------------------------
     # FEE/TAX allocation (asset-linked costs).
     # Step 0 (project 66, M1): a charge the user linked to a BUY/SELL the engine replayed goes, alone, to the lots
-    #         that trade opened and closed (rule LINKED_TRADE, its own audit group dated on the charge). A charge
-    #         whose BUY/SELL of its own broker lies after ``replay_until`` waits (M1b): orphan, in its own empty
-    #         LINKED_TRADE group, with an ASSET_COST_LINKED_PARENT_AFTER_RANGE issue. Any other charge — unlinked, or
-    #         linked to a parent the engine neither replays nor knows the facts of — follows the ladder, unchanged.
+    #         that trade opened and closed (rule LINKED_TRADE, its own audit group dated on the charge). M2: a charge
+    #         linked to a DIVIDEND/INTEREST the engine allocated goes, alone, to the lots that earned it (rule
+    #         LINKED_INCOME, the income's D-1 eligibility); when no lot earned it, the charge stays orphan with it, in
+    #         its own empty LINKED_INCOME group, with an ASSET_COST_LINKED_INCOME_NO_ELIGIBLE_LOTS issue. A charge
+    #         whose parent of its own broker lies after ``replay_until`` waits (M1b): orphan, in its own empty group
+    #         (LINKED_TRADE or LINKED_INCOME, by the parent's kind), with an ASSET_COST_LINKED_PARENT_AFTER_RANGE issue.
+    #         Any other charge — unlinked, or linked to a parent the engine neither replays nor knows the facts of —
+    #         follows the ladder, unchanged.
     # Deterministic matching order of the ladder
     # (§4.3): FEE  = same-day trades -> previous-day trades -> holdings fallback -> orphan;
     #         TAX  = same-day income -> same-day trades -> previous-day income ->
@@ -1028,7 +1034,7 @@ class FifoLotEngine:
     ) -> Decimal:
         """Allocate FEE or TAX: the linked charges first (step 0), then the pools of the rest; returns the orphaned
         target total (the charges waiting for their parent, and the unallocatable pools)."""
-        pooled, orphan_total = self._allocate_linked_charges(cost_events, economic_type, accumulator_field, groups, accumulators)
+        pooled, orphan_total = self._allocate_linked_charges(cost_events, economic_type, accumulator_field, fragments_by_lot, groups, accumulators)
         pools: dict[tuple[int, date, str | None, str], list[EconomicEvent]] = defaultdict(list)
         for event in pooled:
             pools[(event.broker_id, event.date, event.native_currency, event.target_currency)].append(event)
@@ -1105,31 +1111,47 @@ class FifoLotEngine:
         cost_events: Sequence[EconomicEvent],
         economic_type: EconomicType,
         accumulator_field: str,
+        fragments_by_lot: dict[int, list[FragmentInterval]],
         groups: list[EconomicAllocationGroup],
         accumulators: dict[int, dict[str, Decimal]],
     ) -> tuple[list[EconomicEvent], Decimal]:
-        """Step 0 (project 66, M1 and M1b): each charge linked to a trade the engine replayed goes alone to that trade's
-        lots; each charge whose trade lies after ``replay_until`` waits, orphan. Both get their own ``LINKED_TRADE``
-        group, in one list sorted by charge date, then id. Returns the other events, for the pools, and the target
-        total of the waiting charges."""
+        """Step 0 (project 66, M1, M1b and M2): each charge linked to a trade the engine replayed goes alone to that
+        trade's lots (``LINKED_TRADE``); each charge linked to an income the engine allocated goes alone to the lots
+        that earned it (``LINKED_INCOME``), or stays orphan with it; each charge whose parent lies after
+        ``replay_until`` waits, orphan. Every one gets its own group, in one list sorted by charge date, then id.
+        Returns the other events, for the pools, and the target total of the orphan linked charges (waiting, or linked
+        to an orphan income)."""
         pooled: list[EconomicEvent] = []
-        linked: list[tuple[EconomicEvent, list[TargetOperationAllocation], date | None]] = []
+        # (event, rule, operations, waiting parent date, income parent): operations None with an income parent is
+        # a charge orphan with its income (D12).
+        linked: list[tuple[EconomicEvent, AllocationRule, list[TargetOperationAllocation] | None, date | None, EconomicEvent | None]] = []
         for event in cost_events:
-            parent_date = self._waiting_parent_date(event)
-            if parent_date is not None:
-                linked.append((event, [], parent_date))
+            waiting = self._waiting_parent(event)
+            if waiting is not None:
+                parent_date, rule = waiting
+                linked.append((event, rule, [], parent_date, None))
                 continue
             operations = self._linked_trade_operations(event)
-            if operations is None:
-                pooled.append(event)
-            else:
-                linked.append((event, operations, None))
-        waiting_total = Decimal("0")
-        for event, operations, parent_date in sorted(linked, key=lambda item: (item[0].date, item[0].transaction_id)):
-            if parent_date is not None:
-                waiting_total += self._wait_for_parent(event, economic_type, parent_date, groups)
+            if operations is not None:
+                linked.append((event, "LINKED_TRADE", operations, None, None))
                 continue
-            for operation in operations:
+            income = self._linked_income_parent(event)
+            if income is None:
+                pooled.append(event)
+                continue
+            native = abs(event.native_amount)
+            target = abs(event.target_amount)
+            income_operations = self._holding_operations(income.broker_id, day_before(income.date), native, target, fragments_by_lot, "INCOME", operation_transaction_id=income.transaction_id)
+            linked.append((event, "LINKED_INCOME", income_operations, None, income))
+        orphan_total = Decimal("0")
+        for event, rule, operations, parent_date, income in sorted(linked, key=lambda item: (item[0].date, item[0].transaction_id)):
+            if parent_date is not None:
+                orphan_total += self._wait_for_parent(event, economic_type, parent_date, rule, groups)
+                continue
+            if operations is None and income is not None:
+                orphan_total += self._orphan_with_income(event, economic_type, income, groups)
+                continue
+            for operation in operations or ():
                 for allocation in operation.lot_allocations:
                     accumulator = accumulators.setdefault(allocation.lot_id, _new_economic_accumulator())
                     accumulator[accumulator_field] += allocation.target_amount
@@ -1141,39 +1163,47 @@ class FifoLotEngine:
                     date=event.date,
                     native_currency=event.native_currency,
                     target_currency=event.target_currency,
-                    rule="LINKED_TRADE",
+                    rule=rule,
                     source_transaction_ids=(event.transaction_id,),
                     native_pool_total=abs(event.native_amount),
                     target_pool_total=abs(event.target_amount),
-                    operation_allocations=tuple(operations),
+                    operation_allocations=tuple(operations or ()),
                 )
             )
-        return pooled, waiting_total
+        return pooled, orphan_total
 
-    def _waiting_parent_date(self, event: EconomicEvent) -> date | None:
-        """Project 66 (M1b): the date of the parent ``event`` waits for, or ``None`` when it does not wait.
+    def _waiting_parent(self, event: EconomicEvent) -> tuple[date, AllocationRule] | None:
+        """Project 66 (M1b, M2): the date of the parent ``event`` waits for and the rule of its group, or ``None`` when
+        it does not wait.
 
         A charge waits when the engine has an end (``replay_until``) and its parent — read from the engine's own
-        transactions, else from the facts the service read (``event.parent``) — is a BUY/SELL of the charge's broker
-        dated after that end. An income parent is M2; a parent at another broker can only be one edited after the link,
-        and keeps the ladder, never named."""
+        transactions, else from its income events, else from the facts the service read (``event.parent``) — is a
+        BUY/SELL (``LINKED_TRADE``) or a DIVIDEND/INTEREST (``LINKED_INCOME``) of the charge's broker dated after that
+        end. A parent at another broker can only be one edited after the link, and keeps the ladder, never named."""
         if self.replay_until is None or event.parent_transaction_id is None:
             return None
         replayed = self._tx_by_id.get(event.parent_transaction_id)
+        income = self._income_by_id.get(event.parent_transaction_id)
         if replayed is not None:
             parent_date, parent_type, parent_broker = replayed.date, replayed.type, replayed.broker_id
+        elif income is not None:
+            parent_date, parent_type, parent_broker = income.date, income.economic_type, income.broker_id
         elif event.parent is not None:
             parent_date, parent_type, parent_broker = event.parent.date, event.parent.type, event.parent.broker_id
         else:
             return None
-        if parent_date <= self.replay_until or parent_type not in ("BUY", "SELL") or parent_broker != event.broker_id:
+        if parent_date <= self.replay_until or parent_broker != event.broker_id:
             return None
-        return parent_date
+        if parent_type in ("BUY", "SELL"):
+            return parent_date, "LINKED_TRADE"
+        if parent_type in ("DIVIDEND", "INTEREST"):
+            return parent_date, "LINKED_INCOME"
+        return None
 
-    def _wait_for_parent(self, event: EconomicEvent, economic_type: EconomicType, parent_date: date, groups: list[EconomicAllocationGroup]) -> Decimal:
-        """Project 66 (M1b): leave ``event`` orphan until the analysis reaches its parent: its own empty ``LINKED_TRADE``
-        group, all of it orphan, and one ``ASSET_COST_LINKED_PARENT_AFTER_RANGE`` issue. Returns its target amount."""
-        native = abs(event.native_amount)
+    def _wait_for_parent(self, event: EconomicEvent, economic_type: EconomicType, parent_date: date, rule: AllocationRule, groups: list[EconomicAllocationGroup]) -> Decimal:
+        """Project 66 (M1b): leave ``event`` orphan until the analysis reaches its parent: its own empty group (``rule``
+        follows the parent's kind), all of it orphan, and one ``ASSET_COST_LINKED_PARENT_AFTER_RANGE`` issue. Returns
+        its target amount."""
         target = abs(event.target_amount)
         self._issues.append(
             FifoDataQualityIssue(
@@ -1190,37 +1220,66 @@ class FifoLotEngine:
                 },
             )
         )
-        groups.append(
-            EconomicAllocationGroup(
-                economic_type=economic_type,
-                asset_id=self.asset_id,
-                broker_id=event.broker_id,
-                date=event.date,
-                native_currency=event.native_currency,
-                target_currency=event.target_currency,
-                rule="LINKED_TRADE",
-                source_transaction_ids=(event.transaction_id,),
-                native_pool_total=native,
-                target_pool_total=target,
-                operation_allocations=(),
-                native_orphan=native,
-                target_orphan=target,
-            )
-        )
+        groups.append(self._orphan_linked_group(event, economic_type, rule))
         return target
 
+    def _orphan_with_income(self, event: EconomicEvent, economic_type: EconomicType, income: EconomicEvent, groups: list[EconomicAllocationGroup]) -> Decimal:
+        """Project 66 (M2, D12): ``event`` is linked to an income no lot earned, so it stays orphan with it: its own
+        empty ``LINKED_INCOME`` group, all of it orphan, and one ``ASSET_COST_LINKED_INCOME_NO_ELIGIBLE_LOTS`` issue
+        dated on the charge. Returns its target amount."""
+        target = abs(event.target_amount)
+        self._issues.append(
+            FifoDataQualityIssue(
+                code="ASSET_COST_LINKED_INCOME_NO_ELIGIBLE_LOTS",
+                transaction_id=event.transaction_id,
+                broker_id=event.broker_id,
+                params={
+                    "economic_type": economic_type,
+                    "as_of_date": event.date.isoformat(),
+                    "target_amount": target,
+                    "target_currency": event.target_currency,
+                    "parent_transaction_id": income.transaction_id,
+                    "parent_date": income.date.isoformat(),
+                },
+            )
+        )
+        groups.append(self._orphan_linked_group(event, economic_type, "LINKED_INCOME"))
+        return target
+
+    def _orphan_linked_group(self, event: EconomicEvent, economic_type: EconomicType, rule: AllocationRule) -> EconomicAllocationGroup:
+        """The empty group of one orphan linked charge, dated on the charge: all of it orphan."""
+        native = abs(event.native_amount)
+        target = abs(event.target_amount)
+        return EconomicAllocationGroup(
+            economic_type=economic_type,
+            asset_id=self.asset_id,
+            broker_id=event.broker_id,
+            date=event.date,
+            native_currency=event.native_currency,
+            target_currency=event.target_currency,
+            rule=rule,
+            source_transaction_ids=(event.transaction_id,),
+            native_pool_total=native,
+            target_pool_total=target,
+            operation_allocations=(),
+            native_orphan=native,
+            target_orphan=target,
+        )
+
     def _linked_trade_operations(self, event: EconomicEvent) -> list[TargetOperationAllocation] | None:
-        """Step 0 (project 66, M1): the lots of the trade ``event`` is linked to, or ``None`` for the ladder.
+        """Step 0 (project 66, M1): the lots of the trade ``event`` is linked to, or ``None`` when it is not linked to
+        a trade the engine replayed.
 
         The charge goes alone on ``_split_trade_cost`` of its parent: the lots that trade opened (by original quantity)
         and closed (by closed quantity, in the run's matching order), whatever the charge's date (rule 4: the date is
-        never judged). ``None`` — the charge joins its day's pool, as before the link — when:
+        never judged). ``None`` — the charge then tries its income parent (M2), else joins its day's pool, as before
+        the link — when:
 
         - it has no parent;
         - the engine does not see the parent: not among its transactions, or after ``replay_until`` (a BUY/SELL of the
-          charge's broker after the end never reaches here: it waits, ``_waiting_parent_date``, M1b);
-        - the parent is not a BUY/SELL of the charge's broker (an income parent is M2; another broker can only be a
-          parent edited after the link);
+          charge's broker after the end never reaches here: it waits, ``_waiting_parent``, M1b);
+        - the parent is not a BUY/SELL of the charge's broker (an income parent is ``_linked_income_parent``, M2;
+          another broker can only be a parent edited after the link);
         - the parent opened and closed nothing (``_split_trade_cost`` is empty): this branch never makes an empty
           group (the only empty ``LINKED_TRADE`` group is a waiting charge's, M1b).
         """
@@ -1236,6 +1295,23 @@ class FifoLotEngine:
         native = abs(event.native_amount)
         target = abs(event.target_amount)
         return self._split_trade_cost(parent, native, target, target) or None
+
+    def _linked_income_parent(self, event: EconomicEvent) -> EconomicEvent | None:
+        """Step 0 (project 66, M2): the income event ``event`` is linked to, or ``None`` for the ladder.
+
+        The parent must be one of the engine's DIVIDEND/INTEREST events, of the charge's broker, not after
+        ``replay_until`` (one after the end never reaches here: it waits, ``_waiting_parent``). The charge then goes on
+        the lots open the day before that income, by quantity: the eligibility of the income itself
+        (``_allocate_income_pools``) and of the TAX on it (``SAME_DAY_INCOME``). An income known only by the facts the
+        service read, with no event in the engine, keeps the ladder; another broker's income too, never named."""
+        if event.parent_transaction_id is None:
+            return None
+        income = self._income_by_id.get(event.parent_transaction_id)
+        if income is None or income.broker_id != event.broker_id:
+            return None
+        if self.replay_until is not None and income.date > self.replay_until:
+            return None
+        return income
 
     def _match_cost_operations(  # noqa: C901 — ordered matching-level fallback chain, early returns per level
         self,
@@ -1387,11 +1463,14 @@ class FifoLotEngine:
         target_pool: Decimal,
         fragments_by_lot: dict[int, list[FragmentInterval]],
         context: AllocationContext,
+        *,
+        operation_transaction_id: int | None = None,
     ) -> list[TargetOperationAllocation] | None:
         """Distribute the whole pool over LONG lots open at ``cutoff`` (D-1 holdings). ``None`` when
         no lot is eligible (orphan), or without a cutoff (an event on ``date.min``: no day before).
-        Reused for the FEE/TAX holdings fallback and for TAX-on-income (same D-1 eligibility as the
-        income, ``context=INCOME``)."""
+        Reused for the FEE/TAX holdings fallback, for TAX-on-income (same D-1 eligibility as the
+        income, ``context=INCOME``) and for a charge linked to an income (M2), whose operation names that income
+        (``operation_transaction_id``)."""
         if cutoff is None:
             return None
         eligible: list[tuple[int, Decimal]] = []
@@ -1404,7 +1483,7 @@ class FifoLotEngine:
         if not eligible:
             return None
         eligible.sort(key=lambda item: item[0])
-        return [self._lot_operation(context, None, eligible, native_pool, target_pool, target_pool)]
+        return [self._lot_operation(context, operation_transaction_id, eligible, native_pool, target_pool, target_pool)]
 
     def _lot_operation(
         self,

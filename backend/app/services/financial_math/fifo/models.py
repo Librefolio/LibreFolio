@@ -33,6 +33,7 @@ IssueCode = Literal[
     "ASSET_INCOME_NO_ELIGIBLE_LOTS",
     "ASSET_COST_NO_ELIGIBLE_LOTS",
     "ASSET_COST_LINKED_PARENT_AFTER_RANGE",
+    "ASSET_COST_LINKED_INCOME_NO_ELIGIBLE_LOTS",
 ]
 # Issue codes that indicate a non-isolable quantitative replay failure (incoherent
 # quantities, invalid fragment topology, or unreconstructable transfers). Their
@@ -78,6 +79,7 @@ AllocationRule = Literal[
     "PREVIOUS_DAY_INCOME",
     "OPEN_LOTS_FALLBACK",
     "LINKED_TRADE",
+    "LINKED_INCOME",
 ]
 
 
