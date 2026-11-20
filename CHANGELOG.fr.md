@@ -61,6 +61,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 ### 🔄 Modifié
 
+- **Relier les événements** regroupe les transactions selon ce qui manque (un événement trouvé, aucun, plusieurs), avec **Tout relier** et **Tout créer** par groupe, une seule barre de sélection avec les nombres, l'action de la ligne toujours à portée de main et une fenêtre pour choisir l'événement quand il y en a plusieurs ce jour-là.
 - **Liste des actifs : Recharger ne met à jour que les actifs sélectionnés**, pas toute la liste.
 - **Les vues en lecture seule n'ont pas de cases sur les lignes** : l'onglet Transactions du tableau de bord et un courtier que vous pouvez seulement consulter.
 - **Modifier et Supprimer ignorent les lignes que vous ne pouvez pas modifier**, et le disent avec leur nombre avant le clic, au lieu d'un avertissement après.

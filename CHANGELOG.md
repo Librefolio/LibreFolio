@@ -61,6 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 
+- **Relink events** groups the transactions by what is missing (an event found, none, several), with **Link all** and **Create all** per group, one selection bar with the numbers, the row's action always at hand, and a window to choose the event when there are several that day.
 - **Asset list: Reload refreshes the selected assets only**, not the whole list.
 - **Read-only views have no row checkboxes**: the dashboard's Transactions tab, and a broker you can only view.
 - **Edit and Delete skip the rows you may not edit**, and say so with their number before the click, instead of a warning after it.

@@ -61,6 +61,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 ### 🔄 Modifiche
 
+- **Ricollega eventi** raggruppa le transazioni per quello che manca (un evento trovato, nessuno, più d'uno), con **Collega tutte** e **Crea tutti** per gruppo, una sola barra della selezione con i numeri, l'azione della riga sempre a portata di mano e una finestra per scegliere l'evento quando quel giorno ce ne sono più d'uno.
 - **Lista asset: Ricarica aggiorna solo gli asset selezionati**, non tutta la lista.
 - **Le viste in sola lettura non hanno caselle sulle righe**: la scheda Transazioni della dashboard e un broker che puoi solo vedere.
 - **Modifica ed Elimina saltano le righe che non puoi modificare**, e lo dicono con il loro numero prima del clic, invece che con un avviso dopo.

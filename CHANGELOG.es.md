@@ -61,6 +61,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 ### 🔄 Cambios
 
+- **Reenlazar eventos** agrupa las transacciones según lo que falta (un evento encontrado, ninguno, varios), con **Vincular todas** y **Crear todos** por grupo, una sola barra de selección con los números, la acción de la fila siempre a mano y una ventana para elegir el evento cuando ese día hay varios.
 - **Lista de activos: Recargar actualiza solo los activos seleccionados**, no toda la lista.
 - **Las vistas de solo lectura no tienen casillas en las filas**: la pestaña Transacciones del panel y un bróker que solo puedes ver.
 - **Editar y Eliminar omiten las filas que no puedes editar**, y lo dicen con su número antes del clic, en lugar de un aviso después.
