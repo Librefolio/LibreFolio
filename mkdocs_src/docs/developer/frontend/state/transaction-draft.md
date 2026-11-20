@@ -224,14 +224,29 @@ The workspace looks for the two halves of a transfer or an exchange and offers t
   of the backend (`chargesBlockParentType`) would refuse the save. `rowsWithLinkedCharges` (`bulkCharges.ts`) gives
   the holders in one pass: a charge linked under the row, or a saved charge of it the workspace does not hold yet
   (`charges_count` minus the saved charges of that row present anywhere in `ops`, so a charge moved away with
-  **Link** frees the row it left). `isSuggestable`, the standalone lists behind the banner and `selectedForPromote`
-  leave them out; `executePromote` refuses them as a defence (`tx.bulk.promote.refused.charges`, for a charge read
+  **Link** frees the row it left). `isSuggestable` and the standalone lists behind the banner leave them out;
+  `selectedForPromote` (66 C22) is `hidden`, `disabled` or `ok` (`PromoteSelection`), and a pair that only the charges
+  of a leg forbid draws the button off with the reason (`aria-disabled`, `data-reason="hasCharges"`, the Tooltip
+  `transactions.promote.chargesBlock`), as the Transactions page draws its `promote` action off
+  (`data-disabled-reason="hasCharges"`) when a row has `charges_count > 0`; `executePromote` refuses them as a defence (`tx.bulk.promote.refused.charges`, for a charge read
   that lands while `PromoteMergeModal` is open), and `promote-suggest` never returns a saved candidate that is the
   parent of a charge. A charge «del» or «unlink» frees its row; after the merge it is a row of its own, because
   `isUnderParent` never puts a charge under a leg of a pair (rule 8). `resetRow` and a restore from «del»
   (`applyDelete`) keep a charge «unlink» when its parent is «del» or a leg of a pair, saved or pending
   (`keepUnlinkedFromUnfitParents`), and a half that a merge hides leaves the grid's selection, so **Reset selected**
   never resets it alone.
+* **Leg of a pair** (66 C22): `isPairLeg(op, ops)` (`bulkCharges.ts`) is the one predicate — the hidden half names the
+  visible one (`pairedWith`), for a saved pair, a merge queued in `pendingPromotes` and two new rows merged alike; a
+  saved pair split here is none. `isUnderParent`, `keepUnlinkedFromUnfitParents` and the charge Form's **Link to a
+  transaction…** (`_parent_link` in `applyChargePayload`) read it: the Form's picker reads the database, where a row
+  merged in the workspace is not a pair yet, so a link to such a leg is refused (`tx.bulk.charge.link.refused.paired`,
+  the toast of the `paired` reason) and the charge's other values apply. `bulkLinkSelection`'s `pairIdOf` and the
+  parent Form's `related_transaction_id` keep their own lookup, because they need the partner's id.
+* **Resets and queued merges** (66 C22): a reset brings rows back as saved, and a merge queued in `pendingPromotes` is
+  not saved. `resetRows(tempIds)` (**Reset row** is `resetRows([tempId])`, **Reset selected** one call for the whole
+  selection) first undoes every queued merge that touches one of the rows (`undoPendingPromote`, the partner taken
+  before the undo), then resets them, so the order of the selection never changes the outcome. **Reset all** undoes
+  every queued merge before it renames the rows, and empties `pendingPromotes` beside `pendingSplits`.
 * **The 💡 button** (`tx-bulk-suggest-import`, and the row action `suggest`) lists
   `importableSuggestions`: saved transactions that `POST /transactions/promote-suggest` proposes as
   the other half of a row, and that are not in the workspace yet. The search runs debounced on the
