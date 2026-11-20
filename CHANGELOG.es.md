@@ -125,6 +125,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - La ventana «Configuración del Horario» se desplaza por dentro cuando es más alta que la pantalla, así que «Guardar» ya no queda cortado en una ventana pequeña.
 - Tipos de cambio: cuando un par tiene varias rutas, cada ruta guarda ahora los tipos de su propio proveedor. Antes, un par podía guardar el tipo de otra ruta con el nombre del proveedor de la primera; una nueva sincronización del periodo reescribe las filas.
 - Editor de transacciones: «Restablecer fila», «Restablecer seleccionados» y «Restablecer todo» ahora también deshacen una fusión en transferencia o en cambio aún no guardada. Antes, la fusión quedaba en cola sin verse y «Guardar todo» la enviaba igualmente; una transacción nueva de esa fusión podía quedar fuera del guardado.
+- Editor de transacciones: «Restablecer fila» y «Restablecer seleccionados» sobre una mitad de un par guardado, dividido y aún no guardado, ahora también deshacen la división. Antes, el par volvía a una sola fila pero la división quedaba en cola, y «Guardar todo» lo dividía igualmente.
 
 ### ⚠️ Cambios incompatibles
 

@@ -125,6 +125,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - La fenêtre «Configuration du Planning» défile à l'intérieur quand elle est plus haute que l'écran : «Enregistrer» n'est plus coupé sur une petite fenêtre.
 - Taux de change : quand une paire a plusieurs routes, chaque route enregistre désormais les taux de son propre fournisseur. Auparavant, une paire pouvait enregistrer le taux d'une autre route sous le nom du fournisseur de la première ; une nouvelle synchronisation de la période réécrit les lignes.
 - Éditeur de transactions : « Réinitialiser la ligne », « Réinitialiser la sélection » et « Tout réinitialiser » annulent aussi une fusion en transfert ou en change pas encore enregistrée. Avant, la fusion restait en attente sans s'afficher et « Tout enregistrer » l'envoyait quand même ; une nouvelle transaction de cette fusion pouvait rester hors de l'enregistrement.
+- Éditeur de transactions : « Réinitialiser la ligne » et « Réinitialiser la sélection » sur une moitié d'une paire enregistrée, scindée et pas encore enregistrée, annulent aussi la scission. Avant, la paire revenait sur une seule ligne mais la scission restait en attente, et « Tout enregistrer » la scindait quand même.
 
 ### ⚠️ Changements incompatibles
 
