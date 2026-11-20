@@ -19,6 +19,13 @@ This section provides the technical documentation for each Foreign Exchange (FX)
 | [**Czech National Bank**](cnb.md) | `CNB` | CZK | 30 | Text (one file per year) | No | Beta |
 | [**South African Reserve Bank**](sarb.md) | `SARB` | ZAR | 25 | JSON | No | Beta |
 | [**Bank of Korea**](bok.md) | `BOK` | KRW | 43 | JSON (ECOS) | Yes (free key) | Beta |
+| [**Banco Central de Reserva del Perú**](bcrp.md) | `BCRP` | PEN | 1 (USD) | JSON (BCRPData) | No | Beta |
+| [**TRM Colombia**](trm.md) | `TRM` | COP | 1 (USD) | JSON (Socrata) | No | Beta |
+| [**Central Bank of the Republic of China (Taiwan)**](cbc.md) | `CBC` | TWD | 1 (USD) | JSON | No | Beta |
+| [**Central Bank of Nigeria**](cbn.md) | `CBN` | NGN | 12 | JSON (undocumented) | No | Beta |
+| [**Central Bank of Kenya**](cbk.md) | `CBK` | KES | 21 | JSON (wpDataTables, undocumented) | No | Beta |
+| [**Reserve Bank of India**](rbi.md) | `RBI` | INR | 7 | HTML (ASP.NET form) | No | Beta |
+| [**Bank of Ghana**](bog.md) | `BOG` | GHS | 17 | JSON (wpDataTables, page nonce) | No | Beta |
 
 ### 📝 General Notes
 
@@ -41,6 +48,13 @@ This section provides the technical documentation for each Foreign Exchange (FX)
 - [🇨🇿 CNB (Czech National Bank)](cnb.md)
 - [🇿🇦 SARB (South African Reserve Bank)](sarb.md)
 - [🇰🇷 BOK (Bank of Korea)](bok.md)
+- [🇵🇪 BCRP (Banco Central de Reserva del Perú)](bcrp.md)
+- [🇨🇴 TRM (TRM Colombia)](trm.md)
+- [🇹🇼 CBC (Central Bank of the Republic of China, Taiwan)](cbc.md)
+- [🇳🇬 CBN (Central Bank of Nigeria)](cbn.md)
+- [🇰🇪 CBK (Central Bank of Kenya)](cbk.md)
+- [🇮🇳 RBI (Reserve Bank of India)](rbi.md)
+- [🇬🇭 BOG (Bank of Ghana)](bog.md)
 
 ---
 

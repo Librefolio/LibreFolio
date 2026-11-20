@@ -97,6 +97,55 @@ one takes over.
         </div>
         <span class="card-desc">43 currencies against KRW, among them TWD, KZT, MNT, VND, PKR and BDT. Needs a free API key.</span>
     </a>
+    <a href="bcrp/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <img src="https://estadisticas.bcrp.gob.pe/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="BCRP favicon">
+            <span class="card-title" style="margin: 0;">Banco Central de Reserva del Perú (BCRP)</span>
+        </div>
+        <span class="card-desc">The interbank rate of the US dollar against PEN, from 1997.</span>
+    </a>
+    <a href="trm/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <img src="https://www.superfinanciera.gov.co/info/superfinancierav8/web/portal/img/favicon.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="TRM favicon">
+            <span class="card-title" style="margin: 0;">TRM Colombia (TRM)</span>
+        </div>
+        <span class="card-desc">Colombia's official dollar rate against COP, a value for every day, from 1991.</span>
+    </a>
+    <a href="cbc/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <img src="https://cpx.cbc.gov.tw/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="CBC favicon">
+            <span class="card-title" style="margin: 0;">Central Bank of the Republic of China (Taiwan) (CBC)</span>
+        </div>
+        <span class="card-desc">The interbank closing rate of the US dollar against TWD, the same day, from 2008.</span>
+    </a>
+    <a href="cbn/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <img src="https://www.cbn.gov.ng/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="CBN favicon">
+            <span class="card-title" style="margin: 0;">Central Bank of Nigeria (CBN)</span>
+        </div>
+        <span class="card-desc">The central rate of 12 currencies against NGN, among them the West African CFA franc, from 2001.</span>
+    </a>
+    <a href="cbk/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <img src="https://www.centralbank.go.ke/wp-content/uploads/2016/09/NewLogoCBK-150x150.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="CBK favicon">
+            <span class="card-title" style="margin: 0;">Central Bank of Kenya (CBK)</span>
+        </div>
+        <span class="card-desc">21 currencies against KES, among them UGX, TZS, RWF and BIF, from 2004.</span>
+    </a>
+    <a href="rbi/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <img src="https://www.rbi.org.in/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="RBI favicon">
+            <span class="card-title" style="margin: 0;">Reserve Bank of India (RBI)</span>
+        </div>
+        <span class="card-desc">The FBIL reference rate of 7 currencies against INR, from 1998, with a gap from 2018 to 2022.</span>
+    </a>
+    <a href="bog/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <img src="https://www.bog.gov.gh/wp-content/uploads/2020/08/logo-150x150.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="BOG favicon">
+            <span class="card-title" style="margin: 0;">Bank of Ghana (BOG)</span>
+        </div>
+        <span class="card-desc">The interbank mid rate of 17 currencies against GHS, among them NGN, XOF, GMD and SLE, from 2020.</span>
+    </a>
     <a href="../../../community/contribute/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
      <div style="display: flex; align-items: center; gap: 0.75rem;">
      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--md-accent-fg-color);"><path d="M15.39 4.39a1 1 0 0 0 1.68-.474 2.5 2.5 0 1 1 3.014 3.015 1 1 0 0 0-.474 1.68l1.683 1.682a2.414 2.414 0 0 1 0 3.414L19.61 15.39a1 1 0 0 1-1.68-.474 2.5 2.5 0 1 0-3.014 3.015 1 1 0 0 1 .474 1.68l-1.683 1.682a2.414 2.414 0 0 1-3.414 0L8.61 19.61a1 1 0 0 0-1.68.474 2.5 2.5 0 1 1-3.014-3.015 1 1 0 0 0 .474-1.68l-1.683-1.682a2.414 2.414 0 0 1 0-3.414L4.39 8.61a1 1 0 0 1 1.68.474 2.5 2.5 0 1 0 3.014-3.015 1 1 0 0 1-.474-1.68l1.683-1.682a2.414 2.414 0 0 1 3.414 0z"/></svg>
@@ -125,6 +174,13 @@ Each central bank quotes other currencies against its own, the **base currency**
 | <img src="https://www.cnb.cz/export/system/modules/org.opencms.apollo/resources/img/favicon_120.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **CNB** (Czech National Bank) | CZK 🇨🇿 | Daily, around 14:30 on Czech working days | Koruna pairs, a long history from 1991 |
 | <img src="https://www.resbank.co.za/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **SARB** (South African Reserve Bank) | ZAR 🇿🇦 | Daily, after 10:30 SAST on South African business days | Southern and eastern Africa (BWP, MWK, MZN, ZMW) |
 | <img src="https://ecos.bok.or.kr/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **BOK** (Bank of Korea) | KRW 🇰🇷 | Daily, on Korean business days | Asia and the Middle East to the won (needs a free key) |
+| <img src="https://estadisticas.bcrp.gob.pe/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **BCRP** (Banco Central de Reserva del Perú) | PEN 🇵🇪 | Peruvian business days, published one to three days late | The official dollar rate of Peru |
+| <img src="https://www.superfinanciera.gov.co/info/superfinancierav8/web/portal/img/favicon.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **TRM** (TRM Colombia) | COP 🇨🇴 | Every Colombian banking day, the day before it is valid; a value for every day | The official dollar rate of Colombia |
+| <img src="https://cpx.cbc.gov.tw/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **CBC** (Central Bank of the Republic of China (Taiwan)) | TWD 🇹🇼 | Every Taiwanese business day, between 16:00 and 17:00 Taiwan time | The Taiwan dollar on the same day |
+| <img src="https://www.cbn.gov.ng/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **CBN** (Central Bank of Nigeria) | NGN 🇳🇬 | Nigerian business days | The official naira rate |
+| <img src="https://www.centralbank.go.ke/wp-content/uploads/2016/09/NewLogoCBK-150x150.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **CBK** (Central Bank of Kenya) | KES 🇰🇪 | Kenyan business days | East Africa (UGX, TZS, RWF, BIF) |
+| <img src="https://www.rbi.org.in/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **RBI** (Reserve Bank of India) | INR 🇮🇳 | Mumbai business days, around 13:30 India time | The rupee's reference rate (FBIL) |
+| <img src="https://www.bog.gov.gh/wp-content/uploads/2020/08/logo-150x150.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **BOG** (Bank of Ghana) | GHS 🇬🇭 | Ghanaian business days | West Africa (NGN, XOF, GMD, SLE) |
 
 ## 🎯 How Routing & Fallback Works
 
