@@ -73,9 +73,27 @@ Data only: what ``classification_params`` holds today becomes the first history 
   empty, a weight not a number or negative, a sum farther than 0.01 from 1) → that voice skipped, the others copied.
   Each skip is a warning of logger ``alembic.runtime.migration``.
 - Checks before it acts: an asset and voice that already has a ``legacy`` row is not copied again.
-- Downgrade, before the tables go: each asset's ``classification_params`` is rebuilt from its last row of each voice
-  in (``read_on``, ``id``) order — what the profile learned since the upgrade goes back to the column. A voice without
-  rows keeps its part; a last row left empty removes it; an asset without rows keeps its column as it was.
+- Downgrade, before the tables go and after ``drop_classification_params`` has added the column back empty: each
+  asset's ``classification_params`` is rebuilt from its last row of each voice in (``read_on``, ``id``) order — what the
+  profile learned since the upgrade goes back to the column. A last row left empty leaves the part out; an asset
+  without rows keeps an empty column.
+- Run again after ``drop_classification_params``, it finds no column and copies nothing.
+
+drop_classification_params (project 68, lot D7b)
+────────────────────────────────────────────────
+The old container goes: ``assets.classification_params`` is dropped, its description, countries and sectors living in
+the profile since ``asset_profile_legacy_copy`` (plan 68, §5 rule 2).
+
+- After the legacy copy in ``upgrade()``, before its downgrade in ``downgrade()``: the copy reads the column, its
+  downgrade writes it.
+- A plain ``ALTER TABLE assets DROP COLUMN``: the column has no index, constraint or reference (SQLite 3.35+), and no
+  row of any table changes (measured on the mock data with ``foreign_keys`` on: same counts, no violation).
+- **What the copy skipped is lost**: a part the copy could not read (not JSON, a distribution today's rule refuses)
+  made no row, and goes with the column. The copy logs each skip.
+- Downgrade: the column is added back with ``ALTER TABLE ADD COLUMN … TEXT``, **last** among the columns of
+  ``assets`` (SQLite appends it), empty for the legacy copy's downgrade to fill. A database brought back to 005 has
+  the 1.3 columns, but its ``CREATE TABLE assets`` text lists ``classification_params`` last; the 1.3 code reads the
+  column by name.
 
 plugin_call_counters (project 76, lot U1)
 ─────────────────────────────────────────
@@ -267,7 +285,12 @@ def _legacy_values(asset_id: int, text: str | None) -> dict[str, str]:
 
 
 def _upgrade_asset_profile_legacy_copy(conn: sa.engine.Connection) -> None:
-    """Step ``asset_profile_legacy_copy``: each asset's description, countries and sectors become ``legacy`` rows."""
+    """Step ``asset_profile_legacy_copy``: each asset's description, countries and sectors become ``legacy`` rows.
+
+    Runs before ``drop_classification_params`` (``upgrade()`` keeps that order, a test pins it). A run again after the
+    drop finds no column, and nothing left to copy: the copy was made by the run that dropped it."""
+    if _CLASSIFICATION_COLUMN not in _columns(conn, _ASSETS):
+        return
     already = {(row[0], row[1]) for row in conn.execute(sa.text(f"SELECT DISTINCT asset_id, key FROM {_PROFILE_UPDATES} WHERE source = :legacy"), {"legacy": _LEGACY})}
     first_days = _legacy_first_days(conn)
     created_at = datetime.now(UTC).replace(tzinfo=None)
@@ -319,6 +342,25 @@ def _downgrade_asset_profile_legacy_copy(conn: sa.engine.Connection) -> None:
                 params[part] = {"distribution": {name: format(Decimal(str(weight)), "f") for name, weight in value.items()}}
         rebuilt = json.dumps(params, default=str) if params else None
         conn.execute(sa.text("UPDATE assets SET classification_params = :params WHERE id = :id"), {"params": rebuilt, "id": asset_id})
+
+
+# ─── step drop_classification_params (project 68, lot D7b) ───────────────────────────────────────────────────────────
+
+_ASSETS = "assets"
+_CLASSIFICATION_COLUMN = "classification_params"
+
+
+def _upgrade_drop_classification_params(conn: sa.engine.Connection) -> None:
+    """Step ``drop_classification_params``: drop ``assets.classification_params``, after the legacy copy, when there."""
+    if _CLASSIFICATION_COLUMN in _columns(conn, _ASSETS):
+        conn.execute(sa.text(f"ALTER TABLE {_ASSETS} DROP COLUMN {_CLASSIFICATION_COLUMN}"))
+
+
+def _downgrade_drop_classification_params(conn: sa.engine.Connection) -> None:
+    """Step ``drop_classification_params`` undone: add the column back, empty and last, before the legacy copy's
+    downgrade fills it from the profile."""
+    if _CLASSIFICATION_COLUMN not in _columns(conn, _ASSETS):
+        conn.execute(sa.text(f"ALTER TABLE {_ASSETS} ADD COLUMN {_CLASSIFICATION_COLUMN} TEXT"))
 
 
 # ─── step plugin_call_counters (project 76, lot U1) ──────────────────────────────────────────────────────────────────
@@ -394,6 +436,7 @@ def upgrade() -> None:
     conn = op.get_bind()
     _upgrade_asset_profile(conn)
     _upgrade_asset_profile_legacy_copy(conn)
+    _upgrade_drop_classification_params(conn)
     _upgrade_plugin_call_counters(conn)
     _upgrade_charge_links(conn)
     _upgrade_broker_operating_profile(conn)
@@ -405,5 +448,6 @@ def downgrade() -> None:
     _downgrade_broker_operating_profile(conn)
     _downgrade_charge_links(conn)
     _downgrade_plugin_call_counters(conn)
+    _downgrade_drop_classification_params(conn)
     _downgrade_asset_profile_legacy_copy(conn)
     _downgrade_asset_profile(conn)

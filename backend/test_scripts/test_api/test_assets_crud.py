@@ -20,10 +20,7 @@ from backend.app.schemas import (
     FABulkAssetDeleteResponse,
     FABulkAssetPatchResponse,
     FABulkAssignResponse,
-    FAClassificationParams,
-    FAGeographicArea,
     FAinfoResponse,
-    FASectorArea,
 )
 from backend.app.schemas.assets.assets import FAAssetPatchItem
 from backend.app.schemas.prices import FAPricePoint, FAUpsert
@@ -263,26 +260,32 @@ async def test_create_duplicate_identifier(test_server):
 
 
 @pytest.mark.asyncio
-async def test_create_with_classification_params(test_server):
-    """Test 5: Create with classification_params."""
-    print_section("Test 5: POST /assets - With classification_params")
+async def test_the_old_classification_container_is_refused_and_never_returned(test_server):
+    """Test 5 (plan 68, D7a): the description, countries and sectors live in the asset's profile. ``POST`` and ``PATCH
+    /assets`` refuse the old ``classification_params`` (422, never a silent drop), and neither the list nor the bulk read
+    carries it or ``has_metadata`` any more."""
+    print_section("Test 5: POST/PATCH /assets - classification_params refused, never returned")
 
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
-        item = FAAssetCreateItem(
-            display_name=f"Tesla Inc. {unique_id('TSLA')}",
-            currency="USD",
-            asset_type=AssetType.STOCK,
-            classification_params=FAClassificationParams(
-                sector_area=FASectorArea(distribution={"Technology": 1.0}),
-                geographic_area=FAGeographicArea(distribution={"USA": 0.8, "CHN": 0.2}),
-            ),
-        )
-        response = await client.post(f"{API_BASE}/assets", json=[item.model_dump(mode="json")], timeout=TIMEOUT)
-        assert response.status_code == 201, f"Expected 201, got {response.status_code}: {response.text}"
-        data = FABulkAssetCreateResponse(**response.json())
-        assert data.results[0].success, "Creation failed"
-        print_success("✓ Asset with classification_params created")
+        name = f"Tesla Inc. {unique_id('TSLA')}"
+        old = {"short_description": "A car maker", "sector_area": {"distribution": {"Technology": "1"}}}
+        refused = await client.post(f"{API_BASE}/assets", json=[{"display_name": name, "currency": "USD", "classification_params": old}], timeout=TIMEOUT)
+        assert refused.status_code == 422, f"POST with classification_params: expected 422, got {refused.status_code}: {refused.text}"
+
+        created = await client.post(f"{API_BASE}/assets", json=[{"display_name": name, "currency": "USD"}], timeout=TIMEOUT)
+        assert created.status_code == 201, created.text
+        asset_id = FABulkAssetCreateResponse(**created.json()).results[0].asset_id
+
+        patched = await client.patch(f"{API_BASE}/assets", json=[{"asset_id": asset_id, "classification_params": None}], timeout=TIMEOUT)
+        assert patched.status_code == 422, f"PATCH with classification_params: expected 422, got {patched.status_code}: {patched.text}"
+
+        listed = await _listed(client, asset_id)
+        assert "has_metadata" not in listed, f"the list still carries has_metadata: {listed}"
+        read = await client.get(f"{API_BASE}/assets", params={"asset_ids": asset_id}, timeout=TIMEOUT)
+        assert read.status_code == 200, read.text
+        assert "classification_params" not in read.json()[0], f"the bulk read still carries classification_params: {read.json()[0]}"
+        print_success("✓ classification_params refused on write, absent on read; has_metadata gone")
 
 
 @pytest.mark.asyncio
@@ -1124,10 +1127,6 @@ async def test_bulk_read_get_all_list_and_delete_identifier_variants(test_server
             currency="USD",
             asset_type=AssetType.STOCK,
             identifier_ticker=read_ticker,
-            classification_params=FAClassificationParams(
-                sector_area=FASectorArea(distribution={"Technology": 1.0}),
-                geographic_area=FAGeographicArea(distribution={"USA": 1.0}),
-            ),
         )
         item2 = FAAssetCreateItem(
             display_name=f"Read Order Two {unique_id('RD2')}",
@@ -1171,8 +1170,7 @@ async def test_bulk_read_get_all_list_and_delete_identifier_variants(test_server
         assert [item["asset_id"] for item in read_data] == [asset2_id, asset1_id]
         assert read_data[0]["provider_code"] is None
         assert read_data[1]["provider_code"] == "mockprov"
-        assert read_data[1]["classification_params"]["sector_area"]["distribution"]["Technology"] == "1.0000"
-        print_success("✓ Bulk read preserves order, skips missing IDs, returns metadata/provider")
+        print_success("✓ Bulk read preserves order, skips missing IDs, returns the provider")
 
         all_resp = await client.get(f"{API_BASE}/assets/query", params={"active": True}, timeout=TIMEOUT)
         assert all_resp.status_code == 200, all_resp.text
@@ -1687,193 +1685,6 @@ async def test_list_held_flags_read_positions_through_the_portfolio_dust_thresho
                 await owner.delete(f"{API_BASE}/brokers", params={"ids": [broker_id], "force": True}, timeout=TIMEOUT)
             if asset_id is not None:
                 await client_a.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
-
-
-# ============================================================================
-# Classification metadata PATCH regression (root cause E2) — AssetCRUDService
-# .patch_assets_bulk / prepared patch_dict must shallow-merge classification_
-# params per subfield, not fully replace it: an unrelated field patch must
-# leave it alone, and an explicit null on one subfield must clear only that
-# subfield, never the whole block. See backend/app/services/assets/crud.py
-# ~ patch_assets_bulk (prepared patch_dict + per-field merge loop).
-# ============================================================================
-
-
-async def _create_asset_with_full_classification(client: httpx.AsyncClient, marker: str, description: str) -> int:
-    """Create an asset owning all three classification_params subfields, return its id."""
-    create_item = FAAssetCreateItem(
-        display_name=f"CP Regression {unique_id(marker)}",
-        currency="USD",
-        asset_type=AssetType.STOCK,
-        classification_params=FAClassificationParams(
-            short_description=description,
-            sector_area=FASectorArea(distribution={"Technology": 1.0}),
-            geographic_area=FAGeographicArea(distribution={"USA": 1.0}),
-        ),
-    )
-    create_resp = await client.post(f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT)
-    assert create_resp.status_code == 201, create_resp.text
-    return FABulkAssetCreateResponse(**create_resp.json()).results[0].asset_id
-
-
-async def _read_classification(client: httpx.AsyncClient, asset_id: int) -> dict | None:
-    """Fresh GET /assets?asset_ids=<id>, identified by asset_id (never by position)."""
-    read_resp = await client.get(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
-    assert read_resp.status_code == 200, read_resp.text
-    row = next(r for r in read_resp.json() if r["asset_id"] == asset_id)
-    return row["classification_params"]
-
-
-@pytest.mark.asyncio
-async def test_patch_name_only_preserves_classification_metadata(test_server):
-    """Test 22: a PATCH that omits classification_params entirely must leave
-    the asset's existing description/sector/geography exactly as they were."""
-    print_section("Test 22: PATCH /assets - name-only patch preserves classification_params")
-
-    async with httpx.AsyncClient() as client:
-        await create_user_and_login(client)
-        asset_id: int | None = None
-        try:
-            asset_id = await _create_asset_with_full_classification(client, "MDK", "Diversified technology holding")
-
-            new_name = f"CP Regression Renamed {unique_id('MDK2')}"
-            # Bare dict, not a model_dump of a full FAAssetPatchItem: classification_params
-            # must be entirely ABSENT from the wire payload, proving an unrelated field
-            # patch cannot disturb it (as opposed to sending it explicitly as null/{}).
-            patch_resp = await client.patch(
-                f"{API_BASE}/assets",
-                json=[{"asset_id": asset_id, "display_name": new_name}],
-                timeout=TIMEOUT,
-            )
-            assert patch_resp.status_code == 200, patch_resp.text
-            patch_data = FABulkAssetPatchResponse(**patch_resp.json())
-            result = next(r for r in patch_data.results if r.asset_id == asset_id)
-            assert result.success, result.message
-
-            cp = await _read_classification(client, asset_id)
-            assert cp is not None, "classification_params must survive an unrelated field patch"
-            assert cp["short_description"] == "Diversified technology holding"
-            assert cp["sector_area"]["distribution"]["Technology"] == "1.0000"
-            assert cp["geographic_area"]["distribution"]["USA"] == "1.0000"
-            print_success("✓ name-only PATCH left classification_params untouched")
-        finally:
-            if asset_id is not None:
-                await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
-
-
-@pytest.mark.asyncio
-async def test_patch_classification_explicit_null_subfield_clears_only_that_field(test_server):
-    """Test 23: classification_params partial patch with an explicit null on
-    ONE subfield (sector_area) clears only that subfield — sibling subfields
-    (geographic_area, short_description) must remain untouched."""
-    print_section("Test 23: PATCH /assets - classification_params explicit-null subfield")
-
-    async with httpx.AsyncClient() as client:
-        await create_user_and_login(client)
-        asset_id: int | None = None
-        try:
-            asset_id = await _create_asset_with_full_classification(client, "MPC", "Diversified technology holding")
-
-            # Only sector_area is present on the wire (explicit null); short_description
-            # and geographic_area are absent from the JSON, i.e. "leave as is".
-            sector_clear = FAClassificationParams(sector_area=None)
-            assert sector_clear.model_fields_set == {"sector_area"}, "fixture must send only sector_area"
-            patch_resp = await client.patch(
-                f"{API_BASE}/assets",
-                json=[
-                    {
-                        "asset_id": asset_id,
-                        "classification_params": sector_clear.model_dump(mode="json", exclude_unset=True),
-                    }
-                ],
-                timeout=TIMEOUT,
-            )
-            assert patch_resp.status_code == 200, patch_resp.text
-            patch_data = FABulkAssetPatchResponse(**patch_resp.json())
-            result = next(r for r in patch_data.results if r.asset_id == asset_id)
-            assert result.success, result.message
-
-            cp = await _read_classification(client, asset_id)
-            assert cp is not None, "an explicit-null subfield must not clear the whole classification block"
-            assert cp.get("sector_area") is None, f"sector_area must be cleared, got {cp.get('sector_area')}"
-            assert cp["geographic_area"]["distribution"]["USA"] == "1.0000"
-            assert cp["short_description"] == "Diversified technology holding"
-            print_success("✓ explicit-null sector_area cleared only sector_area")
-        finally:
-            if asset_id is not None:
-                await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
-
-
-@pytest.mark.asyncio
-async def test_patch_classification_description_only_preserves_distributions(test_server):
-    """Test 24: a classification_params patch touching only short_description
-    must leave sector_area/geographic_area distributions untouched — a shallow
-    per-field merge, not a full-block replace."""
-    print_section("Test 24: PATCH /assets - classification_params description-only patch")
-
-    async with httpx.AsyncClient() as client:
-        await create_user_and_login(client)
-        asset_id: int | None = None
-        try:
-            asset_id = await _create_asset_with_full_classification(client, "MDO", "Original description")
-
-            description_only = FAClassificationParams(short_description="Updated description")
-            assert description_only.model_fields_set == {"short_description"}, "fixture must send only short_description"
-            patch_resp = await client.patch(
-                f"{API_BASE}/assets",
-                json=[
-                    {
-                        "asset_id": asset_id,
-                        "classification_params": description_only.model_dump(mode="json", exclude_unset=True),
-                    }
-                ],
-                timeout=TIMEOUT,
-            )
-            assert patch_resp.status_code == 200, patch_resp.text
-            patch_data = FABulkAssetPatchResponse(**patch_resp.json())
-            result = next(r for r in patch_data.results if r.asset_id == asset_id)
-            assert result.success, result.message
-
-            cp = await _read_classification(client, asset_id)
-            assert cp is not None
-            assert cp["short_description"] == "Updated description"
-            assert cp["sector_area"]["distribution"]["Technology"] == "1.0000"
-            assert cp["geographic_area"]["distribution"]["USA"] == "1.0000"
-            print_success("✓ description-only PATCH left sector_area/geographic_area distributions intact")
-        finally:
-            if asset_id is not None:
-                await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
-
-
-@pytest.mark.asyncio
-async def test_patch_classification_full_null_clears_entire_block(test_server):
-    """Test 25: an explicit classification_params: null (the WHOLE field, not a
-    subfield) clears sector_area, geographic_area and short_description
-    together — distinct from the single-subfield clear in Test 23."""
-    print_section("Test 25: PATCH /assets - classification_params: null clears everything")
-
-    async with httpx.AsyncClient() as client:
-        await create_user_and_login(client)
-        asset_id: int | None = None
-        try:
-            asset_id = await _create_asset_with_full_classification(client, "MFC", "Will be wiped")
-
-            patch_resp = await client.patch(
-                f"{API_BASE}/assets",
-                json=[{"asset_id": asset_id, "classification_params": None}],
-                timeout=TIMEOUT,
-            )
-            assert patch_resp.status_code == 200, patch_resp.text
-            patch_data = FABulkAssetPatchResponse(**patch_resp.json())
-            result = next(r for r in patch_data.results if r.asset_id == asset_id)
-            assert result.success, result.message
-
-            cp = await _read_classification(client, asset_id)
-            assert cp is None, f"classification_params: null must clear the whole block, got {cp}"
-            print_success("✓ classification_params: null cleared sector/geography/description together")
-        finally:
-            if asset_id is not None:
-                await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
 
 
 # ============================================================================

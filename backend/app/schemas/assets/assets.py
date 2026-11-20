@@ -30,7 +30,6 @@ from pydantic import ConfigDict, Field, field_validator
 
 from backend.app.db.models import AssetType, IdentifierType
 from backend.app.schemas.assets.enrichers import FAEnricherBinding, check_enricher_codes
-from backend.app.schemas.assets.metadata import FAClassificationParams
 from backend.app.schemas.common import (
     BaseBulkResponse,
     BaseDeleteResult,
@@ -74,9 +73,8 @@ class FAAssetCreateItem(StrictModel):
     is_benchmark: bool = Field(False, description="Offer this asset as a comparison benchmark in risk and chart selectors")
     user_url: Optional[str] = Field(None, description="User-defined URL (notes, external dashboard, etc.)")
 
-    # Classification metadata (optional)
-    classification_params: Optional[FAClassificationParams] = Field(None, description="Asset classification metadata")
-    # The asset profile (plan 68, B3): written in the same transaction as the asset
+    # The asset profile (plan 68, B3): written in the same transaction as the asset; the description, the countries and
+    # the sectors are its voices (the old ``classification_params`` is refused since D7a)
     enrichers: Optional[Dict[str, FAEnricherBinding]] = Field(None, description="Enricher code → binding; the order of the keys is the priority")
     profile: Optional[Dict[str, Any]] = Field(None, description="Profile voice → value written by hand (null: left empty on purpose)")
 
@@ -229,7 +227,6 @@ class FAinfoResponse(StrictModel):
     is_benchmark: bool = Field(False, description="Asset is offered as a comparison benchmark")
     user_url: Optional[str] = Field(None, description="User-defined URL (notes, external dashboard, etc.)")
     provider_code: Optional[str] = Field(None, description="Provider code if assigned (e.g. 'yfinance')")
-    has_metadata: bool = Field(..., description="Whether asset has classification metadata")
 
     # Usage counters (F15) — drive the "your assets / other users' assets / under
     # analysis" panels on the global assets page. `tx_count_own` counts only
@@ -297,10 +294,8 @@ class FAAssetPatchItem(StrictModel):
     - A list replaces the whole list; an empty list clears it
     - None: IGNORE (keep existing value)
 
-    For classification_params:
-    - If None or an empty object: Set DB column to NULL
-    - Otherwise: Replace provided fields atomically, preserve omitted fields
-    - Explicit null subfields remove only that classification block
+    The description, the countries and the sectors are voices of ``profile`` (plan 68); the old ``classification_params``
+    is refused (422) since D7a.
     """
 
     asset_id: int = Field(..., description="Asset ID to update")
@@ -311,7 +306,6 @@ class FAAssetPatchItem(StrictModel):
     asset_type: Optional[AssetType] = Field(None, description="Update asset type (STOCK, ETF, BOND, etc.)")
     icon_url: Optional[str] = Field(None, description="Update icon URL (None = clear)")
     quote_base_quantity: Optional[int] = Field(None, description="Update quote base quantity")
-    classification_params: Optional[FAClassificationParams] = Field(None, description="Update classification (None = clear)")
     enrichers: Optional[Dict[str, FAEnricherBinding]] = Field(None, description="Replace the enricher bindings (code → binding, the order is the priority); null or {} clears them; absent = unchanged")
     profile: Optional[Dict[str, Any]] = Field(None, description="Profile voices written by hand: a value writes it, null leaves it empty on purpose, an absent voice is untouched")
     active: Optional[bool] = Field(None, description="Update active status")

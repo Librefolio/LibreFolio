@@ -82,9 +82,12 @@ vi.mock('$lib/api', () => ({
     },
     ApiError: class ApiError extends Error {},
 }));
-vi.mock('$lib/utils/providerHelpers', () => ({
+vi.mock('$lib/utils/providerHelpers', async () => ({
     ensureAssetProvidersCached: vi.fn(() => Promise.resolve()),
     getAssetProviderIconUrl: vi.fn(() => null),
+    // The plugin card's attribution line (76 P4): no provider here asks for one
+    assetProvidersVersion: (await import('svelte/store')).writable(0),
+    getAssetProviderAttribution: vi.fn(() => null),
 }));
 // P20: the instance as the component reads it, set per case before the mount. By default a self-hosted instance whose
 // configuration has loaded, with no support address: the one that falls back to a public GitHub issue (N61).
@@ -129,6 +132,7 @@ import {writeTextToClipboard} from '$lib/utils/clipboard';
 import {APP_VERSION} from '$lib/version';
 import {buildSearchReport, type ProviderOutcome, type SearchReportContext} from './assetSearchReport';
 import {GITHUB_NEW_ISSUE_URL, reportHref} from '$lib/features/support/supportChannel';
+import {getAssetProviderAttribution} from '$lib/utils/providerHelpers';
 
 const listProviders = vi.mocked(zodiosApi.list_providers_api_v1_assets_provider_get);
 const restSearch = vi.mocked(zodiosApi.search_assets_via_providers_api_v1_assets_provider_search_get);
@@ -196,6 +200,26 @@ describe('AssetSearchAutocomplete — providers', () => {
         expect(screen.getByTestId('asset-search-provider-beta')).toHaveAttribute('data-selected', 'true');
         expect(screen.queryByTestId('asset-search-provider-nosearch')).toBeNull();
         expect(screen.queryByTestId('asset-search-provider-mockprov')).toBeNull();
+    });
+
+    // MOB (lane 76's triage): the chips arrive after the window opens and move the form down; the root says when the
+    // list is in, so a reader of the layout (settleModal) can wait for it
+    it('publishes the load of the provider list: pending, then ready', async () => {
+        let answer!: (value: unknown) => void;
+        listProviders.mockReturnValue(new Promise((done) => (answer = done)) as never);
+        render(AssetSearchAutocomplete, {onselect: vi.fn()});
+        const root = document.querySelector('[data-search-autocomplete]')!;
+        expect(root).toHaveAttribute('data-providers', 'pending');
+        answer(PROVIDERS);
+        await waitFor(() => expect(root).toHaveAttribute('data-providers', 'ready'));
+        expect(screen.getByTestId('asset-search-provider-alpha')).toBeInTheDocument();
+    });
+
+    it('publishes a failed load of the provider list as failed: finished, no chips', async () => {
+        listProviders.mockRejectedValue(new Error('network') as never);
+        render(AssetSearchAutocomplete, {onselect: vi.fn()});
+        const root = document.querySelector('[data-search-autocomplete]')!;
+        await waitFor(() => expect(root).toHaveAttribute('data-providers', 'failed'));
     });
 });
 
@@ -1658,5 +1682,67 @@ describe('AssetSearchAutocomplete — a provider to configure is switched off (7
         await mountReady();
         expect(chip('beta')).toHaveAttribute('data-configured', 'true');
         expect(chip('beta')).toHaveAttribute('data-selected', 'true');
+    });
+});
+
+// Project 76, P4b (the consultant's rule, 18/11): wherever a provider's data is on screen and the provider has an
+// attribution, its line is there. Search rows are the provider's data too (names, ids): the line goes under the
+// results when such a provider answered with at least one row.
+describe("AssetSearchAutocomplete — a provider's attribution under its results (76 P4b)", () => {
+    const ATTRIBUTION = {text: 'Powered by Alpha', url: 'https://alpha.example/'};
+
+    afterEach(() => {
+        vi.mocked(getAssetProviderAttribution).mockImplementation(() => null);
+    });
+
+    it('shows the line of a provider with an attribution that answered with a row', async () => {
+        vi.mocked(getAssetProviderAttribution).mockImplementation((code: string | null | undefined) => (code === 'alpha' ? ATTRIBUTION : null));
+        await mountReady();
+        await type('apple');
+        await waitFor(() => expect(state()).toBe('results'));
+
+        const note = await screen.findByTestId('asset-search-attribution');
+        const links = within(note).getAllByTestId('provider-attribution-link');
+        expect(links.map((link) => link.getAttribute('data-provider'))).toEqual(['alpha']);
+        expect(links[0]).toHaveAttribute('href', ATTRIBUTION.url);
+    });
+
+    it('shows nothing when that provider gave no row', async () => {
+        vi.mocked(getAssetProviderAttribution).mockImplementation((code: string | null | undefined) => (code === 'alpha' ? ATTRIBUTION : null));
+        global.fetch = vi.fn(async () => sseResponse([{event: 'provider_results', results: [R2]}, {event: 'done'}])) as never;
+        await mountReady();
+        await type('microsoft');
+        await waitFor(() => expect(state()).toBe('results'));
+
+        expect(screen.queryByTestId('asset-search-attribution')).toBeNull();
+    });
+});
+
+// =====================================================================================================================
+// S3 (project 76; the developer, 20/11): a result carries the asset's icon when its provider knows it at search time
+// (CoinGecko's coin logo); the row draws it, and a result without one is drawn as before (the asset type's icon).
+describe('AssetSearchAutocomplete — the icon of a result (76 S3)', () => {
+    const LOGO = 'https://coin-images.coingecko.com/coins/images/29850/large/pepe-token.jpeg';
+    const PEPE = {identifier: 'pepe', identifier_type: 'other', display_name: 'Pepe (PEPE)', provider_code: 'alpha', currency: 'EUR', asset_type: 'CRYPTO', via_web: false, icon_url: LOGO};
+    const iconOf = (index: number) => screen.getByTestId(`asset-search-result-${index}`).querySelector(`img[src="${LOGO}"]`);
+
+    it("ASA-I1: the streamed row draws the result's icon; a result without one draws none of it", async () => {
+        global.fetch = vi.fn(async () => sseResponse([{event: 'provider_results', results: [PEPE, R2]}, {event: 'done'}])) as never;
+        await mountReady();
+        await type('pepe');
+        await waitFor(() => expect(state()).toBe('results'));
+
+        expect(screen.getByTestId('asset-search-result-0')).toHaveAttribute('data-identifier', 'pepe');
+        expect(iconOf(0), 'the logo is drawn').not.toBeNull();
+        expect(iconOf(1), 'Microsoft has no icon: its row is as before').toBeNull();
+    });
+
+    it('ASA-I2: the REST fallback carries the icon too', async () => {
+        global.fetch = vi.fn(async () => sseResponse([], {ok: false})) as never;
+        restSearch.mockResolvedValue({results: [PEPE]} as never);
+        await mountReady();
+        await type('pepe');
+        await waitFor(() => expect(state()).toBe('results'));
+        expect(iconOf(0)).not.toBeNull();
     });
 });

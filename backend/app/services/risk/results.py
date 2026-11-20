@@ -30,7 +30,7 @@ from backend.app.services.risk.metrics import (
     current_buy_and_hold_returns,
     period_returns_from_cumulative,
 )
-from backend.app.services.risk.plan import AnalyticPlan, is_hypothetical_plan, reads_the_twrr_alone
+from backend.app.services.risk.plan import AnalyticPlan, reads_no_price_series, reads_the_twrr_alone
 from backend.app.services.risk.scope import ScopeInputs, scope_exclusions, scope_reference
 
 # What the scope says about its per-asset composition: the assets left without a series, and a
@@ -380,6 +380,9 @@ def available_observations(
         "asset_set_comparison",
     }:
         return context.prepared_series.n_observations if context.prepared_series is not None else 0
+    if plan.request.analytic_code == "rate_shock":
+        # RN-25: the price change comes from the profile's duration, not from a return series.
+        return None
     if plan.request.analytic_code == "stress":
         if getattr(plan.params, "method", None) == RiskStressMethod.HYPOTHETICAL:
             return None
@@ -417,7 +420,7 @@ def success_result(
     data_quality = plan_data_quality(plan, context)
     context_warnings = context.execution_warnings
     context_exclusions = context.excluded_assets
-    if is_hypothetical_plan(plan):
+    if reads_no_price_series(plan):
         context_warnings = tuple(warning for warning in context_warnings if warning.code != "assets_excluded" and warning.code not in _HISTORY_WINDOW_WARNING_CODES)
         context_exclusions = ()
     elif reads_the_twrr_alone(plan, context):
@@ -462,7 +465,7 @@ def result_metadata(
         annualization_factor = None
 
     analyzed_range = computation.analyzed_range if computation is not None and computation.analyzed_range is not None else context_analyzed_range(context)
-    context_exclusions = () if is_hypothetical_plan(plan) or reads_the_twrr_alone(plan, context) else context.excluded_assets
+    context_exclusions = () if reads_no_price_series(plan) or reads_the_twrr_alone(plan, context) else context.excluded_assets
     computation_exclusions = computation.excluded_assets if computation is not None else ()
     exclusions = dedupe_exclusions(
         (

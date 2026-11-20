@@ -23,7 +23,13 @@
  * in the unit-price field; typing an amount (or switching the badge) hands it back to `amount`; a new quantity or asset
  * keeps whoever drives and recalculates the other.
  *
- * @financial-math-exception W5-9 (#47), the transaction form: the amount of a trade from the unit price the user types, or the unit price from the amount (quantity / quote_base_quantity × price), exact decimal arithmetic rounded half-even to the stored scales
+ * ## The total of a parent and its charges (project 66, F1)
+ *
+ * The form of a parent shows, under its linked charges, «Addebito totale» (cash out) or «Netto incassato» (cash in): the
+ * trade amount plus or minus the charges, per currency. A read-only line, never a field: every voice is only itself, so
+ * the trade amount never holds its charges (developer decisions of 12/11/2026), and there is no sum across currencies.
+ *
+ * @financial-math-exception W5-9 (#47), the transaction form: the amount of a trade from the unit price the user types, or the unit price from the amount (quantity / quote_base_quantity × price), exact decimal arithmetic rounded half-even to the stored scales; and (project 66, F1) the total of a parent with its linked charges, «Addebito totale» / «Netto incassato», one exact sum per currency of the amounts the user types
  */
 import {decimalDigitCounts, REAL_SIGNIFICANT_DIGITS} from '$lib/utils/core/parseDecimalInput';
 
@@ -157,4 +163,71 @@ function magnitudeText(text: string | null | undefined): string | null {
  */
 export function tradeHasUnitPrice(rule: {quantityMode: string; cashField: string; assetField: string}): boolean {
     return rule.quantityMode !== 'forbidden' && rule.cashField !== 'forbidden' && rule.assetField !== 'forbidden';
+}
+
+// ─── linked charges: the computed total of a parent (project 66, F1) ─────────────────────────────────────────────────
+
+/** Which way a parent's cash goes: out for a BUY or a WITHDRAWAL, in for a SELL, DIVIDEND, INTEREST or DEPOSIT. */
+export type CashDirection = 'out' | 'in';
+
+/** An amount in canonical decimal text, like `TradeAmountInput` (a magnitude; one leading sign is ignored), with its currency. */
+export interface CashLine {
+    amount: string;
+    currency: string | null | undefined;
+}
+
+/** A total in one currency, as plain decimal text. */
+export interface CurrencyTotal {
+    currency: string;
+    amount: string;
+}
+
+/** A signed decimal text as `coefficient × 10^-scale`, or `null` when it is not a decimal inside an amount's limits. */
+function signedAmount(text: string): {coefficient: bigint; scale: number} | null {
+    const magnitude = magnitudeText(text)?.trim() ?? '';
+    if (!isAmount(magnitude)) return null;
+    return scaled(magnitude);
+}
+
+/** A magnitude inside an amount's limits (6 decimals, 15 significant digits); zero is allowed here. */
+function isAmount(text: string): boolean {
+    const counts = decimalDigitCounts(text);
+    if (counts === null || counts.stripped.startsWith('-')) return false;
+    return counts.fractionDigits <= AMOUNT_DECIMALS && counts.significantDigits <= REAL_SIGNIFICANT_DIGITS;
+}
+
+/**
+ * «Addebito totale» (cash `out`) or «Netto incassato» (cash `in`) of a parent with its linked charges: per currency, the
+ * trade amount plus (out) or minus (in) the charges in that currency. Every voice is only itself — the trade amount never
+ * holds its charges — and there is no sum across currencies: one entry per currency, the trade's first, then the others
+ * in the order the charges bring them. Exact, on the decimal text.
+ *
+ * A charge whose amount is still blank (a row just added) is skipped. `null` when there is nothing sure to show: the trade
+ * amount blank or not a decimal, any typed amount not a decimal or past an amount's limits, or a counted line without a
+ * currency.
+ */
+export function tradeTotalWithCharges(direction: CashDirection, trade: CashLine, charges: readonly CashLine[]): CurrencyTotal[] | null {
+    if (trade.amount.trim() === '' || !trade.currency) return null;
+    const totals = new Map<string, {coefficient: bigint; scale: number}>();
+    const add = (currency: string, value: {coefficient: bigint; scale: number}, sign: 1n | -1n): void => {
+        const current = totals.get(currency) ?? {coefficient: 0n, scale: 0};
+        const scale = Math.max(current.scale, value.scale);
+        const coefficient = current.coefficient * 10n ** BigInt(scale - current.scale) + sign * value.coefficient * 10n ** BigInt(scale - value.scale);
+        totals.set(currency, {coefficient, scale});
+    };
+    const tradeValue = signedAmount(trade.amount);
+    if (tradeValue === null) return null;
+    add(trade.currency, tradeValue, 1n);
+    for (const charge of charges) {
+        if (charge.amount.trim() === '') continue;
+        const value = signedAmount(charge.amount);
+        if (value === null || !charge.currency) return null;
+        add(charge.currency, value, direction === 'out' ? 1n : -1n);
+    }
+    return [...totals].map(([currency, {coefficient, scale}]) => ({currency, amount: signedPlain(coefficient, scale)}));
+}
+
+/** `plain` for a coefficient that may be negative. */
+function signedPlain(coefficient: bigint, scale: number): string {
+    return coefficient < 0n ? `-${plain(-coefficient, scale)}` : plain(coefficient, scale);
 }

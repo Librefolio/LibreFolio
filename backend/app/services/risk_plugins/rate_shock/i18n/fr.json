@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "rateShock": {
+        "name": "Taux en hausse ou en baisse",
+        "description": "Le prix d'un actif sous un déplacement parallèle de son rendement, à partir de la duration modifiée lue dans son profil : une estimation au premier ordre, −duration × le déplacement."
+      }
+    }
+  }
+}

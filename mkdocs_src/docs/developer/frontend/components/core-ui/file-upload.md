@@ -184,8 +184,9 @@ The DataTable of the Files page, both tabs, and of a broker's
   `onScopeChange(file, 'personal')`; both only when the file's `can_delete` is not `false`
 - **Delete** row action: hidden when the row's `can_delete` is `false`, on both types
   (`UploadFileInfo.can_delete`; `can_delete` of the `GET /brokers/import/files` items). The bulk
-  delete belongs to the host's `SelectionBar`: the Files page leaves those files out
-  ([below](#scope-flow)), BrokerImportFilesModal sends them and the server refuses them with `403`
+  delete is the host's action on the table's selection panel (`selectionActions`): on the Files page and in
+  BrokerImportFilesModal it applies only to the selected files whose `can_delete` is not `false`, and counts them
+  ([below](#scope-flow)); the server refuses any other with `403`
 
 ## 🔐 Scope of uploaded files {: #scope-flow }
 

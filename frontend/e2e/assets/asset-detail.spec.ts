@@ -63,7 +63,6 @@ async function mockDetailAssetWithGlobalTransactions(page: Page, assetId: number
         currency: 'EUR',
         asset_type: 'STOCK',
         active: true,
-        has_metadata: false,
         provider_code: null,
         tx_count: txCount,
         // Deliberately zero: the displayed total is global and is not a promise
@@ -610,7 +609,6 @@ test.describe('Asset Detail Page', () => {
             currency: 'GBP',
             asset_type: 'STOCK',
             active: true,
-            has_metadata: false,
             provider_code: null,
             tx_count: 0,
             tx_count_own: 0,
@@ -626,7 +624,6 @@ test.describe('Asset Detail Page', () => {
             currency: 'GBP',
             asset_type: 'STOCK',
             active: true,
-            has_metadata: false,
             provider_code: null,
             tx_count: 0,
             tx_count_own: 0,
@@ -637,7 +634,6 @@ test.describe('Asset Detail Page', () => {
             currency: 'JPY',
             asset_type: 'STOCK',
             active: true,
-            has_metadata: false,
             provider_code: null,
             tx_count: 0,
             tx_count_own: 0,
@@ -648,7 +644,6 @@ test.describe('Asset Detail Page', () => {
             currency: 'CHF',
             asset_type: 'STOCK',
             active: true,
-            has_metadata: false,
             provider_code: null,
             tx_count: 0,
             tx_count_own: 0,
@@ -659,7 +654,6 @@ test.describe('Asset Detail Page', () => {
             currency: 'AUD',
             asset_type: 'STOCK',
             active: true,
-            has_metadata: false,
             provider_code: null,
             tx_count: 0,
             tx_count_own: 0,
@@ -670,7 +664,6 @@ test.describe('Asset Detail Page', () => {
             currency: 'CAD',
             asset_type: 'STOCK',
             active: true,
-            has_metadata: false,
             provider_code: null,
             tx_count: 0,
             tx_count_own: 0,
@@ -681,7 +674,6 @@ test.describe('Asset Detail Page', () => {
             currency: 'EUR',
             asset_type: 'STOCK',
             active: true,
-            has_metadata: false,
             provider_code: 'MOCKASSET',
             tx_count: 0,
             tx_count_own: 0,
@@ -815,7 +807,6 @@ test.describe('Asset Detail Page', () => {
             currency: 'EUR',
             asset_type: 'STOCK',
             active: true,
-            has_metadata: false,
             provider_code: 'MOCKASSET',
             tx_count: 0,
             tx_count_own: 0,
@@ -8488,7 +8479,6 @@ async function mockCacheHitEventsAsset(page: Page, assetId: number) {
         currency: 'EUR',
         asset_type: 'STOCK',
         active: true,
-        has_metadata: false,
         provider_code: null,
         tx_count: 0,
         tx_count_own: 0,
@@ -9704,7 +9694,7 @@ test.describe('X-R16 asset detail: an invalid signal result keeps the prices and
      * `mainSignals` as its signal results. Returns the main queries delivered and the date of the first close.
      */
     async function routeSyntheticAsset(page: Page, assetId: number, mainSignals: readonly object[]) {
-        const asset = {id: assetId, display_name: `X-R16 synthetic asset ${assetId}`, currency: 'EUR', asset_type: 'STOCK', active: true, has_metadata: false, provider_code: null, tx_count: 0, tx_count_own: 0};
+        const asset = {id: assetId, display_name: `X-R16 synthetic asset ${assetId}`, currency: 'EUR', asset_type: 'STOCK', active: true, provider_code: null, tx_count: 0, tx_count_own: 0};
         const history = Array.from({length: 90}, (_, index) => daysAgoIso(90 - index));
         const delivered: DeliveredMainQuery[] = [];
         await page.route(
@@ -10740,5 +10730,78 @@ test.describe('Asset detail — a compared FX pair is drawn (Y-41)', () => {
         await expect(chart).toHaveAttribute('data-series-state', /^(ready|partial)$/);
         await expectPairLineDrawn(page, CHART, PAIR, `the ${PAIR} return is drawn beside the asset's`);
         await waitForSettled(page.getByTestId('asset-detail-page'), 20_000);
+    });
+});
+
+/**
+ * RN-21 «A» (the consultant, 18/11/2026): a chart signal bound to the reader's risk-free rate is asked with the rate, so
+ * when the rate changes in the Risk tab the chart asks it again, with the new rate — the line follows the field instead of
+ * keeping the old answer.
+ */
+test.describe('Asset detail — a signal bound to the risk-free rate follows it («A», RN-21)', () => {
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    interface SignalAsk {
+        signal_code?: string;
+        params?: Record<string, unknown>;
+    }
+
+    /** The rates the chart asked its rolling Sharpe with, in the order sent, from now on. */
+    function watchSharpeRates(page: Page): number[] {
+        const rates: number[] = [];
+        page.on('request', (request: Request) => {
+            if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/v1/assets/prices/query') return;
+            let body: unknown;
+            try {
+                body = request.postDataJSON();
+            } catch {
+                return;
+            }
+            for (const item of Array.isArray(body) ? body : []) {
+                for (const signal of ((item as {signals?: SignalAsk[]}).signals ?? []) as SignalAsk[]) {
+                    if (signal.signal_code === 'RISK_ROLLING_SHARPE' && typeof signal.params?.risk_free_annual_rate === 'number') rates.push(signal.params.risk_free_annual_rate);
+                }
+            }
+        });
+        return rates;
+    }
+
+    test('changing the rate in the Risk tab asks the chart’s rolling Sharpe again, with the new rate', async ({page}) => {
+        const appleId = await assetIdByName(page, 'Apple Inc.');
+        const sharpe = {id: 'e2e-a-sharpe', signalType: 'risk-rolling-sharpe', params: {window: 20}, style: {color: '#f59e0b', lineWidth: 2, lineType: 'solid', markerStart: null, markerEnd: null}};
+        await seedChartComparisons(page, [[`asset-${appleId}`, [sharpe as unknown as Parameters<typeof seedChartComparisons>[1][number][1][number]]]]);
+        const rates = watchSharpeRates(page);
+
+        await goToAssetDetailPage(page, String(appleId));
+        await expect.poll(() => rates.length, {message: 'the chart never asked its rolling Sharpe', timeout: 15_000}).toBeGreaterThan(0);
+        expect(
+            rates.every((rate) => rate === 0),
+            `premise: a fresh reader's rate is 0, asked ${JSON.stringify(rates)}`,
+        ).toBe(true);
+
+        await page.getByTestId('asset-detail-tab-risk').click();
+        const field = page.getByTestId('asset-detail-risk-panel').getByTestId('risk-free-rate');
+        await expect(field).toBeVisible({timeout: 15_000});
+        // The answer to the request at the new rate: the engine must accept it, not only receive it.
+        const answeredAtNewRate = page.waitForResponse(
+            (response) => {
+                const request = response.request();
+                if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/v1/assets/prices/query') return false;
+                try {
+                    const body = request.postDataJSON() as Array<{signals?: SignalAsk[]}>;
+                    return Array.isArray(body) && body.some((item) => (item.signals ?? []).some((signal) => signal.signal_code === 'RISK_ROLLING_SHARPE' && signal.params?.risk_free_annual_rate === 0.025));
+                } catch {
+                    return false;
+                }
+            },
+            {timeout: 15_000},
+        );
+        await field.fill('2.5');
+        await field.press('Enter');
+
+        await expect.poll(() => rates.includes(0.025), {message: `the chart did not ask its rolling Sharpe at the new rate, asked ${JSON.stringify(rates)}`, timeout: 15_000}).toBe(true);
+        expect((await answeredAtNewRate).status(), 'the request at the new rate was refused').toBe(200);
     });
 });

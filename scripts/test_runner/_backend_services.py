@@ -68,13 +68,28 @@ AI_EXPORT_PURE_TEST_PATHS = (
 PROVIDER_ERROR_TEST_PATHS = (
     "backend/test_scripts/test_services/test_borsa_italiana_errors.py",
     "backend/test_scripts/test_services/test_fx_parse_errors.py",
+    "backend/test_scripts/test_services/test_fx_banxico.py",
     "backend/test_scripts/test_services/test_fx_bcb.py",
+    "backend/test_scripts/test_services/test_fx_cbc.py",
+    "backend/test_scripts/test_services/test_fx_cbk.py",
+    "backend/test_scripts/test_services/test_fx_cbn.py",
+    "backend/test_scripts/test_services/test_fx_bcra.py",
+    "backend/test_scripts/test_services/test_fx_bcrp.py",
     "backend/test_scripts/test_services/test_fx_bdi.py",
+    "backend/test_scripts/test_services/test_fx_bnr.py",
     "backend/test_scripts/test_services/test_fx_boc.py",
     "backend/test_scripts/test_services/test_fx_boe_quotes.py",
+    "backend/test_scripts/test_services/test_fx_bog.py",
+    "backend/test_scripts/test_services/test_fx_boi.py",
+    "backend/test_scripts/test_services/test_fx_bok.py",
+    "backend/test_scripts/test_services/test_fx_cnb.py",
     "backend/test_scripts/test_services/test_fx_fed_quotes.py",
+    "backend/test_scripts/test_services/test_fx_nbp.py",
     "backend/test_scripts/test_services/test_fx_nbu.py",
     "backend/test_scripts/test_services/test_fx_norges.py",
+    "backend/test_scripts/test_services/test_fx_rbi.py",
+    "backend/test_scripts/test_services/test_fx_sarb.py",
+    "backend/test_scripts/test_services/test_fx_trm.py",
     "backend/test_scripts/test_services/test_justetf_errors.py",
     "backend/test_scripts/test_services/test_snb_errors.py",
     "backend/test_scripts/test_services/test_yahoo_finance_errors.py",
@@ -102,6 +117,7 @@ RISK_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_risk_exclusion_reasons.py",
     "backend/test_scripts/test_services/test_risk_price_day_budget.py",
     "backend/test_scripts/test_services/test_risk_replay_range_bounds.py",
+    "backend/test_scripts/test_services/test_risk_rate_shock.py",
 )
 
 PAC_PLANNER_CORE_TEST_PATHS = (
@@ -613,12 +629,28 @@ def services_coingecko_prices(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "CoinGecko prices tests", verbose=verbose)
 
 
+def services_provider_attribution(verbose: bool = False, test_names: list = None) -> bool:
+    """Test a provider's attribution line, CoinGecko's «Powered by CoinGecko» (project 76, P4)."""
+    print_section("Services: Provider Attribution")
+    print_info("Testing: schemas/provider.py (FAProviderAttribution, FAProviderInfo.attribution), assets/base.py, coingecko/plugin.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_attribution.py", test_names)
+    return run_command(cmd, "Provider attribution tests", verbose=verbose)
+
+
 def services_coingecko_search(verbose: bool = False, test_names: list = None) -> bool:
-    """Test the CoinGecko provider's search, metadata and page, and the PROVIDER_ID input type (project 76, P3)."""
+    """Test the CoinGecko provider's search, metadata and page, and the COINGECKO_ID input type (project 76, P3)."""
     print_section("Services: CoinGecko Search")
-    print_info("Testing: asset_source_providers/coingecko/plugin.py (search, fetch_asset_metadata, get_asset_url), db/models.py ProviderInputType.PROVIDER_ID, assets/base.py")
+    print_info("Testing: asset_source_providers/coingecko/plugin.py (search, fetch_asset_metadata, get_asset_url), db/models.py ProviderInputType.COINGECKO_ID, assets/base.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_coingecko_search.py", test_names)
     return run_command(cmd, "CoinGecko search tests", verbose=verbose)
+
+
+def services_search_result_icon(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the icon a search result may carry (project 76, S3)."""
+    print_section("Services: Search Result Icon")
+    print_info("Testing: schemas/provider.py FAProviderSearchResultItem.icon_url, assets/search.py (search and search_stream)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_search_result_icon.py", test_names)
+    return run_command(cmd, "Search result icon tests", verbose=verbose)
 
 
 def services_refresh_history_starts(verbose: bool = False, test_names: list = None) -> bool:
@@ -1785,13 +1817,13 @@ def services_asset_profile_store(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "Asset profile store tests", verbose=verbose)
 
 
-def services_asset_profile_double_write(verbose: bool = False, test_names: list = None) -> bool:
-    """Run the double write of classification_params into the asset profile by POST/PATCH /assets (project 68, lot A4)."""
-    print_section("Services: Asset Profile Double Write")
-    print_info("Testing: AssetCRUDService.create_assets_bulk / patch_assets_bulk with user_id")
-    print_info("Tests: user rows by the author on create; only the voices a patch touches; null sector, null classification; same value; read_on never before now; dry run and rolled-back batch write nothing")
-    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_profile_double_write.py", test_names)
-    return run_command(cmd, "Asset profile double write tests", verbose=verbose)
+def services_asset_profile_freshness(verbose: bool = False, test_names: list = None) -> bool:
+    """Run «now» not up to date for the volatile voices of the asset profile (project 68, lot D1d)."""
+    print_section("Services: Asset Profile Freshness")
+    print_info("Testing: backend/app/services/assets/profile/freshness.py")
+    print_info("Tests: the last confirmation from the enrichers' state, the 30 days, by hand and old states count from the row, the voices that never age, the scheduler's zone, the signal only on a step reaching today")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_profile_freshness.py", test_names)
+    return run_command(cmd, "Asset profile freshness tests", verbose=verbose)
 
 
 def services_asset_profile_from(verbose: bool = False, test_names: list = None) -> bool:
@@ -2243,6 +2275,14 @@ def services_enricher_borsa_italiana(verbose: bool = False, test_names: list = N
     print_info("Testing: backend/app/services/enricher_providers/borsa_italiana/plugin.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_borsa_italiana.py", test_names)
     return run_command(cmd, "Enricher Borsa Italiana tests", verbose=verbose)
+
+
+def services_enricher_esma(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the ESMA enricher: declarations, the CFI code and the register's fields to stored forms, not found, recognize, read (plan 68, lot C4b)."""
+    print_section("Services: Enricher ESMA")
+    print_info("Testing: backend/app/services/enricher_providers/esma/plugin.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_esma.py", test_names)
+    return run_command(cmd, "Enricher ESMA tests", verbose=verbose)
 
 
 def services_enricher_yahoo(verbose: bool = False, test_names: list = None) -> bool:
@@ -3268,12 +3308,31 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "provider-attribution",
+        services_provider_attribution,
+        name="Provider Attribution",
+        desc="P4: FAProviderAttribution is a short text and an https link, anything else refused; the base provider has none, CoinGecko's is Powered by CoinGecko linked to its site; every registered provider has none or a valid one; FAProviderInfo carries it, none by default",
+        # PURE: the schemas and the registered plugins' constants; no database, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "coingecko-search",
         services_coingecko_search,
         name="CoinGecko Search",
-        desc="P3: the id travels as PROVIDER_ID, reaching the plugin as OTHER (the reverse map unchanged); search asks /search, coins only by market cap rank (no rank last, in order), rows OTHER, Name (SYMBOL), CRYPTO, the preferred currency as currency and vs_currency, a blank query asks nothing; metadata from /coins/{id} with the P0 flags: name, CRYPTO, logo, the symbol as ticker (left out when too long), coingecko:<id> among the other identifiers; the page; search on, NOT_CONFIGURED without a key; the real path: PROVIDER_ID saved and kept, OTHER received, prices stored, a service search counted on the group",
+        desc="P3: the id travels as COINGECKO_ID, reaching the plugin as OTHER (the reverse map unchanged); search asks /search, coins only by market cap rank (no rank last, in order), rows OTHER, Name (SYMBOL), CRYPTO, the preferred currency as currency and vs_currency, a blank query asks nothing; metadata from /coins/{id} with the P0 flags: name, CRYPTO, logo, the symbol as ticker (left out when too long), coingecko:<id> among the other identifiers; the page; search on, NOT_CONFIGURED without a key; the real path: COINGECKO_ID saved and kept, OTHER received, prices stored, a service search counted on the group",
         # PURE: the real coingecko-sdk on an httpx.MockTransport (the P0 recordings); private SQLite files behind the
         # settings, the counter and the session; no shared database, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "search-result-icon",
+        services_search_result_icon,
+        name="Search Result Icon",
+        desc="S3: a search result's optional icon_url, from the plugin's dict, in the plain and the streamed search: http(s) and local paths kept, any other scheme, a blank or a non-string dropped quietly, every result kept",
+        # PURE: the providers are in-process doubles handed out by AssetProviderRegistry (as quote-base-suggestion's),
+        # pauses on a private fake clock; no lane DB, no server, no network.
         isolation="pure",
     )
     add_test(
@@ -4216,12 +4275,11 @@ Note: No backend server required.
     )
     add_test(
         cat,
-        "asset-profile-double-write",
-        services_asset_profile_double_write,
-        name="Asset Profile Double Write",
-        desc="Project 68 A4: until D7, classification_params sent to create_assets_bulk / patch_assets_bulk (keyword user_id) is also written into the profile in the same transaction: source user, user_id the author, read_on today in scheduler_timezone and never before the voice's now; POST: three rows for description, geography and sector, none without classification; PATCH: only the voices it touches (sector alone: one row, even when the profile's geography differs from the column), sector_area null a NULL row, classification_params null NULL rows for the voices with a value only, the value now (another spelling) no row; the dry run (commit=False) and a batch rolled back on patchFailed write none; a patch that does not touch the classification writes none; a description of spaces counts as empty (no row on POST, an empty row on PATCH)",
-        # PURE: every database is a private SQLite file under tmp_path built with create_all; no session on the lane DB,
-        # no server, no network.
+        "asset-profile-freshness",
+        services_asset_profile_freshness,
+        name="Asset Profile Freshness",
+        desc="Project 68 D1d: a volatile voice's «now» is stale when its last confirmation is more than 30 days old (31 stale, 30 and 29 not); the confirmation is the confirmed moment of the source that wrote now, in the scheduler's zone, never before the row's read_on; by hand, a source without the voice, another source, an old state: the row's read_on; the now row is the last; TER and maps never answer; reaching_today only on a last step reaching today",
+        # PURE: every database is a private SQLite file under tmp_path built with create_all; every day passed in.
         isolation="pure",
     )
     add_test(
@@ -4240,7 +4298,7 @@ Note: No backend server required.
         "asset-profile-merge",
         services_asset_profile_merge,
         name="Asset Profile Merge",
-        desc="Project 68 A5: merge_assets moves to the target every voice the source holds now with a non-empty value and the target has no row of, whole, by changing only asset_id (same row ids, read_on, source, user_id, source_date, created_at, NULL rows of its history included), seen by current_rows and read_steps of the target; a voice both hold keeps the target's rows only, a voice empty now on the source is not moved, a voice the target emptied on purpose stays the target's and empty (no mixing of histories); until D7 a moved description / geography / sector sets that part of the target's classification_params from the moved value, never from the source's column, the other parts and a shared voice's part kept; the source's asset_enrichers row deleted, the target's unchanged (or still none); dry_run moves and deletes nothing; no profile or enrichers row points at the source afterwards; delete_assets_bulk deletes the asset's profile rows and enrichers row and leaves another asset's (guard: ON DELETE CASCADE)",
+        desc="Project 68 A5: merge_assets moves to the target every voice the source holds now with a non-empty value and the target has no row of, whole, by changing only asset_id (same row ids, read_on, source, user_id, source_date, created_at, NULL rows of its history included), seen by current_rows and read_steps of the target; a voice both hold keeps the target's rows only, a voice empty now on the source is not moved, a voice the target emptied on purpose stays the target's and empty (no mixing of histories); the source's asset_enrichers row deleted, the target's unchanged (or still none); dry_run moves and deletes nothing; no profile or enrichers row points at the source afterwards; delete_assets_bulk deletes the asset's profile rows and enrichers row and leaves another asset's (guard: ON DELETE CASCADE)",
         # PURE: every database is a private SQLite file under tmp_path built with create_all; no session on the lane DB,
         # no server, no network.
         isolation="pure",
@@ -4634,6 +4692,16 @@ Note: No backend server required.
         services_enricher_justetf,
         name="Enricher justETF",
         desc="Plan 68 C1: JustETFEnricher declarations (justetf, PRICE_SOURCE, ISIN, ETF family + COMMODITY at 10, 13 voices (legal_form only where an ETC or ETN can sit), not test-only, pause_seconds > 0); recorded overviews (SWDA, VWCE, bond, hedged, gold ETC) mapped to stored forms through the real catalogue (TER and weights as fractions, fund size millions EUR, replication/distribution/legal-form codes, domicile ISO3, English dates, «Other» kept, sectors helper first then the justETF table, holdings date on countries and sectors); synthetic sheets for every replication text, unknown texts absent and logged, ETC/ETN etc_etn, ETF absent, TER 0; empty «ETF Screener» sheet not found; recognize (non-ISIN no call, 429 raises); read per binding (error isolated, 429 RATE_LIMITED for the rest without a call); search over load_overview",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "enricher-esma",
+        services_enricher_esma,
+        name="Enricher ESMA",
+        desc="Plan 68 C4b: EsmaEnricher on esma-registers (FIRDS by ISIN): declarations (esma, OPEN, ISIN, degree 30 for STOCK, BOND, FUND, COMMODITY and the ETF family, None for the rest; no params, no search, no page); the CFI code to legal_form (ES share, DB bond, EY etc_etn, no UCITS guess for C), a bond's coupon_type (F/V/Z), issuer_type (T sovereign, C supranational), maturity and the coupon rate only for a fixed rate (BTP Italia's period coupon never), a fund's distribution policy (G/I); the LEI for every instrument and as recognize's identifier; recorded answers (Enel, BTP 2072, BTP Italia, a corporate bond, SWDA, an ETC, a fund the register lacks) replayed through the library's real reduction; not found; a refusal RATE_LIMITED with its retry_after and for the rest without a call; one module-level pace",
+        # PURE: the plugin's find_instrument is the library's real one on a fake transport that fails the test on any
+        # ISIN not offered; no database, no server, no network.
         isolation="pure",
     )
     add_test(

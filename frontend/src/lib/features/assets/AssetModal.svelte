@@ -21,6 +21,16 @@
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import AssetSearchAutocomplete from './AssetSearchAutocomplete.svelte';
     import AssetModalDetails from './AssetModalDetails.svelte';
+    import AssetEnrichersModal from './enrichers/AssetEnrichersModal.svelte';
+    import {createEnricherRecognitionState} from './enrichers/enricherRecognition.svelte';
+    import type {EnricherBinding, EnricherInfo, EnricherReadState, EnrichersBanner} from './enrichers/enrichersEditState';
+    import {invalidateAssetProfile, loadProfileCatalogue, readAssetProfile, type ProfileVoice} from './profile/profileStore';
+    import AssetModalProfileRow from './profile/AssetModalProfileRow.svelte';
+    import ProfileEditModal from './profile/ProfileEditModal.svelte';
+    import {createProfileAutoAsk} from './profile/profileAutoAsk.svelte';
+    import {autoAskRequest, currentFromRead, descriptionShown, mergeAutoFills, profileBlocksSave, profileRowSummary, userChanges, withDescription, withoutFillsOutside} from './profile/assetProfileDraft';
+    import {profilePatch, type AskAnswer, type CurrentVoice, type PendingChanges, type PendingVoice} from './profile/profileEditState';
+    import {todayIso} from '$lib/utils/dateOnly';
     import AssetModalFooter from './AssetModalFooter.svelte';
     import AssetModalImportNotices from './AssetModalImportNotices.svelte';
     import AssetModalIdentifiers from './AssetModalIdentifiers.svelte';
@@ -32,7 +42,6 @@
     import type {DiffItem} from './ProviderComparisonModal.svelte';
     import type {IdentifierChoice} from './IdentifierPrimaryChooser.svelte';
     import AssetCurrencyChangeModal from './AssetCurrencyChangeModal.svelte';
-    import DistributionEditor from '$lib/components/ui/input/DistributionEditor.svelte';
     import {getIndexColor} from '$lib/utils/colors';
     import ImagePickerWrapper from '$lib/components/ui/media/ImagePickerWrapper.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
@@ -48,9 +57,9 @@
     import {IDENTIFIER_TYPES} from '$lib/utils/assetTypes';
     import {columnsToIdentifierRows, fieldToIdType, identifierValue, withIdentifier, mergeOtherIdentifierValues, withElectedPrimary} from './assetIdentifiers';
     import {searchResultAssetType, searchResultAssignmentType, searchResultIdentifier, searchResultProviderParams} from './assetSearchSelection';
-    import {compareMetadata, type ComparisonAction, type ComparisonSnapshot} from './assetMetadataComparison';
+    import {compareMetadata, type ComparisonAction, type ComparisonScope, type ComparisonSnapshot} from './assetMetadataComparison';
     import {hasSomethingToLose, loadCurrencyChangeImpact, type CurrencyChangeImpact} from './currencyImpact';
-    import {buildClassificationParams, buildCreateItem, buildPatchItem, buildProviderAssignItem, type AssetFormFields, type ClassificationParams, type ProviderAssignment} from './assetPayload';
+    import {buildCreateItem, buildPatchItem, buildProviderAssignItem, type AssetFormFields, type ProviderAssignment} from './assetPayload';
     import {isQuoteBaseQuantityInvalid, quoteBaseQuantityErrorKey, defaultQuoteBaseQuantity, proposeQuoteBase, quoteBaseNote, computeHasProvider, computeProviderDirty, groupImportNotices, type QuoteBaseSource, type QuoteBaseSuggestion} from './assetFormState';
     import {ensureAssetProvidersCached, getAssetProviderAcceptedTypes, getAssetProviderName, getAssetProviderParamKeys, isParametricProvider} from '$lib/utils/providerHelpers';
     import type {AssetCreateSyncResult} from '$lib/utils/sync/syncHelpers';
@@ -73,11 +82,6 @@
         quote_base_quantity?: number | null;
         active?: boolean;
         is_benchmark?: boolean;
-        classification_params?: {
-            short_description?: string | null;
-            sector_area?: {distribution: Record<string, number>} | null;
-            geographic_area?: {distribution: Record<string, number>} | null;
-        } | null;
         // Identifiers
         identifier_isin?: string | null;
         identifier_ticker?: string | null;
@@ -93,6 +97,8 @@
         provider_params?: Record<string, any> | null;
         provider_user_url?: string;
         provider_url?: string | null;
+        /** The asset's enrichers (plan 68, B3): bindings in their order, and the last read of each. Edit mode only. */
+        enrichers?: {config: Record<string, EnricherBinding>; state?: Record<string, EnricherReadState>} | null;
     }
 
     // =========================================================================
@@ -161,6 +167,11 @@
         importNotices?: Array<{kind: string; reason: string}>;
         /** Asset-global only; contextual creation keeps its existing plain success toast. */
         linkCreatedAsset?: boolean;
+        /**
+         * Edit mode: open with the enrichers' window already on top (plan 68 E6c, the «Configura» of the «Profilo» tab).
+         * Read when the window opens; the caller sets it for that opening only.
+         */
+        enrichersOnOpen?: boolean;
         /** The asset exists. `detail.syncing`: its one price sync started, and `onsynced` will tell how it ended. */
         oncreated?: (assetId: number, detail?: {syncing: boolean}) => void;
         /** The one price sync after a creation ended (O-20): its result for the asset, or null when the request failed.
@@ -185,6 +196,7 @@
         reuseAllowKeyMerge = true,
         importNotices = [],
         linkCreatedAsset = false,
+        enrichersOnOpen = false,
         oncreated,
         onsynced,
         onupdated,
@@ -231,15 +243,6 @@
     let identifierRows: IdentifierRow[] = $state([]);
     /** Codes that arrived from `prefillData` (i.e. from the imported reports), upper-cased. */
     let prefilledIdentifiers = $state<Set<string>>(new Set());
-
-    // Classification
-    let shortDescription = $state('');
-    // True while shortDescription holds a BRIM-import prefill (identified-names block) that
-    // was auto-populated, not typed by the user. Lets provider enrichment merge over it
-    // instead of routing to the diff modal. Cleared on manual edit or provider autofill.
-    let descriptionFromPrefill = $state(false);
-    let sectorDistribution: Record<string, number> = $state({});
-    let geographicDistribution: Record<string, number> = $state({});
 
     // Provider
     let providerCode = $state('');
@@ -399,7 +402,6 @@
 
     // Dirty tracking — snapshot of initial form to detect unsaved changes
     let initialSnapshot = $state('');
-    let initialClassification: ClassificationParams | undefined;
 
     // Duplicate name detection
     let duplicateAssetName: string | null = $state(null);
@@ -461,9 +463,185 @@
     );
     let title = $derived(editMode ? $t('assets.modal.titleEdit') : $t('assets.modal.title'));
 
+    // =========================================================================
+    // Enrichers (plan 68, E8a)
+    // =========================================================================
+
+    /** The asset's enrichers: code → binding, the order is the priority. */
+    let enrichersConfig = $state<Record<string, EnricherBinding>>({});
+    /** The list the window opened with: an edit sends `enrichers` only when it differs. */
+    let initialEnrichers: Record<string, EnricherBinding> = {};
+    let enrichersReadState = $state<Record<string, EnricherReadState>>({});
+    /** The user applied a list of their own: «Riconosci» no longer changes it. Always true in edit mode. */
+    let enrichersChosen = $state(false);
+    let enrichersModalOpen = $state(false);
+    let enricherCatalogue = $state<EnricherInfo[]>([]);
+    let profileTopics = $state<ProfileVoice[]>([]);
+    const recognition = createEnricherRecognitionState();
+
+    function resetEnrichers(data: AssetData['enrichers'] | null, edit: boolean) {
+        recognition.cancel();
+        enrichersConfig = {...(data?.config ?? {})};
+        initialEnrichers = {...enrichersConfig};
+        enrichersReadState = {...(data?.state ?? {})};
+        enrichersChosen = edit;
+        enrichersModalOpen = false;
+    }
+
+    /** The identifiers of the form, type → value, as «Riconosci» and the enrichers' window read them. */
+    let formIdentifiers = $derived(Object.fromEntries(identifierRows.filter((row) => row.type !== 'OTHER' && row.value.trim() !== '').map((row) => [row.type, row.value.trim()])));
+
+    // At creation «Riconosci» starts by itself with a whole ISIN (PROF, rounds 18 and 21); never in edit mode or in the
+    // tour's preview. A question already asked is not asked again (enricherRecognition).
+    $effect(() => {
+        if (!open || editMode || tourPreview) return;
+        const input = {assetType, identifiers: formIdentifiers, priceProviderCode: hasProvider ? providerCode : null};
+        untrack(() => {
+            if (recognition.start(input)) loadEnricherCatalogues();
+        });
+    });
+
+    // What «Riconosci» proposes is the list until the user applies one of their own
+    $effect(() => {
+        const proposal = recognition.proposal;
+        if (editMode || untrack(() => enrichersChosen)) return;
+        untrack(() => (enrichersConfig = proposal));
+    });
+
+    /**
+     * The catalogues the enrichers' window and the line under the header need: read once, when «Riconosci» starts or the
+     * window opens, never just because the asset window opened.
+     */
+    let enricherCataloguesAsked = false;
+    function loadEnricherCatalogues() {
+        if (enricherCataloguesAsked) return;
+        enricherCataloguesAsked = true;
+        void zodiosApi.list_enrichers_api_v1_assets_enrichers_get().then(
+            (catalogue) => (enricherCatalogue = ((catalogue as {enrichers?: EnricherInfo[]} | undefined)?.enrichers ?? []) as EnricherInfo[]),
+            () => (enricherCataloguesAsked = false),
+        );
+        void loadProfileCatalogue().then(
+            (voices) => (profileTopics = voices ?? []),
+            () => (profileTopics = []),
+        );
+    }
+
+    function openEnrichers() {
+        loadEnricherCatalogues();
+        enrichersModalOpen = true;
+    }
+
+    /** The codes «Riconosci» is still asking: the covering ones not answered yet. */
+    let enrichersSearching = $derived(recognition.status === 'running' ? enricherCatalogue.filter((info) => info.default_priority?.[assetType as keyof typeof info.default_priority] != null && !recognition.recognitions[info.code]).map((info) => info.code) : []);
+
+    /** The line under the header: what «Riconosci» found. Only at creation, once it has run. */
+    let enrichersBanner = $derived.by((): EnrichersBanner | null => {
+        if (editMode) return null;
+        if (recognition.status === 'running') return {state: 'running', text: $t('assets.modal.enrichersSearching'), reading: 'none', readingText: null};
+        if (recognition.status === 'refused') return {state: 'refused', text: $t('assets.modal.enrichersRefused'), reading: 'none', readingText: null};
+        if (recognition.status === 'error') return {state: 'error', text: $t('assets.modal.enrichersError'), reading: 'none', readingText: null};
+        if (recognition.status !== 'done') return null;
+        const codes = Object.keys(enrichersConfig);
+        if (!codes.length) return {state: 'none', text: $t('assets.modal.enrichersNone'), reading: 'none', readingText: null};
+        const names = codes.map((code) => enricherCatalogue.find((info) => info.code === code)?.name ?? recognition.recognitions[code]?.name ?? code).join(', ');
+        // What the automatic «Chiedi» is doing with them (E9b2, the mock's «I loro dati si stanno leggendo adesso»)
+        const reading = autoAsk.status === 'running' ? 'running' : autoAsk.status === 'refused' ? 'waiting' : 'none';
+        const readingText = reading === 'running' ? $t('assets.modal.enrichersReading') : reading === 'waiting' ? $t('assets.modal.enrichersReadingWaiting') : null;
+        return {state: 'found', text: $t('assets.modal.enrichersFound', {values: {count: codes.length, names}}), reading, readingText};
+    });
+
+    // =========================================================================
+    // Profile (plan 68, E8b2): the «Dati del profilo» row and window, the automatic «Chiedi»
+    // =========================================================================
+
+    /** The changes the profile window kept, and the automatic fills: they leave with the save (`profilePatch`). */
+    let profilePending = $state<PendingChanges>({});
+    /** The automatic fills now in place: a later answer replaces those the user did not touch. */
+    let profileAuto = $state<Record<string, PendingVoice>>({});
+    /** «Adesso» of an asset that exists: its profile of today, read when the asset window opens in edit mode. */
+    let profileCurrent = $state<Record<string, CurrentVoice>>({});
+    let profileVoices = $state<ProfileVoice[]>([]);
+    let profileModalOpen = $state(false);
+    let profileCurrentAsked = false;
+    const autoAsk = createProfileAutoAsk(
+        (request) => zodiosApi.ask_profile_api_v1_assets_profile_ask_post(request as never) as Promise<AskAnswer>,
+        (answer) => {
+            const merged = mergeAutoFills(profilePending, profileAuto, answer, profileCurrent);
+            profilePending = merged.pending;
+            profileAuto = merged.auto;
+            loadProfileVoices();
+        },
+    );
+
+    /** The profile's catalogue: read when something of the profile is shown, never just because the window opened. */
+    function loadProfileVoices() {
+        void loadProfileCatalogue().then(
+            (voices) => (profileVoices = voices ?? []),
+            () => undefined,
+        );
+    }
+
+    function resetProfile() {
+        autoAsk.cancel();
+        profilePending = {};
+        profileAuto = {};
+        profileCurrent = {};
+        profileModalOpen = false;
+        profileCurrentAsked = false;
+    }
+
+    /** «Adesso» of the asset being edited: its profile of today, once per opening (the description field shows it). */
+    function loadProfileCurrent() {
+        const id = editMode ? editData?.id : undefined;
+        if (!id || profileCurrentAsked) return;
+        profileCurrentAsked = true;
+        void readAssetProfile(id, {start: todayIso()}).then(
+            (read) => {
+                if (read.kind === 'found' && editData?.id === id) profileCurrent = currentFromRead(read.voices);
+            },
+            () => (profileCurrentAsked = false),
+        );
+    }
+
+    function openProfile() {
+        loadProfileVoices();
+        loadProfileCurrent();
+        profileModalOpen = true;
+    }
+
+    // At creation, once the enrichers are settled («Riconosci» done, or a list the user applied), the automatic «Chiedi»
+    // fills the empty voices (PROF §14.8); never on the proposal still growing, never in edit mode or in the preview
+    $effect(() => {
+        if (!open) return;
+        const request = autoAskRequest({editMode, tourPreview, assetType, enrichers: enrichersConfig, settled: recognition.status === 'done' || enrichersChosen});
+        if (request) untrack(() => autoAsk.start($state.snapshot(request) as typeof request));
+    });
+
+    // A fill whose source left the list goes: the creation would refuse the whole asset
+    $effect(() => {
+        const config = enrichersConfig;
+        untrack(() => {
+            const kept = withoutFillsOutside(profilePending, config);
+            if (Object.keys(kept).length === Object.keys(profilePending).length) return;
+            profilePending = kept;
+            profileAuto = Object.fromEntries(Object.entries(profileAuto).filter(([key]) => key in kept));
+        });
+    });
+
+    let profileSummary = $derived(profileRowSummary(profilePending, profileVoices));
+    /** The description field: a view of the profile's description, the one waiting else «Adesso»'s (E9). */
+    let descriptionValue = $derived(descriptionShown(profilePending, profileCurrent));
+    /** A value the profile window would refuse blocks the save. */
+    let profileBlocked = $derived(profileBlocksSave(profilePending, profileVoices));
+    let enricherNames = $derived(Object.fromEntries(enricherCatalogue.map((info) => [info.code, info.name])));
+
     /** Build form snapshot for dirty tracking — single source of truth */
     function buildFormSnapshot(): string {
         return JSON.stringify([
+            // The profile's changes count once they are the user's: the automatic fills alone change nothing to discard
+            JSON.stringify(userChanges(profilePending, profileAuto)),
+            // The enrichers count only once the user chose them: «Riconosci»'s proposal alone changes nothing to discard
+            enrichersChosen ? JSON.stringify(Object.entries(enrichersConfig)) : null,
             displayName,
             currency,
             assetType,
@@ -473,9 +651,6 @@
             isBenchmark,
             providerUserUrl,
             JSON.stringify(identifierRows.map((r) => [r.type, r.value])),
-            shortDescription,
-            JSON.stringify(sectorDistribution),
-            JSON.stringify(geographicDistribution),
             providerCode,
             providerIdentifier,
             providerIdentifierType,
@@ -548,11 +723,20 @@
                     providerNoProvider = false;
                     providerExpanded = true;
                 }
+                resetEnrichers(editMode && editData ? (editData.enrichers ?? null) : null, editMode);
+                if (editMode && enrichersOnOpen && !tourPreview) openEnrichers();
+                resetProfile();
                 initialSnapshot = buildFormSnapshot();
-                initialClassification = $state.snapshot(buildClassificationParams(shortDescription, sectorDistribution, geographicDistribution));
+                // The description field shows «Adesso»'s description: the profile of today is read at once in edit mode
+                if (editMode && editData) loadProfileCurrent();
             });
         } else {
-            untrack(() => providerProbe.cancelPending());
+            untrack(() => {
+                providerProbe.cancelPending();
+                // No work in the background (round 28): the answers in flight are dropped with the window
+                recognition.cancel();
+                autoAsk.cancel();
+            });
         }
     });
 
@@ -566,13 +750,7 @@
         active = data.active !== false;
         isBenchmark = data.is_benchmark === true;
         identifierRows = columnsToIdentifierRows(data);
-        // Classification
-        const cp = data.classification_params;
-        shortDescription = cp?.short_description ?? '';
-        descriptionFromPrefill = false;
         prefilledIdentifiers = new Set();
-        sectorDistribution = cp?.sector_area?.distribution ?? {};
-        geographicDistribution = cp?.geographic_area?.distribution ?? {};
         // Provider
         providerCode = data.provider_code ?? '';
         providerIdentifier = data.provider_identifier ?? '';
@@ -616,10 +794,6 @@
         isBenchmark = false;
         identifierRows = [];
         prefilledIdentifiers = new Set();
-        shortDescription = '';
-        descriptionFromPrefill = false;
-        sectorDistribution = {};
-        geographicDistribution = {};
         providerCode = '';
         providerIdentifier = '';
         providerIdentifierType = 'TICKER';
@@ -648,10 +822,6 @@
         if (data.asset_type) assetType = data.asset_type;
         // A base the import gives stays; else the type's default (Z-32 d: 100 for a bond)
         quoteBaseQuantity = data.quote_base_quantity && data.quote_base_quantity > 0 ? data.quote_base_quantity : defaultQuoteBaseQuantity(assetType);
-        if (data.classification_params?.short_description) {
-            shortDescription = data.classification_params.short_description;
-            descriptionFromPrefill = true;
-        }
         // Build identifier rows from prefilled columns (handles OTHER as a JSON list)
         const rows = columnsToIdentifierRows(data as AssetData);
         if (rows.length > 0) {
@@ -739,7 +909,7 @@
         // Auto-fill provider
         providerCode = result.provider_code;
         providerIdentifier = result.identifier;
-        // OTHER is an asset column, not an assignment type: the provider's own (CoinGecko's PROVIDER_ID, P3). The search
+        // OTHER is an asset column, not an assignment type: the provider's own (CoinGecko's COINGECKO_ID, P3). The search
         // loaded the provider list when it opened; were it still empty, ProviderAssignmentSection sets the only type a
         // provider accepts
         providerIdentifierType = searchResultAssignmentType(result.identifier_type, getAssetProviderAcceptedTypes(result.provider_code));
@@ -930,7 +1100,7 @@
      *
      * @param scope Which fields to compare. 'all' = everything, others = section-specific.
      */
-    async function fetchAndCompareMetadata(scope: 'all' | 'identifiers' | 'sector' | 'geographic', origin: 'manual' | 'selection' = 'manual') {
+    async function fetchAndCompareMetadata(scope: ComparisonScope, origin: 'manual' | 'selection' = 'manual') {
         if (!hasProvider || saving) return;
         const request = providerProbe.beginMetadata();
         const requestIntent = new Map(manualFieldRevisions);
@@ -955,7 +1125,7 @@
             // The decision is pure (./assetMetadataComparison.ts); the writes are applied here, in order.
             const lineSuggestion = lineQuoteBaseSuggestion?.key === request.key ? lineQuoteBaseSuggestion.suggestion : null;
             const providerName = providerDisplayName(request.configuration.providerCode);
-            const {actions, differences, missingFields} = compareMetadata(
+            const {actions, differences} = compareMetadata(
                 meta.patch_data,
                 comparisonSnapshot(),
                 scope,
@@ -970,19 +1140,12 @@
                         const note = quoteBaseNote(source, providerName);
                         return note ? $t(note.key, {values: note.values}) : undefined;
                     },
-                    description: $t('common.description'),
-                    sector: $t('common.sectorDistribution'),
-                    geographic: $t('common.geoDistribution'),
                 },
                 lineSuggestion,
             );
             for (const action of actions) applyComparisonAction(action);
 
-            // --- RESULTS: consistent toast logic (Fix 3) ---
-            if (missingFields.length > 0) {
-                toasts.info($t('assets.comparison.noDistributionData', {values: {fields: missingFields.join(', ')}}));
-            }
-
+            // --- RESULTS ---
             if (differences.length > 0) {
                 const intent = new Map(manualFieldRevisions);
                 if (origin === 'manual') {
@@ -994,8 +1157,7 @@
                     if (decision.kind === 'open') openComparison(decision.differences, request, intent);
                     else if (decision.kind === 'hold') heldComparison = {differences: decision.differences, context: request, intent};
                 }
-            } else if (missingFields.length === 0) {
-                // Only show success if nothing was missing — never both info + success
+            } else {
                 toasts.success($t('assets.comparison.allMatch'));
             }
         } catch (e: any) {
@@ -1029,8 +1191,8 @@
         fetchAndCompareMetadata('all');
     }
 
-    /** Per-section "Ask Provider" — compares only the given section */
-    function handleAskProviderSection(section: 'identifiers' | 'sector' | 'geographic') {
+    /** Per-section "Ask Provider" — compares only the given section (the identifiers: plan 68 E9 left them alone) */
+    function handleAskProviderSection(section: Exclude<ComparisonScope, 'all'>) {
         fetchAndCompareMetadata(section);
     }
 
@@ -1044,10 +1206,6 @@
             currencyUserSet,
             iconUrl: iconUrl ?? '',
             quoteBaseQuantity,
-            shortDescription,
-            descriptionFromPrefill,
-            sectorDistribution,
-            geographicDistribution,
         };
     }
 
@@ -1056,14 +1214,6 @@
         switch (action.kind) {
             case 'fill':
                 setFieldValue(action.field, action.value);
-                break;
-            case 'fillDistribution':
-                if (action.field === 'sector_area') sectorDistribution = action.value;
-                else geographicDistribution = action.value;
-                break;
-            case 'mergeDescription':
-                shortDescription = action.value;
-                descriptionFromPrefill = false;
                 break;
             case 'mergeOther':
                 if (mergeOtherIdentifiers(action.values) === 0) return;
@@ -1096,10 +1246,6 @@
                 case 'icon_url':
                     // The provider's logo (project 76, P3)
                     iconUrl = value || null;
-                    break;
-                case 'short_description':
-                    shortDescription = value;
-                    descriptionFromPrefill = false;
                     break;
             }
         }
@@ -1134,12 +1280,6 @@
                         setFieldValue(diff.field, diff.providerValue);
                     }
                     if (diff.field === 'quote_base_quantity') quoteBaseHint = diff.quoteBaseSource ? suggestionHint(diff.quoteBaseSource, comparisonContext?.configuration.providerCode, comparisonContext?.key ?? providerConfigKey) : null;
-                } else if (diff.type === 'distribution') {
-                    if (diff.field === 'sector_area') {
-                        sectorDistribution = diff.providerValue?.distribution ?? diff.providerValue;
-                    } else if (diff.field === 'geographic_area') {
-                        geographicDistribution = diff.providerValue?.distribution ?? diff.providerValue;
-                    }
                 }
                 autoFilledFields = new Set([...autoFilledFields, diff.field]);
             }
@@ -1152,7 +1292,7 @@
     // =========================================================================
 
     function handleSave() {
-        if (tourPreview || !isValid) return;
+        if (tourPreview || !isValid || profileBlocked) return;
         // I-bis #2 — retest 1.3 follow-up: when the user changes the provider
         // dropdown, ``ProviderAssignmentSection.handleProviderChange`` clears
         // the identifier on purpose (different providers use different ID
@@ -1236,7 +1376,19 @@
 
     /** The form's values, as the save requests are built from them (./assetPayload.ts). */
     function formFields(): AssetFormFields {
-        return {displayName, currency, assetType, iconUrl, quoteBaseQuantity, active, isBenchmark, userUrl: providerUserUrl, shortDescription, sectorDistribution, geographicDistribution, identifierRows};
+        return {
+            displayName,
+            currency,
+            assetType,
+            iconUrl,
+            quoteBaseQuantity,
+            active,
+            isBenchmark,
+            userUrl: providerUserUrl,
+            identifierRows,
+            enrichers: $state.snapshot(enrichersConfig),
+            profile: profilePatch(withoutFillsOutside($state.snapshot(profilePending) as PendingChanges, enrichersConfig)),
+        };
     }
 
     /** The provider the save assigns to the asset. */
@@ -1255,13 +1407,19 @@
             throw new Error(result?.message || 'Failed to create asset');
         }
         const assetId = result.asset_id;
+        // Created: what «Riconosci» and the automatic «Chiedi» still have in flight is dropped (round 28)
+        recognition.cancel();
+        autoAsk.cancel();
+        invalidateAssetProfile(assetId);
         naLog(`created asset #${assetId} "${displayName.trim()}" type=${assetType} currency=${currency} qbq=${createItem.quote_base_quantity} · identifiers: ${identifiersSummary()} · provider=${hasProvider ? providerCode : 'none'}`);
 
         // Upsert the new asset into the shared cache so other pages
         // (transactions cell, AssetCard, AssetTable, …) reflect the entry
         // immediately. The BE response only carries `asset_id`; we merge the
         // fields the FE just submitted (no extra round-trip).
-        mergeAssets([{id: assetId, ...(createItem as Record<string, unknown>)}]);
+        // The asset's own fields only: its enrichers and its profile are not the shared asset cache's
+        const {enrichers: _enrichers, profile: _profile, ...cachedCreate} = createItem as Record<string, unknown>;
+        mergeAssets([{id: assetId, ...cachedCreate}]);
 
         // Step 2: Assign provider (separate try/catch — asset already created)
         // Skip assignment for scheduled_investment if no schedule is configured yet
@@ -1336,8 +1494,8 @@
             }
         }
 
-        // Step 1: Patch asset (classification_params only when it changed since the modal opened)
-        const patchItem = buildPatchItem(assetId, formFields(), initialClassification);
+        // Step 1: Patch asset (the profile's changes ride along as `profile`)
+        const patchItem = buildPatchItem(assetId, formFields(), initialEnrichers);
         const patchPayload = [patchItem];
 
         // N68 — a currency change is never refused, but the PATCH that makes it deletes, in the same call, the asset's prices and
@@ -1365,7 +1523,10 @@
         // the new icon/name/etc. without a manual reload. The BE response
         // only carries the per-item results; we merge the fields
         // the FE just submitted.
-        mergeAssets([{id: assetId, ...(patchItem as unknown as Record<string, unknown>)}]);
+        const {enrichers: _enrichers, profile: _profile, ...cachedPatch} = patchItem as unknown as Record<string, unknown>;
+        mergeAssets([{id: assetId, ...cachedPatch}]);
+        // The profile may have changed (its row, the enrichers' read): the pages read it again
+        invalidateAssetProfile(assetId);
 
         // Step 2: Handle provider change
         if (providerNoProvider) {
@@ -1544,7 +1705,7 @@
                 bind:quoteBaseQuantity
                 quoteBaseSuggestion={visibleQuoteBaseHint}
                 bind:providerUserUrl
-                bind:shortDescription
+                description={descriptionValue}
                 {currency}
                 {iconUrl}
                 {hasProvider}
@@ -1560,13 +1721,13 @@
                     currencyUserSet = true;
                     markManualField('currency');
                 }}
-                ondescriptionedit={() => {
-                    descriptionFromPrefill = false;
-                    markManualField('short_description');
-                }}
+                ondescriptioninput={(text) => (profilePending = withDescription(profilePending, profileCurrent, text))}
+                enricherCount={Object.keys(enrichersConfig).length}
+                {enrichersBanner}
+                onenrichers={tourPreview ? undefined : openEnrichers}
             />
 
-            <!-- More Info (collapsible — Identifiers + Classification) -->
+            <!-- More Info (collapsible — Identifiers) -->
             <div class="border border-lf-subtle rounded-lg" use:guideAnchor={'asset.provider'} data-testid="asset-tour-provider">
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <div
@@ -1598,19 +1759,6 @@
                 {#if moreInfoExpanded}
                     <div class="px-4 py-3 space-y-4 border-t border-lf-subtle">
                         <AssetModalIdentifiers bind:rows={identifierRows} bind:selectedIds={identifierSelectedIds} {hasProvider} {askingProvider} onmanualedit={markManualField} onaskprovider={() => handleAskProviderSection('identifiers')} onbulkdelete={handleIdentifierBulkDelete} />
-
-                        <!-- Sub-section: Classification -->
-                        <div class="space-y-3">
-                            <div class="text-[10px] font-semibold text-lf-muted uppercase tracking-wider">
-                                {$t('common.classification')}
-                            </div>
-
-                            <!-- Sector Distribution -->
-                            <DistributionEditor kind="sector" bind:value={sectorDistribution} {hasProvider} {askingProvider} onchange={() => markManualField('sector_area')} onAskProvider={() => handleAskProviderSection('sector')} zIndex={zIndex + 20} />
-
-                            <!-- Geographic Distribution -->
-                            <DistributionEditor kind="geographic" bind:value={geographicDistribution} {hasProvider} {askingProvider} onchange={() => markManualField('geographic_area')} onAskProvider={() => handleAskProviderSection('geographic')} zIndex={zIndex + 20} />
-                        </div>
                     </div>
                 {/if}
             </div>
@@ -1630,6 +1778,9 @@
                 onreconcile={reconcileProviderContext}
             />
 
+            <!-- The profile's data (plan 68, E8b2): a window over this one; what it keeps leaves with the save -->
+            <AssetModalProfileRow summary={profileSummary} onopen={openProfile} disabled={tourPreview} />
+
             <!-- Auto-assign info banner -->
             {#if searchResultSelected && hasProvider && !editMode}
                 <InfoBanner variant="info">
@@ -1646,7 +1797,7 @@
         </fieldset>
     </div>
 
-    <AssetModalFooter bind:active bind:isBenchmark {saving} {isValid} {tourPreview} {editMode} oncancel={handleClose} onsave={handleSave} />
+    <AssetModalFooter bind:active bind:isBenchmark {saving} isValid={isValid && !profileBlocked} {tourPreview} {editMode} oncancel={handleClose} onsave={handleSave} />
 </ModalBase>
 
 <!-- Confirmation: Save without test -->
@@ -1743,11 +1894,54 @@
 />
 
 <!-- Provider Comparison Modal -->
+<!-- The enrichers' window over the asset window (plan 68, E8a): it hands the list back, saved with the asset -->
+<!-- The profile window over the asset window (plan 68, E8b2): «Tieni le modifiche» hands the changes back here -->
+{#if profileModalOpen}
+    <ProfileEditModal
+        bind:open={profileModalOpen}
+        assetName={displayName}
+        mode="keep"
+        assetId={editMode ? (editData?.id ?? null) : null}
+        askTarget={editMode ? null : {asset_type: assetType, enrichers: enrichersConfig}}
+        catalogue={profileVoices}
+        current={profileCurrent}
+        pending={profilePending}
+        sourceNames={enricherNames}
+        zIndex={zIndex + 30}
+        onkeep={(pending) => {
+            profilePending = pending;
+            profileModalOpen = false;
+        }}
+        oncancel={() => (profileModalOpen = false)}
+    />
+{/if}
+
+{#if enrichersModalOpen}
+    <AssetEnrichersModal
+        bind:open={enrichersModalOpen}
+        asset={{name: displayName, assetType, identifiers: formIdentifiers}}
+        config={enrichersConfig}
+        readState={enrichersReadState}
+        catalogue={enricherCatalogue}
+        profileCatalogue={profileTopics}
+        recognitions={recognition.recognitions}
+        searching={enrichersSearching}
+        zIndex={zIndex + 30}
+        onapply={(config) => {
+            enrichersConfig = config;
+            enrichersChosen = true;
+            enrichersModalOpen = false;
+        }}
+        oncancel={() => (enrichersModalOpen = false)}
+    />
+{/if}
+
 <ProviderComparisonModal
     bind:open={showComparisonModal}
     differences={comparisonDifferences}
     assetName={displayName}
     zIndex={zIndex + 20}
+    providerCodes={[providerCode]}
     onapply={handleComparisonApply}
     oncancel={() => {
         showComparisonModal = false;

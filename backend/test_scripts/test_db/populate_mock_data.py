@@ -760,18 +760,24 @@ def populate_broker_user_access(session: Session):  # noqa: C901 — sequential 
     session.commit()
 
 
-#: The parts of ``classification_params`` and the profile voices migration 006 copies them to (plan 68, A4).
+#: The key of a mock asset's 1.3-style classification (the JSON the old ``classification_params`` column held). It is
+#: not a column any more (plan 68, D7b): ``populate_assets`` takes it out of the dict before building the ``Asset`` and
+#: writes its parts as the ``legacy`` profile rows migration 006 copies from that column on an upgrade.
+LEGACY_CLASSIFICATION_KEY = "legacy_classification"
+
+#: The parts of a 1.3 classification and the profile voices migration 006 copies them to (plan 68, A4).
 _LEGACY_PROFILE_PARTS = (("short_description", "description"), ("geographic_area", "geography"), ("sector_area", "sector"))
 
 
-def _legacy_profile_rows(asset: Asset) -> list[AssetProfileUpdate]:
-    """The ``legacy`` profile rows of an asset's ``classification_params``, as migration 006 writes them on an upgrade.
+def _legacy_profile_rows(asset: Asset, classification: str | None) -> list[AssetProfileUpdate]:
+    """The ``legacy`` profile rows of an asset's 1.3-style ``classification`` (JSON text), as migration 006 writes them
+    on an upgrade.
 
     Mirrors migration 006 (plan 68, A4): a freshly populated database is created at the head, so the copy never ran
     on these rows, and since D2 the portfolio engine reads countries and sectors from the profile only. A value the
     catalogue refuses is skipped with a line, as the migration does.
     """
-    params = json.loads(asset.classification_params, parse_float=Decimal) if asset.classification_params else {}
+    params = json.loads(classification, parse_float=Decimal) if classification else {}
     rows = []
     for part, voice in _LEGACY_PROFILE_PARTS:
         raw = params.get(part)
@@ -808,6 +814,51 @@ def date_legacy_profile_rows(session: Session) -> None:
     print(f"  ✅ legacy profile rows of {len(first_days)} assets dated on their first day")
 
 
+#: The fund whose profile has a history of its own (plan 68, E12): the gallery's «Profilo» tab, «Ultime variazioni» and
+#: «Storia del dato» read it. No test reads its profile; the offline gallery reads only its name and price.
+PROFILE_HISTORY_FUND = "Amundi Core MSCI World UCITS ETF Acc"
+
+
+def populate_profile_history(session: Session) -> None:
+    """A fund's profile with a history (plan 68, E12), as the enrichers and a user would have written it, dated on its
+    first price day and after: the TER read by justETF, corrected by hand, then read again; the fund size read three
+    times; the fund's enrichers (justETF, then Borsa Italiana) with the state of a read this morning, so «Aggiorna» says
+    when and the fund size is confirmed. The enrichers are bound but not served on a lane (``LIBREFOLIO_ENRICHERS_ENABLED``
+    is ``mockenrich`` there): nothing ever reads them. Run after ``date_legacy_profile_rows``."""
+    from backend.app.db.models import AssetEnrichers  # noqa: PLC0415 — the bindings' table, read only by this step
+
+    print("\n🧾 Profile history of one fund...")
+    fund = session.exec(select(Asset).where(Asset.display_name == PROFILE_HISTORY_FUND)).one()
+    user = session.exec(select(User).where(User.username == "e2e_test_user")).one()
+    first_price = session.exec(text("SELECT min(date) FROM price_history WHERE asset_id = :asset").bindparams(asset=fund.id)).one()[0]
+    today = date.today()
+    # Its first price day (the seed's prices go back up to three years); never later than 120 days ago, before the steps below
+    first = min(date.fromisoformat(str(first_price)[:10]) if first_price else today, today - timedelta(days=120))
+
+    def row(key: str, value: object, source: str, day: date, user_id: int | None = None) -> AssetProfileUpdate:
+        return AssetProfileUpdate(asset_id=fund.id, key=key, value=json.dumps(normalize_value(key, value)), source=source, user_id=user_id, read_on=day, source_date=None if source == "user" else day)
+
+    session.add_all(
+        [
+            row("ter", "0.0020", "justetf", first),
+            row("ter", "0.0018", "user", today - timedelta(days=60), user_id=user.id),
+            row("ter", "0.0017", "justetf", today - timedelta(days=30)),
+            row("fund_size", {"amount": "412000000", "currency": "EUR"}, "justetf", today - timedelta(days=90)),
+            row("fund_size", {"amount": "468000000", "currency": "EUR"}, "justetf", today - timedelta(days=45)),
+            row("fund_size", {"amount": "523000000", "currency": "EUR"}, "justetf", today - timedelta(days=7)),
+        ]
+    )
+    read_at = datetime.combine(today, datetime.min.time()).replace(hour=3).isoformat() + "+00:00"
+    config = {"justetf": {"identifier_type": "ISIN", "identifier": fund.identifier_isin}, "borsa_italiana": {"identifier_type": "ISIN", "identifier": fund.identifier_isin}}
+    state = {
+        "justetf": {"read_at": read_at, "status": "ok", "error_code": None, "retry_after": None, "voices": 2, "confirmed": {"ter": read_at, "fund_size": read_at}},
+        "borsa_italiana": {"read_at": read_at, "status": "not_found", "error_code": None, "retry_after": None, "voices": 0, "confirmed": {}},
+    }
+    session.add(AssetEnrichers(asset_id=fund.id, config=json.dumps(config), state=json.dumps(state)))
+    session.commit()
+    print(f"  ✅ {PROFILE_HISTORY_FUND}: TER and fund size with a history, bound to justETF and Borsa Italiana")
+
+
 def populate_assets(session: Session):
     """Create asset records."""
     print("\n📈 Creating Assets...")
@@ -821,7 +872,7 @@ def populate_assets(session: Session):
             "asset_type": AssetType.STOCK,
             "identifier_ticker": "AAPL",
             "user_url": "https://investor.apple.com",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Technology company",
                     "geographic_area": {"distribution": {"USA": 1.0}},
@@ -835,7 +886,7 @@ def populate_assets(session: Session):
             "asset_type": AssetType.STOCK,
             "identifier_ticker": "MSFT",
             "user_url": "https://www.microsoft.com/en-us/investor",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Software and cloud computing",
                     "geographic_area": {"distribution": {"USA": 1.0}},
@@ -848,7 +899,7 @@ def populate_assets(session: Session):
             "currency": "USD",
             "asset_type": AssetType.STOCK,
             "identifier_ticker": "TSLA",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Electric vehicles and clean energy",
                     "geographic_area": {"distribution": {"USA": 0.50, "CHN": 0.25, "DEU": 0.25}},
@@ -869,7 +920,7 @@ def populate_assets(session: Session):
             "asset_type": AssetType.CROWDFUND,
             # Marked inactive — fixture for testing the "inactive asset" UI state.
             "active": False,
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Real estate development loan in Milan (closed position)",
                     "geographic_area": {"distribution": {"ITA": 1.0}},
@@ -881,7 +932,7 @@ def populate_assets(session: Session):
             "display_name": "RE Loan Roma",
             "currency": "EUR",
             "asset_type": AssetType.CROWDFUND,
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Residential project in Rome",
                     "geographic_area": {"distribution": {"ITA": 1.0}},
@@ -895,7 +946,7 @@ def populate_assets(session: Session):
             "currency": "USD",
             "asset_type": AssetType.CRYPTO,
             "identifier_ticker": "BTC-USD",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Digital gold, store of value",
                     "sector_area": {"distribution": {"Other": 1.0}},
@@ -907,7 +958,7 @@ def populate_assets(session: Session):
             "currency": "USD",
             "asset_type": AssetType.CRYPTO,
             "identifier_ticker": "ETH-USD",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Smart contract platform",
                     "sector_area": {"distribution": {"Other": 1.0}},
@@ -920,7 +971,7 @@ def populate_assets(session: Session):
             "currency": "USD",
             "asset_type": AssetType.STOCK,
             "identifier_ticker": "NVDA",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "GPU and AI computing leader",
                     "geographic_area": {"distribution": {"USA": 1.0}},
@@ -934,7 +985,7 @@ def populate_assets(session: Session):
             "asset_type": AssetType.ETF,
             "identifier_isin": "IE000BI8OT95",
             "identifier_ticker": "MWRD",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Global developed markets ETF (accumulating) — served via JustETF",
                     "geographic_area": {"distribution": {"USA": 0.65, "DEU": 0.08, "GBR": 0.08, "JPN": 0.07, "FRA": 0.06, "CHN": 0.06}},
@@ -948,7 +999,7 @@ def populate_assets(session: Session):
             "currency": "USD",
             "asset_type": AssetType.INDEX,
             "identifier_ticker": "^GSPC",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Standard & Poor's 500 — US large-cap benchmark index",
                     "geographic_area": {"distribution": {"USA": 1.0}},
@@ -961,7 +1012,7 @@ def populate_assets(session: Session):
             "currency": "USD",
             "asset_type": AssetType.INDEX,
             "identifier_ticker": "URTH",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "MSCI World Index — global developed markets benchmark",
                     "geographic_area": {
@@ -987,7 +1038,7 @@ def populate_assets(session: Session):
             "currency": "EUR",
             "asset_type": AssetType.BOND,
             "user_url": "https://www.dt.mef.gov.it/it/debito_pubblico/titoli_di_stato/",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Italian government inflation-linked bond maturing 2028",
                     "geographic_area": {"distribution": {"ITA": 1.0}},
@@ -1001,7 +1052,7 @@ def populate_assets(session: Session):
             "currency": "USD",
             "asset_type": AssetType.OTHER,
             "user_url": "https://www.kitco.com/charts/livegold.html",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Gold spot price (XAU/USD) via web scraping",
                     "sector_area": {"distribution": {"Basic Materials": 1.0}},
@@ -1017,7 +1068,7 @@ def populate_assets(session: Session):
             "identifier_isin": "LU1900066033",
             "identifier_ticker": "CHIP",
             "user_url": "https://www.justetf.com/it/etf-profile.html?isin=LU1900066033",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Semiconductors sector ETF tracking MSCI World Semiconductors & Semiconductor Equipment index",
                     "geographic_area": {"distribution": {"USA": 0.80, "TWN": 0.08, "KOR": 0.04, "JPN": 0.03, "NLD": 0.03, "DEU": 0.02}},
@@ -1034,7 +1085,7 @@ def populate_assets(session: Session):
             "identifier_isin": "IE00B4L5Y983",
             "identifier_ticker": "IWDA",
             "user_url": "https://www.justetf.com/it/etf-profile.html?isin=IE00B4L5Y983",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "iShares Core MSCI World — global developed markets ETF, USD share class",
                     "geographic_area": {
@@ -1063,7 +1114,7 @@ def populate_assets(session: Session):
             "currency": "EUR",
             "asset_type": AssetType.BOND,
             "user_url": "https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005634800.html?lang=en",
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Italian government bond (BTP Più, maturity Feb 2033) — current price scraped from Borsa Italiana",
                     "geographic_area": {"distribution": {"ITA": 1.0}},
@@ -1076,7 +1127,7 @@ def populate_assets(session: Session):
             "display_name": "Test KRW Stock",
             "currency": "KRW",
             "asset_type": AssetType.STOCK,
-            "classification_params": json.dumps(
+            "legacy_classification": json.dumps(
                 {
                     "short_description": "Test asset in KRW for WAC FX missing pair scenario",
                     "geographic_area": {"distribution": {"KOR": 1.0}},
@@ -1086,7 +1137,9 @@ def populate_assets(session: Session):
         },
     ]
 
+    classified: list[tuple[Asset, str]] = []
     for asset_data in assets:
+        classification = asset_data.pop(LEGACY_CLASSIFICATION_KEY, None)
         asset = Asset(**asset_data)
         # Mirror migration 003, which seeds is_benchmark from asset_type == INDEX.
         # That UPDATE runs at migration time, against a database these rows do not yet
@@ -1095,16 +1148,24 @@ def populate_assets(session: Session):
         if asset.asset_type == AssetType.INDEX:
             asset.is_benchmark = True
         session.add(asset)
+        if classification:
+            classified.append((asset, classification))
         print(f"  ✅ {asset.display_name} ({asset.currency})")
 
     session.commit()
 
     # Their countries, sectors and description in the profile, as migration 006 copies them (plan 68, A4 and D2)
-    created_assets = session.exec(select(Asset).where(Asset.classification_params.is_not(None))).all()
-    profile_rows = [row for asset in created_assets for row in _legacy_profile_rows(asset)]
+    profile_rows = [row for asset, classification in classified for row in _legacy_profile_rows(asset, classification)]
     session.add_all(profile_rows)
     session.commit()
     print(f"  ✅ {len(profile_rows)} legacy profile rows")
+
+    # The modified duration of one bond, as the Borsa Italiana enricher reads it (plan 70, RN-25): the rates scenario of
+    # its Risk tab reads it. The other seeded bond, BTP Più, keeps none: its tab says the profile has no duration.
+    bond = session.exec(select(Asset).where(Asset.display_name == "BTP Italia 2028")).one()
+    session.add(AssetProfileUpdate(asset_id=bond.id, key="modified_duration", value=json.dumps(normalize_value("modified_duration", "2.15")), source="borsa_italiana", read_on=date.today()))
+    session.commit()
+    print("  ✅ BTP Italia 2028: modified duration 2.15 years in the profile")
 
 
 def populate_asset_provider_assignments(session: Session):
@@ -3974,6 +4035,7 @@ def main():  # noqa: C901 — sequential populate step driver
             create_split_transaction(session)
             add_balance_safe_cash_prefunds(session)
             date_legacy_profile_rows(session)  # after every price and transaction (A4b)
+            populate_profile_history(session)  # after the legacy rows are dated (E12)
             populate_fx_rates(session)
             populate_fx_currency_pair_sources(session)
             configure_user_avatars(session)

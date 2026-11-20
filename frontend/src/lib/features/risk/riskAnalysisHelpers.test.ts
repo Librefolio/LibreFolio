@@ -663,6 +663,28 @@ describe('buildBaseAnalytics', () => {
 
     // k6 (06/10): each risk/return point publishes its own Sharpe and Sortino, so the scatter is charged
     // exactly what the KPI beside it is charged — the same perimeter, the same rate, the same target.
+    // RN-25: the asset's rates scenario rides in the current-composition wave, every step at once, so the page knows
+    // from one answer whether to offer the tool and switches between the steps without asking again.
+    it('current_composition: the rates scenario asks its six steps, up and down, only when opted in and advertised', () => {
+        const asked = buildBaseAnalytics('current_composition', {...ctx(['risk_contribution', 'rate_shock']), includeRateShock: true});
+        const rates = asked.find((analytic) => analytic.analytic_code === 'rate_shock');
+        expect(rates?.parameters).toEqual({yield_changes: [0.005, 0.01, 0.02, -0.005, -0.01, -0.02]});
+        expect(rates?.instance_id).toBe('base-current_composition-rate_shock');
+
+        expect(
+            buildBaseAnalytics('current_composition', ctx(['risk_contribution', 'rate_shock'])).some((analytic) => analytic.analytic_code === 'rate_shock'),
+            'not opted in',
+        ).toBe(false);
+        expect(
+            buildBaseAnalytics('current_composition', {...ctx(['risk_contribution']), includeRateShock: true}).some((analytic) => analytic.analytic_code === 'rate_shock'),
+            'not advertised for the scope',
+        ).toBe(false);
+        expect(
+            buildBaseAnalytics('historical', {...ctx(['historical_kpi', 'rate_shock']), includeRateShock: true}).some((analytic) => analytic.analytic_code === 'rate_shock'),
+            'never in the historical wave',
+        ).toBe(false);
+    });
+
     it('current_composition: the risk/return points are charged the rate and the target of the KPI beside them', () => {
         const analytics = buildBaseAnalytics('current_composition', {...ctx(['risk_contribution', 'historical_kpi', 'asset_risk_return'], 3.5), includeCurrentCompositionRiskReturn: true});
         expect(

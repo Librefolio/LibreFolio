@@ -45,6 +45,7 @@ const discriminatedSchemas = [
     'RiskAssetSetDrawdownOutput',
     'RiskAssetSetReturnOutput',
     'RiskAssetSetComparisonOutput',
+    'RiskRateShockOutput',
     'RiskHistoricalReplayScenario',
     'RiskHypotheticalShockScenario',
     'SchedulerLogCurrentPriceEntry',
@@ -96,6 +97,7 @@ const requiredLiteralDiscriminators = [
     ['RiskAssetSetDrawdownOutput', 'kind', 'drawdown_set'],
     ['RiskAssetSetReturnOutput', 'kind', 'risk_return_set'],
     ['RiskAssetSetComparisonOutput', 'kind', 'comparison_set'],
+    ['RiskRateShockOutput', 'kind', 'rate_shock'],
 ];
 
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

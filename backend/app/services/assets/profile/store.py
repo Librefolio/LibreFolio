@@ -42,7 +42,7 @@ import dataclasses
 import json
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, tzinfo
 from typing import Any
 
 from sqlalchemy import delete, func, select, update
@@ -138,11 +138,15 @@ class ProfileStep:
 
 @dataclass(frozen=True, slots=True)
 class ProfileChange:
-    """A row of «Ultime variazioni»: the row, and the voice's value before it (``has_previous`` False for its first)."""
+    """A row of «Ultime variazioni»: the row, and the voice's value before it (``has_previous`` False for its first).
+
+    ``before`` is the voice's row before it, from the whole history (hidden rows included): who wrote that value and
+    when, for «Cosa è cambiato» (plan 68, E6a). None for the voice's first row."""
 
     row: ProfileRow
     previous: Any
     has_previous: bool
+    before: ProfileRow | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -217,10 +221,15 @@ _ORDER = (AssetProfileUpdate.asset_id, AssetProfileUpdate.key, AssetProfileUpdat
 # =============================================================================
 
 
+async def profile_zone(session: AsyncSession) -> tzinfo:
+    """The scheduler's time zone (``scheduler_timezone``; UTC when it is not set or not valid): the calendar of the
+    profile's days."""
+    return zoneinfo_or_utc(await get_setting_value(session, SETTINGS_REGISTRY.global_.SCHEDULER_TIMEZONE.key))
+
+
 async def profile_today(session: AsyncSession, now: datetime | None = None) -> date:
     """Today in the scheduler's time zone (``scheduler_timezone``; UTC when it is not set or not valid)."""
-    name = await get_setting_value(session, SETTINGS_REGISTRY.global_.SCHEDULER_TIMEZONE.key)
-    return (now or utcnow()).astimezone(zoneinfo_or_utc(name)).date()
+    return (now or utcnow()).astimezone(await profile_zone(session)).date()
 
 
 async def _rows_of(session: AsyncSession, asset_ids: Sequence[int], keys: Sequence[str] | None, *, until: date | None = None) -> list[AssetProfileUpdate]:
@@ -244,6 +253,17 @@ async def current_rows(session: AsyncSession, asset_id: int, keys: Iterable[str]
     """«Now» of each voice of ``asset_id`` (of ``keys``, or all): its last row in (``read_on``, ``id``) order."""
     records = await _rows_of(session, [asset_id], _checked_keys(keys))
     return {key: _row(record) for key, record in _last_by_key(records).items()}
+
+
+async def current_rows_of(session: AsyncSession, asset_ids: Sequence[int], keys: Iterable[str] | None = None) -> dict[int, dict[str, ProfileRow]]:
+    """«Now» of each voice of each asset (of ``keys``, or all); an asset with no row is left out."""
+    asset_ids = list(dict.fromkeys(asset_ids))
+    if not asset_ids:
+        return {}
+    by_asset: dict[int, list[AssetProfileUpdate]] = {}
+    for record in await _rows_of(session, asset_ids, _checked_keys(keys)):
+        by_asset.setdefault(record.asset_id, []).append(record)
+    return {asset_id: {key: _row(record) for key, record in _last_by_key(records).items()} for asset_id, records in by_asset.items()}
 
 
 # =============================================================================
@@ -444,7 +464,8 @@ async def recent_changes(session: AsyncSession, asset_id: int, *, key: str | Non
         previous[record.key] = record
         if key is None and not _shown_in_panel(record, before):
             continue
-        changes.append(ProfileChange(row=_row(record), previous=_row(before).value if before is not None else None, has_previous=before is not None))
+        prior = _row(before) if before is not None else None
+        changes.append(ProfileChange(row=_row(record), previous=prior.value if prior is not None else None, has_previous=prior is not None, before=prior))
     # Newest first, across voices: (read_on, id) descending
     changes.sort(key=lambda change: (change.row.read_on, change.row.id), reverse=True)
     first = page * page_size

@@ -62,6 +62,8 @@ export interface TypeRule {
     pairFormLayout: PairFormLayout | null;
     costBasisMode: CostBasisFieldMode;
     costBasisPair: [CostBasisFieldMode, CostBasisFieldMode] | null;
+    /** Linked charges (project 66): 'charge' for FEE and TAX, 'parent' for the types a charge may point at, null for neither. */
+    chargeRole: 'charge' | 'parent' | null;
 }
 
 export interface ValidatableDraft {
@@ -101,6 +103,7 @@ function serverTypeToRule(s: ServerTXType): TypeRule {
         pairFormLayout: s.pair_form_layout ?? null,
         costBasisMode: s.cost_basis_mode ?? 'forbidden',
         costBasisPair: s.cost_basis_pair ? (s.cost_basis_pair as [CostBasisFieldMode, CostBasisFieldMode]) : null,
+        chargeRole: s.charge_role === 'charge' || s.charge_role === 'parent' ? s.charge_role : null,
     };
 }
 
@@ -127,6 +130,7 @@ const FALLBACK_RULE: TypeRule = {
     pairFormLayout: null,
     costBasisMode: 'forbidden',
     costBasisPair: null,
+    chargeRole: null,
 };
 
 // =============================================================================

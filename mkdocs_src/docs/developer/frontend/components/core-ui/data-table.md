@@ -17,6 +17,12 @@ The `DataTable` is a powerful, generic table component built with Svelte 5 Runes
   [Pagination](#pagination).
 - **Selection**: Row selection with checkboxes, "Select All" on the current page, and a
   "show selected only" filter in the checkbox header.
+  The pages act on the selection through `DataTableToolbar` (`lib/components/table/`), the selection bar:
+  one `toolbar-action-<id>` per action. An action can be `disabled`. A disabled action with a `hint` says why
+  in the shared `Tooltip`, in both variants of the bar. Its button carries `aria-disabled="true"` instead of the
+  native `disabled`, so it keeps the focus, the tap and the click that open the reason; a phone shows no `title`.
+  Its click never runs the action. The label stays the action's name, and the `reason` code is published as
+  `data-disabled-reason` for the tests. A disabled action without a `hint` keeps the native `disabled`.
 - **Column Management**: Resize columns by dragging a header cell's right edge, with a mouse, a
   finger or a pen — see [Column resize](#column-resize); show/hide and drag-to-reorder through
   `ColumnVisibilityToggle`, which the caller places in its own toolbar and hands the table instance
@@ -179,6 +185,7 @@ The source of truth is the `Props` interface of `lib/components/table/DataTable.
 | `defaultPageSize` | `number` | `10` | Page size until the user picks one (the stored choice wins). |
 | `pageSizeOptions` | `number[]` | `[10, 25, 50, 100, 0]` | Choices of the page-size menu; `0` means "all" (shown as ∞). |
 | `alwaysShowPagination` | `boolean` | `false` | Show the bar whenever there is at least one row. |
+| `opensPage` | `(row: T) => boolean` | — | Whether a row may start a page. With it, a row that returns `false` joins the page of the row before it (see [Pagination](#pagination)). |
 
 `enableColumnVisibility` is accepted but not read: column visibility is driven from outside, through
 `ColumnVisibilityToggle` and the [public methods](#public-methods).
@@ -285,6 +292,9 @@ The pagination bar (`DataTablePagination.svelte`) floats in a balloon that stick
 the scroll area. It appears when pagination is on and the filtered rows outnumber the smallest
 non-zero entry of `pageSizeOptions` — or, with `alwaysShowPagination`, as soon as there is one row.
 Changing the page size returns to the first page and is saved under the table's `storageKey`.
+With a single entry in `pageSizeOptions` there is nothing to choose: the pager draws no page-size selector (nor its
+«per page»), only the number of items and the pages (`pagination-total`, 77 SEL-D1). The profile's «Latest changes»,
+which the server pages by 20, is such a pager.
 
 The page-size menu is positioned with **fixed** coordinates computed from its trigger
 (`getFixedDropdownPosition`, `lib/utils/layout/dropdownPosition.ts`): it opens below the trigger,
@@ -294,6 +304,15 @@ scrollable modal the menu is not clipped by the modal's overflow and every optio
 
 Short tables can offer smaller steps: the bulk editor and the import wizard pass
 `pageSizeOptions={[5, 10, 25, 50, 0]}`-style lists.
+
+**Groups that never split (`opensPage`).** Pages are fixed slices of the sorted rows. With the
+optional `opensPage` prop they come from `paginateFlat` (`dataTableLogic.ts`) instead: a page still
+closes at the page size, but never before a row for which `opensPage` returns `false`. That row
+joins the page of the row before it, which then holds more rows than the page size. The bulk
+editor passes it so a parent's linked charges stay on the parent's page. With the prop,
+`navigateToRowId`, `getPageRowIds` and the pager (`DataTablePagination`'s optional `pageCount`)
+follow those pages. Without it nothing changes. The transactions table pages its flat mode with the
+same `paginateFlat`.
 
 ## 🧭 Public methods {: #public-methods }
 
@@ -342,7 +361,7 @@ The main fields; `lib/components/table/types.ts` has the full interface.
 The filter of a `date` column (`DataTableColumnFilter.svelte`) is a `DateRangePicker` without
 presets (`compact`, `stacked`), and it applies a `DateFilter`, `{type: 'date', from?, to?}`
 (`types.ts`). Either end may stay blank: `matchesColumnFilter` (`dataTableLogic.ts`) drops a row only
-before `from` or after `to`, as does `TransactionsTable`'s own pre-filter, so a date in «From» alone
+before `from` or after `to` (`TransactionsTable` filters its folded rows with the same function), so a date in «From» alone
 keeps the rows from that day on, and one in «To» alone the rows up to that day. In the URL the filter
 reads `from,to`, either side empty (`lib/features/files/urlFilters.ts`); the Transactions page keeps its own
 `date_start` and `date_end` (`lib/features/transactions/filterState.ts`).

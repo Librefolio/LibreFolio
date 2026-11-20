@@ -24,6 +24,15 @@ function backendParams(params: Record<string, unknown>, definition: SignalDefini
     return sent;
 }
 
+/**
+ * Whether one of these signals reads the reader's risk-free rate (a parameter bound to it, RN-21): a chart that shows one
+ * asks again when the rate changes («A»), one that shows none has nothing to ask.
+ */
+export function readsRiskFreeRate(configs: readonly SignalConfig[], definitions: readonly SignalDefinition[]): boolean {
+    const definitionsByType = new Map(definitions.map((definition) => [definition.type, definition]));
+    return configs.some((config) => definitionsByType.get(config.signalType)?.paramDescriptors.some((descriptor) => descriptor.control === 'risk_free_rate') === true);
+}
+
 function stableJson(value: unknown): string {
     if (Array.isArray(value)) {
         return `[${value.map(stableJson).join(',')}]`;

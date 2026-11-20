@@ -12,7 +12,6 @@
     "bytes": "B",
     "cancel": "Cancelar",
     "cash": "Efectivo",
-    "classification": "Clasificación",
     "clear": "Limpiar",
     "clearAll": "Deseleccionar Todo",
     "close": "Cerrar",
@@ -381,7 +380,8 @@
     },
     "confirmBulkAction": "¿Estás seguro de querer realizar esta acción en",
     "filterLabel": "Filtro",
-    "resetLayout": "Restablecer disposición"
+    "resetLayout": "Restablecer disposición",
+    "selectionHint": "Selecciona una o varias filas para actuar sobre todas a la vez."
   },
   "date": {
     "today": "Hoy",

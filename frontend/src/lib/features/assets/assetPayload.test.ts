@@ -2,8 +2,8 @@
  * assetPayload — pure unit tests for the shared save-path builders.
  */
 import {describe, expect, it} from 'vitest';
-import {normalizeQuoteBaseQuantity, buildClassificationParams, buildClassificationPatch, normalizeDistribution, sameDistribution, buildCreateItem, buildPatchItem, buildProviderAssignItem} from './assetPayload';
-import type {AssetFormFields, ClassificationParams, ProviderAssignment} from './assetPayload';
+import {normalizeQuoteBaseQuantity, normalizeDistribution, buildCreateItem, buildPatchItem, buildProviderAssignItem} from './assetPayload';
+import type {AssetFormFields, ProviderAssignment} from './assetPayload';
 import type {IdentifierRow} from './assetIdentifiers';
 
 describe('normalizeQuoteBaseQuantity', () => {
@@ -16,133 +16,6 @@ describe('normalizeQuoteBaseQuantity', () => {
         expect(normalizeQuoteBaseQuantity(0)).toBe(1);
         expect(normalizeQuoteBaseQuantity(-5)).toBe(1);
         expect(normalizeQuoteBaseQuantity(NaN)).toBe(1);
-    });
-});
-
-describe('buildClassificationParams', () => {
-    it('returns undefined when nothing is set', () => {
-        expect(buildClassificationParams('', {}, {})).toBeUndefined();
-    });
-
-    it('includes only the short_description when only it is set', () => {
-        expect(buildClassificationParams('a bond', {}, {})).toEqual({short_description: 'a bond'});
-    });
-
-    it('wraps sector and geographic distributions under a distribution key', () => {
-        const out = buildClassificationParams('', {Tech: 0.6, Health: 0.4}, {US: 1});
-        expect(out).toEqual({
-            sector_area: {distribution: {Tech: 0.6, Health: 0.4}},
-            geographic_area: {distribution: {US: 1}},
-        });
-    });
-
-    it('omits an empty distribution but keeps a non-empty sibling', () => {
-        const out = buildClassificationParams('', {Tech: 1}, {});
-        expect(out).toEqual({sector_area: {distribution: {Tech: 1}}});
-        expect(out).not.toHaveProperty('geographic_area');
-    });
-
-    it('assembles all three parts together', () => {
-        const out = buildClassificationParams('desc', {S: 1}, {G: 1});
-        expect(out).toEqual({
-            short_description: 'desc',
-            sector_area: {distribution: {S: 1}},
-            geographic_area: {distribution: {G: 1}},
-        });
-    });
-});
-
-// Root cause E2: a full-block replace silently dropped untouched
-// classification_params subfields on the wire. buildClassificationPatch is the
-// frontend half of that fix — it must diff previous vs. current per subfield
-// (omit unchanged, null only what actually cleared) so the backend's own
-// per-field shallow merge (see backend/app/services/assets/crud.py
-// patch_assets_bulk) receives exactly the intended keys.
-describe('buildClassificationPatch', () => {
-    const full: ClassificationParams = {
-        short_description: 'a bond',
-        sector_area: {distribution: {Tech: 0.4, Health: 0.6}},
-        geographic_area: {distribution: {US: 1}},
-    };
-
-    it('omits the patch when nothing was ever set (unknown initial state)', () => {
-        expect(buildClassificationPatch(undefined, undefined)).toBeUndefined();
-    });
-
-    it('omits the patch when current is identical to previous', () => {
-        const current: ClassificationParams = {
-            short_description: 'a bond',
-            sector_area: {distribution: {Tech: 0.4, Health: 0.6}},
-            geographic_area: {distribution: {US: 1}},
-        };
-        expect(buildClassificationPatch(full, current)).toBeUndefined();
-    });
-
-    it('treats equal weights under a different key order as no change', () => {
-        const current: ClassificationParams = {
-            short_description: 'a bond',
-            sector_area: {distribution: {Health: 0.6, Tech: 0.4}}, // same pairs, keys reordered
-            geographic_area: {distribution: {US: 1}},
-        };
-        expect(buildClassificationPatch(full, current)).toBeUndefined();
-    });
-
-    it('sends a whole-block null when the last remaining field is cleared', () => {
-        // previous carries every subfield; current is undefined, i.e. the editor
-        // ends up with nothing left at all — this must collapse to a single
-        // top-level null, not an object of three null subfields.
-        expect(buildClassificationPatch(full, undefined)).toBeNull();
-    });
-
-    it('nulls only the cleared subfield, leaving siblings out of the patch entirely', () => {
-        // sector_area is dropped, short_description/geographic_area are unchanged
-        // and current is still a real object (not undefined) — so this must NOT
-        // hit the whole-block-null branch, and must not mention the untouched
-        // siblings at all (omission, not a redundant same-value key).
-        const current: ClassificationParams = {
-            short_description: 'a bond',
-            geographic_area: {distribution: {US: 1}},
-        };
-        const patch = buildClassificationPatch(full, current);
-        expect(patch).toEqual({sector_area: null});
-        expect(patch).not.toHaveProperty('short_description');
-        expect(patch).not.toHaveProperty('geographic_area');
-    });
-
-    it('patches only short_description when only the description changed', () => {
-        const current: ClassificationParams = {
-            short_description: 'an updated bond',
-            sector_area: {distribution: {Tech: 0.4, Health: 0.6}},
-            geographic_area: {distribution: {US: 1}},
-        };
-        const patch = buildClassificationPatch(full, current);
-        expect(patch).toEqual({short_description: 'an updated bond'});
-        expect(patch).not.toHaveProperty('sector_area');
-        expect(patch).not.toHaveProperty('geographic_area');
-    });
-});
-
-describe('sameDistribution', () => {
-    it('compares own key/value pairs independently of insertion order without mutating either input', () => {
-        const left = Object.freeze({Technology: 0.4, Health: 0.6});
-        const right = Object.freeze({Health: 0.6, Technology: 0.4});
-        expect(sameDistribution(left, right)).toBe(true);
-        expect(sameDistribution(right, left)).toBe(true);
-        expect(Object.keys(left)).toEqual(['Technology', 'Health']);
-        expect(Object.keys(right)).toEqual(['Health', 'Technology']);
-    });
-
-    it('treats omitted distributions as empty, but distinguishes missing keys from zero weights', () => {
-        expect(sameDistribution()).toBe(true);
-        expect(sameDistribution(undefined, {})).toBe(true);
-        expect(sameDistribution({}, {Technology: 0})).toBe(false);
-        expect(sameDistribution({Technology: 0}, {})).toBe(false);
-    });
-
-    it('rejects changed weights and changed keys even when cardinality and totals match', () => {
-        expect(sameDistribution({Technology: 0.4, Health: 0.6}, {Technology: 0.6, Health: 0.4})).toBe(false);
-        expect(sameDistribution({Technology: 1}, {Health: 1})).toBe(false);
-        expect(sameDistribution({toString: 1}, {Technology: 1})).toBe(false);
     });
 });
 
@@ -176,10 +49,9 @@ function form(overrides: Partial<AssetFormFields> = {}): AssetFormFields {
         active: true,
         isBenchmark: false,
         userUrl: '',
-        shortDescription: '',
-        sectorDistribution: {},
-        geographicDistribution: {},
         identifierRows: [],
+        enrichers: {},
+        profile: {},
         ...overrides,
     };
 }
@@ -192,9 +64,6 @@ const FILLED: Partial<AssetFormFields> = {
     active: false,
     isBenchmark: true,
     userUrl: 'https://example.test/quote/AAPL',
-    shortDescription: 'Consumer electronics',
-    sectorDistribution: {Technology: 1},
-    geographicDistribution: {USA: 1},
     identifierRows: [idRow('ISIN', ' US0378331005 '), idRow('OTHER', 'APC.DE'), idRow('OTHER', 'AAPL.MI')],
 };
 
@@ -209,11 +78,6 @@ describe('buildCreateItem', () => {
             active: false,
             is_benchmark: true,
             user_url: 'https://example.test/quote/AAPL',
-            classification_params: {
-                short_description: 'Consumer electronics',
-                sector_area: {distribution: {Technology: 1}},
-                geographic_area: {distribution: {USA: 1}},
-            },
             identifier_isin: 'US0378331005',
             identifier_ticker: undefined,
             identifier_cusip: undefined,
@@ -231,10 +95,11 @@ describe('buildCreateItem', () => {
         expect(buildCreateItem(form({iconUrl})).icon_url).toBeUndefined();
     });
 
-    it('leaves out an empty user URL, an empty classification and every unset identifier column', () => {
+    it('leaves out an empty user URL and every unset identifier column, and never sends a classification (plan 68, E9)', () => {
         const item = buildCreateItem(form());
         expect(item.user_url).toBeUndefined();
-        expect(item.classification_params).toBeUndefined();
+        // Description, sectors and countries are the profile's: they leave as `profile`, never as `classification_params`
+        expect(item).not.toHaveProperty('classification_params');
         // The inferred item type drops the index signature of the spread identifier columns: read them through a string-keyed view.
         const columns: Record<string, unknown> = item;
         expect([columns.identifier_isin, columns.identifier_ticker, columns.identifier_cusip, columns.identifier_sedol, columns.identifier_figi, columns.identifier_uuid, columns.identifier_other]).toEqual(Array(7).fill(undefined));
@@ -247,7 +112,7 @@ describe('buildCreateItem', () => {
 
 describe('buildPatchItem', () => {
     it('builds the patch item from a filled form', () => {
-        expect(buildPatchItem(42, form(FILLED), undefined)).toStrictEqual({
+        expect(buildPatchItem(42, form(FILLED))).toStrictEqual({
             asset_id: 42,
             display_name: 'Apple Inc.',
             currency: 'USD',
@@ -257,11 +122,6 @@ describe('buildPatchItem', () => {
             active: false,
             is_benchmark: true,
             user_url: 'https://example.test/quote/AAPL',
-            classification_params: {
-                short_description: 'Consumer electronics',
-                sector_area: {distribution: {Technology: 1}},
-                geographic_area: {distribution: {USA: 1}},
-            },
             identifier_isin: 'US0378331005',
             identifier_ticker: null,
             identifier_cusip: null,
@@ -273,26 +133,26 @@ describe('buildPatchItem', () => {
     });
 
     it('passes the icon as it is, null and empty included', () => {
-        expect(buildPatchItem(1, form({iconUrl: null}), undefined).icon_url).toBeNull();
-        expect(buildPatchItem(1, form({iconUrl: ''}), undefined).icon_url).toBe('');
+        expect(buildPatchItem(1, form({iconUrl: null})).icon_url).toBeNull();
+        expect(buildPatchItem(1, form({iconUrl: ''})).icon_url).toBe('');
     });
 
     it('puts a removed icon on the wire as an explicit null, never as a missing key (T-2)', () => {
         // The picker's red x then «Use selected» leaves iconUrl null. The backend clears the column only when the key is
         // present: an undefined would vanish from the JSON body and the removal would answer success and change nothing.
-        const wire = JSON.parse(JSON.stringify([buildPatchItem(7, form({...FILLED, iconUrl: null}), undefined)]));
+        const wire = JSON.parse(JSON.stringify([buildPatchItem(7, form({...FILLED, iconUrl: null}))]));
         expect(wire[0]).toHaveProperty('icon_url', null);
         expect(wire[0]).toHaveProperty('user_url', 'https://example.test/quote/AAPL');
     });
 
     it('trims the name and floors the quote base quantity, like the create item', () => {
-        const item = buildPatchItem(1, form({displayName: '  Apple Inc.  ', quoteBaseQuantity: 0}), undefined);
+        const item = buildPatchItem(1, form({displayName: '  Apple Inc.  ', quoteBaseQuantity: 0}));
         expect(item.display_name).toBe('Apple Inc.');
         expect(item.quote_base_quantity).toBe(1);
     });
 
     it('clears, with null, the user URL and the identifier columns the create item would leave out', () => {
-        const item = buildPatchItem(1, form({userUrl: ''}), undefined);
+        const item = buildPatchItem(1, form({userUrl: ''}));
         expect(item.user_url).toBeNull();
         expect([item.identifier_isin, item.identifier_ticker, item.identifier_cusip, item.identifier_sedol, item.identifier_figi, item.identifier_uuid]).toEqual(Array(6).fill(null));
     });
@@ -301,31 +161,52 @@ describe('buildPatchItem', () => {
         // The backend reads `identifier_other: null` as "leave unchanged": only `[]` clears the list. A blank OTHER row
         // counts as no row.
         const noOther = [idRow('ISIN', 'US0378331005'), idRow('OTHER', '   ')];
-        const wire = JSON.parse(JSON.stringify([buildPatchItem(7, form({...FILLED, identifierRows: noOther}), undefined)]));
+        const wire = JSON.parse(JSON.stringify([buildPatchItem(7, form({...FILLED, identifierRows: noOther}))]));
         expect(wire[0]).toHaveProperty('identifier_other', []);
         expect(wire[0]).toHaveProperty('identifier_isin', 'US0378331005');
-        expect(buildPatchItem(7, form(FILLED), undefined).identifier_other).toEqual(['APC.DE', 'AAPL.MI']);
+        expect(buildPatchItem(7, form(FILLED)).identifier_other).toEqual(['APC.DE', 'AAPL.MI']);
     });
 
-    describe('classification_params', () => {
-        const initial: ClassificationParams = {short_description: 'Consumer electronics', sector_area: {distribution: {Technology: 1}}};
+    it('never sends a classification: the description, the sectors and the countries are the profile’s (plan 68, E9)', () => {
+        expect(buildPatchItem(1, form(FILLED))).not.toHaveProperty('classification_params');
+    });
+});
 
-        it('is absent when the classification is the one the modal opened with', () => {
-            expect(buildPatchItem(1, form({shortDescription: 'Consumer electronics', sectorDistribution: {Technology: 1}}), initial)).not.toHaveProperty('classification_params');
-        });
+describe('the enrichers on the asset (plan 68, E8a)', () => {
+    const JUSTETF = {identifier_type: 'ISIN', identifier: 'IE00BK5BQT80'};
+    const YAHOO = {identifier_type: 'TICKER', identifier: 'VWCE.DE'};
 
-        it('is absent when there was none and there is none', () => {
-            expect(buildPatchItem(1, form(), undefined)).not.toHaveProperty('classification_params');
-        });
+    it('creates the asset with the enrichers chosen, in their order, and without the key when there are none', () => {
+        const item = buildCreateItem(form({enrichers: {yahoo_finance: YAHOO, justetf: JUSTETF}}));
+        expect(Object.keys(item.enrichers ?? {})).toEqual(['yahoo_finance', 'justetf']);
+        expect(item.enrichers).toEqual({yahoo_finance: YAHOO, justetf: JUSTETF});
+        expect(buildCreateItem(form())).not.toHaveProperty('enrichers');
+    });
 
-        it('is null when everything was cleared', () => {
-            expect(buildPatchItem(1, form(), initial)).toHaveProperty('classification_params', null);
-        });
+    it('leaves the enrichers out of an edit that did not change them: absent means unchanged', () => {
+        const initial = {justetf: JUSTETF, yahoo_finance: YAHOO};
+        expect(buildPatchItem(1, form({enrichers: {justetf: {...JUSTETF}, yahoo_finance: {...YAHOO}}}), initial)).not.toHaveProperty('enrichers');
+    });
 
-        it('carries only the parts that changed', () => {
-            const item = buildPatchItem(1, form({shortDescription: 'Phones and computers', sectorDistribution: {Technology: 1}, geographicDistribution: {USA: 1}}), initial);
-            expect(item).toHaveProperty('classification_params', {short_description: 'Phones and computers', geographic_area: {distribution: {USA: 1}}});
-        });
+    it('sends the whole list when the order, a binding or the set changed; {} to clear them all', () => {
+        const initial = {justetf: JUSTETF, yahoo_finance: YAHOO};
+        expect(buildPatchItem(1, form({enrichers: {yahoo_finance: YAHOO, justetf: JUSTETF}}), initial).enrichers).toEqual({yahoo_finance: YAHOO, justetf: JUSTETF});
+        expect(buildPatchItem(1, form({enrichers: {justetf: JUSTETF, yahoo_finance: {...YAHOO, identifier: 'VWRA.L'}}}), initial)).toHaveProperty('enrichers');
+        expect(buildPatchItem(1, form({enrichers: {}}), initial).enrichers).toEqual({});
+    });
+});
+
+describe('the profile on the asset (plan 68, E8b)', () => {
+    const PROFILE = {ter: '0.002', fund_provider: {from: 'justetf', seen: 'Vanguard'}, withholding_tax: null};
+
+    it('creates the asset with the pending changes of the profile, and without the key when there are none', () => {
+        expect(buildCreateItem(form({profile: PROFILE})).profile).toEqual(PROFILE);
+        expect(buildCreateItem(form())).not.toHaveProperty('profile');
+    });
+
+    it('sends the profile on an edit only when a change waits: absent leaves every voice untouched', () => {
+        expect(buildPatchItem(1, form({profile: PROFILE})).profile).toEqual(PROFILE);
+        expect(buildPatchItem(1, form())).not.toHaveProperty('profile');
     });
 });
 

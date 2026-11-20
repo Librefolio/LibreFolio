@@ -33,14 +33,15 @@ The contract pinned here:
    NULL value are stored; two rows of one asset, key and day are stored; an enricher row written without
    ``config``/``state`` holds ``'{}'`` in both.
 4. A populated 1.3 database (at 005: a user and its settings, a broker, assets with and without
-   ``classification_params``, prices; plain SQL) upgraded to 006 keeps every row of every table it had (guard, green
-   before and after), gets ``asset_enrichers`` empty and — since A4 — the legacy copy of its classification in
+   ``classification_params``, prices; plain SQL) upgraded to 006 keeps every row of every table it had, on every column
+   but the one ``drop_classification_params`` drops (11), gets ``asset_enrichers`` empty and — since A4 — the legacy copy of its classification in
    ``asset_profile_updates`` (10), and no foreign-key violation, integrity ``ok``.
 5. Models = migration: ``SQLModel.metadata`` declares both tables and the index, and ``create_all`` builds them with
    the shape the migration gives them (``_full_shape``, and the defaults of every column).
 6. The downgrade 006 → 005 removes both tables and the index and leaves every other object as a new database at 005
-   has it; the populated database goes down keeping every other row — ``assets.classification_params`` with the same
-   meaning, since A4 rebuilds it from the profile —, and up again, the two tables back, ``asset_enrichers`` empty and
+   has it (11: once the column 006 drops is taken out of both texts); the populated database goes down keeping every
+   other row — ``assets.classification_params`` with the same meaning, since A4 rebuilds it from the profile and every
+   part of this install is one the copy keeps —, and up again, the two tables back, ``asset_enrichers`` empty and
    the profile holding the legacy copy again.
 7. Every part checks before it acts: an upgrade run again over its own work changes no object and no row; an upgrade
    that finds one table, or both, or a table and its index already there completes with the shape of a new database
@@ -70,8 +71,17 @@ The contract pinned here:
     reads it — ``normalize_value(key, json.loads(row.value))`` — equal to ``normalize_value(key, the part)``. Run
     again, it adds no row: an asset and voice with a ``legacy`` row already is skipped. Every other row stays, no
     violation. Downgrade: ``classification_params`` rebuilt from each asset's last row in (``read_on``, ``id``) order of
-    each of the three voices (a map as ``{"distribution": …}`` with string weights; a NULL last row removes the part; a
-    voice with no row keeps its part as it was); an asset with no profile row keeps its column byte for byte.
+    each of the three voices (a map as ``{"distribution": …}`` with string weights; a NULL last row removes the part).
+    Since D7b (11) the column comes back empty first: a part the copy skipped is gone, and an asset with no profile row
+    gets a NULL column.
+
+11. Step ``drop_classification_params`` (project 68, lot D7b): ``assets.classification_params`` is dropped after the
+    legacy copy in ``upgrade()``, added back before the copy's downgrade in ``downgrade()``. A new database at 006 and an
+    upgraded 1.3 install have no such column, the model neither; the 1.3 rows are compared on the columns 006 keeps
+    (``alembic_harness._kept_columns``). Back at 005 the column is there again, TEXT and nullable, **last** in
+    ``assets`` (``ALTER TABLE ADD COLUMN``): the schema is compared with a new 005 once its definition is taken out of
+    both texts (``_without_dropped_columns``). A part the copy skipped is lost with the column: the rebuilt column holds
+    only the copied parts, and an asset without profile rows gets it back NULL.
 
 Safety and fidelity: ``alembic_harness``. Every database is a file under ``tmp_path``; Alembic runs in this process on
 that file alone — a connect listener refuses any other — with ``PRAGMA foreign_keys`` asserted 1 at every step, as
@@ -116,7 +126,9 @@ from backend.app.db import session as db_session
 from backend.app.db.base import SQLModel
 from backend.app.services.assets.profile.catalogue import normalize_value
 from backend.test_scripts.test_db.alembic_harness import (
+    DROPPED_AT_006,
     Rows,
+    _assert_dropped_columns_back,
     _connect,
     _copy,
     _create_all,
@@ -125,6 +137,7 @@ from backend.test_scripts.test_db.alembic_harness import (
     _full_shape,
     _index_list,
     _integrity,
+    _kept_columns,
     _migrate,
     _on_columns,
     _revision,
@@ -134,6 +147,7 @@ from backend.test_scripts.test_db.alembic_harness import (
     _table_info,
     _tables,
     _violations,
+    _without_dropped_columns,
 )
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -730,13 +744,14 @@ def test_an_enricher_row_written_without_config_and_state_holds_empty_objects(fr
 
 
 def test_a_populated_1_3_database_keeps_every_row_of_every_table(upgraded_1_3: Upgrade) -> None:
-    """GUARD, green before and after: every table the 1.3 install had is there, every row identical on the columns it
-    had (another step of 006 may add a column: its values are that step's to pin)."""
+    """Every table the 1.3 install had is there, every row identical on the columns it had but those 006 drops (another
+    step of 006 may add a column: its values are that step's to pin; ``drop_classification_params`` drops
+    ``assets.classification_params``, D7b)."""
     print_section("A populated 1.3 database upgraded to 006")
     before, after = upgraded_1_3.rows_before, upgraded_1_3.rows_after
     lost = sorted(set(before) - set(after))
     assert lost == [], f"the upgrade lost the tables {lost}"
-    changes = _row_changes(before, after, set(before) - BOOKKEEPING, columns_of=before)
+    changes = _row_changes(before, after, set(before) - BOOKKEEPING, columns_of=_kept_columns(before))
     assert not changes, f"the upgrade changed rows: {changes}"
     assert _revision(upgraded_1_3.db) == REV_006
     print_success(f"{len(set(before) - BOOKKEEPING)} tables, every row kept")
@@ -795,7 +810,9 @@ def test_the_models_and_the_migration_build_the_same_table(fresh_006: Path, crea
 
 def test_the_downgrade_of_a_new_database_removes_the_two_tables_and_leaves_005(fresh_006: Path, at_005: Path, tmp_path: Path) -> None:
     """``downgrade 005`` of a new database at 006: the two tables and the index are gone, and every other object of
-    ``sqlite_master`` is what a new database at 005 holds, SQL text included (whitespace collapsed); the rows too."""
+    ``sqlite_master`` is what a new database at 005 holds, SQL text included (whitespace collapsed) once the definition
+    of each column 006 drops is taken out of both sides — the downgrade adds it back last (D7b) —; the column back, TEXT
+    and nullable; the rows too."""
     db = _copy(fresh_006, tmp_path / "app.db")
     _assert_profile_tables(db)
 
@@ -804,7 +821,8 @@ def test_the_downgrade_of_a_new_database_removes_the_two_tables_and_leaves_005(f
     assert _revision(db) == REV_005
     left = _of_the_step(_objects(db))
     assert left == [], f"the downgrade must remove both tables and their index: {left}"
-    expected, found = _not_of_the_step(_objects(at_005)), _not_of_the_step(_objects(db))
+    _assert_dropped_columns_back(db)
+    expected, found = _without_dropped_columns(_not_of_the_step(_objects(at_005))), _without_dropped_columns(_not_of_the_step(_objects(db)))
     assert found == expected, f"every other object must be as at 005: missing {sorted(set(expected) - set(found))}, unexpected {sorted(set(found) - set(expected))}"
     changes = _row_changes(_rows(at_005), _rows(db), set(_rows(at_005)) - BOOKKEEPING, columns_of=_rows(at_005))
     assert not changes, f"the downgrade of a new database changed rows: {changes}"
@@ -924,7 +942,8 @@ def test_a_downgrade_stopped_half_way_completes_to_005(fresh_006: Path, at_005: 
 
     assert _revision(db) == REV_005
     assert _of_the_step(_objects(db)) == [], f"nothing of the step may be left: {_of_the_step(_objects(db))}"
-    expected, found = _not_of_the_step(_objects(at_005)), _not_of_the_step(_objects(db))
+    _assert_dropped_columns_back(db)
+    expected, found = _without_dropped_columns(_not_of_the_step(_objects(at_005))), _without_dropped_columns(_not_of_the_step(_objects(db)))
     assert found == expected, f"every other object must be as at 005: missing {sorted(set(expected) - set(found))}, unexpected {sorted(set(found) - set(expected))}"
 
 
@@ -1284,11 +1303,12 @@ def test_every_legacy_row_has_no_author_no_source_date_the_assets_first_day_and_
 
 
 def test_the_classified_upgrade_keeps_every_other_row_and_no_violation(classified_upgrade: ClassifiedUpgrade) -> None:
-    """Every table but the profile keeps every row it had (``classification_params`` included: D7 drops the column, not
-    A4); ``asset_enrichers`` empty; ``foreign_key_check`` empty, integrity ``ok``. Barrier: the copy ran."""
+    """Every table but the profile keeps every row it had, on every column but ``classification_params``, which the step
+    ``drop_classification_params`` drops after the copy (D7b); ``asset_enrichers`` empty; ``foreign_key_check`` empty,
+    integrity ``ok``. Barrier: the copy ran."""
     _assert_copy_ran(classified_upgrade.profile, "the classified install upgraded")
     before, after = classified_upgrade.rows_before, classified_upgrade.rows_after
-    changes = _row_changes(before, after, set(before) - BOOKKEEPING, columns_of=before)
+    changes = _row_changes(before, after, set(before) - BOOKKEEPING, columns_of=_kept_columns(before))
     assert not changes, f"the upgrade changed rows: {changes}"
     assert after[ENRICHERS][1] == [], f"{ENRICHERS} stays empty: {after[ENRICHERS][1]}"
     assert classified_upgrade.violations == [], f"foreign key violations: {classified_upgrade.violations}"
@@ -1402,13 +1422,15 @@ def test_the_downgrade_removes_a_part_whose_last_row_is_null(classified_downgrad
 
 @pytest.mark.parametrize("case_name", [case.name for case in LEGACY_CASES if case.copied and CASE_ID[case.name] not in (FULL, MOCK_FLOATS)])
 def test_the_downgrade_gives_back_the_meaning_of_an_untouched_asset(classified_downgrade: ClassifiedDowngrade | str, case_name: str) -> None:
-    """An asset with legacy rows and no later change: the rebuilt column means what the column meant at 005 — the parts
-    from the rows in the catalogue's stored form, a part the copy skipped as it was — and every map part rebuilt from a
-    row is ``{"distribution": …}`` with string weights."""
+    """An asset with legacy rows and no later change: the rebuilt column means what the parts the copy kept meant at 005,
+    in the catalogue's stored form. A part the copy skipped is gone: it made no row, and the column went with
+    ``drop_classification_params`` (D7b). Every map part rebuilt from a row is ``{"distribution": …}`` with string weights."""
     trip = _ran(classified_downgrade)
     asset_id = CASE_ID[case_name]
     original, rebuilt = _classification_by_asset(trip.rows_at_005)[asset_id], _classification_by_asset(trip.rows_down)[asset_id]
-    assert _meaning(rebuilt) == _meaning(original), f"{case_name}: the rebuilt {rebuilt!r} must mean what {original!r} meant"
+    kept_parts = {PATH_OF_VOICE[key][0] for key in LEGACY_CASES[asset_id - 1].copied}
+    expected = {part: meaning for part, meaning in _meaning(original).items() if part in kept_parts}
+    assert _meaning(rebuilt) == expected, f"{case_name}: the rebuilt {rebuilt!r} must mean the copied parts of {original!r}: {expected}"
     data = json.loads(rebuilt)
     for key in ("geography", "sector"):
         if key in LEGACY_CASES[asset_id - 1].copied:
@@ -1417,9 +1439,60 @@ def test_the_downgrade_gives_back_the_meaning_of_an_untouched_asset(classified_d
 
 
 @pytest.mark.parametrize("case_name", [case.name for case in LEGACY_CASES if not case.copied])
-def test_the_downgrade_leaves_the_column_of_an_asset_without_profile_rows_untouched(classified_downgrade: ClassifiedDowngrade | str, case_name: str) -> None:
-    """An asset the copy gave no row (NULL, ``''``, ``'{}'``, broken, non-object column): its column byte for byte."""
+def test_the_downgrade_gives_an_asset_without_profile_rows_an_empty_column(classified_downgrade: ClassifiedDowngrade | str, case_name: str) -> None:
+    """An asset the copy gave no row (NULL, ``''``, ``'{}'``, broken, non-object column): its column comes back NULL.
+    What the copy could not read went with the column (D7b): the copy logged each skip on the way up."""
     trip = _ran(classified_downgrade)
     asset_id = CASE_ID[case_name]
-    original, after = _classification_by_asset(trip.rows_at_005)[asset_id], _classification_by_asset(trip.rows_down)[asset_id]
-    assert after == original, f"{case_name}: the column must stay {original!r}, found {after!r}"
+    after = _classification_by_asset(trip.rows_down)[asset_id]
+    assert after is None, f"{case_name}: the column comes back empty, found {after!r}"
+
+
+# =============================================================================
+# 11. D7b: THE OLD COLUMN GOES
+# =============================================================================
+
+DROP_STEP = "drop_classification_params"
+UPGRADE_DROP, DOWNGRADE_DROP = f"_upgrade_{DROP_STEP}", f"_downgrade_{DROP_STEP}"
+CLASSIFICATION_COLUMN = "classification_params"
+
+
+def test_006_drops_the_column_after_the_copy_and_adds_it_back_before_the_copy_is_undone() -> None:
+    """The step ``drop_classification_params`` exists; ``upgrade()`` calls it after the legacy copy (which reads the
+    column), ``downgrade()`` before the copy's downgrade (which writes it). Mis-ordered, an upgrade would drop every
+    classification before copying it, and the copy, finding no column, would copy nothing."""
+    print_section(f"{REV_006}: step {DROP_STEP}")
+    module = _scripts().get_revision(REV_006).module
+    missing = [name for name in (UPGRADE_DROP, DOWNGRADE_DROP) if not callable(getattr(module, name, None))]
+    assert not missing, f"red until D7b: {REV_006} defines no {missing}"
+    upgrade, downgrade = inspect.getsource(module.upgrade), inspect.getsource(module.downgrade)
+    assert upgrade.index(f"{UPGRADE_LEGACY}(") < upgrade.index(f"{UPGRADE_DROP}("), f"upgrade() must call {UPGRADE_DROP} after {UPGRADE_LEGACY}"
+    assert downgrade.index(f"{DOWNGRADE_DROP}(") < downgrade.index(f"{DOWNGRADE_LEGACY}("), f"downgrade() must call {DOWNGRADE_DROP} before {DOWNGRADE_LEGACY}"
+    assert (module._CLASSIFICATION_COLUMN, "TEXT") in DROPPED_AT_006.get(module._ASSETS, ()), f"alembic_harness.DROPPED_AT_006 must name what the step drops: {DROPPED_AT_006}"
+    print_success(f"{DROP_STEP}: after the copy up, before its downgrade down")
+
+
+def test_a_new_database_at_006_has_no_classification_column(fresh_006: Path, at_005: Path) -> None:
+    """At 005 ``assets`` has the column (barrier); at 006 it has not, and every other column of 005 is there."""
+    at_1_3, at_1_4 = _table_info(at_005, "assets"), _table_info(fresh_006, "assets")
+    assert CLASSIFICATION_COLUMN in at_1_3, "barrier: a new database at 005 has assets.classification_params"
+    assert CLASSIFICATION_COLUMN not in at_1_4, f"red until D7b: a new database at 006 still has assets.{CLASSIFICATION_COLUMN}"
+    lost = sorted(set(at_1_3) - set(at_1_4) - {CLASSIFICATION_COLUMN})
+    assert not lost, f"the step drops only its column: {lost}"
+
+
+def test_the_models_and_the_migration_build_the_same_assets_table(fresh_006: Path, created_by_models: Path) -> None:
+    """The model ``Asset`` has no ``classification_params`` either: ``create_all`` and the migration give ``assets`` the
+    same columns. Only the columns: the names of the constraints and the declared types of ``assets`` differed between
+    the two before 1.4, and are not this step's."""
+    assert CLASSIFICATION_COLUMN not in _table_info(created_by_models, "assets"), "red until D7b: the model still declares the column"
+    by_migration, by_models = set(_table_info(fresh_006, "assets")), set(_table_info(created_by_models, "assets"))
+    assert by_migration == by_models, f"assets: columns only in the migration {sorted(by_migration - by_models)}, only in the models {sorted(by_models - by_migration)}"
+
+
+def test_a_populated_1_3_database_loses_the_column_only_after_its_copy(upgraded_1_3: Upgrade) -> None:
+    """The populated 1.3 install upgraded: the column is gone, and its classification is in the profile (the copy ran
+    first): the geography of asset 1, the sector of asset 2."""
+    assert CLASSIFICATION_COLUMN not in _table_info(upgraded_1_3.db, "assets"), f"red until D7b: the upgraded install still has assets.{CLASSIFICATION_COLUMN}"
+    copied = sorted((row["asset_id"], row["key"]) for row in _profile_rows(upgraded_1_3.db))
+    assert copied == [(1, "geography"), (2, "sector")], f"the copy ran before the drop: {copied}"

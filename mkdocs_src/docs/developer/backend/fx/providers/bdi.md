@@ -8,7 +8,7 @@
 | **API Format** | JSON (`Accept: application/json`), one time series per request, one request per currency |
 | **API Key** | Not required |
 | **Terms** | Site © Banca d'Italia ([copyright](https://www.bancaditalia.it/footer/copyright/index.html)); the rates are indicative, not a benchmark under Regulation (EU) 2016/1011 |
-| **Currencies** | Discovered at runtime by `get_supported_currencies()`: on 2026-11-16, 149 plus EUR. `GET /fx/providers` caches the list for 24 h (`backend/app/services/fx/catalog.py`) |
+| **Currencies** | Discovered at runtime by `get_supported_currencies()`: on 2026-11-16, 149 plus EUR; with the SDR (`XDR`) served since 2026-11-20, 150 plus EUR. `GET /fx/providers` caches the list for 24 h (`backend/app/services/fx/catalog.py`) |
 | **Update Frequency** | Daily, Italian business days |
 | **Historical Data** | From 1999-01-04, the first day of the euro series |
 | **API Docs** | [Operating instructions (PDF)](https://tassidicambio.bancaditalia.it/terzevalute-wf-ui-web/assets/files/Operating_Instructions.pdf), [exchange rates portal](https://www.bancaditalia.it/compiti/operazioni-cambi/portale-tassi/index.html) |
@@ -75,7 +75,7 @@ series are kept.
 
 ### 💰 Supported Currencies
 
-On 2026-11-16, 149 currencies plus EUR (`FALLBACK_CURRENCIES`):
+On 2026-11-16, 149 currencies plus EUR; since 2026-11-20 `FALLBACK_CURRENCIES` also holds `XDR`, 150 plus EUR:
 
 AED, AFN, ALL, AMD, AOA, ARS, AUD, AWG, AZN, BAM, BBD, BDT, BHD, BIF, BMD, BND, BOB, BRL, BSD, BTN, BWP, BZD, CAD, CDF,
 CHF, CLP, CNY, COP, CRC, CUP, CVE, CZK, DJF, DKK, DOP, DZD, EGP, ERN, ETB, EUR, FJD, FKP, GBP, GEL, GHS, GIP, GMD, GNF,
@@ -83,9 +83,12 @@ GTQ, GYD, HKD, HNL, HTG, HUF, IDR, ILS, INR, IQD, ISK, JMD, JOD, JPY, KES, KGS, 
 LKR, LRD, LSL, LYD, MAD, MDL, MGA, MKD, MMK, MNT, MOP, MRU, MUR, MVR, MWK, MXN, MYR, MZN, NAD, NGN, NIO, NOK, NPR, NZD,
 OMR, PAB, PEN, PGK, PHP, PKR, PLN, PYG, QAR, RON, RSD, RWF, SAR, SBD, SCR, SDG, SEK, SGD, SHP, SLE, SOS, SRD, SSP, STN,
 SVC, SYP, SZL, THB, TJS, TMT, TND, TOP, TRY, TTD, TWD, TZS, UAH, UGX, USD, UYU, UZS, VES, VND, VUV, WST, XAF, XCD, XCG,
-XOF, XPF, YER, ZAR, ZMW, ZWG.
+XDR, XOF, XPF, YER, ZAR, ZMW, ZWG.
 
-116 of them are not in the ECB provider's list (`FALLBACK_CURRENCIES` in `backend/app/services/fx_providers/ecb/plugin.py`),
+`XDR` is the IMF's special drawing right (SDR): the IMF's unit of account, a basket of USD, EUR, CNY, JPY and GBP, not a
+commodity. It has the same convention `C` as the other currencies: 0.817625 XDR per 1 EUR on 2026-11-19.
+
+117 of them are not in the ECB provider's list (`FALLBACK_CURRENCIES` in `backend/app/services/fx_providers/ecb/plugin.py`),
 among them NGN, KES, GHS, EGP, VND, PKR, DOP and UGX: BDI reaches them in one step to the euro, with no chain of routes.
 
 #### 📋 The catalogue rule
@@ -95,7 +98,7 @@ country, so a currency shared by several countries (XOF, XAF, USD…) repeats. O
 The plugin keeps:
 
 - **Rows with a rate**: a row whose `eurRate` is «N.A.» (a suspended currency), empty or no positive number is dropped.
-- **Currencies only** (`NOT_CURRENCIES`): the IMF's SDR, `XDR`, is dropped.
+- **The SDR is served**: `XDR` stays in the catalogue, in the bank's convention and unit like any other currency.
 - **EUR**, the base, is always added.
 
 A `latestRates` answer without the list raises `FXServiceError` («Banca d'Italia catalogue has no latestRates list
@@ -143,10 +146,12 @@ JSON object is an `FXServiceError` naming «the catalogue», and a 429 is still 
 - Indicative rates, not a benchmark; for some administered currencies the value can reflect the official rate of the
   day before.
 - One request per currency: N currencies cost N requests in series, with 0.3 s between two of them.
-- **A first full-history sync of many currencies can outlast the route timeout**: the sync core waits at most 120 s
-  per route for its legs (`asyncio.wait_for(..., timeout=120.0)` in `backend/app/services/fx/sync.py`). One currency's
-  whole history takes about 1.8 s plus the 0.3 s pause, so one call fits roughly 50 BDI currencies from 1999; beyond
-  that the route times out and the sync tries the next route.
+- **A first full-history sync of many currencies is long**: the sync waits for the provider's whole answer. Its 120 s
+  wait on a route's legs (`asyncio.wait_for(..., timeout=120.0)` in `backend/app/services/fx/sync.py`) starts only after
+  every provider of the sync has answered, so it never cuts a slow fetch and never switches route because of time
+  (lane 75, L25c). One currency's whole history takes about 1.8 s plus the 0.3 s pause, so roughly 50 BDI currencies
+  from 1999 fit the 120 s a sync started from the interface waits for its answer (`FX_SYNC_TIMEOUT_MS`, or a sync
+  window's longer **Timeout**; see [Architecture](../architecture.md)); beyond that the interface stops waiting first.
 - Suspended currencies (BYN, IRR, KPW, RUB on 2026-11-16) are not offered, and their «N.A.» days are never stored.
 - History starts on 1999-01-04; earlier days are never asked.
 

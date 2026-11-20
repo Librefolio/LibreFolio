@@ -49,6 +49,7 @@ import es from '$lib/i18n/es.json';
 import AssetCard from './AssetCard.svelte';
 import AssetTable, {type AssetRow} from './AssetTable.svelte';
 import {matchesAssetLifecycle, orderAssetsByLifecycle} from './assetLifecycle';
+import {getUserStorageKey} from '$lib/utils/storage';
 
 function row(id: number, txCount: number, txScope: AssetRow['txScope'], active = true): AssetRow {
     return {
@@ -413,5 +414,63 @@ describe('AssetTable and AssetCard — a price keeps its significant digits (C-9
         expect.soft(absoluteDeltaOf(83, 1.5), 'a Δ of 1.5').toMatch(numberToken('+1.50'));
         expect.soft(absoluteDeltaOf(84, -12.5), 'a Δ of -12.5').toMatch(numberToken('-12.50'));
         expect.soft(absoluteDeltaOf(85, 0), 'a Δ of 0, no sign').toMatch(numberToken('0.00'));
+    });
+});
+
+// RN-23 (Q10 a): the risk columns, each row measured on its own asset (`assetListRisk.ts`). The max drawdown is shown, the
+// others wait in the column menu; a figure the engine could not give is «—» with its reason; a row still measured is «…».
+describe('AssetTable — the risk columns (RN-23)', () => {
+    const figures = (values: Partial<Record<string, number | null>>, reasons: Record<string, string> = {}) => ({
+        values: {maxDrawdown: null, volatility: null, annualReturn: null, sharpe: null, sortino: null, worstDay: null, bestDay: null, rally: null, ...values},
+        reasons,
+    });
+    const cellOf = (rowId: number, column: string) => rowEl(rowId).querySelector<HTMLElement>(`[data-testid="asset-risk-cell"][data-column="${column}"]`);
+
+    it('without risk figures the table has no risk column', async () => {
+        render(AssetTable, {data: [row(1, 0, 'analysis')], storageKey: 'rn23-none'});
+        await waitFor(() => expect(document.querySelector('tbody tr[data-row-id="1"]')).not.toBeNull());
+        expect(screen.queryByTestId('dt-header-risk_maxDrawdown')).toBeNull();
+    });
+
+    it('shows the max drawdown and keeps the other risk columns hidden', async () => {
+        render(AssetTable, {data: [row(1, 0, 'analysis')], storageKey: 'rn23-default', riskFigures: new Map([[1, figures({maxDrawdown: -0.25, volatility: 0.18})]])});
+        await waitFor(() => expect(screen.getByTestId('dt-header-risk_maxDrawdown')).toBeInTheDocument());
+        for (const hidden of ['volatility', 'annualReturn', 'sharpe', 'sortino', 'worstDay', 'bestDay', 'rally']) expect(screen.queryByTestId(`dt-header-risk_${hidden}`), hidden).toBeNull();
+    });
+
+    it('a reader with saved column choices from before still sees only the max drawdown among the new columns', async () => {
+        // DataTable keeps only explicit choices: a column it never saw takes its own default. Saved before RN-23: a choice on
+        // another column, and the column order without the risk columns.
+        // jsdom on Node 26 has no global `localStorage` (see `L4WhatIf.test.ts`): a stand-in, for this case only.
+        const stored = new Map<string, string>();
+        vi.stubGlobal('localStorage', {getItem: (k: string) => stored.get(k) ?? null, setItem: (k: string, v: string) => void stored.set(k, String(v)), removeItem: (k: string) => void stored.delete(k), clear: () => stored.clear()});
+        const key = (suffix: string) => getUserStorageKey(`dataTable_rn23-saved_${suffix}`);
+        stored.set(key('columnVisibilityOverrides'), JSON.stringify({quoteBaseQuantity: true, provider: false}));
+        stored.set(key('columnOrder'), JSON.stringify(['name', 'provider', 'quoteBaseQuantity']));
+        try {
+            render(AssetTable, {data: [row(1, 0, 'analysis')], storageKey: 'rn23-saved', riskFigures: new Map([[1, figures({maxDrawdown: -0.25})]])});
+            await waitFor(() => expect(screen.getByTestId('dt-header-risk_maxDrawdown')).toBeInTheDocument());
+            expect(screen.getByTestId('dt-header-quoteBaseQuantity'), 'control: the saved choice is read').toBeInTheDocument();
+            for (const hidden of ['volatility', 'annualReturn', 'sharpe', 'sortino', 'worstDay', 'bestDay', 'rally']) expect(screen.queryByTestId(`dt-header-risk_${hidden}`), hidden).toBeNull();
+        } finally {
+            vi.unstubAllGlobals();
+        }
+    });
+
+    it('a measured figure carries its value; a blank says why; a row not measured yet waits', async () => {
+        const risk = new Map([
+            [1, figures({maxDrawdown: -0.25})],
+            [2, figures({}, {maxDrawdown: 'insufficient_history'})],
+        ]);
+        render(AssetTable, {data: [row(1, 0, 'analysis'), row(2, 0, 'analysis'), row(3, 0, 'analysis')], storageKey: 'rn23-cells', riskFigures: risk});
+        await waitFor(() => expect(document.querySelectorAll('tbody tr[data-row-id]')).toHaveLength(3));
+
+        expect(cellOf(1, 'maxDrawdown')).toHaveAttribute('data-state', 'value');
+        expect(cellOf(1, 'maxDrawdown')).toHaveAttribute('data-value', '-0.25');
+        expect(cellOf(2, 'maxDrawdown')).toHaveAttribute('data-state', 'blank');
+        expect(cellOf(2, 'maxDrawdown')).toHaveAttribute('data-reason', 'insufficient_history');
+        expect(cellOf(2, 'maxDrawdown')).toHaveAttribute('title', get(t)('risk.errors.insufficient_history'));
+        expect(cellOf(2, 'maxDrawdown')?.textContent).toBe('—');
+        expect(cellOf(3, 'maxDrawdown')).toHaveAttribute('data-state', 'pending');
     });
 });

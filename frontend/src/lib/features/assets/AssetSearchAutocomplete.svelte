@@ -16,6 +16,8 @@
   - «Can't find it? Let us know» after every search (P20): a report of the search, sent from the user's own client
     through the instance's support address (assetSearchReport.ts)
   - Event onselect(result)
+  - The root publishes the load of the provider list, `data-providers` (`pending`, `ready`, `failed`): the chips arrive
+    after the window opens and move what is under them, so a reader of the layout waits for it (MOB, lane 76's triage)
   Svelte 5 runes.
 -->
 <script lang="ts">
@@ -39,6 +41,7 @@
     import {hasPremium, orderSearchResults, splitSearchResults, type ProviderTier} from './assetSearchSections';
     import {buildSearchReport, type ProviderOutcome, type SearchReportContext} from './assetSearchReport';
     import {reportHref, supportChannel, type SupportChannel} from '$lib/features/support/supportChannel';
+    import ProviderAttributionNote from './ProviderAttributionNote.svelte';
 
     // =========================================================================
     // Types
@@ -56,6 +59,8 @@
         /** The provider's quote base suggestion for this line (Z-32 d), handed to `onselect`. */
         quote_base_suggestion?: {quantity: number; quote_currency?: string | null} | null;
         via_web?: boolean;
+        /** The asset's icon, when the provider knows it at search time (project 76, S3): CoinGecko's coin logo. */
+        icon_url?: string | null;
     }
 
     interface ProviderInfo extends ProviderReadiness {
@@ -103,6 +108,8 @@
     let providers: ProviderInfo[] = $state([]);
     let selectedProviders: Set<string> = $state(new Set());
     let providersLoaded = $state(false);
+    /** The list could not be read: finished all the same, without chips. */
+    let providersFailed = $state(false);
     let showResults = $state(false);
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
     /** Monotonic search ID to ignore stale responses */
@@ -224,6 +231,7 @@
             console.error('Failed to load providers:', e);
             // Finished, badly. Still mark it: a query held back waiting for
             // providers must not spin forever on a list that will never come.
+            providersFailed = true;
             providersLoaded = true;
         }
     }
@@ -364,6 +372,7 @@
                                 currency: r.currency,
                                 asset_type: r.asset_type,
                                 provider_url: r.provider_url,
+                                icon_url: typeof r.icon_url === 'string' && r.icon_url ? r.icon_url : null,
                                 provider_params: r.provider_params,
                                 quote_base_suggestion: r.quote_base_suggestion ?? null,
                                 via_web: r.via_web ?? false,
@@ -426,6 +435,7 @@
                     currency: r.currency,
                     asset_type: r.asset_type,
                     provider_url: r.provider_url,
+                    icon_url: typeof r.icon_url === 'string' && r.icon_url ? r.icon_url : null,
                     provider_params: r.provider_params,
                     quote_base_suggestion: r.quote_base_suggestion ?? null,
                     via_web: r.via_web ?? false,
@@ -560,7 +570,7 @@
     });
 </script>
 
-<div class="space-y-2" data-search-autocomplete>
+<div class="space-y-2" data-search-autocomplete data-providers={!providersLoaded ? 'pending' : providersFailed ? 'failed' : 'ready'}>
     <!-- Section label (hidden when parent renders it externally) -->
     {#if !hideTitle}
         <div class="flex items-center gap-2 text-xs font-semibold text-lf-muted uppercase tracking-wider">
@@ -723,6 +733,8 @@
                 {#if crownShown}
                     <p class="border-t border-lf-subtle px-3 py-1.5 text-xs text-lf-muted" data-testid="asset-search-crown-legend">{$t('assets.search.crownLegend')}</p>
                 {/if}
+                <!-- The line a provider's terms ask for, when it answered with a row: its names and ids are its data (76 P4b) -->
+                <ProviderAttributionNote providerCodes={orderedResults.map((result) => result.provider_code)} align="end" testId="asset-search-attribution" extraClass="px-3 py-1.5" />
             {/if}
             {#if reportPlacement === 'bottom' && channel}
                 {@render reportRow(channel)}
@@ -741,7 +753,7 @@
         onclick={() => selectResult(result)}
     >
         <!-- Icon placeholder -->
-        <AssetIcon assetType={result.asset_type} iconUrl={null} altText={result.display_name} size="sm" />
+        <AssetIcon assetType={result.asset_type} iconUrl={result.icon_url ?? null} altText={result.display_name} size="sm" />
 
         <!-- Info -->
         <div class="flex-1 min-w-0">

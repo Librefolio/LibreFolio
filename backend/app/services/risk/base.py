@@ -105,12 +105,21 @@ class RiskHistoricalReplayContext:
 
 @dataclass(frozen=True, slots=True)
 class RiskAssetClassification:
-    """Canonical classification inputs consumed by hypothetical stress."""
+    """Canonical classification inputs consumed by hypothetical stress, and the duration the rates scenario reads."""
 
     asset_class: str
     sector_exposures: Optional[Mapping[str, float]] = None
     geography_exposures: Optional[Mapping[str, float]] = None
     metadata_error: Optional[str] = None
+    # RN-25: the profile's modified duration holding the analysis day, the day it was read and its source; the rates
+    # scenario reads them. None when the profile has none, or none readable.
+    modified_duration: Optional[float] = None
+    modified_duration_read_on: Optional[date] = None
+    modified_duration_source: Optional[str] = None
+    # D1d: when the duration is the profile's «now», the day it was last confirmed and whether that is more than 30 days
+    # ago («non aggiornato»); None and False when the analysis day is held by an older reading.
+    modified_duration_confirmed_on: Optional[date] = None
+    modified_duration_stale: bool = False
 
 
 @dataclass(frozen=True, slots=True)

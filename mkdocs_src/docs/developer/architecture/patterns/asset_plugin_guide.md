@@ -145,7 +145,7 @@ perform blocking I/O directly on the application's main event loop.
 
 | Method | Default | Description |
 |--------|---------|-------------|
-| `search(query)` | Raises `NOT_SUPPORTED` | Search for assets by name, ticker, or ISIN. Returns `[{identifier, identifier_type, display_name, currency, type}]`; a result may add `quote_base_suggestion` ([Quote Base Suggestion](#quote-base-suggestion)). |
+| `search(query)` | Raises `NOT_SUPPORTED` | Search for assets by name, ticker, or ISIN. Returns `[{identifier, identifier_type, display_name, currency, type}]`; a result may add `quote_base_suggestion` ([Quote Base Suggestion](#quote-base-suggestion)) and `icon_url`, the asset's icon when the source gives it at search time (project 76, S3). |
 
 ### 🔧 Optional (Override)
 
@@ -162,11 +162,12 @@ perform blocking I/O directly on the application's main event loop.
 | `get_asset_url(identifier, type, params)` | `None` | Generate URL to the provider's page for this asset (e.g., Yahoo Finance quote page). Shown to the user: never a secret in it, see [Secrets](#secrets) |
 | `resolvable_url_domains` | `[]` | Domains this provider can turn a page URL back into a search-item for (opt-in). See [Asset Search & Link-Finder](../../backend/assets/search_link_finder.md). |
 | `resolve_url(url)` | `None` | Inverse of `get_asset_url`: open a provider page URL → return one search-item dict, a list of dicts, or `None`. Enables the last-resort external search stack. |
-| `accepted_identifier_types` | `[TICKER, ISIN]` | Input types accepted by this provider (shown in frontend dropdown), the preferred first: `TICKER`, `ISIN`, `URL`, `AUTO_GENERATED`, or `PROVIDER_ID` for the source's own code (CoinGecko's `bitcoin`; reaches the plugin as `IdentifierType.OTHER`). A provider that accepts `PROVIDER_ID` gets it as the assignment type of a search row typed `OTHER`, and `<provider>:<id>` among the asset's other identifiers |
-| `fetch_asset_metadata(identifier, type, params)` | `None` | Fetch asset metadata (type, sector, identifiers) from the provider |
+| `accepted_identifier_types` | `[TICKER, ISIN]` | Input types accepted by this provider (shown in frontend dropdown), the preferred first: `TICKER`, `ISIN`, `URL`, `AUTO_GENERATED`, or `COINGECKO_ID` for CoinGecko's own code (`bitcoin`; reaches the plugin as `IdentifierType.OTHER`). A type named after its source on purpose: a generic name stays free for the future, and another source with its own code gets a type of its own. A provider that accepts `COINGECKO_ID` gets it as the assignment type of a search row typed `OTHER`, and `<provider>:<id>` among the asset's other identifiers |
+| `fetch_asset_metadata(identifier, type, params)` | `None` | Fetch asset metadata (type, currency, name, identifiers) from the provider; never the description, sectors or countries, which are the enrichers' (plan 68, D6) |
 | `suggest_quote_base(identifier, type, params)` | `None` | How many units one price refers to (the asset's `quote_base_quantity`), as an `FAQuoteBaseSuggestion`, when the source's own data says it: Yahoo Finance suggests 100 for a line it quotes in pence. Asked by the probe's `metadata` operation only: see [Quote Base Suggestion](#quote-base-suggestion) |
 | `cooldown_scope(identifier, type, params)` | `None` | The part of the provider a pause after «too many requests» covers, such as a site's host; `None` pauses the whole provider. Called before every call, so no I/O, and never a secret in the result: see [Too Many Requests](#too-many-requests) |
 | `provider_help_url` | `None` | URL to the provider's documentation page (served by the running instance) |
+| `attribution` | `None` | The line the source's terms ask to show with its prices, as an `FAProviderAttribution` (`text`, an `https://` `url`): a constant, never a setting. `GET /assets/provider` exposes it, and the interface draws it with `ProviderAttributionNote`: under the price on the asset page, on the plugin's card in Settings › Plugins, and once at the foot of the asset list and of the Dashboard positions when an asset on screen is priced by that source. CoinGecko: «Powered by CoinGecko» (project 76, P4) |
 | `settings_fields` | `()` | The values the provider needs from the instance or from each user: an API key, a region, a preference. Read with `self.settings` in the operations, never in `__init__`: see [Settings](#settings) |
 | `test_only` | `False` | `True` for a provider that exists for the tests: hidden from the provider list and from the settings catalogue and, outside test mode, not served at all ([Test-Only Plugins](plugin_settings.md#test-only)) |
 | `tier` | `FAProviderTier.COMMUNITY` | Where the provider stands in the asset search: `PREMIUM` for a source the instance vouches for, such as licensed data; when at least one premium provider is available, its results come first. A class attribute; a valid string (`"premium"`) is accepted. See [Search Order](#search-order) |
@@ -324,6 +325,9 @@ GET /api/v1/assets/provider/search/stream?q=Apple&providers=yfinance,justetf
 - `provider_url` is generated by the provider's `get_asset_url()` method (if implemented)
 - `quote_base_suggestion` is the plugin's [quote base suggestion](#quote-base-suggestion) for the line, `null` when it
   gives none; each result of the stream's `provider_results` event carries it too
+- `icon_url` is the asset's icon when the plugin's result dict gives one (project 76, S3): an `http(s)` address or a path
+  of this instance, anything else dropped quietly (an icon is decoration; the result stays); `null` otherwise. The
+  search box draws it in the row, before the name, in place of the asset type's icon; the stream carries it too
 
 ### 🧪 Probe Endpoint
 

@@ -31,6 +31,10 @@
     import {buildMoveFigures, moveLead, semiDeviationPerimeterDiffers} from '../moveFigures';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {riskFreeRate} from '../riskFreeRateStore.svelte';
+    import {goto} from '$app/navigation';
+    import {buildTabUrlFromLocation} from '$lib/utils/url/tabUrl';
+    import L4Rates from './l4/L4Rates.svelte';
+    import {rateShockAvailability} from './l4/scenarioHelpers';
 
     /**
      * The four levels of risk, as one component.
@@ -78,9 +82,11 @@
         assetIds?: number[];
         refreshVersion?: number;
         onsynced?: (detail: RiskSyncCompletion) => void | Promise<void>;
+        /** One asset's type (the Asset Detail): a bond without a duration says so in its «What if…?» (RN-25). */
+        assetType?: string | null;
     }
 
-    let {scope, dateStart, dateEnd, targetCurrency, title = '', subtitle = '', wholeBroker = false, internalSubset = false, scopeValue = null, assetIds = [], refreshVersion = 0, onsynced}: Props = $props();
+    let {scope, dateStart, dateEnd, targetCurrency, title = '', subtitle = '', wholeBroker = false, internalSubset = false, scopeValue = null, assetIds = [], refreshVersion = 0, onsynced, assetType = null}: Props = $props();
 
     // The reader's risk-free rate (RN-21): one value for every risk page, read from its store. A change is a new
     // question: the controller's signature carries it, so the answers that read it are asked again.
@@ -111,6 +117,8 @@
         // which is exactly why the card reads the perimeter from the payload and
         // prints it, instead of anyone assuming which one is on screen.
         includeCurrentCompositionRiskReturn: true,
+        // RN-25: the asset's rates scenario rides in the same wave; the catalogue offers it on one asset only.
+        includeRateShock: true,
     });
     // Cards served from the risk cache appear at their value instead of counting up from 0.
     setTweenHydration(() => controller.hydratedFromCache);
@@ -118,6 +126,9 @@
     let historicalResults = $derived(controller.historicalResults);
     let currentResults = $derived(controller.currentResults);
     let contributionResult = $derived(resultByCode(currentResults, 'risk_contribution'));
+    /** The asset's rates scenario (RN-25): the tool, a bond's missing duration, or nothing. */
+    let rateShockResult = $derived(resultByCode(currentResults, 'rate_shock'));
+    let rates = $derived(rateShockAvailability(rateShockResult, assetType));
     // `correlation` is requested in the historical wave (`buildBaseAnalytics` in `riskAnalysisHelpers.ts`)
     // and was resolved and handed to nobody. It is not a datum to ask for: it is
     // one already paid for and thrown away.
@@ -402,7 +413,7 @@
             metadata={l4Metadata}
             onfirstopen={() => controller.loadScenarioCatalog()}
         >
-            <L4WhatIf {controller}>
+            <L4WhatIf {controller} rates={rates === 'tool' ? ratesTool : undefined} notes={rates === 'missing' ? ratesMissing : undefined}>
                 {#snippet replay()}
                     <L4Replay {controller} {assetNames} currency={targetCurrency} {dateStart} {dateEnd} {scopeValue} />
                 {/snippet}
@@ -416,3 +427,14 @@
         </RiskLevelSection>
     {/if}
 </div>
+
+{#snippet ratesTool()}
+    <L4Rates result={rateShockResult} currency={targetCurrency} {scopeValue} />
+{/snippet}
+{#snippet ratesMissing()}
+    <!-- RN-25: on a bond the reader expects the tool; an empty box would read as «it does not exist». -->
+    <p class="text-xs text-lf-muted" data-testid="risk-l4-rates-missing">
+        {$t('risk.levels.l4.ratesMissing')}
+        <button type="button" class="text-lf-link hover:underline" onclick={() => goto(buildTabUrlFromLocation(window.location.href, 'profile'), {noScroll: true})} data-testid="risk-l4-rates-missing-profile">{$t('risk.levels.l4.ratesMissingLink')}</button>
+    </p>
+{/snippet}

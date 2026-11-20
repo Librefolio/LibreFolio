@@ -410,3 +410,51 @@ def test_xr50_guard_parse_json_skips_a_month_it_cannot_read_and_parses_the_other
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
+
+
+# ── Q7 (a): the SDR (D1 id "XDR1") is read like any currency ────────────────
+
+_DIMENSIONS_XDR = {
+    "dimensions": [
+        {
+            "id": "D1",
+            "dimensionItems": [
+                {"id": "EUR1"},
+                {"id": "XDR1"},  # the SDR: a currency, CHF per 1 XDR
+                {"id": "USD3M"},  # forward rate → still skipped
+                {"id": "USD6M"},  # forward rate → still skipped
+            ],
+        },
+    ]
+}
+
+
+@pytest.mark.asyncio
+async def test_currency_map_keeps_the_sdr_and_skips_forwards(monkeypatch):
+    _install_fake_httpx(monkeypatch, lambda url, params: _FakeResponse(_DIMENSIONS_XDR))
+
+    currencies = await SNBProvider().get_supported_currencies()
+
+    assert currencies == ["CHF", "EUR", "XDR"]
+    assert SNBProvider._d1_to_iso["XDR1"] == ("XDR", 1)
+
+
+@pytest.mark.asyncio
+async def test_fetch_rates_reads_the_sdr_like_any_currency(monkeypatch):
+    """CHF per 1 XDR, monthly average M0: 1.12241 for 2026-10."""
+    p = SNBProvider()
+    p._iso_to_d1 = {"EUR": "EUR1", "XDR": "XDR1"}
+    p._d1_to_iso = {"EUR1": ("EUR", 1), "XDR1": ("XDR", 1)}
+    data = {"timeseries": [{"metadata": {"key": "EPB@SNB.devkum{M0,XDR1}"}, "values": [{"date": "2026-10", "value": 1.12241}]}]}
+    asked: list = []
+
+    def handler(url, params):
+        asked.append(params)
+        return _FakeResponse(data)
+
+    _install_fake_httpx(monkeypatch, handler)
+
+    result = await p.fetch_rates((date(2026, 10, 1), date(2026, 10, 31)), ["XDR"])
+
+    assert result == {"XDR": [(date(2026, 10, 1), "XDR", "CHF", Decimal("1.12241"))]}
+    assert asked[0]["dimSel"] == "D0(M0),D1(XDR1)"

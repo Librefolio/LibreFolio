@@ -12,7 +12,6 @@
     "bytes": "B",
     "cancel": "Annulla",
     "cash": "Contante",
-    "classification": "Classificazione",
     "clear": "Pulisci",
     "clearAll": "Deseleziona Tutti",
     "close": "Chiudi",
@@ -381,7 +380,8 @@
     },
     "confirmBulkAction": "Sei sicuro di voler eseguire questa azione su",
     "filterLabel": "Filtro",
-    "resetLayout": "Ripristina disposizione"
+    "resetLayout": "Ripristina disposizione",
+    "selectionHint": "Seleziona una o più righe per agire su tutte insieme."
   },
   "date": {
     "today": "Oggi",

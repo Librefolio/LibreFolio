@@ -353,7 +353,7 @@ the workspace stays open with the issues; on success it calls `onCommitted` and 
 
 ---
 
-## 🗺️ The `WorkspaceIntent` Pattern
+## 🗺️ The `WorkspaceIntent` Pattern {: #workspace-intent }
 
 To keep components decoupled and avoid passing large, stale arrays of transaction objects, LibreFolio uses a declarative routing pattern to open the bulk transaction workspace. 
 
@@ -364,11 +364,168 @@ export type WorkspaceIntent =
   | { action: 'create'; }                      // Open empty grid to add new rows
   | { action: 'import'; }                      // Mount BRIM wizard to parse files
   | { action: 'edit'; txIds: number[]; }       // Edit specific existing rows
-  | { action: 'delete'; txIds: number[]; }     // Pre-mark specific rows for deletion
+  | { action: 'delete'; txIds: number[]; unlinkIds?: number[]; chargeIds?: number[]; } // Pre-mark rows for deletion
   | { action: 'clone'; txIds: number[]; };     // Copy existing rows, keeping their dates
 ```
 
 Upon receiving the intent, `TransactionBulkModal` resolves the actual row data directly from `txStore` (the Single Source of Truth) using the provided transaction IDs. This ensures the modal always operates on the most up-to-date ledger state.
+
+An id that `txStore` does not hold is left out. A caller that needs rows the page did not load adds them first with
+`txStoreAddExtras(rows)`: a row already in the store is kept, and the next `txStoreSetAll` drops the extras.
+
+**Linked charges in the workspace** (project 66). A charge (a FEE or a TAX) brought into the workspace is a
+`PendingOp` of its own, owned by its parent through `chargeOf`, the parent's `tempId`. It never uses `pairedWith`, so
+the pairs' code is untouched. The pure half lives in `bulk/bulkCharges.ts`:
+
+- **Ownership.** `adoptCharges` gives a present parent its saved charges, from their `parent_transaction_id`. It runs
+  after every `collapsePairedOps`: an intent, a reset, the picker. A reset that regenerates the parent's `tempId`
+  remaps its charges (`remapChargeOf`), so `chargeOf` never names a missing operation.
+- **The link that changes lives on the charge.** `parentUnlink` sends `parent_transaction_id: 0`; `parentLinkId` names
+  a saved parent absent from the workspace. A new charge typed in its parent's form carries `followsParent`: at batch
+  time it takes the parent's broker, asset and date.
+- **The payload.** `chargeParentFields` gives `parent_ref` (the parent's `tempId`, sent as its create's `ref`) or
+  `parent_transaction_id`, merged in `collectCreate` / `collectUpdate`. So the three places that build a payload see
+  the same thing: the nested form's context, «Validate now» and «Save all».
+- **The parent's form.** It receives its charges as drafts (`chargeDraftsFor`, as `_charges`, with
+  `allowChargeEdits`). Its answer goes back onto the operations (`applyChargeDrafts`), one way: nothing typed is lost.
+- **Reading the charges on entry.** A saved parent whose `charges_count` is higher than the charges the workspace
+  holds has them read (`GET /transactions?parent_ids=…`, batched). This happens when it enters: with the intent, from
+  the picker or a suggestion, and after a row reset or «Reset all». The charges read join as unchanged edit rows
+  marked `loadedWithParent`, adopted by their parent. Under a parent already «del» they are unlinked. Each read
+  carries a generation number, bumped on every open, reset and «Reset all», and a stale answer is dropped. While a
+  read is in flight «Save all» is off. If it fails, an error toast names the parents and says that «Reset row» reads
+  again, and «del» on that parent is off, with the reason in its menu; «Reset row» shows on that parent even
+  untouched. The parent's form waits for the same read rather than asking again.
+- **The close guard's baseline.** `initialOpsKey` is the key of `baselineOps`, the rows the editor opened on. The
+  charges read are added to both, so an editor nobody changed closes without asking.
+
+```mermaid
+flowchart LR
+    E[Saved parent enters] --> M{charges_count above<br/>the charges held?}
+    M -- no --> D[Done]
+    M -- yes --> R[Read parent_ids]
+    R -- answer, same generation --> A[Add as loadedWithParent edits,<br/>adopt; into baselineOps too]
+    R -- stale generation --> X[Dropped]
+    R -- failure --> F[Error toast;<br/>«del» on the parent off]
+```
+
+**The grid groups the charges under their parent (BK2).** `visibleOps` still holds every row; it feeds the labels.
+The title counts the top-level rows, as a pair already counts as one. The grid draws `gridRows`, built in three steps:
+
+1. The top-level rows are `visibleOps` without the charges that sit under their parent (`isUnderParent`).
+2. `foldBulkCharges` puts each open parent's charges right after it, in the order of the operations.
+3. The date column sorts with a constant, so the table keeps this order in both directions. The header only sets
+   `dateSortDirection`.
+
+`DataTable` gets `opensPage`, so a charge never starts a page. The rest of the grid:
+
+- **The chip.** The parent's Type cell carries the chip «N charges» (`tx-bulk-charges-toggle-<tempId>`), with the
+  markup and label of the transactions table's chip. A click, caught in the capture phase, opens and closes the
+  group. It marks the group as changed when one of its charges is not unchanged; the parent's own status stays its
+  own.
+- **The indented row.** It shows `↳` with `data-charge-of`, and keeps its `#id`. Its Status cell holds one chip: a
+  charge «del» shows the row's «🔴 del», a charge «unlink» shows «Unlink» in place of «edit», a linked charge keeps
+  the row's status with 🔗 beside it. The charge's state (`linked` / `unlink` / `del`) rides on a wrapper,
+  `tx-bulk-charge-state`, that draws nothing. It has no checkbox. Its menu offers «Edit row», «Delete» and
+  «Restore» (no clone, split, remove or reset), and keeps the ⋮ button, the only way to it on touch; a double-click
+  opens its own form too.
+- **A charge unlinked from a parent that stays** is a top-level row, with the chip «Unlink».
+- **When a group opens by itself.** The parent is «del», the charges came in the intent with their parent, or a charge
+  was created or linked in the parent's form, or a parent was picked after its charges were already rows; «Link» on
+  the selection opens the parent's group, and «Open» onto a charge in a closed group opens it (`openGroup`). Charges
+  the workspace read itself start closed. A group never closes by itself.
+- **Labels.** A charge under its parent takes no number: its label is `<parent>·k` (`buildBulkRowLabels`), so an
+  issue on it names a row in the banner. The highlight and the jump use `rowAnchor`, and a jump to a charge in a
+  closed group opens the group first.
+- **«Remove from batch»** on a parent takes along the charges read with it that are still unchanged.
+- **A row leaving the workspace** — «Remove from batch», or «Mark for deletion» / «Delete selected» on a new row — goes
+  through `withoutRows` (`bulk/bulkCharges.ts`), the one removal of the workspace: the row leaves with its pair's hidden
+  half, and a parent, new or saved, takes along only the creates born in its Form that still follow it (`followsParent`). Any
+  other new charge stays, as a row of its own owned by nobody, as every saved charge does: one applied in its own Form,
+  which drops `followsParent` (`applyChargePayload`), or one joined with «Link», which never followed (`linkInBulk`
+  leaves the flag as it is, and a charge under its parent has no checkbox to be selected).
+
+**Deleting a parent and keeping its charges.** The same panel, `TxChargesActionModal` («Keep the charges» / «Delete
+all» / «Cancel»), asks on the Transactions page, on a broker's Transactions tab and inside the workspace. The two pages
+share one flow, `createChargesDeleteFlow` in `lib/features/transactions/chargesDeleteFlow.svelte.ts`, each with its own
+panel bound to the flow's `panel`, `counts`, `choose` and `cancel`:
+
+- `start(rows)` opens the workspace at once when no row has `charges_count > 0`. Otherwise it reads the parents' charges
+  (`GET /transactions?parent_ids=…`) and adds them to the store (`txStoreAddExtras`), so the workspace resolves them
+  even when the list does not show them. `deletePlan` (`chargeLinkRules.ts`) keeps the parents whose charges are not
+  all selected; with none, the workspace opens on the selection, otherwise the panel opens. A failed read calls
+  `onReadFailed` (the page's error toast) and opens nothing.
+- `choose(choice)` closes the panel and opens the workspace on `deleteIntent(ids, plan, choice)`: «Delete all» adds
+  the plan's other charges to `txIds`, «Keep» lists them in `unlinkIds`, and both name them in `chargeIds`. A charge
+  the user selected is in neither `unlinkIds` nor `chargeIds`: it stays in `txIds` and is deleted as asked, on its own.
+- `cancel()` closes the panel; nothing opens.
+
+`buildInitialOps` reads the intent: a charge of `unlinkIds` not marked for deletion is a row with `parentUnlink`,
+indented under its parent «del» with the state `unlink`; a charge of `chargeIds` that is unlinked or marked for deletion
+also carries `byParentChoice`. An intent without `chargeIds` takes `unlinkIds` as the parent's choice. Charges the
+workspace reads itself under a parent already «del» are unlinked the same way.
+
+Inside the workspace, «Delete» on a row and «Delete selected» go through one plan, `planBulkDelete` in
+`bulk/bulkCharges.ts`. It is decided on the state before anything changes:
+
+- a saved row flips («del» or restored), and a new row leaves;
+- a parent going «del» that still has linked charges (`linkedChargesOf`, new ones included) waits for the panel. One
+  panel asks for every such parent, and its counts come from the plan;
+- a parent whose charges are still being read is waited for. A reset, «Reset all» or closing the workspace cancels
+  the wait;
+- a parent whose read failed is skipped, and a warning toast (`transactions.bulk.deleteSkippedUnread`) says how many.
+
+`applyDeleteChoice` then applies the plan and the choice. With «Keep», saved charges get `parentUnlink`; a charge
+linked only here loses its local link; new charges become rows of their own, with the broker, asset and date they
+followed. With «Delete all», saved charges are «del» and new ones leave. «Cancel» or Esc changes nothing and keeps the
+selection.
+
+Every mark the choice sets carries `byParentChoice`, and so do the page's and the broker tab's «Keep» and «Delete all»
+(`chargeIds`, above). «Restore» on the parent (or a row reset) takes back only those marks, so a charge unlinked or
+deleted by hand stays as it is. A charge restored under a parent still «del» is unlinked, never linked to it.
+
+**One delete request per row.** `requestDelete` holds the rows of the requests still waiting for a read in
+`deleteHeld`, by `tempId`. A new request leaves those rows out and goes on with the others; when all of its rows are
+held it changes nothing, since the earlier request decides. Each request releases its own rows in a `finally`, so a
+wait cut by a reset, «Reset all» or the workspace closing frees them too. The plan itself is `planAndAskDelete`.
+
+**«Open» in the workspace.** The Form's «Open» (on a charge in the parent's section, or on the parent in «Linked to»)
+calls `handleFormOpenTransaction(id)`:
+
+- the row with that `txId` is looked up on screen (`findSavedRow`: its own, or the visible half of its pair). An absent
+  row is read from the store, else from the server (`GET /transactions?ids=…`, then `txStoreAddExtras`), and joins as
+  the picker adds rows: `addSavedRows`, shared with `handlePickerAdd`, which collapses the pairs, adopts the charges,
+  opens the group of a charge brought in and reads the charges of a saved parent;
+- the rows added are navigation, not a change: `joinBaseline` adds them, adopted, to `baselineOps` and recomputes
+  `initialOpsKey`, so a workspace nobody edited still closes without asking;
+- a target under a closed group opens it (`openGroup`), so the row is on screen when the Form closes. The Form then
+  moves by the double-click's entry, `handleEditRowClick`: a row «del» asks «restore and edit» first. The row the user
+  came from is passed as `highlightTxId` (`formHighlightTxId`, carried across that question);
+- a failed read gives the `tx.form.open.failed` toast; a late answer (the workspace or the Form closed, or the Form
+  moved to another row) does nothing. The Form itself is open only while the workspace is (`open && formOpen`).
+
+**«Link» in the workspace (U3).** The toolbar's «Link» (`tx-bulk-link-charges` in `TxBulkToolbar`) joins one parent
+and its charges among the selected rows, new ones included. `bulkLinkSelection` (`bulk/bulkCharges.ts`) applies the
+page's rules, `linkSelection` of `chargeLinkRules.ts`, to mirror rows built from the operations:
+
+- each mirror takes the operation's broker, asset, type and date; a create gets a negative synthetic id;
+- its parent is its owner in the workspace (`chargeOf`), else `parentLinkId`, else the saved one; none after
+  `parentUnlink`, so a charge unlinked here is free to link;
+- a pair is read from the saved row's `related_transaction_id` (a new pair has no saved partner).
+
+Every `hidden` outcome of `linkSelection` wins; then a selected row marked for deletion turns «Link» off with the
+reason `deleted` (restore the row first); then the page's reasons. A disabled «Link» is the selection bar's pattern
+(`aria-disabled`, the reason in a `Tooltip` reachable by tap and keyboard, `data-reason`). The confirmation is the same
+`TxChargesActionModal`, in `link` mode; `confirmLinkPanel` applies `linkInBulk`, which sets each charge's `chargeOf` to
+the parent and drops `parentUnlink`, `parentLinkId` and `byParentChoice` (keeping `followsParent` as it is), then opens
+the group and empties the selection. Nothing else is needed for the save: `chargeParentFields` already turns `chargeOf`
+into `parent_ref` (a new parent) or `parent_transaction_id` (a saved one).
+
+**Naming a row: `txRowRef`.** One helper in `chargeLinkRules.ts` names a row in the texts of the charges:
+`#123` for a saved row, `row N` (`transactions.bulk.rowRef`, no `#`, which in the workspace's banners already means a
+row) for a new one with a label, «new» without one. It builds the disabled reasons of «Link» on the page and in the
+workspace (`bulkRowRef`, from `visualRowLabels`, which do not depend on the grid's filters), and the panel's title,
+target line and column headers (`parentRefs` / `chargeRefs`, which the workspace passes for both of its panels).
 
 ---
 

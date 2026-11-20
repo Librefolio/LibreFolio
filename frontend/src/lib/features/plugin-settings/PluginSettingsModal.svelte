@@ -100,6 +100,8 @@
 
     const groupNames = $derived(Object.fromEntries(groupEntries.map((group) => [group.plugin_code, entryTitle(group, $_)])));
     const openableGroups = $derived(groupEntries.map((group) => group.plugin_code));
+    /** The groups shown that own a call count (project 76, U5): the plugin says its calls count there. */
+    const countGroups = $derived(groupEntries.filter((group) => group.call_usage !== undefined).map((group) => group.plugin_code));
 
     /** Bring a group's form into view, and the focus to its heading. */
     function openGroup(name: string): void {
@@ -124,7 +126,7 @@
             {:else if loading}
                 <p class="text-sm text-lf-muted">{$_('common.loading')}</p>
             {:else if entry}
-                <PluginSettingsForm {entry} {groupNames} onopengroup={openGroup} onsaved={saved} {openableGroups} />
+                <PluginSettingsForm {countGroups} {entry} {groupNames} onopengroup={openGroup} onsaved={saved} {openableGroups} />
                 {#each groupEntries as group (group.plugin_code)}
                     <div class="mt-4" data-group={group.plugin_code} data-testid="plugin-settings-modal-group" id="{uid}-group-{group.plugin_code}">
                         <PluginSettingsForm entry={group} onsaved={groupSaved} />

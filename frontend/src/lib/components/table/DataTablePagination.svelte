@@ -13,11 +13,17 @@
         pageSizeOptions: number[];
         onPageChange: (pageIndex: number) => void;
         onPageSizeChange: (pageSize: number) => void;
+        /** The number of pages, when the table cut them itself and they are not `ceil(totalItems / pageSize)` (66 F7-c1:
+         *  `DataTable`'s `opensPage`, a group overflowing a page). Absent: computed from the items, as always. */
+        pageCount?: number;
+        /** 77 SEL-A: the pager is the second row of a table's dock, under its selection actions: the dock is the balloon
+         *  then. A prop, not a second instance, so the pager is never remounted when the actions come and go. */
+        docked?: boolean;
     }
 
-    let {pageIndex, pageSize, totalItems, pageSizeOptions, onPageChange, onPageSizeChange}: Props = $props();
+    let {pageIndex, pageSize, totalItems, pageSizeOptions, onPageChange, onPageSizeChange, pageCount, docked = false}: Props = $props();
 
-    let totalPages = $derived(Math.max(1, Math.ceil(totalItems / pageSize)));
+    let totalPages = $derived(pageCount !== undefined ? Math.max(1, pageCount) : Math.max(1, Math.ceil(totalItems / pageSize)));
     let currentPage = $derived(pageIndex + 1);
     let canPrevPage = $derived(pageIndex > 0);
     let canNextPage = $derived(pageIndex < totalPages - 1);
@@ -109,28 +115,31 @@
     }
 </script>
 
-<div class="pagination-container" data-testid="data-table-pagination">
+<div class="pagination-container" class:docked data-testid="data-table-pagination" data-docked={docked ? 'true' : 'false'}>
     <div class="pagination-balloon">
         <!-- Row 1: Page size + label + total (groups together on mobile) -->
         <div class="pagination-row-top">
-            <div bind:this={dropdownRef} class="page-size-selector">
-                <button class="page-size-btn" onclick={() => (showDropdown = !showDropdown)} type="button" data-testid="pagination-size-trigger" aria-expanded={showDropdown}>
-                    <span>{formatPageSize(getDisplayPageSize())}</span>
-                    <ChevronDown size={14} />
-                </button>
-                {#if showDropdown}
-                    <div class="page-size-dropdown" bind:this={dropdownPanel} style:left={`${dropdownPosition.left}px`} style:top={`${dropdownPosition.top}px`} data-testid="pagination-size-menu">
-                        {#each pageSizeOptions as size}
-                            <button type="button" class="dropdown-option" class:selected={getDisplayPageSize() === size} onclick={() => selectPageSize(size)} data-testid={`pagination-size-option-${size}`}>
-                                {formatPageSize(size)}
-                            </button>
-                        {/each}
-                    </div>
-                {/if}
-                <span class="page-size-label">{$t('table.perPage') || 'per page'}</span>
-            </div>
-            <div class="divider desktop-only"></div>
-            <div class="total-info"><span class="total-text">{totalItems} {$t('table.items') || 'items'}</span></div>
+            <!-- 77 SEL-D1: with a single page size there is nothing to choose (Q-SEL-17): no selector, the total stays. -->
+            {#if pageSizeOptions.length > 1}
+                <div bind:this={dropdownRef} class="page-size-selector">
+                    <button class="page-size-btn" onclick={() => (showDropdown = !showDropdown)} type="button" data-testid="pagination-size-trigger" aria-expanded={showDropdown}>
+                        <span>{formatPageSize(getDisplayPageSize())}</span>
+                        <ChevronDown size={14} />
+                    </button>
+                    {#if showDropdown}
+                        <div class="page-size-dropdown" bind:this={dropdownPanel} style:left={`${dropdownPosition.left}px`} style:top={`${dropdownPosition.top}px`} data-testid="pagination-size-menu">
+                            {#each pageSizeOptions as size}
+                                <button type="button" class="dropdown-option" class:selected={getDisplayPageSize() === size} onclick={() => selectPageSize(size)} data-testid={`pagination-size-option-${size}`}>
+                                    {formatPageSize(size)}
+                                </button>
+                            {/each}
+                        </div>
+                    {/if}
+                    <span class="page-size-label">{$t('table.perPage') || 'per page'}</span>
+                </div>
+                <div class="divider desktop-only"></div>
+            {/if}
+            <div class="total-info" data-testid="pagination-total"><span class="total-text">{totalItems} {$t('table.items') || 'items'}</span></div>
         </div>
 
         <!-- Row 2: Page navigation -->
@@ -167,9 +176,11 @@
 </div>
 
 <style>
+    /* Lifted above a page's fixed selection panel (Q-SEL-7): `--lf-pager-lift`, set by that page on its own content (Asset,
+       SEL-B), never on the document, so a table inside a dialog over the page stays where it is. */
     .pagination-container {
         position: sticky;
-        bottom: 1rem;
+        bottom: calc(1rem + var(--lf-pager-lift, 0px));
         display: flex;
         justify-content: center;
         padding: 0.5rem 0;
@@ -189,6 +200,23 @@
         box-shadow: 0 4px 6px -1px var(--lf-shadow-card);
         pointer-events: auto;
         max-width: calc(100vw - 2rem);
+    }
+
+    /* 77 SEL-A: the second row of a table's dock. The dock is sticky and draws the card; the pager sits in it on the
+       panel's surface, under a rule. */
+    .pagination-container.docked {
+        position: static;
+        padding: 0;
+        z-index: auto;
+    }
+
+    .pagination-container.docked .pagination-balloon {
+        max-width: none;
+        border: 0;
+        border-top: 1px solid var(--lf-border-subtle);
+        border-radius: 0 0 15px 15px;
+        background: var(--lf-surface-panel);
+        box-shadow: none;
     }
 
     /* Row layout */
@@ -383,7 +411,7 @@
     /* Mobile */
     @media (max-width: 480px) {
         .pagination-container {
-            bottom: 0.5rem;
+            bottom: calc(0.5rem + var(--lf-pager-lift, 0px));
             padding: 0.5rem;
         }
 

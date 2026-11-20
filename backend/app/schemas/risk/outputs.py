@@ -637,6 +637,30 @@ class RiskPortfolioOptimizationOutput(StrictModel):
     algorithm_version: str = Field(..., min_length=1)
 
 
+class RiskRateShockScenario(StrictModel):
+    """One parallel move of the yield and the price change it gives, both as decimal ratios (0.01 == one point)."""
+
+    yield_change: FiniteFloat
+    price_change: FiniteFloat
+
+
+class RiskRateShockOutput(StrictModel):
+    """An asset's price under parallel moves of its yield (RN-25): −modified duration × Δy, a first-order estimate.
+
+    The duration is the asset profile's ``modified_duration`` holding the analysis day, with the day it was read and its
+    source, so a page says which figure it used, and (D1d) when «now» was last confirmed and whether it is stale. Rises
+    and falls alike, in the order they were asked.
+    """
+
+    kind: Literal[RiskOutputKind.RATE_SHOCK] = Field(default=RiskOutputKind.RATE_SHOCK, json_schema_extra={"enum": ["rate_shock"]})
+    modified_duration: FiniteFloat = Field(..., ge=0)
+    duration_read_on: date
+    duration_source: str = Field(..., min_length=1)
+    duration_confirmed_on: Optional[date] = Field(None, description="D1d: the day the profile's «now» duration was last confirmed; null when the analysis day is held by an older reading")
+    duration_stale: bool = Field(False, description="D1d: that confirmation is more than 30 days old («non aggiornato»)")
+    scenarios: List[RiskRateShockScenario] = Field(..., min_length=1)
+
+
 class RiskDrawdownPoint(StrictModel):
     """One dated point of the underwater (peak-relative) drawdown curve.
 
@@ -1061,6 +1085,7 @@ RiskAnalyticOutput = Annotated[
         RiskAssetSetDrawdownOutput,
         RiskAssetSetReturnOutput,
         RiskAssetSetComparisonOutput,
+        RiskRateShockOutput,
     ],
     Field(discriminator="kind"),
 ]

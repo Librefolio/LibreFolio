@@ -25,7 +25,7 @@
     import ViewModeToggle from '$lib/components/ui/ViewModeToggle.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
-    import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
+    import type {BulkAction} from '$lib/components/table/types';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {type ChartPrimaryView, type ChartSettings, effectiveCalendarReturnWindow, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setItemPrimaryView, setPairSettings, setScopePrimaryView} from '$lib/stores/chartSettingsStore.svelte';
     import {CALENDAR_RETURN_INSTANCE_ID, emptyCalendarReturnView, extractCalendarReturnView, type CalendarReturnView} from '$lib/features/signals/calendarReturn';
@@ -38,6 +38,7 @@
     import {firstDateOf, forgetFirstDate, isFirstDateKnown, rememberFirstDate, rememberNoSeries} from '$lib/stores/firstSeriesDates';
     import {onPricesCaughtUp} from '$lib/features/price-refresh/onPricesCaughtUp';
     import {comparisonTargetFromStore, ensureComparisonSeries} from '$lib/features/signals/comparisonSeries';
+    import {countedQueue} from '$lib/features/signals/countedQueue';
     import {comparisonTargetIds} from '$lib/utils/reducedPriceQuery';
     import {todayIso} from '$lib/utils/dateOnly';
     import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/features/signals';
@@ -310,12 +311,15 @@
         // Preload currency graph so provider icons are cached before FxTable renders (E1c fix)
         getCurrencyGraph();
         // The first load holds the page's Refresh button (Y11): the catalog, the pairs, their rates.
-        await pageBusy.track('fx-first-load', async () => {
-            await loadFxSignalDefinitions();
-            await loadPairSources();
-        });
-        // Load asset list for cross-domain signal selection
-        loadAssetList();
+        try {
+            await pageBusy.track('fx-first-load', async () => {
+                await loadFxSignalDefinitions();
+                await loadPairSources();
+            });
+        } finally {
+            // Load asset list for cross-domain signal selection; `data-busy` holds until it is in (FB-7d).
+            void loadAssetList();
+        }
         onboardingGuide.maybeStartContextual('fx_page_guide');
     });
 
@@ -839,12 +843,18 @@
                 requestVersion,
             });
 
-            const needsRates = askedFromMin || store.getMissingIntervals(dateStart, dateEnd).length > 0;
+            // FB-7c: «All» pending, only a pair this session has no first day for is asked from `min` (a pair known to have no rate
+            // too: never the 2000 placeholder); a pair with a first day starts from it, and from its store when that holds it. One
+            // newcomer (a pair added meanwhile) never sends every pair back
+            const knownFirstDay = askedFromMin ? firstDateOf('fx', pair.config.slug) : undefined;
+            const pairFromMin = askedFromMin && knownFirstDay === undefined;
+            const pairStart = knownFirstDay ?? dateStart;
+            const needsRates = pairFromMin || store.getMissingIntervals(pairStart, dateEnd).length > 0;
             if (!needsRates) {
                 // Fast path: already cached — nothing to wait for, so clear the
                 // per-card skeleton here too (this branch never reaches the bulk
                 // call below, which is the only other place that clears it).
-                pairs[i] = {...pair, data: store.getRange(dateStart, dateEnd).data, loading: false};
+                pairs[i] = {...pair, data: store.getRange(pairStart, dateEnd).data, loading: false};
             } else {
                 needFetch.push({index: i, slug: pair.config.slug});
                 // A store a catch-up marked stale that still holds points for the range (Y5-1, D3): they go on screen at once and the rates
@@ -856,7 +866,7 @@
             if (needsRates || plan.requests.length > 0) {
                 bulkRequests.push({
                     slug: pair.config.slug,
-                    start: askedFromMin ? MIN_START : dateStart,
+                    start: pairFromMin ? MIN_START : pairStart,
                     end: dateEnd,
                     signals: plan.requests,
                     displayedInverted: isCardInverted(pair.config.slug),
@@ -935,11 +945,14 @@
         const plan = buildBackendSignalRequestPlan(configs, signalDefinitions);
         const state = resultStateForPair(pair.config.slug);
         const requestVersion = state.beginRequest();
-        const askedFromMin = isMaxPending;
-        const needsRates = askedFromMin || store.getMissingIntervals(dateStart, dateEnd).length > 0;
+        // FB-7c: as in the bulk read, only a pair with no first day remembered this session is asked from `min`
+        const knownFirstDay = isMaxPending ? firstDateOf('fx', pair.config.slug) : undefined;
+        const askedFromMin = isMaxPending && knownFirstDay === undefined;
+        const pairStart = knownFirstDay ?? dateStart;
+        const needsRates = askedFromMin || store.getMissingIntervals(pairStart, dateEnd).length > 0;
 
         if (!needsRates && plan.requests.length === 0) {
-            pairs[index] = {...pair, data: store.getRange(dateStart, dateEnd).data};
+            pairs[index] = {...pair, data: store.getRange(pairStart, dateEnd).data};
             const mapped = mapSignalInstanceResults(configs, plan, []);
             if (state.apply(requestVersion, mapped)) {
                 signalResultsByPair = new Map(signalResultsByPair).set(pair.config.slug, [...state.values()]);
@@ -953,7 +966,7 @@
             const result = await loadFxRatesAndSignalsBulk([
                 {
                     slug: pair.config.slug,
-                    start: askedFromMin ? MIN_START : dateStart,
+                    start: askedFromMin ? MIN_START : pairStart,
                     end: dateEnd,
                     signals: plan.requests,
                     displayedInverted: isCardInverted(pair.config.slug),
@@ -1015,6 +1028,12 @@
         }
     }
 
+    /**
+     * The asset list, and the comparison series it lets the cards ask: a load wave of the page (FB-7d). True from the
+     * start, so the page never says settled between its first load and this one.
+     */
+    let assetListLoading = $state(true);
+
     /** Load asset list for signal settings — lightweight, no chart data needed */
     async function loadAssetList() {
         try {
@@ -1029,9 +1048,11 @@
                 is_benchmark: a.is_benchmark === true,
             }));
             // The cards' comparisons with an asset need its currency (the key of its cached series): ask them now.
-            void fetchComparisonSeries();
+            await fetchComparisonSeries();
         } catch {
             // Non-critical — asset dropdown will just be empty
+        } finally {
+            assetListLoading = false;
         }
     }
 
@@ -1045,7 +1066,9 @@
      */
     let comparisonSeriesVersion = $state(0);
     let comparisonSeriesLoading = $state(0);
-    let comparisonSeriesChain: Promise<void> = Promise.resolve();
+    /** One load at a time; a load that is not silent counts from its call (FB-7e): queued behind a silent one (a price
+     * catch-up), the page says busy for the whole wait — a settings save and its preview start such loads. */
+    const comparisonSeriesQueue = countedQueue((delta) => (comparisonSeriesLoading += delta));
 
     /**
      * The daily series of the assets the cards compare (`comparisonSeries.ts`): one request for all of them, only for the
@@ -1054,11 +1077,10 @@
      */
     function fetchComparisonSeries(extraIds: readonly number[] = [], silent = false): Promise<void> {
         // One at a time: a call that follows another finds what it loaded in the cache, and asks nothing twice.
-        comparisonSeriesChain = comparisonSeriesChain.then(() => loadComparisonSeries(extraIds, silent));
-        return comparisonSeriesChain;
+        return comparisonSeriesQueue.run(() => loadComparisonSeries(extraIds), !silent);
     }
 
-    async function loadComparisonSeries(extraIds: readonly number[], silent: boolean) {
+    async function loadComparisonSeries(extraIds: readonly number[]) {
         const sessionGeneration = getClientSessionGeneration();
         const ids = new Set(extraIds);
         for (const pair of pairs) {
@@ -1070,12 +1092,7 @@
         });
         if (assets.length === 0) return;
         const range = {start: dateStart, end: dateEnd};
-        if (!silent) comparisonSeriesLoading++;
-        try {
-            await ensureComparisonSeries(assets, range);
-        } finally {
-            if (!silent) comparisonSeriesLoading--;
-        }
+        await ensureComparisonSeries(assets, range);
         if (pageAlive && isClientSessionCurrent(sessionGeneration)) comparisonSeriesVersion++;
     }
 
@@ -1265,30 +1282,41 @@
     // Bulk Actions (table selection)
     // =========================================================================
 
-    function handleBulkSyncFx() {
-        syncModalPairs = selectedFxRows.filter((r) => !r.manualOnly).map((r) => `${r.base}-${r.quote}`);
+    function handleBulkSyncFx(rows: FxRow[] = selectedFxRows) {
+        syncModalPairs = rows.filter((r) => !r.manualOnly).map((r) => `${r.base}-${r.quote}`);
         syncModalOpen = true;
     }
 
-    async function handleBulkRefreshFx() {
-        for (const row of selectedFxRows) {
+    async function handleBulkRefreshFx(rows: FxRow[] = selectedFxRows) {
+        for (const row of rows) {
             await handleRefreshPair({slug: row.slug});
         }
         fxTableComponent?.getTableRef()?.clearSelection();
         selectedFxRows = [];
     }
 
-    function handleBulkInvertFx() {
-        const slugs = selectedFxRows.map((r) => r.slug);
+    function handleBulkInvertFx(rows: FxRow[] = selectedFxRows) {
+        const slugs = rows.map((r) => r.slug);
         fxTableComponent?.bulkToggleInversion(slugs);
         fxTableComponent?.getTableRef()?.clearSelection();
         selectedFxRows = [];
     }
 
-    async function handleBulkDeleteFx() {
-        deletingPairs = selectedFxRows.map((r) => ({base: r.base, quote: r.quote, slug: r.slug}));
+    async function handleBulkDeleteFx(rows: FxRow[] = selectedFxRows) {
+        deletingPairs = rows.map((r) => ({base: r.base, quote: r.quote, slug: r.slug}));
         bulkDeleteDialogOpen = true;
     }
+
+    /**
+     * 77 SEL-B: the bulk actions of the table's selection panel. «Sync» takes the pairs with a provider only — a manual
+     * pair has nothing to sync, and with none selected the action is not there (Q-SEL-17); the others take every pair.
+     */
+    let fxSelectionActions = $derived<BulkAction<FxRow>[]>([
+        {id: 'sync', icon: RotateCw, label: () => $_('common.sync'), appliesTo: (row) => !row.manualOnly, onClick: (rows) => handleBulkSyncFx(rows)},
+        {id: 'refresh', icon: RefreshCw, label: () => $_('common.refresh'), onClick: (rows) => handleBulkRefreshFx(rows)},
+        {id: 'invert', icon: ArrowLeftRight, label: () => $_('common.swapDirection'), onClick: (rows) => handleBulkInvertFx(rows)},
+        {id: 'delete', icon: Trash2, label: () => $_('common.delete'), variant: 'danger', onClick: (rows) => handleBulkDeleteFx(rows)},
+    ]);
 
     async function confirmBulkDelete() {
         if (deletingPairs.length === 0) return;
@@ -1404,8 +1432,8 @@
      * note there — until this is false, the rates on screen are not the final ones.
      */
     // The cards' rolling returns are a load wave too (Y-40): `data-busy` holds until they are in.
-    // The assets the cards compare are one too (Y-41).
-    let busy = $derived(loading || periodChangesLoading || comparisonSeriesLoading > 0 || pairs.some((p) => p.loading) || calendarAssetsLoading > 0 || [...calendarBySlug.values()].some((entry) => entry.own.state === 'loading'));
+    // The assets the cards compare are one too (Y-41), and the asset list that lets them be asked (FB-7d).
+    let busy = $derived(loading || assetListLoading || periodChangesLoading || comparisonSeriesLoading > 0 || pairs.some((p) => p.loading) || calendarAssetsLoading > 0 || [...calendarBySlug.values()].some((entry) => entry.own.state === 'loading'));
 </script>
 
 <div class="space-y-6 text-lf-primary" aria-busy={busy} data-busy={busy ? 'true' : 'false'} data-testid="fx-page">
@@ -1429,22 +1457,6 @@
             </div>
         </div>
         <div class="flex flex-wrap items-center gap-2 justify-end ml-auto">
-            {#if viewMode === 'list' && selectedFxRows.length > 0}
-                <DataTableToolbar
-                    variant="floating"
-                    selectedCount={selectedFxRows.length}
-                    bulkActions={[
-                        {id: 'sync', icon: RotateCw, label: () => $_('common.sync'), onClick: () => handleBulkSyncFx()},
-                        {id: 'refresh', icon: RefreshCw, label: () => $_('common.refresh'), onClick: () => handleBulkRefreshFx()},
-                        {id: 'invert', icon: ArrowLeftRight, label: () => $_('common.swapDirection'), onClick: () => handleBulkInvertFx()},
-                        {id: 'delete', icon: Trash2, label: () => $_('common.delete'), variant: 'danger', onClick: () => handleBulkDeleteFx()},
-                    ]}
-                    onClearSelection={() => {
-                        fxTableComponent?.getTableRef()?.clearSelection();
-                        selectedFxRows = [];
-                    }}
-                />
-            {/if}
             <ViewModeToggle bind:mode={viewMode} storageKey="fxViewMode" />
             <button class="flex items-center gap-1.5 px-3 py-2 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors whitespace-nowrap" data-testid="fx-add-pair-button" use:guideAnchor={'fx.page.add'} onclick={handleAddPair}>
                 <Plus size={16} />
@@ -1698,6 +1710,7 @@
             onsync={handleSyncPair}
             onrefresh={handleRefreshPair}
             ondelete={handleDeletePair}
+            selectionActions={fxSelectionActions}
             oninversionchange={() => {
                 void fetchAllPairSeries();
                 // A pair swapped in the table: the cards in the rolling-return view read the swapped rate's return.

@@ -976,8 +976,13 @@ interface UnderFooterReading {
     /** The box spanning the four footer controls. */
     band: Edges;
     formWindow: FormWindow | null;
-    /** Positive control B: the middle of the form's window above the band, and the form descendant hit there. */
-    probe: {x: number; y: number; hit: string | null} | null;
+    /**
+     * Positive control B: a column of points down the middle of the form's window above the band (`top` → `bottom`), and
+     * the first form descendant hit, at `y`. A column, not one point: one point can fall in the gap between two blocks
+     * (MOB, lane 76's triage: y 289.5 at 360×640, between the search and the identity), and what B proves — the probe sees
+     * the form — does not depend on where the gaps are.
+     */
+    probe: {x: number; top: number; bottom: number; y: number | null; hit: string | null} | null;
     points: number;
     /** Every grid point where something of the form is hit, with the topmost such element. */
     offenders: Array<{element: string; x: number; y: number}>;
@@ -1000,7 +1005,9 @@ interface SwitchesReading {
 /**
  * Resolves once the modal has stopped moving: ModalBase opens it with a 200 ms scale transition, and a box read half-way
  * is up to 5 % small. The form and the four footer controls keep the same boxes over two animation frames, no animation
- * runs on any of them or on an ancestor, every font is loaded. The pointer is parked first on the backdrop's corner, where
+ * runs on any of them or on an ancestor, every font is loaded, and no search of the form still waits for its provider
+ * list (`data-providers="pending"`): the chips arrive after the window opens and move the form down by their rows
+ * (MOB, lane 76's triage: read before them, the layout was 102 px shorter than the user's). The pointer is parked first on the backdrop's corner, where
  * it hovers nothing: resting on a tooltip's trigger it would hang a fixed box over the modal. Read frame by frame, no clock.
  */
 async function settleModal(page: Page): Promise<void> {
@@ -1024,12 +1031,13 @@ async function settleModal(page: Page): Promise<void> {
                         const target = animation.effect instanceof KeyframeEffect ? animation.effect.target : null;
                         return animation.playState === 'running' && target !== null && elements.some((element) => element !== null && target.contains(element));
                     }).length;
-                    same = elements.every((element) => element !== null) && running === 0 && document.fonts.status === 'loaded' && boxes === last ? same + 1 : 0;
+                    const providers = document.querySelector('[data-search-autocomplete][data-providers="pending"]') === null;
+                    same = elements.every((element) => element !== null) && running === 0 && providers && document.fonts.status === 'loaded' && boxes === last ? same + 1 : 0;
                     last = boxes;
                     if (same >= 2) {
                         resolve('');
                     } else if (performance.now() - started > budgetMs) {
-                        resolve(`still moving after ${Math.round(performance.now() - started)} ms: ${running} animation(s) running on the modal, fonts ${document.fonts.status}, boxes ${boxes}`);
+                        resolve(`still moving after ${Math.round(performance.now() - started)} ms: ${running} animation(s) running on the modal, provider list ${providers ? 'in' : 'pending'}, fonts ${document.fonts.status}, boxes ${boxes}`);
                     } else {
                         requestAnimationFrame(frame);
                     }
@@ -1089,9 +1097,16 @@ function readUnderFooterInPage({formTestId, controlTestIds, stepX, stepY, inset}
     let probe: UnderFooterReading['probe'] = null;
     if (formWindow) {
         const x = (formWindow.left + formWindow.right) / 2;
-        const y = (formWindow.top + band.top) / 2;
-        const hit = document.elementsFromPoint(x, y).find((element) => element !== form && form.contains(element));
-        probe = {x, y, hit: hit ? describe(hit) : null};
+        const top = formWindow.top + inset;
+        const bottom = Math.min(formWindow.bottom, band.top) - inset;
+        probe = {x, top, bottom, y: null, hit: null};
+        for (const y of ticks(top, bottom, stepY)) {
+            const hit = document.elementsFromPoint(x, y).find((element) => element !== form && form.contains(element));
+            if (hit) {
+                probe = {x, top, bottom, y, hit: describe(hit)};
+                break;
+            }
+        }
     }
 
     const offenders: UnderFooterReading['offenders'] = [];
@@ -1136,7 +1151,7 @@ function edgesReport(box: Edges): string {
 function underFooterReport(reading: UnderFooterReading): string {
     const {form, band, formWindow, probe, innerHeight} = reading;
     const seenThrough = formWindow ? `its window ${formWindow.element} y ${px(formWindow.top)} → ${px(formWindow.bottom)} (${px(formWindow.bottom - formWindow.top)} tall; clientHeight ${formWindow.clientHeight}, scrollHeight ${formWindow.scrollHeight})` : 'no scroll container from the form up';
-    const middle = probe ? `; the window's middle above the band, x ${px(probe.x)} y ${px(probe.y)}, hits ${probe.hit ?? 'nothing of the form'}` : '';
+    const middle = probe ? `; the window's middle column above the band, x ${px(probe.x)} y ${px(probe.top)} → ${px(probe.bottom)}, ${probe.hit && probe.y !== null ? `first hits ${probe.hit} at y ${px(probe.y)}` : 'hits nothing of the form'}` : '';
     return `form box y ${px(form.top)} → ${px(form.bottom)} (${px(form.bottom - form.top)} tall), ${seenThrough}; 70vh = ${px(FORM_WINDOW_VH * innerHeight)}; footer band ${edgesReport(band)}${middle}`;
 }
 
@@ -1145,7 +1160,7 @@ function expectNothingOfTheFormUnderTheFooter(reading: UnderFooterReading, where
     const {formWindow, probe, offenders, points} = reading;
     if (!formWindow || !probe) throw new Error(`${where}: the form's window — the first scroll container from the form up — was not found: ${underFooterReport(reading)}`);
     expect(formWindow.scrollHeight, `${where}, positive control A: the form holds more than its window ${formWindow.element} shows — ${underFooterReport(reading)}`).toBeGreaterThan(formWindow.clientHeight);
-    expect(probe.hit, `${where}, positive control B: the middle of the form's window above the footer hits a form descendant — ${underFooterReport(reading)}`).not.toBeNull();
+    expect(probe.hit, `${where}, positive control B: the middle column of the form's window above the footer hits a form descendant — ${underFooterReport(reading)}`).not.toBeNull();
 
     // The offenders by element, in the order met (top row first): how often, and the first y.
     const byElement = new Map<string, {count: number; firstY: number}>();

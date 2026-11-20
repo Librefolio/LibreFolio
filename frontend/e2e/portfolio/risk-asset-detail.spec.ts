@@ -844,3 +844,114 @@ test.describe('Asset Risk tab — the position the amounts are on, and prices fr
         await expect(page.getByTestId('asset-risk-tab').getByTestId('asset-risk-plan-prices'), `${market.display_name} (#${market.id}) is market-priced and noted as priced from a plan`).toHaveCount(0);
     });
 });
+
+/**
+ * RN-25 — the rates scenario, on the real backend: the duration the seed puts in a bond's profile (`populate_mock_data.py`,
+ * «BTP Italia 2028», 2.15 years from Borsa Italiana) travels through the risk engine to L4's «Rates» box. No risk mock
+ * here: the mocked catalogue does not offer `rate_shock`, and what this block proves is the engine's answer on screen.
+ */
+test.describe('Asset Risk tab — the rates scenario from the profile’s duration (RN-25)', () => {
+    test.beforeEach(async ({page}) => {
+        await holdLivePricePoll(page);
+        await login(page, TEST_USER);
+    });
+
+    /** The seeded asset of that name: the seed is the contract, so a missing one is a seeding error, never a skip. */
+    async function seeded(page: Page, name: string): Promise<CatalogueAsset> {
+        const asset = (await listAssets(page)).find((item) => item.display_name === name);
+        if (!asset) throw new Error(`«${name}» is not in the asset list. Check populate_mock_data.py seeding.`);
+        return asset;
+    }
+
+    /**
+     * A test lane serves only `mockenrich` (`dev.py server --test`, plan 68 E8a): no suite reaches the real sites. So
+     * `GET /assets/enrichers` does not list the seeded duration's source, and the box could only show its code. The real
+     * answer, with that source added under the name it declares, lets the line be checked for the name; the rest of the
+     * catalogue is untouched and the risk engine is not mocked.
+     */
+    async function nameTheSource(page: Page, code: string, name: string): Promise<void> {
+        await page.route(/\/api\/v1\/assets\/enrichers(?:\?|$)/, async (route) => {
+            const response = await route.fetch();
+            const body = schemas.FAEnrichersCatalogue.parse(await response.json());
+            if (!body.enrichers.some((enricher) => enricher.code === code)) {
+                expect(body.enrichers.length, 'barrier: the lane serves at least one enricher to copy the shape of').toBeGreaterThan(0);
+                body.enrichers.push({...body.enrichers[0], code, name});
+            }
+            await route.fulfill({response, json: body});
+        });
+    }
+
+    /** L4's rates tool on screen, whether it was left open or is offered. */
+    async function openRates(panel: Locator): Promise<Locator> {
+        const level4 = await openLevel4Drawer(panel);
+        const box = level4.getByTestId('risk-l4-rates');
+        const add = level4.getByTestId('risk-l4-add-rates');
+        await expect(box.or(add), 'L4 must show the rates tool either open or offered, exactly once').toHaveCount(1);
+        if ((await add.count()) > 0) await add.click();
+        await expect(box).toBeVisible({timeout: 8_000});
+        await expect(box).toHaveAttribute('data-distance', 'assumed');
+        return box;
+    }
+
+    test('a bond with a duration: the rates box says its source and moves the price both ways, by every step', async ({page}) => {
+        const bond = await seeded(page, 'BTP Italia 2028');
+        await nameTheSource(page, 'borsa_italiana', 'Borsa Italiana');
+        const asked: Array<Record<string, unknown>> = [];
+        page.on('request', (request) => {
+            if (request.method() !== 'POST' || !request.url().includes('/api/v1/risk/query')) return;
+            const body = request.postDataJSON() as RiskRequest;
+            if (body.scope.kind !== 'asset' || body.scope.asset_id !== bond.id) return;
+            for (const analytic of body.analytics) if (analytic.analytic_code === 'rate_shock') asked.push(analytic.parameters ?? {});
+        });
+
+        const panel = await openAssetRiskTab(page, bond.id);
+        const box = await openRates(panel);
+        const rates = box.getByTestId('risk-rates');
+        await expect(rates, 'the engine gave no rates answer on a bond whose profile holds a duration').toBeVisible({timeout: 10_000});
+        expect(asked.length, 'the base wave did not ask the rates scenario about this bond').toBeGreaterThan(0);
+        expect(asked[asked.length - 1]).toMatchObject({yield_changes: [0.005, 0.01, 0.02, -0.005, -0.01, -0.02]});
+        // The duration and its source as the engine sent them (stable handles, not the locale's digits), and the line
+        // names the source by the enricher's name, never by its code.
+        await expect(rates).toHaveAttribute('data-duration', '2.15');
+        await expect(rates).toHaveAttribute('data-source', 'borsa_italiana');
+        await expect(rates.getByTestId('risk-rates-source')).toContainText('Borsa Italiana');
+        await expect(rates.getByTestId('risk-rates-source')).not.toHaveText(/borsa_italiana/);
+        await expect(rates.getByTestId('risk-rates-caveat')).toBeVisible();
+
+        // Opens on rates up by one point: −2.15 × 1 % = −2.15 %, the engine's figure (a float: compared within a hair).
+        const result = rates.getByTestId('risk-rates-result');
+        await expect(rates).toHaveAttribute('data-direction', 'up');
+        await expect(rates).toHaveAttribute('data-step', '0.01');
+        const priceChange = async () => Number(await result.getAttribute('data-price-change'));
+        expect(await priceChange()).toBeCloseTo(-0.0215, 10);
+
+        await rates.getByTestId('risk-rates-down').click();
+        await expect(rates).toHaveAttribute('data-direction', 'down');
+        expect(await priceChange()).toBeCloseTo(0.0215, 10);
+
+        for (const [step, expected] of [
+            ['0.02', 0.043],
+            ['0.005', 0.01075],
+        ] as const) {
+            await rates.getByTestId(`risk-rates-step-${step}`).click();
+            await expect(rates).toHaveAttribute('data-step', step);
+            expect(await priceChange(), `rates down by ${step}`).toBeCloseTo(expected, 10);
+        }
+        await expect(panel.getByTestId('risk-l4-rates-missing'), 'a bond with a duration is told it has none').toHaveCount(0);
+    });
+
+    test('a bond without a duration: no rates tool, one line that leads to the Profile', async ({page}) => {
+        const bond = await seeded(page, 'BTP Più Sc Fb33 EUR');
+        const panel = await openAssetRiskTab(page, bond.id);
+        const level4 = await openLevel4Drawer(panel);
+
+        const missing = level4.getByTestId('risk-l4-rates-missing');
+        await expect(missing, 'a bond without a duration is not told why it has no rates scenario').toBeVisible({timeout: 10_000});
+        // The line is the barrier: the base wave answered, so a rates tool would be offered by now.
+        await expect(level4.getByTestId('risk-l4-rates')).toHaveCount(0);
+        await expect(level4.getByTestId('risk-l4-add-rates')).toHaveCount(0);
+
+        await missing.getByTestId('risk-l4-rates-missing-profile').click();
+        await expect(page).toHaveURL(/[?&]tab=profile(?:&|$)/);
+    });
+});

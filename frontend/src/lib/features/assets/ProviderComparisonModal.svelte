@@ -19,6 +19,7 @@
   Svelte 5 runes.
 -->
 <script lang="ts">
+    import ProviderAttributionNote from './ProviderAttributionNote.svelte';
     import {_ as t} from '$lib/i18n';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {Info, X} from 'lucide-svelte';
@@ -32,7 +33,7 @@
     // =========================================================================
 
     export interface DiffItem {
-        field: string; // "currency", "identifier_isin", "sector_area", etc.
+        field: string; // "currency", "identifier_isin", a profile voice ("sector"), etc.
         label: string; // Localized label
         type: 'string' | 'distribution';
         currentValue: any;
@@ -98,10 +99,6 @@
             titleKey: 'assets.modal.assetDetails',
             fields: ['display_name', 'asset_type', 'currency', 'quote_base_quantity'],
         },
-        {
-            titleKey: 'common.classification',
-            fields: ['short_description', 'sector_area', 'geographic_area'],
-        },
     ];
 
     // =========================================================================
@@ -123,9 +120,11 @@
          */
         onapply?: (selectedFields: string[], resolutions: Record<string, {primary: string; alternates: string[]}>) => void;
         oncancel?: () => void;
+        /** The providers whose data the window compares: one with an attribution has its line in the footer (76 P4b). */
+        providerCodes?: readonly (string | null | undefined)[];
     }
 
-    let {open = $bindable(false), differences = [], assetName = '', zIndex = 70, title, description, onapply, oncancel}: Props = $props();
+    let {open = $bindable(false), differences = [], assetName = '', zIndex = 70, title, description, onapply, oncancel, providerCodes = []}: Props = $props();
 
     // =========================================================================
     // State — local copy for checkbox management
@@ -278,9 +277,9 @@
         return s.length > max ? s.slice(0, max) + '…' : s;
     }
 
-    /** Format a distribution key with i18n for sector fields */
+    /** A distribution key in the interface language: the sectors of the profile's `sector` voice (plan 68, D7a). */
     function formatDistKey(key: string, field: string): string {
-        if (field === 'sector_area') {
+        if (field === 'sector') {
             const i18nKey = `sectors.${sectorI18nKey(key)}`;
             const localized = $t(i18nKey);
             return localized !== i18nKey ? localized : key;
@@ -433,6 +432,8 @@
 
     <!-- Footer -->
     <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-lf-subtle">
+        <!-- The line a provider's terms ask for: the window shows its data (76 P4b) -->
+        <ProviderAttributionNote {providerCodes} testId="comparison-attribution" extraClass="mr-auto" />
         <button type="button" onclick={handleCancel} data-testid="comparison-cancel" class="px-4 py-2 text-sm font-medium text-lf-secondary bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover transition-colors">
             {$t('common.cancel')}
         </button>

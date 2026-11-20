@@ -34,6 +34,7 @@ from backend.app.db.models import ProviderInputType
 from backend.app.logging_config import get_logger
 from backend.app.schemas.assets.assets import FAAssetPatchItem
 from backend.app.schemas.prices import FACurrentValue, FACurrentValueRequest, FAHistoricalData, FAPricePoint
+from backend.app.schemas.provider import FAProviderAttribution
 from backend.app.services.asset_source_providers.coingecko import _sdk
 from backend.app.services.asset_source_providers.coingecko._currencies import DEFAULT_VS_CURRENCY, VS_CURRENCIES
 from backend.app.services.assets.base import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
@@ -144,15 +145,30 @@ class CoinGeckoProvider(AssetSourceProvider):
         return "CoinGecko"
 
     @property
+    def get_icon(self) -> str:
+        # CoinGecko's own favicon, by URL, as the other providers' icons: it follows CoinGecko's updates (P1b-b)
+        return "https://www.coingecko.com/favicon.ico"
+
+    @property
+    def provider_help_url(self) -> str:
+        # Its page in the user guide (P6): the key, the year of history, the credits, the attribution
+        return "/mkdocs/user/assets/providers/coingecko/"
+
+    @property
+    def attribution(self) -> FAProviderAttribution:
+        # CoinGecko's terms: every price shown with «Powered by CoinGecko», prominent, linked to its site (P4)
+        return FAProviderAttribution(text="Powered by CoinGecko", url="https://www.coingecko.com/")
+
+    @property
     def supports_meaningful_volume(self) -> bool:
         """CoinGecko's volume is a 24-hour aggregate over every exchange, not one market's: not shown as volume."""
         return False
 
     @property
     def accepted_identifier_types(self) -> list:
-        # The CoinGecko id («bitcoin») is CoinGecko's own code, not a ticker: PROVIDER_ID, which reaches the plugin as
+        # The CoinGecko id («bitcoin») is CoinGecko's own code, not a ticker: COINGECKO_ID, which reaches the plugin as
         # OTHER (the consultant's rule, P3). The asset's ticker is the symbol (BTC), from the metadata.
-        return [ProviderInputType.PROVIDER_ID]
+        return [ProviderInputType.COINGECKO_ID]
 
     @property
     def params_schema(self) -> list[dict]:
@@ -361,6 +377,8 @@ class CoinGeckoProvider(AssetSourceProvider):
                     "currency": currency,
                     "type": AssetType.CRYPTO.value,
                     "provider_params": {"vs_currency": currency},
+                    # S3: the coin's logo, the very image its metadata gives (``image.large``), so the browser asks it once
+                    "icon_url": coin.get("large") if isinstance(coin.get("large"), str) and coin.get("large") else None,
                 }
             )
         return rows

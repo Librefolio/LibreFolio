@@ -140,6 +140,23 @@ class FAProviderParamField(StrictModel):
 # ============================================================================
 
 
+class FAProviderAttribution(StrictModel):
+    """The line a provider's terms ask the interface to show with its prices (project 76, P4): a short text and the
+    link to the provider's site, e.g. CoinGecko's «Powered by CoinGecko». A constant of the plugin: never a setting,
+    never built from an identifier."""
+
+    text: str = Field(..., min_length=1, max_length=80, description="The words the provider's terms ask for, shown as they are (a brand phrase, not translated)")
+    url: str = Field(..., max_length=200, description="The provider's site, https only")
+
+    @field_validator("url")
+    @classmethod
+    def https_only(cls, value: str) -> str:
+        """A link the interface opens: https only, never a script, a relative path or plain http."""
+        if not value.startswith("https://") or len(value) <= len("https://"):
+            raise ValueError("an attribution link is an https:// address")
+        return value
+
+
 class FAProviderInfo(StrictModel):
     """Information about a single Financial Asset pricing provider.
 
@@ -173,6 +190,7 @@ class FAProviderInfo(StrictModel):
     params_schema: List[FAProviderParamField] = Field(default_factory=list, description="Form field definitions for provider_params")
     accepted_identifier_types: List[str] = Field(default_factory=list, description="Identifier types accepted by this provider")
     provider_help_url: Optional[str] = Field(None, description="URL to provider documentation")
+    attribution: Optional[FAProviderAttribution] = Field(None, description="The line its terms ask the interface to show with its prices, with its link (CoinGecko: «Powered by CoinGecko»); null when its terms ask none (project 76, P4)")
     configured: bool = Field(True, description="False when a required setting of the plugin, or of a shared group it reads, has no value for the caller: every call would answer NOT_CONFIGURED (plan 76, N1). The same rule as the call")
     missing_settings: list[str] = Field(default_factory=list, description="The settings to set, `<group>.<field>` for a shared group's; in the managed profile a field an environment variable locks is never named (decision N2)")
     missing_reason: Optional[str] = Field(None, description="Why it is not configured (N2b): `missing_fields` (a value to set) or `invalid_locked_setting` (an environment variable that locks a field has an invalid value: it is fixed on the server); null when configured")
@@ -235,7 +253,7 @@ class FAProviderConfigBase(StrictModel):
 
     provider_code: str = Field(..., description="Provider code (yfinance, cssscraper, scheduled_investment, etc.)")
     identifier: str = Field(..., description="Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.)")
-    identifier_type: str = Field(..., description="Provider input type (TICKER, ISIN, URL, AUTO_GENERATED, PROVIDER_ID) — mapped to IdentifierType on save")
+    identifier_type: str = Field(..., description="Provider input type (TICKER, ISIN, URL, AUTO_GENERATED, COINGECKO_ID) — mapped to IdentifierType on save")
     provider_params: Optional[dict[str, Any]] = Field(None, description="Provider-specific configuration (JSON)")
 
     @field_validator("provider_params", mode="before")
@@ -466,7 +484,7 @@ class ProbeHistoryResult(BaseProbeOperationResult):
 class ProbeMetadataResult(BaseProbeOperationResult):
     """Result of metadata probe operation."""
 
-    patch_data: Optional[dict] = Field(None, description="Asset metadata patch (identifiers, asset_type, classification, etc.)")
+    patch_data: Optional[dict] = Field(None, description="Asset metadata patch: asset_type, currency, display_name and identifiers (never the description, sectors or countries)")
     quote_base_suggestion: Optional[FAQuoteBaseSuggestion] = Field(None, description="The plugin's quote base suggestion (Z-32 d), beside the patch and never inside it; null when it suggests nothing")
 
 
@@ -510,6 +528,7 @@ class FAProviderSearchResultItem(StrictModel):
     provider_params: Optional[dict[str, Any]] = Field(None, description="Provider-specific params to carry over (e.g. language)")
     quote_base_suggestion: Optional[FAQuoteBaseSuggestion] = Field(None, description="The plugin's quote base suggestion for this line (Z-32 d); null when it suggests nothing")
     via_web: bool = Field(False, description="True if resolved via the external web link-finder (last-resort), not the provider's native on-site search")
+    icon_url: Optional[str] = Field(None, description="The asset's icon, when the provider knows it at search time (an http(s) address or a path of this instance; CoinGecko's coin logo); null otherwise (project 76, S3)")
 
 
 class FAProviderSearchResponse(StrictModel):

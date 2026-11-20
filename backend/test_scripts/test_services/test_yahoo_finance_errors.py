@@ -637,7 +637,7 @@ async def test_metadata_unavailable_returns_none(monkeypatch):
 async def test_metadata_happy(monkeypatch):
     info = {
         "quoteType": "EQUITY",
-        "longBusinessSummary": "y" * 600,  # truncated to 500
+        "longBusinessSummary": "y" * 600,
         "sector": "Technology",
         "currency": "USD",
         "symbol": "AAPL",
@@ -651,8 +651,7 @@ async def test_metadata_happy(monkeypatch):
     assert result.currency == "USD"
     assert result.identifier_ticker == "AAPL"
     assert result.identifier_isin == "US0378331005"
-    assert len(result.classification_params.short_description) == 500
-    assert result.classification_params.sector_area is not None
+    # Plan 68, D6: description, countries and sectors are the enrichers' (the profile), never the price provider's
 
 
 @pytest.mark.asyncio
@@ -662,31 +661,20 @@ async def test_metadata_no_info_returns_none(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_metadata_name_fallbacks(monkeypatch):
-    # No longBusinessSummary → longName wins; unknown quoteType → OTHER; bad ISIN ignored.
+async def test_metadata_unknown_type_and_bad_isin(monkeypatch):
+    # Unknown quoteType → OTHER; bad ISIN ignored.
     info = {"quoteType": "weird", "longName": "Long Co", "shortName": "LC"}
     ticker = _FakeTicker(info=info, isin="-")
     _install_yf(monkeypatch, ticker=ticker)
 
     result = await YahooFinanceProvider().fetch_asset_metadata("AAPL", IdentifierType.TICKER)
     assert result.asset_type == "OTHER"
-    assert result.classification_params.short_description == "Long Co"
     assert result.identifier_isin is None  # "-" rejected
 
 
 @pytest.mark.asyncio
-async def test_metadata_unknown_sector_still_builds(monkeypatch):
-    info = {"quoteType": "ETF", "shortName": "Fund", "sector": "Nonexistent Sector"}
-    _install_yf(monkeypatch, ticker=_FakeTicker(info=info))
-    result = await YahooFinanceProvider().fetch_asset_metadata("AAPL", IdentifierType.TICKER)
-    # shortName fallback for description, unknown sector still yields a sector area.
-    assert result.classification_params.short_description == "Fund"
-    assert result.classification_params.sector_area is not None
-
-
-@pytest.mark.asyncio
-async def test_metadata_isin_error_and_default_description(monkeypatch):
-    # t.isin raises (629-630) and no summary/longName/shortName → default description (663).
+async def test_metadata_isin_error_is_swallowed(monkeypatch):
+    # t.isin raises: the rest of the metadata still comes back.
     info = {"quoteType": "EQUITY", "currency": "USD", "symbol": "AAPL"}
     ticker = _FakeTicker(info=info, isin_exc=RuntimeError("isin lookup failed"))
     _install_yf(monkeypatch, ticker=ticker)
@@ -694,7 +682,7 @@ async def test_metadata_isin_error_and_default_description(monkeypatch):
     result = await YahooFinanceProvider().fetch_asset_metadata("AAPL", IdentifierType.TICKER)
     assert result is not None
     assert result.identifier_isin is None  # isin fetch failed, swallowed
-    assert result.classification_params.short_description == "AAPL from Yahoo Finance"
+    assert result.identifier_ticker == "AAPL"
 
 
 @pytest.mark.asyncio

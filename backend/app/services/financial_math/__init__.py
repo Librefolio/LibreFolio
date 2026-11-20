@@ -57,6 +57,10 @@ Modules:
   same-day trade average (for an asset with nothing else yet, an incoming transfer's cost, as an
   estimate), or the last observation carried forward.
 * ``yield_on_cost`` — Yield on Cost of holdings, replayed from the transaction ledger.
+* ``bond_duration`` — a bond's first-order price change for a move of its yield, from its modified duration
+  (−D_mod × Δy), which the rates scenario of an asset's «What if…?» reads.
+* ``series_steps`` — series as steps: one point per stretch of days with no change, the value of a day and the steps
+  of a list of changes, for the report, lots and positions series and every backend reader of them.
 * ``splits`` — the ADJUSTMENT rows linked to a SPLIT asset event, loaded with one query, the ids
   an average-cost replay marks as a rescale, and the rule for a usable split ratio.
 * ``acceptable_cost`` — the Rebalancer's table «maximum acceptable cost»: rows of misplaced money to two significant

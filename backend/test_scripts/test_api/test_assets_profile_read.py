@@ -10,7 +10,9 @@ Test Suite: reading the profile from the enrichers through the routes (project 6
 2. ``POST /assets/profile/refresh`` (body: a JSON list of asset ids): the voices written as ``mockenrich`` rows with no
    user; ``GET /assets`` answers ``enrichers.state.mockenrich.status == "ok"``; a second refresh writes nothing new; an
    asset id that does not exist has a result with ``error``; an asset bound to ``MOCK_RATE_LIMITED`` has an outcome
-   ``error`` with ``RATE_LIMITED`` and its ``retry_after``.
+   ``error`` with ``RATE_LIMITED`` and its ``retry_after``. E6c2 (PROF, 19/11): each result says how many enrichers it
+   read (``enrichers_read``): one for the asset bound to mockenrich; zero, with nothing written and no error, for an
+   asset bound only to an enricher this instance cannot use (here, one not installed), so the page can say so.
 
 3. B5b, the background «Aggiorna»: after ``POST /assets`` with non-empty ``enrichers`` (each item created) and after a
    committed ``PATCH /assets`` whose item sets non-empty ``enrichers``, the server reads them after the answer: within
@@ -142,12 +144,12 @@ async def _create(client: httpx.AsyncClient, item: dict[str, Any]) -> int:
     return int(result["asset_id"])
 
 
-async def _bind(asset_id: int, identifier: str) -> None:
-    """Bind the asset to mockenrich straight on the lane's database: no route, so no background read (B5b)."""
+async def _bind(asset_id: int, identifier: str, code: str = MOCK_CODE) -> None:
+    """Bind the asset to ``code`` (mockenrich) straight on the lane's database: no route, so no background read (B5b)."""
     from backend.app.services.enrichers import bindings  # noqa: PLC0415 — the service writing the bindings, imported in the test body
 
     async with AsyncSession(get_async_engine()) as session:
-        await bindings.save_config(session, asset_id, {MOCK_CODE: _binding(identifier)})
+        await bindings.save_config(session, asset_id, {code: _binding(identifier)})
         await session.commit()
 
 
@@ -305,6 +307,7 @@ async def test_refresh_writes_the_mock_voices_and_the_state_then_nothing_new(tes
             result = (await _refresh(client, [asset_id]))[asset_id]
 
             assert result["error"] is None and set(result["written"]) == set(expected), f"every voice written: {result}"
+            assert result["enrichers_read"] == 1, f"one enricher read: {result}"
             assert [(outcome["code"], outcome["status"]) for outcome in result["outcomes"]] == [(MOCK_CODE, "ok")], result
             new_rows = [row for row in await _profile_rows(asset_id) if row["id"] not in {old["id"] for old in before}]
             assert {row["key"]: (row["stored"], row["source"], row["user_id"]) for row in new_rows} == {key: (value, MOCK_CODE, None) for key, value in expected.items()}, f"mockenrich rows, no user: {new_rows}"
@@ -351,6 +354,24 @@ async def test_refresh_of_an_asset_refused_for_too_many_requests(test_server):
             assert result["written"] == [] and await _profile_rows(asset_id) == [], f"nothing written: {result}"
             state = _state_of(await _read_asset(client, asset_id)).get(MOCK_CODE) or {}
             assert (state.get("status"), state.get("error_code")) == ("error", RATE_LIMITED), f"the refusal is in the state: {state}"
+        finally:
+            await _delete(client, [asset_id])
+
+
+@pytest.mark.asyncio
+async def test_refresh_of_an_asset_whose_enrichers_cannot_be_used_says_it_read_none(test_server):
+    """E6c2 (PROF, 19/11): the refresh of an asset bound only to an enricher this instance cannot use reads nothing and
+    says so (``enrichers_read == 0``), instead of looking like a read that found nothing new."""
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        asset_id = await _create(client, _item("UNUSABLE"))
+        await _bind(asset_id, _fake_isin(), code="notinstalled")
+        try:
+            result = (await _refresh(client, [asset_id]))[asset_id]
+
+            assert result["enrichers_read"] == 0, f"no enricher read: {result}"
+            assert (result["error"], result["written"], result["outcomes"]) == (None, [], []), f"nothing read, no error: {result}"
+            assert _state_of(await _read_asset(client, asset_id)) == {}, "no state written"
         finally:
             await _delete(client, [asset_id])
 

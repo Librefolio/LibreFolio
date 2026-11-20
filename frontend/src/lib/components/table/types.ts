@@ -444,8 +444,37 @@ export interface BulkAction<T> {
     /** Confirmation message - string or function with count */
     confirmMessage?: string | ((count: number) => string);
 
-    /** Minimum selection required to enable */
+    /** Minimum number of rows the action must take, under which it is hidden (the rows it can take, `appliesTo`). */
     minSelection?: number;
+
+    // ---- The rule of the selection panel (plan 77, SEL-A; `resolveSelectionAction`) ----
+
+    /** The word shown where the bar has little room, when it is shorter than the label (the label stays its name). */
+    shortLabel?: string | (() => string);
+
+    /** The main action of the bar: drawn solid. */
+    primary?: boolean;
+
+    /** CSS class applied to the icon (e.g. 'animate-spin' while it runs). */
+    iconClass?: string;
+
+    /** Whether the action can take this row. Absent: every selected row. It acts on those rows only, and shows their number. */
+    appliesTo?: (row: T) => boolean;
+
+    /** Whether, on the rows it would take, the action makes no sense here (Q-SEL-17: Balance at 100 %): then it is hidden. */
+    pointless?: (rows: T[]) => boolean;
+
+    /**
+     * Why the action is blocked on the rows it would take, or null when it is not: then it is off, and the hint says why
+     * (Q-SEL-9, 66 F7-a). An action is never off without a reason: the type asks for both.
+     */
+    blocked?: (rows: T[]) => SelectionActionBlock | null;
+}
+
+/** Why a bulk action is off: the words the reader sees, and a code tests read (`data-disabled-reason`). */
+export interface SelectionActionBlock {
+    hint: string | (() => string);
+    reason: string;
 }
 
 // ============ Filter Types ============

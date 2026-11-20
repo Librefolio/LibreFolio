@@ -126,3 +126,396 @@ describe('variant inline (the default)', () => {
         expect(onClearSelection).not.toHaveBeenCalled();
     });
 });
+
+// ---------------------------------------------------------------------------
+// 66 F6 — the reason of a disabled action: `hint` (its tooltip) and `reason` (`data-disabled-reason`)
+// ---------------------------------------------------------------------------
+
+/**
+ * An action may carry `hint?: string | (() => string)` — what its tooltip says while it is disabled, instead of the label —
+ * and `reason?: string`, published as `data-disabled-reason` on `toolbar-action-<id>` while it is disabled. Both are
+ * optional and additive: an action without them renders exactly as before (the shared bar of every other page).
+ *
+ * The tooltip is asserted on the channel each case uses: an action that is not «disabled with a hint» keeps the floating
+ * bar's `title` (its `aria-label` is the label, the button's name) and the inline bar's `Tooltip` (`tooltip-content`,
+ * opened by a click on its trigger, the wrapper around the icon button). A disabled action with a hint shows the hint in
+ * the shared `Tooltip` in both variants, opened by a click on the button itself, and has no native `title` (66 F7: the
+ * block below pins that contract). The texts are the test's own: nothing here is translated.
+ */
+describe('hint and reason of an action (66 F6)', () => {
+    const LABEL = 'Link the charges';
+    const HINT = 'The charges are on another broker';
+    const REASON = 'brokerMismatch';
+
+    function linkAction(extra: Record<string, unknown>) {
+        return {id: 'link-charges', icon: Pencil, label: LABEL, onClick: vi.fn(), ...extra};
+    }
+
+    /** The text of the inline bar's tooltip for an action: a click on its trigger opens it. */
+    async function inlineTooltipText(id: string): Promise<string> {
+        const trigger = screen.getByTestId(`toolbar-action-${id}`).parentElement;
+        if (!trigger) throw new Error(`toolbar-action-${id} has no tooltip trigger around it`);
+        await fireEvent.click(trigger);
+        return (await screen.findByTestId('tooltip-content')).textContent?.trim() ?? '';
+    }
+
+    describe('variant floating', () => {
+        it('backward compatibility: an action without hint or reason has its label as title and name, enabled or disabled, and no data-disabled-reason', () => {
+            const {list} = actions();
+            render(DataTableToolbar, {selectedCount: 3, bulkActions: [...list, linkAction({disabled: true})], variant: 'floating'});
+
+            for (const [id, label] of [
+                ['edit', 'Edit selected (3)'],
+                ['delete', 'Delete'],
+                ['link-charges', LABEL],
+            ]) {
+                const button = screen.getByTestId(`toolbar-action-${id}`);
+                expect(button, `${id}: title`).toHaveAttribute('title', label);
+                expect(button, `${id}: name`).toHaveAttribute('aria-label', label);
+                expect(button, `${id}: no reason`).not.toHaveAttribute('data-disabled-reason');
+            }
+        });
+
+        // 66 F7: was «the title is the hint» on a natively disabled button; the hint now goes through the shared Tooltip.
+        it('a disabled action with a hint: aria-disabled, the name stays the label, no title, the reason is published', () => {
+            render(DataTableToolbar, {selectedCount: 3, bulkActions: [linkAction({disabled: true, hint: HINT, reason: REASON})], variant: 'floating'});
+
+            const button = screen.getByTestId('toolbar-action-link-charges');
+            expect(button).toHaveAttribute('aria-disabled', 'true');
+            expect(button).not.toHaveAttribute('disabled');
+            expect(button).not.toHaveAttribute('title');
+            expect(button).toHaveAttribute('aria-label', LABEL);
+            expect(button).toHaveAttribute('data-disabled-reason', REASON);
+        });
+
+        it('a hint given as a function is read like a string', async () => {
+            render(DataTableToolbar, {selectedCount: 3, bulkActions: [linkAction({disabled: true, hint: () => HINT, reason: REASON})], variant: 'floating'});
+
+            await fireEvent.click(screen.getByTestId('toolbar-action-link-charges'));
+            expect((await screen.findByTestId('tooltip-content')).textContent?.trim()).toBe(HINT);
+        });
+
+        it('an enabled action with a hint: the hint is not shown, the title is the label, no data-disabled-reason', () => {
+            render(DataTableToolbar, {selectedCount: 3, bulkActions: [linkAction({disabled: false, hint: HINT, reason: REASON})], variant: 'floating'});
+
+            const button = screen.getByTestId('toolbar-action-link-charges');
+            expect(button).toBeEnabled();
+            expect(button).toHaveAttribute('title', LABEL);
+            expect(button).toHaveAttribute('aria-label', LABEL);
+            expect(button).not.toHaveAttribute('data-disabled-reason');
+        });
+    });
+
+    describe('variant inline', () => {
+        it('backward compatibility: an action without hint or reason has its label as tooltip, no title, no data-disabled-reason', async () => {
+            render(DataTableToolbar, {selectedCount: 3, bulkActions: [linkAction({disabled: true})]});
+
+            const button = screen.getByTestId('toolbar-action-link-charges');
+            expect(button).not.toHaveAttribute('title');
+            expect(button).not.toHaveAttribute('data-disabled-reason');
+            expect(await inlineTooltipText('link-charges')).toBe(LABEL);
+        });
+
+        it('backward compatibility: an enabled action without hint has its label as tooltip', async () => {
+            const {list} = actions();
+            render(DataTableToolbar, {selectedCount: 3, bulkActions: list});
+
+            expect(screen.getByTestId('toolbar-action-delete')).not.toHaveAttribute('data-disabled-reason');
+            expect(await inlineTooltipText('delete')).toBe('Delete');
+        });
+
+        // 66 F7: was `toBeDisabled()` (native `disabled`); a disabled action with a hint is now aria-disabled.
+        it('a disabled action with a hint: the tooltip is the hint, the hint is not the name, the reason is published', async () => {
+            render(DataTableToolbar, {selectedCount: 3, bulkActions: [linkAction({disabled: true, hint: () => HINT, reason: REASON})]});
+
+            const button = screen.getByTestId('toolbar-action-link-charges');
+            expect(button).toHaveAttribute('aria-disabled', 'true');
+            expect(button).not.toHaveAttribute('disabled');
+            expect(button).toHaveAttribute('data-disabled-reason', REASON);
+            expect([null, LABEL], 'the name, if any, stays the label').toContain(button.getAttribute('aria-label'));
+            expect(await inlineTooltipText('link-charges')).toBe(HINT);
+        });
+
+        it('an enabled action with a hint: the tooltip is the label, no data-disabled-reason', async () => {
+            render(DataTableToolbar, {selectedCount: 3, bulkActions: [linkAction({disabled: false, hint: HINT, reason: REASON})]});
+
+            const button = screen.getByTestId('toolbar-action-link-charges');
+            expect(button).toBeEnabled();
+            expect(button).not.toHaveAttribute('data-disabled-reason');
+            expect(await inlineTooltipText('link-charges')).toBe(LABEL);
+        });
+    });
+});
+
+// ---------------------------------------------------------------------------
+// 66 F7 — a disabled action with a reason stays reachable: aria-disabled, the shared Tooltip, no action
+// ---------------------------------------------------------------------------
+
+/**
+ * A disabled action with a non-empty `hint`, in both variants:
+ *  - the button is `aria-disabled="true"` and has no native `disabled` — a natively disabled button takes no focus and no
+ *    click, so its reason would be out of reach on touch and from the keyboard (precedent: CorrelationHeatmap's
+ *    unavailable orderings);
+ *  - it sits in the shared `Tooltip` (`interactiveChild`), whose text is the hint: a click (or a tap) on the button opens
+ *    it, and the action's `onClick` is NOT called;
+ *  - Enter and Space on the focused button do not call `onClick` either;
+ *  - `data-disabled-reason` is published as before; in the floating bar the name (`aria-label`) stays the label and there
+ *    is no native `title` any more (the Tooltip replaces it).
+ * Unchanged: a disabled action without a hint (or with an empty one) keeps the native `disabled`; an enabled action has
+ * neither, runs its `onClick` on a click and ignores its hint.
+ *
+ * jsdom never turns a keydown into a click (a browser does, for Enter and Space on a focused button), so here the click
+ * stands for the keyboard activation; the key events are a guard against a keydown handler that would run the action.
+ * The real keyboard path is proved in the browser by `e2e/transactions/tx-charges-link-delete.spec.ts`.
+ */
+describe('a disabled action with a hint stays reachable (66 F7)', () => {
+    const LABEL = 'Link the charges';
+    const HINT = 'The charges are on another broker';
+    const REASON = 'brokerMismatch';
+    const ID = 'link-charges';
+
+    function mount(floating: boolean, extra: Record<string, unknown>) {
+        const onClick = vi.fn();
+        render(DataTableToolbar, {
+            selectedCount: 3,
+            bulkActions: [{id: ID, icon: Pencil, label: LABEL, onClick, ...extra}],
+            ...(floating ? {variant: 'floating' as const} : {}),
+        });
+        return {onClick, button: screen.getByTestId(`toolbar-action-${ID}`)};
+    }
+
+    /** The texts of the tooltips open right now (portaled to the body). */
+    function openTooltipTexts(): string[] {
+        return screen.queryAllByRole('tooltip').map((node) => node.textContent?.trim() ?? '');
+    }
+
+    for (const floating of [true, false]) {
+        const variant = floating ? 'floating' : 'inline';
+
+        describe(`variant ${variant}`, () => {
+            it.each([
+                {form: 'string', hint: HINT},
+                {form: 'function', hint: () => HINT},
+            ])('is aria-disabled, not natively disabled, focusable, and keeps its reason and name (hint as a $form)', ({hint}) => {
+                const {button} = mount(floating, {disabled: true, hint, reason: REASON});
+
+                expect(button).toHaveAttribute('aria-disabled', 'true');
+                expect(button, 'a natively disabled button takes no focus and no click').not.toHaveAttribute('disabled');
+                expect(button.tabIndex, 'the button is taken out of the tab order').not.toBe(-1);
+                button.focus();
+                expect(document.activeElement, 'the button cannot take the keyboard focus').toBe(button);
+                expect(button).toHaveAttribute('data-disabled-reason', REASON);
+                expect(button.getAttribute('title'), 'the hint is still a native title').not.toBe(HINT);
+                if (floating) {
+                    expect(button, 'the floating bar still has a native title: the Tooltip replaces it').not.toHaveAttribute('title');
+                    expect(button).toHaveAttribute('aria-label', LABEL);
+                } else {
+                    expect([null, LABEL], 'the name, if any, stays the label').toContain(button.getAttribute('aria-label'));
+                }
+            });
+
+            it.each([
+                {form: 'string', hint: HINT},
+                {form: 'function', hint: () => HINT},
+            ])('a click on the button opens the shared Tooltip with the hint and does not run the action (hint as a $form)', async ({hint}) => {
+                const {button, onClick} = mount(floating, {disabled: true, hint, reason: REASON});
+
+                await fireEvent.click(button);
+                const tooltip = await screen.findByRole('tooltip');
+                expect(tooltip).toHaveAttribute('data-testid', 'tooltip-content');
+                expect(tooltip.textContent?.trim()).toBe(HINT);
+                expect(onClick, 'a click on a disabled action ran it').not.toHaveBeenCalled();
+            });
+
+            // A finger: touchstart and touchend on the button (they bubble to the Tooltip's wrapper, which opens and pins on
+            // touchstart), then the click a browser derives from the tap. That click must neither close the reason nor run
+            // the action.
+            it('a tap (touchstart, touchend, then the derived click) opens the shared Tooltip with the hint and does not run the action', async () => {
+                const {button, onClick} = mount(floating, {disabled: true, hint: HINT, reason: REASON});
+
+                await fireEvent.touchStart(button);
+                await fireEvent.touchEnd(button);
+                expect(openTooltipTexts(), 'the touch did not open the reason').toEqual([HINT]);
+                await fireEvent.click(button);
+                const tooltip = await screen.findByRole('tooltip');
+                expect(tooltip).toHaveAttribute('data-testid', 'tooltip-content');
+                expect(openTooltipTexts(), 'the click derived from the tap closed the reason').toEqual([HINT]);
+                expect(onClick, 'a tap on a disabled action ran it').not.toHaveBeenCalled();
+            });
+
+            it('Enter and Space on the focused button do not run the action', async () => {
+                const {button, onClick} = mount(floating, {disabled: true, hint: HINT, reason: REASON});
+
+                button.focus();
+                expect(document.activeElement, 'the button cannot take the keyboard focus').toBe(button);
+                for (const key of ['Enter', ' ']) {
+                    await fireEvent.keyDown(button, {key});
+                    await fireEvent.keyUp(button, {key});
+                }
+                expect(onClick, 'a key on a disabled action ran it').not.toHaveBeenCalled();
+            });
+
+            it.each([
+                {form: 'no hint', extra: {}},
+                {form: 'an empty hint', extra: {hint: ''}},
+                {form: 'an empty hint function', extra: {hint: () => ''}},
+            ])('unchanged: a disabled action with $form keeps the native disabled, not aria-disabled', ({extra}) => {
+                const {button} = mount(floating, {disabled: true, reason: REASON, ...extra});
+
+                // No click here: a browser dispatches no click to a natively disabled button, jsdom does (and Svelte's
+                // delegated handler runs), so a click would test jsdom, not the bar.
+                expect(button).toBeDisabled();
+                expect(button).not.toHaveAttribute('aria-disabled');
+            });
+
+            it.each([
+                {form: 'without a hint', extra: {}},
+                {form: 'with a hint', extra: {hint: HINT, reason: REASON}},
+            ])('unchanged: an enabled action $form is neither disabled nor aria-disabled, runs on a click and never shows the hint', async ({extra}) => {
+                const {button, onClick} = mount(floating, {disabled: false, ...extra});
+
+                expect(button).toBeEnabled();
+                expect(button).not.toHaveAttribute('aria-disabled');
+                expect(button).not.toHaveAttribute('data-disabled-reason');
+                await fireEvent.click(button);
+                expect(onClick).toHaveBeenCalledTimes(1);
+                expect(button.getAttribute('title')).not.toBe(HINT);
+                expect(openTooltipTexts()).not.toContain(HINT);
+            });
+        });
+    }
+});
+
+// ---------------------------------------------------------------------------
+// 77 SEL-A — the number of each action, the bar at the top of a table and the actions row of the dock
+// ---------------------------------------------------------------------------
+
+/**
+ * Plan 77, approved 19/11/2026 (Q-SEL-1, Q-SEL-8, Q-SEL-13, Q-SEL-15, Q-SEL-16).
+ * - An action may carry `count`: the number of rows it acts on, drawn beside it in every variant
+ *   (`toolbar-action-<id>-count`). Without it, nothing changes.
+ * - `variant="top"`: the bar at the top of a table. It keeps its row while nothing is selected, holding a grey hint
+ *   (`selection-toolbar-hint`) so the table does not jump at the first tick; with a selection, the count button and the
+ *   actions with their words (the U8 rule) and numbers. It sits in the flow: nothing fixed, nothing reserved.
+ * - `variant="dock"`: the actions row of a table's dock (the balloon at its bottom). Like the floating card's content —
+ *   a `role="toolbar"`, the words, the gap before the destructive action, Esc deselects from inside — but in the flow of
+ *   its dock, and it reserves nothing at the bottom of the page. Nothing without a selection.
+ */
+describe('the number of rows each action takes (77 SEL-A)', () => {
+    for (const variant of ['floating', 'inline', 'top', 'dock'] as const) {
+        it(`${variant}: an action with a count shows it; one without shows none`, () => {
+            const onClick = vi.fn();
+            render(DataTableToolbar, {
+                selectedCount: 3,
+                variant,
+                bulkActions: [
+                    {id: 'edit', icon: Pencil, label: 'Edit', count: 2, onClick},
+                    {id: 'delete', icon: Trash2, label: 'Delete', variant: 'danger' as const, onClick},
+                ],
+            });
+            expect(screen.getByTestId('toolbar-action-edit-count').textContent?.trim()).toBe('2');
+            expect(screen.queryByTestId('toolbar-action-delete-count')).toBeNull();
+        });
+    }
+
+    // 77 SEL-B (the designer, 20/11): on a phone the number is a dot on the icon's corner, drawn only; the button's name
+    // carries it, so a screen reader says how many rows the action takes.
+    for (const variant of ['floating', 'top', 'dock'] as const) {
+        it(`${variant}: the name of an action with a count says the number`, () => {
+            const onClick = vi.fn();
+            render(DataTableToolbar, {
+                selectedCount: 3,
+                variant,
+                bulkActions: [
+                    {id: 'edit', icon: Pencil, label: 'Edit', count: 25, onClick},
+                    {id: 'delete', icon: Trash2, label: 'Delete', variant: 'danger' as const, onClick},
+                ],
+            });
+            expect(screen.getByTestId('toolbar-action-edit')).toHaveAttribute('aria-label', 'Edit, 25');
+            expect(screen.getByTestId('toolbar-action-delete')).toHaveAttribute('aria-label', 'Delete');
+        });
+
+        it(`${variant}: with a short label and a count, the name is the shown word and the number (never the number twice)`, () => {
+            render(DataTableToolbar, {
+                selectedCount: 3,
+                variant,
+                bulkActions: [{id: 'edit', icon: Pencil, label: 'Edit 3 assets', shortLabel: 'Edit', count: 3, onClick: vi.fn()}],
+            });
+            expect(screen.getByTestId('toolbar-action-edit')).toHaveAttribute('aria-label', 'Edit, 3');
+        });
+    }
+});
+
+describe('variant top (77 SEL-A)', () => {
+    it('keeps its row with the hint while nothing is selected: no count button, no action', () => {
+        const {list} = actions();
+        render(DataTableToolbar, {selectedCount: 0, bulkActions: list, variant: 'top', hint: 'Pick some rows'});
+        // The hint only: the bar itself exists only with a selection, as the floating bar always did.
+        expect(screen.queryByTestId('selection-toolbar')).toBeNull();
+        expect(screen.getByTestId('selection-toolbar-hint').textContent?.trim()).toBe('Pick some rows');
+        expect(screen.queryByTestId('selection-toolbar-clear')).toBeNull();
+        expect(screen.queryByTestId('toolbar-action-edit')).toBeNull();
+    });
+
+    it('without a hint of its own, it says the shared one', () => {
+        const {list} = actions();
+        render(DataTableToolbar, {selectedCount: 0, bulkActions: list, variant: 'top'});
+        expect(screen.getByTestId('selection-toolbar-hint').textContent?.trim()).not.toBe('');
+    });
+
+    it('with a selection: the count button and the actions with their words, in the flow, nothing reserved', async () => {
+        const {list, edit} = actions();
+        const onClearSelection = vi.fn();
+        render(DataTableToolbar, {selectedCount: 3, bulkActions: list, variant: 'top', onClearSelection, hint: 'Pick some rows'});
+        const bar = screen.getByTestId('selection-toolbar');
+        expect(bar).toHaveAttribute('data-selected-count', '3');
+        expect(bar).toHaveAttribute('role', 'toolbar');
+        expect(screen.queryByTestId('selection-toolbar-hint')).toBeNull();
+        expect(screen.getByTestId('toolbar-action-edit-label').textContent?.trim()).toBe('Edit');
+        expect(screen.getByTestId('toolbar-action-edit')).toHaveAttribute('data-primary', 'true');
+        expect(screen.getByTestId('toolbar-action-delete')).toHaveAttribute('data-danger', 'true');
+        expect(document.documentElement.style.getPropertyValue('--lf-selbar-space')).toBe('');
+
+        await fireEvent.click(screen.getByTestId('toolbar-action-edit'));
+        expect(edit).toHaveBeenCalledTimes(1);
+        await fireEvent.click(screen.getByTestId('selection-toolbar-clear'));
+        expect(onClearSelection).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('variant top: Esc (77 SEL-A)', () => {
+    it('Esc deselects from inside the top bar and stops there (a dialog around it stays open)', async () => {
+        const {list} = actions();
+        const onClearSelection = vi.fn();
+        const outer = vi.fn();
+        document.addEventListener('keydown', outer);
+        render(DataTableToolbar, {selectedCount: 2, bulkActions: list, variant: 'top', onClearSelection});
+        await fireEvent.keyDown(screen.getByTestId('toolbar-action-edit'), {key: 'Escape'});
+        document.removeEventListener('keydown', outer);
+        expect(onClearSelection).toHaveBeenCalledTimes(1);
+        expect(outer).not.toHaveBeenCalled();
+    });
+});
+
+describe('variant dock (77 SEL-A)', () => {
+    it('exists only with a selection, is a toolbar with the words, and reserves nothing at the bottom of the page', async () => {
+        const {list} = actions();
+        const view = render(DataTableToolbar, {selectedCount: 0, bulkActions: list, variant: 'dock'});
+        expect(screen.queryByTestId('selection-toolbar')).toBeNull();
+
+        await view.rerender({selectedCount: 2, bulkActions: list, variant: 'dock'});
+        const bar = screen.getByTestId('selection-toolbar');
+        expect(bar).toHaveAttribute('data-variant', 'dock');
+        expect(bar).toHaveAttribute('role', 'toolbar');
+        expect(screen.getByTestId('toolbar-action-edit-label').textContent?.trim()).toBe('Edit');
+        expect(document.documentElement.style.getPropertyValue('--lf-selbar-space')).toBe('');
+    });
+
+    it('Esc deselects from inside the dock row', async () => {
+        const {list} = actions();
+        const onClearSelection = vi.fn();
+        render(DataTableToolbar, {selectedCount: 2, bulkActions: list, variant: 'dock', onClearSelection});
+        await fireEvent.keyDown(screen.getByTestId('toolbar-action-edit'), {key: 'Escape'});
+        expect(onClearSelection).toHaveBeenCalledTimes(1);
+    });
+});

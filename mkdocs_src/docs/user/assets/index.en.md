@@ -26,6 +26,7 @@ Open **Assets** in the sidebar, then:
 
 - **Pick a layout** — the two buttons next to **Add Asset** switch between cards with a small chart (**Grid view**) and a sortable table (**Table view**). Your choice is remembered in this browser.
 - **Pick the period** — the date range sets the period of the card charts and of the change they show. When a card's chart groups the days into weeks or months because the plot is too narrow for so many days, a small **Weekly** or **Monthly** badge at its top left says so, like on the [detail page's chart](detail/chart.md). In the table, the **Δ** columns give the change over one day and over each period, from 1W to 5Y, that fits in the range.
+- **See the risk of each asset** — in the table, the **Max drawdown** column gives each asset's deepest fall over the period, in the page's currency. **Volatility**, **Annual return**, **Sharpe**, **Sortino**, **Worst day**, **Best day** and **Largest rally** wait in the column menu. Each row is measured on its own asset alone, at your risk-free rate: the same figure as that asset's [Risk tab](detail/index.md#risk-scenarios) with the same period, currency and rate. A row still being measured shows **…**; a figure that cannot be measured shows **—**, and its tooltip says why (for example, not enough history in the period). Both sort last.
 - **Filter** — type in **Search assets...** to filter by name, and pick one or more currencies and types in the two menus; the ✕ clears the search and both menus.
 - **Show archived assets** — the list starts with **Active** assets only: switch on **Inactive** to add the archived ones, or switch off **Active** to see only those.
 
@@ -77,7 +78,7 @@ Each card has its own buttons; in the table, the **⋮** at the end of a row, or
 - **Merge with…** — folds a duplicate into another asset, which keeps everything ([Create & Edit](create-edit.md)).
 - **Delete** — removes an asset that no transaction uses, with its provider, prices and events (dividends, splits…).
 
-In the table, tick several rows to **Edit** ([several at once](create-edit.md#bulk-edit)), **Sync**, **Reload** or **Delete** them together.
+In the table, tick several rows to **Edit** ([several at once](create-edit.md#bulk-edit)), **Sync**, **Reload** or **Delete** them together, in the bar at the bottom of the screen. Each action shows how many assets it acts on: **Sync** takes only the assets with a provider, and does not appear when none has one; **Reload** reloads the prices of the selected assets only.
 
 ??? warning "🗑️ When an asset cannot be deleted"
 

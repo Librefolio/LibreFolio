@@ -27,11 +27,6 @@ from typing import Dict
 from backend.app.db import IdentifierType
 from backend.app.db.models import ProviderInputType
 from backend.app.schemas.assets.assets import FAAssetPatchItem
-from backend.app.schemas.assets.metadata import (
-    FAClassificationParams,
-    FAGeographicArea,
-    FASectorArea,
-)
 from backend.app.schemas.prices import (
     FACurrentValue,
     FACurrentValueRequest,
@@ -323,8 +318,9 @@ class MockProvider(AssetSourceProvider):
         """
         Fetch mock asset metadata for testing.
 
-        Returns predictable mock data to test metadata auto-populate,
-        refresh, and validation flows.
+        Answers a patch with no field set: the metadata operation succeeds and changes nothing. Description,
+        countries and sectors are the profile's, read by the enrichers (plan 68, D6; the test enricher is
+        ``mockenrich``).
 
         Args:
             identifier: Asset identifier
@@ -332,17 +328,10 @@ class MockProvider(AssetSourceProvider):
             provider_params: Optional parameters (unused)
 
         Returns:
-            FAAssetPatchItem object with classification_params populated
+            An empty FAAssetPatchItem
         """
         _refuse_if_asked(provider_params)
-        # Return mock data for testing as FAAssetPatchItem
-        classification_params = FAClassificationParams(
-            sector_area=FASectorArea(distribution={"Technology": Decimal("1.0")}),
-            short_description=f"Mock test asset {identifier} - type: {identifier_type} - used for testing metadata features",
-            geographic_area=FAGeographicArea(distribution={"USA": Decimal("0.6"), "ITA": Decimal("0.4")}),
-        )
-
-        return FAAssetPatchItem(asset_id=0, classification_params=classification_params)  # Will be set by caller
+        return FAAssetPatchItem(asset_id=0)  # Will be set by caller
 
     async def suggest_quote_base(
         self,

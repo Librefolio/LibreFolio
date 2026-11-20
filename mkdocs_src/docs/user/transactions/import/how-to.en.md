@@ -49,6 +49,8 @@ its broker — or all at once with **Assign broker for uploads**. A missing brok
 from the same list (**Create new**).
 
 - Every report you upload is kept: to reuse one, skip this step with **Next: Select Files**.
+- To take files out of the list before uploading them, tick them: the bar above the table shows **Remove** with the
+  number of files it takes.
 - When one account comes in several exports (e.g. [Danske Bank](danske-bank.md)), upload them
   together: if one is missing, the wizard stays here and names it.
 

@@ -70,6 +70,7 @@ from backend.app.db import models as db_models
 from backend.app.db import session as db_session
 from backend.app.db.base import SQLModel
 from backend.test_scripts.test_db.alembic_harness import (
+    _assert_dropped_columns_back,
     _connect,
     _copy,
     _create_all,
@@ -78,6 +79,7 @@ from backend.test_scripts.test_db.alembic_harness import (
     _full_shape,
     _index_list,
     _integrity,
+    _kept_columns,
     _migrate,
     _revision,
     _row_changes,
@@ -86,6 +88,7 @@ from backend.test_scripts.test_db.alembic_harness import (
     _table_info,
     _tables,
     _violations,
+    _without_dropped_columns,
 )
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -319,7 +322,8 @@ def test_u1_the_composite_key_refuses_a_second_row_of_a_pair_and_stores_the_code
 
 
 def test_u1_a_populated_1_3_database_keeps_its_rows_and_gets_the_table_empty(populated_1_3: Path, tmp_path: Path) -> None:
-    """Every table the 1.3 install had is there, every row identical on the columns it had; the counter table is there
+    """Every table the 1.3 install had is there, every row identical on the columns it had but those 006 drops
+    (``alembic_harness.DROPPED_AT_006``: ``assets.classification_params``, plan 68 D7b); the counter table is there
     and empty; no foreign-key violation, integrity ``ok``."""
     print_section("A populated 1.3 database upgraded to 006")
     db = _copy(populated_1_3, tmp_path / "app.db")
@@ -331,7 +335,7 @@ def test_u1_a_populated_1_3_database_keeps_its_rows_and_gets_the_table_empty(pop
     assert after[TABLE][1] == [], f"{TABLE} must start empty: {after[TABLE][1]}"
     lost = sorted(set(before) - set(after))
     assert lost == [], f"the upgrade lost the tables {lost}"
-    changes = _row_changes(before, after, set(before) - BOOKKEEPING, columns_of=before)
+    changes = _row_changes(before, after, set(before) - BOOKKEEPING, columns_of=_kept_columns(before))
     assert not changes, f"the upgrade changed rows: {changes}"
     assert _violations(db) == [] and _integrity(db) == [("ok",)], f"violations {_violations(db)}, integrity {_integrity(db)}"
     print_success(f"{len(set(before) - BOOKKEEPING)} tables kept, {TABLE} empty")
@@ -374,7 +378,8 @@ def test_u1_the_models_and_the_migration_build_the_same_table(fresh_006: Path, c
 
 def test_u1_the_downgrade_of_a_new_database_removes_the_table_and_leaves_005(fresh_006: Path, at_005: Path, tmp_path: Path) -> None:
     """``downgrade 005`` of a new database at 006: the table and its automatic index are gone, and every object of
-    ``sqlite_master`` is what a new database at 005 holds, SQL text included; the rows too."""
+    ``sqlite_master`` is what a new database at 005 holds, SQL text included once the columns 006 drops are taken out
+    of both sides (its downgrade adds them back last; checked apart, ``_assert_dropped_columns_back``); the rows too."""
     db = _copy(fresh_006, tmp_path / "app.db")
     _assert_table(db)
 
@@ -382,7 +387,8 @@ def test_u1_the_downgrade_of_a_new_database_removes_the_table_and_leaves_005(fre
 
     assert _revision(db) == REV_005
     assert _of_the_step(_objects(db)) == [], f"the downgrade must remove {TABLE}: {_of_the_step(_objects(db))}"
-    expected, found = _objects(at_005), _objects(db)
+    _assert_dropped_columns_back(db)
+    expected, found = _without_dropped_columns(_objects(at_005)), _without_dropped_columns(_objects(db))
     assert found == expected, f"every object must be as at 005: missing {sorted(set(expected) - set(found))}, unexpected {sorted(set(found) - set(expected))}"
     changes = _row_changes(_rows(at_005), _rows(db), set(_rows(at_005)) - BOOKKEEPING, columns_of=_rows(at_005))
     assert not changes, f"the downgrade of a new database changed rows: {changes}"
@@ -470,7 +476,8 @@ def test_u1_a_downgrade_finding_the_table_already_gone_completes_to_005(fresh_00
     _migrate(db, "downgrade", REV_005)
 
     assert _revision(db) == REV_005
-    expected, found = _objects(at_005), _objects(db)
+    _assert_dropped_columns_back(db)
+    expected, found = _without_dropped_columns(_objects(at_005)), _without_dropped_columns(_objects(db))
     assert found == expected, f"every object must be as at 005: missing {sorted(set(expected) - set(found))}, unexpected {sorted(set(found) - set(expected))}"
 
 

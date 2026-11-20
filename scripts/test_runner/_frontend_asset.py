@@ -308,6 +308,78 @@ def front_asset_provider_not_configured(verbose: bool = False, ui: bool = False,
     return _run_playwright("assets/asset-provider-not-configured.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
 
 
+def front_asset_enrichers(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the asset enrichers E2E tests (plan 68, E8a): the enrichers' window from the asset window, saved with it."""
+    print_section("Frontend Asset Enrichers Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("assets/asset-enrichers.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_asset_profile_edit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the profile data E2E tests (plan 68, E8b2): the profile window from the asset window, saved with it."""
+    print_section("Frontend Asset Profile Edit Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("assets/asset-profile-edit.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_asset_profile_changes(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the «Ultime variazioni» E2E tests (plan 68, E6a): the panel of the Profilo tab and «Dimentica»."""
+    print_section("Frontend Asset Profile Changes Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("assets/asset-profile-changes.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_asset_profile_refresh(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the «Aggiorna» and «Configura» E2E tests of the Profilo tab (plan 68, E6c)."""
+    print_section("Frontend Asset Profile Refresh Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("assets/asset-profile-refresh.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_asset_profile_create(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the new asset's profile E2E tests (plan 68, E8b2): a whole ISIN, «Riconosci», the automatic «Chiedi», the creation."""
+    print_section("Frontend Asset Profile Create Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("assets/asset-profile-create.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_asset_provider_attribution(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the provider attribution line E2E («Powered by CoinGecko», project 76, P4), on both projects."""
+    print_section("Frontend Asset — Provider Attribution Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("assets/provider-attribution.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
+
+
 def front_asset_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all Asset tests (unit + E2E)."""
     if _common.nothing_left_to_run("front-asset"):
@@ -384,6 +456,32 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "asset-modal", front_asset_modal, name="Asset Modal", desc="Create/edit modal, provider, distributions", tests="assets/asset-modal.spec.ts")
     add_test(cat, "asset-data-editor", front_asset_data_editor, name="Asset Data Editor", desc="Prices/Events tabs, CSV import", tests="assets/asset-data-editor.spec.ts")
     add_test(cat, "asset-classification", front_asset_classification, name="Asset Classification", desc="Distribution editors round-trip (geo, sector)", tests="assets/asset-classification.spec.ts")
+    add_test(
+        cat,
+        "asset-profile-changes",
+        front_asset_profile_changes,
+        name="Asset Profile Changes",
+        desc="Plan 68 E6a: «Ultime variazioni» of the Profilo tab, folded and closed; the changes by hand with their author; «Dimentica» after a confirmation puts «now» back to the value before",
+        tests="assets/asset-profile-changes.spec.ts",
+    )
+    add_test(
+        cat,
+        "asset-profile-refresh",
+        front_asset_profile_refresh,
+        name="Asset Profile Refresh",
+        desc="Plan 68 E6c: «Aggiorna» of the Profilo tab reads the asset's enrichers again (never the prices) and says the last read; without enrichers, «Configura» opens the asset window with the enrichers window on top",
+        tests="assets/asset-profile-refresh.spec.ts",
+    )
+    add_test(cat, "asset-profile-edit", front_asset_profile_edit, name="Asset Profile Edit", desc="Plan 68 E8b2: the «Dati del profilo» row of the asset window opens the profile window; a value kept there waits, is counted and is saved with the asset", tests="assets/asset-profile-edit.spec.ts")
+    add_test(
+        cat,
+        "asset-profile-create",
+        front_asset_profile_create,
+        name="Asset Profile Create",
+        desc="Plan 68 E8b2: a whole ISIN in a new asset starts «Riconosci», the automatic «Chiedi» fills the profile from the enricher, and the creation writes it in the source name",
+        tests="assets/asset-profile-create.spec.ts",
+    )
+    add_test(cat, "asset-enrichers", front_asset_enrichers, name="Asset Enrichers", desc="Plan 68 E8a: the «Arricchitori» button of the asset window opens the enrichers' window; mockenrich added there is saved with the asset (the lane serves only mockenrich)", tests="assets/asset-enrichers.spec.ts")
     add_test(cat, "asset-currency-change", front_asset_currency_change, name="Asset Currency Change", desc="N68: changing the currency asks the dry run, cancel changes nothing, confirm is one PATCH that keeps the split and its adjustment", tests="assets/asset-currency-change.spec.ts")
     add_test(cat, "asset-event-delete", front_asset_event_delete, name="Asset Event Delete", desc="Delete asset events flow", tests="assets/asset-event-delete.spec.ts")
     add_test(
@@ -434,6 +532,14 @@ def populate_registry(registry: dict) -> None:
         name="Asset Search Provider Not Configured",
         desc="Project 76 N3a/N3b, desktop and mobile: a provider the list says is not configured (justETF, patched in the page's own route; the search stream simulated) gets a switched-off chip, kept in its place and never named in a search; a touch opens the common window — a member sees the read-only settings link and no Configure, an administrator's Configure opens the plugin's settings (closed, nothing saved), the managed profile has no button and closes on Escape; in the provider select its option is switched off and choosing it opens the window without changing the selection, unless it is the provider saved on the asset (own asset, cleaned up), whose Configure carries the warning",
         tests="assets/asset-provider-not-configured.spec.ts",
+    )
+    add_test(
+        cat,
+        "provider-attribution",
+        front_asset_provider_attribution,
+        name="Asset Provider Attribution",
+        desc="Project 76 P4, desktop and mobile: a price provider's attribution line («Powered by CoinGecko»), once per provider, linked in a new tab, at least 10 px — absent on the Assets list, the Dashboard positions and an asset's detail with the real provider list (no asset uses CoinGecko on the test backend); drawn with one yfinance link when the page's own read of the list gives yfinance a synthetic attribution; on Settings › Plugins (administrator) CoinGecko's asset card carries its real line, justETF's card and CoinGecko's settings group none",
+        tests="assets/provider-attribution.spec.ts",
     )
     add_test(cat, "all", front_asset_all, test_names=False, name="All Asset Tests", desc="Run all Asset tests (unit + E2E)")
     registry["front-asset"] = cat

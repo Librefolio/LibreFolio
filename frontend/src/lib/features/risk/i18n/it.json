@@ -595,7 +595,20 @@
         },
         "shockUnconfigured": "Non sono nello scenario, quindi il loro shock è 0: {names}. Il totale li conta come intatti.",
         "replayTotalAsset": "Questo asset avrebbe chiuso il periodo a {percent} {amount}",
-        "shockTotalAsset": "Questo asset si muoverebbe di {percent} {amount}"
+        "shockTotalAsset": "Questo asset si muoverebbe di {percent} {amount}",
+        "rates": "Tassi in salita o in discesa",
+        "ratesHint": "Dalla duration letta nel Profilo.",
+        "ratesSource": "Dalla duration letta nel Profilo ({source}, {date}): {years} anni.",
+        "ratesUp": "I tassi salgono",
+        "ratesDown": "I tassi scendono",
+        "ratesBy": "di",
+        "ratesFall": "Il prezzo scenderebbe di circa {percent}{amount}.",
+        "ratesRise": "Il prezzo salirebbe di circa {percent}{amount}.",
+        "ratesCaveat": "È un'approssimazione al primo ordine: vale per piccoli movimenti e non conta le cedole che nel frattempo arrivano.",
+        "ratesMissing": "Tassi in salita o in discesa: nessuna duration nel profilo di questo titolo.",
+        "ratesMissingLink": "Apri il Profilo",
+        "ratesPointsUnit": "punti",
+        "ratesStale": "Duration confermata il {date}, non aggiornata."
       },
       "backtestNotice": "Con una fetta attiva, questi numeri sono ricostruiti sulla composizione di oggi: dicono come *sarebbe* andata, non come è andata davvero.",
       "notice": {

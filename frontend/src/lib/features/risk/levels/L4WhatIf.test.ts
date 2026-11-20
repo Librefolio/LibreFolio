@@ -505,3 +505,63 @@ describe('L4WhatIf — the remembered set', () => {
         expect(selectorState(), `user ${USER} does not find the set they left`).toEqual({open: ['shock'], add: ['replay', 'simulation']});
     });
 });
+
+// RN-25: the rates scenario of one asset, an assumed tool beside the shock. Its answer rides in the base wave, so
+// closing it forgets nothing; a page may put a note under the tools (a bond whose profile has no duration).
+describe('L4WhatIf — the rates scenario', () => {
+    const rates = (): Snippet => createRawSnippet(() => ({render: () => '<div data-testid="probe-rates">rates probe</div>'}));
+
+    it('sits between the shock and the simulation, as an assumed tool', () => {
+        remember(JSON.stringify(['replay', 'shock', 'rates', 'simulation']));
+        render(WhatIf, {props: {controller: fakeController(), replay: probe('replay'), shock: probe('shock'), simulation: probe('simulation'), rates: rates()} as never});
+
+        const boxes = ['replay', 'shock', 'rates', 'simulation'].map((tool) => screen.getByTestId(`risk-l4-${tool}`));
+        for (let index = 1; index < boxes.length; index += 1) expect(boxes[index - 1].compareDocumentPosition(boxes[index]) & Node.DOCUMENT_POSITION_FOLLOWING, `box ${index} is not after box ${index - 1}`).toBeTruthy();
+        expect(screen.getByTestId('risk-l4-rates')).toHaveAttribute('data-distance', 'assumed');
+        expect(screen.getByTestId('probe-rates')).toBeInTheDocument();
+    });
+
+    it('closing it forgets no answer: the scenario is in the base wave', async () => {
+        remember(JSON.stringify(['shock', 'rates']));
+        const controller = fakeController();
+        render(WhatIf, {props: {controller, shock: probe('shock'), rates: rates()} as never});
+
+        await fireEvent.click(screen.getByTestId('risk-l4-rates-close'));
+
+        expect(screen.queryByTestId('risk-l4-rates')).toBeNull();
+        expect(controller.resetAnalysis).not.toHaveBeenCalled();
+    });
+
+    it('kept open but not supplied — no answer yet, a stock, a bond without a duration — it draws no empty box', async () => {
+        remember(JSON.stringify(['shock', 'rates']));
+        const view = render(WhatIf, {props: {controller: fakeController(), replay: probe('replay'), shock: probe('shock'), simulation: probe('simulation'), rates: rates()} as never});
+        expect(screen.getByTestId('probe-rates')).toBeInTheDocument();
+
+        // The base wave asked again (a new period) and has no rates answer yet: the snippet goes, the open choice stays.
+        // `rerender` keeps a prop it is not given: the snippet is removed by name.
+        await view.rerender({controller: fakeController(), replay: probe('replay'), shock: probe('shock'), simulation: probe('simulation'), rates: undefined} as never);
+
+        expect(screen.queryByTestId('risk-l4-rates'), 'an open rates tool with nothing to show is drawn as an empty box').toBeNull();
+        expect(screen.queryByTestId('risk-l4-add-rates'), 'a rates tool is offered where there is none').toBeNull();
+        // The selector's helpers know the three original tools; the shock stays open beside the missing rates.
+        expect(selectorState()).toEqual({open: ['shock'], add: ['replay', 'simulation']});
+    });
+
+    it('left open, it opens when its answer arrives after the mount (the base wave)', async () => {
+        remember(JSON.stringify(['shock', 'rates']));
+        const view = render(WhatIf, {props: {controller: fakeController(), replay: probe('replay'), shock: probe('shock'), simulation: probe('simulation')} as never});
+        expect(screen.queryByTestId('risk-l4-rates')).toBeNull();
+
+        await view.rerender({controller: fakeController(), replay: probe('replay'), shock: probe('shock'), simulation: probe('simulation'), rates: rates()} as never);
+
+        expect(screen.getByTestId('probe-rates')).toBeInTheDocument();
+        expect(screen.getByTestId('risk-l4-rates').contains(screen.getByTestId('probe-rates'))).toBe(true);
+        expect(screen.queryByTestId('risk-l4-add-rates'), 'an open tool is still offered').toBeNull();
+    });
+
+    it('shows the page’s note under the tools', () => {
+        const notes = createRawSnippet(() => ({render: () => '<p data-testid="probe-note">note</p>'}));
+        render(WhatIf, {props: {controller: fakeController(), shock: probe('shock'), notes} as never});
+        expect(screen.getByTestId('risk-l4-notes').contains(screen.getByTestId('probe-note'))).toBe(true);
+    });
+});

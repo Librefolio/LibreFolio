@@ -114,7 +114,6 @@ def _asset(
     currency: str = "EUR",
     active: bool = True,
     quote_base_quantity: int | None = 1,
-    classification_params: str | None = None,
     asset_type=AssetType.STOCK,
 ):
     return SimpleNamespace(
@@ -126,7 +125,6 @@ def _asset(
         active=active,
         currency=currency,
         quote_base_quantity=quote_base_quantity,
-        classification_params=classification_params,
     )
 
 
@@ -253,25 +251,6 @@ def _cash_ledger_row(
         asset_id=asset_id,
         currency=currency,
         amount=None if amount is None else Decimal(amount),
-    )
-
-
-def _valid_classification() -> str:
-    return json.dumps(
-        {
-            "sector_area": {
-                "distribution": {
-                    "Technology": 0.6,
-                    "Financials": 0.4,
-                }
-            },
-            "geographic_area": {
-                "distribution": {
-                    "USA": 0.75,
-                    "ITA": 0.25,
-                }
-            },
-        }
     )
 
 
@@ -555,7 +534,7 @@ async def test_builder_authorizes_every_broker_before_all_private_reads(
     events: list[str] = []
     broker = _broker(7)
     access = _access(7, share="0")
-    asset = _asset(11, classification_params=_valid_classification())
+    asset = _asset(11)
     price = _price(11)
 
     async def authorize(*_args, **_kwargs):
@@ -847,7 +826,6 @@ async def test_explicit_unheld_global_asset_keeps_identity_price_and_classificat
         11,
         currency="USD",
         quote_base_quantity=100,
-        classification_params=_valid_classification(),
     )
     price = _price(
         11,
@@ -1393,7 +1371,7 @@ def test_saved_price_rows_preserve_quote_facts_and_make_missing_basis_explicit()
 
 
 def test_valid_saved_classification_is_exact_sorted_and_does_not_leak_raw_json():
-    # D4: the rows come from the asset profile (voice → stored map), never from classification_params.
+    # D4: the rows come from the asset profile (voice → stored map).
     asset = _asset(11)
     issues = []
 
@@ -1471,7 +1449,7 @@ def test_missing_and_invalid_saved_classifications_emit_typed_placeholders(
 
 # ---------------------------------------------------------------------------
 # Project 68, lot D4 — the planner source reads each asset's sector and geography
-# from the asset profile on the analysis day, never from Asset.classification_params.
+# from the asset profile on the analysis day.
 #
 # - load_profile_classifications(session, asset_ids, day): store.read_steps over
 #   ("sector", "geography") with carry_back, the value of the step holding ``day``
@@ -1554,13 +1532,13 @@ def test_profile_missing_asset_missing_voice_and_emptied_value_are_missing_place
     }
 
 
-def test_profile_builder_never_reads_classification_params():
-    # 11: a valid legacy column and no profile → missing in both dimensions.
-    # 12: a malformed legacy column and a valid profile → clean rows, no whole-column issue.
+def test_profile_builder_reads_the_profile_only():
+    # 11: no profile → missing in both dimensions. 12: a valid profile → clean rows. (Plan 68 D7b: the asset has no
+    # other place for a classification; the old column is gone.)
     issues = []
 
     rows = _build_from_profile(
-        [_asset(11, classification_params=_valid_classification()), _asset(12, classification_params="{")],
+        [_asset(11), _asset(12)],
         {12: _valid_profile()},
         issues=issues,
     )
@@ -1569,7 +1547,6 @@ def test_profile_builder_never_reads_classification_params():
         ("allocation.classification_sector_missing", "asset:11", "sector"),
         ("allocation.classification_geography_missing", "asset:11", "geography"),
     }
-    assert all(issue.path.field != "classification_params" for issue in issues)
     assert _dimension_rows(rows, 11, "sector") == [_placeholder(11, "sector")]
     assert _dimension_rows(rows, 11, "geography") == [_placeholder(11, "geography")]
     assert [(row["category_id"], row["weight"]) for row in _dimension_rows(rows, 12, "sector")] == [("Financials", "0.4000"), ("Technology", "0.6000")]
@@ -1722,8 +1699,8 @@ async def test_builder_reads_the_profile_on_as_of_for_the_candidates_only_when_c
 ):
     broker = _broker(7)
     access = _access(7)
-    # 12 has a valid legacy column and no profile: the copy must not read the column.
-    candidates = [_asset(11), _asset(12, classification_params=_valid_classification())]
+    # 12 has no profile: it gets no classification rows.
+    candidates = [_asset(11), _asset(12)]
     loader_calls: list[tuple[object, list[int], date]] = []
 
     async def load_profile_classifications(session, asset_ids, day):
@@ -2700,7 +2677,6 @@ async def test_complete_saved_domain_copy_is_select_only_private_and_stable(
         name="Private Asset Name",
         currency="USD",
         quote_base_quantity=100,
-        classification_params=_valid_classification(),
     )
     price = _price(
         11,

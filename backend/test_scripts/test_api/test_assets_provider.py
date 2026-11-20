@@ -80,6 +80,25 @@ def test_server():
 
 
 # ============================================================
+# Project 76, P4: the provider list carries each provider's attribution
+# ============================================================
+@pytest.mark.asyncio
+async def test_p4_the_provider_list_carries_coingeckos_attribution(test_server):
+    """GET /assets/provider: CoinGecko's «Powered by CoinGecko» line with its link (listed even unconfigured); null for
+    a provider whose terms ask none."""
+    print_section("P4: the attribution in the provider list")
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        resp = await client.get(f"{API_BASE}/assets/provider", timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+    by_code = {item["code"]: item for item in resp.json()}
+    assert {"coingecko", "yfinance"} <= set(by_code), f"barrier: the shipped providers are listed: {sorted(by_code)}"
+    assert by_code["coingecko"]["attribution"] == {"text": "Powered by CoinGecko", "url": "https://www.coingecko.com/"}
+    assert by_code["yfinance"]["attribution"] is None
+    print_success("coingecko: Powered by CoinGecko; yfinance: none")
+
+
+# ============================================================
 # Test 1: POST /assets/provider - Assign provider
 # ============================================================
 @pytest.mark.asyncio

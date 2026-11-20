@@ -329,7 +329,7 @@ test.describe('Search online — a provider that is not configured', () => {
         await expect(modal.getByTestId('plugin-not-configured-message')).toHaveAttribute('data-variant', 'warning');
         const link = modal.getByTestId('plugin-not-configured-settings-link');
         await expect(link, 'a member is sent to the read-only settings').toBeVisible();
-        await expect(link).toHaveAttribute('href', '/settings/plugins');
+        await expect(link, 'the page filtered on the plugin (76 S2c)').toHaveAttribute('href', `/settings/plugins?family=asset&q=${UNCONFIGURED}`);
         await expect(link, 'in a new tab: the open dialog underneath is kept').toHaveAttribute('target', '_blank');
         await expect(modal.getByTestId('plugin-not-configured-close')).toBeVisible();
         await expect(modal.getByTestId('plugin-not-configured-configure'), 'a member cannot configure').toHaveCount(0);
