@@ -3902,4 +3902,302 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
             });
         });
     });
+
+    /*
+     * 66 P1b — the names of an import hand-over become the Bulk's links (contract `66-P1b-contract.md` §1.3, corrected by
+     * §4.1 and §5). Within ONE hand-over (`onImportBatch`), a row carrying `ref` is a parent and a row naming it in
+     * `parent_ref` its charge (`chargeOf`), but only when the Bulk's own rule accepts the pair: `bulkLinkSelection([parent,
+     * …charges], ops, get, {roleOf, canEdit})` → `ok`; otherwise the charges stay free, as in P1a. No `followsParent`: an
+     * imported charge keeps its values and stays when its parent leaves. The groups start CLOSED (§5: the consultant's
+     * answer — 200 trades → 600 rows), the wizard's split legs included; a problem on a charge of a closed group is in
+     * the banner, and its jump opens the group (the C14 rule). The save goes through F7: `parent_ref` = the parent's `ref`.
+     *
+     * Today the hand-over drops `ref` and `parent_ref` (`txCreateItemToPendingOp`), so every case that needs a link is
+     * red; the cases about a link that must NOT form carry a positive premise in the same test (a pair of the same
+     * hand-over that does link), so none of them is green for the wrong reason.
+     *
+     * Broker 77 is the user's own (`canEdit`, as F7-d's «Link»). New rows are found by the description the test gave
+     * them; a parent's chip by the parent's `data-row-id`.
+     */
+    describe('66 P1b: an import hand-over brings its linked charges', () => {
+        const P1B_DATE = '2026-09-13';
+        type Handed = {tx: TransactionCreateItem; todos: unknown[]};
+
+        beforeEach(() => {
+            mergeBrokers([{id: 77, name: 'P1b broker', user_role: 'OWNER'}]);
+        });
+
+        afterEach(() => {
+            resetBrokerStore();
+        });
+
+        function importedParent(description: string, ref: string | null, over: Record<string, unknown> = {}): Handed {
+            const tx = {broker_id: 77, asset_id: 101, type: 'BUY', date: P1B_DATE, quantity: '1', cash: {code: 'EUR', amount: '-10'}, tags: [], description, ...(ref ? {ref} : {}), ...over};
+            return {tx: tx as unknown as TransactionCreateItem, todos: []};
+        }
+
+        function importedCharge(type: 'FEE' | 'TAX', description: string, parentRef: string | null, over: Record<string, unknown> = {}): Handed {
+            const tx = {broker_id: 77, asset_id: 101, type, date: P1B_DATE, quantity: '0', cash: {code: 'EUR', amount: '-1.5'}, tags: [], description, ...(parentRef ? {parent_ref: parentRef} : {}), ...over};
+            return {tx: tx as unknown as TransactionCreateItem, todos: []};
+        }
+
+        /** A new editor on the import intent; ends on its wizard open. */
+        async function openImportEditor(): Promise<ReturnType<typeof mountEditor>> {
+            const mounted = mountEditor({action: 'import'});
+            await waitFor(() => expect(wizardProbe().open, 'the import intent opens the wizard').toBe(true));
+            return mounted;
+        }
+
+        /** One hand-over of the wizard; ends on its first row on screen (a parent, which is never indented). */
+        async function handOver(batch: Handed[]): Promise<void> {
+            await (wizardProbe().onImportBatch as (creates: Handed[]) => Promise<void>)(batch);
+            await settle();
+            const first = String(batch[0].tx.description);
+            await waitFor(() =>
+                expect(
+                    gridRows().filter((row) => rowDescription(row) === first),
+                    `premise: ${first} is on screen`,
+                ).toHaveLength(1),
+            );
+        }
+
+        function rowIdOf(row: HTMLElement): string {
+            const id = row.getAttribute('data-row-id');
+            if (!id) throw new Error('the row publishes no data-row-id');
+            return id;
+        }
+
+        /** The chip of the parent described `description`, or null. */
+        function chipOf(description: string): HTMLElement | null {
+            return screen.queryByTestId(`tx-bulk-charges-toggle-${rowIdOf(gridRowDescribed(description))}`);
+        }
+
+        function theChipOf(description: string): HTMLElement {
+            const found = chipOf(description);
+            if (!found) throw new Error(`the row described ${JSON.stringify(description)} has no charges chip: no charge was linked to it`);
+            return found;
+        }
+
+        /** The rows on screen described `description` (0 when a closed group hides it). */
+        function rowsDescribed(description: string): HTMLElement[] {
+            return gridRows().filter((row) => rowDescription(row) === description);
+        }
+
+        async function openGroup(description: string): Promise<void> {
+            const chip = theChipOf(description);
+            if (chip.getAttribute('aria-expanded') !== 'true') {
+                await fireEvent.click(chip);
+                await settle();
+            }
+            expect(theChipOf(description)).toHaveAttribute('aria-expanded', 'true');
+        }
+
+        async function saveAll(): Promise<Payload> {
+            const {commitTransactions} = await api();
+            const commit = screen.getByTestId('tx-bulk-commit');
+            expect(commit, '«Save all» is on').not.toBeDisabled();
+            await fireEvent.click(commit);
+            await settle();
+            await waitFor(() => expect(commitTransactions, 'Save all committed').toHaveBeenCalledTimes(1));
+            return commitTransactions.mock.calls[0]?.[0] as Payload;
+        }
+
+        /** The one create of a body described `description`. */
+        function createDescribed(body: Payload, description: string): Record<string, unknown> {
+            const found = (body.creates ?? []).filter((create) => create.description === description);
+            expect(found, `one create described ${JSON.stringify(description)}`).toHaveLength(1);
+            return found[0];
+        }
+
+        /** A body's parent and charge, by description: the charge names the parent's `ref`, never by id. */
+        function expectLinkedInBody(body: Payload, where: string, parent: string, charge: string): void {
+            const parentCreate = createDescribed(body, parent);
+            const chargeCreate = createDescribed(body, charge);
+            expect(typeof parentCreate.ref, `${where}: ${parent} carries a ref`).toBe('string');
+            expect((parentCreate.ref as string).length, `${where}: a ref within 36 characters`).toBeLessThanOrEqual(36);
+            expect(chargeCreate.parent_ref, `${where}: ${charge} names ${parent} by its ref`).toBe(parentCreate.ref);
+            expect(chargeCreate, `${where}: a new parent is named by ref, never by id`).not.toHaveProperty('parent_transaction_id');
+        }
+
+        it('an imported BUY and its FEE become parent and charge: the group starts closed, the chip counts 1, opening it shows the FEE under the BUY', async () => {
+            await openImportEditor();
+            await handOver([importedParent('P1b buy', 'r1'), importedCharge('FEE', 'P1b fee', 'r1')]);
+
+            const chip = theChipOf('P1b buy');
+            expect(chip).toHaveAttribute('data-charges-count', '1');
+            expect(chip, 'closed: an import brings its charges closed (§5)').toHaveAttribute('aria-expanded', 'false');
+            expect(rowsDescribed('P1b fee'), 'a closed group shows no FEE row').toHaveLength(0);
+
+            await openGroup('P1b buy');
+
+            expect(chargeOfCell(gridRowDescribed('P1b fee')), 'the FEE sits under the BUY').toBe(rowIdOf(gridRowDescribed('P1b buy')));
+            expect(rowStatus(gridRowDescribed('P1b fee')), 'a new row').toBe('new');
+        });
+
+        it('the split legs of the wizard arrive as any imported charge: one closed group of two', async () => {
+            await openImportEditor();
+            const legs = {tags: ['split_leg']};
+            await handOver([importedParent('P1b split trade', 'n-split'), importedCharge('FEE', 'P1b split fee', 'n-split', legs), importedCharge('TAX', 'P1b split tax', 'n-split', {...legs, cash: {code: 'EUR', amount: '-0.5'}})]);
+
+            const chip = theChipOf('P1b split trade');
+            expect(chip).toHaveAttribute('data-charges-count', '2');
+            expect(chip).toHaveAttribute('aria-expanded', 'false');
+            expect(rowsDescribed('P1b split fee')).toHaveLength(0);
+            expect(rowsDescribed('P1b split tax')).toHaveLength(0);
+        });
+
+        it('«Validate now» and «Save all» send the FEE with parent_ref = the BUY’s ref', async () => {
+            await openImportEditor();
+            await handOver([importedParent('P1b buy', 'r1'), importedCharge('FEE', 'P1b fee', 'r1')]);
+
+            expectLinkedInBody(await validateNow(), 'validate', 'P1b buy', 'P1b fee');
+            expectLinkedInBody(await saveAll(), 'commit', 'P1b buy', 'P1b fee');
+        });
+
+        it('two hand-overs reusing r1 never cross; a third one’s lone FEE naming r1 joins neither', async () => {
+            await openImportEditor();
+            await handOver([importedParent('P1b buy A', 'r1'), importedCharge('FEE', 'P1b fee A', 'r1')]);
+            await handOver([importedParent('P1b buy B', 'r1', {date: '2026-09-14'}), importedCharge('FEE', 'P1b fee B', 'r1', {date: '2026-09-14'})]);
+            await handOver([importedCharge('FEE', 'P1b lone fee', 'r1', {date: '2026-09-15'})]);
+
+            expect(theChipOf('P1b buy A'), 'A holds its own FEE only').toHaveAttribute('data-charges-count', '1');
+            expect(theChipOf('P1b buy B'), 'B holds its own FEE only').toHaveAttribute('data-charges-count', '1');
+            await openGroup('P1b buy A');
+            await openGroup('P1b buy B');
+            expect(chargeOfCell(gridRowDescribed('P1b fee A'))).toBe(rowIdOf(gridRowDescribed('P1b buy A')));
+            expect(chargeOfCell(gridRowDescribed('P1b fee B'))).toBe(rowIdOf(gridRowDescribed('P1b buy B')));
+            expect(chargeOfCell(gridRowDescribed('P1b lone fee')), 'the names hold for one hand-over: the lone FEE is free').toBeNull();
+
+            const body = await validateNow();
+            expectLinkedInBody(body, 'validate', 'P1b buy A', 'P1b fee A');
+            expectLinkedInBody(body, 'validate', 'P1b buy B', 'P1b fee B');
+            expect(createDescribed(body, 'P1b buy A').ref, 'two parents, two refs').not.toBe(createDescribed(body, 'P1b buy B').ref);
+            expect(createDescribed(body, 'P1b lone fee'), 'the lone FEE names no parent').not.toHaveProperty('parent_ref');
+            expect(createDescribed(body, 'P1b lone fee')).not.toHaveProperty('parent_transaction_id');
+        });
+
+        it('a pair the Bulk’s rule refuses stays free — a parent retyped ADJUSTMENT, a FEE on another asset — while a valid pair of the same hand-over links', async () => {
+            await openImportEditor();
+            await handOver([
+                importedParent('P1b valid buy', 'r2'),
+                importedCharge('FEE', 'P1b valid fee', 'r2'),
+                importedParent('P1b adjustment', 'r1', {type: 'ADJUSTMENT', cash: null, date: '2026-09-14'}),
+                importedCharge('FEE', 'P1b fee of the adjustment', 'r1', {date: '2026-09-14'}),
+                importedParent('P1b other buy', 'r3', {date: '2026-09-15'}),
+                importedCharge('FEE', 'P1b fee on another asset', 'r3', {date: '2026-09-15', asset_id: 202}),
+            ]);
+
+            // Positive premise, in the same hand-over: the rule does link a valid pair.
+            expect(theChipOf('P1b valid buy'), 'premise: the valid pair links').toHaveAttribute('data-charges-count', '1');
+            expect(chipOf('P1b adjustment'), 'an ADJUSTMENT is no parent: no chip').toBeNull();
+            expect(chipOf('P1b other buy'), 'a FEE on another asset is not its charge: no chip').toBeNull();
+            for (const free of ['P1b fee of the adjustment', 'P1b fee on another asset']) {
+                expect(rowsDescribed(free), `${free}: a top-level row, on screen`).toHaveLength(1);
+                expect(chargeOfCell(gridRowDescribed(free)), `${free}: free`).toBeNull();
+            }
+
+            const body = await validateNow();
+            expectLinkedInBody(body, 'validate', 'P1b valid buy', 'P1b valid fee');
+            for (const free of ['P1b fee of the adjustment', 'P1b fee on another asset']) {
+                expect(createDescribed(body, free), `${free}: no parent_ref (the backend would refuse it)`).not.toHaveProperty('parent_ref');
+                expect(createDescribed(body, free)).not.toHaveProperty('parent_transaction_id');
+            }
+            expect(createDescribed(body, 'P1b adjustment').ref ?? null, 'nothing names the ADJUSTMENT: no ref').toBeNull();
+        });
+
+        // Coordinator's decision (20/11): the imported link is judged charge by charge, as the backend judges it — one
+        // invalid charge does not take the link away from the other charges of the same parent.
+        it('charge by charge: a FEE on another asset stays free, and does not take the link away from its sibling on the BUY’s asset', async () => {
+            await openImportEditor();
+            await handOver([importedParent('P1b buy', 'r1'), importedCharge('FEE', 'P1b fee on the asset', 'r1'), importedCharge('FEE', 'P1b fee on another asset', 'r1', {asset_id: 202})]);
+
+            expect(theChipOf('P1b buy'), 'the FEE on the BUY’s asset is linked: the chip counts it alone').toHaveAttribute('data-charges-count', '1');
+            expect(rowsDescribed('P1b fee on another asset'), 'the FEE on another asset is a top-level row, on screen').toHaveLength(1);
+            expect(chargeOfCell(gridRowDescribed('P1b fee on another asset')), 'free').toBeNull();
+            await openGroup('P1b buy');
+            expect(chargeOfCell(gridRowDescribed('P1b fee on the asset')), 'the FEE on the asset sits under the BUY').toBe(rowIdOf(gridRowDescribed('P1b buy')));
+
+            const body = await validateNow();
+            expectLinkedInBody(body, 'validate', 'P1b buy', 'P1b fee on the asset');
+            const other = createDescribed(body, 'P1b fee on another asset');
+            expect(other, 'the FEE on another asset names no parent').not.toHaveProperty('parent_ref');
+            expect(other).not.toHaveProperty('parent_transaction_id');
+            expect(other.asset_id, 'and keeps its own asset').toBe(202);
+        });
+
+        // §5, second half of the consultant's condition: a problem the import itself raised on a charge of a closed group.
+        // The banner of blocking todos names the FEE by the label derived from its parent (the entry's `#<label>`; the
+        // entry publishes no data-row-label, so its leading row number is read — data, not wording); its jump opens the
+        // group and lands on the FEE; «Save all» is off and says why (its title is the catalogue's blocker hint).
+        it('a blocking import todo on an imported FEE in its closed group: the banner names it <parent>·1, the jump opens the group, Save all is off with its reason', async () => {
+            const blocker = {field: 'description', severity: 'blocker' as const, reasonCode: 'p1b_probe_blocker', message: 'p1b probe blocker'};
+            await openImportEditor();
+            await handOver([importedParent('P1b buy', 'r1'), {...importedCharge('FEE', 'P1b fee', 'r1'), todos: [blocker]}]);
+            expect(theChipOf('P1b buy'), 'premise: the group is closed').toHaveAttribute('aria-expanded', 'false');
+            expect(rowsDescribed('P1b fee'), 'premise: the FEE is not on screen').toHaveLength(0);
+            const parentLabel = (gridRowDescribed('P1b buy').querySelector('[data-testid="tx-bulk-row-label"]')?.textContent ?? '').trim();
+
+            const commit = screen.getByTestId('tx-bulk-commit');
+            expect(commit, '«Save all» is off while a blocking todo stands').toBeDisabled();
+            expect(commit, 'and says why').toHaveAttribute('title', get(_)('importWizard.todoBlockerCommitHint'));
+
+            const banner = screen.getByTestId('tx-bulk-todo-blockers');
+            if (within(banner).queryAllByTestId('tx-bulk-todo-goto').length === 0) {
+                await fireEvent.click(within(banner).getByTestId('tx-bulk-todo-blockers-toggle'));
+                await settle();
+            }
+            const gotos = within(banner).getAllByTestId('tx-bulk-todo-goto');
+            expect(gotos, 'one entry: the one blocker this test handed over').toHaveLength(1);
+            expect((gotos[0].textContent ?? '').trim().startsWith(`#${parentLabel}·1`), `the entry names the FEE by its derived label #${parentLabel}·1: ${gotos[0].textContent}`).toBe(true);
+
+            await fireEvent.click(gotos[0]);
+            await settle();
+
+            expect(theChipOf('P1b buy'), 'the jump opens the group').toHaveAttribute('aria-expanded', 'true');
+            const fee = gridRowDescribed('P1b fee');
+            expect(rowIdOf(fee), 'the entry leads to the FEE').toBe(gotos[0].getAttribute('data-row-id'));
+            await waitFor(() => expect(fee, 'and the jump lands on it').toHaveAttribute('data-highlighted', 'true'));
+        });
+
+        it('no followsParent: the BUY leaves the batch, its imported FEE stays, free, with its own values', async () => {
+            await openImportEditor();
+            await handOver([importedParent('P1b buy', 'r1'), importedCharge('FEE', 'P1b fee', 'r1')]);
+            expect(theChipOf('P1b buy'), 'premise: linked').toHaveAttribute('data-charges-count', '1');
+
+            // A new row's «Delete» takes it out of the batch (`removeRow` → `withoutRows`).
+            await rowAction(gridRowDescribed('P1b buy'), 'mark-delete');
+
+            expect(rowsDescribed('P1b buy'), 'the BUY left the batch').toHaveLength(0);
+            expect(rowsDescribed('P1b fee'), 'the FEE stays, on screen').toHaveLength(1);
+            expect(chargeOfCell(gridRowDescribed('P1b fee')), 'as a top-level row').toBeNull();
+            const body = await validateNow();
+            expect(body.creates ?? []).toHaveLength(1);
+            const charge = createDescribed(body, 'P1b fee');
+            expect(charge, 'its own values').toMatchObject({broker_id: 77, asset_id: 101, date: P1B_DATE, cash: {code: 'EUR', amount: '-1.5'}});
+            expect(charge).not.toHaveProperty('parent_ref');
+        });
+
+        it('a refusal of an imported FEE in its closed group is in the banner with the derived label; the jump opens the group and goes to the FEE', async () => {
+            const {validateTransactions} = await api();
+            // The hand-over validates once by itself: the FEE's create is refused, at the index it holds in that body.
+            validateTransactions.mockImplementation((async (payload: Payload) => {
+                const index = (payload.creates ?? []).findIndex((create) => create.description === 'P1b fee');
+                const issues = index < 0 ? [] : [{operation: 'create', index, ref_id: null, error: 'refused by the test', code: 'p1bTestRefusal', params: null}];
+                return {committed: issues.length === 0, issues, rawResponse: {wac_results: []}};
+            }) as never);
+            await openImportEditor();
+            await handOver([importedParent('P1b buy', 'r1'), importedCharge('FEE', 'P1b fee', 'r1')]);
+            expect(theChipOf('P1b buy'), 'premise: the group is closed').toHaveAttribute('aria-expanded', 'false');
+            const parentLabel = (gridRowDescribed('P1b buy').querySelector('[data-testid="tx-bulk-row-label"]')?.textContent ?? '').trim();
+
+            const issue = await screen.findByTestId('tx-bulk-issue');
+            expect(issue, 'the issue names the FEE by the label derived from its parent').toHaveAttribute('data-row-label', `${parentLabel}·1`);
+
+            await fireEvent.click(issue);
+            await settle();
+
+            expect(theChipOf('P1b buy'), 'the jump opens the group').toHaveAttribute('aria-expanded', 'true');
+            await waitFor(() => expect(gridRowDescribed('P1b fee'), 'and lands on the FEE row').toHaveAttribute('data-highlighted', 'true'));
+        });
+    });
 });

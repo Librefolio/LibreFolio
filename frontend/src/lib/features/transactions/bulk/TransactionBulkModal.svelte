@@ -2821,6 +2821,43 @@
         return newOps;
     }
 
+    /**
+     * 66 P1b: the names of ONE hand-over become the Bulk's links. A row carrying `ref` is a parent, a row naming it in
+     * `parent_ref` its charge (`chargeOf`), when the Bulk's own rule accepts the group (`bulkLinkSelection` → `ok`, the
+     * same answer «Link» gets); otherwise the charges stay free. A name carried by two rows links nothing. No
+     * `followsParent`: an imported charge keeps its values. The groups start closed (an import brings its charges
+     * closed); the names are not kept, so two hand-overs never cross. `newOps[i]` is the op of `creates[i]`.
+     */
+    function linkImportedCharges(all: PendingOp[], creates: ReadonlyArray<{tx: TransactionCreateItem}>, newOps: readonly PendingOp[]): PendingOp[] {
+        const named = (value: unknown): string | null => (typeof value === 'string' && value !== '' ? value : null);
+        const parentByName = new Map<string, PendingOp | null>();
+        const chargesByName = new Map<string, PendingOp[]>();
+        creates.forEach((item, i) => {
+            const names = item.tx as {ref?: string | null; parent_ref?: string | null};
+            const ref = named(names.ref);
+            if (ref) parentByName.set(ref, parentByName.has(ref) ? null : newOps[i]);
+            const parentRef = named(names.parent_ref);
+            if (parentRef) chargesByName.set(parentRef, [...(chargesByName.get(parentRef) ?? []), newOps[i]]);
+        });
+        let result = all;
+        for (const [name, charges] of chargesByName) {
+            const parent = parentByName.get(name);
+            const own = charges.filter((c) => c !== parent);
+            if (!parent || own.length === 0) continue;
+            const current = (op: PendingOp) => result.find((d) => d.tempId === op.tempId) ?? op;
+            // Charge by charge, as the backend judges a link (66 P1b §6.1): one charge that breaks a rule (another
+            // asset) stays free and never takes the link away from its siblings.
+            const valid = own.filter((charge) => {
+                const state = bulkLinkSelection([current(parent), current(charge)], result, txStoreGet, {roleOf: (type) => getTypeRule(type).chargeRole, canEdit: (brokerId) => canEditBroker(brokerId)});
+                // The parent must be the row that carried the name: the rule picks the parent by type.
+                return state.kind === 'ok' && state.parent.tempId === parent.tempId;
+            });
+            if (valid.length === 0) continue;
+            result = linkInBulk(result, current(parent), valid.map(current));
+        }
+        return result;
+    }
+
     async function onImportBatch(creates: Array<{tx: TransactionCreateItem; todos: ImportTodo[]}>, guideProgress?: {current: number; total: number}) {
         const newOps = creates.map((item) => {
             const op = txCreateItemToPendingOp(item.tx);
@@ -2832,7 +2869,7 @@
             return op;
         });
         const linked = linkPairedImportOps(newOps);
-        ops = [...ops, ...linked];
+        ops = linkImportedCharges([...ops, ...linked], creates, newOps);
         importGuideBulkReady = true;
         importGuideBulkProgress = guideProgress;
         importWizardOpen = false;
