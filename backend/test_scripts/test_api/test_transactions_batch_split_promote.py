@@ -1614,6 +1614,35 @@ def candidate_ids(results: dict, input_id: int) -> list[int]:
     return sorted(candidate["id"] for candidate in results.get(str(input_id), []))
 
 
+async def link_fee(client: httpx.AsyncClient, broker_id: int, parent_id: int, day: date) -> int:
+    """Commit a FEE EUR -1 on ``broker_id`` linked to the saved ``parent_id`` (``parent_transaction_id`` on the create): its id.
+
+    No asset: a DEPOSIT or a WITHDRAWAL has none, and a charge carries its parent's (rule 3).
+    """
+    fee = {"broker_id": broker_id, "type": "FEE", "date": day.isoformat(), "quantity": "0", "cash": {"code": "EUR", "amount": "-1"}, "parent_transaction_id": parent_id}
+    resp = await client.post(f"{API_BASE}/transactions/commit", json={"creates": [fee]}, timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["committed"] is True, f"FEE linked to row {parent_id} on broker {broker_id} not committed: {data}"
+    ids = [tx_id for r in data["results"] if r["operation"] == "create" and r["index"] == 0 for tx_id in r["ids"]]
+    assert len(ids) == 1, f"Expected one id for create 0, got {ids}: {data}"
+    return ids[0]
+
+
+async def read_rows(client: httpx.AsyncClient, tx_ids: list[int]) -> dict[int, dict]:
+    """The rows ``tx_ids`` read back by id: ``{id: row}``."""
+    resp = await client.get(f"{API_BASE}/transactions", params={"ids": tx_ids}, timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+    return {tx["id"]: tx for tx in resp.json()}
+
+
+async def assert_fee_linked(client: httpx.AsyncClient, fee_id: int, parent_id: int) -> None:
+    """Precondition: the FEE is saved linked to ``parent_id``, and the parent counts it."""
+    rows = await read_rows(client, [fee_id, parent_id])
+    assert rows.get(fee_id, {}).get("parent_transaction_id") == parent_id, f"FEE {fee_id}: expected parent_transaction_id={parent_id}, got {rows.get(fee_id)}"
+    assert rows.get(parent_id, {}).get("charges_count") == 1, f"Row {parent_id}: expected charges_count=1 (FEE {fee_id}), got {rows.get(parent_id)}"
+
+
 async def post_on_its_own_connection(client: httpx.AsyncClient, url: str, **kwargs) -> httpx.Response:
     """POST with ``client``'s session on a connection of its own, for a request that may end in an unhandled exception.
 
@@ -2160,6 +2189,147 @@ class TestPromoteSuggest:
                 found = candidate_ids(results, -1)
                 assert found == inside, f"Next to the edge inputs, the DEPOSIT dated {WINDOW_DAY} on broker {broker_b} must still be offered the WITHDRAWALs 0 and 7 days away {inside}, never those 8 days away {[rows[offset] for offset in WINDOW_OUTSIDE]}; candidates {found} (rows by offset {rows})"
                 print_success("Suggest: the window is cut at the calendar's edges, the batch keeps its suggestions ✓")
+            finally:
+                cleanup_problems = await delete_owned(client, broker_ids=broker_ids, asset_ids=[])
+            assert cleanup_problems == [], f"Cleanup of the test's brokers: {cleanup_problems}"
+
+    async def test_suggest_never_offers_a_candidate_with_linked_charges(self):
+        """B3.14 — RED until C21 (project 66): a saved WITHDRAWAL with a FEE linked to it is never offered; its uncharged twin is.
+
+        Rule 6 (charges.py, charges_parent_type_issue): a row with charges cannot become a leg of a pair, so the commit
+        refuses promoting it (chargesBlockParentType) until its charges are unlinked. Offering it is a dead end. The twin
+        (same broker, day, currency and amount: the linked FEE is the one difference) is the control the answer must keep,
+        so an empty answer cannot pass for the rule.
+        """
+        print_section("B3.14 — Suggest never offers a candidate with linked charges (C21)")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_ids: list[int] = []
+            cleanup_problems: list[str] = []
+            try:
+                broker_a = await create_broker(client, "SugChargedA")
+                broker_ids.append(broker_a)
+                broker_b = await create_broker(client, "SugChargedB")
+                broker_ids.append(broker_b)
+                charged_id = await create_standalone_tx(client, broker_a, "WITHDRAWAL", cash={"code": "EUR", "amount": "-600"}, tx_date=WINDOW_DAY.isoformat())
+                twin_id = await create_standalone_tx(client, broker_a, "WITHDRAWAL", cash={"code": "EUR", "amount": "-600"}, tx_date=WINDOW_DAY.isoformat())
+                fee_id = await link_fee(client, broker_a, charged_id, WINDOW_DAY)
+                await assert_fee_linked(client, fee_id, charged_id)
+                assert (await read_rows(client, [twin_id]))[twin_id]["charges_count"] == 0, f"Twin {twin_id}: expected no charges before the suggest"
+
+                resp = await client.post(f"{API_BASE}/transactions/promote-suggest", params={"tolerance_days": 7}, json=[deposit_input(-1, broker_b, WINDOW_DAY)], timeout=TIMEOUT)
+                assert resp.status_code == 200, resp.text
+                found = candidate_ids(resp.json()["results"], -1)
+                assert twin_id in found, f"Control: the uncharged WITHDRAWAL EUR -600 id={twin_id} on broker {broker_a} must be offered to a new DEPOSIT EUR 600 on broker {broker_b}; candidates {found}"
+                if charged_id in found:
+                    pytest.fail(
+                        f"C21: promote-suggest offered the WITHDRAWAL id={charged_id}, which has FEE id={fee_id} linked to it, as the other half of a new DEPOSIT EUR 600 on broker {broker_b}: candidates {found}. Rule 6 (chargesBlockParentType) refuses promoting a row with charges, so a candidate with linked charges must not be proposed; expected the uncharged twin id={twin_id} and not the charged row",
+                        pytrace=False,
+                    )
+                print_success("Suggest offers the uncharged twin, never the WITHDRAWAL with a linked FEE ✓")
+            finally:
+                cleanup_problems = await delete_owned(client, broker_ids=broker_ids, asset_ids=[])
+            assert cleanup_problems == [], f"Cleanup of the test's brokers: {cleanup_problems}"
+
+    async def test_suggest_offers_a_candidate_without_charges(self):
+        """B3.15 — C21 guard (passes before and after): a WITHDRAWAL without charges is offered, even next to a FEE on its broker and day.
+
+        The filter keys on the candidate's own charges: a FEE on the same broker and day, unlinked, or linked to another
+        row (a DEPOSIT, not a candidate of a DEPOSIT input), leaves the WITHDRAWAL a candidate.
+        """
+        print_section("B3.15 — Suggest offers a candidate without charges (C21 guard)")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_ids: list[int] = []
+            cleanup_problems: list[str] = []
+            try:
+                broker_a = await create_broker(client, "SugNoChargeA")
+                broker_ids.append(broker_a)
+                broker_b = await create_broker(client, "SugNoChargeB")
+                broker_ids.append(broker_b)
+                withdrawal_id = await create_standalone_tx(client, broker_a, "WITHDRAWAL", cash={"code": "EUR", "amount": "-600"}, tx_date=WINDOW_DAY.isoformat())
+                loose_fee_id = await create_standalone_tx(client, broker_a, "FEE", cash={"code": "EUR", "amount": "-1"}, tx_date=WINDOW_DAY.isoformat())
+                other_parent_id = await create_standalone_tx(client, broker_a, "DEPOSIT", cash={"code": "EUR", "amount": "50"}, tx_date=WINDOW_DAY.isoformat())
+                other_fee_id = await link_fee(client, broker_a, other_parent_id, WINDOW_DAY)
+                await assert_fee_linked(client, other_fee_id, other_parent_id)
+                rows = await read_rows(client, [withdrawal_id, loose_fee_id])
+                assert rows[withdrawal_id]["charges_count"] == 0, f"WITHDRAWAL {withdrawal_id}: expected no charges, got {rows[withdrawal_id]}"
+                assert rows[loose_fee_id]["parent_transaction_id"] is None, f"FEE {loose_fee_id}: expected unlinked, got {rows[loose_fee_id]}"
+
+                resp = await client.post(f"{API_BASE}/transactions/promote-suggest", params={"tolerance_days": 7}, json=[deposit_input(-1, broker_b, WINDOW_DAY)], timeout=TIMEOUT)
+                assert resp.status_code == 200, resp.text
+                found = candidate_ids(resp.json()["results"], -1)
+                assert (
+                    withdrawal_id in found
+                ), f"The WITHDRAWAL EUR -600 id={withdrawal_id} on broker {broker_a} has no charges (an unlinked FEE id={loose_fee_id} and FEE id={other_fee_id} of DEPOSIT id={other_parent_id} sit beside it) and must be offered to a new DEPOSIT EUR 600 on broker {broker_b}; candidates {found}"
+                print_success("Suggest offers the WITHDRAWAL without charges ✓")
+            finally:
+                cleanup_problems = await delete_owned(client, broker_ids=broker_ids, asset_ids=[])
+            assert cleanup_problems == [], f"Cleanup of the test's brokers: {cleanup_problems}"
+
+    async def test_suggest_offers_again_a_candidate_whose_charge_was_unlinked(self):
+        """B3.16 — C21 guard (passes before and after): once its FEE is unlinked (parent_transaction_id 0), the WITHDRAWAL is offered again.
+
+        The filter reads the charges linked now, not the ones the row ever had: «unlink + promote» is the path rule 6
+        leaves open, and the suggestion must follow it.
+        """
+        print_section("B3.16 — Suggest offers a candidate whose FEE was unlinked (C21 guard)")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_ids: list[int] = []
+            cleanup_problems: list[str] = []
+            try:
+                broker_a = await create_broker(client, "SugUnlinkA")
+                broker_ids.append(broker_a)
+                broker_b = await create_broker(client, "SugUnlinkB")
+                broker_ids.append(broker_b)
+                withdrawal_id = await create_standalone_tx(client, broker_a, "WITHDRAWAL", cash={"code": "EUR", "amount": "-600"}, tx_date=WINDOW_DAY.isoformat())
+                fee_id = await link_fee(client, broker_a, withdrawal_id, WINDOW_DAY)
+                await assert_fee_linked(client, fee_id, withdrawal_id)
+
+                unlink = await client.post(f"{API_BASE}/transactions/commit", json={"updates": [{"id": fee_id, "parent_transaction_id": 0}]}, timeout=TIMEOUT)
+                assert unlink.status_code == 200, unlink.text
+                assert unlink.json()["committed"] is True, f"Unlink of FEE {fee_id} not committed: {unlink.json()}"
+                rows = await read_rows(client, [fee_id, withdrawal_id])
+                assert rows[fee_id]["parent_transaction_id"] is None, f"FEE {fee_id}: expected unlinked after the update, got {rows[fee_id]}"
+                assert rows[withdrawal_id]["charges_count"] == 0, f"WITHDRAWAL {withdrawal_id}: expected no charges after the unlink, got {rows[withdrawal_id]}"
+
+                resp = await client.post(f"{API_BASE}/transactions/promote-suggest", params={"tolerance_days": 7}, json=[deposit_input(-1, broker_b, WINDOW_DAY)], timeout=TIMEOUT)
+                assert resp.status_code == 200, resp.text
+                found = candidate_ids(resp.json()["results"], -1)
+                assert withdrawal_id in found, f"The WITHDRAWAL EUR -600 id={withdrawal_id} on broker {broker_a}, whose FEE id={fee_id} was unlinked, must be offered again to a new DEPOSIT EUR 600 on broker {broker_b}; candidates {found}"
+                print_success("Suggest offers again the WITHDRAWAL whose FEE was unlinked ✓")
+            finally:
+                cleanup_problems = await delete_owned(client, broker_ids=broker_ids, asset_ids=[])
+            assert cleanup_problems == [], f"Cleanup of the test's brokers: {cleanup_problems}"
+
+    async def test_suggest_searches_an_input_that_has_charges(self):
+        """B3.17 — C21 guard (passes before and after): a saved DEPOSIT with a linked FEE, sent as input, still gets its candidates.
+
+        The backend never filters the inputs: the bulk editor decides them on its pending state (it may unlink the charges
+        in the same batch, «unlink + promote», which rule 6 accepts). The input carries no charge field (StrictModel);
+        its positive id names the saved row that has the FEE.
+        """
+        print_section("B3.17 — Suggest searches an input that has charges (C21 guard)")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_ids: list[int] = []
+            cleanup_problems: list[str] = []
+            try:
+                broker_a = await create_broker(client, "SugChargedInA")
+                broker_ids.append(broker_a)
+                broker_b = await create_broker(client, "SugChargedInB")
+                broker_ids.append(broker_b)
+                withdrawal_id = await create_standalone_tx(client, broker_a, "WITHDRAWAL", cash={"code": "EUR", "amount": "-600"}, tx_date=WINDOW_DAY.isoformat())
+                deposit_id = await create_standalone_tx(client, broker_b, "DEPOSIT", cash={"code": "EUR", "amount": "600"}, tx_date=WINDOW_DAY.isoformat())
+                fee_id = await link_fee(client, broker_b, deposit_id, WINDOW_DAY)
+                await assert_fee_linked(client, fee_id, deposit_id)
+
+                resp = await client.post(f"{API_BASE}/transactions/promote-suggest", params={"tolerance_days": 7}, json=[deposit_input(deposit_id, broker_b, WINDOW_DAY)], timeout=TIMEOUT)
+                assert resp.status_code == 200, resp.text
+                found = candidate_ids(resp.json()["results"], deposit_id)
+                assert withdrawal_id in found, f"The saved DEPOSIT id={deposit_id} on broker {broker_b}, with FEE id={fee_id} linked to it, sent as input must still be offered the WITHDRAWAL EUR -600 id={withdrawal_id} on broker {broker_a}: the backend never filters inputs; candidates {found}"
+                print_success("Suggest searches an input that has charges ✓")
             finally:
                 cleanup_problems = await delete_owned(client, broker_ids=broker_ids, asset_ids=[])
             assert cleanup_problems == [], f"Cleanup of the test's brokers: {cleanup_problems}"
