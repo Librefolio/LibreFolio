@@ -22,6 +22,7 @@ server, no database.
 
 from __future__ import annotations
 
+import ast
 import copy
 import json
 import traceback
@@ -43,9 +44,11 @@ from backend.app.db.session import get_async_engine
 from backend.app.schemas.pac_allocator.preview import PAC_TOOL_INPUT_ADAPTER, PAC_TOOL_OUTPUT_ADAPTER, REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER
 from backend.app.schemas.pac_allocator.results import PAC_PLAN_INPUT_ADAPTER, PAC_PLAN_OUTPUT_ADAPTER, REBALANCER_PLAN_INPUT_ADAPTER, REBALANCER_PLAN_OUTPUT_ADAPTER
 from backend.app.services.accounts import user_service
-from backend.app.services.pac_allocator.planner import plan_pac_allocation, plan_rebalancing
+from backend.app.services.pac_allocator.evaluation.errors import ExactReplayRejectedError
+from backend.app.services.pac_allocator.planner import SeededRunsFailedError, plan_pac_allocation, plan_rebalancing
 from backend.app.services.pac_allocator.preview import preview_pac_allocation, preview_rebalancing
-from backend.app.services.tool_plugins.pac_allocator.plugin import _log_engine_failure
+from backend.app.services.pac_allocator.solver import SolverStageError
+from backend.app.services.tool_plugins.pac_allocator.plugin import MESSAGE_SAFE_ERRORS, _log_engine_failure
 from backend.test_scripts.test_db_config import verify_test_database
 from backend.test_scripts.test_server_helper import TEST_SERVER_PLANNER_SEEDS, _TestingServerManager, without_time_limits
 from backend.test_scripts.test_services import _reb_small_requests as reb
@@ -850,3 +853,110 @@ def test_pac_engine_failure_log_never_shows_the_message_or_the_amounts():
     logged = repr(event)
     assert MESSAGE_FIGURE not in logged, f"the exception message reached the log: {logged}"
     assert LOCAL_FIGURE not in logged, f"a local variable or an argument reached the log: {logged}"
+
+
+# ---------------------------------------------------------------------------
+# The reason: the message of a closed list of classes (R1-B of project 67)
+# ---------------------------------------------------------------------------
+#
+# The developer's rule of 20/11/2026: the log carries the message of an engine failure only for a closed list of classes,
+# matched by exact type, each one in the list once every place that raises it has been read. The scan below makes that
+# reading durable: it finds every construction of a listed class in backend/app, pins how many there are, and admits as
+# arguments only fixed text and the named interpolations (identifiers, closed codes). A new raise site, or one that
+# interpolates anything else (an amount, a name), is red until it is read and added here.
+
+# Each listed class, its number of constructions in backend/app, and the interpolations they may carry.
+READ_RAISE_SITES: dict[str, tuple[int, frozenset[str]]] = {
+    # evaluation/evaluator.py: a Broker's id and a currency code (``PlannerId``, ``^[A-Za-z0-9][A-Za-z0-9._:@/-]*$``,
+    # built by the page from the database's ids), and the replay's conflict codes (``ExactConstraintCode``, a Literal).
+    "ExactReplayRejectedError": (8, frozenset({"entry.broker_id", "entry.currency", "ledger.broker_id", "ledger.currency", "', '.join(evaluation.conflict_codes)"})),
+    # solver.py: the stage's code (``objectives.py``: fixed words, or ``tie:`` and a decision id).
+    "SolverStageError": (1, frozenset({"stage.code"})),
+    # planner.py: the verdict of the seeded runs (``SeededVerdict.state``, a Literal).
+    "SeededRunsFailedError": (1, frozenset({"verdict.state"})),
+}
+APP_ROOT = Path(__file__).resolve().parents[2] / "app"
+
+
+def _constructions(name: str) -> list[tuple[str, ast.Call]]:
+    """Every call ``name(...)`` or ``module.name(...)`` in backend/app, with its ``file:line``."""
+    found = []
+    for path in sorted(APP_ROOT.rglob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"), filename=str(path))):
+            if isinstance(node, ast.Call) and _called_name(node.func) == name:
+                found.append((f"{path.relative_to(APP_ROOT)}:{node.lineno}", node))
+    return found
+
+
+def _called_name(func: ast.expr) -> str | None:
+    """The name a call reaches: ``name`` for ``name(...)`` and for ``module.name(...)``."""
+    if isinstance(func, ast.Name):
+        return func.id
+    return func.attr if isinstance(func, ast.Attribute) else None
+
+
+def _interpolations(argument: ast.expr) -> list[str] | None:
+    """The interpolated expressions of a str literal or an f-string; ``None`` for anything else."""
+    if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
+        return []
+    if isinstance(argument, ast.JoinedStr):
+        return [ast.unparse(part.value) for part in argument.values if isinstance(part, ast.FormattedValue)]
+    return None
+
+
+def test_pac_engine_failure_log_lists_exactly_the_read_classes():
+    """The closed list is the classes whose raise sites were read, no more: a class enters with its line above."""
+    assert sorted(error.__name__ for error in MESSAGE_SAFE_ERRORS) == sorted(READ_RAISE_SITES)
+    assert {ExactReplayRejectedError, SolverStageError, SeededRunsFailedError} == set(MESSAGE_SAFE_ERRORS)
+
+
+@pytest.mark.parametrize("name", sorted(READ_RAISE_SITES))
+def test_every_raise_of_a_listed_class_carries_no_amount(name: str):
+    """Each construction of a listed class: one argument, fixed text with only the interpolations read for it."""
+    count, allowed = READ_RAISE_SITES[name]
+    sites = _constructions(name)
+    assert len(sites) == count, f"{name} is constructed {len(sites)} times, read {count}: read the new site, then update READ_RAISE_SITES: {[where for where, _ in sites]}"
+    for where, call in sites:
+        assert len(call.args) == 1 and not call.keywords, f"{where}: {name} takes one message argument; got {ast.unparse(call)}"
+        parts = _interpolations(call.args[0])
+        assert parts is not None, f"{where}: the message of {name} must be a literal or an f-string; got {ast.unparse(call.args[0])}"
+        assert set(parts) <= allowed, f"{where}: {name} interpolates {sorted(set(parts) - allowed)}, not read as free of amounts"
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        pytest.param(ExactReplayRejectedError("the exact replay left broker:1/EUR short beyond its rounded postings"), id="replay-rejected"),
+        pytest.param(SolverStageError("SCIP failed inside stage 'fixed_l2' before holding any plan"), id="stage-error"),
+        pytest.param(SeededRunsFailedError("no run of the Rebalancer could be published (failed)"), id="seeded-runs"),
+    ],
+)
+def test_pac_engine_failure_log_gives_the_reason_of_a_listed_class(error: Exception):
+    """A listed class adds ``reason``, its message, to the line; the rest of the line is unchanged."""
+    try:
+        raise error
+    except type(error) as exc:
+        caught = exc
+
+    event = _logged_engine_failure(caught, execution_id="pac-log-reason")
+
+    assert (event.get("error_type"), event.get("reason")) == (type(error).__qualname__, str(error)), event
+    # ``callers`` is there only when an own frame called ``where``: raised in this test's body, none did.
+    assert set(event) - CAPTURE_KEYS == {"error_type", "execution_id", "where", "reason"}, sorted(event)
+
+
+def test_pac_engine_failure_log_keeps_the_message_of_a_subclass_out():
+    """The list matches the exact class: a subclass of a listed class was never read, so its message stays out."""
+
+    class UnreadRejection(ExactReplayRejectedError):
+        pass
+
+    try:
+        raise UnreadRejection(f"PRIVATE-{MESSAGE_FIGURE}: an unread message")
+    except UnreadRejection as exc:
+        caught = exc
+
+    event = _logged_engine_failure(caught, execution_id="pac-log-subclass")
+
+    assert "reason" not in event, event
+    assert MESSAGE_FIGURE not in repr(event), event

@@ -124,7 +124,11 @@ representative scale (see the module header of `plugin.py`).
 and passes `window.timeout_ms / 1000` to the solver as its time budget, together with the executor's
 `checkpoint`. The 2 s reserve is a deliberate over-reserve for the exact replay and the report. An
 unexpected exception is logged by `_log_engine_failure` (exception class and code location only, never
-the message or amounts) and re-raised, so the platform answers `execution_failed`.
+the message or amounts) and re-raised, so the platform answers `execution_failed`. The one exception is
+`reason`, the message of a class in `MESSAGE_SAFE_ERRORS`, a closed list matched by exact type:
+`ExactReplayRejectedError`, `SolverStageError` and `SeededRunsFailedError`. Their messages name only
+rules, stages, Brokers' ids and currencies, and a test reads every place that raises them, so a new
+one enters the list only once it has been read.
 
 The generic transport (executor, worker process, codecs, `tools.py` routes) is described in
 [Tool plugins](../architecture/patterns/tool_plugins.en.md).
