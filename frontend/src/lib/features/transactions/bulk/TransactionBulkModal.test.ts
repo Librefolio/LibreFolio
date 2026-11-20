@@ -5399,6 +5399,213 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
                 expect(item, `the Form holds the visible row #${from.id}`).toBeDefined();
                 expect(item!.related_transaction_id != null, `related_transaction_id = ${item!.related_transaction_id}`).toBe(leg);
             });
+
+            // ---------------------------------------------------------------
+            // C22b — a reset after «Split pair» on a saved pair
+            // ---------------------------------------------------------------
+
+            type C22bPayload = C21Payload & {splits?: Array<{id_a: number; id_b: number}>};
+
+            /** The splits of a payload, as sorted id pairs. */
+            function splitsOf(body: C22bPayload): number[][] {
+                return (body.splits ?? []).map((split) => [split.id_a, split.id_b].sort((a, b) => a - b));
+            }
+
+            /** Whether a row's menu offers «Reset row»; the menu is closed again before returning. */
+            async function offersReset(row: HTMLElement): Promise<boolean> {
+                await openMenu(row);
+                expect(screen.getByTestId('context-menu-action-edit-single'), 'barrier: the menu is drawn').toBeInTheDocument();
+                const offered = screen.queryByTestId('context-menu-action-reset') !== null;
+                await fireEvent.keyDown(window, {key: 'Escape'});
+                await settle();
+                await waitFor(() => expect(screen.queryByTestId('context-menu'), 'the menu closed').toBeNull());
+                return offered;
+            }
+
+            /**
+             * The saved CASH_TRANSFER pair (L_W the sender, L_D the receiver) split with «Split pair», then the note of
+             * `edited` changed in its own Form — a split half that is not edited is `original`, and neither «Reset row»
+             * nor «Reset selected» is offered on an `original` row. The push is the row the Form was handed (its post-split
+             * type), only the note changed. Ends on two rows, the split queued, the edited half `edited`.
+             */
+            async function openSplitAndEdit(edited: TXReadItem, extra: readonly TXReadItem[] = []): Promise<void> {
+                answerChargesRead([]);
+                txStoreSetAll([L_W, L_D, ...extra], []);
+                mountEditor({action: 'edit', txIds: [L_D.id, L_W.id, ...extra.map((tx) => tx.id)]});
+                await waitFor(() => expect(rowsShowing(L_W.id, L_D.id), 'premise: the saved pair is one row').toHaveLength(1));
+                for (const tx of extra) await waitFor(() => expect(rowsOf(tx.id), `premise: #${tx.id} is a row on screen`).toHaveLength(1));
+                const pair = rowsShowing(L_W.id, L_D.id)[0];
+                // The ID cell of a pair names the row's own id first, then its hidden partner's (`renderDualHtml`).
+                const ids = idCellText(pair);
+                expect(ids.indexOf(`#${L_W.id}`), `premise: the saved WITHDRAWAL (the sender) is the visible half — ${ids}`).toBeLessThan(ids.indexOf(`#${L_D.id}`));
+                expect(rowStatus(pair), 'premise: the pair is as saved').toBe('original');
+
+                await rowAction(pair, 'split');
+                expect(rowsShowing(L_W.id, L_D.id), 'premise: «Split pair» shows two rows').toHaveLength(2);
+                expect(rowsOf(L_W.id), 'premise: the WITHDRAWAL is a row of its own').toHaveLength(1);
+                expect(rowsOf(L_D.id), 'premise: the DEPOSIT is a row of its own').toHaveLength(1);
+                expect(screen.queryByTestId('split-queued-badge'), 'premise: the split is queued (badge)').not.toBeNull();
+                // The status cell of a split-queued half says `split` whatever its fields: «edited» is read from the menu.
+                expect(rowStatus(gridRow(L_W.id)), 'premise: the WITHDRAWAL is marked split').toBe('split');
+                expect(rowStatus(gridRow(L_D.id)), 'premise: the DEPOSIT is marked split').toBe('split');
+                const queued = (await validateNow()) as C22bPayload;
+                expect(splitsOf(queued), `premise: one split queued, the saved pair — ${JSON.stringify(queued.splits)}`).toEqual([[L_W.id, L_D.id].sort((a, b) => a - b)]);
+
+                await editHalfNote(edited, 'C22b note changed');
+            }
+
+            /**
+             * The note of a split half changed in its own Form: the push is the row the Form was handed (its post-split
+             * type), only the note changed. Ends on the half offering «Reset row», its note in the payload, the split
+             * still queued.
+             */
+            async function editHalfNote(half: TXReadItem, note: string): Promise<void> {
+                await rowAction(gridRow(half.id), 'edit-single');
+                await waitFor(() => expect(formProbe().open, 'premise: the Form of the half is open').toBe(true));
+                const item = ((formProbe().items as TXReadItem[] | null) ?? []).find((candidate) => candidate.id === half.id);
+                expect(item, `premise: the Form holds #${half.id}`).toBeDefined();
+                await push({broker_id: item!.broker_id, type: item!.type, date: item!.date, quantity: item!.quantity, asset_id: item!.asset_id, cash: item!.cash, tags: item!.tags ?? [], description: note});
+                expect(await offersReset(gridRow(half.id)), `premise: the edited half #${half.id} offers «Reset row»`).toBe(true);
+                const withEdit = (await validateNow()) as C22bPayload;
+                expect(
+                    (withEdit.updates ?? []).some((update) => update.id === half.id && update.description === note),
+                    `premise: the note change of #${half.id} is sent — ${JSON.stringify(withEdit.updates)}`,
+                ).toBe(true);
+                expect(splitsOf(withEdit), 'premise: the split is still queued').toHaveLength(1);
+            }
+
+            // Red today: `handleSplitRow` (case A) queues `{id_a, id_b}` in `pendingSplits`; «Reset row» and «Reset selected»
+            // reach `resetRows` → `resetOne`, which reads the row back from the store and `collapsePairedOps` joins the pair
+            // again, but the split stays queued — the grid shows one row while the payload still splits it. Only «Reset all»
+            // empties `pendingSplits`. Expected (C22, nothing queued that the grid does not show): the split undone.
+            it.each([
+                ['«Reset row» on the half visible before the split (the WITHDRAWAL)', 'row', 'sender'],
+                ['«Reset row» on the half the split made visible (the DEPOSIT)', 'row', 'receiver'],
+                ['both halves ticked, «Reset selected» (the DEPOSIT edited)', 'selected', 'receiver'],
+            ] as const)('C22b: a saved pair split, one half edited, then %s — no split queued, the pair one row as saved', async (_label, door, half) => {
+                const edited = half === 'sender' ? L_W : L_D;
+                await openSplitAndEdit(edited);
+                if (door === 'row') {
+                    await rowAction(gridRow(edited.id), 'reset');
+                } else {
+                    await setTicked(gridRow(L_W.id), true);
+                    await setTicked(gridRow(L_D.id), true);
+                    const reset = screen.queryByTestId('tx-bulk-reset-selected');
+                    expect(reset, 'premise: «Reset selected» is offered (one ticked half is edited)').not.toBeNull();
+                    expect(await clickCollectingErrors(reset!), '«Reset selected» throws nothing').toEqual([]);
+                }
+
+                const rows = rowsShowing(L_W.id, L_D.id);
+                expect.soft(rows, 'the pair is one row again').toHaveLength(1);
+                if (rows.length === 1) expect.soft(rowStatus(rows[0]), 'C22b: the pair is back as saved (today its status cell still says split)').toBe('original');
+                expect.soft(screen.queryByTestId('split-queued-badge'), 'C22b: no split badge — the grid shows no split').toBeNull();
+                const body = (await validateNow()) as C22bPayload;
+                expect.soft(splitsOf(body), `C22b: the reset left a split in the queue that the grid no longer shows — ${JSON.stringify(body.splits)}`).toEqual([]);
+                expect
+                    .soft(
+                        (body.updates ?? []).filter((update) => update.id === L_W.id || update.id === L_D.id),
+                        'no update of the saved halves: they are back as saved',
+                    )
+                    .toEqual([]);
+            });
+
+            // Green with `resetRows`' `undone` halves. Without them `resetOne` would reset only the chosen half (a split
+            // half has no `pairedWith` partner, so `getPartnerOp` finds none), then `collapsePairedOps` would join the
+            // pair again with the other half still holding its edit: its post-split type and its note would be sent as
+            // an update, on the visible half (WITHDRAWAL kept) or on the hidden one (DEPOSIT kept).
+            it.each([
+                ['the WITHDRAWAL', 'sender'],
+                ['the DEPOSIT', 'receiver'],
+            ] as const)('C22b: a saved pair split, both halves edited, «Reset row» on %s only — no split queued, the pair one row as saved, no update of either half', async (_label, half) => {
+                await openSplitAndEdit(L_W);
+                await editHalfNote(L_D, 'C22b other note changed');
+                expect(await offersReset(gridRow(L_W.id)), 'premise: the WITHDRAWAL still offers «Reset row»').toBe(true);
+                const both = (await validateNow()) as C22bPayload;
+                expect(
+                    (both.updates ?? []).filter((update) => update.id === L_W.id || update.id === L_D.id).map((update) => [update.id, update.description]),
+                    `premise: both halves are sent with their notes — ${JSON.stringify(both.updates)}`,
+                ).toEqual(
+                    expect.arrayContaining([
+                        [L_W.id, 'C22b note changed'],
+                        [L_D.id, 'C22b other note changed'],
+                    ]),
+                );
+                expect(splitsOf(both), 'premise: the split is still queued').toHaveLength(1);
+
+                await rowAction(gridRow(half === 'sender' ? L_W.id : L_D.id), 'reset');
+
+                const rows = rowsShowing(L_W.id, L_D.id);
+                expect.soft(rows, 'the pair is one row again').toHaveLength(1);
+                if (rows.length === 1) expect.soft(rowStatus(rows[0]), 'C22b: the pair is back as saved').toBe('original');
+                expect.soft(screen.queryByTestId('split-queued-badge'), 'C22b: no split badge').toBeNull();
+                const body = (await validateNow()) as C22bPayload;
+                expect.soft(splitsOf(body), `C22b: a split left in the queue — ${JSON.stringify(body.splits)}`).toEqual([]);
+                expect(
+                    (body.updates ?? []).filter((update) => update.id === L_W.id || update.id === L_D.id),
+                    'C22b: no update of either half: the other half was reset too, its post-split type and its note dropped',
+                ).toEqual([]);
+            });
+
+            // A saved pair split here is no pair leg (`isPairLeg`, `pairIdOf`), so «Link» accepts a split half as a
+            // parent. A reset that undoes the split joins the pair again, whichever door undoes it: the charge must not
+            // stay linked to what is now a leg (rule 8), no split may stay queued, and the FEE — saved with no parent —
+            // has nothing to send: its «unlink» changes nothing that is saved. Both halves are reset by every door
+            // (`resetRows`' `undone` halves); in (b2) the DEPOSIT, the FEE's owner, is reset second.
+            // The DEPOSIT is edited first in every case: a saved split half keeps the pair's type (CASH_TRANSFER) until
+            // its Form hands it its own (`handleSplitRow`, case A), and a CASH_TRANSFER has no charge role, so «Link» is
+            // not offered on an untouched split half. (b2) then edits the WITHDRAWAL and resets from it.
+            it.each([
+                ['«Reset row» on the DEPOSIT (the FEE’s owner)', 'row-deposit'],
+                ['the WITHDRAWAL edited too, «Reset row» on it (the half that does not own the FEE)', 'row-withdrawal'],
+                ['both halves ticked, «Reset selected»', 'selected'],
+            ] as const)('C22b: a saved FEE linked by «Link» to the split DEPOSIT, the DEPOSIT edited, then %s — no split queued, no update of the FEE, the FEE «unlink», one pair notify', async (_label, door) => {
+                await openSplitAndEdit(L_D, [FREE]);
+                await linkRows(gridRow(L_D.id), gridRow(FREE.id));
+                expect(chargeOfCell(gridRow(FREE.id)), 'premise: the FEE sits under the split DEPOSIT').toBe(gridRow(L_D.id).getAttribute('data-row-id'));
+                expect(await offersReset(gridRow(L_D.id)), 'premise: the DEPOSIT still offers «Reset row»').toBe(true);
+                if (door === 'row-withdrawal') await editHalfNote(L_W, 'C22b withdrawal note changed');
+                const linked = (await validateNow()) as C22bPayload;
+                expect(
+                    (linked.updates ?? []).filter((update) => update.id === FREE.id).map((update) => update.parent_transaction_id),
+                    `premise: the FEE is sent under the split DEPOSIT — ${JSON.stringify(linked.updates)}`,
+                ).toEqual([L_D.id]);
+                expect(splitsOf(linked), 'premise: the split is still queued').toHaveLength(1);
+
+                const since = eventSeq();
+                await clearToasts();
+                if (door !== 'selected') {
+                    await rowAction(gridRow(door === 'row-deposit' ? L_D.id : L_W.id), 'reset');
+                } else {
+                    // The selection is the two halves, nothing else: «Link» cleared its own (`confirmLinkPanel`), and the
+                    // FEE, now a charge row, has no checkbox.
+                    expect(rowCheckbox(gridRow(FREE.id)), 'premise: the linked FEE is a charge row, with no checkbox').toBeNull();
+                    await setTicked(gridRow(L_W.id), true);
+                    await setTicked(gridRow(L_D.id), true);
+                    const reset = screen.queryByTestId('tx-bulk-reset-selected');
+                    expect(reset, 'premise: «Reset selected» is offered (one ticked half is edited)').not.toBeNull();
+                    expect(await clickCollectingErrors(reset!), '«Reset selected» throws nothing').toEqual([]);
+                }
+
+                const body = (await validateNow()) as C22bPayload;
+                expect.soft(splitsOf(body), `C22b: a split left in the queue — ${JSON.stringify(body.splits)}`).toEqual([]);
+                expect.soft(rowsShowing(L_W.id, L_D.id), 'C22b: the pair is one row again').toHaveLength(1);
+                expect
+                    .soft(
+                        (body.updates ?? []).filter((update) => update.id === FREE.id && (update.parent_transaction_id === L_D.id || update.parent_transaction_id === L_W.id)),
+                        `C22b: the FEE is sent under a leg of the pair again (rule 8) — ${JSON.stringify(body.updates)}`,
+                    )
+                    .toEqual([]);
+                // The FEE has no saved parent: its «unlink» sends nothing, so no update of the FEE at all.
+                expect
+                    .soft(
+                        (body.updates ?? []).filter((update) => update.id === FREE.id),
+                        `C22b: an update of the FEE is sent — ${JSON.stringify(body.updates)}`,
+                    )
+                    .toEqual([]);
+                // C21 §5.2 applied to the charges of a reset row: the FEE stays «unlink» and the pair is named once.
+                expect.soft(chargeStateOf(FREE.id), 'C22b: the FEE stays «unlink», as a charge whose parent became a leg (C21 §5.2)').toBe('unlink');
+                expect.soft(eventsSince(since, 'tx.bulk.reset.charge.kept-unlinked'), 'C22b: exactly one «half of a pair» notify').toHaveLength(1);
+            });
         });
     });
 });
