@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Added
 
+- In the asset search, a result shows its asset's icon when the provider gives one: CoinGecko's coins appear with their logo.
 - **ESMA enricher**: every asset traded on a European market can read official facts from ESMA's FIRDS register — the issuer's LEI and the legal form; for a bond its maturity, the coupon type, a fixed coupon and a State guarantee; for a fund whether it accumulates or distributes. It comes after the other sources, filling what they leave empty.
 - **The selection bar sits above the table on Transactions, the broker's Transactions tab and FX**, and its actions move into the bar at the bottom when you scroll. Each action says how many rows it acts on (Edit and Delete count only the rows you may edit, Sync only the pairs or assets with a provider).
 - **Download several files at once** on the Files page.
