@@ -417,15 +417,41 @@ describe('the number of rows each action takes (77 SEL-A)', () => {
             expect(screen.queryByTestId('toolbar-action-delete-count')).toBeNull();
         });
     }
+
+    // 77 SEL-B (the designer, 20/11): on a phone the number is a dot on the icon's corner, drawn only; the button's name
+    // carries it, so a screen reader says how many rows the action takes.
+    for (const variant of ['floating', 'top', 'dock'] as const) {
+        it(`${variant}: the name of an action with a count says the number`, () => {
+            const onClick = vi.fn();
+            render(DataTableToolbar, {
+                selectedCount: 3,
+                variant,
+                bulkActions: [
+                    {id: 'edit', icon: Pencil, label: 'Edit', count: 25, onClick},
+                    {id: 'delete', icon: Trash2, label: 'Delete', variant: 'danger' as const, onClick},
+                ],
+            });
+            expect(screen.getByTestId('toolbar-action-edit')).toHaveAttribute('aria-label', 'Edit, 25');
+            expect(screen.getByTestId('toolbar-action-delete')).toHaveAttribute('aria-label', 'Delete');
+        });
+
+        it(`${variant}: with a short label and a count, the name is the shown word and the number (never the number twice)`, () => {
+            render(DataTableToolbar, {
+                selectedCount: 3,
+                variant,
+                bulkActions: [{id: 'edit', icon: Pencil, label: 'Edit 3 assets', shortLabel: 'Edit', count: 3, onClick: vi.fn()}],
+            });
+            expect(screen.getByTestId('toolbar-action-edit')).toHaveAttribute('aria-label', 'Edit, 3');
+        });
+    }
 });
 
 describe('variant top (77 SEL-A)', () => {
     it('keeps its row with the hint while nothing is selected: no count button, no action', () => {
         const {list} = actions();
         render(DataTableToolbar, {selectedCount: 0, bulkActions: list, variant: 'top', hint: 'Pick some rows'});
-        const bar = screen.getByTestId('selection-toolbar');
-        expect(bar).toHaveAttribute('data-variant', 'top');
-        expect(bar).toHaveAttribute('data-selected-count', '0');
+        // The hint only: the bar itself exists only with a selection, as the floating bar always did.
+        expect(screen.queryByTestId('selection-toolbar')).toBeNull();
         expect(screen.getByTestId('selection-toolbar-hint').textContent?.trim()).toBe('Pick some rows');
         expect(screen.queryByTestId('selection-toolbar-clear')).toBeNull();
         expect(screen.queryByTestId('toolbar-action-edit')).toBeNull();
