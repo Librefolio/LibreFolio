@@ -238,7 +238,7 @@
 
     function rowActions(status: ReconciliationStatus): RowAction<ReconciliationRow>[] {
         const action = rowActionOf(status);
-        return [{id: `reconcile-${status}`, icon: action.icon, label: action.label, onClick: (row) => action.run(row), disabled: () => linking}];
+        return [{id: `reconcile-${status}`, icon: action.icon, label: action.label, onClick: (row) => action.run(row), blocked: () => (linking ? {hint: () => $t('transactions.reconcile.linkingBusy'), reason: 'linking'} : null)}];
     }
 
     function columnsFor(status: ReconciliationStatus): ColumnDef<ReconciliationRow>[] {
