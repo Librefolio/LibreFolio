@@ -36,11 +36,15 @@ Each provider represents a central bank or financial data source that provides e
 | **CBK** | `cbk/plugin.py` | `CBK` | KES | wpDataTables `admin-ajax` JSON, two tables; three directions by name |
 | **RBI** | `rbi/plugin.py` | `RBI` | INR | ASP.NET form read as HTML (hidden fields echoed), yearly windows |
 | **BOG** | `bog/plugin.py` | `BOG` | GHS | wpDataTables `admin-ajax` JSON with the page's nonce, one request |
+| **BNR** | `bnr/plugin.py` | `BNR` | RON | XML: the ten-day file, or one file per year; local tag names (the namespace changes) |
+| **BOI** | `boi/plugin.py` | `BOI` | ILS | SDMX CSV, every series in one request; a 404 or an empty body is an empty range |
+| **NBP** | `nbp/plugin.py` | `NBP` | PLN | JSON tables A (daily) and B (weekly, D3), 93 days per request, both at once |
+| **BCRA** | `bcra/plugin.py` | `BCRA` | ARS | Documented JSON, one series per currency in windows, three at once; USD from `REF` |
 | **MANUAL** | `manual/plugin.py` | `MANUAL` | Any | Sentinel (no sync) |
 
 A provider's note (`warning_i18n`) has a level, `warning_level`: `"warning"` (⚠️, a data limit that can mislead: SNB,
-BOC, BDI, SARB, BOK, CBN, CBK, RBI, BOG) or `"info"` (ℹ️, a fact worth knowing: FED, NORGES, NBU, BCB, BANXICO,
-CNB, BCRP, TRM, CBC). Unit and direction tests: one
+BOC, BDI, SARB, BOK, CBN, CBK, RBI, BOG, BOI, NBP, BCRA) or `"info"` (ℹ️, a fact worth knowing: FED, NORGES, NBU,
+BCB, BANXICO, CNB, BCRP, TRM, CBC, BNR). Unit and direction tests: one
 `test_fx_<code>*.py` per provider, registered in `services provider-errors`; answers are synthetic, never downloaded.
 
 ## MANUAL Provider (Sentinel)
