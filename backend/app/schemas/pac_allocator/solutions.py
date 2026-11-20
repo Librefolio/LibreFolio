@@ -261,7 +261,14 @@ class RebalancerNoOpSolution(RebalancerPlanSolution):
 
 
 class PacIncumbentSolution(PacPlanSolution):
-    order_rows: Annotated[list[PlannerBuyOrderRow], Field(min_length=1)]
+    """A plan with at least one step: an order, a deposit or a conversion (contract §6.3 and §6.8). A plan that moves cash
+    and buys nothing is a plan (the developer, 20/11/2026); none of the lists is required alone."""
+
+    @model_validator(mode="after")
+    def validate_has_a_step(self) -> PacIncumbentSolution:
+        if not (self.order_rows or self.funding_actions or self.conversions):
+            raise ValueError("A PAC plan with no step is a no-op solution")
+        return self
 
 
 class RebalancerIncumbentSolution(RebalancerPlanSolution):
