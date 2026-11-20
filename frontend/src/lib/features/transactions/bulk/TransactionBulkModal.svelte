@@ -1206,17 +1206,26 @@
     /** 66 C22 (§5.1): reset rows back to what is saved. A merge still waiting for the save (`pendingPromotes`) that
      *  touches one of them is undone first, both halves, so «Save all» never sends a merge the grid no longer shows, and
      *  the order of the rows does not change the outcome (a charge reset before its parent's merge is undone would
-     *  otherwise stay «unlink»). */
+     *  otherwise stay «unlink»). 66 C22b: a split still waiting for the save (`pendingSplits`) that touches one of them is
+     *  undone the same way, both halves reset, so the grid's joined pair is never split by the save. */
     function resetRows(tempIds: readonly string[]) {
         const rows = [...new Set(tempIds)];
         const undone: string[] = [];
+        const rowTxIds = new Set(rows.map((tempId) => ops.find((d) => d.tempId === tempId)).flatMap((d) => (d?.op === 'edit' ? [d.txId] : [])));
+        const splitsUndone = pendingSplits.filter((s) => rowTxIds.has(s.id_a) || rowTxIds.has(s.id_b));
+        if (splitsUndone.length > 0) {
+            pendingSplits = pendingSplits.filter((s) => !splitsUndone.includes(s));
+            const halves = new Set(splitsUndone.flatMap((s) => [s.id_a, s.id_b]));
+            for (const d of ops) if (d.op === 'edit' && halves.has(d.txId)) undone.push(d.tempId);
+            lastSuggestKey = ''; // B9: invalidate suggest
+        }
         for (const tempId of rows) {
             const row = ops.find((d) => d.tempId === tempId);
             // The partner is taken before the undo: afterwards neither half names the other.
             const partner = row ? (row.pairedWith !== undefined ? ops.find((d) => d.tempId === row.pairedWith) : getPartnerOp(row.tempId)) : undefined;
             if (row && partner && undoPendingPromote(row, partner)) undone.push(partner.tempId);
         }
-        for (const tempId of [...rows, ...undone.filter((id) => !rows.includes(id))]) resetOne(tempId);
+        for (const tempId of new Set([...rows, ...undone])) resetOne(tempId);
     }
 
     function resetRow(tempId: string) {
@@ -1259,9 +1268,11 @@
     }
 
     /** 66 C21 (§5.2): a reset or restored charge whose parent cannot hold it — «del», or a leg of a pair, saved or pending — stays
-     *  «unlink»; the reset brings back its other values only. A pair is named in a toast (the «Link» reason `paired`). */
+     *  «unlink»; the reset brings back its other values only. A pair is named in a toast (the «Link» reason `paired`).
+     *  66 C22b: so does a charge of a reset row that the reset made a leg again — a half of a split undone by the reset,
+     *  whose charge was linked while the split was queued. */
     function keepUnlinkedFromUnfitParents(resetTempIds: ReadonlySet<string>) {
-        const ownerOfReset = (d: PendingOp): PendingOp | undefined => (resetTempIds.has(d.tempId) && d.chargeOf !== undefined && !d.parentUnlink ? ops.find((o) => o.tempId === d.chargeOf && o !== d) : undefined);
+        const ownerOfReset = (d: PendingOp): PendingOp | undefined => (d.chargeOf !== undefined && !d.parentUnlink && (resetTempIds.has(d.tempId) || resetTempIds.has(d.chargeOf)) ? ops.find((o) => o.tempId === d.chargeOf && o !== d) : undefined);
         const unfit = (owner: PendingOp | undefined): boolean => !!owner && (isPairLeg(owner, ops) || (owner.op === 'edit' && owner.markedDelete === true));
         const parent = ops.map(ownerOfReset).find((owner): owner is PendingOp => !!owner && isPairLeg(owner, ops));
         ops = ops.map((d) => (unfit(ownerOfReset(d)) ? {...d, parentUnlink: true} : d));
