@@ -1023,6 +1023,36 @@ Il database tiene i prezzi a 12 decimali. PEPE (3,5e-6) resta con 7 cifre signif
 un miliardo di monete; una moneta sotto 1e-12 diventerebbe 0 e sarebbe scartata, sotto ~1e-9 perde precisione. Idea
 (P2c, ~0,5 giorni): un parametro «prezzo per N unità», come i pence di Yahoo, solo per le monete sotto ~1e-9.
 
+**Aggiornamento del 20/11/2026.** Il developer: «si ok prevediamolo e documentiamolo per quando servirà ma attendiamo a
+farlo». Il lotto è deciso nella forma, non nei tempi:
+
+- **Quando parte**: appena qualcuno tiene una moneta sotto ~1e-9 € (oggi salvata con 4 cifre o meno; sotto 1e-12 € come 0).
+- **Cosa fa**: un parametro `price_per` del plugin CoinGecko (1, 1 000, 1 000 000, 1 000 000 000; predefinito 1). Il plugin
+  moltiplica prezzo corrente e storia per quel numero, e `suggest_quote_base()` restituisce lo stesso numero, così la
+  finestra dell'asset propone la quote base giusta: il meccanismo che c'è già per i GBp di Yahoo. Esempio: «prezzo per
+  1 000 000» salva 3,514249 invece di 0,000003514249, e il valore resta quantità ÷ 1 000 000 × prezzo.
+- **Dettagli**: il lotto P2c nel piano della corsia 76 (journal, `Release_2/Phase_2/76_cryptoPrices/`).
+
+## 🖼️ Le icone dei provider servite da LibreFolio (corsia 76, 20/11/2026)
+
+**Data aggiunta**: 20 Novembre 2026 · **Status**: 📋 FUTURO · **Priorità**: 🔽 Medio-bassa
+**Origine**: domanda 4 delle decisioni aperte della corsia 76; il developer: «non è un idea da scartare, ma ogni tanto
+dovrebbe aggiornare le icone, o meglio verificare se sono cambiate, ma non la farei ora».
+
+Oggi le icone dei provider (i favicon di Yahoo, justETF, CoinGecko, delle banche centrali) e i loghi delle monete sono
+indirizzi dei siti delle fonti: ogni browser che li mostra chiede a quei siti. Idea: LibreFolio le scarica, ne tiene una
+copia e le serve lui, dallo stesso indirizzo dell'istanza.
+
+- **Cosa risolverebbe**: la privacy verso i siti delle fonti; i siti che vietano di mostrare le loro icone altrove
+  (`Cross-Origin-Resource-Policy: same-origin`, come Banca d'Italia, oggi servita da una copia fissa); e la copia di
+  Banca d'Italia stessa, che non si aggiorna mai.
+- **Il punto del developer**: ogni tanto verificare se un'icona è cambiata (per esempio confrontandone l'impronta), e
+  sostituire la copia solo allora.
+- **Cosa costa**: lo scaricamento, una cache, i limiti di dimensione e di formato, e una protezione dagli indirizzi
+  malevoli (SSRF: l'indirizzo di un'icona lo dà un plugin).
+- **Dettagli**: il piano della corsia 76 (journal, `Release_2/Phase_2/76_cryptoPrices/`, le decisioni del 20/11) e il
+  triage delle icone a puzzle (journal, `76_cryptoPrices/notes/icons-triage/`).
+
 ## 🔍 Da approfondire: XERJ, ricerca locale per gli agenti
 
 **Data aggiunta**: 16 Novembre 2026 (decisione del developer) · **Status**: ⏳ IN ATTESA che diventi stabile ·
