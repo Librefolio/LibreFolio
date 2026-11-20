@@ -58,12 +58,13 @@ class NorgesBankProvider(FXRateProvider):
     """
 
     BASE_URL = "https://data.norges-bank.no/api/data/EXR"
-    #: Series of the catalogue that are no currency: two NOK exchange-rate indices and the IMF's SDR.
-    NOT_CURRENCIES = frozenset({"I44", "TWI", "XDR"})
+    #: Series of the catalogue that are no currency: two NOK exchange-rate indices (the IMF's SDR is served, Q7 of
+    #: lane 75).
+    NOT_CURRENCIES = frozenset({"I44", "TWI"})
     #: A series whose last value is older than this, counted from the newest value of the catalogue, is closed.
     CLOSED_AFTER = timedelta(days=31)
 
-    # What the catalogue returned on 2026-11-13, without indices, SDR and closed series, plus NOK. Listed while the
+    # What the catalogue returned on 2026-11-13, without indices and closed series, plus NOK. Listed while the
     # first discovery after a restart is slow or fails; the live list replaces it as soon as one arrives.
     FALLBACK_CURRENCIES = (
         "AUD",
@@ -101,6 +102,7 @@ class NorgesBankProvider(FXRateProvider):
         "TWD",
         "USD",
         "VND",
+        "XDR",
         "ZAR",
     )
 
@@ -163,7 +165,7 @@ class NorgesBankProvider(FXRateProvider):
         """
         The live currencies of the catalogue (last observation of every ``B..NOK.SP`` series), plus NOK.
 
-        Drops the indices and the SDR, and every series whose last value is more than ``CLOSED_AFTER`` older than the
+        Drops the indices, and every series whose last value is more than ``CLOSED_AFTER`` older than the
         newest value of the answer (RUB, HRK, BGN on 2026-11-13).
         """
         rows = await self._get_csv("", {"format": "csv", "lastNObservations": "1"})
