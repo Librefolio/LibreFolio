@@ -379,7 +379,6 @@
     let showImagePicker = $state(false);
 
     // Identifier selection + bulk delete
-    let identifierSelectedIds: string[] = $state([]);
     let showIdentifierDeleteConfirm = $state(false);
     let pendingIdentifierDeleteIds: string[] = $state([]);
 
@@ -675,8 +674,8 @@
     }
 
     /** Bulk delete identifiers with confirmation */
-    function handleIdentifierBulkDelete() {
-        pendingIdentifierDeleteIds = [...identifierSelectedIds];
+    function handleIdentifierBulkDelete(ids: string[]) {
+        pendingIdentifierDeleteIds = [...ids];
         showIdentifierDeleteConfirm = true;
     }
 
@@ -684,7 +683,6 @@
         const deleteSet = new Set(pendingIdentifierDeleteIds);
         for (const row of identifierRows) if (deleteSet.has(row.id)) markManualField(`identifier_${row.type.toLowerCase()}`);
         identifierRows = identifierRows.filter((r) => !deleteSet.has(r.id));
-        identifierSelectedIds = [];
         pendingIdentifierDeleteIds = [];
         showIdentifierDeleteConfirm = false;
     }
@@ -1758,7 +1756,7 @@
 
                 {#if moreInfoExpanded}
                     <div class="px-4 py-3 space-y-4 border-t border-lf-subtle">
-                        <AssetModalIdentifiers bind:rows={identifierRows} bind:selectedIds={identifierSelectedIds} {hasProvider} {askingProvider} onmanualedit={markManualField} onaskprovider={() => handleAskProviderSection('identifiers')} onbulkdelete={handleIdentifierBulkDelete} />
+                        <AssetModalIdentifiers bind:rows={identifierRows} {hasProvider} {askingProvider} onmanualedit={markManualField} onaskprovider={() => handleAskProviderSection('identifiers')} onbulkdelete={handleIdentifierBulkDelete} />
                     </div>
                 {/if}
             </div>
