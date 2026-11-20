@@ -141,13 +141,16 @@ const CALCULATION_TIMEOUT = 75_000;
 /**
  * The Tool platform admits one batch per user at a time (backend services/tools/executor.py, `_admit`: a second batch of the same
  * user is refused, 429 `queue_full`). The gallery's projects calculate as the same `TEST_ADMIN`, in parallel workers, so one
- * calculation at a time per lane: a lock file in the lane's data directory (playwright.config.ts exports it), taken before the
- * click and released when the planner is no longer busy. The wait for it is a calculation's budget plus a margin. The name
- * carries the Playwright runner's pid, the parent of every worker of this run: a file left by an earlier, killed run never
- * blocks this one, and no lock is ever taken over.
+ * Tool batch at a time per lane: a lock file in the lane's data directory (playwright.config.ts exports it). A batch is a
+ * calculation, and also the scenario preview the page sends by itself, 600 ms after every edit of the draft and after every
+ * plan (preview.svelte.ts; lot 0c of project 67: a preview of one project met the other's calculation, 429). So the lock
+ * covers every section that edits the draft or calculates, until the page's own preview has landed
+ * ({@link withToolBatches}). The name carries the Playwright runner's pid, the parent of every worker of this run: a file left
+ * by an earlier, killed run never blocks this one, and no lock is ever taken over. The wait covers the other workers'
+ * sections, a whole draft each, queued.
  */
 const TOOL_BATCH_LOCK = path.join(process.env.LIBREFOLIO_TEST_DATA_DIR ?? '.', `.gallery-tool-batch.${process.ppid}.lock`);
-const TOOL_BATCH_LOCK_WAIT = CALCULATION_TIMEOUT + 15_000;
+const TOOL_BATCH_LOCK_WAIT = 3 * CALCULATION_TIMEOUT;
 const TOOL_BATCH_LOCK_POLL = 200;
 /**
  * The result's Exposures: the world map, read once per page — a static file of the app (`/data/world.json`, about 1 MB), no
@@ -337,6 +340,10 @@ async function editBroker(page: Page, brokerKey: string, configure: (editor: Loc
  * nothing left to complete. Every step is visited, so the step list marks them all; the FX step reads its rate (Auto).
  */
 export async function buildPacDraft(page: Page, ids: PacIds): Promise<PacDraft> {
+    return withToolBatches(page, () => buildPacDraftSteps(page, ids));
+}
+
+async function buildPacDraftSteps(page: Page, ids: PacIds): Promise<PacDraft> {
     const s = PAC_SCENARIO;
     const keys = {
         ib: `broker:${ids.brokers.ib}`,
@@ -526,6 +533,10 @@ export async function buildPacDraft(page: Page, ids: PacIds): Promise<PacDraft> 
  * Typed here, the result is the same every day. When SLIP lands, decide whether this pin can go.
  */
 export async function pinPacMarketData(page: Page, draft: PacDraft): Promise<void> {
+    await withToolBatches(page, () => pinPacMarketDataSteps(page, draft));
+}
+
+async function pinPacMarketDataSteps(page: Page, draft: PacDraft): Promise<void> {
     const pinned = PAC_SCENARIO.resultMarketData;
     await goToPacStep(page, 'assets');
     const apple = assetCard(page, draft.keys.apple);
@@ -757,9 +768,11 @@ export async function framePacRouting(page: Page, draft: PacDraft): Promise<Loca
 
 /** Bring the target total to 90%, so the Review has one field still to complete; {@link framePacTargets} puts it back. */
 export async function leavePacTargetsIncomplete(page: Page, draft: PacDraft): Promise<void> {
-    await goToPacStep(page, 'targets');
-    await typeValue(targetInput(page, draft.keys.bond), PAC_SCENARIO.incompleteBondTarget);
-    await expect(page.getByTestId('pac-planner-targets-control')).toHaveAttribute('data-state', 'missing');
+    await withToolBatches(page, async () => {
+        await goToPacStep(page, 'targets');
+        await typeValue(targetInput(page, draft.keys.bond), PAC_SCENARIO.incompleteBondTarget);
+        await expect(page.getByTestId('pac-planner-targets-control')).toHaveAttribute('data-state', 'missing');
+    });
 }
 
 /**
@@ -826,11 +839,14 @@ async function scrollBackToFirstColumn(field: Locator): Promise<void> {
 export async function framePacTargets(page: Page, draft: PacDraft): Promise<Locator> {
     const step = await goToPacStep(page, 'targets');
     const bond = targetInput(page, draft.keys.bond);
-    await typeValue(bond, PAC_SCENARIO.targets.bond);
     // `fill` focuses the field and scrolls it into view, sideways too inside the table's own scroller (on a phone the table is
     // wider than the screen); the shot wants the table at rest from its first column, with no focus ring. So the focus goes,
-    // the table goes back to its start, and the spec's settle (settlePacShot: motion, stillness) runs after both.
-    await bond.blur();
+    // the table goes back to its start, and the spec's settle (settlePacShot: motion, stillness) runs after both. The edit and
+    // the blur that may commit it are one Tool batch section.
+    await withToolBatches(page, async () => {
+        await typeValue(bond, PAC_SCENARIO.targets.bond);
+        await bond.blur();
+    });
     await scrollBackToFirstColumn(bond);
     await expect(bond, 'the bond target changed when its field let the focus go').toHaveValue(PAC_SCENARIO.targets.bond);
     const control = page.getByTestId('pac-planner-targets-control');
@@ -851,6 +867,8 @@ export async function framePacTargets(page: Page, draft: PacDraft): Promise<Loca
  * for whoever reads it, waited for by polling and removed when `work` ends, whatever its outcome.
  */
 async function withToolBatchLock<T>(work: () => Promise<T>): Promise<T> {
+    // Re-entrant within a worker: a section inside another (a calculation inside a whole draft) keeps the lock it holds.
+    if (toolBatchLockDepth > 0) return nested(work);
     const deadline = Date.now() + TOOL_BATCH_LOCK_WAIT;
     for (;;) {
         try {
@@ -865,16 +883,45 @@ async function withToolBatchLock<T>(work: () => Promise<T>): Promise<T> {
         }
     }
     try {
-        return await work();
+        return await nested(work);
     } finally {
         rmSync(TOOL_BATCH_LOCK, {force: true});
     }
 }
 
+/** How deep this worker is inside {@link withToolBatchLock}: one file per lock, whatever the nesting. */
+let toolBatchLockDepth = 0;
+
+async function nested<T>(work: () => Promise<T>): Promise<T> {
+    toolBatchLockDepth += 1;
+    try {
+        return await work();
+    } finally {
+        toolBatchLockDepth -= 1;
+    }
+}
+
+/**
+ * Run `work`, a section that edits the draft or calculates, under the lane's Tool batch lock, and release it only once the
+ * page's own scenario preview has landed with its numbers: the planner's `data-preview` reads `ready` (PlannerShell.svelte;
+ * `waiting` while one is scheduled or on its way, `error` when refused). A preview is scheduled 600 ms after the last edit
+ * and once more after a plan, so a section that ended without waiting for it would leave a batch on its way after the
+ * release. Every section of the gallery's drafts ends `ready`, the 90% target total included (seen on 20/11/2026): a
+ * refused preview fails here instead of reaching a shot.
+ */
+async function withToolBatches<T>(page: Page, work: () => Promise<T>): Promise<T> {
+    return withToolBatchLock(async () => {
+        const result = await work();
+        await expect(page.getByTestId('pac-planner'), "the page's own preview did not land, or was refused").toHaveAttribute('data-preview', 'ready', {timeout: READ_TIMEOUT});
+        return result;
+    });
+}
+
 /**
  * Calculate the complete draft from its Review and end on a plan: the copied facts read again and nothing missing from them,
  * the result current (not stale), state `ready_incumbent`. A no-op, an infeasible draft or a tool error fails here, named.
- * The click and the wait run under the lane's Tool batch lock: the other project calculates as the same user.
+ * The click and the wait run under the lane's Tool batch lock, until the preview the page sends after the plan has landed:
+ * the other project calculates as the same user.
  */
 export async function calculatePacPlan(page: Page): Promise<Locator> {
     const review = (await goToPacStep(page, 'review')).getByTestId('pac-planner-review');
@@ -882,7 +929,7 @@ export async function calculatePacPlan(page: Page): Promise<Locator> {
     const calculate = review.getByTestId('pac-planner-calculate');
     await expect(calculate).toBeEnabled();
     const planner = page.getByTestId('pac-planner');
-    await withToolBatchLock(async () => {
+    await withToolBatches(page, async () => {
         await calculate.click();
         await expect(planner).toHaveAttribute('data-view', 'result');
         await expect(planner, 'the calculation is still running').toHaveAttribute('data-busy', 'false', {timeout: CALCULATION_TIMEOUT});

@@ -349,7 +349,8 @@
     });
 </script>
 
-<div class="min-w-0 space-y-4 text-lf-primary" data-testid={profile.testIdPrefix} data-view={view} data-step={step} data-state={runState} data-busy={working ? 'true' : 'false'} aria-busy={working}>
+<!-- data-preview: the scenario preview's state, whatever the step; «waiting» while one is scheduled or on its way (a Tool batch). -->
+<div class="min-w-0 space-y-4 text-lf-primary" data-testid={profile.testIdPrefix} data-view={view} data-step={step} data-state={runState} data-busy={working ? 'true' : 'false'} data-preview={preview.state} aria-busy={working}>
     {#if view === 'result'}
         {#if refreshing}
             <BusyPanel phase="refresh" onstop={stopRefresh} />
