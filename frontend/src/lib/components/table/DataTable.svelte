@@ -13,14 +13,14 @@
   - Dark mode support
 -->
 <script generics="T" lang="ts">
-    import {onDestroy, onMount, untrack} from 'svelte';
+    import {onDestroy, onMount, untrack, type Snippet} from 'svelte';
     import {t} from '$lib/i18n';
     import {getUserStorageKey} from '$lib/utils/storage';
     import {Ban, Check, Filter} from 'lucide-svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import DataTablePagination from './DataTablePagination.svelte';
     import DataTableToolbar from './DataTableToolbar.svelte';
-    import {resolveSelectionActions} from './selectionActions';
+    import {selectionToolbarActions} from './selectionActions';
     import {watchInView} from './selectionDock';
     import DataTableColumnHeader from './DataTableColumnHeader.svelte';
     import DataTableCellContent from './DataTableCellContent.svelte';
@@ -139,6 +139,12 @@
         selectionPanel?: boolean;
         /** The words of the top bar while nothing is selected; absent: the shared hint. */
         selectionHint?: string;
+        /**
+         * 77 SEL-B: the caller's pager, for a table whose pages are cut outside it (`enablePagination` off: the
+         * transactions grouped with their charges). The table hosts it where its own pager would be — in the dock, under
+         * the actions, when the selection panel is on — and passes `docked`. Drawn whenever given.
+         */
+        pager?: Snippet<[boolean]>;
     }
 
     let {
@@ -191,6 +197,7 @@
         opensPage,
         selectionPanel = false,
         selectionHint,
+        pager: externalPager,
     }: Props = $props();
 
     /** Dataset used for computing filter boundaries (min/max, currency ranges). */
@@ -439,24 +446,7 @@
 
     let panelOn = $derived(selectionPanel && effectiveSelectionMode === 'multi');
     /** The actions to draw, each with the rows it takes (the count chip and the numbers come from the same rows). */
-    let panelActions = $derived(
-        panelOn
-            ? resolveSelectionActions(bulkActions, selectedRows).map((item) => ({
-                  id: item.action.id,
-                  icon: item.action.icon,
-                  label: item.action.label,
-                  shortLabel: item.action.shortLabel,
-                  variant: item.action.variant,
-                  primary: item.action.primary,
-                  iconClass: item.action.iconClass,
-                  count: item.count,
-                  disabled: item.state === 'off',
-                  hint: item.state === 'off' ? item.hint : undefined,
-                  reason: item.state === 'off' ? item.reason : undefined,
-                  onClick: () => handleBulkAction(item.action, item.rows),
-              }))
-            : [],
-    );
+    let panelActions = $derived(panelOn ? selectionToolbarActions(bulkActions, selectedRows, handleBulkAction) : []);
     /** The slot of the top bar, always drawn while the panel is on: what the watcher observes. */
     let selectionTopEl = $state<HTMLDivElement | null>(null);
     let selectionTopInView = $state(true);
@@ -467,7 +457,7 @@
     /** The actions are in one place at a time: at the top while it is in view, in the dock otherwise. */
     let dockHasActions = $derived(panelOn && selectedRows.length > 0 && !selectionTopInView);
     /** Whether the table draws its pager: enabled, and more rows than the smallest page (or `alwaysShowPagination`). */
-    let showPagination = $derived(enablePagination && filteredData.length > 0 && (alwaysShowPagination || filteredData.length > Math.min(...pageSizeOptions.filter((x) => x > 0))));
+    let showPagination = $derived(!!externalPager || (enablePagination && filteredData.length > 0 && (alwaysShowPagination || filteredData.length > Math.min(...pageSizeOptions.filter((x) => x > 0)))));
     let computedFooterCells = $derived.by<Record<string, FooterCellContent>>(() => {
         if (!footerCells) return {};
         return typeof footerCells === 'function' ? footerCells(footerSourceRows, selectedRows, visibleColumns) : footerCells;
@@ -1313,16 +1303,20 @@
 
     <!-- Pagination - show only when enabled and items exceed smallest page size (or alwaysShowPagination) -->
     {#snippet pager(docked: boolean)}
-        <DataTablePagination
-            pageIndex={flatPages ? Math.min(pagination.pageIndex, flatPages.length - 1) : pagination.pageIndex}
-            pageSize={pagination.pageSize}
-            totalItems={filteredData.length}
-            pageCount={flatPages?.length}
-            {pageSizeOptions}
-            {docked}
-            onPageChange={handlePageChange}
-            onPageSizeChange={handlePageSizeChange}
-        />
+        {#if externalPager}
+            {@render externalPager(docked)}
+        {:else}
+            <DataTablePagination
+                pageIndex={flatPages ? Math.min(pagination.pageIndex, flatPages.length - 1) : pagination.pageIndex}
+                pageSize={pagination.pageSize}
+                totalItems={filteredData.length}
+                pageCount={flatPages?.length}
+                {pageSizeOptions}
+                {docked}
+                onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
+            />
+        {/if}
     {/snippet}
     {#if panelOn}
         <!-- 77 SEL-A: the dock. The actions come down into it while the top of the table is out of view; the pager is the

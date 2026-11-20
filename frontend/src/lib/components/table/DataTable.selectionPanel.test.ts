@@ -17,6 +17,7 @@ import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest
 import {Link2, Plus, Trash2} from 'lucide-svelte';
 import {fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
 import DataTable from './DataTable.svelte';
+import ExternalPagerFixture from '$test/harness/DataTableExternalPagerHarness.svelte';
 import type {BulkAction, ColumnDef} from './types';
 
 interface Row {
@@ -222,5 +223,23 @@ describe('the dock at the bottom', () => {
         const {list} = actions();
         mount(rowsOf(4), {bulkActions: list, selectionPanel: true});
         expect(observers.some((observer) => observer.targets.includes(screen.getByTestId('dt-selection-top')))).toBe(true);
+    });
+});
+
+/**
+ * 77 SEL-B: a table whose pages are cut outside it (the transactions grouped with their charges) hands its own pager to
+ * the table, which hosts it where its pager would be: in the dock, under the actions, and the same instance throughout.
+ */
+describe('an external pager (77 SEL-B)', () => {
+    it('sits where the table’s own pager would, and docks under the actions when they come down', async () => {
+        const {list} = actions();
+        render(ExternalPagerFixture, {props: {rows: rowsOf(4), bulkActions: list as never}});
+        const pager = screen.getByTestId('data-table-pagination');
+        expect(pager).toHaveAttribute('data-docked', 'false');
+        await tick('r1');
+        setTopInView(false);
+        await waitFor(() => expect(screen.getByTestId('dt-dock')).toHaveAttribute('data-actions', 'true'));
+        expect(screen.getByTestId('data-table-pagination')).toBe(pager);
+        expect(pager).toHaveAttribute('data-docked', 'true');
     });
 });
