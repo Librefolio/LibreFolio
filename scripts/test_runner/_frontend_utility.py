@@ -500,6 +500,8 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/assets/AssetModal.enrichers.test.ts",
             "src/lib/features/assets/AssetModal.profile.test.ts",
             "src/lib/components/ui/input/DistributionEditor.askLabel.test.ts",
+            "src/lib/components/ui/input/DistributionEditor.selection.test.ts",
+            "src/lib/features/assets/AssetModalIdentifiers.test.ts",
             "src/lib/features/assets/CellDateRange.test.ts",
             "src/lib/features/assets/ProviderAssignmentSection.test.ts",
             "src/lib/features/assets/providerProbeState.test.ts",
