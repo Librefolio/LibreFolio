@@ -167,7 +167,7 @@ form, which saves them with the asset.
 ### 📜 Latest changes {: #latest-changes }
 
 The **Latest changes** panel, at the bottom of the tab, is closed at first: click its title to open it. It lists the
-asset's latest changes, newest first, twenty per page:
+asset's latest changes, newest first, twenty per page (the pages are in the bar at the bottom of the table):
 
 - **When** — the day of the change;
 - **Data** — the item;
@@ -184,7 +184,8 @@ their [history](#data-history).
 </div>
 
 **Forget** removes a change as if it had never been made: the item goes back to the value it had before. Use it on one
-row (its menu) or on the rows you select (**Forget 2 changes**). LibreFolio asks first, as it cannot be undone.
+row (its menu) or on the rows you select: the bar above the table shows **Forget** with the number of rows. LibreFolio
+asks first, as it cannot be undone.
 
 ### 🕘 History of the data {: #data-history }
 

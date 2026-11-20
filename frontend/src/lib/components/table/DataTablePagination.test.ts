@@ -338,3 +338,26 @@ describe('DataTablePagination — docked (77 SEL-A)', () => {
         expect(screen.getByTestId('pagination-size-trigger')).toBeInTheDocument();
     });
 });
+
+/**
+ * 77 SEL-D1 (designer, 20/11; Q-SEL-17: a control that does nothing is not shown): with one page size only there is
+ * nothing to choose, so the selector goes, «per page» with it; the number of items and the pages stay. The rule is the
+ * pager's own, for every caller, with no prop. The «Modifiche del profilo» pager, which the server pages by 20, is one.
+ */
+describe('DataTablePagination — one page size, no selector (77 SEL-D1)', () => {
+    it('with a single option there is no size selector; the total and the pages stay', async () => {
+        await setupI18n();
+        const {onPageChange} = mount({pageIndex: 0, pageSize: 20, totalItems: 25, pageSizeOptions: [20]});
+        expect(screen.queryByTestId('pagination-size-trigger')).toBeNull();
+        expect(screen.getByTestId('pagination-total').textContent).toContain('25');
+        await fireEvent.click(screen.getByTestId('pagination-next'));
+        expect(lastArg(onPageChange)).toBe(1);
+    });
+
+    it('with two options the selector is there (guard)', async () => {
+        await setupI18n();
+        mount({pageIndex: 0, pageSize: 20, totalItems: 25, pageSizeOptions: [20, 50]});
+        expect(screen.getByTestId('pagination-size-trigger')).toBeInTheDocument();
+        expect(screen.getByTestId('pagination-total')).toBeInTheDocument();
+    });
+});

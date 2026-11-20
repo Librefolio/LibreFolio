@@ -3,7 +3,7 @@
  *
  * `files/+page.svelte` has two delete paths that write to shared, global state:
  * `deleteFile` (single, static + BRIM) and `handleBulkDeleteFiles` (the page-level
- * SelectionBar), plus the `file.delete.failed` error branch. Uploaded files live
+ * selection panel), plus the `file.delete.failed` error branch. Uploaded files live
  * in the shared uploads dir and every files spec reads them, so a spec that
  * deletes a *mock* file becomes the cause of a red somewhere else entirely. These
  * were deliberately left uncovered until they could be done safely.
@@ -75,7 +75,7 @@ async function uploadBrimFile(page: Page, brokerId: number, label: string): Prom
 }
 
 /** Land on the static tab in list view — the only view where rows carry row
- *  actions and the SelectionBar renders. `view-mode-list` is idempotent
+ *  actions and the selection panel renders. `view-mode-list` is idempotent
  *  (`setViewMode('list')`), not a flip, so clicking it is safe even if already
  *  active; we still assert the end state per the toggle rule. */
 async function openStaticListView(page: Page): Promise<void> {

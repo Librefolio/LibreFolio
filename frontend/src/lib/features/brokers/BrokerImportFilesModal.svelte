@@ -27,8 +27,8 @@
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
-    import SelectionBar from '$lib/components/table/SelectionBar.svelte';
-    import type {BrimFile, FilePreviewResponse} from '$lib/types';
+    import type {BulkAction} from '$lib/components/table/types';
+    import type {BrimFile, FileData, FilePreviewResponse} from '$lib/types';
     import {fetchFilePreview} from '$lib/utils/files/filePreview';
     import {resolveParseFailureMessage} from '$lib/features/transactions/import/parseFailure';
 
@@ -69,7 +69,6 @@
 
     // FilesTable ref + selection tracking
     let filesTableRef: FilesTable | undefined = $state(undefined);
-    let selectedFileIds: string[] = $state([]);
 
     // BRIM preview modal state
     let showPreviewModal = $state(false);
@@ -254,9 +253,21 @@
     }
 
     // #R6-7 (Batch 4.d-part3) — Bulk delete confirmation gating.
-    // Centralised entry point used by both the SelectionBar action and the
+    // Centralised entry point used by both the table's «Delete» (77 SEL-D: the selection panel) and the
     // FilesTable internal ``onDeleteMultiple`` callback, so a single
     // destructive ConfirmModal protects every bulk-delete path.
+    /** The table's selection panel (77 SEL-D): «Delete» on the selected files the user may delete, as on the Files page. */
+    const fileSelectionActions: BulkAction<FileData>[] = [
+        {
+            id: 'delete',
+            icon: Trash2,
+            label: () => $_('common.delete'),
+            variant: 'danger',
+            appliesTo: (file) => (file as {can_delete?: boolean}).can_delete !== false,
+            onClick: (rows) => requestBulkDelete(rows.map((file) => (file as BrimFile).file_id)),
+        },
+    ];
+
     function requestBulkDelete(ids: string[]) {
         if (ids.length === 0) return;
         pendingBulkDeleteIds = [...ids];
@@ -338,21 +349,6 @@
             </button>
         </div>
         <div class="modal-header-toolbar">
-            <SelectionBar
-                actions={[
-                    {
-                        id: 'delete',
-                        icon: Trash2,
-                        label: () => $_('common.delete'),
-                        variant: 'danger',
-                        onClick: () => {
-                            requestBulkDelete(selectedFileIds);
-                        },
-                    },
-                ]}
-                onClearSelection={() => filesTableRef?.clearSelection()}
-                selectedCount={selectedFileIds.length}
-            />
             <a class="manage-link" href="/files?tab=brim&broker={brokerId}">
                 <ExternalLink size={14} />
                 {$_('brokers.manageFiles')}
@@ -398,7 +394,7 @@
                 <p class="text-lf-muted text-sm mt-1">{$_('brokers.uploadHint')}</p>
             </div>
         {:else}
-            <FilesTable bind:this={filesTableRef} {files} type="brim" onDelete={handleDelete} onDeleteMultiple={requestBulkDelete} onPreview={(file) => openPreview(file as BrimFile)} showBrokerColumn={false} onSelectionChange={(ids) => (selectedFileIds = ids)} />
+            <FilesTable bind:this={filesTableRef} {files} type="brim" onDelete={handleDelete} onDeleteMultiple={requestBulkDelete} onPreview={(file) => openPreview(file as BrimFile)} showBrokerColumn={false} selectionActions={fileSelectionActions} />
         {/if}
     </div>
 

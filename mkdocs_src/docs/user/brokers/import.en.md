@@ -51,6 +51,8 @@ The same wizard opens from **Import** on the [Transactions](../transactions/inde
 
 - **Upload** CSV or Excel files: they are assigned to this broker and listed in the wizard's **Select Files** step. Files you upload together form one set — this is how banks that split an account across several exports, such as Danske Bank, are imported.
 - **Preview** or **Delete** a file. Deleting a report never deletes the transactions imported from it.
+- Tick several files to **Download** or **Delete** them together: the bar above the table shows each action with the
+  number of files it takes. **Delete** counts only the files you may delete, and is not shown when you may delete none.
 - Check each file's **Status** and **Report set** badges — see [Report sets](../files/index.md#report-sets).
 - **Manage all files** opens the [Files & Uploads](../files/index.md#broker-reports) page, filtered on this broker.
 

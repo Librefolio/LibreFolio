@@ -3,19 +3,20 @@
  * BrokerImportFilesModal — bulk delete of a broker's BRIM report files (backlog W-B37, decision 36).
  *
  * The contract under test. `GET /brokers/import/files` lists the broker's reports, and each item (`BRIMFileListItem`)
- * says whether the user may delete it: `can_delete`. A bulk delete — rows ticked, the SelectionBar's delete, the
- * destructive confirmation — sends a DELETE only for the selected files whose `can_delete` is not false, as the Files
- * page does since H's CP-U2 (`deletableSelection` and `handleBulkDeleteFiles` in `routes/(app)/files/+page.svelte`).
- * The files left out are announced once, with the page's own notice: `notify({name: 'file.delete.skipped', detail:
- * {count, isBrim: true}, toast: {variant: 'warning', message: $_('uploads.deleteSkipped')}})`, `count` being the files
- * left out. When nothing deletable remains the operation stops there: no DELETE, no error, no success toast. Otherwise
- * the success toast counts the deleted files only.
+ * says whether the user may delete it: `can_delete`. A bulk delete — rows ticked, the bar's «Delete», the destructive
+ * confirmation — sends a DELETE only for the selected files whose `can_delete` is not false, as the Files page does.
+ *
+ * Since 77 SEL-D the table draws its own selection panel (the rule of Q-SEL-1 and Q-SEL-9): «Delete» counts only the
+ * selected files the user may delete and acts on those only, so the number says it before the click; with none of
+ * them deletable «Delete» is not offered. The modal's own guard (`handleDeleteMultiple` leaves out a file it may not
+ * delete, with the notice `file.delete.skipped`) stays as the safety net, but no click reaches it any more: no notice
+ * follows a delete from the bar. The success toast counts the deleted files.
  *
  * Today (`588ee99c7`) `handleDeleteMultiple` sends a DELETE for every selected id and reports the 403s in the error
  * banner: the first two tests are red on their first assertion, the DELETEs sent. The third is the green guard of a
  * selection the user may wholly delete; the last is a control of the harness.
  *
- * The harness. The component runs as in the app — the modal, FilesTable, DataTable, SelectionBar, ConfirmModal and the
+ * The harness. The component runs as in the app — the modal, FilesTable, DataTable and its panel, ConfirmModal and the
  * generated client (Zodios on axios, `validate: 'response'`) — and only the transport is faked:
  * `axiosInstance.defaults.adapter` answers as a server holding the broker's files would. A DELETE of a file whose
  * `can_delete` is false is refused with a 403, as the backend refuses it; an accepted one removes the file, so the list
@@ -33,7 +34,7 @@
  *   - which confirmation opened (this ConfirmModal carries no testId): by the values its message was formatted with.
  *
  * The end of the operation: `confirmBulkDelete` clears the table's selection only once `handleDeleteMultiple` has
- * returned, and the SelectionBar's delete goes with it. The modal publishes no busy state for a delete, so that is the
+ * returned, and the bar's «Delete» goes with it. The modal publishes no busy state for a delete, so that is the
  * barrier every test waits on before reading anything. Each test keeps a file listed after the operation, so the table
  * — and the selection the barrier reads — stays mounted throughout.
  */
@@ -194,19 +195,20 @@ async function selectRows(modal: HTMLElement, ids: string[]): Promise<void> {
     for (const id of ids) expect(within(modal).getByTestId(`${ROW_CHECKBOX}${id}`)).toHaveAttribute('data-state', 'checked');
 }
 
-/** The SelectionBar's delete, then the destructive confirmation; returns once the operation is over. */
-async function bulkDelete(modal: HTMLElement, selected: number): Promise<void> {
+/** The bar's «Delete», then the destructive confirmation; returns once the operation is over. `deletable`: the files it takes. */
+async function bulkDelete(modal: HTMLElement, deletable: number): Promise<void> {
     expect(screen.queryByTestId('confirm-modal-confirm'), 'no confirmation is open before the bulk action').toBeNull();
-    await fireEvent.click(within(modal).getByTestId('selection-bar-action-delete'));
+    expect(within(modal).getByTestId('toolbar-action-delete-count').textContent?.trim(), '«Delete» counts the files it takes').toBe(String(deletable));
+    await fireEvent.click(within(modal).getByTestId('toolbar-action-delete'));
     const confirm = await screen.findByTestId('confirm-modal-confirm');
     // This ConfirmModal has no testId: the bulk confirmation is the one whose message counts the selection.
     expect(
         formattedFor('uploads.confirmBulkDelete.message').map((call) => call.values),
         'the bulk confirmation, for the selected files',
-    ).toContainEqual({n: selected});
+    ).toContainEqual({n: deletable});
     await fireEvent.click(confirm);
     // confirmBulkDelete clears the selection only after handleDeleteMultiple has returned: the end of the operation.
-    await waitFor(() => expect(within(modal).queryByTestId('selection-bar-action-delete')).toBeNull(), {timeout: 3_000});
+    await waitFor(() => expect(within(modal).queryByTestId('toolbar-action-delete')).toBeNull(), {timeout: 3_000});
 }
 
 let realAdapter: typeof axiosInstance.defaults.adapter;
@@ -240,22 +242,14 @@ afterEach(() => {
 });
 
 describe('BrokerImportFilesModal bulk delete — the files the user may not delete are left out (W-B37)', () => {
-    // Red today: a DELETE goes out for the locked file too, its 403 lands in the error banner, no notice, no success.
-    it('deletes only the deletable files of a mixed selection, with one skipped notice and a success toast counting the deleted ones', async () => {
+    it('a mixed selection: «Delete» counts the deletable files and deletes those only, with a success toast counting them', async () => {
         const modal = await openModal([listed(DELETABLE_1, true), listed(LOCKED_1, false), listed(DELETABLE_2, true)]);
         await selectRows(modal, [DELETABLE_1, LOCKED_1, DELETABLE_2]);
-        await bulkDelete(modal, 3);
+        await bulkDelete(modal, 2);
 
         expect([...server.deletes].sort(), 'a DELETE for each selected file the user may delete, none for the other').toEqual([DELETABLE_1, DELETABLE_2].sort());
-        const notices = skippedNotices();
-        expect(notices, 'one notice for the file left in place').toHaveLength(1);
-        expect(notices[0].detail).toEqual({count: 1, isBrim: true});
-        expect(notices[0].toast?.variant).toBe('warning');
-        expect(
-            formattedFor('uploads.deleteSkipped').map((call) => call.text),
-            'the notice is worded by uploads.deleteSkipped',
-        ).toContain(notices[0].toast?.message);
-        expect(toastMessages('warning'), 'its toast reached the store, once').toEqual([notices[0].toast?.message]);
+        expect(skippedNotices(), 'the number said it before the click: no notice after').toEqual([]);
+        expect(toastMessages('warning')).toEqual([]);
         const counted = formattedFor('uploads.deleteBatchSucceeded');
         expect(
             counted.map((call) => call.values),
@@ -266,19 +260,16 @@ describe('BrokerImportFilesModal bulk delete — the files the user may not dele
         expect(listedIds(modal), 'the list asked again holds the file left in place').toEqual([LOCKED_1]);
     });
 
-    // Red today: a DELETE goes out for each locked file, both 403s land in the error banner.
-    it('sends no DELETE for a selection the user may not delete at all: the skipped notice once, and neither an error nor a success', async () => {
+    it('a selection the user may not delete at all: «Delete» is not offered, «Download» is, and nothing is sent', async () => {
         const modal = await openModal([listed(LOCKED_1, false), listed(DELETABLE_1, true), listed(LOCKED_2, false)]);
         await selectRows(modal, [LOCKED_1, LOCKED_2]);
-        await bulkDelete(modal, 2);
+        const bar = within(modal).getByTestId('selection-toolbar');
+        expect(bar).toHaveAttribute('data-selected-count', '2');
+        expect(within(modal).queryByTestId('toolbar-action-delete'), 'no selected file may be deleted').toBeNull();
+        expect(within(modal).getByTestId('toolbar-action-download-count').textContent?.trim(), '«Download» takes both (77 SEL-D, designer 2a)').toBe('2');
 
         expect(server.deletes, 'nothing selected may be deleted: no DELETE at all').toEqual([]);
-        const notices = skippedNotices();
-        expect(notices, 'one notice for the two files left in place').toHaveLength(1);
-        expect(notices[0].detail).toEqual({count: 2, isBrim: true});
-        expect(notices[0].toast?.variant).toBe('warning');
-        expect(formattedFor('uploads.deleteSkipped').map((call) => call.text)).toContain(notices[0].toast?.message);
-        expect(toastMessages('warning'), 'its toast reached the store, once').toEqual([notices[0].toast?.message]);
+        expect(skippedNotices()).toEqual([]);
         expect(within(modal).queryByTestId('info-banner-error'), 'no error: nothing was refused').toBeNull();
         expect(toastMessages('success'), 'no success toast: nothing was deleted').toEqual([]);
         expect(formattedFor('uploads.deleteBatchSucceeded')).toEqual([]);
@@ -287,7 +278,7 @@ describe('BrokerImportFilesModal bulk delete — the files the user may not dele
         expect(listedIds(modal)).toEqual([DELETABLE_1, LOCKED_1, LOCKED_2].sort());
     });
 
-    // Green today, and after the cure: the guard of the path that must not change.
+    // The guard of the path that must not change.
     it('deletes a selection the user may wholly delete file by file, without a skipped notice', async () => {
         const modal = await openModal([listed(DELETABLE_1, true), listed(DELETABLE_2, true), listed(DELETABLE_3, true)]);
         await selectRows(modal, [DELETABLE_1, DELETABLE_3]);

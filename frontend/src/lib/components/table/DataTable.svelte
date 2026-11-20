@@ -136,8 +136,14 @@
          * that pass `bulkActions` today without drawing them stay as they are until their lot.
          */
         selectionPanel?: boolean;
-        /** The words of the top bar while nothing is selected; absent: the shared hint. */
+        /** The words of the top bar while nothing is selected; absent: the shared hint (in a section head: none). */
         selectionHint?: string;
+        /**
+         * 77 SEL-D (Q-SEL-8): a section's head — its title and its own buttons — drawn by the table in place of the bar
+         * at the top, with the bar placed where the head renders the snippet it is given. Drawn also when the selection
+         * or the panel is off (then with no bar), so the section keeps one head.
+         */
+        selectionHead?: Snippet<[Snippet]>;
         /**
          * 77 SEL-B: the caller's pager, for a table whose pages are cut outside it (`enablePagination` off: the
          * transactions grouped with their charges). The table hosts it where its own pager would be — in the dock, under
@@ -196,6 +202,7 @@
         opensPage,
         selectionPanel = false,
         selectionHint,
+        selectionHead,
         pager: externalPager,
     }: Props = $props();
 
@@ -1303,11 +1310,15 @@
             />
         {/if}
     {/snippet}
+    {#snippet noBar()}{/snippet}
     {#if panelOn}
-        <SelectionPanel actions={panelActions} selectedCount={selectedRows.length} hint={selectionHint} onClearSelection={clearAllSelection} pager={showPagination ? pager : undefined}>
+        <SelectionPanel actions={panelActions} selectedCount={selectedRows.length} hint={selectionHint} onClearSelection={clearAllSelection} pager={showPagination ? pager : undefined} head={selectionHead}>
             {@render tableBody()}
         </SelectionPanel>
     {:else}
+        {#if selectionHead}
+            {@render selectionHead(noBar)}
+        {/if}
         {@render tableBody()}
         {#if showPagination}
             {@render pager(false)}

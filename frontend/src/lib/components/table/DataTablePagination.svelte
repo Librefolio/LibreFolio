@@ -119,24 +119,27 @@
     <div class="pagination-balloon">
         <!-- Row 1: Page size + label + total (groups together on mobile) -->
         <div class="pagination-row-top">
-            <div bind:this={dropdownRef} class="page-size-selector">
-                <button class="page-size-btn" onclick={() => (showDropdown = !showDropdown)} type="button" data-testid="pagination-size-trigger" aria-expanded={showDropdown}>
-                    <span>{formatPageSize(getDisplayPageSize())}</span>
-                    <ChevronDown size={14} />
-                </button>
-                {#if showDropdown}
-                    <div class="page-size-dropdown" bind:this={dropdownPanel} style:left={`${dropdownPosition.left}px`} style:top={`${dropdownPosition.top}px`} data-testid="pagination-size-menu">
-                        {#each pageSizeOptions as size}
-                            <button type="button" class="dropdown-option" class:selected={getDisplayPageSize() === size} onclick={() => selectPageSize(size)} data-testid={`pagination-size-option-${size}`}>
-                                {formatPageSize(size)}
-                            </button>
-                        {/each}
-                    </div>
-                {/if}
-                <span class="page-size-label">{$t('table.perPage') || 'per page'}</span>
-            </div>
-            <div class="divider desktop-only"></div>
-            <div class="total-info"><span class="total-text">{totalItems} {$t('table.items') || 'items'}</span></div>
+            <!-- 77 SEL-D1: with a single page size there is nothing to choose (Q-SEL-17): no selector, the total stays. -->
+            {#if pageSizeOptions.length > 1}
+                <div bind:this={dropdownRef} class="page-size-selector">
+                    <button class="page-size-btn" onclick={() => (showDropdown = !showDropdown)} type="button" data-testid="pagination-size-trigger" aria-expanded={showDropdown}>
+                        <span>{formatPageSize(getDisplayPageSize())}</span>
+                        <ChevronDown size={14} />
+                    </button>
+                    {#if showDropdown}
+                        <div class="page-size-dropdown" bind:this={dropdownPanel} style:left={`${dropdownPosition.left}px`} style:top={`${dropdownPosition.top}px`} data-testid="pagination-size-menu">
+                            {#each pageSizeOptions as size}
+                                <button type="button" class="dropdown-option" class:selected={getDisplayPageSize() === size} onclick={() => selectPageSize(size)} data-testid={`pagination-size-option-${size}`}>
+                                    {formatPageSize(size)}
+                                </button>
+                            {/each}
+                        </div>
+                    {/if}
+                    <span class="page-size-label">{$t('table.perPage') || 'per page'}</span>
+                </div>
+                <div class="divider desktop-only"></div>
+            {/if}
+            <div class="total-info" data-testid="pagination-total"><span class="total-text">{totalItems} {$t('table.items') || 'items'}</span></div>
         </div>
 
         <!-- Row 2: Page navigation -->

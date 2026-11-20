@@ -13,10 +13,9 @@
     import {BrokerSearchSelect} from '$lib/components/ui/select';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import DataTable from '$lib/components/table/DataTable.svelte';
-    import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import type {BrokerInfo} from '$lib/stores/reference/brokerStore';
     import type {PendingFileEntry, Step1SetWarning} from './wizardTypes';
-    import type {ColumnDef, RowAction} from '$lib/components/table/types';
+    import type {BulkAction, ColumnDef, RowAction} from '$lib/components/table/types';
 
     interface Props {
         brokers: BrokerInfo[];
@@ -66,6 +65,21 @@
         onGlobalBrokerChange,
         removePendingFilesByIds,
     }: Props = $props();
+
+    /** The files' bar (77 SEL-D): «Remove» on the ticked files, at the top of the table and in the dock. */
+    const step1BulkActions: BulkAction<PendingFileEntry>[] = [
+        {
+            id: 'bulk-delete',
+            icon: Trash2,
+            label: () => $t('common.remove'),
+            variant: 'danger',
+            onClick: (rows) => {
+                removePendingFilesByIds(rows.map((row) => row.id));
+                step1SelectedIds = [];
+                step1TableRef?.clearSelection();
+            },
+        },
+    ];
 </script>
 
 <div class="space-y-4" data-testid="import-wizard-step1" data-busy={brokersLoading || uploading}>
@@ -139,30 +153,6 @@
                 </div>
             </div>
 
-            <!-- Toolbar for bulk actions on selected files -->
-            {#if step1SelectedIds.length > 0}
-                <DataTableToolbar
-                    selectedCount={step1SelectedIds.length}
-                    bulkActions={[
-                        {
-                            id: 'bulk-delete',
-                            icon: Trash2,
-                            label: () => $t('common.remove'),
-                            variant: 'danger',
-                            onClick: () => {
-                                removePendingFilesByIds(step1SelectedIds);
-                                step1SelectedIds = [];
-                                step1TableRef?.clearSelection();
-                            },
-                        },
-                    ]}
-                    onClearSelection={() => {
-                        step1SelectedIds = [];
-                        step1TableRef?.clearSelection();
-                    }}
-                />
-            {/if}
-
             <!-- Files DataTable with selection -->
             <DataTable
                 bind:this={step1TableRef}
@@ -173,6 +163,8 @@
                 enableSelection={true}
                 selectionMode="multi"
                 onSelectionChange={(ids) => (step1SelectedIds = ids)}
+                bulkActions={step1BulkActions}
+                selectionPanel={true}
                 enableActions={true}
                 actionsColumnWidth="64px"
                 rowActions={pendingFileActions}

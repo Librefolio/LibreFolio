@@ -9,12 +9,15 @@
  *   - «Chi»: the author of a value written by hand by username, a source by its name;
  *   - «Dimentica» of one row and of the rows chosen asks first, and hands the host the ids only on confirm;
  *   - the pager: the host owns the page (the server pages by twenty), the table asks for the next one.
+ *   - 77 SEL-D: the table draws its selection panel — the bar at the top with the hint, «Dimentica» with the number of
+ *     rows it takes — and the pager is the table's balloon (`DataTablePagination`, the server's total), the second row
+ *     of the dock under the actions when they come down (the designer's (b), 20/11).
  */
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 // The countries' names are not the table's to test: no network for them.
 vi.mock('$lib/stores/reference/countryStore', () => ({ensureCountriesLoaded: vi.fn(async () => undefined), getCountryInfo: (iso3: string) => ({name: iso3})}));
 
-import {cleanup, fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
+import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import type {ProfileVoice} from './profileStore';
 import type {ProfileChange} from './profileChanges';
 import ProfileChangesTable from './ProfileChangesTable.svelte';
@@ -112,6 +115,8 @@ describe('ProfileChangesTable', () => {
         const {onforget} = mount();
         await fireEvent.click(screen.getByTestId('dt-row-checkbox-11'));
         await fireEvent.click(screen.getByTestId('dt-row-checkbox-9'));
+        expect(screen.getByTestId('selection-toolbar')).toHaveAttribute('data-variant', 'top');
+        expect(screen.getByTestId('toolbar-action-forget-count').textContent?.trim(), '«Dimentica» says how many rows it takes').toBe('2');
         await fireEvent.click(await screen.findByTestId('toolbar-action-forget'));
         await screen.findByTestId('profile-changes-confirm');
         await fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
@@ -119,16 +124,24 @@ describe('ProfileChangesTable', () => {
         expect([...(onforget.mock.calls[0] as unknown as [number[]])[0]].sort((a, b) => a - b)).toEqual([9, 11]);
     });
 
-    it('pages by the server: the range, and the next page asked of the host', async () => {
+    it('nothing chosen: the bar at the top of the table holds the hint', () => {
+        mount();
+        expect(screen.getByTestId('dt-selection-top')).toBeInTheDocument();
+        expect(screen.getByTestId('selection-toolbar-hint')).toBeInTheDocument();
+    });
+
+    it('pages by the server, in the table’s balloon: the range, and the next page asked of the host', async () => {
         const {onpage} = mount({total: 45, page: 1});
         const pager = screen.getByTestId('profile-changes-pager');
         expect(pager).toHaveAttribute('data-from', '21');
         expect(pager).toHaveAttribute('data-to', '23');
         expect(pager).toHaveAttribute('data-total', '45');
-        expect(screen.getByTestId('profile-changes-prev')).not.toBeDisabled();
-        await fireEvent.click(screen.getByTestId('profile-changes-next'));
+        const balloon = within(pager).getByTestId('data-table-pagination');
+        expect(screen.getByTestId('dt-dock')).toContainElement(balloon);
+        expect(within(pager).getByTestId('pagination-prev')).not.toBeDisabled();
+        await fireEvent.click(within(pager).getByTestId('pagination-next'));
         expect(onpage).toHaveBeenCalledWith(2);
-        await fireEvent.click(screen.getByTestId('profile-changes-prev'));
+        await fireEvent.click(within(pager).getByTestId('pagination-prev'));
         expect(onpage).toHaveBeenCalledWith(0);
     });
 
@@ -168,7 +181,8 @@ describe('ProfileChangesTable', () => {
 
     it('closes the pager at the ends', () => {
         mount({total: 3, page: 0});
-        expect(screen.getByTestId('profile-changes-prev')).toBeDisabled();
-        expect(screen.getByTestId('profile-changes-next')).toBeDisabled();
+        const pager = screen.getByTestId('profile-changes-pager');
+        expect(within(pager).getByTestId('pagination-prev')).toBeDisabled();
+        expect(within(pager).getByTestId('pagination-next')).toBeDisabled();
     });
 });

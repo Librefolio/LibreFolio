@@ -7,6 +7,10 @@
   - **The dock** (`dt-dock`, `data-actions`): the actions come down into it only while the top is out of view, above the
     pager when one is given (`pager`, called with `docked`). Without either, nothing is drawn.
   - The actions are in one place at a time, so `toolbar-action-<id>` stays unique.
+  - **In a section** (SEL-D, Q-SEL-8): the caller's head (`head`, its title and its own buttons) takes the place of the
+    bar at the top, and places the bar inside itself. The whole head is what the watcher observes. While nothing is
+    selected the head stays as it was: no hint, unless `hint` is given. Its slot keeps the bar's height, so the head
+    does not grow at the first tick.
 
   The actions arrive resolved (`selectionToolbarActions`): the caller owns the rows, the rule and what a click does.
   Uses Svelte 5 runes.
@@ -30,9 +34,11 @@
         children: Snippet;
         /** A pager to host in the dock, with whether it is docked under the actions. */
         pager?: Snippet<[boolean]>;
+        /** A section's head, in place of the bar at the top: it draws the bar it is given where the bar goes (SEL-D). */
+        head?: Snippet<[Snippet]>;
     }
 
-    let {actions, selectedCount, hint, onClearSelection, children, pager}: Props = $props();
+    let {actions, selectedCount, hint, onClearSelection, children, pager, head}: Props = $props();
 
     let topEl = $state<HTMLDivElement | null>(null);
     let topInView = $state(true);
@@ -45,8 +51,17 @@
 </script>
 
 <!-- The bar at the top. Its slot stays (and keeps its height) while the actions are down in the dock. -->
-<div class="dt-selection-top" bind:this={topEl} data-testid="dt-selection-top" data-in-view={topInView ? 'true' : 'false'}>
-    {#if selectedCount === 0 || topInView}
+{#snippet headBar()}
+    <div class="dt-head-bar">
+        {#if selectedCount > 0 ? topInView : hint !== undefined}
+            <DataTableToolbar variant="top" {selectedCount} bulkActions={actions} {onClearSelection} {hint} />
+        {/if}
+    </div>
+{/snippet}
+<div class="dt-selection-top" class:in-head={!!head} bind:this={topEl} data-testid="dt-selection-top" data-in-view={topInView ? 'true' : 'false'}>
+    {#if head}
+        {@render head(headBar)}
+    {:else if selectedCount === 0 || topInView}
         <DataTableToolbar variant="top" {selectedCount} bulkActions={actions} {onClearSelection} {hint} />
     {/if}
 </div>
@@ -71,6 +86,18 @@
     .dt-selection-top {
         min-height: 2rem;
         margin-bottom: 0.5rem;
+    }
+
+    /* In a section's head the slot of the bar keeps the bar's height (32 px on a phone), so the head does not grow. */
+    .dt-head-bar {
+        display: flex;
+        align-items: center;
+        min-height: 2rem;
+        min-width: 0;
+    }
+
+    .dt-head-bar:empty {
+        flex: 0 0 0;
     }
 
     /* Without actions the dock adds nothing: the pager keeps its own sticky balloon, as without the panel. */
