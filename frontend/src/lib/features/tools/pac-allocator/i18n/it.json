@@ -87,7 +87,8 @@
             "readFailed": "Non è stato possibile leggere il broker: non è stato salvato niente.",
             "refused": "Il broker non ha accettato la modifica: non è stato salvato niente.",
             "saved": "Salvato nel broker.",
-            "writeFailed": "Il salvataggio non si è concluso: apri il broker per controllarlo."
+            "writeFailed": "Il salvataggio non si è concluso: apri il broker per controllarlo.",
+            "writing": "Salvo nel broker…"
           }
         },
         "brokers": {

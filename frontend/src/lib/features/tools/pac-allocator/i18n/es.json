@@ -87,7 +87,8 @@
             "readFailed": "No se ha podido leer el bróker: no se ha guardado nada.",
             "refused": "El bróker no ha aceptado el cambio: no se ha guardado nada.",
             "saved": "Guardado en el bróker.",
-            "writeFailed": "El guardado no ha terminado: abre el bróker para comprobarlo."
+            "writeFailed": "El guardado no ha terminado: abre el bróker para comprobarlo.",
+            "writing": "Guardando en el bróker…"
           }
         },
         "brokers": {

@@ -87,7 +87,8 @@
             "readFailed": "Le courtier n’a pas pu être lu : rien n’a été enregistré.",
             "refused": "Le courtier n’a pas accepté le changement : rien n’a été enregistré.",
             "saved": "Enregistré dans le courtier.",
-            "writeFailed": "L’enregistrement n’a pas abouti : ouvrez le courtier pour le vérifier."
+            "writeFailed": "L’enregistrement n’a pas abouti : ouvrez le courtier pour le vérifier.",
+            "writing": "Enregistrement dans le courtier…"
           }
         },
         "brokers": {

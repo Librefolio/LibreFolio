@@ -8,8 +8,8 @@
   account's profile (D12), or to the default modes when it has none.
 -->
 <script lang="ts">
-    import {untrack} from 'svelte';
-    import {PiggyBank} from 'lucide-svelte';
+    import {tick, untrack} from 'svelte';
+    import {PiggyBank, Save} from 'lucide-svelte';
     import {t} from '$lib/i18n';
     import ExactDecimalInput from '$lib/components/ui/input/ExactDecimalInput.svelte';
     import BrokerOperatingProfileBox from '$lib/features/brokers/profile/BrokerOperatingProfileBox.svelte';
@@ -165,11 +165,16 @@
         savePhase = 'saved';
     }
 
+    /** «Save to the broker»: the confirmation modal gives the focus back to it when it closes without writing (R1-C). */
+    let saveButton = $state<HTMLButtonElement | undefined>(undefined);
+
     function closeProfileSave(): void {
         if (savePhase === 'writing') return;
+        const asked = savePhase === 'confirm';
         savePhase = null;
         savePlan = null;
         saveRefusal = null;
+        if (asked) void tick().then(() => saveButton?.focus({preventScroll: true}));
     }
 
     /** Who a funding source belongs to: a Broker account (with its icon) or a contribution. */
@@ -343,8 +348,13 @@
 
     {#snippet footer()}
         {#if savable}
-            <button type="button" class="{BUTTON_SECONDARY} sm:mr-auto" disabled={!saveHasChanges || problems.length > 0 || savePhase === 'reading' || savePhase === 'confirm' || savePhase === 'writing'} data-testid={testId('broker-editor-profile-save', profile)} onclick={startProfileSave}
-                >{$t('tools.pacAllocator.planner.brokerEditor.profileSave.button')}</button
+            <button
+                bind:this={saveButton}
+                type="button"
+                class="{BUTTON_SECONDARY} sm:mr-auto"
+                disabled={!saveHasChanges || problems.length > 0 || savePhase === 'reading' || savePhase === 'confirm' || savePhase === 'writing'}
+                data-testid={testId('broker-editor-profile-save', profile)}
+                onclick={startProfileSave}><Save class="h-4 w-4" aria-hidden="true" />{$t('tools.pacAllocator.planner.brokerEditor.profileSave.button')}</button
             >
         {/if}
         <button type="button" class={BUTTON_SECONDARY} data-testid={testId('broker-editor-cancel', profile)} onclick={onclose}>{$t('common.cancel', {default: 'Cancel'})}</button>

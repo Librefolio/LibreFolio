@@ -87,7 +87,8 @@
             "readFailed": "The broker could not be read: nothing was saved.",
             "refused": "The broker did not accept the change: nothing was saved.",
             "saved": "Saved to the broker.",
-            "writeFailed": "The save did not complete: open the broker to check it."
+            "writeFailed": "The save did not complete: open the broker to check it.",
+            "writing": "Saving to the broker…"
           }
         },
         "brokers": {
