@@ -97,6 +97,7 @@
         chargeParentFields,
         foldBulkCharges,
         isUnderParent,
+        isPairLeg,
         parentNeedsRef,
         remapChargeOf,
         rowAnchor,
@@ -121,7 +122,7 @@
     import {TRANSACTION_BULK_STEP_IDS, type TransactionBulkStepId} from '$lib/features/onboarding/onboardingGuideCatalog';
     import {resolveFormItemsFromOps, type FormModalItems} from '../resolveFormItems';
     import type {TXReadItem, ValidationIssue} from '../types';
-    import type {DraftFields, PendingOp, SuggestEntry, WacResultEntry} from './txBulkTypes';
+    import type {DraftFields, PendingOp, PromoteSelection, SuggestEntry, WacResultEntry} from './txBulkTypes';
     import TxBulkBanners from './TxBulkBanners.svelte';
     import TxBulkToolbar from './TxBulkToolbar.svelte';
     import type {TransactionCreateItem} from '$lib/types';
@@ -1202,7 +1203,28 @@
         }
     }
 
+    /** 66 C22 (§5.1): reset rows back to what is saved. A merge still waiting for the save (`pendingPromotes`) that
+     *  touches one of them is undone first, both halves, so «Save all» never sends a merge the grid no longer shows, and
+     *  the order of the rows does not change the outcome (a charge reset before its parent's merge is undone would
+     *  otherwise stay «unlink»). */
+    function resetRows(tempIds: readonly string[]) {
+        const rows = [...new Set(tempIds)];
+        const undone: string[] = [];
+        for (const tempId of rows) {
+            const row = ops.find((d) => d.tempId === tempId);
+            // The partner is taken before the undo: afterwards neither half names the other.
+            const partner = row ? (row.pairedWith !== undefined ? ops.find((d) => d.tempId === row.pairedWith) : getPartnerOp(row.tempId)) : undefined;
+            if (row && partner && undoPendingPromote(row, partner)) undone.push(partner.tempId);
+        }
+        for (const tempId of [...rows, ...undone.filter((id) => !rows.includes(id))]) resetOne(tempId);
+    }
+
     function resetRow(tempId: string) {
+        resetRows([tempId]);
+    }
+
+    /** Reset one row (and the hidden half of its saved pair) to what is saved. */
+    function resetOne(tempId: string) {
         // A saved pair is one row on screen: its hidden half is reset with it, in place, or an edit made through the
         // pair's form would stay on it. A W4b placeholder has nothing to reset: its half is not in the store.
         const partnerTempId = getPartnerOp(tempId)?.tempId;
@@ -1239,10 +1261,9 @@
     /** 66 C21 (§5.2): a reset or restored charge whose parent cannot hold it — «del», or a leg of a pair, saved or pending — stays
      *  «unlink»; the reset brings back its other values only. A pair is named in a toast (the «Link» reason `paired`). */
     function keepUnlinkedFromUnfitParents(resetTempIds: ReadonlySet<string>) {
-        const isPairLeg = (op: PendingOp) => op.pairedWith !== undefined || ops.some((o) => o.pairedWith === op.tempId);
         const ownerOfReset = (d: PendingOp): PendingOp | undefined => (resetTempIds.has(d.tempId) && d.chargeOf !== undefined && !d.parentUnlink ? ops.find((o) => o.tempId === d.chargeOf && o !== d) : undefined);
-        const unfit = (owner: PendingOp | undefined): boolean => !!owner && (isPairLeg(owner) || (owner.op === 'edit' && owner.markedDelete === true));
-        const parent = ops.map(ownerOfReset).find((owner): owner is PendingOp => !!owner && isPairLeg(owner));
+        const unfit = (owner: PendingOp | undefined): boolean => !!owner && (isPairLeg(owner, ops) || (owner.op === 'edit' && owner.markedDelete === true));
+        const parent = ops.map(ownerOfReset).find((owner): owner is PendingOp => !!owner && isPairLeg(owner, ops));
         ops = ops.map((d) => (unfit(ownerOfReset(d)) ? {...d, parentUnlink: true} : d));
         if (parent) {
             notify({
@@ -1272,6 +1293,12 @@
     }
 
     function resetAll() {
+        // 66 C22 (§1.5): every merge still waiting for the save is undone first, before the reset renames the rows: a
+        // reset brings back what is saved, and a queued merge is not (it stayed queued, unseen, and «Save all» sent it).
+        for (const hidden of ops.filter((d) => d.pairedWith !== undefined)) {
+            const visible = ops.find((d) => d.tempId === hidden.pairedWith);
+            if (visible) undoPendingPromote(visible, hidden);
+        }
         // BUG-C2: also undo pending splits
         // Remove partner rows added by split, then reset remaining edit rows
         ops = ops.filter((d) => !(d as any).addedBySplit);
@@ -1289,6 +1316,7 @@
         // Re-collapse pairs, then the charges
         ops = syncFollowers(adoptCharges(collapsePairedOps(next), txStoreGet));
         pendingSplits = [];
+        pendingPromotes = [];
         // 66 F7-c1 (§15.8): «Reset all» reads again the charges of every saved parent that lacks some.
         restartChargesLoad();
         loadMissingCharges(ops);
@@ -3278,6 +3306,16 @@
         if (typeof payload._parent_link === 'number') {
             const parentId = payload._parent_link;
             const owner = ops.find((d) => d.op === 'edit' && d.txId === parentId);
+            // 66 C22 (path 3): the Form's picker reads the database, where a row merged in this Bulk is not a pair yet; a leg
+            // is no parent (rule 8), so the link is refused and the charge keeps its own state. Its other values apply.
+            if (owner && isPairLeg(owner, ops)) {
+                notify({
+                    name: 'tx.bulk.charge.link.refused.paired',
+                    detail: {chargeTempId: tempId, parentTempId: owner.tempId, parentTxId: parentId},
+                    toast: {variant: 'warning', message: $t('transactions.chargesLink.reason.paired', {values: {type: $t(`transactions.types.${owner.fields.type}`) || owner.fields.type, ref: bulkRowRef(owner)}})},
+                });
+                return;
+            }
             ops = ops.map((d) => {
                 if (d.tempId !== tempId) return d;
                 const next = {...d};
@@ -3471,29 +3509,36 @@
         return chargeHolders.has(op.tempId);
     }
 
-    /** Selection-based promote detection — 2 standalone rows with matching promote rule. */
-    let selectedForPromote = $derived.by(() => {
-        if (bulkTableSelectedRows.length !== 2) return null;
+    /** Selection-based promote detection — 2 standalone rows with matching promote rule. 66 C22: a pair that only the
+     *  linked charges of a leg forbid (rule 6) is offered off, with the reason; any other failure keeps it absent. */
+    let selectedForPromote = $derived.by((): PromoteSelection => {
+        const hidden: PromoteSelection = {kind: 'hidden'};
+        if (bulkTableSelectedRows.length !== 2) return hidden;
         const [a, b] = bulkTableSelectedRows;
         // Both must be standalone (no hidden partner)
-        if (getPartnerOp(a.tempId) || getPartnerOp(b.tempId)) return null;
+        if (getPartnerOp(a.tempId) || getPartnerOp(b.tempId)) return hidden;
         // Check markedDelete
-        if ((a.op === 'edit' && a.markedDelete) || (b.op === 'edit' && b.markedDelete)) return null;
-        if (hasLinkedCharges(a) || hasLinkedCharges(b)) return null;
+        if ((a.op === 'edit' && a.markedDelete) || (b.op === 'edit' && b.markedDelete)) return hidden;
         const match = findPromoteMatch(a.fields.type, b.fields.type, $t, buildPromoteCtx(a, b));
-        if (!match) return null;
+        if (!match) return hidden;
         // For CASH_TRANSFER: require exact cash cancel (same currency, opposite sign).
         // For TRANSFER: the same asset by exactly opposite quantities, compared as decimals like
         // the banner and the backend do (findPromoteMatch compares JavaScript numbers).
         // For FX_CONVERSION: amounts are in different currencies — no cancel check.
-        if (match.targetType === 'CASH_TRANSFER' && !cashAmountsCancel(a, b, getTypeRule)) return null;
-        if (match.targetType === 'TRANSFER' && !assetQuantitiesCancel(a, b, getTypeRule)) return null;
-        return {...match, opA: a, opB: b};
+        if (match.targetType === 'CASH_TRANSFER' && !cashAmountsCancel(a, b, getTypeRule)) return hidden;
+        if (match.targetType === 'TRANSFER' && !assetQuantitiesCancel(a, b, getTypeRule)) return hidden;
+        // 66 C22: the one place the off state is born (to drop it, return `hidden` here).
+        const holder = [a, b].find(hasLinkedCharges);
+        if (holder) return {kind: 'disabled', reason: 'hasCharges', holder, targetLabel: match.targetLabel};
+        return {...match, kind: 'ok', opA: a, opB: b};
     });
+
+    /** 66 C22: why the merge button is off — the leg that still holds linked charges. */
+    let promoteHint = $derived(selectedForPromote.kind === 'disabled' ? $t('transactions.promote.chargesBlock', {values: {type: $t(`transactions.types.${selectedForPromote.holder.fields.type}`) || selectedForPromote.holder.fields.type, ref: bulkRowRef(selectedForPromote.holder)}}) : '');
 
     /** Handle promote of 2 selected rows. */
     function handlePromoteSelected() {
-        if (!selectedForPromote) return;
+        if (selectedForPromote.kind !== 'ok') return;
         const {opA, opB, targetLabel} = selectedForPromote;
         // Check if fields diverge (only description + tags — date/cost_basis handled in FormModal)
         const descA = opA.fields.description,
@@ -4245,6 +4290,7 @@
             {tableRef}
             {importableSuggestions}
             {selectedForPromote}
+            {promoteHint}
             {tableRefForToggle}
             {visibleOps}
             {deriveStatus}
@@ -4257,7 +4303,7 @@
             {openPicker}
             {openSuggestPicker}
             {resetAll}
-            {resetRow}
+            {resetRows}
         />
 
         <!-- DataTable body -->
