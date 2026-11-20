@@ -248,8 +248,9 @@ class FifoLot:
 
 @dataclass(frozen=True, slots=True)
 class LinkedParent:
-    """Project 66 (M1b): the facts of a charge's parent, read by the service even when the parent lies after the end of
-    the analysis, where the engine never sees it. ``type`` is the transaction type's value (``"BUY"``, ``"SELL"``…)."""
+    """Project 66 (M1b, M2b): the facts of a charge's parent, read by the service even where the engine never sees the
+    parent: after the end of the analysis, or an income of amount 0, which the income loader leaves out. ``type`` is
+    the transaction type's value (``"BUY"``, ``"SELL"``…)."""
 
     date: date
     type: str
@@ -277,8 +278,9 @@ class EconomicEvent:
     #: Project 66 (M1): a FEE/TAX linked by the user to the transaction it was paid for. ``None`` for an unlinked
     #: charge and for every income event.
     parent_transaction_id: int | None = None
-    #: Project 66 (M1b): the parent's facts, when the service read them. The engine reads them only for a parent it
-    #: does not replay itself (after ``replay_until``): such a charge waits, orphan, until the analysis reaches it.
+    #: Project 66 (M1b, M2b): the parent's facts, when the service read them. The engine reads them only for a parent
+    #: it has no event of: after ``replay_until`` the charge waits, orphan, until the analysis reaches it (M1b); an
+    #: income of amount 0 not after the end sends it to the lots held the day before that income (M2b).
     parent: LinkedParent | None = None
 
 

@@ -1090,9 +1090,10 @@ class LotsAnalysisService:
         return list((await self.db.execute(stmt)).scalars().all())
 
     async def _load_linked_parents(self, cost_transactions: Sequence[Transaction], *, asset_id: int, scope_broker_ids: Sequence[int]) -> dict[int, LinkedParent]:
-        """Project 66 (M1b): the facts (date, type, broker) of the parents the charges are linked to, with no date
-        filter: the parent after the end of the analysis is the one the engine needs. One query, kept to the asset and
-        the scope; a parent outside them has no facts, so its charge takes the ladder."""
+        """Project 66 (M1b, M2b): the facts (date, type, broker) of the parents the charges are linked to, with no date
+        and no amount filter: the engine needs them for a parent after the end of the analysis (M1b) and for an income
+        of amount 0, which ``_load_income_transactions`` leaves out (M2b). One query, kept to the asset and the scope; a
+        parent outside them has no facts, so its charge takes the ladder."""
         parent_ids = {tx.parent_transaction_id for tx in cost_transactions if tx.parent_transaction_id is not None}
         if not parent_ids:
             return {}
