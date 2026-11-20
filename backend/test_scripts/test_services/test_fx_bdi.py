@@ -78,6 +78,16 @@ async def test_bdi_returns_each_rate_as_foreign_currency_per_one_euro(monkeypatc
 
 
 @pytest.mark.asyncio
+async def test_bdi_serves_the_sdr_like_any_currency(monkeypatch: pytest.MonkeyPatch):
+    """Q7 (a): the SDR (XDR) is a currency of the bank's convention C: «1 EUR = 0.817033 XDR», the same tuple as any other."""
+    _route(monkeypatch, bdi_mod, _by_currency({"XDR": [("2026-11-17", "0.817033")]}))
+
+    rates = await BDIProvider().fetch_rates((date(2026, 11, 16), date(2026, 11, 18)), ["XDR"])
+
+    assert rates == {"XDR": [(date(2026, 11, 17), "EUR", "XDR", Decimal("0.817033"))]}
+
+
+@pytest.mark.asyncio
 async def test_bdi_asks_each_currency_against_the_euro_in_json_in_series(monkeypatch: pytest.MonkeyPatch):
     """One time-series request per currency, in series: the foreign currency in ``baseCurrencyIsoCode``, EUR in
     ``currencyIsoCode`` (the other way round is a 400), the asked range, JSON by the ``Accept`` header."""
@@ -177,14 +187,14 @@ async def test_bdi_too_many_requests_is_a_rate_limit(monkeypatch: pytest.MonkeyP
 @pytest.mark.asyncio
 async def test_bdi_catalogue_keeps_the_currencies_with_a_rate(monkeypatch: pytest.MonkeyPatch):
     """``latestRates``: one row per country (a currency shared by many countries repeats), «N.A.» for a suspended one, the
-    SDR; EUR, the base, is listed."""
+    SDR (XDR, kept like any currency: Q7 (a)); EUR, the base, is listed."""
     rows = [("NIGERIA", "NGN", "1498.5"), ("BENIN", "XOF", "655.957"), ("SENEGAL", "XOF", "655.957"), ("RUSSIA", "RUB", "N.A."), ("IMF", "XDR", "0.84"), ("EURO AREA", "EUR", "1")]
     body = {"resultsInfo": {"totalRecords": len(rows)}, "latestRates": [{"country": c, "currency": "x", "isoCode": i, "uicCode": "0", "eurRate": r, "usdRate": "1", "referenceDate": "2026-01-09"} for c, i, r in rows]}
     asked = _route(monkeypatch, bdi_mod, lambda request: httpx.Response(200, headers={"content-type": "application/json"}, text=json.dumps(body)))
 
     currencies = await BDIProvider().get_supported_currencies()
 
-    assert currencies == ["EUR", "NGN", "XOF"]
+    assert currencies == ["EUR", "NGN", "XDR", "XOF"]
     assert asked[0].url.path.endswith("/latestRates")
 
 
@@ -194,7 +204,7 @@ def test_bdi_identity_and_texts():
     for texts in (provider.description_i18n, provider.warning_i18n):
         assert set(texts) == {"en", "it", "fr", "es"} and all(texts.values())
     assert "Banca d'Italia" in provider.description_i18n["en"]
-    assert "EUR" in provider.fallback_currencies and not {"XDR", "RUB"} & set(provider.fallback_currencies)
+    assert "EUR" in provider.fallback_currencies and "XDR" in provider.fallback_currencies and "RUB" not in provider.fallback_currencies
 
 
 def test_bdi_icon_is_our_own_static_file():

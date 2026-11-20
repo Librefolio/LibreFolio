@@ -65,10 +65,7 @@ class BDIProvider(FXRateProvider):
     FIRST_DAY = date(1999, 1, 4)
     #: Pause between two requests of one call (D9: an explicit, slow pace; Frankfurter uses 0.3 s too).
     PAUSE_SECONDS = 0.3
-    #: Entries of ``latestRates`` that are no currency: the IMF's SDR.
-    NOT_CURRENCIES = frozenset({"XDR"})
-
-    # What ``latestRates`` returned on 2026-11-16 (rates «N.A.» and the SDR left out), EUR included. Listed while the
+    # What ``latestRates`` returned on 2026-11-16 (rates «N.A.» left out; the SDR is served, Q7 of lane 75), EUR included. Listed while the
     # first discovery after a restart is slow or fails; the live list replaces it as soon as one arrives.
     FALLBACK_CURRENCIES = tuple(
         (
@@ -76,7 +73,7 @@ class BDIProvider(FXRateProvider):
             "CUP CVE CZK DJF DKK DOP DZD EGP ERN ETB EUR FJD FKP GBP GEL GHS GIP GMD GNF GTQ GYD HKD HNL HTG HUF IDR ILS INR IQD "
             "ISK JMD JOD JPY KES KGS KHR KMF KRW KWD KYD KZT LAK LBP LKR LRD LSL LYD MAD MDL MGA MKD MMK MNT MOP MRU MUR MVR MWK "
             "MXN MYR MZN NAD NGN NIO NOK NPR NZD OMR PAB PEN PGK PHP PKR PLN PYG QAR RON RSD RWF SAR SBD SCR SDG SEK SGD SHP SLE "
-            "SOS SRD SSP STN SVC SYP SZL THB TJS TMT TND TOP TRY TTD TWD TZS UAH UGX USD UYU UZS VES VND VUV WST XAF XCD XCG XOF "
+            "SOS SRD SSP STN SVC SYP SZL THB TJS TMT TND TOP TRY TTD TWD TZS UAH UGX USD UYU UZS VES VND VUV WST XAF XCD XCG XDR XOF "
             "XPF YER ZAR ZMW ZWG"
         ).split()
     )
@@ -143,13 +140,13 @@ class BDIProvider(FXRateProvider):
         return list(self.FALLBACK_CURRENCIES)
 
     async def get_supported_currencies(self) -> list[str]:
-        """The currencies of ``latestRates`` with a rate (not «N.A.»), the SDR left out, EUR included."""
+        """The currencies of ``latestRates`` with a rate (not «N.A.»), the SDR included, EUR included."""
         data = await self._get_json("/latestRates", {"lang": "en"}, "the catalogue")
         rows = data.get("latestRates")
         if not isinstance(rows, list):
             raise FXServiceError("Banca d'Italia catalogue has no latestRates list (endpoint changed)")
         currencies = {row.get("isoCode") for row in rows if isinstance(row, dict) and self._rate(row.get("eurRate")) is not None}
-        live = {c for c in currencies if isinstance(c, str) and len(c) == 3 and c not in self.NOT_CURRENCIES}
+        live = {c for c in currencies if isinstance(c, str) and len(c) == 3}
         if not live:
             raise FXServiceError("Banca d'Italia catalogue lists no currency")
         return sorted(live | {self.base_currency})
