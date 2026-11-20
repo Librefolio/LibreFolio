@@ -7,7 +7,7 @@
 import {describe, expect, it, vi} from 'vitest';
 
 import type {BulkAction} from './types';
-import {resolveSelectionAction, resolveSelectionActions} from './selectionActions';
+import {resolveSelectionAction, resolveSelectionActions, selectionToolbarActions} from './selectionActions';
 
 interface Row {
     id: number;
@@ -98,5 +98,27 @@ describe('resolveSelectionActions', () => {
         expect(resolveSelectionActions([link, create, remove], [rows[0], rows[2]]).map((item) => item.action.id)).toEqual(['link', 'delete']);
         expect(resolveSelectionActions([link, create, remove], [rows[1]]).map((item) => item.action.id)).toEqual(['create', 'delete']);
         expect(resolveSelectionActions([link, create], [rows[3]])).toEqual([]);
+    });
+});
+
+describe('selectionToolbarActions — the bar’s buttons from the rule (77 SEL-B)', () => {
+    it('gives each shown action its number, its off state with the reason, and a click on its own rows', () => {
+        const link = action({id: 'link', primary: true, appliesTo: (row) => row.kind === 'unique'});
+        const create = action({id: 'create', appliesTo: (row) => row.kind === 'none', blocked: () => ({hint: 'Not now', reason: 'later'})});
+        const hidden = action({id: 'never', appliesTo: () => false});
+        const buttons = selectionToolbarActions([link, create, hidden], rows);
+        expect(buttons.map((button) => button.id)).toEqual(['link', 'create']);
+        expect(buttons[0]).toMatchObject({count: 2, primary: true, disabled: false});
+        expect(buttons[1]).toMatchObject({count: 1, disabled: true, hint: 'Not now', reason: 'later'});
+        buttons[0].onClick();
+        expect(link.onClick).toHaveBeenCalledWith([rows[0], rows[2]]);
+    });
+
+    it('hands the click to the caller when it runs the actions itself (a confirmation first)', () => {
+        const remove = action({id: 'delete'});
+        const run = vi.fn();
+        selectionToolbarActions([remove], rows, run)[0].onClick();
+        expect(run).toHaveBeenCalledWith(remove, rows);
+        expect(remove.onClick).not.toHaveBeenCalled();
     });
 });

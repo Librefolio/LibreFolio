@@ -18,7 +18,7 @@ Administrators also see a third tab, [Backups](#backups-tab), and a bar with the
 Here you find the users' **avatars**, the brokers' **icons** and the **images and documents** uploaded by users: the shared ones, which everyone with a LibreFolio account can see, and your personal ones, which only you and the administrators can see (see [Shared or personal](#visibility)).
 
 - Switch between **list** and **grid** view: the grid previews images.
-- In the list, right-click a file for **Preview**, **Copy Link**, **Download** or **Delete**. You can delete only the files you uploaded, so **Delete** appears only on them; an administrator can delete any. Tick several files to delete them together: **Delete** appears above the list with the number of files it will delete, only those you may delete, and when you scroll the list down it moves into the bar at the bottom. The files of other users stay in place, and a notice tells you so.
+- In the list, right-click a file for **Preview**, **Copy Link**, **Download** or **Delete**. You can delete only the files you uploaded, so **Delete** appears only on them; an administrator can delete any. Tick several files to download or delete them together: **Download** and **Delete** appear above the list with the number of files each acts on (**Delete** counts only those you may delete); when you scroll the list down they move into the bar at the bottom. On delete, the files of other users stay in place, and a notice tells you so.
 - **Preview** shows a PDF in a read-only viewer: you can read it, search it and copy its text, but not edit, annotate or print it; to keep the file, use **Download**. A password-protected PDF asks for its password, which stays in your browser: it is never sent to the server or saved, and it is gone once the preview closes.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
@@ -88,7 +88,7 @@ The broker you choose only decides which account receives the transactions. The 
 
 ### ⚙️ Manage reports
 
-Right-click a report for **Preview**, **Download** or **Delete**, or tick several to delete them together. **Delete** appears only on the reports you may delete, and deleting several leaves the others in place, with a notice. Deleting a report never deletes the transactions already imported from it.
+Right-click a report for **Preview**, **Download** or **Delete**, or tick several to download or delete them together, from the bar above the list. **Delete** appears only on the reports you may delete, and deleting several leaves the others in place, with a notice. Deleting a report never deletes the transactions already imported from it.
 
 ### 🧩 Report sets {: #report-sets }
 

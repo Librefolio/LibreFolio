@@ -84,6 +84,25 @@ async function openList(page: Page, token: string, count: number): Promise<void>
     await waitForSettled(page.getByTestId('assets-page'), 20_000);
 }
 
+/** The fixed panel's four actions sit inside the screen and inside the panel's card, at this width. */
+async function expectActionsInside(page: Page, width: number): Promise<void> {
+    const bar = page.getByTestId('selection-toolbar');
+    await expect(bar.getByTestId('toolbar-action-sync')).toBeVisible();
+    const card = await bar.boundingBox();
+    if (!card) throw new Error('The panel must be on screen to be measured.');
+    for (const id of ['edit', 'sync', 'refresh', 'delete']) {
+        const box = await bar.getByTestId(`toolbar-action-${id}`).boundingBox();
+        expect(box, `«${id}» is drawn (${width} px)`).not.toBeNull();
+        expect(box!.x, `«${id}» inside the screen on the left (${width} px)`).toBeGreaterThanOrEqual(0);
+        expect(box!.x + box!.width, `«${id}» inside the screen on the right (${width} px)`).toBeLessThanOrEqual(width);
+        expect(box!.x + box!.width, `«${id}» inside the panel (${width} px)`).toBeLessThanOrEqual(card.x + card.width + 0.5);
+        const dot = await bar.getByTestId(`toolbar-action-${id}-count`).boundingBox();
+        expect(dot, `the number of «${id}» is drawn (${width} px)`).not.toBeNull();
+        expect(dot!.x + dot!.width, `the number of «${id}» inside the screen (${width} px)`).toBeLessThanOrEqual(width);
+        expect(dot!.x + dot!.width, `the number of «${id}» inside the panel (${width} px)`).toBeLessThanOrEqual(card.x + card.width + 0.5);
+    }
+}
+
 /** Open the filtered table, select every row and open the bulk edit. */
 async function openBulkEdit(page: Page, token: string, count: number): Promise<void> {
     await openList(page, token, count);
@@ -430,6 +449,146 @@ test.describe('Asset bulk edit', () => {
             const stored = await storedAssets(page, [asset.id]);
             expect(stored[0].display_name).toBe(renamed);
         } finally {
+            await deleteOwned(page, owned);
+        }
+    });
+
+    // 77 SEL-B: the page's fixed panel follows the rule of every table. «Sync» takes the assets with a provider only — the
+    // assets made here have none, so it is not there (Q-SEL-17); the others say how many assets they act on; «Reload» asks the
+    // prices of the selected assets only (Q-SEL-10), never the whole list.
+    test('the fixed panel counts each action’s assets, hides Sync without a provider, and Reload asks the selected assets only', async ({page}) => {
+        const owned: Owned = {assetIds: [], brokerIds: []};
+        const token = uniqueToken(6);
+        try {
+            const assets = await createAssets(page, owned, token, ['A', 'B']);
+            await openList(page, token, 2);
+            for (const asset of assets) await page.getByTestId(`dt-row-checkbox-${asset.id}`).click();
+            const bar = page.getByTestId('selection-toolbar');
+            await expect(bar).toHaveAttribute('data-selected-count', '2');
+            await expect(bar).toHaveAttribute('data-variant', 'floating');
+            await expect(page.getByTestId('toolbar-action-edit-count')).toHaveText('2');
+            await expect(page.getByTestId('toolbar-action-refresh-count')).toHaveText('2');
+            await expect(page.getByTestId('toolbar-action-delete-count')).toHaveText('2');
+            await expect(page.getByTestId('toolbar-action-sync')).toHaveCount(0);
+
+            const asked: number[] = [];
+            page.on('request', (request) => {
+                if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/v1/assets/prices/query') return;
+                for (const item of (request.postDataJSON() as Array<{asset_id: number; include_price: boolean}>) ?? []) if (item.include_price) asked.push(item.asset_id);
+            });
+            await page.getByTestId('toolbar-action-refresh').click();
+            await expect.poll(() => asked.length, {message: 'Reload asks prices again', timeout: 15_000}).toBeGreaterThan(0);
+            await waitForSettled(page.getByTestId('assets-page'), 20_000);
+            const ids = assets.map((asset) => asset.id);
+            expect(
+                asked.every((id) => ids.includes(id)),
+                `only the selected assets are asked again, asked ${JSON.stringify(asked)}`,
+            ).toBe(true);
+        } finally {
+            await deleteOwned(page, owned);
+        }
+    });
+
+    // 77 SEL-B: on a phone the fixed panel, with all four actions and their numbers, stays inside the screen. The assets made
+    // here get a provider in the list's answer (only theirs), so «Sync» is there too: the widest panel the page draws.
+    test('on a phone the fixed panel holds all four actions, with their numbers, inside the screen', async ({page}) => {
+        const owned: Owned = {assetIds: [], brokerIds: []};
+        const token = uniqueToken(6);
+        const width = 375;
+        await page.setViewportSize({width, height: 812});
+        try {
+            const assets = await createAssets(page, owned, token, ['A', 'B']);
+            const ids = assets.map((asset) => asset.id);
+            await page.route('**/api/v1/assets/query*', async (route) => {
+                const response = await route.fetch();
+                const rows = (await response.json()) as Array<{id: number; provider_code?: string | null}>;
+                await route.fulfill({response, json: rows.map((row) => (ids.includes(row.id) ? {...row, provider_code: 'mockprov'} : row))});
+            });
+            await openList(page, token, 2);
+            for (const asset of assets) await page.getByTestId(`dt-row-checkbox-${asset.id}`).click();
+            const bar = page.getByTestId('selection-toolbar');
+            await expect(bar).toHaveAttribute('data-variant', 'floating');
+            for (const id of ['edit', 'sync', 'refresh', 'delete']) {
+                const action = bar.getByTestId(`toolbar-action-${id}`);
+                await expect(bar.getByTestId(`toolbar-action-${id}-count`)).toHaveText('2');
+                const box = await action.boundingBox();
+                expect(box, `«${id}» is drawn`).not.toBeNull();
+                expect(box!.x, `«${id}» inside the screen on the left`).toBeGreaterThanOrEqual(0);
+                expect(box!.x + box!.width, `«${id}» inside the screen on the right`).toBeLessThanOrEqual(width);
+            }
+        } finally {
+            await page.unroute('**/api/v1/assets/query*');
+            await deleteOwned(page, owned);
+        }
+    });
+
+    // 77 SEL-B (Q-SEL-7): a table of the list that pages keeps its pager above the fixed panel, on a wide screen and on a
+    // phone; and the panel's four actions fit a phone with two-digit numbers (a page of 25) and with three (all 125 rows
+    // shown and selected) on a 320 px screen, where the number is a dot on the icon's corner and the button's name says it
+    // (the designer, 20/11). The test makes 125 assets and gives them a provider in the list's answer, so «Sync» is there.
+    test('a table that pages keeps its pager above the fixed panel, and the numbers fit a phone, up to three digits at 320 px', async ({page}) => {
+        // 125 assets are created in one call but deleted one by one in the cleanup: room for a busy machine, so a timeout
+        // never stops halfway and leaves them in the shared database. While it runs, the list holds 125 more rows.
+        test.setTimeout(90_000);
+        const owned: Owned = {assetIds: [], brokerIds: []};
+        const token = uniqueToken(6);
+        try {
+            const letters = Array.from({length: 125}, (_, i) => `P${String(i + 1).padStart(3, '0')}`);
+            const assets = await createAssets(page, owned, token, letters);
+            const ids = assets.map((asset) => asset.id);
+            await page.route('**/api/v1/assets/query*', async (route) => {
+                const response = await route.fetch();
+                const rows = (await response.json()) as Array<{id: number; provider_code?: string | null}>;
+                await route.fulfill({response, json: rows.map((row) => (ids.includes(row.id) ? {...row, provider_code: 'mockprov'} : row))});
+            });
+            await goToAssetsPage(page);
+            await page.getByTestId('assets-search-input').fill(token);
+            await waitForSettled(page.getByTestId('assets-page'), 20_000);
+            await page.getByTestId('view-mode-list').click();
+            await waitForSettled(page.getByTestId('assets-page'), 20_000);
+            // The token is unique: the one table holding rows is this test's, and it pages.
+            const table = page.locator('[data-testid^="assets-table-panel-"]').filter({has: page.locator('[data-testid^="dt-row-checkbox-"]')});
+            await expect(table).toHaveCount(1, {timeout: 10_000});
+            await expect(table.locator('[data-testid^="dt-row-checkbox-"]:not([data-testid="dt-row-checkbox-all"])')).toHaveCount(25, {timeout: 10_000});
+            const pager = table.getByTestId('data-table-pagination');
+            await expect(pager).toBeVisible();
+            await table.getByTestId('dt-select-all').click();
+            const bar = page.getByTestId('selection-toolbar');
+            await expect(bar).toHaveAttribute('data-variant', 'floating');
+            expect(Number(await bar.getAttribute('data-selected-count')), 'two-digit numbers').toBeGreaterThanOrEqual(10);
+
+            for (const [width, height] of [
+                [1280, 800],
+                [375, 812],
+            ] as const) {
+                await page.setViewportSize({width, height});
+                // The table's top at the window's top: its 25 rows run on below the window, so the pager sticks to the
+                // window's bottom, the one place where only its lift keeps it above the panel (at the end of the page it
+                // sits in the flow, above the room the page keeps, and would pass without the lift).
+                await table.evaluate((element) => element.scrollIntoView({block: 'start'}));
+                await expect(bar.getByTestId('toolbar-action-sync')).toBeVisible();
+                const barBox = await bar.boundingBox();
+                const pagerBox = await pager.boundingBox();
+                if (!barBox || !pagerBox) throw new Error('The panel and the pager must be on screen to be measured.');
+                expect(pagerBox.y + pagerBox.height, `the pager is stuck inside the window (${width} px)`).toBeLessThanOrEqual(height);
+                expect(pagerBox.y + pagerBox.height, `the pager is stuck near the window's bottom (${width} px)`).toBeGreaterThan(height - 200);
+                expect(pagerBox.y + pagerBox.height, `the pager ends above the panel (${width} px)`).toBeLessThanOrEqual(barBox.y + 1);
+                await expectActionsInside(page, width);
+            }
+
+            // Every row shown and selected: three digits, on the narrowest phone.
+            await page.setViewportSize({width: 1280, height: 800});
+            await table.getByTestId('pagination-size-trigger').click();
+            await table.getByTestId('pagination-size-option-0').click();
+            await expect(table.locator('[data-testid^="dt-row-checkbox-"]:not([data-testid="dt-row-checkbox-all"])')).toHaveCount(125, {timeout: 10_000});
+            await table.getByTestId('dt-select-all').click();
+            await expect(bar).toHaveAttribute('data-selected-count', '125');
+            await expect(bar.getByTestId('toolbar-action-delete-count')).toHaveText('125');
+            await expect(bar.getByTestId('toolbar-action-delete')).toHaveAttribute('aria-label', /, 125$/);
+            await page.setViewportSize({width: 320, height: 700});
+            await expectActionsInside(page, 320);
+        } finally {
+            await page.unroute('**/api/v1/assets/query*');
             await deleteOwned(page, owned);
         }
     });

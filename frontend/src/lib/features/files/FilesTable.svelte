@@ -55,8 +55,9 @@
         /** Static files: called with the scope a file should get (share with everyone, or make personal) */
         onScopeChange?: (file: UploadedFile, scope: UploadScope) => void;
         /**
-         * 77 SEL-A: the actions of the shared selection panel (the bar at the top of the table, the dock at its bottom).
-         * Given, the table draws them; absent, nothing changes (the page or the window draws its own bar).
+         * 77 SEL-A/B: the actions of the shared selection panel (the bar at the top of the table, the dock at its bottom).
+         * Given, the table draws them after its own «Download» (Q-SEL-10: the multiple download, unreachable until now);
+         * absent, nothing changes (the page or the window draws its own bar).
          */
         selectionActions?: BulkAction<FileData>[];
     }
@@ -697,7 +698,7 @@
 <div data-testid="files-table-{type}" data-users-state={userLookupState} data-busy={userLookupState === 'loading'} aria-busy={userLookupState === 'loading'}>
     <DataTable
         bind:this={dataTableRef}
-        bulkActions={selectionActions ?? bulkActions}
+        bulkActions={selectionActions ? [...bulkActions.filter((action) => action.id === 'download'), ...selectionActions] : bulkActions}
         selectionPanel={selectionActions !== undefined}
         {columns}
         data={files}

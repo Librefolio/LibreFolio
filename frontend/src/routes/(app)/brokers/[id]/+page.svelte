@@ -24,7 +24,7 @@
     import TxChargesActionModal from '$lib/features/transactions/TxChargesActionModal.svelte';
     import {createChargesDeleteFlow} from '$lib/features/transactions/chargesDeleteFlow.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
-    import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
+    import type {BulkAction} from '$lib/components/table/types';
     import {txStoreSetAll, txStoreCanEdit} from '$lib/features/transactions/txStore.svelte';
     import {guardEditableRows} from '$lib/features/transactions/bulk/selectionGuards';
     import type {TXReadItem} from '$lib/features/transactions/types';
@@ -143,19 +143,19 @@
     }
 
     /** The selected rows the user can edit, with the reason shown when some or all are left out (`selectionGuards.ts`, shared with the Transactions page). */
-    function editableTxSelection(): TXReadItem[] | null {
-        return guardEditableRows(txSelectedRows, txStoreCanEdit, toasts, $_);
+    function editableTxSelection(selected: TXReadItem[] = txSelectedRows): TXReadItem[] | null {
+        return guardEditableRows(selected, txStoreCanEdit, toasts, $_);
     }
 
-    function editSelectedTx() {
-        if (txSelectedRows.length === 0) return;
-        const rows = editableTxSelection();
+    function editSelectedTx(selected: TXReadItem[] = txSelectedRows) {
+        if (selected.length === 0) return;
+        const rows = editableTxSelection(selected);
         if (rows) openBulkIntent({action: 'edit', txIds: rows.map((r) => r.id)});
     }
 
-    function cloneSelectedTx() {
-        if (txSelectedRows.length === 0) return;
-        openBulkIntent({action: 'clone', txIds: txSelectedRows.map((r) => r.id)});
+    function cloneSelectedTx(selected: TXReadItem[] = txSelectedRows) {
+        if (selected.length === 0) return;
+        openBulkIntent({action: 'clone', txIds: selected.map((r) => r.id)});
     }
 
     /** «Delete» from the bar or a row's menu: a parent with charges asks first, as on the Transactions page (66 F7-d). */
@@ -164,9 +164,9 @@
         onReadFailed: () => toasts.error($_('transactions.chargesDelete.loadFailed') || 'Could not read the charges of this transaction'),
     });
 
-    function deleteSelectedTx() {
-        if (txSelectedRows.length === 0) return;
-        const rows = editableTxSelection();
+    function deleteSelectedTx(selected: TXReadItem[] = txSelectedRows) {
+        if (selected.length === 0) return;
+        const rows = editableTxSelection(selected);
         if (rows) void chargesDelete.start(rows);
     }
 
@@ -176,10 +176,11 @@
         await view?.refresh();
     }
 
-    const txBulkActions = $derived([
-        {id: 'edit', icon: Pencil, label: () => $_('common.edit'), primary: true, onClick: editSelectedTx},
-        {id: 'clone', icon: Copy, label: () => $_('transactions.actions.clone'), onClick: cloneSelectedTx},
-        {id: 'delete', icon: Trash2, label: () => $_('common.delete'), variant: 'danger' as const, onClick: deleteSelectedTx},
+    /** 77 SEL-B: the bulk actions of the table's selection panel. Edit and Delete take the rows the user can edit, with their number. */
+    const txBulkActions = $derived<BulkAction<TXReadItem>[]>([
+        {id: 'edit', icon: Pencil, label: () => $_('common.edit'), primary: true, appliesTo: (row) => txStoreCanEdit(row.id), onClick: (rows) => editSelectedTx(rows)},
+        {id: 'clone', icon: Copy, label: () => $_('transactions.actions.clone'), onClick: (rows) => cloneSelectedTx(rows)},
+        {id: 'delete', icon: Trash2, label: () => $_('common.delete'), variant: 'danger', appliesTo: (row) => txStoreCanEdit(row.id), onClick: (rows) => deleteSelectedTx(rows)},
     ]);
 
     /** What the Transactions tab needs of a page that writes: the actions of the rows show only to who can edit this broker. */
@@ -192,6 +193,8 @@
         onFiltersChange: (filters: Record<string, FilterValue>) => (txColumnFilters = filters),
         // The bulk workspace reads the originals of a selected row from the store (FB-17), as the Transactions page fills it.
         onLoaded: (mainRows: TXReadItem[], partnerRows: TXReadItem[]) => txStoreSetAll(mainRows, partnerRows),
+        // Who cannot edit this broker gets no checkboxes: nothing would act on them (Q-SEL-16).
+        selectionActions: canEdit ? txBulkActions : undefined,
     });
 
     // ---- formatting ----------------------------------------------------------------------------------------------------
@@ -316,9 +319,6 @@
             </a>
         </div>
         <div class="flex items-center gap-2">
-            {#if canEdit && txSelectedRows.length > 0}
-                <DataTableToolbar variant="floating" selectedCount={txSelectedRows.length} bulkActions={txBulkActions} onClearSelection={clearTxSelection} />
-            {/if}
             <ColumnVisibilityToggle tableRef={table?.getTableRef()} />
             {#if canEdit}
                 <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-all" onclick={openImportTransactions} data-testid="broker-import-transactions">

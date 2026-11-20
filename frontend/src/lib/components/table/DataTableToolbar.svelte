@@ -5,7 +5,7 @@
   Four variants:
   - `inline` (default): a compact row of icons, placed by the parent. It is the bar of the modals that hold a table.
   - `top` (77 SEL-A): the bar at the top of a table. It keeps its row while nothing is selected, holding a grey hint so the
-    table does not jump at the first tick (Q-SEL-15); with a selection, the count button and the actions with their
+    table does not jump at the first tick (Q-SEL-15) — the hint only: `selection-toolbar` exists only with a selection; with a selection, the count button and the actions with their
     words (the rule below) and their numbers. In the flow: nothing fixed, nothing reserved.
   - `dock` (77 SEL-A): the actions row of a table's dock, the balloon at its bottom: the floating card's content, in the
     flow of its dock, without reserving room at the bottom of the page. Only with a selection.
@@ -150,7 +150,7 @@
         disabled={action.disabled && !reachable}
         aria-disabled={reachable ? 'true' : undefined}
         title={reachable ? undefined : getTooltip(action)}
-        aria-label={name}
+        aria-label={action.count !== undefined ? `${getShownLabel(action)}, ${action.count}` : name}
         data-disabled-reason={action.disabled && action.reason ? action.reason : undefined}
         data-primary={action.primary ? 'true' : 'false'}
         data-danger={action.variant === 'danger' ? 'true' : 'false'}
@@ -212,7 +212,8 @@
             {@render wordedActions()}
         </div>
     {:else}
-        <div class="top-bar" data-testid="selection-toolbar" data-variant="top" data-selected-count="0">
+        <!-- No selection: the hint holds the row, and there is no bar yet (`selection-toolbar` exists only with a selection). -->
+        <div class="top-bar" data-variant="top">
             <span class="top-hint" data-testid="selection-toolbar-hint">{hint ?? $t('table.selectionHint')}</span>
         </div>
     {/if}
@@ -531,16 +532,36 @@
         background: var(--lf-on-action);
     }
 
-    /* On a phone the top bar and the dock row keep the number only (the mock B2/B6; the status line still says it all). */
+    /* On a phone the top bar, the dock row and a page's fixed panel keep the number only (the mock B2/B6; the status line
+       still says it all). In the fixed panel and the dock row the number of each action becomes a dot on the icon's
+       corner, as in the inline bar (`.bulk-btn .n`): the button keeps its width, so four actions fit a 320 px screen up
+       to three digits, and its name says the number (the designer, 20/11, 77 SEL-B). The top bar wraps instead. */
     @media (max-width: 639px) {
         .top-bar .count-word,
-        .dock-row .count-word {
+        .dock-row .count-word,
+        .floating .count-word {
             display: none;
         }
 
         .act.compact {
             height: 32px;
             padding: 0 0.5625rem;
+        }
+
+        .floating .act,
+        .dock-row .act {
+            position: relative;
+        }
+
+        .floating .act .n,
+        .dock-row .act .n {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            min-width: 16px;
+            height: 16px;
+            padding: 0 4px;
+            font-size: 0.625rem;
         }
     }
 

@@ -31,7 +31,7 @@ Without filters or sorting, the two rows of a linked pair (a transfer or a curre
 ## ✏️ Edit, clone or delete transactions
 
 - **One row** — right-click it, or use its row actions: **View**, **Edit**, **Clone**, **Split pair** or **Delete**. You only see the actions your role on that broker allows.
-- **Several rows** — tick them, then choose **Edit**, **Clone** or **Delete** in the selection bar. **Edit** and **Delete** leave out the rows of brokers where you are only a Viewer.
+- **Several rows** — tick them, then choose **Edit**, **Clone** or **Delete** in the selection bar above the table. Each action shows how many rows it acts on: **Edit** and **Delete** leave out the rows of brokers where you are only a Viewer. When you scroll the list down, the same actions move into the bar at the bottom, above the pages.
 
 Each of these opens the bulk workspace, and nothing changes before **Save All**. Editing or deleting one side of a linked pair brings its partner along. Deleting a transaction that has linked charges first asks what to do with them — see [Linked charges](#linked-charges).
 
