@@ -266,9 +266,11 @@ describe('ScheduledInvestmentEditor — splitting and merging', () => {
         mount(value);
 
         const menu = await openRowMenu(0);
-        // Offered but unusable, so the user can see the action exists.
-        expect(within(menu).getByTestId('schedule-action-split')).toBeDisabled();
-        await fireEvent.click(within(menu).getByTestId('schedule-action-split'));
+        // Offered but blocked, with its reason (77 SEL-M): reachable, and its click opens no dialog.
+        const split = within(menu).getByTestId('schedule-action-split');
+        expect(split).toHaveAttribute('aria-disabled', 'true');
+        expect(split).toHaveAttribute('data-disabled-reason', 'too-short');
+        await fireEvent.click(split);
         expect(screen.queryByTestId('boundary-modal-confirm')).toBeNull();
     });
 
@@ -629,17 +631,14 @@ describe('ScheduledInvestmentEditor — validity and locked modes', () => {
         expect(tableRows()).toHaveLength(2);
     });
 
-    it('shows the row actions but disables them when the editor is locked', async () => {
+    it('offers no row action when the editor is locked', async () => {
         await setupI18n();
         mount(twoPeriods(), {readonly: true});
 
         await fireEvent.contextMenu(tableRows()[0]);
-        const menu = screen.getByTestId('context-menu');
-
-        // Keeping them visible tells the user the operations exist; disabling
-        // them is what stops a locked schedule from being edited.
-        expect(within(menu).getByTestId('schedule-action-split')).toBeDisabled();
-        expect(within(menu).getByTestId('schedule-action-delete')).toBeDisabled();
+        // Read-only, split and delete make no sense here: they are not offered (77 SEL-M, Q-SEL-12), so there is no menu.
+        expect(screen.queryByTestId('schedule-action-split')).toBeNull();
+        expect(screen.queryByTestId('schedule-action-delete')).toBeNull();
     });
 });
 
