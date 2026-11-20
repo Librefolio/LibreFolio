@@ -2213,6 +2213,14 @@ def services_enricher_borsa_italiana(verbose: bool = False, test_names: list = N
     return run_command(cmd, "Enricher Borsa Italiana tests", verbose=verbose)
 
 
+def services_enricher_esma(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the ESMA enricher: declarations, the CFI code and the register's fields to stored forms, not found, recognize, read (plan 68, lot C4b)."""
+    print_section("Services: Enricher ESMA")
+    print_info("Testing: backend/app/services/enricher_providers/esma/plugin.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_esma.py", test_names)
+    return run_command(cmd, "Enricher ESMA tests", verbose=verbose)
+
+
 def services_enricher_yahoo(verbose: bool = False, test_names: list = None) -> bool:
     """Test the Yahoo Finance enricher: declarations, info and fund data to stored forms, not found, recognize, read (plan 68, lot C3)."""
     print_section("Services: Enricher Yahoo Finance")
@@ -4554,6 +4562,16 @@ Note: No backend server required.
         services_enricher_justetf,
         name="Enricher justETF",
         desc="Plan 68 C1: JustETFEnricher declarations (justetf, PRICE_SOURCE, ISIN, ETF family + COMMODITY at 10, 13 voices (legal_form only where an ETC or ETN can sit), not test-only, pause_seconds > 0); recorded overviews (SWDA, VWCE, bond, hedged, gold ETC) mapped to stored forms through the real catalogue (TER and weights as fractions, fund size millions EUR, replication/distribution/legal-form codes, domicile ISO3, English dates, «Other» kept, sectors helper first then the justETF table, holdings date on countries and sectors); synthetic sheets for every replication text, unknown texts absent and logged, ETC/ETN etc_etn, ETF absent, TER 0; empty «ETF Screener» sheet not found; recognize (non-ISIN no call, 429 raises); read per binding (error isolated, 429 RATE_LIMITED for the rest without a call); search over load_overview",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "enricher-esma",
+        services_enricher_esma,
+        name="Enricher ESMA",
+        desc="Plan 68 C4b: EsmaEnricher on esma-registers (FIRDS by ISIN): declarations (esma, OPEN, ISIN, degree 30 for STOCK, BOND, FUND, COMMODITY and the ETF family, None for the rest; no params, no search, no page); the CFI code to legal_form (ES share, DB bond, EY etc_etn, no UCITS guess for C), a bond's coupon_type (F/V/Z), issuer_type (T sovereign, C supranational), maturity and the coupon rate only for a fixed rate (BTP Italia's period coupon never), a fund's distribution policy (G/I); the LEI for every instrument and as recognize's identifier; recorded answers (Enel, BTP 2072, BTP Italia, a corporate bond, SWDA, an ETC, a fund the register lacks) replayed through the library's real reduction; not found; a refusal RATE_LIMITED with its retry_after and for the rest without a call; one module-level pace",
+        # PURE: the plugin's find_instrument is the library's real one on a fake transport that fails the test on any
+        # ISIN not offered; no database, no server, no network.
         isolation="pure",
     )
     add_test(
