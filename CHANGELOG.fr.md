@@ -62,6 +62,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 ### 🔄 Modifié
 
+- La liste des fichiers de l'import, la fenêtre des fichiers d'import du courtier et les **Dernières modifications** du profil utilisent la même barre de sélection que les autres tableaux : chaque action indique sur combien de lignes elle agit, les fichiers du courtier se téléchargent ensemble et les pages du profil passent dans la barre sous le tableau.
 - Le droit de tirage spécial du FMI (XDR) est désormais servi par chaque fournisseur FX dont la banque le publie : la Banca d'Italia, la Banque nationale d'Ukraine, Norges Bank, la Banque nationale suisse (moyennes mensuelles), la Banque nationale de Roumanie, la Narodowy Bank Polski, la BCRA et la Central Bank of Nigeria rejoignent la BCB, Banxico et la CNB. Les métaux et les indices restent exclus.
 - **Relier les événements** regroupe les transactions selon ce qui manque (un événement trouvé, aucun, plusieurs), avec **Tout relier** et **Tout créer** par groupe, une seule barre de sélection avec les nombres, l'action de la ligne toujours à portée de main et une fenêtre pour choisir l'événement quand il y en a plusieurs ce jour-là.
 - **Liste des actifs : Recharger ne met à jour que les actifs sélectionnés**, pas toute la liste.

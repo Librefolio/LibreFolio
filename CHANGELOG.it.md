@@ -62,6 +62,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 ### 🔄 Modifiche
 
+- L'elenco dei file dell'import, la finestra dei file di import del broker e le **Ultime variazioni** del profilo usano la stessa barra della selezione delle altre tabelle: ogni azione mostra su quante righe agisce, i file del broker si scaricano insieme e le pagine del profilo passano nella barra sotto la tabella.
 - Il diritto speciale di prelievo del FMI (XDR) è ora servito da ogni provider FX la cui banca lo pubblica: Banca d'Italia, Banca nazionale d'Ucraina, Norges Bank, Banca nazionale svizzera (medie mensili), Banca nazionale di Romania, Narodowy Bank Polski, BCRA e Central Bank of Nigeria si aggiungono a BCB, Banxico e CNB. Metalli e indici restano fuori.
 - **Ricollega eventi** raggruppa le transazioni per quello che manca (un evento trovato, nessuno, più d'uno), con **Collega tutte** e **Crea tutti** per gruppo, una sola barra della selezione con i numeri, l'azione della riga sempre a portata di mano e una finestra per scegliere l'evento quando quel giorno ce ne sono più d'uno.
 - **Lista asset: Ricarica aggiorna solo gli asset selezionati**, non tutta la lista.

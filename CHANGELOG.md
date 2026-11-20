@@ -62,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 
+- The import's file list, the broker's import files window and the profile's **Latest changes** use the same selection bar as the other tables: each action shows how many rows it takes, the broker's files can be downloaded together, and the profile's pages move to the bar below the table.
 - The IMF's special drawing right (XDR) is now served by every FX provider whose bank publishes it: Banca d'Italia, the National Bank of Ukraine, Norges Bank, the Swiss National Bank (monthly averages), the National Bank of Romania, Narodowy Bank Polski, the BCRA and the Central Bank of Nigeria join the BCB, Banxico and the CNB. Metals and indices stay out.
 - **Relink events** groups the transactions by what is missing (an event found, none, several), with **Link all** and **Create all** per group, one selection bar with the numbers, the row's action always at hand, and a window to choose the event when there are several that day.
 - **Asset list: Reload refreshes the selected assets only**, not the whole list.
