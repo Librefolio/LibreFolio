@@ -284,6 +284,18 @@ def front_tx_bulk_charges_link(verbose: bool = False, ui: bool = False, headed: 
     return _run_playwright("transactions/tx-bulk-charges-link.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_bulk_promote_charges(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """No pair-promote for a leg that still has linked charges; «scollega» then merge, saved in one batch (project 66, C21)."""
+    print_section("Frontend TX Bulk Promote Charges Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-bulk-promote-charges.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_import_charge_links(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """The linked charges a plugin names (ref / parent_ref) through the import wizard to the Bulk and the save (project 66, P1b)."""
     print_section("Frontend TX Import Charge Links Tests")
@@ -869,6 +881,14 @@ def populate_registry(registry: dict) -> None:
         name="TX Bulk Charges Link Tests",
         desc="Project 66 F7-d: in the Bulk, «Link» a new BUY + new FEE and a saved BUY + saved free FEE (also by tap on a phone), saved and read back by id; «Open» from a FEE's form to its parent absent from the Bulk adds the parent",
         tests="transactions/tx-bulk-charges-link.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-bulk-promote-charges",
+        front_tx_bulk_promote_charges,
+        name="TX Bulk Promote Charges Tests",
+        desc="Project 66 C21, on a disposable account with two brokers: a saved DEPOSIT with a linked FEE and the saved WITHDRAWAL that cancels it — the Bulk offers no merge while the FEE is linked; «scollega» in the DEPOSIT's Form brings the banner's offer back (the search asked again); merged and saved in one batch (unlink + promote): the server holds the CASH_TRANSFER pair and the FEE with no parent",
+        tests="transactions/tx-bulk-promote-charges.spec.ts",
     )
     add_test(
         cat,
