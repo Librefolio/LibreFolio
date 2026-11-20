@@ -48,7 +48,6 @@
     import FilesTable from '$lib/features/files/FilesTable.svelte';
     import FilePreviewModal from '$lib/features/files/FilePreviewModal.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
-    import SelectionBar from '$lib/components/table/SelectionBar.svelte';
     import {matchesColumnFilter} from '$lib/components/table/dataTableLogic';
     import FileGrid from '$lib/features/files/FileGrid.svelte';
     import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
@@ -142,7 +141,7 @@
     let brimTableRef: FilesTable;
     $: activeTableRef = activeTab === 'static' ? staticTableRef : brimTableRef;
 
-    // Selection state for SelectionBar
+    // The rows the user selected in the active list (the shared selection panel acts on its own part of them)
     let selectedFileIds: string[] = [];
 
     // BRIM upload with broker selection
@@ -692,11 +691,11 @@
     }
 
     /**
-     * 77 SEL-A: the static list draws the shared selection panel. «Delete» takes the files the user may delete (the
-     * others stay out of its number) and acts on those only. «Download» comes in SEL-B; the BRIM tab keeps its bar until then.
+     * 77 SEL-A/B: both lists draw the shared selection panel. «Delete» takes the files the user may delete (the others stay
+     * out of its number) and acts on those only; the table puts its own «Download» before it.
      */
-    let staticSelectionActions: BulkAction<FileData>[];
-    $: staticSelectionActions = [
+    let fileSelectionActions: BulkAction<FileData>[];
+    $: fileSelectionActions = [
         {
             id: 'delete',
             icon: Trash2,
@@ -848,25 +847,6 @@
     <div class="mb-6 flex items-center gap-2">
         <TabBar {tabs} bind:activeTab onchange={(tabId) => setActiveTab(tabId as Tab)} class="flex-1" />
         {#if viewMode === 'list' && activeTab !== 'backup'}
-            {#if activeTab === 'brim'}
-                <SelectionBar
-                    selectedCount={selectedFileIds.length}
-                    actions={[
-                        {
-                            id: 'delete',
-                            icon: Trash2,
-                            label: $t('common.delete') || 'Delete',
-                            variant: 'danger',
-                            // A closure: SelectionBar hands the click event, which must not become the list of ids.
-                            onClick: () => handleBulkDeleteFiles(),
-                        },
-                    ]}
-                    onClearSelection={() => {
-                        selectedFileIds = [];
-                        activeTableRef?.getTableRef()?.clearSelection();
-                    }}
-                />
-            {/if}
             <ColumnVisibilityToggle tableRef={activeTableRef?.getTableRef()} />
         {/if}
     </div>
@@ -925,7 +905,7 @@
                     onFiltersChange={handleFiltersChange}
                     onSelectionChange={(ids) => (selectedFileIds = ids)}
                     onScopeChange={requestScopeChange}
-                    selectionActions={staticSelectionActions}
+                    selectionActions={fileSelectionActions}
                 />
             {/if}
         {:else if activeTab === 'backup'}
@@ -952,6 +932,7 @@
                     initialFilters={currentFilters}
                     onFiltersChange={handleFiltersChange}
                     onSelectionChange={(ids) => (selectedFileIds = ids)}
+                    selectionActions={fileSelectionActions}
                 />
             {/if}
         {/if}

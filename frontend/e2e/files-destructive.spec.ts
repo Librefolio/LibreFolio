@@ -221,6 +221,21 @@ test('the selection panel (77 SEL-A) — the actions sit at the top while it is 
     await expect(table.locator('[data-testid="dt-dock"][data-actions="true"]')).toHaveCount(0);
 });
 
+// Q-SEL-10: the multiple download, unreachable until now, is in the panel, before «Delete», with its number.
+test('static bulk download (77 SEL-B) — «Download» says how many files and downloads each of them', async ({page}) => {
+    const ids = [await uploadStaticFile(page, uniqueSuffix()), await uploadStaticFile(page, uniqueSuffix())];
+    await openStaticListView(page);
+    for (const id of ids) await page.getByTestId(`dt-row-checkbox-${id}`).click();
+
+    const table = page.getByTestId('files-table-static');
+    await expect(table.getByTestId('toolbar-action-download-count')).toHaveText(String(ids.length), {timeout: 5_000});
+    const names: string[] = [];
+    page.on('download', (download) => names.push(download.suggestedFilename()));
+    await table.getByTestId('toolbar-action-download').click();
+    await expect.poll(() => names.length, {message: 'one download per selected file', timeout: 10_000}).toBe(ids.length);
+    for (const id of ids) await expect(page.locator(`[data-row-id="${id}"]`), 'downloading deletes nothing').toHaveCount(1);
+});
+
 test('static delete failure — emits file.delete.failed and keeps the row', async ({page}) => {
     const id = await uploadStaticFile(page, uniqueSuffix());
     await openStaticListView(page);
@@ -266,7 +281,7 @@ test('BRIM single delete — the isBrim path removes the report', async ({page})
     await expect(row).toHaveCount(0);
 });
 
-test('BRIM bulk delete — the tab’s own SelectionBar deletes the selected reports (until SEL-B)', async ({page}) => {
+test('BRIM bulk delete — the shared selection panel deletes the selected reports (77 SEL-B)', async ({page}) => {
     const brokerId = await createBroker(page, uniqueSuffix());
     const ids = [await uploadBrimFile(page, brokerId, uniqueSuffix()), await uploadBrimFile(page, brokerId, uniqueSuffix())];
     await openBrimListView(page);
@@ -275,8 +290,10 @@ test('BRIM bulk delete — the tab’s own SelectionBar deletes the selected rep
         await expect(page.locator(`[data-row-id="${id}"]`)).toHaveCount(1);
         await page.getByTestId(`dt-row-checkbox-${id}`).click();
     }
-    const bulkDelete = page.getByTestId('selection-bar-action-delete');
+    const table = page.getByTestId('files-table-brim');
+    const bulkDelete = table.getByTestId('toolbar-action-delete');
     await expect(bulkDelete).toBeVisible({timeout: 5_000});
+    await expect(table.getByTestId('toolbar-action-delete-count')).toHaveText(String(ids.length));
 
     const since = await eventSeq(page);
     await bulkDelete.click();
