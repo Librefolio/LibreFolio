@@ -70,6 +70,7 @@ _WARNING_ISSUE_CODES = {
     IssueCode.ASSET_INCOME_NO_ELIGIBLE_LOTS,
     IssueCode.ASSET_COST_NO_ELIGIBLE_LOTS,
     IssueCode.ASSET_COST_LINKED_PARENT_AFTER_RANGE,
+    IssueCode.ASSET_COST_LINKED_INCOME_NO_ELIGIBLE_LOTS,
 }
 
 # The analyses a FAILED replay still answers (J-12): the average-cost lines come from the transactions, and the market
@@ -80,6 +81,7 @@ _ORPHAN_ISSUE_CODES = {
     IssueCode.ASSET_INCOME_NO_ELIGIBLE_LOTS,
     IssueCode.ASSET_COST_NO_ELIGIBLE_LOTS,
     IssueCode.ASSET_COST_LINKED_PARENT_AFTER_RANGE,
+    IssueCode.ASSET_COST_LINKED_INCOME_NO_ELIGIBLE_LOTS,
 }
 
 _CUSTODY_KINDS = {
@@ -1725,6 +1727,7 @@ def _message_key_for_issue(code: IssueCode) -> str:
         IssueCode.ASSET_INCOME_NO_ELIGIBLE_LOTS: "dataQuality.assetIncomeNoEligibleLots",
         IssueCode.ASSET_COST_NO_ELIGIBLE_LOTS: "dataQuality.assetCostNoEligibleLots",
         IssueCode.ASSET_COST_LINKED_PARENT_AFTER_RANGE: "dataQuality.assetCostLinkedParentAfterRange",
+        IssueCode.ASSET_COST_LINKED_INCOME_NO_ELIGIBLE_LOTS: "dataQuality.assetCostLinkedIncomeNoEligibleLots",
     }
     return mapping[code]
 
