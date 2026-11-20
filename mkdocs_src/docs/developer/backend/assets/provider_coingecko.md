@@ -112,6 +112,8 @@ flowchart LR
     - The coins are ordered by `market_cap_rank`; a coin without a rank comes last, in CoinGecko's order.
     - A row is `identifier=<id>`, `identifier_type=OTHER`, «Name (SYMBOL)», `type` CRYPTO, with the user's
         `preferred_currency` as `currency` and as `vs_currency`. A blank query asks nothing.
+    - The row's `icon_url` is the coin's logo, `large` of the answer (S3): the very image the metadata gives the asset,
+        so the browser asks it once.
     - `test_search_query` is `"bitcoin"`, so search is on. Without a key it answers `NOT_CONFIGURED`.
 - **Metadata** (`fetch_asset_metadata`): `/coins/{id}` with no localization, tickers, market data, community or
   developer data, and no sparkline. It gives:

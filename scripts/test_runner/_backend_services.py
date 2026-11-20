@@ -589,6 +589,14 @@ def services_coingecko_search(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "CoinGecko search tests", verbose=verbose)
 
 
+def services_search_result_icon(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the icon a search result may carry (project 76, S3)."""
+    print_section("Services: Search Result Icon")
+    print_info("Testing: schemas/provider.py FAProviderSearchResultItem.icon_url, assets/search.py (search and search_stream)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_search_result_icon.py", test_names)
+    return run_command(cmd, "Search result icon tests", verbose=verbose)
+
+
 def services_refresh_history_starts(verbose: bool = False, test_names: list = None) -> bool:
     """Test the first day a source has prices for, in the refresh's outcome (project 76, P2b)."""
     print_section("Services: Refresh History Starts")
@@ -3203,6 +3211,16 @@ Note: No backend server required.
         desc="P3: the id travels as COINGECKO_ID, reaching the plugin as OTHER (the reverse map unchanged); search asks /search, coins only by market cap rank (no rank last, in order), rows OTHER, Name (SYMBOL), CRYPTO, the preferred currency as currency and vs_currency, a blank query asks nothing; metadata from /coins/{id} with the P0 flags: name, CRYPTO, logo, the symbol as ticker (left out when too long), coingecko:<id> among the other identifiers; the page; search on, NOT_CONFIGURED without a key; the real path: COINGECKO_ID saved and kept, OTHER received, prices stored, a service search counted on the group",
         # PURE: the real coingecko-sdk on an httpx.MockTransport (the P0 recordings); private SQLite files behind the
         # settings, the counter and the session; no shared database, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "search-result-icon",
+        services_search_result_icon,
+        name="Search Result Icon",
+        desc="S3: a search result's optional icon_url, from the plugin's dict, in the plain and the streamed search: http(s) and local paths kept, any other scheme, a blank or a non-string dropped quietly, every result kept",
+        # PURE: the providers are in-process doubles handed out by AssetProviderRegistry (as quote-base-suggestion's),
+        # pauses on a private fake clock; no lane DB, no server, no network.
         isolation="pure",
     )
     add_test(

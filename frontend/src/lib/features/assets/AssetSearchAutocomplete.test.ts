@@ -1717,3 +1717,32 @@ describe("AssetSearchAutocomplete — a provider's attribution under its results
         expect(screen.queryByTestId('asset-search-attribution')).toBeNull();
     });
 });
+
+// =====================================================================================================================
+// S3 (project 76; the developer, 20/11): a result carries the asset's icon when its provider knows it at search time
+// (CoinGecko's coin logo); the row draws it, and a result without one is drawn as before (the asset type's icon).
+describe('AssetSearchAutocomplete — the icon of a result (76 S3)', () => {
+    const LOGO = 'https://coin-images.coingecko.com/coins/images/29850/large/pepe-token.jpeg';
+    const PEPE = {identifier: 'pepe', identifier_type: 'other', display_name: 'Pepe (PEPE)', provider_code: 'alpha', currency: 'EUR', asset_type: 'CRYPTO', via_web: false, icon_url: LOGO};
+    const iconOf = (index: number) => screen.getByTestId(`asset-search-result-${index}`).querySelector(`img[src="${LOGO}"]`);
+
+    it("ASA-I1: the streamed row draws the result's icon; a result without one draws none of it", async () => {
+        global.fetch = vi.fn(async () => sseResponse([{event: 'provider_results', results: [PEPE, R2]}, {event: 'done'}])) as never;
+        await mountReady();
+        await type('pepe');
+        await waitFor(() => expect(state()).toBe('results'));
+
+        expect(screen.getByTestId('asset-search-result-0')).toHaveAttribute('data-identifier', 'pepe');
+        expect(iconOf(0), 'the logo is drawn').not.toBeNull();
+        expect(iconOf(1), 'Microsoft has no icon: its row is as before').toBeNull();
+    });
+
+    it('ASA-I2: the REST fallback carries the icon too', async () => {
+        global.fetch = vi.fn(async () => sseResponse([], {ok: false})) as never;
+        restSearch.mockResolvedValue({results: [PEPE]} as never);
+        await mountReady();
+        await type('pepe');
+        await waitFor(() => expect(state()).toBe('results'));
+        expect(iconOf(0)).not.toBeNull();
+    });
+});

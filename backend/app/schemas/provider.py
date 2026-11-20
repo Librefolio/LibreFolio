@@ -528,6 +528,7 @@ class FAProviderSearchResultItem(StrictModel):
     provider_params: Optional[dict[str, Any]] = Field(None, description="Provider-specific params to carry over (e.g. language)")
     quote_base_suggestion: Optional[FAQuoteBaseSuggestion] = Field(None, description="The plugin's quote base suggestion for this line (Z-32 d); null when it suggests nothing")
     via_web: bool = Field(False, description="True if resolved via the external web link-finder (last-resort), not the provider's native on-site search")
+    icon_url: Optional[str] = Field(None, description="The asset's icon, when the provider knows it at search time (an http(s) address or a path of this instance; CoinGecko's coin logo); null otherwise (project 76, S3)")
 
 
 class FAProviderSearchResponse(StrictModel):

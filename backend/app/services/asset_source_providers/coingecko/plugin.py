@@ -377,6 +377,8 @@ class CoinGeckoProvider(AssetSourceProvider):
                     "currency": currency,
                     "type": AssetType.CRYPTO.value,
                     "provider_params": {"vs_currency": currency},
+                    # S3: the coin's logo, the very image its metadata gives (``image.large``), so the browser asks it once
+                    "icon_url": coin.get("large") if isinstance(coin.get("large"), str) and coin.get("large") else None,
                 }
             )
         return rows
