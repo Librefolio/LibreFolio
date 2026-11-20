@@ -146,6 +146,34 @@ one takes over.
         </div>
         <span class="card-desc">The interbank mid rate of 17 currencies against GHS, among them NGN, XOF, GMD and SLE, from 2020.</span>
     </a>
+    <a href="bnr/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <img src="https://www.bnr.ro/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="BNR favicon">
+            <span class="card-title" style="margin: 0;">National Bank of Romania (BNR)</span>
+        </div>
+        <span class="card-desc">Reference rates of 39 currencies against RON from 2005, among them MDL, UAH, RSD, EGP and AED.</span>
+    </a>
+    <a href="boi/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <img src="https://www.boi.org.il/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="BOI favicon">
+            <span class="card-title" style="margin: 0;">Bank of Israel (BOI)</span>
+        </div>
+        <span class="card-desc">The representative rates of 13 currencies against ILS from 1986, among them JOD and EGP.</span>
+    </a>
+    <a href="nbp/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <img src="https://nbp.pl/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="NBP favicon">
+            <span class="card-title" style="margin: 0;">Narodowy Bank Polski (NBP)</span>
+        </div>
+        <span class="card-desc">148 currencies against PLN from 2002: 32 daily and 116 weekly, most currencies of Africa, Asia and Latin America.</span>
+    </a>
+    <a href="bcra/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <img src="https://www.bcra.gob.ar/wp-content/uploads/cropped-favicon-bcra-192x192.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="BCRA favicon">
+            <span class="card-title" style="margin: 0;">Banco Central de la República Argentina (BCRA)</span>
+        </div>
+        <span class="card-desc">33 currencies against ARS from 2002; the US dollar is the official reference rate (Com. A 3500).</span>
+    </a>
     <a href="../../../community/contribute/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
      <div style="display: flex; align-items: center; gap: 0.75rem;">
      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--md-accent-fg-color);"><path d="M15.39 4.39a1 1 0 0 0 1.68-.474 2.5 2.5 0 1 1 3.014 3.015 1 1 0 0 0-.474 1.68l1.683 1.682a2.414 2.414 0 0 1 0 3.414L19.61 15.39a1 1 0 0 1-1.68-.474 2.5 2.5 0 1 0-3.014 3.015 1 1 0 0 1 .474 1.68l-1.683 1.682a2.414 2.414 0 0 1-3.414 0L8.61 19.61a1 1 0 0 0-1.68.474 2.5 2.5 0 1 1-3.014-3.015 1 1 0 0 0 .474-1.68l-1.683-1.682a2.414 2.414 0 0 1 0-3.414L4.39 8.61a1 1 0 0 1 1.68.474 2.5 2.5 0 1 0 3.014-3.015 1 1 0 0 1-.474-1.68l1.683-1.682a2.414 2.414 0 0 1 3.414 0z"/></svg>
@@ -181,6 +209,10 @@ Each central bank quotes other currencies against its own, the **base currency**
 | <img src="https://www.centralbank.go.ke/wp-content/uploads/2016/09/NewLogoCBK-150x150.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **CBK** (Central Bank of Kenya) | KES 🇰🇪 | Kenyan business days | East Africa (UGX, TZS, RWF, BIF) |
 | <img src="https://www.rbi.org.in/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **RBI** (Reserve Bank of India) | INR 🇮🇳 | Mumbai business days, around 13:30 India time | The rupee's reference rate (FBIL) |
 | <img src="https://www.bog.gov.gh/wp-content/uploads/2020/08/logo-150x150.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **BOG** (Bank of Ghana) | GHS 🇬🇭 | Ghanaian business days | West Africa (NGN, XOF, GMD, SLE) |
+| <img src="https://www.bnr.ro/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **BNR** (National Bank of Romania) | RON 🇷🇴 | Daily, on Romanian business days | Eastern Europe and the Middle East (MDL, UAH, RSD, EGP) |
+| <img src="https://www.boi.org.il/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **BOI** (Bank of Israel) | ILS 🇮🇱 | Daily, on Israeli business days | Shekel pairs, the Jordanian dinar |
+| <img src="https://nbp.pl/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **NBP** (Narodowy Bank Polski) | PLN 🇵🇱 | Daily for 32 currencies; weekly (usually Wednesday) for 116 | Rare currencies of the world, once a week |
+| <img src="https://www.bcra.gob.ar/wp-content/uploads/cropped-favicon-bcra-192x192.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **BCRA** (Banco Central de la República Argentina) | ARS 🇦🇷 | Daily, on Argentine business days | The peso's official reference rate, Latin America |
 
 ## 🎯 How Routing & Fallback Works
 

@@ -26,6 +26,10 @@ This section provides the technical documentation for each Foreign Exchange (FX)
 | [**Central Bank of Kenya**](cbk.md) | `CBK` | KES | 21 | JSON (wpDataTables, undocumented) | No | Beta |
 | [**Reserve Bank of India**](rbi.md) | `RBI` | INR | 7 | HTML (ASP.NET form) | No | Beta |
 | [**Bank of Ghana**](bog.md) | `BOG` | GHS | 17 | JSON (wpDataTables, page nonce) | No | Beta |
+| [**National Bank of Romania**](bnr.md) | `BNR` | RON | 39 | XML (ten-day and yearly files) | No | Beta |
+| [**Bank of Israel**](boi.md) | `BOI` | ILS | 13 | CSV (SDMX) | No | Beta |
+| [**Narodowy Bank Polski**](nbp.md) | `NBP` | PLN | 148 (32 daily + 116 weekly) | JSON | No | Beta |
+| [**Banco Central de la República Argentina**](bcra.md) | `BCRA` | ARS | 33 | JSON | No | Beta |
 
 ### 📝 General Notes
 
@@ -55,6 +59,10 @@ This section provides the technical documentation for each Foreign Exchange (FX)
 - [🇰🇪 CBK (Central Bank of Kenya)](cbk.md)
 - [🇮🇳 RBI (Reserve Bank of India)](rbi.md)
 - [🇬🇭 BOG (Bank of Ghana)](bog.md)
+- [🇷🇴 BNR (National Bank of Romania)](bnr.md)
+- [🇮🇱 BOI (Bank of Israel)](boi.md)
+- [🇵🇱 NBP (Narodowy Bank Polski)](nbp.md)
+- [🇦🇷 BCRA (Banco Central de la República Argentina)](bcra.md)
 
 ---
 
