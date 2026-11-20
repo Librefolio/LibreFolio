@@ -400,8 +400,17 @@ per-lot accumulators, an audit trail, and asset-level orphans.
 
 ### 💸 FEE / TAX
 
-`_allocate_cost_pools()` pools asset-linked cost and matches it to operations with a deterministic ladder
-(`_match_cost_operations`), weighting by `target_amount`. Unlike income, a cost pool sums its amounts in
+`_allocate_cost_pools()` first takes out the **linked charges** (project 66): a FEE or TAX whose
+`parent_transaction_id` names a BUY/SELL of its broker that the engine replayed goes, alone, on
+`_split_trade_cost` of that trade — the lots it opened and the lots it closed in the run's matching order —
+whatever the charge's date. Its audit group has rule `LINKED_TRADE` and the charge's date
+(`_linked_trade_operations`). A charge linked to a parent the engine does not see (not loaded, after
+`replay_until`), to another broker's row or to a trade that opened and closed nothing joins its day's pool
+instead.
+
+The rest is pooled and matched to operations with a deterministic ladder
+(`_match_cost_operations`), weighting by `target_amount`. The pool keeps every same-day trade in its weights,
+also a trade that a linked charge already served, so an unlinked charge lands where it always landed. Unlike income, a cost pool sums its amounts in
 absolute value, as the Dashboard counts fees and taxes:
 
 | Cost | Matching order (first non-empty wins) |
@@ -409,8 +418,9 @@ absolute value, as the Dashboard counts fees and taxes:
 | `FEE` | same-day trades → previous-day trades → holdings fallback → orphan |
 | `TAX` | same-day income → same-day trades → previous-day income → previous-day trades → holdings fallback → orphan |
 
-The chosen rule is recorded per group (`SAME_DAY_MIXED_TRADES`, `SAME_DAY_TRADES`, `PREVIOUS_DAY_TRADES`,
-`OPEN_LOTS_FALLBACK`, income-linked variants). Allocation to a matched trade **crosses** to the lots that
+The chosen rule is recorded per group (`LINKED_TRADE`, `SAME_DAY_MIXED_TRADES`, `SAME_DAY_TRADES`,
+`PREVIOUS_DAY_TRADES`, `OPEN_LOTS_FALLBACK`, income-linked variants); within each cost type the `LINKED_TRADE`
+groups come first, by charge date and id. Allocation to a matched trade **crosses** to the lots that
 trade touched (BUY → the opened lot; SELL → the FIFO-consumed lots), so a cost follows the same lots the FIFO
 algorithm already selected. A cost with no eligible target becomes `asset_orphan_fees` / `asset_orphan_taxes`.
 

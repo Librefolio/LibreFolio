@@ -395,7 +395,7 @@ An income / FEE / TAX event without a rate still enters the engine with its nati
 | **Amount-degraded** | One of its source events is in `unconvertible_event_ids` | Its target-currency amount, hence every target share of it |
 | **Split-degraded** | A trade-weighted FEE / TAX rule (`SAME_DAY_TRADES`, `SAME_DAY_MIXED_TRADES`, `PREVIOUS_DAY_TRADES`), with a weighting trade in `unconvertible_trade_ids` and weighting trades in more than one currency | Its split: every operation weight and every per-lot share |
 
-When every weighting trade is in one currency, the pool is not split-degraded: the trades share one date, hence one rate, and their native placeholders keep the exact ratios.
+When every weighting trade is in one currency, the pool is not split-degraded: the trades share one date, hence one rate, and their native placeholders keep the exact ratios. A `LINKED_TRADE` group (a charge linked to its trade, project 66) is never split-degraded: it has one trade and splits by quantity, never by value; a missing rate on the charge itself degrades its amount, and only its own group.
 
 `WithheldEconomics` records, per lot, the date from which its income (`income_from`), fees (`fees_from`) and taxes (`taxes_from`) are unknown — the date of the earliest degraded pool of that kind that allocates to the lot — with the degraded pool indexes (`amount_degraded`, `split_degraded`), `unconvertible_event_ids` and the kinds whose orphan pool is degraded (`orphan_unknown`). The response withholds:
 
