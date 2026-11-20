@@ -1004,7 +1004,11 @@ class FifoLotEngine:
         return orphan_total
 
     # ------------------------------------------------------------------
-    # FEE/TAX allocation (asset-linked costs). Deterministic matching order
+    # FEE/TAX allocation (asset-linked costs).
+    # Step 0 (project 66, M1): a charge the user linked to a BUY/SELL the engine replayed goes, alone, to the lots
+    #         that trade opened and closed (rule LINKED_TRADE, its own audit group dated on the charge). Any other
+    #         charge — unlinked, or linked to a parent the engine does not see — follows the ladder, unchanged.
+    # Deterministic matching order of the ladder
     # (§4.3): FEE  = same-day trades -> previous-day trades -> holdings fallback -> orphan;
     #         TAX  = same-day income -> same-day trades -> previous-day income ->
     #                previous-day trades -> holdings fallback -> orphan.
@@ -1020,10 +1024,12 @@ class FifoLotEngine:
         groups: list[EconomicAllocationGroup],
         accumulators: dict[int, dict[str, Decimal]],
     ) -> Decimal:
-        """Allocate FEE or TAX pools; returns the orphaned target total (unallocatable pools)."""
+        """Allocate FEE or TAX: the linked charges first (step 0), then the pools of the rest; returns the orphaned
+        target total (unallocatable pools)."""
         orphan_total = Decimal("0")
+        pooled = self._allocate_linked_charges(cost_events, economic_type, accumulator_field, groups, accumulators)
         pools: dict[tuple[int, date, str | None, str], list[EconomicEvent]] = defaultdict(list)
-        for event in cost_events:
+        for event in pooled:
             pools[(event.broker_id, event.date, event.native_currency, event.target_currency)].append(event)
         for key in sorted(pools, key=lambda item: (item[1], item[0], str(item[2] or ""))):
             broker_id, event_date, native_currency, target_currency = key
@@ -1092,6 +1098,73 @@ class FifoLotEngine:
                 )
             )
         return orphan_total
+
+    def _allocate_linked_charges(
+        self,
+        cost_events: Sequence[EconomicEvent],
+        economic_type: EconomicType,
+        accumulator_field: str,
+        groups: list[EconomicAllocationGroup],
+        accumulators: dict[int, dict[str, Decimal]],
+    ) -> list[EconomicEvent]:
+        """Step 0 (project 66, M1): each charge linked to a trade the engine replayed goes alone to that trade's lots,
+        with its own ``LINKED_TRADE`` group (by charge date, then id). Returns the other events, for the pools."""
+        pooled: list[EconomicEvent] = []
+        linked: list[tuple[EconomicEvent, list[TargetOperationAllocation]]] = []
+        for event in cost_events:
+            operations = self._linked_trade_operations(event)
+            if operations is None:
+                pooled.append(event)
+            else:
+                linked.append((event, operations))
+        for event, operations in sorted(linked, key=lambda item: (item[0].date, item[0].transaction_id)):
+            for operation in operations:
+                for allocation in operation.lot_allocations:
+                    accumulator = accumulators.setdefault(allocation.lot_id, _new_economic_accumulator())
+                    accumulator[accumulator_field] += allocation.target_amount
+            groups.append(
+                EconomicAllocationGroup(
+                    economic_type=economic_type,
+                    asset_id=self.asset_id,
+                    broker_id=event.broker_id,
+                    date=event.date,
+                    native_currency=event.native_currency,
+                    target_currency=event.target_currency,
+                    rule="LINKED_TRADE",
+                    source_transaction_ids=(event.transaction_id,),
+                    native_pool_total=abs(event.native_amount),
+                    target_pool_total=abs(event.target_amount),
+                    operation_allocations=tuple(operations),
+                )
+            )
+        return pooled
+
+    def _linked_trade_operations(self, event: EconomicEvent) -> list[TargetOperationAllocation] | None:
+        """Step 0 (project 66, M1): the lots of the trade ``event`` is linked to, or ``None`` for the ladder.
+
+        The charge goes alone on ``_split_trade_cost`` of its parent: the lots that trade opened (by original quantity)
+        and closed (by closed quantity, in the run's matching order), whatever the charge's date (rule 4: the date is
+        never judged). ``None`` — the charge joins its day's pool, as before the link — when:
+
+        - it has no parent;
+        - the engine does not see the parent: not among its transactions, or after ``replay_until`` (the plan: a
+          parent out of the period goes back to the ladder);
+        - the parent is not a BUY/SELL of the charge's broker (an income parent is M2; another broker can only be a
+          parent edited after the link);
+        - the parent opened and closed nothing (``_split_trade_cost`` is empty): never an empty group.
+        """
+        if event.parent_transaction_id is None:
+            return None
+        parent = self._tx_by_id.get(event.parent_transaction_id)
+        # Not seen by the engine (out of the period or the scope): the plan sends the charge back to the ladder.
+        if parent is None or (self.replay_until is not None and parent.date > self.replay_until):
+            return None
+        # Not a trade of the charge's broker: the ladder.
+        if parent.type not in ("BUY", "SELL") or parent.broker_id != event.broker_id:
+            return None
+        native = abs(event.native_amount)
+        target = abs(event.target_amount)
+        return self._split_trade_cost(parent, native, target, target) or None
 
     def _match_cost_operations(  # noqa: C901 — ordered matching-level fallback chain, early returns per level
         self,

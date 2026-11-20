@@ -322,6 +322,7 @@ AllocationRuleLiteral = Literal[
     "PREVIOUS_DAY_TRADES",
     "PREVIOUS_DAY_INCOME",
     "OPEN_LOTS_FALLBACK",
+    "LINKED_TRADE",
 ]
 
 

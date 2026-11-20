@@ -76,6 +76,7 @@ AllocationRule = Literal[
     "PREVIOUS_DAY_TRADES",
     "PREVIOUS_DAY_INCOME",
     "OPEN_LOTS_FALLBACK",
+    "LINKED_TRADE",
 ]
 
 
@@ -260,6 +261,9 @@ class EconomicEvent:
     native_currency: str | None
     target_amount: Decimal
     target_currency: str
+    #: Project 66 (M1): a FEE/TAX linked by the user to the transaction it was paid for. ``None`` for an unlinked
+    #: charge and for every income event.
+    parent_transaction_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

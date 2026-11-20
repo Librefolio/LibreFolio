@@ -112,6 +112,7 @@ def build_cost_economic_events(
                 native_currency=native_currency,
                 target_amount=target_amount,
                 target_currency=target_currency,
+                parent_transaction_id=tx.parent_transaction_id,
             )
         )
     return events
