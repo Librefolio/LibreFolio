@@ -16,6 +16,8 @@
     arrows + 🔗), asset, broker, tags. Selection + actions managed by DataTable.
   - GoTo / row actions are emitted via callbacks; this component does not
     perform navigation or open modals on its own.
+  - Linked charges (project 66, F5): with no sort and no filter on the type, a parent's FEE/TAX fold under it (badge
+    «N charges», 🔗 on both); open, they follow it, pages never split the group. Rules in `txTableRows.ts`.
 
   Pattern: Svelte 5 runes, dark mode, `data-testid` everywhere.
 -->
@@ -27,7 +29,7 @@
 
     import DataTable from '$lib/components/table/DataTable.svelte';
     import DataTablePagination from '$lib/components/table/DataTablePagination.svelte';
-    import type {ColumnDef, CellContent, FilterValue, RowAction, SortState} from '$lib/components/table/types';
+    import type {BulkAction, ColumnDef, CellContent, FilterValue, RowAction, SortState} from '$lib/components/table/types';
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
 
     import {assetStoreVersion, ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
@@ -63,21 +65,10 @@
     import type {TXReadItem, AssetEvent} from './types';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
 
-    /**
-     * Display row = TXReadItem + decoration metadata for adjacency rendering.
-     */
-    export interface DisplayRow {
-        tx: TXReadItem;
-        /** True when partner is rendered for context (not in main filter set). */
-        isGhost: boolean;
-        /** True when this row is the receiver half of a linked pair. */
-        isReceiver: boolean;
-        /** Pair anchor id (giver tx id). null when not part of a pair. */
-        pairAnchorId: number | null;
-        /** Bug7-fix: stable sort index for flat mode — preserves date-desc order
-         *  while keeping paired rows adjacent (giver then receiver). */
-        sortIndex: number;
-    }
+    /** Display row = TXReadItem + decoration metadata for adjacency rendering (`txTableRows.ts`). */
+    export type {DisplayRow} from './txTableRows';
+    import {foldCharges, paginateRows, type DisplayRow} from './txTableRows';
+    import {formatCellDate, matchesColumnFilter} from '$lib/components/table/dataTableLogic';
 
     interface Props {
         mainRows: TXReadItem[];
@@ -119,6 +110,14 @@
         /** Compact/embedded mode: disables selection, pagination, filters, sorting,
          *  column visibility toggle, and row actions. Used by dashboard home. */
         compact?: boolean;
+        /** 77 SEL-B: no checkboxes where nothing can act on a selection (the dashboard's tab, a broker the reader cannot edit). */
+        selectable?: boolean;
+        /**
+         * 77 SEL-B: the bulk actions of the shared selection panel (the bar at the top of the table, the dock at its
+         * bottom), on the transactions. Given, the table draws them through the rule of `resolveSelectionAction` (each
+         * action on its own rows, with their number); absent, the page draws its own bar.
+         */
+        selectionActions?: BulkAction<TXReadItem>[];
     }
 
     let {
@@ -147,7 +146,20 @@
         hiddenColumns,
         storageKeyOverride,
         compact = false,
+        selectable = true,
+        selectionActions,
     }: Props = $props();
+
+    /** The panel's actions on the rows the table shows: each one reads the transaction of its row. */
+    let tableSelectionActions = $derived<BulkAction<DisplayRow>[] | undefined>(
+        selectionActions?.map((action) => ({
+            ...action,
+            appliesTo: action.appliesTo ? (d: DisplayRow) => action.appliesTo!(d.tx) : undefined,
+            pointless: action.pointless ? (rows: DisplayRow[]) => action.pointless!(rows.map((d) => d.tx)) : undefined,
+            blocked: action.blocked ? (rows: DisplayRow[]) => action.blocked!(rows.map((d) => d.tx)) : undefined,
+            onClick: (rows: DisplayRow[]) => action.onClick(rows.map((d) => d.tx)),
+        })),
+    );
 
     /** Exposed DataTable ref for ColumnVisibilityToggle / external selection control. */
     let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
@@ -165,11 +177,28 @@
     /** Track active column filters so we can pre-filter displayRows before
      *  the pair-never-split paginator. Initialized from `initialFilters`. */
     let activeColumnFilters: Record<string, FilterValue> = $state(untrack(() => (initialFilters ? {...initialFilters} : {})));
+    /** F5: the first filter records only bring back `initialFilters`; a change after that resets the page. */
+    let filtersSettled = untrack(() => !initialFilters || Object.values(initialFilters).every((value) => value == null));
 
     /** Intercept filter changes: update local state and forward to parent. */
     function handleFiltersChangeInternal(record: Record<string, FilterValue>) {
+        // Called from the DataTable's effect: read our state untracked, or the effect would depend on what it writes.
+        const changed = untrack(() => !sameFilters(record, activeColumnFilters));
+        // The DataTable may first emit an empty record, before `initialFilters` apply: no page reset until the record the
+        // table opened with has come back.
+        const settled = filtersSettled;
+        if (!filtersSettled && sameFilters(record, untrack(() => initialFilters) ?? {})) filtersSettled = true;
         activeColumnFilters = {...record};
+        // F5: the table pages the rows itself while the charges fold, so a new filter starts again from page 1.
+        if (settled && changed && untrack(() => chargesFolded && currentPage > 1)) onPageChange?.(1);
         onFiltersChange?.(record);
+    }
+
+    /** Two filter records hold the same filters (key order aside). */
+    function sameFilters(a: Record<string, FilterValue>, b: Record<string, FilterValue>): boolean {
+        const keys = Object.keys(a).filter((key) => a[key] != null);
+        if (keys.length !== Object.keys(b).filter((key) => b[key] != null).length) return false;
+        return keys.every((key) => JSON.stringify(a[key]) === JSON.stringify(b[key]));
     }
 
     /** Mirror of DataTable's internal `sortState`, exposed via `onSortChange`.
@@ -193,6 +222,21 @@
      *  sort is applied, pairs become regular rows so they participate in
      *  the user's ordering/filtering on equal footing. */
     let isGrouped = $derived(Object.keys(activeColumnFilters).length === 0 && activeSort == null);
+
+    /** F5: a filter on the type is active (it unfolds the charges: each one is a row of its own, `↳`). */
+    let typeFilterActive = $derived(activeColumnFilters.types != null || activeColumnFilters.typeIcon != null);
+    /** F5: the charges fold under their parent — no sort, no filter on the type. The table then pages the rows itself, so a
+     *  group never crosses a page. */
+    let chargesFolded = $derived(activeSort == null && !typeFilterActive);
+    /** F5: the parents shown open; all closed at first, not kept across a reload. */
+    let expandedIds = $state<Set<number>>(new Set());
+
+    function toggleCharges(parentId: number) {
+        const next = new Set(expandedIds);
+        if (next.has(parentId)) next.delete(parentId);
+        else next.add(parentId);
+        expandedIds = next;
+    }
 
     export function getTableRef() {
         return tableRef;
@@ -228,7 +272,7 @@
         const rowId = `tx-${partnerId}`;
         const ghostId = `ghost-${partnerId}`;
 
-        if (!isGrouped) {
+        if (!chargesFolded) {
             // Flat mode — DataTable handles pagination internally.
             tableRef?.navigateToRowId(rowId);
         } else {
@@ -384,48 +428,19 @@
     // filters internally — but since data is already filtered, it's a no-op.
     // =========================================================================
 
-    /** Apply active column filters to displayRows. */
-    let filteredDisplayRows = $derived.by<DisplayRow[]>(() => {
-        const filters = activeColumnFilters;
-        const entries = Object.entries(filters).filter(([, v]) => v != null);
-        if (entries.length === 0) return displayRows;
+    /** The active column filters, read with the DataTable's own predicate (`matchesColumnFilter`). */
+    function rowPasses(d: DisplayRow): boolean {
+        for (const [urlKeyOrId, fv] of Object.entries(activeColumnFilters)) {
+            if (!fv) continue;
+            const col = columns.find((c) => (c.urlKey ?? c.id) === urlKeyOrId || c.id === urlKeyOrId);
+            if (col && !matchesColumnFilter(col, d, fv)) return false;
+        }
+        return true;
+    }
 
-        return displayRows.filter((d) => {
-            for (const [urlKeyOrId, fv] of entries) {
-                if (!fv) continue;
-                const col = columns.find((c) => (c.urlKey ?? c.id) === urlKeyOrId || c.id === urlKeyOrId);
-                if (!col) continue;
-                const getValue = col.getValue ?? col.cell;
-                const rawValue = getValue(d);
-
-                if (fv.type === 'enum') {
-                    if (!fv.selected.includes(String(rawValue))) return false;
-                } else if (fv.type === 'multi-enum') {
-                    if (fv.selected.length > 0) {
-                        const rowVals = col.getMultiValue ? col.getMultiValue(d) : String(rawValue ?? '').split(',');
-                        if (!fv.selected.some((sel) => rowVals.includes(sel))) return false;
-                    }
-                } else if (fv.type === 'date') {
-                    const dateStr = typeof rawValue === 'object' && rawValue !== null && 'type' in rawValue && (rawValue as unknown as {type: string}).type === 'date' ? String((rawValue as unknown as {value: string}).value) : String(rawValue);
-                    const date = new Date(dateStr);
-                    if (fv.from && date < new Date(fv.from)) return false;
-                    if (fv.to && date > new Date(fv.to)) return false;
-                } else if (fv.type === 'currency-stack') {
-                    if (fv.items.length > 0) {
-                        const cv = col.getCurrencyValue ? col.getCurrencyValue(d) : null;
-                        if (!cv) return false;
-                        if (!fv.items.some((it) => it.code === cv.code && (it.min === undefined || cv.amount >= it.min) && (it.max === undefined || cv.amount <= it.max))) return false;
-                    }
-                } else if (fv.type === 'number') {
-                    const num = Number(rawValue);
-                    if (!Number.isFinite(num)) return false;
-                    if (fv.min != null && num < fv.min) return false;
-                    if (fv.max != null && num > fv.max) return false;
-                }
-            }
-            return true;
-        });
-    });
+    /** The rows shown (F5): folded, the filters applied here (a charge follows its parent); flat, every row, the DataTable
+     *  filters and sorts them. */
+    let filteredDisplayRows = $derived.by<DisplayRow[]>(() => foldCharges(displayRows, {folded: chargesFolded, expandedIds, passes: rowPasses}));
 
     // =========================================================================
     // Paginator
@@ -439,41 +454,13 @@
      *  - Flat mode: standard fixed-size pagination — every row is independent
      *    and ordering wins over pair coupling. `pageSize === 0` ⇒ single page.
      */
-    let pages = $derived.by<DisplayRow[][]>(() => {
-        const rows = filteredDisplayRows;
-        const result: DisplayRow[][] = [];
-        if (!isGrouped) {
-            if (pageSize <= 0) return rows.length > 0 ? [rows] : [[]];
-            for (let i = 0; i < rows.length; i += pageSize) {
-                result.push(rows.slice(i, i + pageSize));
-            }
-            if (result.length === 0) result.push([]);
-            return result;
-        }
-        // Grouped mode — pair-never-split paginator.
-        let buf: DisplayRow[] = [];
-        for (let i = 0; i < rows.length; i++) {
-            const row = rows[i];
-            const isPair = row.pairAnchorId != null;
-            const nextIsPartner = isPair && i + 1 < rows.length && rows[i + 1].pairAnchorId === row.pairAnchorId && !row.isReceiver;
-            const wouldExceed = buf.length >= pageSize;
-            const wouldSplitPair = nextIsPartner && buf.length + 1 > pageSize;
-            if ((wouldExceed && !row.isReceiver) || wouldSplitPair) {
-                result.push(buf);
-                buf = [];
-            }
-            buf.push(row);
-        }
-        if (buf.length > 0) result.push(buf);
-        if (result.length === 0) result.push([]);
-        return result;
-    });
+    let pages = $derived.by<DisplayRow[][]>(() => paginateRows(filteredDisplayRows, pageSize, isGrouped));
 
     let totalPages = $derived(pages.length);
     let safePage = $derived(Math.min(Math.max(1, currentPage), totalPages));
     /** In grouped mode: page slice from custom paginator (pre-filtered).
      *  In flat mode: ALL displayRows — DataTable handles sort+filter+pagination internally. */
-    let visibleRows = $derived(isGrouped ? (pages[safePage - 1] ?? []) : displayRows);
+    let visibleRows = $derived(chargesFolded ? (pages[safePage - 1] ?? []) : filteredDisplayRows);
 
     /** Total items for the external paginator in grouped mode.
      *  When "show selected only" is active inside DataTable, filter the count
@@ -582,6 +569,14 @@
         return `🏦 ${$t('transactions.linkTooltip.generic') || 'Cash transfer'} — ${thisBroker} ↔ ${partnerBrokerLabel}`;
     }
 
+    /** F5: «Charge of: <type> · <date>» — the parent of a charge row. */
+    function chargeOfTooltip(d: DisplayRow): string {
+        const parent = partnerLookup.get(d.tx.parent_transaction_id ?? 0);
+        if (!parent) return $t('transactions.linkTooltip.chargeOfOther') || 'Charge of another transaction';
+        const type = $t(`transactions.types.${parent.type}`) || parent.type;
+        return $t('transactions.linkTooltip.chargeOf', {values: {type, date: formatCellDate(parent.date)}}) || `Charge of: ${type} · ${parent.date}`;
+    }
+
     // =========================================================================
     // DataTable wiring
     // =========================================================================
@@ -595,6 +590,7 @@
     function getRowClass(d: DisplayRow): string {
         const cls: string[] = ['tx-row-tinted'];
         if (d.isGhost) cls.push('tx-row-ghost');
+        if (d.chargeOfId != null) cls.push('tx-row-charge');
         if (d.isReceiver) cls.push('tx-row-receiver');
         return cls.join(' ');
     }
@@ -634,14 +630,14 @@
             type: 'date',
             width: 110,
             urlKey: 'date',
-            getValue: (d) => d.tx.date,
+            getValue: (d) => (d.followTx ?? d.tx).date,
             cell: (d) => ({type: 'date', value: d.tx.date}),
         },
         {
             id: 'typeIcon',
             header: () => $t('common.type'),
             type: 'enum',
-            width: 90,
+            width: 150,
             sortable: true,
             filterable: true,
             urlKey: 'types',
@@ -651,10 +647,18 @@
                 const label = $t(`transactions.types.${d.tx.type}`) || d.tx.type;
                 const url = getTransactionTypeIconUrl(d.tx.type);
                 const docUrl = getTxTypeDocUrl(d.tx.type, $locale ?? 'en');
+                const count = d.chargeCount ?? 0;
                 return {
                     type: 'custom',
                     component: TxTypeIconCell,
-                    props: {iconUrl: url, label, docUrl, txId: d.tx.id},
+                    props: {
+                        iconUrl: url,
+                        label,
+                        docUrl,
+                        txId: d.tx.id,
+                        isCharge: d.isChargeRow === true,
+                        charges: count > 0 ? {label: $t('transactions.table.chargesN', {values: {n: count}}) || `${count} charges`, expanded: expandedIds.has(d.tx.id), interactive: chargesFolded} : null,
+                    },
                 };
             },
         },
@@ -666,7 +670,7 @@
             align: 'right',
             urlKey: 'qty',
             filterable: true,
-            getValue: (d) => Number(d.tx.quantity),
+            getValue: (d) => Number((d.followTx ?? d.tx).quantity),
             cell: (d) => formatQty(d.tx.quantity),
         },
         {
@@ -677,8 +681,14 @@
             align: 'right',
             urlKey: 'cash',
             currencyOptions: [...new Set(mainRows.filter((r) => r.cash).map((r) => r.cash!.code))].sort(),
-            getValue: (d) => (d.tx.cash ? Number(d.tx.cash.amount) : 0),
-            getCurrencyValue: (d) => (d.tx.cash ? {code: d.tx.cash.code, amount: Number(d.tx.cash.amount)} : null),
+            getValue: (d) => {
+                const tx = d.followTx ?? d.tx;
+                return tx.cash ? Number(tx.cash.amount) : 0;
+            },
+            getCurrencyValue: (d) => {
+                const tx = d.followTx ?? d.tx;
+                return tx.cash ? {code: tx.cash.code, amount: Number(tx.cash.amount)} : null;
+            },
             cell: (d) => {
                 void $currencyStoreVersion;
                 if (!d.tx.cash) return '—';
@@ -722,7 +732,9 @@
                 void $brokerStoreVersion;
                 const hasEvent = d.tx.asset_event_id != null;
                 const hasLink = d.tx.related_transaction_id != null;
-                if (!hasEvent && !hasLink) return '';
+                const chargesToggle = chargesFolded && (d.chargeCount ?? 0) > 0;
+                const isCharge = d.isChargeRow === true;
+                if (!hasEvent && !hasLink && !chargesToggle && !isCharge) return '';
                 let eventHtml = '';
                 let eventTooltip = '';
                 let linkHtml = '';
@@ -736,6 +748,16 @@
                     const arrow = d.pairAnchorId != null ? (d.isReceiver ? '<span class="tx-pair-arrow">⬆</span>' : '<span class="tx-pair-arrow">⬇</span>') : '';
                     linkTooltip = linkedPairTooltip(d);
                     linkHtml = `${arrow}<button type="button" class="tx-link-icon" data-tx-link="${d.tx.id}" data-testid="tx-link-icon-${d.tx.id}" aria-label="${escapeHtml(linkTooltip)}">🔗</button>`;
+                } else if (isCharge) {
+                    // F5: a charge's 🔗 leads to its parent.
+                    const text = chargeOfTooltip(d);
+                    linkTooltip = escapeHtml(text);
+                    linkHtml = `<button type="button" class="tx-link-icon" data-tx-link="${d.tx.id}" data-testid="tx-link-icon-${d.tx.id}" aria-label="${escapeHtml(text)}">🔗</button>`;
+                } else if (chargesToggle) {
+                    // F5: a parent's 🔗 opens or closes its charges, like its badge.
+                    const text = $t('transactions.linkTooltip.chargesToggle') || 'Show or hide its charges';
+                    linkTooltip = escapeHtml(text);
+                    linkHtml = `<button type="button" class="tx-link-icon" data-tx-charges-toggle="${d.tx.id}" data-testid="tx-charges-toggle-${d.tx.id}" aria-expanded="${expandedIds.has(d.tx.id)}" aria-label="${escapeHtml(text)}">🔗</button>`;
                 }
                 // CustomCell with TxLinksCell — two real Tooltip instances
                 // (one per icon), each with its own text. Native `title=""`
@@ -775,7 +797,10 @@
                     return a.label.localeCompare(b.label);
                 });
             })(),
-            getValue: (d) => (d.tx.asset_id ? String(d.tx.asset_id) : '__null__'),
+            getValue: (d) => {
+                const tx = d.followTx ?? d.tx;
+                return tx.asset_id ? String(tx.asset_id) : '__null__';
+            },
             cell: (d) => {
                 void $assetStoreVersion;
                 if (!d.tx.asset_id) return '—';
@@ -804,7 +829,7 @@
                     dotColor: color.bg,
                 };
             }),
-            getValue: (d) => String(d.tx.broker_id),
+            getValue: (d) => String((d.followTx ?? d.tx).broker_id),
             cell: (d) => {
                 const name = brokerName(d.tx.broker_id);
                 const role = getBrokerRole(d.tx.broker_id);
@@ -837,8 +862,8 @@
                 }
                 return [...tagSet].sort().map((tag) => ({value: tag, label: tag, dotColor: getStringColor(tag).bg}));
             })(),
-            getValue: (d) => (d.tx.tags ?? []).join(','),
-            getMultiValue: (d) => d.tx.tags ?? [],
+            getValue: (d) => ((d.followTx ?? d.tx).tags ?? []).join(','),
+            getMultiValue: (d) => (d.followTx ?? d.tx).tags ?? [],
             cell: (d) => {
                 const tags = d.tx.tags ?? [];
                 if (tags.length === 0) return '—';
@@ -861,7 +886,7 @@
             filterable: true,
             integerOnly: true,
             hiddenByDefault: false,
-            getValue: (d) => d.tx.id,
+            getValue: (d) => (d.followTx ?? d.tx).id,
             // TODO: filtro composito multi-range per ID (come currency-stack con range multipli)
             cell: (d) => ({type: 'html', html: `<span class="font-mono text-xs text-lf-muted" data-testid="tx-id-${d.tx.id}">#${d.tx.id}</span>`}),
         },
@@ -874,7 +899,7 @@
             sortable: true,
             filterable: true,
             hiddenByDefault: false,
-            getValue: (d) => d.tx.description ?? '',
+            getValue: (d) => (d.followTx ?? d.tx).description ?? '',
             cell: (d) => {
                 const desc = d.tx.description ?? '';
                 if (!desc) return {type: 'html', html: ''};
@@ -987,6 +1012,14 @@
             // Event badge is a visual indicator only — no navigation action
             return;
         }
+        const toggle = target.closest('[data-tx-charges-toggle], [data-tx-charges-badge]') as HTMLElement | null;
+        if (toggle) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            const id = Number(toggle.getAttribute('data-tx-charges-toggle') ?? toggle.getAttribute('data-tx-charges-badge'));
+            if (id > 0) toggleCharges(id);
+            return;
+        }
         const linkBtn = target.closest('[data-tx-link]') as HTMLElement | null;
         if (linkBtn) {
             ev.preventDefault();
@@ -1000,11 +1033,19 @@
 
     /** Svelte action: attach click handler in capture phase so we intercept
      *  clicks on injected HTML buttons before DataTable's <tr onclick>. */
+    /** F5: a quick open-and-close of a group is two clicks, not a double-click on the row (which opens the view). */
+    function handleTableDblClick(ev: MouseEvent) {
+        const target = ev.target as HTMLElement | null;
+        if (target?.closest('[data-tx-charges-toggle], [data-tx-charges-badge]')) ev.stopPropagation();
+    }
+
     function captureClick(node: HTMLElement) {
         node.addEventListener('click', handleTableClick, true);
+        node.addEventListener('dblclick', handleTableDblClick, true);
         return {
             destroy() {
                 node.removeEventListener('click', handleTableClick, true);
+                node.removeEventListener('dblclick', handleTableDblClick, true);
             },
         };
     }
@@ -1020,11 +1061,13 @@
         {columns}
         {getRowId}
         storageKey={storageKeyOverride ?? 'transactions-list'}
-        enableSelection={!compact}
-        selectionMode={compact ? 'none' : 'multi'}
+        enableSelection={!compact && selectable}
+        selectionMode={compact || !selectable ? 'none' : 'multi'}
+        bulkActions={tableSelectionActions ?? []}
+        selectionPanel={tableSelectionActions !== undefined}
         enableActions={!compact && !hideActions}
         rowActions={compact || hideActions ? [] : rowActions}
-        enablePagination={!compact && !isGrouped}
+        enablePagination={!compact && !chargesFolded}
         enableColumnVisibility={!compact}
         enableColumnFilters={!compact}
         enableSorting={!compact}
@@ -1044,12 +1087,14 @@
         onSelectionChange={handleSelectionChange}
         getRowDisplayName={(d) => `#${d.tx.id} ${d.tx.type}`}
         onRowDoubleClick={(d) => (onRowDoubleClickOverride ? onRowDoubleClickOverride(d.tx) : onViewRow?.(d.tx))}
+        pager={!compact && chargesFolded && externalPaginatorTotal > 0 ? groupedPager : undefined}
     />
-
-    {#if !compact && isGrouped && externalPaginatorTotal > 0}
-        <DataTablePagination pageIndex={safePage - 1} {pageSize} totalItems={externalPaginatorTotal} pageSizeOptions={[10, 25, 50, 100, 0]} onPageChange={(idx) => onPageChange?.(idx + 1)} onPageSizeChange={(s) => onPageSizeChange?.(s)} />
-    {/if}
 </div>
+
+<!-- The pages of the grouped list are cut here, not by the table: the table hosts this pager in its dock (77 SEL-B). -->
+{#snippet groupedPager(docked: boolean)}
+    <DataTablePagination pageIndex={safePage - 1} {pageSize} totalItems={externalPaginatorTotal} pageSizeOptions={[10, 25, 50, 100, 0]} onPageChange={(idx) => onPageChange?.(idx + 1)} onPageSizeChange={(s) => onPageSizeChange?.(s)} {docked} />
+{/snippet}
 
 <style>
     /* All selectors target HTML injected by DataTable's HtmlCell / row APIs;

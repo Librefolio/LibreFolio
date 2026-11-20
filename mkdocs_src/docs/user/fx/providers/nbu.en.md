@@ -16,14 +16,14 @@ The **National Bank of Ukraine (NBU)** provider retrieves the official daily exc
 
 ## 💰 Supported Currencies
 
-The National Bank of Ukraine publishes rates for about 40 currencies. LibreFolio reads the list from the bank, so it follows what the bank publishes. Among them:
+The National Bank of Ukraine publishes rates for about 41 currencies. LibreFolio reads the list from the bank, so it follows what the bank publishes. Among them:
 
 - **Major**: USD 🇺🇸, EUR 🇪🇺, GBP 🇬🇧, JPY 🇯🇵, CHF 🇨🇭, CAD 🇨🇦, AUD 🇦🇺, NZD 🇳🇿
 - **European/Regional**: SEK 🇸🇪, NOK 🇳🇴, DKK 🇩🇰, PLN 🇵🇱, CZK 🇨🇿, HUF 🇭🇺, RON 🇷🇴, TRY 🇹🇷
 - **Global / Emerging**: CNY 🇨🇳, HKD 🇭🇰, SGD 🇸🇬, KRW 🇰🇷, INR 🇮🇳, IDR 🇮🇩, ILS 🇮🇱, MYR 🇲🇾, THB 🇹🇭, MXN 🇲🇽, ZAR 🇿🇦, DZD 🇩🇿
 - **Not published by the ECB**: KZT 🇰🇿 (Kazakhstani tenge), GEL 🇬🇪 (Georgian lari), AZN 🇦🇿 (Azerbaijani manat), MDL 🇲🇩 (Moldovan leu), RSD 🇷🇸 (Serbian dinar), EGP 🇪🇬 (Egyptian pound), LBP 🇱🇧 (Lebanese pound), TND 🇹🇳 (Tunisian dinar), SAR 🇸🇦 (Saudi riyal), AED 🇦🇪 (UAE dirham), BDT 🇧🇩 (Bangladeshi taka), VND 🇻🇳 (Vietnamese dong)
 
-Gold, silver, platinum, palladium and the IMF's SDR, which the bank also lists, are not offered: they are not currencies.
+The IMF's SDR (XDR), the IMF's unit of account (a basket of USD, EUR, CNY, JPY and GBP), is offered like any other currency. Gold, silver, platinum and palladium, which the bank also lists, are not offered: they are not currencies.
 
 ## 📅 One Rate for Every Day
 

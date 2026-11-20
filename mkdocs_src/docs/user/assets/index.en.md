@@ -78,7 +78,7 @@ Each card has its own buttons; in the table, the **⋮** at the end of a row, or
 - **Merge with…** — folds a duplicate into another asset, which keeps everything ([Create & Edit](create-edit.md)).
 - **Delete** — removes an asset that no transaction uses, with its provider, prices and events (dividends, splits…).
 
-In the table, tick several rows to **Edit** ([several at once](create-edit.md#bulk-edit)), **Sync**, **Reload** or **Delete** them together.
+In the table, tick several rows to **Edit** ([several at once](create-edit.md#bulk-edit)), **Sync**, **Reload** or **Delete** them together, in the bar at the bottom of the screen. Each action shows how many assets it acts on: **Sync** takes only the assets with a provider, and does not appear when none has one; **Reload** reloads the prices of the selected assets only.
 
 ??? warning "🗑️ When an asset cannot be deleted"
 

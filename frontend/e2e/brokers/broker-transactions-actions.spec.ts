@@ -2,8 +2,8 @@
  * broker-transactions-actions.spec.ts — FB-17: the broker page's Transactions tab edits like the Transactions page.
  *
  * Who can edit a broker (OWNER or EDITOR) gets, on the tab `broker-transactions`:
- *   - the selection bar (`selection-toolbar`, `data-selected-count`) as soon as one row is ticked, in the commands row
- *     of the tab (`broker-transactions-actions`), with exactly Edit / Clone / Delete;
+ *   - the selection bar (`selection-toolbar`, `data-selected-count`) as soon as one row is ticked, at the top
+ *     of the tab's table (`broker-transactions`, 77 SEL-B), with exactly Edit / Clone / Delete;
  *   - the actions column, with Edit / Clone / Delete on the rows they may edit, and no Split — the tab wires no
  *     handler for it, and an action nobody listens to is not drawn;
  *   - Edit, Clone and Delete (from the bar or from a row) open the bulk workspace on the selected transactions with
@@ -11,8 +11,8 @@
  *     real type, date and amount, not an empty or broken row);
  *   - after a commit the selection is empty and the table shows the saved value.
  * A row the user cannot edit (a pair whose other half is on a broker the user only reads) is left out of Edit and
- * Delete with a warning, and a selection made only of such rows opens nothing and says so (error).
- * Who only views the broker (VIEWER) gets neither the bar nor the actions column, though the rows can be ticked.
+ * Delete, whose numbers count only the rows they take; with only such rows selected, neither is offered (77 SEL-B).
+ * Who only views the broker (VIEWER) gets neither the bar nor the actions column, nor checkboxes (77 SEL-B, Q-SEL-16).
  * The shortcuts around them do not change: the link to the Transactions page, Import and New transaction.
  *
  * Owned data. Every test registers disposable accounts (an owner; a viewer or a second editor when the case needs
@@ -22,7 +22,7 @@
  *
  * Nothing here reads translated text. Intent of the workspace: `tx-bulk-row-status[data-status]`
  * (`original` = edit, `new` = clone, `delete`); the data of a row: the id cell, `tx-bulk-date[data-date]`, the digits
- * of the cash cell and the type icon's file. Warnings and errors: the toast variant (`toast-warning`, `toast-error`).
+ * of the cash cell and the type icon's file. The number of an action: `toolbar-action-<id>-count`.
  *
  * Key data-testids:
  *   broker-detail-page, broker-tab-transazioni, broker-transactions-tab, broker-transactions-actions
@@ -130,7 +130,8 @@ const commandsRow = (page: Page) => page.getByTestId('broker-transactions-action
 const txTable = (page: Page) => page.getByTestId('broker-transactions');
 const tableRow = (page: Page, id: number) => txTable(page).locator(`tr[data-row-id="tx-${id}"]`);
 const rowCheckbox = (page: Page, id: number) => txTable(page).getByTestId(`dt-row-checkbox-tx-${id}`);
-const bar = (page: Page) => commandsRow(page).getByTestId('selection-toolbar');
+/** The selection bar: at the top of the tab's table since 77 SEL-B (it was in the commands row). */
+const bar = (page: Page) => txTable(page).getByTestId('selection-toolbar');
 const bulkModal = (page: Page) => page.getByTestId('tx-bulk-modal');
 const bulkRows = (page: Page) => page.getByTestId('tx-bulk-body').locator('tbody tr[data-row-id]');
 
@@ -270,7 +271,7 @@ const succeeded = (body: CommitBody, operation: string): number[] => (body.resul
 // ---------------------------------------------------------------------------
 
 test.describe('Broker Transactions tab — who can edit gets the selection bar and the row actions', () => {
-    test('ticking rows shows the bar with Edit, Clone and Delete in the commands row; it counts the rows and clears them', async ({world}) => {
+    test('ticking rows shows the bar with Edit, Clone and Delete at the top of the table; it counts the rows and clears them', async ({world}) => {
         const {page} = world;
         await openOwner(world);
         const {brokerId, d1, d2, w3} = await ownRows(world);
@@ -281,7 +282,7 @@ test.describe('Broker Transactions tab — who can edit gets the selection bar a
         await expect(txTable(page).getByTestId('dt-actions-header')).toBeVisible();
 
         await tick(page, d1.id);
-        // The bar sits in the commands row of the tab, next to Import and New transaction, and counts one.
+        // The bar sits at the top of the tab's table (77 SEL-B) and counts one.
         await expect(bar(page)).toBeVisible({timeout: UI_TIMEOUT});
         await expect(bar(page)).toHaveAttribute('data-selected-count', '1');
         // Exactly the three actions, in this order: no Link-as-pair on this page. Buttons only: each action also holds
@@ -461,7 +462,7 @@ test.describe('Broker Transactions tab — who can edit gets the selection bar a
 // ---------------------------------------------------------------------------
 
 test.describe('Broker Transactions tab — who only views gets no bar and no actions column', () => {
-    test('a VIEWER can tick rows but sees no selection bar and no actions column; the shortcuts stay as they were', async ({world}) => {
+    test('a VIEWER gets no checkboxes, no selection bar and no actions column; the shortcuts stay as they were', async ({world}) => {
         const {page, browser} = world;
         const owner = await openOwner(world);
         const {brokerId, d1, d2, w3} = await ownRows(world);
@@ -487,10 +488,10 @@ test.describe('Broker Transactions tab — who only views gets no bar and no act
         // The page knows the role: a VIEWER has no broker edit button (the rows above are the presence barrier).
         await expect(viewerPage.getByTestId('broker-edit-button'), 'a VIEWER has no broker edit button').toHaveCount(0);
 
-        // The rows can be ticked…
-        await tick(viewerPage, d1.id);
-        await tick(viewerPage, w3.id);
-        // …and nothing offers to act on them: no bar, no actions column, no kebab on a row.
+        // 77 SEL-B (Q-SEL-16): nothing would act on a selection, so the rows have no checkboxes; no bar, no actions column,
+        // no kebab on a row.
+        await expect(rowCheckbox(viewerPage, d1.id)).toHaveCount(0);
+        await expect(txTable(viewerPage).getByTestId('dt-select-header')).toHaveCount(0);
         await expect(bar(viewerPage)).toHaveCount(0);
         await expect(txTable(viewerPage).getByTestId('dt-actions-header')).toHaveCount(0);
         await expect(txTable(viewerPage).getByTestId(`row-actions-tx-${d1.id}`)).toHaveCount(0);
@@ -505,8 +506,8 @@ test.describe('Broker Transactions tab — who only views gets no bar and no act
 // A row the user cannot edit
 // ---------------------------------------------------------------------------
 
-test.describe('Broker Transactions tab — a row the user cannot edit is left out, with a word', () => {
-    test('a pair whose other half sits on a broker the user only views is left out of Edit with a warning; alone, it opens nothing and says so', async ({world}) => {
+test.describe('Broker Transactions tab — a row the user cannot edit is left out, and the numbers say so', () => {
+    test('a pair whose other half sits on a broker the user only views is left out of Edit and Delete, which say how many rows they take; alone, they are not offered', async ({world}) => {
         const {page, browser} = world;
         const owner = await openOwner(world);
         const {brokerId: brokerA, d1, d2} = await ownRows(world);
@@ -575,28 +576,27 @@ test.describe('Broker Transactions tab — a row the user cannot edit is left ou
 
         await openTransactionsTab(page, brokerA, [d1, d2, {id: legA, description}]);
 
-        // Both ticked → Edit: the standalone row opens, the pair is left out, and a warning says so.
+        // Both ticked: Edit and Delete say they take one row (77 SEL-B, Q-SEL-9: the number replaces the warning after the
+        // click, which stays only as a net); Clone takes both. Edit opens the standalone row, without the pair.
         await tick(page, d1.id);
         await tick(page, legA);
         await expect(bar(page)).toHaveAttribute('data-selected-count', '2');
+        await expect(bar(page).getByTestId('toolbar-action-edit-count')).toHaveText('1');
+        await expect(bar(page).getByTestId('toolbar-action-delete-count')).toHaveText('1');
+        await expect(bar(page).getByTestId('toolbar-action-clone-count')).toHaveText('2');
         await bar(page).getByTestId('toolbar-action-edit').click();
-        await expect(page.getByTestId('toast-warning'), 'some rows were left out: a warning').toBeVisible({timeout: UI_TIMEOUT});
         await expect(bulkModal(page)).toBeVisible({timeout: UI_TIMEOUT});
         await expect(bulkRows(page).filter({hasText: d1.description})).toHaveCount(1, {timeout: UI_TIMEOUT});
         await expect(bulkRows(page).filter({hasText: description}), 'the pair the owner cannot edit is not in the workspace').toHaveCount(0);
         // One editable row is left, so the workspace opens on a single transaction to edit: its form comes on top.
         await closeWorkspace(page, {withForm: true});
 
-        // Only the pair ticked → Edit: nothing opens, and an error says why.
+        // Only the pair ticked: no row Edit or Delete can take, so neither is offered; Clone still is.
         await rowCheckbox(page, d1.id).click();
         await expect(rowCheckbox(page, d1.id)).toHaveAttribute('data-state', 'unchecked');
         await expect(bar(page)).toHaveAttribute('data-selected-count', '1');
-        await bar(page).getByTestId('toolbar-action-edit').click();
-        await expect(page.getByTestId('toast-error'), 'nothing editable in the selection: an error').toBeVisible({timeout: UI_TIMEOUT});
-        await expect(bulkModal(page)).toBeHidden();
-
-        // Delete follows the same rule.
-        await bar(page).getByTestId('toolbar-action-delete').click();
-        await expect(bulkModal(page)).toBeHidden();
+        await expect(bar(page).getByTestId('toolbar-action-clone')).toBeVisible();
+        await expect(bar(page).getByTestId('toolbar-action-edit')).toHaveCount(0);
+        await expect(bar(page).getByTestId('toolbar-action-delete')).toHaveCount(0);
     });
 });

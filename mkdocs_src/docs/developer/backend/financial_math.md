@@ -770,7 +770,8 @@ flowchart LR
    user types, or the unit price from the amount, `quantity / quote_base_quantity × price` on exact decimals
    (`BigInt` at a fixed scale, half-even to the stored 6 and 12 decimals, no float and no library) — a single
    product or quotient, which the developer decided (25/10/2026) is the frontend's own and does not deserve a
-   route. The line is the size of the calculation: a small sum or product on the numbers the user types stays in
+   route. The same file adds the total of a parent with its linked charges (project 66, F1): «Addebito totale» /
+   «Netto incassato», one exact sum per currency of the amounts the user types, never across currencies. The line is the size of the calculation: a small sum or product on the numbers the user types stays in
    the browser; anything with a series, a date, a rate or a rule is the backend's. Each exception must be declared
    where it lives.
    The measuring tool takes the backend's annualization floor: `MIN_ANNUALIZATION_DAYS` in

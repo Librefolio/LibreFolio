@@ -8,6 +8,8 @@
     import {_ as t} from '$lib/i18n';
     import {Plus, Trash2, Undo2, Link2, Lightbulb, Upload} from 'lucide-svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import type {BulkLinkSelection} from './bulkCharges';
     import {txStoreCount} from '$lib/features/transactions/txStore.svelte';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import type {PendingOp} from './txBulkTypes';
@@ -27,6 +29,10 @@
         visibleOps: PendingOp[];
         deriveStatus: (d: PendingOp) => 'new' | 'edited' | 'original' | 'delete';
         executeBulkDeleteOnSelected: () => void;
+        /** 66 F7-d: «Link» on the selection (U3) — hidden, off with a reason (`linkHint`), or on. */
+        linkState: BulkLinkSelection;
+        linkHint: string;
+        onLinkCharges: () => void;
         handlePromoteSelected: () => void;
         openAddRowForm: () => void;
         openPicker: () => void;
@@ -47,6 +53,9 @@
         visibleOps,
         deriveStatus,
         executeBulkDeleteOnSelected,
+        linkState,
+        linkHint,
+        onLinkCharges,
         handlePromoteSelected,
         openAddRowForm,
         openPicker,
@@ -55,6 +64,24 @@
         resetRow,
     }: Props = $props();
 </script>
+
+{#snippet linkButton()}
+    {@const off = linkState.kind === 'disabled'}
+    <button
+        type="button"
+        class="inline-flex items-center gap-1 px-2 py-1 rounded text-lf-secondary hover:bg-lf-hover text-[11px] aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
+        onclick={() => {
+            if (linkState.kind === 'ok') onLinkCharges();
+        }}
+        aria-disabled={off ? 'true' : undefined}
+        aria-label={$t('transactions.chargesLink.action') || 'Link the charges'}
+        title={off ? undefined : $t('transactions.chargesLink.action') || 'Link the charges'}
+        data-reason={linkState.kind === 'disabled' ? linkState.reason : undefined}
+        data-testid="tx-bulk-link-charges"
+    >
+        <Link2 size={12} /> <span class="hidden sm:inline">{$t('transactions.chargesLink.actionShort') || 'Link'}</span>
+    </button>
+{/snippet}
 
 <div class="flex items-center gap-2 px-5 py-3 border-b border-lf-subtle text-xs shrink-0" use:guideAnchor={'transaction.bulk.add_import'}>
     <!-- Left: search & add -->
@@ -124,6 +151,16 @@
                     >
                         <Undo2 size={12} /> <span class="hidden sm:inline">{$t('transactions.bulk.resetSelected') || 'Reset'}</span>
                     </button>
+                {/if}
+                {#if linkState.kind !== 'hidden'}
+                    {#if linkState.kind === 'disabled'}
+                        <!-- Off with a reason (the F7-a pattern): `aria-disabled`, so the click and the tap open the reason. -->
+                        <Tooltip text={linkHint} interactiveChild>
+                            {@render linkButton()}
+                        </Tooltip>
+                    {:else}
+                        {@render linkButton()}
+                    {/if}
                 {/if}
                 <button type="button" class="inline-flex items-center gap-1 px-2 py-1 rounded text-lf-danger hover:bg-lf-danger-soft text-[11px]" onclick={executeBulkDeleteOnSelected} title={$t('transactions.bulk.deleteSelected') || 'Delete selected'} data-testid="tx-bulk-delete-selected">
                     <Trash2 size={12} /> <span class="hidden sm:inline">{$t('common.delete') || 'Delete'}</span>

@@ -46,7 +46,7 @@ vi.mock('$lib/stores/app/toastStore.svelte', () => ({
     toasts: {success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn()},
 }));
 
-import {createMissingEvents, eventTypesOfRow, eventTypeToShow, linkReconciliation, linkUpdates, loadEventReconciliation, plainEventAmount, suggestedEventAmount, uniqueRows, type ReconciliationRow} from './eventReconciliation';
+import {createMissingEvents, eventTypesOfRow, eventTypeToShow, eventValueHtml, linkChosenEvent, linkReconciliation, linkUpdates, loadEventReconciliation, plainEventAmount, suggestedEventAmount, uniqueRows, type ReconciliationRow} from './eventReconciliation';
 
 const listCall = mocks.api.event_reconciliation_api_v1_transactions_event_reconciliation_get;
 const commitCall = mocks.api.commit_transactions_api_v1_transactions_commit_post;
@@ -319,6 +319,63 @@ describe('linkReconciliation', () => {
         await linkReconciliation([row(1, 'unique', [101]), row(2, 'unique', [102])]);
 
         expect(commitCall).toHaveBeenCalledTimes(1);
+    });
+});
+
+/**
+ * 77 SEL-C («Choose event»): a row with several events of the right type that day links the one the user chose, through the
+ * same atomic commit. Only one of the row's own candidates can be chosen: any other id sends nothing.
+ */
+describe('linkChosenEvent', () => {
+    it('sends ONE commit linking the row to the chosen candidate', async () => {
+        commitCall.mockResolvedValue({committed: true, issues: []});
+
+        const outcome = await linkChosenEvent(row(5, 'several', [51, 52]), 52);
+
+        expect(commitCall).toHaveBeenCalledTimes(1);
+        expect(commitCall).toHaveBeenCalledWith({updates: [{id: 5, asset_event_id: 52}]});
+        expect(outcome).toEqual({linked: true, issues: []});
+    });
+
+    it('an id that is not one of the row’s candidates sends nothing', async () => {
+        const outcome = await linkChosenEvent(row(5, 'several', [51, 52]), 99);
+
+        expect(commitCall).not.toHaveBeenCalled();
+        expect(outcome).toEqual({linked: false, issues: []});
+    });
+
+    it('a refused commit links nothing: linked false and the commit’s issues', async () => {
+        const issue = {operation: 'update', index: 0, error: 'cannot link', code: 'event_asset_mismatch'};
+        commitCall.mockResolvedValue({committed: false, issues: [issue]});
+
+        const outcome = await linkChosenEvent(row(5, 'several', [51, 52]), 51);
+
+        expect(outcome.linked).toBe(false);
+        expect(outcome.issues).toEqual([expect.objectContaining({code: 'event_asset_mismatch'})]);
+    });
+});
+
+/**
+ * 77 SEL-C: the value of an event, as the window writes it (the designer, 20/11). An event describes the asset, not the
+ * portfolio: its value is public, never masked. Up to six decimals (what `AssetEvent.value` keeps), so two candidates a
+ * fraction apart never read the same where the user chooses; a SPLIT's value is a ratio, with no currency.
+ */
+describe('eventValueHtml', () => {
+    it('a dividend: the value with its currency, up to six decimals', () => {
+        const html = eventValueHtml({type: 'DIVIDEND', value: '0.2449', currency: 'USD'});
+        expect(html).toContain('USD');
+        expect(html).toMatch(/0[.,]2449/);
+    });
+
+    it('two decimals at least', () => {
+        expect(eventValueHtml({type: 'INTEREST', value: '70.8', currency: 'EUR'})).toMatch(/70[.,]80/);
+    });
+
+    it('a split: the ratio as the lots chart writes it («3:1»), no currency', () => {
+        const html = eventValueHtml({type: 'SPLIT', value: '3', currency: 'USD'});
+        expect(html).toContain('>3:1<');
+        expect(html).not.toContain('USD');
+        expect(eventValueHtml({type: 'SPLIT', value: '1.5000', currency: 'USD'})).toContain('>1.5:1<');
     });
 });
 

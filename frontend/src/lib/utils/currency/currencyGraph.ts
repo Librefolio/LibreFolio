@@ -268,5 +268,91 @@ function distancesTo(graph: MultiDirectedGraph<Record<string, never>, EdgeAttrib
     return steps;
 }
 
-// Measured (lane 75, L2b, synthetic catalogue of ~180 currencies after wave 1): the DFS above runs in a few ms per
-// pair, so no Web Worker. The route picker's own rendering of thousands of chains is a separate matter.
+// ============================================================================
+// ROUTE DEPTH (lane 75, L20b, developer decision Q6 of 19/11/2026)
+// ============================================================================
+
+/** The longest chain the route picker ever offers. */
+export const ROUTE_DEPTH_CAP = 4;
+
+/**
+ * Whether a chain of exactly `length` steps joins `source` to `target`, under the constraints of `findAllPaths`
+ * (simple paths, a provider at most twice). Stops at the first chain found: asking whether a level exists never costs
+ * the chains of that level.
+ */
+export function hasChainOfLength(graph: MultiDirectedGraph<Record<string, never>, EdgeAttributes>, source: string, target: string, length: number): boolean {
+    if (!graph.hasNode(source) || !graph.hasNode(target) || source === target || length < 1) return false;
+    const stepsToTarget = distancesTo(graph, target, length);
+    if (!stepsToTarget.has(source)) return false;
+
+    const visited = new Set([source]);
+    const uses = new Map<string, number>();
+    function walk(node: string, taken: number): boolean {
+        if (node === target) return taken === length;
+        if (taken >= length) return false;
+        let found = false;
+        const step = (neighbor: string, provider: string): void => {
+            if (found || visited.has(neighbor)) return;
+            const distance = stepsToTarget.get(neighbor);
+            // The target before the last step ends the chain too early; any node too far cannot make it in time
+            if (distance === undefined || taken + 1 + distance > length || (neighbor === target && taken + 1 !== length)) return;
+            const used = uses.get(provider) ?? 0;
+            if (used >= 2) return;
+            visited.add(neighbor);
+            uses.set(provider, used + 1);
+            found = walk(neighbor, taken + 1);
+            visited.delete(neighbor);
+            if (used === 0) uses.delete(provider);
+            else uses.set(provider, used);
+        };
+        graph.forEachOutboundEdge(node, (_key, attrs, _src, tgt) => step(tgt, attrs.provider));
+        if (!found) graph.forEachInboundEdge(node, (_key, attrs, src) => step(src, attrs.provider));
+        return found;
+    }
+    return walk(source, 0);
+}
+
+/** The levels (chain lengths, 1 … `cap`) of `graph` from `source` to `target` that hold at least one chain, up to two. */
+function firstTwoLevels(graph: MultiDirectedGraph<Record<string, never>, EdgeAttributes>, source: string, target: string, cap: number): number[] {
+    const levels: number[] = [];
+    for (let length = 1; length <= cap && levels.length < 2; length++) {
+        if (hasChainOfLength(graph, source, target, length)) levels.push(length);
+    }
+    return levels;
+}
+
+/**
+ * The depth the route picker searches at (decision Q6): the first level with a chain, then up to the next level with
+ * chains — direct → 2 steps, first at 2 → 3, first at 3 → 4; a gap (direct, none at 2) jumps to the first level after
+ * it with chains. With no next level within `cap`, `cap`. `0` when no chain exists.
+ *
+ * The levels are read on the graph of the configured providers: a pair whose only short chains go through a provider
+ * still to configure keeps its longer usable chains (consultant 75 on Q6). When the configured providers join the pair
+ * by no chain at all, the levels come from the full graph, so the routes to configure are still offered.
+ */
+export function routeSearchDepth(configuredGraph: MultiDirectedGraph<Record<string, never>, EdgeAttributes>, fullGraph: MultiDirectedGraph<Record<string, never>, EdgeAttributes>, source: string, target: string, cap: number = ROUTE_DEPTH_CAP): number {
+    let levels = firstTwoLevels(configuredGraph, source, target, cap);
+    if (levels.length === 0) levels = firstTwoLevels(fullGraph, source, target, cap);
+    if (levels.length === 0) return 0;
+    return levels.length === 2 ? levels[1] : cap;
+}
+
+/** The currency graph of the providers that are configured (`configured !== false`), on the same nodes. */
+export function buildConfiguredCurrencyGraph(providers: ProviderInfo[], allCurrencyCodes: string[]): MultiDirectedGraph<Record<string, never>, EdgeAttributes> {
+    return buildCurrencyGraph(
+        providers.filter((provider) => provider.configured !== false),
+        allCurrencyCodes,
+    );
+}
+
+/**
+ * The chains the route picker offers: every chain of the full graph (configured providers or not) up to the depth of
+ * `routeSearchDepth`, in the order of `findAllPaths`. `[]` when no chain exists.
+ */
+export function findRoutePaths(fullGraph: MultiDirectedGraph<Record<string, never>, EdgeAttributes>, configuredGraph: MultiDirectedGraph<Record<string, never>, EdgeAttributes>, source: string, target: string, cap: number = ROUTE_DEPTH_CAP): ChainStep[][] {
+    const depth = routeSearchDepth(configuredGraph, fullGraph, source, target, cap);
+    return depth === 0 ? [] : findAllPaths(fullGraph, source, target, depth);
+}
+
+// The route picker runs `findRoutePaths` in a Web Worker (`workers/currencyRoutes.worker.ts`, decision Q6): with the
+// wave-2 catalogue a depth-4 search of a pair of majors built ~200 000 chains in 140-175 ms (lane 75, L20).

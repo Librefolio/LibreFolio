@@ -42,6 +42,7 @@ def front_tx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
         "src/lib/features/transactions/import/NoticeCounts.test.ts",
         "src/lib/features/transactions/import/AnalyzeStep.test.ts",
         "src/lib/features/transactions/bulk/bulkTodos.test.ts",
+        "src/lib/features/transactions/bulk/bulkCharges.test.ts",
         "src/lib/features/transactions/bulk/selectionGuards.test.ts",
         "src/lib/features/transactions/bulk/PossibleSplitRow.test.ts",
         "src/lib/features/transactions/bulk/TxBulkBanners.possibleSplit.test.ts",
@@ -196,6 +197,90 @@ def front_tx_split_promote(verbose: bool = False, ui: bool = False, headed: bool
     if not _ensure_test_users():
         return False
     return _run_playwright("transactions/tx-split-promote.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_charges_view(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Linked charges in the transaction form, read-only (project 66, F2)."""
+    print_section("Frontend TX Linked Charges View Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-charges-view.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_charges_table(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Linked charges folded under their parent in the transactions table (project 66, F5)."""
+    print_section("Frontend TX Linked Charges Table Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-charges-table.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_charges_link_delete(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Link charges from the table's selection bar, delete a parent with charges (project 66, F6)."""
+    print_section("Frontend TX Charges Link and Delete Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-charges-link-delete.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_charges_write(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Write a parent's linked charges from the form the Bulk hosts: create, note, unlink, delete (project 66, F7-b)."""
+    print_section("Frontend TX Charges Write Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-charges-write.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_bulk_charges_grid(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """The Bulk groups a parent's linked charges under it: chip, indented rows, entry read, paging (project 66, F7-c1)."""
+    print_section("Frontend TX Bulk Charges Grid Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-bulk-charges-grid.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_bulk_charges_delete(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """«Delete» on a parent with charges inside the Bulk asks first: the panel V1, Keep / Delete all / Cancel (project 66, F7-c2)."""
+    print_section("Frontend TX Bulk Charges Delete Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-bulk-charges-delete.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_bulk_charges_link(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """«Link» a parent and its charges inside the Bulk (U3), and «Open» a parent from its charge's form (project 66, F7-d)."""
+    print_section("Frontend TX Bulk Charges Link Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-bulk-charges-link.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_tx_crud_full(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -737,6 +822,41 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "tx-bulk-operations", front_tx_bulk_operations, name="TX Bulk Operations Tests", desc="Mixed commit, reset, picker guard, pair validation, mark delete", tests="transactions/tx-bulk-operations.spec.ts")
     add_test(cat, "tx-edit-save-gate", front_tx_edit_save_gate, name="TX Edit Save Gate Tests", desc="Issue #58: changing the type or the asset of a stored row keeps Apply and Save-all enabled, and the discard question agrees", tests="transactions/tx-edit-save-gate.spec.ts")
     add_test(cat, "tx-split-promote", front_tx_split_promote, name="TX Split & Promote Tests", desc="Split paired, promote standalone, merge modal, guards, non-regression", tests="transactions/tx-split-promote.spec.ts")
+    add_test(cat, "tx-charges-view", front_tx_charges_view, name="TX Linked Charges View Tests", desc="Project 66 F2: a BUY with a FEE and a TAX linked, opened read-only: the section lists the two charges with their notes and the total charged", tests="transactions/tx-charges-view.spec.ts")
+    add_test(cat, "tx-charges-table", front_tx_charges_table, name="TX Linked Charges Table Tests", desc="Project 66 F5: charges folded under the BUY, kept under a broker filter, on their own under types=FEE, flat under a sort", tests="transactions/tx-charges-table.spec.ts")
+    add_test(cat, "tx-charges-link-delete", front_tx_charges_link_delete, name="TX Charges Link and Delete Tests", desc="Project 66 F6: link BUY+FEE+TAX from the bar, otherBroker off, delete with all/keep, no panel if all selected", tests="transactions/tx-charges-link-delete.spec.ts")
+    add_test(
+        cat,
+        "tx-charges-write",
+        front_tx_charges_write,
+        name="TX Charges Write Tests",
+        desc="Project 66 F7-b: in the form the Bulk hosts, a new BUY with a FEE and a TAX saved linked; on a saved BUY the FEE note changed, the TAX unlinked, the FEE deleted — read back by id",
+        tests="transactions/tx-charges-write.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-bulk-charges-grid",
+        front_tx_bulk_charges_grid,
+        name="TX Bulk Charges Grid Tests",
+        desc="Project 66 F7-c1: in the Bulk a saved BUY's FEE and TAX are read on entry and grouped under it (chip with the count, closed; open when brought with the parent), indented rows without checkbox, double-click opens the charge's Form, an open group never split by a page, an unlinked TAX a top-level row «unlink»",
+        tests="transactions/tx-bulk-charges-grid.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-bulk-charges-delete",
+        front_tx_bulk_charges_delete,
+        name="TX Bulk Charges Delete Tests",
+        desc="Project 66 F7-c2: in the Bulk, «Delete» on a saved BUY with FEE+TAX opens the panel before marking; Cancel changes nothing; Keep → the BUY goes, its charges stay unlinked; Delete all → all three go; on a phone by tap — read back by id",
+        tests="transactions/tx-bulk-charges-delete.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-bulk-charges-link",
+        front_tx_bulk_charges_link,
+        name="TX Bulk Charges Link Tests",
+        desc="Project 66 F7-d: in the Bulk, «Link» a new BUY + new FEE and a saved BUY + saved free FEE (also by tap on a phone), saved and read back by id; «Open» from a FEE's form to its parent absent from the Bulk adds the parent",
+        tests="transactions/tx-bulk-charges-link.spec.ts",
+    )
     add_test(cat, "tx-crud-full", front_tx_crud_full, name="TX CRUD Full Lifecycle Tests", desc="Full CRUD lifecycle: standalone, paired, split, promote, bulk, suggest, cash sign", tests="transactions/tx-crud-full.spec.ts")
     add_test(cat, "tx-commit-all-types", front_tx_commit_all_types, name="TX Commit All Types Tests", desc="End-to-end commit for every TX type: standalone + paired create, edit, delete", tests="transactions/tx-commit-all-types.spec.ts")
     add_test(cat, "tx-bulk-suggest-ux", front_tx_bulk_suggest_ux, name="TX Bulk Suggest UX Tests", desc="Split badge, type preview, undo split, suggest banner, ActionModal AFTER rows", tests="transactions/tx-bulk-suggest-ux.spec.ts")

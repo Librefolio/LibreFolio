@@ -31,9 +31,9 @@ Without filters or sorting, the two rows of a linked pair (a transfer or a curre
 ## ✏️ Edit, clone or delete transactions
 
 - **One row** — right-click it, or use its row actions: **View**, **Edit**, **Clone**, **Split pair** or **Delete**. You only see the actions your role on that broker allows.
-- **Several rows** — tick them, then choose **Edit**, **Clone** or **Delete** in the selection bar. **Edit** and **Delete** leave out the rows of brokers where you are only a Viewer.
+- **Several rows** — tick them, then choose **Edit**, **Clone** or **Delete** in the selection bar above the table. Each action shows how many rows it acts on: **Edit** and **Delete** leave out the rows of brokers where you are only a Viewer. When you scroll the list down, the same actions move into the bar at the bottom, above the pages.
 
-Each of these opens the bulk workspace, and nothing changes before **Save All**. Editing or deleting one side of a linked pair brings its partner along.
+Each of these opens the bulk workspace, and nothing changes before **Save All**. Editing or deleting one side of a linked pair brings its partner along. Deleting a transaction that has linked charges first asks what to do with them — see [Linked charges](#linked-charges).
 
 **Clone** keeps the original date: it is how you re-record a historical row, for example under another type.
 
@@ -54,21 +54,35 @@ Both ask for confirmation, then save at once, without the workspace.
 
 ---
 
+## 📎 Linked charges {: #linked-charges }
+
+A **Fee** or a **Tax** can be linked to the transaction it was paid for, and stays a transaction of its own. What can be linked to what, and how the form shows it, is in [Linked charges](form.md#linked-charges).
+
+- **In the list** — while the table is not sorted and not filtered on the type, a transaction's charges fold under it. The badge **N charges** (or the 🔗 next to it) opens and closes them; each charge shows `↳`, and its 🔗 takes you to its transaction. Sort the table, or filter it on the type, and every charge is a row of its own again, still marked `↳`.
+- **Link** — tick one transaction and the charges that belong to it, then click **Link** in the selection bar. A window shows the rows and what they become; **Link** saves at once. When the selection cannot be linked — another broker, another asset, half of a pair, a charge already linked elsewhere, two transactions — **Link** is greyed out: tap it, or reach it with the keyboard, to read why.
+- **Delete** — when you delete a transaction whose charges are not all in your selection, from this page or from a broker's **Transactions** tab, a window asks first:
+    - **Keep the charges** — they stay, as transactions of their own, no longer linked;
+    - **Delete all (N)** — the charges go with it.
+
+    Either way the bulk workspace opens with the rows marked, and nothing changes before **Save All**. **Cancel** opens nothing.
+
+---
+
 ## 🔁 Relink events {: #relink-events }
 
 A dividend, an interest payment or an adjustment can be linked to the asset's **event** (the dividend the provider announced, a split…). The link is lost when [changing an asset's currency](../assets/create-edit.md#changing-the-currency) deletes the events it pointed to, and a dividend you booked before its event was downloaded never had one. **Relink events**, in the toolbar above the table, finds those transactions and proposes the event to link.
 
-The window lists your **dividends, interest and adjustments** that have an asset and no event, on the brokers where you are at least an Editor, newest first. Each row shows the asset, the date, the type and what was found:
+The window lists your **dividends, interest and adjustments** that have an asset and no event, on the brokers where you are at least an Editor, newest first. They are split into three groups, one table each; a group with no transaction is not shown. Each row shows the asset and its broker, the date, the transaction's movement and the event:
 
-| What you see | Meaning | What you can do |
-|--------------|---------|-----------------|
-| **One event that day** | Exactly one event of the same asset, on the same day, of the matching type | **Link** the row |
-| **No event that day** | The asset has no such event on that day | **Create event**: enter its value, then link the row; or, when the event is on another day, link it in the transaction (below) |
-| **N events that day** | More than one candidate | Nothing here: LibreFolio never guesses. Choose the right one in the transaction |
+| Group | Meaning | What you can do |
+|-------|---------|-----------------|
+| **With one event** | Exactly one event of the same asset, on the same day, of the matching type: the row shows its value | **Link** the row, or **Link all** the rows of the group |
+| **Without an event** | The asset has no such event on that day | **Create event** (or **Create all**): enter its value, then link the row; or, when the event is on another day, link it in the transaction (below) |
+| **Several events** | More than one candidate | **Choose event**: a small window lists them, each with its value and whether it is automatic or entered by hand; nothing is chosen until you pick one, then **Link** |
 
-**Link every row with one event** links all the rows of the first kind at once, in a single save: if any is refused, none is linked. Nothing is linked unless you click.
+Each row's action is also in the menu you open with a right-click on the row. **Link all** and **Create all** act on the rows the group's filters leave, and say how many; **Link all** links them in a single save: if any is refused, none is linked. Nothing is linked unless you click.
 
-To act on several rows, tick them: **Link selected** appears when at least one of them has its one event, **Create events** when at least one has none, and each acts only on the rows it fits. An action none of the selected rows can take is not shown.
+To act on some rows only, tick them in the first two groups: the bar above the tables shows **Link** and **Create event**, each with the number of rows it takes, and each acts only on the rows it fits. An action none of the selected rows can take is not shown. The linked rows leave the list and the selection; the other ticked rows stay ticked, so after **Link** the bar still offers **Create event** for the rest. When you scroll the window down, the bar moves into the bar at the bottom; **Esc** there clears the selection and leaves the window open.
 
 !!! info "The event must be on the same date"
 
@@ -106,6 +120,13 @@ The workspace is a grid of draft rows — marked **new**, **edit** or **del** �
 </div>
 
 After a save, a **Promote pair** or a **Split pair**, the Transactions page clears its selection, since those rows may have changed; closing or cancelling keeps it. If a **Promote pair** or a **Split pair** is refused, nothing changes: an error message says why, and the confirmation stays open.
+
+### 📎 Linked charges in the workspace {: #bulk-linked-charges }
+
+- **Grouped rows** — a transaction's charges sit under it in the grid: the chip **N charges** opens and closes the group, and each charge shows `↳`. They are saved with it, in the same **Save All**. The form's [Linked charges](form.md#linked-charges) section adds, links, unlinks and deletes them.
+- **Link** — tick one transaction and charges that are rows of their own (a charge under a transaction has no checkbox), then click **Link** above the grid. Rows not saved yet can be linked too: the window and the messages name a new row by its number, such as *row 3*. The link is written by **Save All**. A greyed-out **Link** says why on tap or with the keyboard; besides the reasons of the list, a row marked for deletion must be restored first.
+- **Delete** — **Mark for deletion** on a transaction with linked charges, or **Delete selected** with such a transaction among the rows, asks the same question as the list: **Keep the charges** or **Delete all**. **Restore** on the transaction brings back the charges that choice changed, also when the question was asked on the Transactions page or a broker's tab; a charge you deleted or unlinked yourself stays as you left it.
+- **A transaction that leaves the workspace** (a new one deleted, or **Remove from batch**) takes along the new charges you added in its form, unless you opened and applied one on its own. A charge you joined to it with **Link** stays, as a row of its own.
 
 ---
 

@@ -65,20 +65,38 @@ test.describe('FX list-view bulk actions', () => {
         }
     });
 
-    // U8 — the selection bar floats at the bottom of the screen and never hides the last row.
-    test('the selection bar floats at the bottom and does not cover the last row', async ({page}) => {
+    // 77 SEL-B (was U8) — the selection bar sits at the top of the table; scrolled to the end, its actions come down into the
+    // table's dock and the dock never hides the last row. A short window, so the top leaves the view however few pairs there are.
+    test('the selection bar sits at the top of the table, and its actions come down into the dock at the end of the page', async ({page}) => {
+        await page.setViewportSize({width: 1280, height: 420});
         await selectAllRows(page);
-        const bar = page.getByTestId('selection-toolbar');
-        await expect(bar).toHaveAttribute('data-variant', 'floating');
+        const top = page.getByTestId('dt-selection-top');
+        await expect(page.getByTestId('selection-toolbar')).toHaveAttribute('data-variant', 'top');
 
         await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-        const barBox = await bar.boundingBox();
+        await expect(top).toHaveAttribute('data-in-view', 'false', {timeout: 5_000});
+        const dock = page.getByTestId('dt-dock');
+        await expect(dock).toHaveAttribute('data-actions', 'true');
+        await expect(page.getByTestId('selection-toolbar')).toHaveAttribute('data-variant', 'dock');
+        // The actions coming down make the page taller: scroll to its new end, where a user who keeps scrolling lands.
+        await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+        const dockBox = await dock.locator('.dt-dock').boundingBox();
         const lastRow = await rows(page).last().boundingBox();
         const viewport = page.viewportSize();
-        if (!barBox || !lastRow || !viewport) throw new Error('The bar and the last row must be on screen to be measured.');
-        expect(barBox.y + barBox.height, 'the bar is at the bottom of the viewport').toBeLessThanOrEqual(viewport.height);
-        expect(barBox.y + barBox.height, 'close to the bottom edge').toBeGreaterThanOrEqual(viewport.height - 48);
-        expect(lastRow.y + lastRow.height, 'the last row ends above the bar').toBeLessThanOrEqual(barBox.y + 1);
+        if (!dockBox || !lastRow || !viewport) throw new Error('The dock and the last row must be on screen to be measured.');
+        expect(dockBox.y + dockBox.height, 'the dock is inside the viewport').toBeLessThanOrEqual(viewport.height);
+        expect(lastRow.y + lastRow.height, 'the last row ends above the dock').toBeLessThanOrEqual(dockBox.y + 1);
+    });
+
+    // Q-SEL-17: «Sync» takes the pairs with a provider only, and says how many.
+    test('the sync action counts the pairs with a provider, the others every selected pair', async ({page}) => {
+        await selectAllRows(page);
+        const selected = Number(await page.getByTestId('selection-toolbar').getAttribute('data-selected-count'));
+        await expect(page.getByTestId('toolbar-action-delete-count')).toHaveText(String(selected));
+        await expect(page.getByTestId('toolbar-action-invert-count')).toHaveText(String(selected));
+        const syncCount = Number(await page.getByTestId('toolbar-action-sync-count').textContent());
+        expect(syncCount).toBeGreaterThan(0);
+        expect(syncCount).toBeLessThanOrEqual(selected);
     });
 
     test('bulk sync opens the sync modal without fetching rates', async ({page}) => {

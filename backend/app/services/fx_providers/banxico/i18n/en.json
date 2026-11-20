@@ -1,0 +1,17 @@
+{
+  "pluginSettings": {
+    "fx": {
+      "BANXICO": {
+        "label": {
+          "token": "API token"
+        },
+        "description": {
+          "token": "The free token of the Banco de México SIE API (64 characters), requested on the bank's website."
+        },
+        "missing": {
+          "token": "the Banxico API token"
+        }
+      }
+    }
+  }
+}

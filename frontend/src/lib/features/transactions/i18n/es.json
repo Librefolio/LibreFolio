@@ -9,7 +9,8 @@
       "cash": "Efectivo",
       "broker": "Bróker",
       "links": "Enlaces",
-      "unitPrice": "Precio unitario"
+      "unitPrice": "Precio unitario",
+      "chargesN": "{n, plural, one {# gasto} other {# gastos}}"
     },
     "actions": {
       "clone": "Clonar",
@@ -64,7 +65,10 @@
       "fxSend": "Convirtiendo a {amount}",
       "generic": "Transferencia de fondos",
       "depositFrom": "Ingreso desde {broker} ({currency})",
-      "withdrawalTo": "Retiro hacia {broker} ({currency})"
+      "withdrawalTo": "Retiro hacia {broker} ({currency})",
+      "chargeOf": "Gasto de: {type} · {date}",
+      "chargesToggle": "Mostrar u ocultar sus gastos",
+      "chargeOfOther": "Gasto de otra transacción"
     },
     "form": {
       "titleCreate": "Nueva transacción",
@@ -105,7 +109,34 @@
       },
       "entryModeLabel": "Cómo leer el número",
       "entryDerivedTotal": "= {value} en total",
-      "entryDerivedUnit": "= {value} {base, plural, =1 {por unidad} other {por # unidades}}"
+      "entryDerivedUnit": "= {value} {base, plural, =1 {por unidad} other {por # unidades}}",
+      "charges": {
+        "title": "Gastos enlazados",
+        "addCharge": "+ {type}",
+        "new": "nuevo",
+        "notePlaceholder": "Nota (p. ej. tasa Tobin)",
+        "unlink": "Desenlazar",
+        "remove": "Eliminar",
+        "totalOut": "Cargo total",
+        "totalIn": "Neto cobrado",
+        "loadError": "No se pudieron cargar los gastos enlazados",
+        "missingAmount": "Introduce el importe de este gasto",
+        "loading": "Cargando los gastos enlazados…",
+        "open": "Abrir",
+        "linkExisting": "Enlazar un gasto existente…"
+      },
+      "parent": {
+        "title": "Enlazada a",
+        "unlink": "Desenlazar",
+        "unlinked": "Desenlazada: al guardar será una transacción independiente",
+        "loadError": "No se pudo cargar la transacción enlazada",
+        "loading": "Cargando la transacción enlazada…",
+        "link": "Enlazar a una transacción…",
+        "pending": "Se enlazará al guardar",
+        "undo": "Deshacer"
+      },
+      "openFailed": "No se pudo abrir la transacción",
+      "candidatesFailed": "No se pudieron cargar las transacciones para enlazar"
     },
     "bulk": {
       "resetRow": "Restablecer fila",
@@ -159,7 +190,10 @@
         "confirmTitle": "¿Guardar fechas anteriores a 1900?",
         "confirmMessage": "{n} filas tienen una fecha anterior al 1 de enero de 1900. ¿Guardarlas tal cual?",
         "confirmProceed": "Sí, las fechas son correctas"
-      }
+      },
+      "chargesReadFailed": "No se pudieron leer los gastos vinculados de {ids}. «Restablecer fila» los vuelve a leer.",
+      "deleteSkippedUnread": "{n, plural, one {# transacción no se eliminó: no se pudieron leer sus gastos vinculados. «Restablecer fila» los vuelve a leer.} other {# transacciones no se eliminaron: no se pudieron leer sus gastos vinculados. «Restablecer fila» los vuelve a leer.}}",
+      "rowRef": "fila {n}"
     },
     "commit": {
       "serverError": "Guardado imposible — error del servidor"
@@ -347,7 +381,16 @@
       "pairedNote": "Al seleccionar una transacción vinculada se agrega automáticamente su par.",
       "requiredRole": "requerido",
       "addN": "Agregar {n}",
-      "searchAdd": "Buscar y agregar"
+      "searchAdd": "Buscar y agregar",
+      "chargesTitle": "Elige los gastos que enlazar",
+      "chargesFilterShort": "Gastos sin enlazar",
+      "chargesFilterLong": "Gastos sin enlazar · {broker} · {asset}",
+      "parentTitle": "Elige la transacción a la que enlazar este gasto",
+      "parentFilterShort": "Transacciones enlazables",
+      "parentFilterLong": "Transacciones enlazables · {broker} · {asset}",
+      "linkN": "Enlazar {n} seleccionadas",
+      "link": "Enlazar",
+      "noAsset": "sin activo"
     },
     "access": {
       "partnerNotAccessible": "La transacción vinculada está en un bróker al cual el usuario no tiene acceso."
@@ -372,39 +415,87 @@
       "button": "Reenlazar eventos",
       "buttonTitle": "Vincular dividendos, intereses y ajustes al evento del activo del mismo día",
       "title": "Reenlazar eventos",
-      "intro": "Dividendos, intereses y ajustes sin evento del activo. Solo se propone un evento si es del mismo activo, del mismo día y del tipo correspondiente: un dividendo abonado unos días después del evento no se propone, y lo vinculas a mano en la transacción.",
       "loading": "Buscando transacciones sin evento…",
       "loadError": "No se pudieron leer las transacciones sin evento.",
       "empty": "Cada transacción que puede tener un evento del activo lo tiene.",
-      "statusUnique": "Un evento ese día",
-      "statusNone": "Ningún evento ese día",
-      "statusSeveral": "{n} eventos ese día: elige en la transacción",
       "link": "Vincular",
-      "linkAll": "Vincular todas las filas con un solo evento",
       "linkError": "No se vinculó nada: el servidor rechazó el cambio.",
       "close": "Cerrar",
-      "colAsset": "Activo",
-      "colBroker": "Bróker",
-      "colEvent": "Evento",
-      "colStatus": "Estado",
       "colAction": "Acción",
-      "status": {
-        "unique": "Un evento ese día",
-        "none": "Ningún evento ese día",
-        "several": "Varios eventos ese día"
-      },
-      "linkSelected": "Vincular los seleccionados",
-      "createSelected": "Crear los eventos",
       "createOne": "Crear evento",
       "createTitle": "Crear los eventos que faltan",
       "createIntro": "Revisa el tipo e introduce el valor de cada evento, en la moneda del activo. Los eventos se crean el día de la transacción; luego vincúlalos.",
       "createValue": "Valor",
       "createServes": "{n} transacciones",
       "createHint": "Introduce para cada evento un valor mayor que 0, con 6 decimales como máximo.",
-      "createConfirm": "{n, plural, one {Crear # evento} other {Crear # eventos}}"
+      "createConfirm": "{n, plural, one {Crear # evento} other {Crear # eventos}}",
+      "introShort": "Transacciones sin su evento del activo. Solo se propone un evento del mismo activo, del mismo día y del tipo correcto; los demás los eliges tú.",
+      "selectionHint": "Selecciona filas para actuar solo sobre ellas, o usa «todas» en cada grupo.",
+      "group": {
+        "unique": {
+          "title": "Con un evento · {n}",
+          "sub": "El servidor encontró el evento: basta con vincularlo."
+        },
+        "none": {
+          "title": "Sin evento · {n}",
+          "sub": "Ese día el activo no tiene el evento: se crea y luego se vincula."
+        },
+        "several": {
+          "title": "Varios eventos · {n}",
+          "sub": "Ese día hay varios eventos del tipo correcto: tú eliges cuál."
+        }
+      },
+      "linkAllGroup": "Vincular todas",
+      "createAllGroup": "Crear todos",
+      "createShort": "Crear",
+      "colTransaction": "Transacción",
+      "colMovement": "Movimiento",
+      "colEventFound": "Evento encontrado",
+      "colEventToCreate": "Evento por crear",
+      "colEventsThatDay": "Eventos ese día",
+      "toCreate": "por crear",
+      "toCreateChooseType": "por crear: elige el tipo",
+      "severalSub": "{n, plural, one {# evento} other {# eventos}}, ninguno se elige solo",
+      "quantityUnits": "{n} participaciones",
+      "or": "o",
+      "choose": "Elegir evento",
+      "chooseTitle": "Elegir el evento",
+      "chooseIntro": "Ese día el activo tiene {n} eventos del tipo correcto. ¿Cuál toma esta transacción?",
+      "sourceAuto": "automático",
+      "sourceManual": "introducido a mano"
     },
     "docsHelp": {
       "list": "Cada movimiento de los brókeres a los que tienes acceso, del más reciente al más antiguo: compras, ventas, dividendos, comisiones, transferencias y liquidez. Tus posiciones y tu rendimiento se calculan a partir de ellos. Aquí los añades, importas, filtras o editas."
+    },
+    "chargesLink": {
+      "action": "Vincular los gastos",
+      "actionShort": "Vincular",
+      "title": "Vincular los gastos",
+      "subtitle": "{n} filas separadas → 1 {type} con sus gastos",
+      "target": "{type} {ref} con {n, plural, one {# gasto vinculado} other {# gastos vinculados}}",
+      "note": "Los gastos siguen siendo transacciones propias: solo cambia el vínculo.",
+      "confirm": "Vincular",
+      "failed": "No se pudieron vincular los gastos",
+      "reason": {
+        "twoParents": "Elige una sola transacción: {type} {ref} es la segunda",
+        "paired": "{type} {ref} es parte de un par: primero separa el par",
+        "linked": "{type} {ref} está vinculada a otra transacción: primero desvincúlala",
+        "otherBroker": "{type} {ref} está en otro bróker",
+        "otherAsset": "{type} {ref} tiene otro activo",
+        "noAsset": "{type} {ref} no tiene activo, y la transacción sí",
+        "deleted": "{type} {ref} está por eliminar: primero restaura la fila"
+      }
+    },
+    "chargesDelete": {
+      "title": "¿Eliminar {type} {ref}?",
+      "titleMany": "¿Eliminar {n} transacciones con gastos?",
+      "lead": "{n, plural, one {Tiene # gasto vinculado.} other {Tiene # gastos vinculados.}}",
+      "keep": "Conservar los gastos",
+      "keepAfter": "{n, plural, one {el gasto queda, como fila propia ya no vinculada} other {los # gastos quedan, como filas propias ya no vinculadas}}",
+      "allShort": "Eliminar todo",
+      "allAfter": "no queda ninguna de las {n} filas",
+      "all": "Eliminar todo ({n})",
+      "loadFailed": "No se pudieron leer los gastos de esta transacción"
     }
   }
 }

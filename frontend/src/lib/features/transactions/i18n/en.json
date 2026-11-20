@@ -9,7 +9,8 @@
       "cash": "Cash",
       "broker": "Broker",
       "links": "Links",
-      "unitPrice": "Unit price"
+      "unitPrice": "Unit price",
+      "chargesN": "{n, plural, one {# charge} other {# charges}}"
     },
     "actions": {
       "clone": "Clone",
@@ -64,7 +65,10 @@
       "fxSend": "Converting to {amount}",
       "generic": "Cash transfer",
       "depositFrom": "Cash in from {broker} ({currency})",
-      "withdrawalTo": "Cash out to {broker} ({currency})"
+      "withdrawalTo": "Cash out to {broker} ({currency})",
+      "chargeOf": "Charge of: {type} · {date}",
+      "chargesToggle": "Show or hide its charges",
+      "chargeOfOther": "Charge of another transaction"
     },
     "form": {
       "titleCreate": "New transaction",
@@ -105,7 +109,34 @@
       },
       "entryModeLabel": "How to read the amount",
       "entryDerivedTotal": "= {value} in total",
-      "entryDerivedUnit": "= {value} {base, plural, =1 {per unit} other {per # units}}"
+      "entryDerivedUnit": "= {value} {base, plural, =1 {per unit} other {per # units}}",
+      "charges": {
+        "title": "Linked charges",
+        "addCharge": "+ {type}",
+        "new": "new",
+        "notePlaceholder": "Note (e.g. Tobin tax)",
+        "unlink": "Unlink",
+        "remove": "Delete",
+        "totalOut": "Total charged",
+        "totalIn": "Net received",
+        "loadError": "The linked charges could not be loaded",
+        "missingAmount": "Enter the amount of this charge",
+        "loading": "Loading the linked charges…",
+        "open": "Open",
+        "linkExisting": "Link an existing charge…"
+      },
+      "parent": {
+        "title": "Linked to",
+        "unlink": "Unlink",
+        "unlinked": "Unlinked: it will be a transaction of its own when saved",
+        "loadError": "The linked transaction could not be loaded",
+        "loading": "Loading the linked transaction…",
+        "link": "Link to a transaction…",
+        "pending": "Will be linked when saved",
+        "undo": "Undo"
+      },
+      "openFailed": "The transaction could not be opened",
+      "candidatesFailed": "The transactions to link could not be loaded"
     },
     "bulk": {
       "resetRow": "Reset row",
@@ -159,7 +190,10 @@
         "confirmTitle": "Save dates before 1900?",
         "confirmMessage": "{n} rows are dated before 1 January 1900. Save them as they are?",
         "confirmProceed": "Yes, the dates are right"
-      }
+      },
+      "chargesReadFailed": "Could not read the linked charges of {ids}. «Reset row» on the row reads them again.",
+      "deleteSkippedUnread": "{n, plural, one {# transaction was not deleted: its linked charges could not be read. «Reset row» reads them again.} other {# transactions were not deleted: their linked charges could not be read. «Reset row» reads them again.}}",
+      "rowRef": "row {n}"
     },
     "commit": {
       "serverError": "Save failed — server error"
@@ -347,7 +381,16 @@
       "pairedNote": "Selecting a paired transaction auto-adds its partner.",
       "requiredRole": "required",
       "addN": "Add {n}",
-      "searchAdd": "Search & add"
+      "searchAdd": "Search & add",
+      "chargesTitle": "Choose the charges to link",
+      "chargesFilterShort": "Unlinked charges",
+      "chargesFilterLong": "Unlinked charges · {broker} · {asset}",
+      "parentTitle": "Choose the transaction to link this charge to",
+      "parentFilterShort": "Linkable transactions",
+      "parentFilterLong": "Linkable transactions · {broker} · {asset}",
+      "linkN": "Link {n} selected",
+      "link": "Link",
+      "noAsset": "no asset"
     },
     "access": {
       "partnerNotAccessible": "The linked transaction is on a broker the user cannot access."
@@ -372,39 +415,87 @@
       "button": "Relink events",
       "buttonTitle": "Link dividends, interest and adjustments to the asset event of the same day",
       "title": "Relink events",
-      "intro": "Dividends, interest and adjustments that have no asset event. An event is proposed only when it is of the same asset, on the same day and of the matching type: a dividend credited a few days after the event is not proposed, and you link it by hand in the transaction.",
       "loading": "Looking for transactions without an event…",
       "loadError": "Could not read the transactions without an event.",
       "empty": "Every transaction that can have an asset event has one.",
-      "statusUnique": "One event that day",
-      "statusNone": "No event that day",
-      "statusSeveral": "{n} events that day: choose it in the transaction",
       "link": "Link",
-      "linkAll": "Link every row with one event",
       "linkError": "Nothing was linked: the server refused the change.",
       "close": "Close",
-      "colAsset": "Asset",
-      "colBroker": "Broker",
-      "colEvent": "Event",
-      "colStatus": "Status",
       "colAction": "Action",
-      "status": {
-        "unique": "One event that day",
-        "none": "No event that day",
-        "several": "Several events that day"
-      },
-      "linkSelected": "Link selected",
-      "createSelected": "Create events",
       "createOne": "Create event",
       "createTitle": "Create the missing events",
       "createIntro": "Check the type and enter the value of each event, in the asset’s currency. The events are created on the day of the transaction; then link them.",
       "createValue": "Value",
       "createServes": "{n} transactions",
       "createHint": "Enter a value above 0, with at most 6 decimals, for every event.",
-      "createConfirm": "{n, plural, one {Create # event} other {Create # events}}"
+      "createConfirm": "{n, plural, one {Create # event} other {Create # events}}",
+      "introShort": "Transactions without their asset event. Only an event of the same asset, the same day and the right type is proposed; you choose the others.",
+      "selectionHint": "Select rows to act on those only, or use «all» in each group.",
+      "group": {
+        "unique": {
+          "title": "With one event · {n}",
+          "sub": "The server found the event: just link it."
+        },
+        "none": {
+          "title": "Without an event · {n}",
+          "sub": "That day the asset has no such event: it is created, then linked."
+        },
+        "several": {
+          "title": "Several events · {n}",
+          "sub": "That day there are several events of the right type: you choose which."
+        }
+      },
+      "linkAllGroup": "Link all",
+      "createAllGroup": "Create all",
+      "createShort": "Create",
+      "colTransaction": "Transaction",
+      "colMovement": "Movement",
+      "colEventFound": "Event found",
+      "colEventToCreate": "Event to create",
+      "colEventsThatDay": "Events that day",
+      "toCreate": "to create",
+      "toCreateChooseType": "to create: choose the type",
+      "severalSub": "{n, plural, one {# event} other {# events}}, none chosen by itself",
+      "quantityUnits": "{n} units",
+      "or": "or",
+      "choose": "Choose event",
+      "chooseTitle": "Choose the event",
+      "chooseIntro": "That day the asset has {n} events of the right type. Which one does this transaction take?",
+      "sourceAuto": "automatic",
+      "sourceManual": "entered by hand"
     },
     "docsHelp": {
       "list": "Every movement of the brokers you can access, newest first: purchases, sales, dividends, fees, transfers and cash. Your positions and performance are computed from them. Add, import, filter or edit them here."
+    },
+    "chargesLink": {
+      "action": "Link the charges",
+      "actionShort": "Link",
+      "title": "Link the charges",
+      "subtitle": "{n} separate rows → 1 {type} with its charges",
+      "target": "{type} {ref} with {n, plural, one {# linked charge} other {# linked charges}}",
+      "note": "The charges stay transactions of their own: only the link changes.",
+      "confirm": "Link",
+      "failed": "Linking the charges failed",
+      "reason": {
+        "twoParents": "Choose one transaction only: {type} {ref} is a second one",
+        "paired": "{type} {ref} is half of a pair: split the pair first",
+        "linked": "{type} {ref} is linked to another transaction: unlink it first",
+        "otherBroker": "{type} {ref} is on another broker",
+        "otherAsset": "{type} {ref} has another asset",
+        "noAsset": "{type} {ref} has no asset, and the transaction has one",
+        "deleted": "{type} {ref} is marked for deletion: restore the row first"
+      }
+    },
+    "chargesDelete": {
+      "title": "Delete {type} {ref}?",
+      "titleMany": "Delete {n} transactions with charges?",
+      "lead": "{n, plural, one {It has # linked charge.} other {It has # linked charges.}}",
+      "keep": "Keep the charges",
+      "keepAfter": "{n, plural, one {the charge stays, as a row of its own no longer linked} other {the # charges stay, as rows of their own no longer linked}}",
+      "allShort": "Delete all",
+      "allAfter": "none of the {n} rows stays",
+      "all": "Delete all ({n})",
+      "loadFailed": "Could not read the charges of this transaction"
     }
   }
 }
