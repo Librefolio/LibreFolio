@@ -108,6 +108,7 @@
         bulkLinkSelection,
         linkInBulk,
         rowsWithLinkedCharges,
+        unlinkCharge,
         type BulkDeletePlan,
         type ChargesUnread,
     } from './bulkCharges';
@@ -599,7 +600,8 @@
             const unlinked = unlinkIds.has(op.txId) && !op.markedDelete;
             const chosen = chosenIds.has(op.txId) && (unlinked || op.markedDelete);
             if (!unlinked && !chosen) return op;
-            return {...op, ...(unlinked ? {parentUnlink: true} : {}), ...(chosen ? {byParentChoice: true as const} : {})};
+            // The parent of an intent's charge is its saved one: `unlinkCharge` cuts that link (`parentUnlink`).
+            return {...(unlinked ? unlinkCharge(op, next, txStoreGet) : op), ...(chosen ? {byParentChoice: true as const} : {})};
         });
     }
 
@@ -1270,15 +1272,18 @@
     /** 66 C21 (§5.2): a reset or restored charge whose parent cannot hold it — «del», or a leg of a pair, saved or pending — stays
      *  «unlink»; the reset brings back its other values only. A pair is named in a toast (the «Link» reason `paired`).
      *  66 C22b: so does a charge of a reset row that the reset made a leg again — a half of a split undone by the reset,
-     *  whose charge was linked while the split was queued. */
-    function keepUnlinkedFromUnfitParents(resetTempIds: ReadonlySet<string>) {
+     *  whose charge was linked while the split was queued. 66 C22c: the link is undone by `unlinkCharge` — a saved link is
+     *  cut («unlink»), a link made only here is dropped (the charge back as before it). «Undo split» calls it on the two
+     *  halves too, with its own event name. */
+    function keepUnlinkedFromUnfitParents(resetTempIds: ReadonlySet<string>, eventName = 'tx.bulk.reset.charge.kept-unlinked') {
         const ownerOfReset = (d: PendingOp): PendingOp | undefined => (d.chargeOf !== undefined && !d.parentUnlink && (resetTempIds.has(d.tempId) || resetTempIds.has(d.chargeOf)) ? ops.find((o) => o.tempId === d.chargeOf && o !== d) : undefined);
         const unfit = (owner: PendingOp | undefined): boolean => !!owner && (isPairLeg(owner, ops) || (owner.op === 'edit' && owner.markedDelete === true));
         const parent = ops.map(ownerOfReset).find((owner): owner is PendingOp => !!owner && isPairLeg(owner, ops));
-        ops = ops.map((d) => (unfit(ownerOfReset(d)) ? {...d, parentUnlink: true} : d));
+        const before = ops;
+        ops = ops.map((d) => (unfit(ownerOfReset(d)) ? unlinkCharge(d, before, txStoreGet) : d));
         if (parent) {
             notify({
-                name: 'tx.bulk.reset.charge.kept-unlinked',
+                name: eventName,
                 detail: {parentTempId: parent.tempId},
                 toast: {variant: 'warning', message: $t('transactions.chargesLink.reason.paired', {values: {type: $t(`transactions.types.${parent.fields.type}`) || parent.fields.type, ref: bulkRowRef(parent)}})},
             });
@@ -2550,6 +2555,9 @@
                     (partnerOp as any).addedBySplit = undefined;
                 }
                 ops = [...ops]; // reactivity
+                // 66 C22c: a charge linked to a half while the split was queued would now hang under a leg (rule 8): its
+                // link is undone as by a reset, with the same `paired` toast.
+                keepUnlinkedFromUnfitParents(new Set([row.tempId, ...(partnerOp ? [partnerOp.tempId] : [])]), 'tx.bulk.undo-split.charge.kept-unlinked');
                 lastSuggestKey = ''; // B9: invalidate suggest
             },
             visible: (row: PendingOp) => !indentedIds.has(row.tempId) && row.op === 'edit' && splitTxIdsSet.has((row as any).txId),
@@ -3211,7 +3219,7 @@
         return next.map((op) => {
             if (!addedIds.has(op.tempId) || op.chargeOf === undefined) return op;
             const owner = next.find((p) => p.tempId === op.chargeOf);
-            return owner?.op === 'edit' && owner.markedDelete ? {...op, parentUnlink: true, byParentChoice: true} : op;
+            return owner?.op === 'edit' && owner.markedDelete ? {...unlinkCharge(op, next, txStoreGet), byParentChoice: true} : op;
         });
     }
 
@@ -3277,6 +3285,7 @@
         }
         if (Array.isArray(payload._charges)) {
             const deps = {
+                get: txStoreGet,
                 editOpFromTx: (id: number) => (txStoreGet(id) ? editOpFromTx(id) : null),
                 newChargeOp: (draft: ChargeDraft, parent: PendingOp): PendingOp => ({
                     op: 'create',
@@ -3306,13 +3315,10 @@
             if (ops.some((o) => o.chargeOf === parentTempId && !underBefore.has(o.tempId) && isUnderParent(o, ops))) openGroup(parentTempId);
         }
         if (payload._parent_unlink === true) {
-            // §11.7: the charge keeps its owner (`chargeOf`); only the link goes.
-            ops = ops.map((d) => {
-                if (d.tempId !== tempId) return d;
-                const next = {...d, parentUnlink: true};
-                delete next.parentLinkId;
-                return next;
-            });
+            // §11.7: the charge keeps its owner (`chargeOf`); only the link goes. 66 C22c: a link made only here is dropped
+            // instead (`unlinkCharge`), the charge back as before it.
+            const before = ops;
+            ops = ops.map((d) => (d.tempId === tempId ? unlinkCharge(d, before, txStoreGet) : d));
         }
         if (typeof payload._parent_link === 'number') {
             const parentId = payload._parent_link;

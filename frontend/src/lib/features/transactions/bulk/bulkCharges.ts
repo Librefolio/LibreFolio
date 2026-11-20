@@ -32,6 +32,8 @@ export interface ChargeDraftDeps {
     editOpFromTx: (id: number) => PendingOp | null;
     /** A create for a new charge typed in the parent's form. */
     newChargeOp: (draft: ChargeDraft, parent: PendingOp) => PendingOp;
+    /** 66 C22c: the store, for `unlinkCharge` (a link made here undone back to what it was before it). */
+    get: StoreGet;
 }
 
 function isChargeType(type: string): type is ChargeType {
@@ -67,6 +69,34 @@ export interface ChargeLinkRow {
 function ownerOf<R extends ChargeLinkRow>(op: R, ops: readonly R[]): R | undefined {
     if (op.chargeOf === undefined) return undefined;
     return ops.find((other) => other.tempId === op.chargeOf && other !== op);
+}
+
+/**
+ * 66 C22c: a charge's link undone — the one rule of every path that unlinks a charge (a reset or «Undo split» that makes
+ * its parent a leg again, a restore under a parent still «del», «unlink» in its Form or in its parent's Form, «Keep» on
+ * a parent's delete). Undoing a link brings the charge back to what it was before that link; `parentUnlink` («unlink»,
+ * which sends `parent_transaction_id: 0`) cuts only a SAVED link:
+ *   - its saved parent is its current owner (`chargeOf`, or `parentLinkId` naming it) → `parentUnlink`, the owner kept;
+ *   - it has a saved parent, but another owner now (unlinked from the saved one, then linked here: «Link» refuses a
+ *     charge that still has a parent) → `parentUnlink`, the link made here dropped: unlinked from its saved parent, as
+ *     before that link — under that parent again when the Bulk holds it, as it was;
+ *   - no saved parent (a link made only in this Bulk, or a new charge) → the link dropped and nothing else: the charge
+ *     is back as saved, with no «unlink» badge and nothing to send about a parent (F7 §12.6, F7-d). A new charge that
+ *     followed its parent keeps the parent's broker, asset and date as its own, as «Keep» on a parent's delete does.
+ * Pure: returns a new operation.
+ */
+export function unlinkCharge(op: PendingOp, ops: readonly PendingOp[], get: StoreGet): PendingOp {
+    const saved = savedParentId(op, get);
+    const owner = ownerOf(op, ops);
+    if (saved === null) {
+        const own = without(op, 'chargeOf', 'parentLinkId', 'parentUnlink', 'followsParent', 'byParentChoice');
+        if (op.op !== 'create' || !op.followsParent || !owner) return own;
+        const {broker_id, asset_id, date} = owner.fields;
+        return {...own, fields: {...own.fields, broker_id, asset_id, date}} as PendingOp;
+    }
+    const savedOwner = owner?.op === 'edit' && owner.txId === saved ? owner : ops.find((other) => other !== op && other.op === 'edit' && other.txId === saved);
+    const unlinked = {...without(op, 'chargeOf', 'parentLinkId', 'followsParent'), parentUnlink: true} as PendingOp;
+    return savedOwner ? ({...unlinked, chargeOf: savedOwner.tempId} as PendingOp) : unlinked;
 }
 
 /**
@@ -229,7 +259,7 @@ export function applyChargeDrafts(parent: PendingOp, ops: readonly PendingOp[], 
             // Never linked to this parent: unlinking it undoes the link made here, nothing more.
             if (at >= 0) {
                 handled.add(out[at].tempId);
-                if (out[at].chargeOf === parent.tempId) out[at] = without(out[at], 'chargeOf');
+                if (out[at].chargeOf === parent.tempId) out[at] = unlinkCharge(out[at], out, deps.get);
             }
             continue;
         }
@@ -245,6 +275,7 @@ export function applyChargeDrafts(parent: PendingOp, ops: readonly PendingOp[], 
         if (draft.state === 'delete') {
             out[at] = {...without(valued, 'parentUnlink', 'parentLinkId'), chargeOf: parent.tempId, markedDelete: true} as PendingOp;
         } else if (draft.state === 'unlink') {
+            // Not a `linkNew`: this parent is the charge's saved one, so «unlink» cuts a saved link (`unlinkCharge`'s first case).
             out[at] = {...without(valued, 'parentLinkId'), chargeOf: parent.tempId, markedDelete: false, parentUnlink: true} as PendingOp;
         } else {
             out[at] = {...without(valued, 'parentUnlink', 'parentLinkId'), chargeOf: parent.tempId, markedDelete: false} as PendingOp;
@@ -256,7 +287,7 @@ export function applyChargeDrafts(parent: PendingOp, ops: readonly PendingOp[], 
         if (op.chargeOf !== parent.tempId || handled.has(op.tempId) || op === parent) return [op];
         if (op.op === 'create') return [];
         if (!isChargeType(op.fields.type)) return [op];
-        return [without(op, 'chargeOf')];
+        return [unlinkCharge(op, out, deps.get)];
     });
 }
 
@@ -431,9 +462,9 @@ export function applyDeleteChoice(ops: readonly PendingOp[], plan: BulkDeletePla
             if (choice === 'all') {
                 replaced.set(charge.tempId, {...without(charge, 'parentUnlink'), markedDelete: true, byParentChoice: true} as PendingOp);
             } else if (savedParentId(charge, get) !== parent.txId) {
-                replaced.set(charge.tempId, without(charge, 'chargeOf'));
+                replaced.set(charge.tempId, unlinkCharge(charge, ops, get));
             } else {
-                replaced.set(charge.tempId, {...charge, parentUnlink: true, byParentChoice: true});
+                replaced.set(charge.tempId, {...unlinkCharge(charge, ops, get), byParentChoice: true});
             }
         }
     }
@@ -447,7 +478,7 @@ export function applyDeleteChoice(ops: readonly PendingOp[], plan: BulkDeletePla
         }
         const owner = op.chargeOf !== undefined ? ops.find((o) => o.tempId === op.chargeOf) : undefined;
         const ownerStaysDeleted = owner?.op === 'edit' && owner.markedDelete && !restored.has(owner.tempId);
-        replaced.set(tempId, ownerStaysDeleted ? ({...op, markedDelete: false, parentUnlink: true} as PendingOp) : {...op, markedDelete: false});
+        replaced.set(tempId, ownerStaysDeleted ? unlinkCharge({...op, markedDelete: false} as PendingOp, ops, get) : {...op, markedDelete: false});
         for (const charge of ops) {
             if (charge.chargeOf !== tempId || !charge.byParentChoice || charge.op !== 'edit' || replaced.has(charge.tempId)) continue;
             replaced.set(charge.tempId, {...without(charge, 'parentUnlink', 'byParentChoice'), markedDelete: false} as PendingOp);
