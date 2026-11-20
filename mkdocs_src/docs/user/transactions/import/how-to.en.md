@@ -182,7 +182,12 @@ Open the one the wizard shows you:
     - **Correct it**: pick the type and, where it applies, the security and the quantity, then
       **Apply correction**. A fee or tax may belong to **No instrument (broker charge)**.
     - **Split it**: separate the price from the commissions, taxes or accrued interest shown on your
-      contract note.
+      contract note. Each charge becomes a **Fee** or a **Tax** (accrued interest is a **Fee**)
+      [linked to the trade](../form.md#linked-charges): in the bulk editor it waits under the trade,
+      in a closed group whose **N charges** chip opens it
+      ([Linked charges in the workspace](../index.md#bulk-linked-charges)), and it stays linked once
+      saved. If you untick the trade in **Review**, or it is unticked there as a duplicate, its charges
+      arrive as rows of their own. An import never links rows you saved before.
     - **Keep as recorded**: accept what the importer read.
 
     **Row N in the file** shows the original line, and **Restore** undoes an answer. **Continue** waits

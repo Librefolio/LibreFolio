@@ -113,6 +113,8 @@ The files give **one total per trade**, commission included, so the **Correction
 - **Separate the price from the charges?**, then **Apply correction** — for a security priced in euro, LibreFolio suggests the likely commission; the exact figure is on the trade confirmation in eBanking;
 - or **Keep as recorded**: the trade keeps its whole amount (your cash is right either way).
 
+Once separated, each charge is a **Fee** or a **Tax** [linked to its trade](../form.md#linked-charges): in the editor it sits under the trade, in a closed group behind the **N charges** chip, and it stays linked when you save.
+
 Each trade needs a choice; **Keep the remaining N rows as read** settles the rest in one click.
 
 ### ✂️ Demergers {: #demergers }
