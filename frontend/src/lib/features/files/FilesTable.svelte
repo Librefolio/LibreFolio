@@ -54,9 +54,14 @@
         onSelectionChange?: (selectedIds: string[]) => void;
         /** Static files: called with the scope a file should get (share with everyone, or make personal) */
         onScopeChange?: (file: UploadedFile, scope: UploadScope) => void;
+        /**
+         * 77 SEL-A: the actions of the shared selection panel (the bar at the top of the table, the dock at its bottom).
+         * Given, the table draws them; absent, nothing changes (the page or the window draws its own bar).
+         */
+        selectionActions?: BulkAction<FileData>[];
     }
 
-    let {files, type, onDelete, onPreview, onDeleteMultiple, brokers, showBrokerColumn = true, initialFilters, onFiltersChange, onSelectionChange, onScopeChange}: Props = $props();
+    let {files, type, onDelete, onPreview, onDeleteMultiple, brokers, showBrokerColumn = true, initialFilters, onFiltersChange, onSelectionChange, onScopeChange, selectionActions}: Props = $props();
 
     interface SearchUser {
         id: number;
@@ -692,7 +697,8 @@
 <div data-testid="files-table-{type}" data-users-state={userLookupState} data-busy={userLookupState === 'loading'} aria-busy={userLookupState === 'loading'}>
     <DataTable
         bind:this={dataTableRef}
-        {bulkActions}
+        bulkActions={selectionActions ?? bulkActions}
+        selectionPanel={selectionActions !== undefined}
         {columns}
         data={files}
         emptyMessage={$t('uploads.noFiles')}
