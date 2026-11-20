@@ -105,5 +105,10 @@ A simple **animated spinner** for async loading states (`ui/feedback/LoadingSpin
   a second click on the trigger, on a click outside, or 30 s after contact ends
 - `interactiveChild`: when the child is itself a button or a link, the wrapper does not add its own
   `role="button"` and tab stop
+- `openOnFocus` (off by default): the tooltip opens at once when the keyboard brings the focus inside the trigger, and
+  closes when it leaves; a focus given by a click does not open it. For an icon whose name is its tooltip (the compact
+  selection bar of a section head, 77 SEL-D2)
+- `showIf(trigger)` (absent by default): asked at the moment of opening, by every path; `false` opens nothing. The
+  selection bar uses it to name an action only while its word is hidden
 
 **Used by**: Toolbar buttons, icon-only buttons, info badges, `DocsLink`.

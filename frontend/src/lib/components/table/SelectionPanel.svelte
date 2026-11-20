@@ -54,7 +54,7 @@
 {#snippet headBar()}
     <div class="dt-head-bar">
         {#if selectedCount > 0 ? topInView : hint !== undefined}
-            <DataTableToolbar variant="top" {selectedCount} bulkActions={actions} {onClearSelection} {hint} />
+            <DataTableToolbar variant="top" inHead {selectedCount} bulkActions={actions} {onClearSelection} {hint} />
         {/if}
     </div>
 {/snippet}
@@ -88,12 +88,18 @@
         margin-bottom: 0.5rem;
     }
 
-    /* In a section's head the slot of the bar keeps the bar's height (32 px on a phone), so the head does not grow. */
+    /* A section's head is the container the bar measures (77 SEL-D2): narrow, the bar takes its compact form. */
+    .dt-selection-top.in-head {
+        container: dt-head / inline-size;
+    }
+
+    /* In a section's head the slot of the bar keeps the bar's height (32 px on a phone), so the head does not grow, and
+       never shrinks below the bar (77 SEL-D2): a bar must never cover a control of the head; the others give way. */
     .dt-head-bar {
         display: flex;
+        flex-shrink: 0;
         align-items: center;
         min-height: 2rem;
-        min-width: 0;
     }
 
     .dt-head-bar:empty {

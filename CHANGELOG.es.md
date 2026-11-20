@@ -61,9 +61,39 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Los administradores pueden mantener activos solo algunos proveedores de precios y de tipos de cambio en una instancia (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`): los demás desaparecen de listas, búsqueda, asignaciones y ajustes; las asignaciones existentes conservan sus precios guardados. MANUAL siempre está activo.
 - Búsqueda de activos: al buscar una criptomoneda en Yahoo Finance aparece también su ticker en euros (por ejemplo BTC-EUR junto a BTC-USD), para valorarla directamente en euros.
 
+#### 🎯 Reequilibrador de cartera y Asignador PAC
+
+- **Reequilibrador de cartera**, una nueva herramienta en la página Herramientas: lleva una cartera que ya tienes de vuelta hacia sus pesos objetivo. No envía órdenes.
+  - **De dónde parte:** de las posiciones que LibreFolio registra en cada bróker. Puedes cambiar una cantidad para simular otra cartera; LibreFolio no se modifica.
+  - **Brókeres:** un bróker donde tienes posiciones pero no operas cuenta como «solo posiciones», y «Añadir al plan» permite que el plan opere también allí.
+  - **Objetivos:** en porcentaje de toda la cartera, efectivo incluido. El efectivo de un bróker en una divisa puede ser una fila propia («Añadir efectivo»); el resto es «Otro efectivo», al 0 %. La columna «Ahora» muestra el peso actual de cada fila.
+  - **Estrategia:** «Solo invertir» usa el efectivo para comprar lo que está por debajo del objetivo y no vende nada; «Invertir y vender» aparece como próximamente.
+  - **Fidelidad al objetivo:** «Atento a los costes», «Equilibrado», «Fiel al objetivo», «El objetivo ante todo» o «Personalizada». Fija cuánto aceptas gastar en comisiones para devolver el dinero al objetivo, y la tabla «Coste máximo aceptable» muestra esa cifra para cada suma mal colocada.
+  - **Resultado:**
+    - el plan en el orden en que ejecutarlo: primero los depósitos, las transferencias entre brókeres y los cambios de divisa, después las compras en cada bróker;
+    - la tabla «Asignación por partida»: hoy, objetivo y después del plan, con tus límites;
+    - las cifras clave: «Vale hoy», «Valdrá después», «Dinero perdido», y la «Distancia máxima al objetivo» con la partida a la que pertenece;
+    - las exposiciones por tipo de activo, sector y país — hoy, después del plan y tu objetivo — sobre toda la cartera, efectivo incluido.
+  - **Qué tan seguro es el plan:** la búsqueda se ejecuta tres veces, y un plan se demuestra el mejor solo cuando una segunda búsqueda lo confirma. Un plan no demostrado se presenta como un óptimo local, con su margen cuando las búsquedas lo dan: el mejor plan posible debería ser como mucho esa cantidad mejor.
+- **El perfil operativo de un bróker**, en la ventana del bróker. Reúne cómo toma las órdenes (por número de unidades o por importe, con su incremento) y sus comisiones de compra y de venta (mínimo, porcentaje, máximo, parte fija), divisa por divisa, además de cómo convierte la divisa y su régimen fiscal («Administrado» o «Declarativo»).
+  - Las herramientas lo copian en un plan, donde todavía puedes cambiarlo.
+  - «Guardar en el bróker», en el editor del bróker del planificador, lleva tus cambios al bróker tras una confirmación que los enumera.
+  - API: leer y modificar un bróker llevan `operating_profile`.
+- **Límites en los objetivos**, en el Asignador PAC y en el Reequilibrador de cartera. Cada partida puede tener un mínimo y un máximo de su valor al final del plan, como importe (500) o como porcentaje del total (35 %).
+  - El efectivo de un bróker en una divisa también puede tener límites, con «Añadir efectivo»; en el PAC solo tiene límites, sin objetivo.
+  - La Revisión y el resumen cuentan las partidas con un límite.
+  - Un mínimo por encima de su máximo, o mínimos que en total superan el 100 %, se señalan antes del cálculo.
+  - Cuando los límites no dejan ningún plan, el resultado dice «Ninguna solución con estos límites» y los enumera.
+  - Cuando la búsqueda termina sin un plan dentro de los límites, el resultado lo dice, y aclara que no es una prueba de que no exista ningún plan.
+  - Cuando los límites no dejan sitio a los redondeos, el plan se encuentra contando los redondeos a su favor: respeta los límites una vez añadida la cantidad adicional que pida el resultado, si la hay, y no se demuestra que sea el mejor. Un límite de efectivo incumplido solo porque cada importe se redondea al céntimo recibe una nota con el importe.
+- **Las cifras de hoy mientras editas el plan**: el paso Objetivos muestra el total que el plan reparte (en el Reequilibrador también el peso actual de cada fila), actualizado un momento después de cada cambio.
+- **El cálculo muestra su fase** mientras esperas: «Compruebo los datos», «Construyo el modelo», «Busco el plan», «Verifico las cuentas», «Preparo el resultado», con su posición («2 de 5»).
+- **Cuando un bróker convierte la divisa en cada compra, el plan lo dice.** Cuenta una conversión por par de divisas; el bróker puede redondear cada orden por separado, así que algunos céntimos por orden pueden diferir.
+
 ### 🔄 Cambios
 
 - La lista de archivos de la importación, la ventana de archivos de importación del bróker y los **Últimos cambios** del perfil usan la misma barra de selección que las demás tablas: cada acción muestra sobre cuántas filas actúa, los archivos del bróker se descargan juntos y las páginas del perfil pasan a la barra bajo la tabla.
+- Los **Identificadores** del activo, los sectores y países del perfil, el **Calendario de intereses** y el editor de precios, eventos y tipos usan la misma barra de selección que las demás tablas: cada acción muestra sobre cuántas filas actúa, y **Fusionar** explica por qué está desactivado en periodos no consecutivos. En una sección estrecha la barra pasa a iconos con sus números, que dicen su nombre al pasar el ratón y con el foco del teclado; en el teléfono las páginas de una tabla ya no muestran las palabras «por página».
 - El derecho especial de giro del FMI (XDR) lo ofrece ahora cada proveedor FX cuyo banco lo publica: la Banca d'Italia, el Banco Nacional de Ucrania, Norges Bank, el Banco Nacional Suizo (medias mensuales), el Banco Nacional de Rumanía, el Narodowy Bank Polski, el BCRA y el Central Bank of Nigeria se suman al BCB, Banxico y el CNB. Metales e índices quedan fuera.
 - **Reenlazar eventos** agrupa las transacciones según lo que falta (un evento encontrado, ninguno, varios), con **Vincular todas** y **Crear todos** por grupo, una sola barra de selección con los números, la acción de la fila siempre a mano y una ventana para elegir el evento cuando ese día hay varios.
 - **Lista de activos: Recargar actualiza solo los activos seleccionados**, no toda la lista.
@@ -99,6 +129,14 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Riesgo: la peor caída y la caída actual en dinero ahora dicen que son la misma caída medida sobre el valor de hoy.
 - Los análisis de riesgo publican nuevas medidas junto a las existentes: el mejor día y los 30 mejores días, la mayor subida, la proporción de días positivos, las ganancias frente a las pérdidas (Omega), la semidesviación, la profundidad media bajo el máximo, los días extremos, el día medio de subida y de bajada y la racha positiva más larga. El VaR, el CVaR y cada cifra ya publicada no cambian. Una serie que nunca ganó, o nunca perdió, ya no se marca como parcial por el mejor o peor día que le falta.
 - El número efectivo de posiciones de la pestaña Riesgo se mide solo sobre las posiciones con precio: el efectivo y las posiciones sin precios ya no lo inflan, así que nunca supera las posiciones medidas.
+
+#### 🎯 Asignador PAC y Herramientas
+
+- **Un plan cuya optimalidad no está demostrada se presenta ahora como un óptimo local.**
+- **La «Compra obligatoria» de una ruta desaparece.** Para obligar una compra, fija un mínimo en el objetivo del activo. El mínimo de la ruta solo vale si el plan compra en esa ruta.
+- **El editor del bróker del escenario usa el panel del perfil operativo**: comisiones de compra y de venta con mínimo, porcentaje, máximo y parte fija, divisa por divisa.
+- **Cuando el solver se detiene por un error numérico** tras encontrar un plan, el resultado ahora lo dice en una nota: el plan es válido y se puede ejecutar, y puede existir uno mejor.
+- En la página Herramientas, el título de una herramienta pasa a la línea siguiente entre palabras, y el enlace a la documentación queda a su lado, con su etiqueta bajo el icono.
 
 ### 🐛 Corregido
 
@@ -144,6 +182,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - `PATCH /api/v1/assets` guarda todo o nada: si un elemento tiene un problema, no se guarda nada. La respuesta añade `committed`, `issues` y `warnings` (códigos `assetNotFound`, `indexWithTransactions`, `assetNameTaken`, `patchFailed`; aviso `assetFamilyChange`). Un nombre ya usado por otro activo se indica como `assetNameTaken` en lugar de un error genérico. El nuevo `POST /api/v1/assets/validate` hace los mismos controles y nunca guarda.
 - `POST /api/v1/portfolio/lots/analysis` responde con una forma nueva: las partes que no dependen del método de emparejamiento (`asset_id`, `target_currency`, `quote_base_quantity`, `range`, `calculation_metadata`, `market_price_history`, `broker_wac_history`, `cumulative_wac_history`) quedan arriba; todo lo que viene de la reproducción de los lotes (`calculation_status`, `data_quality`, `lots`, `gantt_segments`, `custody_history`, `lot_events`, los historiales de valor, rentabilidad, precio y rendimiento, `income_events`, `economic_allocation_groups`, los huérfanos) pasa a `methods.FIFO` / `methods.LIFO`. La petición acepta `matching_methods` (por defecto `["FIFO"]`).
 - AI Export: el componente `asset.identity` pasa a la versión 2 y ya no lleva la clasificación del activo (países y sectores); un componente nuevo, `asset.profile`, lleva los datos del perfil del activo con la fecha de cada valor, dondequiera que se exporte `asset.identity`. Un prompt o una herramienta que leía la clasificación de `asset.identity` ahora la lee de `asset.profile`. Los países y sectores fijados en la 1.3 valen desde el primer día del activo en LibreFolio (su creación, su primer precio o su primera transacción), así que la exportación de un periodo pasado los sigue llevando.
+- The PAC allocator's Tool contract is now 2.0.0: a route no longer takes a required purchase (set a minimum on the target entry instead), the request names its `operation` (`plan` or `preview`), and the solution carries `plan_accounts`.
 
 ## [1.3.0] - 2026-11-10
 

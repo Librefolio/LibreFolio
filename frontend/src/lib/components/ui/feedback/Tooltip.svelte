@@ -54,10 +54,17 @@
         showDelayMs?: number;
         /** `data-testid` on the trigger wrapper, for tests that need to address this tooltip. */
         testId?: string;
+        /** Open at once when the keyboard brings the focus inside the trigger, close when it leaves (77 SEL-D2: an
+         *  icon-only button names itself through its tooltip, to the keyboard as to the pointer). A focus a click
+         *  gives is not a keyboard focus: the pointer has its own path. */
+        openOnFocus?: boolean;
+        /** Asked at the moment of opening, by every path, with the trigger: `false` opens nothing (77 SEL-D2: the name of
+         *  an icon whose word is in view beside it would only repeat it). Absent: always. */
+        showIf?: (trigger: HTMLElement) => boolean;
         children?: Snippet;
     }
 
-    let {text = '', html = '', math = false, position = 'top', maxWidth = '400px', wrapperClass = '', interactiveChild = false, showDelayMs = 500, testId = '', children}: Props = $props();
+    let {text = '', html = '', math = false, position = 'top', maxWidth = '400px', wrapperClass = '', interactiveChild = false, showDelayMs = 500, testId = '', openOnFocus = false, showIf, children}: Props = $props();
 
     let visible = $state(false);
     let tooltipElement: HTMLDivElement | undefined = $state(undefined);
@@ -136,6 +143,7 @@
 
     function show() {
         clearPendingShow();
+        if (showIf && triggerElement && !showIf(triggerElement)) return;
         visible = true;
         schedulePositionUpdate();
     }
@@ -228,6 +236,34 @@
                 pinned = true;
             }
         }
+    }
+
+    /** The pointer went down inside the trigger: the focus that follows is the click's, not the keyboard's. */
+    let pointerFocus = false;
+
+    function handlePointerDown() {
+        pointerFocus = true;
+    }
+
+    /** A browser gives a click's focus on the press, before the release: past the release the flag means nothing (and a
+     *  browser that does not focus a clicked button, as Safari, would leave it set for the next keyboard focus). */
+    function handlePointerRelease() {
+        pointerFocus = false;
+    }
+
+    function handleFocusIn() {
+        const fromPointer = pointerFocus;
+        pointerFocus = false;
+        if (!openOnFocus || fromPointer) return;
+        clearPendingHide();
+        show();
+    }
+
+    function handleFocusOut(event: FocusEvent) {
+        if (triggerElement && event.relatedTarget instanceof Node && triggerElement.contains(event.relatedTarget)) return;
+        pointerFocus = false;
+        if (!openOnFocus || pinned) return;
+        hide();
     }
 
     function handleClickOutside(event: MouseEvent) {
@@ -392,6 +428,11 @@
         onclick={(e) => {
             if (!isTouchInteraction) toggle(e);
         }}
+        onfocusin={handleFocusIn}
+        onpointerdown={handlePointerDown}
+        onpointerup={handlePointerRelease}
+        onpointercancel={handlePointerRelease}
+        onfocusout={handleFocusOut}
         onmouseenter={handlePointerEnter}
         onmouseleave={handlePointerLeave}
         ontouchstart={handleTouchStart}
@@ -410,6 +451,11 @@
             if (!isTouchInteraction) toggle(e);
         }}
         onkeydown={handleKeydown}
+        onfocusin={handleFocusIn}
+        onpointerdown={handlePointerDown}
+        onpointerup={handlePointerRelease}
+        onpointercancel={handlePointerRelease}
+        onfocusout={handleFocusOut}
         onmouseenter={handlePointerEnter}
         onmouseleave={handlePointerLeave}
         ontouchstart={handleTouchStart}
