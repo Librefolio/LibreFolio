@@ -623,3 +623,116 @@ class TestPortfolioWACSplit:
             finally:
                 problems = await _drop_wac_env(client, user_id=user_id, broker_id=broker_id, asset_id=asset_id)
         assert not problems, problems
+
+
+AFTER_RANGE = "ASSET_COST_LINKED_PARENT_AFTER_RANGE"
+
+
+async def _lots_analysis_to(client: httpx.AsyncClient, broker_id: int, asset_id: int, end: str) -> dict:
+    """``POST /portfolio/lots/analysis`` (LOT_SUMMARY, EUR, FIFO and LIFO) on this test's broker, up to ``end``."""
+    resp = await client.post(
+        f"{API_BASE}/portfolio/lots/analysis",
+        json={
+            "asset_id": asset_id,
+            "broker_ids": [broker_id],
+            "date_range": {"end": end},
+            "target_currency": "EUR",
+            "requested_analyses": ["LOT_SUMMARY"],
+            "matching_methods": ["FIFO", "LIFO"],
+        },
+        timeout=TIMEOUT,
+    )
+    assert resp.status_code == 200, f"Lots analysis failed: {resp.status_code}: {resp.text}"
+    return resp.json()
+
+
+def _groups_of(block: dict, transaction_id: int) -> list[dict]:
+    return [group for group in block["economic_allocation_groups"] or [] if transaction_id in group["source_transaction_ids"]]
+
+
+def _after_range_issues(block: dict) -> list[dict]:
+    return [issue for issue in (block["data_quality"] or {}).get("issues", []) if issue["code"] == AFTER_RANGE]
+
+
+@pytest.mark.asyncio
+class TestLinkedChargeAfterTheEnd:
+    """Project 66, M1b, on the database through the API (the only test that runs the service's read of the parents).
+
+    Lot A (BUY of 15 Jan 2026) is open; BUY B of 12 Mar 2026 has a FEE of 5 EUR dated 10 Mar, linked to it in the same
+    commit (``parent_ref``). Analysis to 11 Mar: the trades loader stops there, the parents' read finds BUY B after the
+    end, and the FEE waits — orphan in its own LINKED_TRADE group, nothing on lot A, one ASSET_COST_LINKED_PARENT_AFTER_RANGE
+    warning. Analysis to 12 Mar: the FEE is on lot B, as in M1, and nothing waits.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _server(self, test_server):
+        pass
+
+    async def _setup(self, client: httpx.AsyncClient) -> tuple[int, int, int, int, int, int]:
+        """Commit lot A, BUY B and its FEE on this test's own broker and asset; return their ids and the owner's."""
+        broker_id, asset_id = await setup_env(client)
+        user_id = await get_current_user_id(client)
+        result = await commit_batch(
+            client,
+            creates=[
+                {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "10000"}},
+                {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-15", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-03-12", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}, "ref": "b"},
+                {"broker_id": broker_id, "asset_id": asset_id, "type": "FEE", "date": "2026-03-10", "quantity": "0", "cash": {"code": "EUR", "amount": "-5"}, "parent_ref": "b"},
+            ],
+        )
+        lot_a, lot_b, fee = (_created_tx_id(result, index) for index in (1, 2, 3))
+        assert (await _read_tx(client, fee))["parent_transaction_id"] == lot_b, "precondition: the FEE is linked to BUY B"
+        return user_id, broker_id, asset_id, lot_a, lot_b, fee
+
+    async def test_a_fee_linked_to_a_buy_after_date_to_waits_orphan_with_its_warning(self):
+        print_section("M1b: FEE linked to a BUY after date_to")
+        async with httpx.AsyncClient() as client:
+            user_id, broker_id, asset_id, lot_a, lot_b, fee = await self._setup(client)
+            try:
+                response = await _lots_analysis_to(client, broker_id, asset_id, "2026-03-11")
+                for method in ("FIFO", "LIFO"):
+                    block = response["methods"][method]
+                    lots = {lot["lot_id"]: _decimal(lot["allocated_fees"]) for lot in block["lots"] or []}
+                    assert lots == {lot_a: Decimal("0")}, (method, lots)
+
+                    groups = _groups_of(block, fee)
+                    assert len(groups) == 1, (method, block["economic_allocation_groups"])
+                    group = groups[0]
+                    assert (group["rule"], group["source_transaction_ids"], group["operation_allocations"], group["date"]) == ("LINKED_TRADE", [fee], [], "2026-03-10"), (method, group)
+                    assert (_decimal(group["native_orphan"]), _decimal(group["target_orphan"])) == (Decimal("5"), Decimal("5")), (method, group)
+                    assert _decimal(block["asset_orphan_fees"]) == Decimal("5"), method
+
+                    issues = [issue for issue in _after_range_issues(block) if issue["message_params"].get("transaction_id") == fee]
+                    assert len(issues) == 1, (method, block["data_quality"])
+                    issue = issues[0]
+                    assert (issue["severity"], issue["message_i18n_key"]) == ("warning", "dataQuality.assetCostLinkedParentAfterRange"), (method, issue)
+                    params = issue["message_params"]
+                    assert (params["broker_id"], params["economic_type"], params["as_of_date"], _decimal(params["target_amount"]), params["target_currency"]) == (broker_id, "FEE", "2026-03-10", Decimal("5"), "EUR"), (method, params)
+                    assert (params["parent_transaction_id"], params["parent_date"]) == (lot_b, "2026-03-12"), (method, params)
+                print_success("OK the FEE waits, orphan, with ASSET_COST_LINKED_PARENT_AFTER_RANGE")
+            finally:
+                problems = await _drop_wac_env(client, user_id=user_id, broker_id=broker_id, asset_id=asset_id)
+        assert not problems, problems
+
+    async def test_once_date_to_reaches_the_buy_the_fee_goes_on_its_lot(self):
+        print_section("M1b: FEE linked to a BUY on date_to")
+        async with httpx.AsyncClient() as client:
+            user_id, broker_id, asset_id, lot_a, lot_b, fee = await self._setup(client)
+            try:
+                response = await _lots_analysis_to(client, broker_id, asset_id, "2026-03-12")
+                for method in ("FIFO", "LIFO"):
+                    block = response["methods"][method]
+                    lots = {lot["lot_id"]: _decimal(lot["allocated_fees"]) for lot in block["lots"] or []}
+                    assert lots == {lot_a: Decimal("0"), lot_b: Decimal("5")}, (method, lots)
+                    groups = _groups_of(block, fee)
+                    assert len(groups) == 1, (method, block["economic_allocation_groups"])
+                    group = groups[0]
+                    assert (group["rule"], group["source_transaction_ids"]) == ("LINKED_TRADE", [fee]), (method, group)
+                    assert [(op["context"], op["operation_transaction_id"]) for op in group["operation_allocations"]] == [("OPENING", lot_b)], (method, group)
+                    assert _decimal(group["target_orphan"]) == Decimal("0"), (method, group)
+                    assert _after_range_issues(block) == [], (method, block["data_quality"])
+                print_success("OK the FEE is on lot B, no new issue")
+            finally:
+                problems = await _drop_wac_env(client, user_id=user_id, broker_id=broker_id, asset_id=asset_id)
+        assert not problems, problems
