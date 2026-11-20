@@ -21,6 +21,7 @@ import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$t
 import {t} from '$lib/i18n';
 import ProfileHarness from '../../__tests__/ProfileHarness.svelte';
 import {PlannerDraft, type DraftAsset} from '../draft.svelte';
+import {PlannerPreview, type PreviewReady} from '../preview.svelte';
 import {PAC_PLANNER_PROFILE, REBALANCER_PLANNER_PROFILE} from '../profile';
 import TargetsStep from './TargetsStep.svelte';
 
@@ -62,6 +63,25 @@ function mount(targets: [string, string, string]): PlannerDraft {
     render(ProfileHarness, {props: {profile: PAC_PLANNER_PROFILE, child: TargetsStep, childProps: {draft, accountGeneration: 0}}});
     flushSync();
     return draft;
+}
+
+/** A ready preview where «Other cash» is worth something today: the Rebalancer shows that row only then (R1-C of project 67). */
+function otherCashWorthToday(): PlannerPreview {
+    const money = {value: {kind: 'finite_decimal' as const, value: '50'}, currency: 'EUR'};
+    const numbers: PreviewReady = {
+        operation: 'preview',
+        result_state: 'preview_ready',
+        availability: 'ready',
+        valuation_currency: 'EUR',
+        total: money,
+        issues: [],
+        limit_problems: [],
+        items: [{kind: 'other_cash', value: money, weight: {kind: 'finite_decimal', value: '0.1'}}],
+    };
+    const preview = new PlannerPreview({call: vi.fn(), blocked: () => false});
+    preview.state = 'ready';
+    preview.numbers = numbers;
+    return preview;
 }
 
 const tick = (key: string) => fireEvent.click(screen.getByTestId(`dt-row-checkbox-${key}`));
@@ -108,7 +128,7 @@ describe('the targets table on the selection panel (77 SEL-D3)', () => {
         draft.addManualAccount({name: 'Bank probe', currency: 'CHF', available: '100', selected: '50'});
         draft.addAsset(asset('asset:a', 'ETF a'));
         draft.data.targets['asset:a'] = '50';
-        render(ProfileHarness, {props: {profile: REBALANCER_PLANNER_PROFILE, child: TargetsStep, childProps: {draft, accountGeneration: 0}}});
+        render(ProfileHarness, {props: {profile: REBALANCER_PLANNER_PROFILE, child: TargetsStep, childProps: {draft, accountGeneration: 0, preview: otherCashWorthToday()}}});
         flushSync();
 
         await tick('other-cash');
