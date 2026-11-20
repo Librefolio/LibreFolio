@@ -245,7 +245,11 @@ The workspace looks for the two halves of a transfer or an exchange and offers t
 * **Resets and queued merges** (66 C22): a reset brings rows back as saved, and a merge queued in `pendingPromotes` is
   not saved. `resetRows(tempIds)` (**Reset row** is `resetRows([tempId])`, **Reset selected** one call for the whole
   selection) first undoes every queued merge that touches one of the rows (`undoPendingPromote`, the partner taken
-  before the undo), then resets them, so the order of the selection never changes the outcome. **Reset all** undoes
+  before the undo), then resets them, so the order of the selection never changes the outcome. A split queued in
+  `pendingSplits` that touches one of the rows is undone the same way (66 C22b): the entry leaves the queue and both
+  halves are reset, so the pair the grid shows joined is never split by the save. A charge linked to a half while the
+  split was queued would now hang under a leg: `keepUnlinkedFromUnfitParents` also looks at the charges of the reset
+  rows, so it stays «unlink», with the `paired` toast. **Reset all** undoes
   every queued merge before it renames the rows, and empties `pendingPromotes` beside `pendingSplits`.
 * **The 💡 button** (`tx-bulk-suggest-import`, and the row action `suggest`) lists
   `importableSuggestions`: saved transactions that `POST /transactions/promote-suggest` proposes as
