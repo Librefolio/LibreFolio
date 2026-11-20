@@ -7,7 +7,7 @@ transaction type, validates against the backend while the user types, and either
 back to the bulk workspace or commits it itself.
 
 The modal owns the whole state — the draft, the validation, the handlers — and renders its
-sections through four components in `frontend/src/lib/features/transactions/form/`, which read
+sections through six components in `frontend/src/lib/features/transactions/form/`, which read
 that state as props, write back only what they bind, and call the modal's handlers:
 
 | Component | Section |
@@ -15,6 +15,8 @@ that state as props, write back only what they bind, and call the modal's handle
 | `TxFormBanners` | The inline banners: a failed commit, the validation result and its issues, the partner loading |
 | `TxFormPairSection` | The two-sided form of a pair (FX, transfer of an asset, transfer of cash): the shared fields, then **From** and **To** |
 | `TxFormSingleSection` | The one-row form: date, type, quantity and cash, asset, broker, and the cost basis of an adjustment |
+| `TxFormChargesSection` | The linked charges of a parent (a BUY, SELL, DIVIDEND, INTEREST, DEPOSIT or WITHDRAWAL): its FEE and TAX rows, «Open» on each, and the read-only total, «Total charged» or «Net received», one amount per currency (see [Linked charges](#linked-charges)) |
+| `TxFormParentSection` | «Linked to», in the form of a FEE or a TAX: the transaction it belongs to, with «Open» |
 | `TxFormOptionalSection` | The optional fields: linked event, tags, description, link id, pair partner |
 
 The header, the footer, the read-only footer and the stacked modals stay in the modal.
@@ -257,6 +259,40 @@ show it.
   (`getWacResult(editingTempId)`).
 - A `wacFxUnavailable` issue comes with a link that opens `FxSyncModal` on the missing pairs and
   dates (`handleSyncFx`).
+
+---
+
+## 💸 Linked charges {: #linked-charges }
+
+A FEE or a TAX can point at the transaction it belongs to (project 66; the backend side is in
+[Transaction Service, «Linked Charges»](../../../backend/transactions/service.md#linked-charges)).
+
+- **The model** is `form/txCharges.ts`, pure: a `ChargeDraft` per row, with a state `linked`, `unlink` or `delete`; the
+  rows from the API (`GET /transactions?parent_ids=…`, only the rows whose `parent_transaction_id` is the parent), a new
+  row, the total (`tradeTotalWithCharges` of `form/txTradeAmount.ts`, exact, per currency, never across currencies), the
+  rows without an amount, and `buildChargesBatch`, the creates, updates and deletes the batch sends.
+- **Where it can be edited.** In the app the form never saves by itself: the page opens it read-only, and an edit goes
+  through the bulk workspace, where the form hands its rows back. The section is therefore read-only unless the host
+  passes `allowChargeEdits`: then it adds, changes, unlinks and deletes rows, and «Apply» hands every draft over as
+  `_charges` (and a charge's own form hands `_parent_unlink`). The bulk workspace turns it on once it saves them.
+- **Linking what already exists** (also behind `allowChargeEdits`) reuses `bulk/TransactionPickerModal.svelte` with the
+  rows the form fetched (`rows`, plus `title`, `filterLabel`, `addLabel`, `maxSelect` and `zIndex` above the form):
+    - «Link an existing charge…», in the parent's section: the FEE and TAX rows of the same broker with no parent
+      (`GET /transactions?without_parent=true&broker_id=…`), on the parent's asset (`null` with `null`) and not already in
+      the section. Each picked row becomes a `ChargeDraft` with `linkNew` (`chargeFromPicked`), and the batch always
+      sends its link. Unlinking or trashing a picked row only takes it back out of the section: it was never linked,
+      and the picker offers it again.
+    - «Link to a transaction…», in the form of a FEE or TAX with no parent: the rows of the same broker whose type has
+      `charge_role` `parent`, on the charge's asset and not paired. One row; it shows as pending, with «Undo», and «Apply»
+      hands `_parent_link`.
+    - A failed fetch shows a toast and opens no picker. Changing the form's broker or asset drops what was picked.
+- **«Open»** (`onOpenTransaction`): the host shows the other transaction in the same modal, in the same mode, and passes
+  `highlightTxId` so the charge the user came from is highlighted in its parent's section. With unsaved changes the
+  existing discard confirmation comes first. The transactions page and the portfolio views wire it in read-only; the
+  bulk workspace wires it too, and brings the target into the batch as a row ([«Open» in the
+  workspace](../../state/transaction-draft.md#workspace-intent)).
+- **The unsaved-changes baseline** (`baselineKey()`) includes the charges; a charge row without an amount is a local
+  error that blocks «Apply».
 
 ---
 

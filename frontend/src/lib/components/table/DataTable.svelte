@@ -7,23 +7,28 @@
   - Column sorting, filtering (Excel-style), resizing
   - Sticky header and select/actions columns
   - Pagination with floating balloon
+  - The selection panel (plan 77, SEL-A, opt-in with `selectionPanel`): the bulk actions in a bar at the top of the table,
+    coming down into a dock at its bottom, above the pagination, while that top is out of view
   - Preferences saved to localStorage
   - Dark mode support
 -->
 <script generics="T" lang="ts">
-    import {onDestroy, onMount, untrack} from 'svelte';
+    import {onDestroy, onMount, untrack, type Snippet} from 'svelte';
     import {t} from '$lib/i18n';
     import {getUserStorageKey} from '$lib/utils/storage';
     import {Ban, Check, Filter} from 'lucide-svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import DataTablePagination from './DataTablePagination.svelte';
+    import DataTableToolbar from './DataTableToolbar.svelte';
+    import {selectionToolbarActions} from './selectionActions';
+    import {watchInView} from './selectionDock';
     import DataTableColumnHeader from './DataTableColumnHeader.svelte';
     import DataTableCellContent from './DataTableCellContent.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import ContextMenu from '$lib/components/ui/ContextMenu.svelte';
     import type {ContextMenuItem} from '$lib/components/ui/ContextMenu.svelte';
     import type {BulkAction, ColumnDef, ColumnWidthsState, FilterValue, FooterCellContent, FooterCells, PaginationState, RowAction, RowActions, SelectionState, SortState, VisibilityState} from './types';
-    import {compareRowsByColumn, matchesColumnFilter, reorderKeepingAbsent, withNewColumns} from './dataTableLogic';
+    import {compareRowsByColumn, matchesColumnFilter, paginateFlat, reorderKeepingAbsent, withNewColumns} from './dataTableLogic';
     import {clearTimer} from '$lib/utils/core/clearTimer';
 
     interface Props {
@@ -117,6 +122,29 @@
         alwaysShowPagination?: boolean;
         /** Optional aggregate footer. Receives selected rows, or filtered rows when nothing is selected. */
         footerCells?: FooterCells<T>;
+        /**
+         * Optional (66 F7-c1): whether a row may start a page. With it the pages come from `paginateFlat` — fixed size,
+         * but a row for which it is false joins the page of the row before it, overflowing it (a parent's charges stay
+         * on its page) — and `navigateToRowId`, `getPageRowIds` and the pager follow those pages. Without it the pages
+         * are the fixed slices they always were.
+         */
+        opensPage?: (row: T) => boolean;
+        /**
+         * 77 SEL-A: the table draws its `bulkActions` itself, through the rule of `resolveSelectionAction` (hidden, off
+         * with its reason, or on, always with the number of rows each one takes). The bar sits at the top of the table,
+         * with a hint while nothing is selected; the actions come down into the dock at the bottom — above the
+         * pagination, when the table pages — while that top is out of view (Q-SEL-8, Q-SEL-13). Off by default: tables
+         * that pass `bulkActions` today without drawing them stay as they are until their lot.
+         */
+        selectionPanel?: boolean;
+        /** The words of the top bar while nothing is selected; absent: the shared hint. */
+        selectionHint?: string;
+        /**
+         * 77 SEL-B: the caller's pager, for a table whose pages are cut outside it (`enablePagination` off: the
+         * transactions grouped with their charges). The table hosts it where its own pager would be — in the dock, under
+         * the actions, when the selection panel is on — and passes `docked`. Drawn whenever given.
+         */
+        pager?: Snippet<[boolean]>;
     }
 
     let {
@@ -166,6 +194,10 @@
         getRowHref,
         alwaysShowPagination = false,
         footerCells,
+        opensPage,
+        selectionPanel = false,
+        selectionHint,
+        pager: externalPager,
     }: Props = $props();
 
     /** Dataset used for computing filter boundaries (min/max, currency ranges). */
@@ -230,6 +262,8 @@
     // Delete confirmation modal
     let showDeleteModal = $state(false);
     let pendingBulkAction = $state<BulkAction<T> | null>(null);
+    /** The rows the pending bulk action acts on: its own part of the selection (77 SEL-A), listed and counted by the confirm. */
+    let pendingBulkRows = $state<T[]>([]);
 
     // Row action confirmation modal
     let showRowActionModal = $state(false);
@@ -374,9 +408,13 @@
         return [...filteredData].sort((a, b) => compareRowsByColumn(column, a, b, sortState!.direction));
     });
 
+    // The pages cut by `opensPage` (66 F7-c1); null without it, when the pages are fixed slices.
+    let flatPages = $derived(enablePagination && opensPage ? paginateFlat(sortedData, pagination.pageSize, opensPage) : null);
+
     // Paginated data
     let paginatedData = $derived.by(() => {
         if (!enablePagination) return sortedData;
+        if (flatPages) return flatPages[Math.min(pagination.pageIndex, flatPages.length - 1)];
         const start = pagination.pageIndex * pagination.pageSize;
         return sortedData.slice(start, start + pagination.pageSize);
     });
@@ -403,6 +441,23 @@
     );
 
     let footerSourceRows = $derived(selectedRows.length > 0 ? selectedRows : filteredData);
+
+    // ============ The selection panel (77 SEL-A) ============
+
+    let panelOn = $derived(selectionPanel && effectiveSelectionMode === 'multi');
+    /** The actions to draw, each with the rows it takes (the count chip and the numbers come from the same rows). */
+    let panelActions = $derived(panelOn ? selectionToolbarActions(bulkActions, selectedRows, handleBulkAction) : []);
+    /** The slot of the top bar, always drawn while the panel is on: what the watcher observes. */
+    let selectionTopEl = $state<HTMLDivElement | null>(null);
+    let selectionTopInView = $state(true);
+    $effect(() => {
+        if (!selectionTopEl) return;
+        return watchInView(selectionTopEl, (inView) => (selectionTopInView = inView));
+    });
+    /** The actions are in one place at a time: at the top while it is in view, in the dock otherwise. */
+    let dockHasActions = $derived(panelOn && selectedRows.length > 0 && !selectionTopInView);
+    /** Whether the table draws its pager: enabled, and more rows than the smallest page (or `alwaysShowPagination`). */
+    let showPagination = $derived(!!externalPager || (enablePagination && filteredData.length > 0 && (alwaysShowPagination || filteredData.length > Math.min(...pageSizeOptions.filter((x) => x > 0)))));
     let computedFooterCells = $derived.by<Record<string, FooterCellContent>>(() => {
         if (!footerCells) return {};
         return typeof footerCells === 'function' ? footerCells(footerSourceRows, selectedRows, visibleColumns) : footerCells;
@@ -555,28 +610,32 @@
         onSelectionChange?.([]);
     }
 
-    function handleBulkAction(action: BulkAction<T>) {
+    /** Run a bulk action on its own rows (77 SEL-A), through the confirm when it asks for one. */
+    function handleBulkAction(action: BulkAction<T>, rows: T[]) {
         if (action.requireConfirm) {
             pendingBulkAction = action;
+            pendingBulkRows = rows;
             showDeleteModal = true;
         } else {
-            action.onClick(selectedRows);
+            action.onClick(rows);
         }
     }
 
     function confirmBulkAction() {
         if (pendingBulkAction) {
-            pendingBulkAction.onClick(selectedRows);
+            pendingBulkAction.onClick(pendingBulkRows);
             rowSelection = {};
             onSelectionChange?.([]);
         }
         showDeleteModal = false;
         pendingBulkAction = null;
+        pendingBulkRows = [];
     }
 
     function cancelBulkAction() {
         showDeleteModal = false;
         pendingBulkAction = null;
+        pendingBulkRows = [];
     }
 
     // Row action handlers
@@ -874,6 +933,10 @@
     export function navigateToRowId(rowId: string, {scroll = true, highlight = true}: {scroll?: boolean; highlight?: boolean} = {}) {
         const index = sortedData.findIndex((row) => getRowId(row) === rowId);
         if (index < 0) return;
+        if (flatPages) {
+            navigateToFlatPage(flatPages, rowId, {scroll, highlight});
+            return;
+        }
         if (enablePagination) {
             const targetPage = Math.floor(index / pagination.pageSize);
             if (pagination.pageIndex !== targetPage) {
@@ -894,6 +957,21 @@
                 const rows = root.querySelectorAll('.datatable tbody tr');
                 const positionInPage = enablePagination ? index % pagination.pageSize : index;
                 const targetRow = rows[positionInPage];
+                targetRow?.scrollIntoView({behavior: 'smooth', block: 'center'});
+            });
+    }
+
+    /** `navigateToRowId` over the pages cut by `opensPage`: the page that holds the row, and that row scrolled. */
+    function navigateToFlatPage(pages: T[][], rowId: string, {scroll, highlight}: {scroll: boolean; highlight: boolean}) {
+        const targetPage = pages.findIndex((page) => page.some((row) => getRowId(row) === rowId));
+        if (targetPage >= 0 && pagination.pageIndex !== targetPage) pagination = {...pagination, pageIndex: targetPage};
+        if (highlight) highlightedRowId = rowId;
+        if (!scroll) return;
+        import('svelte')
+            .then(({tick}) => tick())
+            .then(() => {
+                const root = containerEl ?? document;
+                const targetRow = [...root.querySelectorAll('.datatable tbody tr[data-row-id]')].find((tr) => tr.getAttribute('data-row-id') === rowId);
                 targetRow?.scrollIntoView({behavior: 'smooth', block: 'center'});
             });
     }
@@ -958,6 +1036,14 @@
 </script>
 
 <div class="datatable-container" bind:this={containerEl}>
+    {#if panelOn}
+        <!-- 77 SEL-A: the bar at the top. Its slot stays (and keeps its height) while the actions are down in the dock. -->
+        <div class="dt-selection-top" bind:this={selectionTopEl} data-testid="dt-selection-top" data-in-view={selectionTopInView ? 'true' : 'false'}>
+            {#if selectedRows.length === 0 || selectionTopInView}
+                <DataTableToolbar variant="top" selectedCount={selectedRows.length} bulkActions={panelActions} onClearSelection={clearAllSelection} hint={selectionHint} />
+            {/if}
+        </div>
+    {/if}
     <!-- Table -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
@@ -1216,8 +1302,39 @@
     </div>
 
     <!-- Pagination - show only when enabled and items exceed smallest page size (or alwaysShowPagination) -->
-    {#if enablePagination && filteredData.length > 0 && (alwaysShowPagination || filteredData.length > Math.min(...pageSizeOptions.filter((x) => x > 0)))}
-        <DataTablePagination pageIndex={pagination.pageIndex} pageSize={pagination.pageSize} totalItems={filteredData.length} {pageSizeOptions} onPageChange={handlePageChange} onPageSizeChange={handlePageSizeChange} />
+    {#snippet pager(docked: boolean)}
+        {#if externalPager}
+            {@render externalPager(docked)}
+        {:else}
+            <DataTablePagination
+                pageIndex={flatPages ? Math.min(pagination.pageIndex, flatPages.length - 1) : pagination.pageIndex}
+                pageSize={pagination.pageSize}
+                totalItems={filteredData.length}
+                pageCount={flatPages?.length}
+                {pageSizeOptions}
+                {docked}
+                onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
+            />
+        {/if}
+    {/snippet}
+    {#if panelOn}
+        <!-- 77 SEL-A: the dock. The actions come down into it while the top of the table is out of view; the pager is the
+             same instance in both states (only its `docked` changes). Without either, nothing is drawn. -->
+        {#if showPagination || dockHasActions}
+            <div class="dt-dock-wrap" class:active={dockHasActions} data-testid="dt-dock" data-actions={dockHasActions ? 'true' : 'false'}>
+                <div class="dt-dock" class:active={dockHasActions}>
+                    {#if dockHasActions}
+                        <DataTableToolbar variant="dock" selectedCount={selectedRows.length} bulkActions={panelActions} onClearSelection={clearAllSelection} />
+                    {/if}
+                    {#if showPagination}
+                        {@render pager(dockHasActions)}
+                    {/if}
+                </div>
+            </div>
+        {/if}
+    {:else if showPagination}
+        {@render pager(false)}
     {/if}
 </div>
 
@@ -1230,9 +1347,9 @@
 <!-- Confirm modal for bulk actions -->
 <ConfirmModal
     danger={pendingBulkAction?.variant === 'danger'}
-    items={selectedRows.map((row) => (getRowDisplayName ? getRowDisplayName(row) : String(getRowId(row))))}
-    itemsLabel={`${selectedRows.length} ${$t('table.items')}`}
-    message={pendingBulkAction?.confirmMessage ? (typeof pendingBulkAction.confirmMessage === 'function' ? pendingBulkAction.confirmMessage(selectedRows.length) : pendingBulkAction.confirmMessage) : `${$t('table.confirmBulkAction')} ${selectedRows.length} ${$t('table.items')}?`}
+    items={pendingBulkRows.map((row) => (getRowDisplayName ? getRowDisplayName(row) : String(getRowId(row))))}
+    itemsLabel={`${pendingBulkRows.length} ${$t('table.items')}`}
+    message={pendingBulkAction?.confirmMessage ? (typeof pendingBulkAction.confirmMessage === 'function' ? pendingBulkAction.confirmMessage(pendingBulkRows.length) : pendingBulkAction.confirmMessage) : `${$t('table.confirmBulkAction')} ${pendingBulkRows.length} ${$t('table.items')}?`}
     onCancel={cancelBulkAction}
     onConfirm={confirmBulkAction}
     open={showDeleteModal}
@@ -1251,6 +1368,69 @@
 />
 
 <style>
+    /* ===== 77 SEL-A: the selection panel ===== */
+    .dt-selection-top {
+        min-height: 2rem;
+        margin-bottom: 0.5rem;
+    }
+
+    /* Without actions the dock adds nothing: the pager keeps its own sticky balloon, as without the panel. */
+    .dt-dock-wrap:not(.active) {
+        display: contents;
+    }
+
+    .dt-dock-wrap:not(.active) > .dt-dock {
+        display: contents;
+    }
+
+    /* With the actions it is the balloon: sticky at the bottom (lifted by `--lf-pager-lift` above a page's fixed panel,
+       as the pager), the actions row on top, the pager under it. */
+    .dt-dock-wrap.active {
+        position: sticky;
+        bottom: calc(1rem + var(--lf-pager-lift, 0px));
+        z-index: 30;
+        display: flex;
+        justify-content: center;
+        padding: 0.5rem 0;
+        pointer-events: none;
+    }
+
+    .dt-dock.active {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        max-width: calc(100vw - 2rem);
+        pointer-events: auto;
+        background: var(--lf-surface-card);
+        border: 1px solid var(--lf-border-raised);
+        border-radius: 16px;
+        box-shadow: 0 10px 30px -8px var(--lf-shadow-raised);
+        animation: dt-dock-rise 0.16s ease-out;
+    }
+
+    @keyframes dt-dock-rise {
+        from {
+            transform: translateY(12px);
+            opacity: 0;
+        }
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .dt-dock.active {
+            animation: none;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .dt-dock-wrap.active {
+            bottom: calc(0.5rem + var(--lf-pager-lift, 0px));
+        }
+    }
+
     .datatable-container {
         width: 100%;
         position: relative;

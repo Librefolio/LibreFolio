@@ -80,6 +80,11 @@ FAMILIES_WITHOUT_ICON: frozenset[str] = frozenset({"tool"})
 #: adds one row, or joins ``FAMILIES_WITHOUT_ICON``.
 FAMILY_ICON_ATTRIBUTES: dict[str, str] = {"asset": "get_icon", "fx": "icon", "brim": "icon_url", "enricher": "icon"}
 
+#: The attributes of a plugin instance that hold its own description (English) and its translations, per family, as its
+#: family's list publishes them (project 76, S2a: the search of the Plugins tab reads them). A price source and an enricher
+#: have none of their own: their lists compose a generic text, which says nothing to search for.
+FAMILY_DESCRIPTION_ATTRIBUTES: dict[str, tuple[str, str | None]] = {"fx": ("description", "description_i18n"), "brim": ("description", None)}
+
 
 class PluginSettingsRefused(Exception):
     """At least one item of a write is refused: nothing was written. ``results`` holds every item's outcome."""
@@ -104,6 +109,8 @@ class _Plugin:
     plugin_class: type
     name: str
     icon_url: str | None
+    description: str | None = None
+    description_i18n: dict[str, str] | None = None
 
     @property
     def fields(self) -> tuple[PluginSettingField, ...]:
@@ -115,6 +122,11 @@ class _Plugin:
 
 
 def _plugin_identity(family: str, plugin_class: type, code: str) -> tuple[str, str | None]:
+    """The plugin's name and icon URL (``_plugin_read`` without the description)."""
+    return _plugin_read(family, plugin_class, code)[:2]
+
+
+def _plugin_read(family: str, plugin_class: type, code: str) -> tuple[str, str | None, str | None, dict[str, str]]:
     """The plugin's name and icon URL, read from one instance as its family's provider list reads them.
 
     A plugin that cannot be instantiated shows its code and no icon. The name is ``provider_name``, else ``name``, else
@@ -125,11 +137,11 @@ def _plugin_identity(family: str, plugin_class: type, code: str) -> tuple[str, s
     """
     if family == "tool":
         service = next((candidate for candidate in getattr(plugin_class, "services", ()) if candidate.tool_code == code), None)
-        return (service.name if service is not None else code), None
+        return (service.name if service is not None else code), None, None, {}
     try:
         instance = plugin_class()
     except Exception:  # noqa: BLE001 — a plugin that cannot be instantiated still has a code to show
-        return code, None
+        return code, None, None, {}
     try:
         name = getattr(instance, "provider_name", None) or getattr(instance, "name", None) or code
     except Exception:  # noqa: BLE001 — a name that cannot be read: the code stands for it
@@ -139,7 +151,25 @@ def _plugin_identity(family: str, plugin_class: type, code: str) -> tuple[str, s
         icon = getattr(instance, attribute, None) if attribute else None
     except Exception:  # noqa: BLE001 — an icon is decoration: one that cannot be read is none
         icon = None
-    return name, icon.strip() if isinstance(icon, str) and icon.strip() else None
+    description, translations = _plugin_description(family, instance)
+    return name, icon.strip() if isinstance(icon, str) and icon.strip() else None, description, translations
+
+
+def _plugin_description(family: str, instance: object) -> tuple[str | None, dict[str, str]]:
+    """The plugin's own description and its translations, as ``FAMILY_DESCRIPTION_ATTRIBUTES`` names them; none for a
+    family without one. A text that cannot be read, or is not a non-empty string, is none: the catalogue never fails
+    because of it, as for the icon."""
+    text_attribute, translations_attribute = FAMILY_DESCRIPTION_ATTRIBUTES.get(family, (None, None))
+    try:
+        text = getattr(instance, text_attribute, None) if text_attribute else None
+    except Exception:  # noqa: BLE001 — a description is a search aid: one that cannot be read is none
+        text = None
+    try:
+        raw = getattr(instance, translations_attribute, None) if translations_attribute else None
+    except Exception:  # noqa: BLE001 — as above
+        raw = None
+    translations = {lang: value.strip() for lang, value in raw.items() if isinstance(lang, str) and isinstance(value, str) and value.strip()} if isinstance(raw, dict) else {}
+    return (text.strip() if isinstance(text, str) and text.strip() else None), translations
 
 
 def _plugins(family: str | None, plugin_code: str | None) -> Iterator[_Plugin]:
@@ -156,7 +186,7 @@ def _plugins(family: str | None, plugin_code: str | None) -> Iterator[_Plugin]:
                 continue
             if getattr(plugin_class, "test_only", False) and plugin_code is None:
                 continue
-            yield _Plugin(name, code, plugin_class, *_plugin_identity(name, plugin_class, code))
+            yield _Plugin(name, code, plugin_class, *_plugin_read(name, plugin_class, code))
 
 
 def _find_plugin(family: str, plugin_code: str) -> _Plugin | None:
@@ -345,7 +375,21 @@ async def read_catalogue(session: AsyncSession, user: User, *, family: str | Non
             # Judged on every field, the hidden ones and the groups' too: a yes or no, which names none of them (decision N2).
             # U5b: the reason is the boundary's own (readiness.readiness_reason), never one the interface guesses
             reason = readiness_reason(states, {name: group_states[name] for name in read})
-            entries.append(PluginSettingsPluginRead(family=plugin.family, plugin_code=plugin.code, plugin_name=plugin.name, icon_url=plugin.icon_url, configured=reason is None, fields=fields, groups=names, call_usage=usage, reason=reason))
+            entries.append(
+                PluginSettingsPluginRead(
+                    family=plugin.family,
+                    plugin_code=plugin.code,
+                    plugin_name=plugin.name,
+                    icon_url=plugin.icon_url,
+                    configured=reason is None,
+                    fields=fields,
+                    groups=names,
+                    call_usage=usage,
+                    reason=reason,
+                    description=plugin.description,
+                    description_i18n=plugin.description_i18n or {},
+                )
+            )
     for group in groups:
         states = group_states[group.name]
         fields = [_field_read(state, is_admin=user.is_superuser) for state in states if not (managed and state.locked)]
@@ -359,6 +403,8 @@ async def read_catalogue(session: AsyncSession, user: User, *, family: str | Non
                     plugin_name=group.label,
                     name_key=group.label_key,
                     icon_url=icon,
+                    description=group.description.strip() or None,
+                    description_key=group.description_key,
                     configured=not missing_field_keys(states),
                     fields=fields,
                     used_by=used_by,

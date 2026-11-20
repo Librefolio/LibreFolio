@@ -113,8 +113,10 @@ RESETS = {
 #: The shipped providers that reach an external service, and those that do not (U2/U3 pins of their flags).
 ASSET_CALLING = ("yfinance", "justetf", "borsa_italiana", "css_scraper")
 ASSET_LOCAL = ("scheduled_investment", "mockprov")
-FX_CALLING = ("ECB", "FED", "BOE", "SNB", "BDI", "BCB", "NORGES", "NBU", "BOC")
+FX_CALLING = ("ECB", "FED", "BOE", "SNB", "BDI", "BCB", "NORGES", "NBU", "BOC", "BANXICO", "CNB", "SARB", "BCRP", "TRM", "CBC", "CBK", "CBN", "RBI", "BOG", "BCRA", "BNR", "BOI", "NBP", "BOK")
 FX_LOCAL = ("MANUAL", "MOCKFX", "MOCKFX_FAIL")
+#: The calling FX providers with a required field of their own (BANXICO's token, lane 75 L21; BOK's key, L26): they may be unconfigured.
+FX_KEYED = ("BANXICO", "BOK")
 MOCKCOUNT_MODULE = "backend.app.services.asset_source_providers.mockcount.plugin"
 YF_DAY_VARIABLE = env_name("asset", "yfinance", "call_limit_day")
 YF_HOUR_VARIABLE = env_name("asset", "yfinance", "call_limit_hour")
@@ -363,7 +365,9 @@ def _counter_selects(engine: AsyncEngine) -> tuple[list[str], Any]:
 
 def test_u4_the_core_declares_five_optional_integer_limit_fields():
     """1: the keys in window order; each field an optional system integer, no default, minimum 0, never secret, the
-    English label «Calls per <window>», a description, no i18n key yet; valid for every family that holds settings."""
+    English label «Calls per <window>», a description, and since S2a (project 76, search) their i18n keys
+    ``pluginSettings.calls.limitField.<window>.label`` / ``.description``, so the search finds «Limite giornaliero»;
+    valid for every family that holds settings."""
     print_section("U4 1: the core fields")
     from backend.app.services.plugin_settings import call_limits
 
@@ -376,7 +380,8 @@ def test_u4_the_core_declares_five_optional_integer_limit_fields():
         assert shape == (SettingType.INTEGER, SettingScope.SYSTEM, False, None, 0, None, False, None), f"{declared.key}: {shape}"
         assert declared.label == LABELS[declared.key]
         assert isinstance(declared.description, str) and declared.description.strip(), f"{declared.key}: no description"
-        assert (declared.label_key, declared.description_key) == (None, None), "i18n keys come with U5's interface"
+        window = declared.key.removeprefix("call_limit_")
+        assert (declared.label_key, declared.description_key) == (f"pluginSettings.calls.limitField.{window}.label", f"pluginSettings.calls.limitField.{window}.description"), declared.key
     for family in ("asset", "fx", "group"):
         validate_declaration(fields, family=family)
     print_success("five fields, valid for asset, fx and group")
@@ -720,7 +725,8 @@ def test_u4_plugin_may_be_unconfigured_is_true_only_for_a_group_a_required_field
 
 def test_u4_the_shipped_providers_with_only_optional_fields_are_cleared(discovered: None, monkeypatch: pytest.MonkeyPatch):
     """5: every shipped calling provider (core fields, and optional user fields of justetf and borsa_italiana) → False;
-    mockprov, which reads a group, → True; yfinance with its day limit variable set (even invalid) → True."""
+    BANXICO, whose token is required, and mockprov, which reads a group, → True; yfinance with its day limit variable
+    set (even invalid) → True."""
     from backend.app.services.plugin_settings.readiness import plugin_may_be_unconfigured
 
     asset_storage, fx_storage = AssetProviderRegistry._get_storage(), FXProviderRegistry._get_storage()
@@ -728,7 +734,7 @@ def test_u4_the_shipped_providers_with_only_optional_fields_are_cleared(discover
     for code in ASSET_CALLING:
         assert plugin_may_be_unconfigured("asset", code, asset_storage[code]) is False, f"asset/{code}"
     for code in FX_CALLING:
-        assert plugin_may_be_unconfigured("fx", code, fx_storage[code]) is False, f"fx/{code}"
+        assert plugin_may_be_unconfigured("fx", code, fx_storage[code]) is (code in FX_KEYED), f"fx/{code}"
     assert plugin_may_be_unconfigured("asset", "mockprov", asset_storage["mockprov"]) is True
     monkeypatch.setenv(YF_DAY_VARIABLE, "abc")
     assert plugin_may_be_unconfigured("asset", "yfinance", asset_storage["yfinance"]) is True

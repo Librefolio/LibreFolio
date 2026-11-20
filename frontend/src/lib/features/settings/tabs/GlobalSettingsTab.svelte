@@ -1,13 +1,12 @@
 <script lang="ts">
     import {_, LANGUAGE_OPTIONS} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/app/language';
-    import {isOutsideClick} from '$lib/utils/core/clickOutside';
     import {zodiosApi} from '$lib/api';
     import {isAxiosError} from 'axios';
-    import {onDestroy, onMount, tick} from 'svelte';
+    import {onMount, tick} from 'svelte';
     import {page} from '$app/stores';
     import {debug} from '$lib/debug';
-    import {BarChart3, ChevronDown, ChevronRight, CircleEllipsis, Clock, Database, Lock, RefreshCw, Settings, Shield, ShieldOff, Unlock, Users} from 'lucide-svelte';
+    import {BarChart3, CircleEllipsis, Clock, Database, Lock, RefreshCw, Settings, Shield, ShieldOff, Unlock, Users} from 'lucide-svelte';
     import {type SelectOption} from '$lib/components/ui/select';
     import {LINE_SHAPES} from '$lib/components/charts/lineShape';
     import type {GlobalSetting} from '$lib/types';
@@ -24,6 +23,7 @@
     import SettingTheme from '$lib/features/settings/SettingTheme.svelte';
     import SettingActions from '$lib/features/settings/SettingActions.svelte';
     import SettingBulkActions from '$lib/features/settings/SettingBulkActions.svelte';
+    import SettingsCategoryNav from '$lib/features/settings/SettingsCategoryNav.svelte';
     import SchedulerConfigModal from '$lib/features/settings/SchedulerConfigModal.svelte';
     import SchedulerLogModal from '$lib/features/settings/SchedulerLogModal.svelte';
     import CachePanel from '$lib/features/settings/CachePanel.svelte';
@@ -481,136 +481,20 @@
                 }),
     );
 
-    // Mobile dropdown state
-    let showDropdown = $state(false);
-    let dropdownRef: HTMLDivElement | null = $state(null);
-
     // Get selected category label for mobile display
     let selectedCategoryLabel = $derived(categoryLabels[selectedCategory] ?? selectedCategory);
 
     // Get selected category icon
     let SelectedCategoryIcon = $derived(selectedCategory === 'all' ? null : visibleCategories.find((c) => c.id === selectedCategory)?.icon || null);
 
-    function toggleDropdown() {
-        showDropdown = !showDropdown;
-    }
-
-    function selectCategoryMobile(id: string) {
-        selectedCategory = id;
-        showDropdown = false;
-    }
-
-    // Close dropdown on click outside
-    function handleClickOutside(event: MouseEvent) {
-        if (isOutsideClick(event.target, (el) => !dropdownRef || dropdownRef.contains(el))) {
-            showDropdown = false;
-        }
-    }
-
-    onMount(() => {
-        document.addEventListener('click', handleClickOutside);
-    });
-
-    onDestroy(() => {
-        document.removeEventListener('click', handleClickOutside);
-    });
+    // «All» and every visible category, as the shared menu draws them (project 76, S1a); the labels follow the language
+    let navEntries = $derived([{id: 'all', label: categoryLabels['all'] ?? ''}, ...visibleCategories.map((cat) => ({id: cat.id, icon: cat.icon, label: categoryLabels[cat.id] ?? cat.id}))]);
 </script>
 
-<!-- Mobile: Custom dropdown category selector -->
-<div bind:this={dropdownRef} class="sm:hidden mb-4 text-lf-primary">
-    <span class="block text-sm font-medium text-lf-secondary mb-2">
-        {$_('settings.category')}
-    </span>
-    <div class="relative">
-        <button
-            class="w-full flex items-center justify-between px-4 py-3 border border-lf-input
-                   rounded-lg bg-lf-field text-lf-primary hover:border-lf-input-hover text-sm
-                   focus:ring-2 focus:ring-lf-focus focus:border-lf-focus transition-all"
-            onclick={toggleDropdown}
-            type="button"
-            data-testid="global-settings-mobile-category-trigger"
-        >
-            <span class="flex items-center gap-2">
-                {#if SelectedCategoryIcon}
-                    <SelectedCategoryIcon size={16} class="text-lf-muted" />
-                {/if}
-                {selectedCategoryLabel}
-            </span>
-            <ChevronDown class="text-lf-muted transition-transform {showDropdown ? 'rotate-180' : ''}" size={18} />
-        </button>
-
-        {#if showDropdown}
-            <div
-                class="absolute top-full left-0 right-0 mt-1 bg-lf-card border border-lf-raised
-                        rounded-lg shadow-lg shadow-lf-shadow overflow-hidden z-50"
-                data-testid="global-settings-mobile-category-menu"
-            >
-                <!-- All Settings option -->
-                <button
-                    type="button"
-                    onclick={() => selectCategoryMobile('all')}
-                    data-testid="global-settings-mobile-category-all"
-                    class="w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors
-                           {selectedCategory === 'all' ? 'bg-lf-selected text-lf-link font-medium' : 'text-lf-secondary hover:bg-lf-hover'}"
-                >
-                    <span class="flex-1">{categoryLabels['all'] ?? ''}</span>
-                    {#if selectedCategory === 'all'}
-                        <ChevronRight size={16} />
-                    {/if}
-                </button>
-
-                <!-- Category options -->
-                {#each visibleCategories as cat (cat.id)}
-                    <button
-                        type="button"
-                        onclick={() => selectCategoryMobile(cat.id)}
-                        data-testid="global-settings-mobile-category-{cat.id}"
-                        class="w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors
-                               {selectedCategory === cat.id ? 'bg-lf-selected text-lf-link font-medium' : 'text-lf-secondary hover:bg-lf-hover'}"
-                    >
-                        <cat.icon size={16} class={selectedCategory === cat.id ? 'text-lf-link' : 'text-lf-muted'} />
-                        <span class="flex-1">{categoryLabels[cat.id] ?? cat.id}</span>
-                        {#if selectedCategory === cat.id}
-                            <ChevronRight size={16} />
-                        {/if}
-                    </button>
-                {/each}
-            </div>
-        {/if}
-    </div>
-</div>
+<SettingsCategoryNav entries={navEntries} mode="phone" onselect={(id) => (selectedCategory = id)} selected={selectedCategory} testIdPrefix="global-settings" triggerIcon={SelectedCategoryIcon} triggerLabel={selectedCategoryLabel} />
 
 <div class="flex flex-col sm:flex-row gap-4 sm:gap-6 min-h-[300px] sm:min-h-[400px] text-lf-primary" data-testid="global-settings-tab" data-busy={isLoading || isSaving ? 'true' : 'false'} aria-busy={isLoading || isSaving}>
-    <!-- Left sidebar: Category navigation (hidden on mobile) -->
-    <div class="hidden sm:block w-48 flex-shrink-0">
-        <nav class="space-y-1">
-            <button
-                class="w-full flex items-center px-3 py-2 text-sm rounded-lg transition-colors
-                    {selectedCategory === 'all' ? 'bg-lf-checked text-lf-on-checked' : 'text-lf-secondary hover:bg-lf-hover'}"
-                onclick={() => (selectedCategory = 'all')}
-            >
-                <span class="flex-1 text-left">{categoryLabels['all'] ?? ''}</span>
-                {#if selectedCategory === 'all'}
-                    <ChevronRight size={16} />
-                {/if}
-            </button>
-
-            {#each visibleCategories as cat}
-                <button
-                    onclick={() => (selectedCategory = cat.id)}
-                    data-testid="global-settings-category-{cat.id}"
-                    class="w-full flex items-center px-3 py-2 text-sm rounded-lg transition-colors
-                        {selectedCategory === cat.id ? 'bg-lf-checked text-lf-on-checked' : 'text-lf-secondary hover:bg-lf-hover'}"
-                >
-                    <cat.icon size={16} class="mr-2" />
-                    <span class="flex-1 text-left">{categoryLabels[cat.id] ?? cat.id}</span>
-                    {#if selectedCategory === cat.id}
-                        <ChevronRight size={16} />
-                    {/if}
-                </button>
-            {/each}
-        </nav>
-    </div>
+    <SettingsCategoryNav entries={navEntries} mode="sidebar" onselect={(id) => (selectedCategory = id)} selected={selectedCategory} testIdPrefix="global-settings" />
 
     <!-- Right side: Settings content -->
     <div class="flex-1 space-y-4">

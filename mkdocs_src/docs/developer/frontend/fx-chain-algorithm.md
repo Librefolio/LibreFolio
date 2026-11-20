@@ -266,11 +266,51 @@ With $N$ = number of currencies, $E$ = number of edges, $D$ = `maxDepth`:
 | Metric | Value | Notes |
 |:-------|:------|:------|
 | Time (worst case) | $O(E^D)$ | Exponential in depth, but $D=4$ is small |
-| Time (practical) | **< 1ms** | ~4 providers × ~25 currencies, ~200 edges |
+| Time (practical) | **a few ms** with the depth rule | wave-2 catalogue, ~180 currencies, ~990 edges: 0.2–2 ms for most pairs, ~30 ms at worst (a pair with one level only, whose level detection searches up to 4) |
 | Space | $O(D)$ | Path stack depth (recursive DFS) |
 | Output | Sorted by length | Shortest paths first |
 
-The graph is small enough that Web Worker parallelization is not needed. Profiling shows sub-millisecond execution even with all providers enabled.
+The walk prunes every branch that cannot reach the target in the steps left (a BFS from the target, `distancesTo`,
+lane 75 L2b). Even so, the number of chains grows with the catalogue: with the central banks of wave 2 a pair of major
+currencies has about 200 000 chains at depth 4 (EUR→USD: 201 625, 140–175 ms to build), almost all of 4 steps. Hence the
+depth rule and the worker below.
+
+## 🎚️ How Deep the Route Picker Searches (decision Q6)
+
+The route picker does not search at a fixed depth. `findRoutePaths()` (`currencyGraph.ts`) finds the **first level**
+(chain length) that holds a chain, then searches **up to the next level with chains**:
+
+| Shortest chain | The picker offers |
+|:---------------|:------------------|
+| Direct (1 step) | 1 and 2 steps |
+| 2 steps | 2 and 3 steps |
+| 3 steps | 3 and 4 steps |
+| Direct, none at 2 (a gap) | 1 step and the first level after the gap (3, else 4) |
+| One level only | That level (the search goes up to the cap, 4) |
+
+- **The cap stays 4** (`ROUTE_DEPTH_CAP`).
+- **Levels without building chains:** `hasChainOfLength()` answers whether a level holds a chain and stops at the first
+  one, so detecting the levels never costs the chains of a level. It uses the same constraints as `findAllPaths()`
+  (simple paths, a provider at most twice): the BFS distance alone ignores the provider limit.
+- **Levels on the configured providers:** `routeSearchDepth()` reads the levels on the graph of the providers that are
+  configured (`configured !== false`). A pair whose only short chains go through a provider still to configure (a
+  missing API key) keeps its longer usable chains. The routes offered are taken from the full graph up to that depth, so
+  the routes to configure still show (dimmed). When the configured providers join the pair by no chain at all, the
+  levels come from the full graph.
+- **Why:** every extra step is one more conversion, with its rounding, and one more source that must publish on the
+  same day. With BDI and BCB almost every pair has a route of 1–2 steps; the 4-step chains were 97% of the total.
+
+Measured on the synthetic wave-2 catalogue (`currencyGraph.scale.test.ts`, block «depth rule»): EUR→USD offers 329
+chains (4 direct, 325 of 2 steps) instead of 201 625.
+
+## 🧵 The Search Runs in a Web Worker
+
+`findConversionPaths()` (`currencyGraphStore.ts`) sends the providers (code, currencies, `configured`) and the currency
+codes to `workers/currencyRoutes.worker.ts` through one `WorkerPool` (`workers/currencyRoutesPool.ts`, pool size 1).
+The worker builds the full and the configured graph for every request (about 1 ms) and answers `findRoutePaths()`: the
+page never waits on the search, and a provider configured in the meantime counts at the next search. Where no `Worker`
+exists (SSR, the node test environment) the same function runs in the current thread. `FxProviderSelect` draws only
+the answer of its latest request: a pair changed while a search ran never shows the routes of the old one.
 
 ## Session-Level Caching
 

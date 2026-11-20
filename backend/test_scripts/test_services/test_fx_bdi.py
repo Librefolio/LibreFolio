@@ -31,6 +31,7 @@ import httpx
 import pytest
 from structlog.testing import capture_logs
 
+from backend.app.config import PROJECT_ROOT
 from backend.app.services.fx.base import FXRateLimitedError
 from backend.app.services.fx_providers.bdi import plugin as bdi_mod
 from backend.app.services.fx_providers.bdi.plugin import BDIProvider
@@ -194,3 +195,14 @@ def test_bdi_identity_and_texts():
         assert set(texts) == {"en", "it", "fr", "es"} and all(texts.values())
     assert "Banca d'Italia" in provider.description_i18n["en"]
     assert "EUR" in provider.fallback_currencies and not {"XDR", "RUB"} & set(provider.fallback_currencies)
+
+
+def test_bdi_icon_is_our_own_static_file():
+    """Banca d'Italia's favicon is served with ``Cross-Origin-Resource-Policy: same-origin`` (19/11/2026), so no other
+    site can show it: the provider points at our copy, ``/icons/fx/bdi.png`` (the frontend's static folder, copied into
+    the user guide by ``dev.py mkdocs build``), and the copy is a real PNG. The other FX providers keep the bank's URL."""
+    assert BDIProvider().icon == "/icons/fx/bdi.png"
+
+    icon = PROJECT_ROOT / "frontend" / "static" / "icons" / "fx" / "bdi.png"
+    assert icon.is_file(), f"missing {icon}"
+    assert icon.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n", "the icon is not a PNG"

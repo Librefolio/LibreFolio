@@ -7,8 +7,9 @@
  * an option's `label_key`); the interface never builds a key (plan 03 §4.4). A missing translation falls back to the
  * English text (`translateOr`). Every class and key below is a whole literal (theme-roles rule 6, i18n audit).
  */
-import {Briefcase, ChartColumn, Coins, IdCard, Share2, Wrench} from 'lucide-svelte';
+import {ArrowRightLeft, ChartColumn, Coins, IdCard, Share2, SlidersHorizontal, Wrench} from 'lucide-svelte';
 import {translateOr, type Translate} from '$lib/utils/core/translateOr';
+import {settingsTabHref} from '$lib/features/settings/settingsPaths';
 import type {PlainValue, PluginSettingsEntry, PluginSettingWriteItem, PluginSettingWriteResult, SettingField, SettingOption, SettingsFamily} from './pluginSettingsApi';
 
 // =============================================================================
@@ -28,11 +29,12 @@ export const FAMILY_TITLE_KEYS: Record<SettingsFamily, string> = {
     group: 'pluginSettings.families.group',
 };
 
-/** The icon before a family's title: the one the family has on the documentation's home («A Modular Ecosystem»). */
+/** The icon before a family's title: the one the family has on the documentation's home («A Modular Ecosystem»). The
+ * import sources take the Transactions icon of the sidebar, what they import (the developer, 19/11, project 76 S1b). */
 export const FAMILY_ICONS: Record<SettingsFamily, typeof ChartColumn> = {
     asset: ChartColumn,
     fx: Coins,
-    brim: Briefcase,
+    brim: ArrowRightLeft,
     tool: Wrench,
     enricher: IdCard,
     group: Share2,
@@ -41,6 +43,111 @@ export const FAMILY_ICONS: Record<SettingsFamily, typeof ChartColumn> = {
 export interface FamilyGroup {
     family: SettingsFamily;
     entries: PluginSettingsEntry[];
+}
+
+// =============================================================================
+// The menu of the Plugins tab (project 76, S1b; mock S0, the developer's yes of 19/11)
+// =============================================================================
+
+/** What the menu can select: everything, the entries not configured, or one family. */
+export type PluginMenuId = 'all' | 'unconfigured' | SettingsFamily;
+
+/** The menu's short titles (the developer's D): the list's section titles stay `FAMILY_TITLE_KEYS`. «To configure» is
+ * the status badge's own text (`pluginSettings.status.notConfigured`, the same four words). */
+export const MENU_TITLE_KEYS: Record<PluginMenuId, string> = {
+    all: 'pluginSettings.menu.all',
+    unconfigured: 'pluginSettings.status.notConfigured',
+    asset: 'pluginSettings.menu.asset',
+    fx: 'pluginSettings.menu.fx',
+    brim: 'pluginSettings.menu.brim',
+    tool: 'pluginSettings.menu.tool',
+    enricher: 'pluginSettings.menu.enricher',
+    group: 'pluginSettings.menu.group',
+};
+
+/** «All» has no icon; «To configure» the sliders of «Configure»; a family its own. */
+export const MENU_ICONS: Record<PluginMenuId, typeof ChartColumn | null> = {all: null, unconfigured: SlidersHorizontal, ...FAMILY_ICONS};
+
+export interface PluginMenuItem {
+    id: PluginMenuId;
+    count: number;
+    /** Something in it is to configure (a family only). */
+    dot: boolean;
+}
+
+/** The menu: «All», «To configure» (when something is, or when it is the entry selected), then each family that has
+ * entries, or is the entry selected, in `FAMILY_ORDER`, with its dot. Which entries are listed, and the dots, go by
+ * every entry; the counts by `shown`, the entries the search shows (S2b, the developer's C: they stay, with 0). */
+export function pluginMenu(entries: readonly PluginSettingsEntry[], selected: PluginMenuId = 'all', shown: readonly PluginSettingsEntry[] = entries): PluginMenuItem[] {
+    const unconfigured = entries.filter((entry) => !entry.configured).length;
+    const items: PluginMenuItem[] = [{id: 'all', count: shown.length, dot: false}];
+    if (unconfigured > 0 || selected === 'unconfigured') items.push({id: 'unconfigured', count: shown.filter((entry) => !entry.configured).length, dot: false});
+    for (const family of FAMILY_ORDER) {
+        const own = entries.filter((entry) => entry.family === family);
+        if (own.length > 0 || selected === family) items.push({id: family, count: shown.filter((entry) => entry.family === family).length, dot: own.some((entry) => !entry.configured)});
+    }
+    return items;
+}
+
+// =============================================================================
+// The search of the Plugins tab (project 76, S2b; the developer's rules of 19/11)
+// =============================================================================
+
+/** Lower case, without accents: what the search compares. */
+function normalised(text: string): string {
+    return text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+}
+
+/** The words of a query, normalised; none for a blank one. */
+export function searchWords(query: string): string[] {
+    return normalised(query)
+        .split(/\s+/)
+        .filter((word) => word.length > 0);
+}
+
+/** What the search reads of a card: its name and code, its description (in the language of the interface, else its key
+ * or its English text), and each field's name and description — never a value, a count or a limit (the developer). */
+export function entrySearchText(entry: PluginSettingsEntry, t: Translate, language: string): string {
+    const english = entry.description ?? '';
+    const description = entry.description_i18n?.[language] ?? (entry.description_key ? translateOr(t, entry.description_key, english) : english);
+    const texts = [entryTitle(entry, t), entry.plugin_name, entry.plugin_code, description, ...entry.fields.flatMap((field) => [fieldLabel(field, t), fieldDescription(field, t)])];
+    return normalised(texts.join('\n'));
+}
+
+// =============================================================================
+// The address of the Plugins tab (project 76, S2c): ?family= and ?q=
+// =============================================================================
+
+export const PLUGINS_FAMILY_PARAM = 'family';
+export const PLUGINS_QUERY_PARAM = 'q';
+
+/** The menu's choice and the search an address names; a family the menu does not know, or none, is «All». */
+export function readPluginsAddress(params: URLSearchParams): {selected: PluginMenuId; query: string} {
+    const family = params.get(PLUGINS_FAMILY_PARAM) ?? '';
+    const selected = family === 'unconfigured' || (FAMILY_ORDER as readonly string[]).includes(family) ? (family as PluginMenuId) : 'all';
+    return {selected, query: params.get(PLUGINS_QUERY_PARAM) ?? ''};
+}
+
+/** The tab's address for a choice and a search: «All» and an empty search write nothing. */
+export function pluginsHref(selected: PluginMenuId, query: string): string {
+    const params: Record<string, string> = {};
+    if (selected !== 'all') params[PLUGINS_FAMILY_PARAM] = selected;
+    if (query.trim() !== '') params[PLUGINS_QUERY_PARAM] = query;
+    return settingsTabHref('plugins', Object.keys(params).length > 0 ? params : undefined);
+}
+
+/** Every word is in the card's texts, as it is written (no tolerance for typos); no word: every card. */
+export function entryMatches(entry: PluginSettingsEntry, words: readonly string[], t: Translate, language: string): boolean {
+    if (words.length === 0) return true;
+    const text = entrySearchText(entry, t, language);
+    return words.every((word) => text.includes(word));
+}
+
+/** The entries the menu's selection shows, in the answer's order. */
+export function filterByMenu(entries: readonly PluginSettingsEntry[], selected: PluginMenuId): PluginSettingsEntry[] {
+    if (selected === 'all') return [...entries];
+    if (selected === 'unconfigured') return entries.filter((entry) => !entry.configured);
+    return entries.filter((entry) => entry.family === selected);
 }
 
 /** The entries by family, in `FAMILY_ORDER`, each family keeping the API's order; a family without entries is left out. */

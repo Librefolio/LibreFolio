@@ -80,6 +80,11 @@ export interface PluginSettingsEntry {
     call_usage?: CallUsage;
     /** Why it is not configured, the boundary check's own reason (project 76, U5b); absent when configured. */
     reason?: ReadinessReason | null;
+    /** The plugin's own description in English, its key (a group's) and its translations (an exchange-rate source's):
+     * what the search of the Plugins tab reads (project 76, S2a/S2b); each absent when the catalogue sends none. */
+    description?: string;
+    description_key?: string;
+    description_i18n?: Record<string, string>;
 }
 
 /** The reason of the readiness check (N1/N2): a value to set, or a variable locking a field with an invalid value. */
@@ -264,7 +269,22 @@ export function entryOf(raw: unknown): PluginSettingsEntry {
         ...(usage ? {call_usage: usage} : {}),
         // No reason, no key either (U5b): a configured entry is exactly what it was
         ...(entry.reason === 'missing_fields' || entry.reason === 'invalid_locked_setting' ? {reason: entry.reason} : {}),
+        // S2a/S2b: the plugin's own texts for the search, each only when there is one
+        ...descriptionOf(entry),
     };
+}
+
+/** The description, its key and its translations of a catalogue entry: non-empty strings only, each left out when absent. */
+function descriptionOf(entry: Record<string, unknown>): Pick<PluginSettingsEntry, 'description' | 'description_key' | 'description_i18n'> {
+    const text = typeof entry.description === 'string' ? entry.description.trim() : '';
+    const key = textOrNull(entry.description_key);
+    const raw = entry.description_i18n !== null && typeof entry.description_i18n === 'object' && !Array.isArray(entry.description_i18n) ? (entry.description_i18n as Record<string, unknown>) : {};
+    const translations = Object.fromEntries(
+        Object.entries(raw)
+            .filter((pair): pair is [string, string] => typeof pair[1] === 'string' && pair[1].trim() !== '')
+            .map(([lang, value]) => [lang, value.trim()]),
+    );
+    return {...(text ? {description: text} : {}), ...(key ? {description_key: key} : {}), ...(Object.keys(translations).length > 0 ? {description_i18n: translations} : {})};
 }
 
 /**

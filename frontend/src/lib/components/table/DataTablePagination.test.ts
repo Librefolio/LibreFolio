@@ -269,3 +269,72 @@ describe('DataTablePagination — page size', () => {
  * Nothing here is chased further: there is no user who reaches an un-taken side
  * of any of the three.
  */
+
+// ---------------------------------------------------------------------------
+// 66 F7-c1 — `pageCount`: the pages a table cut itself (contract 66-F7 §14.4)
+// ---------------------------------------------------------------------------
+
+/**
+ * A table whose pages are not `ceil(totalItems / pageSize)` (a parent's charges overflow a page, `paginateFlat`) hands
+ * the pager the real count. The prop is optional: without it the pager computes the count as it always did (every case
+ * above). Mounted through a cast, because the prop does not exist yet.
+ */
+function mountWithPageCount(props: {pageIndex: number; pageSize: number; totalItems: number; pageCount?: number}) {
+    const onPageChange = vi.fn();
+    const onPageSizeChange = vi.fn();
+    const utils = render(DataTablePagination, {pageSizeOptions: [5, 10, 25, 50, 0], onPageChange, onPageSizeChange, ...props} as never);
+    return {onPageChange, onPageSizeChange, ...utils};
+}
+
+describe('DataTablePagination — pageCount overrides the computed number of pages (66 F7-c1)', () => {
+    it('12 items at 5 per page would be 3 pages; pageCount 2 makes it 2: the last page is the second', async () => {
+        await setupI18n();
+        const {container} = mountWithPageCount({pageIndex: 0, pageSize: 5, totalItems: 12, pageCount: 2});
+        // [1] 2 — 1 is the input: one button, no third page.
+        expect(pageButtons(container)).toEqual(['2']);
+        expect(screen.getByTestId('pagination-next')).toBeEnabled();
+    });
+
+    it('on the second of pageCount 2 «next» is off, though the items alone would allow a third page', async () => {
+        await setupI18n();
+        const {container} = mountWithPageCount({pageIndex: 1, pageSize: 5, totalItems: 12, pageCount: 2});
+        expect(pageButtons(container)).toEqual(['1']);
+        expect(screen.getByTestId('pagination-next')).toBeDisabled();
+        expect(screen.getByTestId('pagination-prev')).toBeEnabled();
+    });
+
+    it('a typed page beyond pageCount is ignored, one within it is committed', async () => {
+        await setupI18n();
+        const {onPageChange, container} = mountWithPageCount({pageIndex: 0, pageSize: 5, totalItems: 12, pageCount: 2});
+        const input = pageInput(container);
+        await fireEvent.input(input, {target: {value: '3'}});
+        await fireEvent.keyDown(input, {key: 'Enter'});
+        expect(onPageChange, 'page 3 does not exist with pageCount 2').not.toHaveBeenCalled();
+        await fireEvent.input(input, {target: {value: '2'}});
+        await fireEvent.keyDown(input, {key: 'Enter'});
+        expect(lastArg(onPageChange)).toBe(1);
+    });
+
+    it('without pageCount the count is computed as before (guard): 12 items at 5 per page are 3 pages', async () => {
+        await setupI18n();
+        const {container} = mountWithPageCount({pageIndex: 0, pageSize: 5, totalItems: 12});
+        expect(pageButtons(container)).toEqual(['2', '3']);
+    });
+});
+
+/**
+ * 77 SEL-A: inside a table's dock, under the row of the selection actions, the pager is `docked` — the dock is the
+ * balloon then, and the pager its second row. It stays the same component instance in both states (no remount when the
+ * actions come and go), so it publishes the state on its root instead of being swapped.
+ */
+describe('DataTablePagination — docked (77 SEL-A)', () => {
+    it('says whether it sits in a dock, and keeps every control there', async () => {
+        await setupI18n();
+        const {rerender} = mount({pageIndex: 0});
+        expect(screen.getByTestId('data-table-pagination')).toHaveAttribute('data-docked', 'false');
+        await rerender({docked: true} as never);
+        expect(screen.getByTestId('data-table-pagination')).toHaveAttribute('data-docked', 'true');
+        expect(screen.getByTestId('pagination-next')).toBeEnabled();
+        expect(screen.getByTestId('pagination-size-trigger')).toBeInTheDocument();
+    });
+});

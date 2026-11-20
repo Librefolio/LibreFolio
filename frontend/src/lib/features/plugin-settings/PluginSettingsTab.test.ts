@@ -32,6 +32,7 @@
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import {tick} from 'svelte';
 
 const fake = vi.hoisted(() => ({
     /** `key`, or `key {name=value, …}` when handed values, so that what the tab hands a form (a group's label) is readable. */
@@ -59,6 +60,14 @@ vi.mock('$lib/i18n', async (importOriginal) => {
     return {...(await importOriginal<typeof import('$lib/i18n')>()), _: readable(fake.translate)};
 });
 vi.mock('$lib/stores/app/notify.svelte', () => ({notify: fake.notify}));
+// The page the tab is open on, held by the test, and the navigation it asks for (S2c: ?family= and ?q=)
+const pageStore = await vi.hoisted(async () => {
+    const {writable: hoistedWritable} = await import('svelte/store');
+    return hoistedWritable({url: new URL('http://librefolio.test/settings/plugins')});
+});
+const goto = vi.hoisted(() => vi.fn(async () => undefined));
+vi.mock('$app/stores', () => ({page: {subscribe: pageStore.subscribe}}));
+vi.mock('$app/navigation', () => ({goto}));
 
 import PluginSettingsTab from './PluginSettingsTab.svelte';
 import type {PluginSettingsEntry, SettingField, SettingsFamily} from './pluginSettingsApi';
@@ -164,6 +173,8 @@ beforeAll(async () => {
 
 beforeEach(() => {
     for (const mock of Object.values(fake)) if (typeof mock === 'function' && 'mockReset' in mock) mock.mockReset();
+    goto.mockClear();
+    pageStore.set({url: new URL('http://librefolio.test/settings/plugins')});
 });
 
 afterEach(() => {
@@ -635,5 +646,265 @@ describe('PluginSettingsTab — shared settings groups (G3)', () => {
             {family: 'asset', plugins: ['justetf']},
             {family: 'group', plugins: ['alpha']},
         ]);
+    });
+});
+
+// =====================================================================================================================
+// The menu (project 76, S1b; mock S0 approved by the developer on 19/11): «All», «To configure» and the families, with
+// counts and a dot, in the sidebar and in the phone dropdown (the shared SettingsCategoryNav, prefix plugin-settings).
+describe('PluginSettingsTab — the menu (76 S1b)', () => {
+    const SHARED = plugin('group', 'coingecko', {plugin_name: 'CoinGecko', fields: [{...nickname(), key: 'api_key', scope: 'system'}], used_by: [{family: 'asset', plugin_code: 'justetf', plugin_name: 'justETF'}]} as Partial<PluginSettingsEntry>);
+    const READER = plugin('asset', 'justetf', {groups: ['coingecko']} as Partial<PluginSettingsEntry>);
+    const ANSWER = () => [READER, BORSA, ECB, MOCKFX, SHARED];
+    const sidebarItem = (key: string) => screen.getByTestId(`plugin-settings-category-${key}`);
+
+    const scrolled = vi.fn();
+    beforeEach(() => {
+        scrolled.mockReset();
+        Element.prototype.scrollIntoView = scrolled;
+    });
+    afterEach(() => {
+        delete (Element.prototype as {scrollIntoView?: unknown}).scrollIntoView;
+    });
+
+    it('PST-28: lists «All», «To configure» and each family present, with their counts and a dot where something is to configure; «All» selected', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        const nav = within(tab()).getByRole('navigation');
+        expect(
+            within(nav)
+                .getAllByRole('button')
+                .map((button) => [button.getAttribute('data-testid'), button.getAttribute('data-count'), button.getAttribute('aria-pressed')]),
+        ).toEqual([
+            ['plugin-settings-category-all', '5', 'true'],
+            ['plugin-settings-category-unconfigured', '3', 'false'],
+            ['plugin-settings-category-asset', '2', 'false'],
+            ['plugin-settings-category-fx', '2', 'false'],
+            ['plugin-settings-category-group', '1', 'false'],
+        ]);
+        expect(within(sidebarItem('asset')).getByTestId('plugin-settings-category-dot')).toBeInTheDocument();
+        expect(within(sidebarItem('all')).queryByTestId('plugin-settings-category-dot')).toBeNull();
+        expect(sidebarItem('asset')).toHaveTextContent('pluginSettings.menu.asset');
+        expect(groups(), '«All»: every family, as before').toEqual([
+            {family: 'asset', plugins: ['justetf', 'borsa_italiana']},
+            {family: 'fx', plugins: ['ecb', 'mockfx']},
+            {family: 'group', plugins: ['coingecko']},
+        ]);
+    });
+
+    it('PST-29: a family shows its section alone; «All» brings every section back', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        await fireEvent.click(sidebarItem('fx'));
+        expect(groups()).toEqual([{family: 'fx', plugins: ['ecb', 'mockfx']}]);
+        expect(sidebarItem('fx')).toHaveAttribute('aria-pressed', 'true');
+
+        await fireEvent.click(sidebarItem('all'));
+        expect(groups().map((group) => group.family)).toEqual(['asset', 'fx', 'group']);
+    });
+
+    it('PST-30: «To configure» shows the entries not configured, under their families', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        await fireEvent.click(sidebarItem('unconfigured'));
+        expect(groups()).toEqual([
+            {family: 'asset', plugins: ['justetf']},
+            {family: 'fx', plugins: ['mockfx']},
+            {family: 'group', plugins: ['coingecko']},
+        ]);
+    });
+
+    it('PST-31: «open» on a group while a family hides it shows the group first, then brings its form into view', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+        await fireEvent.click(sidebarItem('asset'));
+        expect(document.getElementById(groupFormId('coingecko')), 'premise: the filter hides the group').toBeNull();
+
+        await fireEvent.click(within(form('justetf')).getByTestId('plugin-settings-open-group'));
+
+        await waitFor(() => expect(scrolled).toHaveBeenCalled());
+        expect(sidebarItem('group')).toHaveAttribute('aria-pressed', 'true');
+        expect(document.getElementById(groupFormId('coingecko'))).not.toBeNull();
+        await waitFor(() => expect(document.activeElement).toBe(within(form('coingecko')).getByRole('heading', {level: 4})));
+    });
+
+    it('PST-32: «To configure» stays chosen when its last entry is configured, with 0 and a line that says so', async () => {
+        const onlyOne = plugin('fx', 'mockfx');
+        fake.fetchAll.mockResolvedValueOnce([BORSA, onlyOne]);
+        fake.save.mockResolvedValueOnce({kind: 'saved'});
+        fake.fetchEntry.mockResolvedValueOnce(plugin('fx', 'mockfx', {configured: true, fields: [{...nickname(), value: 'someone', is_set: true, source: 'db'}]}));
+        render(PluginSettingsTab);
+        await loaded();
+        await fireEvent.click(sidebarItem('unconfigured'));
+
+        await fireEvent.input(within(form('mockfx')).getByTestId('plugin-setting-input'), {target: {value: 'someone'}});
+        await fireEvent.click(within(form('mockfx')).getByTestId('plugin-settings-save'));
+
+        await waitFor(() => expect(sidebarItem('unconfigured')).toHaveAttribute('data-count', '0'));
+        expect(sidebarItem('unconfigured')).toHaveAttribute('aria-pressed', 'true');
+        expect(groups()).toEqual([]);
+        expect(screen.getByTestId('plugin-settings-nothing-unconfigured')).toHaveTextContent('pluginSettings.menu.nothingUnconfigured');
+    });
+
+    it('PST-33: the phone dropdown offers the same entries, and a choice filters the page', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        await fireEvent.click(screen.getByTestId('plugin-settings-mobile-category-trigger'));
+        const menu = screen.getByTestId('plugin-settings-mobile-category-menu');
+        expect(
+            within(menu)
+                .getAllByRole('button')
+                .map((button) => button.getAttribute('data-testid')),
+        ).toEqual(['plugin-settings-mobile-category-all', 'plugin-settings-mobile-category-unconfigured', 'plugin-settings-mobile-category-asset', 'plugin-settings-mobile-category-fx', 'plugin-settings-mobile-category-group']);
+        await fireEvent.click(screen.getByTestId('plugin-settings-mobile-category-group'));
+        expect(groups()).toEqual([{family: 'group', plugins: ['coingecko']}]);
+        expect(screen.getByTestId('plugin-settings-mobile-category-trigger')).toHaveTextContent('pluginSettings.menu.group');
+    });
+});
+
+// =====================================================================================================================
+// The search (project 76, S2b; the developer's rules of 19/11): exact words, all in the same card, names of the fields
+// and descriptions, never the numbers; the menu's counts follow it, its entries stay (with 0).
+describe('PluginSettingsTab — the search (76 S2b)', () => {
+    const SNB = plugin('fx', 'snb', {plugin_name: 'Swiss National Bank', configured: true, description: 'Swiss National Bank — monthly averages.'} as Partial<PluginSettingsEntry>);
+    const ANSWER = () => [JUSTETF, BORSA, ECB, SNB];
+    const search = () => screen.getByTestId('plugin-settings-search');
+    const sidebarItem = (key: string) => screen.getByTestId(`plugin-settings-category-${key}`);
+    const type = async (text: string) => fireEvent.input(search(), {target: {value: text}});
+
+    it('PST-34: shows the cards whose texts hold every word; the counts follow, the entries stay with 0', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        await type('swiss monthly');
+        expect(groups()).toEqual([{family: 'fx', plugins: ['snb']}]);
+        expect(['all', 'asset', 'fx'].map((key) => sidebarItem(key).getAttribute('data-count'))).toEqual(['1', '0', '1']);
+
+        await type('');
+        expect(groups().map((group) => group.plugins.length)).toEqual([2, 2]);
+        expect(sidebarItem('all')).toHaveAttribute('data-count', '4');
+    });
+
+    it('PST-35: nothing matches anywhere: the empty state names the search, no section is drawn', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        await type('kraken');
+        expect(groups()).toEqual([]);
+        expect(screen.getByTestId('plugin-settings-no-matches')).toHaveTextContent('pluginSettings.search.noMatchAll {query=kraken}');
+        expect(screen.queryByTestId('plugin-settings-search-all')).toBeNull();
+    });
+
+    it('PST-36: within a family with matches elsewhere, a link searches every family', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+        await fireEvent.click(sidebarItem('asset'));
+
+        await type('swiss');
+        expect(groups()).toEqual([]);
+        expect(screen.getByTestId('plugin-settings-no-matches')).toHaveTextContent('pluginSettings.search.noMatchFamily {family=pluginSettings.menu.asset, query=swiss}');
+        await fireEvent.click(screen.getByTestId('plugin-settings-search-all'));
+        expect(sidebarItem('all')).toHaveAttribute('aria-pressed', 'true');
+        expect(groups()).toEqual([{family: 'fx', plugins: ['snb']}]);
+        expect(search(), 'the search stays').toHaveValue('swiss');
+    });
+
+    it('PST-37: the search box is labelled and keeps its text across a choice of the menu', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        expect(search()).toHaveAttribute('placeholder', 'pluginSettings.search.placeholder');
+        expect(search()).toHaveAttribute('aria-label', 'pluginSettings.search.placeholder');
+        await type('bank');
+        await fireEvent.click(sidebarItem('fx'));
+        expect(search()).toHaveValue('bank');
+        expect(groups()).toEqual([{family: 'fx', plugins: ['snb']}]);
+    });
+});
+
+// =====================================================================================================================
+// The address (project 76, S2c): the menu's choice and the search are read from ?family= and ?q=, and written there —
+// a choice as a new step of the history, the search in place while typing.
+describe('PluginSettingsTab — the address (76 S2c)', () => {
+    const SNB = plugin('fx', 'snb', {plugin_name: 'Swiss National Bank', configured: true, description: 'Swiss National Bank.'} as Partial<PluginSettingsEntry>);
+    const ANSWER = () => [JUSTETF, BORSA, ECB, SNB];
+    const search = () => screen.getByTestId('plugin-settings-search');
+    const sidebarItem = (key: string) => screen.getByTestId(`plugin-settings-category-${key}`);
+    const at = (query: string) => pageStore.set({url: new URL(`http://librefolio.test/settings/plugins${query}`)});
+
+    it('PST-38: opens on the family and the search the address names', async () => {
+        at('?family=fx&q=swiss');
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        expect(sidebarItem('fx')).toHaveAttribute('aria-pressed', 'true');
+        expect(search()).toHaveValue('swiss');
+        expect(groups()).toEqual([{family: 'fx', plugins: ['snb']}]);
+        expect(goto, 'reading the address writes nothing').not.toHaveBeenCalled();
+    });
+
+    it('PST-39: a choice of the menu is a new step of the history; typing replaces the address in place', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        await fireEvent.click(sidebarItem('asset'));
+        expect(goto).toHaveBeenLastCalledWith('/settings/plugins?family=asset', expect.objectContaining({replaceState: false, noScroll: true, keepFocus: true}));
+        await fireEvent.input(search(), {target: {value: 'borsa'}});
+        expect(goto).toHaveBeenLastCalledWith('/settings/plugins?family=asset&q=borsa', expect.objectContaining({replaceState: true, noScroll: true, keepFocus: true}));
+    });
+
+    it('PST-40: Back or Forward (the address changes under the page) brings the choice and the search with it', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        at('?family=fx');
+        await waitFor(() => expect(sidebarItem('fx')).toHaveAttribute('aria-pressed', 'true'));
+        at('?q=borsa');
+        await waitFor(() => expect(sidebarItem('all')).toHaveAttribute('aria-pressed', 'true'));
+        expect(search()).toHaveValue('borsa');
+        expect(groups()).toEqual([{family: 'asset', plugins: ['borsa_italiana']}]);
+    });
+
+    it('PST-42: typing fast, the address of an earlier keystroke arriving late does not take back what was typed since', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        await fireEvent.input(search(), {target: {value: 'bo'}});
+        await fireEvent.input(search(), {target: {value: 'bor'}});
+        // The navigation of «bo» lands now: it is the page's own echo, not a new address
+        at('?q=bo');
+        await tick();
+        expect(search()).toHaveValue('bor');
+        at('?q=bor');
+        await tick();
+        expect(search()).toHaveValue('bor');
+        // A real change of address afterwards is read as before
+        at('?q=ecb');
+        await waitFor(() => expect(search()).toHaveValue('ecb'));
+    });
+
+    it('PST-41: a family the menu does not know opens «All»', async () => {
+        at('?family=crypto');
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+        expect(sidebarItem('all')).toHaveAttribute('aria-pressed', 'true');
     });
 });

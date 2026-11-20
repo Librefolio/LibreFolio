@@ -1640,6 +1640,9 @@ test.describe('A6e: changing the email asks for the current password', () => {
             await expect(password).toBeVisible();
             // The barrier, true only once the layout is the phone's: the password starts where the email input starts.
             await expect.poll(async () => Math.abs(((await password.boundingBox())?.x ?? -1000) - ((await emailInput.boundingBox())?.x ?? 1000)), {message: 'phone: the layout reflowed to one column'}).toBeLessThanOrEqual(3);
+            // The email input animates its width (`transition-all` with `w-full sm:w-72`): the start is aligned at once, the
+            // width only when the transition ends. Wait for the width too, then read the boxes (76 S1a triage, 19/11).
+            await expect.poll(async () => Math.abs(((await password.boundingBox())?.width ?? -1000) - ((await emailInput.boundingBox())?.width ?? 1000)), {message: 'phone: the email input finished its width transition'}).toBeLessThanOrEqual(3);
             const {email, field} = await boxes();
             expect(field.y, 'phone: the password is under the email input').toBeGreaterThanOrEqual(email.y + email.height - 1);
             expect(Math.abs(field.x - email.x), 'phone: the password starts where the email input starts').toBeLessThanOrEqual(3);

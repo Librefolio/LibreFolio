@@ -25,7 +25,7 @@
     import ViewModeToggle from '$lib/components/ui/ViewModeToggle.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
-    import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
+    import type {BulkAction} from '$lib/components/table/types';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {type ChartPrimaryView, type ChartSettings, effectiveCalendarReturnWindow, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setItemPrimaryView, setPairSettings, setScopePrimaryView} from '$lib/stores/chartSettingsStore.svelte';
     import {CALENDAR_RETURN_INSTANCE_ID, emptyCalendarReturnView, extractCalendarReturnView, type CalendarReturnView} from '$lib/features/signals/calendarReturn';
@@ -38,6 +38,7 @@
     import {firstDateOf, forgetFirstDate, isFirstDateKnown, rememberFirstDate, rememberNoSeries} from '$lib/stores/firstSeriesDates';
     import {onPricesCaughtUp} from '$lib/features/price-refresh/onPricesCaughtUp';
     import {comparisonTargetFromStore, ensureComparisonSeries} from '$lib/features/signals/comparisonSeries';
+    import {countedQueue} from '$lib/features/signals/countedQueue';
     import {comparisonTargetIds} from '$lib/utils/reducedPriceQuery';
     import {todayIso} from '$lib/utils/dateOnly';
     import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/features/signals';
@@ -1065,7 +1066,9 @@
      */
     let comparisonSeriesVersion = $state(0);
     let comparisonSeriesLoading = $state(0);
-    let comparisonSeriesChain: Promise<void> = Promise.resolve();
+    /** One load at a time; a load that is not silent counts from its call (FB-7e): queued behind a silent one (a price
+     * catch-up), the page says busy for the whole wait — a settings save and its preview start such loads. */
+    const comparisonSeriesQueue = countedQueue((delta) => (comparisonSeriesLoading += delta));
 
     /**
      * The daily series of the assets the cards compare (`comparisonSeries.ts`): one request for all of them, only for the
@@ -1074,11 +1077,10 @@
      */
     function fetchComparisonSeries(extraIds: readonly number[] = [], silent = false): Promise<void> {
         // One at a time: a call that follows another finds what it loaded in the cache, and asks nothing twice.
-        comparisonSeriesChain = comparisonSeriesChain.then(() => loadComparisonSeries(extraIds, silent));
-        return comparisonSeriesChain;
+        return comparisonSeriesQueue.run(() => loadComparisonSeries(extraIds), !silent);
     }
 
-    async function loadComparisonSeries(extraIds: readonly number[], silent: boolean) {
+    async function loadComparisonSeries(extraIds: readonly number[]) {
         const sessionGeneration = getClientSessionGeneration();
         const ids = new Set(extraIds);
         for (const pair of pairs) {
@@ -1090,12 +1092,7 @@
         });
         if (assets.length === 0) return;
         const range = {start: dateStart, end: dateEnd};
-        if (!silent) comparisonSeriesLoading++;
-        try {
-            await ensureComparisonSeries(assets, range);
-        } finally {
-            if (!silent) comparisonSeriesLoading--;
-        }
+        await ensureComparisonSeries(assets, range);
         if (pageAlive && isClientSessionCurrent(sessionGeneration)) comparisonSeriesVersion++;
     }
 
@@ -1285,30 +1282,41 @@
     // Bulk Actions (table selection)
     // =========================================================================
 
-    function handleBulkSyncFx() {
-        syncModalPairs = selectedFxRows.filter((r) => !r.manualOnly).map((r) => `${r.base}-${r.quote}`);
+    function handleBulkSyncFx(rows: FxRow[] = selectedFxRows) {
+        syncModalPairs = rows.filter((r) => !r.manualOnly).map((r) => `${r.base}-${r.quote}`);
         syncModalOpen = true;
     }
 
-    async function handleBulkRefreshFx() {
-        for (const row of selectedFxRows) {
+    async function handleBulkRefreshFx(rows: FxRow[] = selectedFxRows) {
+        for (const row of rows) {
             await handleRefreshPair({slug: row.slug});
         }
         fxTableComponent?.getTableRef()?.clearSelection();
         selectedFxRows = [];
     }
 
-    function handleBulkInvertFx() {
-        const slugs = selectedFxRows.map((r) => r.slug);
+    function handleBulkInvertFx(rows: FxRow[] = selectedFxRows) {
+        const slugs = rows.map((r) => r.slug);
         fxTableComponent?.bulkToggleInversion(slugs);
         fxTableComponent?.getTableRef()?.clearSelection();
         selectedFxRows = [];
     }
 
-    async function handleBulkDeleteFx() {
-        deletingPairs = selectedFxRows.map((r) => ({base: r.base, quote: r.quote, slug: r.slug}));
+    async function handleBulkDeleteFx(rows: FxRow[] = selectedFxRows) {
+        deletingPairs = rows.map((r) => ({base: r.base, quote: r.quote, slug: r.slug}));
         bulkDeleteDialogOpen = true;
     }
+
+    /**
+     * 77 SEL-B: the bulk actions of the table's selection panel. «Sync» takes the pairs with a provider only — a manual
+     * pair has nothing to sync, and with none selected the action is not there (Q-SEL-17); the others take every pair.
+     */
+    let fxSelectionActions = $derived<BulkAction<FxRow>[]>([
+        {id: 'sync', icon: RotateCw, label: () => $_('common.sync'), appliesTo: (row) => !row.manualOnly, onClick: (rows) => handleBulkSyncFx(rows)},
+        {id: 'refresh', icon: RefreshCw, label: () => $_('common.refresh'), onClick: (rows) => handleBulkRefreshFx(rows)},
+        {id: 'invert', icon: ArrowLeftRight, label: () => $_('common.swapDirection'), onClick: (rows) => handleBulkInvertFx(rows)},
+        {id: 'delete', icon: Trash2, label: () => $_('common.delete'), variant: 'danger', onClick: (rows) => handleBulkDeleteFx(rows)},
+    ]);
 
     async function confirmBulkDelete() {
         if (deletingPairs.length === 0) return;
@@ -1449,22 +1457,6 @@
             </div>
         </div>
         <div class="flex flex-wrap items-center gap-2 justify-end ml-auto">
-            {#if viewMode === 'list' && selectedFxRows.length > 0}
-                <DataTableToolbar
-                    variant="floating"
-                    selectedCount={selectedFxRows.length}
-                    bulkActions={[
-                        {id: 'sync', icon: RotateCw, label: () => $_('common.sync'), onClick: () => handleBulkSyncFx()},
-                        {id: 'refresh', icon: RefreshCw, label: () => $_('common.refresh'), onClick: () => handleBulkRefreshFx()},
-                        {id: 'invert', icon: ArrowLeftRight, label: () => $_('common.swapDirection'), onClick: () => handleBulkInvertFx()},
-                        {id: 'delete', icon: Trash2, label: () => $_('common.delete'), variant: 'danger', onClick: () => handleBulkDeleteFx()},
-                    ]}
-                    onClearSelection={() => {
-                        fxTableComponent?.getTableRef()?.clearSelection();
-                        selectedFxRows = [];
-                    }}
-                />
-            {/if}
             <ViewModeToggle bind:mode={viewMode} storageKey="fxViewMode" />
             <button class="flex items-center gap-1.5 px-3 py-2 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors whitespace-nowrap" data-testid="fx-add-pair-button" use:guideAnchor={'fx.page.add'} onclick={handleAddPair}>
                 <Plus size={16} />
@@ -1718,6 +1710,7 @@
             onsync={handleSyncPair}
             onrefresh={handleRefreshPair}
             ondelete={handleDeletePair}
+            selectionActions={fxSelectionActions}
             oninversionchange={() => {
                 void fetchAllPairSeries();
                 // A pair swapped in the table: the cards in the rolling-return view read the swapped rate's return.

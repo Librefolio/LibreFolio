@@ -9,7 +9,8 @@
       "cash": "Espèces",
       "broker": "Courtier",
       "links": "Liens",
-      "unitPrice": "Prix unitaire"
+      "unitPrice": "Prix unitaire",
+      "chargesN": "{n, plural, one {# frais} other {# frais}}"
     },
     "actions": {
       "clone": "Cloner",
@@ -64,7 +65,10 @@
       "fxSend": "Conversion en {amount}",
       "generic": "Virement",
       "depositFrom": "Encaissement de {broker} ({currency})",
-      "withdrawalTo": "Retrait vers {broker} ({currency})"
+      "withdrawalTo": "Retrait vers {broker} ({currency})",
+      "chargeOf": "Frais de : {type} · {date}",
+      "chargesToggle": "Afficher ou masquer ses frais",
+      "chargeOfOther": "Frais d'une autre transaction"
     },
     "form": {
       "titleCreate": "Nouvelle transaction",
@@ -105,7 +109,34 @@
       },
       "entryModeLabel": "Comment lire le nombre",
       "entryDerivedTotal": "= {value} au total",
-      "entryDerivedUnit": "= {value} {base, plural, =1 {par unité} other {pour # unités}}"
+      "entryDerivedUnit": "= {value} {base, plural, =1 {par unité} other {pour # unités}}",
+      "charges": {
+        "title": "Frais liés",
+        "addCharge": "+ {type}",
+        "new": "nouveau",
+        "notePlaceholder": "Note (ex. taxe Tobin)",
+        "unlink": "Délier",
+        "remove": "Supprimer",
+        "totalOut": "Total débité",
+        "totalIn": "Net encaissé",
+        "loadError": "Les frais liés n'ont pas pu être chargés",
+        "missingAmount": "Saisissez le montant de ce frais",
+        "loading": "Chargement des frais liés…",
+        "open": "Ouvrir",
+        "linkExisting": "Lier un frais existant…"
+      },
+      "parent": {
+        "title": "Liée à",
+        "unlink": "Délier",
+        "unlinked": "Déliée : à l'enregistrement, ce sera une transaction à part",
+        "loadError": "La transaction liée n'a pas pu être chargée",
+        "loading": "Chargement de la transaction liée…",
+        "link": "Lier à une transaction…",
+        "pending": "Sera liée à l'enregistrement",
+        "undo": "Annuler"
+      },
+      "openFailed": "La transaction n'a pas pu être ouverte",
+      "candidatesFailed": "Les transactions à lier n'ont pas pu être chargées"
     },
     "bulk": {
       "resetRow": "Réinitialiser la ligne",
@@ -159,7 +190,10 @@
         "confirmTitle": "Enregistrer des dates antérieures à 1900 ?",
         "confirmMessage": "{n} lignes ont une date antérieure au 1er janvier 1900. Les enregistrer telles quelles ?",
         "confirmProceed": "Oui, les dates sont correctes"
-      }
+      },
+      "chargesReadFailed": "Impossible de lire les frais liés de {ids}. «Réinitialiser la ligne» les relit.",
+      "deleteSkippedUnread": "{n, plural, one {# transaction n’a pas été supprimée : ses frais liés n’ont pas pu être lus. «Réinitialiser la ligne» les relit.} other {# transactions n’ont pas été supprimées : leurs frais liés n’ont pas pu être lus. «Réinitialiser la ligne» les relit.}}",
+      "rowRef": "ligne {n}"
     },
     "commit": {
       "serverError": "Sauvegarde impossible — erreur serveur"
@@ -347,7 +381,16 @@
       "pairedNote": "La sélection d'une transaction liée ajoute automatiquement son partenaire.",
       "requiredRole": "requis",
       "addN": "Ajouter {n}",
-      "searchAdd": "Chercher et ajouter"
+      "searchAdd": "Chercher et ajouter",
+      "chargesTitle": "Choisissez les frais à lier",
+      "chargesFilterShort": "Frais non liés",
+      "chargesFilterLong": "Frais non liés · {broker} · {asset}",
+      "parentTitle": "Choisissez la transaction à laquelle lier ce frais",
+      "parentFilterShort": "Transactions liables",
+      "parentFilterLong": "Transactions liables · {broker} · {asset}",
+      "linkN": "Lier {n} sélectionnées",
+      "link": "Lier",
+      "noAsset": "sans actif"
     },
     "access": {
       "partnerNotAccessible": "La transaction liée est sur un courtier auquel l'utilisateur n'a pas accès."
@@ -405,6 +448,36 @@
     },
     "docsHelp": {
       "list": "Chaque mouvement des courtiers auxquels vous avez accès, du plus récent au plus ancien : achats, ventes, dividendes, frais, transferts et liquidités. Vos positions et votre performance en sont calculées. Ajoutez-les, importez-les, filtrez-les ou modifiez-les ici."
+    },
+    "chargesLink": {
+      "action": "Lier les frais",
+      "actionShort": "Lier",
+      "title": "Lier les frais",
+      "subtitle": "{n} lignes séparées → 1 {type} avec ses frais",
+      "target": "{type} {ref} avec {n, plural, one {# frais lié} other {# frais liés}}",
+      "note": "Les frais restent des transactions à part : seul le lien change.",
+      "confirm": "Lier",
+      "failed": "La liaison des frais a échoué",
+      "reason": {
+        "twoParents": "Choisissez une seule transaction : {type} {ref} est la deuxième",
+        "paired": "{type} {ref} fait partie d'une paire : séparez d'abord la paire",
+        "linked": "{type} {ref} est liée à une autre transaction : déliez-la d'abord",
+        "otherBroker": "{type} {ref} est chez un autre courtier",
+        "otherAsset": "{type} {ref} a un autre actif",
+        "noAsset": "{type} {ref} n'a pas d'actif, et la transaction en a un",
+        "deleted": "{type} {ref} est à supprimer : restaurez d'abord la ligne"
+      }
+    },
+    "chargesDelete": {
+      "title": "Supprimer {type} {ref} ?",
+      "titleMany": "Supprimer {n} transactions avec des frais ?",
+      "lead": "{n, plural, one {Elle a # frais lié.} other {Elle a # frais liés.}}",
+      "keep": "Garder les frais",
+      "keepAfter": "{n, plural, one {le frais reste, comme ligne à part plus liée} other {les # frais restent, comme lignes à part plus liées}}",
+      "allShort": "Tout supprimer",
+      "allAfter": "aucune des {n} lignes ne reste",
+      "all": "Tout supprimer ({n})",
+      "loadFailed": "Impossible de lire les frais de cette transaction"
     }
   }
 }

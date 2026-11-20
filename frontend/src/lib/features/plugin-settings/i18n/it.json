@@ -145,7 +145,46 @@
       "managedFullAt": "Limite dell'istanza raggiunto: riprende alle {time} UTC.",
       "adminOnly": "Solo un amministratore può cambiare i limiti.",
       "invalid": "valore non valido",
-      "invalidBy": "{variable}: valore non valido"
+      "invalidBy": "{variable}: valore non valido",
+      "limitField": {
+        "minute": {
+          "label": "Limite al minuto",
+          "description": "Il massimo di chiamate che questa istanza fa al servizio in un minuto (UTC). Vuoto: nessun limite; 0: fermo."
+        },
+        "hour": {
+          "label": "Limite orario",
+          "description": "Il massimo di chiamate che questa istanza fa al servizio in un'ora (UTC). Vuoto: nessun limite; 0: fermo."
+        },
+        "day": {
+          "label": "Limite giornaliero",
+          "description": "Il massimo di chiamate che questa istanza fa al servizio in un giorno (UTC, di calendario). Vuoto: nessun limite; 0: fermo."
+        },
+        "week": {
+          "label": "Limite settimanale",
+          "description": "Il massimo di chiamate che questa istanza fa al servizio in una settimana (UTC, dal lunedì). Vuoto: nessun limite; 0: fermo."
+        },
+        "month": {
+          "label": "Limite mensile",
+          "description": "Il massimo di chiamate che questa istanza fa al servizio in un mese (UTC, dal giorno 1). Vuoto: nessun limite; 0: fermo."
+        }
+      }
+    },
+    "menu": {
+      "all": "Tutti",
+      "asset": "Prezzi",
+      "fx": "Cambi",
+      "brim": "Importazioni",
+      "tool": "Strumenti",
+      "enricher": "Profilo asset",
+      "group": "Condivise",
+      "hasUnconfigured": "Contiene plugin da configurare",
+      "nothingUnconfigured": "Tutti i plugin sono configurati."
+    },
+    "search": {
+      "placeholder": "Cerca plugin o impostazioni...",
+      "noMatchAll": "Nessun plugin corrisponde a «{query}».",
+      "noMatchFamily": "Nessun plugin di «{family}» corrisponde a «{query}».",
+      "searchAll": "Cerca in tutte le famiglie ({count})"
     }
   }
 }

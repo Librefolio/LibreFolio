@@ -908,7 +908,9 @@ Project 76, U4. The instance's limits on the calls a plugin makes to its externa
 settings the **core** declares, not the plugin (`services/plugin_settings/call_limits.py`):
 `call_limit_minute`, `call_limit_hour`, `call_limit_day`, `call_limit_week`, `call_limit_month`.
 They are optional system integers with no default and a minimum of 0. Empty means no limit; 0 stops
-the plugin.
+the plugin. Their label and description have i18n keys (`pluginSettings.calls.limitField.<window>.label` /
+`.description`, «Limite giornaliero»…, S2a), which the search of the Plugins tab reads; the boxes show the window's
+name.
 
 - **Who gets them**: whoever owns the count, by the rule of `call_counter.call_owner`.
   `AbstractPluginRegistry.register` adds the missing keys (`with_call_limits`) to a plugin that
@@ -949,7 +951,11 @@ the plugin.
   (`readiness.readiness_reason`), so the catalogue and the boundary always agree. It is
   `missing_fields`, `invalid_locked_setting` or null when configured, and it names no field.
 - **The interface** (U5): `PluginCallUsage.svelte` draws the five windows of `call_usage`, with the
-  limit fields as inputs an administrator saves with the card (`callUsage.ts` holds the rules). In the
+  limit fields as inputs an administrator saves with the card (`callUsage.ts` holds the rules). The boxes follow the
+  width of the block, not of the window (S1c, container queries, the block is the `@container`): under 24rem one per
+  line, the window, the count and the limit on it; from 24rem three and two, from 40rem five in a row, each with the
+  count on the window's line and the limit below. So the «Configure» dialog and the page beside the menu get three and
+  two. In the
   managed profile, an entry whose `reason` is `invalid_locked_setting` shows the managed text on top,
   the same for every user, with no button.
 - **For the tests**: `mockcount` is a test-only asset double that is counted (a class of its own, no
@@ -1030,7 +1036,7 @@ sees: [Search Preferences](../../../user/settings/plugins.md#search-preferences)
 
 | Endpoint | Caller | What it does |
 |----------|--------|--------------|
-| `GET /api/v1/settings/plugins` | Any signed-in user | Every plugin that declares settings, with `configured` (see [NOT_CONFIGURED](#not-configured)), its `icon_url` (the icon its family's provider list publishes: the `get_icon` property of a price provider, `icon` of an exchange-rate provider, `icon_url` of an import plugin; null without one) and each field as the caller sees it: its declaration (type, scope, labels and i18n keys, bounds, options, default) and its state (`value` for a plain field, `is_set`, `source`: `env`, `db`, `default` or `none`, `locked`, `editable`, `problem`, `updated_at`; `env_variable` for administrators). Filters: `family`, `plugin_code`. The plugins come first, then the shared groups (`family: "group"`, with `used_by`, and as `icon_url` the icon of the first plugin of `used_by` that has one: a group has no icon of its own, decided 19/11); a plugin lists the groups it reads in `groups` ([Shared Groups](#groups)). |
+| `GET /api/v1/settings/plugins` | Any signed-in user | Every plugin that declares settings, with `configured` (see [NOT_CONFIGURED](#not-configured)), its `icon_url` (the icon its family's provider list publishes: the `get_icon` property of a price provider, `icon` of an exchange-rate provider, `icon_url` of an import plugin; null without one) and each field as the caller sees it: its declaration (type, scope, labels and i18n keys, bounds, options, default) and its state (`value` for a plain field, `is_set`, `source`: `env`, `db`, `default` or `none`, `locked`, `editable`, `problem`, `updated_at`; `env_variable` for administrators). Filters: `family`, `plugin_code`. Each entry also carries the plugin's own `description` (English), `description_key` (a group's) and `description_i18n` (the translations an exchange-rate source has), read for the search of the Plugins tab (project 76, S2a; none for a price source or an enricher, whose lists compose a generic text). The plugins come first, then the shared groups (`family: "group"`, with `used_by`, and as `icon_url` the icon of the first plugin of `used_by` that has one: a group has no icon of its own, decided 19/11); a plugin lists the groups it reads in `groups` ([Shared Groups](#groups)). |
 | `PATCH /api/v1/settings/plugins/bulk` | Any signed-in user; `system` fields need an administrator | Writes 1 to 100 items, all or nothing. Each item names `family`, `plugin_code`, `field_key` and `scope` (a shared group: `family: "group"`, `plugin_code` its name, `scope: "system"`), and gives exactly one of `value` (a plain field), `secret_value` (a secret field) and `clear: true` (deletes the saved value, so the default applies again). |
 
 A write checks every item before writing anything, then writes them all in one transaction:
@@ -1097,6 +1103,28 @@ manual, [Plugin Settings](../../../user/settings/plugins.md); the code is in
   test-only `mock` is never in the tab). A group's save reads again each plugin of the tab that reads
   it, so its «configured» follows without a reload. The family of the enrichers (`enricher`, icon `IdCard`,
   **Asset profile**) has its row too, for the first enricher that declares a field.
+- **The menu (project 76, S1b; mock S0 approved 19/11).** The tab uses the shared
+  [`SettingsCategoryNav`](../../frontend/components/features/settings.md#settingscategorynav) of Global settings
+  (prefix `plugin-settings`): «All», «To configure» (`unconfigured`, listed when an entry is not configured or when it
+  is the choice) and the families present, with the short titles `MENU_TITLE_KEYS` (the sections keep
+  `FAMILY_TITLE_KEYS`), their icons (`MENU_ICONS`; the import plugins `ArrowRightLeft`, the Transactions icon), a count
+  (`data-count`) and an amber dot where an entry is to configure. `pluginMenu()` builds the entries and `filterByMenu()`
+  the shown list (`pluginSettingsForm.ts`). With «To configure» chosen and nothing left, the tab says so
+  (`plugin-settings-nothing-unconfigured`). **Open** on a group the choice hides selects `group` first.
+- **The search (S2b, the developer's rules of 19/11).** `plugin-settings-search` keeps the cards in which every word
+  is found (`searchWords()`, `entryMatches()`: lower case, accents removed, substrings, no typo tolerance), reading
+  `entrySearchText()`: the title, `plugin_name`, `plugin_code`, the description (`description_i18n[language]`, else the
+  group's `description_key`, else `description`) and each field's `fieldLabel()` and `fieldDescription()`; never a value,
+  a count or a limit. The menu's counts are `pluginMenu(entries, selected, matching)`: the entries and dots by the
+  totals, the counts by the matches. Nothing found: `plugin-settings-no-matches` (`common.noMatchesTitle`,
+  `pluginSettings.search.noMatchAll` / `noMatchFamily`) and, within a choice with matches elsewhere,
+  `plugin-settings-search-all`.
+- **The address (S2c).** `?family=` (`unconfigured` or a family) and `?q=`: `readPluginsAddress()` reads them (an unknown
+  family is «All») whenever `$page.url` changes; `pluginsHref()` writes them (`settingsTabHref('plugins', …)`; «All» and
+  an empty search write nothing), a choice with `goto` as a new history step, typing with `replaceState`. The tab keeps
+  the addresses it wrote until they land, so a late echo never takes back what was typed since. The N3 window's
+  read-only link is `pluginsHref(family, pluginCode)`; **Open** on a hidden group clears the search and chooses
+  `group`.
 - **Configure on a plugin with groups** shows, below the plugin's form, one form per group it reads
   (`plugin-settings-modal-group`, each read with `fetchPluginEntry('group', name)`): «Configure» from
   the search row or the provider panel thus shows the key where it is missing: a plugin unconfigured
@@ -1266,7 +1294,7 @@ The other units that touch the plugin settings:
 | `./dev.py test services tool-settings-lifecycle` | Real spawn workers: the plugin sees the value the parent delivered, the defaults when none, the values of its own tool code, never another caller's; an unconfigured Tool starts no worker while its sibling runs. It starts processes, so it is exclusive like `tools-lifecycle` |
 | `./dev.py test services plugin-secrets-check` | The startup check of the stored secrets ([Plugin Secrets Check](../security.md#plugin-secrets-check)): `ok` without an unreadable `system` secret, otherwise an `error` that counts them alone; nothing logged and no key file generated without a stored secret; a check that cannot run is a warning, never an exception |
 | `./dev.py test front-utility core-unit` | `pluginSettingsForm.test.ts` (the rules without the DOM, `FAMILY_ICONS` included) and `pluginSettingsApi.test.ts` (the narrowing of the answers, `icon_url` included, and every outcome of a save through the real client, only the transport faked), `notConfigured.test.ts` (the case of the «to configure» window, N3) |
-| `./dev.py test front-utility component-unit` | `PluginSettingsForm.component.test.ts` (PSF-01…40, the plugin's icon and its fallback in PSF-26…30, the shared groups in PSF-33…40), `PluginSettingsTab.test.ts` (PST-01…26, the families' icons in PST-07…09, the shared groups in PST-19…26) and `PluginSettingsModal.test.ts` (PSM-01…18, the shared groups in PSM-11…18), `PluginNotConfiguredModal.test.ts` (the window's cases, N3); **Configure**, the badge, the search's row, the switched-off chip (N3-1…5) and the 👑 legend in `ProviderAssignmentSection.test.ts` and `AssetSearchAutocomplete.test.ts` |
+| `./dev.py test front-utility component-unit` | `PluginSettingsForm.component.test.ts` (PSF-01…40, the plugin's icon and its fallback in PSF-26…30, the shared groups in PSF-33…40), `PluginSettingsTab.test.ts` (PST-01…33, the families' icons in PST-07…09, the shared groups in PST-19…27, the menu in PST-28…33), `SettingsCategoryNav.test.ts` (the shared menu) and `PluginSettingsModal.test.ts` (PSM-01…18, the shared groups in PSM-11…18), `PluginNotConfiguredModal.test.ts` (the window's cases, N3); **Configure**, the badge, the search's row, the switched-off chip (N3-1…5) and the 👑 legend in `ProviderAssignmentSection.test.ts` and `AssetSearchAutocomplete.test.ts` |
 | `./dev.py test front-utility plugin-settings` | End to end, on desktop (`frontend/e2e/settings/plugin-settings.spec.ts`): the tab as a member and as an administrator, **Configure** on `mockprov` from an asset's edit dialog, the search's row and the 👑 legend on a simulated stream ([Front-Utility Tests](../../test-walkthrough/front-utility.md#plugin-settings)) |
 
 ---

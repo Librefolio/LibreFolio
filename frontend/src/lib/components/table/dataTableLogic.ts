@@ -396,3 +396,25 @@ export function reorderKeepingAbsent(previousOrder: readonly string[], newOrder:
     }
     return result;
 }
+
+/**
+ * Fixed-size pages where some rows never open a page (66 F7-c1): a row for which `opensPage` is false joins the page
+ * of the row before it, overflowing a full page, so a group (a parent and the rows that follow it) is never split
+ * across two pages. `pageSize` 0 or below is one page with every row; no rows is one empty page. The rows themselves
+ * are returned, never copies, and the input is not mutated. The transactions table pages its flat mode with it too
+ * (`txTableRows.paginateRows`): one implementation.
+ */
+export function paginateFlat<R>(rows: readonly R[], pageSize: number, opensPage: (row: R) => boolean): R[][] {
+    if (pageSize <= 0) return [[...rows]];
+    const pages: R[][] = [];
+    let page: R[] = [];
+    for (const row of rows) {
+        if (page.length >= pageSize && opensPage(row)) {
+            pages.push(page);
+            page = [];
+        }
+        page.push(row);
+    }
+    if (page.length > 0 || pages.length === 0) pages.push(page);
+    return pages;
+}

@@ -167,6 +167,9 @@ class PluginSettingsPluginRead(StrictModel):
         None,
         description="Why it is not configured, the reason of the boundary's own check (N1/N2): `missing_fields` (a value to set) or `invalid_locked_setting` (an environment variable that locks a field has an invalid value, fixed on the server); null when configured (project 76, U5b)",
     )
+    description: str | None = Field(None, description="The plugin's own description in English, as its family's list publishes it (an exchange-rate source, an import plugin, a shared group); null when it has none. The search of the Plugins tab reads it (project 76, S2a)")
+    description_key: str | None = Field(None, description="For a group: the i18n key of its description; description is the English fallback")
+    description_i18n: dict[str, str] = Field(default_factory=dict, description="The description's translations by language code, when the plugin has them (the exchange-rate sources); empty otherwise")
 
 
 class PluginSettingsCatalogResponse(StrictModel):

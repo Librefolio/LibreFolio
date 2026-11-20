@@ -1,4 +1,5 @@
 import type {ResolvedOp} from '../txPayloadHelpers';
+import {isUnderParent, type ChargeLinkRow} from './bulkCharges';
 
 export interface BulkDisplayRow {
     tempId: string;
@@ -83,21 +84,34 @@ export function createBulkDateComparator<T extends BulkDisplayRow>(rows: readonl
 }
 
 /** Numbers belong to the sorted workspace, not an API array, file or current page.
- *  Filters may leave gaps; each visible group and its hidden legs retain the same label. */
-export function buildBulkRowLabels(rows: readonly BulkDisplayRow[], visibleRows: readonly BulkDisplayRow[]): Map<string, string> {
-    const partners = new Map<string, BulkDisplayRow[]>();
+ *  Filters may leave gaps; each visible group and its hidden legs retain the same label.
+ *  66 F7-c1: a linked charge under its parent (`isUnderParent`) takes no number of its own: it is `<parent>·k`, k = 1..
+ *  in the order of the operations (as a hidden partner is `Nb`), whether its group is open or closed. */
+export function buildBulkRowLabels<R extends BulkDisplayRow & ChargeLinkRow>(rows: readonly R[], visibleRows: readonly R[]): Map<string, string> {
+    const partners = new Map<string, R[]>();
+    const charges = new Map<string, R[]>();
+    const underParent = new Set<string>();
     for (const row of rows) {
+        if (row.chargeOf !== undefined && isUnderParent(row, rows)) {
+            underParent.add(row.tempId);
+            charges.set(row.chargeOf, [...(charges.get(row.chargeOf) ?? []), row]);
+        }
         if (!row.pairedWith) continue;
         const group = partners.get(row.pairedWith) ?? [];
         group.push(row);
         partners.set(row.pairedWith, group);
     }
     const labels = new Map<string, string>();
-    visibleRows.forEach((row, index) => {
+    let number = 0;
+    for (const row of visibleRows) {
+        if (underParent.has(row.tempId)) continue;
+        number++;
         const children = partners.get(row.tempId) ?? [];
-        labels.set(row.tempId, `${index + 1}${children.length > 0 ? 'a' : ''}`);
-        children.forEach((child, childIndex) => labels.set(child.tempId, `${index + 1}${String.fromCharCode(98 + childIndex)}`));
-    });
+        const label = `${number}${children.length > 0 ? 'a' : ''}`;
+        labels.set(row.tempId, label);
+        children.forEach((child, childIndex) => labels.set(child.tempId, `${number}${String.fromCharCode(98 + childIndex)}`));
+        (charges.get(row.tempId) ?? []).forEach((charge, k) => labels.set(charge.tempId, `${label}·${k + 1}`));
+    }
     return labels;
 }
 
@@ -195,6 +209,8 @@ export interface GuardKeyRow {
     createdSeq: number;
     txId?: number;
     pairedWith?: string;
+    /** 66 F7-b: the parent operation a linked charge belongs to, by `tempId` (named like `pairedWith`). */
+    chargeOf?: string;
     link_uuid?: string | null;
 }
 
@@ -215,8 +231,8 @@ function sortedKeys(value: unknown): unknown {
  * seeded. A reset rebuilds the saved rows from the ledger under new identities, and nothing the user sees changes,
  * so the key reads what survives a reset and nothing else:
  * - `tempId` and `createdSeq` are dropped;
- * - `pairedWith` names the row it points at: `tx:<txId>` for a saved row, `new:<tempId>` for a new one, which no
- *   reset regenerates;
+ * - `pairedWith` and `chargeOf` (66 F7-b) name the row they point at: `tx:<txId>` for a saved row, `new:<tempId>` for a
+ *   new one, which no reset regenerates;
  * - `link_uuid` names its group: the sorted references of the rows that share it, `null` when there is none;
  * - object keys are sorted at every depth, so the order a row was built in does not count. Array order does.
  */
@@ -229,10 +245,11 @@ export function serializeOps(rows: readonly GuardKeyRow[]): string {
     return JSON.stringify(
         rows.map((row) => {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const {tempId: _tempId, createdSeq: _createdSeq, pairedWith, link_uuid, ...rest} = row;
+            const {tempId: _tempId, createdSeq: _createdSeq, pairedWith, chargeOf, link_uuid, ...rest} = row;
             return sortedKeys({
                 ...rest,
                 pairedWith: pairedWith === undefined ? undefined : (refs.get(pairedWith) ?? pairedWith),
+                chargeOf: chargeOf === undefined ? undefined : (refs.get(chargeOf) ?? chargeOf),
                 link_uuid: link_uuid ? [...(groups.get(link_uuid) ?? [])].sort() : null,
             });
         }),

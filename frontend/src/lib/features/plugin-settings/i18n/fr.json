@@ -145,7 +145,46 @@
       "managedFullAt": "Limite de l'instance atteinte : reprise à {time} UTC.",
       "adminOnly": "Seul un administrateur peut changer les limites.",
       "invalid": "valeur non valide",
-      "invalidBy": "{variable} : valeur non valide"
+      "invalidBy": "{variable} : valeur non valide",
+      "limitField": {
+        "minute": {
+          "label": "Limite par minute",
+          "description": "Le nombre maximal d'appels que cette instance fait au service en une minute (UTC). Vide : aucune limite ; 0 : arrêté."
+        },
+        "hour": {
+          "label": "Limite horaire",
+          "description": "Le nombre maximal d'appels que cette instance fait au service en une heure (UTC). Vide : aucune limite ; 0 : arrêté."
+        },
+        "day": {
+          "label": "Limite quotidienne",
+          "description": "Le nombre maximal d'appels que cette instance fait au service en un jour (UTC, calendaire). Vide : aucune limite ; 0 : arrêté."
+        },
+        "week": {
+          "label": "Limite hebdomadaire",
+          "description": "Le nombre maximal d'appels que cette instance fait au service en une semaine (UTC, à partir du lundi). Vide : aucune limite ; 0 : arrêté."
+        },
+        "month": {
+          "label": "Limite mensuelle",
+          "description": "Le nombre maximal d'appels que cette instance fait au service en un mois (UTC, à partir du 1er). Vide : aucune limite ; 0 : arrêté."
+        }
+      }
+    },
+    "menu": {
+      "all": "Tous",
+      "asset": "Prix",
+      "fx": "Change",
+      "brim": "Imports",
+      "tool": "Outils",
+      "enricher": "Profil d'actif",
+      "group": "Partagés",
+      "hasUnconfigured": "Contient des plugins à configurer",
+      "nothingUnconfigured": "Tous les plugins sont configurés."
+    },
+    "search": {
+      "placeholder": "Rechercher des plugins ou des paramètres...",
+      "noMatchAll": "Aucun plugin ne correspond à « {query} ».",
+      "noMatchFamily": "Aucun plugin de « {family} » ne correspond à « {query} ».",
+      "searchAll": "Rechercher dans toutes les familles ({count})"
     }
   }
 }

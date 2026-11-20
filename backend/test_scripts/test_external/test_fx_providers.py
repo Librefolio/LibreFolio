@@ -16,6 +16,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.app.services.fx.base import FXServiceError
 from backend.app.services.fx.registry import FXProviderRegistry
+from backend.app.services.fx.runtime import configured_fx_provider
 from backend.app.services.fx.storage import normalize_rate_for_storage
 from backend.test_scripts.test_utils import (
     print_error,
@@ -75,6 +76,17 @@ def get_all_fx_providers():
 # Parametrize all tests to run for each registered provider
 # This replaces the old run_all_tests() orchestration
 pytestmark = pytest.mark.parametrize("provider_code", get_all_fx_providers())
+
+
+async def _configured_or_skip(provider_code: str):
+    """The provider with the instance's settings bound (its environment variables included); a skip when a required
+    setting has no value, as BANXICO without ``LIBREFOLIO_PLUGIN_FX_BANXICO_TOKEN``: without it nothing can be asked."""
+    provider = await configured_fx_provider(provider_code)
+    missing = provider.settings.missing
+    if missing:
+        print_info(f"{provider_code} is not configured ({', '.join(missing)} missing) - SKIPPING")
+        pytest.skip(f"{provider_code}: not configured, {', '.join(missing)} missing")
+    return provider
 
 
 # ============================================================================
@@ -172,9 +184,9 @@ async def test_supported_currencies(provider_code: str):
 async def test_fetch_rates(provider_code: str):
     """Test fetching actual FX rates."""
     print_section(f"Test 3: {provider_code} - Fetch Rates")
+    provider = await _configured_or_skip(provider_code)
 
     try:
-        provider = FXProviderRegistry.get_provider_instance(provider_code)
 
         # Test date range: last 5 business days
         end_date = date.today()
