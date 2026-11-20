@@ -321,3 +321,20 @@ describe('DataTablePagination — pageCount overrides the computed number of pag
         expect(pageButtons(container)).toEqual(['2', '3']);
     });
 });
+
+/**
+ * 77 SEL-A: inside a table's dock, under the row of the selection actions, the pager is `docked` — the dock is the
+ * balloon then, and the pager its second row. It stays the same component instance in both states (no remount when the
+ * actions come and go), so it publishes the state on its root instead of being swapped.
+ */
+describe('DataTablePagination — docked (77 SEL-A)', () => {
+    it('says whether it sits in a dock, and keeps every control there', async () => {
+        await setupI18n();
+        const {rerender} = mount({pageIndex: 0});
+        expect(screen.getByTestId('data-table-pagination')).toHaveAttribute('data-docked', 'false');
+        await rerender({docked: true} as never);
+        expect(screen.getByTestId('data-table-pagination')).toHaveAttribute('data-docked', 'true');
+        expect(screen.getByTestId('pagination-next')).toBeEnabled();
+        expect(screen.getByTestId('pagination-size-trigger')).toBeInTheDocument();
+    });
+});
