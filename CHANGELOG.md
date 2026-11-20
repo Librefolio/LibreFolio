@@ -124,6 +124,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Risk lab: each section asks once when the lab opens about the assets it can analyse, instead of twice.
 - The «Schedule Configuration» window scrolls inside when it is taller than the screen, so «Save» is never cut off on a small window.
 - Exchange rates: when a pair has several routes, each route now saves the rates of its own provider. Before, a pair could save another route's rate under the first route's provider name; a new sync of the period rewrites the rows.
+- Transactions editor: «Reset row», «Reset selected» and «Reset All» now also undo a merge into a transfer or an exchange that was not saved yet. Before, the merge stayed queued without showing, and «Save All» sent it anyway; a new transaction in such a merge could be left out of the save.
 
 ### ⚠️ Breaking changes
 

@@ -124,6 +124,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Laboratoire du risque : chaque section demande une seule fois, à l'ouverture, quels actifs elle peut analyser, au lieu de deux.
 - La fenêtre «Configuration du Planning» défile à l'intérieur quand elle est plus haute que l'écran : «Enregistrer» n'est plus coupé sur une petite fenêtre.
 - Taux de change : quand une paire a plusieurs routes, chaque route enregistre désormais les taux de son propre fournisseur. Auparavant, une paire pouvait enregistrer le taux d'une autre route sous le nom du fournisseur de la première ; une nouvelle synchronisation de la période réécrit les lignes.
+- Éditeur de transactions : « Réinitialiser la ligne », « Réinitialiser la sélection » et « Tout réinitialiser » annulent aussi une fusion en transfert ou en change pas encore enregistrée. Avant, la fusion restait en attente sans s'afficher et « Tout enregistrer » l'envoyait quand même ; une nouvelle transaction de cette fusion pouvait rester hors de l'enregistrement.
 
 ### ⚠️ Changements incompatibles
 
