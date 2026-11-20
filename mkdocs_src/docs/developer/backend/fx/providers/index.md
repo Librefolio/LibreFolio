@@ -15,12 +15,16 @@ This section provides the technical documentation for each Foreign Exchange (FX)
 | [**Norges Bank**](norges.md) | `NORGES` | NOK | ~35 | CSV (SDMX) | No | Beta |
 | [**National Bank of Ukraine**](nbu.md) | `NBU` | UAH | ~40 | JSON | No | Beta |
 | [**Bank of Canada**](boc.md) | `BOC` | CAD | ~24 | JSON | No | Beta |
+| [**Banco de México**](banxico.md) | `BANXICO` | MXN | 6 | JSON (SIE) | Yes (free token) | Beta |
+| [**Czech National Bank**](cnb.md) | `CNB` | CZK | 30 | Text (one file per year) | No | Beta |
+| [**South African Reserve Bank**](sarb.md) | `SARB` | ZAR | 25 | JSON | No | Beta |
+| [**Bank of Korea**](bok.md) | `BOK` | KRW | 43 | JSON (ECOS) | Yes (free key) | Beta |
 
 ### 📝 General Notes
 
 - **Base Currency**: The currency against which all other rates are quoted by the provider. LibreFolio automatically handles conversions between any pair, regardless of the provider's base currency.
 - **Update Frequency**: ECB, BOE, BDI, BCB, NORGES and BOC publish one rate per business day of their country (weekdays only); NBU has a row for every day, weekends included, each valid from the day after it is set ([NBU](nbu.md)). FED holds one rate per US business day too, but FRED releases them once a week, on Mondays ([FED](fed.md#release-schedule)). The SNB publishes monthly averages only, stored on the 1st of each month.
-- **No API Keys**: All core providers use publicly accessible APIs — no registration or API keys required.
+- **API Keys**: BANXICO and BOK need a free key from their bank (a secret `PluginSettingField`, set by an administrator in the plugin settings or with `LIBREFOLIO_PLUGIN_FX_<CODE>_<FIELD>`); without it they are «to configure» and the sync does not call them. The other providers use public APIs, with no registration.
 
 ## 📚 Technical Details
 
@@ -33,6 +37,10 @@ This section provides the technical documentation for each Foreign Exchange (FX)
 - [🇳🇴 NORGES (Norges Bank)](norges.md)
 - [🇺🇦 NBU (National Bank of Ukraine)](nbu.md)
 - [🇨🇦 BOC (Bank of Canada)](boc.md)
+- [🇲🇽 BANXICO (Banco de México)](banxico.md)
+- [🇨🇿 CNB (Czech National Bank)](cnb.md)
+- [🇿🇦 SARB (South African Reserve Bank)](sarb.md)
+- [🇰🇷 BOK (Bank of Korea)](bok.md)
 
 ---
 
