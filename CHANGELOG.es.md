@@ -11,6 +11,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 ### ✨ Añadido
 
+- **Enriquecedor ESMA**: todo activo negociado en un mercado europeo puede leer datos oficiales del registro FIRDS de la ESMA — el LEI del emisor y la forma jurídica; para un bono, el vencimiento, el tipo de cupón, un cupón fijo y la garantía de un Estado; para un fondo, si acumula o distribuye. Va después de las demás fuentes y completa lo que dejan vacío.
 - **La barra de selección está encima de la tabla en Transacciones, la pestaña Transacciones del bróker y FX**, y sus acciones bajan a la barra inferior al desplazarte. Cada acción dice sobre cuántas filas actúa (Editar y Eliminar cuentan solo las filas que puedes editar, Sincronizar solo los pares o activos con un proveedor).
 - **Descargar varios archivos a la vez** en la página Archivos.
 - **Una barra de selección sobre la lista de Recursos Estáticos** en la página Archivos: **Eliminar** dice cuántos archivos eliminará (solo los que puedes eliminar); al desplazar la lista, pasa a la barra inferior, encima de las páginas. Las demás tablas seguirán.

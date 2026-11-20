@@ -11,6 +11,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 ### ✨ Ajouté
 
+- **Enrichisseur ESMA** : tout actif négocié sur un marché européen peut lire des données officielles dans le registre FIRDS de l'ESMA — le LEI de l'émetteur et la forme juridique ; pour une obligation, l'échéance, le type de coupon, un coupon fixe et la garantie d'un État ; pour un fonds, s'il capitalise ou distribue. Il passe après les autres sources et complète ce qu'elles laissent vide.
 - **La barre de sélection est au-dessus du tableau dans Transactions, l'onglet Transactions du courtier et FX**, et ses actions descendent dans la barre du bas quand vous faites défiler. Chaque action indique sur combien de lignes elle agit (Modifier et Supprimer ne comptent que les lignes que vous pouvez modifier, Synchroniser seulement les paires ou actifs avec un fournisseur).
 - **Télécharger plusieurs fichiers à la fois** sur la page Fichiers.
 - **Une barre de sélection au-dessus de la liste des Ressources Statiques** sur la page Fichiers : **Supprimer** indique combien de fichiers il supprimera (seulement ceux que vous pouvez supprimer) ; quand vous faites défiler la liste, elle passe dans la barre du bas, au-dessus des pages. Les autres tableaux suivront.

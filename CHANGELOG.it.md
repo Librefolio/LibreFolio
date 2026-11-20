@@ -11,6 +11,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 ### ✨ Aggiunto
 
+- **Arricchitore ESMA**: ogni asset negoziato su un mercato europeo può leggere dati ufficiali dal registro FIRDS dell'ESMA — il LEI dell'emittente e la forma legale; per un'obbligazione la scadenza, il tipo di cedola, una cedola fissa e la garanzia di uno Stato; per un fondo se accumula o distribuisce. Viene dopo le altre fonti e riempie quello che lasciano vuoto.
 - **La barra della selezione sta sopra la tabella in Transazioni, nella scheda Transazioni del broker e in FX**, e le sue azioni scendono nella barra in basso quando scorri. Ogni azione dice su quante righe agisce (Modifica ed Elimina contano solo le righe che puoi modificare, Sincronizza solo le coppie o gli asset con un provider).
 - **Scarica più file insieme** nella pagina File.
 - **Una barra della selezione sopra l'elenco delle Risorse Statiche** nella pagina File: **Elimina** dice quanti file eliminerà (solo quelli che puoi eliminare); quando scorri l'elenco si sposta nella barra in basso, sopra le pagine. Le altre tabelle seguiranno.
