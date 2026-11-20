@@ -72,17 +72,17 @@ A **Fee** or a **Tax** can be linked to the transaction it was paid for, and sta
 
 A dividend, an interest payment or an adjustment can be linked to the asset's **event** (the dividend the provider announced, a split…). The link is lost when [changing an asset's currency](../assets/create-edit.md#changing-the-currency) deletes the events it pointed to, and a dividend you booked before its event was downloaded never had one. **Relink events**, in the toolbar above the table, finds those transactions and proposes the event to link.
 
-The window lists your **dividends, interest and adjustments** that have an asset and no event, on the brokers where you are at least an Editor, newest first. Each row shows the asset, the date, the type and what was found:
+The window lists your **dividends, interest and adjustments** that have an asset and no event, on the brokers where you are at least an Editor, newest first. They are split into three groups, one table each; a group with no transaction is not shown. Each row shows the asset and its broker, the date, the transaction's movement and the event:
 
-| What you see | Meaning | What you can do |
-|--------------|---------|-----------------|
-| **One event that day** | Exactly one event of the same asset, on the same day, of the matching type | **Link** the row |
-| **No event that day** | The asset has no such event on that day | **Create event**: enter its value, then link the row; or, when the event is on another day, link it in the transaction (below) |
-| **N events that day** | More than one candidate | Nothing here: LibreFolio never guesses. Choose the right one in the transaction |
+| Group | Meaning | What you can do |
+|-------|---------|-----------------|
+| **With one event** | Exactly one event of the same asset, on the same day, of the matching type: the row shows its value | **Link** the row, or **Link all** the rows of the group |
+| **Without an event** | The asset has no such event on that day | **Create event** (or **Create all**): enter its value, then link the row; or, when the event is on another day, link it in the transaction (below) |
+| **Several events** | More than one candidate | **Choose event**: a small window lists them, each with its value and whether it is automatic or entered by hand; nothing is chosen until you pick one, then **Link** |
 
-**Link every row with one event** links all the rows of the first kind at once, in a single save: if any is refused, none is linked. Nothing is linked unless you click.
+Each row's action is also in the menu you open with a right-click on the row. **Link all** and **Create all** act on the rows the group's filters leave, and say how many; **Link all** links them in a single save: if any is refused, none is linked. Nothing is linked unless you click.
 
-To act on several rows, tick them: **Link selected** appears when at least one of them has its one event, **Create events** when at least one has none, and each acts only on the rows it fits. An action none of the selected rows can take is not shown.
+To act on some rows only, tick them in the first two groups: the bar above the tables shows **Link** and **Create event**, each with the number of rows it takes, and each acts only on the rows it fits. An action none of the selected rows can take is not shown. The linked rows leave the list and the selection; the other ticked rows stay ticked, so after **Link** the bar still offers **Create event** for the rest. When you scroll the window down, the bar moves into the bar at the bottom; **Esc** there clears the selection and leaves the window open.
 
 !!! info "The event must be on the same date"
 
