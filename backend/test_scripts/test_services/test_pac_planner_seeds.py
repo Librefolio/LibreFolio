@@ -441,7 +441,8 @@ def test_a_proven_plan_carries_no_margin() -> None:
 def test_the_seeded_runs_line_carries_no_amount() -> None:
     """Lot LOGS of project 67 (the coordinator's ruling on the log rule): the «Rebalancer seeded runs» line names each run's
     seed, origin, state, seconds and failure, never an amount of the plan. A run's value and bound, and the margin, are
-    money of the user's portfolio, which the UI masks as personal."""
+    money of the user's portfolio, which the UI masks as personal. ``refused`` (R1-A): the run held only a plan the exact
+    replay refuses, answered «no plan»."""
     from structlog.testing import capture_logs  # noqa: PLC0415 — beside its only use
 
     with capture_logs() as lines:
@@ -449,8 +450,26 @@ def test_the_seeded_runs_line_carries_no_amount() -> None:
 
     (line,) = [line for line in lines if line["event"] == "Rebalancer seeded runs"]
     assert set(line) == {"event", "log_level", "runs", "state", "chosen", "downgrade"}
-    assert [set(run) for run in line["runs"]] == [{"seed", "origin", "closed", "infeasible", "seconds", "failure"}] * 3
+    assert [set(run) for run in line["runs"]] == [{"seed", "origin", "closed", "infeasible", "refused", "seconds", "failure"}] * 3
     assert [run["seed"] for run in line["runs"]] == [1, 2, 3]
+    assert [run["refused"] for run in line["runs"]] == [False] * 3
+
+
+def test_three_runs_holding_only_a_refused_plan_answer_no_plan(monkeypatch) -> None:
+    """R1-A of project 67 (the consultant's answer 2): a run whose search ended holding only a plan the exact replay
+    refuses votes «no plan», never «failed», and passes no lower bound. Three such runs: «no plan» (before: no run could
+    be published, ``SeededRunsFailedError``, «execution_failed»); the merge's line carries each run as ``refused``."""
+    from structlog.testing import capture_logs  # noqa: PLC0415 — beside its only use
+
+    from backend.test_scripts.test_services.test_pac_planner_cash_rule import _held_refused_search, _short_case  # noqa: PLC0415
+
+    scenario, _product, quanta = _short_case("rebalancer")
+    _held_refused_search(monkeypatch, stage_one="unfinished", quanta=quanta)
+    with capture_logs() as lines:
+        result = planner.plan_exact_scenario(scenario, solver_time_budget_seconds=5, seeds=(1, 2, 3)).result
+    assert (result.result_state, result.proof.kind) == ("ready_no_incumbent", "not_proven")
+    (line,) = [line for line in lines if line["event"] == "Rebalancer seeded runs"]
+    assert [(run["refused"], run["failure"], run["origin"]) for run in line["runs"]] == [(True, None, "none")] * 3
 
 
 # ---------------------------------------------------------------------------- the planner, three runs in processes
