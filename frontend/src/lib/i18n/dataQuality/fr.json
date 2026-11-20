@@ -47,6 +47,7 @@
     "nonIsoReportCurrencyUnknown": "Ce rapport convertit en « {value} », qui n'est pas un code de devise ISO — choisissez de nouveau la « Devise par défaut » dans Paramètres › Préférences",
     "staleFx": "{count} taux de change non à jour, le plus ancien depuis {days} jours — synchronisez les taux pour mettre à jour les totaux",
     "staleFxAfterSync": "Le fournisseur n'a pas encore de taux plus récents pour {pairs} : réessayez plus tard.",
-    "assetCostLinkedParentAfterRange": "{economic_type} de {target_amount} {target_currency} du {as_of_date} est liée à une transaction du {parent_date}, après la fin de l'analyse — non allouée tant que l'analyse n'atteint pas cette date"
+    "assetCostLinkedParentAfterRange": "{economic_type} de {target_amount} {target_currency} du {as_of_date} est liée à une transaction du {parent_date}, après la fin de l'analyse — non allouée tant que l'analyse n'atteint pas cette date",
+    "assetCostLinkedIncomeNoEligibleLots": "{economic_type} de {target_amount} {target_currency} du {as_of_date} est liée à un revenu du {parent_date} qu'aucun lot n'a perçu — non allouée"
   }
 }
