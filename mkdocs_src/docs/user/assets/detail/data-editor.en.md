@@ -14,7 +14,7 @@ The Data Editor lets you fix and complete an asset's data by hand: its daily pri
 2. Change what you need:
     - **Add Row** adds a row on a free date: change the date if needed, then fill in the values.
     - Click a cell to edit it.
-    - **Delete**, in a row's **⋮** menu, marks the row for deletion, and **Undo** brings it back. Tick several rows to delete them together.
+    - **Delete**, in a row's **⋮** menu, marks the row for deletion, and **Undo** brings it back. Tick several rows to delete them together: the bar at the top of the table offers **Delete** with the number of rows it marks (a row already marked is not counted again).
     - **Import CSV** loads many rows at once ([below](#import-from-csv)).
 3. Click **Save (n)**, where *n* counts your changes, or **Cancel** to drop them. Both close the editor and bring the other panels back; so does ✕, without saving.
 
