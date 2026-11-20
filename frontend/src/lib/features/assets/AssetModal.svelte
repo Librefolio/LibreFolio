@@ -909,7 +909,7 @@
         // Auto-fill provider
         providerCode = result.provider_code;
         providerIdentifier = result.identifier;
-        // OTHER is an asset column, not an assignment type: the provider's own (CoinGecko's PROVIDER_ID, P3). The search
+        // OTHER is an asset column, not an assignment type: the provider's own (CoinGecko's COINGECKO_ID, P3). The search
         // loaded the provider list when it opened; were it still empty, ProviderAssignmentSection sets the only type a
         // provider accepts
         providerIdentifierType = searchResultAssignmentType(result.identifier_type, getAssetProviderAcceptedTypes(result.provider_code));
@@ -1941,6 +1941,7 @@
     differences={comparisonDifferences}
     assetName={displayName}
     zIndex={zIndex + 20}
+    providerCodes={[providerCode]}
     onapply={handleComparisonApply}
     oncancel={() => {
         showComparisonModal = false;

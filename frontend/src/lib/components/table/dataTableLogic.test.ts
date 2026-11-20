@@ -27,6 +27,8 @@ import {waitLocale} from 'svelte-i18n';
 import {currentLanguage} from '$lib/stores/app/language';
 import {compareRowsByColumn, extractRawValue, formatCellDate, getColumnMinMax, getCurrencyMinMaxByCode, getCurrencyOptions, getEnumOptionsWithCounts, getMultiEnumOptions, getMultiEnumOptionsWithCounts, matchesColumnFilter} from './dataTableLogic';
 import type {CellContent, ColumnDef, EnumOption, FilterValue} from './types';
+// 66 F7-c1: `paginateFlat` is read through the namespace, so that while it does not exist only its own cases fail.
+import * as dataTableLogicModule from './dataTableLogic';
 
 interface Row {
     id: string;
@@ -835,5 +837,78 @@ describe('reorderKeepingAbsent — Y-27: a reorder made while a column is absent
 
         expect(reorderKeepingAbsent(frozen('select', 'name', 'delta_1Y', 'provider'), frozen('provider', 'name'), drawn), 'Y-27: select is not put back; delta_1Y is, after name').toEqual(['provider', 'name', 'delta_1Y']);
         expect(reorderKeepingAbsent(frozen('name', 'select', 'delta_1Y', 'provider'), frozen('provider', 'name'), drawn), 'Y-27: delta_1Y followed select, which is not in the result: it goes after name, the nearest earlier id that is').toEqual(['provider', 'name', 'delta_1Y']);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// paginateFlat — fixed-size pages where some rows never open a page (66 F7-c1, contract 66-F7 §14.4)
+// ---------------------------------------------------------------------------
+
+type PaginateFlat = <R>(rows: readonly R[], pageSize: number, opensPage: (row: R) => boolean) => R[][];
+
+/** `paginateFlat`, or a failure naming it while `dataTableLogic.ts` does not export it yet. */
+function paginateFlat<R>(rows: readonly R[], pageSize: number, opensPage: (row: R) => boolean): R[][] {
+    const fn = (dataTableLogicModule as unknown as {paginateFlat?: PaginateFlat}).paginateFlat;
+    expect(fn, 'dataTableLogic exports paginateFlat').toBeTypeOf('function');
+    return fn!(rows, pageSize, opensPage);
+}
+
+/** A row of the Bulk's grid reduced to what paging reads: an id and whether it follows the row before it (a charge). */
+interface FlatRow {
+    id: string;
+    follows: boolean;
+}
+const top = (id: string): FlatRow => ({id, follows: false});
+const under = (id: string): FlatRow => ({id, follows: true});
+const opens = (row: FlatRow): boolean => !row.follows;
+const flatIds = (pages: FlatRow[][]): string[][] => pages.map((page) => page.map((row) => row.id));
+
+describe('paginateFlat — fixed-size pages, and a row that does not open a page never starts one', () => {
+    it('every row opens a page: fixed size, the last page holding the rest', () => {
+        const rows = ['a', 'b', 'c', 'd', 'e'].map(top);
+        expect(flatIds(paginateFlat(rows, 2, opens))).toEqual([['a', 'b'], ['c', 'd'], ['e']]);
+    });
+
+    it('a following row at the boundary overflows the full page instead of starting the next one', () => {
+        const rows = [top('a'), top('p'), under('p1'), under('p2'), top('b')];
+        expect(flatIds(paginateFlat(rows, 2, opens))).toEqual([['a', 'p', 'p1', 'p2'], ['b']]);
+    });
+
+    it('a parent arriving on a full page starts the next one and takes its followers with it', () => {
+        const rows = [top('a'), top('b'), top('p'), under('p1'), top('c')];
+        expect(flatIds(paginateFlat(rows, 2, opens))).toEqual([['a', 'b'], ['p', 'p1'], ['c']]);
+    });
+
+    it('after an overflow the next page starts at the next opening row, with the full size again', () => {
+        const rows = [top('p'), under('p1'), under('p2'), top('a'), top('b'), top('c')];
+        expect(flatIds(paginateFlat(rows, 2, opens))).toEqual([['p', 'p1', 'p2'], ['a', 'b'], ['c']]);
+    });
+
+    it('pageSize 0 or below is one page with every row', () => {
+        const rows = [top('a'), top('p'), under('p1'), top('b')];
+        expect(flatIds(paginateFlat(rows, 0, opens))).toEqual([['a', 'p', 'p1', 'b']]);
+        expect(flatIds(paginateFlat(rows, -1, opens))).toEqual([['a', 'p', 'p1', 'b']]);
+    });
+
+    it('«all» (999999, how DataTable stores the 0 option) is one page', () => {
+        const rows = [top('a'), top('p'), under('p1'), top('b')];
+        expect(flatIds(paginateFlat(rows, 999999, opens))).toEqual([['a', 'p', 'p1', 'b']]);
+    });
+
+    it('no rows is one empty page', () => {
+        expect(paginateFlat([], 5, opens)).toEqual([[]]);
+        expect(paginateFlat([], 0, opens)).toEqual([[]]);
+    });
+
+    it('a following row first in the list still lands on the first page', () => {
+        expect(flatIds(paginateFlat([under('x'), top('a'), top('b')], 2, opens))).toEqual([['x', 'a'], ['b']]);
+    });
+
+    it('returns the rows themselves (no copies) and never mutates the input', () => {
+        const rows = [top('a'), top('p'), under('p1')];
+        const before = rows.map((row) => ({...row}));
+        const pages = paginateFlat(rows, 1, opens);
+        expect(pages[0][0]).toBe(rows[0]);
+        expect(rows).toEqual(before);
     });
 });

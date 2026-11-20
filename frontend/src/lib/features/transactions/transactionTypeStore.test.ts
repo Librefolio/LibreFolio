@@ -279,3 +279,46 @@ describe('isDraftReadyForValidation — a zero cash is no cash (B-47)', () => {
         expect(isDraftReadyForValidation(deposit('0.01'))).toBe(true);
     });
 });
+
+// ─── chargeRole: linked charges (project 66, F2a) ────────────────────────────────────────────────────────────────────
+//
+// The main cache above is loaded once and never dropped, so these tests import a fresh copy of the store with its own
+// response (`vi.resetModules`): FEE is a «charge», BUY a «parent», TRANSFER neither.
+
+function chargeType(code: string, chargeRole: 'charge' | 'parent' | null) {
+    return {
+        code,
+        name: code,
+        description: code,
+        icon_slug: code.toLowerCase(),
+        doc_slug: null,
+        asset_mode: 'optional',
+        cash_mode: 'required',
+        quantity_mode: 'forbidden',
+        requires_link: false,
+        quantity_sign: 'zero',
+        cash_sign: 'negative',
+        event_compatible: false,
+        charge_role: chargeRole,
+        swap_group: [],
+    };
+}
+
+describe('getTypeRule — chargeRole from charge_role (project 66)', () => {
+    it('maps charge, parent and null, and the fallback rule has no role', async () => {
+        vi.resetModules();
+        const fresh = await import('./transactionTypeStore');
+        expect(fresh.getTypeRule('FEE').chargeRole, 'before the types load: the fallback rule has no charge role').toBeNull();
+        getTransactionTypes.mockResolvedValue(
+            schemas.TXTypesResponse.parse({
+                transaction_types: [chargeType('FEE', 'charge'), chargeType('BUY', 'parent'), chargeType('TRANSFER', null)],
+                event_types: [],
+            }),
+        );
+        await fresh.ensureTypesLoaded();
+        expect(fresh.getTypeRule('FEE').chargeRole).toBe('charge');
+        expect(fresh.getTypeRule('BUY').chargeRole).toBe('parent');
+        expect(fresh.getTypeRule('TRANSFER').chargeRole).toBeNull();
+        expect(fresh.getTypeRule('NO_SUCH_TYPE').chargeRole, 'an unknown code takes the fallback rule').toBeNull();
+    });
+});

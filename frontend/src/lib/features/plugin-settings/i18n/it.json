@@ -94,8 +94,10 @@
             "demo": "Demo (gratuito)",
             "pro": "Pro (a pagamento)"
           }
-        }
-      }
+        },
+        "callsNote": "Il mese di CoinGecko può ripartire in un altro giorno: questo è il conteggio di LibreFolio."
+      },
+      "countsOn": "Le sue chiamate contano su {group}: il contatore e i limiti stanno lì."
     },
     "notConfigured": {
       "tooltip": "{provider} va configurato",
@@ -111,6 +113,78 @@
       "missingMemberGeneric": "{provider} va configurato: chiedi all'amministratore di impostare le sue impostazioni obbligatorie.",
       "missingAdminPhrase": "{provider} va configurato: {count, plural, one {manca} other {mancano}} {fields}.",
       "missingMemberPhrase": "{provider} va configurato: chiedi all'amministratore di impostare {fields}."
+    },
+    "calls": {
+      "title": "Chiamate",
+      "window": {
+        "minute": "Minuto",
+        "hour": "Ora",
+        "day": "Giorno",
+        "week": "Settimana",
+        "month": "Mese"
+      },
+      "noLimit": "Nessun limite",
+      "noLimitInline": "nessun limite",
+      "limitOf": "Limite — {window}",
+      "utcNote": "Finestre di calendario in UTC: il giorno riparte alle 00:00 UTC, la settimana il lunedì, il mese il giorno 1. Conteggi letti al caricamento della pagina.",
+      "full": {
+        "minute": "Limite al minuto raggiunto: {count} su {limit}. Riprende alle {time} UTC.",
+        "hour": "Limite orario raggiunto: {count} su {limit}. Riprende alle {time} UTC.",
+        "day": "Limite giornaliero raggiunto: {count} su {limit}. Riprende il {date} alle {time} UTC.",
+        "week": "Limite settimanale raggiunto: {count} su {limit}. Riprende il {date} alle {time} UTC.",
+        "month": "Limite mensile raggiunto: {count} su {limit}. Riprende il {date} alle {time} UTC."
+      },
+      "stopped": {
+        "minute": "Fermo: il limite al minuto è 0, nessuna chiamata parte finché un amministratore non lo cambia.",
+        "hour": "Fermo: il limite orario è 0, nessuna chiamata parte finché un amministratore non lo cambia.",
+        "day": "Fermo: il limite giornaliero è 0, nessuna chiamata parte finché un amministratore non lo cambia.",
+        "week": "Fermo: il limite settimanale è 0, nessuna chiamata parte finché un amministratore non lo cambia.",
+        "month": "Fermo: il limite mensile è 0, nessuna chiamata parte finché un amministratore non lo cambia."
+      },
+      "managedFull": "Limite dell'istanza raggiunto: riprende il {date} alle {time} UTC.",
+      "managedFullAt": "Limite dell'istanza raggiunto: riprende alle {time} UTC.",
+      "adminOnly": "Solo un amministratore può cambiare i limiti.",
+      "invalid": "valore non valido",
+      "invalidBy": "{variable}: valore non valido",
+      "limitField": {
+        "minute": {
+          "label": "Limite al minuto",
+          "description": "Il massimo di chiamate che questa istanza fa al servizio in un minuto (UTC). Vuoto: nessun limite; 0: fermo."
+        },
+        "hour": {
+          "label": "Limite orario",
+          "description": "Il massimo di chiamate che questa istanza fa al servizio in un'ora (UTC). Vuoto: nessun limite; 0: fermo."
+        },
+        "day": {
+          "label": "Limite giornaliero",
+          "description": "Il massimo di chiamate che questa istanza fa al servizio in un giorno (UTC, di calendario). Vuoto: nessun limite; 0: fermo."
+        },
+        "week": {
+          "label": "Limite settimanale",
+          "description": "Il massimo di chiamate che questa istanza fa al servizio in una settimana (UTC, dal lunedì). Vuoto: nessun limite; 0: fermo."
+        },
+        "month": {
+          "label": "Limite mensile",
+          "description": "Il massimo di chiamate che questa istanza fa al servizio in un mese (UTC, dal giorno 1). Vuoto: nessun limite; 0: fermo."
+        }
+      }
+    },
+    "menu": {
+      "all": "Tutti",
+      "asset": "Prezzi",
+      "fx": "Cambi",
+      "brim": "Importazioni",
+      "tool": "Strumenti",
+      "enricher": "Profilo asset",
+      "group": "Condivise",
+      "hasUnconfigured": "Contiene plugin da configurare",
+      "nothingUnconfigured": "Tutti i plugin sono configurati."
+    },
+    "search": {
+      "placeholder": "Cerca plugin o impostazioni...",
+      "noMatchAll": "Nessun plugin corrisponde a «{query}».",
+      "noMatchFamily": "Nessun plugin di «{family}» corrisponde a «{query}».",
+      "searchAll": "Cerca in tutte le famiglie ({count})"
     }
   }
 }

@@ -143,10 +143,12 @@ JSON object is an `FXServiceError` naming «the catalogue», and a 429 is still 
 - Indicative rates, not a benchmark; for some administered currencies the value can reflect the official rate of the
   day before.
 - One request per currency: N currencies cost N requests in series, with 0.3 s between two of them.
-- **A first full-history sync of many currencies can outlast the route timeout**: the sync core waits at most 120 s
-  per route for its legs (`asyncio.wait_for(..., timeout=120.0)` in `backend/app/services/fx/sync.py`). One currency's
-  whole history takes about 1.8 s plus the 0.3 s pause, so one call fits roughly 50 BDI currencies from 1999; beyond
-  that the route times out and the sync tries the next route.
+- **A first full-history sync of many currencies is long**: the sync waits for the provider's whole answer. Its 120 s
+  wait on a route's legs (`asyncio.wait_for(..., timeout=120.0)` in `backend/app/services/fx/sync.py`) starts only after
+  every provider of the sync has answered, so it never cuts a slow fetch and never switches route because of time
+  (lane 75, L25c). One currency's whole history takes about 1.8 s plus the 0.3 s pause, so roughly 50 BDI currencies
+  from 1999 fit the 120 s a sync started from the interface waits for its answer (`FX_SYNC_TIMEOUT_MS`, or a sync
+  window's longer **Timeout**; see [Architecture](../architecture.md)); beyond that the interface stops waiting first.
 - Suspended currencies (BYN, IRR, KPW, RUB on 2026-11-16) are not offered, and their «N.A.» days are never stored.
 - History starts on 1999-01-04; earlier days are never asked.
 

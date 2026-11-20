@@ -13,7 +13,7 @@ a free CoinGecko account and its API key, which an administrator sets once for t
 
 ## 🔑 What You Need
 
-- **A free CoinGecko account** with a **Demo** API key. It needs no credit card. The Demo plan allows 10 000 calls a
+- **A free CoinGecko account** with a **Demo** API key ([how to get and set it](../../settings/coingecko-key.md)). It needs no credit card. The Demo plan allows 10 000 calls a
   month and 100 a minute ([CoinGecko's plans](https://www.coingecko.com/en/api/pricing)): plenty for a personal
   portfolio (see [Credits](#credits)).
 - **An administrator** puts the key in **Settings › Plugins**, on the **CoinGecko** card under **Shared settings**:
@@ -34,7 +34,7 @@ other identifiers.
 By hand, in **Provider Assignment**:
 
 1. Choose **CoinGecko** as **Provider**.
-2. Type the coin's **Provider ID**: CoinGecko's own name for it, such as `bitcoin`, `ethereum` or `usd-coin`. It is the
+2. Type the coin's **CoinGecko ID**: CoinGecko's own name for it, such as `bitcoin`, `ethereum` or `usd-coin`. It is the
    last part of the coin's address on coingecko.com (`coingecko.com/en/coins/bitcoin`).
 3. In **Price currency**, pick the asset's own currency (EUR by default). It must be the currency of the asset: a
    price in another one is not stored.
@@ -73,6 +73,11 @@ To spend fewer, an administrator can set a longer **Price refresh** (60, 120 or 
 card under **Prices** in **Settings › Plugins**. CoinGecko's [Developer Dashboard](https://www.coingecko.com/en/developers/dashboard) shows
 the account's exact usage.
 
+LibreFolio keeps its own count: the **Calls** block of the **CoinGecko** card under **Shared settings** shows the calls
+of this instance, and an administrator can cap each window, for example the month below the plan's credits
+(see **Calls and Their Limits** in [Plugin Settings](../../settings/plugins.md)). CoinGecko's month may start again on another day than
+LibreFolio's, so the two counts can differ.
+
 ## 🏷️ Terms and Attribution {: #attribution }
 
 The prices are CoinGecko's, under [CoinGecko's API terms](https://www.coingecko.com/en/api_terms): whoever creates
@@ -94,6 +99,7 @@ link to its site. LibreFolio does that for you:
 ## 🔗 Related
 
 - 🔌 **[Asset Providers](index.md)** — Compare the providers
+- 🔑 **[Get and Set the CoinGecko Key](../../settings/coingecko-key.md)** — From no account to the first price
 - 🧩 **[Plugin Settings](../../settings/plugins.md)** — The key, the plan and your preferred currency
 - ✏️ **[Data Editor](../detail/data-editor.md)** — Import the older prices
 - 🛠️ **For developers: [CoinGecko Provider](../../../developer/backend/assets/provider_coingecko.md)** — The SDK, the

@@ -85,7 +85,18 @@
       "lastPrice": "Ultimo Prezzo",
       "quoteBaseQuantity": "Unità/prezzo",
       "txCount": "Mov.",
-      "txCountTooltip": "Transazioni che usano questo asset. Verde: in broker di cui sei owner. Blu: solo in broker di altri utenti. Grigio: nessuna — asset salvato ma mai usato."
+      "txCountTooltip": "Transazioni che usano questo asset. Verde: in broker di cui sei owner. Blu: solo in broker di altri utenti. Grigio: nessuna — asset salvato ma mai usato.",
+      "risk": {
+        "maxDrawdown": "Max drawdown",
+        "volatility": "Volatilità",
+        "annualReturn": "Rendimento annuo",
+        "sharpe": "Sharpe",
+        "sortino": "Sortino",
+        "worstDay": "Giorno peggiore",
+        "bestDay": "Giorno migliore",
+        "rally": "Risalita più ampia",
+        "hint": "Misurato su questo asset da solo, sul periodo e nella valuta di questa pagina, al tuo tasso privo di rischio: la stessa cifra della scheda Rischio dell'asset con le stesse impostazioni."
+      }
     },
     "empty": {
       "noAssets": "Nessun asset",
@@ -255,10 +266,10 @@
       "identifier": "Identificativo",
       "identifierType": "Tipo Identificativo",
       "inputType": {
-        "PROVIDER_ID": "ID del provider"
+        "COINGECKO_ID": "ID CoinGecko"
       },
       "inputTypePlaceholder": {
-        "PROVIDER_ID": "es. bitcoin"
+        "COINGECKO_ID": "es. bitcoin"
       }
     },
     "schedule": {

@@ -148,6 +148,79 @@ describe('buildBulkRowLabels', () => {
     });
 });
 
+/**
+ * 66 F7-c1 (contract 66-F7 §13.8, corrected by §14.3): a linked charge under its parent (`isUnderParent`) takes no number
+ * of its own. Its label is derived from its parent's, `<parent>·<k>` with k = 1.. in the order of the operations, as a
+ * hidden partner's is `Nb`; top-level rows keep their numbers, which charges do not consume. Every charge under its
+ * parent has its label whether its group is open or closed, so an issue on it names a row in the banner.
+ *
+ * The rows are the Bulk's operations, as `TransactionBulkModal` hands them (`buildBulkRowLabels(ops, visibleOps)`), and
+ * `visibleOps` still holds the charges (only the hidden partners are out of it): they sit where the date sort puts them.
+ */
+type ChargeAwareRow = BulkDisplayRow & {op: 'edit' | 'create'; markedDelete?: boolean; chargeOf?: string; parentUnlink?: boolean};
+const opRow = (tempId: string, date: string, extra: Partial<ChargeAwareRow> = {}): ChargeAwareRow => ({op: 'edit', markedDelete: false, tempId, fields: {date}, ...extra});
+
+describe('buildBulkRowLabels — the linked charges under their parent (66 F7-c1)', () => {
+    const buy = opRow('buy', '2024-02-02');
+    const fee = opRow('fee', '2024-02-02', {chargeOf: 'buy'});
+    const tax = opRow('tax', '2024-02-02', {chargeOf: 'buy'});
+    const dep = opRow('dep', '2024-02-03');
+    const early = opRow('early', '2024-02-01');
+
+    it('a charge under its parent is <parent>·k and takes no number: the next top-level row keeps its own', () => {
+        const labels = buildBulkRowLabels([buy, fee, tax, dep], [buy, fee, tax, dep]);
+        expect(labels.get('buy')).toBe('1');
+        expect(labels.get('fee')).toBe('1·1');
+        expect(labels.get('tax')).toBe('1·2');
+        expect(labels.get('dep'), 'the charges consumed no number').toBe('2');
+    });
+
+    it('k follows the order of the operations, not where the sort put the charges', () => {
+        const ops = [buy, tax, dep, fee, early];
+        const labels = buildBulkRowLabels(ops, [early, fee, buy, dep, tax]);
+        expect(labels.get('early')).toBe('1');
+        expect(labels.get('buy')).toBe('2');
+        expect(labels.get('dep')).toBe('3');
+        expect(labels.get('tax'), 'first of the parent’s charges in ops').toBe('2·1');
+        expect(labels.get('fee'), 'second of the parent’s charges in ops').toBe('2·2');
+    });
+
+    it('the same labels when the visible rows are the top-level ones only (a closed group still labels its charges)', () => {
+        const labels = buildBulkRowLabels([buy, fee, tax, dep], [buy, dep]);
+        expect([labels.get('buy'), labels.get('fee'), labels.get('tax'), labels.get('dep')]).toEqual(['1', '1·1', '1·2', '2']);
+    });
+
+    it('a charge unlinked from a parent that stays is a top-level row: it has a number of its own', () => {
+        const unlinked = opRow('fee', '2024-02-02', {chargeOf: 'buy', parentUnlink: true});
+        const labels = buildBulkRowLabels([buy, unlinked, tax, dep], [buy, unlinked, tax, dep]);
+        expect(labels.get('buy')).toBe('1');
+        expect(labels.get('fee')).toBe('2');
+        expect(labels.get('tax'), 'the TAX is the only charge still under the BUY').toBe('1·1');
+        expect(labels.get('dep')).toBe('3');
+    });
+
+    it('under a parent marked for deletion a «scollega» charge and a «del» one are both under it', () => {
+        const deleted = opRow('buy', '2024-02-02', {markedDelete: true});
+        const kept = opRow('fee', '2024-02-02', {chargeOf: 'buy', parentUnlink: true});
+        const gone = opRow('tax', '2024-02-02', {chargeOf: 'buy', markedDelete: true});
+        const labels = buildBulkRowLabels([deleted, kept, gone, dep], [deleted, kept, gone, dep]);
+        expect([labels.get('buy'), labels.get('fee'), labels.get('tax'), labels.get('dep')]).toEqual(['1', '1·1', '1·2', '2']);
+    });
+
+    it('a chargeOf naming no operation present is a row of its own, numbered', () => {
+        const dangling = opRow('fee', '2024-02-02', {chargeOf: 'nobody'});
+        const labels = buildBulkRowLabels([buy, dangling], [buy, dangling]);
+        expect([labels.get('buy'), labels.get('fee')]).toEqual(['1', '2']);
+    });
+
+    it('a new charge of a new parent: the same derivation', () => {
+        const newBuy = opRow('nb', '2024-02-05', {op: 'create'});
+        const newFee = opRow('nf', '2024-02-05', {op: 'create', chargeOf: 'nb'});
+        const labels = buildBulkRowLabels([dep, newBuy, newFee], [dep, newBuy, newFee]);
+        expect([labels.get('dep'), labels.get('nb'), labels.get('nf')]).toEqual(['1', '2', '2·1']);
+    });
+});
+
 describe('buildBulkOperationIndex', () => {
     it('indexes only the payloads and deletions that were actually emitted, plus explicit split/promote ids', () => {
         const resolved: IdentifiedBulkOp[] = [

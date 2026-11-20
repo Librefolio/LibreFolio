@@ -51,10 +51,12 @@
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
     import AssetRiskTab from '$lib/features/risk/AssetRiskTab.svelte';
+    import {riskFreeRate} from '$lib/features/risk/riskFreeRateStore.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {
         buildBackendSignalRequestPlan,
+        readsRiskFreeRate,
         getSignalProblem,
         getSignalProblemSeverity,
         getLocalSignalDefinitions,
@@ -1740,6 +1742,30 @@
         if (!pageAlive || data.assetId !== requestedAssetId || !isClientSessionCurrent(sessionGeneration) || dateStart !== range.start || dateEnd !== range.end) return;
         overlayDataVersion++;
     }
+
+    /**
+     * RN-21 «A» (the consultant, 18/11/2026): a signal bound to the reader's risk-free rate (`x-control: "risk_free_rate"`) is
+     * asked with the rate when the request is built, so when the reader changes the rate while the page is open (the Risk
+     * tab's field) the chart asks its signals again; a rate set on another page is read at the next mount. The answer cache
+     * is keyed on the request, so the new rate misses it and reaches the server; a chart with no such signal asks nothing.
+     * A session change (logout, another account) also changes the value read, but it is not the reader's choice and the
+     * page is leaving: it asks nothing then.
+     */
+    let chartRiskFreePercent = untrack(() => riskFreeRate.percent);
+    let chartRiskFreeSession = getClientSessionGeneration();
+    $effect(() => {
+        const percent = riskFreeRate.percent;
+        if (percent === chartRiskFreePercent) return;
+        chartRiskFreePercent = percent;
+        const session = getClientSessionGeneration();
+        if (session !== chartRiskFreeSession) {
+            chartRiskFreeSession = session;
+            return;
+        }
+        untrack(() => {
+            if (pageAlive && readsRiskFreeRate(signals, signalDefinitions)) void trackChartLoad('asset-risk-free-rate');
+        });
+    });
 
     /** N64 (Q1): the chart load under the page's busy token only when it asks the server; one the caches answer runs without. */
     function trackChartLoad(label: string, requestedSignalConfigs: SignalConfig[] = signals): Promise<void> {

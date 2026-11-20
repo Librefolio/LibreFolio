@@ -296,11 +296,17 @@
         return text;
     }
 
+    /** The latest route search: an answer that arrives after a newer request is dropped (the search runs in a Web
+     * Worker, lane 75 L20b, so a pair changed while it ran can be answered out of order). */
+    let routeRequest = 0;
+
     async function computeRoutes(base: string, quote: string) {
+        const request = ++routeRequest;
         loading = true;
         error = null;
         try {
             const paths = await findConversionPaths(base, quote, 4);
+            if (request !== routeRequest) return;
             const providers = getCachedFxProviders();
             searchTexts.clear();
             shownChains = {};
@@ -352,10 +358,11 @@
                 }
             }
         } catch (e) {
+            if (request !== routeRequest) return;
             console.error('Failed to compute conversion routes:', e);
             error = 'Failed to load conversion routes';
         } finally {
-            loading = false;
+            if (request === routeRequest) loading = false;
         }
     }
 

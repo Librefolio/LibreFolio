@@ -408,3 +408,24 @@ async def test_p1_an_invalid_plan_in_its_variable_is_an_invalid_locked_setting(p
     assert answer.configured is False
     assert answer.reason == "invalid_locked_setting"
     assert PLAN_VARIABLE in answer.variables
+
+
+# =============================================================================
+# P1b. THE ICON: COINGECKO'S OWN FAVICON, BY URL
+# =============================================================================
+#
+# The developer's choice (P1b-b): the icon points at CoinGecko's favicon, as Yahoo's, justETF's and Borsa Italiana's
+# point at theirs, so it follows CoinGecko's own updates. No file is bundled.
+
+COINGECKO_FAVICON = "https://www.coingecko.com/favicon.ico"
+
+
+def test_p1b_the_icon_is_coingeckos_favicon_by_url():
+    assert CoinGeckoProvider().get_icon == COINGECKO_FAVICON
+
+
+def test_p1b_no_icon_file_is_bundled():
+    from backend.app.api.v1.uploads import plugin_static_file  # noqa: PLC0415 — the route's own resolution
+
+    bundled = plugin_static_file("asset", "coingecko.png")
+    assert bundled is not None and not bundled.exists(), "the icon is the favicon's URL, not a file of the static folder"

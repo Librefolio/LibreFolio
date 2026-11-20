@@ -13,8 +13,9 @@
  * Test ids: `event-reconciliation-modal`; `-loading` (while the list is read); `-empty` (no rows); `-error` (the list failed
  * to load, or a link was refused); one row per transaction `event-reconciliation-row-{transactionId}` carrying
  * `data-status="unique|none|several"` and `data-candidate-count`; `event-reconciliation-link-{transactionId}` only on
- * unique rows; `event-reconciliation-link-all` (disabled or absent when no row is unique; links every unique row with ONE
- * commit); `event-reconciliation-close`. Linking a row removes it from the list (a re-read or a local removal: the test
+ * unique rows; `event-reconciliation-group-unique-all` («Link all» of the group with one event: absent when no row is
+ * unique; links every unique row with ONE commit; it was `event-reconciliation-link-all` before 77 SEL-C);
+ * `event-reconciliation-close`. Linking a row removes it from the list (a re-read or a local removal: the test
  * does not tell which) and calls `onlinked`. A commit that reports issues, or fails, leaves every row and shows
  * `event-reconciliation-error`: nothing was linked, `onlinked` is not called.
  *
@@ -140,7 +141,7 @@ describe('EventReconciliationModal — opening and states', () => {
 
         expect(screen.getByTestId('event-reconciliation-empty')).toBeInTheDocument();
         expect(screen.queryByTestId('event-reconciliation-error')).toBeNull();
-        const all = screen.queryByTestId('event-reconciliation-link-all') as HTMLButtonElement | null;
+        const all = screen.queryByTestId('event-reconciliation-group-unique-all') as HTMLButtonElement | null;
         expect(all === null || all.disabled, 'link all has nothing to link').toBe(true);
     });
 
@@ -195,7 +196,7 @@ describe('EventReconciliationModal — the rows', () => {
         mount();
         await listed();
 
-        const all = screen.getByTestId('event-reconciliation-link-all') as HTMLButtonElement;
+        const all = screen.getByTestId('event-reconciliation-group-unique-all') as HTMLButtonElement;
         expect(all).toBeEnabled();
     });
 
@@ -204,7 +205,7 @@ describe('EventReconciliationModal — the rows', () => {
         mount();
         await listed();
 
-        const all = screen.queryByTestId('event-reconciliation-link-all') as HTMLButtonElement | null;
+        const all = screen.queryByTestId('event-reconciliation-group-unique-all') as HTMLButtonElement | null;
         expect(all === null || all.disabled).toBe(true);
         expect(row(12)).not.toBeNull();
         expect(row(13)).not.toBeNull();
@@ -309,7 +310,7 @@ describe('EventReconciliationModal — linking all', () => {
         const {onlinked} = mount();
         await listed();
 
-        await fireEvent.click(screen.getByTestId('event-reconciliation-link-all'));
+        await fireEvent.click(screen.getByTestId('event-reconciliation-group-unique-all'));
 
         await waitFor(() => expect(row(11)).toBeNull());
         expect(row(14)).toBeNull();
@@ -323,7 +324,7 @@ describe('EventReconciliationModal — linking all', () => {
         expect(row(12)).toHaveAttribute('data-status', 'none');
         expect(row(13)).toHaveAttribute('data-status', 'several');
         expect(onlinked).toHaveBeenCalled();
-        const all = screen.queryByTestId('event-reconciliation-link-all') as HTMLButtonElement | null;
+        const all = screen.queryByTestId('event-reconciliation-group-unique-all') as HTMLButtonElement | null;
         expect(all === null || all.disabled, 'nothing unique is left to link').toBe(true);
     });
 
@@ -333,7 +334,7 @@ describe('EventReconciliationModal — linking all', () => {
         const {onlinked} = mount();
         await listed();
 
-        await fireEvent.click(screen.getByTestId('event-reconciliation-link-all'));
+        await fireEvent.click(screen.getByTestId('event-reconciliation-group-unique-all'));
 
         await waitFor(() => expect(screen.queryByTestId('event-reconciliation-error')).not.toBeNull());
         expect(row(11)).not.toBeNull();
@@ -470,7 +471,7 @@ describe('EventReconciliationModal — the event and the creation of the missing
 
         await fireEvent.click(screen.getByTestId('dt-row-checkbox-12'));
         await fireEvent.click(screen.getByTestId('dt-row-checkbox-14'));
-        await fireEvent.click(await screen.findByTestId('selection-bar-action-create'));
+        await fireEvent.click(await screen.findByTestId('toolbar-action-create'));
 
         const line = await screen.findByTestId('event-reconciliation-create-row-12');
         expect(line.dataset.transactions).toBe('2');
@@ -510,16 +511,62 @@ describe('EventReconciliationModal — the event and the creation of the missing
         expect(row(12), 'the list is not read again: nothing was created').toHaveAttribute('data-status', 'none');
     });
 
-    it('«Create events» on a selection with no row that misses its event says so and opens nothing', async () => {
+    // SEL-0 (the developer, 19/11/2026): an action no selected row can take is not offered — lane 66's rule for «Link»
+    // (`linkSelection`: hidden / disabled with its reason / on). Here each action acts on the rows of the selection that
+    // can take it, so there is no disabled state: an action is there when at least one selected row can take it.
+    it('a selection of rows that all miss their event offers «Create events» only', async () => {
+        serve([item(12, 'none'), item(14, 'none')]);
+        mount();
+        await listed();
+
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-12'));
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-14'));
+
+        expect(await screen.findByTestId('toolbar-action-create')).toBeInTheDocument();
+        expect(screen.queryByTestId('toolbar-action-link')).toBeNull();
+    });
+
+    it('a selection of rows that all have their one event offers «Link selected» only', async () => {
         serve([item(11, 'unique')]);
         mount();
         await listed();
 
         await fireEvent.click(screen.getByTestId('dt-row-checkbox-11'));
-        await fireEvent.click(await screen.findByTestId('selection-bar-action-create'));
 
-        expect(screen.getByTestId('event-reconciliation-notice')).toBeInTheDocument();
+        expect(await screen.findByTestId('toolbar-action-link')).toBeInTheDocument();
+        expect(screen.queryByTestId('toolbar-action-create')).toBeNull();
         expect(screen.queryByTestId('event-reconciliation-create-modal')).toBeNull();
+    });
+
+    it('a mixed selection offers both, each on the rows that can take it; rows with several events offer neither', async () => {
+        serve([item(11, 'unique'), item(12, 'none'), item(13, 'several')]);
+        mount();
+        await listed();
+
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-11'));
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-12'));
+        expect(await screen.findByTestId('toolbar-action-link')).toBeInTheDocument();
+        expect(screen.getByTestId('toolbar-action-create')).toBeInTheDocument();
+
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-11'));
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-12'));
+        await waitFor(() => expect(screen.queryByTestId('toolbar-action-create')).toBeNull());
+        expect(screen.queryByTestId('toolbar-action-link')).toBeNull();
+        // 77 SEL-C (Q-SEL-4): a row with several events takes no checkbox, so it never enters the selection.
+        expect(screen.queryByTestId('dt-row-checkbox-13')).toBeNull();
+    });
+
+    it('«Create events» on a mixed selection opens the dialog for the rows that miss their event only', async () => {
+        serve([item(11, 'unique'), item(12, 'none')]);
+        mount();
+        await listed();
+
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-11'));
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-12'));
+        await fireEvent.click(await screen.findByTestId('toolbar-action-create'));
+
+        expect(await screen.findByTestId('event-reconciliation-create-row-12')).toBeInTheDocument();
+        expect(screen.queryByTestId('event-reconciliation-create-row-11')).toBeNull();
     });
 
     it('«Link selected» links the unique rows of the selection in ONE commit and leaves the others', async () => {
@@ -529,7 +576,7 @@ describe('EventReconciliationModal — the event and the creation of the missing
 
         await fireEvent.click(screen.getByTestId('dt-row-checkbox-11'));
         await fireEvent.click(screen.getByTestId('dt-row-checkbox-12'));
-        await fireEvent.click(await screen.findByTestId('selection-bar-action-link'));
+        await fireEvent.click(await screen.findByTestId('toolbar-action-link'));
 
         await waitFor(() => expect(commitCall).toHaveBeenCalledTimes(1));
         expect(commitCall).toHaveBeenCalledWith({updates: [{id: 11, asset_event_id: 501}]});
@@ -537,5 +584,177 @@ describe('EventReconciliationModal — the event and the creation of the missing
         expect(row(12)).not.toBeNull();
         expect(row(15), 'a unique row that was not selected stays').not.toBeNull();
         expect(onlinked).toHaveBeenCalledTimes(1);
+    });
+});
+
+/**
+ * 77 SEL-C — the A4 window (the developer's Q-SEL-1…5, Q-SEL-14…16; the designer's answers of 20/11).
+ *   - One table per status, under its own header (`event-reconciliation-group-<status>`, `data-count`); a group with no row
+ *     is not drawn. The rows with several events take no checkbox.
+ *   - Each group's «all» says how many rows it takes (`event-reconciliation-group-<status>-all-count`).
+ *   - One selection covers the two selectable tables: the bar's actions say how many rows each takes, the × clears both.
+ *   - Linking rows keeps the rest of the selection.
+ *   - «Choose event» lists the candidates (nothing chosen to start, the source of each), links the chosen one in ONE
+ *     commit; a refusal keeps the small window open and links nothing.
+ */
+describe('EventReconciliationModal — the A4 window (77 SEL-C)', () => {
+    const group = (status: string) => screen.queryByTestId(`event-reconciliation-group-${status}`);
+
+    it('one table per status, each with its count; a group with no row is not drawn; several rows take no checkbox', async () => {
+        serve([item(11, 'unique'), item(14, 'unique'), item(13, 'several')]);
+        mount();
+        await listed();
+
+        expect(group('unique')).toHaveAttribute('data-count', '2');
+        expect(group('several')).toHaveAttribute('data-count', '1');
+        expect(group('none'), 'no row without an event: no group').toBeNull();
+        expect(within(screen.getByTestId('event-reconciliation-table-unique')).getByTestId('event-reconciliation-row-11')).toBeInTheDocument();
+        expect(within(screen.getByTestId('event-reconciliation-table-several')).getByTestId('event-reconciliation-row-13')).toBeInTheDocument();
+        expect(screen.getByTestId('dt-row-checkbox-11')).toBeInTheDocument();
+        expect(screen.queryByTestId('dt-row-checkbox-13')).toBeNull();
+        expect(screen.getByTestId('event-reconciliation-choose-13')).toBeInTheDocument();
+    });
+
+    it('each group’s «all» says how many rows it takes', async () => {
+        serve([item(11, 'unique'), item(14, 'unique'), item(12, 'none')]);
+        mount();
+        await listed();
+
+        expect(screen.getByTestId('event-reconciliation-group-unique-all-count').textContent?.trim()).toBe('2');
+        expect(screen.getByTestId('event-reconciliation-group-none-all-count').textContent?.trim()).toBe('1');
+    });
+
+    it('«Create all» opens the creation for the rows of its group', async () => {
+        serve([item(11, 'unique'), item(12, 'none'), item(16, 'none')]);
+        mount();
+        await listed();
+
+        await fireEvent.click(screen.getByTestId('event-reconciliation-group-none-all'));
+
+        expect(await screen.findByTestId('event-reconciliation-create-modal')).toBeInTheDocument();
+        expect(screen.queryByTestId('event-reconciliation-create-row-11')).toBeNull();
+    });
+
+    it('one selection over the two tables: each action says how many rows it takes, and the × clears both', async () => {
+        serve([item(11, 'unique'), item(14, 'unique'), item(12, 'none')]);
+        mount();
+        await listed();
+
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-11'));
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-14'));
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-12'));
+
+        const bar = await screen.findByTestId('selection-toolbar');
+        expect(bar).toHaveAttribute('data-selected-count', '3');
+        expect(screen.getByTestId('toolbar-action-link-count').textContent?.trim()).toBe('2');
+        expect(screen.getByTestId('toolbar-action-create-count').textContent?.trim()).toBe('1');
+
+        await fireEvent.click(screen.getByTestId('selection-toolbar-clear'));
+        await waitFor(() => expect(screen.queryByTestId('selection-toolbar')).toBeNull());
+        expect(screen.getByTestId('dt-row-checkbox-11')).toHaveAttribute('data-state', 'unchecked');
+        expect(screen.getByTestId('dt-row-checkbox-12')).toHaveAttribute('data-state', 'unchecked');
+    });
+
+    it('linking from the bar takes its rows out; the rest of the selection stays, ready for the next step (designer (b))', async () => {
+        serve([item(11, 'unique', [501]), item(12, 'none')]);
+        mount();
+        await listed();
+
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-11'));
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-12'));
+        await fireEvent.click(await screen.findByTestId('toolbar-action-link'));
+
+        await waitFor(() => expect(row(11)).toBeNull());
+        const bar = screen.getByTestId('selection-toolbar');
+        expect(bar).toHaveAttribute('data-selected-count', '1');
+        expect(screen.getByTestId('dt-row-checkbox-12')).toHaveAttribute('data-state', 'checked');
+        expect(screen.getByTestId('toolbar-action-create-count').textContent?.trim()).toBe('1');
+        expect(screen.queryByTestId('toolbar-action-link')).toBeNull();
+    });
+
+    it('the row’s button is named by its word, even where only the icon shows', async () => {
+        serve([item(11, 'unique'), item(12, 'none'), item(13, 'several')]);
+        mount();
+        await listed();
+
+        for (const id of ['event-reconciliation-link-11', 'event-reconciliation-create-12', 'event-reconciliation-choose-13']) {
+            const name = screen.getByTestId(id).getAttribute('aria-label') ?? '';
+            expect(name.length, `${id} has a name`).toBeGreaterThan(0);
+            expect(name, `${id} is not named by its code`).not.toMatch(/^transactions\./);
+        }
+    });
+
+    describe('«Choose event»', () => {
+        function several() {
+            const one = {...candidate(701), is_auto: true, value: '0.2449'};
+            const two = {...candidate(702), is_auto: false, value: '0.2451'};
+            return {...item(13, 'several'), candidates: [one, two]};
+        }
+
+        it('lists the candidates with their source; nothing is chosen, so «Link» is off until one is', async () => {
+            serve([several()]);
+            mount();
+            await listed();
+
+            await fireEvent.click(screen.getByTestId('event-reconciliation-choose-13'));
+            const modal = await screen.findByTestId('event-reconciliation-choose-modal');
+            expect(within(modal).getByTestId('event-reconciliation-choose-option-701')).toHaveAttribute('data-source', 'auto');
+            expect(within(modal).getByTestId('event-reconciliation-choose-option-702')).toHaveAttribute('data-source', 'manual');
+            expect(within(modal).getByTestId('event-reconciliation-choose-option-701').textContent).toMatch(/0[.,]2449/);
+            expect(within(modal).getByTestId('event-reconciliation-choose-option-702').textContent).toMatch(/0[.,]2451/);
+            expect(within(modal).getByTestId('event-reconciliation-choose-confirm')).toBeDisabled();
+        });
+
+        it('links the chosen event in ONE commit: the row leaves the list and the page is told', async () => {
+            serve([several(), item(11, 'unique')]);
+            const {onlinked} = mount();
+            await listed();
+
+            await fireEvent.click(screen.getByTestId('event-reconciliation-choose-13'));
+            const modal = await screen.findByTestId('event-reconciliation-choose-modal');
+            await fireEvent.click(within(modal).getByTestId('event-reconciliation-choose-option-702').querySelector('input')!);
+            await fireEvent.click(within(modal).getByTestId('event-reconciliation-choose-confirm'));
+
+            await waitFor(() => expect(commitCall).toHaveBeenCalledWith({updates: [{id: 13, asset_event_id: 702}]}));
+            await waitFor(() => expect(screen.queryByTestId('event-reconciliation-choose-modal')).toBeNull());
+            await waitFor(() => expect(row(13)).toBeNull());
+            expect(row(11)).not.toBeNull();
+            expect(onlinked).toHaveBeenCalledTimes(1);
+        });
+
+        it("choosing on a «several» row leaves the other groups' selection as it is (designer (b))", async () => {
+            serve([several(), item(11, 'unique'), item(12, 'none')]);
+            mount();
+            await listed();
+
+            await fireEvent.click(screen.getByTestId('dt-row-checkbox-11'));
+            await fireEvent.click(screen.getByTestId('dt-row-checkbox-12'));
+            await fireEvent.click(screen.getByTestId('event-reconciliation-choose-13'));
+            const modal = await screen.findByTestId('event-reconciliation-choose-modal');
+            await fireEvent.click(within(modal).getByTestId('event-reconciliation-choose-option-701').querySelector('input')!);
+            await fireEvent.click(within(modal).getByTestId('event-reconciliation-choose-confirm'));
+
+            await waitFor(() => expect(row(13)).toBeNull());
+            expect(screen.getByTestId('dt-row-checkbox-11')).toHaveAttribute('data-state', 'checked');
+            expect(screen.getByTestId('dt-row-checkbox-12')).toHaveAttribute('data-state', 'checked');
+            expect(screen.getByTestId('selection-toolbar')).toHaveAttribute('data-selected-count', '2');
+        });
+
+        it('a refusal links nothing: the small window stays open and says so', async () => {
+            serve([several()]);
+            commitCall.mockResolvedValueOnce({committed: false, issues: [{operation: 'update', index: 0, error: 'cannot link', code: 'event_asset_mismatch'}]});
+            const {onlinked} = mount();
+            await listed();
+
+            await fireEvent.click(screen.getByTestId('event-reconciliation-choose-13'));
+            const modal = await screen.findByTestId('event-reconciliation-choose-modal');
+            await fireEvent.click(within(modal).getByTestId('event-reconciliation-choose-option-701').querySelector('input')!);
+            await fireEvent.click(within(modal).getByTestId('event-reconciliation-choose-confirm'));
+
+            expect(await within(modal).findByTestId('event-reconciliation-choose-error')).toBeInTheDocument();
+            expect(screen.getByTestId('event-reconciliation-choose-modal')).toBeInTheDocument();
+            expect(row(13)).not.toBeNull();
+            expect(onlinked).not.toHaveBeenCalled();
+        });
     });
 });

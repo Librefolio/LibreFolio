@@ -3456,6 +3456,70 @@ test.describe('FB-7c FX detail: All starts at the pair first rate when the asset
 });
 
 // ============================================================================
+// FB-7d — the FX list says busy until its own comparison load is in
+// ============================================================================
+//
+// The list loads the asset list after its first load, and only then asks the series of the assets its cards compare.
+// Before FB-7d that load was outside `data-busy`: the page said settled, and the comparison request came after
+// (fx-detail «discards accepted FX comparison Asset sync completions…», red at 3 workers). The asset list is held here,
+// every other request of the page is let finish, and the page must still say busy; released, the comparison is asked
+// before the page says settled.
+// ============================================================================
+test.describe('FB-7d FX list: data-busy covers the asset list and the comparison it starts', () => {
+    test.describe.configure({timeout: 90_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    // The held asset list is handed on after the test if it failed first: its routes go with the test.
+    test.afterEach(async ({page}) => {
+        await page.unrouteAll({behavior: 'ignoreErrors'});
+    });
+
+    test('the list stays busy while its asset list loads, and asks the compared asset before it says settled', async ({page}) => {
+        const fixture = await installFxComparisonSyncFixture(page);
+        const assetListEntered = createDeferredGate();
+        const assetListHold = createDeferredGate();
+        let heldRequest: Request | null = null;
+        // Registered after the fixture's own route, so it runs first; it hands the request on to the fixture once released.
+        await page.route('**/api/v1/assets/query*', async (route) => {
+            heldRequest = route.request();
+            assetListEntered.release();
+            await assetListHold.wait;
+            await route.fallback();
+        });
+        const inFlight = new Set<Request>();
+        page.on('request', (request) => {
+            if (request.url().includes('/api/')) inFlight.add(request);
+        });
+        page.on('requestfinished', (request) => inFlight.delete(request));
+        page.on('requestfailed', (request) => inFlight.delete(request));
+        const othersInFlight = () => [...inFlight].filter((request) => request !== heldRequest).length;
+
+        try {
+            await navigateTo(page, '/fx');
+            const fxPage = page.getByTestId('fx-page');
+            await expect(fxPage).toBeVisible({timeout: 15_000});
+            await assetListEntered.wait;
+            // Everything else the page asked is answered, and the page has drawn it: only the asset list is pending.
+            await expect.poll(othersInFlight, {timeout: 20_000}).toBe(0);
+            await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+            await expect.poll(othersInFlight).toBe(0);
+            expect(fixture.stats.comparisonRequests, 'precondition: no comparison before the asset list').toHaveLength(0);
+
+            await expect(fxPage, 'the page says busy while its asset list loads').toHaveAttribute('data-busy', 'true');
+        } finally {
+            assetListHold.release();
+        }
+
+        await waitForSettled(page.getByTestId('fx-page'), 20_000);
+        expect(fixture.stats.comparisonRequests, 'the compared asset is asked before the page says settled').toHaveLength(1);
+        expect(fixture.stats.comparisonRequests[0].map((query) => query.asset_id)).toEqual([fixture.peer.id]);
+    });
+});
+
+// ============================================================================
 // N64 — FX pair detail: a signal result already answered is not asked again
 // ============================================================================
 // The pair page keeps a client cache of the backend's signal results beside its rate cache. Before N64 every load with a

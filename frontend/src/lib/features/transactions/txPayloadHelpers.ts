@@ -530,7 +530,8 @@ export interface ResolvedOp {
  * (split-queued rows have type stripped, promote-queued rows are skipped).
  * The resolveOps() caller has already applied these rules — this function just assembles.
  *
- * Omits empty arrays from the output (e.g. no `creates` key if none exist).
+ * Omits empty arrays from the output (e.g. no `creates` key if none exist). The items pass through as resolved: a linked
+ * charge's `ref`, `parent_ref` and `parent_transaction_id` (project 66, F7-b) ride on its own create or update.
  */
 export function buildBatchPayload(input: {ops: ResolvedOp[]; splits?: {id_a: number; id_b: number}[]; promotes?: Record<string, unknown>[]}): Record<string, unknown> {
     const creates: Record<string, unknown>[] = [];

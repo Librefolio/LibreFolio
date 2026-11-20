@@ -1,10 +1,11 @@
 """The CoinGecko provider, lot P3: search, metadata, the asset's page, and the id's own input type (project 76; the
-P0 trial's recordings, journal ``76_cryptoPrices/prove/``; the consultant's rule of 17/11 on ``PROVIDER_ID``).
+P0 trial's recordings, journal ``76_cryptoPrices/prove/``; the consultant's rule of 17/11 on the provider's own code, ``COINGECKO_ID`` since the developer's
+rename of 19/11, N-ID).
 
 The contract pinned here:
 
 1. **The id's type.** CoinGecko's id (``bitcoin``) is CoinGecko's own code, not a ticker: the provider accepts the new
-   ``ProviderInputType.PROVIDER_ID`` only, which reaches the plugin as ``IdentifierType.OTHER``, as ``URL`` does. The
+   ``ProviderInputType.COINGECKO_ID`` only, which reaches the plugin as ``IdentifierType.OTHER``, as ``URL`` does. The
    reverse map (``OTHER`` → ``URL``) is untouched: a client that sends ``OTHER`` still stores ``URL``.
 2. **Search** asks ``/search?query=…`` and answers its coins only (never its NFTs, exchanges or categories), ordered by
    ``market_cap_rank`` (a coin without a rank last, in CoinGecko's order). A row is ``identifier=<id>``,
@@ -17,11 +18,11 @@ The contract pinned here:
 4. **The page** is ``https://www.coingecko.com/en/coins/<id>``, built with no I/O; an id CoinGecko cannot have has none.
 5. **Search is on** (``test_search_query``); without a key it answers NOT_CONFIGURED and asks nothing.
 6. **The real path** (a private database behind the settings, the counter and the session; the key in its variable):
-   an assignment saved as ``PROVIDER_ID`` stays ``PROVIDER_ID``, the plugin receives ``IdentifierType.OTHER``, and the
+   an assignment saved as ``COINGECKO_ID`` stays ``COINGECKO_ID``, the plugin receives ``IdentifierType.OTHER``, and the
    refresh stores prices; a search through the service gives a valid row and counts on the group ``coingecko``.
 
 Pure: the real SDK on an ``httpx.MockTransport``; private SQLite files; no server.
-Red on HEAD: no ``PROVIDER_ID``, no search, no metadata, no page.
+Red on HEAD: no ``COINGECKO_ID``, no search, no metadata, no page.
 """
 
 from __future__ import annotations
@@ -128,11 +129,13 @@ def _provider(monkeypatch: pytest.MonkeyPatch, wire: _Wire, *, preferred: str | 
 
 
 def test_p3_coingecko_accepts_its_own_id_which_reaches_it_as_other():
-    print_section("P3 1: PROVIDER_ID")
-    assert CoinGeckoProvider().accepted_identifier_types == [ProviderInputType.PROVIDER_ID]
-    assert AssetSourceProvider.map_input_type_to_identifier_type("PROVIDER_ID") is IdentifierType.OTHER
+    print_section("P3 1: COINGECKO_ID")
+    assert CoinGeckoProvider().accepted_identifier_types == [ProviderInputType.COINGECKO_ID]
+    assert AssetSourceProvider.map_input_type_to_identifier_type("COINGECKO_ID") is IdentifierType.OTHER
+    # N-ID (developer, 19/11): the type is CoinGecko's own, so the generic name stays free for the future
+    assert "PROVIDER_ID" not in ProviderInputType.__members__
     assert AssetSourceProvider.map_identifier_type_to_input_type("OTHER") is ProviderInputType.URL, "the reverse map is unchanged"
-    print_success("PROVIDER_ID → OTHER; OTHER → URL as before")
+    print_success("COINGECKO_ID → OTHER; OTHER → URL as before")
 
 
 # =============================================================================
@@ -340,9 +343,9 @@ async def test_p3_an_assignment_saved_as_provider_id_stays_so_and_is_priced_as_o
         asset = Asset(display_name=f"P3 Bitcoin {uuid.uuid4().hex[:8]}", currency="EUR", asset_type=AssetType.CRYPTO)
         session.add(asset)
         await session.commit()
-        await ProviderManagementOperations.bulk_assign_providers([FAProviderAssignmentItem(asset_id=asset.id, provider_code="coingecko", identifier="bitcoin", identifier_type="PROVIDER_ID", provider_params={"vs_currency": "EUR"})], session)
+        await ProviderManagementOperations.bulk_assign_providers([FAProviderAssignmentItem(asset_id=asset.id, provider_code="coingecko", identifier="bitcoin", identifier_type="COINGECKO_ID", provider_params={"vs_currency": "EUR"})], session)
         stored = (await session.execute(select(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == asset.id))).scalar_one()
-        assert stored.identifier_type == ProviderInputType.PROVIDER_ID
+        assert stored.identifier_type == ProviderInputType.COINGECKO_ID
 
     # The recorded history spans 07…17/11/2026: a range inside it, ended before the real today
     start, end = date(2026, 11, 10), date(2026, 11, 15)
@@ -354,7 +357,7 @@ async def test_p3_an_assignment_saved_as_provider_id_stays_so_and_is_priced_as_o
     async with AsyncSession(configured) as session:
         days = (await session.execute(select(PriceHistory.date).where(PriceHistory.asset_id == asset.id))).scalars().all()
     assert days and min(days) >= start and max(days) <= end
-    print_success(f"PROVIDER_ID kept, OTHER received, {len(days)} days stored")
+    print_success(f"COINGECKO_ID kept, OTHER received, {len(days)} days stored")
 
 
 @pytest.mark.asyncio

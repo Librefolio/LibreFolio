@@ -7,7 +7,7 @@
  * transaction that could take an event and has none, with the verdict the server found for it —
  * `data-status="unique"` (exactly one event of the corresponding type that SAME day), `"none"` (no event that day) or
  * `"several"` — and `data-candidate-count`. The user links the unique rows, one by one (`event-reconciliation-link-{id}`)
- * or all at once (`event-reconciliation-link-all`, ONE `POST /transactions/commit`); nothing is linked on its own and a
+ * or all at once (`event-reconciliation-group-unique-all`, ONE `POST /transactions/commit`); nothing is linked on its own and a
  * `several` row is never guessed. Backend contract: `GET /transactions/event-reconciliation`; the link is the existing
  * `commit` with `updates: [{id, asset_event_id}]`.
  *
@@ -35,18 +35,25 @@
  * FB-19 (the window is a DataTable with column filters, a selection bar and the creation of the missing events):
  *   - the event column names the event (`[data-event-type]`: its code, the emoji the catalogue of event types gives it and its
  *     name in the interface language, read from the translation catalogue and never typed here);
- *   - the asset and broker column filters narrow the list, and «link every row» links only the unique rows still shown;
+ *   - the asset filter (on the «Transaction» column since 77 SEL-C; the broker is read in the row, not filtered) narrows the
+ *     list, and «Link all» links only the unique rows still shown; a group its filter empties stays;
  *   - «Create event» (one row) and «Create events» (the selected rows) open the creation dialog: ONE line per event (rows of the
  *     same asset, day and type share it), the value suggested from the transaction's cash, ONE `POST /assets/events` (mode
  *     `create`), then the rows are `unique` and nothing is linked until the user links them; a refusal (here: an event that
  *     appeared behind the dialog's back, 409) keeps the dialog open and creates nothing;
- *   - «Link selected» links the selected unique rows only, and a selection with nothing to act on says so (`-notice`).
+ *   - «Link selected» links the selected unique rows only; an action no selected row can take is not offered (SEL-0).
+ * 77 SEL-C (the A4 window): one table per status under its header; one selection over the two selectable tables, whose bar
+ * sits at the top of the window and comes down into the dock when the window's body scrolls; «Choose event» links the
+ * event the user picks among a row's candidates.
  * Each FB-19 test seeds its own account, brokers, assets and events (the helpers below), like the N68 ones.
  *
- * Key data-testids: tx-reconcile-events-button, event-reconciliation-modal|-loading|-empty|-error|-close|-link-all|-notice|-table,
+ * Key data-testids: tx-reconcile-events-button, event-reconciliation-modal|-loading|-empty|-error|-close|-body,
+ * event-reconciliation-group-{unique|none|several} [data-count], event-reconciliation-group-{unique|none}-all(-count),
+ * event-reconciliation-table-{status}, event-reconciliation-choose-{id}, event-reconciliation-choose-modal|-option-{eventId}
+ * [data-source]|-confirm|-error, dt-selection-top [data-in-view], dt-dock [data-actions], toolbar-action-{id}(-count),
  * event-reconciliation-row-{id} [data-status, data-candidate-count], event-reconciliation-link-{id}, event-reconciliation-create-{id},
  * event-reconciliation-create-modal|-row-{id} [data-transactions]|-type-{id}|-amount-{id}|-confirm|-cancel|-error,
- * dt-row-checkbox-{id}, selection-bar-action-link|-create, col-filter-trigger-{column}, filter-enum-option-{value},
+ * dt-row-checkbox-{id}, toolbar-action-link|-create, col-filter-trigger-{column}, filter-enum-option-{value},
  * transactions-page [data-busy].
  *
  * Expected. Red before the cure, by absence: the button does not exist, so every test that opens the modal fails at it.
@@ -192,7 +199,7 @@ const linkButton = (page: Page, txId: number) => page.getByTestId(`event-reconci
 
 /** «Link all» offers nothing: absent, or present and disabled. */
 async function expectNothingToLinkAll(page: Page): Promise<void> {
-    const all = page.getByTestId('event-reconciliation-link-all');
+    const all = page.getByTestId('event-reconciliation-group-unique-all');
     await expect(async () => {
         if ((await all.count()) > 0) await expect(all).toBeDisabled();
     }).toPass({timeout: UI_TIMEOUT});
@@ -221,7 +228,7 @@ test.describe('Event reconciliation (N68)', () => {
         await expect(linkButton(page, world.uniqueB.tx)).toBeVisible();
         await expect(linkButton(page, world.none.tx), 'nothing to link on a none row').toHaveCount(0);
         await expect(linkButton(page, world.several.tx), 'a several row is never guessed').toHaveCount(0);
-        await expect(page.getByTestId('event-reconciliation-link-all')).toBeEnabled();
+        await expect(page.getByTestId('event-reconciliation-group-unique-all')).toBeEnabled();
         await expect(page.getByTestId('event-reconciliation-empty')).toHaveCount(0);
         await expect(page.getByTestId('event-reconciliation-error')).toHaveCount(0);
     });
@@ -261,7 +268,7 @@ test.describe('Event reconciliation (N68)', () => {
         page.on('request', (req) => {
             if (req.method() === 'POST' && new URL(req.url()).pathname === COMMIT_PATH) commits.push(req.postDataJSON());
         });
-        await page.getByTestId('event-reconciliation-link-all').click();
+        await page.getByTestId('event-reconciliation-group-unique-all').click();
 
         await expect(row(page, world.uniqueA.tx)).toHaveCount(0, {timeout: UI_TIMEOUT});
         await expect(row(page, world.uniqueB.tx)).toHaveCount(0, {timeout: UI_TIMEOUT});
@@ -289,7 +296,7 @@ test.describe('Event reconciliation (N68)', () => {
         await expect(row(page, world.uniqueA.tx)).toHaveAttribute('data-status', 'unique', {timeout: UI_TIMEOUT});
         await expect(row(page, world.uniqueB.tx)).toHaveAttribute('data-status', 'unique');
 
-        await page.getByTestId('event-reconciliation-link-all').click();
+        await page.getByTestId('event-reconciliation-group-unique-all').click();
 
         await expect(page.getByTestId('event-reconciliation-empty')).toBeVisible({timeout: UI_TIMEOUT});
         await expect(row(page, world.uniqueA.tx)).toHaveCount(0);
@@ -388,7 +395,8 @@ async function eventsOn(page: Page, assetId: number, date: string, type: string)
 
 /** The column filter of the table in the window: its funnel and its popover. */
 function columnFilter(page: Page, column: string) {
-    const table = page.getByTestId('event-reconciliation-table');
+    // 77 SEL-C: one table per status; the filters here are on the table of the rows with one event.
+    const table = page.getByTestId('event-reconciliation-table-unique');
     return {trigger: table.getByTestId(`col-filter-trigger-${column}`), popover: table.getByTestId(`dt-header-${column}`).getByTestId('column-filter')};
 }
 
@@ -473,15 +481,23 @@ test.describe('Event reconciliation — the table (FB-19)', () => {
         await openReconciliation(page);
         const lang = await pageLanguage(page);
         const emojis = await eventEmojis(page);
-        // The name is the catalogue's, in the language the page is drawn in; for an adjustment with no event yet, the transaction's own.
+        // The name is the catalogue's, in the language the page is drawn in.
         const expectations = [
             {tx: dividend, code: 'DIVIDEND', emoji: emojis.get('DIVIDEND'), key: 'assetDetail.eventType.DIVIDEND'},
             {tx: interest, code: 'INTEREST', emoji: emojis.get('INTEREST'), key: 'assetDetail.eventType.INTEREST'},
             {tx: split, code: 'SPLIT', emoji: emojis.get('SPLIT'), key: 'assetDetail.eventType.SPLIT'},
             {tx: price, code: 'PRICE_ADJUSTMENT', emoji: emojis.get('PRICE_ADJUSTMENT'), key: 'assetDetail.eventType.PRICE_ADJUSTMENT'},
-            {tx: adjustmentNoEvent, code: 'ADJUSTMENT', emoji: emojis.get('PRICE_ADJUSTMENT'), key: 'transactions.types.ADJUSTMENT'},
+
             {tx: dividendNoEvent, code: 'DIVIDEND', emoji: emojis.get('DIVIDEND'), key: 'assetDetail.eventType.DIVIDEND'},
         ];
+        // 77 SEL-C: an adjustment with no event yet names the two events it may become, «split or price adjustment».
+        const or = catalogueText(lang, 'transactions.reconcile.or');
+        const adjustmentCell = page
+            .locator('tr')
+            .filter({has: row(page, adjustmentNoEvent)})
+            .locator('[data-event-type]');
+        await expect(adjustmentCell).toHaveAttribute('data-event-type', 'ADJUSTMENT', {timeout: UI_TIMEOUT});
+        await expect(adjustmentCell).toHaveText(`${emojis.get('SPLIT')} ${catalogueText(lang, 'assetDetail.eventType.SPLIT')} ${or} ${emojis.get('PRICE_ADJUSTMENT')} ${catalogueText(lang, 'assetDetail.eventType.PRICE_ADJUSTMENT')}`);
         for (const {tx, code, emoji, key} of expectations) {
             expect(emoji, `the catalogue gives ${code} an emoji`).toMatch(/\p{Extended_Pictographic}/u);
             const label = catalogueText(lang, key);
@@ -524,14 +540,14 @@ test.describe('Event reconciliation — filters (FB-19)', () => {
         const grid = await seedGrid(page, request);
         await openGrid(page, grid);
 
-        await pickFilterOption(page, 'asset', grid.assetA.id);
+        await pickFilterOption(page, 'transaction', grid.assetA.id);
         await expect(row(page, grid.ax)).toBeVisible();
         await expect(row(page, grid.ay)).toBeVisible();
         await expect(row(page, grid.bx), 'the other asset’s rows are filtered out').toHaveCount(0);
         await expect(row(page, grid.by)).toHaveCount(0);
 
         const commits = recordPosts<CommitBody>(page, COMMIT_PATH);
-        await page.getByTestId('event-reconciliation-link-all').click();
+        await page.getByTestId('event-reconciliation-group-unique-all').click();
         await expect(row(page, grid.ax)).toHaveCount(0, {timeout: UI_TIMEOUT});
         await expect(row(page, grid.ay)).toHaveCount(0);
 
@@ -548,49 +564,22 @@ test.describe('Event reconciliation — filters (FB-19)', () => {
         expect(await linkedEventOf(page, grid.bx)).toBeNull();
         expect(await linkedEventOf(page, grid.by)).toBeNull();
 
+        // 77 SEL-C (the designer, 20/11): the filter has emptied its group, and the group stays, so the filter can be taken off.
+        await expect(page.getByTestId('event-reconciliation-group-unique')).toBeVisible();
+        await expect(page.getByTestId('event-reconciliation-table-unique').locator('[data-testid^="event-reconciliation-row-"]'), 'the filter leaves no row').toHaveCount(0);
+        await expect(page.getByTestId('event-reconciliation-group-unique-all'), 'nothing left to link under the filter').toBeDisabled();
+
         // Clear the filter: the rows that were hidden are still there, unique, and still offered.
-        await resetColumnFilter(page, 'asset');
+        await resetColumnFilter(page, 'transaction');
         await expect(row(page, grid.bx)).toHaveAttribute('data-status', 'unique', {timeout: UI_TIMEOUT});
         await expect(row(page, grid.by)).toHaveAttribute('data-status', 'unique');
-        await expect(page.getByTestId('event-reconciliation-link-all')).toBeEnabled();
+        await expect(page.getByTestId('event-reconciliation-group-unique-all')).toBeEnabled();
         expect(commits, 'clearing the filter sends nothing').toHaveLength(1);
-    });
-
-    test('the broker filter narrows the list, and link all links only the unique rows still shown', async ({page, request}) => {
-        const grid = await seedGrid(page, request);
-        await openGrid(page, grid);
-
-        await pickFilterOption(page, 'broker', grid.brokerY);
-        await expect(row(page, grid.ay)).toBeVisible();
-        await expect(row(page, grid.by)).toBeVisible();
-        await expect(row(page, grid.ax), 'the other broker’s rows are filtered out').toHaveCount(0);
-        await expect(row(page, grid.bx)).toHaveCount(0);
-
-        const commits = recordPosts<CommitBody>(page, COMMIT_PATH);
-        await page.getByTestId('event-reconciliation-link-all').click();
-        await expect(row(page, grid.ay)).toHaveCount(0, {timeout: UI_TIMEOUT});
-        await expect(row(page, grid.by)).toHaveCount(0);
-
-        expect(commits, 'ONE commit').toHaveLength(1);
-        expect([...(commits[0].updates ?? [])].sort(byId), 'exactly the unique rows of the filtered broker').toEqual(
-            [
-                {id: grid.ay, asset_event_id: grid.eventA},
-                {id: grid.by, asset_event_id: grid.eventB},
-            ].sort(byId),
-        );
-        expect(await linkedEventOf(page, grid.ay)).toBe(grid.eventA);
-        expect(await linkedEventOf(page, grid.by)).toBe(grid.eventB);
-        expect(await linkedEventOf(page, grid.ax)).toBeNull();
-        expect(await linkedEventOf(page, grid.bx)).toBeNull();
-
-        await resetColumnFilter(page, 'broker');
-        await expect(row(page, grid.ax)).toHaveAttribute('data-status', 'unique', {timeout: UI_TIMEOUT});
-        await expect(row(page, grid.bx)).toHaveAttribute('data-status', 'unique');
     });
 });
 
 test.describe('Event reconciliation — selection (FB-19)', () => {
-    test('link selected links the selected unique rows only; a selection with nothing to act on says so and sends nothing', async ({page, request}) => {
+    test('link selected links the selected unique rows only; an action no selected row can take is not offered', async ({page, request}) => {
         const world = await seedWorld(page, request);
         await openReconciliation(page);
         await expect(row(page, world.uniqueA.tx)).toHaveAttribute('data-status', 'unique', {timeout: UI_TIMEOUT});
@@ -599,7 +588,7 @@ test.describe('Event reconciliation — selection (FB-19)', () => {
         // A unique row and a none row: only the unique one is sent.
         await setSelected(page, world.uniqueA.tx, true);
         await setSelected(page, world.none.tx, true);
-        await page.getByTestId('selection-bar-action-link').click();
+        await page.getByTestId('toolbar-action-link').click();
         await expect(row(page, world.uniqueA.tx)).toHaveCount(0, {timeout: UI_TIMEOUT});
         expect(commits, 'ONE commit').toHaveLength(1);
         expect(commits[0].updates, 'only the selected unique row').toEqual([{id: world.uniqueA.tx, asset_event_id: world.uniqueA.event}]);
@@ -608,28 +597,28 @@ test.describe('Event reconciliation — selection (FB-19)', () => {
         expect(await linkedEventOf(page, world.uniqueA.tx)).toBe(world.uniqueA.event);
         expect(await linkedEventOf(page, world.uniqueB.tx)).toBeNull();
         expect(await linkedEventOf(page, world.none.tx)).toBeNull();
-        // The link cleared the selection.
-        await expect(page.getByTestId(`dt-row-checkbox-${world.none.tx}`)).toHaveAttribute('data-state', 'unchecked');
+        // The linked row left the selection; the none row stays selected, and the bar offers its next step (77 SEL-C, the
+        // designer's (b)).
+        await expect(page.getByTestId(`dt-row-checkbox-${world.none.tx}`)).toHaveAttribute('data-state', 'checked');
+        await expect(page.getByTestId('toolbar-action-create-count')).toHaveText('1');
+        await expect(page.getByTestId('toolbar-action-link')).toHaveCount(0);
 
-        // Only a none row: nothing to link, said, and no request.
+        // Only a none row: «Link selected» is not offered (SEL-0: an action no selected row can take is not there), «Create
+        // events» is; cancelling the dialog creates nothing.
         await setSelected(page, world.none.tx, true);
-        await expect(page.getByTestId('event-reconciliation-notice')).toHaveCount(0);
-        await page.getByTestId('selection-bar-action-link').click();
-        await expect(page.getByTestId('event-reconciliation-notice')).toBeVisible({timeout: UI_TIMEOUT});
-        expect(commits, 'nothing to link sends no commit').toHaveLength(1);
-
-        // Opening the creation dialog for it clears the notice; cancelling creates nothing.
-        await page.getByTestId('selection-bar-action-create').click();
+        await expect(page.getByTestId('toolbar-action-create')).toBeVisible({timeout: UI_TIMEOUT});
+        await expect(page.getByTestId('toolbar-action-link')).toHaveCount(0);
+        await page.getByTestId('toolbar-action-create').click();
         await expectCreateModalOpen(page, 1);
-        await expect(page.getByTestId('event-reconciliation-notice')).toHaveCount(0);
         await page.getByTestId('event-reconciliation-create-cancel').click();
         await expect(createModal(page)).toBeHidden({timeout: UI_TIMEOUT});
+        expect(commits, 'nothing was linked meanwhile').toHaveLength(1);
 
-        // Only a unique row: nothing to create, said, and no dialog.
+        // Only a unique row: «Create events» is not offered, «Link selected» is.
         await setSelected(page, world.none.tx, false);
         await setSelected(page, world.uniqueB.tx, true);
-        await page.getByTestId('selection-bar-action-create').click();
-        await expect(page.getByTestId('event-reconciliation-notice')).toBeVisible({timeout: UI_TIMEOUT});
+        await expect(page.getByTestId('toolbar-action-link')).toBeVisible({timeout: UI_TIMEOUT});
+        await expect(page.getByTestId('toolbar-action-create')).toHaveCount(0);
         await expect(createModal(page)).toHaveCount(0);
         expect(await linkedEventOf(page, world.uniqueB.tx)).toBeNull();
     });
@@ -701,7 +690,7 @@ test.describe('Event reconciliation — create the missing events (FB-19)', () =
         await expect(row(page, txB)).toHaveAttribute('data-status', 'none');
         await setSelected(page, txA, true);
         await setSelected(page, txB, true);
-        await page.getByTestId('selection-bar-action-create').click();
+        await page.getByTestId('toolbar-action-create').click();
 
         await expectCreateModalOpen(page, 2);
         await expect(page.getByTestId(`event-reconciliation-create-row-${txA}`)).toHaveAttribute('data-transactions', '1');
@@ -749,7 +738,7 @@ test.describe('Event reconciliation — create the missing events (FB-19)', () =
         await expect(row(page, tx2)).toHaveAttribute('data-status', 'none');
         await setSelected(page, tx1, true);
         await setSelected(page, tx2, true);
-        await page.getByTestId('selection-bar-action-create').click();
+        await page.getByTestId('toolbar-action-create').click();
 
         await expectCreateModalOpen(page, 1);
         const lines = createModal(page).locator('[data-transactions]');
@@ -778,7 +767,7 @@ test.describe('Event reconciliation — create the missing events (FB-19)', () =
 
         // Both link to that one event, in one commit.
         const commits = recordPosts<CommitBody>(page, COMMIT_PATH);
-        await page.getByTestId('event-reconciliation-link-all').click();
+        await page.getByTestId('event-reconciliation-group-unique-all').click();
         await expect(row(page, tx1)).toHaveCount(0, {timeout: UI_TIMEOUT});
         await expect(row(page, tx2)).toHaveCount(0);
         expect(commits).toHaveLength(1);
@@ -804,7 +793,7 @@ test.describe('Event reconciliation — create the missing events (FB-19)', () =
         await expect(row(page, txB)).toHaveAttribute('data-status', 'none');
         await setSelected(page, txA, true);
         await setSelected(page, txB, true);
-        await page.getByTestId('selection-bar-action-create').click();
+        await page.getByTestId('toolbar-action-create').click();
         await expectCreateModalOpen(page, 2);
         await expect.poll(() => lineAmount(page, txA)).toBe(4);
         await expect.poll(() => lineAmount(page, txB)).toBe(6);
@@ -832,4 +821,99 @@ test.describe('Event reconciliation — create the missing events (FB-19)', () =
         await expect(row(page, txA)).toHaveAttribute('data-status', 'none');
         await expect(page.getByTestId('event-reconciliation-modal')).toBeVisible();
     });
+});
+
+// ---------------------------------------------------------------------------
+// 77 SEL-C — the A4 window
+// ---------------------------------------------------------------------------
+
+test.describe('Event reconciliation — the A4 window (77 SEL-C)', () => {
+    test('«Choose event» on a row with several events links the one the user picks, in ONE commit', async ({page, request}) => {
+        const world = await seedWorld(page, request);
+        await openReconciliation(page);
+        await expect(row(page, world.several.tx)).toHaveAttribute('data-status', 'several', {timeout: UI_TIMEOUT});
+        await expect(page.getByTestId(`dt-row-checkbox-${world.several.tx}`), 'a row with several events takes no checkbox').toHaveCount(0);
+
+        await page.getByTestId(`event-reconciliation-choose-${world.several.tx}`).click();
+        const chooser = page.getByTestId('event-reconciliation-choose-modal');
+        await expect(chooser).toBeVisible({timeout: UI_TIMEOUT});
+        for (const eventId of world.several.events) await expect(chooser.getByTestId(`event-reconciliation-choose-option-${eventId}`)).toHaveAttribute('data-source', 'manual');
+        const confirm = chooser.getByTestId('event-reconciliation-choose-confirm');
+        await expect(confirm, 'nothing is chosen to start').toBeDisabled();
+
+        const picked = world.several.events[1];
+        await chooser.getByTestId(`event-reconciliation-choose-option-${picked}`).locator('input').check();
+        await expect(confirm).toBeEnabled();
+        const commits = recordPosts<CommitBody>(page, COMMIT_PATH);
+        await confirm.click();
+
+        await expect(chooser).toBeHidden({timeout: UI_TIMEOUT});
+        await expect(row(page, world.several.tx)).toHaveCount(0, {timeout: UI_TIMEOUT});
+        expect(commits, 'ONE commit').toHaveLength(1);
+        expect(commits[0].updates).toEqual([{id: world.several.tx, asset_event_id: picked}]);
+        expect(await linkedEventOf(page, world.several.tx)).toBe(picked);
+        expect(await linkedEventOf(page, world.uniqueA.tx), 'nothing else was linked').toBeNull();
+    });
+
+    test('one selection over the two tables: the bar at the top of the window comes down into the dock when its body scrolls, and Esc there deselects without closing the window', async ({page, request}) => {
+        // A short window, so its body scrolls however few rows there are.
+        await page.setViewportSize({width: 1280, height: 420});
+        const world = await seedWorld(page, request);
+        await openReconciliation(page);
+        await expect(row(page, world.uniqueA.tx)).toHaveAttribute('data-status', 'unique', {timeout: UI_TIMEOUT});
+
+        await setSelected(page, world.uniqueA.tx, true);
+        await setSelected(page, world.none.tx, true);
+        const modal = page.getByTestId('event-reconciliation-modal');
+        const bar = modal.getByTestId('selection-toolbar');
+        await expect(bar).toHaveAttribute('data-variant', 'top');
+        await expect(bar).toHaveAttribute('data-selected-count', '2');
+        await expect(modal.getByTestId('toolbar-action-link-count')).toHaveText('1');
+        await expect(modal.getByTestId('toolbar-action-create-count')).toHaveText('1');
+
+        // The body scrolled to its end: the top is out of view, and the actions are in the dock, once.
+        await modal.getByTestId('event-reconciliation-body').evaluate((body) => body.scrollTo(0, body.scrollHeight));
+        await expect(modal.getByTestId('dt-selection-top')).toHaveAttribute('data-in-view', 'false', {timeout: UI_TIMEOUT});
+        await expect(modal.getByTestId('dt-dock')).toHaveAttribute('data-actions', 'true');
+        await expect(bar).toHaveAttribute('data-variant', 'dock');
+        await expect(modal.getByTestId('toolbar-action-link')).toHaveCount(1);
+
+        // Esc inside the dock deselects both tables, and the window stays open.
+        await modal.getByTestId('toolbar-action-link').focus();
+        await page.keyboard.press('Escape');
+        await expect(modal.getByTestId('selection-toolbar')).toHaveCount(0);
+        await expect(modal).toBeVisible();
+        await expect(page.getByTestId(`dt-row-checkbox-${world.uniqueA.tx}`)).toHaveAttribute('data-state', 'unchecked');
+        await expect(page.getByTestId(`dt-row-checkbox-${world.none.tx}`)).toHaveAttribute('data-state', 'unchecked');
+    });
+
+    for (const [width, height] of [
+        [768, 600],
+        [390, 760],
+    ] as const) {
+        test(`at ${width} px every row's button is drawn whole inside its table, in the column pinned on the right`, async ({page, request}) => {
+            await page.setViewportSize({width, height});
+            const world = await seedWorld(page, request);
+            await openReconciliation(page);
+            await expect(row(page, world.uniqueA.tx)).toHaveAttribute('data-status', 'unique', {timeout: UI_TIMEOUT});
+
+            const buttons: Array<[string, string]> = [
+                ['unique', `event-reconciliation-link-${world.uniqueA.tx}`],
+                ['none', `event-reconciliation-create-${world.none.tx}`],
+                ['several', `event-reconciliation-choose-${world.several.tx}`],
+            ];
+            for (const [status, testId] of buttons) {
+                const table = await page.getByTestId(`event-reconciliation-table-${status}`).boundingBox();
+                const button = page.getByTestId(testId);
+                await button.scrollIntoViewIfNeeded();
+                const box = await button.boundingBox();
+                if (!table || !box) throw new Error(`${status}: the table or its button is not drawn`);
+                expect(box.x, `${status}: the button starts inside its table`).toBeGreaterThanOrEqual(table.x);
+                expect(box.x + box.width, `${status}: the button ends inside its table (${box.x + box.width} > ${table.x + table.width} means it is cut)`).toBeLessThanOrEqual(table.x + table.width + 0.5);
+                // Inside its cell too: a pinned cell narrower than its button clips it (overflow hidden).
+                const cellRight = await button.evaluate((el) => (el.closest('td') as HTMLElement).getBoundingClientRect().right);
+                expect(box.x + box.width, `${status}: the button is not clipped by its cell`).toBeLessThanOrEqual(cellRight + 0.5);
+            }
+        });
+    }
 });

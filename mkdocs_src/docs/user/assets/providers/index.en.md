@@ -61,10 +61,10 @@ details such as the type or the sector. Each asset has at most one provider: pic
 
 | Provider | Current price | History | Search | Details | Identifier | Best for |
 |----------|:---:|:---:|:---:|:---:|---|---|
-| <img src="https://s.yimg.com/cv/apiv2/myc/finance/Finance_icon_0919_250x252.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **Yahoo Finance** | ✅ | ✅ | ✅ | ✅ | Ticker (`AAPL`, `VWCE.DE`) or ISIN | Stocks, ETFs, funds and crypto worldwide |
+| <img src="https://s.yimg.com/cv/apiv2/myc/finance/Finance_icon_0919_250x252.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **Yahoo Finance** | ✅ | ✅ | ✅ | ✅ | Ticker (`AAPL`, `VWCE.DE`) or ISIN | Stocks, ETFs, funds worldwide, and the main crypto |
 | <img src="https://www.justetf.com/android-chrome-144x144.png?v2" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **justETF** | ✅ | ✅ | ✅ | ✅ | ISIN (`IE00B4L5Y983`) | European ETFs, priced in EUR, USD, CHF or GBP |
 | <img src="https://www.borsaitaliana.it/media-rwd/assets/images/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **Borsa Italiana** | ✅ | ✅ | ✅ | ✅ | ISIN (`IT0003128367`) | Instruments listed in Milan, Italian mutual funds |
-| <img src="https://www.coingecko.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **CoinGecko** | ✅ | ✅ (one year, free plan) | ✅ | ✅ | Provider ID (`bitcoin`) | Crypto and tokens; needs a free API key |
+| <img src="https://www.coingecko.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **CoinGecko** | ✅ | ✅ (one year, free plan) | ✅ | ✅ | CoinGecko ID (`bitcoin`) | Crypto and tokens; needs a free API key |
 | <img src="../../../static/cssscraper.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **CSS Scraper** | ✅ | ❌ | ❌ | ❌ | Page URL | A price shown on any public web page |
 | <img src="../../../static/scheduled_investment.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **Scheduled Investment** | ✅ | ✅ | ❌ | ❌ | None — created for you | Deposits, loans and bonds valued by their interest |
 
@@ -74,10 +74,11 @@ Finance, justETF), splits (Yahoo Finance), interest payouts and maturity (Schedu
 
 ## 🎯 Choosing a Provider
 
-- **Stocks, ETFs or crypto on any exchange** → **Yahoo Finance**.
+- **Stocks, ETFs or funds on any exchange** → **Yahoo Finance**.
 - **A European ETF**, or ETF prices in USD, CHF or GBP → **justETF**.
 - **Stocks, bonds, ETFs or funds traded in Milan**, and Italian mutual funds → **Borsa Italiana**.
-- **Crypto and tokens**, priced in your currency → **CoinGecko** (an administrator sets its free API key first).
+- **Crypto** → **CoinGecko** (every coin and token, priced in your currency; a free Demo key; one year of history) or
+  **Yahoo Finance** (the main coins, many years of history, no key; smaller coins only in US dollars).
 - **A price that only a web page shows** → **CSS Scraper**.
 - **A savings account, term deposit, P2P loan or bond followed by its interest** →
   **Scheduled Investment**.

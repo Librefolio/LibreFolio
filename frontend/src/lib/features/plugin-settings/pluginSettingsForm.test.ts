@@ -34,7 +34,7 @@
  * function must leave what it is given as it was: a mutation throws instead of passing.
  */
 import {describe, expect, it, vi} from 'vitest';
-import {ChartColumn, Coins, IdCard, Share2} from 'lucide-svelte';
+import {ArrowRightLeft, ChartColumn, Coins, IdCard, Share2, SlidersHorizontal} from 'lucide-svelte';
 import en from '$lib/i18n/en.json';
 import itCatalogue from '$lib/i18n/it.json';
 import fr from '$lib/i18n/fr.json';
@@ -51,6 +51,14 @@ import {
     FAMILY_ICONS,
     FAMILY_ORDER,
     FAMILY_TITLE_KEYS,
+    entryMatches,
+    filterByMenu,
+    MENU_ICONS,
+    MENU_TITLE_KEYS,
+    pluginMenu,
+    pluginsHref,
+    readPluginsAddress,
+    searchWords,
     fieldDescription,
     fieldLabel,
     groupByFamily,
@@ -247,6 +255,175 @@ describe('groupByFamily — the groups of the Plugins tab', () => {
 
         expect(FAMILY_ICONS.asset).toBe(ChartColumn);
         expect(FAMILY_ICONS.fx).toBe(Coins);
+    });
+});
+
+// --- The menu (project 76, S1b) ---------------------------------------------------------------------------------------
+
+describe("pluginMenu, filterByMenu — the menu of the Plugins tab (76 S1b, the developer's yes to mock S0)", () => {
+    const OK_ASSET = entry([], {plugin_code: 'justetf', configured: true});
+    const TODO_ASSET = entry([], {plugin_code: 'coingecko', configured: false});
+    const OK_FX = entry([], {family: 'fx', plugin_code: 'ecb', configured: true});
+    const TODO_GROUP = entry([], {family: 'group', plugin_code: 'coingecko', configured: false});
+    const ANSWER = frozen([TODO_GROUP, OK_FX, TODO_ASSET, OK_ASSET]);
+
+    it('lists «All», «To configure» and each family present, in FAMILY_ORDER, with its count and a dot where something is to configure', () => {
+        expect(pluginMenu(ANSWER)).toStrictEqual([
+            {id: 'all', count: 4, dot: false},
+            {id: 'unconfigured', count: 2, dot: false},
+            {id: 'asset', count: 2, dot: true},
+            {id: 'fx', count: 1, dot: false},
+            {id: 'group', count: 1, dot: true},
+        ]);
+    });
+
+    it('leaves «To configure» out when nothing is, unless it is the entry selected', () => {
+        const allConfigured = [OK_ASSET, OK_FX];
+        expect(pluginMenu(allConfigured).map((item) => item.id)).toEqual(['all', 'asset', 'fx']);
+        expect(pluginMenu(allConfigured, 'unconfigured').map((item) => [item.id, item.count])).toEqual([
+            ['all', 2],
+            ['unconfigured', 0],
+            ['asset', 1],
+            ['fx', 1],
+        ]);
+        expect(pluginMenu([])).toStrictEqual([{id: 'all', count: 0, dot: false}]);
+    });
+
+    it('keeps a selected family that has no entry any more, with 0', () => {
+        expect(pluginMenu([OK_FX], 'asset').map((item) => [item.id, item.count])).toEqual([
+            ['all', 1],
+            ['asset', 0],
+            ['fx', 1],
+        ]);
+    });
+
+    it('filters: «All» everything, «To configure» the entries not configured, a family its own; the input untouched', () => {
+        expect(filterByMenu(ANSWER, 'all')).toStrictEqual([TODO_GROUP, OK_FX, TODO_ASSET, OK_ASSET]);
+        expect(filterByMenu(ANSWER, 'unconfigured')).toStrictEqual([TODO_GROUP, TODO_ASSET]);
+        expect(filterByMenu(ANSWER, 'asset')).toStrictEqual([TODO_ASSET, OK_ASSET]);
+        expect(filterByMenu(ANSWER, 'tool')).toStrictEqual([]);
+    });
+
+    it("has a short title key for every family (the developer's D), and «All» and «To configure» keys", () => {
+        expect(MENU_TITLE_KEYS).toStrictEqual({
+            all: 'pluginSettings.menu.all',
+            unconfigured: 'pluginSettings.status.notConfigured',
+            asset: 'pluginSettings.menu.asset',
+            fx: 'pluginSettings.menu.fx',
+            brim: 'pluginSettings.menu.brim',
+            tool: 'pluginSettings.menu.tool',
+            enricher: 'pluginSettings.menu.enricher',
+            group: 'pluginSettings.menu.group',
+        });
+        for (const catalogue of [en, itCatalogue, fr, es] as Array<Record<string, unknown>>) {
+            for (const key of [...Object.values(MENU_TITLE_KEYS), 'pluginSettings.menu.hasUnconfigured', 'pluginSettings.menu.nothingUnconfigured']) {
+                expect(
+                    key.split('.').reduce<unknown>((node, part) => (node as Record<string, unknown> | undefined)?.[part], catalogue),
+                    key,
+                ).toBeTypeOf('string');
+            }
+        }
+    });
+
+    it('draws «To configure» with the sliders, each family with its own icon, «All» with none', () => {
+        expect(MENU_ICONS.all).toBeNull();
+        expect(MENU_ICONS.unconfigured).toBe(SlidersHorizontal);
+        for (const family of FAMILY_ORDER) expect(MENU_ICONS[family]).toBe(FAMILY_ICONS[family]);
+    });
+
+    it('draws the import sources with the Transactions icon (the developer, 19/11: what they import)', () => {
+        expect(FAMILY_ICONS.brim).toBe(ArrowRightLeft);
+    });
+});
+
+// --- The search (project 76, S2b) ------------------------------------------------------------------------------------
+
+describe("searchWords, entryMatches — the search of the Plugins tab (76 S2b, the developer's rules of 19/11)", () => {
+    const t = (key: string): string =>
+        ({
+            'pluginSettings.calls.limitField.day.label': 'Limite giornaliero',
+            'pluginSettings.group.coingecko.about': "L'account CoinGecko condiviso dai plugin CoinGecko",
+        })[key] ?? key;
+    const DAY_LIMIT = field({key: 'call_limit_day', type: 'integer', scope: 'system', label: 'Calls per day', label_key: 'pluginSettings.calls.limitField.day.label', value: 2000, is_set: true, source: 'db'});
+    const GROUP = entry([DAY_LIMIT], {family: 'group', plugin_code: 'coingecko', plugin_name: 'CoinGecko', description: 'The CoinGecko account the CoinGecko plugins share.', description_key: 'pluginSettings.group.coingecko.about', configured: false});
+    const READER = entry([field({key: 'current_refresh_minutes', label: 'Price refresh', description: 'How long a current price stays fresh.'})], {plugin_code: 'coingecko', plugin_name: 'CoinGecko', configured: false});
+    const SNB = entry([], {family: 'fx', plugin_code: 'SNB', plugin_name: 'Swiss National Bank', description: 'Swiss National Bank — monthly averages.', description_i18n: {it: 'Banca Nazionale Svizzera — medie mensili.'}});
+
+    it('splits on blanks, in lower case, without accents', () => {
+        expect(searchWords('  Gecko   LÍMITE ')).toEqual(['gecko', 'limite']);
+        expect(searchWords('   ')).toEqual([]);
+    });
+
+    it('wants every word in the same card, in any of its texts: «gecko limite giornaliero» is the group, not its reader', () => {
+        const words = searchWords('gecko limite giornaliero');
+        expect(entryMatches(GROUP, words, t, 'it')).toBe(true);
+        expect(entryMatches(READER, words, t, 'it')).toBe(false);
+        expect(entryMatches(READER, searchWords('gecko'), t, 'it'), 'one word: both CoinGecko cards').toBe(true);
+    });
+
+    it("reads the description in the language of the interface, else in English, else the group's key", () => {
+        expect(entryMatches(SNB, searchWords('svizzera'), t, 'it')).toBe(true);
+        expect(entryMatches(SNB, searchWords('svizzera'), t, 'fr'), 'no French text: the English one').toBe(false);
+        expect(entryMatches(SNB, searchWords('monthly'), t, 'fr')).toBe(true);
+        expect(entryMatches(GROUP, searchWords('condiviso'), t, 'it')).toBe(true);
+    });
+
+    it("reads the plugin's code and the fields' descriptions", () => {
+        expect(entryMatches(SNB, searchWords('snb'), t, 'it')).toBe(true);
+        expect(entryMatches(READER, searchWords('fresh'), t, 'it')).toBe(true);
+    });
+
+    it('never the numbers: a value is not searched', () => {
+        expect(entryMatches(GROUP, searchWords('2000'), t, 'it')).toBe(false);
+    });
+
+    it('exact words, no tolerance: «geko» does not find «CoinGecko»', () => {
+        expect(entryMatches(GROUP, searchWords('geko'), t, 'it')).toBe(false);
+    });
+
+    it('no word: every card', () => {
+        expect(entryMatches(READER, [], t, 'it')).toBe(true);
+    });
+
+    it("the menu counts what the search shows; its entries and dots stay by the totals (the developer's C)", () => {
+        const OK_FX = entry([], {family: 'fx', plugin_code: 'ecb', configured: true});
+        const all = frozen([READER, GROUP, OK_FX]);
+        expect(pluginMenu(all, 'all', [GROUP])).toStrictEqual([
+            {id: 'all', count: 1, dot: false},
+            {id: 'unconfigured', count: 1, dot: false},
+            {id: 'asset', count: 0, dot: true},
+            {id: 'fx', count: 0, dot: false},
+            {id: 'group', count: 1, dot: true},
+        ]);
+    });
+});
+
+// --- The address (project 76, S2c) -----------------------------------------------------------------------------------
+
+describe("readPluginsAddress, pluginsHref — the menu's choice and the search in the page's address (76 S2c)", () => {
+    it('reads ?family= and ?q=; a family the menu does not know, or none, is «All»', () => {
+        expect(readPluginsAddress(new URLSearchParams('family=fx&q=svizzera'))).toStrictEqual({selected: 'fx', query: 'svizzera'});
+        expect(readPluginsAddress(new URLSearchParams('family=unconfigured'))).toStrictEqual({selected: 'unconfigured', query: ''});
+        expect(readPluginsAddress(new URLSearchParams('family=crypto&q='))).toStrictEqual({selected: 'all', query: ''});
+        expect(readPluginsAddress(new URLSearchParams(''))).toStrictEqual({selected: 'all', query: ''});
+    });
+
+    it('writes only what is chosen: «All» and an empty search write nothing', () => {
+        expect(pluginsHref('all', '')).toBe('/settings/plugins');
+        expect(pluginsHref('fx', '')).toBe('/settings/plugins?family=fx');
+        expect(pluginsHref('all', 'gecko limite')).toBe('/settings/plugins?q=gecko+limite');
+        expect(pluginsHref('asset', 'coingecko')).toBe('/settings/plugins?family=asset&q=coingecko');
+        expect(pluginsHref('all', '   ')).toBe('/settings/plugins');
+    });
+
+    it('reads back what it writes', () => {
+        for (const [selected, query] of [
+            ['group', 'chiave'],
+            ['all', 'swiss bank'],
+            ['unconfigured', ''],
+        ] as const) {
+            expect(readPluginsAddress(new URL(pluginsHref(selected, query), 'http://librefolio.test').searchParams)).toStrictEqual({selected, query});
+        }
     });
 });
 

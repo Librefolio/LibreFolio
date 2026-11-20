@@ -267,6 +267,15 @@ describe('fieldOf — a field as the components trust it', () => {
 
 // =====================================================================================================================
 describe('entryOf — a plugin’s entry as the components trust it', () => {
+    it("keeps the plugin's description, its key and its translations when the catalogue sends them, and no key otherwise (76 S2a/S2b)", () => {
+        const read = entryOf({family: 'fx', plugin_code: 'SNB', plugin_name: 'Swiss National Bank', description: '  Swiss National Bank.  ', description_key: null, description_i18n: {it: 'Banca Nazionale Svizzera.', fr: 7, es: ''}});
+        expect(read.description).toBe('Swiss National Bank.');
+        expect(read.description_i18n).toStrictEqual({it: 'Banca Nazionale Svizzera.'});
+        expect('description_key' in read).toBe(false);
+        const group = entryOf({family: 'group', plugin_code: 'coingecko', plugin_name: 'CoinGecko', description: 'The account.', description_key: 'pluginSettings.group.coingecko.about', description_i18n: {}});
+        expect([group.description, group.description_key, 'description_i18n' in group]).toEqual(['The account.', 'pluginSettings.group.coingecko.about', false]);
+    });
+
     it('keeps a well-formed entry as it is, its fields narrowed', () => {
         expect(entryOf(structuredClone(JUSTETF))).toStrictEqual(JUSTETF);
     });

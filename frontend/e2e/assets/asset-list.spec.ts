@@ -3021,3 +3021,181 @@ test.describe('Asset List Page — the live poll brings the Δ with the quote (Y
         expect(url.searchParams.get('range_start')! <= todayIso(), 'a day that is not after today').toBe(true);
     });
 });
+
+/**
+ * RN-23 (Q10 a) — the risk columns of the table: each row is its own asset's question (`asset` scope, never one shared
+ * calendar), over the page's period and in its currency, so a row is the figure of that asset's Risk tab. The max
+ * drawdown is shown; a figure the engine cannot give is «—» with its reason; the page says when the columns are in
+ * (`data-risk-columns`). A new period asks again, about the new period.
+ */
+test.describe('Asset list — the risk columns (RN-23)', () => {
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    interface ListRiskRequest {
+        scope: {kind: string; asset_id?: number};
+        date_range: {start: string; end: string | null};
+        target_currency: string;
+        mode: string;
+        analytics: Array<{instance_id: string; analytic_code: string}>;
+    }
+
+    /** The risk requests the table's columns send (their instances are `list-…`), as the browser sent them, and the HTTP status of each answer. */
+    function recordListRiskRequests(page: Page): {sent: ListRiskRequest[]; refused: string[]} {
+        const sent: ListRiskRequest[] = [];
+        const refused: string[] = [];
+        const isList = (request: Request) => request.method() === 'POST' && request.url().includes('/api/v1/risk/query') && (request.postDataJSON() as ListRiskRequest).analytics.some((analytic) => analytic.instance_id.startsWith('list-'));
+        page.on('request', (request: Request) => {
+            if (isList(request)) sent.push(request.postDataJSON() as ListRiskRequest);
+        });
+        page.on('response', (answer) => {
+            if (isList(answer.request()) && answer.status() !== 200) refused.push(`${answer.status()} ${(answer.request().postDataJSON() as ListRiskRequest).mode}`);
+        });
+        return {sent, refused};
+    }
+
+    async function openTable(page: Page, period: {start: string; end: string}): Promise<Locator> {
+        await goToAssetsPage(page, period);
+        await page.getByTestId('view-mode-list').click();
+        const root = page.getByTestId('assets-page');
+        await expect(root, 'the risk columns never said they were in').toHaveAttribute('data-risk-columns', 'ready', {timeout: 30_000});
+        await expect(root).toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+        return root;
+    }
+
+    const cell = (root: Locator, assetId: number, column: string) => root.locator(`tbody tr[data-row-id="${assetId}"] [data-testid="asset-risk-cell"][data-column="${column}"]`);
+
+    test('each row asks about its own asset over the page’s period: the max drawdown shown, a blank with its reason', async ({page}) => {
+        const apple = await assetIdByName(page, 'Apple Inc.');
+        const btpPiu = await assetIdByName(page, 'BTP Più Sc Fb33 EUR');
+        const {sent, refused} = recordListRiskRequests(page);
+        const period = {start: daysAgoIso(120), end: todayIso()};
+        const root = await openTable(page, period);
+
+        // Every question the columns sent is about one asset, over the page's period, in one currency.
+        expect(sent.length, 'the risk columns asked nothing').toBeGreaterThan(0);
+        // Every wave is a question the engine accepts, the hidden columns' too (a current-composition request without its policy is a 422).
+        expect(refused, 'the engine refused a question of the risk columns').toEqual([]);
+        expect(
+            sent.filter((request) => request.scope.kind !== 'asset').map((request) => request.scope.kind),
+            'a row was measured inside a set of assets',
+        ).toEqual([]);
+        expect(new Set(sent.map((request) => `${request.date_range.start}…${request.date_range.end}`))).toEqual(new Set([`${period.start}…${period.end}`]));
+        expect(new Set(sent.map((request) => request.target_currency)).size, 'the rows were asked in more than one currency').toBe(1);
+        const aboutApple = sent.filter((request) => request.scope.asset_id === apple);
+        expect(aboutApple.map((request) => request.mode).sort(), 'Apple’s row did not ask both of the Risk tab’s waves').toEqual(['current_composition', 'historical']);
+
+        // Apple has prices over the period: its max drawdown is a figure. BTP Più has a current price only: a blank, with why.
+        await expect(cell(root, apple, 'maxDrawdown')).toHaveAttribute('data-state', 'value');
+        expect(Number(await cell(root, apple, 'maxDrawdown').getAttribute('data-value'))).toBeLessThanOrEqual(0);
+        await expect(cell(root, btpPiu, 'maxDrawdown')).toHaveAttribute('data-state', 'blank');
+        await expect(cell(root, btpPiu, 'maxDrawdown')).toHaveAttribute('data-reason', /\S/);
+        // The figure is the Risk tab's: its whole historical wave on Apple (`buildBaseAnalytics`, with the monthly VaR and the
+        // summary, as `RiskLevelsPanel` asks it), over the same period and currency, gives the same max drawdown.
+        const listQuestion = aboutApple.find((request) => request.mode === 'historical')!;
+        const listRate = (listQuestion.analytics.find((analytic) => analytic.analytic_code === 'historical_kpi') as {parameters?: Record<string, number>} | undefined)?.parameters ?? {};
+        const tab = await page.request.post('/api/v1/risk/query', {
+            data: {
+                scope: {kind: 'asset', asset_id: apple},
+                date_range: listQuestion.date_range,
+                target_currency: listQuestion.target_currency,
+                mode: 'historical',
+                analytics: [
+                    {instance_id: 'base-historical-historical_kpi', analytic_code: 'historical_kpi', parameters: listRate},
+                    {instance_id: 'base-historical-historical_var', analytic_code: 'historical_var', parameters: {confidence_level: 0.95, horizon_days: 1}},
+                    {instance_id: 'base-historical-historical_var-monthly', analytic_code: 'historical_var', parameters: {confidence_level: 0.95, horizon_days: 30}},
+                    {instance_id: 'base-historical-drawdown_summary', analytic_code: 'drawdown_summary', parameters: {}},
+                ],
+            },
+        });
+        expect(tab.ok(), `the Risk tab's wave answered HTTP ${tab.status()}`).toBe(true);
+        const tabItems = ((await tab.json()) as {items: Array<{analytic_code: string; status: string; output: {maximum_drawdown?: number} | null}>}).items;
+        const tabDrawdown = tabItems.find((item) => item.analytic_code === 'drawdown_summary');
+        expect(tabDrawdown?.status).toBe('ok');
+        expect(Number(await cell(root, apple, 'maxDrawdown').getAttribute('data-value')), 'the row is not the Risk tab’s figure').toBe(tabDrawdown?.output?.maximum_drawdown);
+
+        // The other figures wait in the column menu.
+        await expect(root.locator('[data-testid="asset-risk-cell"][data-column="volatility"]')).toHaveCount(0);
+
+        // The toolbar's Refresh (prices invalidated): the same question is asked again, not served from the page's cache.
+        const beforeRefresh = sent.length;
+        await page.getByTestId('assets-refresh-button').click();
+        await expect.poll(() => sent.slice(beforeRefresh).filter((request) => request.scope.asset_id === apple).length, {timeout: 15_000, message: 'a refresh did not ask the risk columns again'}).toBeGreaterThan(0);
+        await expect(root).toHaveAttribute('data-risk-columns', 'ready', {timeout: 30_000});
+
+        // A new period: Apple's row asks again, about the new period.
+        const before = sent.length;
+        const later = {start: daysAgoIso(60), end: todayIso()};
+        await openTable(page, later);
+        const asked = sent.slice(before).filter((request) => request.scope.asset_id === apple);
+        expect(
+            asked.map((request) => request.date_range.start),
+            'the new period was not asked about',
+        ).toContain(later.start);
+        await expect(cell(root, apple, 'maxDrawdown')).toHaveAttribute('data-state', 'value');
+    });
+});
+
+/**
+ * «A2» (RN-21) — a card's signal bound to the reader's risk-free rate follows it. The lab, on this page's correlation tab,
+ * has the rate field: a rate changed there asks again the cards whose signals read it, so a card never shows a Rolling
+ * Sharpe at the old rate. The rate lives in the browser per context: this test leaves nothing behind.
+ */
+test.describe('Asset list — a card signal bound to the risk-free rate follows it («A2», RN-21)', () => {
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    interface SignalAsk {
+        signal_code?: string;
+        params?: Record<string, unknown>;
+    }
+
+    /** The rates a request asks a Rolling Sharpe with, when it is a card load (`POST /assets/prices/query`). */
+    function sharpeRatesOf(request: Request): number[] {
+        if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/v1/assets/prices/query') return [];
+        let body: unknown;
+        try {
+            body = request.postDataJSON();
+        } catch {
+            return [];
+        }
+        const rates: number[] = [];
+        for (const item of Array.isArray(body) ? body : []) {
+            for (const signal of ((item as {signals?: SignalAsk[]}).signals ?? []) as SignalAsk[]) {
+                if (signal.signal_code === 'RISK_ROLLING_SHARPE' && typeof signal.params?.risk_free_annual_rate === 'number') rates.push(signal.params.risk_free_annual_rate);
+            }
+        }
+        return rates;
+    }
+
+    test('changing the rate in the lab asks the card’s rolling Sharpe again, with the new rate', async ({page}) => {
+        await goToAssetsPage(page);
+        const appleId = await assetIdByName(page, 'Apple Inc.');
+        const sharpe = {id: 'e2e-a2-sharpe', signalType: 'risk-rolling-sharpe', params: {window: 20}, style: {color: '#f59e0b', lineWidth: 2, lineType: 'solid', markerStart: null, markerEnd: null}};
+        await seedChartComparisons(page, [[`asset-${appleId}`, [sharpe as unknown as Parameters<typeof seedChartComparisons>[1][number][1][number]]]]);
+        const rates: number[] = [];
+        page.on('request', (request: Request) => rates.push(...sharpeRatesOf(request)));
+
+        await goToAssetsPage(page);
+        await page.getByTestId('view-mode-grid').click();
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+        await expect.poll(() => rates.length, {message: 'the card never asked its rolling Sharpe', timeout: 15_000}).toBeGreaterThan(0);
+        expect(
+            rates.every((rate) => rate === 0),
+            `premise: a fresh reader's rate is 0, asked ${JSON.stringify(rates)}`,
+        ).toBe(true);
+
+        await page.getByTestId('assets-tab-correlation').click();
+        const field = page.getByTestId('asset-global-risk-panel').getByTestId('risk-free-rate');
+        await expect(field, 'the lab shows the rate field only once its opening selection is analysed (the seeded holdings)').toBeVisible({timeout: 20_000});
+        // The answer to the card load at the new rate: the engine must accept it, not only receive it.
+        const answeredAtNewRate = page.waitForResponse((response) => sharpeRatesOf(response.request()).includes(0.025), {timeout: 15_000});
+        await field.fill('2.5');
+        await field.press('Enter');
+
+        await expect.poll(() => rates.includes(0.025), {message: `the card did not ask its rolling Sharpe at the new rate, asked ${JSON.stringify(rates)}`, timeout: 15_000}).toBe(true);
+        expect((await answeredAtNewRate).status(), 'the card load at the new rate was refused').toBe(200);
+    });
+});

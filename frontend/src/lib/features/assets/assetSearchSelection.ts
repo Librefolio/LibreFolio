@@ -33,16 +33,16 @@ export interface SearchResultProvider {
     acceptedTypes: readonly string[];
 }
 
-/** A provider whose own code is an input type (PROVIDER_ID): its OTHER search rows carry that code (project 76, P3). */
+/** A provider whose own code is an input type (COINGECKO_ID): its OTHER search rows carry that code (project 76, P3). */
 function takesProviderId(provider: SearchResultProvider | null | undefined): provider is SearchResultProvider {
-    return !!provider && provider.acceptedTypes.includes('PROVIDER_ID');
+    return !!provider && provider.acceptedTypes.includes('COINGECKO_ID');
 }
 
 /**
  * The outcome of a search result's identifier (`identifier_type` + `identifier`) on the form's rows. A row of the
  * same type that is empty, or holds the same code in another case, takes the result's code.
  *
- * For a provider that accepts PROVIDER_ID (CoinGecko) only, an OTHER result is its own code, and OTHER is a list that
+ * For a provider that accepts COINGECKO_ID (CoinGecko) only, an OTHER result is its own code, and OTHER is a list that
  * grows (project 76, P3, the consultant's rule): the code is written as `<provider>:<code>` (`coingecko:bitcoin`) into
  * an empty OTHER row or a new one, unless the list already holds it; never a conflict. Any other provider's OTHER row
  * behaves as before.
@@ -73,13 +73,13 @@ const ASSIGNMENT_TYPES: readonly string[] = schemas.ProviderInputType.options;
 
 /**
  * The assignment's type for a search result (project 76, P3): the result's type when an assignment accepts it (TICKER,
- * ISIN…); an OTHER result of a provider that accepts PROVIDER_ID (CoinGecko), PROVIDER_ID. Anything else as it is: the
+ * ISIN…); an OTHER result of a provider that accepts COINGECKO_ID (CoinGecko), COINGECKO_ID. Anything else as it is: the
  * server reads OTHER as URL, as it always has (Borsa Italiana's fallback rows).
  */
 export function searchResultAssignmentType(identifierType: string | null | undefined, acceptedTypes: readonly string[]): string {
     const type = (identifierType ?? '').toUpperCase();
     if (ASSIGNMENT_TYPES.includes(type)) return type;
-    if (type === 'OTHER' && acceptedTypes.includes('PROVIDER_ID')) return 'PROVIDER_ID';
+    if (type === 'OTHER' && acceptedTypes.includes('COINGECKO_ID')) return 'COINGECKO_ID';
     return type;
 }
 

@@ -10,7 +10,7 @@
     import {_ as t} from '$lib/i18n';
     import {deltaPeriodLabel} from '$lib/features/assets/assetPriceDerived';
     import DataTable from '$lib/components/table/DataTable.svelte';
-    import type {ColumnDef} from '$lib/components/table/types';
+    import type {BulkAction, ColumnDef} from '$lib/components/table/types';
     import {ArrowLeftRight, RefreshCw, RotateCw, Trash2} from 'lucide-svelte';
     import {isCardInverted, setCardInverted} from '$lib/features/fx/fxCardInversionStore';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
@@ -52,9 +52,11 @@
         ondelete?: (info: {base: string; quote: string; slug: string}) => void;
         onselectionchange?: (rows: FxRow[]) => void;
         oninversionchange?: () => void;
+        /** 77 SEL-B: the bulk actions of the table's selection panel (the bar at its top, the dock at its bottom). */
+        selectionActions?: BulkAction<FxRow>[];
     }
 
-    let {data = [], loading = false, visiblePeriods = [], dateStart, dateEnd, onsync, onrefresh, ondelete, onselectionchange, oninversionchange}: Props = $props();
+    let {data = [], loading = false, visiblePeriods = [], dateStart, dateEnd, onsync, onrefresh, ondelete, onselectionchange, oninversionchange, selectionActions}: Props = $props();
 
     ensureCurrenciesLoaded($currentLanguage);
 
@@ -281,6 +283,8 @@
         goto(`/fx/${target}${params}`);
     }}
     onSelectionChange={(ids) => onselectionchange?.(data.filter((row) => ids.includes(row.slug)))}
+    bulkActions={selectionActions ?? []}
+    selectionPanel={selectionActions !== undefined}
     rowActions={[
         {
             id: 'swap',

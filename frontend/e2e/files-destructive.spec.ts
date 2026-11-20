@@ -155,7 +155,7 @@ test('static single delete — cancel keeps the row', async ({page}) => {
     await expect(row).toHaveCount(1);
 });
 
-test('static bulk delete — SelectionBar emits file.deleted.bulk for the selected rows', async ({page}) => {
+test('static bulk delete — the shared selection panel emits file.deleted.bulk for the selected rows', async ({page}) => {
     const ids = [await uploadStaticFile(page, uniqueSuffix()), await uploadStaticFile(page, uniqueSuffix()), await uploadStaticFile(page, uniqueSuffix())];
     await openStaticListView(page);
 
@@ -164,10 +164,12 @@ test('static bulk delete — SelectionBar emits file.deleted.bulk for the select
         await page.getByTestId(`dt-row-checkbox-${id}`).click();
     }
 
-    // The page SelectionBar only renders once something is selected; its delete
-    // button is the sole reachable entry point to `handleBulkDeleteFiles`.
-    const bulkDelete = page.getByTestId('selection-bar-action-delete');
+    // 77 SEL-A: the static list draws the shared panel; its delete, at the top of the table while it is in view, is the
+    // entry point to `handleBulkDeleteFiles`. The number says how many rows it deletes.
+    const table = page.getByTestId('files-table-static');
+    const bulkDelete = table.getByTestId('toolbar-action-delete');
     await expect(bulkDelete).toBeVisible({timeout: 5_000});
+    await expect(table.getByTestId('toolbar-action-delete-count')).toHaveText(String(ids.length));
 
     const since = await eventSeq(page);
     await bulkDelete.click();
@@ -177,6 +179,61 @@ test('static bulk delete — SelectionBar emits file.deleted.bulk for the select
     for (const id of ids) {
         await expect(page.locator(`[data-row-id="${id}"]`)).toHaveCount(0);
     }
+});
+
+/** Scroll whatever scrolls the static table (the app's main column, or the window) to its end, or back to its start. */
+async function scrollFilesTable(page: Page, to: 'end' | 'start'): Promise<void> {
+    await page.getByTestId('files-table-static').evaluate((table, where) => {
+        let root: Element | null = table.parentElement;
+        while (root && root !== document.body && !['auto', 'scroll', 'overlay'].includes(getComputedStyle(root).overflowY)) root = root.parentElement;
+        const scroller = root && root !== document.body ? root : document.scrollingElement!;
+        scroller.scrollTop = where === 'end' ? scroller.scrollHeight : 0;
+    }, to);
+}
+
+test('the selection panel (77 SEL-A) — the actions sit at the top while it is in view, and come down into the dock once it is out', async ({page}) => {
+    const ids = [await uploadStaticFile(page, uniqueSuffix()), await uploadStaticFile(page, uniqueSuffix())];
+    // A short window, so the top of the table leaves the view however few files the shared database holds.
+    await page.setViewportSize({width: 1280, height: 320});
+    await openStaticListView(page);
+    const table = page.getByTestId('files-table-static');
+    const top = table.getByTestId('dt-selection-top');
+    await expect(top.getByTestId('selection-toolbar-hint')).toBeVisible({timeout: 5_000});
+
+    for (const id of ids) await page.getByTestId(`dt-row-checkbox-${id}`).click();
+
+    // The top in view: the actions are there, with the number; the dock holds none.
+    await expect(top.getByTestId('toolbar-action-delete-count')).toHaveText(String(ids.length), {timeout: 5_000});
+    await expect(table.locator('[data-testid="dt-dock"][data-actions="true"]')).toHaveCount(0);
+
+    // The top out of view: the actions come down into the dock, and only there.
+    await scrollFilesTable(page, 'end');
+    await expect(top).toHaveAttribute('data-in-view', 'false', {timeout: 5_000});
+    const dock = table.getByTestId('dt-dock');
+    await expect(dock).toHaveAttribute('data-actions', 'true');
+    await expect(dock.getByTestId('toolbar-action-delete')).toBeVisible();
+    await expect(table.getByTestId('toolbar-action-delete')).toHaveCount(1);
+
+    // Back to the top: the actions go back up.
+    await scrollFilesTable(page, 'start');
+    await expect(top).toHaveAttribute('data-in-view', 'true', {timeout: 5_000});
+    await expect(top.getByTestId('toolbar-action-delete')).toBeVisible();
+    await expect(table.locator('[data-testid="dt-dock"][data-actions="true"]')).toHaveCount(0);
+});
+
+// Q-SEL-10: the multiple download, unreachable until now, is in the panel, before «Delete», with its number.
+test('static bulk download (77 SEL-B) — «Download» says how many files and downloads each of them', async ({page}) => {
+    const ids = [await uploadStaticFile(page, uniqueSuffix()), await uploadStaticFile(page, uniqueSuffix())];
+    await openStaticListView(page);
+    for (const id of ids) await page.getByTestId(`dt-row-checkbox-${id}`).click();
+
+    const table = page.getByTestId('files-table-static');
+    await expect(table.getByTestId('toolbar-action-download-count')).toHaveText(String(ids.length), {timeout: 5_000});
+    const names: string[] = [];
+    page.on('download', (download) => names.push(download.suggestedFilename()));
+    await table.getByTestId('toolbar-action-download').click();
+    await expect.poll(() => names.length, {message: 'one download per selected file', timeout: 10_000}).toBe(ids.length);
+    for (const id of ids) await expect(page.locator(`[data-row-id="${id}"]`), 'downloading deletes nothing').toHaveCount(1);
 });
 
 test('static delete failure — emits file.delete.failed and keeps the row', async ({page}) => {
@@ -222,6 +279,30 @@ test('BRIM single delete — the isBrim path removes the report', async ({page})
     const ev = await waitForEvent(page, 'file.deleted', {since});
     expect(ev.detail).toMatchObject({fileId, isBrim: true});
     await expect(row).toHaveCount(0);
+});
+
+test('BRIM bulk delete — the shared selection panel deletes the selected reports (77 SEL-B)', async ({page}) => {
+    const brokerId = await createBroker(page, uniqueSuffix());
+    const ids = [await uploadBrimFile(page, brokerId, uniqueSuffix()), await uploadBrimFile(page, brokerId, uniqueSuffix())];
+    await openBrimListView(page);
+
+    for (const id of ids) {
+        await expect(page.locator(`[data-row-id="${id}"]`)).toHaveCount(1);
+        await page.getByTestId(`dt-row-checkbox-${id}`).click();
+    }
+    const table = page.getByTestId('files-table-brim');
+    const bulkDelete = table.getByTestId('toolbar-action-delete');
+    await expect(bulkDelete).toBeVisible({timeout: 5_000});
+    await expect(table.getByTestId('toolbar-action-delete-count')).toHaveText(String(ids.length));
+
+    const since = await eventSeq(page);
+    await bulkDelete.click();
+
+    const ev = await waitForEvent(page, 'file.deleted.bulk', {since});
+    expect(ev.detail).toMatchObject({count: ids.length, isBrim: true});
+    for (const id of ids) {
+        await expect(page.locator(`[data-row-id="${id}"]`)).toHaveCount(0);
+    }
 });
 
 test('BRIM empty state renders when the report list is empty', async ({page}) => {

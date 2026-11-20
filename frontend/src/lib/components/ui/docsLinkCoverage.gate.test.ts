@@ -57,6 +57,8 @@ const PANELS: ReadonlyArray<readonly [string, string, string]> = [
     ['lib/features/assets/profile/ProfileClassification.svelte', 'user/assets/detail/profile/', 'assetDetail.docsHelp.profile'],
     // The data editor: one icon at the right of its Prices | Events tab row (the page covers both; its title is the page's).
     ['lib/features/assets/AssetDataEditorSection.svelte', 'user/assets/detail/data-editor/', 'assetDetail.docsHelp.dataEditor'],
+    // Group 10 — the transactions page (its form and import wizard are modals, out as above).
+    ['routes/(app)/transactions/+page.svelte', 'user/transactions/', 'transactions.docsHelp.list'],
 ];
 
 function escapeRegExp(text: string): string {

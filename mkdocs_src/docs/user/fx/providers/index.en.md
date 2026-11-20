@@ -35,7 +35,7 @@ one takes over.
     </a>
     <a href="bdi/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <img src="https://www.bancaditalia.it/application/themes/bdi2/img/favicon.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="BDI favicon">
+            <img src="../../../static/icons/fx/bdi.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="BDI favicon">
             <span class="card-title" style="margin: 0;">Banca d'Italia (BDI)</span>
         </div>
         <span class="card-desc">About 150 currencies against EUR: almost every currency in the world in one step to the euro.</span>
@@ -87,7 +87,7 @@ Each central bank quotes other currencies against its own, the **base currency**
 | <img src="https://fred.stlouisfed.org/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **FED** (Federal Reserve FRED) | USD 🇺🇸 | Daily, on US business days | US-dollar pairs |
 | <img src="https://www.bankofengland.co.uk/favicon.svg?ver=2c06d" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **BOE** (Bank of England) | GBP 🇬🇧 | Daily, on UK business days | Sterling pairs |
 | <img src="https://data.snb.ch/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **SNB** (Swiss National Bank) | CHF 🇨🇭 | Monthly averages, one value per month | Swiss-franc pairs, when a monthly rate is enough |
-| <img src="https://www.bancaditalia.it/application/themes/bdi2/img/favicon.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **BDI** (Banca d'Italia) | EUR 🇪🇺 | Daily, on Italian business days | Almost any currency to the euro in one step |
+| <img src="../../../static/icons/fx/bdi.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **BDI** (Banca d'Italia) | EUR 🇪🇺 | Daily, on Italian business days | Almost any currency to the euro in one step |
 | <img src="https://www.bcb.gov.br/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **BCB** (Banco Central do Brasil) | USD 🇺🇸 | Daily, on Brazilian business days | Almost any currency to the US dollar, and BRL |
 | <img src="https://www.norges-bank.no/Static/Favicons/favicon-32x32.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **NORGES** (Norges Bank) | NOK 🇳🇴 | Daily, around 16:00 CET on Norwegian business days | Asian currencies the ECB does not publish (BDT, PKR, VND, MMK) |
 | <img src="https://bank.gov.ua/frontend/icon/favicon-32x32.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **NBU** (National Bank of Ukraine) | UAH 🇺🇦 | Every day, weekends included (each rate valid from the day after it is set) | Central Asia, the Caucasus, Eastern Europe, North Africa |

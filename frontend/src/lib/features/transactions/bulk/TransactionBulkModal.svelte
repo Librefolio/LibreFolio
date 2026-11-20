@@ -89,7 +89,30 @@
     import TransactionFormModal from '../form/TransactionFormModal.svelte';
     import TransactionPickerModal from './TransactionPickerModal.svelte';
     import ImportWizardModal from '../import/ImportWizardModal.svelte';
-    import {txStoreGet, txStoreCount} from '$lib/features/transactions/txStore.svelte';
+    import {txStoreGet, txStoreCount, txStoreAddExtras} from '$lib/features/transactions/txStore.svelte';
+    import {
+        adoptCharges,
+        applyChargeDrafts,
+        chargeDraftsFor,
+        chargeParentFields,
+        foldBulkCharges,
+        isUnderParent,
+        parentNeedsRef,
+        remapChargeOf,
+        rowAnchor,
+        applyDeleteChoice,
+        linkedChargesOf,
+        planBulkDelete,
+        withoutRows,
+        bulkLinkSelection,
+        linkInBulk,
+        type BulkDeletePlan,
+        type ChargesUnread,
+    } from './bulkCharges';
+    import {txRowRef} from '../chargeLinkRules';
+    import {canEditBroker} from '$lib/stores/reference/brokerStore';
+    import TxChargesActionModal from '../TxChargesActionModal.svelte';
+    import type {ChargeDraft} from '../form/txCharges';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
@@ -109,8 +132,9 @@
     // =========================================================================
 
     /** WorkspaceIntent — declarative API for opening the BulkModal.
-     *  +page passes only action + txIds; BulkModal resolves data from txStore. */
-    export type WorkspaceIntent = {action: 'create'} | {action: 'import'} | {action: 'edit'; txIds: number[]} | {action: 'delete'; txIds: number[]} | {action: 'clone'; txIds: number[]};
+     *  +page passes only action + txIds; BulkModal resolves data from txStore. A delete after the panel V1 (66 F6) names
+     *  the charges to unlink (`unlinkIds`) and the charges chosen with their parent (`chargeIds`, 66 F7-d). */
+    export type WorkspaceIntent = {action: 'create'} | {action: 'import'} | {action: 'edit'; txIds: number[]} | {action: 'delete'; txIds: number[]; unlinkIds?: number[]; chargeIds?: number[]} | {action: 'clone'; txIds: number[]};
 
     interface Props {
         open: boolean;
@@ -233,9 +257,12 @@
     }
 
     /** Create 'edit' PendingOp from DB transaction (reads txStore, zero copies). */
-    function editOpFromTx(txId: number, opts?: {markedDelete?: boolean; addedViaPicker?: boolean}): PendingOp {
+    function editOpFromTx(txId: number, opts?: {markedDelete?: boolean; addedViaPicker?: boolean; loadedWithParent?: boolean}): PendingOp {
         const tx = txStoreGet(txId)!;
-        return {op: 'edit', tempId: generateUUID(), createdSeq: nextCreatedSeq(), txId, fields: fieldsFromTx(tx), markedDelete: opts?.markedDelete ?? false, addedViaPicker: opts?.addedViaPicker};
+        const op: PendingOp = {op: 'edit', tempId: generateUUID(), createdSeq: nextCreatedSeq(), txId, fields: fieldsFromTx(tx), markedDelete: opts?.markedDelete ?? false, addedViaPicker: opts?.addedViaPicker};
+        // 66 F7-c1: set only when true, so a row that was not read with its parent keys as it always did (close guard).
+        if (opts?.loadedWithParent) op.loadedWithParent = true;
+        return op;
     }
 
     /** Create 'create' PendingOp by cloning from a TXReadItem. */
@@ -262,6 +289,32 @@
     /** Sort display groups only. The ledger and payload retain their original order. */
     let visibleOps = $derived(ops.filter((o) => !o.pairedWith).sort((a, b) => (dateSortDirection === 'asc' ? 1 : -1) * compareBulkDates(a, b)));
     let visualRowLabels = $derived(buildBulkRowLabels(ops, visibleOps));
+    /** 66 F7-c1 (BK2): the parents whose group of linked charges is open, by `tempId`. A group opens by the chip, or by
+     *  itself (a parent «del», charges brought with their parent, a charge created or linked in its parent's Form); it
+     *  never closes by itself. Remapped when a reset regenerates a parent's `tempId`. */
+    let expandedParents = $state<Set<string>>(new Set());
+    /** 66 F7-c1 (§14.2): the saved parents (by `txId`) whose charges are being read: «Save all» waits, «del» on them
+     *  waits. */
+    let chargesInFlight = $state<Set<number>>(new Set());
+    /** 66 F7-c1 (§14.2): the saved parents (by `txId`) whose charges could not be read: «del» on them is off, with a
+     *  reason. */
+    let chargesReadFailed = $state<Set<number>>(new Set());
+    /** 66 F7-c1: the operations that sit under their parent (`isUnderParent`): indented rows, drawn only in an open
+     *  group. They stay in `visibleOps`, so the labels see them (the title counts `topRows`). */
+    let indentedIds = $derived(new Set(ops.filter((o) => o.chargeOf !== undefined && isUnderParent(o, ops)).map((o) => o.tempId)));
+    /** 66 F7-c1: the top-level rows, in the date order of `visibleOps`. */
+    let topRows = $derived(visibleOps.filter((o) => !indentedIds.has(o.tempId)));
+    /** 66 F7-c1: the rows of the grid — the top-level rows, each open parent followed by its charges. One order, ours:
+     *  the date column only says which direction (`dateSortDirection`). */
+    let gridRows = $derived(foldBulkCharges(topRows, ops, expandedParents));
+    /** 66 F7-c1: the charges under each parent, in the order of the operations (the chip counts them). */
+    let chargesUnder = $derived.by(() => {
+        const under = new Map<string, PendingOp[]>();
+        for (const op of ops) if (op.chargeOf !== undefined && indentedIds.has(op.tempId)) under.set(op.chargeOf, [...(under.get(op.chargeOf) ?? []), op]);
+        return under;
+    });
+    /** 66 F7-b: whether any row is owned by another one (`chargeOf`); spares the scan of `parentNeedsRef` otherwise. */
+    let hasChargeLinks = $derived(ops.some((o) => o.chargeOf !== undefined));
     /** Find the hidden partner op for a given main op's tempId. */
     function getPartnerOp(mainTempId: string): PendingOp | undefined {
         return ops.find((o) => o.pairedWith === mainTempId);
@@ -275,7 +328,7 @@
     let lastDraftKey = $state('');
     let activeIssue = $state<ValidationIssue | null>(null);
     let activeIssueRows = $derived(activeIssue && lastIssueDraftKey === lastDraftKey ? getIssueRows(activeIssue) : []);
-    let highlightedIssueIds = $derived(new Set(activeIssueRows.map((row) => row.pairedWith ?? row.tempId)));
+    let highlightedIssueIds = $derived(new Set(activeIssueRows.map((row) => issueRowAnchor(row))));
     let formError = $state<string | null>(null);
     let commitFailed = $state(false);
     let committing = $state(false);
@@ -421,7 +474,11 @@
     // [[problems/svelte5-effect-read-write-loop]]).
     $effect(() => {
         if (!open) return;
-        const {rows, status: initSt, autoForm} = resolveInitialRows();
+        // The rows come from the intent; the store is read untracked. Tracked, a row added to the store while the editor
+        // is open (66 F7-c1: the charges the Bulk reads, `txStoreAddExtras`) re-ran this whole effect, which rebuilds the
+        // rows from the intent: every unsaved edit was lost.
+        void intent;
+        const {rows, status: initSt, autoForm} = untrack(() => resolveInitialRows());
         // K-2: the nested form or wizard opens automatically once per open. Set when it is scheduled before the load
         // ends; the load's end then opens nothing the user may have closed meanwhile.
         let autoOpenScheduled = false;
@@ -435,6 +492,10 @@
             formError = null;
             commitFailed = false;
             confirmCloseOpen = false;
+            formChargeEdits = true;
+            ++chargesReadRequest; // a charges read still in flight belongs to the previous open
+            restartChargesLoad(); // 66 F7-c1: and so does an entry load
+            expandedParents = new Set();
             pendingSplits = [];
             pendingPromotes = [];
             promoteMergeOpen = false;
@@ -450,19 +511,10 @@
                 suggestTimer = null;
             }
             // When no initial rows → empty grid; user adds rows via nested FormModal.
-            let next: PendingOp[] = [];
-            if (rows.length > 0) {
-                if (initSt === 'delete') {
-                    next = rows.filter((r) => r.id > 0).map((r) => editOpFromTx(r.id, {markedDelete: true}));
-                } else {
-                    next = rows.map((r) => (r.id > 0 ? editOpFromTx(r.id) : createOpFromClone(r, (r as any).link_uuid)));
-                }
-            }
-
             // Collapse paired rows: keep only the "from" half with partner
             // metadata populated. No dependency on isTypesLoaded — pair detection
             // uses related_transaction_id (not getTypeRule().requiresPair).
-            next = collapsePairedOps(next);
+            let next: PendingOp[] = rows.length > 0 ? buildInitialOps(rows, initSt) : [];
 
             // B4-fix: Build ops eagerly but only assign after types are loaded,
             // because getTypeRule() returns FALLBACK_RULE (requiresPair=false)
@@ -470,7 +522,8 @@
             if (isTypesLoaded()) {
                 // Fast path: types already cached → assign + auto-open immediately.
                 ops = next;
-                initialOpsKey = serializeOps(next);
+                setBaseline(next);
+                enterOps(next);
                 scheduleAutoOpen(autoForm, next);
                 autoOpenScheduled = true;
             } else {
@@ -479,7 +532,7 @@
                 ops = [];
                 // The snapshot of what is on screen: no rows. Without initial rows it is never taken again, and an
                 // empty key would make an untouched editor ask to discard.
-                initialOpsKey = serializeOps(ops);
+                setBaseline([]);
                 if (rows.length === 0 && intent?.action !== 'import') {
                     autoOpenScheduled = true;
                     queueMicrotask(() => {
@@ -504,15 +557,10 @@
             untrack(() => {
                 // B4-fix: if ops was deferred (slow path), rebuild + assign now.
                 if (ops.length === 0 && rows.length > 0) {
-                    let next2: PendingOp[] = [];
-                    if (initSt === 'delete') {
-                        next2 = rows.filter((r) => r.id > 0).map((r) => editOpFromTx(r.id, {markedDelete: true}));
-                    } else {
-                        next2 = rows.map((r) => (r.id > 0 ? editOpFromTx(r.id) : createOpFromClone(r, (r as any).link_uuid)));
-                    }
-                    next2 = collapsePairedOps(next2);
+                    const next2 = buildInitialOps(rows, initSt);
                     ops = next2;
-                    initialOpsKey = serializeOps(next2);
+                    setBaseline(next2);
+                    enterOps(next2);
                 }
                 if (!autoOpenScheduled && !formOpen) {
                     scheduleAutoOpen(autoForm, ops);
@@ -520,6 +568,38 @@
             });
         })();
     });
+
+    /**
+     * The operations of the rows an intent opens on: saved rows as edits (marked for deletion by a delete intent), clones
+     * as creates, the pairs collapsed, the charges adopted by their parent (66 F7-b). «Keep the charges» (66 F6, V1:
+     * `unlinkIds`) brings each charge kept as a row of its own, owned by its parent and unlinked (`parentUnlink`): the
+     * batch sends `parent_transaction_id: 0` beside the parent's deletion. A charge also marked for deletion is a delete.
+     * The charges of the page's choice (`chargeIds`, 66 F7-d: «Delete all» or «Keep») are the parent's choice
+     * (`byParentChoice`), so «Restore» on the parent takes them back; a charge the user selected is not among them.
+     */
+    function buildInitialOps(rows: TXReadItem[], initSt: 'delete' | undefined): PendingOp[] {
+        let next: PendingOp[] = initSt === 'delete' ? rows.filter((r) => r.id > 0).map((r) => editOpFromTx(r.id, {markedDelete: true})) : rows.map((r) => (r.id > 0 ? editOpFromTx(r.id) : createOpFromClone(r, (r as any).link_uuid)));
+        const unlinkIds = new Set(intent?.action === 'delete' ? (intent.unlinkIds ?? []) : []);
+        if (unlinkIds.size > 0) {
+            const present = new Set(next.map((op) => opTxId(op)).filter((id): id is number => id != null));
+            for (const id of unlinkIds) {
+                if (present.has(id) || !txStoreGet(id)) continue;
+                present.add(id);
+                next.push(editOpFromTx(id));
+            }
+        }
+        next = adoptCharges(collapsePairedOps(next), txStoreGet);
+        // An intent from before `chargeIds`: the charges unlinked are the parent's choice.
+        const chosenIds = new Set(intent?.action === 'delete' ? (intent.chargeIds ?? intent.unlinkIds ?? []) : []);
+        if (unlinkIds.size === 0 && chosenIds.size === 0) return next;
+        return next.map((op) => {
+            if (op.op !== 'edit') return op;
+            const unlinked = unlinkIds.has(op.txId) && !op.markedDelete;
+            const chosen = chosenIds.has(op.txId) && (unlinked || op.markedDelete);
+            if (!unlinked && !chosen) return op;
+            return {...op, ...(unlinked ? {parentUnlink: true} : {}), ...(chosen ? {byParentChoice: true as const} : {})};
+        });
+    }
 
     /** Schedule auto-open of the nested FormModal based on the mode. */
     function scheduleAutoOpen(autoForm: string | null, opArr: PendingOp[]) {
@@ -541,6 +621,24 @@
                 importWizardOpen = true;
             });
         }
+    }
+
+    /** The close guard's baseline: the rows as the editor opened on them, plus the charges the Bulk read itself since
+     *  (66 F7-c1, `addLoadedCharges`). A plain snapshot: the live rows are mutated in place in a few places. */
+    let baselineOps: PendingOp[] = [];
+    function setBaseline(rows: PendingOp[]) {
+        baselineOps = $state.snapshot(rows) as PendingOp[];
+        initialOpsKey = serializeOps(baselineOps);
+    }
+
+    /**
+     * 66 F7-c1: rows that entered the editor with the intent. A parent that came with its charges opens its group (§14.7:
+     * the user brought them; a parent «del» too), and the charges of every saved parent not all held are read.
+     */
+    function enterOps(rows: readonly PendingOp[]) {
+        const parents = rows.filter((o) => o.chargeOf !== undefined && isUnderParent(o, rows)).map((o) => o.chargeOf!);
+        if (parents.length > 0) expandedParents = new Set([...expandedParents, ...parents]);
+        loadMissingCharges(rows);
     }
 
     function hasUnsavedChanges(): boolean {
@@ -602,15 +700,19 @@
         // For paired main, find partner's DB id (if it's an edit op)
         const partnerOp = d.pairedWith ? undefined : getPartnerOp(d.tempId);
         const partnerDbId = partnerOp?.op === 'edit' ? partnerOp.txId : null;
+        const fields = followedFields(d);
         return {
             id: id ?? 0,
-            broker_id: d.fields.broker_id,
-            asset_id: d.fields.asset_id,
+            broker_id: fields.broker_id,
+            asset_id: fields.asset_id,
             type: d.fields.type,
-            date: d.fields.date,
+            date: fields.date,
             quantity: d.fields.quantity,
             cash: d.fields.cash,
             related_transaction_id: partnerDbId ?? (partnerOp ? 0 : null),
+            // 66 F7-b: the charge's parent as the Bulk holds it now, and the parent's saved count (the Form's section).
+            parent_transaction_id: effectiveParentId(d, orig),
+            charges_count: orig?.charges_count,
             tags: d.fields.tags,
             description: d.fields.description,
             cost_basis_override: (d.fields.cost_basis_override || null) as any,
@@ -619,6 +721,27 @@
             created_at: orig?.created_at,
             updated_at: orig?.updated_at,
         };
+    }
+
+    /** 66 F7-b: the parent of a charge as the Bulk holds it — none once unlinked, the owner's saved id (a new owner has
+     *  none yet), the saved parent picked in the charge's form, else the saved link. */
+    function effectiveParentId(d: PendingOp, orig: TXReadItem | undefined): number | null {
+        if (d.parentUnlink) return null;
+        if (d.chargeOf !== undefined) {
+            const owner = ops.find((o) => o.tempId === d.chargeOf);
+            if (owner) return owner.op === 'edit' ? owner.txId : null;
+        }
+        if (d.parentLinkId !== undefined) return d.parentLinkId;
+        return orig?.parent_transaction_id ?? null;
+    }
+
+    /** 66 F7-b (§11.4): a create born in its parent's form takes the parent's broker, asset and date until it is opened
+     *  on its own. Read wherever the row is sent or shown to the Form, so the three payloads and the Form agree. */
+    function followedFields(d: PendingOp, opArr: readonly PendingOp[] = ops): DraftFields {
+        if (d.op !== 'create' || !d.followsParent || d.chargeOf === undefined) return d.fields;
+        const owner = opArr.find((o) => o.tempId === d.chargeOf);
+        if (!owner) return d.fields;
+        return {...d.fields, broker_id: owner.fields.broker_id, asset_id: owner.fields.asset_id, date: owner.fields.date};
     }
 
     function opToTxLikeForForm(d: PendingOp): TXReadItem {
@@ -780,14 +903,15 @@
         return {main: from, removeTempId: ''}; // no removal — to stays in ops but hidden
     }
 
-    /** Apply the form-collected payload to a brand-new draft row. */
-    function addRowFromForm(payload: Record<string, unknown>) {
+    /** Apply the form-collected payload to a brand-new draft row; returns its tempId. */
+    function addRowFromForm(payload: Record<string, unknown>): string {
         const next = createOpEmpty();
         applyFormPayload(next.fields, payload);
         if (typeof payload.link_uuid === 'string' && next.op === 'create') (next as any).link_uuid = payload.link_uuid;
         // Persist WAC currency hint
         if (typeof payload._wac_currency_hint === 'string') next.wacCurrencyHint = payload._wac_currency_hint;
         ops = [...ops, next];
+        return next.tempId;
     }
 
     /** Apply the form-collected payload to an existing draft (deep-edit). */
@@ -810,6 +934,17 @@
                 if (merged.todos.length === 0) delete merged.todos;
             }
             return merged;
+        });
+        ops = syncFollowers(ops);
+    }
+
+    /** 66 F7-b: the creates that follow their parent (`followsParent`) show its broker, asset and date in the grid too
+     *  (the payload reads them through `followedFields` whatever this says). Unchanged rows keep their reference. */
+    function syncFollowers(opArr: PendingOp[]): PendingOp[] {
+        if (!opArr.some((o) => o.followsParent)) return opArr;
+        return opArr.map((d) => {
+            const fields = followedFields(d, opArr);
+            return fields === d.fields || (fields.broker_id === d.fields.broker_id && fields.asset_id === d.fields.asset_id && fields.date === d.fields.date) ? d : {...d, fields};
         });
     }
 
@@ -877,16 +1012,162 @@
 
     function removeRow(tempId: string) {
         // A pair is one row on screen and two ops: its hidden half leaves the batch with it.
-        ops = ops.filter((d) => d.tempId !== tempId && d.pairedWith !== tempId);
+        const removed = new Set(ops.filter((d) => d.tempId === tempId || d.pairedWith === tempId).map((d) => d.tempId));
+        // 66 F7-c1 (§14.2): the charges the Bulk read itself for this parent leave with it while nobody changed them.
+        const takenAlong = new Set(ops.filter((d) => d.loadedWithParent && d.chargeOf !== undefined && removed.has(d.chargeOf) && deriveStatus(d) === 'original').map((d) => d.tempId));
+        // 66 F7-b (§11.2): no `chargeOf` left dangling. The parent's new charges born in its form (`followsParent`, F7-d)
+        // leave with it; every other charge stays, owned by nobody (an unlink typed on them stays theirs): `withoutRows`.
+        ops = withoutRows(
+            ops.filter((d) => !takenAlong.has(d.tempId)),
+            removed,
+        );
     }
 
-    /** Mark an existing row for deletion (toggle). */
+    /** 66 F7-c1/F7-c2: whether the charges of this saved row are being read, or could not be read. */
+    function chargesUnread(row: PendingOp): ChargesUnread {
+        if (row.op !== 'edit') return null;
+        if (chargesInFlight.has(row.txId)) return 'loading';
+        if (chargesReadFailed.has(row.txId) && parentChargesMissing(row)) return 'failed';
+        return null;
+    }
+
+    /** 66 F7-c1 (§14.2): why «del» on this saved parent is off — its charges are being read, or could not be — or
+     *  `null` when it is not. */
+    function chargesUnreadReason(row: PendingOp): string | null {
+        const state = chargesUnread(row);
+        if (state === 'loading') return $t('transactions.form.charges.loading');
+        if (state === 'failed') return $t('transactions.chargesDelete.loadFailed');
+        return null;
+    }
+
+    /** 66 F7-c2: the panel V1 open inside the Bulk — the plan it decides, and what it shows. */
+    let deletePanel = $state<{plan: BulkDeletePlan; parents: TXReadItem[]; charges: TXReadItem[]; parentRefs: string[]; chargeRefs: string[]; fromSelection: boolean} | null>(null);
+
+    /** 66 F7-d (§22.1): how a text names a row of the Bulk — `#123` saved, its label («row 3») new, «new» without one.
+     *  The labels do not depend on the grid's filters (`visualRowLabels`). */
+    function bulkRowRef(op: PendingOp): string {
+        const id = opTxId(op) ?? null;
+        return txRowRef(id, id === null ? (visualRowLabels.get(op.tempId) ?? null) : null, $t);
+    }
+
+    /** A row as the panel shows it: the editor's values, signed as the ledger holds them. */
+    function panelItem(op: PendingOp, parentTxId?: number): TXReadItem {
+        const item = opToTxLike(op);
+        const {signedQty, signedCash} = applySignRules(item.quantity, item.cash, getTypeRule(op.fields.type));
+        return {...item, quantity: signedQty, cash: signedCash, ...(parentTxId !== undefined ? {parent_transaction_id: parentTxId} : {})};
+    }
+
+    /**
+     * 66 F7-c2 (§17, §18, §19): «Delete» (one row) and «Delete selected» go through one plan (`planBulkDelete`). A parent
+     * going «del» with linked charges asks first, in the panel V1, once for every such parent; nothing is marked before
+     * the choice. A parent whose charges are being read is waited for; a reset, «Reset all» or the Bulk closed meanwhile
+     * cancels the wait. A parent whose read failed is skipped, with a warning; the other rows proceed.
+     */
+    /** 66 F7-d (§20.3, §21.1): the rows of the delete requests waiting for a read, by `tempId`. A new request leaves them
+     *  out and proceeds with the others; each request releases its own rows when it ends, a cut wait included. */
+    const deleteHeld = new Set<string>();
+
+    async function requestDelete(tempIds: readonly string[], fromSelection: boolean) {
+        const mine = [...new Set(tempIds)].filter((id) => !deleteHeld.has(id));
+        // Every row already waits in another request: that one decides, this one changes nothing.
+        if (mine.length === 0) return;
+        for (const id of mine) deleteHeld.add(id);
+        try {
+            await planAndAskDelete(mine, fromSelection);
+        } finally {
+            for (const id of mine) deleteHeld.delete(id);
+        }
+    }
+
+    async function planAndAskDelete(tempIds: readonly string[], fromSelection: boolean) {
+        const generation = chargesLoadGeneration;
+        let plan = planBulkDelete(ops, tempIds, chargesUnread);
+        while (plan.waiting.length > 0) {
+            const reads = plan.waiting.map((id) => ops.find((d) => d.tempId === id)).map((d) => (d?.op === 'edit' ? chargesReads.get(d.txId) : undefined));
+            await Promise.all(reads.map((read) => read ?? Promise.resolve(false)));
+            await tick();
+            if (generation !== chargesLoadGeneration || !open) return;
+            // The rows taken at the click, resolved again (§19.7): a row gone meanwhile is simply not there.
+            const next = planBulkDelete(ops, tempIds, chargesUnread);
+            if (next.waiting.length > 0 && reads.every((read) => read === undefined)) return;
+            plan = next;
+        }
+        if (plan.skipped.length > 0) {
+            notify({
+                name: 'tx.bulk.delete.skipped-unread',
+                detail: {rowIds: plan.skipped},
+                toast: {variant: 'warning', message: $t('transactions.bulk.deleteSkippedUnread', {values: {n: plan.skipped.length}})},
+            });
+        }
+        if (plan.needsChoice.length === 0) {
+            applyDelete(plan, 'keep', fromSelection);
+            return;
+        }
+        const parents = plan.needsChoice.map((id) => ops.find((d) => d.tempId === id)).filter((d): d is PendingOp => d?.op === 'edit');
+        const own = new Set([...plan.toggles.map((t) => t.tempId), ...plan.removals]);
+        const charges = parents.flatMap((p) =>
+            linkedChargesOf(p, ops)
+                .filter((c) => !own.has(c.tempId))
+                .map((c) => ({op: c, parentTxId: p.op === 'edit' ? p.txId : undefined})),
+        );
+        deletePanel = {
+            plan,
+            parents: parents.map((p) => panelItem(p)),
+            charges: charges.map(({op, parentTxId}) => panelItem(op, parentTxId)),
+            parentRefs: parents.map((p) => bulkRowRef(p)),
+            chargeRefs: charges.map(({op}) => bulkRowRef(op)),
+            fromSelection,
+        };
+    }
+
+    /** The plan and the choice onto the rows: the groups of the parents gone «del» open, and a selection that asked is
+     *  emptied (§19.5). */
+    function applyDelete(plan: BulkDeletePlan, choice: 'keep' | 'all', fromSelection: boolean) {
+        const deleted = [...plan.needsChoice, ...plan.toggles.filter((t) => t.deleted).map((t) => t.tempId)];
+        ops = applyDeleteChoice(ops, plan, choice, txStoreGet);
+        // 66 F7-c1 (§14.7): a parent marked «del» opens its group, so its charges' state is on screen.
+        const opened = deleted.filter((id) => !expandedParents.has(id) && ops.some((d) => d.chargeOf === id));
+        if (opened.length > 0) expandedParents = new Set([...expandedParents, ...opened]);
+        if (fromSelection) {
+            tableRef?.clearSelection();
+            bulkTableSelectedRows = [];
+        }
+    }
+
+    function chooseDelete(choice: 'keep' | 'all') {
+        const panel = deletePanel;
+        deletePanel = null;
+        if (panel) applyDelete(panel.plan, choice, panel.fromSelection);
+    }
+
+    /** «Cancel» or Esc on the panel: nothing changes, the selection is kept (§18.5). */
+    function cancelDelete() {
+        deletePanel = null;
+    }
+
+    /** «Delete» on one row, through the same plan as «Delete selected». */
     function markDelete(tempId: string) {
-        ops = ops.map((d) => {
-            if (d.tempId !== tempId) return d;
-            if (d.op !== 'edit') return d; // can't mark-delete a create — just remove it
-            return {...d, markedDelete: !(d as any).markedDelete};
-        });
+        const target = ops.find((d) => d.tempId === tempId);
+        if (!target || target.op !== 'edit') return; // can't mark-delete a create — just remove it
+        // 66 F7-c1 (§14.2): «del» on a parent waits for its charges to be read (the menu says why).
+        if (!target.markedDelete && chargesUnreadReason(target) !== null) return;
+        void requestDelete([tempId], false);
+    }
+
+    /**
+     * Mark a saved row for deletion, or restore it, without asking: a restore (a row reset, «Restore and edit»), or a
+     * deletion whose choice is known. 66 F7-c2: a parent «del» no longer unlinks its charges by itself; restoring it
+     * takes back only what a delete choice set on them (`byParentChoice`); a charge restored under a parent still «del»
+     * is unlinked (`applyDeleteChoice`).
+     */
+    function setRowDeleted(tempId: string, deleted: boolean, choice: 'keep' | 'all' = 'keep') {
+        const target = ops.find((d) => d.tempId === tempId);
+        if (!target || target.op !== 'edit' || target.markedDelete === deleted) return;
+        applyDelete(
+            planBulkDelete(ops, [tempId], () => null),
+            choice,
+            false,
+        );
     }
 
     /** Clone a row as a new row. */
@@ -922,13 +1203,51 @@
         // A saved pair is one row on screen: its hidden half is reset with it, in place, or an edit made through the
         // pair's form would stay on it. A W4b placeholder has nothing to reset: its half is not in the store.
         const partnerTempId = getPartnerOp(tempId)?.tempId;
-        ops = ops.map((d) => {
+        // 66 F7-b: a parent reset from «del» is restored, so its charges come back from «del» and «scollega» as with
+        // «Restore»; an edited parent keeps what its charges hold.
+        const wasDeleted = ops.some((d) => d.tempId === tempId && d.op === 'edit' && d.markedDelete);
+        if (wasDeleted) setRowDeleted(tempId, false);
+        const renamed = new Map<string, string>();
+        let next = ops.map((d) => {
             if ((d.tempId !== tempId && d.tempId !== partnerTempId) || d.op !== 'edit' || d.inaccessible) return d;
-            const reset = editOpFromTx(d.txId, {addedViaPicker: d.addedViaPicker});
+            const reset = editOpFromTx(d.txId, {addedViaPicker: d.addedViaPicker, loadedWithParent: d.loadedWithParent});
+            renamed.set(d.tempId, reset.tempId);
             return reset;
         });
-        // Re-collapse pairs from txStore
-        ops = collapsePairedOps(ops);
+        // 66 F7-b (§11.2): the charges follow their parent's new tempId.
+        for (const [from, to] of renamed) next = remapChargeOf(next, from, to);
+        remapExpanded(renamed);
+        // Re-collapse pairs from txStore, then the charges
+        ops = syncFollowers(adoptCharges(collapsePairedOps(next), txStoreGet));
+        // 66 F7-c1 (§14.2): the row enters again: its charges are read if they are not all held (a new generation). The
+        // reads in flight are asked again; a parent whose read failed and that was not reset keeps «del» off.
+        const failedBefore = chargesReadFailed;
+        const waiting = restartChargesLoad();
+        const entered = new Set(renamed.values());
+        const resetTxIds = new Set(ops.filter((d) => entered.has(d.tempId)).map((d) => opTxId(d)));
+        chargesReadFailed = new Set([...failedBefore].filter((id) => !resetTxIds.has(id)));
+        loadMissingCharges(
+            ops.filter((d) => entered.has(d.tempId)),
+            waiting,
+        );
+    }
+
+    /** 66 F7-c1: open the group of this parent (never closed by itself). */
+    function openGroup(parentTempId: string) {
+        if (!expandedParents.has(parentTempId)) expandedParents = new Set([...expandedParents, parentTempId]);
+    }
+
+    /** 66 F7-c1: the chip opens and closes the group of this parent. */
+    function toggleGroup(parentTempId: string) {
+        const next = new Set(expandedParents);
+        if (!next.delete(parentTempId)) next.add(parentTempId);
+        expandedParents = next;
+    }
+
+    /** 66 F7-c1: a reset regenerated these parents' `tempId`s: their groups stay as they were. */
+    function remapExpanded(renamed: ReadonlyMap<string, string>) {
+        if (![...renamed.keys()].some((from) => expandedParents.has(from))) return;
+        expandedParents = new Set([...expandedParents].map((id) => renamed.get(id) ?? id));
     }
 
     function resetAll() {
@@ -936,14 +1255,22 @@
         // Remove partner rows added by split, then reset remaining edit rows
         ops = ops.filter((d) => !(d as any).addedBySplit);
         // K-3: a W4b placeholder has nothing to reset, its half is not in the store (as in `resetRow`).
-        ops = ops.map((d) => {
+        const renamed = new Map<string, string>();
+        let next = ops.map((d) => {
             if (d.op !== 'edit' || d.inaccessible) return d;
-            const reset = editOpFromTx(d.txId, {addedViaPicker: d.addedViaPicker});
+            const reset = editOpFromTx(d.txId, {addedViaPicker: d.addedViaPicker, loadedWithParent: d.loadedWithParent});
+            renamed.set(d.tempId, reset.tempId);
             return reset;
         });
-        // Re-collapse pairs
-        ops = collapsePairedOps(ops);
+        // 66 F7-b (§11.2): the charges follow their parent's new tempId (the saved ones are adopted again below).
+        for (const [from, to] of renamed) next = remapChargeOf(next, from, to);
+        remapExpanded(renamed);
+        // Re-collapse pairs, then the charges
+        ops = syncFollowers(adoptCharges(collapsePairedOps(next), txStoreGet));
         pendingSplits = [];
+        // 66 F7-c1 (§15.8): «Reset all» reads again the charges of every saved parent that lacks some.
+        restartChargesLoad();
+        loadMissingCharges(ops);
     }
 
     /** Split a paired row in the BulkModal.
@@ -1071,6 +1398,11 @@
         // a pairing marker at all: it is the handle the promote resolves as
         // `link_uuid_b`, so it has to ride along independently of the type's own rule.
         if (d.promoteFromType && d.link_uuid) payload.link_uuid = d.link_uuid;
+        // 66 F7-b: a new parent named by a charge carries its tempId as `ref` (36 characters, the schema's limit); a
+        // charge names its parent by `parent_ref` or by `parent_transaction_id` (`chargeParentFields`).
+        if (hasChargeLinks && parentNeedsRef(d, ops)) payload.ref = d.tempId;
+        const link = chargeParentFields(d, ops, txStoreGet);
+        if (link) Object.assign(payload, link);
         return payload;
     }
 
@@ -1080,7 +1412,10 @@
         if (!orig) return null;
         const rule = getTypeRule(d.fields.type);
         const origRule = getTypeRule(orig.type as TransactionTypeCode);
-        return buildUpdateDiff(opToTxFields(d), orig as unknown as TxOriginal, rule, origRule);
+        const diff = buildUpdateDiff(opToTxFields(d), orig as unknown as TxOriginal, rule, origRule);
+        // 66 F7-b (§11.3): a change of parent is a change of the row: an unlink or a new link alone makes it `edited`.
+        const link = chargeParentFields(d, ops, txStoreGet);
+        return link ? {...diff, ...link} : diff;
     }
 
     /**
@@ -1112,6 +1447,9 @@
         for (const d of ops) {
             if (d.pairedWith) continue; // hidden partners are handled via their main op
             if (d.tempId === excludeTempId) continue;
+            // 66 F7-b (§4): the parent open in the Form takes its charges out of the context with it, or they would
+            // count twice (and name a parent the context does not hold).
+            if (excludeTempId !== null && d.chargeOf === excludeTempId) continue;
             const st = deriveStatus(d);
 
             // Skip split-queued edit rows ONLY if unchanged
@@ -1184,7 +1522,7 @@
         // A mixed promote is applied server-side from the two *source* types, so the
         // wire keeps the pre-promote value while the grid shows the promoted one.
         const type = d.promoteFromType ?? d.fields.type;
-        return {...d.fields, type, cost_basis_override: cbo, link_uuid: d.link_uuid ?? null};
+        return {...followedFields(d), type, cost_basis_override: cbo, link_uuid: d.link_uuid ?? null};
     }
 
     /** Derive the effective display status of a draft row.
@@ -1629,6 +1967,33 @@
         return `<span class="inline-flex items-center gap-1.5 text-xs leading-snug" style="white-space:normal"><img src="/icons/transactions/${slug}.png" alt="" style="width:1.75rem;height:1.75rem" class="object-contain shrink-0" data-hide-on-error="display"/>${arrow}<span>${label}</span></span>`;
     }
 
+    /**
+     * 66 F7-c1 (§13.4, §14.8): the chip of a parent's linked charges in its Type cell, the markup and label of the
+     * transactions table's chip (`TxTypeIconCell`, F5): «N charges» with a chevron, N = the charges under it. A click
+     * (caught in capture, `captureChargeChip`) opens and closes the group and does nothing else. `data-charges-modified`
+     * marks a group with a charge that is not unchanged; the parent's own status stays its own. None when N = 0.
+     */
+    function chargesChipHtml(row: PendingOp): string {
+        const charges = chargesUnder.get(row.tempId) ?? [];
+        if (charges.length === 0) return '';
+        const expanded = expandedParents.has(row.tempId);
+        const modified = charges.some((c) => deriveStatus(c) !== 'original');
+        const label = $t('transactions.table.chargesN', {values: {n: charges.length}}) || `${charges.length} charges`;
+        const chevron = expanded ? '<path d="m6 9 6 6 6-6"/>' : '<path d="m9 18 6-6-6-6"/>';
+        const toggleText = escapeHtml($t('transactions.linkTooltip.chargesToggle') || 'Show or hide its charges');
+        return `<button type="button" class="ml-1 inline-flex items-center gap-0.5 whitespace-nowrap rounded-full border border-lf-input bg-lf-card px-2 text-[11px] font-medium leading-5 text-lf-link hover:bg-lf-hover" data-tx-bulk-charges-toggle="${escapeHtml(row.tempId)}" data-testid="tx-bulk-charges-toggle-${escapeHtml(row.tempId)}" aria-expanded="${expanded}" data-expanded="${expanded}" data-charges-count="${charges.length}"${modified ? ' data-charges-modified="true"' : ''} title="${toggleText}"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${chevron}</svg>${modified ? '<span class="text-lf-warning" aria-hidden="true">•</span>' : ''}${escapeHtml(label)}</button>`;
+    }
+
+    /**
+     * 66 F7-c1 (§13.5, §15.2): the state of a linked charge, beside its own status: `linked`, `unlink` or `del`. On every
+     * row under its parent, and on a charge unlinked from a parent that stays (a top-level row); nothing on other rows.
+     */
+    /** 66 F7-c1: the state of a linked charge (`linked` / `unlink` / `del`), or null for a row that is not one. */
+    function chargeState(row: PendingOp): 'linked' | 'unlink' | 'del' | null {
+        if (!indentedIds.has(row.tempId) && !(row.chargeOf !== undefined && row.parentUnlink)) return null;
+        return row.op === 'edit' && row.markedDelete ? 'del' : row.parentUnlink ? 'unlink' : 'linked';
+    }
+
     /** Format a cash value as "±amount CODE". */
     function formatCashText(cash: {code: string; amount: string} | null | undefined): string {
         if (!cash) return '—';
@@ -1673,6 +2038,10 @@
                 cell: (row): CellContent => {
                     const partner = getPartnerOp(row.tempId);
                     const label = visualRowLabels.get(row.tempId) ?? '—';
+                    // 66 F7-c1: a charge under its parent draws `↳` (its label, `<parent>·k`, names it in the banners).
+                    if (row.chargeOf !== undefined && indentedIds.has(row.tempId)) {
+                        return {type: 'html', html: `<div data-testid="tx-bulk-row-label" data-row-id="${row.tempId}" data-charge-of="${escapeHtml(row.chargeOf)}" data-issue-highlighted="${highlightedIssueIds.has(row.tempId)}" class="pl-3 text-lf-muted" title="${escapeHtml(label)}">↳</div>`};
+                    }
                     const content = partner ? renderDualHtml(label, visualRowLabels.get(partner.tempId) ?? '—') : label;
                     return {type: 'html', html: `<div data-testid="tx-bulk-row-label" data-row-id="${row.tempId}" data-issue-highlighted="${highlightedIssueIds.has(row.tempId)}">${content}</div>`};
                 },
@@ -1681,7 +2050,8 @@
                 id: 'status',
                 header: () => $t('common.status'),
                 type: 'text',
-                width: 70,
+                // 66 F7-c1: 84, not 70 — the charge chip «Desenlazar» (ES, the longest) fits whole.
+                width: 84,
                 sortable: false,
                 filterable: false,
                 // Bugfix-3 §U14: hidden by default — operations are atomic and
@@ -1693,17 +2063,23 @@
                     if (row.op === 'edit' && splitTxIdsSet.has((row as any).txId)) {
                         return {type: 'html', html: '<span data-testid="tx-bulk-row-status" data-status="split" class="px-1.5 py-0.5 text-[10px] rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">✂️ split</span>'};
                     }
-                    return {
-                        type: 'html',
-                        html:
-                            st === 'new'
-                                ? '<span data-testid="tx-bulk-row-status" data-status="new" class="px-1.5 py-0.5 text-[10px] rounded bg-lf-success-soft text-lf-success-on-soft">new</span>'
-                                : st === 'edited'
-                                  ? '<span data-testid="tx-bulk-row-status" data-status="edited" class="px-1.5 py-0.5 text-[10px] rounded bg-lf-warning-soft text-lf-warning-on-soft">edit</span>'
-                                  : st === 'delete'
-                                    ? '<span data-testid="tx-bulk-row-status" data-status="delete" class="px-1.5 py-0.5 text-[10px] rounded bg-lf-danger-soft text-lf-danger-on-soft">🔴 del</span>'
-                                    : '<span data-testid="tx-bulk-row-status" data-status="original" class="text-lf-muted">·</span>',
-                    };
+                    // 66 F7-c1 (consultant, v5): one chip in the Status cell. A charge «del» shows the row's «🔴 del»; a charge
+                    // «unlink» shows «Unlink» in place of «edit», drawn as a chip on the tinted row; a linked charge keeps the
+                    // row's status, with 🔗 beside it. The charge's state rides on a wrapper that draws nothing.
+                    const charge = chargeState(row);
+                    const statusHtml =
+                        charge === 'unlink'
+                            ? `<span data-testid="tx-bulk-row-status" data-status="${st}" class="px-1.5 py-0.5 text-[10px] rounded border border-lf-info-line bg-lf-info-soft text-lf-info-on-soft">${escapeHtml($t('transactions.form.charges.unlink'))}</span>`
+                            : st === 'new'
+                              ? '<span data-testid="tx-bulk-row-status" data-status="new" class="px-1.5 py-0.5 text-[10px] rounded bg-lf-success-soft text-lf-success-on-soft">new</span>'
+                              : st === 'edited'
+                                ? '<span data-testid="tx-bulk-row-status" data-status="edited" class="px-1.5 py-0.5 text-[10px] rounded bg-lf-warning-soft text-lf-warning-on-soft">edit</span>'
+                                : st === 'delete'
+                                  ? '<span data-testid="tx-bulk-row-status" data-status="delete" class="px-1.5 py-0.5 text-[10px] rounded bg-lf-danger-soft text-lf-danger-on-soft">🔴 del</span>'
+                                  : '<span data-testid="tx-bulk-row-status" data-status="original" class="text-lf-muted">·</span>';
+                    if (!charge) return {type: 'html', html: statusHtml};
+                    const link = charge === 'linked' ? `<span class="text-lf-muted" title="${escapeHtml($t('transactions.form.charges.title'))}">🔗</span>` : '';
+                    return {type: 'html', html: `<span data-testid="tx-bulk-charge-state" data-state="${charge}" class="inline-flex items-center gap-1 whitespace-nowrap">${statusHtml}${link}</span>`};
                 },
             },
             {
@@ -1732,7 +2108,10 @@
                 sortable: true,
                 filterable: false,
                 getValue: (row) => row.fields.date,
-                sortFn: compareBulkDates,
+                // 66 F7-c1 (§14.5): one order, ours — `gridRows` is already sorted by date in the header's direction,
+                // each open parent followed by its charges. The table's sort is stable, so a constant keeps that order
+                // in both directions; the header only sets `dateSortDirection` (`onSortChange`).
+                sortFn: () => 0,
                 headerTooltip: () => bulkDisplayText('transactions.bulk.dateSortHint', 'Date is primary. Pairs stay together, ordered by earliest leg date, then latest leg date and stable row ID.'),
                 cell: (row): CellContent => {
                     // Paired rows with different dates → Da:/A:
@@ -1768,6 +2147,9 @@
                         }
                         return {type: 'html', html: `<span class="text-[11px]">${renderTypeHtml(row.fields.type)} → <span class="text-purple-600 dark:text-purple-400">✂️ ADJUSTMENT</span></span>`};
                     }
+                    const chip = chargesChipHtml(row);
+                    // 66 F7-c1: the chip goes under the type, inside the cell (side by side it overflows the column).
+                    if (chip) return {type: 'html', html: `<div class="flex flex-col items-start gap-1" style="white-space:normal">${renderTypeHtml(row.fields.type)}${chip}</div>`};
                     return {type: 'html', html: renderTypeHtml(row.fields.type)};
                 },
             },
@@ -2061,12 +2443,14 @@
             label: () => $t('transactions.bulk.editSingle') || 'Edit row',
             onClick: (row: PendingOp) => handleEditRowClick(row),
             disabled: (row: PendingOp) => !!getPartnerOp(row.tempId)?.inaccessible,
+            // 66 F7-c1: an indented row keeps «Edit row» — on touch and from the keyboard it is the double-click's twin.
         },
         {
             id: 'clone',
             icon: Copy,
             label: () => $t('transactions.bulk.cloneRow') || 'Clone row',
             onClick: (row: PendingOp) => cloneRow(row.tempId),
+            visible: (row: PendingOp) => !indentedIds.has(row.tempId),
         },
         {
             id: 'split',
@@ -2074,6 +2458,7 @@
             label: () => $t('transactions.actions.split') || 'Split pair',
             onClick: (row: PendingOp) => handleSplitRow(row),
             visible: (row: PendingOp) => {
+                if (indentedIds.has(row.tempId)) return false;
                 // Hide if already split-queued
                 if (row.op === 'edit' && splitTxIdsSet.has((row as any).txId)) return false;
                 // Has a hidden partner → can split
@@ -2106,7 +2491,7 @@
                 ops = [...ops]; // reactivity
                 lastSuggestKey = ''; // B9: invalidate suggest
             },
-            visible: (row: PendingOp) => row.op === 'edit' && splitTxIdsSet.has((row as any).txId),
+            visible: (row: PendingOp) => !indentedIds.has(row.tempId) && row.op === 'edit' && splitTxIdsSet.has((row as any).txId),
         },
         {
             id: 'suggest',
@@ -2129,7 +2514,7 @@
                 }
             },
             visible: (row: PendingOp) => {
-                if (getPartnerOp(row.tempId)) return false;
+                if (indentedIds.has(row.tempId) || getPartnerOp(row.tempId)) return false;
                 // Show if this row (saved or new) has importable DB candidates OR is in banner suggestions
                 return importableSuggestions.some((s) => s.tempId === row.tempId) || bannerSuggestions.some((s) => s.tempIdA === row.tempId || s.tempIdB === row.tempId);
             },
@@ -2147,6 +2532,9 @@
                     removeRow(row.tempId);
                 }
             },
+            // 66 F7-c1 (§14.2): «del» on a parent waits for its charges to be read, and stays off when they could not be.
+            disabled: (row: PendingOp) => row.op === 'edit' && !row.markedDelete && chargesUnreadReason(row) !== null,
+            title: (row: PendingOp) => (row.op === 'edit' && !row.markedDelete ? (chargesUnreadReason(row) ?? '') : ''),
             variant: 'danger' as const,
         },
         {
@@ -2154,14 +2542,15 @@
             icon: X,
             label: () => $t('transactions.bulk.removeFromBatch') || 'Remove from batch',
             onClick: (row: PendingOp) => removeRow(row.tempId),
-            visible: (row: PendingOp) => row.op === 'edit' && deriveStatus(row) !== 'delete',
+            visible: (row: PendingOp) => !indentedIds.has(row.tempId) && row.op === 'edit' && deriveStatus(row) !== 'delete',
         },
         {
             id: 'reset',
             icon: Undo2,
             label: () => $t('transactions.bulk.resetRow'),
             onClick: (row: PendingOp) => resetRow(row.tempId),
-            visible: (row: PendingOp) => row.op === 'edit' && (deriveStatus(row) === 'edited' || deriveStatus(row) === 'delete'),
+            // 66 F7-c1: also on an untouched parent whose charges could not be read: the reset reads them again (the toast says so).
+            visible: (row: PendingOp) => !indentedIds.has(row.tempId) && row.op === 'edit' && (deriveStatus(row) === 'edited' || deriveStatus(row) === 'delete' || (chargesReadFailed.has(row.txId) && parentChargesMissing(row))),
         },
     ]);
 
@@ -2187,9 +2576,24 @@
         return bulkDisplayText('transactions.bulk.workspaceRows', `Workspace rows: ${rows}`, {rows});
     }
 
+    /** 66 F7-c1: the row on screen that stands for an issue's row (`rowAnchor`): a charge in a closed group → its parent. */
+    function issueRowAnchor(row: {tempId: string; pairedWith?: string}): string {
+        const op = ops.find((o) => o.tempId === row.tempId);
+        return op ? rowAnchor(op, ops, expandedParents) : (row.pairedWith ?? row.tempId);
+    }
+
+    /** 66 F7-c1 (§13.8): the groups to open so these rows are drawn: a charge under a closed parent opens its group. */
+    async function openGroupsOf(tempIds: readonly string[]) {
+        const parents = tempIds.map((id) => ops.find((o) => o.tempId === id)).filter((o): o is PendingOp => !!o && o.chargeOf !== undefined && indentedIds.has(o.tempId) && !expandedParents.has(o.chargeOf));
+        if (parents.length === 0) return;
+        expandedParents = new Set([...expandedParents, ...parents.map((o) => o.chargeOf!)]);
+        await tick();
+    }
+
     /** Page the grid to the row of a todo and highlight it, as a validation issue does.
-     *  `rowId` is the visible row: a hidden partner's todo leads to its paired row. */
-    function jumpToTodoRow(rowId: string) {
+     *  `rowId` is the visible row: a hidden partner's todo leads to its paired row; a charge's todo opens its group. */
+    async function jumpToTodoRow(rowId: string) {
+        await openGroupsOf([rowId]);
         if (!tableRef?.getSortedRowIds().includes(rowId)) {
             notify({
                 name: 'tx.bulk.todo.row-hidden',
@@ -2206,14 +2610,16 @@
     function jumpToFirstAutoCostRefusal() {
         if (lastIssueDraftKey !== lastDraftKey) return;
         const rowId = firstAutoCostRefusalRowId(issues, getIssueRows);
-        if (rowId) jumpToTodoRow(rowId);
+        if (rowId) void jumpToTodoRow(rowId);
     }
 
-    function jumpToIssue(issue: ValidationIssue) {
+    async function jumpToIssue(issue: ValidationIssue) {
         if (lastIssueDraftKey !== lastDraftKey) return;
         const rows = getIssueRows(issue);
         if (rows.length === 0) return;
-        const affectedIds = new Set(rows.map((row) => row.pairedWith ?? row.tempId));
+        // 66 F7-c1 (§13.8): an issue on a charge of a closed group opens the group, then goes to the charge.
+        await openGroupsOf(rows.map((row) => row.tempId));
+        const affectedIds = new Set(rows.map((row) => issueRowAnchor(row)));
         activeIssue = isBulkBalanceIssue(issue) ? issue : null;
         const firstVisibleId = tableRef?.getSortedRowIds().find((id) => affectedIds.has(id));
         if (!firstVisibleId) {
@@ -2256,6 +2662,7 @@
     let deleteCount = $derived(visibleOps.filter((d) => deriveStatus(d) === 'delete').length);
     /** B23: true when at least one paired row is marked for deletion — show split hint. */
     let hasPairedDelete = $derived(visibleOps.some((d) => deriveStatus(d) === 'delete' && getPartnerOp(d.tempId) != null));
+
     let actionCount = $derived(newCount + editedCount + deleteCount + pendingSplits.length + pendingPromotes.length);
     let hasTodoBlockers = $derived(ops.some((op) => op.todos?.some((t) => t.severity === 'blocker')));
     /** Blocker todos with their row position, so the banner can name the offending rows.
@@ -2289,7 +2696,8 @@
     let splitCreateAsset = $derived(splitCreateEntry?.assetId != null ? getAssetInfo(splitCreateEntry.assetId) : null);
     /** Human-readable list of the auto-derived fields still awaiting verification (for the Save-gate dialog). */
     let todoWarningItems = $derived(ops.flatMap((op) => warningTodos(op.todos).map((todo) => resolveBrimTodoMessage(todo, $t) || todo.field)));
-    let commitDisabled = $derived(committing || ops.length === 0 || actionCount === 0 || hasTodoBlockers);
+    // 66 F7-c1 (§14.2): while the charges of a parent are being read, the batch is not complete: «Save all» waits.
+    let commitDisabled = $derived(committing || ops.length === 0 || actionCount === 0 || hasTodoBlockers || chargesInFlight.size > 0);
     let commitLabel = $derived(committing ? $t('common.saving') : $t('common.saveAll'));
 
     // -------------------------------------------------------------------------
@@ -2304,6 +2712,13 @@
     /** Bug15-fix: monotonic counter incremented on every open to guarantee
      *  the FormModal's $effect re-fires even when `open` stays `true`. */
     let formKey = $state(0);
+    /** 66 F7-b: the Form's charges section is editable (`allowChargeEdits`): the Bulk saves what it hands back. Off only
+     *  when the charges of the parent it opens on could not be read: the section is then read-only. */
+    let formChargeEdits = $state(true);
+    /** 66 F7-d: the saved row the Form highlights — the one the user came from with «Open». */
+    let formHighlightTxId = $state<number | null>(null);
+    /** Guards the charges' read before a parent's Form: an answer for an older open is dropped. */
+    let chargesReadRequest = 0;
 
     // PickerModal (Plan B Step 9): "Search & add" existing DB transactions.
     let pickerOpen = $state(false);
@@ -2441,16 +2856,31 @@
     function openPicker() {
         pickerOpen = true;
     }
-    function handlePickerAdd(rows: TXReadItem[]) {
+    /**
+     * Saved rows (in the store) join the Bulk as unchanged edits, the way the picker brings them: the pairs collapsed, a
+     * parent adopting its charges already here and a charge joining its parent (66 F7-b, §11.6), the group of a charge the
+     * user brought opened (F7-c1, §14.7), the charges of a saved parent read (§14.2). Returns the operations added.
+     */
+    function addSavedRows(txIds: readonly number[]): PendingOp[] {
         const existing = new Set(ops.filter((d) => opTxId(d) != null).map((d) => opTxId(d)!));
         const newOps: PendingOp[] = [];
-        for (const r of rows) {
-            if (existing.has(r.id)) continue;
-            existing.add(r.id);
-            newOps.push(editOpFromTx(r.id, {addedViaPicker: true}));
+        for (const id of txIds) {
+            if (existing.has(id) || !txStoreGet(id)) continue;
+            existing.add(id);
+            newOps.push(editOpFromTx(id, {addedViaPicker: true}));
         }
+        if (newOps.length === 0) return [];
         const collapsed = collapsePairedOps(newOps);
-        ops = [...ops, ...collapsed];
+        const ownedBefore = new Set(ops.filter((d) => d.chargeOf !== undefined).map((d) => d.tempId));
+        ops = adoptCharges([...ops, ...collapsed], txStoreGet);
+        const brought = ops.filter((d) => d.chargeOf !== undefined && !ownedBefore.has(d.tempId) && !d.loadedWithParent && isUnderParent(d, ops)).map((d) => d.chargeOf!);
+        if (brought.length > 0) expandedParents = new Set([...expandedParents, ...brought]);
+        loadMissingCharges(collapsed);
+        return collapsed;
+    }
+
+    function handlePickerAdd(rows: TXReadItem[]) {
+        addSavedRows(rows.map((r) => r.id));
         pickerOpen = false;
         suggestPickerOpen = false;
         lastSuggestKey = ''; // BUG-C10: force re-trigger suggest after import
@@ -2467,6 +2897,9 @@
     });
 
     function openAddRowForm() {
+        ++chargesReadRequest;
+        formChargeEdits = true;
+        formHighlightTxId = null;
         formMode = 'create';
         formItems = null;
         formEditingTempId = null;
@@ -2474,33 +2907,250 @@
         formOpen = true;
     }
 
-    /** B23 Step 4: intercept edit on deleted row — show confirm before restoring. */
-    function handleEditRowClick(row: PendingOp) {
+    /** The highlight the «restore and edit» question carries to the Form it opens (66 F7-d, «Open»). */
+    let confirmEditDeleteHighlight: number | null = null;
+
+    /** B23 Step 4: intercept edit on deleted row — show confirm before restoring. `highlightTxId`: the row the Form
+     *  highlights (66 F7-d, the row «Open» came from). */
+    function handleEditRowClick(row: PendingOp, highlightTxId: number | null = null) {
         // W4b: block edit if partner is inaccessible
         if (getPartnerOp(row.tempId)?.inaccessible) return;
         if (deriveStatus(row) === 'delete') {
             confirmEditDeleteRow = row;
+            confirmEditDeleteHighlight = highlightTxId;
             confirmEditDeleteOpen = true;
             return;
         }
-        openEditRowForm(row);
+        openEditRowForm(row, highlightTxId);
     }
 
     /** B23 Step 4: user confirmed restore-and-edit on a deleted row. */
     function confirmRestoreAndEdit() {
         if (!confirmEditDeleteRow) return;
         const target = ops.find((d) => d.tempId === confirmEditDeleteRow!.tempId);
-        if (target) {
-            if (target.op === 'edit') (target as any).markedDelete = false;
-            ops = [...ops];
-        }
+        if (target) setRowDeleted(target.tempId, false);
         const row = confirmEditDeleteRow;
+        const highlight = confirmEditDeleteHighlight;
         confirmEditDeleteOpen = false;
         confirmEditDeleteRow = null;
-        openEditRowForm(row);
+        confirmEditDeleteHighlight = null;
+        openEditRowForm(row, highlight);
     }
 
-    function openEditRowForm(row: PendingOp) {
+    /**
+     * 66 F7-d (§20.4, §21.4, §22.4): «Open» in the Form, on a parent or a charge with an id. The Form moves to that row
+     * by the double-click's entry (`handleEditRowClick`: a row «del» asks «restore and edit»), highlighting the row the
+     * user came from.
+     *   - present: the row with that `txId` (a hidden partner: the visible row of its pair); under a closed group, the
+     *     group opens, so the row is on screen when the Form closes;
+     *   - absent: read from the store, else from the server (then added to the store), and added as the picker adds
+     *     (`addSavedRows`). It is navigation, not a change: it joins the close guard's baseline;
+     *   - a failed read: an error toast; a late answer (the Bulk closed, the Form closed or moved): nothing.
+     */
+    async function handleFormOpenTransaction(id: number) {
+        const fromTempId = formEditingTempId;
+        const fromOp = fromTempId !== null ? ops.find((d) => d.tempId === fromTempId) : undefined;
+        const fromTxId = fromOp ? (opTxId(fromOp) ?? null) : null;
+        const request = chargesReadRequest;
+        const stale = () => !open || !formOpen || formEditingTempId !== fromTempId || request !== chargesReadRequest;
+        if (!findSavedRow(id)) {
+            let row: TXReadItem | null = txStoreGet(id) ?? null;
+            if (!row) {
+                try {
+                    const answer = (await zodiosApi.query_transactions_api_v1_transactions_get({queries: {ids: [id]}} as never)) as unknown;
+                    row = Array.isArray(answer) ? ((answer as TXReadItem[]).find((r) => r.id === id) ?? null) : null;
+                } catch {
+                    row = null;
+                }
+                if (stale()) return;
+                if (!row) {
+                    notify({name: 'tx.form.open.failed', detail: {id}, toast: {variant: 'error', message: $t('transactions.form.openFailed')}});
+                    return;
+                }
+                txStoreAddExtras([row]);
+            }
+            if (stale()) return;
+            joinBaseline(addSavedRows([id]));
+        }
+        const target = findSavedRow(id);
+        if (!target) return;
+        if (target.chargeOf !== undefined && isUnderParent(target, ops)) openGroup(target.chargeOf);
+        handleEditRowClick(target, fromTxId);
+    }
+
+    /** The row on screen of the saved transaction `txId`: its own, or the visible half of its pair. */
+    function findSavedRow(txId: number): PendingOp | undefined {
+        const op = ops.find((d) => d.op === 'edit' && d.txId === txId && !d.inaccessible);
+        if (!op?.pairedWith) return op;
+        return ops.find((d) => d.tempId === op.pairedWith);
+    }
+
+    /** 66 F7-d (§22.4): rows added by navigation join the close guard's baseline, adopted as in the rows, so an editor
+     *  nobody changed is still unchanged. */
+    function joinBaseline(added: readonly PendingOp[]) {
+        if (added.length === 0) return;
+        const addedIds = new Set(added.map((d) => d.tempId));
+        const current = ops.filter((d) => addedIds.has(d.tempId) || (d.pairedWith !== undefined && addedIds.has(d.pairedWith)));
+        baselineOps = adoptCharges([...baselineOps, ...($state.snapshot(current) as PendingOp[])], txStoreGet);
+        initialOpsKey = serializeOps(baselineOps);
+    }
+
+    // -------------------------------------------------------------------------
+    // 66 F7-c1 (§14.2): the linked charges of a saved parent, read when it enters the Bulk
+    // -------------------------------------------------------------------------
+
+    /** How many parents one read asks for (`GET /transactions?parent_ids=…`): the query string stays short. */
+    const CHARGES_READ_BATCH = 100;
+    /** Bumped on every open, reset and «Reset all»: an answer of an older generation changes nothing. */
+    let chargesLoadGeneration = 0;
+    /** The read in flight for each parent (by `txId`), so the Form of a parent waits for it instead of asking again. */
+    const chargesReads = new Map<number, Promise<boolean>>();
+
+    /** Whether the Bulk lacks some saved charge of this saved parent: fewer owned rows saved under it than its count. */
+    function parentChargesMissing(row: PendingOp): boolean {
+        if (row.op !== 'edit' || row.pairedWith || row.inaccessible) return false;
+        const count = txStoreGet(row.txId)?.charges_count ?? 0;
+        if (count <= 0 || getTypeRule(row.fields.type).chargeRole !== 'parent') return false;
+        const held = ops.filter((d) => d.op === 'edit' && d.chargeOf === row.tempId && txStoreGet(d.txId)?.parent_transaction_id === row.txId).length;
+        return held < count;
+    }
+
+    /** A new generation: every read in flight is dropped. Returns the parents (by `txId`) that were waiting, so the
+     *  caller can ask for them again. */
+    function restartChargesLoad(): Set<number> {
+        const waiting = new Set(chargesInFlight);
+        chargesLoadGeneration++;
+        chargesReads.clear();
+        chargesInFlight = new Set();
+        chargesReadFailed = new Set();
+        return waiting;
+    }
+
+    /** Read the charges of the saved parents among `rows` that the Bulk does not hold all of (and is not reading). */
+    function loadMissingCharges(rows: readonly PendingOp[], extraTxIds: ReadonlySet<number> = new Set()) {
+        const wanted = new Set<number>();
+        for (const row of rows) {
+            const current = ops.find((d) => d.tempId === row.tempId) ?? (row.op === 'edit' ? ops.find((d) => d.op === 'edit' && d.txId === row.txId && !d.pairedWith) : undefined);
+            if (current?.op === 'edit' && parentChargesMissing(current)) wanted.add(current.txId);
+        }
+        for (const txId of extraTxIds) {
+            const current = ops.find((d) => d.op === 'edit' && d.txId === txId && !d.pairedWith);
+            if (current && parentChargesMissing(current)) wanted.add(txId);
+        }
+        const ids = [...wanted].filter((id) => !chargesInFlight.has(id));
+        for (let at = 0; at < ids.length; at += CHARGES_READ_BATCH) void readParentCharges(ids.slice(at, at + CHARGES_READ_BATCH));
+    }
+
+    /** One read of the charges of these saved parents. True when they landed; false when the read failed or its answer
+     *  belongs to an older generation (dropped). A failure raises an error toast and leaves «del» off on them. */
+    function readParentCharges(parentIds: number[]): Promise<boolean> {
+        const generation = chargesLoadGeneration;
+        chargesInFlight = new Set([...chargesInFlight, ...parentIds]);
+        const failedBefore = chargesReadFailed;
+        if (parentIds.some((id) => failedBefore.has(id))) chargesReadFailed = new Set([...failedBefore].filter((id) => !parentIds.includes(id)));
+        const read = (async (): Promise<boolean> => {
+            let rows: TXReadItem[] | null = null;
+            try {
+                const answer = (await zodiosApi.query_transactions_api_v1_transactions_get({queries: {parent_ids: parentIds}} as never)) as unknown;
+                if (Array.isArray(answer)) rows = (answer as TXReadItem[]).filter((charge) => charge.parent_transaction_id != null && parentIds.includes(charge.parent_transaction_id));
+            } catch {
+                rows = null;
+            }
+            // An answer for an editor closed, reopened or reset meanwhile changes nothing.
+            if (generation !== chargesLoadGeneration || !open) return false;
+            chargesInFlight = new Set([...chargesInFlight].filter((id) => !parentIds.includes(id)));
+            for (const id of parentIds) chargesReads.delete(id);
+            if (rows === null) {
+                chargesReadFailed = new Set([...chargesReadFailed, ...parentIds]);
+                notify({name: 'tx.bulk.charges.read-failed', detail: {parentIds}, toast: {variant: 'error', message: $t('transactions.bulk.chargesReadFailed', {values: {ids: shortIdList(parentIds)}})}});
+                return false;
+            }
+            addLoadedCharges(rows);
+            return true;
+        })();
+        for (const id of parentIds) chargesReads.set(id, read);
+        return read;
+    }
+
+    /** 66 F7-c1: a toast names at most three parents (`#1, #2, #3 +4`): a read may cover up to 100. */
+    function shortIdList(ids: readonly number[]): string {
+        const shown = ids
+            .slice(0, 3)
+            .map((id) => `#${id}`)
+            .join(', ');
+        return ids.length > 3 ? `${shown} +${ids.length - 3}` : shown;
+    }
+
+    /**
+     * The charges read join as unchanged edit rows (`loadedWithParent`), adopted by their parent; under a parent already
+     * «del» they are unlinked (§15.1, the F7-b interim), and the group opens. The close guard's baseline takes them too
+     * (§14.2), when it holds their parent: an editor nobody changed is still unchanged.
+     */
+    function addLoadedCharges(rows: TXReadItem[]) {
+        txStoreAddExtras(rows);
+        const present = new Set(ops.map((d) => opTxId(d)).filter((id): id is number => id != null));
+        const fresh = rows.filter((charge, at) => !present.has(charge.id) && rows.findIndex((other) => other.id === charge.id) === at && txStoreGet(charge.id));
+        if (fresh.length === 0) return;
+        const added = fresh.map((charge) => editOpFromTx(charge.id, {loadedWithParent: true}));
+        ops = withLoadedCharges(ops, added);
+        const opened = ops.filter((d) => d.loadedWithParent && d.chargeOf !== undefined && added.some((a) => a.tempId === d.tempId) && ops.some((p) => p.tempId === d.chargeOf && p.op === 'edit' && p.markedDelete)).map((d) => d.chargeOf!);
+        if (opened.length > 0) expandedParents = new Set([...expandedParents, ...opened]);
+        const baseHeld = new Set(baselineOps.map((d) => opTxId(d)).filter((id): id is number => id != null));
+        const forBaseline = added.filter((op) => {
+            const parentId = txStoreGet(op.op === 'edit' ? op.txId : 0)?.parent_transaction_id;
+            return op.op === 'edit' && !baseHeld.has(op.txId) && parentId != null && baseHeld.has(parentId);
+        });
+        if (forBaseline.length > 0) {
+            baselineOps = withLoadedCharges(baselineOps, $state.snapshot(forBaseline) as PendingOp[]);
+            initialOpsKey = serializeOps(baselineOps);
+        }
+    }
+
+    /** `rows` with these charges read added, adopted by their parent, unlinked under a parent already «del» (§15.1). */
+    function withLoadedCharges(rows: PendingOp[], added: PendingOp[]): PendingOp[] {
+        const addedIds = new Set(added.map((op) => op.tempId));
+        const next = adoptCharges([...rows, ...added], txStoreGet);
+        return next.map((op) => {
+            if (!addedIds.has(op.tempId) || op.chargeOf === undefined) return op;
+            const owner = next.find((p) => p.tempId === op.chargeOf);
+            return owner?.op === 'edit' && owner.markedDelete ? {...op, parentUnlink: true, byParentChoice: true} : op;
+        });
+    }
+
+    /**
+     * 66 F7-b (§10, §11.6): before the Form of a saved parent opens, the Bulk holds every charge of it, so the Form never
+     * reads them on its own. The entry load normally has them already; a read still in flight is awaited, otherwise
+     * (a read that failed) the charges are read again. True when the charges are in the Bulk, false when the read failed.
+     */
+    async function ensureParentCharges(tempId: string): Promise<boolean> {
+        const row = ops.find((d) => d.tempId === tempId);
+        if (!row || row.op !== 'edit' || !parentChargesMissing(row)) return true;
+        return (await (chargesReads.get(row.txId) ?? readParentCharges([row.txId]))) || !parentChargesMissingByTxId(row.txId);
+    }
+
+    /** Whether the parent saved as `txId`, as the Bulk holds it now, still lacks some of its charges. */
+    function parentChargesMissingByTxId(txId: number): boolean {
+        const current = ops.find((d) => d.op === 'edit' && d.txId === txId && !d.pairedWith);
+        return current ? parentChargesMissing(current) : false;
+    }
+
+    function openEditRowForm(row: PendingOp, highlightTxId: number | null = null) {
+        const request = ++chargesReadRequest;
+        const current = ops.find((d) => d.tempId === row.tempId);
+        if (!current || !parentChargesMissing(current)) {
+            showRowForm(row.tempId, true, highlightTxId);
+            return;
+        }
+        void ensureParentCharges(row.tempId).then((ok) => {
+            if (request !== chargesReadRequest || !open) return;
+            showRowForm(row.tempId, ok, highlightTxId);
+        });
+    }
+
+    function showRowForm(tempId: string, chargesEditable: boolean, highlightTxId: number | null = null) {
+        const row = ops.find((d) => d.tempId === tempId);
+        if (!row) return;
+        formHighlightTxId = highlightTxId;
         // When editing a 'new' draft, open in create mode so type stays editable;
         // formEditingTempId is still set so handleFormPushed patches (not adds).
         formMode = deriveStatus(row) === 'new' ? 'create' : 'edit';
@@ -2508,12 +3158,89 @@
         // Project post-split type before validatePair: handleSplitRow already
         // un-paired split tails, so the mismatch must stop txStore fallback from
         // re-pairing them as the original transfer.
-        formItems = resolveFormItemsFromOps(row, ops, opToTxLikeForForm, txStoreGet);
+        const items = resolveFormItemsFromOps(row, ops, opToTxLikeForForm, txStoreGet);
+        // 66 F7-b (§11.6): the parent's charges always handed over, `[]` too, so the Form in the Bulk never reads them.
+        formItems = items && items.length === 1 ? [{...items[0], _charges: chargeDraftsFor(row, ops, txStoreGet)} as TXReadItem] : items;
+        formChargeEdits = chargesEditable;
         formKey++;
         formOpen = true;
     }
+
+    /** 66 F7-b: what the Form hands back about the linked charges, onto the operations (`bulkCharges.ts`). */
+    function applyChargePayload(tempId: string, payload: Record<string, unknown>, openedOnItself: boolean) {
+        let target = ops.find((d) => d.tempId === tempId);
+        if (!target) return;
+        // §11.4: a create that followed its parent, opened and applied on its own, keeps the values it now shows.
+        if (openedOnItself && target.followsParent) {
+            const next = {...target};
+            delete next.followsParent;
+            ops = ops.map((d) => (d.tempId === tempId ? next : d));
+            target = next;
+        }
+        if (Array.isArray(payload._charges)) {
+            const deps = {
+                editOpFromTx: (id: number) => (txStoreGet(id) ? editOpFromTx(id) : null),
+                newChargeOp: (draft: ChargeDraft, parent: PendingOp): PendingOp => ({
+                    op: 'create',
+                    tempId: generateUUID(),
+                    createdSeq: nextCreatedSeq(),
+                    fields: {
+                        broker_id: parent.fields.broker_id,
+                        asset_id: parent.fields.asset_id,
+                        type: draft.type,
+                        date: parent.fields.date,
+                        quantity: '0',
+                        cash: draft.cash ? {code: draft.cash.code, amount: draft.cash.amount} : null,
+                        tags: [],
+                        description: draft.description,
+                        asset_event_id: null,
+                        cost_basis_override: null,
+                        cost_basis_mode: null,
+                    },
+                    link_uuid: null,
+                }),
+            };
+            const parentTempId = target.tempId;
+            const underBefore = new Set(chargesUnder.get(parentTempId)?.map((o) => o.tempId) ?? []);
+            ops = adoptCharges(applyChargeDrafts(target, ops, payload._charges as ChargeDraft[], deps), txStoreGet);
+            // 66 F7-c1 (§14.7, §15.6): a charge created or linked in the parent's Form opens the group (the user brought
+            // it); a value changed on a charge already under it does not (§15.7).
+            if (ops.some((o) => o.chargeOf === parentTempId && !underBefore.has(o.tempId) && isUnderParent(o, ops))) openGroup(parentTempId);
+        }
+        if (payload._parent_unlink === true) {
+            // §11.7: the charge keeps its owner (`chargeOf`); only the link goes.
+            ops = ops.map((d) => {
+                if (d.tempId !== tempId) return d;
+                const next = {...d, parentUnlink: true};
+                delete next.parentLinkId;
+                return next;
+            });
+        }
+        if (typeof payload._parent_link === 'number') {
+            const parentId = payload._parent_link;
+            const owner = ops.find((d) => d.op === 'edit' && d.txId === parentId);
+            ops = ops.map((d) => {
+                if (d.tempId !== tempId) return d;
+                const next = {...d};
+                delete next.parentUnlink;
+                if (owner) {
+                    delete next.parentLinkId;
+                    next.chargeOf = owner.tempId;
+                    // 66 F7-c1: linked from its own Form to a parent of the Bulk, the charge goes under it: the group
+                    // opens, or the row the user just applied would vanish from the grid.
+                    openGroup(owner.tempId);
+                } else {
+                    delete next.chargeOf;
+                    next.parentLinkId = parentId;
+                }
+                return next;
+            });
+        }
+    }
+
     function handleFormPushed(payload: Record<string, unknown>) {
         const isDual = payload._dual === true;
+        let pushedTempId: string | null = formEditingTempId;
         if (formEditingTempId != null) {
             // Patching an existing draft row
             if (isDual) {
@@ -2526,9 +3253,10 @@
             if (isDual) {
                 addDualRowFromForm(payload);
             } else {
-                addRowFromForm(payload);
+                pushedTempId = addRowFromForm(payload);
             }
         }
+        if (!isDual && pushedTempId != null) applyChargePayload(pushedTempId, payload, formEditingTempId != null);
         formOpen = false;
         formEditingTempId = null;
         // R3-B2: trigger validation after FormModal pushes a draft
@@ -2645,15 +3373,11 @@
         icon: Trash2,
         label: () => $t('transactions.bulk.deleteSelected') || 'Delete selected',
         variant: 'danger' as const,
-        onClick: (rows: PendingOp[]) => {
-            for (const r of rows) {
-                if (r.op === 'edit') {
-                    markDelete(r.tempId);
-                } else {
-                    removeRow(r.tempId);
-                }
-            }
-        },
+        onClick: (rows: PendingOp[]) =>
+            void requestDelete(
+                rows.map((row) => row.tempId),
+                true,
+            ),
     });
     let bulkActionsForTable = $derived([bulkDeleteSelected] as never);
 
@@ -3164,6 +3888,8 @@
             if (!tx) return null; // TX not in store — can't proceed
             opB = editOpFromTx(sug.dbCandidateId, {addedViaPicker: true});
             ops = [...ops, opB];
+            // 66 F7-c1 (§14.2): a saved parent entering from a suggestion has its charges read, as from the picker.
+            loadMissingCharges([opB]);
         }
         return {opA, opB};
     }
@@ -3246,21 +3972,115 @@
         }
     }
 
+    /** 66 F7-c1: a charge under its parent never opens a page (`DataTable`'s `opensPage`, `paginateFlat`). */
+    function opensGridPage(row: PendingOp): boolean {
+        return !indentedIds.has(row.tempId);
+    }
+
+    /** 66 F7-c1 (§13.5): an indented row has no checkbox; the selection is of top-level rows. */
+    function isGridRowSelectable(row: PendingOp): boolean {
+        return !indentedIds.has(row.tempId);
+    }
+
+    // 66 F7-c1 (§14.6): a selected top-level row that goes under its parent (a «Restore», a link in the parent's Form)
+    // leaves the selection.
+    $effect(() => {
+        const indented = indentedIds;
+        untrack(() => {
+            for (const row of bulkTableSelectedRows) if (indented.has(row.tempId)) tableRef?.toggleRowSelectionById(row.tempId);
+        });
+    });
+
+    /**
+     * 66 F7-c1: clicks the grid's HTML cells cannot handle themselves, caught in the capture phase before the row's own
+     * handlers: the chip of a parent toggles its group and nothing else (no selection, no menu, no Form); a double-click
+     * on an indented row opens its Form (the table ignores a double-click on a row that cannot be selected).
+     */
+    function captureChargeChip(node: HTMLElement) {
+        const onClick = (ev: MouseEvent) => {
+            const chip = (ev.target as HTMLElement | null)?.closest?.('[data-tx-bulk-charges-toggle]') as HTMLElement | null;
+            if (!chip) return;
+            ev.preventDefault();
+            ev.stopPropagation();
+            const parentTempId = chip.getAttribute('data-tx-bulk-charges-toggle');
+            if (parentTempId) toggleGroup(parentTempId);
+        };
+        const onDblClick = (ev: MouseEvent) => {
+            const target = ev.target as HTMLElement | null;
+            if (target?.closest?.('[data-tx-bulk-charges-toggle]')) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                return;
+            }
+            const rowId = (target?.closest?.('tbody tr[data-row-id]') as HTMLElement | null)?.getAttribute('data-row-id');
+            if (!rowId || !indentedIds.has(rowId)) return;
+            const row = ops.find((o) => o.tempId === rowId);
+            if (!row) return;
+            ev.stopPropagation();
+            handleEditRowClick(row);
+        };
+        node.addEventListener('click', onClick, true);
+        node.addEventListener('dblclick', onDblClick, true);
+        return {
+            destroy() {
+                node.removeEventListener('click', onClick, true);
+                node.removeEventListener('dblclick', onDblClick, true);
+            },
+        };
+    }
+
     function handleBulkTableSelectionChange(selectedIds: string[]) {
         const idSet = new Set(selectedIds);
         bulkTableSelectedRows = ops.filter((d) => idSet.has(d.tempId));
     }
 
-    function executeBulkDeleteOnSelected() {
-        for (const r of bulkTableSelectedRows) {
-            if (r.op === 'edit') {
-                markDelete(r.tempId);
-            } else {
-                removeRow(r.tempId);
-            }
-        }
+    // -------------------------------------------------------------------------
+    // 66 F7-d (§20.5, §21.2, §22): U3, «Link» on the selection — one parent and its charges, saved with «Save all»
+    // -------------------------------------------------------------------------
+
+    /** What «Link» does with the selection, on the rows as they are now (`bulkLinkSelection`). */
+    let bulkLinkState = $derived.by(() => {
+        const selected = bulkTableSelectedRows.map((row) => ops.find((op) => op.tempId === row.tempId)).filter((op): op is PendingOp => op !== undefined);
+        return bulkLinkSelection(selected, ops, txStoreGet, {roleOf: (type) => getTypeRule(type).chargeRole, canEdit: (brokerId) => canEditBroker(brokerId)});
+    });
+    /** Why «Link» is off, naming the row by its reference (`bulkRowRef`). */
+    let bulkLinkHint = $derived(bulkLinkState.kind === 'disabled' ? $t(`transactions.chargesLink.reason.${bulkLinkState.reason}`, {values: {type: $t(`transactions.types.${bulkLinkState.params.type}`) || bulkLinkState.params.type, ref: bulkRowRef(bulkLinkState.params.op)}}) : '');
+    /** The open panel of «Link»: the parent and the charges by `tempId`, and what the panel shows. */
+    let linkPanel = $state<{parentId: string; chargeIds: string[]; parent: TXReadItem; charges: TXReadItem[]; parentRef: string; chargeRefs: string[]} | null>(null);
+
+    function openLinkPanel() {
+        const state = bulkLinkState;
+        if (state.kind !== 'ok') return;
+        linkPanel = {
+            parentId: state.parent.tempId,
+            chargeIds: state.charges.map((c) => c.tempId),
+            parent: panelItem(state.parent),
+            charges: state.charges.map((c) => panelItem(c)),
+            parentRef: bulkRowRef(state.parent),
+            chargeRefs: state.charges.map((c) => bulkRowRef(c)),
+        };
+    }
+
+    /** The confirmation: the charges go under the parent (`linkInBulk`), its group opens, the selection empties. */
+    function confirmLinkPanel() {
+        const panel = linkPanel;
+        linkPanel = null;
+        if (!panel) return;
+        const parent = ops.find((op) => op.tempId === panel.parentId);
+        const charges = panel.chargeIds.map((id) => ops.find((op) => op.tempId === id)).filter((op): op is PendingOp => op !== undefined);
+        if (!parent || charges.length === 0) return;
+        ops = linkInBulk(ops, parent, charges);
+        openGroup(parent.tempId);
         tableRef?.clearSelection();
         bulkTableSelectedRows = [];
+    }
+
+    /** «Delete selected» (66 F7-c2): the rows taken at the click; the selection empties once the choice is made. */
+    function executeBulkDeleteOnSelected() {
+        void requestDelete(
+            bulkTableSelectedRows.map((row) => row.tempId),
+            true,
+        );
     }
 </script>
 
@@ -3269,7 +4089,7 @@
         <!-- Header -->
         <div class="flex items-center justify-between p-5 pb-4 border-b border-lf-subtle shrink-0">
             <h2 class="text-lg font-semibold text-lf-primary" data-testid="tx-bulk-title" use:guideAnchor={'transaction.bulk.workspace'}>
-                📋 {$t('transactions.bulk.title', {values: {total: visibleOps.length}})}
+                📋 {$t('transactions.bulk.title', {values: {total: topRows.length}})}
                 {#if actionCount > 0}
                     <span class="text-sm font-normal text-lf-muted">
                         ({#if newCount > 0}<span class="text-lf-success">{newCount} {$t('transactions.bulk.stateNew')}</span>{/if}{#if newCount > 0 && (editedCount > 0 || deleteCount > 0)}
@@ -3348,6 +4168,9 @@
             {visibleOps}
             {deriveStatus}
             {executeBulkDeleteOnSelected}
+            linkState={bulkLinkState}
+            linkHint={bulkLinkHint}
+            onLinkCharges={openLinkPanel}
             {handlePromoteSelected}
             {openAddRowForm}
             {openPicker}
@@ -3357,10 +4180,12 @@
         />
 
         <!-- DataTable body -->
-        <div class="flex-1 min-h-0 overflow-y-auto px-3 py-2" data-testid="tx-bulk-body">
+        <div class="flex-1 min-h-0 overflow-y-auto px-3 py-2" data-testid="tx-bulk-body" use:captureChargeChip>
             <DataTable
                 bind:this={tableRef}
-                data={visibleOps}
+                data={gridRows}
+                opensPage={opensGridPage}
+                isRowSelectable={isGridRowSelectable}
                 {columns}
                 getRowId={(d) => d.tempId}
                 storageKey="tx-bulk-modal"
@@ -3514,7 +4339,7 @@
      committing to the backend; `unlockImmutable={true}` lets the user change
      `type` and `broker` even when editing an existing draft (deep-edit). -->
 <TransactionFormModal
-    open={formOpen}
+    open={open && formOpen}
     mode={formMode}
     items={formItems}
     {defaultBrokerId}
@@ -3524,6 +4349,7 @@
     zIndex={70}
     openKey={formKey}
     getBulkContext={() => getBulkContextExcluding(formEditingTempId)}
+    allowChargeEdits={formChargeEdits}
     getWacResult={(tempId) => {
         // Direct lookup (standalone ADJUSTMENT)
         const direct = wacResults.get(tempId);
@@ -3536,6 +4362,8 @@
         return selfOp?._wacCache ?? null;
     }}
     editingTempId={formEditingTempId}
+    onOpenTransaction={(id) => void handleFormOpenTransaction(id)}
+    highlightTxId={formHighlightTxId}
     pendingTxIds={pendingTxIds.size > 0 ? pendingTxIds : null}
     onClose={() => {
         formOpen = false;
@@ -3545,6 +4373,33 @@
 />
 
 <!-- Plan B Step 9: PickerModal for adding existing DB transactions -->
+<!-- 66 F7-c2: the panel V1 inside the Bulk — what to do with the linked charges of the parents being deleted. -->
+<TxChargesActionModal
+    open={deletePanel != null}
+    mode="deleteParent"
+    parents={deletePanel?.parents ?? []}
+    charges={deletePanel?.charges ?? []}
+    parentRefs={deletePanel?.parentRefs}
+    chargeRefs={deletePanel?.chargeRefs}
+    counts={deletePanel?.plan.counts}
+    onChoose={chooseDelete}
+    onCancel={cancelDelete}
+    zIndex={70}
+/>
+
+<!-- 66 F7-d: «Link» inside the Bulk (U3) — the parent and its charges, linked on «Save all». -->
+<TxChargesActionModal
+    open={linkPanel != null}
+    mode="link"
+    parents={linkPanel ? [linkPanel.parent] : []}
+    charges={linkPanel?.charges ?? []}
+    parentRefs={linkPanel ? [linkPanel.parentRef] : undefined}
+    chargeRefs={linkPanel?.chargeRefs}
+    onConfirm={confirmLinkPanel}
+    onCancel={() => (linkPanel = null)}
+    zIndex={70}
+/>
+
 <TransactionPickerModal open={pickerOpen} excludeIds={pickerExcludeIds} onAdd={handlePickerAdd} onClose={() => (pickerOpen = false)} />
 
 <!-- BUG-C7: Suggest picker — opens PickerModal filtered to importable candidates -->

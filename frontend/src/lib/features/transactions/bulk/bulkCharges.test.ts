@@ -1,0 +1,1404 @@
+/**
+ * bulkCharges — the linked charges of the Bulk editor, as operations (project 66, F7-b, model H).
+ *
+ * A charge (a FEE or a TAX) brought into the Bulk is a `PendingOp` of its own, owned by its parent through `chargeOf` (the
+ * parent's `tempId`), never through `pairedWith`. The link that changes lives on the charge: `parentUnlink` («scollega»:
+ * the payload sends `parent_transaction_id: 0`), `parentLinkId` (a saved parent absent from the Bulk), and a create born
+ * in its parent's form carries `followsParent`. This module is the pure half of that model (contract 66-F7 §10, corrected
+ * by §11):
+ *
+ *   - `adoptCharges`      a present parent adopts its saved charges, recognised by their saved `parent_transaction_id`;
+ *                         a `parentLinkId` turns into `chargeOf` once its parent arrives. Pairs untouched. Idempotent.
+ *   - `remapChargeOf`     a reset regenerates the parent's `tempId`: its charges follow it (§11.2).
+ *   - `isUnderParent`     the one predicate of «sits under its parent» (§11.7).
+ *   - `chargeDraftsFor`   the parent's form gets its charges as `ChargeDraft[]` (`txCharges.ts`).
+ *   - `applyChargeDrafts` the form's answer back onto the operations: one way, nothing typed is lost.
+ *   - `chargeParentFields`/`parentNeedsRef` what the payload of a charge carries to name its parent, and which creates
+ *                         need a `ref`.
+ *   - `foldBulkCharges`   (F7-c1) the grid's rows: the top-level rows in order, each open parent followed by its
+ *                         charges (`isUnderParent`), in the order of the operations.
+ *   - `rowAnchor`         (F7-c1) the row on screen that stands for an operation: a charge under a closed parent → the
+ *                         parent; open → itself; otherwise `pairedWith ?? tempId`.
+ *   (`chargeUnlinkList`, the F6 banner's list, is gone in F7-c1: the indented «scollega» rows replace the banner.)
+ *
+ * And the five invariants of the payload (§3 + §11.2), checked on a payload built by applying `chargeParentFields` to
+ * operations that the module itself produced: every id once across updates and deletes; a deleted parent leaves each of
+ * its saved charges deleted or unlinked; every `parent_ref` names a `ref` of the same batch; no charge kept twice; every
+ * `chargeOf` names an operation present. The checker is proved to bite, on one bad payload per invariant.
+ *
+ * RED until `bulkCharges.ts` exists and `PendingOp` gains `chargeOf`, `parentUnlink`, `parentLinkId`, `followsParent`.
+ */
+import {describe, expect, it, vi} from 'vitest';
+import type {TXReadItem} from '../types';
+import type {DraftFields, PendingOp} from './txBulkTypes';
+import {chargeFromPicked, chargesFromRows, type ChargeDraft} from '../form/txCharges';
+import {magnitudeForRule} from '../txPayloadHelpers';
+import {adoptCharges, applyChargeDrafts, chargeDraftsFor, chargeParentFields, isUnderParent, parentNeedsRef, remapChargeOf} from './bulkCharges';
+// F7-c1: the two functions it adds, read through the namespace so that while they do not exist only their own cases fail.
+import * as bulkChargesModule from './bulkCharges';
+
+// ---------------------------------------------------------------------------
+// Fixtures: a store of saved rows, and operations built from them
+// ---------------------------------------------------------------------------
+
+function row(id: number, type: string, extra: Partial<TXReadItem> = {}): TXReadItem {
+    return {
+        id,
+        broker_id: 77,
+        asset_id: 101,
+        type,
+        date: '2026-10-01',
+        quantity: type === 'BUY' ? '2.000000' : '0',
+        cash: {code: 'EUR', amount: '-10.000000'},
+        related_transaction_id: null,
+        partner_broker_id: null,
+        parent_transaction_id: null,
+        charges_count: 0,
+        tags: [],
+        description: `saved ${type} ${id}`,
+        cost_basis_override: null,
+        asset_event_id: null,
+        ...extra,
+    };
+}
+
+/** A saved BUY with two charges, a FEE and a TAX. */
+const BUY_A = row(501, 'BUY', {charges_count: 2});
+const FEE_A = row(502, 'FEE', {parent_transaction_id: 501, cash: {code: 'EUR', amount: '-1.500000'}, description: 'fee A'});
+const TAX_A = row(503, 'TAX', {parent_transaction_id: 501, cash: {code: 'EUR', amount: '-0.250000'}, description: 'tax A'});
+/** Another saved BUY with one FEE. */
+const BUY_B = row(511, 'BUY', {date: '2026-10-05', charges_count: 1});
+const FEE_B = row(512, 'FEE', {parent_transaction_id: 511, date: '2026-10-05', cash: {code: 'EUR', amount: '-2.000000'}, description: 'fee B'});
+/** A saved FEE that belongs to no parent. */
+const FEE_FREE = row(520, 'FEE', {cash: {code: 'EUR', amount: '-3.000000'}, description: 'fee free'});
+/** A saved TRANSFER pair: never touched by the charges. */
+const PAIR_FROM = row(530, 'TRANSFER', {related_transaction_id: 531, cash: null, quantity: '-1.000000'});
+const PAIR_TO = row(531, 'TRANSFER', {related_transaction_id: 530, cash: null, quantity: '1.000000', broker_id: 88});
+
+const STORE = new Map<number, TXReadItem>([BUY_A, FEE_A, TAX_A, BUY_B, FEE_B, FEE_FREE, PAIR_FROM, PAIR_TO].map((r) => [r.id, r]));
+const get = (id: number): TXReadItem | undefined => STORE.get(id);
+
+/** The fields of a saved row as the editor holds them: amounts as magnitudes (`fieldsFromTx`). */
+function fieldsOf(r: TXReadItem): DraftFields {
+    return {
+        broker_id: r.broker_id,
+        asset_id: r.asset_id ?? null,
+        type: r.type as DraftFields['type'],
+        date: r.date,
+        quantity: magnitudeForRule(r.quantity, 'free'),
+        cash: r.cash ? {code: r.cash.code, amount: magnitudeForRule(r.cash.amount, 'negative')} : null,
+        tags: [...(r.tags ?? [])],
+        description: r.description ?? '',
+        asset_event_id: null,
+        cost_basis_override: null,
+        cost_basis_mode: null,
+    };
+}
+
+type OpExtra = {tempId?: string; markedDelete?: boolean; chargeOf?: string; parentUnlink?: boolean; parentLinkId?: number; followsParent?: boolean; pairedWith?: string; link_uuid?: string | null};
+
+/** The edit operation of a saved row; its `tempId` is `t-<id>` unless given. */
+function editOp(r: TXReadItem, extra: OpExtra = {}): PendingOp {
+    return {op: 'edit', txId: r.id, markedDelete: false, tempId: `t-${r.id}`, createdSeq: r.id, fields: fieldsOf(r), ...extra};
+}
+
+/** A create operation. */
+function createOp(tempId: string, fields: DraftFields, extra: Omit<OpExtra, 'markedDelete' | 'tempId'> = {}): PendingOp {
+    return {op: 'create', tempId, createdSeq: 0, fields, ...extra};
+}
+
+/** A new BUY typed in the Bulk. */
+function newBuyFields(): DraftFields {
+    return {...fieldsOf(BUY_A), date: '2026-10-20', description: 'new buy'};
+}
+
+/** A new FEE draft as the form adds it (`newCharge`), with an amount and a note typed. */
+function newDraft(key: string, type: 'FEE' | 'TAX', amount: string, description: string): ChargeDraft {
+    return {key, id: null, type, cash: {amount, code: 'EUR'}, description, original: null, state: 'linked'};
+}
+
+function byTxId(ops: readonly PendingOp[], txId: number): PendingOp {
+    const found = ops.filter((op) => op.op === 'edit' && op.txId === txId);
+    if (found.length !== 1) throw new Error(`expected one operation for #${txId}, found ${found.length}`);
+    return found[0];
+}
+
+function byTempId(ops: readonly PendingOp[], tempId: string): PendingOp {
+    const found = ops.filter((op) => op.tempId === tempId);
+    if (found.length !== 1) throw new Error(`expected one operation ${tempId}, found ${found.length}`);
+    return found[0];
+}
+
+function draftByKey(drafts: readonly ChargeDraft[], key: string): ChargeDraft {
+    const found = drafts.filter((draft) => draft.key === key);
+    if (found.length !== 1) throw new Error(`expected one draft ${key}, found ${found.length}: ${drafts.map((d) => d.key).join(', ')}`);
+    return found[0];
+}
+
+/** The two dependencies `applyChargeDrafts` takes from the editor, as spies. Both return operations WITHOUT `chargeOf`
+ *  and `followsParent`: setting them is the module's job, whatever the editor hands back. */
+function makeDeps() {
+    const editOpFromTx = vi.fn((id: number): PendingOp | null => {
+        const r = get(id);
+        return r ? editOp(r, {tempId: `fresh-${id}`}) : null;
+    });
+    const newChargeOp = vi.fn((draft: ChargeDraft, parent: PendingOp): PendingOp => createOp(`made-${draft.key}`, {...parent.fields, type: draft.type, cash: draft.cash ? {...draft.cash} : null, description: draft.description, quantity: '0', tags: []}));
+    return {editOpFromTx, newChargeOp};
+}
+
+/** A deep copy, to prove an input was not mutated. */
+const snapshot = <T>(value: T): T => structuredClone(value);
+
+// ---------------------------------------------------------------------------
+// adoptCharges
+// ---------------------------------------------------------------------------
+
+describe('adoptCharges — a present parent adopts its saved charges', () => {
+    it('a FEE and a TAX whose saved parent is an edit operation of the Bulk take that operation’s tempId as chargeOf', () => {
+        const out = adoptCharges([editOp(BUY_A), editOp(FEE_A), editOp(TAX_A)], get);
+
+        expect(byTxId(out, FEE_A.id).chargeOf).toBe('t-501');
+        expect(byTxId(out, TAX_A.id).chargeOf).toBe('t-501');
+        expect(byTxId(out, BUY_A.id).chargeOf, 'the parent itself belongs to nobody').toBeUndefined();
+    });
+
+    it('recognises the parent by its saved id, not by its position nor its tempId', () => {
+        const out = adoptCharges([editOp(TAX_A), editOp(FEE_B), editOp(BUY_B, {tempId: 'other'}), editOp(BUY_A, {tempId: 'zzz'})], get);
+
+        expect(byTxId(out, TAX_A.id).chargeOf).toBe('zzz');
+        expect(byTxId(out, FEE_B.id).chargeOf).toBe('other');
+    });
+
+    it('a parent marked for deletion still adopts its charges', () => {
+        const out = adoptCharges([editOp(BUY_A, {markedDelete: true}), editOp(FEE_A)], get);
+        expect(byTxId(out, FEE_A.id).chargeOf).toBe('t-501');
+    });
+
+    it('a charge whose parent is not in the Bulk, and a charge with no parent, stay without chargeOf', () => {
+        const out = adoptCharges([editOp(FEE_A), editOp(FEE_FREE), editOp(BUY_B)], get);
+
+        expect(byTxId(out, FEE_A.id).chargeOf).toBeUndefined();
+        expect(byTxId(out, FEE_FREE.id).chargeOf).toBeUndefined();
+    });
+
+    it('a chargeOf already set is kept, even when the saved parent is present too', () => {
+        // Linked in this Bulk to the new BUY: the saved link to BUY_A must not take it back.
+        const ops = [editOp(BUY_A), createOp('new-buy', newBuyFields()), editOp(FEE_A, {chargeOf: 'new-buy'})];
+        const out = adoptCharges(ops, get);
+        expect(byTxId(out, FEE_A.id).chargeOf).toBe('new-buy');
+    });
+
+    it('a parentLinkId becomes chargeOf when its parent arrives, and the parentLinkId goes', () => {
+        const ops = [editOp(FEE_FREE, {parentLinkId: BUY_B.id}), editOp(BUY_B)];
+        const out = adoptCharges(ops, get);
+
+        const fee = byTxId(out, FEE_FREE.id);
+        expect(fee.chargeOf).toBe('t-511');
+        expect(fee.parentLinkId).toBeUndefined();
+    });
+
+    it('a parentLinkId whose parent is absent stays as it is', () => {
+        const out = adoptCharges([editOp(FEE_FREE, {parentLinkId: BUY_B.id})], get);
+
+        const fee = byTxId(out, FEE_FREE.id);
+        expect(fee.parentLinkId).toBe(BUY_B.id);
+        expect(fee.chargeOf).toBeUndefined();
+    });
+
+    it('never touches a pair: its two halves come out exactly as they went in', () => {
+        const from = editOp(PAIR_FROM, {link_uuid: 'L-1'});
+        const to = editOp(PAIR_TO, {pairedWith: from.tempId, link_uuid: 'L-1'});
+        const out = adoptCharges([from, to, editOp(BUY_A), editOp(FEE_A)], get);
+
+        expect(byTxId(out, PAIR_FROM.id)).toEqual(from);
+        expect(byTxId(out, PAIR_TO.id)).toEqual(to);
+    });
+
+    it('returns a new array and leaves its input as it was', () => {
+        const ops = [editOp(BUY_A), editOp(FEE_A), editOp(TAX_A), editOp(FEE_FREE, {parentLinkId: BUY_A.id})];
+        const before = snapshot(ops);
+
+        const out = adoptCharges(ops, get);
+
+        expect(out).not.toBe(ops);
+        expect(ops, 'the input operations are not mutated').toEqual(before);
+    });
+
+    it('is idempotent', () => {
+        const ops = [editOp(BUY_A), editOp(FEE_A), editOp(TAX_A), editOp(BUY_B), editOp(FEE_B), editOp(FEE_FREE, {parentLinkId: BUY_B.id})];
+        const once = adoptCharges(ops, get);
+        expect(adoptCharges(once, get)).toEqual(once);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// remapChargeOf
+// ---------------------------------------------------------------------------
+
+describe('remapChargeOf — the charges follow their parent’s new tempId', () => {
+    it('every chargeOf naming the old tempId names the new one; the others are untouched', () => {
+        const ops = [editOp(BUY_A), editOp(FEE_A, {chargeOf: 't-501'}), editOp(TAX_A, {chargeOf: 't-501', parentUnlink: true}), createOp('new-fee', fieldsOf(FEE_A), {chargeOf: 't-501', followsParent: true}), editOp(BUY_B), editOp(FEE_B, {chargeOf: 't-511'})];
+        const before = snapshot(ops);
+
+        const out = remapChargeOf(ops, 't-501', 'reset-501');
+
+        expect(byTxId(out, FEE_A.id).chargeOf).toBe('reset-501');
+        expect(byTxId(out, TAX_A.id)).toMatchObject({chargeOf: 'reset-501', parentUnlink: true});
+        expect(byTempId(out, 'new-fee')).toMatchObject({chargeOf: 'reset-501', followsParent: true});
+        expect(byTxId(out, FEE_B.id).chargeOf, 'another parent’s charge').toBe('t-511');
+        expect(ops, 'the input is not mutated').toEqual(before);
+    });
+
+    it('with nothing to remap, the operations come out equal', () => {
+        const ops = [editOp(BUY_A), editOp(FEE_B, {chargeOf: 't-511'})];
+        expect(remapChargeOf(ops, 'nobody', 'x')).toEqual(ops);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// isUnderParent — the one predicate (§11.7)
+// ---------------------------------------------------------------------------
+
+describe('isUnderParent — the one predicate of «sits under its parent»', () => {
+    const parent = editOp(BUY_A);
+    const deletedParent = editOp(BUY_A, {markedDelete: true});
+
+    it.each([
+        ['no chargeOf', [parent, editOp(FEE_A)], false],
+        ['chargeOf naming an operation that is not there', [editOp(FEE_A, {chargeOf: 't-501'})], false],
+        ['chargeOf, linked', [parent, editOp(FEE_A, {chargeOf: 't-501'})], true],
+        ['chargeOf, itself marked for deletion', [parent, editOp(FEE_A, {chargeOf: 't-501', markedDelete: true})], true],
+        ['chargeOf + parentUnlink, the parent stays', [parent, editOp(FEE_A, {chargeOf: 't-501', parentUnlink: true})], false],
+        ['chargeOf + parentUnlink, the parent marked for deletion', [deletedParent, editOp(FEE_A, {chargeOf: 't-501', parentUnlink: true})], true],
+        ['a new charge of a new parent', [createOp('new-buy', newBuyFields()), createOp('new-fee', fieldsOf(FEE_A), {chargeOf: 'new-buy'})], true],
+    ] as const)('%s → %s', (_label, ops, expected) => {
+        const charge = ops[ops.length - 1];
+        expect(isUnderParent(charge, [...ops])).toBe(expected);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// chargeDraftsFor
+// ---------------------------------------------------------------------------
+
+describe('chargeDraftsFor — the parent’s form gets its charges as drafts', () => {
+    it('a saved charge: key saved-<id>, its id, the values of its operation, original from the store as chargesFromRows reads it, state linked', () => {
+        const ops = adoptCharges([editOp(BUY_A), editOp(FEE_A), editOp(TAX_A)], get);
+
+        const drafts = chargeDraftsFor(byTxId(ops, BUY_A.id), ops, get);
+
+        expect(drafts).toHaveLength(2);
+        const fee = draftByKey(drafts, `saved-${FEE_A.id}`);
+        expect(fee).toMatchObject({id: FEE_A.id, type: 'FEE', cash: {amount: '1.5', code: 'EUR'}, description: 'fee A', state: 'linked'});
+        expect(fee.original, 'original: the saved values, magnitudes, exactly as the form reads them').toEqual(chargesFromRows([FEE_A])[0].original);
+        expect(fee.linkNew ?? false, 'a charge already linked to this parent is not a new link').toBe(false);
+        expect(draftByKey(drafts, `saved-${TAX_A.id}`).original).toEqual(chargesFromRows([TAX_A])[0].original);
+    });
+
+    it('the current values come from the operation, the original from the store', () => {
+        const ops = adoptCharges([editOp(BUY_A), editOp(FEE_A, {})], get).map((op) => (op.op === 'edit' && op.txId === FEE_A.id ? {...op, fields: {...op.fields, description: 'typed in the grid', cash: {code: 'EUR', amount: '9'}}} : op));
+
+        const fee = draftByKey(chargeDraftsFor(byTxId(ops, BUY_A.id), ops, get), `saved-${FEE_A.id}`);
+
+        expect(fee.description).toBe('typed in the grid');
+        expect(fee.cash).toEqual({amount: '9', code: 'EUR'});
+        expect(fee.original?.description).toBe('fee A');
+    });
+
+    it('state: delete for a charge marked for deletion, unlink for parentUnlink', () => {
+        const ops = [editOp(BUY_A, {markedDelete: true}), editOp(FEE_A, {chargeOf: 't-501', parentUnlink: true}), editOp(TAX_A, {chargeOf: 't-501', markedDelete: true})];
+
+        const drafts = chargeDraftsFor(ops[0], ops, get);
+
+        expect(draftByKey(drafts, `saved-${FEE_A.id}`).state).toBe('unlink');
+        expect(draftByKey(drafts, `saved-${TAX_A.id}`).state).toBe('delete');
+    });
+
+    it('a new charge (a create): key op-<tempId>, no id, no original, its values', () => {
+        const ops = [createOp('new-buy', newBuyFields()), createOp('n-fee', {...fieldsOf(FEE_A), description: 'brand new', cash: {code: 'EUR', amount: '4'}}, {chargeOf: 'new-buy', followsParent: true})];
+
+        const drafts = chargeDraftsFor(ops[0], ops, get);
+
+        expect(drafts).toEqual([{key: 'op-n-fee', id: null, type: 'FEE', cash: {amount: '4', code: 'EUR'}, description: 'brand new', original: null, state: 'linked'}]);
+    });
+
+    it('only this parent’s charges: not another parent’s, not a free FEE, not a FEE whose saved parent is this one but that was not adopted', () => {
+        const ops = [editOp(BUY_A), editOp(FEE_A, {chargeOf: 't-501'}), editOp(TAX_A), editOp(BUY_B), editOp(FEE_B, {chargeOf: 't-511'}), editOp(FEE_FREE)];
+
+        const drafts = chargeDraftsFor(ops[0], ops, get);
+
+        expect(drafts.map((d) => d.key)).toEqual([`saved-${FEE_A.id}`]);
+    });
+
+    it('a parent with no charges gets an empty list', () => {
+        expect(chargeDraftsFor(editOp(BUY_B), [editOp(BUY_B)], get)).toEqual([]);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// applyChargeDrafts
+// ---------------------------------------------------------------------------
+
+describe('applyChargeDrafts — the form’s answer back onto the operations', () => {
+    /** BUY_A with its two charges adopted, plus BUY_B with its FEE and the free FEE, untouched bystanders. */
+    function start(): {ops: PendingOp[]; parent: PendingOp; drafts: ChargeDraft[]} {
+        const ops = adoptCharges([editOp(BUY_A), editOp(FEE_A), editOp(TAX_A), editOp(BUY_B), editOp(FEE_B), editOp(FEE_FREE)], get);
+        const parent = byTxId(ops, BUY_A.id);
+        return {ops, parent, drafts: chargeDraftsFor(parent, ops, get)};
+    }
+
+    function edit(drafts: ChargeDraft[], key: string, patch: Partial<ChargeDraft>): ChargeDraft[] {
+        return drafts.map((draft) => (draft.key === key ? {...draft, ...patch} : draft));
+    }
+
+    it('round trip: the drafts the form was given, handed back unchanged, change nothing', () => {
+        const {ops, parent, drafts} = start();
+        const deps = makeDeps();
+
+        expect(applyChargeDrafts(parent, ops, drafts, deps)).toEqual(ops);
+        expect(deps.newChargeOp).not.toHaveBeenCalled();
+    });
+
+    it('type, cash and note are applied to the charge’s operation', () => {
+        const {ops, parent, drafts} = start();
+        const next = edit(drafts, `saved-${TAX_A.id}`, {type: 'FEE', cash: {amount: '0.75', code: 'EUR'}, description: 'tax note changed'});
+
+        const out = applyChargeDrafts(parent, ops, next, makeDeps());
+
+        const tax = byTxId(out, TAX_A.id);
+        expect(tax.fields).toMatchObject({type: 'FEE', cash: {amount: '0.75', code: 'EUR'}, description: 'tax note changed'});
+        expect(tax).toMatchObject({chargeOf: parent.tempId, markedDelete: false});
+        expect(tax.parentUnlink ?? false).toBe(false);
+    });
+
+    it('delete → the saved charge is marked for deletion', () => {
+        const {ops, parent, drafts} = start();
+        const out = applyChargeDrafts(parent, ops, edit(drafts, `saved-${FEE_A.id}`, {state: 'delete'}), makeDeps());
+        expect(byTxId(out, FEE_A.id)).toMatchObject({markedDelete: true, chargeOf: parent.tempId});
+    });
+
+    it('unlink → parentUnlink, chargeOf kept, and what was typed with it is kept too', () => {
+        const {ops, parent, drafts} = start();
+        const out = applyChargeDrafts(parent, ops, edit(drafts, `saved-${FEE_A.id}`, {state: 'unlink', description: 'typed, then unlinked'}), makeDeps());
+
+        const fee = byTxId(out, FEE_A.id);
+        expect(fee).toMatchObject({parentUnlink: true, chargeOf: parent.tempId, markedDelete: false});
+        expect(fee.fields.description, 'nothing typed is lost').toBe('typed, then unlinked');
+    });
+
+    it('linked → clears both a previous delete and a previous unlink', () => {
+        const {ops: started, parent} = start();
+        const ops = started.map((op) => {
+            if (op.op === 'edit' && op.txId === FEE_A.id) return {...op, markedDelete: true};
+            if (op.op === 'edit' && op.txId === TAX_A.id) return {...op, parentUnlink: true};
+            return op;
+        });
+        const drafts = chargeDraftsFor(parent, ops, get).map((draft) => ({...draft, state: 'linked' as const}));
+
+        const out = applyChargeDrafts(parent, ops, drafts, makeDeps());
+
+        expect(byTxId(out, FEE_A.id)).toMatchObject({op: 'edit', markedDelete: false});
+        expect(byTxId(out, TAX_A.id).parentUnlink ?? false).toBe(false);
+        expect(byTxId(out, TAX_A.id).chargeOf).toBe(parent.tempId);
+    });
+
+    it('a new draft → newChargeOp, and the create it returns is owned by the parent and follows it', () => {
+        const {ops, parent, drafts} = start();
+        const deps = makeDeps();
+        const added = newDraft('new-1', 'FEE', '2', 'fee typed in the form');
+
+        const out = applyChargeDrafts(parent, ops, [...drafts, added], deps);
+
+        expect(deps.newChargeOp).toHaveBeenCalledTimes(1);
+        expect(deps.newChargeOp.mock.calls[0][0]).toMatchObject({key: 'new-1', type: 'FEE', description: 'fee typed in the form'});
+        expect(deps.newChargeOp.mock.calls[0][1].tempId).toBe(parent.tempId);
+        expect(out).toHaveLength(ops.length + 1);
+        const created = out.filter((op) => op.op === 'create');
+        expect(created).toHaveLength(1);
+        expect(created[0]).toMatchObject({chargeOf: parent.tempId, followsParent: true});
+        expect(created[0].fields).toMatchObject({type: 'FEE', cash: {amount: '2', code: 'EUR'}, description: 'fee typed in the form'});
+    });
+
+    it('a new charge already in the Bulk (key op-<tempId>): its values applied, no second create; delete → it leaves', () => {
+        const {ops: started, parent} = start();
+        const ops = [...started, createOp('n-fee', {...fieldsOf(FEE_A), description: 'first'}, {chargeOf: parent.tempId, followsParent: true})];
+        const drafts = chargeDraftsFor(parent, ops, get);
+        const deps = makeDeps();
+
+        const changed = applyChargeDrafts(parent, ops, edit(drafts, 'op-n-fee', {description: 'second', cash: {amount: '7', code: 'EUR'}}), deps);
+        expect(byTempId(changed, 'n-fee').fields).toMatchObject({description: 'second', cash: {amount: '7', code: 'EUR'}});
+        expect(byTempId(changed, 'n-fee')).toMatchObject({chargeOf: parent.tempId, followsParent: true});
+        expect(changed).toHaveLength(ops.length);
+
+        const removed = applyChargeDrafts(parent, ops, edit(drafts, 'op-n-fee', {state: 'delete'}), deps);
+        expect(
+            removed.some((op) => op.tempId === 'n-fee'),
+            'a create the user deleted leaves the Bulk',
+        ).toBe(false);
+        expect(removed).toHaveLength(ops.length - 1);
+        expect(deps.newChargeOp).not.toHaveBeenCalled();
+    });
+
+    it('linkNew of a saved charge not in the Bulk: its operation is added from the store, owned by the parent', () => {
+        const {ops, parent, drafts} = start();
+        const ops2 = ops.filter((op) => !(op.op === 'edit' && op.txId === FEE_FREE.id));
+        const deps = makeDeps();
+        const picked = chargeFromPicked(FEE_FREE);
+        if (!picked) throw new Error('premise: FEE_FREE is a charge');
+
+        const out = applyChargeDrafts(parent, ops2, [...drafts, picked], deps);
+
+        expect(deps.editOpFromTx).toHaveBeenCalledWith(FEE_FREE.id);
+        expect(byTxId(out, FEE_FREE.id)).toMatchObject({chargeOf: parent.tempId, markedDelete: false});
+        expect(out).toHaveLength(ops2.length + 1);
+    });
+
+    it('linkNew of a saved charge already in the Bulk: the same operation, re-owned, no second one', () => {
+        const {ops, parent, drafts} = start();
+        const deps = makeDeps();
+        const picked = chargeFromPicked(FEE_B);
+        if (!picked) throw new Error('premise: FEE_B is a charge');
+
+        const out = applyChargeDrafts(parent, ops, [...drafts, {...picked, description: 'moved here'}], deps);
+
+        expect(deps.editOpFromTx).not.toHaveBeenCalled();
+        expect(byTxId(out, FEE_B.id)).toMatchObject({chargeOf: parent.tempId, tempId: `t-${FEE_B.id}`});
+        expect(byTxId(out, FEE_B.id).fields.description).toBe('moved here');
+        expect(out).toHaveLength(ops.length);
+    });
+
+    it('the other operations come out exactly as they went in, and the input is not mutated', () => {
+        const {ops, parent, drafts} = start();
+        const before = snapshot(ops);
+
+        const out = applyChargeDrafts(parent, ops, edit(edit(drafts, `saved-${FEE_A.id}`, {state: 'unlink'}), `saved-${TAX_A.id}`, {state: 'delete'}), makeDeps());
+
+        for (const id of [BUY_A.id, BUY_B.id, FEE_B.id, FEE_FREE.id]) expect(byTxId(out, id), `#${id}`).toEqual(byTxId(before, id));
+        expect(ops).toEqual(before);
+    });
+
+    it('applied twice (the form opened again on the same parent), a new charge is still one create', () => {
+        const {ops, parent, drafts} = start();
+        const deps = makeDeps();
+        const once = applyChargeDrafts(parent, ops, [...drafts, newDraft('new-1', 'TAX', '1', 'once')], deps);
+        const parentAgain = byTempId(once, parent.tempId);
+
+        const twice = applyChargeDrafts(parentAgain, once, chargeDraftsFor(parentAgain, once, get), deps);
+
+        expect(twice.filter((op) => op.op === 'create')).toHaveLength(1);
+        expect(twice).toEqual(once);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// chargeParentFields / parentNeedsRef
+// ---------------------------------------------------------------------------
+
+describe('chargeParentFields — how a charge’s payload names its parent', () => {
+    const newBuy = createOp('new-buy', newBuyFields());
+
+    it('nothing for an operation that is no charge of the Bulk', () => {
+        const ops = [editOp(BUY_A), editOp(FEE_FREE)];
+        expect(chargeParentFields(ops[0], ops, get)).toBeNull();
+        expect(chargeParentFields(ops[1], ops, get)).toBeNull();
+    });
+
+    it('parentUnlink → parent_transaction_id 0, whatever chargeOf says', () => {
+        const ops = [editOp(BUY_A, {markedDelete: true}), editOp(FEE_A, {chargeOf: 't-501', parentUnlink: true})];
+        expect(chargeParentFields(ops[1], ops, get)).toEqual({parent_transaction_id: 0});
+    });
+
+    it('a create under a new parent → parent_ref = the parent’s tempId', () => {
+        const ops = [newBuy, createOp('n-fee', fieldsOf(FEE_A), {chargeOf: 'new-buy', followsParent: true})];
+        expect(chargeParentFields(ops[1], ops, get)).toEqual({parent_ref: 'new-buy'});
+    });
+
+    it('a saved charge linked to a new parent (linkNew) → parent_ref too (§11.5)', () => {
+        const ops = [newBuy, editOp(FEE_FREE, {chargeOf: 'new-buy'})];
+        expect(chargeParentFields(ops[1], ops, get)).toEqual({parent_ref: 'new-buy'});
+    });
+
+    it('a create under a saved parent → parent_transaction_id = the parent’s id', () => {
+        const ops = [editOp(BUY_A), createOp('n-fee', fieldsOf(FEE_A), {chargeOf: 't-501', followsParent: true})];
+        expect(chargeParentFields(ops[1], ops, get)).toEqual({parent_transaction_id: BUY_A.id});
+    });
+
+    it('a saved charge under its own saved parent → nothing: the link is already saved', () => {
+        const ops = adoptCharges([editOp(BUY_A), editOp(FEE_A)], get);
+        expect(chargeParentFields(byTxId(ops, FEE_A.id), ops, get)).toBeNull();
+    });
+
+    it('a saved charge moved under another saved parent, or a free one linked → parent_transaction_id = the new parent', () => {
+        const ops = [editOp(BUY_A), editOp(FEE_B, {chargeOf: 't-501'}), editOp(FEE_FREE, {chargeOf: 't-501'})];
+        expect(chargeParentFields(ops[1], ops, get)).toEqual({parent_transaction_id: BUY_A.id});
+        expect(chargeParentFields(ops[2], ops, get)).toEqual({parent_transaction_id: BUY_A.id});
+    });
+
+    it('parentLinkId (a saved parent absent from the Bulk) → parent_transaction_id = that id', () => {
+        const ops = [editOp(FEE_FREE, {parentLinkId: BUY_B.id})];
+        expect(chargeParentFields(ops[0], ops, get)).toEqual({parent_transaction_id: BUY_B.id});
+    });
+});
+
+describe('parentNeedsRef — which creates carry a ref', () => {
+    it('a create named by a charge’s chargeOf needs one; a create nobody names, and a saved parent, do not', () => {
+        const ops = [createOp('new-buy', newBuyFields()), createOp('n-fee', fieldsOf(FEE_A), {chargeOf: 'new-buy'}), createOp('lonely', newBuyFields()), editOp(BUY_A), editOp(FEE_A, {chargeOf: 't-501'})];
+
+        expect(parentNeedsRef(ops[0], ops)).toBe(true);
+        expect(parentNeedsRef(ops[2], ops)).toBe(false);
+        expect(parentNeedsRef(ops[3], ops)).toBe(false);
+        expect(parentNeedsRef(ops[1], ops), 'the charge itself is no parent').toBe(false);
+    });
+
+    it('a new parent named only by a saved charge linked to it (linkNew) needs one too', () => {
+        const ops = [createOp('new-buy', newBuyFields()), editOp(FEE_FREE, {chargeOf: 'new-buy'})];
+        expect(parentNeedsRef(ops[0], ops)).toBe(true);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// The invariants of the payload
+// ---------------------------------------------------------------------------
+
+type Item = Record<string, unknown>;
+type Payload = {creates: Item[]; updates: Item[]; deletes: number[]};
+
+/**
+ * A payload of the operations, reduced to what the charges decide: a create per create op (`ref` when
+ * `parentNeedsRef`, plus `chargeParentFields`), a delete per marked saved row, an update per saved row whose note
+ * changed or whose parent fields are not null. `_op` names the operation an item came from, for the invariants.
+ */
+function payloadOf(ops: readonly PendingOp[]): Payload {
+    const payload: Payload = {creates: [], updates: [], deletes: []};
+    for (const op of ops) {
+        const link = chargeParentFields(op, [...ops], get) ?? {};
+        if (op.op === 'create') {
+            payload.creates.push({_op: op.tempId, type: op.fields.type, ...(parentNeedsRef(op, [...ops]) ? {ref: op.tempId} : {}), ...link});
+            continue;
+        }
+        if (op.markedDelete) {
+            payload.deletes.push(op.txId);
+            continue;
+        }
+        const saved = get(op.txId);
+        const note = saved && (saved.description ?? '') !== op.fields.description ? {description: op.fields.description} : {};
+        const update = {id: op.txId, ...note, ...link};
+        if (Object.keys(update).length > 1) payload.updates.push(update);
+    }
+    return payload;
+}
+
+/** Every broken invariant of a payload, by name; `[]` when it holds them all. */
+function invariantViolations(payload: Payload, ops: readonly PendingOp[]): string[] {
+    const out: string[] = [];
+    // 1. every id once across updates and deletes
+    const ids = [...payload.updates.map((u) => u.id as number), ...payload.deletes];
+    const dup = ids.filter((id, i) => ids.indexOf(id) !== i);
+    if (dup.length > 0) out.push(`1 ids twice: ${[...new Set(dup)].join(', ')}`);
+    // 2. a deleted parent: each of its saved charges in the Bulk is deleted or unlinked
+    for (const deletedId of payload.deletes) {
+        const parentOp = ops.find((op) => op.op === 'edit' && op.txId === deletedId);
+        const charges = ops.filter((op) => op.op === 'edit' && (get(op.txId)?.parent_transaction_id === deletedId || (parentOp && op.chargeOf === parentOp.tempId)));
+        for (const charge of charges) {
+            if (charge.op !== 'edit') continue;
+            const unlinked = payload.updates.some((u) => u.id === charge.txId && u.parent_transaction_id === 0);
+            if (!payload.deletes.includes(charge.txId) && !unlinked) out.push(`2 charge #${charge.txId} of deleted #${deletedId} kept linked`);
+        }
+    }
+    // 3. every parent_ref names a ref of the same batch
+    const refs = new Set(payload.creates.map((c) => c.ref).filter((r): r is string => typeof r === 'string'));
+    for (const item of [...payload.creates, ...payload.updates]) {
+        if (item.parent_ref !== undefined && !refs.has(item.parent_ref as string)) out.push(`3 parent_ref ${String(item.parent_ref)} names no ref`);
+        if (item.parent_ref !== undefined && item.parent_transaction_id !== undefined) out.push(`3 both parent_ref and parent_transaction_id on one item`);
+    }
+    // 4. no charge kept twice: one item per operation, one operation per saved row
+    const sources = payload.creates.map((c) => c._op);
+    if (new Set(sources).size !== sources.length) out.push('4 one create twice');
+    const txIds = ops.filter((op) => op.op === 'edit').map((op) => (op.op === 'edit' ? op.txId : 0));
+    if (new Set(txIds).size !== txIds.length) out.push('4 one saved row held by two operations');
+    // 5. every chargeOf names an operation present
+    for (const op of ops) if (op.chargeOf !== undefined && !ops.some((o) => o.tempId === op.chargeOf)) out.push(`5 dangling chargeOf ${op.chargeOf}`);
+    return out;
+}
+
+describe('the five invariants of the payload, on operations the module produced', () => {
+    const deps = () => makeDeps();
+    function edit(drafts: ChargeDraft[], key: string, patch: Partial<ChargeDraft>): ChargeDraft[] {
+        return drafts.map((draft) => (draft.key === key ? {...draft, ...patch} : draft));
+    }
+
+    /** S1 — delete a saved parent: its FEE kept (unlink), its TAX deleted. */
+    function deleteParentKeepFee(): PendingOp[] {
+        const ops = adoptCharges([editOp(BUY_A, {markedDelete: true}), editOp(FEE_A), editOp(TAX_A)], get);
+        const parent = byTxId(ops, BUY_A.id);
+        const drafts = edit(edit(chargeDraftsFor(parent, ops, get), `saved-${FEE_A.id}`, {state: 'unlink'}), `saved-${TAX_A.id}`, {state: 'delete'});
+        return applyChargeDrafts(parent, ops, drafts, deps());
+    }
+
+    /** S2 — a new parent with a new FEE, and a free saved FEE linked to it. */
+    function newParentNewFeeAndLinked(): PendingOp[] {
+        const ops = [createOp('new-buy', newBuyFields())];
+        const picked = chargeFromPicked(FEE_FREE);
+        if (!picked) throw new Error('premise: FEE_FREE is a charge');
+        return applyChargeDrafts(ops[0], ops, [newDraft('new-1', 'FEE', '2', 'new fee'), picked], deps());
+    }
+
+    /** S3 — a saved parent: a new FEE, the TAX’s note changed, the FEE unlinked, another parent’s FEE moved here. */
+    function savedParentMixed(): PendingOp[] {
+        const ops = adoptCharges([editOp(BUY_A), editOp(FEE_A), editOp(TAX_A), editOp(BUY_B), editOp(FEE_B), editOp(PAIR_FROM, {link_uuid: 'L'}), editOp(PAIR_TO, {pairedWith: 't-530', link_uuid: 'L'})], get);
+        const parent = byTxId(ops, BUY_A.id);
+        const picked = chargeFromPicked(FEE_B);
+        if (!picked) throw new Error('premise: FEE_B is a charge');
+        const drafts = [...edit(edit(chargeDraftsFor(parent, ops, get), `saved-${FEE_A.id}`, {state: 'unlink'}), `saved-${TAX_A.id}`, {description: 'tax note changed'}), newDraft('new-1', 'FEE', '1', 'new fee'), picked];
+        return applyChargeDrafts(parent, ops, drafts, deps());
+    }
+
+    /** S4 — S3, then its parent form opened and applied again, then the parent reset (its tempId regenerated). */
+    function savedParentAppliedTwiceThenReset(): PendingOp[] {
+        const once = savedParentMixed();
+        const parent = byTxId(once, BUY_A.id);
+        const twice = applyChargeDrafts(parent, once, chargeDraftsFor(parent, once, get), deps());
+        const reset = twice.map((op) => (op.tempId === parent.tempId ? {...editOp(BUY_A), tempId: 'reset-501'} : op));
+        return remapChargeOf(reset, parent.tempId, 'reset-501');
+    }
+
+    it.each([
+        ['S1 delete a parent, keep its FEE, delete its TAX', deleteParentKeepFee],
+        ['S2 a new parent, a new FEE, a saved FEE linked to it', newParentNewFeeAndLinked],
+        ['S3 a saved parent: new FEE, TAX note, FEE unlinked, a FEE moved in', savedParentMixed],
+        ['S4 S3 applied twice and reset', savedParentAppliedTwiceThenReset],
+    ] as const)('%s: the payload holds all five', (_label, build) => {
+        const ops = build();
+        expect(invariantViolations(payloadOf(ops), ops)).toEqual([]);
+    });
+
+    it('S1 payload: the parent and the TAX deleted, the FEE unlinked with parent_transaction_id 0, nothing else', () => {
+        const payload = payloadOf(deleteParentKeepFee());
+        expect(payload.creates).toEqual([]);
+        expect([...payload.deletes].sort()).toEqual([BUY_A.id, TAX_A.id]);
+        expect(payload.updates).toEqual([{id: FEE_A.id, parent_transaction_id: 0}]);
+    });
+
+    it('S2 payload: the new parent carries a ref, the new FEE and the linked saved FEE name it by parent_ref', () => {
+        const payload = payloadOf(newParentNewFeeAndLinked());
+        const parent = payload.creates.find((c) => c.type === 'BUY');
+        const fee = payload.creates.find((c) => c.type === 'FEE');
+        expect(typeof parent?.ref).toBe('string');
+        expect(fee).toMatchObject({parent_ref: parent?.ref});
+        expect(fee?.parent_transaction_id).toBeUndefined();
+        expect(payload.updates).toEqual([{id: FEE_FREE.id, parent_ref: parent?.ref}]);
+    });
+
+    it('S3 payload: one create under the saved parent, the TAX note, the FEE unlinked, the moved FEE relinked', () => {
+        const payload = payloadOf(savedParentMixed());
+        expect(payload.creates).toEqual([expect.objectContaining({type: 'FEE', parent_transaction_id: BUY_A.id})]);
+        expect(payload.updates).toEqual(
+            expect.arrayContaining([
+                {id: FEE_A.id, parent_transaction_id: 0},
+                {id: TAX_A.id, description: 'tax note changed'},
+                {id: FEE_B.id, parent_transaction_id: BUY_A.id},
+            ]),
+        );
+        expect(payload.updates).toHaveLength(3);
+        expect(payload.deletes).toEqual([]);
+    });
+
+    describe('the checker bites: one bad payload per invariant', () => {
+        // Hand-built, so the checker's own proof does not depend on the module under test.
+        const ops = [editOp(BUY_A, {markedDelete: true}), editOp(FEE_A, {chargeOf: 't-501'}), editOp(TAX_A, {chargeOf: 't-501'})];
+
+        it.each([
+            ['1 an id twice', {creates: [], updates: [{id: FEE_A.id, parent_transaction_id: 0}], deletes: [BUY_A.id, TAX_A.id, FEE_A.id]}, ops, '1 '],
+            ['2 a charge of a deleted parent kept linked', {creates: [], updates: [], deletes: [BUY_A.id, TAX_A.id]}, ops, '2 '],
+            ['3 a parent_ref naming no ref', {creates: [{_op: 'x', type: 'FEE', parent_ref: 'ghost'}], updates: [], deletes: []}, [], '3 '],
+            [
+                '3 parent_ref and parent_transaction_id together',
+                {
+                    creates: [
+                        {_op: 'p', type: 'BUY', ref: 'p'},
+                        {_op: 'x', type: 'FEE', parent_ref: 'p', parent_transaction_id: 501},
+                    ],
+                    updates: [],
+                    deletes: [],
+                },
+                [],
+                '3 ',
+            ],
+            [
+                '4 one create twice',
+                {
+                    creates: [
+                        {_op: 'x', type: 'FEE'},
+                        {_op: 'x', type: 'FEE'},
+                    ],
+                    updates: [],
+                    deletes: [],
+                },
+                [],
+                '4 ',
+            ],
+            ['4 one saved row held twice', {creates: [], updates: [], deletes: []}, [editOp(FEE_A), editOp(FEE_A, {tempId: 'again'})], '4 '],
+            ['5 a dangling chargeOf', {creates: [], updates: [], deletes: []}, [editOp(FEE_A, {chargeOf: 'gone'})], '5 '],
+        ] as const)('%s', (_label, payload, opsOf, prefix) => {
+            const violations = invariantViolations(payload as unknown as Payload, opsOf as readonly PendingOp[]);
+            expect(
+                violations.some((v) => v.startsWith(prefix)),
+                violations.join(' | ') || 'no violation found',
+            ).toBe(true);
+        });
+    });
+});
+
+// ---------------------------------------------------------------------------
+// F7-c1 — foldBulkCharges and rowAnchor (contract 66-F7 §13 F7-c1, corrected by §14)
+// ---------------------------------------------------------------------------
+
+type FoldBulkCharges = (top: readonly PendingOp[], ops: readonly PendingOp[], expanded: ReadonlySet<string>) => PendingOp[];
+type RowAnchor = (op: PendingOp, ops: readonly PendingOp[], expanded: ReadonlySet<string>) => string;
+
+/** `foldBulkCharges`, or a failure naming it while `bulkCharges.ts` does not export it yet. */
+function foldBulkCharges(top: readonly PendingOp[], ops: readonly PendingOp[], expanded: ReadonlySet<string>): PendingOp[] {
+    const fn = (bulkChargesModule as unknown as {foldBulkCharges?: FoldBulkCharges}).foldBulkCharges;
+    expect(fn, 'bulkCharges exports foldBulkCharges').toBeTypeOf('function');
+    return fn!(top, ops, expanded);
+}
+
+/** `rowAnchor`, or a failure naming it while `bulkCharges.ts` does not export it yet. */
+function rowAnchor(op: PendingOp, ops: readonly PendingOp[], expanded: ReadonlySet<string>): string {
+    const fn = (bulkChargesModule as unknown as {rowAnchor?: RowAnchor}).rowAnchor;
+    expect(fn, 'bulkCharges exports rowAnchor').toBeTypeOf('function');
+    return fn!(op, ops, expanded);
+}
+
+const tempIds = (ops: readonly PendingOp[]): string[] => ops.map((op) => op.tempId);
+
+describe('foldBulkCharges — the grid’s rows: top-level rows, each open parent followed by its charges', () => {
+    // The ops in the order the Bulk holds them: the TAX before the FEE, so «in ops order» is not «in id order».
+    const buyA = editOp(BUY_A);
+    const taxA = editOp(TAX_A, {chargeOf: 't-501'});
+    const feeA = editOp(FEE_A, {chargeOf: 't-501'});
+    const buyB = editOp(BUY_B);
+    const feeB = editOp(FEE_B, {chargeOf: 't-511'});
+    const free = editOp(FEE_FREE);
+    const ops = [taxA, buyA, free, feeB, buyB, feeA];
+    /** The top-level rows as the Bulk sorts them (here BUY_B first, as a descending date sort would). */
+    const top = [buyB, free, buyA];
+
+    it('nothing open: the top-level rows, unchanged and in their order; no charge', () => {
+        expect(tempIds(foldBulkCharges(top, ops, new Set()))).toEqual(['t-511', 't-520', 't-501']);
+    });
+
+    it('an open parent is followed by its charges, in the order of the operations, wherever the parent sits', () => {
+        expect(tempIds(foldBulkCharges(top, ops, new Set(['t-501'])))).toEqual(['t-511', 't-520', 't-501', 't-503', 't-502']);
+    });
+
+    it('only the open parents unfold: BUY_B open, BUY_A closed', () => {
+        expect(tempIds(foldBulkCharges(top, ops, new Set(['t-511'])))).toEqual(['t-511', 't-512', 't-520', 't-501']);
+    });
+
+    it('both open: each group right after its own parent', () => {
+        expect(tempIds(foldBulkCharges(top, ops, new Set(['t-501', 't-511'])))).toEqual(['t-511', 't-512', 't-520', 't-501', 't-503', 't-502']);
+    });
+
+    it('a charge unlinked from a parent that stays is not under it: it is not inserted, even with the parent open (it is a top-level row of its own)', () => {
+        const unlinked = editOp(FEE_A, {chargeOf: 't-501', parentUnlink: true});
+        const opsU = [buyA, taxA, unlinked];
+        const topU = [buyA, unlinked];
+        expect(tempIds(foldBulkCharges(topU, opsU, new Set(['t-501'])))).toEqual(['t-501', 't-503', 't-502']);
+        expect(
+            foldBulkCharges(topU, opsU, new Set(['t-501'])).filter((op) => op.tempId === 't-502'),
+            'the unlinked FEE appears once, where the top-level rows put it',
+        ).toHaveLength(1);
+    });
+
+    it('under a parent marked for deletion a «scollega» charge is still under it: inserted, as a «del» one is', () => {
+        const deleted = editOp(BUY_A, {markedDelete: true});
+        const opsD = [deleted, editOp(FEE_A, {chargeOf: 't-501', parentUnlink: true}), editOp(TAX_A, {chargeOf: 't-501', markedDelete: true})];
+        expect(tempIds(foldBulkCharges([deleted], opsD, new Set(['t-501'])))).toEqual(['t-501', 't-502', 't-503']);
+    });
+
+    it('a new charge of a new parent unfolds the same way', () => {
+        const newBuy = createOp('new-buy', newBuyFields());
+        const newFee = createOp('new-fee', fieldsOf(FEE_A), {chargeOf: 'new-buy', followsParent: true});
+        expect(tempIds(foldBulkCharges([newBuy], [newBuy, newFee], new Set(['new-buy'])))).toEqual(['new-buy', 'new-fee']);
+    });
+
+    it('an open tempId that names no top-level row inserts nothing; a pair’s hidden half is never inserted', () => {
+        const from = editOp(PAIR_FROM);
+        const to = editOp(PAIR_TO, {pairedWith: 't-530', tempId: 't-531'});
+        expect(tempIds(foldBulkCharges([from], [from, to], new Set(['t-530', 'nobody'])))).toEqual(['t-530']);
+    });
+
+    it('returns a new array and mutates neither input', () => {
+        const topCopy = snapshot(top);
+        const opsCopy = snapshot(ops);
+        const out = foldBulkCharges(top, ops, new Set(['t-501']));
+        expect(out).not.toBe(top);
+        expect(top).toEqual(topCopy);
+        expect(ops).toEqual(opsCopy);
+    });
+});
+
+describe('rowAnchor — the row on screen that stands for an operation', () => {
+    const buyA = editOp(BUY_A);
+    const feeA = editOp(FEE_A, {chargeOf: 't-501'});
+    const ops = [buyA, feeA];
+
+    it('a charge under a closed parent → the parent’s row', () => {
+        expect(rowAnchor(feeA, ops, new Set())).toBe('t-501');
+    });
+
+    it('a charge under an open parent → its own row', () => {
+        expect(rowAnchor(feeA, ops, new Set(['t-501']))).toBe('t-502');
+    });
+
+    it('the parent itself → its own row, open or closed', () => {
+        expect(rowAnchor(buyA, ops, new Set())).toBe('t-501');
+        expect(rowAnchor(buyA, ops, new Set(['t-501']))).toBe('t-501');
+    });
+
+    it('a charge unlinked from a parent that stays is a top-level row: its own, whether the parent is open or not', () => {
+        const unlinked = editOp(FEE_A, {chargeOf: 't-501', parentUnlink: true});
+        expect(rowAnchor(unlinked, [buyA, unlinked], new Set())).toBe('t-502');
+        expect(rowAnchor(unlinked, [buyA, unlinked], new Set(['t-501']))).toBe('t-502');
+    });
+
+    it('a «scollega» charge under a parent marked for deletion is under it: the parent while closed, itself while open', () => {
+        const deleted = editOp(BUY_A, {markedDelete: true});
+        const kept = editOp(FEE_A, {chargeOf: 't-501', parentUnlink: true});
+        expect(rowAnchor(kept, [deleted, kept], new Set())).toBe('t-501');
+        expect(rowAnchor(kept, [deleted, kept], new Set(['t-501']))).toBe('t-502');
+    });
+
+    it('a pair’s hidden half → its visible half (pairedWith), as before', () => {
+        const from = editOp(PAIR_FROM);
+        const to = editOp(PAIR_TO, {pairedWith: 't-530', tempId: 't-531'});
+        expect(rowAnchor(to, [from, to], new Set())).toBe('t-530');
+    });
+
+    it('a row of its own → itself; a chargeOf naming nobody present → itself', () => {
+        const free = editOp(FEE_FREE);
+        const dangling = editOp(FEE_B, {chargeOf: 'gone'});
+        expect(rowAnchor(free, [free], new Set())).toBe('t-520');
+        expect(rowAnchor(dangling, [dangling], new Set())).toBe('t-512');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// F7-c2 — linkedChargesOf, planBulkDelete, applyDeleteChoice (contract 66-F7 §17, corrected by §18)
+// ---------------------------------------------------------------------------
+
+/**
+ * The shapes pinned here (the implementer follows them):
+ *
+ *   linkedChargesOf(parent, ops): PendingOp[]
+ *       the operations with `chargeOf` = parent.tempId for which `isUnderParent` holds, not `markedDelete`, without
+ *       `parentUnlink`; new ones included; in the order of `ops`.
+ *
+ *   planBulkDelete(ops, selectedTempIds, unread): BulkDeletePlan
+ *       unread(op) → 'loading' | 'failed' | null, asked only of a saved row about to go «del»;
+ *       BulkDeletePlan = {
+ *           toggles: {tempId: string; deleted: boolean}[];  // saved selected rows that flip («del» ↔ restored)
+ *           removals: string[];                              // new selected rows, which leave the Bulk
+ *           needsChoice: string[];                           // parents going «del» that have linked charges
+ *           waiting: string[];                               // parents going «del» whose read is in flight
+ *           skipped: string[];                               // parents going «del» whose read failed
+ *           counts: {keep: number; all: number};
+ *       }
+ *       Every decision is taken on the state before any of them. A waiting or skipped parent is in no toggle.
+ *       counts, as the page's panel counts its intent (66 F6): `keep` = the linked charges of the parents in
+ *       needsChoice (they survive «Keep»); `all` = every row «Delete all» deletes or removes: those parents, their
+ *       linked charges, and the other selected rows going «del» or leaving. A restore counts in neither.
+ *
+ *   applyDeleteChoice(ops, plan, choice, get): PendingOp[]
+ *       `get` is the store's read (`txStoreGet`): a saved charge linked here to a parent that is not its saved one
+ *       (`linkNew`) is told apart by its saved `parent_transaction_id`. `choice` is ignored when needsChoice is empty.
+ *       - toggles and removals applied;
+ *       - «keep»: each parent «del»; its saved linked charges `parentUnlink` + `byParentChoice`; its new ones on their
+ *         own (no `chargeOf`, no `followsParent`) with the broker, asset and date they followed; a `linkNew` one only
+ *         loses `chargeOf` (it never had this parent saved: nothing to send);
+ *       - «all»: each parent «del»; its saved linked charges `markedDelete` + `byParentChoice` (a `linkNew` too); its
+ *         new ones leave the Bulk;
+ *       - a parent restored: its charges marked `byParentChoice` get back as they were (no `markedDelete`, no
+ *         `parentUnlink`, no `byParentChoice`); a charge unlinked by hand stays unlinked.
+ *
+ * RED until `bulkCharges.ts` exports them and `PendingOp` gains `byParentChoice?: true`.
+ */
+type Unread = 'loading' | 'failed' | null;
+type BulkDeletePlan = {
+    toggles: {tempId: string; deleted: boolean}[];
+    removals: string[];
+    needsChoice: string[];
+    waiting: string[];
+    skipped: string[];
+    counts: {keep: number; all: number};
+};
+type LinkedChargesOf = (parent: PendingOp, ops: readonly PendingOp[]) => PendingOp[];
+type PlanBulkDelete = (ops: readonly PendingOp[], selectedTempIds: readonly string[], unread: (op: PendingOp) => Unread) => BulkDeletePlan;
+type ApplyDeleteChoice = (ops: readonly PendingOp[], plan: BulkDeletePlan, choice: 'keep' | 'all', get: (id: number) => TXReadItem | undefined) => PendingOp[];
+
+function c2<T>(name: string): T {
+    const fn = (bulkChargesModule as unknown as Record<string, unknown>)[name];
+    expect(fn, `bulkCharges exports ${name}`).toBeTypeOf('function');
+    return fn as T;
+}
+const linkedChargesOf: LinkedChargesOf = (parent, ops) => c2<LinkedChargesOf>('linkedChargesOf')(parent, ops);
+const planBulkDelete: PlanBulkDelete = (ops, selected, unread) => c2<PlanBulkDelete>('planBulkDelete')(ops, selected, unread);
+const applyDeleteChoice: ApplyDeleteChoice = (ops, plan, choice, g) => c2<ApplyDeleteChoice>('applyDeleteChoice')(ops, plan, choice, g);
+const allRead = (): Unread => null;
+type WithChoice = PendingOp & {byParentChoice?: true};
+
+describe('linkedChargesOf — the charges still linked to a parent', () => {
+    it('saved and new charges under the parent, in ops order; not «del», not unlinked, not another parent’s', () => {
+        const ops = [
+            editOp(BUY_A),
+            editOp(TAX_A, {chargeOf: 't-501'}),
+            editOp(FEE_A, {chargeOf: 't-501', markedDelete: true}),
+            createOp('n-fee', fieldsOf(FEE_A), {chargeOf: 't-501', followsParent: true}),
+            editOp(FEE_FREE, {chargeOf: 't-501', parentUnlink: true}),
+            editOp(BUY_B),
+            editOp(FEE_B, {chargeOf: 't-511'}),
+        ];
+        expect(tempIds(linkedChargesOf(ops[0], ops))).toEqual(['t-503', 'n-fee']);
+        expect(tempIds(linkedChargesOf(ops[5], ops))).toEqual(['t-512']);
+    });
+
+    it('under a parent already «del» a «scollega» charge is under it but not linked: excluded', () => {
+        const ops = [editOp(BUY_A, {markedDelete: true}), editOp(FEE_A, {chargeOf: 't-501', parentUnlink: true}), editOp(TAX_A, {chargeOf: 't-501'})];
+        expect(tempIds(linkedChargesOf(ops[0], ops))).toEqual(['t-503']);
+    });
+
+    it('a row with no charge: none', () => {
+        const ops = [editOp(BUY_A), editOp(FEE_FREE)];
+        expect(linkedChargesOf(ops[0], ops)).toEqual([]);
+    });
+});
+
+describe('planBulkDelete — one plan for «Delete» and «Delete selected»', () => {
+    const buyA = editOp(BUY_A);
+    const feeA = editOp(FEE_A, {chargeOf: 't-501'});
+    const taxA = editOp(TAX_A, {chargeOf: 't-501'});
+    const free = editOp(FEE_FREE);
+
+    it('a single parent with linked charges asks for a choice: keep = 2 charges, all = parent + 2', () => {
+        const ops = [buyA, feeA, taxA, free];
+        const plan = planBulkDelete(ops, ['t-501'], allRead);
+        expect(plan.needsChoice).toEqual(['t-501']);
+        expect(plan.waiting).toEqual([]);
+        expect(plan.skipped).toEqual([]);
+        expect(plan.counts).toEqual({keep: 2, all: 3});
+    });
+
+    it('a row with no linked charge needs no choice: it toggles', () => {
+        const plan = planBulkDelete([buyA, free], ['t-520'], allRead);
+        expect(plan.needsChoice).toEqual([]);
+        expect(plan.toggles).toEqual([{tempId: 't-520', deleted: true}]);
+    });
+
+    it('a selected row already «del» toggles back without asking, and counts in nothing', () => {
+        const ops = [editOp(BUY_A, {markedDelete: true}), editOp(FEE_A, {chargeOf: 't-501', parentUnlink: true, byParentChoice: true} as never), free];
+        const plan = planBulkDelete(ops, ['t-501'], allRead);
+        expect(plan.needsChoice).toEqual([]);
+        expect(plan.toggles).toEqual([{tempId: 't-501', deleted: false}]);
+        expect(plan.counts).toEqual({keep: 0, all: 0});
+    });
+
+    it('a selection mixing a parent, an unrelated row and a new row: one choice; all counts every row that goes', () => {
+        const fresh = createOp('n-dep', {...fieldsOf(FEE_FREE), type: 'DEPOSIT' as DraftFields['type']});
+        const ops = [buyA, feeA, taxA, free, fresh];
+        const plan = planBulkDelete(ops, ['t-501', 't-520', 'n-dep'], allRead);
+        expect(plan.needsChoice).toEqual(['t-501']);
+        expect(plan.toggles).toContainEqual({tempId: 't-520', deleted: true});
+        expect(plan.removals).toEqual(['n-dep']);
+        expect(plan.counts, 'keep: the 2 charges; all: BUY + 2 charges + the free FEE + the new row').toEqual({keep: 2, all: 5});
+    });
+
+    it('a parent whose read is in flight waits; one whose read failed is skipped; neither toggles', () => {
+        const ops = [buyA, feeA, editOp(BUY_B), free];
+        const unread = (op: PendingOp): Unread => (op.tempId === 't-501' ? 'loading' : op.tempId === 't-511' ? 'failed' : null);
+        const plan = planBulkDelete(ops, ['t-501', 't-511', 't-520'], unread);
+        expect(plan.waiting).toEqual(['t-501']);
+        expect(plan.skipped).toEqual(['t-511']);
+        expect(plan.needsChoice).toEqual([]);
+        expect(plan.toggles).toEqual([{tempId: 't-520', deleted: true}]);
+    });
+
+    it('unread is asked only of rows going «del»: a parent being restored never waits', () => {
+        const ops = [editOp(BUY_A, {markedDelete: true}), free];
+        const plan = planBulkDelete(ops, ['t-501'], () => 'loading');
+        expect(plan.waiting).toEqual([]);
+        expect(plan.toggles).toEqual([{tempId: 't-501', deleted: false}]);
+    });
+
+    it('a top-level charge of the parent (unlinked by hand), selected with it: its own toggle, outside the parent’s choice', () => {
+        const unlinked = editOp(TAX_A, {chargeOf: 't-501', parentUnlink: true});
+        const ops = [buyA, feeA, unlinked];
+        const plan = planBulkDelete(ops, ['t-501', 't-503'], allRead);
+        expect(plan.needsChoice).toEqual(['t-501']);
+        expect(plan.toggles).toContainEqual({tempId: 't-503', deleted: true});
+        expect(plan.counts, 'keep: the FEE alone; all: BUY + FEE + the TAX deleted anyway').toEqual({keep: 1, all: 3});
+    });
+});
+
+describe('applyDeleteChoice — the choice onto the operations', () => {
+    const buyA = editOp(BUY_A);
+    const feeA = editOp(FEE_A, {chargeOf: 't-501'});
+    const taxA = editOp(TAX_A, {chargeOf: 't-501'});
+
+    it('«keep»: parent «del»; saved charges unlinked, marked byParentChoice, still under the parent', () => {
+        const ops = [buyA, feeA, taxA];
+        const out = applyDeleteChoice(ops, planBulkDelete(ops, ['t-501'], allRead), 'keep', get) as WithChoice[];
+        expect(byTempId(out, 't-501')).toMatchObject({markedDelete: true});
+        for (const id of ['t-502', 't-503']) {
+            expect(byTempId(out, id), id).toMatchObject({chargeOf: 't-501', parentUnlink: true, byParentChoice: true, markedDelete: false});
+            expect(isUnderParent(byTempId(out, id), out), `${id} sits under the parent «del»`).toBe(true);
+        }
+    });
+
+    it('«all»: parent «del»; saved charges «del», marked byParentChoice', () => {
+        const ops = [buyA, feeA, taxA];
+        const out = applyDeleteChoice(ops, planBulkDelete(ops, ['t-501'], allRead), 'all', get) as WithChoice[];
+        expect(byTempId(out, 't-501')).toMatchObject({markedDelete: true});
+        for (const id of ['t-502', 't-503']) expect(byTempId(out, id), id).toMatchObject({markedDelete: true, byParentChoice: true});
+        expect(
+            out.some((op) => op.tempId === 't-502' && op.parentUnlink),
+            '«del» wins over «scollega»',
+        ).toBe(false);
+    });
+
+    it('«keep» on a new charge: a row of its own, no chargeOf nor followsParent, with the broker, asset and date it followed', () => {
+        const parent = editOp(BUY_A);
+        const stale = createOp('n-fee', {...fieldsOf(FEE_A), date: '2025-01-01', broker_id: 1, asset_id: null}, {chargeOf: 't-501', followsParent: true});
+        const ops = [parent, stale];
+        const out = applyDeleteChoice(ops, planBulkDelete(ops, ['t-501'], allRead), 'keep', get);
+        const kept = byTempId(out, 'n-fee');
+        expect(kept.chargeOf, 'on its own').toBeUndefined();
+        expect(kept.followsParent, 'no longer follows').toBeUndefined();
+        expect({broker_id: kept.fields.broker_id, asset_id: kept.fields.asset_id, date: kept.fields.date}, 'the values it followed, frozen').toEqual({broker_id: parent.fields.broker_id, asset_id: parent.fields.asset_id, date: parent.fields.date});
+    });
+
+    it('«all» on a new charge: it leaves the Bulk', () => {
+        const ops = [buyA, createOp('n-fee', fieldsOf(FEE_A), {chargeOf: 't-501', followsParent: true})];
+        const out = applyDeleteChoice(ops, planBulkDelete(ops, ['t-501'], allRead), 'all', get);
+        expect(out.some((op) => op.tempId === 'n-fee')).toBe(false);
+    });
+
+    it('a linkNew charge (linked here, saved under no parent): «keep» only drops the local link; «all» marks it «del»', () => {
+        const linked = editOp(FEE_FREE, {chargeOf: 't-501'});
+        const ops = [buyA, linked];
+        const kept = byTempId(applyDeleteChoice(ops, planBulkDelete(ops, ['t-501'], allRead), 'keep', get), 't-520') as WithChoice;
+        expect(kept.chargeOf, 'the local link is gone').toBeUndefined();
+        expect(kept.parentUnlink, 'nothing to send: it never had this parent saved').toBeUndefined();
+        expect(chargeParentFields(kept, [buyA, kept], get), 'the payload names no parent').toBeNull();
+        const gone = byTempId(applyDeleteChoice(ops, planBulkDelete(ops, ['t-501'], allRead), 'all', get), 't-520') as WithChoice;
+        expect(gone).toMatchObject({markedDelete: true, byParentChoice: true});
+    });
+
+    it('the toggles and removals of the plan are applied with the choice', () => {
+        const free = editOp(FEE_FREE);
+        const fresh = createOp('n-dep', fieldsOf(FEE_FREE));
+        const ops = [buyA, feeA, free, fresh];
+        const out = applyDeleteChoice(ops, planBulkDelete(ops, ['t-501', 't-520', 'n-dep'], allRead), 'keep', get);
+        expect(byTempId(out, 't-520')).toMatchObject({markedDelete: true});
+        expect(out.some((op) => op.tempId === 'n-dep')).toBe(false);
+    });
+
+    it('restoring the parent undoes only what the choice set: a charge unlinked by hand before stays unlinked', () => {
+        const byHand = editOp(TAX_A, {chargeOf: 't-501', parentUnlink: true});
+        const before = [buyA, feeA, byHand];
+        const deleted = applyDeleteChoice(before, planBulkDelete(before, ['t-501'], allRead), 'keep', get);
+        const restored = applyDeleteChoice(deleted, planBulkDelete(deleted, ['t-501'], allRead), 'keep', get) as WithChoice[];
+        expect(byTempId(restored, 't-501')).toMatchObject({markedDelete: false});
+        const fee = byTempId(restored, 't-502') as WithChoice;
+        expect(fee.parentUnlink, 'the FEE the choice unlinked is linked again').toBeUndefined();
+        expect(fee.byParentChoice, 'and no longer marked').toBeUndefined();
+        expect(byTempId(restored, 't-503'), 'the TAX unlinked by hand stays unlinked').toMatchObject({parentUnlink: true});
+    });
+
+    it('restoring after «all»: the saved charges come back linked; a new one removed does not come back', () => {
+        const before = [buyA, feeA, createOp('n-fee', fieldsOf(FEE_A), {chargeOf: 't-501', followsParent: true})];
+        const deleted = applyDeleteChoice(before, planBulkDelete(before, ['t-501'], allRead), 'all', get);
+        const restored = applyDeleteChoice(deleted, planBulkDelete(deleted, ['t-501'], allRead), 'all', get) as WithChoice[];
+        expect(byTempId(restored, 't-502')).toMatchObject({markedDelete: false});
+        expect((byTempId(restored, 't-502') as WithChoice).byParentChoice).toBeUndefined();
+        expect(restored.some((op) => op.tempId === 'n-fee')).toBe(false);
+    });
+
+    it('does not mutate its input', () => {
+        const ops = [buyA, feeA, taxA];
+        const copy = snapshot(ops);
+        applyDeleteChoice(ops, planBulkDelete(ops, ['t-501'], allRead), 'keep', get);
+        expect(ops).toEqual(copy);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// F7-d — U3 «Link» inside the Bulk, and the rows that leave (contract 66-F7 §20.5, corrected by §21.2, §21.3, §22.2, §22.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * The shape pinned here (the implementer follows it):
+ *
+ *   bulkLinkSelection(rows, ops, get, opts): BulkLinkSelection
+ *       rows: the selected operations (top-level rows, in selection order); ops: every operation of the Bulk; get: the
+ *       store's read; opts: `LinkOptions` of `chargeLinkRules.ts` ({roleOf, canEdit}).
+ *       BulkLinkSelection =
+ *           | {kind: 'hidden'}
+ *           | {kind: 'disabled'; reason: LinkReason | 'deleted'; params: …}   // params: the implementer's (§20.6, §22.1)
+ *           | {kind: 'ok'; parent: PendingOp; charges: PendingOp[]};
+ *       It reuses `linkSelection` on mirror rows: a negative synthetic id for a create; a mirror's
+ *       `parent_transaction_id` is its parent in the Bulk (`chargeOf`, unless `parentUnlink`), or `parentLinkId`, or its
+ *       saved one unless `parentUnlink`. Order of the outcomes: every `hidden` of `linkSelection` first (§22.2); then
+ *       `deleted` (a «del» row in the selection); then the reasons of `linkSelection`.
+ *
+ * RED until `bulkCharges.ts` exports `bulkLinkSelection`: read through the namespace, so only these cases fail.
+ */
+type BulkLinkSelection = {kind: 'hidden'} | {kind: 'disabled'; reason: string; params?: unknown} | {kind: 'ok'; parent: PendingOp; charges: PendingOp[]};
+type LinkOpts = {roleOf: (type: string) => 'charge' | 'parent' | null; canEdit: (brokerId: number) => boolean};
+type BulkLinkSelectionFn = (rows: readonly PendingOp[], ops: readonly PendingOp[], g: (id: number) => TXReadItem | undefined, opts: LinkOpts) => BulkLinkSelection;
+
+const ROLES: Record<string, 'charge' | 'parent' | null> = {BUY: 'parent', SELL: 'parent', DEPOSIT: 'parent', WITHDRAWAL: 'parent', FEE: 'charge', TAX: 'charge', TRANSFER: null, ADJUSTMENT: null};
+const LINK_OPTS: LinkOpts = {roleOf: (type) => ROLES[type] ?? null, canEdit: () => true};
+
+const bulkLinkSelection: BulkLinkSelectionFn = (rows, ops, g, opts) => c2<BulkLinkSelectionFn>('bulkLinkSelection')(rows, ops, g, opts);
+
+/** A new charge typed on its own in the Bulk (not born in a parent's form: no `followsParent`). */
+function newFeeFields(extra: Partial<DraftFields> = {}): DraftFields {
+    return {...fieldsOf(FEE_FREE), description: 'new fee', ...extra};
+}
+
+/** `ok`, with the parent and the charges named by tempId. */
+function expectOk(result: BulkLinkSelection, parent: string, charges: string[]): void {
+    expect(result.kind, JSON.stringify(result)).toBe('ok');
+    if (result.kind !== 'ok') return;
+    expect(result.parent.tempId).toBe(parent);
+    expect(tempIds(result.charges)).toEqual(charges);
+}
+
+/** `disabled`, with this reason. */
+function expectOff(result: BulkLinkSelection, reason: string): void {
+    expect({kind: result.kind, reason: result.kind === 'disabled' ? result.reason : undefined}, JSON.stringify(result)).toEqual({kind: 'disabled', reason});
+}
+
+describe('bulkLinkSelection — «Link» on the Bulk’s selection (U3)', () => {
+    it('saved parent + saved free charge: ok', () => {
+        const buy = editOp(BUY_B, {});
+        const fee = editOp(FEE_FREE);
+        const ops = [buy, fee];
+        expectOk(bulkLinkSelection([buy, fee], ops, get, LINK_OPTS), 't-511', ['t-520']);
+    });
+
+    it('new parent + new charge: ok, the operations themselves come back', () => {
+        const buy = createOp('n-buy', newBuyFields());
+        const fee = createOp('n-fee', newFeeFields({date: '2026-10-20'}));
+        const ops = [buy, fee];
+        expectOk(bulkLinkSelection([buy, fee], ops, get, LINK_OPTS), 'n-buy', ['n-fee']);
+    });
+
+    it('saved parent + new charge: ok', () => {
+        const buy = editOp(BUY_B);
+        const fee = createOp('n-fee', newFeeFields());
+        expectOk(bulkLinkSelection([buy, fee], [buy, fee], get, LINK_OPTS), 't-511', ['n-fee']);
+    });
+
+    it('new parent + saved free charge: ok', () => {
+        const buy = createOp('n-buy', newBuyFields());
+        const fee = editOp(FEE_FREE);
+        expectOk(bulkLinkSelection([buy, fee], [buy, fee], get, LINK_OPTS), 'n-buy', ['t-520']);
+    });
+
+    it('two new charges with a new parent: ok, both, in selection order', () => {
+        const buy = createOp('n-buy', newBuyFields());
+        const fee = createOp('n-fee', newFeeFields());
+        const tax = createOp('n-tax', {...newFeeFields(), type: 'TAX' as DraftFields['type'], description: 'new tax'});
+        expectOk(bulkLinkSelection([tax, buy, fee], [buy, fee, tax], get, LINK_OPTS), 'n-buy', ['n-tax', 'n-fee']);
+    });
+
+    // §22.2: the hidden outcomes of linkSelection still win.
+    it('two charges and no parent stay hidden, even when one of them is «del»', () => {
+        const fee = editOp(FEE_FREE, {markedDelete: true});
+        const other = createOp('n-fee', newFeeFields());
+        expect(bulkLinkSelection([fee, other], [fee, other], get, LINK_OPTS)).toEqual({kind: 'hidden'});
+    });
+
+    it('a single row is hidden', () => {
+        const buy = editOp(BUY_B);
+        expect(bulkLinkSelection([buy], [buy], get, LINK_OPTS)).toEqual({kind: 'hidden'});
+    });
+
+    it('a parent «del» in the selection: off, reason deleted', () => {
+        const buy = editOp(BUY_B, {markedDelete: true});
+        const fee = editOp(FEE_FREE);
+        expectOff(bulkLinkSelection([buy, fee], [buy, fee], get, LINK_OPTS), 'deleted');
+    });
+
+    it('a charge «del» in the selection: off, reason deleted', () => {
+        const buy = editOp(BUY_B);
+        const fee = editOp(FEE_FREE, {markedDelete: true});
+        expectOff(bulkLinkSelection([buy, fee], [buy, fee], get, LINK_OPTS), 'deleted');
+    });
+
+    it('deleted is checked before the other reasons: a «del» charge on another broker says deleted, not otherBroker', () => {
+        const buy = editOp(BUY_B);
+        const fee: PendingOp = {...editOp(FEE_FREE, {markedDelete: true}), fields: {...fieldsOf(FEE_FREE), broker_id: 99}};
+        expectOff(bulkLinkSelection([buy, fee], [buy, fee], get, LINK_OPTS), 'deleted');
+    });
+
+    it('two parents: off, twoParents', () => {
+        const a = editOp(BUY_B);
+        const b = createOp('n-buy', newBuyFields());
+        const fee = editOp(FEE_FREE);
+        expectOff(bulkLinkSelection([a, b, fee], [a, b, fee], get, LINK_OPTS), 'twoParents');
+    });
+
+    it('a charge on another broker: off, otherBroker', () => {
+        const buy = editOp(BUY_B);
+        const fee = createOp('n-fee', newFeeFields({broker_id: 99}));
+        expectOff(bulkLinkSelection([buy, fee], [buy, fee], get, LINK_OPTS), 'otherBroker');
+    });
+
+    it('a charge on another asset: off, otherAsset', () => {
+        const buy = editOp(BUY_B);
+        const fee = createOp('n-fee', newFeeFields({asset_id: 202}));
+        expectOff(bulkLinkSelection([buy, fee], [buy, fee], get, LINK_OPTS), 'otherAsset');
+    });
+
+    it('a charge still linked to a saved parent absent from the Bulk (its saved parent): off, linked', () => {
+        const buy = editOp(BUY_B);
+        // FEE_A's saved parent is BUY_A (501), which is not in the Bulk.
+        const fee = editOp(FEE_A);
+        expectOff(bulkLinkSelection([buy, fee], [buy, fee], get, LINK_OPTS), 'linked');
+    });
+
+    it('a charge linked in this Bulk to a saved parent absent from it (parentLinkId): off, linked', () => {
+        const buy = editOp(BUY_B);
+        const fee = createOp('n-fee', newFeeFields(), {parentLinkId: 501});
+        expectOff(bulkLinkSelection([buy, fee], [buy, fee], get, LINK_OPTS), 'linked');
+    });
+
+    // §21.2: unlinked here from A, then linked to B — «unlink first» is already done.
+    it('a top-level charge unlinked here from its parent A (parentUnlink), selected with parent B: ok', () => {
+        const a = editOp(BUY_A);
+        const feeA = editOp(FEE_A, {chargeOf: 't-501', parentUnlink: true});
+        const b = editOp(BUY_B);
+        const ops = [a, feeA, b];
+        expectOk(bulkLinkSelection([b, feeA], ops, get, LINK_OPTS), 't-511', ['t-502']);
+    });
+
+    it('a saved charge whose saved parent is absent but unlinked here (parentUnlink, no chargeOf): ok', () => {
+        const b = editOp(BUY_B);
+        const feeA = editOp(FEE_A, {parentUnlink: true});
+        expectOk(bulkLinkSelection([b, feeA], [b, feeA], get, LINK_OPTS), 't-511', ['t-502']);
+    });
+
+    it('a row the user cannot edit hides the button, as on the page', () => {
+        const buy = editOp(BUY_B);
+        const fee = editOp(FEE_FREE);
+        expect(bulkLinkSelection([buy, fee], [buy, fee], get, {...LINK_OPTS, canEdit: (id) => id !== 77})).toEqual({kind: 'hidden'});
+    });
+});
+
+/**
+ * «paired» read from the Bulk's own state (66 F7-d, pair rule 8 of `charges.py`, `row_is_paired`): the backend refuses
+ * a leg of a pair as parent or charge, and in one batch the pair links are applied before the charge links. So a
+ * row is a leg of a pair when the Bulk holds it as one, as the payload does (`opToTxLike`): a visible row is paired
+ * when another operation has `pairedWith === its tempId`; its hidden half carries `pairedWith`. The saved row's
+ * `related_transaction_id` alone is not the answer: a new pair has none, and a saved pair split in this Bulk
+ * (`handleSplitRow` Case A: the partner loses `pairedWith` and becomes visible) still has it.
+ *
+ * The pairs below use DEPOSIT / WITHDRAWAL, parent types of `ROLES`, so the other rules would say ok: a CASH_TRANSFER
+ * or FX_CONVERSION leg has no charge role and would hide «Link» before «paired» is ever read.
+ *
+ * RED until `bulkLinkSelection` reads pairing from the operations: the new pair (no saved partner) and the split pair
+ * (saved `related_transaction_id` still set) fail; the pair loaded as usual is a green guard.
+ */
+describe('bulkLinkSelection — «paired» from the Bulk’s own pairs (rule 8)', () => {
+    /** A saved DEPOSIT / WITHDRAWAL pair on broker 77, asset 101 (the asset of FEE_FREE). */
+    const DEP_P = row(540, 'DEPOSIT', {related_transaction_id: 541, cash: {code: 'EUR', amount: '100.000000'}, description: 'paired deposit'});
+    const WD_P = row(541, 'WITHDRAWAL', {related_transaction_id: 540, cash: {code: 'EUR', amount: '-100.000000'}, description: 'paired withdrawal'});
+    const PAIR_STORE = new Map<number, TXReadItem>([DEP_P, WD_P].map((r) => [r.id, r]));
+    const pairGet = (id: number): TXReadItem | undefined => PAIR_STORE.get(id) ?? get(id);
+
+    /** `disabled` for `paired`, naming this operation. */
+    function expectPaired(result: BulkLinkSelection, tempId: string): void {
+        expectOff(result, 'paired');
+        const params = (result as {params?: {op?: PendingOp}}).params;
+        expect(params?.op?.tempId, 'the row named is the leg of the pair').toBe(tempId);
+    }
+
+    it('a new pair in the Bulk (visible DEPOSIT + hidden WITHDRAWAL with pairedWith) with a new free FEE: off, paired, naming the DEPOSIT', () => {
+        const dep = createOp('n-dep', {...fieldsOf(DEP_P), date: '2026-10-20', description: 'new paired deposit'}, {link_uuid: 'pair-uuid'});
+        const wd = createOp('n-wd', {...fieldsOf(WD_P), date: '2026-10-20', description: 'new paired withdrawal'}, {pairedWith: 'n-dep', link_uuid: 'pair-uuid'});
+        const fee = createOp('n-fee', newFeeFields({date: '2026-10-20'}));
+        expectPaired(bulkLinkSelection([dep, fee], [dep, wd, fee], pairGet, LINK_OPTS), 'n-dep');
+    });
+
+    it('a saved pair split in this Bulk (both halves visible, no pairedWith either way) with a saved free FEE: ok', () => {
+        // handleSplitRow Case A: the partner op stays in the Bulk, visible, and loses `pairedWith`; the store still
+        // has `related_transaction_id` until the save, whose split runs before the charge links.
+        const dep = editOp(DEP_P);
+        const wd = editOp(WD_P);
+        const fee = editOp(FEE_FREE);
+        expectOk(bulkLinkSelection([dep, fee], [dep, wd, fee], pairGet, LINK_OPTS), 't-540', ['t-520']);
+    });
+
+    it('a saved pair loaded as usual (visible edit + hidden edit partner with pairedWith) with a saved free FEE: off, paired', () => {
+        const dep = editOp(DEP_P, {link_uuid: 'saved-pair'});
+        const wd = editOp(WD_P, {tempId: 'h-541', pairedWith: 't-540', link_uuid: 'saved-pair'});
+        const fee = editOp(FEE_FREE);
+        expectPaired(bulkLinkSelection([dep, fee], [dep, wd, fee], pairGet, LINK_OPTS), 't-540');
+    });
+});
+
+describe('withoutRows — rows leaving the Bulk, and the new charges linked with «Link» (§21.3, §22.3)', () => {
+    const withoutRows = (ops: readonly PendingOp[], ids: Iterable<string>): PendingOp[] => c2<(o: readonly PendingOp[], i: Iterable<string>) => PendingOp[]>('withoutRows')(ops, ids);
+
+    it('a new charge born in its new parent’s form (followsParent) leaves with it', () => {
+        const buy = createOp('n-buy', newBuyFields());
+        const born = createOp('n-born', newFeeFields(), {chargeOf: 'n-buy', followsParent: true});
+        const out = withoutRows([buy, born], ['n-buy']);
+        expect(tempIds(out)).toEqual([]);
+    });
+
+    it('a new charge linked with «Link» (no followsParent) stays: a new top-level row, no chargeOf, its own values', () => {
+        const buy = createOp('n-buy', newBuyFields());
+        const linked = createOp('n-linked', newFeeFields({date: '2026-10-07', broker_id: 77, asset_id: 101}), {chargeOf: 'n-buy'});
+        const out = withoutRows([buy, linked], ['n-buy']);
+        expect(tempIds(out), 'only the parent leaves').toEqual(['n-linked']);
+        const kept = byTempId(out, 'n-linked');
+        expect(kept.chargeOf, 'no chargeOf left dangling').toBeUndefined();
+        expect({broker_id: kept.fields.broker_id, asset_id: kept.fields.asset_id, date: kept.fields.date}).toEqual({broker_id: 77, asset_id: 101, date: '2026-10-07'});
+    });
+
+    it('both kinds under one new parent: the born one leaves, the linked one stays', () => {
+        const buy = createOp('n-buy', newBuyFields());
+        const born = createOp('n-born', newFeeFields(), {chargeOf: 'n-buy', followsParent: true});
+        const linked = createOp('n-linked', newFeeFields(), {chargeOf: 'n-buy'});
+        const saved = editOp(FEE_FREE, {chargeOf: 'n-buy'});
+        const out = withoutRows([buy, born, linked, saved], ['n-buy']);
+        expect(tempIds(out)).toEqual(['n-linked', 't-520']);
+        for (const op of out) expect(op.chargeOf, op.tempId).toBeUndefined();
+    });
+
+    // §22.3: §12.5 unchanged — under a SAVED parent «Delete all» removes every new charge listed in the panel.
+    it('«Delete all» on a saved parent still removes every new charge under it, followsParent or not', () => {
+        const buy = editOp(BUY_B);
+        const born = createOp('n-born', newFeeFields(), {chargeOf: 't-511', followsParent: true});
+        const linked = createOp('n-linked', newFeeFields(), {chargeOf: 't-511'});
+        const ops = [buy, born, linked];
+        const out = applyDeleteChoice(ops, planBulkDelete(ops, ['t-511'], allRead), 'all', get);
+        expect(tempIds(out)).toEqual(['t-511']);
+        expect(byTempId(out, 't-511')).toMatchObject({markedDelete: true});
+    });
+
+    // §21.3: «Keep» on a create linked with «Link» keeps its own broker, asset and date (it never followed the parent).
+    it('«Keep» on a saved parent with a new charge linked with «Link»: it stays with its own broker, asset and date', () => {
+        const buy = editOp(BUY_B);
+        const linked = createOp('n-linked', newFeeFields({date: '2026-10-07', broker_id: 77, asset_id: 101}), {chargeOf: 't-511'});
+        const ops = [buy, linked];
+        const out = applyDeleteChoice(ops, planBulkDelete(ops, ['t-511'], allRead), 'keep', get);
+        const kept = byTempId(out, 'n-linked');
+        expect(kept.chargeOf).toBeUndefined();
+        expect({broker_id: kept.fields.broker_id, asset_id: kept.fields.asset_id, date: kept.fields.date}, 'its own, not BUY_B’s 2026-10-05').toEqual({broker_id: 77, asset_id: 101, date: '2026-10-07'});
+    });
+});

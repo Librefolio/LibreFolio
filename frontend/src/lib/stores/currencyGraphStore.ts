@@ -18,14 +18,14 @@
  * not cached: the next call asks the backend again, which retries the list.
  *
  * Usage:
- *   const graph = await getCurrencyGraph();
- *   const paths = findAllPaths(graph, 'RON', 'USD');
+ *   const paths = await findConversionPaths('RON', 'USD');  // the routes of a pair, found in a Web Worker
  *
  * @module stores/currencyGraphStore
  */
 
 import type MultiDirectedGraph from 'graphology';
-import {buildCurrencyGraph, type ChainStep, type EdgeAttributes, findAllPaths, type ProviderInfo} from '$lib/utils/currency/currencyGraph';
+import {buildCurrencyGraph, type ChainStep, type EdgeAttributes, type ProviderInfo} from '$lib/utils/currency/currencyGraph';
+import {findRoutePathsOffThread} from '$lib/workers/currencyRoutesPool';
 import {zodiosApi} from '$lib/api';
 import {ensureCurrenciesLoaded, getAllCurrencies, isCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
 /**
@@ -153,15 +153,19 @@ export function getCachedFxProviders(): ProviderInfo[] {
 }
 
 /**
- * Find all conversion paths between two currencies.
- * Convenience wrapper that ensures the graph is built first.
+ * The conversion routes of a pair, as the route picker offers them (lane 75, L20b, decision Q6): the depth rule of
+ * `routeSearchDepth` on the configured providers, then every chain up to that depth. The search runs in a Web Worker
+ * (`workers/currencyRoutesPool.ts`); the providers are sent with their current readiness, so a provider just configured
+ * counts at the next search.
  *
  * @param source - Source currency code (e.g. "RON")
  * @param target - Target currency code (e.g. "USD")
- * @param maxDepth - Maximum chain length (default 4)
+ * @param maxDepth - The longest chain searched (default 4, the cap of the rule)
  * @returns Array of paths sorted by length (shortest first)
  */
 export async function findConversionPaths(source: string, target: string, maxDepth: number = 4): Promise<ChainStep[][]> {
-    const graph = await getCurrencyGraph();
-    return findAllPaths(graph as Parameters<typeof findAllPaths>[0], source, target, maxDepth);
+    await getCurrencyGraph();
+    const currencyCodes = getAllCurrencies().map((currency) => currency.code);
+    const providers = cachedFxProviders.map(({code, name, base_currency, base_currencies, target_currencies, configured}) => ({code, name, base_currency, base_currencies, target_currencies, configured}));
+    return findRoutePathsOffThread({providers, currencyCodes, source, target, cap: maxDepth});
 }
