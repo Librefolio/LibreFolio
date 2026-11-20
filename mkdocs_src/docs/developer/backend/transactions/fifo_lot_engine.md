@@ -417,6 +417,13 @@ group, the whole charge as `native_orphan` / `target_orphan`, and the issue
 `parent_date`. A same-day tax linked to its income takes this branch too: same lots and weights as `SAME_DAY_INCOME`,
 rule `LINKED_INCOME`.
 
+An **income of amount 0** has no event in the engine: the service's income loader leaves it out (`amount != 0`), while
+the API accepts one (a DIVIDEND or INTEREST whose tax was withheld with nothing paid out). A charge linked to it takes
+the same branch from the parent's facts (`event.parent`, read by `_load_linked_parents` with no amount filter): a
+DIVIDEND/INTEREST of the charge's broker, not after `replay_until`, sends the charge to the lots held the day before it,
+or leaves it an orphan with the same issue (66 M2b). The amount of the income plays no part in the weights. When the
+engine has an event for the parent, the event wins over the facts.
+
 A charge **waiting for its parent** — `replay_until` is set and the parent BUY/SELL or DIVIDEND/INTEREST of its broker
 is dated after it, read from the replayed transactions, then from the engine's income events, then, when the caller
 did not load it, from the event's `parent` facts (`LinkedParent`: date, type, broker) — goes on no lot
@@ -424,9 +431,9 @@ did not load it, from the event's `parent` facts (`LinkedParent`: date, type, br
 income (no operations, the whole
 charge as `native_orphan` / `target_orphan`) and the issue `ASSET_COST_LINKED_PARENT_AFTER_RANGE`, whose params add
 `parent_transaction_id` and `parent_date`. It stays so until the analysis reaches the trade (developer decision, 66
-M1b). A charge linked to a parent the engine knows nothing about, to an income known only by its facts, to another
-broker's row or to a trade that opened and closed nothing joins its day's pool instead; so does a waiting one when `replay_until` is
-`None`.
+M1b). A charge linked to a parent the engine knows nothing about (no event and no facts), to another broker's row or
+to a trade that opened and closed nothing joins its day's pool instead; so does a trade parent after the last replayed
+transaction when `replay_until` is `None`. An income known only by its facts is no longer one of them (66 M2b, above).
 
 The rest is pooled and matched to operations with a deterministic ladder
 (`_match_cost_operations`), weighting by `target_amount`. The pool keeps every same-day trade in its weights,
