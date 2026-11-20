@@ -4546,3 +4546,69 @@ class TestBothMatchingMethods:
                 status="COMPLETE",
                 matching_methods=[LotMatchingMethod.FIFO],
             ).reading(LotMatchingMethod.LIFO)
+
+
+# --------------------------------------------------------------------------- #
+# Project 66, M1 — a charge linked to a trade goes on that trade's lots
+# --------------------------------------------------------------------------- #
+
+
+class TestTheCostEventsCarryTheirParent:
+    def test_build_cost_economic_events_copies_the_parent_transaction(self):
+        """The engine finds a charge's trade through the event: the builder copies ``parent_transaction_id`` as it is."""
+        linked = _tx(2, tx_type=TransactionType.FEE, quantity=D("0"), amount=D("-5"))
+        linked.parent_transaction_id = 1
+        unlinked = _tx(3, tx_type=TransactionType.TAX, quantity=D("0"), amount=D("-2"))
+        events = build_cost_economic_events(cost_transactions=[linked, unlinked], fx_resolver=_resolver("EUR"), asset_currency="EUR", target_currency="EUR")
+
+        assert [(event.transaction_id, event.parent_transaction_id) for event in events] == [(2, 1), (3, None)]
+
+    def test_income_events_carry_no_parent(self):
+        """M1 links charges only: an income event has no parent (LINKED_INCOME is M2)."""
+        [event] = build_income_economic_events(
+            income_transactions=[_tx(1, tx_type=TransactionType.DIVIDEND, quantity=D("0"), amount=D("50"))],
+            fx_resolver=_resolver("EUR"),
+            asset_currency="EUR",
+            target_currency="EUR",
+        )
+
+        assert event.parent_transaction_id is None
+
+
+class TestALinkedFeeInBothMatchingMethods:
+    """get_lots_analysis_methods on in-memory rows: a FEE linked to a SELL lands on the lots each method's SELL closed."""
+
+    _JAN_10, _FEB_10, _MAR_1, _MAR_5 = date(2024, 1, 10), date(2024, 2, 10), date(2024, 3, 1), date(2024, 3, 5)
+
+    @pytest.mark.asyncio
+    async def test_the_fee_follows_the_closures_of_each_method(self, monkeypatch):
+        """Lots 1 (10 Jan) and 2 (10 Feb), 10 units sold on 1 Mar: FIFO closes lot 1, LIFO lot 2. The FEE of 5 Mar is linked
+        to the SELL. Today it takes OPEN_LOTS_FALLBACK and lands on the lot each method left open — the other one."""
+        rows = [
+            _tx(1, tx_date=self._JAN_10, quantity=D("10"), amount=D("-1000")),
+            _tx(2, tx_date=self._FEB_10, quantity=D("10"), amount=D("-900")),
+            _tx(3, tx_type=TransactionType.SELL, tx_date=self._MAR_1, quantity=D("-10"), amount=D("1200")),
+        ]
+        fee = _tx(4, tx_type=TransactionType.FEE, tx_date=self._MAR_5, quantity=D("0"), amount=D("-5"))
+        fee.parent_transaction_id = 3
+        service = _service_on_rows(monkeypatch, rows)
+        monkeypatch.setattr(service, "_load_cost_transactions", _loader_returning([fee]))
+
+        response = await service.get_lots_analysis_methods(
+            user_id=1,
+            asset_id=7,
+            broker_ids=[1],
+            date_from=None,
+            date_to=_MAR_20,
+            target_currency="EUR",
+            selected_lot_ids=None,
+            requested_analyses=[LotAnalysisType.LOT_SUMMARY],
+            matching_methods=[LotMatchingMethod.FIFO, LotMatchingMethod.LIFO],
+        )
+
+        for method, closed_lot, open_lot in ((LotMatchingMethod.FIFO, 1, 2), (LotMatchingMethod.LIFO, 2, 1)):
+            block = response.methods[method]
+            fees = {lot.lot_id: lot.allocated_fees for lot in block.lots or []}
+            assert (fees.get(closed_lot), fees.get(open_lot)) == (D("5"), D("0")), method
+            assert [(group.rule, group.source_transaction_ids) for group in block.economic_allocation_groups or []] == [("LINKED_TRADE", [4])], method
+            assert block.asset_orphan_fees == D("0"), method

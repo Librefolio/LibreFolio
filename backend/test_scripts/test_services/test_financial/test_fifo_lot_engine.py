@@ -7,7 +7,19 @@ import pytest
 
 from backend.app.services.financial_math.fifo.eligibility import eligible_income_quantity
 from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
-from backend.app.services.financial_math.fifo.models import EconomicEvent, FifoInputTransaction, FragmentInterval, ReferencePriceResolution
+from backend.app.services.financial_math.fifo.models import (
+    EconomicAllocationGroup,
+    EconomicEvent,
+    EconomicLotAllocation,
+    FifoInputTransaction,
+    FragmentInterval,
+    LotMatchingMethod,
+    ReferencePriceResolution,
+    TargetOperationAllocation,
+)
+from backend.app.services.financial_math.lots.conversions import FxRateResolver
+from backend.app.services.financial_math.lots.economic_events import extract_cost_outputs, map_economic_groups, withheld_economics
+from backend.app.services.financial_math.lots.histories import _prefix_value_on_date, build_value_history, group_closures, group_fragments
 
 ASSET_ID = 101
 
@@ -1463,3 +1475,636 @@ class TestCloseCurrency:
 
         assert (closure.close_reason, closure.close_unit_price, closure.realized_pnl) == ("BUY", expected_close_price, expected_realized)
         assert closure.close_currency == expected_currency
+
+
+# --------------------------------------------------------------------------- #
+# Project 66, M1 — a charge linked to a trade goes on that trade's lots
+# --------------------------------------------------------------------------- #
+#
+# A FEE/TAX whose ``parent_transaction_id`` names a BUY/SELL the engine replayed, at the charge's own broker, leaves the
+# day's pool before pooling: one ``LINKED_TRADE`` group per charge, dated on the charge, split by
+# ``_split_trade_cost`` between the lots its parent opened (OPENING) and closed (CLOSURE). Every other charge — no
+# parent, a parent the engine never saw (absent, or after ``replay_until``), a parent that opened and closed nothing,
+# a parent that is not a trade, or a trade of another broker — keeps today's ladder and its numbers. Within a type the
+# LINKED_TRADE groups come first, by (charge date, charge id), then the pools.
+
+
+def _linked_cost(
+    tx_id: int,
+    econ_type: str,
+    amount: str,
+    *,
+    dt: str,
+    parent: int,
+    broker_id: int = 1,
+    native_currency: str = "EUR",
+    target_amount: str | None = None,
+    target_currency: str = "EUR",
+) -> EconomicEvent:
+    """A FEE/TAX event linked to ``parent`` (project 66). ``amount`` is the stored (negative) native amount."""
+    return EconomicEvent(
+        transaction_id=tx_id,
+        broker_id=broker_id,
+        asset_id=ASSET_ID,
+        date=date.fromisoformat(dt),
+        economic_type=econ_type,
+        native_amount=_d(amount),
+        native_currency=native_currency,
+        target_amount=_d(target_amount if target_amount is not None else amount),
+        target_currency=target_currency,
+        parent_transaction_id=parent,
+    )
+
+
+def _linked_fee(tx_id: int, amount: str, *, dt: str, parent: int, **kwargs) -> EconomicEvent:
+    return _linked_cost(tx_id, "FEE", amount, dt=dt, parent=parent, **kwargs)
+
+
+def _linked_tax(tx_id: int, amount: str, *, dt: str, parent: int, **kwargs) -> EconomicEvent:
+    return _linked_cost(tx_id, "TAX", amount, dt=dt, parent=parent, **kwargs)
+
+
+def _run_linked(
+    txs: list[FifoInputTransaction],
+    events: list[EconomicEvent],
+    *,
+    replay_until: str | None = None,
+    matching_method: LotMatchingMethod = LotMatchingMethod.FIFO,
+    broker_shorting: dict[int, bool] | None = None,
+):
+    """The engine in EUR, with the replay end and the matching method ``_run`` does not pass."""
+    return run_fifo_lot_engine(
+        txs,
+        broker_shorting or {},
+        economic_events=events,
+        target_currency="EUR",
+        replay_until=date.fromisoformat(replay_until) if replay_until is not None else None,
+        matching_method=matching_method,
+    )
+
+
+def _group_of(result, source_id: int) -> EconomicAllocationGroup:
+    """The one allocation group whose sources hold the charge ``source_id``."""
+    groups = [group for group in result.economic_allocation_groups if source_id in group.source_transaction_ids]
+    assert len(groups) == 1, f"charge {source_id} must be in exactly one group: {groups}"
+    return groups[0]
+
+
+def _group_index(groups, source_id: int) -> int:
+    """Index of the group holding ``source_id`` in the engine's list (what ``withheld_economics`` returns indexes into)."""
+    indexes = [index for index, group in enumerate(groups) if source_id in group.source_transaction_ids]
+    assert len(indexes) == 1, f"charge {source_id} must be in exactly one group: {indexes}"
+    return indexes[0]
+
+
+def _operations(group: EconomicAllocationGroup) -> list[tuple[str, int | None, tuple[int, ...]]]:
+    """(context, operation transaction, lot ids) of each operation of a group."""
+    return [(op.context, op.operation_transaction_id, tuple(allocation.lot_id for allocation in op.lot_allocations)) for op in group.operation_allocations]
+
+
+def _cents(value: Decimal) -> Decimal:
+    """The figure to the cent: the running remainder of a pool split may leave sub-cent digits (§7.3 of the M1 contract)."""
+    return value.quantize(Decimal("0.01"))
+
+
+class TestLinkedChargeOnItsTrade:
+    """The three trade cases of analysis §3.5: each linked charge lands on the lots of its own trade."""
+
+    def test_two_buys_of_one_day_keep_each_their_own_linked_fee(self):
+        # Morning BUY 1 000 € with its FEE 2 €, afternoon BUY 9 000 € with its FEE 19 €. Today the 21 € pool splits by
+        # controvalue: 2.10 / 18.90.
+        result = _run_linked(
+            [_buy(1, "10", "100", dt="2025-03-03"), _buy(2, "90", "100", dt="2025-03-03")],
+            [_linked_fee(90, "-2", dt="2025-03-03", parent=1), _linked_fee(91, "-19", dt="2025-03-03", parent=2)],
+        )
+
+        assert (_lot_fees(result, 1), _lot_fees(result, 2)) == (_d("2"), _d("19"))
+        for charge, parent in ((90, 1), (91, 2)):
+            group = _group_of(result, charge)
+            assert (group.rule, group.source_transaction_ids, group.date) == ("LINKED_TRADE", (charge,), date(2025, 3, 3))
+            assert _operations(group) == [("OPENING", parent, (parent,))]
+        assert _issue_codes(result) == []
+
+    def test_a_fee_linked_to_the_sell_of_a_mixed_day_goes_to_the_closure_only(self):
+        # Same day: BUY 1 000 opens lot 2, SELL 1 000 closes lot 1. FEE 5 € linked to the SELL: 5 on the closure, 0 on the
+        # new lot. Today the mixed pool gives 2.50 / 2.50.
+        result = _run_linked(
+            [_buy(1, "10", "100", dt="2025-01-01"), _buy(2, "10", "100", dt="2025-02-03"), _sell(3, "10", "100", dt="2025-02-03")],
+            [_linked_fee(90, "-5", dt="2025-02-03", parent=3)],
+        )
+
+        assert (_lot_fees(result, 1), _lot_fees(result, 2)) == (_d("5"), _d("0"))
+        group = _group_of(result, 90)
+        assert group.rule == "LINKED_TRADE"
+        assert _operations(group) == [("CLOSURE", 3, (1,))]
+
+    def test_a_tax_linked_to_a_sell_three_days_earlier_goes_to_the_lots_it_closed(self):
+        # SELL 3 closes lot 1 on 3 Feb, lot 2 stays open. TAX 6 € on 6 Feb linked to the SELL. Today: no trade that day or
+        # the day before, so OPEN_LOTS_FALLBACK puts it on the open lot 2.
+        result = _run_linked(
+            [_buy(1, "10", "100", dt="2025-01-01"), _buy(2, "10", "100", dt="2025-01-02"), _sell(3, "10", "120", dt="2025-02-03")],
+            [_linked_tax(90, "-6", dt="2025-02-06", parent=3)],
+        )
+
+        assert (_lot_taxes(result, 1), _lot_taxes(result, 2)) == (_d("6"), _d("0"))
+        group = _group_of(result, 90)
+        assert (group.rule, group.date) == ("LINKED_TRADE", date(2025, 2, 6))
+        assert _operations(group) == [("CLOSURE", 3, (1,))]
+
+    def test_a_tax_linked_to_a_sell_that_left_nothing_open_is_allocated_not_orphan(self):
+        # Same shape with no lot left open: today the TAX is orphan (ASSET_COST_NO_ELIGIBLE_LOTS, DEGRADED). Linked, it is
+        # a cost of the closed lot and the analysis is COMPLETE (§7.6 of the M1 contract).
+        result = _run_linked(
+            [_buy(1, "10", "100", dt="2025-01-01"), _sell(3, "10", "120", dt="2025-02-03")],
+            [_linked_tax(90, "-6", dt="2025-02-06", parent=3)],
+        )
+
+        assert _lot_taxes(result, 1) == _d("6")
+        assert result.asset_orphan_taxes == _d("0")
+        assert "ASSET_COST_NO_ELIGIBLE_LOTS" not in _issue_codes(result)
+        assert result.analysis_status == "COMPLETE"
+
+
+class TestLinkedChargeBesideAPool:
+    def test_the_unlinked_rest_of_the_day_still_splits_over_every_trade(self):
+        # BUY A 1 000 with its FEE 2 €, BUY B 9 000, an unlinked FEE 19 € the same day. The 19 € pool splits over both
+        # trades as today (1.90 / 17.10, §6.6): A = 2 + 1.90, B = 17.10.
+        result = _run_linked(
+            [_buy(1, "10", "100", dt="2025-03-03"), _buy(2, "90", "100", dt="2025-03-03")],
+            [_linked_fee(90, "-2", dt="2025-03-03", parent=1), _fee(91, "-19", dt="2025-03-03")],
+        )
+
+        assert (_cents(_lot_fees(result, 1)), _cents(_lot_fees(result, 2))) == (_d("3.90"), _d("17.10"))
+        assert _group_of(result, 90).rule == "LINKED_TRADE"
+        pool = _group_of(result, 91)
+        assert (pool.rule, pool.source_transaction_ids, pool.target_pool_total) == ("SAME_DAY_TRADES", (91,), _d("19"))
+        assert sorted(_operations(pool)) == [("OPENING", 1, (1,)), ("OPENING", 2, (2,))]
+
+
+class TestLinkedChargeConservation:
+    """Σ allocated + orphan == Σ |events| for each type, in native and in target (§1.5, §7.9 of the M1 contract)."""
+
+    def test_linked_unlinked_unseen_and_orphan_charges_conserve_both_totals(self):
+        # BUY 4 lies after replay_until: the charges linked to it are not seen as linked and go back to their own day's
+        # pool (93 with 94, 96 with 98). Every charge is dated on or before replay_until and on no day touching BUY 4,
+        # so no ladder pool reaches the unreplayed trade.
+        txs = [
+            _buy(1, "10", "100", dt="2025-01-01"),
+            _buy(2, "20", "100", dt="2025-01-10"),
+            _sell(3, "5", "120", dt="2025-01-10"),
+            _buy(4, "10", "100", dt="2025-03-01"),
+        ]
+        events = [
+            _linked_fee(90, "-3", dt="2025-01-10", parent=2),
+            _fee(91, "-4", dt="2025-01-10"),
+            _linked_fee(92, "-10", dt="2025-01-10", parent=3, native_currency="USD", target_amount="-9"),
+            _linked_fee(93, "-2", dt="2025-01-20", parent=4),
+            _fee(94, "-1", dt="2025-01-20"),
+            _fee(97, "-5", dt="2025-01-20", broker_id=2),
+            _linked_tax(95, "-6", dt="2025-01-13", parent=3),
+            _linked_tax(96, "-7", dt="2025-01-25", parent=4),
+            _tax(98, "-1.5", dt="2025-01-25"),
+        ]
+        result = _run_linked(txs, events, replay_until="2025-02-01")
+
+        # Each charge is in exactly one group; the linked ones alone in theirs.
+        for event in events:
+            _group_of(result, event.transaction_id)
+        assert [(group.source_transaction_ids, group.rule) for group in result.economic_allocation_groups if group.rule == "LINKED_TRADE"] == [((90,), "LINKED_TRADE"), ((92,), "LINKED_TRADE"), ((95,), "LINKED_TRADE")]
+        assert (_group_of(result, 93).source_transaction_ids, _group_of(result, 93).rule) == ((93, 94), "OPEN_LOTS_FALLBACK")
+        assert (_group_of(result, 96).source_transaction_ids, _group_of(result, 96).rule) == ((96, 98), "OPEN_LOTS_FALLBACK")
+        assert result.asset_orphan_fees == _d("5")
+
+        for economic_type, accumulated, orphan in (("FEE", _sum_allocated_fees(result), result.asset_orphan_fees), ("TAX", _sum_allocated_taxes(result), result.asset_orphan_taxes)):
+            typed = [event for event in events if event.economic_type == economic_type]
+            groups = [group for group in result.economic_allocation_groups if group.economic_type == economic_type]
+            target_total = sum((abs(event.target_amount) for event in typed), _d("0"))
+            native_total = sum((abs(event.native_amount) for event in typed), _d("0"))
+            native_allocated = sum((allocation.native_amount for group in groups for op in group.operation_allocations for allocation in op.lot_allocations), _d("0"))
+            native_orphan = sum((group.native_orphan for group in groups), _d("0"))
+            assert accumulated + orphan == target_total, economic_type
+            assert native_allocated + native_orphan == native_total, economic_type
+
+
+class TestLinkedChargeCurrency:
+    def test_a_usd_charge_on_a_eur_trade_uses_its_resolved_target_amount(self):
+        # FEE 10 USD, resolved by the service to 9 EUR, linked to BUY 2. No FX in the engine: 9 EUR on lot 2, 10 USD native.
+        result = _run_linked(
+            [_buy(1, "10", "100", dt="2025-01-01"), _buy(2, "10", "100", dt="2025-01-01")],
+            [_linked_fee(90, "-10", dt="2025-01-01", parent=2, native_currency="USD", target_amount="-9")],
+        )
+
+        assert (_lot_fees(result, 1), _lot_fees(result, 2)) == (_d("0"), _d("9"))
+        group = _group_of(result, 90)
+        assert (group.rule, group.native_currency, group.target_currency) == ("LINKED_TRADE", "USD", "EUR")
+        assert (group.native_pool_total, group.target_pool_total) == (_d("10"), _d("9"))
+        [operation] = group.operation_allocations
+        assert [(allocation.lot_id, allocation.native_amount, allocation.target_amount) for allocation in operation.lot_allocations] == [(2, _d("10"), _d("9"))]
+
+
+class TestLinkedChargeDate:
+    """The date of a linked charge is never judged: it goes on its parent's lots, and its group carries its own date."""
+
+    def test_a_charge_dated_after_its_parent(self):
+        # Today: OPEN_LOTS_FALLBACK splits 4 € over lots 1 and 2 (2 / 2).
+        result = _run_linked(
+            [_buy(1, "10", "100", dt="2025-01-01"), _buy(2, "10", "100", dt="2025-01-20")],
+            [_linked_fee(90, "-4", dt="2025-01-25", parent=1)],
+        )
+
+        assert (_lot_fees(result, 1), _lot_fees(result, 2)) == (_d("4"), _d("0"))
+        group = _group_of(result, 90)
+        assert (group.rule, group.date) == ("LINKED_TRADE", date(2025, 1, 25))
+        assert _operations(group) == [("OPENING", 1, (1,))]
+
+    def test_a_charge_dated_before_its_buy(self):
+        # Today: OPEN_LOTS_FALLBACK on 17 Jan reaches lot 1 only.
+        result = _run_linked(
+            [_buy(1, "10", "100", dt="2025-01-01"), _buy(2, "10", "100", dt="2025-01-20")],
+            [_linked_fee(90, "-4", dt="2025-01-18", parent=2)],
+        )
+
+        assert (_lot_fees(result, 1), _lot_fees(result, 2)) == (_d("0"), _d("4"))
+        group = _group_of(result, 90)
+        assert (group.rule, group.date) == ("LINKED_TRADE", date(2025, 1, 18))
+        assert _operations(group) == [("OPENING", 2, (2,))]
+
+    def test_a_charge_dated_before_its_sell(self):
+        # SELL 3 on 20 Jan closes lot 1 (FIFO). Today: OPEN_LOTS_FALLBACK on 17 Jan splits 4 € over lots 1 and 2.
+        result = _run_linked(
+            [_buy(1, "10", "100", dt="2025-01-01"), _buy(2, "10", "100", dt="2025-01-05"), _sell(3, "10", "120", dt="2025-01-20")],
+            [_linked_fee(90, "-4", dt="2025-01-18", parent=3)],
+        )
+
+        assert (_lot_fees(result, 1), _lot_fees(result, 2)) == (_d("4"), _d("0"))
+        group = _group_of(result, 90)
+        assert (group.rule, group.date) == ("LINKED_TRADE", date(2025, 1, 18))
+        assert _operations(group) == [("CLOSURE", 3, (1,))]
+
+
+class TestLinkedChargeFallbacks:
+    """A charge whose parent is not a trade the engine replayed keeps today's ladder: same rule, same numbers."""
+
+    # The consultant's example (§8 of the M1 contract): lot A bought in January and still open; FEE 5 € of 10 Mar linked
+    # to a BUY of 12 Mar (lot B).
+    _LOT_A = _buy(1, "10", "100", dt="2025-01-15")
+    _LOT_B = _buy(2, "10", "100", dt="2025-03-12")
+    _FEE = ("-5", "2025-03-10")
+
+    @pytest.mark.parametrize(
+        ("with_lot_b", "replay_until"),
+        [
+            pytest.param(False, None, id="a-parent-absent-from-transactions"),
+            pytest.param(True, "2025-03-11", id="b-parent-after-replay-until"),
+        ],
+    )
+    def test_linked_charge_parent_not_seen_by_engine_goes_back_to_the_ladder(self, with_lot_b, replay_until):
+        txs = [self._LOT_A, self._LOT_B] if with_lot_b else [self._LOT_A]
+        amount, day = self._FEE
+        result = _run_linked(txs, [_linked_fee(90, amount, dt=day, parent=2)], replay_until=replay_until)
+
+        assert _lot_fees(result, 1) == _d("5")
+        group = _group_of(result, 90)
+        assert (group.rule, group.date) == ("OPEN_LOTS_FALLBACK", date(2025, 3, 10))
+        assert _operations(group) == [("HOLDING", None, (1,))]
+
+    @pytest.mark.parametrize("replay_until", [pytest.param("2025-03-12", id="on-the-parents-day"), pytest.param("2025-06-30", id="later"), pytest.param(None, id="no-end")])
+    def test_linked_charge_parent_seen_by_engine_goes_to_its_lot(self, replay_until):
+        amount, day = self._FEE
+        result = _run_linked([self._LOT_A, self._LOT_B], [_linked_fee(90, amount, dt=day, parent=2)], replay_until=replay_until)
+
+        assert (_lot_fees(result, 1), _lot_fees(result, 2)) == (_d("0"), _d("5"))
+        group = _group_of(result, 90)
+        assert (group.rule, group.date) == ("LINKED_TRADE", date(2025, 3, 10))
+        assert _operations(group) == [("OPENING", 2, (2,))]
+
+    def test_without_lot_a_a_charge_whose_parent_is_unseen_is_orphan(self):
+        amount, day = self._FEE
+        result = _run_linked([self._LOT_B], [_linked_fee(90, amount, dt=day, parent=2)], replay_until="2025-03-11")
+
+        assert result.asset_orphan_fees == _d("5")
+        assert _group_of(result, 90).rule == "OPEN_LOTS_FALLBACK"
+        assert "ASSET_COST_NO_ELIGIBLE_LOTS" in _issue_codes(result)
+
+    def test_a_charge_back_on_the_ladder_joins_its_own_days_pool(self):
+        # Never a second group with the same pool key (§7.2): the unseen-parent charge and an unlinked FEE of the same
+        # broker, day and currency make one pool.
+        amount, day = self._FEE
+        result = _run_linked([self._LOT_A, self._LOT_B], [_linked_fee(90, amount, dt=day, parent=2), _fee(91, "-1", dt=day)], replay_until="2025-03-11")
+
+        group = _group_of(result, 90)
+        assert (group.source_transaction_ids, group.rule, group.target_pool_total) == ((90, 91), "OPEN_LOTS_FALLBACK", _d("6"))
+        assert _lot_fees(result, 1) == _d("6")
+
+    def test_a_parent_that_opened_and_closed_nothing_goes_back_to_the_ladder(self):
+        # SELL 3 at broker 2, which holds nothing and cannot short: the replay rejects it (FIFO_SOURCE_QUANTITY_MISSING),
+        # so it closed nothing and opened nothing (``_split_trade_cost`` is []). The FEE, dated away from the SELL's day
+        # and the day after, takes the ladder of broker 2: no lot, orphan.
+        result = _run_linked(
+            [_buy(1, "10", "100", dt="2025-01-15"), _sell(3, "5", "120", dt="2025-03-12", broker_id=2)],
+            [_linked_fee(90, "-5", dt="2025-03-20", parent=3, broker_id=2)],
+            broker_shorting={1: False, 2: False},
+        )
+
+        assert "FIFO_SOURCE_QUANTITY_MISSING" in _issue_codes(result), "precondition: the SELL is rejected"
+        group = _group_of(result, 90)
+        assert (group.rule, group.operation_allocations, group.target_orphan) == ("OPEN_LOTS_FALLBACK", (), _d("5"))
+        assert result.asset_orphan_fees == _d("5")
+
+    def test_a_tax_linked_to_a_dividend_stays_on_the_ladder_until_m2(self):
+        # The fourth case of analysis §3.5 is M2 (LINKED_INCOME). Until then a TAX linked to a dividend keeps
+        # SAME_DAY_INCOME: the D-1 holdings, lots 1 and 2, 3 / 3.
+        result = _run_linked(
+            [_buy(1, "10", "100", dt="2025-01-01"), _buy(2, "10", "100", dt="2025-01-05")],
+            [_income(80, "DIVIDEND", "50", dt="2025-02-10"), _linked_tax(90, "-6", dt="2025-02-10", parent=80)],
+        )
+
+        assert (_lot_taxes(result, 1), _lot_taxes(result, 2)) == (_d("3"), _d("3"))
+        group = _group_of(result, 90)
+        assert group.rule == "SAME_DAY_INCOME"
+        assert [context for context, _tx_id, _lots in _operations(group)] == ["INCOME"]
+
+    def test_a_charge_linked_to_a_row_that_is_not_a_trade_stays_on_the_ladder(self):
+        # ADJUSTMENT 1 opens lot 1 with a cost but is not a trade; BUY 2 the same day opens lot 2. The FEE linked to the
+        # adjustment takes today's SAME_DAY_TRADES: all of it to lot 2.
+        result = _run_linked(
+            [_adjustment(1, "10", dt="2025-01-10", cost_basis_override="100", cost_basis_currency="EUR"), _buy(2, "10", "100", dt="2025-01-10")],
+            [_linked_fee(90, "-4", dt="2025-01-10", parent=1)],
+        )
+
+        assert (_lot_fees(result, 1), _lot_fees(result, 2)) == (_d("0"), _d("4"))
+        assert _group_of(result, 90).rule == "SAME_DAY_TRADES"
+
+    def test_a_charge_linked_to_a_trade_of_another_broker_stays_on_the_ladder(self):
+        # Defence (§7.2): the parent's broker was changed after the link. The FEE of broker 2 takes broker 2's ladder.
+        result = _run_linked(
+            [_buy(1, "10", "100", dt="2025-01-10", broker_id=1), _buy(2, "10", "100", dt="2025-01-10", broker_id=2)],
+            [_linked_fee(90, "-4", dt="2025-01-10", parent=1, broker_id=2)],
+        )
+
+        assert (_lot_fees(result, 1), _lot_fees(result, 2)) == (_d("0"), _d("4"))
+        assert _group_of(result, 90).rule == "SAME_DAY_TRADES"
+
+
+class TestLinkedChargeQuantitySplit:
+    """A linked charge splits over its parent's lots by quantity, as ``_split_trade_cost`` does for one trade."""
+
+    def test_a_sell_closing_two_lots_unevenly_splits_its_fee_by_closed_quantity(self):
+        # SELL 3 closes 10 of lot 1 and 15 of lot 2 (FIFO). FEE 5 € five days later, linked: 2 / 3. Today OPEN_LOTS_FALLBACK
+        # puts all of it on lot 2, the only lot still open.
+        result = _run_linked(
+            [_buy(1, "10", "100", dt="2025-01-01"), _buy(2, "30", "100", dt="2025-01-05"), _sell(3, "25", "120", dt="2025-02-10")],
+            [_linked_fee(90, "-5", dt="2025-02-15", parent=3)],
+        )
+
+        assert (_lot_fees(result, 1), _lot_fees(result, 2)) == (_d("2"), _d("3"))
+        group = _group_of(result, 90)
+        assert group.rule == "LINKED_TRADE"
+        [operation] = group.operation_allocations
+        assert (operation.context, operation.operation_transaction_id, operation.weight) == ("CLOSURE", 3, _d("1"))
+        assert [(allocation.lot_id, allocation.weight, allocation.target_amount) for allocation in operation.lot_allocations] == [(1, _d("0.4"), _d("2")), (2, _d("0.6"), _d("3"))]
+
+    def test_a_crossing_parent_splits_its_fee_between_opening_and_closure(self):
+        # Short lot 1 (SELL 10); BUY 2 of 15 covers it (q_close 10) and opens long lot 2 (q_open 5). FEE 30 € on 20 Jan
+        # linked to the BUY: 20 to the closure, 10 to the opening; each operation weighs its share of the charge. Today
+        # OPEN_LOTS_FALLBACK puts all 30 on lot 2, the only LONG lot.
+        result = _run_linked(
+            [_sell(1, "10", "100", dt="2025-01-01"), _buy(2, "15", "110", dt="2025-01-05")],
+            [_linked_fee(90, "-30", dt="2025-01-20", parent=2)],
+            broker_shorting={1: True},
+        )
+
+        assert (_lot_fees(result, 1), _lot_fees(result, 2)) == (_d("20"), _d("10"))
+        group = _group_of(result, 90)
+        assert group.rule == "LINKED_TRADE"
+        assert _operations(group) == [("OPENING", 2, (2,)), ("CLOSURE", 2, (1,))]
+        assert [(op.context, _cents(op.weight * group.target_pool_total)) for op in group.operation_allocations] == [("OPENING", _d("10.00")), ("CLOSURE", _d("20.00"))]
+        assert sum((op.weight for op in group.operation_allocations), _d("0")) == _d("1")
+
+
+class TestLinkedChargeRules:
+    def test_a_tax_linked_to_a_sell_skips_same_day_income(self):
+        # SELL 3 closes lot 1 on the day of a dividend. Today the TAX follows the income (SAME_DAY_INCOME, 3 / 3 over the
+        # D-1 holdings); linked, it is a cost of the SELL's closure.
+        result = _run_linked(
+            [_buy(1, "10", "100", dt="2025-01-01"), _buy(2, "10", "100", dt="2025-01-05"), _sell(3, "10", "120", dt="2025-02-10")],
+            [_income(80, "DIVIDEND", "50", dt="2025-02-10"), _linked_tax(90, "-6", dt="2025-02-10", parent=3)],
+        )
+
+        assert (_lot_taxes(result, 1), _lot_taxes(result, 2)) == (_d("6"), _d("0"))
+        group = _group_of(result, 90)
+        assert group.rule == "LINKED_TRADE"
+        assert _operations(group) == [("CLOSURE", 3, (1,))]
+
+    @pytest.mark.parametrize(("method", "closed_lot", "open_lot"), [pytest.param(LotMatchingMethod.FIFO, 1, 2, id="FIFO"), pytest.param(LotMatchingMethod.LIFO, 2, 1, id="LIFO")])
+    def test_a_fee_linked_to_a_sell_goes_to_the_lots_the_method_closed(self, method, closed_lot, open_lot):
+        # SELL 3 closes lot 1 in FIFO, lot 2 in LIFO. The FEE is dated five days later: today OPEN_LOTS_FALLBACK puts it on
+        # the lot left open, the other one.
+        result = _run_linked(
+            [_buy(1, "10", "100", dt="2025-01-01"), _buy(2, "10", "100", dt="2025-01-05"), _sell(3, "10", "120", dt="2025-02-10")],
+            [_linked_fee(90, "-5", dt="2025-02-15", parent=3)],
+            matching_method=method,
+        )
+
+        assert (_lot_fees(result, closed_lot), _lot_fees(result, open_lot)) == (_d("5"), _d("0"))
+        group = _group_of(result, 90)
+        assert group.rule == "LINKED_TRADE"
+        assert _operations(group) == [("CLOSURE", 3, (closed_lot,))]
+
+
+class TestLinkedChargeAudit:
+    def _result(self):
+        # Lot 1 on 1 Jan; on 10 Jan BUY 2 opens lot 2 and SELL 3 closes 5 of lot 1. FEE 91 (BUY 2) and 93 (BUY 1) on 10 Jan,
+        # FEE 92 (SELL 3) on 12 Jan, FEE 90 unlinked on 10 Jan, a dividend and a TAX linked to SELL 3.
+        return _run_linked(
+            [_buy(1, "10", "100", dt="2025-01-01"), _buy(2, "10", "100", dt="2025-01-10"), _sell(3, "5", "120", dt="2025-01-10")],
+            [
+                _income(80, "DIVIDEND", "20", dt="2025-01-20"),
+                _fee(90, "-1", dt="2025-01-10"),
+                _linked_fee(93, "-3", dt="2025-01-10", parent=1),
+                _linked_fee(92, "-2", dt="2025-01-12", parent=3),
+                _linked_fee(91, "-4", dt="2025-01-10", parent=2),
+                _linked_tax(94, "-6", dt="2025-01-20", parent=3),
+            ],
+        )
+
+    def test_one_linked_group_per_charge_before_the_pools_of_its_type(self):
+        result = self._result()
+        layout = [(group.economic_type, group.rule, group.source_transaction_ids) for group in result.economic_allocation_groups]
+
+        assert layout == [
+            ("DIVIDEND", "ASSET_INCOME_HOLDINGS", (80,)),
+            ("FEE", "LINKED_TRADE", (91,)),
+            ("FEE", "LINKED_TRADE", (93,)),
+            ("FEE", "LINKED_TRADE", (92,)),
+            ("FEE", "SAME_DAY_MIXED_TRADES", (90,)),
+            ("TAX", "LINKED_TRADE", (94,)),
+        ]
+        assert _operations(_group_of(result, 91)) == [("OPENING", 2, (2,))]
+        assert _operations(_group_of(result, 93)) == [("OPENING", 1, (1,))]
+        assert _operations(_group_of(result, 92)) == [("CLOSURE", 3, (1,))]
+        for charge in (91, 92, 93, 94):
+            group = _group_of(result, charge)
+            assert (group.native_orphan, group.target_orphan) == (_d("0"), _d("0"))
+            assert sum((allocation.target_amount for op in group.operation_allocations for allocation in op.lot_allocations), _d("0")) == group.target_pool_total
+
+    def test_the_linked_groups_validate_through_the_api_schema(self):
+        mapped = map_economic_groups(self._result().economic_allocation_groups)
+
+        assert [group.rule for group in mapped if group.economic_type == "FEE"] == ["LINKED_TRADE", "LINKED_TRADE", "LINKED_TRADE", "SAME_DAY_MIXED_TRADES"]
+
+    def test_a_linked_trade_rule_is_a_rule_of_the_api(self):
+        # Independent of the engine: the API's AllocationRuleLiteral must accept the rule M1 adds.
+        group = EconomicAllocationGroup(
+            economic_type="FEE",
+            asset_id=ASSET_ID,
+            broker_id=1,
+            date=date(2025, 1, 10),
+            native_currency="EUR",
+            target_currency="EUR",
+            rule="LINKED_TRADE",
+            source_transaction_ids=(90,),
+            native_pool_total=_d("4"),
+            target_pool_total=_d("4"),
+            operation_allocations=(
+                TargetOperationAllocation(
+                    context="OPENING",
+                    operation_transaction_id=2,
+                    weight=_d("1"),
+                    lot_allocations=(EconomicLotAllocation(lot_id=2, weight=_d("1"), native_amount=_d("4"), target_amount=_d("4")),),
+                ),
+            ),
+        )
+
+        [mapped] = map_economic_groups([group])
+        assert (mapped.rule, mapped.source_transaction_ids) == ("LINKED_TRADE", [90])
+
+
+class TestLinkedChargeWithheld:
+    """A missing rate degrades only what it touches (§6.8, §7.6 of the M1 contract)."""
+
+    @pytest.mark.parametrize("sibling_linked", [pytest.param(True, id="sibling-linked-to-lot-2"), pytest.param(False, id="sibling-unlinked")])
+    def test_a_charge_without_a_rate_degrades_its_own_group_only(self, sibling_linked):
+        # FEE 90 (linked to BUY 1) has no rate; FEE 91 is linked to BUY 2 or unlinked. Today both share one pool, and the
+        # missing rate leaves the fees of lots 1 and 2 unknown.
+        sibling = _linked_fee(91, "-3", dt="2025-01-10", parent=2) if sibling_linked else _fee(91, "-3", dt="2025-01-10")
+        result = _run_linked(
+            [_buy(1, "10", "100", dt="2025-01-10"), _buy(2, "10", "100", dt="2025-01-10")],
+            [_linked_fee(90, "-2", dt="2025-01-10", parent=1), sibling],
+        )
+        groups = result.economic_allocation_groups
+
+        withheld = withheld_economics(groups, unconvertible_event_ids={90}, unconvertible_trade_ids=set(), trade_currency_by_id={1: "EUR", 2: "EUR"})
+
+        assert withheld.amount_degraded == frozenset({_group_index(groups, 90)})
+        assert _group_index(groups, 91) not in withheld.amount_degraded
+        assert withheld.fees_from == {1: date(2025, 1, 10)}
+        assert withheld.split_degraded == frozenset()
+
+    def test_a_parent_trade_without_a_rate_does_not_degrade_the_split(self):
+        # BUY 1 in EUR and BUY 2 in USD (no rate) the same day; FEE 90 linked to BUY 2. Today the pool weighs both trades in
+        # two currencies, one without a rate: split-degraded. A LINKED_TRADE group weighs one trade by quantity.
+        result = _run_linked(
+            [_buy(1, "10", "100", dt="2025-01-10"), _buy(2, "10", "100", dt="2025-01-10", currency="USD", target_amount="-1000")],
+            [_linked_fee(90, "-2", dt="2025-01-10", parent=2)],
+        )
+        groups = result.economic_allocation_groups
+
+        withheld = withheld_economics(groups, unconvertible_event_ids=set(), unconvertible_trade_ids={2}, trade_currency_by_id={1: "EUR", 2: "USD"})
+
+        assert _group_of(result, 90).rule == "LINKED_TRADE"
+        assert withheld.split_degraded == frozenset()
+        assert withheld.fees_from == {}
+        assert _lot_fees(result, 2) == _d("2")
+
+
+class TestTwoChargesLinkedToOneTrade:
+    def test_two_charges_of_one_buy_make_two_groups_by_date_and_conserve(self):
+        # Guard (MF review of M1): FEE 2 € on the BUY's day and FEE 3 € the day after, both linked to BUY 1. One
+        # LINKED_TRADE group each, by date; 5 on the BUY's lot; native and target conserved.
+        events = [_linked_fee(91, "-3", dt="2025-01-11", parent=1), _linked_fee(90, "-2", dt="2025-01-10", parent=1)]
+        result = _run_linked([_buy(1, "10", "100", dt="2025-01-10")], events)
+
+        fee_groups = [group for group in result.economic_allocation_groups if group.economic_type == "FEE"]
+        assert [(group.rule, group.source_transaction_ids, group.date) for group in fee_groups] == [
+            ("LINKED_TRADE", (90,), date(2025, 1, 10)),
+            ("LINKED_TRADE", (91,), date(2025, 1, 11)),
+        ]
+        assert all(_operations(group) == [("OPENING", 1, (1,))] for group in fee_groups)
+        assert _lot_fees(result, 1) == _d("5")
+        native_allocated = sum((allocation.native_amount for group in fee_groups for op in group.operation_allocations for allocation in op.lot_allocations), _d("0"))
+        native_orphan = sum((group.native_orphan for group in fee_groups), _d("0"))
+        assert _sum_allocated_fees(result) + result.asset_orphan_fees == sum((abs(event.target_amount) for event in events), _d("0"))
+        assert native_allocated + native_orphan == sum((abs(event.native_amount) for event in events), _d("0"))
+
+
+class TestLinkedChargeDailySeries:
+    """Guards (MF review of M1): the per-day cumulative FEE/TAX maps that feed the lots' net history
+    (``extract_cost_outputs``), read on the engine's output with linked charges."""
+
+    def test_a_mixed_pool_day_adds_the_linked_and_the_pooled_shares(self):
+        # The 3.90 / 17.10 case: on its day lot A sums its linked 2 and its pooled 1.90, never one replacing the other.
+        result = _run_linked(
+            [_buy(1, "10", "100", dt="2025-03-03"), _buy(2, "90", "100", dt="2025-03-03")],
+            [_linked_fee(90, "-2", dt="2025-03-03", parent=1), _fee(91, "-19", dt="2025-03-03")],
+        )
+        fees_by_lot, _taxes_by_lot, fees_prefix_by_lot, _taxes_prefix_by_lot = extract_cost_outputs(result)
+        day = date(2025, 3, 3)
+
+        assert {lot_id: {d: _cents(v) for d, v in prefix.items()} for lot_id, prefix in fees_prefix_by_lot.items()} == {1: {day: _d("3.90")}, 2: {day: _d("17.10")}}
+        assert {lot_id: _cents(value) for lot_id, value in fees_by_lot.items()} == {1: _d("3.90"), 2: _d("17.10")}
+
+    def test_two_charges_of_one_buy_step_on_their_own_days(self):
+        result = _run_linked(
+            [_buy(1, "10", "100", dt="2025-01-10")],
+            [_linked_fee(90, "-2", dt="2025-01-10", parent=1), _linked_fee(91, "-3", dt="2025-01-11", parent=1)],
+        )
+        fees_by_lot, _taxes_by_lot, fees_prefix_by_lot, _taxes_prefix_by_lot = extract_cost_outputs(result)
+
+        assert fees_prefix_by_lot == {1: {date(2025, 1, 10): _d("2"), date(2025, 1, 11): _d("5")}}
+        assert fees_by_lot == {1: _d("5")}
+
+    def test_a_charge_dated_before_its_buy_is_in_the_lots_first_history_row(self):
+        # FEE 4 € on 18 Jan linked to BUY 2 of 20 Jan. The prefix is keyed on the charge's date with the whole charge; the
+        # value history starts on the opening day (no row before it) and that first row already carries the 4 €.
+        result = _run_linked(
+            [_buy(1, "10", "100", dt="2025-01-01"), _buy(2, "10", "100", dt="2025-01-20")],
+            [_linked_fee(90, "-4", dt="2025-01-18", parent=2)],
+        )
+        fees_by_lot, taxes_by_lot, fees_prefix_by_lot, taxes_prefix_by_lot = extract_cost_outputs(result)
+        assert fees_prefix_by_lot == {2: {date(2025, 1, 18): _d("4")}}
+        assert _prefix_value_on_date(fees_prefix_by_lot[2], date(2025, 1, 20)) == _d("4")
+
+        history_dates = [date(2025, 1, 15) + timedelta(days=offset) for offset in range(11)]
+        points = build_value_history(
+            selected_ids=[2],
+            lots_by_id={lot.lot_id: lot for lot in result.lots},
+            fragments_by_lot=group_fragments(result.fragment_intervals),
+            closures_by_lot=group_closures(result.closures),
+            market_prices={day: _d("100") for day in history_dates},
+            history_dates=history_dates,
+            fx_resolver=FxRateResolver("EUR"),
+            income_prefix_by_lot={},
+            fees_prefix_by_lot=fees_prefix_by_lot,
+            taxes_prefix_by_lot=taxes_prefix_by_lot,
+            at_cost_until=None,
+            quote_base_quantity=1,
+        )
+
+        assert points, "the lot opened inside the window has a value history"
+        first = min(points, key=lambda point: point.date)
+        assert (first.date, first.allocated_fees) == (date(2025, 1, 20), _d("4"))
+        assert all(point.date >= date(2025, 1, 20) for point in points)
+        assert fees_by_lot == {2: _d("4")} and taxes_by_lot == {}
+
+    def test_a_tax_after_the_closure_steps_the_closed_lot_on_its_own_date(self):
+        # SELL 3 closes lot 1 on 3 Feb; the linked TAX of 6 Feb is a step on lot 1 from that day, nothing before.
+        result = _run_linked(
+            [_buy(1, "10", "100", dt="2025-01-01"), _buy(2, "10", "100", dt="2025-01-02"), _sell(3, "10", "120", dt="2025-02-03")],
+            [_linked_tax(90, "-6", dt="2025-02-06", parent=3)],
+        )
+        _fees_by_lot, taxes_by_lot, _fees_prefix_by_lot, taxes_prefix_by_lot = extract_cost_outputs(result)
+
+        assert taxes_prefix_by_lot == {1: {date(2025, 2, 6): _d("6")}}
+        assert (_prefix_value_on_date(taxes_prefix_by_lot[1], date(2025, 2, 5)), _prefix_value_on_date(taxes_prefix_by_lot[1], date(2025, 2, 6))) == (_d("0"), _d("6"))
+        assert taxes_by_lot == {1: _d("6")}
