@@ -106,6 +106,7 @@
         withoutRows,
         bulkLinkSelection,
         linkInBulk,
+        rowsWithLinkedCharges,
         type BulkDeletePlan,
         type ChargesUnread,
     } from './bulkCharges';
@@ -1125,6 +1126,8 @@
     function applyDelete(plan: BulkDeletePlan, choice: 'keep' | 'all', fromSelection: boolean) {
         const deleted = [...plan.needsChoice, ...plan.toggles.filter((t) => t.deleted).map((t) => t.tempId)];
         ops = applyDeleteChoice(ops, plan, choice, txStoreGet);
+        // 66 C21 (§5.2): a charge back from «del» stays «unlink» when its parent cannot hold it (a leg of a pair, «del»).
+        keepUnlinkedFromUnfitParents(new Set(plan.toggles.filter((t) => !t.deleted).map((t) => t.tempId)));
         // 66 F7-c1 (§14.7): a parent marked «del» opens its group, so its charges' state is on screen.
         const opened = deleted.filter((id) => !expandedParents.has(id) && ops.some((d) => d.chargeOf === id));
         if (opened.length > 0) expandedParents = new Set([...expandedParents, ...opened]);
@@ -1219,17 +1222,35 @@
         remapExpanded(renamed);
         // Re-collapse pairs from txStore, then the charges
         ops = syncFollowers(adoptCharges(collapsePairedOps(next), txStoreGet));
+        const entered = new Set(renamed.values());
+        keepUnlinkedFromUnfitParents(entered);
         // 66 F7-c1 (§14.2): the row enters again: its charges are read if they are not all held (a new generation). The
         // reads in flight are asked again; a parent whose read failed and that was not reset keeps «del» off.
         const failedBefore = chargesReadFailed;
         const waiting = restartChargesLoad();
-        const entered = new Set(renamed.values());
         const resetTxIds = new Set(ops.filter((d) => entered.has(d.tempId)).map((d) => opTxId(d)));
         chargesReadFailed = new Set([...failedBefore].filter((id) => !resetTxIds.has(id)));
         loadMissingCharges(
             ops.filter((d) => entered.has(d.tempId)),
             waiting,
         );
+    }
+
+    /** 66 C21 (§5.2): a reset or restored charge whose parent cannot hold it — «del», or a leg of a pair, saved or pending — stays
+     *  «unlink»; the reset brings back its other values only. A pair is named in a toast (the «Link» reason `paired`). */
+    function keepUnlinkedFromUnfitParents(resetTempIds: ReadonlySet<string>) {
+        const isPairLeg = (op: PendingOp) => op.pairedWith !== undefined || ops.some((o) => o.pairedWith === op.tempId);
+        const ownerOfReset = (d: PendingOp): PendingOp | undefined => (resetTempIds.has(d.tempId) && d.chargeOf !== undefined && !d.parentUnlink ? ops.find((o) => o.tempId === d.chargeOf && o !== d) : undefined);
+        const unfit = (owner: PendingOp | undefined): boolean => !!owner && (isPairLeg(owner) || (owner.op === 'edit' && owner.markedDelete === true));
+        const parent = ops.map(ownerOfReset).find((owner): owner is PendingOp => !!owner && isPairLeg(owner));
+        ops = ops.map((d) => (unfit(ownerOfReset(d)) ? {...d, parentUnlink: true} : d));
+        if (parent) {
+            notify({
+                name: 'tx.bulk.reset.charge.kept-unlinked',
+                detail: {parentTempId: parent.tempId},
+                toast: {variant: 'warning', message: $t('transactions.chargesLink.reason.paired', {values: {type: $t(`transactions.types.${parent.fields.type}`) || parent.fields.type, ref: bulkRowRef(parent)}})},
+            });
+        }
     }
 
     /** 66 F7-c1: open the group of this parent (never closed by itself). */
@@ -1990,7 +2011,8 @@
      */
     /** 66 F7-c1: the state of a linked charge (`linked` / `unlink` / `del`), or null for a row that is not one. */
     function chargeState(row: PendingOp): 'linked' | 'unlink' | 'del' | null {
-        if (!indentedIds.has(row.tempId) && !(row.chargeOf !== undefined && row.parentUnlink)) return null;
+        // 66 C21: a charge «del» of a row merged here is top-level (no parent is a leg of a pair) and keeps its state.
+        if (!indentedIds.has(row.tempId) && !(row.chargeOf !== undefined && (row.parentUnlink || (row.op === 'edit' && row.markedDelete)))) return null;
         return row.op === 'edit' && row.markedDelete ? 'del' : row.parentUnlink ? 'unlink' : 'linked';
     }
 
@@ -3442,6 +3464,13 @@
     // because a cash amount cannot be compared without knowing the sign its type implies:
     // pool rows arrive signed, DB rows arrive normalised to a magnitude by fieldsFromTx.
 
+    /** 66 C21: the rows that still hold linked charges (under them, or saved and not read yet): rule 6 refuses to promote
+     *  them, so no offer takes them, on either side. A charge «unlink»ed or «del» does not count. */
+    let chargeHolders = $derived(rowsWithLinkedCharges(ops, txStoreGet));
+    function hasLinkedCharges(op: PendingOp): boolean {
+        return chargeHolders.has(op.tempId);
+    }
+
     /** Selection-based promote detection — 2 standalone rows with matching promote rule. */
     let selectedForPromote = $derived.by(() => {
         if (bulkTableSelectedRows.length !== 2) return null;
@@ -3450,6 +3479,7 @@
         if (getPartnerOp(a.tempId) || getPartnerOp(b.tempId)) return null;
         // Check markedDelete
         if ((a.op === 'edit' && a.markedDelete) || (b.op === 'edit' && b.markedDelete)) return null;
+        if (hasLinkedCharges(a) || hasLinkedCharges(b)) return null;
         const match = findPromoteMatch(a.fields.type, b.fields.type, $t, buildPromoteCtx(a, b));
         if (!match) return null;
         // For CASH_TRANSFER: require exact cash cancel (same currency, opposite sign).
@@ -3491,6 +3521,16 @@
     function executePromote(opA: PendingOp, opB: PendingOp, resolved: Record<string, unknown>) {
         const match = findPromoteMatch(opA.fields.type, opB.fields.type, $t, buildPromoteCtx(opA, opB));
         if (!match) return;
+        // 66 C21: a defence — the offers already leave such rows out; a charge can still land while the merge dialog is open.
+        const holder = [opA, opB].find(hasLinkedCharges);
+        if (holder) {
+            notify({
+                name: 'tx.bulk.promote.refused.charges',
+                detail: {tempId: holder.tempId, txId: opTxId(holder) ?? null},
+                toast: {variant: 'error', message: $t('transactions.promote.chargesBlock', {values: {type: $t(`transactions.types.${holder.fields.type}`) || holder.fields.type, ref: bulkRowRef(holder)}})},
+            });
+            return;
+        }
 
         // Apply resolved fields (from MergeModal) to *both* ops before collapsing.
         //
@@ -3595,6 +3635,7 @@
      */
     function isSuggestable(op: PendingOp): boolean {
         if (op.pairedWith || getPartnerOp(op.tempId)) return false;
+        if (hasLinkedCharges(op)) return false; // 66 C21
         if (op.op === 'edit') return !(op as any).markedDelete;
         const measured = Number(op.fields.cash?.amount ?? 0) !== 0 || Number(op.fields.quantity ?? 0) !== 0;
         return !op.link_uuid && !!op.fields.type && Number(op.fields.broker_id) > 0 && !!op.fields.date && measured;
@@ -3745,7 +3786,7 @@
 
     /** Local promote suggestions: match new standalone ops against each other. */
     let localSuggestions = $derived.by(() => {
-        const newStandalone = ops.filter((o) => o.op === 'create' && !o.pairedWith && !getPartnerOp(o.tempId) && !o.link_uuid);
+        const newStandalone = ops.filter((o) => o.op === 'create' && !o.pairedWith && !getPartnerOp(o.tempId) && !o.link_uuid && !hasLinkedCharges(o));
         const results: SuggestEntry[] = [];
         for (let i = 0; i < newStandalone.length; i++) {
             for (let j = i + 1; j < newStandalone.length; j++) {
@@ -3773,7 +3814,7 @@
         for (const s of localSuggestions) combined.push(s);
 
         // Local edit+edit: match standalone edit ops against each other (works even after suggestFromDB is refreshed)
-        const editStandalone = ops.filter((o) => o.op === 'edit' && !o.pairedWith && !getPartnerOp(o.tempId) && !(o as any).markedDelete);
+        const editStandalone = ops.filter((o) => o.op === 'edit' && !o.pairedWith && !getPartnerOp(o.tempId) && !(o as any).markedDelete && !hasLinkedCharges(o));
         const seenPairs = new Set<string>(); // avoid duplicates
         for (let i = 0; i < editStandalone.length; i++) {
             for (let j = i + 1; j < editStandalone.length; j++) {
@@ -3803,7 +3844,7 @@
 
         // New + saved: a side imported now whose other side was saved earlier, both in the editor.
         // The mixed branch of executePromote links the saved id to the new row's link_uuid.
-        const newStandalone = ops.filter((o) => o.op === 'create' && !o.pairedWith && !getPartnerOp(o.tempId) && !o.link_uuid);
+        const newStandalone = ops.filter((o) => o.op === 'create' && !o.pairedWith && !getPartnerOp(o.tempId) && !o.link_uuid && !hasLinkedCharges(o));
         const mixed = mixedPromotePairs(newStandalone, editStandalone, {
             keyOf: (o) => o.tempId,
             daysBetween: (a, b) => daysDiff(a.fields.date, b.fields.date),
@@ -4020,11 +4061,14 @@
     }
 
     // 66 F7-c1 (§14.6): a selected top-level row that goes under its parent (a «Restore», a link in the parent's Form)
-    // leaves the selection.
+    // leaves the selection. 66 C21: so does the half a merge hides (`pairedWith`): «Reset selected» would reset it alone and
+    // break the pair still waiting for the save.
+    let hiddenPairHalves = $derived(new Set(ops.filter((op) => op.pairedWith !== undefined).map((op) => op.tempId)));
     $effect(() => {
         const indented = indentedIds;
+        const hidden = hiddenPairHalves;
         untrack(() => {
-            for (const row of bulkTableSelectedRows) if (indented.has(row.tempId)) tableRef?.toggleRowSelectionById(row.tempId);
+            for (const row of bulkTableSelectedRows) if (indented.has(row.tempId) || hidden.has(row.tempId)) tableRef?.toggleRowSelectionById(row.tempId);
         });
     });
 

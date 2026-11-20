@@ -59,6 +59,8 @@ export interface ChargeLinkRow {
     markedDelete?: boolean;
     chargeOf?: string;
     parentUnlink?: boolean;
+    /** The visible half this hidden half of a pair names (the Bulk's pairs). */
+    pairedWith?: string;
 }
 
 /** The parent operation `op` names, if present. */
@@ -97,10 +99,12 @@ export function remapChargeOf(ops: readonly PendingOp[], fromTempId: string, toT
 }
 
 /** The one predicate of «sits under its parent» (§11.7): owned by a present parent and linked to it, or unlinked from a
- *  parent marked for deletion (the state it keeps under it). */
+ *  parent marked for deletion (the state it keeps under it). 66 C21: never under a leg of a pair (rule 8: a leg is no
+ *  parent) — a charge «del» or unlinked of a row merged here is a row of its own, never hidden with the leg. */
 export function isUnderParent<R extends ChargeLinkRow>(op: R, ops: readonly R[]): boolean {
     const owner = ownerOf(op, ops);
     if (!owner) return false;
+    if (owner.pairedWith !== undefined || ops.some((other) => other.pairedWith === owner.tempId)) return false;
     if (!op.parentUnlink) return true;
     return owner.op === 'edit' && owner.markedDelete === true;
 }
@@ -303,6 +307,31 @@ export interface BulkDeletePlan {
 /** The charges still linked to a parent (§17.1): under it, not «del», not unlinked; new ones included; in ops order. */
 export function linkedChargesOf(parent: PendingOp, ops: readonly PendingOp[]): PendingOp[] {
     return ops.filter((op) => op !== parent && op.chargeOf === parent.tempId && !op.parentUnlink && !(op.op === 'edit' && op.markedDelete) && isUnderParent(op, ops));
+}
+
+/**
+ * 66 C21: the rows (by `tempId`) that still hold linked charges, so no pair-promote may take them (rule 6): a charge
+ * linked under them (`linkedChargesOf`), or a saved charge of theirs the Bulk does not hold yet — the saved count minus
+ * the saved charges of that row held here, wherever they sit now (a charge moved to another parent with «Link» is held,
+ * so the row it left is free). One pass over `ops`.
+ */
+export function rowsWithLinkedCharges(ops: readonly PendingOp[], get: StoreGet): Set<string> {
+    const byTempId = new Map(ops.map((op) => [op.tempId, op]));
+    const heldBySavedParent = new Map<number, number>();
+    for (const op of ops) {
+        const parentId = savedParentId(op, get);
+        if (parentId !== null) heldBySavedParent.set(parentId, (heldBySavedParent.get(parentId) ?? 0) + 1);
+    }
+    const result = new Set<string>();
+    for (const op of ops) {
+        // `isUnderParent` holds here: the owner is present and the link not dropped.
+        if (op.chargeOf !== undefined && !op.parentUnlink && !(op.op === 'edit' && op.markedDelete)) {
+            const owner = byTempId.get(op.chargeOf);
+            if (owner && owner !== op) result.add(owner.tempId);
+        }
+        if (op.op === 'edit' && !op.inaccessible && (get(op.txId)?.charges_count ?? 0) > (heldBySavedParent.get(op.txId) ?? 0)) result.add(op.tempId);
+    }
+    return result;
 }
 
 /**
