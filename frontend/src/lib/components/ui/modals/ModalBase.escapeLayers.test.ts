@@ -154,13 +154,17 @@ describe('ModalBase — one Escape closes the top layer only', () => {
         await fireEvent.click(opener);
         expect(screen.queryByTestId('context-menu'), 'premise: the button opens the row menu').not.toBeNull();
         expect(onMenuClose, 'premise: nothing has closed the menu yet').not.toHaveBeenCalled();
+        // The menu takes the focus on its first item (77 SEL-M, WAI-ARIA menu): the Escape starts there
+        const firstItem = screen.getByTestId('context-menu-action-edit');
+        await waitFor(() => expect(firstItem, 'premise: the open menu holds the focus').toHaveFocus());
 
-        await pressEscape(modal, opener);
+        await pressEscape(modal, firstItem);
 
         // The menu's own listener ran — the capturing one on window, the first to see the key.
         expect(onMenuClose, 'the Escape must close the row menu').toHaveBeenCalledTimes(1);
         expect(screen.queryByTestId('context-menu'), 'the Escape must close the row menu').toBeNull();
         expect(onRequestClose, 'one Escape on an open row menu must close the menu only, not the modal under it').not.toHaveBeenCalled();
+        expect(opener, 'the Escape gives the focus back to the button that opened the menu').toHaveFocus();
 
         // The menu took its listener with it: the next Escape is the modal's.
         await pressEscape(modal, opener);
