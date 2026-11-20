@@ -14,6 +14,9 @@
 
 import {zodiosApi} from '$lib/api';
 import {normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
+import {escapeHtml} from '$lib/utils/core/escapeHtml';
+import {formatExactDecimal} from '$lib/utils/core/formatFixed';
+import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
 import {eventTypesForTx} from './events/eventTypes';
 import {commitTransactions, type TxValidationIssue} from './txCommitApi';
 
@@ -154,4 +157,24 @@ export async function linkReconciliation(rows: readonly ReconciliationRow[]): Pr
     if (updates.length === 0) return {linked: false, issues: []};
     const result = await commitTransactions({updates});
     return {linked: result.committed, issues: result.issues};
+}
+
+/**
+ * Link a row with several events of the right type that day to the one the user chose («Choose event», 77 SEL-C), in ONE
+ * atomic commit. Only one of the row's own candidates can be chosen: any other id sends nothing and answers `linked: false`.
+ */
+export async function linkChosenEvent(row: Pick<ReconciliationRow, 'transactionId' | 'candidates'>, eventId: number): Promise<{linked: boolean; issues: TxValidationIssue[]}> {
+    if (!row.candidates.some((candidate) => candidate.id === eventId)) return {linked: false, issues: []};
+    const result = await commitTransactions({updates: [{id: row.transactionId, asset_event_id: eventId}]});
+    return {linked: result.committed, issues: result.issues};
+}
+
+/**
+ * The value of an event as the window writes it (77 SEL-C; the designer, 20/11). An event describes the asset, not the
+ * portfolio, so its value is public (as in the transactions' event tooltip). Up to six decimals, what `AssetEvent.value`
+ * keeps, so two candidates a fraction apart never read the same; a SPLIT's value is a ratio, written as the lots chart does («2:1»), with no currency.
+ */
+export function eventValueHtml(event: Pick<ReconciliationCandidate, 'type' | 'value' | 'currency'>): string {
+    if (event.type === 'SPLIT') return `<span class="currency-amount">${escapeHtml(formatExactDecimal(event.value, {minFrac: 0, maxFrac: 8}))}:1</span>`;
+    return formatCurrencyAmountHtml(Number(event.value), event.currency, {minFraction: 2, maxFraction: 6, sensitivity: 'public'});
 }

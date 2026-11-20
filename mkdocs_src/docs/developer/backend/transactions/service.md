@@ -566,6 +566,13 @@ with `linkReconciliation()`, which sends **one** `POST /transactions/commit` wit
 batch: any issue and nothing is linked, and the rows are not retried with fewer. With nothing to link there is
 no request. On success the page reloads its transactions softly (`onlinked`).
 
+The window draws one `DataTable` per status (`unique`, `none`, `several`; an empty group is not drawn) inside one
+`SelectionPanel` (`lib/components/table/`), so the two tables with checkboxes share one selection bar and one dock.
+Each row's action sits in a column pinned on the right and in the row menu. A `several` row is never guessed: «Choose
+event» opens `EventReconciliationChooseModal.svelte` on the row's `candidates`, and `linkChosenEvent()` links the one
+picked through the same single commit (an id that is not among the candidates sends nothing). Event values go through
+`eventValueHtml()` (`formatCurrencyAmountHtml`, `public`; a SPLIT is a bare ratio).
+
 Tests: `backend/test_scripts/test_api/test_event_reconciliation_api.py`
 (`./dev.py test api event-reconciliation`); in the frontend `eventReconciliation.test.ts` and
 `EventReconciliationModal.test.ts` (`frontend/src/lib/features/transactions/`) and
