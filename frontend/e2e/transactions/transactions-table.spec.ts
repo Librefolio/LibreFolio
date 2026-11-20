@@ -362,26 +362,36 @@ test.describe('TransactionsTable (main read-view)', () => {
         await page.keyboard.press('Escape');
     });
 
-    // U8 — the selection bar floats at the bottom of the screen and never hides the last row of the table. The row ticked is the
-    // last one of the page: it is the row the bar could cover.
-    test('the selection bar floats at the bottom and does not cover the last row', async ({page}) => {
+    // 77 SEL-B (was U8) — the selection bar sits at the top of the table; scrolled to the end, its actions come down into the
+    // table's dock, above the pager, and the dock never hides the last row. The row ticked is the last one of the page.
+    test('the selection bar sits at the top of the table, and its actions come down into the dock at the end of the page', async ({page}) => {
         const table = page.getByTestId('tx-table');
         const lastRow = table.locator('tbody tr[data-row-id]').last();
         await expect(lastRow).toBeVisible({timeout: 5_000});
         await lastRow.getByTestId(/^dt-row-checkbox-/).click();
-        const bar = page.getByTestId('selection-toolbar');
-        await expect(bar).toBeVisible({timeout: 5_000});
-        await expect(bar).toHaveAttribute('data-variant', 'floating');
 
-        // At the end of the page the last row sits above the bar: the page keeps room for it.
+        // Scrolled to the end: the top of the table is out of view, the actions are in the dock, once.
         await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-        const barBox = await bar.boundingBox();
+        await expect(table.getByTestId('dt-selection-top')).toHaveAttribute('data-in-view', 'false', {timeout: 5_000});
+        const dock = table.getByTestId('dt-dock');
+        await expect(dock).toHaveAttribute('data-actions', 'true');
+        const bar = page.getByTestId('selection-toolbar');
+        await expect(bar).toHaveAttribute('data-variant', 'dock');
+        // The actions coming down make the page taller: scroll to its new end, where a user who keeps scrolling lands.
+        await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+        await expect(bar.getByTestId('toolbar-action-edit')).toBeVisible();
+
+        const dockBox = await dock.locator('.dt-dock').boundingBox();
         const lastBox = await lastRow.boundingBox();
         const viewport = page.viewportSize();
-        if (!barBox || !lastBox || !viewport) throw new Error('The bar and the last row must be on screen to be measured.');
-        expect(barBox.y + barBox.height, 'the bar is at the bottom of the viewport').toBeLessThanOrEqual(viewport.height);
-        expect(barBox.y + barBox.height, 'close to the bottom edge').toBeGreaterThanOrEqual(viewport.height - 48);
-        expect(lastBox.y + lastBox.height, 'the last row ends above the bar').toBeLessThanOrEqual(barBox.y + 1);
+        if (!dockBox || !lastBox || !viewport) throw new Error('The dock and the last row must be on screen to be measured.');
+        expect(dockBox.y + dockBox.height, 'the dock is inside the viewport').toBeLessThanOrEqual(viewport.height);
+        expect(lastBox.y + lastBox.height, 'the last row ends above the dock').toBeLessThanOrEqual(dockBox.y + 1);
+
+        // Back at the top: the actions go back up into the bar above the table.
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await expect(table.getByTestId('dt-selection-top')).toHaveAttribute('data-in-view', 'true', {timeout: 5_000});
+        await expect(page.getByTestId('selection-toolbar')).toHaveAttribute('data-variant', 'top');
     });
 });
 
