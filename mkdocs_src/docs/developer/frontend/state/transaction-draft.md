@@ -220,6 +220,18 @@ The workspace looks for the two halves of a transfer or an exchange and offers t
   hold for every promote of the workspace: **Merge**, **Merge all**, and the selection toolbar's
   promote button (`selectedForPromote`, `promote-toolbar-confirm`), which also asks
   `cashAmountsCancel` of a cash transfer and `assetQuantitiesCancel` of an asset transfer.
+* **Rows with linked charges** (66 C21): a row that still holds linked charges is never a side of a promote — rule 6
+  of the backend (`chargesBlockParentType`) would refuse the save. `rowsWithLinkedCharges` (`bulkCharges.ts`) gives
+  the holders in one pass: a charge linked under the row, or a saved charge of it the workspace does not hold yet
+  (`charges_count` minus the saved charges of that row present anywhere in `ops`, so a charge moved away with
+  **Link** frees the row it left). `isSuggestable`, the standalone lists behind the banner and `selectedForPromote`
+  leave them out; `executePromote` refuses them as a defence (`tx.bulk.promote.refused.charges`, for a charge read
+  that lands while `PromoteMergeModal` is open), and `promote-suggest` never returns a saved candidate that is the
+  parent of a charge. A charge «del» or «unlink» frees its row; after the merge it is a row of its own, because
+  `isUnderParent` never puts a charge under a leg of a pair (rule 8). `resetRow` and a restore from «del»
+  (`applyDelete`) keep a charge «unlink» when its parent is «del» or a leg of a pair, saved or pending
+  (`keepUnlinkedFromUnfitParents`), and a half that a merge hides leaves the grid's selection, so **Reset selected**
+  never resets it alone.
 * **The 💡 button** (`tx-bulk-suggest-import`, and the row action `suggest`) lists
   `importableSuggestions`: saved transactions that `POST /transactions/promote-suggest` proposes as
   the other half of a row, and that are not in the workspace yet. The search runs debounced on the
