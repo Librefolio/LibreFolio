@@ -119,6 +119,7 @@
         type SetPreviewState,
     } from '$lib/features/transactions/import/importReportSets';
     import {completePairsOnly, freshLinkFor, linkedPairs, setPairSelected} from '$lib/features/transactions/import/importPairs';
+    import {completeChargeNames, MAX_SPLIT_LEGS, SPLIT_LEG_INDEX_BASE, splitLegRows} from '$lib/features/transactions/import/importChargeNames';
     import {renderFromToHtml, renderImpliedRateHtml} from '$lib/features/transactions/import/pairCellHtml';
     import {buildGapFixRequests, buildGapFixView, defaultGapFixSelection, gapFixHasSomethingToShow, gapFixSelectedCount, resolveTruthAssetId, selectedGapFixCreates, truthSourcesOf, type GapFixOutcome, type GapFixView, type TruthSource} from '$lib/features/transactions/import/gapFixModel';
     import {groupPartitions as groupPartitionsPure, defaultKeeperIndices as defaultKeeperIndicesPure, resolverSelectionFor as resolverSelectionForPure, outlierIndexSet, carryResolverChoices, type ResolverChoices} from '$lib/features/transactions/import/importDuplicateResolver';
@@ -1353,7 +1354,8 @@
         // Whole pairs only, each under a fresh link_uuid: a plugin's ids repeat in every upload of one statement.
         const freshLinks = new Map<string, string>();
         const chosen = mergedTransactions.filter((t) => t.selected && !beforeOpeningIndices.has(t.index) && !beforeHistoryIndices.has(t.index));
-        return completePairsOnly(chosen, pairs).map((t) => {
+        // 66 P1b: the linked charges' names too, renewed for this hand-over, a name whose other end is not chosen dropped.
+        return completeChargeNames(completePairsOnly(chosen, pairs), generateUUID).map((t) => {
             const tx = {...t.tx} as any;
             const link = freshLinkFor(t, freshLinks, generateUUID);
             if (link) tx.link_uuid = link;
@@ -2763,19 +2765,10 @@ ${arrow}<span>${label}</span></span>`,
      * todos. The parse response itself is left untouched: it stays the plugin's objective
      * reading of the file, and a re-parse must be able to restore it.
      */
-    /**
-     * Index namespace for the legs the user carves out of a source row. A leg is not in the
-     * file, so it has no row of its own to be numbered by; keeping it far above the parse
-     * counter makes its index stable across re-applies (one leg per parent, replaced in
-     * place) and impossible to confuse with a row the plugin actually read.
-     */
-    const SPLIT_LEG_INDEX_BASE = 1_000_000;
-
-    /** Every index a given source row's legs can occupy, in order. */
+    /** Every index a given source row's legs can occupy, in order (`SPLIT_LEG_INDEX_BASE`, `importChargeNames.ts`). */
     function legIndices(index: number): number[] {
         return Array.from({length: MAX_SPLIT_LEGS}, (_, k) => SPLIT_LEG_INDEX_BASE * (k + 1) + index);
     }
-    const MAX_SPLIT_LEGS = 6;
 
     function applyFixToRow(index: number, patch: FixPatch) {
         snapshotFixTodos(index);
@@ -2807,22 +2800,10 @@ ${arrow}<span>${label}</span></span>`,
                 const code = cash?.code ?? 'EUR';
                 const sign = Number(cash?.amount ?? '0') < 0 ? '-' : '';
                 (tx as {cash?: {code: string; amount: string} | null}).cash = {code, amount: `${sign}${patch.split.main}`};
-                legs = patch.split.legs.slice(0, MAX_SPLIT_LEGS).map((leg, k) => ({
-                    ...m,
-                    index: SPLIT_LEG_INDEX_BASE * (k + 1) + m.index,
-                    tx: {
-                        ...(tx as TransactionCreateItem),
-                        type: leg.type,
-                        quantity: '0',
-                        cash: {code, amount: `-${leg.amount}`},
-                        description: leg.description,
-                        tags: [...(((tx as {tags?: string[]}).tags ?? []) as string[]), 'split_leg'],
-                        cost_basis_override: null,
-                    } as TransactionCreateItem,
-                    todos: [],
-                    duplicateStatus: 'unique' as DuplicateStatus,
-                    dupMatches: [],
-                }));
+                // 66 P1b (D10): the legs are born linked to the trade, which is named for them.
+                const split = splitLegRows({...m, tx}, patch.split.legs);
+                legs = split.legs;
+                return {...m, tx: split.parent.tx, todos: todosAfterSettle(m.todos)};
             }
             return {...m, tx, todos: todosAfterSettle(m.todos)};
         });
@@ -2988,12 +2969,20 @@ ${arrow}<span>${label}</span></span>`,
                 if (m.index !== index) return m;
                 return {
                     ...m,
-                    tx: original ? ({...original} as TransactionCreateItem) : m.tx,
+                    // The snapshot is the row as the plugin read it, before any split named it (66 P1b): a reset trade
+                    // never keeps the wizard's name.
+                    tx: original ? ({...original} as TransactionCreateItem) : withoutSplitName(m.tx, index),
                     todos: todosAfterReopen(m.todos, todos),
                 };
             });
         fixDecisions = Object.fromEntries(Object.entries(fixDecisions).filter(([k]) => Number(k) !== index));
         fixCreatedAssets = Object.fromEntries(Object.entries(fixCreatedAssets).filter(([k]) => Number(k) !== index));
+    }
+
+    /** A row without the name the wizard's split gave it (`split:<index>`, `splitLegRows`); any other name is kept. */
+    function withoutSplitName(tx: TransactionCreateItem, index: number): TransactionCreateItem {
+        const {ref, ...rest} = tx as TransactionCreateItem & {ref?: string | null};
+        return ref === `split:${index}` ? (rest as TransactionCreateItem) : tx;
     }
 
     function resetAllFixRows(indices?: number[]) {

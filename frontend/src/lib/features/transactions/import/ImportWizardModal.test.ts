@@ -81,6 +81,28 @@ vi.mock('$lib/features/brokers/BrokerModal.svelte', async (importOriginal) => {
     };
 });
 
+const {fixStepProbe} = vi.hoisted(() => ({
+    fixStepProbe: {props: null as Record<string, unknown> | null},
+}));
+
+/*
+ * 66 P1b: the corrections step's callbacks are the wizard's own `applyFixToRow`, `resetFixRow` and
+ * `acceptPluginFallback`. Recording the props of the step's latest mount lets a test answer a flagged row
+ * exactly as the step's Apply / Reset / Keep buttons do — with a typed patch, not with translated labels and
+ * the type picker (whose options come from the type store this file stubs). The real step still renders.
+ */
+vi.mock('./FixFlaggedStep.svelte', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('./FixFlaggedStep.svelte')>();
+    const renderActual = actual.default as unknown as (...args: unknown[]) => unknown;
+    return {
+        ...actual,
+        default: ((...args: unknown[]) => {
+            fixStepProbe.props = args[1] as Record<string, unknown>;
+            return renderActual(...args);
+        }) as typeof actual.default,
+    };
+});
+
 vi.mock('../form/TransactionFormModal.svelte', () => ({
     default: (...args: unknown[]) => {
         if (bulkChildProbe.interceptImportWizard) {
@@ -969,5 +991,342 @@ describe('TransactionBulkModal — Import success-only handoff', () => {
 
         await waitFor(() => expect(capturedImportWizard().open).toBe(false));
         await waitFor(() => expect(guideMocks.startImportAt).toHaveBeenCalledExactlyOnceWith('import.bulk', progress));
+    });
+});
+
+/**
+ * 66 P1b — the names of the linked charges at the hand-over (contract `66-P1b-contract.md` §1, corrected by §4).
+ *
+ * One synthetic file of broker 77 is walked through the real wizard — select, parse, the corrections step when a row
+ * is flagged, the review — to `onImportBatch`, the one door to the editor. The assets are real ids (101), so nothing
+ * waits for a resolution; the duplicate re-check answers «no duplicate». What reaches `onImportBatch` is `{tx, todos}`
+ * only: a leg's `duplicateStatus` and `dupMatches` are not visible here (the `splitLegRows` unit tests pin them), and
+ * the legs' index scheme is read in the review, by the rows' `data-row-id` (the merged index).
+ *
+ *   - The split legs, field by field, on TODAY's code: GREEN, every field the wizard writes (the pins). Then the names:
+ *     RED until P1b — the legs carry no `ref`/`link_uuid` of the parent, they name it in `parent_ref`, and the parent,
+ *     which had no name, is named. Re-apply replaces the legs and keeps the names consistent; a reset parent hands
+ *     over no name (a guard: green today).
+ *   - A parse with BUY `ref: 'r1'` and FEE `parent_ref: 'r1'` reaches the editor under a fresh pair of names (RED: today
+ *     the parse's names pass through); the BUY unticked in the review → the FEE arrives without `parent_ref` (RED); a
+ *     BUY retyped ADJUSTMENT in the corrections step still hands over its name — whether the link holds is the Bulk's
+ *     call (`bulkLinkSelection`, contract §4.1) — (RED: the fresh name).
+ *
+ * The leg descriptions are the test's own (the patch carries them), never the catalogue's wording.
+ */
+describe('ImportWizardModal — 66 P1b: the names of the linked charges at the hand-over', () => {
+    const BROKER = {id: 77, name: 'P1b owned broker', default_import_plugin: 'owned-parser', opened_at: '2020-01-01', icon_url: null, portal_url: null};
+    const FILE_ID = 'p1b-file';
+    const ASSET = 101;
+    const DATE = '2025-03-14';
+    /** The schema's limit on a `ref` (TXCreateItem). */
+    const REF_MAX = 36;
+    const SPLIT_LEG_INDEX_BASE = 1_000_000;
+
+    type ParsedTx = Record<string, unknown>;
+    type ParseTodo = {tx_index: number; field: string; severity: 'blocker' | 'warning'; reason_code: string; message: string; context?: Record<string, unknown>};
+    type Handed = {tx: TransactionCreateItem & {ref?: string | null; parent_ref?: string | null; link_uuid?: string | null}; todos: unknown[]};
+    type Patch = {type?: string; asset_id?: number | null; quantity?: string; split?: {main: string; legs: Array<{type: string; amount: string; description: string}>}};
+
+    function buy(over: ParsedTx = {}): ParsedTx {
+        return {broker_id: BROKER.id, type: 'BUY', date: DATE, asset_id: ASSET, quantity: '10', cash: {code: 'EUR', amount: '-1012.50'}, tags: ['p1b-probe'], description: 'P1b buy', ...over};
+    }
+
+    function fee(over: ParsedTx = {}): ParsedTx {
+        return {broker_id: BROKER.id, type: 'FEE', date: DATE, asset_id: ASSET, quantity: '0', cash: {code: 'EUR', amount: '-2.50'}, tags: [], description: 'P1b fee', ...over};
+    }
+
+    /** The plugin's split hint on a row's cash (Danske, Crédit Agricole): the corrections step offers the split. */
+    function splitHint(txIndex: number): ParseTodo {
+        return {tx_index: txIndex, field: 'cash', severity: 'warning', reason_code: 'p1b_trade_charges', message: 'p1b probe', context: {split_hint: 'trade_charges'}};
+    }
+
+    /** A blocker on a row's type: the corrections step owns it (`isDupRelevantBlocker`). */
+    function typeBlocker(txIndex: number): ParseTodo {
+        return {tx_index: txIndex, field: 'type', severity: 'blocker', reason_code: 'p1b_type_unclear', message: 'p1b probe'};
+    }
+
+    function answerParse(transactions: ParsedTx[], todos: ParseTodo[] = []): void {
+        vi.mocked(zodiosApi.parse_file_api_v1_brokers_import_files__file_id__parse_post).mockResolvedValue({
+            file_id: FILE_ID,
+            plugin_code: 'owned-parser',
+            broker_id: BROKER.id,
+            transactions,
+            asset_mappings: [],
+            duplicates: null,
+            warnings: [],
+            validation_issues: [],
+            field_todos: todos,
+        } as never);
+    }
+
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        guideAnchors.clear();
+        guideState.active = null;
+        fixStepProbe.props = null;
+        vi.mocked(getEditableBrokers).mockReturnValue([BROKER]);
+        vi.mocked(getBrokerInfo).mockImplementation((id) => (id === BROKER.id ? BROKER : null));
+        vi.mocked(zodiosApi.list_files_api_v1_brokers_import_files_get).mockResolvedValue([{file_id: FILE_ID, filename: 'p1b.csv', size_bytes: 256, status: 'uploaded', uploaded_at: '2026-11-20T08:00:00Z', compatible_plugins: ['owned-parser'], target_broker_id: BROKER.id, can_delete: true}]);
+        vi.mocked(zodiosApi.get_asset_candidates_api_v1_brokers_import_asset_candidates_post).mockResolvedValue([]);
+        // The duplicate re-check: nothing in the database looks like these rows.
+        vi.mocked(zodiosApi.check_duplicates_api_v1_brokers_import_duplicates_post).mockResolvedValue({tx_likely_duplicates: [], tx_possible_duplicates: []} as never);
+        await setupI18n();
+    });
+
+    afterEach(() => {
+        cleanup();
+        guideAnchors.clear();
+        guideState.active = null;
+        fixStepProbe.props = null;
+        vi.mocked(getEditableBrokers).mockReturnValue([]);
+        vi.mocked(getBrokerInfo).mockReturnValue(null);
+        vi.mocked(zodiosApi.list_files_api_v1_brokers_import_files_get).mockResolvedValue([]);
+        vi.mocked(zodiosApi.parse_file_api_v1_brokers_import_files__file_id__parse_post).mockReset();
+        vi.mocked(zodiosApi.check_duplicates_api_v1_brokers_import_duplicates_post).mockReset();
+    });
+
+    function currentStepId(): string | null {
+        return screen.getByTestId('import-wizard-stepper').querySelector('[aria-current="step"]')?.getAttribute('data-step-id') ?? null;
+    }
+
+    /** Mount, select the file, parse it, and leave the analysis; ends on the first step after it, named. */
+    async function walkPastAnalysis(): Promise<ReturnType<typeof mount>> {
+        const mounted = mount();
+        await waitFor(() => expect(screen.getByTestId('import-wizard-step1')).toHaveAttribute('data-busy', 'false'));
+        await fireEvent.click(screen.getByTestId('import-wizard-next'));
+        await waitFor(() => expect(screen.getByTestId('import-wizard-step2')).toHaveAttribute('data-busy', 'false'));
+        const checkbox = screen.getByTestId(`dt-row-checkbox-${FILE_ID}`);
+        if (checkbox.getAttribute('data-state') !== 'checked') await fireEvent.click(checkbox);
+        await waitFor(() => expect(screen.getByTestId('import-wizard-parse')).toBeEnabled());
+        await fireEvent.click(screen.getByTestId('import-wizard-parse'));
+        await waitFor(() => expect(screen.getByTestId('import-wizard-continue')).toBeEnabled());
+        await fireEvent.click(screen.getByTestId('import-wizard-continue'));
+        await waitFor(() => expect(currentStepId(), 'the wizard leaves the analysis').toMatch(/^(fix|review)$/));
+        return mounted;
+    }
+
+    /** The corrections step's own callbacks (the wizard's), recorded at its latest mount. */
+    function fixStep(): {apply: (index: number, patch: Patch) => void; reset: (index: number) => void; accept: (index: number) => void} {
+        const props = fixStepProbe.props;
+        if (!props) throw new Error('the wizard did not mount its corrections step');
+        return {
+            apply: (index, patch) => (props.onapply as (i: number, p: Patch) => void)(index, patch),
+            reset: (index) => (props.onreset as (i: number) => void)(index),
+            accept: (index) => (props.onaccept as (i: number) => void)(index),
+        };
+    }
+
+    /** From the corrections step, every flagged row settled, to the review; ends on the review settled. */
+    async function continueFromFix(): Promise<HTMLElement> {
+        expect(currentStepId(), 'premise: the corrections step').toBe('fix');
+        await waitFor(() => expect(screen.getByTestId('import-wizard-fix-continue'), 'every flagged row is settled').toBeEnabled());
+        await fireEvent.click(screen.getByTestId('import-wizard-fix-continue'));
+        return reviewSettled();
+    }
+
+    async function reviewSettled(): Promise<HTMLElement> {
+        await waitFor(() => expect(currentStepId()).toBe('review'));
+        const review = screen.getByTestId('import-wizard-step4');
+        await waitFor(() => expect(review).toHaveAttribute('data-busy', 'false'));
+        return review;
+    }
+
+    /** The review's row of a merged index, or null. */
+    function reviewRow(review: HTMLElement, index: number): HTMLElement | null {
+        return review.querySelector<HTMLElement>(`tbody tr[data-row-id="${index}"]`);
+    }
+
+    /** Import from the review; ends on the one hand-over, returned. */
+    async function importHandOver(onImportBatch: ReturnType<typeof vi.fn>): Promise<Handed[]> {
+        await waitFor(() => expect(screen.getByTestId('import-wizard-import'), 'Import is offered').toBeEnabled());
+        await fireEvent.click(screen.getByTestId('import-wizard-import'));
+        await waitFor(() => expect(onImportBatch, 'the wizard hands the rows over').toHaveBeenCalledTimes(1));
+        return onImportBatch.mock.calls[0][0] as Handed[];
+    }
+
+    function handedDescribed(handed: Handed[], description: string): Handed {
+        const found = handed.filter((item) => item.tx.description === description);
+        if (found.length !== 1) throw new Error(`expected one handed row described ${JSON.stringify(description)}, found ${found.length}: ${JSON.stringify(handed.map((item) => item.tx.description))}`);
+        return found[0];
+    }
+
+    /** A handed row's name, `null` for none (absent, null and empty are the same to the batch). */
+    const refOf = (item: Handed): string | null => item.tx.ref || null;
+    const parentRefOf = (item: Handed): string | null => item.tx.parent_ref || null;
+
+    /** A fresh name of the hand-over: a string within the schema's limit, never one the parse or the wizard wrote. */
+    function expectFreshName(name: string | null, notOneOf: string[], what: string): void {
+        expect(typeof name, `${what}: a name`).toBe('string');
+        expect((name as string).length, `${what}: within ${REF_MAX} characters`).toBeLessThanOrEqual(REF_MAX);
+        expect(notOneOf, `${what}: not a name of the parse or of the wizard`).not.toContain(name);
+    }
+
+    const SPLIT = {
+        main: '1000.00',
+        legs: [
+            {type: 'FEE', amount: '10.00', description: 'P1b split fee'},
+            {type: 'TAX', amount: '2.50', description: 'P1b split tax'},
+        ],
+    };
+
+    // -----------------------------------------------------------------------
+    // The harness
+    // -----------------------------------------------------------------------
+
+    it('control: a file without names reaches onImportBatch whole, through the review', async () => {
+        answerParse([buy(), fee()]);
+        const {onImportBatch} = await walkPastAnalysis();
+        const review = await reviewSettled();
+        expect(review).toHaveAttribute('data-selected-count', '2');
+
+        const handed = await importHandOver(onImportBatch);
+
+        expect(handed.map((item) => item.tx.description)).toEqual(['P1b buy', 'P1b fee']);
+        for (const item of handed) {
+            expect(refOf(item), `${item.tx.description}: no name`).toBeNull();
+            expect(parentRefOf(item), `${item.tx.description}: no parent named`).toBeNull();
+        }
+    });
+
+    // -----------------------------------------------------------------------
+    // The split legs: today's shape first (green), then the names (red)
+    // -----------------------------------------------------------------------
+
+    it('pin (green today): the split legs, field by field — a FEE and a TAX, with the index scheme in the review', async () => {
+        answerParse([buy()], [splitHint(0)]);
+        const {onImportBatch} = await walkPastAnalysis();
+        fixStep().apply(0, {split: SPLIT});
+        const review = await continueFromFix();
+
+        expect(reviewRow(review, 0), 'the trade keeps its row').not.toBeNull();
+        expect(reviewRow(review, SPLIT_LEG_INDEX_BASE * 1 + 0), 'leg 0 of row 0').not.toBeNull();
+        expect(reviewRow(review, SPLIT_LEG_INDEX_BASE * 2 + 0), 'leg 1 of row 0').not.toBeNull();
+        expect(review, 'the trade and its two legs are selected').toHaveAttribute('data-selected-count', '3');
+
+        const handed = await importHandOver(onImportBatch);
+        expect(handed).toHaveLength(3);
+        const trade = handedDescribed(handed, 'P1b buy');
+        expect(trade.tx.cash, 'the trade keeps its share of the amount, in its direction').toEqual({code: 'EUR', amount: '-1000.00'});
+        for (const spec of SPLIT.legs) {
+            const leg = handedDescribed(handed, spec.description);
+            expect(leg.tx.type, `${spec.type}: its type`).toBe(spec.type);
+            expect(leg.tx.quantity, `${spec.type}: quantity 0`).toBe('0');
+            expect(leg.tx.cash, `${spec.type}: money leaving, in the row's currency`).toEqual({code: 'EUR', amount: `-${spec.amount}`});
+            expect(leg.tx.tags, `${spec.type}: the row's tags plus split_leg`).toEqual(['p1b-probe', 'split_leg']);
+            expect(leg.tx.cost_basis_override, `${spec.type}: no cost`).toBeNull();
+            expect(leg.todos, `${spec.type}: no todo`).toEqual([]);
+            expect(leg.tx.broker_id, `${spec.type}: the row's broker`).toBe(BROKER.id);
+            expect(leg.tx.asset_id, `${spec.type}: the row's asset`).toBe(ASSET);
+            expect(leg.tx.date, `${spec.type}: the row's date`).toBe(DATE);
+        }
+    });
+
+    it('the split legs are born linked to the trade: no ref or link_uuid of their own, parent_ref = the trade’s fresh name', async () => {
+        answerParse([buy()], [splitHint(0)]);
+        const {onImportBatch} = await walkPastAnalysis();
+        fixStep().apply(0, {split: SPLIT});
+        await continueFromFix();
+
+        const handed = await importHandOver(onImportBatch);
+        const trade = handedDescribed(handed, 'P1b buy');
+        expectFreshName(refOf(trade), ['split:0'], 'the trade, which had no name');
+        for (const spec of SPLIT.legs) {
+            const leg = handedDescribed(handed, spec.description);
+            expect(parentRefOf(leg), `${spec.type}: names the trade`).toBe(refOf(trade));
+            expect(refOf(leg), `${spec.type}: no name of its own`).toBeNull();
+            expect(leg.tx.link_uuid ?? null, `${spec.type}: no link_uuid`).toBeNull();
+        }
+    });
+
+    it('re-apply replaces the legs, and the names stay consistent: the one leg left names the trade', async () => {
+        answerParse([buy()], [splitHint(0)]);
+        const {onImportBatch} = await walkPastAnalysis();
+        fixStep().apply(0, {split: SPLIT});
+        await waitFor(() => expect(screen.getByTestId('import-wizard-fix-continue')).toBeEnabled());
+        fixStep().apply(0, {split: {main: '1005.50', legs: [{type: 'FEE', amount: '7.00', description: 'P1b split fee again'}]}});
+        const review = await continueFromFix();
+
+        expect(reviewRow(review, SPLIT_LEG_INDEX_BASE * 1 + 0), 'leg 0 replaced in place').not.toBeNull();
+        expect(reviewRow(review, SPLIT_LEG_INDEX_BASE * 2 + 0), 'leg 1 gone').toBeNull();
+        const handed = await importHandOver(onImportBatch);
+        expect(
+            handed.map((item) => item.tx.description),
+            'the trade and the new leg only',
+        ).toEqual(['P1b buy', 'P1b split fee again']);
+        const trade = handedDescribed(handed, 'P1b buy');
+        const leg = handedDescribed(handed, 'P1b split fee again');
+        expect(leg.tx.cash).toEqual({code: 'EUR', amount: '-7.00'});
+        expectFreshName(refOf(trade), ['split:0'], 'the trade');
+        expect(parentRefOf(leg), 'the leg names the trade').toBe(refOf(trade));
+    });
+
+    it('guard (green today): a reset trade hands over no name, and no leg', async () => {
+        answerParse([buy()], [splitHint(0)]);
+        const {onImportBatch} = await walkPastAnalysis();
+        fixStep().apply(0, {split: SPLIT});
+        const review = await continueFromFix();
+        expect(reviewRow(review, SPLIT_LEG_INDEX_BASE + 0), 'premise: the split made its legs').not.toBeNull();
+
+        await fireEvent.click(screen.getByTestId('import-wizard-back'));
+        await waitFor(() => expect(currentStepId(), 'back on the corrections step').toBe('fix'));
+        fixStep().reset(0);
+        fixStep().accept(0);
+        const after = await continueFromFix();
+
+        expect(reviewRow(after, SPLIT_LEG_INDEX_BASE + 0), 'the reset took the legs away').toBeNull();
+        const handed = await importHandOver(onImportBatch);
+        expect(handed.map((item) => item.tx.description)).toEqual(['P1b buy']);
+        expect(refOf(handed[0]), 'the reset trade carries no name').toBeNull();
+        expect(handed[0].tx.cash, 'and its whole amount').toEqual({code: 'EUR', amount: '-1012.50'});
+    });
+
+    // -----------------------------------------------------------------------
+    // The plugin's names (P1a): renewed, and dropped with the parent
+    // -----------------------------------------------------------------------
+
+    it('a BUY ref r1 and a FEE parent_ref r1 reach the editor under one fresh name', async () => {
+        answerParse([buy({ref: 'r1'}), fee({parent_ref: 'r1'})]);
+        const {onImportBatch} = await walkPastAnalysis();
+        await reviewSettled();
+
+        const handed = await importHandOver(onImportBatch);
+        const parent = handedDescribed(handed, 'P1b buy');
+        const charge = handedDescribed(handed, 'P1b fee');
+        expectFreshName(refOf(parent), ['r1'], 'the BUY');
+        expect(parentRefOf(charge), 'the FEE names the BUY by its fresh name').toBe(refOf(parent));
+        expect(refOf(charge), 'the FEE has no name of its own').toBeNull();
+        expect(parentRefOf(parent), 'the BUY names no parent').toBeNull();
+    });
+
+    it('the BUY unticked in the review: the FEE arrives without parent_ref', async () => {
+        answerParse([buy({ref: 'r1'}), fee({parent_ref: 'r1'})]);
+        const {onImportBatch} = await walkPastAnalysis();
+        const review = await reviewSettled();
+        // The review's own switch, in the row's «selected» cell (an editable-checkbox: `aria-pressed`).
+        const toggle = reviewRow(review, 0)?.querySelector<HTMLElement>('td[data-column-id="selected"] button[aria-pressed]');
+        if (!toggle) throw new Error('the BUY row of the review has no selection switch');
+        expect(toggle, 'premise: the BUY is ticked').toHaveAttribute('aria-pressed', 'true');
+        await fireEvent.click(toggle);
+        await waitFor(() => expect(review, 'the FEE alone is selected').toHaveAttribute('data-selected-count', '1'));
+
+        const handed = await importHandOver(onImportBatch);
+        expect(handed.map((item) => item.tx.description)).toEqual(['P1b fee']);
+        expect(parentRefOf(handed[0]), 'its parent is not in the batch: it stands alone (D10)').toBeNull();
+        expect(refOf(handed[0])).toBeNull();
+    });
+
+    it('a BUY retyped ADJUSTMENT in the corrections step still hands over its name: the editor decides the link', async () => {
+        answerParse([buy({ref: 'r1'}), fee({parent_ref: 'r1'})], [typeBlocker(0)]);
+        const {onImportBatch} = await walkPastAnalysis();
+        fixStep().apply(0, {type: 'ADJUSTMENT'});
+        const review = await continueFromFix();
+        expect(review).toHaveAttribute('data-selected-count', '2');
+
+        const handed = await importHandOver(onImportBatch);
+        const parent = handedDescribed(handed, 'P1b buy');
+        expect(parent.tx.type, 'premise: retyped').toBe('ADJUSTMENT');
+        expectFreshName(refOf(parent), ['r1'], 'the ADJUSTMENT');
+        expect(parentRefOf(handedDescribed(handed, 'P1b fee')), 'the FEE still names it').toBe(refOf(parent));
     });
 });
