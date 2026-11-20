@@ -61,6 +61,35 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Les administrateurs peuvent ne garder actifs que certains fournisseurs de prix et de taux de change sur une instance (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`) : les autres disparaissent des listes, de la recherche, des affectations et des paramètres ; les affectations existantes gardent leurs prix enregistrés. MANUAL reste toujours actif.
 - Recherche d'actifs : en cherchant une cryptomonnaie sur Yahoo Finance, son ticker en euros apparaît aussi (par exemple BTC-EUR à côté de BTC-USD), pour la valoriser directement en euros.
 
+#### 🎯 Rééquilibreur de portefeuille et Allocateur PAC
+
+- **Rééquilibreur de portefeuille**, un nouvel outil de la page Outils : il ramène un portefeuille que vous détenez déjà vers ses poids cibles. Il n'envoie aucun ordre.
+  - **Son point de départ :** les positions que LibreFolio enregistre chez chaque courtier. Vous pouvez changer une quantité pour simuler un autre portefeuille ; LibreFolio n'est pas modifié.
+  - **Courtiers :** un courtier où vous détenez des positions sans y opérer compte comme « positions seulement », et « Ajouter au plan » permet au plan d'y opérer aussi.
+  - **Cibles :** en pourcentage du portefeuille entier, liquidités comprises. Les liquidités d'un courtier dans une devise peuvent former une ligne à part (« Ajouter des liquidités ») ; le reste est « Autres liquidités », à 0 %. La colonne « Aujourd’hui » montre le poids actuel de chaque ligne.
+  - **Stratégie :** « Investir seulement » utilise les liquidités pour acheter ce qui est sous la cible et ne vend rien ; « Investir et vendre » est annoncé pour bientôt.
+  - **Fidélité à la cible :** « Attentif aux coûts », « Équilibré », « Fidèle à la cible », « La cible avant tout » ou « Personnalisée ». Elle fixe combien vous acceptez de dépenser en frais pour remettre l'argent sur la cible, et le tableau « Coût maximal acceptable » montre ce montant pour chaque somme mal placée.
+  - **Résultat :**
+    - le plan dans l'ordre où l'exécuter : d'abord les dépôts, les transferts entre courtiers et les changes de devises, puis les achats chez chaque courtier ;
+    - le tableau « Allocation par ligne » : aujourd'hui, cible et après le plan, avec vos limites ;
+    - les chiffres clés : « Vaut aujourd’hui », « Vaudra après », « Argent perdu », et l'« Écart maximal à l’objectif » avec la ligne à laquelle il appartient ;
+    - les expositions par type d'actif, secteur et pays — aujourd'hui, après le plan et votre cible — sur le portefeuille entier, liquidités comprises.
+  - **La fiabilité du plan :** la recherche tourne trois fois, et un plan n'est prouvé le meilleur que si une seconde recherche le confirme. Un plan non prouvé est présenté comme un optimum local, avec sa marge quand les recherches en donnent une : le meilleur plan possible devrait être au plus meilleur de ce montant.
+- **Le profil opérationnel d'un courtier**, dans la fenêtre du courtier. Il réunit la façon dont le courtier prend les ordres (en nombre de parts ou en montant, avec son incrément) et ses frais d'achat et de vente (minimum, pourcentage, maximum, partie fixe), devise par devise, ainsi que sa façon de convertir les devises et son régime fiscal (« Administré » ou « Déclaratif »).
+  - Les outils le copient dans un plan, où vous pouvez encore le modifier.
+  - « Enregistrer dans le courtier », dans l'éditeur du courtier du planificateur, reporte vos modifications dans le courtier après une confirmation qui les énumère.
+  - API : la lecture et la modification d'un courtier portent `operating_profile`.
+- **Des limites sur les cibles**, dans l'Allocateur PAC et le Rééquilibreur de portefeuille. Chaque ligne peut avoir un minimum et un maximum de sa valeur à la fin du plan, en montant (500) ou en pourcentage du total (35 %).
+  - Les liquidités d'un courtier dans une devise peuvent aussi avoir des limites, avec « Ajouter des liquidités » ; dans le PAC elles n'ont que des limites, pas de cible.
+  - Le Récapitulatif et le résumé comptent les lignes avec une limite.
+  - Un minimum au-dessus de son maximum, ou des minimums qui dépassent 100 % au total, sont signalés avant le calcul.
+  - Quand les limites ne laissent aucun plan, le résultat indique « Aucune solution avec ces limites » et les énumère.
+  - Quand la recherche se termine sans plan dans les limites, le résultat le dit, et précise que ce n'est pas une preuve qu'aucun plan n'existe.
+  - Quand les limites ne laissent pas de place aux arrondis, le plan est trouvé en comptant les arrondis en sa faveur : il respecte les limites une fois ajoutée la somme supplémentaire éventuelle que demande le résultat, et il n'est pas prouvé le meilleur. Une limite de liquidités manquée seulement parce que chaque montant est arrondi au centime reçoit une note avec le montant.
+- **Les chiffres du jour pendant que vous modifiez le plan** : l'étape Cibles montre le total que le plan répartit (dans le Rééquilibreur aussi le poids actuel de chaque ligne), mis à jour un instant après chaque modification.
+- **Le calcul montre sa phase** pendant l'attente : « Je contrôle les données », « Je construis le modèle », « Je cherche le plan », « Je vérifie les comptes », « Je prépare le résultat », avec sa position (« 2 sur 5 »).
+- **Quand un courtier convertit la devise à chaque achat, le plan le dit.** Il compte une conversion par paire de devises ; le courtier peut arrondir chaque ordre séparément, donc quelques centimes par ordre peuvent différer.
+
 ### 🔄 Modifié
 
 - La liste des fichiers de l'import, la fenêtre des fichiers d'import du courtier et les **Dernières modifications** du profil utilisent la même barre de sélection que les autres tableaux : chaque action indique sur combien de lignes elle agit, les fichiers du courtier se téléchargent ensemble et les pages du profil passent dans la barre sous le tableau.
@@ -99,6 +128,14 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Risque : la pire baisse et la baisse actuelle en argent disent désormais qu'il s'agit de la même baisse mesurée sur la valeur d'aujourd'hui.
 - Les analyses de risque publient de nouvelles mesures à côté des existantes : le meilleur jour et les 30 meilleurs jours, la plus forte hausse, la part de jours positifs, les gains face aux pertes (Omega), la semi-déviation, la profondeur moyenne sous le sommet, les jours extrêmes, le jour moyen de hausse et de baisse et la plus longue série positive. La VaR, la CVaR et chaque chiffre déjà publié ne bougent pas. Une série qui n'a jamais gagné, ou jamais perdu, n'est plus marquée partielle pour son meilleur ou pire jour manquant.
 - Le nombre effectif de positions de l'onglet Risque se mesure sur les seules positions qui ont un prix : les liquidités et les positions sans prix ne le gonflent plus, il ne dépasse donc jamais les positions mesurées.
+
+#### 🎯 Allocateur PAC et Outils
+
+- **Un plan dont l'optimalité n'est pas prouvée est désormais présenté comme un optimum local.**
+- **L'« Achat obligatoire » d'une route disparaît.** Pour obliger un achat, fixez un minimum sur la cible de l'actif. Le minimum de la route ne vaut que si le plan achète sur cette route.
+- **L'éditeur du courtier du scénario utilise le panneau du profil opérationnel** : frais d'achat et de vente avec minimum, pourcentage, maximum et partie fixe, devise par devise.
+- **Quand le solveur s'arrête sur une erreur numérique** après avoir trouvé un plan, le résultat le dit désormais dans une note : le plan est valide et peut être exécuté, et un meilleur peut exister.
+- Sur la page Outils, le titre d'un outil passe à la ligne entre les mots, et le lien vers la documentation reste à côté, son libellé sous l'icône.
 
 ### 🐛 Corrections
 
@@ -144,6 +181,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - `PATCH /api/v1/assets` enregistre tout ou rien : si un élément pose problème, rien n'est enregistré. La réponse ajoute `committed`, `issues` et `warnings` (codes `assetNotFound`, `indexWithTransactions`, `assetNameTaken`, `patchFailed` ; avertissement `assetFamilyChange`). Un nom déjà utilisé par un autre actif est signalé par `assetNameTaken` au lieu d'une erreur générique. Le nouveau `POST /api/v1/assets/validate` fait les mêmes contrôles et n'enregistre jamais.
 - `POST /api/v1/portfolio/lots/analysis` répond sous une nouvelle forme : les parties qui ne dépendent pas de la méthode d'appariement (`asset_id`, `target_currency`, `quote_base_quantity`, `range`, `calculation_metadata`, `market_price_history`, `broker_wac_history`, `cumulative_wac_history`) restent en tête ; tout ce qui vient du rejeu des lots (`calculation_status`, `data_quality`, `lots`, `gantt_segments`, `custody_history`, `lot_events`, les historiques de valeur, de rendement, de prix et de performance, `income_events`, `economic_allocation_groups`, les orphelins) passe sous `methods.FIFO` / `methods.LIFO`. La requête accepte `matching_methods` (par défaut `["FIFO"]`).
 - AI Export : le composant `asset.identity` passe à la version 2 et ne porte plus la classification de l'actif (pays et secteurs) ; un nouveau composant, `asset.profile`, porte les données du profil de l'actif avec la date de chaque valeur, partout où `asset.identity` est exporté. Un prompt ou un outil qui lisait la classification dans `asset.identity` la lit désormais dans `asset.profile`. Les pays et secteurs saisis en 1.3 valent depuis le premier jour de l'actif dans LibreFolio (sa création, son premier prix ou sa première transaction) : l'export d'une période passée les contient toujours.
+- The PAC allocator's Tool contract is now 2.0.0: a route no longer takes a required purchase (set a minimum on the target entry instead), the request names its `operation` (`plan` or `preview`), and the solution carries `plan_accounts`.
 
 ## [1.3.0] - 2026-11-10
 
