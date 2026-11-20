@@ -404,9 +404,16 @@ per-lot accumulators, an audit trail, and asset-level orphans.
 `parent_transaction_id` names a BUY/SELL of its broker that the engine replayed goes, alone, on
 `_split_trade_cost` of that trade — the lots it opened and the lots it closed in the run's matching order —
 whatever the charge's date. Its audit group has rule `LINKED_TRADE` and the charge's date
-(`_linked_trade_operations`). A charge linked to a parent the engine does not see (not loaded, after
-`replay_until`), to another broker's row or to a trade that opened and closed nothing joins its day's pool
-instead.
+(`_linked_trade_operations`).
+
+A charge **waiting for its trade** — `replay_until` is set and the parent BUY/SELL of its broker is dated after it, read
+from the replayed transactions or, when the caller did not load it, from the event's `parent` facts (`LinkedParent`:
+date, type, broker) — goes on no lot. It is an orphan with its own `LINKED_TRADE` group (no operations, the whole
+charge as `native_orphan` / `target_orphan`) and the issue `ASSET_COST_LINKED_PARENT_AFTER_RANGE`, whose params add
+`parent_transaction_id` and `parent_date`. It stays so until the analysis reaches the trade (developer decision, 66
+M1b). A charge linked to a parent the engine knows nothing about, to an income row (M2), to another broker's row or to
+a trade that opened and closed nothing joins its day's pool instead; so does a waiting one when `replay_until` is
+`None`.
 
 The rest is pooled and matched to operations with a deterministic ladder
 (`_match_cost_operations`), weighting by `target_amount`. The pool keeps every same-day trade in its weights,

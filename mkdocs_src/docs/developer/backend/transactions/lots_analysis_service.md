@@ -405,7 +405,7 @@ When every weighting trade is in one currency, the pool is not split-degraded: t
 - **Orphans**: `asset_orphan_income`, `asset_orphan_fees` or `asset_orphan_taxes` is `None` when an orphan pool of that kind is degraded.
 - **Audit** (`map_economic_groups()`): an amount-degraded pool has `target_pool_total`, `target_orphan` and each lot allocation's `target_amount` set to `None`; a split-degraded pool has each operation `weight` and each lot allocation's `native_amount` and `target_amount` set to `None`. The native pool total, the native orphan and each lot's `weight` inside an operation — a quantity ratio — stay.
 
-**Orphan issues.** The engine builds an orphan pool's `ASSET_INCOME_NO_ELIGIBLE_LOTS` / `ASSET_COST_NO_ELIGIBLE_LOTS` issue with the pool's `target_amount` and `target_currency` in its params. `_build_data_quality_report()` passes them through `_orphan_issue_params()`: for an amount-degraded orphan pool — matched by the issue's `transaction_id`, the pool's first source — the issue states the pool in its own currency, `target_amount` = `native_pool_total` and `target_currency` = `native_currency`, so the banner shows an orphan 70 VND dividend without a rate as "70 VND", never "70 EUR". The message keys keep their `target_` names: such an issue holds a native amount and currency under them, and summing `message_params.target_amount` across issues would mix currencies. A convertible orphan pool keeps its converted amount in the target currency.
+**Orphan issues.** The engine builds an orphan pool's `ASSET_INCOME_NO_ELIGIBLE_LOTS` / `ASSET_COST_NO_ELIGIBLE_LOTS` issue — and a waiting linked charge's `ASSET_COST_LINKED_PARENT_AFTER_RANGE`, which `_orphan_issue_params()` treats the same way — with the pool's `target_amount` and `target_currency` in its params. `_build_data_quality_report()` passes them through `_orphan_issue_params()`: for an amount-degraded orphan pool — matched by the issue's `transaction_id`, the pool's first source — the issue states the pool in its own currency, `target_amount` = `native_pool_total` and `target_currency` = `native_currency`, so the banner shows an orphan 70 VND dividend without a rate as "70 VND", never "70 EUR". The message keys keep their `target_` names: such an issue holds a native amount and currency under them, and summing `message_params.target_amount` across issues would mix currencies. A convertible orphan pool keeps its converted amount in the target currency.
 
 The native placeholder therefore never reaches the response.
 
@@ -566,7 +566,10 @@ counterpart minus costs.
 When income or FEE/TAX has no eligible lot (e.g. a cost after the position is fully closed), the amount is
 **not dropped**: it is returned at asset level as `asset_orphan_income` / `asset_orphan_fees` /
 `asset_orphan_taxes` and surfaced as a `ASSET_INCOME_NO_ELIGIBLE_LOTS` / `ASSET_COST_NO_ELIGIBLE_LOTS`
-data-quality issue. The engine guarantees, per pool, `Σ allocated + orphan == converted pool total`. For a pool
+data-quality issue. A linked charge whose trade is dated after `date_to` is an orphan too, with its own warning
+`ASSET_COST_LINKED_PARENT_AFTER_RANGE` (`dataQuality.assetCostLinkedParentAfterRange`): the service reads the parents
+of the loaded charges in one query (asset and scope brokers, no date limit) and hands their date, type and broker to
+`build_cost_economic_events()`, so the engine can tell a trade after the end from a parent it never replays. The engine guarantees, per pool, `Σ allocated + orphan == converted pool total`. For a pool
 whose amount has no rate, it conserves the native placeholder instead: the response withholds that pool's target
 figures and, for an orphan pool, the asset-level orphan total of its kind, and the orphan issue states the pool in
 its own currency (see [Economic events and degraded pools](#degraded-economic-pools)).

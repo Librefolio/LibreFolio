@@ -353,7 +353,8 @@ subtracted to produce **net** figures alongside the gross ones.
 A **linked charge** — a fee or a tax you linked to the buy or the sell it was paid for — goes straight to the
 lots that trade opened or closed, whatever its date: a commission on the morning buy stays on the morning lot, a
 capital-gains tax booked three days after a sale lands on the lots that sale closed. A linked charge whose trade
-is outside the analysis (after its end date) is matched like any other charge until the trade enters it.
+is outside the analysis (after its end date) stays unallocated, as an orphan cost with its own notice, until the
+trade enters it.
 
 The other charges form a cost pool (same broker, same day, same type), matched to the first non-empty target in
 this order:
