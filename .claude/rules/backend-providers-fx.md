@@ -29,10 +29,18 @@ Each provider represents a central bank or financial data source that provides e
 | **CNB** | `cnb/plugin.py` | `CNB` | CZK | Text fixing, one `year.txt` per year, units from the header |
 | **SARB** | `sarb/plugin.py` | `SARB` | ZAR | JSON series per currency, three at once |
 | **BOK** | `bok/plugin.py` | `BOK` | KRW | ECOS JSON, one series per currency, three at once; free key (`api_key`, in the URL path: never log a URL) |
+| **BCRP** | `bcrp/plugin.py` | `BCRP` | PEN | BCRPData JSON, USD only; «n.d.» days are gaps |
+| **TRM** | `trm/plugin.py` | `TRM` | COP | Socrata JSON, one row per validity interval, a value for every day |
+| **CBC** | `cbc/plugin.py` | `CBC` | TWD | JSON, the whole USD series in one answer |
+| **CBN** | `cbn/plugin.py` | `CBN` | NGN | Undocumented JSON, an explicit name map; conflicting duplicates dropped |
+| **CBK** | `cbk/plugin.py` | `CBK` | KES | wpDataTables `admin-ajax` JSON, two tables; three directions by name |
+| **RBI** | `rbi/plugin.py` | `RBI` | INR | ASP.NET form read as HTML (hidden fields echoed), yearly windows |
+| **BOG** | `bog/plugin.py` | `BOG` | GHS | wpDataTables `admin-ajax` JSON with the page's nonce, one request |
 | **MANUAL** | `manual/plugin.py` | `MANUAL` | Any | Sentinel (no sync) |
 
 A provider's note (`warning_i18n`) has a level, `warning_level`: `"warning"` (⚠️, a data limit that can mislead: SNB,
-BOC, BDI, SARB, BOK) or `"info"` (ℹ️, a fact worth knowing: FED, NORGES, NBU, BCB, BANXICO, CNB). Unit and direction tests: one
+BOC, BDI, SARB, BOK, CBN, CBK, RBI, BOG) or `"info"` (ℹ️, a fact worth knowing: FED, NORGES, NBU, BCB, BANXICO,
+CNB, BCRP, TRM, CBC). Unit and direction tests: one
 `test_fx_<code>*.py` per provider, registered in `services provider-errors`; answers are synthetic, never downloaded.
 
 ## MANUAL Provider (Sentinel)
