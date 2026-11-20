@@ -16,12 +16,13 @@ The **Banco Central de la República Argentina (BCRA)** provider retrieves the d
 
 ## 💰 Supported Currencies
 
-A fixed list of 32 currencies, all against ARS:
+A fixed list of 33 currencies, all against ARS:
 
 - **Americas**: USD 🇺🇸, BRL 🇧🇷, CLP 🇨🇱, UYU 🇺🇾, PYG 🇵🇾, BOB 🇧🇴, PEN 🇵🇪, COP 🇨🇴, MXN 🇲🇽, CAD 🇨🇦, NIO 🇳🇮, AWG 🇦🇼
 - **Europe**: EUR 🇪🇺, GBP 🇬🇧, CHF 🇨🇭, SEK 🇸🇪, NOK 🇳🇴, DKK 🇩🇰, CZK 🇨🇿, RSD 🇷🇸, RUB 🇷🇺, TRY 🇹🇷
 - **Asia and Oceania**: JPY 🇯🇵, CNY 🇨🇳, HKD 🇭🇰, SGD 🇸🇬, INR 🇮🇳, VND 🇻🇳, ILS 🇮🇱, AUD 🇦🇺, NZD 🇳🇿
 - **Africa**: ZAR 🇿🇦
+- **International**: XDR, the IMF's special drawing right (SDR), a unit of account built on a basket of USD, EUR, CNY, JPY and GBP
 
 ## 📝 Important Notes
 

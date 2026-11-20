@@ -8,7 +8,7 @@
 | **API Format** | JSON, **documented** (OpenAPI in the bank's [API catalogue](https://www.bcra.gob.ar/BCRAyVos/catalogo-de-APIs-banco-central.asp)) |
 | **API Key** | Not required |
 | **Terms** | [Aviso legal](https://www.bcra.gob.ar/aviso-legal/): informative, educational or academic use, citing the bank; no commercial use without permission. Developer decision Q2 (b): kept for a self-hosted instance, with a note; the paid cloud turns it off (`LIBREFOLIO_FX_PROVIDERS_ENABLED`) |
-| **Currencies** | A fixed code map: 32 currencies plus ARS |
+| **Currencies** | A fixed code map: 33 currencies plus ARS |
 | **Update Frequency** | Argentine business days |
 | **Historical Data** | From 2002-03-04 (`FIRST_DAY`, the first day of REF); some currencies start later |
 
@@ -43,8 +43,9 @@ Every value is ARS per unit: `(d, CUR, 'ARS', tipoCotizacion / units)`. `CODES` 
 | MXN | `MXP` | |
 | VND | `VND` | quoted per 1 000 dong, divided by 1 000 |
 | 29 others | the same | AUD AWG BOB BRL CAD CHF CLP CNY COP CZK DKK EUR GBP HKD ILS INR JPY NIO NOK NZD PEN PYG RSD RUB SEK SGD TRY UYU ZAR |
+| XDR | `DEG` | the IMF's special drawing right (SDR, a basket of USD, EUR, CNY, JPY and GBP), built like the other currencies on the «USD» row: 2103.9547 ARS per 1 XDR on 2026-11-19 |
 
-**Not served**: the «USD» row (`DOLAR E.E.U.U.`, definition not documented), XDR (an open question of lane 75), XAU
+**Not served**: the «USD» row (`DOLAR E.E.U.U.`, definition not documented), XAU
 and XAG (no ARS value), CNH (not ISO), VEB (three redenominations under one code), the legacy ATS, DEM, ESP, ITL.
 
 **The two dollar rates**: the bank builds every other currency's `tipoCotizacion` on its «USD» row times the
