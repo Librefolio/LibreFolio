@@ -183,6 +183,9 @@ Two actions help you get there:
     total at exactly $100\%$. To change only some rows, **Balance to 100%** on
     a row gives that Asset what is missing, or takes away the excess, and
     **Balance the selected rows to 100%** rescales only the rows you tick.
+    It is not offered when the total is already $100\%$, and it is off, with
+    its reason, when a target is not a number or when the rows you did not
+    tick already add up to $100\%$ or more.
 
 - **Copy current distribution** reads how much each of these Assets weighs
   today in the Brokers you tick, counting only these Assets and not cash.
