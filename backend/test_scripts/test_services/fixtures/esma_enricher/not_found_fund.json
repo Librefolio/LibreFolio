@@ -1,0 +1,19 @@
+{
+ "responseHeader": {
+  "status": 0,
+  "QTime": 362,
+  "params": {
+   "q": "isin:IT0005487001",
+   "fl": "isin,mic,rca_mic,gnr_full_name,gnr_short_name,gnr_cfi_code,lei,gnr_notional_curr_code,gnr_comm_derivative_flag,bnd_maturity_date,bnd_fixed_rate,bnd_nmnl_value_total,bnd_nmnl_value_unit,bnd_nmnl_value_curr_code,bnd_seniority,drv_underlng_isin,mrkt_trdng_start_date,status",
+   "fq": "latest_received_flag:1",
+   "rows": "1000",
+   "wt": "json"
+  }
+ },
+ "response": {
+  "numFound": 0,
+  "start": 0,
+  "numFoundExact": true,
+  "docs": []
+ }
+}
