@@ -24,14 +24,16 @@ units per cash pool (N = the pool's postings that carry a quantum) is
 published with its top-ups — one per negative pool, "this broker/currency
 needs D more" (test_rounding_top_up_*). Any other rejection raises
 ``ExactReplayRejectedError``, which the Tool reports as
-``execution_failed``; it is never ``ready_no_incumbent``
-(test_replay_rejection_*). The locked properties, each mapped to a test:
+``execution_failed`` (test_replay_rejection_*); the one exception is a
+refused plan the solver held for want of another, which is
+``ready_no_incumbent`` (R1-A, ``test_pac_planner_cash_rule.py``). The
+locked properties, each mapped to a test:
 
 * **No-op is a first-class optimum, not "no exception".** The unmodified fixture
   has €5 against a €10 whole-unit price, so doing nothing *is* the proven
   optimum. Asserting ``ready_no_op`` **and** ``optimal_proven`` is what caught a
-  real defect once (building a ``PacIncumbentSolution``, which needs ≥1 order
-  row, before testing for no-op) — the single most common real-world PAC case
+  real defect once (building a ``PacIncumbentSolution``, which needs ≥1 step,
+  before testing for no-op) — the single most common real-world PAC case
   early in the month.
 * **The wire-union revalidation is the real gate**: ``model_dump`` →
   ``PAC_PLAN_OUTPUT_ADAPTER.validate_python`` runs every schema validator.
@@ -136,6 +138,7 @@ from backend.app.services.pac_allocator.models import ExactCashEntry, ExactLimit
 from backend.app.services.pac_allocator.normalize import normalize_pac_plan
 from backend.app.services.pac_allocator.numeric import ExactRatio as R
 from backend.app.services.pac_allocator.planner import plan_pac_allocation, plan_rebalancing
+from backend.app.services.pac_allocator.solver import SolverStageError
 from backend.app.services.tools.executor import TOOL_PROGRESS_MESSAGE_CAP
 from backend.test_scripts.test_schemas.test_pac_planner_schemas import _compact_pac_request, _fixture, _pac_request
 from backend.test_scripts.test_services import _pac_reference_values as ref
@@ -2610,3 +2613,23 @@ def _available(value) -> Fraction:
 
 def _exact(number) -> Fraction:
     return exact_fraction(number)
+
+
+def test_a_stage_error_before_any_plan_is_not_an_execution_failure() -> None:
+    """SCIP failing inside the first stage, before it holds any plan, still answers a planner result.
+
+    The gallery's PAC draft of 19/11/2026 (mock data, contract 2.0.0) at EUR/USD 1.0792 with every cash amount and the
+    contribution multiplied by 300: SCIP fails inside ``fixed_l2`` in under a second, deterministically, and
+    ``_solve_stages`` raises ``SolverStageError``, which the Tool reports as ``execution_failed`` (consultant REB,
+    R1-A, ``r1a_err``). A known defect: the error itself is reported as an expected failure (``pytest.xfail``, the
+    coordinator's decision of 20/11/2026, non-strict), and only that error; anything else stays a real red. The answer
+    it should give is R1-A part 2's, which waits for the developer: that lot replaces the call with its assertion.
+    """
+    request = _validated(_fixture("pac_plan_request.stage-error-fixed-l2.2-0-0.json"))
+    try:
+        result = plan_pac_allocation(request, solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+    except SolverStageError as error:
+        if "'fixed_l2' before holding any plan" in str(error):
+            pytest.xfail(f"known defect R1-A part 2 (project 67), a stage error before any plan: {error}")
+        raise
+    assert result.result_state in ("ready_incumbent", "ready_no_op", "ready_no_incumbent"), result.result_state
