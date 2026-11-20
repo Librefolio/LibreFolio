@@ -997,7 +997,9 @@
           "limitsNoteTotal": "Limits on the value at the end of the plan. Write an amount (500) or a percentage (35%) of the total, the money you invest now: {total}. Empty field = no limit.",
           "previewIncomplete": "Today's figures appear once no field of the draft is marked in red, on any step.",
           "previewUnavailable": "Today's figures are not available right now; the calculation is not affected.",
-          "addCashHelp": "A Broker's cash in one currency becomes a row of the targets with limits only: how much must stay at least, or at most, at the end of the plan. It has no target and does not count in the total."
+          "addCashHelp": "A Broker's cash in one currency becomes a row of the targets with limits only: how much must stay at least, or at most, at the end of the plan. It has no target and does not count in the total.",
+          "balanceNotNumber": "A target is not a number",
+          "balanceNoRoom": "The rows not selected already add up to 100% or more: lower them, or select them too."
         },
         "toolErrors": {
           "cleanup_failed": "The calculation finished, but the platform could not clean up after it.",

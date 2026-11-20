@@ -1,10 +1,10 @@
 <script lang="ts">
     import {PieChart, Plus, Scale, Trash2} from 'lucide-svelte';
+    import type {Snippet} from 'svelte';
     import {MediaQuery} from 'svelte/reactivity';
     import {t} from '$lib/i18n';
     import DataTable from '$lib/components/table/DataTable.svelte';
-    import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
-    import type {ColumnDef, RowAction} from '$lib/components/table/types';
+    import type {BulkAction, ColumnDef, RowAction} from '$lib/components/table/types';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {canonicalInput, compareDecimal, decimalSign, rebalanceControlPercentages, remainingControlPercentage, sumControlPercentages} from '$lib/utils/core/exactDecimal';
     import type {PlannerDraft, TargetRow} from '../draft.svelte';
@@ -58,7 +58,6 @@
 
     let copying = $state(false);
     let addingCash = $state(false);
-    let selectedKeys = $state<string[]>([]);
     let tableRef: DataTable<TableRow> | undefined = $state(undefined);
 
     /** A row with a target of its own: an Asset, or a cash entry where the Tool gives cash a target (`full`). */
@@ -123,10 +122,11 @@
 
     /** Targets in row order; an empty field counts as 0, text that is not a number stops the balancing. */
     const controlValues = $derived(editable.map((row) => ((draft.data.targets[row.key] ?? '').trim() === '' ? '0' : canonicalInput(draft.data.targets[row.key]))));
-    const selectedIndices = $derived.by(() => {
-        const keys = new Set(selectedKeys);
+    /** The positions, among the rows the balancing reads, of the given rows (a row without a target has none). */
+    function indicesOf(rows: readonly TableRow[]): number[] {
+        const keys = new Set(rows.map((row) => row.key));
         return editable.flatMap((row, index) => (keys.has(row.key) ? [index] : []));
-    });
+    }
 
     /** Rescales the chosen rows, keeping their ratios, so the total is exactly 100% (equal parts if they are all 0). */
     function rebalanced(indices: readonly number[]): string[] | null {
@@ -134,8 +134,14 @@
         return rebalanceControlPercentages(controlValues as string[], indices);
     }
 
+    /** Whether the rows left out of `indices` stay below 100 %, so the chosen ones have something to share. */
+    function hasRoom(indices: readonly number[]): boolean {
+        const chosen = new Set(indices);
+        const others = sumControlPercentages(controlValues.flatMap((value, index) => (chosen.has(index) || value === null ? [] : [value])));
+        return others !== null && (compareDecimal(others, '100') ?? 1) < 0;
+    }
+
     const canBalanceAll = $derived(editable.length > 0 && rebalanced(editable.map((_, index) => index)) !== null);
-    const canBalanceSelected = $derived(selectedIndices.length > 0 && rebalanced(selectedIndices) !== null);
 
     function applyBalance(indices: readonly number[]): void {
         const next = rebalanced(indices);
@@ -143,10 +149,30 @@
         for (const index of indices) draft.data.targets[editable[index].key] = next[index];
     }
 
-    function balanceSelected(): void {
-        applyBalance(selectedIndices);
-        tableRef?.clearSelection();
-    }
+    /**
+     * The selection bar's action (77 SEL-D3): the ticked rows that have a target, with their number. At a total of 100 %
+     * there is nothing to balance, so it is not offered (Q-SEL-17); it is off, saying why, when a target is not a number
+     * or when the rows left out already exceed 100 % on their own, so the ticked ones have no room.
+     */
+    const bulkActions = $derived.by((): BulkAction<TableRow>[] => [
+        {
+            id: 'balance-selected',
+            icon: Scale,
+            label: () => $t(`${KEY}.balanceSelected`, {default: 'Balance the selected rows to 100%'}),
+            appliesTo: (row) => targetable(row),
+            pointless: () => totalState === 'balanced',
+            blocked: (picked) => {
+                if (controlValues.some((value) => value === null || decimalSign(value) === -1)) return {hint: () => $t(`${KEY}.balanceNotNumber`), reason: 'not-a-number'};
+                // The rows left out at 100 % or more leave the ticked ones no room: at exactly 100 the balancing would only empty them.
+                if (!hasRoom(indicesOf(picked)) || rebalanced(indicesOf(picked)) === null) return {hint: () => $t(`${KEY}.balanceNoRoom`), reason: 'no-room'};
+                return null;
+            },
+            onClick: (picked) => {
+                applyBalance(indicesOf(picked));
+                tableRef?.clearSelection();
+            },
+        },
+    ]);
 
     // On a phone (the table's own 768 px breakpoint) the columns are fluid down to a floor each, and the decorative bar is hidden by
     // default: asset, target, and the pinned columns have to fit a card some 300 px wide (Y-9). The bar stays one click away in «Columns».
@@ -300,73 +326,71 @@
     }
 </script>
 
-<div class="space-y-3" data-testid={testId('targets', profile)} data-preview={preview?.state ?? 'none'} data-stale={stale ? 'true' : 'false'}>
-    <div class="flex flex-wrap items-center gap-2">
-        <p class="text-sm text-lf-secondary" data-testid={testId('targets-intro', profile)}>
-            {#if profile.text === 'rebalancer'}
-                {totalText !== null ? $t('tools.portfolioRebalancer.planner.targets.introTotal', {values: {total: totalText}}) : $t('tools.portfolioRebalancer.planner.targets.intro')}
-            {:else}
-                {$t(`${KEY}.intro`, {default: 'How to split among the Assets the money you invest now, in percent.'})}
-            {/if}
-        </p>
-        <div class="ml-auto flex flex-wrap items-center justify-end gap-1.5">
-            {#if selectedKeys.length > 0}
-                <DataTableToolbar
-                    selectedCount={selectedKeys.length}
-                    bulkActions={[
-                        {
-                            id: 'balance-selected',
-                            icon: Scale,
-                            label: () => $t(`${KEY}.balanceSelected`, {default: 'Balance the selected rows to 100%'}),
-                            onClick: balanceSelected,
-                            disabled: !canBalanceSelected,
-                        },
-                    ]}
-                    onClearSelection={() => tableRef?.clearSelection()}
-                />
-            {/if}
-            {#if draft.data.assets.length > 0}
-                <button type="button" class={BUTTON_SECONDARY} disabled={!canBalanceAll} data-testid={testId('targets-balance-all', profile)} onclick={() => applyBalance(editable.map((_, index) => index))}>
-                    <Scale class="h-4 w-4" aria-hidden="true" />
-                    {$t(`${KEY}.balanceAll`, {default: 'Balance all'})}
-                </button>
-            {/if}
-            <div class="flex items-center gap-0.5">
-                <button type="button" class={BUTTON_SECONDARY} disabled={copyDisabled} data-testid={testId('distribution-open', profile)} onclick={() => (copying = true)}>
-                    <PieChart class="h-4 w-4" aria-hidden="true" />
-                    {$t(`${KEY}.copyDistribution`, {default: 'Copy current distribution'})}
-                </button>
-                <HelpTip
-                    label={$t(`${KEY}.copyDistribution`, {default: 'Copy current distribution'})}
-                    help={$t(`${KEY}.copyHelp`, {
-                        default:
-                            'Reads how much each of these Assets weighs today in the Brokers you tick, counting only these Assets and not the cash, and brings the ratios to 100%. Assets entered by hand get 0. You see the weights before using them, and a target you changed is replaced only after you confirm.',
-                    })}
-                    testid={testId('distribution-help', profile)}
-                />
-            </div>
-            {#if profile.cashEntries !== 'none'}
-                <div class="flex items-center gap-0.5">
-                    <button type="button" class={BUTTON_SECONDARY} data-testid={testId('cash-entry-add', profile)} onclick={() => (addingCash = true)}>
-                        <Plus class="h-4 w-4" aria-hidden="true" />
-                        {$t(`${R}.addCash`)}
+<!-- The step's head (77 SEL-D3): the intro, the table's selection bar, the step's own buttons, and the preview's reason
+     below them. The table draws it and hands it the bar, as the sections of SEL-D2 do; with no Asset it is drawn here with
+     an empty bar. -->
+{#snippet head(bar: Snippet)}
+    <!-- The step keeps 12 px between its head and the table. Drawn by the table with the panel (a desktop), the head sits in
+         the panel's top slot, 8 px above the rows: 4 px more. On a phone the table has no ticks and no panel: all 12. -->
+    <div class={bar === noBar ? '' : phone.current ? 'pb-3' : 'pb-1'}>
+        <div class="flex flex-wrap items-center gap-2">
+            <p class="text-sm text-lf-secondary" data-testid={testId('targets-intro', profile)}>
+                {#if profile.text === 'rebalancer'}
+                    {totalText !== null ? $t('tools.portfolioRebalancer.planner.targets.introTotal', {values: {total: totalText}}) : $t('tools.portfolioRebalancer.planner.targets.intro')}
+                {:else}
+                    {$t(`${KEY}.intro`, {default: 'How to split among the Assets the money you invest now, in percent.'})}
+                {/if}
+            </p>
+            <div class="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+                {@render bar()}
+                {#if draft.data.assets.length > 0}
+                    <button type="button" class={BUTTON_SECONDARY} disabled={!canBalanceAll} data-testid={testId('targets-balance-all', profile)} onclick={() => applyBalance(editable.map((_, index) => index))}>
+                        <Scale class="h-4 w-4" aria-hidden="true" />
+                        {$t(`${KEY}.balanceAll`, {default: 'Balance all'})}
                     </button>
-                    <HelpTip label={$t(`${R}.addCash`)} help={profile.text === 'rebalancer' ? $t(`${R}.addCashHelp`) : $t(`${KEY}.addCashHelp`)} />
+                {/if}
+                <div class="flex items-center gap-0.5">
+                    <button type="button" class={BUTTON_SECONDARY} disabled={copyDisabled} data-testid={testId('distribution-open', profile)} onclick={() => (copying = true)}>
+                        <PieChart class="h-4 w-4" aria-hidden="true" />
+                        {$t(`${KEY}.copyDistribution`, {default: 'Copy current distribution'})}
+                    </button>
+                    <HelpTip
+                        label={$t(`${KEY}.copyDistribution`, {default: 'Copy current distribution'})}
+                        help={$t(`${KEY}.copyHelp`, {
+                            default:
+                                'Reads how much each of these Assets weighs today in the Brokers you tick, counting only these Assets and not the cash, and brings the ratios to 100%. Assets entered by hand get 0. You see the weights before using them, and a target you changed is replaced only after you confirm.',
+                        })}
+                        testid={testId('distribution-help', profile)}
+                    />
                 </div>
-            {/if}
-            {#if draft.data.assets.length > 0}
-                <TableColumns table={tableRef} testid={testId('targets-columns', profile)} />
-            {/if}
+                {#if profile.cashEntries !== 'none'}
+                    <div class="flex items-center gap-0.5">
+                        <button type="button" class={BUTTON_SECONDARY} data-testid={testId('cash-entry-add', profile)} onclick={() => (addingCash = true)}>
+                            <Plus class="h-4 w-4" aria-hidden="true" />
+                            {$t(`${R}.addCash`)}
+                        </button>
+                        <HelpTip label={$t(`${R}.addCash`)} help={profile.text === 'rebalancer' ? $t(`${R}.addCashHelp`) : $t(`${KEY}.addCashHelp`)} />
+                    </div>
+                {/if}
+                {#if draft.data.assets.length > 0}
+                    <TableColumns table={tableRef} testid={testId('targets-columns', profile)} />
+                {/if}
+            </div>
         </div>
+
+        {#if preview?.state === 'error' && preview.reason}
+            <p class="{HINT} mt-3" role="status" data-testid={testId('targets-preview-reason', profile)} data-reason={preview.reason}>
+                {preview.reason === 'incomplete' ? $t(`${KEY}.previewIncomplete`) : preview.reason === 'unavailable' ? $t(`${KEY}.previewUnavailable`) : $t(`tools.pacAllocator.planner.issues.${preview.reason}`, {default: $t(`${KEY}.previewUnavailable`)})}
+            </p>
+        {/if}
     </div>
+{/snippet}
 
-    {#if preview?.state === 'error' && preview.reason}
-        <p class={HINT} role="status" data-testid={testId('targets-preview-reason', profile)} data-reason={preview.reason}>
-            {preview.reason === 'incomplete' ? $t(`${KEY}.previewIncomplete`) : preview.reason === 'unavailable' ? $t(`${KEY}.previewUnavailable`) : $t(`tools.pacAllocator.planner.issues.${preview.reason}`, {default: $t(`${KEY}.previewUnavailable`)})}
-        </p>
-    {/if}
+{#snippet noBar()}{/snippet}
 
+<div class="space-y-3" data-testid={testId('targets', profile)} data-preview={preview?.state ?? 'none'} data-stale={stale ? 'true' : 'false'}>
     {#if draft.data.assets.length === 0}
+        {@render head(noBar)}
         <p class={NOTICE.info} data-testid={testId('targets-empty', profile)}>{$t('tools.pacAllocator.planner.problems.noAssets', {default: 'Add at least one Asset.'})}</p>
     {:else}
         <div data-testid={testId('targets-table', profile)}>
@@ -380,7 +404,9 @@
                 enablePagination={false}
                 enableSelection={!phone.current}
                 selectionMode={phone.current ? 'none' : 'multi'}
-                onSelectionChange={(ids) => (selectedKeys = ids)}
+                {bulkActions}
+                selectionPanel={true}
+                selectionHead={head}
                 enableColumnVisibility
                 enableColumnFilters={false}
                 enableColumnResize
