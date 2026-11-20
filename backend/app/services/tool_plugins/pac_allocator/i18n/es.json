@@ -3,6 +3,10 @@
     "pacAllocator": {
       "name": "Asignador PAC",
       "description": "Planifica las compras que acercan al máximo una nueva inversión a su asignación objetivo, en participaciones enteras o importes, sin enviar órdenes."
+    },
+    "portfolioRebalancer": {
+      "name": "Reequilibrador de cartera",
+      "description": "Lleva una cartera ya invertida hacia sus objetivos: compra y, si lo autorizas, vende, estimando comisiones e impuestos. No envía órdenes."
     }
   }
 }

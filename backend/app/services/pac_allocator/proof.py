@@ -49,26 +49,44 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from fractions import Fraction
 from typing import Literal
 
 from backend.app.services.pac_allocator.models import CandidateActionVector, ExactObjectiveCode
-from backend.app.services.pac_allocator.solver import SolverRunResult
+from backend.app.services.pac_allocator.solver import BOUND_CHECK_TOLERANCE, SolverRunResult
 
 __all__ = [
     "NOT_PROVEN_REASON",
+    "PROOF_NOT_CONFIRMED_REASON",
+    "WIDE_MODEL_REASON",
     "InfeasibilityProvenConclusion",
     "OptimalProvenConclusion",
     "PlanConclusion",
     "ProofForgeryError",
     "ProvenConclusion",
+    "SeededRunVote",
+    "SeededVerdict",
     "SolverStatusWitnessFacts",
     "UnprovenConclusion",
     "conclude_with_solver",
+    "merge_seeded_runs",
+    "seeded_margin",
+    "seeded_runs_agree",
 ]
 
 # Generic reason code (Step3 §16.7 Q2). Kept as a module constant so the
 # single wire value this build may emit is stated once.
 NOT_PROVEN_REASON = "allocation.exact_proof_not_established"
+# Lot SEEDS of project 67 (specification §16.11, §16.16; the consultant's definitions of 17/11): a plan of the wide model
+# (lot ZB), found counting the rounding in its favour because the limits leave no room for the reserve; and a run that
+# proved its plan by itself while no second run closed on the same value.
+WIDE_MODEL_REASON = "allocation.limits_leave_no_rounding_room"
+PROOF_NOT_CONFIRMED_REASON = "allocation.proof_not_confirmed"
+#: Two runs' values are «equal» within this many of the engine's whole band: the bound check's relative tolerance plus the
+#: first stage's band (lot SEEDS-b, the consultant's answer of 17/11). Derived, not fitted: two plans, each within one band
+#: of the same closure, are at most two bands apart. 0.16 cent on G5; it holds SCIP's spread among closures (7.2e-8 and
+#: 1.4e-6 on the lane's battery) and leaves out a different plan 4.86e-6 above G5's optimum, which the earlier factor 5 let in.
+SEED_AGREEMENT_FACTOR = 2
 
 # Module-private construction seal. A witness is the key that unlocks a proven
 # conclusion, so the key may only be cut here. This object never leaves the
@@ -169,6 +187,7 @@ def conclude_with_solver(
     *,
     objective_codes: Sequence[ExactObjectiveCode],
     published: CandidateActionVector | None,
+    outer_model: bool = False,
 ) -> PlanConclusion:
     """Read the proof out of a SCIP run.
 
@@ -182,8 +201,20 @@ def conclude_with_solver(
     * ``optimal_proven`` — ``incumbent``, no anomaly, every stage (the
       canonical tie-breaks included) closed ``optimal``, and ``published``
       exactly SCIP's candidate. A proof about SCIP's optimum is never
-      transferred to a candidate SCIP did not return.
+      transferred to a candidate SCIP did not return. The Rebalancer's
+      tie-breaks (``operation_count``, ``route_priority`` and its canonical
+      vector, on one level: specifica §6.4) are the one exception: one left
+      open, by a limit or by the exact comparison that rejected its plan
+      (D4), does not downgrade the proof, which is about ``J`` or the «Target
+      first» chain (§15 n. 10). The witness then names the stages that closed.
+      The PAC's stages are never tie-breaks, so its rule is unchanged.
     * ``not_proven`` — everything else. Downgrading is always sound.
+
+    ``outer_model`` (lot ZB of project 67): the run was on the outer model, solved because the prudent one closed
+    infeasible (``planner.plan_exact_scenario``). It holds every plan the replay could accept, so its «infeasible» is the
+    proof above. It is not the model the cascade optimizes, so nothing it returns is proven the best: its plans are
+    ``not_proven`` whatever its stages say. The prudent model's own «infeasible» never reaches this function as a verdict:
+    the planner always checks it on the outer model first.
 
     Raises ``ProofForgeryError`` when a run that would prove something did not
     run exactly the named objectives: the view and the compiled cascade would
@@ -201,13 +232,117 @@ def conclude_with_solver(
             raise ProofForgeryError(f"SCIP closed stage {stage.objective_code!r} infeasible, but the first objective is {expected[0] if expected else None!r}")
         return InfeasibilityProvenConclusion(witness=_witness((stage.objective_code,)))
 
+    if outer_model:
+        # Lot SEEDS: a plan of the wide model says why it is not proven; anything else of it says what it says today.
+        return UnprovenConclusion(reason_code=WIDE_MODEL_REASON) if solver.outcome == "incumbent" and published is not None else UnprovenConclusion()
     if solver.outcome != "incumbent" or solver.anomaly is not None or not solver.stages:
         return UnprovenConclusion()
-    if any(stage.status != "finished" or stage.scip_status != "optimal" for stage in solver.stages):
+    if any((stage.status != "finished" or stage.scip_status != "optimal") and not stage.tie_break for stage in solver.stages):
         return UnprovenConclusion()
     if published is None or solver.candidate is None or _quanta(published) != _quanta(solver.candidate):
         return UnprovenConclusion()
     normative = tuple(stage.objective_code for stage in solver.stages if not stage.objective_code.startswith(_TIE_STAGE_PREFIX))
     if normative != expected:
         raise ProofForgeryError(f"SCIP closed the stages {list(normative)}, but the view's objectives are {list(expected)}")
-    return OptimalProvenConclusion(witness=_witness(expected))
+    closed = tuple(stage.objective_code for stage in solver.stages if not stage.objective_code.startswith(_TIE_STAGE_PREFIX) and stage.status == "finished")
+    return OptimalProvenConclusion(witness=_witness(closed))
+
+
+@dataclass(frozen=True, slots=True)
+class SeededRunVote:
+    """What one of the Rebalancer's runs found, as the merge reads it (lot SEEDS of project 67).
+
+    ``origin`` is the model of its published plan (``prudent``, ``wide``) or ``none`` without a plan; ``closed`` is its own
+    verdict, ``optimal_proven``; ``infeasible`` its own «impossible, proven»; ``value`` its published plan's first stage
+    valued exactly as the solver sees it (``evaluation.solver_view``); ``band`` that stage's band (its quadratic rows, how
+    far below the truth SCIP's value may sit) in the unit of ``value``; ``failed`` a run that returned nothing.
+    """
+
+    seed: int
+    origin: Literal["prudent", "wide", "none"] = "none"
+    closed: bool = False
+    infeasible: bool = False
+    value: Fraction | None = None
+    band: Fraction = Fraction(0)
+    #: Its first stage's lower bound (SCIP's dual) in the unit of ``value``; None when the run has none (no plan, the wide
+    #: model, a bound SCIP did not reach).
+    bound: Fraction | None = None
+    failed: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class SeededVerdict:
+    """The merge's answer: the run to publish (its index), and whether its own «proven» must be downgraded to
+    ``PROOF_NOT_CONFIRMED_REASON``. ``index`` is None when no run can be published as it is (``inconclusive``: a single
+    «impossible» and nothing else; ``failed``: every run failed)."""
+
+    index: int | None
+    downgrade: bool = False
+    state: Literal["plan", "infeasible", "no_plan", "inconclusive", "failed"] = "plan"
+
+
+def seeded_runs_agree(a: Fraction, b: Fraction, lowest: Fraction, *, band: Fraction = Fraction(0)) -> bool:
+    """Two runs' values are «equal»: |a − b| ≤ ``SEED_AGREEMENT_FACTOR`` × (the bound check's relative tolerance of the
+    lowest value + the first stage's ``band``), the engine's whole band (lot SEEDS-b)."""
+    # The tolerance as the decimal it is written as (1e-6), not as its nearest binary float.
+    relative = Fraction(str(BOUND_CHECK_TOLERANCE)) * max(Fraction(1), abs(lowest))
+    return abs(a - b) <= Fraction(SEED_AGREEMENT_FACTOR) * (relative + band)
+
+
+def seeded_margin(votes: Sequence[SeededRunVote], verdict: SeededVerdict) -> Fraction | None:
+    """Lot MG of project 67 (the developer's «ottimo locale (entro X)», the consultant's rule of 17/11): how far below the
+    published plan the best plan can still be, in the first stage's unit: V − L.
+
+    V is the published run's value. L is the **second-highest** of the runs' bounds that are usable, not above V beyond the
+    agreement band (a bound above the plan is refuted by the plan itself): a bound counts when two searches say it, as the
+    proof does. None for a proven plan, a plan of the wide model, no plan, or fewer than two usable bounds. The result may
+    be at most zero (bounds just above V, inside the band): the caller posts it as one minor unit.
+    """
+    if verdict.index is None or verdict.state != "plan":
+        return None
+    chosen = votes[verdict.index]
+    if chosen.origin != "prudent" or chosen.value is None or (chosen.closed and not verdict.downgrade):
+        return None
+    value = chosen.value
+    usable = sorted((vote.bound for vote in votes if not vote.failed and vote.bound is not None and (vote.bound <= value or seeded_runs_agree(vote.bound, value, value, band=chosen.band))), reverse=True)
+    return value - usable[1] if len(usable) >= 2 else None
+
+
+def merge_seeded_runs(votes: Sequence[SeededRunVote]) -> SeededVerdict:
+    """The developer's rule for three runs (specification §16.11, §16.16), with the consultant's merge of 17/11.
+
+    The merge may only downgrade: a run's own «not proven» is never upgraded and keeps its reason; its own «proven» stays
+    only when a second closed run is equal to it. A run that failed does not vote.
+
+    1. Any plan of the prudent model: only those runs count. The lowest value wins. If at least two closed runs are equal
+       to it, the published one is the lowest of them, proven; otherwise the run with the lowest value, downgraded if it
+       had proven itself.
+    2. Else any plan of the wide model: the lowest, never proven (its own reason says why).
+    3. Else «impossible, proven» when at least two runs say so; else «no plan found» from a run that found none; a single
+       «impossible» with nothing else to publish is inconclusive.
+
+    Ties of value go to the lowest seed.
+    """
+    usable = [(index, vote) for index, vote in enumerate(votes) if not vote.failed]
+    if not usable:
+        return SeededVerdict(index=None, state="failed")
+    order = lambda item: (item[1].value, item[1].seed)  # noqa: E731
+    prudent = [item for item in usable if item[1].origin == "prudent" and item[1].value is not None]
+    if prudent:
+        lowest = min(vote.value for _, vote in prudent)
+        band = max(vote.band for _, vote in prudent)
+        agreeing = [item for item in prudent if item[1].closed and seeded_runs_agree(item[1].value, lowest, lowest, band=band)]
+        if len(agreeing) >= 2:
+            return SeededVerdict(index=min(agreeing, key=order)[0])
+        index, vote = min(prudent, key=order)
+        return SeededVerdict(index=index, downgrade=vote.closed)
+    wide = [item for item in usable if item[1].origin == "wide" and item[1].value is not None]
+    if wide:
+        return SeededVerdict(index=min(wide, key=order)[0])
+    infeasible = [item for item in usable if item[1].infeasible]
+    if len(infeasible) >= 2:
+        return SeededVerdict(index=min(infeasible, key=lambda item: item[1].seed)[0], state="infeasible")
+    none = [item for item in usable if not item[1].infeasible]
+    if none:
+        return SeededVerdict(index=min(none, key=lambda item: item[1].seed)[0], state="no_plan")
+    return SeededVerdict(index=None, state="inconclusive")

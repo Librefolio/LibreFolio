@@ -3,6 +3,10 @@
     "pacAllocator": {
       "name": "Allocateur PAC",
       "description": "Planifie les achats qui rapprochent au mieux un nouvel investissement de son allocation cible, en parts entières ou en montants, sans passer d'ordres."
+    },
+    "portfolioRebalancer": {
+      "name": "Rééquilibreur de portefeuille",
+      "description": "Ramène un portefeuille déjà investi vers ses cibles : il achète et, si vous l'autorisez, vend, en estimant frais et impôts. Il n'envoie aucun ordre."
     }
   }
 }

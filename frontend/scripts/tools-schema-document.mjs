@@ -300,7 +300,7 @@ export function prepareToolDocument(document) {
             roots.add(name);
         }
     }
-    const roles = {catalog: 'serialization', computeRequest: 'validation', computeResponse: 'serialization', diagnostics: 'serialization'};
+    const roles = {catalog: 'serialization', computeRequest: 'validation', computeResponse: 'serialization', computeProgress: 'serialization', diagnostics: 'serialization'};
     invariant(Object.keys(manifest.transport).length === Object.keys(roles).length, 'unknown transport roles');
     for (const [role, mode] of Object.entries(roles)) {
         const entry = manifest.transport[role];

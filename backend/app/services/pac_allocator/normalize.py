@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -16,6 +17,7 @@ from backend.app.schemas.pac_allocator.exact import FiniteDecimal
 from backend.app.schemas.pac_allocator.issues import CurrencyIssueParam, IdIssueParam, PlannerIssue, PlannerIssueParam, PlannerIssuePath, TextIssueParam
 from backend.app.schemas.pac_allocator.request import (
     AmountFeeCap,
+    ContributionFundingSourceRef,
     DomainAssetIdentity,
     DomainBrokerIdentity,
     DomainCopyProvenance,
@@ -25,13 +27,15 @@ from backend.app.schemas.pac_allocator.request import (
     NoOrderCap,
     NotionalOrderCap,
     PacPlannerRequest,
+    PlannerFundingRouteInput,
     PlannerOrderRouteInput,
-    RebalancerInvestAndSellRequest,
-    RebalancerInvestOnlyRequest,
     RebalancerPlannerRequest,
     WholeQuantityCapability,
     WholeQuantityMinimum,
 )
+from backend.app.services.financial_math.fx_rates import oriented_rate
+from backend.app.services.pac_allocator.evaluation.limits import entries_with_limits
+from backend.app.services.pac_allocator.evaluation.scenario import build_scenario_index
 from backend.app.services.pac_allocator.issues import (
     PlannerAvailability,
     canonicalize_issues,
@@ -42,13 +46,14 @@ from backend.app.services.pac_allocator.issues import (
     normalizer_issue_definition,
     section_path,
 )
+from backend.app.services.pac_allocator.limits import check_maximum_below_current, check_minimum_above_maximum, check_minimums_exceed_reference, limit_reference_of, trapped_cash_by_cell
 from backend.app.services.pac_allocator.models import (
+    FIDELITY_LEVEL_WEIGHTS,
     ExactAsset,
     ExactAssetQuote,
-    ExactAssetTax,
     ExactBroker,
+    ExactCashEntry,
     ExactContribution,
-    ExactCostBasis,
     ExactCurrencySpec,
     ExactExistingCash,
     ExactExposure,
@@ -56,6 +61,7 @@ from backend.app.services.pac_allocator.models import (
     ExactFundingRoute,
     ExactFxRate,
     ExactHolding,
+    ExactLimit,
     ExactMoney,
     ExactOrderCap,
     ExactOrderCapability,
@@ -63,28 +69,39 @@ from backend.app.services.pac_allocator.models import (
     ExactOrderRoute,
     ExactPlannerScenario,
     ExactProvenance,
-    ExactSellContext,
     ExactSnapshot,
+    ExactTargetFidelity,
     ExactTargetWeight,
-    ExactWithholding,
+    ExactTransferLane,
 )
 from backend.app.services.pac_allocator.numeric import (
     ExactRatio,
 )
 
 # Shared by v2: these were defined inside the P1 block removed on 2026-09-21.
-type _PlannerV2Request = PacPlannerRequest | RebalancerInvestOnlyRequest | RebalancerInvestAndSellRequest
+type _PlannerV2Request = PacPlannerRequest | RebalancerPlannerRequest
 _RATIO_WIRE_INTEGER_CHARS = 192
 # Half a unit of the tenth decimal: the rounding error of an FX rate stored as
 # Numeric(24, 10) (``backend/app/db/models.py``, ``FxRate.rate``).
 _FX_STORED_RATE_HALF_UNIT = ExactRatio(1, 2 * 10**10)
 
 
+# The issues that keep a plan from running but not the preview from counting (F3a step 8 of project 67): the weights the
+# user is still typing. A ready preview leaves them out of its issues: the screen shows the control total itself.
+COUNTED_ANYWAY = frozenset({"allocation.target_total_not_one"})
+
+
 @dataclass(frozen=True, slots=True)
 class PlannerV2NormalizationResult:
+    """The normalizer's answer. ``limit_problems`` are the three cross checks of the limits (M1, T12) that made it
+    ``invalid`` (they are in ``issues`` too), and ``counted`` the scenario they were found on: the preview counts on it
+    (B4, consultant's Q2), the plan never reads it."""
+
     availability: PlannerAvailability
     issues: tuple[PlannerIssue, ...]
     normalized: ExactPlannerScenario | None
+    limit_problems: tuple[PlannerIssue, ...] = ()
+    counted: ExactPlannerScenario | None = None
 
     @property
     def ready(self) -> bool:
@@ -113,10 +130,62 @@ def currency_minor_unit(currency: str) -> ExactRatio:
     return ExactRatio(1, 10 ** get_currency_precision(currency))
 
 
+def exact_fidelity(fidelity) -> ExactTargetFidelity:
+    """The request's target fidelity as the exact one: a level reads its ``λ`` off ``FIDELITY_LEVEL_WEIGHTS``, the one table the
+    scenario preview also reads (B4); a custom ``λ`` is taken as it is; «Target first» has none."""
+    if fidelity.kind == "level":
+        return ExactTargetFidelity(kind="weighted", distance_weight=FIDELITY_LEVEL_WEIGHTS[fidelity.level])
+    if fidelity.kind == "custom":
+        return ExactTargetFidelity(kind="weighted", distance_weight=ExactRatio.from_decimal(Decimal(fidelity.lambda_)))
+    return ExactTargetFidelity(kind="target_first", distance_weight=None)
+
+
+def _deposit_id(contribution_id: str, broker_id: str) -> str:
+    """The ID of a generated deposit: both IDs length-prefixed (they may contain ``:``), as ``broker_transfer_key`` does, so two
+    pairs never meet. Past the 128 characters of an ID, the SHA-256 of that same key: still one per pair, and still an ID."""
+    key = f"{len(contribution_id)}:{contribution_id}{len(broker_id)}:{broker_id}"
+    deposit_id = f"deposit:{key}"
+    return deposit_id if len(deposit_id) <= 128 else f"deposit:{hashlib.sha256(key.encode()).hexdigest()}"
+
+
+def _rebalancer_deposits(request: RebalancerPlannerRequest) -> list[PlannerFundingRouteInput]:
+    """The Rebalancer's deposits (specification §15 n. 2): every contribution may go to every Broker that has a buy route, in
+    the contribution's currency, with no cap of its own; the plan decides how much goes where. Each carries the provenance of
+    its contribution."""
+    buying = sorted({route.broker_id for route in request.order_routes if route.side == "buy"})
+    return [
+        PlannerFundingRouteInput(
+            funding_route_id=_deposit_id(item.contribution_id, broker_id),
+            source=ContributionFundingSourceRef(kind="contribution", contribution_id=item.contribution_id),
+            broker_id=broker_id,
+            currency=item.amount.currency,
+            provenance_id=item.provenance_id,
+        )
+        for item in request.contributions
+        for broker_id in buying
+    ]
+
+
+def _rebalancer_lanes(request: RebalancerPlannerRequest) -> tuple[ExactTransferLane, ...]:
+    """Transfers between every ordered pair of the Brokers that hold cash, buy, or have a cash item, in every currency their
+    cash, the contributions, the quotes of their buys or their cash items are in (specification §15 n. 2). Free and instant;
+    the score prefers fewer of them only as a tie-break. A cash item on a Broker with no route and no cash is reached this way:
+    the deposits go to the Brokers that buy, a lane carries the money on."""
+    quote_by_asset = {asset.asset_id: asset.quote.currency for asset in request.assets if asset.quote is not None}
+    cash_items = [item for item in request.target_weights if item.kind == "cash"]
+    # An inactive Broker keeps its custody but moves nothing (a selected cash or a route there is already an issue).
+    inactive = {broker.broker_id for broker in request.brokers if isinstance(broker.identity, DomainBrokerIdentity) and broker.identity.active is False}
+    brokers = sorted(({route.broker_id for route in request.order_routes} | {item.broker_id for item in request.existing_cash} | {item.broker_id for item in cash_items}) - inactive)
+    currencies = sorted({item.selected.currency for item in request.existing_cash} | {item.amount.currency for item in request.contributions} | {quote_by_asset[route.asset_id] for route in request.order_routes if route.asset_id in quote_by_asset} | {item.currency for item in cash_items})
+    return tuple(ExactTransferLane(source_broker_id=source, destination_broker_id=destination, currency=currency) for source in brokers for destination in brokers if source != destination for currency in currencies)
+
+
 class _PlannerV2Normalizer:
     def __init__(self, request: _PlannerV2Request, source_issues: tuple[PlannerIssue, ...]) -> None:
         self.request = request
         self.issues = list(source_issues)
+        # The PAC declares its funding routes; the Rebalancer's deposits are generated (specification §15 n. 2).
+        self.funding_routes = list(request.funding_routes) if isinstance(request, PacPlannerRequest) else _rebalancer_deposits(request)
         self.currency_references: dict[str, PlannerIssuePath] = {}
         self.provenance_ids: set[str] = set()
         self.asset_ids: set[str] = set()
@@ -263,16 +332,31 @@ class _PlannerV2Normalizer:
             if dimension not in out_of_range_dimensions and total > ExactRatio(1):
                 self.issue("allocation.exposure_total_exceeds_one", exposure_path, params=(TextIssueParam(kind="text", name="dimension", value=dimension),))
 
+    def validate_limit(self, limit, entity_kind: str, entity_id: str, field: str) -> None:
+        """One limit of a target entry: an amount in the valuation currency and not negative, or a share from 0 to 1."""
+        if limit is None:
+            return
+        path = field_path("targets", entity_kind, entity_id, field)
+        if limit.kind == "amount":
+            if limit.amount.currency != self.request.valuation_currency:
+                self.issue("allocation.currency_mismatch", path)
+            if self.ratio(limit.amount.amount, path) < ExactRatio(0):
+                self.issue("allocation.target_weight_out_of_range", path)
+        elif not self._ratio_in_unit_interval(self.ratio(limit.share, path)):
+            self.issue("allocation.target_weight_out_of_range", path)
+
     def validate_targets(self) -> None:
+        asset_entries = [item for item in self.request.target_weights if item.kind == "asset"]
+        cash_entries = [item for item in self.request.target_weights if item.kind == "cash"]
         target_ids = self.duplicates(
-            self.request.target_weights,
+            asset_entries,
             lambda item: item.asset_id,
             lambda _item, item_id: field_path("targets", "asset", item_id, "asset_id"),
         )
         valid_values: list[ExactRatio] = []
         references_valid = True
         values_valid = True
-        for item in self.request.target_weights:
+        for item in asset_entries:
             path = field_path("targets", "asset", item.asset_id, "weight")
             if item.asset_id not in self.asset_ids:
                 references_valid = False
@@ -282,15 +366,50 @@ class _PlannerV2Normalizer:
             if not self._ratio_in_unit_interval(weight):
                 values_valid = False
                 self.issue("allocation.target_weight_out_of_range", path)
+            self.validate_limit(item.minimum, "asset", item.asset_id, "minimum")
+            self.validate_limit(item.maximum, "asset", item.asset_id, "maximum")
         missing_targets = sorted(self.asset_ids - target_ids)
         for asset_id in missing_targets:
             self.issue("allocation.target_weight_missing", field_path("targets", "asset", asset_id, "weight"))
-        if not missing_targets and references_valid and values_valid and len(target_ids) == len(self.request.target_weights):
-            total = sum(valid_values, ExactRatio(0))
+        cash_weights = self.validate_cash_entries(cash_entries)
+        values_valid = values_valid and cash_weights is not None
+        if not missing_targets and references_valid and values_valid and len(target_ids) == len(asset_entries):
+            # The Rebalancer's weights of every entry, Assets and cash, sum to one (contract §5.2); the PAC's cash has none.
+            total = sum((*valid_values, *(cash_weights or ())), ExactRatio(0))
             if len(str(abs(total.numerator))) > _RATIO_WIRE_INTEGER_CHARS or len(str(total.denominator)) > _RATIO_WIRE_INTEGER_CHARS:
                 self.issue("allocation.coefficient_envelope_unsupported", section_path("targets"))
             if total != ExactRatio(1):
                 self.issue("allocation.target_total_not_one", section_path("targets"))
+
+    def validate_cash_entries(self, entries) -> list[ExactRatio] | None:
+        """Cash entries (contract 2.0.0): one per Broker and currency cell, a known Broker, limits as for an Asset. A weight other
+        than zero is the Rebalancer's (B3 of project 67) and unsupported in the PAC. Returns the weights, ``None`` when one is out
+        of range."""
+        rebalancer = isinstance(self.request, RebalancerPlannerRequest)
+        weights: list[ExactRatio] | None = []
+        seen: set[tuple[str, str]] = set()
+        for item in entries:
+            cell = f"{item.broker_id}:{item.currency}"
+            if (item.broker_id, item.currency) in seen:
+                self.issue("allocation.duplicate_id", field_path("targets", "cash", cell, "broker_id"))
+            seen.add((item.broker_id, item.currency))
+            if item.broker_id not in self.broker_ids:
+                self.issue("allocation.reference_not_found", field_path("targets", "cash", cell, "broker_id"))
+            weight_path = field_path("targets", "cash", cell, "weight")
+            weight = self.ratio(item.weight, weight_path)
+            # An entry with no weight and no limit says nothing: its currency needs no rate.
+            if item.minimum is not None or item.maximum is not None or (rebalancer and weight != ExactRatio(0)):
+                self.currency(item.currency, field_path("targets", "cash", cell, "currency"))
+            if not self._ratio_in_unit_interval(weight):
+                self.issue("allocation.target_weight_out_of_range", weight_path)
+                weights = None
+            elif weight != ExactRatio(0) and not rebalancer:
+                self.issue("pac_allocator.cash_weight_unsupported", weight_path)
+            elif weights is not None:
+                weights.append(weight)
+            self.validate_limit(item.minimum, "cash", cell, "minimum")
+            self.validate_limit(item.maximum, "cash", cell, "maximum")
+        return weights
 
     def validate_brokers(self) -> None:
         self.broker_ids = self.duplicates(
@@ -305,7 +424,7 @@ class _PlannerV2Normalizer:
             lambda item: field_path("brokers", "broker", item.broker_id, "identity.source_broker_id"),
             lambda source_broker_id: (TextIssueParam(kind="text", name="source_broker_id", value=source_broker_id),),
         )
-        executable_broker_ids = {item.broker_id for item in self.request.funding_routes}
+        executable_broker_ids = {item.broker_id for item in self.funding_routes}
         executable_broker_ids.update(item.broker_id for item in self.request.order_routes)
         executable_broker_ids.update(item.broker_id for item in self.request.existing_cash if self.ratio(item.selected.amount, field_path("cash", "cash", item.cash_id, "selected")) > ExactRatio(0))
         for broker in self.request.brokers:
@@ -453,16 +572,17 @@ class _PlannerV2Normalizer:
     def validate_selected_funding(self) -> None:
         funding_values = [self.ratio(item.selected.amount, field_path("cash", "cash", item.cash_id, "selected")) for item in self.request.existing_cash]
         funding_values.extend(self.ratio(item.amount.amount, field_path("contributions", "contribution", item.contribution_id, "amount")) for item in self.request.contributions)
-        if not funding_values and not isinstance(self.request, RebalancerInvestAndSellRequest):
+        # «Invest only» needs money to invest; C1 (project 67) exempts «Invest and sell», which can fund itself by selling.
+        if not funding_values:
             self.issue("allocation.no_selected_funding", section_path("funding"))
 
     def validate_funding_routes(self, cash_by_id: dict[str, object], contribution_by_id: dict[str, object]) -> None:  # noqa: C901 — flat per-route field checks plus one source lookup per source kind
         self.duplicates(
-            self.request.funding_routes,
+            self.funding_routes,
             lambda item: item.funding_route_id,
             lambda _item, item_id: field_path("funding", "funding_route", item_id, "funding_route_id"),
         )
-        for item in self.request.funding_routes:
+        for item in self.funding_routes:
             route_path = field_path("funding", "funding_route", item.funding_route_id, "transfer_cap")
             self.reference(item.broker_id, self.broker_ids, field_path("funding", "funding_route", item.funding_route_id, "broker_id"))
             self.provenance(item.provenance_id, field_path("funding", "funding_route", item.funding_route_id, "provenance_id"))
@@ -556,17 +676,13 @@ class _PlannerV2Normalizer:
 
     def validate_order_route_limits(self, route: PlannerOrderRouteInput, capability, quote_currency: str | None) -> None:
         minimum_if_active, minimum_if_active_kind, minimum_if_active_currency = self.order_minimum(route.minimum_if_active, route, "minimum_if_active")
-        required_minimum, required_minimum_kind, required_minimum_currency = self.order_minimum(route.required_minimum, route, "required_minimum")
         cap, cap_kind, cap_currency = self.order_cap(route)
         if minimum_if_active < ExactRatio(0):
             self.issue("allocation.order_minimum_negative", field_path("routing", "order_route", route.route_id, "minimum_if_active"))
-        if required_minimum < ExactRatio(0):
-            self.issue("allocation.order_minimum_negative", field_path("routing", "order_route", route.route_id, "required_minimum"))
         if cap is not None and cap <= ExactRatio(0):
             self.issue("allocation.order_cap_nonpositive", field_path("routing", "order_route", route.route_id, "cap"))
         expected_kind = "quantity" if isinstance(capability, WholeQuantityCapability) else "notional" if isinstance(capability, MonetaryAmountCapability) else None
         self.validate_order_minimum_kind(route, capability, expected_kind, minimum_if_active_kind, minimum_if_active_currency, quote_currency, "minimum_if_active")
-        self.validate_order_minimum_kind(route, capability, expected_kind, required_minimum_kind, required_minimum_currency, quote_currency, "required_minimum")
         if cap is None:
             return
         if expected_kind is not None and cap_kind != expected_kind:
@@ -575,8 +691,6 @@ class _PlannerV2Normalizer:
             self.issue("allocation.currency_mismatch", field_path("routing", "order_route", route.route_id, "cap"))
         if minimum_if_active_kind in {"none", cap_kind} and minimum_if_active > cap:
             self.issue("allocation.order_minimum_exceeds_cap", field_path("routing", "order_route", route.route_id, "minimum_if_active"))
-        if required_minimum_kind in {"none", cap_kind} and required_minimum > cap:
-            self.issue("allocation.order_minimum_exceeds_cap", field_path("routing", "order_route", route.route_id, "required_minimum"))
 
     def validate_order_minimum_kind(self, route: PlannerOrderRouteInput, capability, expected_kind: str | None, minimum_kind: str, minimum_currency: str | None, quote_currency: str | None, field: str) -> None:
         if minimum_kind != "none" and expected_kind is not None and minimum_kind != expected_kind:
@@ -607,7 +721,7 @@ class _PlannerV2Normalizer:
     @staticmethod
     def _stored_fx_rate(rate: ExactRatio, source: str, destination: str) -> ExactRatio:
         """Return the stored value behind ``rate`` (source → destination): the key "A/B" with A < B stores B per A."""
-        return rate if source < destination else ExactRatio(1) / rate
+        return oriented_rate(rate, source, destination)
 
     def fx_rate(self, source: str, destination: str) -> ExactRatio | None:
         if source == destination:
@@ -621,7 +735,7 @@ class _PlannerV2Normalizer:
             # treat it as unusable here too instead of dividing by zero/negative on
             # the reciprocal branch. Callers already handle a ``None`` return.
             return None
-        return rate if source < destination else ExactRatio(1) / rate
+        return oriented_rate(rate, source, destination)
 
     def require_fx_pair(self, first: str, second: str) -> None:
         if first == second:
@@ -636,7 +750,7 @@ class _PlannerV2Normalizer:
         pool_currencies_by_broker: dict[str, set[str]] = defaultdict(set)
         for item in self.request.existing_cash:
             pool_currencies_by_broker[item.broker_id].add(item.available.currency)
-        for item in self.request.funding_routes:
+        for item in self.funding_routes:
             pool_currencies_by_broker[item.broker_id].add(item.currency)
         for route in self.request.order_routes:
             if route.side != "sell":
@@ -721,123 +835,6 @@ class _PlannerV2Normalizer:
                             CurrencyIssueParam(kind="currency", name="valuation_currency", value=valuation),
                         ),
                     )
-
-    def validate_sell_context(self) -> None:
-        if not isinstance(self.request, RebalancerInvestAndSellRequest):
-            return
-        context = self.request.sell_context
-        cost_by_holding = self.validate_cost_basis_rows(context)
-        tax_by_asset = self.validate_asset_tax_rows(context)
-        withholding_by_broker = self.validate_withholding_rows(context)
-        self.validate_sell_route_requirements(cost_by_holding, tax_by_asset, withholding_by_broker)
-
-    def validate_cost_basis_rows(self, context) -> dict[str, object]:
-        self.duplicates(
-            context.cost_bases,
-            lambda item: item.holding_id,
-            lambda _item, item_id: field_path("policy", "holding", item_id, "holding_id"),
-        )
-        cost_by_holding = {item.holding_id: item for item in context.cost_bases}
-        for item in context.cost_bases:
-            path = field_path("policy", "holding", item.holding_id, "average_unit_cost")
-            self.reference(item.holding_id, self.holding_ids, field_path("policy", "holding", item.holding_id, "holding_id"))
-            self.provenance(item.provenance_id, field_path("policy", "holding", item.holding_id, "provenance_id"))
-            if self.money(item.average_unit_cost, path) < ExactRatio(0):
-                self.issue("portfolio_rebalancer.cost_basis_negative", path)
-        return cost_by_holding
-
-    def validate_asset_tax_rows(self, context) -> dict[str, object]:
-        self.duplicates(
-            context.asset_taxes,
-            lambda item: item.asset_id,
-            lambda _item, item_id: field_path("policy", "asset", item_id, "asset_id"),
-        )
-        tax_by_asset = {item.asset_id: item for item in context.asset_taxes}
-        for item in context.asset_taxes:
-            self.reference(item.asset_id, self.asset_ids, field_path("policy", "asset", item.asset_id, "asset_id"))
-            self.provenance(item.provenance_id, field_path("policy", "asset", item.asset_id, "provenance_id"))
-            tax_path = field_path("policy", "asset", item.asset_id, "tax_rate")
-            tax_rate = self.ratio(item.tax_rate, tax_path)
-            if not self._ratio_in_unit_interval(tax_rate):
-                self.issue("portfolio_rebalancer.tax_rate_out_of_range", tax_path)
-            if item.fiscal_currency is None:
-                self.issue("allocation.fiscal_currency_missing", field_path("policy", "asset", item.asset_id, "fiscal_currency"))
-            else:
-                self.currency(item.fiscal_currency, field_path("policy", "asset", item.asset_id, "fiscal_currency"))
-        return tax_by_asset
-
-    def validate_withholding_rows(self, context) -> dict[str, object]:
-        self.duplicates(
-            context.broker_withholding,
-            lambda item: item.broker_id,
-            lambda _item, item_id: field_path("policy", "broker", item_id, "broker_id"),
-        )
-        withholding_by_broker = {item.broker_id: item for item in context.broker_withholding}
-        for item in context.broker_withholding:
-            path = field_path("policy", "broker", item.broker_id, "carried_loss")
-            self.reference(item.broker_id, self.broker_ids, field_path("policy", "broker", item.broker_id, "broker_id"))
-            self.provenance(item.provenance_id, field_path("policy", "broker", item.broker_id, "provenance_id"))
-            if self.money(item.carried_loss, path) < ExactRatio(0):
-                self.issue("portfolio_rebalancer.carried_loss_negative", path)
-        return withholding_by_broker
-
-    def validate_sell_route_requirements(self, cost_by_holding: dict[str, object], tax_by_asset: dict[str, object], withholding_by_broker: dict[str, object]) -> None:
-        if not isinstance(self.request, RebalancerInvestAndSellRequest):
-            raise RuntimeError("SELL requirements require invest_and_sell")
-        holding_groups: dict[tuple[str, str], list[object]] = defaultdict(list)
-        for holding in self.request.holdings:
-            holding_groups[(holding.asset_id, holding.broker_id)].append(holding)
-        holdings_by_pair = {key: values[0] for key, values in holding_groups.items() if len(values) == 1}
-        ambiguous_holding_pairs = {key for key, values in holding_groups.items() if len(values) > 1}
-        fiscal_by_broker: dict[str, set[str]] = defaultdict(set)
-        for route in self.request.order_routes:
-            if route.side != "sell":
-                continue
-            self.validate_sell_route_requirement(route, holdings_by_pair, ambiguous_holding_pairs, cost_by_holding, tax_by_asset, withholding_by_broker, fiscal_by_broker)
-        for broker_id, fiscal_currencies in sorted(fiscal_by_broker.items()):
-            if len(fiscal_currencies) > 1:
-                self.issue("allocation.tax_netting_unsupported", field_path("policy", "broker", broker_id, "fiscal_currency"))
-                continue
-            withholding = withholding_by_broker.get(broker_id)
-            if withholding is not None and fiscal_currencies and withholding.carried_loss.currency not in fiscal_currencies:
-                self.issue("allocation.currency_mismatch", field_path("policy", "broker", broker_id, "carried_loss.currency"))
-
-    def validate_sell_route_requirement(
-        self,
-        route,
-        holdings_by_pair: dict[tuple[str, str], object],
-        ambiguous_holding_pairs: set[tuple[str, str]],
-        cost_by_holding: dict[str, object],
-        tax_by_asset: dict[str, object],
-        withholding_by_broker: dict[str, object],
-        fiscal_by_broker: dict[str, set[str]],
-    ) -> None:
-        tax = tax_by_asset.get(route.asset_id)
-        if tax is None:
-            self.issue("portfolio_rebalancer.tax_rate_missing", field_path("policy", "asset", route.asset_id, "tax_rate"))
-        elif tax.fiscal_currency is not None:
-            fiscal_by_broker[route.broker_id].add(tax.fiscal_currency)
-            asset = self.asset_by_id.get(route.asset_id)
-            quote_currency = asset.quote.currency if asset is not None and asset.quote is not None else None
-            # SELL always settles tax/withholding in the asset's own quote currency
-            # (no conversion at SELL time); the evaluator hard-asserts this, so it
-            # must be a typed issue here rather than a boundary crash.
-            if quote_currency is not None and tax.fiscal_currency != quote_currency:
-                self.issue("allocation.currency_mismatch", field_path("policy", "asset", route.asset_id, "fiscal_currency"))
-        if route.broker_id not in withholding_by_broker:
-            self.issue("portfolio_rebalancer.withholding_missing", field_path("policy", "broker", route.broker_id, "withholding"))
-        holding_pair = (route.asset_id, route.broker_id)
-        if holding_pair in ambiguous_holding_pairs:
-            return
-        holding = holdings_by_pair.get(holding_pair)
-        if holding is None:
-            self.issue("allocation.wac_missing", field_path("policy", "order_route", route.route_id, "cost_basis"))
-            return
-        cost_basis = cost_by_holding.get(holding.holding_id)
-        if cost_basis is None:
-            self.issue("allocation.wac_missing", field_path("policy", "holding", holding.holding_id, "average_unit_cost"))
-        elif tax is not None and tax.fiscal_currency is not None:
-            self.require_fx_pair(cost_basis.average_unit_cost.currency, tax.fiscal_currency)
 
     def validate_current_portfolio(self) -> None:
         if isinstance(self.request, PacPlannerRequest) or not self.request.holdings:
@@ -1060,41 +1057,6 @@ class _PlannerV2Normalizer:
             return ExactOrderCap(kind="notional", value=ExactRatio.from_decimal(Decimal(cap.amount.amount)), currency=cap.amount.currency)
         return ExactOrderCap(kind="quantity", value=ExactRatio.from_decimal(Decimal(cap.quantity)), currency=None)
 
-    def build_sell_context(self) -> ExactSellContext | None:
-        if not isinstance(self.request, RebalancerInvestAndSellRequest):
-            return None
-        return ExactSellContext(
-            cost_basis=tuple(
-                ExactCostBasis(
-                    holding_id=item.holding_id,
-                    average_unit_cost=self.build_money(item.average_unit_cost),
-                    reference_date=date.fromisoformat(item.reference_date),
-                    provenance_id=item.provenance_id,
-                )
-                for item in sorted(self.request.sell_context.cost_bases, key=lambda value: value.holding_id)
-            ),
-            asset_tax=tuple(
-                ExactAssetTax(
-                    asset_id=item.asset_id,
-                    fiscal_currency=item.fiscal_currency or "",
-                    gain_tax_rate=ExactRatio.from_decimal(Decimal(item.tax_rate)),
-                    provenance_id=item.provenance_id,
-                )
-                for item in sorted(self.request.sell_context.asset_taxes, key=lambda value: value.asset_id)
-            ),
-            withholding=tuple(
-                ExactWithholding(
-                    broker_id=item.broker_id,
-                    fiscal_currency=item.carried_loss.currency,
-                    carried_loss_available=self.build_money(item.carried_loss),
-                    withholding_kind=item.withholding_kind,
-                    reference_date=date.fromisoformat(item.reference_date),
-                    provenance_id=item.provenance_id,
-                )
-                for item in sorted(self.request.sell_context.broker_withholding, key=lambda value: value.broker_id)
-            ),
-        )
-
     def build_transfer_cap(self, item) -> ExactMoney:
         """An absent cap is the whole selected amount of the source."""
         if item.transfer_cap is not None:
@@ -1103,7 +1065,29 @@ class _PlannerV2Normalizer:
             return self.build_money(next(cash.selected for cash in self.request.existing_cash if cash.cash_id == item.source.cash_id))
         return self.build_money(next(row.amount for row in self.request.contributions if row.contribution_id == item.source.contribution_id))
 
-    def build_scenario(self) -> ExactPlannerScenario:
+    @staticmethod
+    def build_limit(limit) -> ExactLimit | None:
+        if limit is None:
+            return None
+        if limit.kind == "amount":
+            return ExactLimit(kind="amount", value=ExactRatio.from_decimal(Decimal(limit.amount.amount)))
+        return ExactLimit(kind="share", value=ExactRatio.from_decimal(Decimal(limit.share)))
+
+    def build_scenario(self, *, neutral_weights: bool = False) -> ExactPlannerScenario:
+        """The exact scenario. ``neutral_weights`` (the preview's counted scenario of targets that do not sum to one, F3a step 8
+        of project 67): every entry gets an equal share, so the scenario's invariants hold (the weights sum to one, a cash entry
+        says something); the entries themselves, their limits and today's facts are the request's. Nothing the preview answers
+        reads a weight; the plan never receives such a scenario."""
+        asset_entries = sorted((value for value in self.request.target_weights if value.kind == "asset"), key=lambda value: value.asset_id)
+        rebalancer = isinstance(self.request, RebalancerPlannerRequest)
+        cash_items = [item for item in sorted((value for value in self.request.target_weights if value.kind == "cash"), key=lambda value: (value.broker_id, value.currency)) if item.minimum is not None or item.maximum is not None or (rebalancer and Decimal(item.weight) != 0)]
+
+        weighted = len(asset_entries) + (len(cash_items) if rebalancer else 0)
+        neutral = ExactRatio(1, weighted) if neutral_weights and weighted > 0 else ExactRatio(0)
+
+        def weight_of(item) -> ExactRatio:
+            return neutral if neutral_weights else ExactRatio.from_decimal(Decimal(item.weight))
+
         fx_rates = tuple(
             ExactFxRate(
                 pair_first=pair.partition("/")[0],
@@ -1142,7 +1126,7 @@ class _PlannerV2Normalizer:
                 priority=item.priority,
                 provenance_id=item.provenance_id,
             )
-            for item in sorted(self.request.funding_routes, key=lambda value: value.funding_route_id)
+            for item in sorted(self.funding_routes, key=lambda value: value.funding_route_id)
         )
         fee_schedules, route_fee_ids = self.build_fee_instances()
         order_routes = tuple(
@@ -1154,7 +1138,6 @@ class _PlannerV2Normalizer:
                 fee_schedule_id=route_fee_ids[item.route_id],
                 side=item.side,
                 minimum_if_active=self.build_order_minimum(item.minimum_if_active),
-                required_minimum=self.build_order_minimum(item.required_minimum),
                 cap=self.build_order_cap(item.cap),
                 execution_margin_rate=ExactRatio.from_decimal(Decimal(item.execution_margin_rate)),
                 priority=item.priority,
@@ -1183,8 +1166,16 @@ class _PlannerV2Normalizer:
             contributions=contributions,
             funding_routes=funding_routes,
             order_routes=order_routes,
-            target_weights=tuple(ExactTargetWeight(asset_id=item.asset_id, weight=ExactRatio.from_decimal(Decimal(item.weight))) for item in sorted(self.request.target_weights, key=lambda value: value.asset_id)),
-            sell_context=self.build_sell_context(),
+            target_weights=tuple(ExactTargetWeight(asset_id=item.asset_id, weight=weight_of(item), minimum=self.build_limit(item.minimum), maximum=self.build_limit(item.maximum)) for item in asset_entries),
+            # Sales and their tax facts enter with C1 and C2 (project 67): the request carries no sale before then.
+            sell_context=None,
+            # Transfers between Brokers: none in the PAC, whose funding routes stay as the user declares them; the Rebalancer
+            # moves cash between every pair of its Brokers (specification §15 n. 2, B3 of project 67).
+            transfer_lanes=_rebalancer_lanes(self.request) if isinstance(self.request, RebalancerPlannerRequest) else (),
+            # A cash entry with no weight, no minimum and no maximum says nothing: it is left out. The PAC's weight is zero.
+            cash_entries=tuple(ExactCashEntry(broker_id=item.broker_id, currency=item.currency, minimum=self.build_limit(item.minimum), maximum=self.build_limit(item.maximum), weight=weight_of(item) if rebalancer else ExactRatio(0)) for item in cash_items),
+            # «Balanced» until B3 (project 67) reads the fidelity from the Rebalancer's request (specifica §14 n. 9).
+            target_fidelity=exact_fidelity(self.request.target_fidelity) if isinstance(self.request, RebalancerPlannerRequest) else None,
         )
 
     def run(self) -> PlannerV2NormalizationResult:
@@ -1196,19 +1187,69 @@ class _PlannerV2Normalizer:
         self.validate_order_routes()
         self.validate_fx_rates()
         self.validate_targets()
-        self.validate_sell_context()
         self.validate_current_portfolio()
         self.validate_fx_pair_closure()
         self.validate_fx_coherence()
         issues = canonicalize_issues(self.issues)
         availability = normalization_availability(issues)
         normalized = self.build_scenario() if availability == "ready" else None
+        # Targets that do not sum to one yet (F3a step 8 of project 67): the plan refuses them, as before (this branch is the
+        # preview's only); the preview counts on the scenario anyway, because the total, today's items and the table do not
+        # depend on the weights the user is still typing. As with the limits' cross checks, the scenario travels as `counted`.
+        if normalized is None and self.request.operation == "preview" and availability == "invalid" and normalization_availability([issue for issue in issues if issue.code not in COUNTED_ANYWAY]) == "ready":
+            counted = self._counted_with_neutral_weights()
+            if counted is not None:
+                limit_issues = self.check_limits(counted)
+                self.issues.extend(limit_issues)
+                return PlannerV2NormalizationResult(availability=availability, issues=canonicalize_issues(self.issues), normalized=None, limit_problems=canonicalize_issues(limit_issues), counted=counted)
+        if normalized is not None:
+            limit_issues = self.check_limits(normalized)
+            if limit_issues:
+                self.issues.extend(limit_issues)
+                issues = canonicalize_issues(self.issues)
+                return PlannerV2NormalizationResult(
+                    availability=normalization_availability(issues),
+                    issues=issues,
+                    normalized=None,
+                    limit_problems=canonicalize_issues(limit_issues),
+                    counted=normalized,
+                )
         return PlannerV2NormalizationResult(availability=availability, issues=issues, normalized=normalized)
+
+    def _counted_with_neutral_weights(self) -> ExactPlannerScenario | None:
+        """The preview's counted scenario of targets that do not sum to one; ``None`` when even neutral weights cannot make a
+        scenario (no target entry at all): the preview then answers the refusal, as before."""
+        try:
+            return self.build_scenario(neutral_weights=True)
+        except ValueError:
+            # A model invariant the request breaks beyond its weights: the refusal already in `issues` is the answer.
+            return None
+
+    def check_limits(self, scenario: ExactPlannerScenario) -> list[PlannerIssue]:
+        """The three checks before the calculation (M1, T12), on the built scenario; each names the entries that cause it.
+
+        A scenario with no limit has nothing to check and the replay of the do-nothing plan is not run.
+        """
+        if not entries_with_limits(scenario):
+            return []
+        reference = limit_reference_of(scenario)
+        problems = [
+            *check_minimum_above_maximum(scenario, reference),
+            *check_minimums_exceed_reference(scenario, reference, trapped_cash_by_cell(scenario)),
+            *check_maximum_below_current(scenario, build_scenario_index(scenario), reference),
+        ]
+        found: list[PlannerIssue] = []
+        for problem in problems:
+            field = "maximum" if problem.code == "bound_max_below_current" else "minimum"
+            for entry in problem.entries:
+                entity_id = entry.asset_id if entry.kind == "asset" else f"{entry.broker_id}:{entry.currency}"
+                found.append(make_issue(normalizer_issue_definition(f"allocation.{problem.code}"), field_path("targets", entry.kind, entity_id, field)))
+        return found
 
 
 def normalize_planner_request(request: _PlannerV2Request, *, source_issues: tuple[PlannerIssue, ...] = ()) -> PlannerV2NormalizationResult:
     """Normalize one frozen Planner v2 request into immutable exact facts."""
-    if not isinstance(request, (PacPlannerRequest, RebalancerInvestOnlyRequest, RebalancerInvestAndSellRequest)):
+    if not isinstance(request, (PacPlannerRequest, RebalancerPlannerRequest)):
         raise TypeError(f"Unsupported Planner v2 request: {type(request).__name__}")
     return _PlannerV2Normalizer(request, source_issues).run()
 
@@ -1222,6 +1263,6 @@ def normalize_pac_plan(request: PacPlannerRequest, *, source_issues: tuple[Plann
 
 def normalize_rebalancer_plan(request: RebalancerPlannerRequest, *, source_issues: tuple[PlannerIssue, ...] = ()) -> PlannerV2NormalizationResult:
     """Normalize one frozen Rebalancer v2 request without changing P1 behavior."""
-    if not isinstance(request, (RebalancerInvestOnlyRequest, RebalancerInvestAndSellRequest)):
+    if not isinstance(request, RebalancerPlannerRequest):
         raise TypeError(f"Expected Rebalancer Planner request, got {type(request).__name__}")
     return normalize_planner_request(request, source_issues=source_issues)

@@ -14,6 +14,8 @@
 
     import {numericArrows} from '$lib/actions/numericArrows';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import BrokerOperatingProfileBox from './profile/BrokerOperatingProfileBox.svelte';
+    import {draftsEqual, fromDraft, profileProblems, type OperatingProfileDocument, type ProfileDraft} from './profile/brokerOperatingProfile';
     type _DispatchEvents = {
         submit: {
             name: string;
@@ -26,8 +28,10 @@
             is_active: boolean;
             opened_at?: string;
             initial_balances?: Array<{code: string; amount: number}>;
+            operating_profile?: OperatingProfileDocument | null;
         };
         cancel: void;
+        profilechange: void;
     };
     const dispatch = createEventDispatcher();
 
@@ -46,6 +50,35 @@
     } = {};
     export let loading = false;
     export let tourPreview = false;
+    /**
+     * The broker's operating profile as read by the modal (P2 of project 67, D8 b), in a prop of its own: `initialData` and its
+     * reset stay as they are. Edit mode only; `operatingProfileState` says whether the reading is in, failed or on its way.
+     */
+    export let operatingProfile: ProfileDraft | null = null;
+    export let operatingProfileState: 'idle' | 'loading' | 'ready' | 'failed' = 'idle';
+
+    // The panel's latest draft; a new reading starts it again.
+    let profileDraft: ProfileDraft | null = null;
+    let profileRead: ProfileDraft | null = null;
+    $: if (operatingProfile !== profileRead) {
+        profileRead = operatingProfile;
+        profileDraft = operatingProfile;
+    }
+
+    // A profile field the backend would refuse (D4): the save is off and the panel says why.
+    $: profileBlocked = mode === 'edit' && operatingProfileState === 'ready' && profileDraft !== null && profileProblems(profileDraft).length > 0;
+
+    function profileChanged(next: ProfileDraft) {
+        profileDraft = next;
+        dispatch('profilechange');
+    }
+
+    /** The key `operating_profile`, only when the panel is ready and changed (D5): an untouched panel never overwrites the stored profile. */
+    function profileField(): {operating_profile?: OperatingProfileDocument | null} {
+        if (mode !== 'edit' || operatingProfileState !== 'ready' || !operatingProfile || !profileDraft) return {};
+        if (draftsEqual(profileDraft, operatingProfile)) return {};
+        return {operating_profile: fromDraft(profileDraft)};
+    }
 
     // Debug flag - set to false in production
     const DEBUG = false;
@@ -180,6 +213,7 @@
         const trimmedPortalUrl = portalUrl.trim();
         const trimmedIconUrl = iconUrl.trim();
         const trimmedPlugin = defaultImportPlugin?.trim() || '';
+        if (profileBlocked) return;
 
         dispatch('submit', {
             name: name.trim(),
@@ -194,6 +228,7 @@
             is_active: isActive,
             opened_at: openedAt || undefined,
             initial_balances: mode === 'create' && validBalances.length > 0 ? validBalances : undefined,
+            ...profileField(),
         });
     }
 
@@ -358,6 +393,27 @@
         {/if}
     </div>
 
+    <!-- Operating profile (edit only, P2 of project 67): the shared panel, every group shown -->
+    {#if mode === 'edit'}
+        <div class="space-y-3 border border-lf-subtle rounded-lg p-4 bg-lf-panel" data-testid="broker-operating-profile" data-state={operatingProfileState}>
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+                <h4 class="text-sm font-medium text-lf-secondary">{$_('brokers.operatingProfile.title')}</h4>
+                <span class="text-xs text-lf-muted">{$_('brokers.operatingProfile.usedBy')}</span>
+            </div>
+            <p class="text-xs text-lf-muted">{$_('brokers.operatingProfile.help')}</p>
+            {#if operatingProfileState === 'failed'}
+                <p class="text-sm text-lf-warning" data-testid="broker-operating-profile-unavailable">{$_('brokers.operatingProfile.unavailable')}</p>
+            {:else if operatingProfileState === 'ready' && operatingProfile}
+                {#if profileBlocked}
+                    <p class="text-sm text-lf-danger" role="alert" data-testid="broker-operating-profile-problems">{$_('brokers.operatingProfile.problems.fixBeforeSaving')}</p>
+                {/if}
+                <BrokerOperatingProfileBox draft={operatingProfile} disabled={loading} onchange={profileChanged} />
+            {:else}
+                <p class="text-sm text-lf-muted" data-testid="broker-operating-profile-loading">{$_('brokers.operatingProfile.loading')}</p>
+            {/if}
+        </div>
+    {/if}
+
     <!-- Initial Balances (only for create mode) -->
     {#if mode === 'create'}
         <div class="border-t border-lf-subtle pt-5">
@@ -419,7 +475,13 @@
         {$_('common.cancel')}
     </button>
     {#if !tourPreview}
-        <button class="px-4 py-2 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed" data-testid="broker-form-submit" disabled={!isValid || loading || hasDuplicateCurrencies} on:click={handleSubmit} type="button">
+        <button
+            class="px-4 py-2 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            data-testid="broker-form-submit"
+            disabled={!isValid || loading || hasDuplicateCurrencies || profileBlocked}
+            on:click={handleSubmit}
+            type="button"
+        >
             {#if loading}
                 <span class="inline-flex items-center space-x-2">
                     <span class="animate-spin">⏳</span>

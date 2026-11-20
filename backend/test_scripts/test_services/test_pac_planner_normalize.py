@@ -7,6 +7,7 @@ from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast, get_args
 
 import pytest
@@ -15,7 +16,13 @@ from backend.app.schemas.pac_allocator.base import PlannerIssueCode
 from backend.app.schemas.pac_allocator.exact import ExactRatio as WireExactRatio
 from backend.app.schemas.pac_allocator.exact import FiniteDecimal
 from backend.app.schemas.pac_allocator.issues import PlannerIssue, PlannerIssuePath
+from backend.app.schemas.pac_allocator.request import PlannerFundingRouteInput
 from backend.app.schemas.pac_allocator.results import PAC_PLAN_INPUT_ADAPTER, REBALANCER_PLAN_INPUT_ADAPTER
+from backend.app.services.financial_math.fx_rates import oriented_rate
+from backend.app.services.pac_allocator import normalize
+from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view
+from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs
+from backend.app.services.pac_allocator.evaluation.scenario import build_scenario_index
 from backend.app.services.pac_allocator.issues import (
     CANONICAL_ISSUE_CODES,
     W1_NORMALIZER_ISSUE_DEFINITIONS,
@@ -28,9 +35,10 @@ from backend.app.services.pac_allocator.issues import (
     normalizer_issue_definition,
     section_path,
 )
-from backend.app.services.pac_allocator.models import ExactFeeSchedule, ExactMoney, ExactPlannerScenario
+from backend.app.services.pac_allocator.models import FIDELITY_LEVEL_WEIGHTS, ExactFeeSchedule, ExactMoney, ExactPlannerScenario
 from backend.app.services.pac_allocator.normalize import (
     PlannerV2NormalizationResult,
+    _deposit_id,
     currency_minor_unit,
     exact_number_to_ratio,
     normalize_pac_plan,
@@ -38,11 +46,22 @@ from backend.app.services.pac_allocator.normalize import (
     normalize_rebalancer_plan,
 )
 from backend.app.services.pac_allocator.numeric import ExactRatio
-from backend.test_scripts.test_services._pac_synthetic_requests import FX_TRIANGLE, fx_conversion_request
+from backend.test_scripts.test_services._pac_synthetic_requests import (
+    FX_TRIANGLE,
+    amount_limit,
+    asset_entry,
+    cash_entry,
+    fx_conversion_request,
+    fx_two_assets_one_pair_request,
+    fx_two_brokers_request,
+    fx_two_sources_request,
+    fx_two_way_request,
+    share_limit,
+)
 
 FIXTURE_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "pac_allocator"
-PAC_FIXTURE = "pac_plan_request.min.v2.json"
-REBALANCER_FIXTURE = "rebalancer_plan_request.medium.v2.json"
+PAC_FIXTURE = "pac_plan_request.min.2-0-0.json"
+REBALANCER_FIXTURE = "rebalancer_plan_request.medium.2-0-0.json"
 
 JsonObject = dict[str, Any]
 
@@ -414,17 +433,6 @@ def _mutate_fx_rate(payload: JsonObject, value: str) -> None:
     payload["fx_rates"]["EUR/USD"] = value
 
 
-def _mutate_tax_rate(payload: JsonObject, value: str) -> None:
-    sell_context = payload["sell_context"]
-    assert isinstance(sell_context, dict)
-    tax = _find_row(
-        sell_context["asset_taxes"],
-        "asset_id",
-        "asset-a",
-    )
-    tax["tax_rate"] = value
-
-
 RANGE_MUTATORS: dict[str, Callable[[JsonObject, str], None]] = {
     "price": _mutate_price,
     "quote-basis": _mutate_quote_basis,
@@ -435,7 +443,6 @@ RANGE_MUTATORS: dict[str, Callable[[JsonObject, str], None]] = {
     "planning-quantity": _mutate_planning_quantity,
     "cash-selection": _mutate_cash_selection,
     "fx-rate": _mutate_fx_rate,
-    "tax-rate": _mutate_tax_rate,
 }
 
 
@@ -551,14 +558,7 @@ RANGE_ISSUE_CASES = (
         _field_wire_path("fx", "fx_rate", "EUR/USD", "rate"),
         id="fx-rate",
     ),
-    pytest.param(
-        "rebalancer",
-        "tax-rate",
-        "1.5",
-        "portfolio_rebalancer.tax_rate_out_of_range",
-        _field_wire_path("policy", "asset", "asset-a", "tax_rate"),
-        id="tax-rate",
-    ),
+    # «tax-rate» left with B3 (project 67): the normalizer reads the ``tax`` section from C1-C2 on, which brings the case back.
 )
 
 
@@ -716,24 +716,6 @@ def _rebalancer_fixture_without_mismatched_route_c_alpha_buy() -> JsonObject:
 def _inactive_executable_payload(
     trigger: str,
 ) -> tuple[str, JsonObject, str]:
-    if trigger == "sell-route":
-        payload = _rebalancer_fixture_without_mismatched_route_c_alpha_buy()
-        holding = _find_row(
-            payload["holdings"],
-            "holding_id",
-            "holding-a-alpha",
-        )
-        holding["economic_share"] = "1"
-        sell_context = payload["sell_context"]
-        assert isinstance(sell_context, dict)
-        tax = _find_row(
-            sell_context["asset_taxes"],
-            "asset_id",
-            "asset-a",
-        )
-        tax["tax_rate"] = "0.25"
-        return "rebalancer", payload, "broker-alpha"
-
     payload = _inactive_custody_only_payload()
     baseline = _fixture(PAC_FIXTURE)
     baseline_broker = _find_row(
@@ -813,7 +795,7 @@ def test_inactive_custody_only_adds_no_issue_and_cash_is_not_spendable() -> None
         pytest.param("capability", id="capability"),
         pytest.param("funding-route", id="funding-route"),
         pytest.param("buy-route", id="buy-route"),
-        pytest.param("sell-route", id="sell-route"),
+        # «sell-route» waits for C1 (project 67): until then no Rebalancer request with a sale route passes the schema (S1).
         # NOTE: "fx-route" was deleted -- it exercised a Broker becoming
         # "executable" solely by hosting an FX route/quote object. FX facts
         # are now global, broker-less `ExactFxRate` entries in the canonical
@@ -949,8 +931,8 @@ def test_canonical_issue_universe_matches_schema_and_w1_map_is_explicit() -> Non
     schema_codes = tuple(get_args(PlannerIssueCode))
 
     assert schema_codes == CANONICAL_ISSUE_CODES
-    assert len(schema_codes) == 77
-    assert len(set(schema_codes)) == 77
+    assert len(schema_codes) == 79
+    assert len(set(schema_codes)) == 79
     # FX conversion fix: an incoherent cross rate is a closed code of its own.
     assert "allocation.fx_rate_inconsistent" in schema_codes
     # Contract compaction: the planner reads neither a quote date nor a freshness any more.
@@ -976,7 +958,6 @@ REQUIRED_NONPRODUCER_CODES = {
     "allocation.solver_limit_no_incumbent",
     "allocation.zero_selected_funding",
     "pac_allocator.initial_holding_forbidden",
-    "portfolio_rebalancer.sell_irreducibility_unresolved",
 }
 
 
@@ -1071,23 +1052,22 @@ def test_semantically_invalid_medium_rebalancer_fixture_never_becomes_ready() ->
             "holding-a-alpha",
             "economic_share",
         ),
-        "portfolio_rebalancer.tax_rate_out_of_range": _field_wire_path(
-            "policy",
-            "asset",
-            "asset-a",
-            "tax_rate",
+        "allocation.currency_mismatch": _field_wire_path(
+            "routing",
+            "order_route",
+            "route-c-alpha-buy",
+            "fee_schedule_id",
         ),
     }
     for code, expected_path in expected_paths.items():
         assert _issue_wire_path(_single_issue(result, code)) == expected_path
+    # The ``tax`` section is not read before C1-C2 (B3 of project 67): no tax issue, whatever it holds.
+    assert not [issue for issue in result.issues if issue.code.startswith("portfolio_rebalancer.tax")]
 
 
 def _ready_rebalancer_payload() -> JsonObject:
     payload = _rebalancer_fixture_without_mismatched_route_c_alpha_buy()
     _find_row(payload["holdings"], "holding_id", "holding-a-alpha")["economic_share"] = "1"
-    sell_context = payload["sell_context"]
-    assert isinstance(sell_context, dict)
-    _find_row(sell_context["asset_taxes"], "asset_id", "asset-a")["tax_rate"] = "0.25"
     _find_row(payload["brokers"], "broker_id", "broker-alpha")["identity"]["active"] = True
     return payload
 
@@ -1682,8 +1662,8 @@ def test_normalized_scenario_derives_every_referenced_currency_quantum_from_babe
 # (no transfer cap = the whole selected source; F1-extended fee instances).
 # ---------------------------------------------------------------------------
 
-COMPACT_PAC_FIXTURE = "pac_plan_request.compact.v2.json"
-CANDIDATE_MAX_PAC_FIXTURE = "pac_plan_request.candidate-max.v2.json"
+COMPACT_PAC_FIXTURE = "pac_plan_request.compact.2-0-0.json"
+CANDIDATE_MAX_PAC_FIXTURE = "pac_plan_request.candidate-max.2-0-0.json"
 PAC_ROUTE_ID = "route-asset-one-broker-one-buy"
 PAC_CAPABILITY_ID = "cap-broker-one-eur-whole"
 PAC_FEE_SCHEDULE_ID = "fee-broker-one-eur-buy"
@@ -1746,12 +1726,6 @@ def _pac_payload_with_uncapped_cash_funding_route() -> JsonObject:
     return payload
 
 
-def _rebalancer_payload_with_uncapped_contribution_route() -> JsonObject:
-    payload = _ready_rebalancer_payload()
-    del _find_row(payload["funding_routes"], "funding_route_id", "fund-contribution-alpha")["transfer_cap"]
-    return payload
-
-
 ABSENT_TRANSFER_CAP_CASES = (
     pytest.param(
         "pac",
@@ -1759,15 +1733,7 @@ ABSENT_TRANSFER_CAP_CASES = (
         {"fund-cash-broker-one": (_money(ExactRatio(5), "EUR"), 0)},
         id="existing-cash-takes-the-selected-amount",
     ),
-    pytest.param(
-        "rebalancer",
-        _rebalancer_payload_with_uncapped_contribution_route,
-        {
-            "fund-contribution-alpha": (_money(ExactRatio(50), "EUR"), 1),
-            "fund-contribution-beta": (_money(ExactRatio(40), "EUR"), 2),
-        },
-        id="contribution-takes-its-whole-amount",
-    ),
+    # The Rebalancer's deposits are generated without a cap: ``test_rebalancer_deposits_and_lanes_are_generated``.
 )
 
 
@@ -1808,7 +1774,8 @@ def test_buy_routes_without_schedule_share_one_implicit_zero_instance_per_capabi
     assert next(row for row in schedules if row.fee_schedule_id == implicit_id) == _zero_fee_instance(implicit_id, ALPHA_CAPABILITY_ID, "EUR")
     routes = _route_fee_schedule_ids(scenario)
     assert (routes["route-a-alpha-buy"], routes["route-b-alpha-buy"]) == (implicit_id, implicit_id)
-    assert (routes["route-d-alpha-buy"], routes["route-a-alpha-sell"]) == ("fee-alpha-eur-buy", "fee-alpha-eur-sell")
+    # The SELL schedule stays on the Broker; no route uses it until C1 (project 67) lets a sale route in.
+    assert routes["route-d-alpha-buy"] == "fee-alpha-eur-buy"
 
 
 def test_currency_free_schedule_gets_one_instance_per_quote_currency_that_uses_it() -> None:
@@ -1843,10 +1810,8 @@ def test_currency_free_schedule_gets_one_instance_per_quote_currency_that_uses_i
     )
     assert _route_fee_schedule_ids(scenario) == {
         "route-a-alpha-buy": "fee-alpha-buy~EUR",
-        "route-a-alpha-sell": "fee-alpha-eur-sell",
         "route-b-alpha-buy": "fee-alpha-buy~EUR",
         "route-b-beta-buy": "fee-beta-eur-buy",
-        "route-b-beta-sell": "fee-beta-eur-sell",
         "route-c-alpha-buy": "fee-alpha-buy~USD",
         "route-c-beta-buy": "fee-beta-usd-buy",
         "route-d-alpha-buy": "fee-alpha-buy~EUR",
@@ -2184,10 +2149,6 @@ def _rebalancer_payload_funded_in_chf(cross_rate: str) -> JsonObject:
     payload = _ready_rebalancer_payload()
     for contribution in payload["contributions"]:
         contribution["amount"]["currency"] = "CHF"
-    for route in payload["funding_routes"]:
-        route["currency"] = "CHF"
-        if route.get("transfer_cap") is not None:
-            route["transfer_cap"]["currency"] = "CHF"
     payload["fx_rates"] = {**FX_TRIANGLE, "CHF/USD": cross_rate}
     return payload
 
@@ -2218,3 +2179,237 @@ def test_fx_rate_inconsistent_has_an_explicit_w1_definition() -> None:
     assert definition.kind == "invalid"
     assert definition.severity == "error"
     assert definition.producer == "w1_normalizer"
+
+
+# ---------------------------------------------------------------------------
+# A0 (project 67): the normalizer reads a stored FX rate through the house's ``oriented_rate``
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(("source", "destination"), [pytest.param("EUR", "USD", id="stored-direction"), pytest.param("USD", "EUR", id="inverse-direction")])
+def test_normalizer_fx_rate_is_the_oriented_rate(monkeypatch, source, destination):
+    """``fx_rate`` and ``_stored_fx_rate`` give what ``financial_math.fx_rates.oriented_rate`` gives, in both directions:
+    no inversion of their own. ``oriented_rate`` is replaced in the module by a recorder that delegates; before A0 the
+    module has no such name, so ``monkeypatch.setattr`` is the red."""
+    calls: list[tuple] = []
+
+    def recorder(rate, from_currency, to_currency):
+        calls.append((rate, from_currency, to_currency))
+        return oriented_rate(rate, from_currency, to_currency)
+
+    monkeypatch.setattr(normalize, "oriented_rate", recorder)
+    normalizer_class = normalize._PlannerV2Normalizer
+    stub = SimpleNamespace(request=SimpleNamespace(fx_rates={"EUR/USD": "1.25"}), _fx_pair_key=normalizer_class._fx_pair_key)
+    stored = ExactRatio(5, 4)
+
+    read = normalizer_class.fx_rate(stub, source, destination)
+    assert read == oriented_rate(stored, source, destination)
+    assert calls == [(stored, source, destination)]
+
+    calls.clear()
+    assert normalizer_class._stored_fx_rate(read, source, destination) == stored
+    assert calls and calls[0][1:] == (source, destination)
+
+
+def test_normalized_pac_scenario_has_no_broker_transfer() -> None:
+    """A2 step 10 (specification §15 n. 2): in the PAC the funding routes stay as the user declares them; the transfers between
+    Brokers belong to the Rebalancer. A normalized PAC scenario has no transfer lane, and its view no ``broker_transfer`` decision."""
+    for payload in (_fixture(PAC_FIXTURE), fx_conversion_request("no-transfer", funding_currency="EUR", assets=[("USD", "10.00")], fx_rates={"EUR/USD": "1.085"})):
+        scenario = _normalize_payload("pac", payload).normalized
+        assert scenario.transfer_lanes == ()
+        assert not [access for access in build_exact_policy_view(scenario).decisions if access.family == "broker_transfer"]
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        pytest.param(lambda: fx_conversion_request("pairs-one", funding_currency="EUR", assets=[("USD", "10.00")], fx_rates={"EUR/USD": "1.085"}), id="one-pair"),
+        pytest.param(fx_two_assets_one_pair_request, id="N1-two-routes-one-pair"),
+        pytest.param(fx_two_way_request, id="N2-both-directions"),
+        pytest.param(fx_two_brokers_request, id="N3-two-brokers"),
+        pytest.param(fx_two_sources_request, id="N4-two-sources"),
+    ],
+)
+def test_normalizer_and_engine_agree_on_conversion_pairs(build):
+    """A2 step 14: the normalizer checks a rate (and its coherence) for every conversion a buy may need, from its own
+    reading of the cash pools; the engine plans exactly those conversions, from ``fx_decision_specs``. The two readings of
+    the pool-currency rule (D2 a) must name the same (Broker, source, destination) pairs."""
+    payload = build()
+    request = PAC_PLAN_INPUT_ADAPTER.validate_json(_wire(payload), strict=True)
+    normalizer = normalize._PlannerV2Normalizer(request, ())
+    normalizer.validate_assets()
+    pools = normalizer._cash_pool_currencies_by_broker()
+    checked = {(route.broker_id, pool, normalizer.asset_by_id[route.asset_id].quote.currency) for route in request.order_routes if route.side == "buy" for pool in pools.get(route.broker_id, set()) if pool != normalizer.asset_by_id[route.asset_id].quote.currency}
+
+    scenario = _normalize_payload("pac", payload).normalized
+    planned = {(spec.broker_id, spec.source_currency, spec.destination_currency) for spec in fx_decision_specs(scenario, build_scenario_index(scenario), None)}
+    assert planned == checked
+    assert planned, "every case converts"
+
+
+# ---------------------------------------------------------------------------
+# A4 step 3 (project 67): target entries with limits, read from the request
+# ---------------------------------------------------------------------------
+
+
+def _issues(result, code: str) -> list:
+    return [issue for issue in result.issues if issue.code == code]
+
+
+def test_minimum_above_maximum_is_invalid_and_names_the_entry() -> None:
+    """The check of M1 from the request: an Asset whose minimum is above its maximum is ``invalid``, and the issue names the
+    entry (its minimum), so the interface can mark that row. Amounts and shares may be mixed: a share is read against the reference."""
+    payload = _fixture(PAC_FIXTURE)
+    payload["target_weights"] = [asset_entry("asset-one", "1", minimum=amount_limit("4"), maximum=amount_limit("3"))]
+
+    result = _normalize_payload("pac", payload)
+
+    assert (result.availability, result.normalized) == ("invalid", None)
+    (issue,) = _issues(result, "allocation.bound_min_above_max")
+    assert issue.path.model_dump() == {"kind": "field", "section": "targets", "entity_kind": "asset", "entity_id": "asset-one", "field": "minimum"}
+    assert issue.severity == "error" and issue.kind == "invalid"
+
+    mixed = _fixture(PAC_FIXTURE)
+    mixed["target_weights"] = [asset_entry("asset-one", "1", minimum=share_limit("0.8"), maximum=amount_limit("3"))]  # 80% of EUR5 = 4 > 3
+    assert _issues(_normalize_payload("pac", mixed), "allocation.bound_min_above_max")
+
+
+def test_rebalancer_cash_weight_reaches_the_exact_entry() -> None:
+    """B3 of project 67 (contract §5.2): a Rebalancer cash entry with a weight is an entry of the target; the weights of the
+    Assets and the cash entries sum to one together, and the weight reaches the exact entry. Without the cash weight the Assets
+    alone sum to 0.95, which is «not one»."""
+    scenario = _ready_rebalancer_scenario()
+    assert [(entry.broker_id, entry.currency, entry.weight, entry.minimum, entry.maximum) for entry in scenario.cash_entries] == [("broker-alpha", "EUR", ExactRatio(1, 20), None, None)]
+
+    short = _ready_rebalancer_payload()
+    short["target_weights"] = [entry for entry in short["target_weights"] if entry["kind"] == "asset"]
+    assert _issues(_normalize_payload("rebalancer", short), "allocation.target_total_not_one")
+
+    out_of_range = _ready_rebalancer_payload()
+    next(entry for entry in out_of_range["target_weights"] if entry["kind"] == "cash")["weight"] = "1.05"
+    result = _normalize_payload("rebalancer", out_of_range)
+    assert _issues(result, "allocation.target_weight_out_of_range") and not _issues(result, "allocation.target_total_not_one")
+
+
+def test_rebalancer_cash_item_on_a_broker_without_routes_is_reached_by_a_lane() -> None:
+    """A 5 % cash item on an active Broker that neither buys nor holds cash: the deposits go to the Brokers that buy, and a
+    lane in the item's currency reaches its cell, so its target is not unreachable by construction."""
+    payload = _ready_rebalancer_payload()
+    payload["brokers"].append({"broker_id": "broker-gamma", "identity": {"kind": "manual_broker", "name": "Synthetic Broker Gamma"}, "provenance_id": "prov-manual", "conversion_mode": "manual"})
+    next(entry for entry in payload["target_weights"] if entry["kind"] == "cash")["broker_id"] = "broker-gamma"
+
+    scenario = _ready_scenario("rebalancer", payload)
+
+    assert ("broker-alpha", "broker-gamma", "EUR") in {(lane.source_broker_id, lane.destination_broker_id, lane.currency) for lane in scenario.transfer_lanes}
+    assert "broker-gamma" not in {route.broker_id for route in scenario.funding_routes}
+
+
+def test_cash_entry_with_a_weight_is_unsupported_in_a_pac() -> None:
+    """Contract §5.2: a PAC cash entry may carry a minimum and a maximum; a weight other than zero is «unsupported» (it arrives
+    with the Rebalancer). A zero weight with no limit says nothing and is ignored."""
+    payload = _fixture(PAC_FIXTURE)
+    payload["target_weights"] = [asset_entry("asset-one", "1"), cash_entry("broker-one", "EUR", weight="0.5")]
+    result = _normalize_payload("pac", payload)
+    assert result.availability == "unsupported"
+    (issue,) = _issues(result, "pac_allocator.cash_weight_unsupported")
+    assert issue.path.model_dump() == {"kind": "field", "section": "targets", "entity_kind": "cash", "entity_id": "broker-one:EUR", "field": "weight"}
+
+    fine = _fixture(PAC_FIXTURE)
+    fine["target_weights"] = [asset_entry("asset-one", "1"), cash_entry("broker-one", "EUR", maximum=amount_limit("3")), cash_entry("broker-one", "USD")]
+    result = _normalize_payload("pac", fine)
+    assert result.availability == "ready", [issue.code for issue in result.issues]
+    assert [(entry.broker_id, entry.currency) for entry in result.normalized.cash_entries] == [("broker-one", "EUR")]
+
+
+def test_limit_values_are_checked_before_the_scenario_is_built() -> None:
+    """An amount in another currency than the valuation one, a negative amount and a share outside [0, 1] are refused with the
+    entry's field named; a cash entry at an unknown Broker is a missing reference."""
+    cases = {
+        "allocation.currency_mismatch": asset_entry("asset-one", "1", maximum=amount_limit("3", "USD")),
+        "allocation.target_weight_out_of_range": asset_entry("asset-one", "1", minimum=amount_limit("-1")),
+    }
+    for code, entry in cases.items():
+        payload = _fixture(PAC_FIXTURE)
+        payload["target_weights"] = [entry]
+        assert _issues(_normalize_payload("pac", payload), code), code
+    share = _fixture(PAC_FIXTURE)
+    share["target_weights"] = [asset_entry("asset-one", "1", maximum=share_limit("1.5"))]
+    assert _issues(_normalize_payload("pac", share), "allocation.target_weight_out_of_range")
+    unknown = _fixture(PAC_FIXTURE)
+    unknown["target_weights"] = [asset_entry("asset-one", "1"), cash_entry("broker-nowhere", "EUR", maximum=amount_limit("3"))]
+    assert _issues(_normalize_payload("pac", unknown), "allocation.reference_not_found")
+
+
+FIDELITY_LAMBDA_CASES = (
+    pytest.param({"kind": "level", "level": "cost_aware"}, "weighted", ExactRatio(1, 4), id="cost-aware"),
+    pytest.param({"kind": "level", "level": "balanced"}, "weighted", ExactRatio(1), id="balanced"),
+    pytest.param({"kind": "level", "level": "faithful"}, "weighted", ExactRatio(4), id="faithful"),
+    pytest.param({"kind": "custom", "lambda": "2.5"}, "weighted", ExactRatio(5, 2), id="custom"),
+    pytest.param({"kind": "target_first"}, "target_first", None, id="target-first"),
+)
+
+
+@pytest.mark.parametrize(("fidelity", "kind", "distance_weight"), FIDELITY_LAMBDA_CASES)
+def test_normalizer_maps_each_fidelity_level_to_its_lambda(fidelity: JsonObject, kind: str, distance_weight: ExactRatio | None) -> None:
+    """B3 test 5 (specifica §6.3): a level reads its ``λ`` off the one table (¼, 1, 4) the preview of B4 reuses; a custom
+    ``λ`` goes through exactly; «Target first» has none. The PAC has no fidelity: its objectives do not depend on it."""
+    payload = _ready_rebalancer_payload()
+    payload["target_fidelity"] = fidelity
+    scenario = _ready_scenario("rebalancer", payload)
+    assert (scenario.target_fidelity.kind, scenario.target_fidelity.distance_weight) == (kind, distance_weight)
+    if fidelity["kind"] == "level":
+        assert FIDELITY_LEVEL_WEIGHTS[fidelity["level"]] == distance_weight
+
+    pac = _normalize_payload("pac", _fixture(PAC_FIXTURE))
+    assert pac.ready and pac.normalized.target_fidelity is None
+
+
+def test_rebalancer_deposits_and_lanes_are_generated() -> None:
+    """Specification §15 n. 2, B3 of project 67: every contribution may be deposited, whole, at every Broker with a buy
+    route, in its own currency and with its provenance; transfers join every ordered pair of the Brokers, in every currency
+    of their cash, of the contributions and of the quotes they buy. The PAC keeps the funding routes it declares, and no lane."""
+    scenario = _ready_rebalancer_scenario()
+    assert {(route.route_id, route.source_kind, route.source_id, route.broker_id, route.currency, route.transfer_cap, route.priority, route.provenance_id) for route in scenario.funding_routes} == {
+        ("deposit:16:contribution-eur12:broker-alpha", "contribution", "contribution-eur", "broker-alpha", "EUR", _money(ExactRatio(50), "EUR"), 0, "prov-manual"),
+        ("deposit:16:contribution-eur11:broker-beta", "contribution", "contribution-eur", "broker-beta", "EUR", _money(ExactRatio(50), "EUR"), 0, "prov-manual"),
+    }
+    assert [(lane.source_broker_id, lane.destination_broker_id, lane.currency) for lane in scenario.transfer_lanes] == [
+        ("broker-alpha", "broker-beta", "EUR"),
+        ("broker-alpha", "broker-beta", "USD"),
+        ("broker-beta", "broker-alpha", "EUR"),
+        ("broker-beta", "broker-alpha", "USD"),
+    ]
+    assert scenario.sell_context is None
+
+    pac = _ready_scenario("pac", _pac_payload_with_uncapped_cash_funding_route())
+    assert [route.route_id for route in pac.funding_routes] == ["fund-cash-broker-one"]
+    assert pac.transfer_lanes == ()
+
+
+def test_deposit_ids_never_collide_and_stay_ids() -> None:
+    """Two pairs whose IDs contain ``:`` stay apart (length prefixes), and a pair past 128 characters still gives an ID."""
+    assert _deposit_id("a:b", "c") != _deposit_id("a", "b:c")
+    long_id = _deposit_id("c" * 128, "b" * 128)
+    assert len(long_id) <= 128 and long_id != _deposit_id("c" * 128, "b" * 127)
+    route = {"funding_route_id": long_id, "source": {"kind": "contribution", "contribution_id": "c"}, "broker_id": "b", "currency": "EUR", "provenance_id": "p"}
+    assert PlannerFundingRouteInput.model_validate_json(json.dumps(route), strict=True).funding_route_id == long_id
+
+
+def test_rebalancer_lanes_skip_an_inactive_broker_that_keeps_only_custody() -> None:
+    """An inactive Broker with only custody and a cash row selected at zero is ready (V9 keeps its facts), and gets no lane:
+    a lane moves cash only between active Brokers (``_validate_transfer_lanes``)."""
+    payload = _ready_rebalancer_payload()
+    payload["brokers"].append(
+        {
+            "broker_id": "broker-gamma",
+            "identity": {"kind": "domain_broker", "source_broker_id": "synthetic-broker-gamma", "name": "Synthetic Broker Gamma", "active": False},
+            "provenance_id": "prov-portfolio",
+            "conversion_mode": "manual",
+        }
+    )
+    payload["existing_cash"] = [{"cash_id": "cash-gamma-eur", "broker_id": "broker-gamma", "available": {"amount": "7", "currency": "EUR"}, "selected": {"amount": "0", "currency": "EUR"}, "provenance_id": "prov-portfolio"}]
+
+    scenario = _ready_scenario("rebalancer", payload)
+
+    assert "broker-gamma" in {broker.broker_id for broker in scenario.brokers}
+    assert not [lane for lane in scenario.transfer_lanes if "broker-gamma" in (lane.source_broker_id, lane.destination_broker_id)]

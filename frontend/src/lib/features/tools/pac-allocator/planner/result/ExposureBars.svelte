@@ -24,6 +24,10 @@
     import {chartRoles} from '$lib/theme/roleColors';
     import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
     import {actualColours, idealColour} from './exposureBarColours';
+    import {getPlannerProfile, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
 
     interface Props {
         rows: readonly WeightRow[];
@@ -77,7 +81,7 @@
             const fresh = chart === null;
             if (!chart) {
                 chart = echarts.init(element, CHART_INIT_THEME, chartInitOptions(element));
-                attachChartReady(chart, element, `pac-planner-exposure-bars-${dimension}`);
+                attachChartReady(chart, element, testId(`exposure-bars-${dimension}`, profile));
             }
             chart.setOption(next, CHART_SET_OPTION_OPTS);
             chart.resize();
@@ -172,4 +176,4 @@
     }
 </script>
 
-<div bind:this={container} class="w-full" style:height="{height}px" data-testid="pac-planner-exposures-bars" data-dimension={dimension} aria-hidden="true"></div>
+<div bind:this={container} class="w-full" style:height="{height}px" data-testid={testId('exposures-bars', profile)} data-dimension={dimension} aria-hidden="true"></div>

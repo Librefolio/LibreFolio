@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from backend.app.services.pac_allocator.evaluation.keys import asset_broker_key, entity_refs, fx_debit_key
-from backend.app.services.pac_allocator.evaluation.reachability import buy_pool_currencies
+from backend.app.services.pac_allocator.evaluation.keys import asset_broker_key, entity_refs
+from backend.app.services.pac_allocator.evaluation.limits import limited_entries
+from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs, fx_relay_groups, transfer_relay_groups
 from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex
 from backend.app.services.pac_allocator.models import (
     Checkpoint,
@@ -26,6 +27,9 @@ def ledger_keys(
     keys = {(cash.broker_id, cash.selected.currency) for cash in scenario.existing_cash}
     keys.update((route.broker_id, route.currency) for route in scenario.funding_routes)
     keys.update((route.broker_id, index.assets[route.asset_id].quote.price.currency) for route in scenario.order_routes)
+    for lane in scenario.transfer_lanes:
+        keys.update(((lane.source_broker_id, lane.currency), (lane.destination_broker_id, lane.currency)))
+    keys.update((limit.broker_id, limit.currency) for limit in scenario.cash_entries)
     return tuple(sorted(keys))
 
 
@@ -154,71 +158,123 @@ def _fx_constraint_refs(
     checkpoint: Checkpoint | None,
 ) -> list[ConstraintRef]:
     refs: list[ConstraintRef] = []
-    for route in scenario.order_routes:
-        if route.side != "buy":
-            continue
+    for spec in fx_decision_specs(scenario, index, checkpoint):
         check_budget(checkpoint)
-        quote_currency = index.assets[route.asset_id].quote.price.currency
-        for currency in buy_pool_currencies(
-            scenario,
-            index,
-            broker_id=route.broker_id,
-            quote_currency=quote_currency,
-            checkpoint=checkpoint,
-        ):
-            key = fx_debit_key(route.route_id, currency)
-            route_refs = entity_refs(
-                ("order_route", route.route_id),
-                ("currency", currency),
+        currency, quote_currency, key, route_refs = spec.source_currency, spec.destination_currency, spec.key, spec.entity_refs
+        refs.extend(
+            (
+                _constraint_ref(
+                    code="FX_DEBIT_CREDIT_COUPLED",
+                    key=key,
+                    scope=spec.scope,
+                    entity_refs=route_refs,
+                    unit=ExactUnit(
+                        kind="native_money",
+                        currency_code=quote_currency,
+                    ),
+                    bound_source="approved rate and global spread",
+                ),
+                _constraint_ref(
+                    code="FX_CREDIT_POSITIVE",
+                    key=key,
+                    scope=spec.scope,
+                    entity_refs=route_refs,
+                    unit=ExactUnit(
+                        kind="native_money",
+                        currency_code=quote_currency,
+                    ),
+                    bound_source="posted destination credit",
+                ),
+                _constraint_ref(
+                    code="FX_NATIVE_QUANTUM",
+                    key=key,
+                    scope=spec.scope,
+                    entity_refs=route_refs,
+                    unit=ExactUnit(
+                        kind="native_money",
+                        currency_code=currency,
+                    ),
+                    bound_source="source currency minor unit",
+                ),
+                _constraint_ref(
+                    code="FX_SOURCE_CASH",
+                    key=key,
+                    scope=spec.scope,
+                    entity_refs=route_refs,
+                    unit=ExactUnit(
+                        kind="native_money",
+                        currency_code=currency,
+                    ),
+                    bound_source="Broker source-currency ledger",
+                ),
             )
-            refs.extend(
-                (
-                    _constraint_ref(
-                        code="FX_DEBIT_CREDIT_COUPLED",
-                        key=key,
-                        scope="order_route",
-                        entity_refs=route_refs,
-                        unit=ExactUnit(
-                            kind="native_money",
-                            currency_code=quote_currency,
-                        ),
-                        bound_source="approved rate and global spread",
-                    ),
-                    _constraint_ref(
-                        code="FX_CREDIT_POSITIVE",
-                        key=key,
-                        scope="order_route",
-                        entity_refs=route_refs,
-                        unit=ExactUnit(
-                            kind="native_money",
-                            currency_code=quote_currency,
-                        ),
-                        bound_source="posted destination credit",
-                    ),
-                    _constraint_ref(
-                        code="FX_NATIVE_QUANTUM",
-                        key=key,
-                        scope="order_route",
-                        entity_refs=route_refs,
-                        unit=ExactUnit(
-                            kind="native_money",
-                            currency_code=currency,
-                        ),
-                        bound_source="source currency minor unit",
-                    ),
-                    _constraint_ref(
-                        code="FX_SOURCE_CASH",
-                        key=key,
-                        scope="order_route",
-                        entity_refs=route_refs,
-                        unit=ExactUnit(
-                            kind="native_money",
-                            currency_code=currency,
-                        ),
-                        bound_source="Broker source-currency ledger",
-                    ),
-                )
+        )
+    return refs
+
+
+def _fx_relay_constraint_refs(
+    scenario: ExactPlannerScenario,
+    index: ScenarioIndex,
+    checkpoint: Checkpoint | None,
+) -> list[ConstraintRef]:
+    """V7: one ref per Broker and currency that both receives and gives a conversion (``FX_NO_RELAY``)."""
+    return [
+        _constraint_ref(
+            code="FX_NO_RELAY",
+            key=group.key,
+            scope="broker",
+            entity_refs=entity_refs(("broker", group.broker_id), ("currency", group.currency)),
+            unit=ExactUnit(kind="count"),
+            bound_source="a currency that receives a conversion does not give one (V7)",
+        )
+        for group in fx_relay_groups(fx_decision_specs(scenario, index, checkpoint))
+    ]
+
+
+def _transfer_relay_constraint_refs(
+    scenario: ExactPlannerScenario,
+    index: ScenarioIndex,
+    checkpoint: Checkpoint | None,
+) -> list[ConstraintRef]:
+    """The Rebalancer's cash rule: one ref per Broker and currency a transfer lane leaves (``TRANSFER_NO_RELAY``, lot CR)."""
+    if scenario.product != "rebalancer":
+        return []
+    return [
+        _constraint_ref(
+            code="TRANSFER_NO_RELAY",
+            key=group.key,
+            scope="broker",
+            entity_refs=entity_refs(("broker", group.broker_id), ("currency", group.currency)),
+            unit=ExactUnit(kind="count"),
+            bound_source="a cash cell that receives a conversion or a transfer sends no transfer (cash rule, lot CR)",
+        )
+        for group in transfer_relay_groups(scenario, fx_decision_specs(scenario, index, checkpoint))
+    ]
+
+
+def _limit_constraint_refs(
+    scenario: ExactPlannerScenario,
+    index: ScenarioIndex,
+    valuation_unit: ExactUnit,
+    checkpoint: Checkpoint | None,
+) -> list[ConstraintRef]:
+    """V5 (``ENTRY_VALUE_WITHIN_LIMITS``) for every entry that carries a limit.
+
+    Nothing is added to a scenario without limits, so its view is what it was before A3.
+    """
+    refs: list[ConstraintRef] = []
+    for entry in limited_entries(scenario):
+        check_budget(checkpoint)
+        refs.append(
+            _constraint_ref(
+                code="ENTRY_VALUE_WITHIN_LIMITS",
+                key=entry.key,
+                scope="asset" if entry.kind == "asset" else "cash",
+                entity_refs=entity_refs(("asset", entry.asset_id)) if entry.kind == "asset" else entity_refs(("broker", entry.broker_id), ("currency", entry.currency)),
+                unit=valuation_unit,
+                bound_source="limits of the entry, resolved on the reference",
             )
+        )
     return refs
 
 
@@ -257,11 +313,6 @@ def _order_constraint_refs(
                 "ORDER_MIN_IF_ACTIVE",
                 "route minimum_if_active",
                 "allocation.order_minimum_exceeds_cap",
-            ),
-            (
-                "ORDER_REQUIRED_MIN",
-                "route required_minimum",
-                "allocation.required_min_notional_unfunded",
             ),
             ("ORDER_CAP", "route cap", "allocation.order_cap_nonpositive"),
             ("ORDER_SIDE_ALLOWED", "declared route side", None),
@@ -316,17 +367,6 @@ def _order_constraint_refs(
                         currency_code=quote_currency,
                     ),
                     bound_source="posted BUY cash debit",
-                )
-            )
-        if purpose == "sell_extension" and route.side == "sell":
-            refs.append(
-                _constraint_ref(
-                    code="SELL_ELIGIBLE",
-                    key=route.route_id,
-                    scope="order_route",
-                    entity_refs=route_refs,
-                    unit=boolean_unit,
-                    bound_source="frozen invest-only baseline",
                 )
             )
     return refs
@@ -419,7 +459,6 @@ def _position_constraint_refs(
                     entity_refs=asset_refs,
                     unit=boolean_unit,
                     bound_source="active order sides",
-                    public_issue_code="allocation.required_buy_sell_conflict",
                 ),
             )
         )
@@ -462,20 +501,8 @@ def _global_constraint_refs(
                 scope="scenario",
                 entity_refs=(),
                 unit=valuation_unit,
-                bound_source="current and final invested value",
+                bound_source="current invested value",
                 public_issue_code=("portfolio_rebalancer.nonpositive_current_portfolio"),
-            )
-        )
-    if purpose == "sell_extension":
-        refs.append(
-            _constraint_ref(
-                code="SELL_FUNDS_INCREMENTAL_BUY",
-                key="global",
-                scope="scenario",
-                entity_refs=(),
-                unit=boolean_unit,
-                bound_source="frozen baseline and incremental BUY",
-                public_issue_code="portfolio_rebalancer.sell_to_idle_forbidden",
             )
         )
     return refs
@@ -505,6 +532,9 @@ def build_constraint_refs(
             checkpoint,
         )
     )
+    refs.extend(_fx_relay_constraint_refs(scenario, index, checkpoint))
+    refs.extend(_transfer_relay_constraint_refs(scenario, index, checkpoint))
+    refs.extend(_limit_constraint_refs(scenario, index, valuation_unit, checkpoint))
     refs.extend(
         _order_constraint_refs(
             scenario,
@@ -563,27 +593,27 @@ def _objective_codes(
             "route_priority",
             "explicit_cost",
         )
-    return (
-        "fixed_l2",
-        "shortfall",
-        "turnover",
-        "explicit_cost",
-        "active_order_rows",
-    )
+    # The Rebalancer (specifica §6.3): a weighted fidelity is one score, «Target first» the distance then the money lost.
+    # Then the tie-breaks of specifica §6.4, which choose only among plans equal on what precedes them.
+    tie_breaks: tuple[ExactObjectiveCode, ...] = ("operation_count", "route_priority")
+    if scenario.target_fidelity is not None and scenario.target_fidelity.kind == "target_first":
+        return ("target_distance", "wealth_loss", *tie_breaks)
+    return ("plan_score", *tie_breaks)
 
 
 def _objective_unit(
     scenario: ExactPlannerScenario,
     code: ExactObjectiveCode,
 ) -> ExactUnit:
-    if code == "fixed_l2":
+    if code in {"fixed_l2", "target_distance"}:
         return ExactUnit(
             kind="valuation_money_squared",
             currency_code=scenario.valuation_currency,
         )
     if code in {
         "shortfall",
-        "turnover",
+        "plan_score",
+        "wealth_loss",
         "explicit_cost",
         "incremental_cost",
     }:
@@ -595,6 +625,7 @@ def _objective_unit(
         "split_asset_count",
         "active_order_rows",
         "incremental_order_rows",
+        "operation_count",
     }:
         return ExactUnit(kind="count")
     return ExactUnit(kind="ordinal_penalty")

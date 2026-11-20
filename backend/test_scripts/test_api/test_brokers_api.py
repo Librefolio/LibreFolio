@@ -1409,3 +1409,69 @@ class TestBrokerImportEndpoints:
             assert item["last_parse_result"]["plugin_code"] == "broker_generic_csv"
 
             print_success("✓ BRIM parse auto fallback returned cached generic CSV result")
+
+
+# ============================================================================
+# THE OPERATING PROFILE (P1 of project 67, tests 23–24)
+# ============================================================================
+
+#: A small valid profile: one whole-quantity mode in EUR with a buy fee, conversions by the broker.
+OPERATING_PROFILE = {
+    "profile_version": 1,
+    "order_modes": [
+        {
+            "currency": "EUR",
+            "capability": {"kind": "whole_quantity", "capability_id": "mode:EUR", "quantity_unit": "asset_unit", "quantity_step": "1"},
+            "fees": [{"fee_schedule_id": "fee:EUR:buy", "capability_id": "mode:EUR", "side": "buy", "rate": "0.0019", "variable_floor": {"amount": "2.95", "currency": "EUR"}}],
+        }
+    ],
+    "conversion_mode": "automatic",
+    "tax_regime": "administered",
+}
+
+
+def _contains(served, sent) -> bool:
+    """Every key the client sent is served with the same value; the server may add the shapes' defaults."""
+    if isinstance(sent, dict):
+        return isinstance(served, dict) and all(key in served and _contains(served[key], value) for key, value in sent.items())
+    if isinstance(sent, list):
+        return isinstance(served, list) and len(served) == len(sent) and all(_contains(a, b) for a, b in zip(served, sent, strict=True))
+    return served == sent
+
+
+class TestBrokerOperatingProfile:
+    """``PATCH /brokers/{id}`` writes the profile, ``GET /brokers/{id}`` and ``GET /brokers`` read it back (own broker)."""
+
+    @pytest.mark.asyncio
+    async def test_patch_then_get_round_trips_the_profile(self, test_server):
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            created = await client.post(f"{API_BASE}/brokers", json=[{"name": unique_name("Profile Broker")}], timeout=TIMEOUT)
+            broker_id = created.json()["results"][0]["broker_id"]
+
+            patched = await client.patch(f"{API_BASE}/brokers/{broker_id}", json={"operating_profile": OPERATING_PROFILE}, timeout=TIMEOUT)
+            assert patched.status_code == 200 and patched.json()["success_count"] == 1, patched.text
+
+            one = (await client.get(f"{API_BASE}/brokers/{broker_id}", timeout=TIMEOUT)).json()
+            assert _contains(one["operating_profile"], OPERATING_PROFILE), one["operating_profile"]
+            listed = (await client.get(f"{API_BASE}/brokers", timeout=TIMEOUT)).json()["items"]
+            mine = next(item for item in listed if item["id"] == broker_id)
+            assert mine["operating_profile"] == one["operating_profile"]
+
+            cleared = await client.patch(f"{API_BASE}/brokers/{broker_id}", json={"operating_profile": None}, timeout=TIMEOUT)
+            assert cleared.json()["success_count"] == 1
+            assert (await client.get(f"{API_BASE}/brokers/{broker_id}", timeout=TIMEOUT)).json()["operating_profile"] is None
+            print_success("✓ PATCH writes the profile, GET reads it back, null clears it")
+
+    @pytest.mark.asyncio
+    async def test_patch_with_an_unknown_profile_key_is_422(self, test_server):
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            created = await client.post(f"{API_BASE}/brokers", json=[{"name": unique_name("Profile Broker")}], timeout=TIMEOUT)
+            broker_id = created.json()["results"][0]["broker_id"]
+
+            response = await client.patch(f"{API_BASE}/brokers/{broker_id}", json={"operating_profile": {**OPERATING_PROFILE, "unexpected": 1}}, timeout=TIMEOUT)
+
+            assert response.status_code == 422, response.text
+            assert (await client.get(f"{API_BASE}/brokers/{broker_id}", timeout=TIMEOUT)).json()["operating_profile"] is None
+            print_success("✓ an unknown key in the profile: 422, nothing written")

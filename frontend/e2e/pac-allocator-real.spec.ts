@@ -46,7 +46,9 @@ import {uniqueSuffix} from './fixtures/unique';
 
 const API = '/api/v1';
 const TOOLS_CATALOG_PATH = `${API}/tools/catalog`;
-const TOOLS_COMPUTE_PATH = `${API}/tools/compute`;
+// The planner reads its calculation through the streaming route (V3 of project 67): progress lines, then the result line.
+const TOOLS_COMPUTE_STREAM_PATH = `${API}/tools/compute/stream`;
+const PLANNER_PHASES = ['validate', 'model', 'search', 'verify', 'report'];
 
 /** The compiled planner's interface key (registry.ts, `defineToolRenderer(…, {componentKey})`): how the catalogue names the tool this spec drives. */
 const PLANNER_COMPONENT_KEY = 'pac-allocator';
@@ -117,16 +119,6 @@ type Amount = {figure: Figure; units: bigint; scale: number};
 
 const DECIMAL = /^([+-])?(\d+)(?:\.(\d+))?$/;
 
-/**
- * A wait armed before the action and awaited later. If the test fails in between, the pending wait would reject
- * unobserved when the page closes, and that noise would be reported beside the real failure; awaiting the returned
- * promise still throws as usual.
- */
-function armed<T>(wait: Promise<T>): Promise<T> {
-    wait.catch(() => undefined);
-    return wait;
-}
-
 async function jsonFrom<T>(response: HttpResponse, purpose: string): Promise<T> {
     expect(response.ok(), `${purpose}: HTTP ${response.status()} ${await response.text()}`).toBeTruthy();
     return (await response.json()) as T;
@@ -140,7 +132,46 @@ function attr(value: string): string {
 const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 function isCompute(req: Request): boolean {
-    return req.method() === 'POST' && new URL(req.url()).pathname === TOOLS_COMPUTE_PATH;
+    return req.method() === 'POST' && new URL(req.url()).pathname === TOOLS_COMPUTE_STREAM_PATH;
+}
+
+type StreamLine = {kind: 'progress'; correlation_id: string; phase: string} | {kind: 'result'; response: ComputeAnswer};
+
+/**
+ * The calculation as the server answered it. The browser does not keep the body of a streamed `fetch`, so the route is
+ * intercepted: Playwright reads the server's whole answer, the test keeps it, and the page receives it unchanged — at once,
+ * as when a proxy holds a stream back, which the client handles the same way (V1 of project 67).
+ */
+async function captureCompute(page: Page): Promise<{ask: () => Promise<ComputeAsk>; answer: () => Promise<{status: number; text: string}>}> {
+    let resolveAsk: (value: ComputeAsk) => void = () => undefined;
+    let resolveAnswer: (value: {status: number; text: string}) => void = () => undefined;
+    const ask = new Promise<ComputeAsk>((resolve) => (resolveAsk = resolve));
+    const answer = new Promise<{status: number; text: string}>((resolve) => (resolveAnswer = resolve));
+    await page.route(
+        (url) => url.pathname === TOOLS_COMPUTE_STREAM_PATH,
+        async (route) => {
+            if (!isCompute(route.request())) return route.continue();
+            resolveAsk(route.request().postDataJSON() as ComputeAsk);
+            const response = await route.fetch({timeout: CALCULATION_TIMEOUT_MS});
+            const text = await response.text();
+            resolveAnswer({status: response.status(), text});
+            await route.fulfill({response, body: text});
+        },
+    );
+    const bounded = <T>(wait: Promise<T>, what: string): Promise<T> => Promise.race([wait, new Promise<T>((_resolve, reject) => setTimeout(() => reject(new Error(`no ${what} within ${CALCULATION_TIMEOUT_MS} ms`)), CALCULATION_TIMEOUT_MS))]);
+    return {ask: () => bounded(ask, 'compute request'), answer: () => bounded(answer, 'compute answer')};
+}
+
+/** The lines of the streaming route's answer: progress lines, then the result line, whose `response` is `/compute`'s answer. */
+function streamFrom({status, text}: {status: number; text: string}, purpose: string): {phases: string[]; answer: ComputeAnswer} {
+    expect(status >= 200 && status < 300, `${purpose}: HTTP ${status} ${text}`).toBeTruthy();
+    const lines = text
+        .split('\n')
+        .filter((line) => line.trim() !== '')
+        .map((line) => JSON.parse(line) as StreamLine);
+    const last = lines.at(-1);
+    if (last?.kind !== 'result') throw new Error(`${purpose}: the stream ended without its result line`);
+    return {phases: lines.flatMap((line) => (line.kind === 'progress' ? [line.phase] : [])), answer: last.response};
 }
 
 // ---------------------------------------------------------------------------
@@ -510,12 +541,12 @@ test.describe('PAC allocator (beta) on real data — 1.2 gap 3', () => {
             const calculate = review.getByTestId('pac-planner-calculate');
             await expect(calculate).toBeEnabled();
 
-            const computed = armed(page.waitForResponse((response) => isCompute(response.request()), {timeout: CALCULATION_TIMEOUT_MS}));
+            const computed = await captureCompute(page);
             const since = await eventSeq(page);
             await calculate.click();
-            const response = await computed;
-            const ask = response.request().postDataJSON() as ComputeAsk;
-            const answer = await jsonFrom<ComputeAnswer>(response, `POST ${TOOLS_COMPUTE_PATH}`);
+            const ask = await computed.ask();
+            const {phases, answer} = streamFrom(await computed.answer(), `POST ${TOOLS_COMPUTE_STREAM_PATH}`);
+            expect([...new Set(phases)], 'the plan reports its phases, in order, before its answer').toEqual(PLANNER_PHASES);
 
             expect(
                 ask.items.map((item) => item.tool_code),

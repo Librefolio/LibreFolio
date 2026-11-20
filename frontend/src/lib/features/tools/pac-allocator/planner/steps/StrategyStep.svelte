@@ -11,6 +11,10 @@
     import {contractPolicies, OBJECTIVE_FALLBACKS, OBJECTIVE_HELP_FALLBACKS, OBJECTIVE_TIPS, POLICY_OBJECTIVES} from '../policies';
     import HelpTip from '../shared/HelpTip.svelte';
     import {CARD, HINT, ICON_BUBBLE, NOTICE, SECTION_TITLE} from '../ui';
+    import {getPlannerProfile, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
     const PLANNER_KEY = 'tools.pacAllocator.planner';
 
     interface Props {
@@ -20,7 +24,7 @@
     let {draft}: Props = $props();
 
     const ids = $props.id();
-    const policies = contractPolicies();
+    const policies = contractPolicies(profile);
     const POLICY_FALLBACKS: Record<string, string> = {proportional: 'Proportional'};
     const POLICY_HELP_FALLBACKS: Record<string, string> = {
         proportional: 'It buys so that the money you invest splits among the Assets as close as possible to your targets.',
@@ -32,31 +36,31 @@
     const objectiveName = (code: string) => $t(`${PLANNER_KEY}.objectives.${code}`, {default: OBJECTIVE_FALLBACKS[code] ?? code});
 </script>
 
-<div class="space-y-4" data-testid="pac-planner-strategy">
+<div class="space-y-4" data-testid={testId('strategy', profile)}>
     <p class="max-w-3xl text-sm text-lf-secondary">
         {$t('tools.pacAllocator.planner.strategy.intro', {default: 'Among all the purchase plans that respect what you set in the previous steps, the strategy picks the best one.'})}
     </p>
 
     {#if policies.length === 0}
-        <div class={NOTICE.danger} role="alert" data-testid="pac-planner-strategy-none">{$t('tools.pacAllocator.planner.strategy.none', {default: 'The backend contract offers no strategy: the plan cannot be calculated.'})}</div>
+        <div class={NOTICE.danger} role="alert" data-testid={testId('strategy-none', profile)}>{$t('tools.pacAllocator.planner.strategy.none', {default: 'The backend contract offers no strategy: the plan cannot be calculated.'})}</div>
     {/if}
 
     <fieldset class="max-w-3xl space-y-3">
         <legend class="sr-only">{$t('tools.pacAllocator.planner.steps.strategy', {default: 'Strategy'})}</legend>
         {#each policies as policy (policy)}
             {@const objectives = POLICY_OBJECTIVES[policy] ?? []}
-            <div class={CARD} data-testid="pac-planner-policy" data-policy={policy}>
+            <div class={CARD} data-testid={testId('policy', profile)} data-policy={policy}>
                 <label for="{ids}-{policy}" class="flex cursor-pointer items-start gap-2">
-                    <input id="{ids}-{policy}" type="radio" name="{ids}-policy" value={policy} bind:group={draft.data.policy} class="mt-1 shrink-0 accent-lf-checked" data-testid="pac-planner-policy-radio" />
+                    <input id="{ids}-{policy}" type="radio" name="{ids}-policy" value={policy} bind:group={draft.data.policy} class="mt-1 shrink-0 accent-lf-checked" data-testid={testId('policy-radio', profile)} />
                     <span class="min-w-0">
                         <span class="block font-medium text-lf-primary">{$t(`${PLANNER_KEY}.policies.${policy}`, {default: POLICY_FALLBACKS[policy] ?? policy})}</span>
                         {#if POLICY_HELP_FALLBACKS[policy]}
-                            <span class="mt-0.5 block text-sm text-lf-secondary" data-testid="pac-planner-policy-help">
+                            <span class="mt-0.5 block text-sm text-lf-secondary" data-testid={testId('policy-help', profile)}>
                                 {$t(`${PLANNER_KEY}.policyHelp.${policy}`, {default: POLICY_HELP_FALLBACKS[policy]})}
                             </span>
                         {/if}
                         {#if POLICY_SCOPE_FALLBACKS[policy]}
-                            <span class="mt-0.5 block text-sm text-lf-secondary" data-testid="pac-planner-policy-scope">
+                            <span class="mt-0.5 block text-sm text-lf-secondary" data-testid={testId('policy-scope', profile)}>
                                 {$t(`${PLANNER_KEY}.policyScope.${policy}`, {default: POLICY_SCOPE_FALLBACKS[policy]})}
                             </span>
                         {/if}
@@ -65,10 +69,10 @@
                 {#if objectives.length > 0}
                     <div class="mt-4 border-t border-lf-subtle pt-3">
                         <p class={SECTION_TITLE}>{$t('tools.pacAllocator.planner.strategy.cascade', {default: 'How it picks the plan, in order'})}</p>
-                        <p class="mt-1 {HINT}" data-testid="pac-planner-policy-rule">
+                        <p class="mt-1 {HINT}" data-testid={testId('policy-rule', profile)}>
                             {$t('tools.pacAllocator.planner.strategy.cascadeRule', {default: 'Each criterion decides only among the plans still tied on the ones above it.'})}
                         </p>
-                        <ol class="mt-3 space-y-2.5" data-testid="pac-planner-policy-objectives">
+                        <ol class="mt-3 space-y-2.5" data-testid={testId('policy-objectives', profile)}>
                             {#each objectives as objective, index (objective)}
                                 {@const tip = OBJECTIVE_TIPS[objective]}
                                 <li class="flex items-start gap-3" data-objective={objective}>
@@ -77,7 +81,7 @@
                                         <div class="flex flex-wrap items-center gap-0.5 text-sm font-medium text-lf-primary">
                                             <span>{objectiveName(objective)}</span>
                                             {#if tip}
-                                                <HelpTip label={objectiveName(objective)} help={$t(tip.key, {default: tip.fallback})} math={tip.math} spoken={tip.spoken ? $t(tip.spoken.key, {default: tip.spoken.fallback}) : undefined} testid="pac-planner-objective-help" />
+                                                <HelpTip label={objectiveName(objective)} help={$t(tip.key, {default: tip.fallback})} math={tip.math} spoken={tip.spoken ? $t(tip.spoken.key, {default: tip.spoken.fallback}) : undefined} testid={testId('objective-help', profile)} />
                                             {/if}
                                         </div>
                                         {#if OBJECTIVE_HELP_FALLBACKS[objective]}
@@ -87,7 +91,7 @@
                                 </li>
                             {/each}
                         </ol>
-                        <div class="mt-2.5 flex items-start gap-3" data-testid="pac-planner-policy-tie-break">
+                        <div class="mt-2.5 flex items-start gap-3" data-testid={testId('policy-tie-break', profile)}>
                             <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-lf-panel text-lf-muted" aria-hidden="true"><Equal size={14} /></span>
                             <div class="min-w-0">
                                 <p class="text-sm font-medium text-lf-primary">{$t('tools.pacAllocator.planner.strategy.tieBreakTitle', {default: 'Final tie-break'})}</p>

@@ -152,9 +152,11 @@ import {
     exactQuantityCount,
     formatCopyStamp,
     formatExactFxRate,
+    formatExactMoneyCompact,
     formatExactMoneyHtml,
     formatExactMoneyPlain,
     formatExactPercent,
+    formatExactPoints,
     formatExactQuantity,
     formatObjectiveValue,
     formatPlannerDate,
@@ -170,7 +172,7 @@ import {
     plannerPlainDecimalCount,
     plannerQuantityCount,
 } from './format';
-import type {PacExactMoney, PacExactNumber, PacObjectiveUnit} from './types';
+import type {PlannerExactMoney, PlannerExactNumber, PlannerObjectiveUnit} from './types';
 
 const P = PRIVACY_PLACEHOLDER;
 const EMPTY = '—';
@@ -180,22 +182,22 @@ const digits = catalogCurrencyDigits([
     {currency: 'JPY', minor_unit: '1'},
 ]);
 
-const EUR_MONEY: PacObjectiveUnit = {kind: 'valuation_money', currency_code: 'EUR'};
-const JPY_MONEY: PacObjectiveUnit = {kind: 'valuation_money', currency_code: 'JPY'};
-const EUR_SQUARED: PacObjectiveUnit = {kind: 'valuation_money_squared', currency_code: 'EUR'};
-const COUNT: PacObjectiveUnit = {kind: 'count'};
-const PENALTY: PacObjectiveUnit = {kind: 'ordinal_penalty'};
+const EUR_MONEY: PlannerObjectiveUnit = {kind: 'valuation_money', currency_code: 'EUR'};
+const JPY_MONEY: PlannerObjectiveUnit = {kind: 'valuation_money', currency_code: 'JPY'};
+const EUR_SQUARED: PlannerObjectiveUnit = {kind: 'valuation_money_squared', currency_code: 'EUR'};
+const COUNT: PlannerObjectiveUnit = {kind: 'count'};
+const PENALTY: PlannerObjectiveUnit = {kind: 'ordinal_penalty'};
 
-function finite(value: string): PacExactNumber {
+function finite(value: string): PlannerExactNumber {
     return {kind: 'finite_decimal', value};
 }
 
 /** An exact ratio as the backend sends it. The display projection is not authoritative. */
-function ratio(numerator: string, denominator: string, display_decimal: string, display_scale = 6): PacExactNumber {
+function ratio(numerator: string, denominator: string, display_decimal: string, display_scale = 6): PlannerExactNumber {
     return {kind: 'exact_ratio', numerator, denominator, display_decimal, display_scale, display_authority: 'non_authoritative'};
 }
 
-function money(value: PacExactNumber, currency = 'EUR'): PacExactMoney {
+function money(value: PlannerExactNumber, currency = 'EUR'): PlannerExactMoney {
     return {value, currency};
 }
 
@@ -461,6 +463,35 @@ describe('formatExactMoneyPlain / formatExactMoneyHtml — privacy on', () => {
         // Control for the masked expectation: in the clear the same call shows the digits.
         privacy(false);
         expect(digitsOf(formatExactMoneyHtml(money(finite('1234.5678')), {digits}))).toBe('123457');
+    });
+});
+
+describe('formatExactMoneyCompact — two significant digits and the symbol only, for a table that names its currency once (G6-1)', () => {
+    it('keeps two significant digits, with ≈ only where the rounding changed the amount', () => {
+        const exact = formatExactMoneyCompact(money(finite('2.4')));
+        expect(digitsOf(exact)).toBe('24');
+        expect(exact).not.toContain('≈');
+        expect(digitsOf(formatExactMoneyCompact(money(finite('12.0937'))))).toBe('12');
+        expect(formatExactMoneyCompact(money(finite('12.0937')))).toMatch(/^≈/);
+        expect(digitsOf(formatExactMoneyCompact(money(finite('1208.97'))))).toBe('1200');
+        expect(digitsOf(formatExactMoneyCompact(money(finite('1600'))))).toBe('1600');
+        expect(formatExactMoneyCompact(money(finite('1600')))).not.toContain('≈');
+        expect(digitsOf(formatExactMoneyCompact(money(finite('0.125'))))).toBe('013');
+        expect(digitsOf(formatExactMoneyCompact(money(ratio('1', '3', '0.333333'))))).toBe('033');
+        expect(formatExactMoneyCompact(money(finite('0')))).not.toContain('≈');
+    });
+
+    it('names the currency by its symbol alone: no flag, no code', () => {
+        const text = formatExactMoneyCompact(money(finite('2.4')));
+        expect(text.endsWith(' €')).toBe(true);
+        expect(text).not.toContain('EUR');
+        expect(text).not.toContain('🇪🇺');
+    });
+
+    it('masks the number in privacy mode, keeping ≈ and the symbol', () => {
+        privacy(true);
+        expect(formatExactMoneyCompact(money(finite('12.0937')))).toBe(`≈${P} €`);
+        expect(formatExactMoneyCompact(money(finite('1600')))).toBe(`${P} €`);
     });
 });
 
@@ -1308,5 +1339,30 @@ describe('the percentages in the interface language: a tie rounds the same, writ
         expect(digitsOf(owed.share), 'control: with the digits of 30.60').toBe('3060');
 
         expect({share: formatPlannerPercent('0.30595'), units: formatPlannerPercentUnits('30.595')}).toEqual(owed);
+    });
+});
+
+/**
+ * F4a step 4 (project 67): the Rebalancer's «largest deviation from the target» is a share of one (0.1921), shown in
+ * percentage points («19,2»), the word «points» around it from the catalogue. Rounded once, exactly, to one decimal;
+ * public, like every weight: privacy does not mask it.
+ */
+describe('formatExactPoints — a share as percentage points (F4a step 4)', () => {
+    it('shows a share of one as points, one decimal, rounded once', () => {
+        const separator = new Intl.NumberFormat(uiLocale()).format(1.5).charAt(1);
+        expect(formatExactPoints(finite('0.192129505'))).toBe(`19${separator}2`);
+        expect(formatExactPoints(finite('0.0885449694'))).toBe(`8${separator}9`);
+        expect(formatExactPoints(finite('0'))).toBe(`0${separator}0`);
+        // An exact ratio: 1/3 is 33.33… points, 33.3 at one decimal.
+        expect(formatExactPoints(ratio('1', '3', '0.333333'))).toBe(`33${separator}3`);
+    });
+
+    it('stays public with privacy on', () => {
+        setPrivacyEnabled(true);
+        try {
+            expect(formatExactPoints(finite('0.25'))).not.toContain(PRIVACY_PLACEHOLDER);
+        } finally {
+            setPrivacyEnabled(false);
+        }
     });
 });

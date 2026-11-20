@@ -27,7 +27,7 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
-from sqlalchemy import and_, delete, func, or_, select
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import (
@@ -43,6 +43,7 @@ from backend.app.db.models import (
     UserRole,
 )
 from backend.app.db.session import get_async_engine
+from backend.app.schemas.broker_profile import BrokerOperatingProfile
 from backend.app.schemas.brokers import (
     BRBulkDeleteResponse,
     BRCreateItem,
@@ -1918,3 +1919,101 @@ class TestDeleteBulkOneSavepointPerBroker:
             "counts": (1, 1, []),
             "differences": _all_gone(before, labels, [own]),
         }
+
+
+# ============================================================================
+# THE OPERATING PROFILE (P1 of project 67, tests 17–21; decisions D1, D5, D6)
+# ============================================================================
+
+#: A small valid profile: one whole-quantity mode in EUR with a buy fee, conversions by the broker, declarative taxes.
+PROFILE_DOCUMENT = {
+    "profile_version": 1,
+    "order_modes": [
+        {
+            "currency": "EUR",
+            "capability": {"kind": "whole_quantity", "capability_id": "mode:EUR", "quantity_unit": "asset_unit", "quantity_step": "1"},
+            "fees": [{"fee_schedule_id": "fee:EUR:buy", "capability_id": "mode:EUR", "side": "buy", "rate": "0.0019"}],
+        }
+    ],
+    "conversion_mode": "automatic",
+    "tax_regime": "declarative",
+}
+
+
+async def _new_broker(service: BrokerService, user: User, prefix: str) -> int:
+    response = await service.create_bulk([BRCreateItem(name=f"{prefix} {uuid4().hex[:10]}")], user_id=user.id)
+    assert response.results[0].success, response.results[0]
+    return response.results[0].broker_id
+
+
+class TestOperatingProfile:
+    """Written through ``update_bulk``, read back through ``get_by_id`` and ``get_all`` (found by id, never by position)."""
+
+    @pytest.mark.asyncio
+    async def test_update_sets_the_profile_and_get_reads_it_back(self, session, test_user):
+        service = BrokerService(session)
+        broker_id = await _new_broker(service, test_user, "Profile set")
+
+        response = await service.update_bulk([BRUpdateItem(operating_profile=PROFILE_DOCUMENT)], [broker_id], user_id=test_user.id)
+
+        assert response.success_count == 1, response.results
+        expected = BrokerOperatingProfile.model_validate(PROFILE_DOCUMENT)
+        assert (await service.get_by_id(broker_id, user_id=test_user.id)).operating_profile == expected
+        listed = {item.id: item for item in (await service.get_all(user_id=test_user.id)).items}
+        assert listed[broker_id].operating_profile == expected
+
+    @pytest.mark.asyncio
+    async def test_update_without_the_key_keeps_the_profile(self, session, test_user):
+        service = BrokerService(session)
+        broker_id = await _new_broker(service, test_user, "Profile kept")
+        await service.update_bulk([BRUpdateItem(operating_profile=PROFILE_DOCUMENT)], [broker_id], user_id=test_user.id)
+        stored = (await session.get(Broker, broker_id)).operating_profile
+
+        response = await service.update_bulk([BRUpdateItem(name=f"Renamed {uuid4().hex[:10]}")], [broker_id], user_id=test_user.id)
+
+        assert response.success_count == 1
+        assert (await session.get(Broker, broker_id)).operating_profile == stored
+
+    @pytest.mark.asyncio
+    async def test_update_with_null_clears_the_profile(self, session, test_user):
+        service = BrokerService(session)
+        broker_id = await _new_broker(service, test_user, "Profile cleared")
+        await service.update_bulk([BRUpdateItem(operating_profile=PROFILE_DOCUMENT)], [broker_id], user_id=test_user.id)
+
+        response = await service.update_bulk([BRUpdateItem(operating_profile=None)], [broker_id], user_id=test_user.id)
+
+        assert response.success_count == 1
+        assert (await session.get(Broker, broker_id)).operating_profile is None
+        assert (await service.get_by_id(broker_id, user_id=test_user.id)).operating_profile is None
+
+    @pytest.mark.asyncio
+    async def test_a_profile_over_the_cap_is_refused_and_nothing_is_written(self, session, test_user, monkeypatch):
+        service = BrokerService(session)
+        broker_id = await _new_broker(service, test_user, "Profile capped")
+        await service.update_bulk([BRUpdateItem(operating_profile=PROFILE_DOCUMENT)], [broker_id], user_id=test_user.id)
+        before = await session.get(Broker, broker_id)
+        stored, name = before.operating_profile, before.name
+        # The real cap is 16 KiB; a smaller one makes any profile too heavy without building a huge document.
+        monkeypatch.setattr("backend.app.schemas.broker_profile.OPERATING_PROFILE_MAX_BYTES", 10)
+
+        response = await service.update_bulk([BRUpdateItem(name=f"Not applied {uuid4().hex[:10]}", operating_profile=PROFILE_DOCUMENT)], [broker_id], user_id=test_user.id)
+
+        assert (response.success_count, response.results[0].success) == (0, False)
+        after = await session.get(Broker, broker_id)
+        assert (after.operating_profile, after.name) == (stored, name), "a refused item writes nothing, not even its other fields"
+
+    @pytest.mark.asyncio
+    async def test_an_unreadable_stored_profile_does_not_break_the_list(self, session, test_user):
+        service = BrokerService(session)
+        broken_id = await _new_broker(service, test_user, "Profile broken")
+        sound_id = await _new_broker(service, test_user, "Profile sound")
+        await service.update_bulk([BRUpdateItem(operating_profile=PROFILE_DOCUMENT)], [sound_id], user_id=test_user.id)
+        await session.execute(update(Broker).where(Broker.id == broken_id).values(operating_profile="{not json"))
+
+        listed = {item.id: item for item in (await service.get_all(user_id=test_user.id)).items}
+
+        assert {broken_id, sound_id} <= set(listed)
+        assert listed[broken_id].operating_profile is None
+        assert listed[sound_id].operating_profile == BrokerOperatingProfile.model_validate(PROFILE_DOCUMENT)
+        assert (await service.get_by_id(broken_id, user_id=test_user.id)).operating_profile is None
+        assert (await session.get(Broker, broken_id)).operating_profile == "{not json", "the stored text stays where it is"

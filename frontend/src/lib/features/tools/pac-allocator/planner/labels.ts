@@ -6,6 +6,12 @@ import type {PlannerStep} from './types';
 // Every planner module declares its own quoted namespace constant: `dev.py i18n audit`
 // (scripts/i18n_usage.py) resolves only same-file string literals, and dotted backend
 // codes need a literal template head. An imported prefix makes every key look dead.
+// A text that differs between the PAC and the Rebalancer (F1 of project 67, plan §3 n. 2) is
+// chosen in its own file: two whole literal keys in a ternary on `profile.text`, or, for a small
+// group, a same-file constant `cond ? '<ns a>' : '<ns b>'` (or a parameter typed with the union
+// of the two literals) at the head of the template. That form proves every key under BOTH
+// prefixes, and the audit never reports a proven key the catalogue lacks: the group must exist
+// in full under both (pinned by `TestPlannerNamespaceChoice` in test_i18n_usage_gate.py).
 const PLANNER_KEY = 'tools.pacAllocator.planner';
 
 export const STEP_FALLBACKS: Readonly<Record<PlannerStep, string>> = {

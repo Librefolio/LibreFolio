@@ -6,10 +6,11 @@
  * calculation. The cards show the outcome, so there is no copy banner.
  */
 import {SvelteMap, SvelteSet} from 'svelte/reactivity';
-import {applyAddedAssetClassifications, applyAddedAssetPrices, domainAssetKey, exposuresAwaitRead, lackingDimensions, newCopyRecord, priceAwaitsRead} from './copies';
+import {applyAddedAssetClassifications, applyAddedAssetPrices, applyOwnedPositions, domainAssetKey, exposuresAwaitRead, lackingDimensions, newCopyRecord, ownedAssets, priceAwaitsRead} from './copies';
 import type {DraftAsset, ExposureDimension, PlannerDraft} from './draft.svelte';
 import {loadCopyScope, selectableIds} from './scope';
 import {SourceLoad, type SourceLoadError} from './sourceLoad.svelte';
+import type {SourceReadOptions, SourceSection} from './source';
 
 const SCOPE_ERROR: SourceLoadError = {key: 'tools.pacAllocator.planner.copy.scopeError', fallback: 'The Broker list could not be loaded. Nothing was copied.'};
 
@@ -40,7 +41,18 @@ export function needsRead(asset: DraftAsset | undefined): boolean {
 }
 
 export class AddedAssetFacts {
-    readonly load = new SourceLoad();
+    readonly load: SourceLoad;
+    readonly #positions: boolean;
+
+    /**
+     * `options.positions` (the Rebalancer, Q-F3a-5a): the read also asks for the holdings, and copies the user's positions
+     * in the Assets it reads, so an Asset added by search comes with them.
+     */
+    constructor(options: SourceReadOptions = {}) {
+        this.#positions = options.positions === true;
+        this.load = new SourceLoad(options);
+    }
+
     /** Asset ids waiting for the running read. */
     waiting = $state<number[]>([]);
     busy = $state(false);
@@ -105,7 +117,8 @@ export class AddedAssetFacts {
         const priceIds = awaiting(priceAwaitsRead);
         const classIds = awaiting(exposuresAwaitRead);
         draft.refreshAsOf();
-        const source = await this.load.load({asOf: draft.data.asOf, targetCurrency: draft.data.valuationCurrency, sections: ['assets', 'prices', 'classifications'], brokerIds: owners, assetIds: ids, fxPairs: []}, accountGeneration);
+        const sections: SourceSection[] = this.#positions ? ['assets', 'prices', 'classifications', 'brokers', 'holdings'] : ['assets', 'prices', 'classifications'];
+        const source = await this.load.load({asOf: draft.data.asOf, targetCurrency: draft.data.valuationCurrency, sections, brokerIds: owners, assetIds: ids, fxPairs: []}, accountGeneration);
         if (sequence !== this.#sequence) return;
         if (!source) {
             if (this.load.status === 'error') this.#finish(this.load.error, ids);
@@ -114,6 +127,10 @@ export class AddedAssetFacts {
         }
         applyAddedAssetPrices(draft, source, newCopyRecord(draft, 'prices', source), priceIds);
         applyAddedAssetClassifications(draft, source, newCopyRecord(draft, 'classifications', source), classIds);
+        if (this.#positions) {
+            const rows = ownedAssets(source).rows.filter((row) => ids.includes(row.asset.source_asset_id));
+            if (rows.length > 0) applyOwnedPositions(draft, source, newCopyRecord(draft, 'positions', source), rows);
+        }
         for (const id of priceIds) {
             if (draft.asset(domainAssetKey(id))?.price === null) memory.missedPrice.add(id);
         }

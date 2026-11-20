@@ -160,7 +160,9 @@ export interface HtmlCell {
 }
 
 /**
- * Editable select cell — renders an inline <select> dropdown.
+ * Editable select cell — renders the project's `SimpleSelect` inline (`DataTableCellContent.svelte`), never a native
+ * `<select>`: a choice inside a table cell follows the selector rule (M5). For a selector with search or another shape,
+ * use a `custom` cell with the project's component, as `TargetInputCell` does.
  * Used for identifier type, sector/country selection in distribution editors, etc.
  */
 export interface EditableSelectCell {

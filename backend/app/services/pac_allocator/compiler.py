@@ -8,12 +8,11 @@ ordered objective cascade (``objectives.build_objective_cascade``), ready for
 built). This module never calls ``model.optimize()`` itself — building and
 solving are deliberately separate responsibilities.
 
-Scope: PAC ``proportional`` policy, ``primary`` purpose only (see
-``constraints.py``/``objectives.py`` module docstrings and Step3 §16.6/
-§16.9). ``compile_policy_program`` raises ``PolicyProgramScopeError`` for any
-other ``(product, policy, purpose)`` combination rather than silently
-building an incomplete or wrong model — this build only implements PAC
-proportional.
+Scope: PAC ``proportional`` and the Rebalancer (B2 of project 67), ``primary``
+purpose only. ``compile_policy_program`` raises ``PolicyProgramScopeError`` for
+``min_fragmentation`` and ``deployment`` rather than silently building an
+incomplete or wrong model. A Rebalancer scenario with sell routes fails closed
+in the ledger guard (``LedgerPostingScopeError``) until the sales are modelled.
 
 ``ObjectiveInputs`` (``fixed_reference``/per-Asset ``target_value``) are
 obtained by one probe call to the public ``evaluate_exact_candidate`` rather
@@ -33,14 +32,14 @@ guaranteed-valid probe candidate returns the identical constants.
 Fee fidelity, stated here (not only in the plan and the regression tests) so
 a reader meets it where the code is: the fee epigraph
 ``constraints.add_fee_epigraph_constraints`` builds is exact. For every BUY
-route, the minimal fee a compiled model admits is ``calculate_fee`` at every
-notional, minimum and cap included. The minimum is in the bound since X2,
+route, the minimal fee a compiled model admits is ``financial_math.fees.calculate_fee`` at
+every notional, minimum and cap included. The minimum is in the bound since X2,
 and the cap has one ``fee_capped`` binary wherever it can bind, since QX1-a;
-the derivation is in ``constraints.py``'s module docstring. The fee
+the derivation is in the module docstring of the ``constraints`` package. The fee
 *variable* may still sit above that minimum where no stage presses it down,
 so it never feeds a reported number: every fee published or replayed comes
-from ``evaluate_exact_candidate``'s exact ``calculate_fee``, never from the
-SCIP variable. Locked by ``test_fee_epigraph_floor_above_linear_upper_boundary``,
+from ``evaluate_exact_candidate``'s exact ``financial_math.fees.calculate_fee``, never from
+the SCIP variable. Locked by ``test_fee_epigraph_floor_above_linear_upper_boundary``,
 ``test_fee_epigraph_cap_boundary`` and ``test_fee_epigraph_cap_exact``. If a
 solve ever produces an incumbent whose SCIP-internal objective disagrees
 with the exact replay in a way that changes the *lexicographic ranking*,
@@ -51,6 +50,7 @@ by widening an epsilon.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from fractions import Fraction
 
 from pyscipopt import Model
 
@@ -61,7 +61,9 @@ from backend.app.services.pac_allocator.constraints import (
     build_scenario_facts,
     compile_hard_constraints,
 )
+from backend.app.services.pac_allocator.constraints.pool import create_pool_variables
 from backend.app.services.pac_allocator.evaluation.evaluator import evaluate_exact_candidate
+from backend.app.services.pac_allocator.evaluation.limits import limit_reference, resolve_scenario_limits
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
     CandidateDecision,
@@ -69,6 +71,7 @@ from backend.app.services.pac_allocator.models import (
     ExactPlannerScenario,
     ExactPolicyView,
 )
+from backend.app.services.pac_allocator.numeric import ExactRatio
 from backend.app.services.pac_allocator.objectives import (
     ObjectiveInputs,
     ObjectiveStage,
@@ -114,11 +117,15 @@ class CompiledProgram:
     variables: CompiledVariables
     objective_stages: tuple[ObjectiveStage, ...]
     objective_inputs: ObjectiveInputs
+    # Lot ZB of project 67: the wide model, which holds every plan the replay could accept, solved only when the prudent
+    # one closed infeasible (``planner.plan_exact_scenario``).
+    outer: bool = False
 
 
 def _require_supported_scope(scenario: ExactPlannerScenario, view: ExactPolicyView) -> None:
-    if scenario.product != "pac" or scenario.policy != "proportional":
-        raise PolicyProgramScopeError(f"compiler.py only supports PAC proportional for now; got product={scenario.product!r} policy={scenario.policy!r}")
+    # The PAC proportional, and the Rebalancer (B2 of project 67); min_fragmentation and deployment stay out of SCIP.
+    if scenario.product == "pac" and scenario.policy != "proportional":
+        raise PolicyProgramScopeError(f"compiler.py only supports PAC proportional and the Rebalancer for now; got product={scenario.product!r} policy={scenario.policy!r}")
     if view.purpose != "primary":
         raise PolicyProgramScopeError(f"compiler.py only supports the primary purpose for now; got purpose={view.purpose!r}")
 
@@ -130,7 +137,7 @@ def _probe_quanta(access: DecisionAccess) -> int:
     return access.frozen_quanta if access.mode == "frozen_exact" else access.baseline_quanta
 
 
-def _probe_objective_inputs(scenario: ExactPlannerScenario, view: ExactPolicyView) -> ObjectiveInputs:
+def _probe_objective_inputs(scenario: ExactPlannerScenario, view: ExactPolicyView) -> tuple[ObjectiveInputs, ExactRatio]:
     probe_candidate = CandidateActionVector(
         view_id=view.view_id,
         candidate_id="__stage2_compiler_probe__",
@@ -140,11 +147,27 @@ def _probe_objective_inputs(scenario: ExactPlannerScenario, view: ExactPolicyVie
     if evaluation.accounting is None:
         raise PolicyProgramContractError("compiler.py's internal probe candidate was rejected; the policy view is not well-formed")
     target_value_by_asset = {asset.asset_id: as_float(asset.target_value) for asset in evaluation.assets}
-    return compute_objective_inputs(target_value_by_asset, as_float(evaluation.accounting.fixed_reference))
+    reference = limit_reference(scenario, evaluation.accounting)
+    if scenario.product != "rebalancer":
+        return compute_objective_inputs(target_value_by_asset, as_float(evaluation.accounting.fixed_reference)), reference
+    initial_wealth = evaluation.accounting.initial_wealth
+    return (
+        compute_objective_inputs(
+            target_value_by_asset,
+            as_float(evaluation.accounting.fixed_reference),
+            initial_wealth=Fraction(initial_wealth.numerator, initial_wealth.denominator),
+            cash_target_by_cell={(row.broker_id, row.currency): as_float(row.target_value) for row in evaluation.cash_targets},
+            fidelity=scenario.target_fidelity,
+        ),
+        reference,
+    )
 
 
 def _create_variables(model: Model, scenario: ExactPlannerScenario, view: ExactPolicyView) -> CompiledVariables:
-    quanta = {access.decision_id: model.addVar(vtype="I", lb=access.lower_quanta, ub=access.upper_quanta, name=access.decision_id) for access in view.decisions}
+    # The Rebalancer's lanes are held at zero in SCIP: its transfers are the cash rule's balances, and the candidate reads them
+    # off the balances (``constraints.pool``, lot CR of project 67). The view's box does not change.
+    held = scenario.product == "rebalancer"
+    quanta = {access.decision_id: model.addVar(vtype="I", lb=access.lower_quanta, ub=0 if held and access.family == "broker_transfer" else access.upper_quanta, name=access.decision_id) for access in view.decisions}
     buy_active = {}
     buy_fee = {}
     for route in scenario.order_routes:
@@ -153,21 +176,30 @@ def _create_variables(model: Model, scenario: ExactPlannerScenario, view: ExactP
         buy_active[route.route_id] = model.addVar(vtype="B", name=f"active_buy:{route.route_id}")
         buy_fee[route.route_id] = model.addVar(vtype="C", lb=0.0, name=f"fee:{route.route_id}")
     funding_active = {route.route_id: model.addVar(vtype="B", name=f"active_funding:{route.route_id}") for route in scenario.funding_routes}
-    return CompiledVariables(quanta=quanta, buy_active=buy_active, funding_active=funding_active, buy_fee=buy_fee)
+    if scenario.product != "rebalancer":
+        return CompiledVariables(quanta=quanta, buy_active=buy_active, funding_active=funding_active, buy_fee=buy_fee)
+    # The Rebalancer counts its operations (B2 of project 67): one activity binary per conversion; its transfers are counted
+    # off the cash rule's balances (lot CR).
+    fx_active = {access.decision_id: model.addVar(vtype="B", name=f"active_fx:{access.decision_id}") for access in view.decisions if access.family == "fx_debit"}
+    return CompiledVariables(quanta=quanta, buy_active=buy_active, funding_active=funding_active, buy_fee=buy_fee, fx_active=fx_active, pool=create_pool_variables(model, scenario, view))
 
 
-def compile_policy_program(scenario: ExactPlannerScenario, view: ExactPolicyView) -> CompiledProgram:
+def compile_policy_program(scenario: ExactPlannerScenario, view: ExactPolicyView, *, outer: bool = False) -> CompiledProgram:
     """Build one complete SCIP model for ``scenario``/``view``: variables,
     hard constraints, and the ordered objective cascade. Never solves.
+
+    The default model is prudent: the replay accepts every plan it holds. ``outer`` builds the one that holds every plan
+    the replay could accept (lot ZB of project 67), whose «infeasible» alone is a proof.
     """
     _require_supported_scope(scenario, view)
     facts = build_scenario_facts(scenario)
     model = Model(f"pac_allocator:{view.view_id}")
     model.hideOutput()
     variables = _create_variables(model, scenario, view)
-    compile_hard_constraints(model, scenario, facts, variables)
-    objective_inputs = _probe_objective_inputs(scenario, view)
-    objective_stages = tuple(build_objective_cascade(model, scenario, facts, variables, objective_inputs, view))
+    # The probe first: V5 resolves shares of the reference, which only the exact do-nothing replay gives (specification §15 n. 17).
+    objective_inputs, reference = _probe_objective_inputs(scenario, view)
+    cells = compile_hard_constraints(model, scenario, facts, variables, resolve_scenario_limits(scenario, reference), outer=outer)
+    objective_stages = tuple(build_objective_cascade(model, scenario, facts, variables, objective_inputs, view, cells))
     return CompiledProgram(
         model=model,
         scenario=scenario,
@@ -176,4 +208,5 @@ def compile_policy_program(scenario: ExactPlannerScenario, view: ExactPolicyView
         variables=variables,
         objective_stages=objective_stages,
         objective_inputs=objective_inputs,
+        outer=outer,
     )

@@ -66,16 +66,18 @@ from backend.app.schemas.pac_allocator.evidence import OptimalProvenProof, Repor
 from backend.app.schemas.pac_allocator.exact import ExactRatio as WireExactRatio
 from backend.app.schemas.pac_allocator.exact import FiniteDecimal, exact_fraction, validate_weight_availability
 from backend.app.schemas.pac_allocator.results import PacPlannerReadyIncumbentResult
-from backend.app.schemas.pac_allocator.rows import PlannerFxAction
 from backend.app.schemas.pac_allocator.solutions import DeploymentUnavailable, PacIncumbentSolution
 from backend.app.services.pac_allocator import models as pac_models
 from backend.app.services.pac_allocator import planner_report as PR
+from backend.app.services.pac_allocator import rebalancer_report as RR
 from backend.app.services.pac_allocator.compiler import compile_policy_program
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
-from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id, fx_debit_key
 from backend.app.services.pac_allocator.models import CandidateActionVector, CandidateDecision, ExactExposure
 from backend.app.services.pac_allocator.proof import OptimalProvenConclusion, conclude_with_solver
 from backend.app.services.pac_allocator.solver import solve_policy_program
+from backend.test_scripts.test_services import _reb_small_cases as cases
+from backend.test_scripts.test_services import test_pac_planner_evaluator as ev
+from backend.test_scripts.test_services._pac_fx_decisions import fx_id
 from backend.test_scripts.test_services.test_pac_planner_evaluator import (
     ONE,
     PROVENANCE_ID,
@@ -88,6 +90,7 @@ from backend.test_scripts.test_services.test_pac_planner_evaluator import (
     _fx_rate,
     _order_route,
     _pac_scenario,
+    _pac_scenario_with_asset_minimum,
     _scenario,
 )
 from backend.test_scripts.test_services.test_pac_planner_oracle import _coarse_funding_fx_scenario, _two_asset_pac_scenario
@@ -209,21 +212,19 @@ def _build_primary_solution(scenario, view, evaluation, *, sequence: PR._Sequenc
     Shares one ``_SequenceAllocator`` across the funding/conversion/order
     builders, called in execution order exactly as ``_build_solution_parts``
     calls them, so the produced sequences obey the schema's cross-section
-    uniqueness and per-section ordering rules. FX actions take no sequence:
-    the user executes their conversion.
+    uniqueness and per-section ordering rules.
     """
     allocator = sequence or PR._SequenceAllocator()
     funding_actions = PR.build_funding_actions(scenario, evaluation, allocator)
-    fx_actions = PR.build_fx_actions(scenario, evaluation)
-    conversions = PR.build_conversions(scenario, evaluation, fx_actions, allocator)
+    conversions = PR.build_conversions(scenario, evaluation, allocator)
     order_rows = PR.build_order_rows(scenario, evaluation, allocator)
     return PacIncumbentSolution(
         solution_id="solution:primary",
         solution_kind="primary",
         validation="decimal_verified",
         asset_rows=PR.build_asset_rows(scenario, evaluation),
+        cash_rows=PR.build_cash_rows(scenario, evaluation),
         funding_actions=funding_actions,
-        fx_actions=fx_actions,
         conversions=conversions,
         order_rows=order_rows,
         ledger_rows=PR.build_ledger_rows(evaluation),
@@ -231,12 +232,13 @@ def _build_primary_solution(scenario, view, evaluation, *, sequence: PR._Sequenc
         exposure_rows=PR.build_exposure_rows(scenario, evaluation),
         accounting=PR.build_accounting(scenario, evaluation),
         costs=PR.build_costs(scenario, evaluation),
+        plan_accounts=PR.build_plan_accounts(scenario, evaluation),
         objectives=PR.build_objective_results(scenario, view, evaluation),
     )
 
 
 def _referenced_provenance_ids(solution: PacIncumbentSolution) -> set[str]:
-    rows = [*solution.funding_actions, *solution.fx_actions, *solution.conversions, *solution.order_rows, *solution.exposure_rows]
+    rows = [*solution.funding_actions, *solution.conversions, *solution.order_rows, *solution.exposure_rows]
     return {provenance_id for row in rows for provenance_id in row.provenance_ids}
 
 
@@ -573,10 +575,11 @@ def test_infeasible_first_stage_is_a_verdict_that_completes_the_search() -> None
     ``build_solver_evidence`` must carry that single stage with none of the four
     observations filled in, because SCIP reported none.
 
-    This is a real run, not a doctored one: the route cap (10) is below the
-    required contribution (50), so no candidate can exist.
+    This is a real run, not a doctored one: the route cap (3 units, EUR30) is
+    below the Asset's minimum (EUR50) while EUR100 of cash makes the minimum itself plausible, so no candidate can
+    exist and the planner could publish this state.
     """
-    scenario = _pac_scenario(required=R(50), route_cap=R(10))
+    scenario = _pac_scenario_with_asset_minimum(R(50), route_cap=R(3))
     view, result = _solve(scenario)
     assert result.outcome == "reported_infeasible"
 
@@ -614,13 +617,12 @@ def test_cross_section_sequences_are_globally_unique_and_densely_shared(mode: st
     view, evaluation = _evaluate(scenario)
     allocator = PR._SequenceAllocator()
     funding = PR.build_funding_actions(scenario, evaluation, allocator)
-    fx = PR.build_fx_actions(scenario, evaluation)
-    conversions = PR.build_conversions(scenario, evaluation, fx, allocator)
+    conversions = PR.build_conversions(scenario, evaluation, allocator)
     orders = PR.build_order_rows(scenario, evaluation, allocator)
 
     # Every section is genuinely populated, so the cross-section rule has
     # something to prove.
-    assert funding and fx and conversions and orders
+    assert funding and conversions and orders
     assert {conversion.mode for conversion in conversions} == {mode}
     if mode == "automatic":
         assert all(conversion.sequence is None for conversion in conversions)
@@ -641,8 +643,7 @@ def test_each_action_section_is_internally_ascending() -> None:
     view, evaluation = _evaluate(scenario)
     allocator = PR._SequenceAllocator()
     funding = PR.build_funding_actions(scenario, evaluation, allocator)
-    fx = PR.build_fx_actions(scenario, evaluation)
-    conversions = PR.build_conversions(scenario, evaluation, fx, allocator)
+    conversions = PR.build_conversions(scenario, evaluation, allocator)
     orders = PR.build_order_rows(scenario, evaluation, allocator)
 
     assert len(orders) >= 2, "need a multi-row section for a non-vacuous ordering check"
@@ -652,27 +653,28 @@ def test_each_action_section_is_internally_ascending() -> None:
 
 
 # --------------------------------------------------------------------------
-# Conversions — the engine's FX actions, one row per Broker and currency pair
+# Conversions — the engine's FX decisions, one row per Broker and ordered currency pair
 # --------------------------------------------------------------------------
 
 _ALPHA_BROKER_ID = "broker:alpha"
 _BETA_BROKER_ID = "broker:beta"
 _SECOND_ALPHA_USD_PROVENANCE_ID = "provenance:route:c:alpha"
-# EUR debited per BUY route, in whole EUR (the scenario's EUR quantum is one).
-_MULTI_CONVERSION_FX_DEBITS = {"route:a:beta": 4, "route:b:alpha": 4, "route:c:alpha": 4, "route:d:alpha": 5}
+# EUR debited per FX decision, one per (Broker, destination currency) since A2, in whole EUR (the scenario's EUR quantum
+# is one). Alpha's USD decision serves its two USD routes, b and c.
+_MULTI_CONVERSION_FX_DEBITS = {(_BETA_BROKER_ID, "USD"): 4, (_ALPHA_BROKER_ID, "USD"): 8, (_ALPHA_BROKER_ID, "GBP"): 5}
 
 
 def _multi_conversion_scenario(*, alpha_mode: str = "manual", beta_mode: str = "manual"):
-    """Four EUR-funded FX decisions that make three conversions.
+    """Three EUR-funded FX decisions, one per conversion (A2: one decision per Broker and pair).
 
-    Broker alpha converts EUR into USD on two BUY routes (assets a and b) and
-    into GBP on a third (asset c); Broker beta converts EUR into USD on its
-    own route for asset a. Route IDs sort beta's route first, so the engine's
-    (route, currency) order meets the pairs in the *reverse* of their canonical
-    (Broker, source, destination) order. A whole-unit quantum makes a posted
-    credit visibly differ from the exact one, and the second alpha USD route
-    cites its own (published) provenance record so a conversion's provenance
-    is a real union.
+    Broker alpha converts EUR into USD for two BUY routes (assets a and b), one decision for both, and
+    into GBP for a third (asset c); Broker beta converts EUR into USD on its
+    own route for asset a. Route IDs sort beta's route first; the engine's FX
+    evaluations come in canonical (Broker, source, destination) order all the
+    same. A whole-unit quantum makes a posted credit visibly differ from the
+    exact one where it is not whole. The second alpha USD route cites its own
+    (published) provenance record: under contract 1.0.0 the action names the
+    representative route (the first in id order, b), so its provenance is b's.
     """
     capability = _capability("capability:whole")
     usd_fee = _fee("fee:buy:usd", capability.capability_id, "buy", currency="USD")
@@ -716,10 +718,10 @@ def _evaluate_multi_conversion(scenario):
     FX decision exists in the view and carried its quanta, so an override
     silently ignored by ``_evaluate`` cannot pass for a projection.
     """
-    fx_quanta = {exact_decision_id("fx_debit", fx_debit_key(route_id, "EUR")): debit for route_id, debit in _MULTI_CONVERSION_FX_DEBITS.items()}
+    fx_quanta = {fx_id(scenario, source="EUR", destination=destination, broker_id=broker_id): debit for (broker_id, destination), debit in _MULTI_CONVERSION_FX_DEBITS.items()}
     view, evaluation = _evaluate(scenario, quanta={**_all_zero_quanta(scenario), **fx_quanta})
     assert evaluation.candidate_valid
-    assert {(exact.order_route_id, exact.quanta) for exact in evaluation.fx} == set(_MULTI_CONVERSION_FX_DEBITS.items())
+    assert {((exact.broker_id, exact.destination_currency), exact.quanta) for exact in evaluation.fx} == set(_MULTI_CONVERSION_FX_DEBITS.items())
     return evaluation
 
 
@@ -728,82 +730,43 @@ def _amount(money) -> R:
     return R.from_decimal(Decimal(str(money.amount)))
 
 
-def test_fx_actions_carry_no_sequence_and_name_their_conversion() -> None:
-    """An FX action is the engine's decision, not a step the user takes: it
-    carries no sequence and names the conversion that aggregates it, keyed by
-    its Broker and currency pair."""
-    scenario = _multi_conversion_scenario()
-    evaluation = _evaluate_multi_conversion(scenario)
+def test_each_conversion_is_one_engine_decision() -> None:
+    """One conversion per (Broker, source, destination), in that canonical order, each the engine's own FX decision.
 
-    fx_actions = PR.build_fx_actions(scenario, evaluation)
-
-    assert "sequence" not in PlannerFxAction.model_fields
-    for exact, action in zip(evaluation.fx, fx_actions, strict=True):
-        assert "sequence" not in action.model_dump(mode="json")
-        assert action.action_id == f"fx:{exact.order_route_id}:{exact.source_currency}"
-        assert action.conversion_id == f"conversion:{exact.broker_id}:{exact.source_currency}:{exact.destination_currency}"
-        assert (action.order_route_id, action.broker_id) == (exact.order_route_id, exact.broker_id)
-        assert _amount(action.destination_credit) == exact.posted_destination_credit
-
-
-def test_conversions_group_fx_actions_by_broker_and_currency_pair() -> None:
-    """One conversion per (Broker, source, destination), in that canonical
-    order whatever order the engine met the pairs in.
-
-    A conversion's debit and spread are the exact sums of its actions; its
-    credit sums the *posted* credits the ledger reconciles against. Alpha's
-    two USD actions each credit an exact 4.5 USD that posts its floor, 4 (a
-    credit is rounded against the plan), so the conversion credits 8 USD —
-    not the 9 exact sum, a whole quantum that posting it as one sum would
-    keep — while beta's single 4.5 USD credit posts 4 and alpha's 3.6 GBP
-    posts 3. Rates are the pair's (global per pair), member IDs keep the
-    action order, and the provenance is the canonical union of the members'.
+    A conversion's debit is the exact amount converted, its credit the *posted* credit the ledger reconciles against, its spread
+    the exact cost. Alpha's USD decision serves two routes and converts 8 EUR at once: an exact 9 USD that posts 9, where two
+    halves would have posted 4 + 4 (each 4.5 floored, a credit is rounded against the plan). Beta's 4.5 USD credit posts 4 and
+    alpha's 3.6 GBP posts 3. Rates are the pair's, and the provenance is the Broker's.
     """
     scenario = _multi_conversion_scenario()
     evaluation = _evaluate_multi_conversion(scenario)
-    fx_actions = PR.build_fx_actions(scenario, evaluation)
 
-    conversions = PR.build_conversions(scenario, evaluation, fx_actions, PR._SequenceAllocator())
+    conversions = PR.build_conversions(scenario, evaluation, PR._SequenceAllocator())
 
     canonical_pairs = [(_ALPHA_BROKER_ID, "EUR", "GBP"), (_ALPHA_BROKER_ID, "EUR", "USD"), (_BETA_BROKER_ID, "EUR", "USD")]
-    engine_pairs = list(dict.fromkeys((exact.broker_id, exact.source_currency, exact.destination_currency) for exact in evaluation.fx))
-    assert engine_pairs == list(reversed(canonical_pairs)), "precondition: the engine meets the pairs in reverse canonical order"
+    engine_pairs = [(exact.broker_id, exact.source_currency, exact.destination_currency) for exact in evaluation.fx]
+    assert engine_pairs == canonical_pairs, "the engine's FX evaluations are one per pair, in canonical order"
+    assert len(conversions) == len(evaluation.fx)
     assert [(row.broker_id, row.source_debit.currency, row.destination_credit.currency) for row in conversions] == canonical_pairs
     assert [row.conversion_id for row in conversions] == [f"conversion:{broker}:{source}:{destination}" for broker, source, destination in canonical_pairs]
 
-    by_id = {row.conversion_id: row for row in conversions}
     expected = {
-        # conversion_id: (fx_action_ids, debit EUR, posted credit, spread EUR)
-        "conversion:broker:alpha:EUR:GBP": (["fx:route:d:alpha:EUR"], R(5), R(3), R(1, 2)),
-        "conversion:broker:alpha:EUR:USD": (["fx:route:b:alpha:EUR", "fx:route:c:alpha:EUR"], R(8), R(8), R(4, 5)),
-        "conversion:broker:beta:EUR:USD": (["fx:route:a:beta:EUR"], R(4), R(4), R(2, 5)),
+        # conversion_id: (debit EUR, posted credit, spread EUR)
+        "conversion:broker:alpha:EUR:GBP": (R(5), R(3), R(1, 2)),
+        "conversion:broker:alpha:EUR:USD": (R(8), R(9), R(4, 5)),
+        "conversion:broker:beta:EUR:USD": (R(4), R(4), R(2, 5)),
     }
-    for conversion_id, (action_ids, debit, credit, spread) in expected.items():
-        row = by_id[conversion_id]
-        assert row.fx_action_ids == action_ids
-        assert _amount(row.source_debit) == debit
-        assert _amount(row.destination_credit) == credit
+    by_id = {row.conversion_id: row for row in conversions}
+    for exact in evaluation.fx:
+        row = by_id[f"conversion:{exact.broker_id}:{exact.source_currency}:{exact.destination_currency}"]
+        debit, credit, spread = expected[row.conversion_id]
+        assert (_amount(row.source_debit), _amount(row.destination_credit)) == (debit, credit) == (exact.source_debit, exact.posted_destination_credit)
         assert (PR._exact_of(row.spread_loss.value), row.spread_loss.currency) == (spread, scenario.valuation_currency)
-
-    # Each figure is the members' own, so the aggregation adds nothing of its
-    # own: exact sums for debit and spread, posted sum for the credit, and the
-    # one rate every member of the pair shares.
-    members_by_id: dict[str, list] = {}
-    for exact, action in zip(evaluation.fx, fx_actions, strict=True):
-        members_by_id.setdefault(action.conversion_id, []).append((exact, action))
-    for row in conversions:
-        members = members_by_id[row.conversion_id]
-        assert _amount(row.source_debit) == sum((exact.source_debit for exact, _ in members), R(0))
-        assert _amount(row.destination_credit) == sum((exact.posted_destination_credit for exact, _ in members), R(0))
-        assert PR._exact_of(row.spread_loss.value) == sum((exact.spread_loss for exact, _ in members), R(0))
-        assert {PR._exact_of(row.spot_rate.value)} == {exact.approved_rate for exact, _ in members}
-        assert {PR._exact_of(row.effective_rate.value)} == {exact.effective_rate for exact, _ in members}
+        assert PR._exact_of(row.spot_rate.value) == exact.approved_rate and PR._exact_of(row.effective_rate.value) == exact.effective_rate
         assert (row.spot_rate.source_currency, row.spot_rate.destination_currency) == (row.source_debit.currency, row.destination_credit.currency)
-        assert row.provenance_ids == sorted({provenance_id for _, action in members for provenance_id in action.provenance_ids})
-
-    alpha_usd = members_by_id["conversion:broker:alpha:EUR:USD"]
-    assert sum((exact.exact_destination_credit for exact, _ in alpha_usd), R(0)) == R(9), "precondition: the exact credits do not sum to the posted ones"
-    assert by_id["conversion:broker:alpha:EUR:USD"].provenance_ids == sorted({PROVENANCE_ID, _SECOND_ALPHA_USD_PROVENANCE_ID})
+        assert row.provenance_ids == [next(broker.provenance_id for broker in scenario.brokers if broker.broker_id == exact.broker_id)]
+    alpha_usd = next(exact for exact in evaluation.fx if (exact.broker_id, exact.destination_currency) == (_ALPHA_BROKER_ID, "USD"))
+    assert (alpha_usd.exact_destination_credit, alpha_usd.posted_destination_credit) == (R(9), R(9))
 
 
 @pytest.mark.parametrize(
@@ -830,7 +793,7 @@ def test_manual_conversions_take_the_next_step_and_automatic_ones_none(alpha_mod
     allocator = PR._SequenceAllocator()
     assert [allocator.next(), allocator.next()] == [1, 2]
 
-    conversions = PR.build_conversions(scenario, evaluation, PR.build_fx_actions(scenario, evaluation), allocator)
+    conversions = PR.build_conversions(scenario, evaluation, allocator)
 
     mode_by_broker = {_ALPHA_BROKER_ID: alpha_mode, _BETA_BROKER_ID: beta_mode}
     assert [row.mode for row in conversions] == [mode_by_broker[row.broker_id] for row in conversions]
@@ -839,7 +802,7 @@ def test_manual_conversions_take_the_next_step_and_automatic_ones_none(alpha_mod
 
     manual_scenario = _multi_conversion_scenario()
     manual_evaluation = _evaluate_multi_conversion(manual_scenario)
-    manual = PR.build_conversions(manual_scenario, manual_evaluation, PR.build_fx_actions(manual_scenario, manual_evaluation), PR._SequenceAllocator())
+    manual = PR.build_conversions(manual_scenario, manual_evaluation, PR._SequenceAllocator())
     presentation = {"mode", "sequence"}
     assert [row.model_dump(mode="json", exclude=presentation) for row in conversions] == [row.model_dump(mode="json", exclude=presentation) for row in manual]
 
@@ -1349,3 +1312,146 @@ def test_float_text_keeps_its_spelling_of_signed_and_absent_observations(value: 
 def test_tolerance_text_spells_a_float_tolerance_positionally() -> None:
     """A SCIP tolerance such as ``1e-06`` is published positionally, as the wire pattern requires."""
     assert PR._tolerance_text(1e-06) == "0.000001"
+
+
+def test_solver_evidence_bounds_use_the_published_unit() -> None:
+    """B2-9, D2: the view's ``plan_score`` is ``J``. Since lot S1 of project 67 SCIP minimizes ``J`` itself, in euros
+    (``λ·D/F + C``, the residuals over ``√F``): the stage's scale is 1, and the evidence publishes its primal, dual and gap
+    divided by it, so they read in money next to the published ``J``."""
+    scenario = cases.t4()
+    view = build_exact_policy_view(scenario)
+    result = solve_policy_program(compile_policy_program(scenario, view), time_budget_seconds=30.0)
+    (report,) = [stage for stage in result.stages if stage.objective_code == "plan_score"]
+    assert report.scale == Fraction(1)
+
+    evidence = PR.build_solver_evidence(scenario, view, result)
+
+    (published,) = [stage for stage in evidence.stages if stage.objective_code == "plan_score"]
+    assert published.unit.kind == "valuation_money"
+    assert float(published.primal) == pytest.approx(report.primal, rel=1e-12)
+    assert float(published.primal) == pytest.approx(1_001 / 200, rel=1e-6)
+    assert float(published.dual) == pytest.approx(report.dual, rel=1e-12)
+
+
+# --------------------------------------------------------------------------
+# B3 (project 67): the Rebalancer's report
+# --------------------------------------------------------------------------
+
+
+def _rebalancer_plan(scenario):
+    """SCIP's plan for ``scenario``, replayed, and the run: what the report reads."""
+    view, run = _solve(scenario)
+    assert run.candidate is not None
+    return view, evaluate_exact_candidate(scenario, view, run.candidate), run
+
+
+def _wire_fraction(money) -> Fraction:
+    return exact_fraction(money.value)
+
+
+def test_rebalancer_item_rows_cover_assets_cash_items_and_uninvested() -> None:
+    """B3 test 6 (contract §6.2): T4 with a cash item at 2 % — one row per Asset, one per cash item, and the uninvested row,
+    every weight a share of ``F``, the items with the uninvested row adding up to ``F`` before and after."""
+    scenario = cases.t4_cash_over_target()
+    view, evaluation, _run = _rebalancer_plan(scenario)
+    assets = RR.build_rebalancer_asset_rows(scenario, evaluation)
+    cash = RR.build_cash_item_rows(scenario, evaluation)
+    uninvested = RR.build_uninvested_row(scenario, evaluation)
+    wealth = Fraction(10_100)
+    assert [row.asset_id for row in assets] == ["asset:a", "asset:b"] and [(row.broker_id, row.currency) for row in cash] == [(cases.BROKER, "EUR")]
+    for row in [*assets, *cash]:
+        assert exact_fraction(row.target_weight) * wealth == _wire_fraction(row.target_value)
+        assert exact_fraction(row.before_weight) * wealth == _wire_fraction(row.before_value)
+        assert exact_fraction(row.final_weight) * wealth == _wire_fraction(row.final_value)
+    assert (_wire_fraction(cash[0].before_value), _wire_fraction(uninvested.before_value)) == (300, 0)
+    for side in ("before_value", "final_value"):
+        assert sum((_wire_fraction(getattr(row, side)) for row in [*assets, *cash]), Fraction()) + _wire_fraction(getattr(uninvested, side)) == wealth
+
+
+def test_rebalancer_objective_publishes_the_score_and_its_parts() -> None:
+    """B3 test 7 (specifica §6): T4 — ``J`` = λ·D/F + money lost (1 × 50/10 000 + 5 = 1 001/200), the stage of the score
+    equal to it, and the two tie-breaks by name, closed."""
+    scenario = cases.t4()
+    view, evaluation, run = _rebalancer_plan(scenario)
+    score = RR.build_score(scenario, view, evaluation, run)
+    assert (exact_fraction(score.distance_weight), exact_fraction(score.target_distance), _wire_fraction(score.wealth_loss)) == (1, 50, 5)
+    assert _wire_fraction(score.plan_score) == Fraction(1_001, 200) == _wire_fraction(score.distance_per_wealth) + 5
+    stages = {stage.objective_code: exact_fraction(stage.value) for stage in PR.build_objective_results(scenario, view, evaluation).stages}
+    assert stages["plan_score"] == Fraction(1_001, 200)
+    assert [(stage.objective_code, stage.status) for stage in score.tie_breaks] == [("operation_count", "closed"), ("route_priority", "closed"), ("canonical", "closed")]
+
+
+def test_rebalancer_publishes_the_largest_deviation_before_and_after() -> None:
+    """B3 test 20 (X14): T4, targets 50/50 on ``F`` = 10 000 — before B weighs 48 %, 2 points off; after the purchase of
+    195 it weighs 49.95 %, 1/20 of a point. Exact fractions."""
+    scenario = cases.t4()
+    view, evaluation, run = _rebalancer_plan(scenario)
+    score = RR.build_score(scenario, view, evaluation, run)
+    assert (exact_fraction(score.largest_deviation_before), exact_fraction(score.largest_deviation_after)) == (Fraction(1, 50), Fraction(1, 2_000))
+
+
+def _item(ref) -> tuple | None:
+    """A published item reference as a tuple: ``("asset", id)``, ``("cash", Broker, currency)`` or None."""
+    if ref is None:
+        return None
+    return ("asset", ref.asset_id) if ref.kind == "asset" else ("cash", ref.broker_id, ref.currency)
+
+
+def test_rebalancer_names_the_item_of_the_largest_deviation() -> None:
+    """X14, «which entry» (F4a step 4 of project 67): T4 names B, before (2 points off) and after (1/20 of a point)."""
+    scenario = cases.t4()
+    view, evaluation, run = _rebalancer_plan(scenario)
+    score = RR.build_score(scenario, view, evaluation, run)
+    assert (_item(score.largest_deviation_before_item), _item(score.largest_deviation_after_item)) == (("asset", "asset:b"), ("asset", "asset:b"))
+
+
+def test_a_tie_of_the_largest_deviation_names_the_first_item() -> None:
+    """Two items and no cash: A at 60 % and B at 40 % against 50/50 are ten points off each way, an exact tie. With nothing
+    to invest the plan does nothing, so the tie stays after it. The first item in the published order, A, is named."""
+    scenario = cases.scenario("tie", holdings={"asset:a": R(6000), "asset:b": R(4000)}, cash=R(0), weights={"asset:a": cases.HALF, "asset:b": cases.HALF})
+    view, evaluation, run = _rebalancer_plan(scenario)
+    score = RR.build_score(scenario, view, evaluation, run)
+    assert (exact_fraction(score.largest_deviation_before), exact_fraction(score.largest_deviation_after)) == (Fraction(1, 10), Fraction(1, 10))
+    assert (_item(score.largest_deviation_before_item), _item(score.largest_deviation_after_item)) == (("asset", "asset:a"), ("asset", "asset:a"))
+
+
+@pytest.mark.parametrize("build", [pytest.param(lambda: cases.t6(with_usd=True, target_fidelity=pac_models.ExactTargetFidelity(kind="weighted", distance_weight=R(4))), id="rebalancer-t6-usd"), pytest.param(_coarse_funding_fx_scenario, id="pac-fx")])
+def test_plan_accounts_sum_the_money_lost_to_f_minus_w(build) -> None:
+    """The shared accounts type (contract §6.1) read off the exact accounting and costs: the entries, rounding included,
+    sum to ``F − W`` on a plan with a conversion spread and an FX credit rounded against the plan, for either product; the
+    PAC's ``N`` is its shortfall plus its trapped cash."""
+    scenario = build()
+    view, evaluation = _evaluate(scenario)
+    accounts = PR.build_plan_accounts(scenario, evaluation)
+    lost = accounts.money_lost.total()
+    assert lost == _wire_fraction(accounts.initial_wealth) - _wire_fraction(accounts.final_wealth)
+    assert lost == Fraction(evaluation.accounting.wealth_loss.numerator, evaluation.accounting.wealth_loss.denominator)
+    if scenario.product == "pac":
+        accounting = evaluation.accounting
+        expected = accounting.shortfall + accounting.trapped_funding
+        assert _wire_fraction(accounts.uninvested) == Fraction(expected.numerator, expected.denominator)
+
+
+def test_pac_plan_accounts_count_trapped_cash_as_uninvested() -> None:
+    """The PAC's accounts on the wire (B3 of project 67): ``F`` counts every selected cash and contribution, trapped or not
+    (10 reachable + 7 trapped + a 5 contribution no route reaches = 22), and ``N`` is the shortfall plus the trapped cash; no
+    validator equates the uninvested with the shortfall alone."""
+    capability = ev._capability("capability:buy")
+    fee = ev._fee("fee:buy", capability.capability_id, "buy")
+    broker_a, broker_b = ev._broker("broker:a", (capability,), (fee,)), ev._broker("broker:b")
+    scenario = ev._scenario(
+        "scenario:trapped",
+        product="pac",
+        policy="proportional",
+        assets=(ev._asset("asset:a"),),
+        brokers=(broker_a, broker_b),
+        existing_cash=(ev._cash("cash:reachable", broker_a.broker_id, R(10)), ev._cash("cash:trapped", broker_b.broker_id, R(7))),
+        contributions=(ev._contribution("contribution:trapped", R(5)),),
+        order_routes=(ev._order_route("route:buy", broker_id=broker_a.broker_id, asset_id="asset:a", capability=capability, fee_id=fee.fee_schedule_id, side="buy"),),
+    )
+    view = build_exact_policy_view(scenario)
+    evaluation = evaluate_exact_candidate(scenario, view, ev._candidate(view))
+    accounts = PR.build_plan_accounts(scenario, evaluation)
+    assert evaluation.accounting.trapped_funding == R(12)
+    # Nothing is bought (the do-nothing candidate): the shortfall is the 10 reachable, the trapped 12 the rest.
+    assert (_wire_fraction(accounts.initial_wealth), _wire_fraction(accounts.uninvested)) == (22, 10 + 12)

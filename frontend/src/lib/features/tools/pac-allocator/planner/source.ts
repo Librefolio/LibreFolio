@@ -11,6 +11,8 @@ import {isAxiosError} from 'axios';
 import {zodiosApi} from '$lib/api';
 import {safeToolTransportError} from '$lib/features/tools/client';
 import {ToolClientError, assertToolAccount, runToolSessionTask} from '$lib/features/tools/contracts';
+import type {OperatingProfileDocument} from '$lib/features/brokers/profile/brokerOperatingProfile';
+import {canonicalDecimal} from '$lib/utils/core/exactDecimal';
 
 export type SourceSection = 'assets' | 'brokers' | 'holdings' | 'cash_balances' | 'prices' | 'classifications' | 'wac_contexts' | 'fx_quotes' | 'current_distribution';
 export type SourceDomain = 'portfolio' | 'market_data' | 'broker' | 'fx' | 'wac';
@@ -54,19 +56,35 @@ export interface SourceBroker {
     ownership_share: string;
     observed_currencies: string[];
     active: boolean;
-    execution_profile_status: string;
+    /** Source 1.1.0 (P3 of project 67): `available` when the account keeps a readable operating profile. */
+    operating_profile_status: 'available' | 'not_available';
+    /** The account's whole operating profile, sale side and tax regime included (D13); `null` without one. */
+    operating_profile: OperatingProfileDocument | null;
     provenance_id: string;
 }
 
+/** The quantity of one holding: in custody, the user's share of it, and the user's part (`custody × share`, the backend's). */
+export interface SourceHoldingQuantity {
+    custody: string;
+    ownershipShare: string;
+    economic: string;
+}
+
 /**
- * Which Asset is held at which Broker. Identifiers only: the picker of the
- * user's own Assets needs no quantity, so none crosses into the planner.
+ * Which Asset is held at which Broker. The PAC's picker of the user's own Assets needs no quantity, so for the PAC
+ * none crosses into the planner (`quantity: null`); the Rebalancer works on positions and reads it (F3a of project 67).
  */
 export interface SourceHolding {
     holding_id: string;
     asset_id: string;
     broker_id: string;
     provenance_id: string;
+    quantity: SourceHoldingQuantity | null;
+}
+
+/** What a read keeps besides what every Tool needs: the quantities held, for a Tool that works on positions. */
+export interface SourceReadOptions {
+    positions?: boolean;
 }
 
 export interface SourceCash {
@@ -175,6 +193,11 @@ export class PlannerSourceError extends Error {
 
 // The generated TS types widen nullable fields to `X | null | Array<X | null>`;
 // the runtime Zod schema is `X | null`. These guards keep the runtime truth.
+/** A decimal the backend served, in canonical form; the text as served when it is not one (the codec already checked it). */
+function canonicalServed(value: string): string {
+    return canonicalDecimal(value) ?? value;
+}
+
 function text(value: unknown): string | null {
     return typeof value === 'string' ? value : null;
 }
@@ -196,7 +219,7 @@ function refusal(error: unknown): PlannerSourceErrorCode | null {
 
 type RawResponse = Awaited<ReturnType<typeof zodiosApi.get_portfolio_allocation_source_api_v1_portfolio_allocation_source_post>>;
 
-function mapResponse(raw: RawResponse): PlannerSource {
+function mapResponse(raw: RawResponse, options: SourceReadOptions): PlannerSource {
     const distribution = raw.current_distribution;
     return {
         asOf: raw.snapshot.as_of,
@@ -228,7 +251,8 @@ function mapResponse(raw: RawResponse): PlannerSource {
             ownership_share: row.ownership_share,
             observed_currencies: [...row.observed_currencies],
             active: row.active,
-            execution_profile_status: row.execution_profile_status,
+            operating_profile_status: row.operating_profile_status,
+            operating_profile: (row.operating_profile ?? null) as OperatingProfileDocument | null,
             provenance_id: row.provenance_id,
         })),
         holdings: raw.holdings.map((row) => ({
@@ -236,6 +260,8 @@ function mapResponse(raw: RawResponse): PlannerSource {
             asset_id: row.asset_id,
             broker_id: row.broker_id,
             provenance_id: row.provenance_id,
+            // Canonical form (G5-3): the ledger serves its scale, `7.0000000000`; the planner shows and compares `7`.
+            quantity: options.positions ? {custody: canonicalServed(row.custody_quantity), ownershipShare: canonicalServed(row.ownership_share), economic: canonicalServed(row.economic_quantity)} : null,
         })),
         cash: raw.cash_balances.map((row) => ({
             cash_id: row.cash_id,
@@ -305,7 +331,7 @@ function mapResponse(raw: RawResponse): PlannerSource {
 }
 
 /** Reads one immutable domain snapshot. Every call is an explicit user action. */
-export async function fetchPlannerSource(query: SourceQuery, accountGeneration: number, signal?: AbortSignal): Promise<PlannerSource> {
+export async function fetchPlannerSource(query: SourceQuery, accountGeneration: number, signal?: AbortSignal, options: SourceReadOptions = {}): Promise<PlannerSource> {
     try {
         return await runToolSessionTask(
             accountGeneration,
@@ -321,7 +347,7 @@ export async function fetchPlannerSource(query: SourceQuery, accountGeneration: 
                     },
                     {signal: requestSignal},
                 );
-                return mapResponse(response);
+                return mapResponse(response, options);
             },
             signal,
         );

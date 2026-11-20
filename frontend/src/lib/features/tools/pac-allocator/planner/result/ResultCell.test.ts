@@ -46,7 +46,7 @@ import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
 import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import {catalogCurrencyDigits} from '../format';
-import type {PacExactNumber, PacObjectiveUnit} from '../types';
+import type {PlannerExactNumber, PlannerObjectiveUnit} from '../types';
 import ResultCell, {type ResultCellContent} from './ResultCell.svelte';
 
 const P = PRIVACY_PLACEHOLDER;
@@ -56,9 +56,9 @@ const digits = catalogCurrencyDigits([
     {currency: 'JPY', minor_unit: '1'},
 ]);
 
-const EUR_MONEY: PacObjectiveUnit = {kind: 'valuation_money', currency_code: 'EUR'};
-const JPY_MONEY: PacObjectiveUnit = {kind: 'valuation_money', currency_code: 'JPY'};
-const COUNT: PacObjectiveUnit = {kind: 'count'};
+const EUR_MONEY: PlannerObjectiveUnit = {kind: 'valuation_money', currency_code: 'EUR'};
+const JPY_MONEY: PlannerObjectiveUnit = {kind: 'valuation_money', currency_code: 'JPY'};
+const COUNT: PlannerObjectiveUnit = {kind: 'count'};
 
 /** The three number variants this file mounts, each with the testid it is found by. */
 type NumberCell = Extract<ResultCellContent, {type: 'solver' | 'exactMoney' | 'money'}> & {testid: string};
@@ -66,12 +66,12 @@ type NumberCell = Extract<ResultCellContent, {type: 'solver' | 'exactMoney' | 'm
 /** Solver money at 1234.5678 EUR: the minor unit drops two digits, so the clear text is approximate. */
 const SOLVER_MONEY_CELL: NumberCell = {type: 'solver', value: '1234.5678', unit: EUR_MONEY, digits, testid: 'result-cell-solver-money'};
 
-function finite(value: string): PacExactNumber {
+function finite(value: string): PlannerExactNumber {
     return {kind: 'finite_decimal', value};
 }
 
 /** An exact ratio as the backend sends it. The display projection is not authoritative. */
-function ratio(numerator: string, denominator: string, display_decimal: string, display_scale = 6): PacExactNumber {
+function ratio(numerator: string, denominator: string, display_decimal: string, display_scale = 6): PlannerExactNumber {
     return {kind: 'exact_ratio', numerator, denominator, display_decimal, display_scale, display_authority: 'non_authoritative'};
 }
 

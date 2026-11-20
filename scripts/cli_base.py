@@ -345,6 +345,9 @@ def configure_test_runtime(
     os.environ["LIBREFOLIO_TEST_DATA_DIR"] = str(resolved_data_dir)
     ensure_test_lane_id()
     os.environ["LIBREFOLIO_TEST_MODE"] = "1"
+    # The Rebalancer's three run seeds, fixed for every test process and the test server (lot SEEDS of project 67): a
+    # test compares two runs of one request. A lane may set its own.
+    os.environ.setdefault("LIBREFOLIO_PLANNER_SEEDS", "11,22,33")
     os.environ["PIPENV_DONT_LOAD_ENV"] = "1"
     _default_lane_tmpdir(resolved_port)
 

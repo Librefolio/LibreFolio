@@ -133,6 +133,13 @@ PAC_PLANNER_PROOF_TEST_PATH = "backend/test_scripts/test_services/test_pac_plann
 PAC_PLANNER_WIRE_NUMBERS_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_wire_numbers.py"
 PAC_PLANNER_REPORT_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_report.py"
 PAC_PLANNER_SERVICE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_planner.py"
+PAC_PLANNER_SEQUENCE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_plan_sequence.py"
+PAC_PLANNER_CASH_RULE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_cash_rule.py"
+PAC_PLANNER_SEEDS_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_seeds.py"
+PAC_PLANNER_CENTS_OUTSIDE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_cents_outside.py"
+PAC_PLANNER_SOUNDNESS_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_soundness.py"
+PAC_PLANNER_PREVIEW_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_preview.py"
+PAC_PLANNER_REFERENCE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_reference.py"
 
 
 def services_pac_planner_core(verbose: bool = False, test_names: list = None) -> bool:
@@ -193,11 +200,60 @@ def services_pac_planner_report(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "PAC/Rebalancer wire projection tests", verbose=verbose)
 
 
+def services_pac_planner_soundness(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the distance's writing: one variable under every square, and the G5 seed that misled SCIP's cuts."""
+    print_section("Services: Rebalancer Distance Soundness")
+    cmd = _build_pytest_cmd(PAC_PLANNER_SOUNDNESS_TEST_PATH, test_names)
+    return run_command(cmd, "Rebalancer distance soundness tests", verbose=verbose)
+
+
+def services_pac_planner_sequence(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the plan's step counter: an order the balances can follow, checked on the engine's own plans."""
+    print_section("Services: PAC/Rebalancer Step Counter")
+    cmd = _build_pytest_cmd(PAC_PLANNER_SEQUENCE_TEST_PATH, test_names)
+    return run_command(cmd, "PAC/Rebalancer step counter tests", verbose=verbose)
+
+
+def services_pac_planner_cash_rule(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Rebalancer's cash rule: no cash goes round, converted money never travels, transfers read off the balances."""
+    print_section("Services: Rebalancer Cash Rule")
+    cmd = _build_pytest_cmd(PAC_PLANNER_CASH_RULE_TEST_PATH, test_names)
+    return run_command(cmd, "Rebalancer cash rule tests", verbose=verbose)
+
+
+def services_pac_planner_seeds(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Rebalancer's seeded runs: three runs in processes, their outcome, the rule that reads them."""
+    print_section("Services: Rebalancer Seeded Runs")
+    cmd = _build_pytest_cmd(PAC_PLANNER_SEEDS_TEST_PATH, test_names)
+    return run_command(cmd, "Rebalancer seeded runs tests", verbose=verbose)
+
+
+def services_pac_planner_cents_outside(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Rebalancer's continuous money: no rounding variable, the solver's view equal to SCIP's, the published values kept."""
+    print_section("Services: Rebalancer Cents Outside the Solver")
+    cmd = _build_pytest_cmd(PAC_PLANNER_CENTS_OUTSIDE_TEST_PATH, test_names)
+    return run_command(cmd, "Rebalancer cents outside the solver tests", verbose=verbose)
+
+
 def services_pac_planner_service(verbose: bool = False, test_names: list = None) -> bool:
     """Test the plan orchestration end to end, from a wire request to a wire result."""
     print_section("Services: PAC/Rebalancer Plan Orchestration")
     cmd = _build_pytest_cmd(PAC_PLANNER_SERVICE_TEST_PATH, test_names)
     return run_command(cmd, "PAC/Rebalancer plan orchestration tests", verbose=verbose)
+
+
+def services_pac_planner_preview(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the scenario preview of both Tools: the total, today's items, the table «maximum acceptable cost», no SCIP."""
+    print_section("Services: PAC/Rebalancer Scenario Preview")
+    cmd = _build_pytest_cmd(PAC_PLANNER_PREVIEW_TEST_PATH, test_names)
+    return run_command(cmd, "PAC/Rebalancer scenario preview tests", verbose=verbose)
+
+
+def services_pac_planner_reference(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the PAC's reference values: the comparison rules R1-R7 and every corpus case planned against the recorded file."""
+    print_section("Services: PAC Reference Values")
+    cmd = _build_pytest_cmd(PAC_PLANNER_REFERENCE_TEST_PATH, test_names)
+    return run_command(cmd, "PAC reference values tests", verbose=verbose)
 
 
 def services_fx_conversion(verbose: bool = False, test_names: list = None) -> bool:
@@ -1423,8 +1479,8 @@ def services_brim_create_transaction(verbose: bool = False, test_names: list = N
 def services_financial_math(verbose: bool = False, test_names: list = None) -> bool:
     """Test the financial_math layer: average cost, native cash, returns, periods, ledger control totals, and the boundaries of the whole layer."""
     print_section("Services: Financial Math (average cost, native cash, returns, periods, ledger totals, layer boundaries)")
-    print_info("Testing: backend/app/services/financial_math/ (average_cost.py, native_cash.py, returns.py, portfolio/period.py, ledger_totals.py; imports and packages of every module)")
-    print_info("Tests: average costs and cost movements, native cash and cash movements, the first negative cash day (first_negative_cash), effective share, exchange results, rebasing and ratios, the verified MWRR root, periods and unit costs, control totals, layer boundaries")
+    print_info("Testing: backend/app/services/financial_math/ (average_cost.py, native_cash.py, returns.py, portfolio/period.py, ledger_totals.py, fees.py; imports and packages of every module)")
+    print_info("Tests: average costs and cost movements, native cash and cash movements, the first negative cash day (first_negative_cash), effective share, exchange results, rebasing and ratios, the verified MWRR root, periods and unit costs, control totals, fees, layer boundaries")
     print_info("Pure — convert_bulk is stubbed: no server, no shared DB (the ledger totals read private SQLite files under tmp_path)")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial_math/", test_names)
@@ -2986,6 +3042,46 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "pac-planner-soundness",
+        services_pac_planner_soundness,
+        name="Rebalancer Distance Soundness",
+        desc="Every square of the Rebalancer's distance holds one variable; the G5 seed whose cuts excluded better plans no longer bounds the score above a valid plan",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-sequence",
+        services_pac_planner_sequence,
+        name="PAC/Rebalancer Step Counter",
+        desc="The plan's steps numbered in an order the balances can follow; the invariant replayed on the engine's own plans (G5, a PAC deposit and exchange)",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-seeds",
+        services_pac_planner_seeds,
+        name="Rebalancer Seeded Runs",
+        desc="Three runs with their own seeds, in processes (forked) or in process; a run that fails or overruns is a run with no result; the lowest plan, proven only when two runs closed on it",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-cash-rule",
+        services_pac_planner_cash_rule,
+        name="Rebalancer Cash Rule",
+        desc="One signed balance per cash cell: a cell that receives sends nothing, converted money never travels, the transfers derived from the balances; the PAC unchanged",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-cents-outside",
+        services_pac_planner_cents_outside,
+        name="Rebalancer Cents Outside the Solver",
+        desc="The Rebalancer's money continuous in the model, each posting less its reserve: no rounding variable, SCIP's value equal to the replay's view, the published values unchanged, G5 closing with no anomaly",
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "pac-planner-report",
         services_pac_planner_report,
         name="PAC/Rebalancer Wire Projection",
@@ -2997,7 +3093,23 @@ Note: No backend server required.
         "pac-planner-service",
         services_pac_planner_service,
         name="PAC/Rebalancer Plan Orchestration",
-        desc="plan_pac_allocation end to end: ready states, failure availabilities, solver-status proofs, no domain enumeration, test-only oracle and SCIP import isolation",
+        desc="plan_pac_allocation and plan_rebalancing end to end: ready states, failure availabilities, solver-status proofs, no domain enumeration, test-only oracle and SCIP import isolation",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-preview",
+        services_pac_planner_preview,
+        name="PAC/Rebalancer Scenario Preview",
+        desc="preview_pac_allocation and preview_rebalancing: the plan's total, today's items on F, the table «maximum acceptable cost» and the custom fidelity both ways, exact, without SCIP",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-reference",
+        services_pac_planner_reference,
+        name="PAC Reference Values",
+        desc="The plans the PAC published before the planner became general, frozen in a file (written once by diagnostics/pac_reference_recorder.py), and the rules R1-R7 that hold later plans to them: no worse objective vector, no more conversions, no new pair, differences only in a file of accepted ones; every corpus case replanned in the Tool's engine window",
         isolation="pure",
     )
     add_test(cat, "asset-source", services_asset_source, name="Asset Source", desc="Provider assignment, synthetic yield")

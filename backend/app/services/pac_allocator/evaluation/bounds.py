@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from backend.app.services.pac_allocator.evaluation.errors import ExactPolicyContractError
-from backend.app.services.pac_allocator.evaluation.keys import candidate_quanta, entity_refs, exact_decision_id, floor_units, fx_debit_key
-from backend.app.services.pac_allocator.evaluation.reachability import buy_pool_currencies
+from backend.app.services.pac_allocator.evaluation.keys import broker_transfer_key, candidate_quanta, entity_refs, exact_decision_id, floor_units
+from backend.app.services.pac_allocator.evaluation.reachability import buy_pool_currencies, fx_decision_specs
 from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex, order_prices, source_broker, source_selected, to_valuation
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
@@ -14,6 +14,7 @@ from backend.app.services.pac_allocator.models import (
     DecisionFamily,
     EntityRef,
     ExactPlannerScenario,
+    ExactTransferLane,
     check_budget,
 )
 from backend.app.services.pac_allocator.numeric import (
@@ -40,6 +41,23 @@ def current_invested(
             asset.quote.price.currency,
         )
     return total
+
+
+def current_value_by_asset(
+    scenario: ExactPlannerScenario,
+    index: ScenarioIndex,
+) -> dict[str, ExactRatio]:
+    """What each held Asset is worth today, ``V⁰``, in the valuation currency: the planning quantity at the mid price.
+
+    ``current_invested`` is its sum; the SCIP model of the Rebalancer starts every Asset from it (B2 of project 67).
+    """
+    values: dict[str, ExactRatio] = {}
+    for holding in scenario.holdings:
+        asset = index.assets[holding.asset_id]
+        source_unit = asset.quote.price.amount / asset.quote.quote_base_quantity
+        value = to_valuation(index, holding.planning_quantity * source_unit, asset.quote.price.currency)
+        values[holding.asset_id] = values.get(holding.asset_id, _EXACT_ZERO) + value
+    return values
 
 
 def selected_funding(
@@ -98,10 +116,12 @@ def _total_resource_bound(
 ) -> ExactRatio:
     current = current_invested(scenario, index, checkpoint)
     selected = selected_funding(scenario, index, checkpoint)
-    # Postings round against the plan, so no rounding adds resources any more.
-    # The half-quantum margin below predates that rule: it only widens the
-    # decision boxes by a few quanta, and keeping it keeps them, and the
-    # oracle's enumeration domains, stable.
+    # Postings round against the plan, so no rounding adds resources any more:
+    # this margin no longer protects against rounding. It predates that rule
+    # and stays only to keep the decision boxes, and the oracle's enumeration
+    # domains, exactly as they were (A2, D5 a). For that reason it still
+    # counts one half-quantum per buy route and pool currency, as the FX
+    # decisions did before they became one per Broker and pair.
     favorable_rounding_bound = _EXACT_ZERO
     for route in scenario.order_routes:
         check_budget(checkpoint)
@@ -139,24 +159,31 @@ def _fx_upper_bounds(
     checkpoint: Checkpoint | None,
 ) -> dict[str, int]:
     bounds = {}
-    for route in scenario.order_routes:
-        if route.side != "buy":
-            continue
+    for spec in fx_decision_specs(scenario, index, checkpoint):
         check_budget(checkpoint)
-        quote_currency = index.assets[route.asset_id].quote.price.currency
-        for currency in buy_pool_currencies(
-            scenario,
-            index,
-            broker_id=route.broker_id,
-            quote_currency=quote_currency,
-            checkpoint=checkpoint,
-        ):
-            native_bound = resource_bound / index.valuation_rate[currency]
-            bounds[exact_decision_id("fx_debit", fx_debit_key(route.route_id, currency))] = floor_units(
-                native_bound,
-                index.currency_quantum[currency],
-            )
+        native_bound = resource_bound / index.valuation_rate[spec.source_currency]
+        bounds[spec.decision_id] = floor_units(native_bound, index.currency_quantum[spec.source_currency])
     return bounds
+
+
+def _transfer_upper_bounds(
+    scenario: ExactPlannerScenario,
+    index: ScenarioIndex,
+    resource_bound: ExactRatio,
+    checkpoint: Checkpoint | None,
+) -> dict[str, int]:
+    """A transfer moves at most what can reach its source cell: the same resource bound as an FX debit (specification P5)."""
+    bounds = {}
+    for lane in scenario.transfer_lanes:
+        check_budget(checkpoint)
+        native_bound = resource_bound / index.valuation_rate[lane.currency]
+        bounds[transfer_decision_id(lane)] = floor_units(native_bound, index.currency_quantum[lane.currency])
+    return bounds
+
+
+def transfer_decision_id(lane: ExactTransferLane) -> str:
+    """The decision id of a transfer lane: ``transfer:<broker_transfer_key>``."""
+    return exact_decision_id("broker_transfer", broker_transfer_key(lane.source_broker_id, lane.destination_broker_id, lane.currency))
 
 
 def _order_upper_bounds(
@@ -211,6 +238,7 @@ def decision_upper_bounds(
             checkpoint,
         )
     )
+    bounds.update(_transfer_upper_bounds(scenario, index, resource_bound, checkpoint))
     bounds.update(
         _order_upper_bounds(
             scenario,
@@ -240,28 +268,18 @@ def expected_decision_rows(
                 ),
             )
         )
-    for route in scenario.order_routes:
+    for spec in fx_decision_specs(scenario, index, checkpoint):
         check_budget(checkpoint)
-        if route.side != "buy":
-            continue
-        quote_currency = index.assets[route.asset_id].quote.price.currency
-        for currency in buy_pool_currencies(
-            scenario,
-            index,
-            broker_id=route.broker_id,
-            quote_currency=quote_currency,
-            checkpoint=checkpoint,
-        ):
-            rows.append(
-                (
-                    exact_decision_id("fx_debit", fx_debit_key(route.route_id, currency)),
-                    "fx_debit",
-                    entity_refs(
-                        ("order_route", route.route_id),
-                        ("currency", currency),
-                    ),
-                )
+        rows.append((spec.decision_id, "fx_debit", spec.entity_refs))
+    for lane in scenario.transfer_lanes:
+        check_budget(checkpoint)
+        rows.append(
+            (
+                transfer_decision_id(lane),
+                "broker_transfer",
+                entity_refs(("source_broker", lane.source_broker_id), ("destination_broker", lane.destination_broker_id), ("currency", lane.currency)),
             )
+        )
     for route in scenario.order_routes:
         check_budget(checkpoint)
         family: DecisionFamily = "buy_quantum" if route.side == "buy" else "sell_quantum"

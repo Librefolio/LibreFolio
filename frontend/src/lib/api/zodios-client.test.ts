@@ -49,7 +49,7 @@
  * their positive control).
  */
 import {AxiosError, type AxiosAdapter, type AxiosResponse} from 'axios';
-import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 
 const mocks = vi.hoisted(() => ({
     goto: vi.fn().mockName('goto'),
@@ -68,7 +68,10 @@ vi.mock('./generated', () => ({createApiClient: vi.fn(() => ({use: vi.fn()}))}))
 // H-62: the configuration the root gate reads; the interceptor forces a reload of it on a 423 instance_awaiting_restore.
 vi.mock('$lib/features/instance/instanceConfig.svelte', () => ({instanceConfig: {load: mocks.loadInstanceConfig}}));
 
-import {axiosInstance} from './zodios-client';
+import {axiosInstance, observeFetchAnswer} from './zodios-client';
+import {safeToolTransportError} from '$lib/features/tools/client';
+import {getToolAccountState} from '$lib/features/tools/contracts';
+import {getClientSessionUserId, transitionClientSession} from '$lib/stores/app/clientSession';
 import {instanceBlock} from '$lib/features/instance/instanceBlock.svelte';
 import {userLimit} from '$lib/features/instance/userLimit.svelte';
 import {loginUrl} from '$lib/utils/internalPath';
@@ -365,5 +368,35 @@ describe('zodios-client — a 401 goes to the login, but not from the anonymous 
         expect([error?.response?.status, error?.response?.data], 'the refusal reaches the caller').toEqual([423, BLOCKED_BODY]);
         expect(instanceBlock.blocked, 'the 423 handling does not depend on the page').toBe(true);
         expect(mocks.goto, 'a 423 never navigated, and does not start to').not.toHaveBeenCalled();
+    });
+});
+
+describe('zodios-client — a fetch answer goes through the same handling (lot V1 of project 67, the Tool stream)', () => {
+    const json = (_body: unknown) => new Headers({'Content-Type': 'application/json'});
+    const previousSession = getClientSessionUserId();
+    beforeAll(() => transitionClientSession('fetch-answer-user'));
+    afterAll(() => transitionClientSession(previousSession));
+    const toolError = (error: AxiosError | null) => safeToolTransportError(error, getToolAccountState().generation);
+
+    it('a 423 instance_blocked marks the block, as an Axios refusal would', () => {
+        const error = observeFetchAnswer('/api/v1/tools/compute/stream', {status: 423, headers: json(BLOCKED_BODY), data: BLOCKED_BODY});
+
+        expect(instanceBlock.blocked).toBe(true);
+        expect(error).toBeInstanceOf(AxiosError);
+        expect([error?.response?.status, error?.response?.data]).toEqual([423, BLOCKED_BODY]);
+    });
+
+    it('a refusal maps to the Tool errors of /compute: 429 is an HTTP refusal, 401 asks for authentication', () => {
+        const refused = observeFetchAnswer('/api/v1/tools/compute/stream', {status: 429, headers: json({}), data: {detail: {code: 'queue_full', retryable: true}}});
+        expect(toolError(refused)).toMatchObject({kind: 'http', code: 'request_rejected', httpStatus: 429});
+
+        const signedOut = observeFetchAnswer('/api/v1/tools/compute/stream', {status: 401, headers: json({}), data: {detail: 'Not authenticated'}});
+        expect(toolError(signedOut)).toMatchObject({kind: 'authentication', code: 'authentication_required', httpStatus: 401});
+        expect(instanceBlock.blocked).toBe(false);
+    });
+
+    it('no answer is a network failure; a success is no error', () => {
+        expect(toolError(observeFetchAnswer('/api/v1/tools/compute/stream', null))).toMatchObject({kind: 'network', code: 'network_failed'});
+        expect(observeFetchAnswer('/api/v1/tools/compute/stream', {status: 200, headers: new Headers({'Content-Type': 'application/x-ndjson'})})).toBeNull();
     });
 });

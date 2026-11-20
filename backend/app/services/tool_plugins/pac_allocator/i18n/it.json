@@ -3,6 +3,10 @@
     "pacAllocator": {
       "name": "Allocatore PAC",
       "description": "Pianifica gli acquisti che portano un nuovo investimento il più vicino possibile all'allocazione obiettivo, in quote intere o importi, senza inviare ordini."
+    },
+    "portfolioRebalancer": {
+      "name": "Ribilanciatore",
+      "description": "Porta un portafoglio già investito verso i suoi obiettivi: compra e, se lo autorizzi, vende, stimando commissioni e tasse. Non invia ordini."
     }
   }
 }

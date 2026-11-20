@@ -71,3 +71,43 @@ describe('BusyPanel bar', () => {
         expect(vi.getTimerCount()).toBe(0);
     });
 });
+
+// V3 of project 67: the phase the calculation reports, by its position in the list the service declares (M11). The label
+// is read through its attributes, never through its translated text.
+const PHASES = ['validate', 'model', 'search', 'verify', 'report'];
+const phase = () => screen.queryByTestId('pac-planner-busy-phase');
+
+describe('BusyPanel phases', () => {
+    it('busy panel shows the phase label and its position', () => {
+        render(BusyPanel, {timeoutMs: 60_000, onstop: () => {}, progressPhases: PHASES, progressPhase: 'search'});
+        const label = phase();
+        expect(label).not.toBeNull();
+        expect([label?.dataset.progressPhase, label?.dataset.progressIndex, label?.dataset.progressTotal]).toEqual(['search', '3', '5']);
+        // The bar stays the bar of the time waited: no fill by phase (no percentage, M11).
+        expect(bar().getAttribute('data-mode')).toBe('elapsed');
+    });
+
+    it("busy panel without phases is today's panel", () => {
+        const today = render(BusyPanel, {timeoutMs: 60_000, onstop: () => {}});
+        const html = today.container.innerHTML;
+        expect(phase()).toBeNull();
+        today.unmount();
+        const empty = render(BusyPanel, {timeoutMs: 60_000, onstop: () => {}, progressPhases: [], progressPhase: null});
+        expect(empty.container.innerHTML).toBe(html);
+        empty.unmount();
+        // A phase without a declared list (a Tool without phases) changes nothing either.
+        const undeclared = render(BusyPanel, {timeoutMs: 60_000, onstop: () => {}, progressPhases: [], progressPhase: 'search'});
+        expect(undeclared.container.innerHTML).toBe(html);
+    });
+
+    it('an unknown phase is ignored', async () => {
+        const view = render(BusyPanel, {timeoutMs: 60_000, onstop: () => {}, progressPhases: PHASES, progressPhase: 'model'});
+        expect(phase()?.dataset.progressIndex).toBe('2');
+        await view.rerender({timeoutMs: 60_000, onstop: () => {}, progressPhases: PHASES, progressPhase: 'mystery'});
+        flushSync();
+        expect([phase()?.dataset.progressPhase, phase()?.dataset.progressIndex]).toEqual(['model', '2']);
+        await view.rerender({timeoutMs: 60_000, onstop: () => {}, progressPhases: PHASES, progressPhase: 'report'});
+        flushSync();
+        expect([phase()?.dataset.progressPhase, phase()?.dataset.progressIndex]).toEqual(['report', '5']);
+    });
+});

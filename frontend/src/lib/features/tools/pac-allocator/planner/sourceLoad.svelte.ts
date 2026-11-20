@@ -6,7 +6,7 @@
  */
 import {ToolClientError} from '../../contracts';
 import {toolErrorMessage} from '../../presentation';
-import {fetchPlannerSource, isPlannerSourceError, isStoppedWait, type PlannerSource, type SourceQuery} from './source';
+import {fetchPlannerSource, isPlannerSourceError, isStoppedWait, type PlannerSource, type SourceQuery, type SourceReadOptions} from './source';
 
 export interface SourceLoadError {
     key: string;
@@ -25,6 +25,12 @@ export class SourceLoad {
 
     #controller: AbortController | null = null;
     #sequence = 0;
+    readonly #options: SourceReadOptions;
+
+    /** `options.positions`: keep the quantities held (a Tool that works on positions, the Rebalancer). */
+    constructor(options: SourceReadOptions = {}) {
+        this.#options = options;
+    }
 
     async load(query: SourceQuery, accountGeneration: number): Promise<PlannerSource | null> {
         this.#controller?.abort();
@@ -35,7 +41,7 @@ export class SourceLoad {
         this.error = null;
         this.data = null;
         try {
-            const data = await fetchPlannerSource(query, accountGeneration, controller.signal);
+            const data = await fetchPlannerSource(query, accountGeneration, controller.signal, this.#options);
             if (sequence !== this.#sequence) return null;
             this.data = data;
             this.status = 'ready';

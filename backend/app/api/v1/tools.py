@@ -4,24 +4,27 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
-from starlette.responses import Response
+from starlette.responses import Response, StreamingResponse
 from starlette.types import Message, Receive, Scope
 
 from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import User
-from backend.app.schemas.tools import ToolCatalogResponse, ToolComputeBatchRequest, ToolComputeBatchResponse, ToolDiagnosticsResponse, ToolPlatformPolicy
+from backend.app.logging_config import get_logger
+from backend.app.schemas.tools import ToolCatalogResponse, ToolComputeBatchRequest, ToolComputeBatchResponse, ToolComputeProgress, ToolComputeStreamLine, ToolDiagnosticsResponse, ToolPlatformPolicy
 from backend.app.services.plugin_settings.contract import BoundSettings
 from backend.app.services.tools.base import ToolExecutionError
 from backend.app.services.tools.catalog import effective_catalog_entries
 from backend.app.services.tools.catalog import get_tool_catalog as build_tool_catalog
 from backend.app.services.tools.executor import get_tool_executor
 from backend.app.services.tools.settings import bound_settings_for_batch
-from backend.app.services.tools.wire import parse_json, validate_json_value
+from backend.app.services.tools.wire import encode_json, parse_json, validate_json_value
+
+logger = get_logger(__name__)
 
 # Request budget of the catalogue and diagnostics routes, capped by the platform's request_timeout_ms.
 _READ_ROUTE_TIMEOUT_MS = 20_000
@@ -46,6 +49,7 @@ class _ToolRequest(Request):
         self._decoded: object = None
         self._has_decoded = False
         self._received_bytes = 0
+        self.deadline = started + policy.request_timeout_ms / 1000
 
         async def bounded_receive() -> Message:
             message = await receive()
@@ -76,6 +80,7 @@ class _ToolRequest(Request):
         remaining = self.started + bounded_timeout_ms / 1000 - time.monotonic()
         if remaining <= 0:
             raise HTTPException(status_code=503, detail="Tool request deadline exceeded")
+        self.deadline = self.started + bounded_timeout_ms / 1000
         self._timeout.reschedule(asyncio.get_running_loop().time() + remaining)
 
 
@@ -102,7 +107,8 @@ class ToolRoute(APIRoute):
                 async with asyncio.timeout(opening_window_ms / 1000) as timeout:
                     bounded_request = _ToolRequest(request.scope, request.receive, policy=policy, started=started, timeout=timeout)
                     response = await handler(bounded_request)
-                    if request.method == "POST" and len(response.body) > policy.max_response_bytes:
+                    # A stream's body is written after this window: it bounds its own lines and its own deadline.
+                    if request.method == "POST" and not isinstance(response, StreamingResponse) and len(response.body) > policy.max_response_bytes:
                         raise HTTPException(status_code=503, detail="Tool response body limit exceeded")
                     return response
             except RequestValidationError as exc:
@@ -170,6 +176,117 @@ async def compute_tools(batch: ToolComputeBatchRequest, request: Request, curren
     except ToolExecutionError as exc:
         status_code = 429 if exc.code == "queue_full" else 503
         raise HTTPException(status_code=status_code, detail={"code": exc.code, "retryable": exc.retryable}) from exc
+
+
+def _ndjson_line(value: dict[str, object]) -> bytes:
+    return encode_json(value, max_depth=64) + b"\n"
+
+
+def _release(*tasks: asyncio.Task) -> None:
+    """Cancel without waiting (a cancelled stream must not await again), and retrieve what each task ends with."""
+    for task in tasks:
+        if not task.done():
+            task.cancel()
+        task.add_done_callback(lambda done: done.cancelled() or done.exception())
+
+
+async def _stream_lines(work: asyncio.Task[ToolComputeBatchResponse], events: asyncio.Queue[ToolComputeProgress], first: ToolComputeProgress | None, deadline: float, max_bytes: int) -> AsyncIterator[bytes]:
+    """The stream's body: every progress message as it comes, then ``{kind: "result", response}``. A stream that cannot
+    end well (past its deadline, an unexpected failure, a result over the response ceiling) ends without a result line,
+    which the client reads as a broken answer. A closed browser cancels it, and with it the calculation. The deadline is
+    checked between lines, never around a ``yield``: a cancel must not land in the transport's send."""
+    getter: asyncio.Task[ToolComputeProgress] | None = None
+    try:
+        if first is not None:
+            yield _ndjson_line(first.model_dump(mode="json"))
+        while not work.done():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                logger.warning("Tool stream deadline exceeded before the result")
+                return
+            getter = asyncio.create_task(events.get())
+            await asyncio.wait((work, getter), timeout=remaining, return_when=asyncio.FIRST_COMPLETED)
+            event = getter.result() if getter.done() else None
+            if event is None:
+                getter.cancel()
+            getter = None
+            if event is not None:
+                yield _ndjson_line(event.model_dump(mode="json"))
+        # The outcome reaches this loop after its item's last messages: hand them over first.
+        while not events.empty():
+            yield _ndjson_line(events.get_nowait().model_dump(mode="json"))
+        response = work.result()
+        line = _ndjson_line({"kind": "result", "response": response.model_dump(mode="json")})
+        if len(line) > max_bytes:
+            logger.warning("Tool stream result exceeds the response limit", request_id=response.request_id, size=len(line))
+            return
+        yield line
+    except Exception as exc:  # isolation boundary: the headers are sent, the stream can only end without a result
+        logger.error("Tool stream failed before the result", exc_info=exc)
+    finally:
+        _release(work, *((getter,) if getter is not None else ()))
+
+
+def _refusal(exc: ToolExecutionError) -> HTTPException:
+    """A refusal before any line: the status ``POST /tools/compute`` answers."""
+    return HTTPException(status_code=429 if exc.code == "queue_full" else 503, detail={"code": exc.code, "retryable": exc.retryable})
+
+
+class _NDJSONResponse(StreamingResponse):
+    """A stream of JSON lines; its media type is what the OpenAPI document declares for the route."""
+
+    media_type = "application/x-ndjson"
+
+
+@router.post(
+    "/compute/stream",
+    response_class=_NDJSONResponse,
+    responses={
+        200: {
+            "model": ToolComputeStreamLine,
+            "description": "One ToolComputeStreamLine per line: progress lines, then the result line. A stream without its result line is a broken answer.",
+        }
+    },
+)
+async def compute_tools_stream(batch: ToolComputeBatchRequest, request: Request, current_user: User = Depends(get_current_user)) -> Response:
+    """``POST /tools/compute`` with the progress of its calculations (lot V1 of project 67). The same admission,
+    deadlines, cancellation and result; refusals before any job (429, 503) and a disconnect before the first line are
+    the same HTTP answers. Then a stream of lines, never compressed (``MIDDLEWARE_STACK`` excludes the media type), so
+    each line leaves as soon as it is written."""
+    executor = get_tool_executor()
+    request_timeout_ms = await asyncio.to_thread(executor.batch_request_timeout_ms, batch)
+    bounded_request = _execution_request(request, timeout_ms=request_timeout_ms)
+    if current_user.id is None:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        settings = await bound_settings_for_batch(batch, user_id=current_user.id)
+    except ToolExecutionError as exc:
+        raise _refusal(exc) from exc
+    events: asyncio.Queue[ToolComputeProgress] = asyncio.Queue()
+    work = asyncio.create_task(executor.compute(batch, principal_key=str(current_user.id), request_started=bounded_request.started, settings=settings, on_progress=events.put_nowait))
+    first = asyncio.create_task(events.get())
+    disconnect = asyncio.create_task(_client_disconnected(bounded_request))
+    try:
+        # Until a first line exists the answer is still an HTTP status: an admission refusal stays a 429 or a 503.
+        await asyncio.wait((work, first, disconnect), return_when=asyncio.FIRST_COMPLETED)
+    except BaseException:
+        _release(work, first, disconnect)
+        raise
+    if disconnect.done() and not work.done():
+        _release(work, first, disconnect)
+        return Response(status_code=499)
+    _release(disconnect)
+    initial = first.result() if first.done() else None
+    if not first.done():
+        first.cancel()
+    failure = work.exception() if work.done() and not work.cancelled() else None
+    if isinstance(failure, ToolExecutionError):
+        raise _refusal(failure) from failure
+    if failure is not None:
+        raise failure  # what /compute would answer for it, never a 200 with an empty stream
+    # GZip leaves application/x-ndjson alone (platform/middleware.py); a proxy is asked not to transform or buffer it.
+    headers = {"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"}
+    return _NDJSONResponse(_stream_lines(work, events, initial, bounded_request.deadline, executor.policy.max_response_bytes), headers=headers)
 
 
 @router.get("/diagnostics", response_model=ToolDiagnosticsResponse)

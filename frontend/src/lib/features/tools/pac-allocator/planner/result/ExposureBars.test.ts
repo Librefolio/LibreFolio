@@ -117,7 +117,7 @@ import {PAC_EXPOSURE_COLORS} from '$lib/theme/chartTheme';
 import {chartRoles, setRoleReader} from '$lib/theme/roleColors';
 import {notifyChartColorsChange} from '$lib/theme/themeMode';
 import {themed} from '$lib/theme/themePair';
-import type {PacExactNumber, PacNumberAvailability} from '../types';
+import type {PlannerExactNumber, PlannerNumberAvailability} from '../types';
 import {UNCATEGORISED_CATEGORY_ID, type WeightRow} from './model';
 
 // =============================================================================
@@ -136,13 +136,13 @@ type Theme = 'light' | 'dark';
 const THEMES: readonly Theme[] = ['light', 'dark'];
 
 /** An ideal weight, as the backend publishes a finite decimal. */
-const weight = (value: string): PacExactNumber => ({kind: 'finite_decimal', value});
+const weight = (value: string): PlannerExactNumber => ({kind: 'finite_decimal', value});
 
 /** An actual weight the backend published. */
-const after = (value: string): PacNumberAvailability => ({kind: 'available', value: weight(value)});
+const after = (value: string): PlannerNumberAvailability => ({kind: 'available', value: weight(value)});
 
 /** An actual weight the backend could not publish: no bar is drawn for it, and its row keeps its colour. */
-const UNPUBLISHED: PacNumberAvailability = {kind: 'unavailable', reason: 'dependency_unavailable'};
+const UNPUBLISHED: PlannerNumberAvailability = {kind: 'unavailable', reason: 'dependency_unavailable'};
 
 /** One row of a fixture, with what its actual weight is drawn in, spelled out. */
 interface RowSpec {
@@ -152,7 +152,7 @@ interface RowSpec {
     /** Asset types: absent for the family's own colour, n for its n-th shade (GR4). */
     rank?: number;
     target: string;
-    final: PacNumberAvailability;
+    final: PlannerNumberAvailability;
 }
 
 interface Fixture {

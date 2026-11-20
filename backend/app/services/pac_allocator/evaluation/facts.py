@@ -6,10 +6,11 @@ from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from backend.app.services.pac_allocator.evaluation.economics import EconomicState, evaluate_economic_state
+from backend.app.services.pac_allocator.evaluation.economics import EconomicState, final_cash_by_cell
 from backend.app.services.pac_allocator.evaluation.errors import ExactPolicyContractError
-from backend.app.services.pac_allocator.evaluation.keys import asset_broker_key, exact_decision_id, fx_debit_key, is_quantum_multiple
-from backend.app.services.pac_allocator.evaluation.reachability import buy_pool_currencies
+from backend.app.services.pac_allocator.evaluation.keys import asset_broker_key, exact_decision_id, is_quantum_multiple
+from backend.app.services.pac_allocator.evaluation.limits import limit_reference, resolve_scenario_limits
+from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs, fx_relay_groups, transfer_relay_groups
 from backend.app.services.pac_allocator.evaluation.references import ledger_keys
 from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex, fx_rate, order_prices, source_broker, valuation_rate_of
 from backend.app.services.pac_allocator.ledger import (
@@ -18,12 +19,15 @@ from backend.app.services.pac_allocator.ledger import (
 from backend.app.services.pac_allocator.models import (
     Checkpoint,
     DecisionFamily,
+    ExactAccountingEvaluation,
+    ExactAssetEvaluation,
     ExactBrokerLedgerEvaluation,
+    ExactCashTargetEvaluation,
     ExactObjectiveCode,
     ExactOrderRoute,
     ExactPlannerScenario,
-    ExactPolicyPurpose,
     ExactPolicyView,
+    ExactTargetFidelity,
     check_budget,
 )
 from backend.app.services.pac_allocator.numeric import (
@@ -134,74 +138,144 @@ def _fx_constraint_facts(
     checkpoint: Checkpoint | None,
 ) -> dict[str, _ConstraintFact]:
     facts: dict[str, _ConstraintFact] = {}
-    fx_actions = {(item.order_route_id, item.source_currency): item for item in state.fx}
-    for route in scenario.order_routes:
-        if route.side != "buy":
-            continue
+    fx_actions = {item.decision_id: item for item in state.fx}
+    for spec in fx_decision_specs(scenario, index, checkpoint):
         check_budget(checkpoint)
-        quote_currency = index.assets[route.asset_id].quote.price.currency
-        for currency in buy_pool_currencies(
-            scenario,
-            index,
-            broker_id=route.broker_id,
-            quote_currency=quote_currency,
-            checkpoint=checkpoint,
-        ):
-            key = fx_debit_key(route.route_id, currency)
-            action = fx_actions.get((route.route_id, currency))
-            source_debit = action.source_debit if action is not None else _EXACT_ZERO
-            exact_credit = action.exact_destination_credit if action is not None else _EXACT_ZERO
-            posted_credit = action.posted_destination_credit if action is not None else _EXACT_ZERO
-            approved_rate = fx_rate(index.fx_rate_by_pair, currency, quote_currency)
-            expected_exact = calculate_fx_credit(
-                source_debit=source_debit,
-                approved_rate=approved_rate,
-                spread=scenario.fx_spread_rate,
-                source_valuation_rate=valuation_rate_of(index, currency),
-                destination_valuation_rate=valuation_rate_of(index, quote_currency),
-            )
-            expected_posted = (
-                rounded_money_posting(
-                    posting_id="constraint-only",
-                    family="fx_credit",
-                    broker_id=route.broker_id,
-                    currency=quote_currency,
-                    exact_amount=expected_exact,
-                    quantum=index.currency_quantum[quote_currency],
-                ).posted_amount
-                if expected_exact != _EXACT_ZERO
-                else _EXACT_ZERO
-            )
-            coupling_delta = posted_credit - expected_posted
-            facts[_constraint_id("FX_DEBIT_CREDIT_COUPLED", key)] = _ConstraintFact(
-                value=coupling_delta,
-                lower_bound=_EXACT_ZERO,
-                upper_bound=_EXACT_ZERO,
-                satisfied=(exact_credit == expected_exact and coupling_delta == _EXACT_ZERO),
-            )
-            facts[_constraint_id("FX_CREDIT_POSITIVE", key)] = _ConstraintFact(
-                value=posted_credit,
-                lower_bound=_EXACT_ZERO,
-                upper_bound=None,
-                satisfied=(action is None or posted_credit > _EXACT_ZERO),
-            )
-            native_quantized = is_quantum_multiple(
-                source_debit,
-                index.currency_quantum[currency],
-            )
-            facts[_constraint_id("FX_NATIVE_QUANTUM", key)] = _ConstraintFact(
-                value=source_debit,
-                lower_bound=_EXACT_ZERO,
-                upper_bound=None,
-                satisfied=native_quantized,
-            )
-            source_ledger = ledger_rows[(route.broker_id, currency)]
-            facts[_constraint_id("FX_SOURCE_CASH", key)] = _ConstraintFact(
-                value=source_ledger.final_spendable,
-                lower_bound=_EXACT_ZERO,
-                upper_bound=None,
-                satisfied=source_ledger.final_spendable >= _EXACT_ZERO,
-            )
+        currency, quote_currency, key = spec.source_currency, spec.destination_currency, spec.key
+        action = fx_actions.get(spec.decision_id)
+        source_debit = action.source_debit if action is not None else _EXACT_ZERO
+        exact_credit = action.exact_destination_credit if action is not None else _EXACT_ZERO
+        posted_credit = action.posted_destination_credit if action is not None else _EXACT_ZERO
+        approved_rate = fx_rate(index.fx_rate_by_pair, currency, quote_currency)
+        expected_exact = calculate_fx_credit(
+            source_debit=source_debit,
+            approved_rate=approved_rate,
+            spread=scenario.fx_spread_rate,
+            source_valuation_rate=valuation_rate_of(index, currency),
+            destination_valuation_rate=valuation_rate_of(index, quote_currency),
+        )
+        expected_posted = (
+            rounded_money_posting(
+                posting_id="constraint-only",
+                family="fx_credit",
+                broker_id=spec.broker_id,
+                currency=quote_currency,
+                exact_amount=expected_exact,
+                quantum=index.currency_quantum[quote_currency],
+            ).posted_amount
+            if expected_exact != _EXACT_ZERO
+            else _EXACT_ZERO
+        )
+        coupling_delta = posted_credit - expected_posted
+        facts[_constraint_id("FX_DEBIT_CREDIT_COUPLED", key)] = _ConstraintFact(
+            value=coupling_delta,
+            lower_bound=_EXACT_ZERO,
+            upper_bound=_EXACT_ZERO,
+            satisfied=(exact_credit == expected_exact and coupling_delta == _EXACT_ZERO),
+        )
+        facts[_constraint_id("FX_CREDIT_POSITIVE", key)] = _ConstraintFact(
+            value=posted_credit,
+            lower_bound=_EXACT_ZERO,
+            upper_bound=None,
+            satisfied=(action is None or posted_credit > _EXACT_ZERO),
+        )
+        native_quantized = is_quantum_multiple(
+            source_debit,
+            index.currency_quantum[currency],
+        )
+        facts[_constraint_id("FX_NATIVE_QUANTUM", key)] = _ConstraintFact(
+            value=source_debit,
+            lower_bound=_EXACT_ZERO,
+            upper_bound=None,
+            satisfied=native_quantized,
+        )
+        source_ledger = ledger_rows[(spec.broker_id, currency)]
+        facts[_constraint_id("FX_SOURCE_CASH", key)] = _ConstraintFact(
+            value=source_ledger.final_spendable,
+            lower_bound=_EXACT_ZERO,
+            upper_bound=None,
+            satisfied=source_ledger.final_spendable >= _EXACT_ZERO,
+        )
+    return facts
+
+
+def _fx_relay_constraint_facts(
+    *,
+    scenario: ExactPlannerScenario,
+    index: ScenarioIndex,
+    state: EconomicState,
+    checkpoint: Checkpoint | None,
+) -> dict[str, _ConstraintFact]:
+    """V7: on a Broker a currency that receives a conversion does not give one (``FX_NO_RELAY``).
+
+    The fact counts the sides in use, 0 to 2: some conversion into the currency, some conversion out of it. A relay, one of each,
+    burns cash and no optimum needs it: the planning rate never beats the triangle, credits are floored, and a buy is never paid
+    through a chain. Converting back and forth in one pair is the shortest relay.
+    """
+    active = {item.decision_id for item in state.fx if item.quanta > 0}
+    facts: dict[str, _ConstraintFact] = {}
+    for group in fx_relay_groups(fx_decision_specs(scenario, index, checkpoint)):
+        check_budget(checkpoint)
+        sides = ExactRatio(sum(1 for side in (group.receiving, group.giving) if any(spec.decision_id in active for spec in side)))
+        facts[_constraint_id("FX_NO_RELAY", group.key)] = _ConstraintFact(value=sides, lower_bound=_EXACT_ZERO, upper_bound=ExactRatio(1), satisfied=sides <= ExactRatio(1))
+    return facts
+
+
+def _transfer_relay_constraint_facts(
+    *,
+    scenario: ExactPlannerScenario,
+    index: ScenarioIndex,
+    quanta: Mapping[str, int],
+    checkpoint: Checkpoint | None,
+) -> dict[str, _ConstraintFact]:
+    """The Rebalancer's cash rule (lot CR of project 67): in one currency, a Broker that receives a conversion or a transfer
+    sends no transfer (``TRANSFER_NO_RELAY``, ``reachability.TransferRelayGroup``).
+
+    The fact counts the sides in use, 0 to 2, as ``FX_NO_RELAY``'s. A plan that breaks it may still end with every balance
+    positive, but cash goes round: on G5, Broker 1 changed more euros than it held and sent the dollars away, Broker 2 changed
+    them back and returned the euros, and no order of the steps could pay it.
+    """
+    facts: dict[str, _ConstraintFact] = {}
+    if scenario.product != "rebalancer":
+        return facts
+    for group in transfer_relay_groups(scenario, fx_decision_specs(scenario, index, checkpoint)):
+        check_budget(checkpoint)
+        sides = ExactRatio(sum(1 for side in (group.receiving, group.giving) if any(quanta[decision_id] > 0 for decision_id in side)))
+        facts[_constraint_id("TRANSFER_NO_RELAY", group.key)] = _ConstraintFact(value=sides, lower_bound=_EXACT_ZERO, upper_bound=ExactRatio(1), satisfied=sides <= ExactRatio(1))
+    return facts
+
+
+def _limit_constraint_facts(
+    *,
+    scenario: ExactPlannerScenario,
+    index: ScenarioIndex,
+    state: EconomicState,
+    checkpoint: Checkpoint | None,
+) -> dict[str, _ConstraintFact]:
+    """V5 for every limited entry (A3), on limits resolved against ``fixed_reference``.
+
+    The final value of an Asset is ``ExactAssetEvaluation.final_value``; of a cash cell, its final spendable cash valued in
+    the valuation currency. A violation is never a rounding deficit: the code is not among the four ``evaluator`` accepts for a
+    top-up (D9). There is no cap on «uninvested» cash: fees a plan has to pay are not uninvested, and a cash maximum on a
+    cell already says how much may be left in it.
+    """
+    facts: dict[str, _ConstraintFact] = {}
+    resolved = resolve_scenario_limits(scenario, limit_reference(scenario, state.accounting))
+    final_value = {item.asset_id: item.final_value for item in state.assets}
+    final_cash = final_cash_by_cell(index, state.ledgers)
+    for entry, bounds in resolved.by_entry.items():
+        check_budget(checkpoint)
+        value = final_value[entry.asset_id] if entry.kind == "asset" else final_cash[(entry.broker_id, entry.currency)]
+        satisfied = (bounds.minimum is None or value >= bounds.minimum) and (bounds.maximum is None or value <= bounds.maximum)
+        contradictory = bounds.minimum is not None and bounds.maximum is not None and bounds.minimum > bounds.maximum
+        # A minimum above its maximum is refused before the calculation (``limits.check_minimum_above_maximum``); a replay that
+        # meets one anyway reports it unsatisfiable, and publishes the minimum alone: a fact's bounds must be ordered.
+        facts[_constraint_id("ENTRY_VALUE_WITHIN_LIMITS", entry.key)] = _ConstraintFact(
+            value=value,
+            lower_bound=bounds.minimum,
+            upper_bound=None if contradictory else bounds.maximum,
+            satisfied=satisfied and not contradictory,
+        )
     return facts
 
 
@@ -210,7 +284,6 @@ def _order_route_constraint_facts(
     route: ExactOrderRoute,
     index: ScenarioIndex,
     quanta: Mapping[str, int],
-    purpose: ExactPolicyPurpose,
 ) -> dict[str, _ConstraintFact]:
     capability = index.capabilities[(route.broker_id, route.capability_id)]
     family: DecisionFamily = "buy_quantum" if route.side == "buy" else "sell_quantum"
@@ -221,9 +294,6 @@ def _order_route_constraint_facts(
         capability.order_step,
         _minimum_value(route, "minimum_if_active"),
     )
-    required_minimum = _minimum_value(route, "required_minimum")
-    if purpose in {"primary", "invest_only_baseline"} and route.side == "sell":
-        required_minimum = _EXACT_ZERO
     prices = order_prices(index, route)
     price_order_safe = prices.mid_native <= prices.execution_native if route.side == "buy" else prices.execution_native <= prices.mid_native
     return {
@@ -247,15 +317,6 @@ def _order_route_constraint_facts(
             lower_bound=active_floor if active else _EXACT_ZERO,
             upper_bound=None,
             satisfied=not active or measure >= active_floor,
-        ),
-        _constraint_id(
-            "ORDER_REQUIRED_MIN",
-            route.route_id,
-        ): _ConstraintFact(
-            value=measure,
-            lower_bound=required_minimum,
-            upper_bound=None,
-            satisfied=measure >= required_minimum,
         ),
         _constraint_id("ORDER_CAP", route.route_id): _ConstraintFact(
             value=measure,
@@ -283,7 +344,6 @@ def _order_constraint_facts(
     index: ScenarioIndex,
     quanta: Mapping[str, int],
     state: EconomicState,
-    purpose: ExactPolicyPurpose,
     checkpoint: Checkpoint | None,
 ) -> dict[str, _ConstraintFact]:
     facts = {}
@@ -295,7 +355,6 @@ def _order_constraint_facts(
                 route=route,
                 index=index,
                 quanta=quanta,
-                purpose=purpose,
             )
         )
         if route.side == "sell":
@@ -455,60 +514,13 @@ def _global_constraint_facts(  # noqa: C901 — flat sequential global facts, ea
             no_short_or_leverage = False
     facts[_constraint_id("NO_SHORT_OR_LEVERAGE", "global")] = _bool_fact(no_short_or_leverage)
     if scenario.product == "rebalancer":
-        rebalancer_nonempty = state.accounting.current_invested > _EXACT_ZERO and state.accounting.final_invested > _EXACT_ZERO
+        # Only a portfolio to rebalance is required (specifica §15 n. 14): with a target on cash a plan may end all in cash.
         facts[_constraint_id("REBALANCER_NONEMPTY", "global")] = _ConstraintFact(
-            value=state.accounting.final_invested,
+            value=state.accounting.current_invested,
             lower_bound=_EXACT_ZERO,
             upper_bound=None,
-            satisfied=rebalancer_nonempty,
+            satisfied=state.accounting.current_invested > _EXACT_ZERO,
         )
-    return facts
-
-
-def _sell_extension_constraint_facts(
-    *,
-    scenario: ExactPlannerScenario,
-    index: ScenarioIndex,
-    view: ExactPolicyView,
-    quanta: Mapping[str, int],
-    state: EconomicState,
-    baseline_state: EconomicState | None,
-    checkpoint: Checkpoint | None,
-) -> dict[str, _ConstraintFact]:
-    if baseline_state is None:
-        raise ExactPolicyContractError("SELL extension constraints require baseline facts")
-    facts = {}
-    baseline_assets = {item.asset_id: item for item in baseline_state.assets}
-    baseline_buy_assets = {order.asset_id for order in baseline_state.orders if order.side == "buy"}
-    active_order_ids = {order.route_id for order in state.orders}
-    for route in scenario.order_routes:
-        if route.side != "sell":
-            continue
-        check_budget(checkpoint)
-        eligible = baseline_assets[route.asset_id].residual > _EXACT_ZERO and route.asset_id not in baseline_buy_assets
-        facts[_constraint_id("SELL_ELIGIBLE", route.route_id)] = _bool_fact(route.route_id not in active_order_ids or eligible)
-    sell_active = any(order.side == "sell" for order in state.orders)
-    incremental_buy = any(item.family == "buy_quantum" and quanta[item.decision_id] > item.baseline_quanta for item in view.decisions)
-    no_sell_fundable = True
-    if sell_active:
-        no_sell_quanta = dict(quanta)
-        for item in view.decisions:
-            check_budget(checkpoint)
-            if item.family == "sell_quantum":
-                no_sell_quanta[item.decision_id] = 0
-        no_sell_state = evaluate_economic_state(
-            scenario,
-            index,
-            no_sell_quanta,
-            checkpoint,
-        )
-        no_sell_fundable = all(row.final_spendable >= _EXACT_ZERO for row in no_sell_state.ledgers)
-    facts[
-        _constraint_id(
-            "SELL_FUNDS_INCREMENTAL_BUY",
-            "global",
-        )
-    ] = _bool_fact(not sell_active or (incremental_buy and not no_sell_fundable))
     return facts
 
 
@@ -516,10 +528,8 @@ def constraint_facts(
     *,
     scenario: ExactPlannerScenario,
     index: ScenarioIndex,
-    view: ExactPolicyView,
     quanta: Mapping[str, int],
     state: EconomicState,
-    baseline_state: EconomicState | None,
     checkpoint: Checkpoint | None,
 ) -> dict[str, _ConstraintFact]:
     facts = _funding_constraint_facts(
@@ -539,13 +549,15 @@ def constraint_facts(
             checkpoint=checkpoint,
         )
     )
+    facts.update(_fx_relay_constraint_facts(scenario=scenario, index=index, state=state, checkpoint=checkpoint))
+    facts.update(_transfer_relay_constraint_facts(scenario=scenario, index=index, quanta=quanta, checkpoint=checkpoint))
+    facts.update(_limit_constraint_facts(scenario=scenario, index=index, state=state, checkpoint=checkpoint))
     facts.update(
         _order_constraint_facts(
             scenario,
             index,
             quanta,
             state,
-            view.purpose,
             checkpoint,
         )
     )
@@ -558,19 +570,67 @@ def constraint_facts(
         )
     )
     facts.update(_global_constraint_facts(scenario, state, checkpoint))
-    if view.purpose == "sell_extension":
-        facts.update(
-            _sell_extension_constraint_facts(
-                scenario=scenario,
-                index=index,
-                view=view,
-                quanta=quanta,
-                state=state,
-                baseline_state=baseline_state,
-                checkpoint=checkpoint,
-            )
-        )
     return facts
+
+
+def rebalancer_score(
+    fidelity: ExactTargetFidelity | None,
+    assets: tuple[ExactAssetEvaluation, ...],
+    cash_targets: tuple[ExactCashTargetEvaluation, ...],
+    accounting: ExactAccountingEvaluation,
+) -> dict[ExactObjectiveCode, ExactRatio]:
+    """The Rebalancer's objectives (specifica §6), in exact arithmetic: the one place they are computed, read by the replay's
+    objectives and by the report's score (B3 of project 67).
+
+    ``D``: the squared distance of the final portfolio from the targets ``w · F``, over every Asset, every cash cell with a
+    target, and the uninvested ``N`` (target zero): the money lost stays inside ``N``, so wasting it never shortens ``D``.
+    ``C = F − W``, the money lost. ``J = λ·D/F + C`` for a weighted fidelity. A scenario worth nothing (``F = 0``) has no
+    distance to scale: ``J = C``, and ``REBALANCER_NONEMPTY`` refuses the plan anyway.
+    """
+    residuals = tuple(item.residual for item in (*assets, *cash_targets))
+    return rebalancer_score_of(fidelity, residuals, uninvested=accounting.uninvested, wealth_loss=accounting.wealth_loss, initial_wealth=accounting.initial_wealth)
+
+
+def rebalancer_score_of(
+    fidelity: ExactTargetFidelity | None,
+    residuals: tuple[ExactRatio, ...],
+    *,
+    uninvested: ExactRatio,
+    wealth_loss: ExactRatio,
+    initial_wealth: ExactRatio,
+) -> dict[ExactObjectiveCode, ExactRatio]:
+    """``rebalancer_score``'s formula on its plain parts: the residuals of the items, ``N``, ``F − W`` and ``F``. Also read by
+    the value «as the solver sees it» (``evaluation.solver_view``, row 6 of lot CR), on the same parts with continuous cash."""
+    distance = sum((item.square() for item in residuals), _EXACT_ZERO) + uninvested.square()
+    score = wealth_loss
+    if fidelity is not None and fidelity.kind == "weighted" and initial_wealth > _EXACT_ZERO:
+        score += fidelity.distance_weight * distance / initial_wealth
+    return {"target_distance": distance, "wealth_loss": wealth_loss, "plan_score": score}
+
+
+def _operation_count(view: ExactPolicyView, quanta: Mapping[str, int], state: EconomicState) -> ExactRatio:
+    """The first tie-break of the Rebalancer (specifica §6.4): every operation of the plan, each counted once.
+
+    Orders and deposits by their rows (the replay posts only nonzero ones); conversions by their decisions, since a conversion
+    row can exist at zero. Transfers by the cash rule's balances (lot CR of project 67, specification §16.3): per currency, the
+    Broker cells whose transfers do not cancel out, less one. It is the model's count (``objectives.build_operation_count_stage``)
+    and, with up to three Brokers, the number of transfers the plan lists; from four Brokers, when two groups of cells balance
+    each other exactly, the plan lists one transfer less (§16.9 n. 6). Counted the same way on both sides, the stage's bounds
+    never contradict the plan's exact value.
+    """
+    conversions = sum(1 for item in view.decisions if item.family == "fx_debit" and quanta[item.decision_id] > 0)
+    nets: dict[tuple[str, str], int] = defaultdict(int)
+    for item in view.decisions:
+        if item.family != "broker_transfer" or quanta[item.decision_id] == 0:
+            continue
+        refs = {ref.kind: ref.entity_id for ref in item.entity_refs}
+        nets[(refs["source_broker"], refs["currency"])] -= quanta[item.decision_id]
+        nets[(refs["destination_broker"], refs["currency"])] += quanta[item.decision_id]
+    moving: dict[str, int] = defaultdict(int)
+    for (_broker, currency), value in nets.items():
+        moving[currency] += value != 0
+    transfers = sum(max(count - 1, 0) for count in moving.values())
+    return ExactRatio(len(state.orders) + len(state.funding_transfers) + conversions + transfers)
 
 
 def objective_value_map(
@@ -585,10 +645,6 @@ def objective_value_map(
 ) -> dict[ExactObjectiveCode, ExactRatio]:
     fixed_l2 = sum(
         (asset.residual.square() for asset in state.assets),
-        _EXACT_ZERO,
-    )
-    turnover = sum(
-        (order.mid_value for order in state.orders),
         _EXACT_ZERO,
     )
     active_order_rows = len(state.orders)
@@ -617,7 +673,6 @@ def objective_value_map(
     values: dict[ExactObjectiveCode, ExactRatio] = {
         "fixed_l2": fixed_l2,
         "shortfall": state.accounting.shortfall,
-        "turnover": turnover,
         "explicit_cost": state.costs.explicit_cost,
         "incremental_cost": incremental_cost,
         "split_asset_count": ExactRatio(split_asset_count),
@@ -625,6 +680,9 @@ def objective_value_map(
         "incremental_order_rows": ExactRatio(incremental_order_rows),
         "route_priority": ExactRatio(route_priority),
     }
+    if scenario.product == "rebalancer":
+        values |= rebalancer_score(scenario.target_fidelity, state.assets, state.cash_targets, state.accounting)
+        values["operation_count"] = _operation_count(view, quanta, state)
     expected = {item.code for item in view.objectives}
     if not expected.issubset(values):
         raise ExactPolicyContractError("policy view contains an unsupported exact objective")

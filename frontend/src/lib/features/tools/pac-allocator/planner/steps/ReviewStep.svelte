@@ -7,12 +7,17 @@
     import type {PlannerDraft} from '../draft.svelte';
     import type {ListedIssue} from '../labels';
     import {factOriginState, sectionCounts, snapshotFacts, type FactKind, type FactOriginState, type SnapshotFact} from '../review';
+    import {fidelityName, rebalancerStrategyName} from '../strategyText';
     import type {PlannerStep} from '../types';
     import {BUTTON_PRIMARY, BUTTON_SECONDARY, HINT, NOTICE, SECTION_TITLE} from '../ui';
     import HelpTip from '../shared/HelpTip.svelte';
     import IssueList from '../shared/IssueList.svelte';
     import ReviewCell from '../shared/ReviewCell.svelte';
     import TableColumns from '../shared/TableColumns.svelte';
+    import {getPlannerProfile, domId, storageKey, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
 
     interface Props {
         draft: PlannerDraft;
@@ -37,8 +42,8 @@
     const PLANNER_KEY = 'tools.pacAllocator.planner';
     const POLICY_FALLBACKS: Record<string, string> = {proportional: 'Proportional'};
     const SECTIONS: PlannerStep[] = ['scenario', 'liquidity', 'brokers', 'assets', 'routing', 'targets', 'fx', 'strategy'];
-    const KIND_ORDER: FactKind[] = ['broker', 'cash', 'contribution', 'price', 'fx'];
-    const KIND_FALLBACKS: Record<FactKind, string> = {broker: 'Broker', cash: 'Cash', contribution: 'Contribution', price: 'Price', fx: 'Exchange rate'};
+    const KIND_ORDER: FactKind[] = ['broker', 'cash', 'contribution', 'price', 'position', 'fx'];
+    const KIND_FALLBACKS: Record<Exclude<FactKind, 'position'>, string> = {broker: 'Broker', cash: 'Cash', contribution: 'Contribution', price: 'Price', fx: 'Exchange rate'};
     const ORIGIN_ORDER: FactOriginState[] = ['librefolio', 'manual', 'modified'];
 
     // On a phone (the table's own 768 px breakpoint) the columns are fluid down to a floor each, and the facts' secondary columns are hidden by
@@ -63,6 +68,7 @@
             case 'liquidity':
                 return {text: $t(`${KEY}.sources`, {default: '{count, plural, one {# source} other {# sources}}', values: {count: counts.liquidity.sources}}), currencies: counts.liquidity.currencies};
             case 'brokers':
+                if (profile.positions) return {text: $t('tools.portfolioRebalancer.planner.review.brokers', {values: {operative: counts.brokers.operative, external: counts.brokers.fundingOnly, held: counts.brokers.positionsOnly}}), currencies: []};
                 return {
                     text: $t(`${KEY}.brokers`, {
                         default: '{operative, plural, one {# Broker} other {# Brokers}}{external, plural, =0 {} one { · # external account} other { · # external accounts}}',
@@ -71,6 +77,11 @@
                     currencies: [],
                 };
             case 'assets':
+                if (profile.positions)
+                    return {
+                        text: $t('tools.portfolioRebalancer.planner.review.assets', {values: {count: counts.assets.count, positions: counts.assets.positions, missing: counts.assets.missing, stale: counts.assets.stale}}),
+                        currencies: [],
+                    };
                 return {
                     text: $t(`${KEY}.assets`, {
                         default: '{count, plural, one {# Asset} other {# Assets}}{missing, plural, =0 {} other { · # without a price}}{stale, plural, =0 {} one { · # price not of today} other { · # prices not of today}}',
@@ -81,7 +92,14 @@
             case 'routing':
                 return {text: $t(`${KEY}.routes`, {default: '{assets} of {total, plural, one {# Asset} other {# Assets}} can be bought', values: {assets: counts.routing.assetsWithRoute, total: counts.assets.count}}), currencies: []};
             case 'targets':
-                return {text: $t(`${KEY}.targets`, {default: '{count} of {total, plural, one {# Asset} other {# Assets}} with a target', values: {count: counts.targets.count, total: counts.assets.count}}), currencies: []};
+                return {
+                    text:
+                        (profile.cashEntries === 'full'
+                            ? $t('tools.portfolioRebalancer.planner.review.targets', {values: {count: counts.targets.count, total: counts.targets.entries}})
+                            : $t(`${KEY}.targets`, {default: '{count} of {total, plural, one {# Asset} other {# Assets}} with a target', values: {count: counts.targets.count, total: counts.assets.count}})) +
+                        $t(`${KEY}.limited`, {default: '{count, plural, =0 {} one { · # with a limit} other { · # with limits}}', values: {count: counts.targets.limited}}),
+                    currencies: [],
+                };
             case 'fx':
                 return {
                     text: $t(`${KEY}.fxRated`, {
@@ -91,6 +109,11 @@
                     currencies: [],
                 };
             case 'strategy':
+                if (counts.strategy.fidelity !== null)
+                    return {
+                        text: $t('tools.portfolioRebalancer.planner.review.strategy', {values: {strategy: rebalancerStrategyName($t, counts.strategy.policy), fidelity: fidelityName($t, counts.strategy.fidelity)}}),
+                        currencies: [],
+                    };
                 return {text: counts.strategy.policy ? $t(`${PLANNER_KEY}.policies.${counts.strategy.policy}`, {default: POLICY_FALLBACKS[counts.strategy.policy] ?? counts.strategy.policy}) : '—', currencies: []};
             default:
                 return {text: '', currencies: []};
@@ -120,9 +143,10 @@
         },
     ]);
 
-    const sectionActions = $derived.by((): RowAction<SectionRow>[] => [{id: 'edit', icon: Pencil, label: () => $t(`${KEY}.edit`, {default: 'Edit'}), onClick: (row) => ongoto(row.step), testid: 'pac-planner-review-goto'}]);
+    const sectionActions = $derived.by((): RowAction<SectionRow>[] => [{id: 'edit', icon: Pencil, label: () => $t(`${KEY}.edit`, {default: 'Edit'}), onClick: (row) => ongoto(row.step), testid: testId('review-goto', profile)}]);
 
     function kindLabel(kind: FactKind): string {
+        if (kind === 'position') return $t('tools.portfolioRebalancer.planner.review.kindPosition');
         return $t(`${KEY}.kind.${kind}`, {default: KIND_FALLBACKS[kind]});
     }
 
@@ -162,7 +186,7 @@
                         type: 'entity',
                         fact,
                         broker: fact.subject.type === 'broker' || fact.subject.type === 'cash' ? (draft.broker(fact.subject.brokerKey) ?? null) : null,
-                        asset: fact.subject.type === 'asset' ? (draft.asset(fact.subject.assetKey) ?? null) : null,
+                        asset: fact.subject.type === 'asset' || fact.subject.type === 'position' ? (draft.asset(fact.subject.assetKey) ?? null) : null,
                     },
                 },
             }),
@@ -204,10 +228,10 @@
         },
     ]);
 
-    const factActions = $derived.by((): RowAction<SnapshotFact>[] => [{id: 'edit', icon: Pencil, label: () => $t(`${KEY}.edit`, {default: 'Edit'}), onClick: (fact) => ongoto(fact.step), testid: 'pac-planner-review-fact-goto'}]);
+    const factActions = $derived.by((): RowAction<SnapshotFact>[] => [{id: 'edit', icon: Pencil, label: () => $t(`${KEY}.edit`, {default: 'Edit'}), onClick: (fact) => ongoto(fact.step), testid: testId('review-fact-goto', profile)}]);
 </script>
 
-<div class="space-y-4" data-testid="pac-planner-review">
+<div class="space-y-4" data-testid={testId('review', profile)}>
     <div class="flex flex-wrap items-center gap-1">
         <p class="text-sm text-lf-secondary">{$t(`${KEY}.lead`, {default: 'Last check before the calculation.'})}</p>
         <HelpTip
@@ -215,18 +239,18 @@
             help={$t(`${KEY}.help`, {
                 default: 'The calculation uses only the data listed here. Just before it, LibreFolio reads again the prices, rates and balances you took from LibreFolio without changing them; the ones you typed or changed stay as they are.',
             })}
-            testid="pac-planner-review-help"
+            testid={testId('review-help', profile)}
         />
-        <TableColumns table={sectionsTable} testid="pac-planner-review-sections-columns" />
+        <TableColumns table={sectionsTable} testid={testId('review-sections-columns', profile)} />
     </div>
 
-    <div data-testid="pac-planner-review-sections">
+    <div data-testid={testId('review-sections', profile)}>
         <DataTable
             bind:this={sectionsTable}
             data={sectionRows}
             columns={sectionColumns}
             getRowId={(row) => row.step}
-            storageKey="pac-planner-review-sections"
+            storageKey={storageKey('review-sections', profile)}
             onRowClick={(row) => ongoto(row.step)}
             enableSorting={false}
             enablePagination={false}
@@ -244,9 +268,9 @@
     </div>
 
     {#if problems.length > 0}
-        <div class={NOTICE.warning} role="alert" data-testid="pac-planner-review-problems">
+        <div class={NOTICE.warning} role="alert" data-testid={testId('review-problems', profile)}>
             <p class="mb-2 font-medium">{$t(`${KEY}.problems`, {default: 'Complete these fields before calculating:'})}</p>
-            <IssueList items={problems} {ongoto} testid="pac-planner-review-problem" />
+            <IssueList items={problems} {ongoto} testid={testId('review-problem', profile)} />
         </div>
     {/if}
 
@@ -256,23 +280,23 @@
                 type="button"
                 class="flex items-center gap-1 rounded text-left {SECTION_TITLE} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
                 aria-expanded={factsOpen}
-                aria-controls="pac-planner-review-facts-body"
-                data-testid="pac-planner-review-facts-toggle"
+                aria-controls={domId('review-facts-body', profile)}
+                data-testid={testId('review-facts-toggle', profile)}
                 onclick={() => (factsOpen = !factsOpen)}
             >
                 {#if factsOpen}<ChevronDown size={16} aria-hidden="true" />{:else}<ChevronRight size={16} aria-hidden="true" />{/if}
                 {$t(`${KEY}.factsToggle`, {default: 'Calculation data ({count})', values: {count: facts.length}})}
             </button>
-            <div id="pac-planner-review-facts-body" hidden={!factsOpen}>
+            <div id={domId('review-facts-body', profile)} hidden={!factsOpen}>
                 {#if factsOpen}
-                    <div class="space-y-2" data-testid="pac-planner-review-facts">
-                        <TableColumns table={factsTable} testid="pac-planner-review-facts-columns" />
+                    <div class="space-y-2" data-testid={testId('review-facts', profile)}>
+                        <TableColumns table={factsTable} testid={testId('review-facts-columns', profile)} />
                         <DataTable
                             bind:this={factsTable}
                             data={facts}
                             columns={factColumns}
                             getRowId={(fact) => fact.id}
-                            storageKey="pac-planner-review-facts"
+                            storageKey={storageKey('review-facts', profile)}
                             enableSorting
                             enablePagination={false}
                             enableSelection={false}
@@ -297,9 +321,9 @@
     <div class="space-y-2">
         <div class="flex flex-wrap justify-center gap-3">
             {#if hasResult}
-                <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-show-result" onclick={onshowresult}>{$t(`${KEY}.showResult`, {default: 'See the last result'})}</button>
+                <button type="button" class={BUTTON_SECONDARY} data-testid={testId('show-result', profile)} onclick={onshowresult}>{$t(`${KEY}.showResult`, {default: 'See the last result'})}</button>
             {/if}
-            <button type="button" class={BUTTON_PRIMARY} disabled={busy || problems.length > 0} data-testid="pac-planner-calculate" onclick={oncalculate}>
+            <button type="button" class={BUTTON_PRIMARY} disabled={busy || problems.length > 0} data-testid={testId('calculate', profile)} onclick={oncalculate}>
                 {$t(`${KEY}.calculate`, {default: 'Calculate plan'})}
             </button>
         </div>

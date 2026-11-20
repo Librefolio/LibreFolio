@@ -17,6 +17,15 @@ machine, so read every line with its load.
 
 ``--compare`` reads the old record before ``--record`` writes the new one, so
 both may name the same file. The exit status is 1 when a check line fails.
+
+Lot A1 of project 67 widened it to the quantities of the PAC's reference values
+(``_pac_reference_values.extract_reference``: orders, conversions, fundings, cells,
+accounting, costs, read from the published result), recorded with each variant and
+compared by the rules that apply to a plan SCIP did not prove: R3 (the objective vector
+is not worse) and R4 (no more conversions, no new pair). The variants SCIP closes inside
+its window are held to R1-R7 by ``test_pac_planner_reference.py``; the heavy ones, which
+it does not, stay here. A worse vector on a ``time_limit`` run is a thing to look into,
+not a verdict: read the machine's load beside it.
 """
 
 from __future__ import annotations
@@ -28,7 +37,6 @@ import sys
 import time
 from collections.abc import Callable
 from fractions import Fraction
-from functools import partial
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -36,16 +44,10 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 os.environ.setdefault("LIBREFOLIO_TEST_MODE", "1")
 
-from backend.app.schemas.pac_allocator.exact import exact_fraction
-from backend.app.schemas.pac_allocator.results import PAC_PLAN_INPUT_ADAPTER  # noqa: E402
-from backend.app.services.pac_allocator.planner import plan_pac_allocation  # noqa: E402
-from backend.test_scripts.test_services._pac_synthetic_requests import V, make, realistic_make  # noqa: E402
+from backend.test_scripts.test_services import _pac_reference_values as reference_values  # noqa: E402
 
-REALISTIC_SHAPES = ((3, 2), (5, 2), (8, 2), (12, 2), (3, 3), (5, 3), (8, 3), (10, 3))
-VARIANTS: dict[str, Callable[[], dict]] = {
-    **{f"m-{name}": partial(make, **settings) for name, settings in V.items()},
-    **{f"r-{assets}x{brokers}": partial(realistic_make, assets, brokers) for assets, brokers in REALISTIC_SHAPES},
-}
+# The two grids (``m-``, ``r-``) and the FX cases (``f-``) of the reference corpus: the same builders the test plans.
+VARIANTS: dict[str, Callable[[], dict]] = {**reference_values.GRID_VARIANTS, **{f"f-{name}": build for name, build in reference_values.CASES.items() if name not in reference_values.GRID_VARIANTS and name not in reference_values.GRID_CASES}}
 
 type Vector = tuple[Fraction, ...]
 
@@ -63,34 +65,17 @@ CHECKS: dict[str, tuple[str, Vector]] = {
 }
 
 
-def _published_vector(result: object) -> Vector | None:
-    """The exact objective values of the published solution, in ordinal order."""
-    solution = getattr(result, "primary_solution", None)
-    if solution is None:
-        return None
-    return tuple(exact_fraction(stage.value) for stage in solution.objectives.stages)
-
-
 def run_variant(name: str, budget: float) -> dict:
-    """Plan one variant; never raises, the exception type is part of the row."""
+    """Plan one variant; never raises, the exception type is part of the row. ``reference`` is the record of the published plan."""
     load = os.getloadavg()[0]
     payload = VARIANTS[name]()
     started = time.perf_counter()
     try:
-        result = plan_pac_allocation(PAC_PLAN_INPUT_ADAPTER.validate_python(payload), solver_time_budget_seconds=budget)
+        record = reference_values.plan_record(payload, budget_seconds=budget)
     except Exception as error:  # a probe reports every failure and goes on with the grid
-        return {"load": load, "wall": time.perf_counter() - started, "error": type(error).__name__, "state": None, "proof": None, "stop": None, "vector": None}
-    wall = time.perf_counter() - started
-    proof = getattr(result, "proof", None)
-    return {
-        "load": load,
-        "wall": wall,
-        "error": None,
-        "state": result.result_state,
-        "proof": getattr(proof, "kind", None),
-        "stop": getattr(result, "stop_reason", None),
-        "vector": _published_vector(result),
-    }
+        return {"load": load, "wall": time.perf_counter() - started, "error": type(error).__name__, "state": None, "proof": None, "stop": None, "vector": None, "reference": None}
+    vector = tuple(Fraction(text) for text in record["objective_vector"]) if "objective_vector" in record else None
+    return {"load": load, "wall": time.perf_counter() - started, "error": None, "state": record["state"], "proof": record["proof_kind"], "stop": record["stop_reason"], "vector": vector, "reference": record}
 
 
 def _format_vector(vector: Vector | None) -> str:
@@ -137,11 +122,24 @@ def _comparison(old: Vector | None, new: Vector | None) -> str:
     return "same" if new == old else "REGRESSION"
 
 
+def _conversion_verdict(old: dict | None, new: dict | None) -> str:
+    """R4 on two reference records: no more conversions, no pair the old plan did not convert."""
+    if old is None or new is None or "conversions" not in old or "conversions" not in new:
+        return "R4 not comparable"
+    extra = sorted(set(new["conversions"]) - set(old["conversions"]))
+    if len(new["conversions"]) > len(old["conversions"]) or extra:
+        return f"R4 REGRESSION ({len(old['conversions'])} -> {len(new['conversions'])} conversions, new pairs {extra})"
+    return f"R4 holds ({len(old['conversions'])} -> {len(new['conversions'])} conversions)"
+
+
 def compare(rows: dict[str, dict], recorded: dict[str, dict]) -> None:
-    """Per variant, the current vector against the recorded one, lexicographically."""
+    """Per variant, the current vector against the recorded one, lexicographically (R3), and the conversions (R4)."""
     for name, row in rows.items():
-        verdict = "not in the record" if name not in recorded else _comparison(_recorded_vector(recorded[name]), row["vector"])
-        print(f"{name:<28} {verdict}")
+        if name not in recorded:
+            print(f"{name:<28} not in the record")
+            continue
+        verdict = _comparison(_recorded_vector(recorded[name]), row["vector"])
+        print(f"{name:<28} {verdict}; {_conversion_verdict(recorded[name].get('reference'), row['reference'])}")
 
 
 def _record_entry(row: dict) -> dict:
@@ -153,6 +151,7 @@ def _record_entry(row: dict) -> dict:
         "vector": None if vector is None else [str(value) for value in vector],
         "wall": round(row["wall"], 3),
         "error": row["error"],
+        "reference": row["reference"],
     }
 
 

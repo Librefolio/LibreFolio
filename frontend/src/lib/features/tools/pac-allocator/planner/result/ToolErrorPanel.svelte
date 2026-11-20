@@ -5,6 +5,10 @@
     import {clientErrorRetryable, presentToolError} from '../issues';
     import type {RunOutcome} from '../run.svelte';
     import {BUTTON_PRIMARY, BUTTON_SECONDARY, HINT, NOTICE} from '../ui';
+    import {getPlannerProfile, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
     const PLANNER_KEY = 'tools.pacAllocator.planner';
 
     interface Props {
@@ -29,7 +33,7 @@
     const reference = $derived(outcome.kind === 'tool_error' && outcome.error.code === 'execution_failed' ? outcome.executionId : null);
 </script>
 
-<div class="{NOTICE.danger} space-y-3" role="alert" data-testid="pac-planner-platform-error" data-kind={outcome.kind} data-code={message.code} data-retryable={message.retryable ? 'true' : 'false'}>
+<div class="{NOTICE.danger} space-y-3" role="alert" data-testid={testId('platform-error', profile)} data-kind={outcome.kind} data-code={message.code} data-retryable={message.retryable ? 'true' : 'false'}>
     <p class="flex items-center gap-2 font-semibold">
         <CircleX size={18} aria-hidden="true" />
         {$t(`${KEY}.title`, {default: 'Calculation failed'})}
@@ -39,16 +43,16 @@
         · {$t(message.key, {default: message.fallback, values: {code: message.code}})}
     </p>
     {#if reference}
-        <p class={HINT} data-testid="pac-planner-platform-reference">
+        <p class={HINT} data-testid={testId('platform-reference', profile)}>
             {$t(`${KEY}.reference`, {default: 'Reference in the server log:'})}
             <code class="break-all rounded bg-lf-card/60 px-1 text-xs">{reference}</code>
         </p>
     {/if}
     <div class="flex flex-wrap gap-2">
         {#if message.retryable}
-            <button type="button" class={BUTTON_PRIMARY} data-testid="pac-planner-platform-retry" {disabled} onclick={onretry}>{$t(`${KEY}.retry`, {default: 'Retry'})}</button>
+            <button type="button" class={BUTTON_PRIMARY} data-testid={testId('platform-retry', profile)} {disabled} onclick={onretry}>{$t(`${KEY}.retry`, {default: 'Retry'})}</button>
         {/if}
-        <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-platform-edit" {disabled} onclick={onedit}>{$t(`${PLANNER_KEY}.actions.editConfiguration`, {default: 'Edit configuration'})}</button>
+        <button type="button" class={BUTTON_SECONDARY} data-testid={testId('platform-edit', profile)} {disabled} onclick={onedit}>{$t(`${PLANNER_KEY}.actions.editConfiguration`, {default: 'Edit configuration'})}</button>
     </div>
     <p class={HINT}>{$t(`${KEY}.draftIntact`, {default: 'The draft is intact.'})}</p>
 </div>

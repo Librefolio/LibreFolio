@@ -25,6 +25,7 @@ vi.mock('$lib/api', () => ({
 }));
 
 import {getClientSessionGeneration, transitionClientSession} from '$lib/stores/app/clientSession';
+import {effectiveTaxRegime} from '$lib/features/brokers/profile/brokerOperatingProfile';
 import {fetchPlannerSource, fromPlannerId, toPlannerId, type SourceQuery} from './source';
 
 const QUERY: SourceQuery = {
@@ -104,6 +105,113 @@ describe('fetchPlannerSource — current distribution valuation codes', () => {
     });
 });
 
+describe('fetchPlannerSource — the broker operating profile (P3 of project 67, source 1.1.0)', () => {
+    /** A served broker row with its operating profile, every field as the backend writes it (sale side and regime included). */
+    const PROFILE = {
+        profile_version: 1,
+        order_modes: [
+            {
+                currency: 'EUR',
+                capability: {kind: 'whole_quantity', capability_id: 'mode:EUR', quantity_unit: 'asset_unit', quantity_step: '1'},
+                fees: [
+                    {fee_schedule_id: 'fee:EUR:buy', capability_id: 'mode:EUR', side: 'buy', fixed_fee: null, rate: '0.0019', variable_floor: {amount: '1.5', currency: 'EUR'}, variable_cap: {kind: 'none'}},
+                    {fee_schedule_id: 'fee:EUR:sell', capability_id: 'mode:EUR', side: 'sell', fixed_fee: {amount: '5', currency: 'EUR'}, rate: '0', variable_floor: null, variable_cap: {kind: 'none'}},
+                ],
+            },
+        ],
+        conversion_mode: 'automatic',
+        tax_regime: 'administered',
+    };
+
+    function brokerRow(changes: Record<string, unknown> = {}) {
+        return {
+            broker_id: 'broker:7',
+            source_broker_id: 7,
+            name: 'Profile probe',
+            icon_url: null,
+            portal_url: null,
+            default_import_plugin: null,
+            access_role: 'OWNER',
+            ownership_share: '1',
+            observed_currencies: ['EUR'],
+            active: true,
+            allow_cash_overdraft: false,
+            allow_asset_shorting: false,
+            operating_profile_status: 'available',
+            operating_profile: PROFILE,
+            provenance_id: 'source:broker-domain',
+            ...changes,
+        };
+    }
+
+    it('maps the profile of a source Broker, sell side and tax regime included', async () => {
+        allocationSource.mockResolvedValue({...sourceResponse([]), current_distribution: null, brokers: [brokerRow()]});
+
+        const source = await fetchPlannerSource({...QUERY, sections: ['brokers']}, getClientSessionGeneration());
+
+        expect(source.brokers).toHaveLength(1);
+        expect(source.brokers[0]).toMatchObject({broker_id: 'broker:7', operating_profile_status: 'available'});
+        expect(source.brokers[0].operating_profile).toEqual(PROFILE);
+    });
+
+    it('a Broker without a profile maps to a null profile', async () => {
+        allocationSource.mockResolvedValue({...sourceResponse([]), current_distribution: null, brokers: [brokerRow({operating_profile_status: 'not_available', operating_profile: null})]});
+
+        const source = await fetchPlannerSource({...QUERY, sections: ['brokers']}, getClientSessionGeneration());
+
+        expect(source.brokers[0]).toMatchObject({operating_profile_status: 'not_available', operating_profile: null});
+    });
+
+    it('an absent tax regime reads «declarative», as the backend reads it', async () => {
+        const {tax_regime: _regime, ...withoutRegime} = PROFILE;
+        allocationSource.mockResolvedValue({...sourceResponse([]), current_distribution: null, brokers: [brokerRow({operating_profile: withoutRegime})]});
+
+        const source = await fetchPlannerSource({...QUERY, sections: ['brokers']}, getClientSessionGeneration());
+
+        expect(source.brokers[0].operating_profile).not.toHaveProperty('tax_regime');
+        expect(effectiveTaxRegime(source.brokers[0].operating_profile)).toBe('declarative');
+        expect(effectiveTaxRegime({profile_version: 1, tax_regime: 'administered'})).toBe('administered');
+        expect(effectiveTaxRegime(null)).toBe('declarative');
+    });
+});
+
+describe('fetchPlannerSource — positions (F3a of project 67, step 4)', () => {
+    /** One served holding row: 10 units in custody, half of them the user's. */
+    function holdingRow() {
+        return {holding_id: 'holding:asset:11:broker:7', asset_id: 'asset:11', broker_id: 'broker:7', custody_quantity: '10', ownership_share: '0.5', economic_quantity: '5', quantity_unit: 'asset_unit', provenance_id: 'source:portfolio-ledger'};
+    }
+
+    it('holdings map quantity and share for the rebalancer', async () => {
+        allocationSource.mockResolvedValue({...sourceResponse([]), current_distribution: null, holdings: [holdingRow()]});
+
+        const source = await fetchPlannerSource({...QUERY, sections: ['holdings']}, getClientSessionGeneration(), undefined, {positions: true});
+
+        expect(source.holdings).toEqual([{holding_id: 'holding:asset:11:broker:7', asset_id: 'asset:11', broker_id: 'broker:7', provenance_id: 'source:portfolio-ledger', quantity: {custody: '10', ownershipShare: '0.5', economic: '5'}}]);
+    });
+
+    it('quantities served with trailing zeros reach the planner in canonical form (G5-3)', async () => {
+        // The ledger serves its scale (`7.0000000000`); the quantity field showed it whole, cut at 390 px.
+        allocationSource.mockResolvedValue({...sourceResponse([]), current_distribution: null, holdings: [{...holdingRow(), custody_quantity: '17.5000000000', ownership_share: '0.4000000000', economic_quantity: '7.0000000000'}]});
+
+        const source = await fetchPlannerSource({...QUERY, sections: ['holdings']}, getClientSessionGeneration(), undefined, {positions: true});
+
+        expect(source.holdings[0].quantity).toEqual({custody: '17.5', ownershipShare: '0.4', economic: '7'});
+    });
+
+    it('the PAC source mapping still drops quantities', async () => {
+        allocationSource.mockResolvedValue({...sourceResponse([]), current_distribution: null, holdings: [holdingRow()]});
+
+        const source = await fetchPlannerSource({...QUERY, sections: ['holdings']}, getClientSessionGeneration());
+
+        expect(source.holdings).toEqual([{holding_id: 'holding:asset:11:broker:7', asset_id: 'asset:11', broker_id: 'broker:7', provenance_id: 'source:portfolio-ledger', quantity: null}]);
+    });
+});
+
+/**
+ * The planner's identifiers (`toPlannerId`): a sector such as «Health Care» travels encoded, `enc:` plus its bytes. The
+ * result's exposure rows carry that id; `fromPlannerId` reads the name back, exactly, so a chart can find the sector's
+ * colour by its name.
+ */
 describe('fromPlannerId — the name a planner id was made from', () => {
     it.each(['Health Care', 'Real Estate', 'Consumer Discretionary', 'snake_case', 'a+b', 'Énergie à 100%', 'enc:already'])('reads back %s', (name) => {
         const id = toPlannerId(name) as string;

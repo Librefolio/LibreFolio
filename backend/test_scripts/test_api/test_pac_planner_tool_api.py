@@ -40,12 +40,15 @@ from structlog.testing import capture_logs
 
 from backend.app.config import get_settings
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.pac_allocator.results import PAC_PLAN_INPUT_ADAPTER, PAC_PLAN_OUTPUT_ADAPTER
+from backend.app.schemas.pac_allocator.preview import PAC_TOOL_INPUT_ADAPTER, PAC_TOOL_OUTPUT_ADAPTER, REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER
+from backend.app.schemas.pac_allocator.results import PAC_PLAN_INPUT_ADAPTER, PAC_PLAN_OUTPUT_ADAPTER, REBALANCER_PLAN_INPUT_ADAPTER, REBALANCER_PLAN_OUTPUT_ADAPTER
 from backend.app.services.accounts import user_service
-from backend.app.services.pac_allocator.planner import plan_pac_allocation
+from backend.app.services.pac_allocator.planner import plan_pac_allocation, plan_rebalancing
+from backend.app.services.pac_allocator.preview import preview_pac_allocation, preview_rebalancing
 from backend.app.services.tool_plugins.pac_allocator.plugin import _log_engine_failure
 from backend.test_scripts.test_db_config import verify_test_database
-from backend.test_scripts.test_server_helper import _TestingServerManager
+from backend.test_scripts.test_server_helper import TEST_SERVER_PLANNER_SEEDS, _TestingServerManager, without_time_limits
+from backend.test_scripts.test_services import _reb_small_requests as reb
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
@@ -58,9 +61,9 @@ SOLE_ADMIN_DELETE_DETAIL = {"error_code": "LAST_ADMIN", "message": "Cannot delet
 
 TOOL_CODE = "pac_allocator"
 IDENTITY_KEYS = ("tool_code", "contract_version", "implementation_version", "schema_fingerprint")
-MIN_REQUEST_FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "pac_allocator" / "pac_plan_request.min.v2.json"
+MIN_REQUEST_FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "pac_allocator" / "pac_plan_request.min.2-0-0.json"
 # The same request as the UI sends it: every default omitted, no fee schedule (contract compaction).
-COMPACT_REQUEST_FIXTURE = MIN_REQUEST_FIXTURE.with_name("pac_plan_request.compact.v2.json")
+COMPACT_REQUEST_FIXTURE = MIN_REQUEST_FIXTURE.with_name("pac_plan_request.compact.2-0-0.json")
 
 
 @pytest.fixture(scope="module")
@@ -122,16 +125,16 @@ async def _tool_user() -> AsyncIterator[httpx.AsyncClient]:
 # ---------------------------------------------------------------------------
 
 
-async def _served_descriptor(client: httpx.AsyncClient) -> dict:
+async def _served_descriptor(client: httpx.AsyncClient, tool_code: str = TOOL_CODE) -> dict:
     response = await client.get(f"{API_BASE}/tools/catalog", timeout=TIMEOUT)
     assert response.status_code == 200, response.text
-    descriptor = next((item for item in response.json()["items"] if item["tool_code"] == TOOL_CODE), None)
-    assert descriptor is not None, "pac_allocator is not served by the catalog"
+    descriptor = next((item for item in response.json()["items"] if item["tool_code"] == tool_code), None)
+    assert descriptor is not None, f"{tool_code} is not served by the catalog"
     return descriptor
 
 
-async def _served_identity(client: httpx.AsyncClient) -> dict[str, str]:
-    descriptor = await _served_descriptor(client)
+async def _served_identity(client: httpx.AsyncClient, tool_code: str = TOOL_CODE) -> dict[str, str]:
+    descriptor = await _served_descriptor(client, tool_code)
     return {key: descriptor[key] for key in IDENTITY_KEYS}
 
 
@@ -494,6 +497,162 @@ LIBRARY_FRAME = "libreFolio_fake_library.py:2:boom"
 # Out of every source line a frame points at: a figure found in the log can only be a value.
 MESSAGE_FIGURE = "4242.42"
 LOCAL_FIGURE = "98765.43"
+
+
+# ---------------------------------------------------------------------------
+# B3 (project 67): the Rebalancer, the plugin's second service
+# ---------------------------------------------------------------------------
+
+REBALANCER_TOOL_CODE = "portfolio_rebalancer"
+
+
+@pytest.mark.asyncio
+async def test_rebalancer_compute_plans_to_a_proven_optimum(test_server):
+    """B3 test 13: T4 through ``POST /tools/compute`` buys 195 of B, proven optimal, exactly as the planner in process."""
+    async with _tool_user() as client:
+        identity = await _served_identity(client, REBALANCER_TOOL_CODE)
+        engine_timeout_ms = (await _served_descriptor(client, REBALANCER_TOOL_CODE))["operations"][0]["engine_timeout_ms"]
+        item = _item(identity, reb.t4())
+        payload, results = await _compute(client, item)
+
+    result = results[item["correlation_id"]]
+    assert result["status"] == "success", result
+    assert {key: result[key] for key in IDENTITY_KEYS} == identity
+    plan = result["result"]
+    assert (plan["result_state"], plan["proof"]["kind"]) == ("ready_incumbent", "optimal_proven")
+    (order,) = plan["primary_solution"]["order_rows"]
+    assert (order["asset_id"], order["instruction"]["amount"]) == ("asset-b", {"amount": "195", "currency": "EUR"})
+    in_process = plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.t4()), solver_time_budget_seconds=engine_timeout_ms / 1000, seeds=TEST_SERVER_PLANNER_SEEDS)
+    # Compared without the time limits: on a machine with fewer usable CPUs than runs, a later run has the time left.
+    assert without_time_limits(plan) == without_time_limits(REBALANCER_PLAN_OUTPUT_ADAPTER.dump_python(in_process, mode="json", by_alias=True))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("two_cells", [pytest.param(False, id="one-cell"), pytest.param(True, id="two-cells")])
+async def test_rebalancer_compute_publishes_a_wide_plan_with_its_top_up(test_server, two_cells):
+    """Lot ZB-b of project 67: the consultant's case Y through ``POST /tools/compute``. The plan of the wide model needs a
+    top-up of 0.01 EUR and, with one cash cell, leaves no cash: it is published, not proven, with its top-up, exactly as the
+    planner in process."""
+    async with _tool_user() as client:
+        identity = await _served_identity(client, REBALANCER_TOOL_CODE)
+        engine_timeout_ms = (await _served_descriptor(client, REBALANCER_TOOL_CODE))["operations"][0]["engine_timeout_ms"]
+        item = _item(identity, reb.y_top_up(two_cells=two_cells))
+        payload, results = await _compute(client, item)
+
+    result = results[item["correlation_id"]]
+    assert result["status"] == "success", result
+    plan = result["result"]
+    assert (plan["result_state"], plan["proof"]["kind"]) == ("ready_incumbent", "not_proven")
+    assert [(row["broker_id"], row["amount"]) for row in plan["primary_solution"]["rounding_top_ups"]] == [(reb.BROKER, "0.01")]
+    in_process = REBALANCER_PLAN_OUTPUT_ADAPTER.dump_python(plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.y_top_up(two_cells=two_cells)), solver_time_budget_seconds=engine_timeout_ms / 1000, seeds=TEST_SERVER_PLANNER_SEEDS), mode="json", by_alias=True)
+    # The wide model is solved with the time the prudent one left, a wall-clock figure each stage publishes among its
+    # settings (``time_budget``). That one value is the run's; everything else, the bounds included, is compared as it is.
+    assert without_time_limits(plan) == without_time_limits(in_process)
+
+
+@pytest.mark.asyncio
+async def test_rebalancer_compute_answers_missing_holdings_with_needs_input(test_server):
+    """B3 test 14: a Rebalancer request with no holdings is a planning outcome, ``needs_input`` with its code."""
+    payload_without_holdings = reb.t4()
+    payload_without_holdings["holdings"] = []
+    async with _tool_user() as client:
+        identity = await _served_identity(client, REBALANCER_TOOL_CODE)
+        item = _item(identity, payload_without_holdings)
+        _payload, results = await _compute(client, item)
+
+    result = results[item["correlation_id"]]
+    assert result["status"] == "success", result
+    plan = result["result"]
+    assert (plan["result_state"], plan["availability"]) == ("needs_input", "needs_input")
+    assert "portfolio_rebalancer.holdings_missing" in {issue["code"] for issue in plan["issues"]}
+
+
+@pytest.mark.asyncio
+async def test_rebalancer_and_pac_items_share_one_batch(test_server):
+    """B3 test 15: one batch, a Rebalancer item and a PAC item (two, the platform's two lanes): two successes."""
+    async with _tool_user() as client:
+        rebalancer = _item(await _served_identity(client, REBALANCER_TOOL_CODE), reb.t5())
+        pac = _item(await _served_identity(client), _buying_request())
+        payload, results = await _compute(client, rebalancer, pac)
+
+    assert (payload["success_count"], payload["failed_count"]) == (2, 0)
+    assert results[rebalancer["correlation_id"]]["result"]["result_state"] == "ready_no_op"
+    assert results[pac["correlation_id"]]["result"]["result_state"] == "ready_incumbent"
+
+
+async def _stream(client: httpx.AsyncClient, *items: dict) -> list[dict]:
+    """One batch through ``POST /tools/compute/stream``, through the server's whole middleware stack; its lines."""
+    envelope = {"request_id": f"pac-request-{uuid4().hex}", "items": list(items)}
+    async with client.stream("POST", f"{API_BASE}/tools/compute/stream", json=envelope, headers={"Accept-Encoding": "gzip"}, timeout=COMPUTE_TIMEOUT) as response:
+        body = b"".join([chunk async for chunk in response.aiter_bytes()])
+    assert response.status_code == 200, body
+    assert "content-encoding" not in response.headers
+    return [json.loads(line) for line in body.decode("utf-8").split("\n") if line]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("tool_code", "parameters", "searches"), [pytest.param(TOOL_CODE, _buying_request, 5, id="pac"), pytest.param(REBALANCER_TOOL_CODE, reb.t4, 3, id="rebalancer-t4")])
+async def test_compute_forwards_progress_to_the_context(test_server, tool_code, parameters, searches):
+    """V2 test 8 (project 67): the plugin hands ``report_progress`` to the engine, and a served plan streams its phases in
+    order — validate, model, search «n of m», verify, report — then the result of ``/compute`` for the same request."""
+    async with _tool_user() as client:
+        descriptor = await _served_descriptor(client, tool_code)
+        plan_policy = next(policy for policy in descriptor["operations"] if policy["operation"] == "plan")
+        identity = {key: descriptor[key] for key in IDENTITY_KEYS}
+        item = _item(identity, parameters())
+        lines = await _stream(client, item)
+        _payload, computed = await _compute(client, _item(identity, parameters()))
+
+    assert plan_policy["progress_phases"] == ["validate", "model", "search", "verify", "report"]
+    *progress, last = lines
+    assert {line["correlation_id"] for line in progress} == {item["correlation_id"]}
+    expected = [("validate", None, None), ("model", None, None), *(("search", step, searches) for step in range(1, searches + 1)), ("verify", None, None), ("report", None, None)]
+    assert [(line["phase"], line["step"], line["total"]) for line in progress] == expected
+    assert last["kind"] == "result"
+    (streamed,) = last["response"]["results"]
+    (planned,) = computed.values()
+    assert streamed["status"] == planned["status"] == "success", streamed
+    assert streamed["result"] == planned["result"]
+
+
+@pytest.mark.asyncio
+async def test_rebalancer_compute_rejects_a_pac_request_and_invest_and_sell(test_server):
+    """B3 tests 16 and 19 (service half): parameters of the wrong kind, and «Invest and sell» before C1, are refused as
+    ``invalid_parameters`` with their path, never ``execution_failed``, never a plan."""
+    invest_and_sell = reb.t4()
+    invest_and_sell["policy"] = "invest_and_sell"
+    async with _tool_user() as client:
+        identity = await _served_identity(client, REBALANCER_TOOL_CODE)
+        pac_shaped = _item(identity, _buying_request())
+        selling = _item(identity, invest_and_sell)
+        payload, results = await _compute(client, pac_shaped, selling)
+
+    assert (payload["success_count"], payload["failed_count"]) == (0, 2)
+    for item in (pac_shaped, selling):
+        result = results[item["correlation_id"]]
+        assert result["status"] == "error" and "result" not in result, result
+        assert result["error"]["code"] == "invalid_parameters"
+    assert {"code": "literal_error", "path": ["policy"]} in results[selling["correlation_id"]]["error"]["issues"]
+
+
+@pytest.mark.asyncio
+async def test_preview_over_http(test_server):
+    """B4 test 14 (contract §11): ``operation="preview"`` through ``POST /tools/compute`` gives, for each service, exactly the
+    numbers the preview computes in process: the PAC's total, the Rebalancer's F, items and table."""
+    pac_payload = {**_buying_request(), "operation": "preview"}
+    rebalancer_payload = {**reb.t4(), "operation": "preview"}
+    async with _tool_user() as client:
+        pac = _item(await _served_identity(client), pac_payload)
+        rebalancer = _item(await _served_identity(client, REBALANCER_TOOL_CODE), rebalancer_payload)
+        payload, results = await _compute(client, pac, rebalancer)
+
+    assert (payload["success_count"], payload["failed_count"]) == (2, 0)
+    pac_in_process = preview_pac_allocation(PAC_TOOL_INPUT_ADAPTER.validate_python(pac_payload))
+    rebalancer_in_process = preview_rebalancing(REBALANCER_TOOL_INPUT_ADAPTER.validate_python(rebalancer_payload))
+    assert results[pac["correlation_id"]]["result"] == PAC_TOOL_OUTPUT_ADAPTER.dump_python(pac_in_process, mode="json", by_alias=True)
+    assert results[rebalancer["correlation_id"]]["result"] == REBALANCER_TOOL_OUTPUT_ADAPTER.dump_python(rebalancer_in_process, mode="json", by_alias=True)
+    assert results[rebalancer["correlation_id"]]["result"]["result_state"] == "preview_ready"
+    assert results[rebalancer["correlation_id"]]["result"]["total"] == {"value": {"kind": "finite_decimal", "value": "10000"}, "currency": "EUR"}
 
 
 def _compile_library_boom() -> Callable[[], None]:

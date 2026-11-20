@@ -31,6 +31,8 @@ _FAMILY_DIRECTIONS: dict[LedgerPostingFamily, LedgerPostingDirection] = {
     "sell_fee": "debit",
     "broker_withheld_tax": "debit",
     "self_reserved_tax": "debit",
+    "transfer_in": "credit",
+    "transfer_out": "debit",
 }
 
 _EXACT_FLOW_FAMILIES: frozenset[LedgerPostingFamily] = frozenset(
@@ -39,6 +41,8 @@ _EXACT_FLOW_FAMILIES: frozenset[LedgerPostingFamily] = frozenset(
         "funding_in",
         "funding_out",
         "fx_debit",
+        "transfer_in",
+        "transfer_out",
     }
 )
 
@@ -186,7 +190,9 @@ def reconcile_broker_ledgers(
     for broker_id, currency in sorted(keys):
         check_budget(checkpoint)
         row = amounts[(broker_id, currency)]
-        final_spendable = row["initial_selected"] + row["funding_in"] + row["fx_credit"] + row["gross_sell_credit"] - row["funding_out"] - row["fx_debit"] - row["buy_debit"] - row["buy_fee"] - row["sell_fee"] - row["broker_withheld_tax"] - row["self_reserved_tax"]
+        final_spendable = (
+            row["initial_selected"] + row["funding_in"] + row["fx_credit"] + row["gross_sell_credit"] + row["transfer_in"] - row["funding_out"] - row["fx_debit"] - row["buy_debit"] - row["buy_fee"] - row["sell_fee"] - row["broker_withheld_tax"] - row["self_reserved_tax"] - row["transfer_out"]
+        )
         result.append(
             ExactBrokerLedgerEvaluation(
                 broker_id=broker_id,
@@ -206,6 +212,8 @@ def reconcile_broker_ledgers(
                 accounting_rounding_adjustment=accounting_rounding[(broker_id, currency)],
                 final_spendable=final_spendable,
                 final_physical=(final_spendable + row["self_reserved_tax"]),
+                transfer_in=row["transfer_in"],
+                transfer_out=row["transfer_out"],
             )
         )
     check_budget(checkpoint)

@@ -12,11 +12,9 @@ The one place it does arithmetic is the exposure projection, and even there
 it only aggregates quantities the solve already decided (see
 ``build_exposure_rows``).
 
-Scope: PAC only. ``plan_rebalancing`` deliberately does not exist yet — every
-Rebalancer policy and the SELL verifier are deferred, and a function that
-exists but always fails is worse than an absent one because it invites
-wiring, whereas an absent one fails at import in the exact place the missing
-work is obvious.
+Scope: the rows both Tools share, and the PAC's own. What only the Rebalancer
+publishes (the items on ``F``, the transfers, the plan accounts, the score) is
+projected by ``rebalancer_report``, which reuses the shared builders here.
 """
 
 from __future__ import annotations
@@ -34,6 +32,7 @@ from backend.app.schemas.pac_allocator.rows import (
     MonetaryAmountInstruction,
     ObjectiveStageResult,
     PacAssetPlanRow,
+    PacCashEntryRow,
     PacExposurePlanRow,
     PlannerAccountingSummary,
     PlannerBuyOrderRow,
@@ -43,15 +42,18 @@ from backend.app.schemas.pac_allocator.rows import (
     PlannerConversion,
     PlannerCostTotals,
     PlannerFundingAction,
-    PlannerFxAction,
     PlannerLedgerRow,
+    PlannerMoneyLost,
     PlannerObjectiveResults,
+    PlannerPlanAccounts,
     PlannerRoundingTopUp,
     PlannerScenarioCounts,
     TieBreakResult,
     WholeQuantityInstruction,
 )
-from backend.app.services.pac_allocator.evaluation.scenario import exact_scenario_fingerprint
+from backend.app.services.pac_allocator.evaluation.economics import final_cash_by_cell
+from backend.app.services.pac_allocator.evaluation.limits import limit_reference, resolve_scenario_limits
+from backend.app.services.pac_allocator.evaluation.scenario import build_scenario_index, exact_scenario_fingerprint
 from backend.app.services.pac_allocator.models import (
     ExactAsset,
     ExactEvaluation,
@@ -165,16 +167,21 @@ def build_planner_provenance(scenario: ExactPlannerScenario) -> list[PlannerProv
 
 def build_scenario_basis(scenario: ExactPlannerScenario, evaluation: ExactEvaluation) -> PacScenarioBasis:
     """Project the scenario-level accounting basis and its object counts."""
+    return PacScenarioBasis(**scenario_basis_fields(scenario, evaluation))
+
+
+def scenario_basis_fields(scenario: ExactPlannerScenario, evaluation: ExactEvaluation) -> dict:
+    """The fields of the scenario basis both Tools share; the Rebalancer adds its own (``rebalancer_report``)."""
     accounting = evaluation.accounting
     if accounting is None:
         raise ValueError("scenario basis requires an evaluation that produced accounting")
     currency = scenario.valuation_currency
     capability_count = sum(len(broker.capabilities) for broker in scenario.brokers)
-    return PacScenarioBasis(
-        as_of=scenario.as_of_date.isoformat(),
-        valuation_currency=currency,
-        policy=scenario.policy,
-        counts=PlannerScenarioCounts(
+    return {
+        "as_of": scenario.as_of_date.isoformat(),
+        "valuation_currency": currency,
+        "policy": scenario.policy,
+        "counts": PlannerScenarioCounts(
             assets=len(scenario.assets),
             brokers=len(scenario.brokers),
             currencies=len(scenario.currency_specs),
@@ -187,12 +194,12 @@ def build_scenario_basis(scenario: ExactPlannerScenario, evaluation: ExactEvalua
             order_routes=len(scenario.order_routes),
             provenance=len(scenario.provenance),
         ),
-        current_invested=_money(accounting.current_invested, currency),
-        selected_funding=_money(accounting.selected_funding, currency),
-        reachable_funding=_money(accounting.reachable_funding, currency),
-        trapped_funding=_money(accounting.trapped_funding, currency),
-        fixed_reference=_money(accounting.fixed_reference, currency),
-    )
+        "current_invested": _money(accounting.current_invested, currency),
+        "selected_funding": _money(accounting.selected_funding, currency),
+        "reachable_funding": _money(accounting.reachable_funding, currency),
+        "trapped_funding": _money(accounting.trapped_funding, currency),
+        "fixed_reference": _money(accounting.fixed_reference, currency),
+    }
 
 
 def _money(value: ExactRatio, currency: str) -> ExactMoney:
@@ -440,8 +447,10 @@ def build_asset_rows(scenario: ExactPlannerScenario, evaluation: ExactEvaluation
     currency = scenario.valuation_currency
     final_invested = accounting.final_invested
     zero_denominator = final_invested == _EXACT_ZERO
+    bounds = resolve_scenario_limits(scenario, limit_reference(scenario, accounting)).assets()
     rows: list[PacAssetPlanRow] = []
     for row in evaluation.assets:
+        limit = bounds.get(row.asset_id)
         share = UnavailableExactNumber(kind="unavailable", reason="zero_final_invested") if zero_denominator else AvailableExactNumber(kind="available", value=ratio_to_exact_number(row.final_value / final_invested))
         rows.append(
             PacAssetPlanRow(
@@ -452,9 +461,34 @@ def build_asset_rows(scenario: ExactPlannerScenario, evaluation: ExactEvaluation
                 residual=_money(row.residual, currency),
                 final_weight=share,
                 buy_mid_value=_money(row.buy_mid_value, currency),
+                minimum=_money(limit.minimum, currency) if limit is not None and limit.minimum is not None else None,
+                maximum=_money(limit.maximum, currency) if limit is not None and limit.maximum is not None else None,
             )
         )
     return rows
+
+
+def build_cash_rows(scenario: ExactPlannerScenario, evaluation: ExactEvaluation) -> list[PacCashEntryRow]:
+    """One row per cash entry that carries a limit: the cell's final spendable cash in the valuation currency, and its limits.
+
+    The value is the one the replay checks the limit against (``ENTRY_VALUE_WITHIN_LIMITS``): the cell's ``final_spendable``,
+    valued with the scenario's own rates.
+    """
+    accounting = _require_accounting(evaluation)
+    currency = scenario.valuation_currency
+    index = build_scenario_index(scenario)
+    bounds = resolve_scenario_limits(scenario, limit_reference(scenario, accounting)).cash()
+    final_by_cell = final_cash_by_cell(index, evaluation.ledgers)
+    return [
+        PacCashEntryRow(
+            broker_id=broker_id,
+            currency=cell_currency,
+            final_value=_money(final_by_cell.get((broker_id, cell_currency), _EXACT_ZERO), currency),
+            minimum=_money(limit.minimum, currency) if limit.minimum is not None else None,
+            maximum=_money(limit.maximum, currency) if limit.maximum is not None else None,
+        )
+        for (broker_id, cell_currency), limit in sorted(bounds.items())
+    ]
 
 
 def build_funding_actions(scenario: ExactPlannerScenario, evaluation: ExactEvaluation, sequence: _SequenceAllocator) -> list[PlannerFundingAction]:
@@ -492,83 +526,34 @@ def _conversion_id(action: ExactFxEvaluation) -> str:
     return f"conversion:{action.broker_id}:{action.source_currency}:{action.destination_currency}"
 
 
-def build_fx_actions(scenario: ExactPlannerScenario, evaluation: ExactEvaluation) -> list[PlannerFxAction]:
-    """Project posted FX decisions, one per engine decision.
+def build_conversions(scenario: ExactPlannerScenario, evaluation: ExactEvaluation, sequence: _SequenceAllocator) -> list[PlannerConversion]:
+    """One conversion per engine FX decision: the engine decides FX once per Broker and ordered currency pair (A2).
 
-    ``destination_credit`` publishes the **posted** credit, not the exact one:
-    the ledger identity reconciles on posted amounts (an exact 9.504 USD
-    credit posts as 10), which is the same exact/posted distinction the
-    compiled model had to learn in Step3 §16.11. ``spread_loss`` by contrast
-    is an economic cost and stays exact, matching ``_evaluate_costs``.
-
-    An action has no sequence: what the user executes is its conversion
-    (``build_conversions``).
+    The credit lands in the Broker's cash in the destination currency, which every order of that Broker in that currency
+    shares, so the pair is what the plan presents. ``destination_credit`` publishes the **posted** credit, not the exact one:
+    the ledger identity reconciles on posted amounts (an exact 9.504 USD credit posts as 10). ``spread_loss`` by contrast is an
+    economic cost and stays exact, matching ``_evaluate_costs``. ``evaluation.fx`` is already in canonical (Broker, source,
+    destination) order and holds each pair once (``ExactEvaluation`` refuses duplicates). Manual conversions take the next
+    sequences of the shared counter, provisionally: ``planner._executable_steps`` renumbers every step in an order the
+    balances can follow (``plan_sequence``). Automatic ones happen when a step spends their currency and carry none. The
+    provenance is the Broker's: a conversion has no route of its own (D12).
     """
-    provenance_by_route = {route.route_id: route.provenance_id for route in scenario.order_routes}
-    actions: list[PlannerFxAction] = []
-    for action in evaluation.fx:
-        actions.append(
-            PlannerFxAction(
-                action_id=f"fx:{action.order_route_id}:{action.source_currency}",
-                conversion_id=_conversion_id(action),
-                order_route_id=action.order_route_id,
-                broker_id=action.broker_id,
-                source_debit=_positive_money(action.source_debit, action.source_currency),
-                destination_credit=_positive_money(action.posted_destination_credit, action.destination_currency),
-                spot_rate=ExactFxRate(source_currency=action.source_currency, destination_currency=action.destination_currency, value=ratio_to_exact_number(action.approved_rate)),
-                effective_rate=ExactFxRate(source_currency=action.source_currency, destination_currency=action.destination_currency, value=ratio_to_exact_number(action.effective_rate)),
-                spread_loss=_money(action.spread_loss, scenario.valuation_currency),
-                provenance_ids=_canonical_provenance_ids(
-                    {provenance_by_route[action.order_route_id]},
-                    context=f"FX action on route {action.order_route_id!r}",
-                    asset_ids=(),
-                ),
-            )
-        )
-    return actions
-
-
-def build_conversions(scenario: ExactPlannerScenario, evaluation: ExactEvaluation, fx_actions: list[PlannerFxAction], sequence: _SequenceAllocator) -> list[PlannerConversion]:
-    """Aggregate the FX actions into one conversion per Broker and currency pair.
-
-    The engine decides FX per order route, but no constraint ties a decision to
-    its route's BUY: the credit lands in the Broker's cash in the destination
-    currency, which every order of that Broker in that currency shares, and the
-    canonical tie-break picks the route. So the pair total is the figure the
-    plan can present; rate and spread are global per pair.
-
-    ``fx_actions`` is ``build_fx_actions``'s output for the same evaluation,
-    one row per ``evaluation.fx`` entry in the same order. Manual conversions
-    take the next sequences in (Broker, source, destination) order, which puts
-    them between funding and orders; automatic ones happen inside the orders
-    and carry none.
-    """
-    mode_by_broker = {broker.broker_id: broker.conversion_mode for broker in scenario.brokers}
-    groups: dict[tuple[str, str, str], list[tuple[ExactFxEvaluation, PlannerFxAction]]] = {}
-    for exact, row in zip(evaluation.fx, fx_actions, strict=True):
-        groups.setdefault((exact.broker_id, exact.source_currency, exact.destination_currency), []).append((exact, row))
+    broker_by_id = {broker.broker_id: broker for broker in scenario.brokers}
     conversions: list[PlannerConversion] = []
-    for (broker_id, source_currency, destination_currency), members in sorted(groups.items()):
-        exacts = [exact for exact, _ in members]
-        rows = [row for _, row in members]
-        mode = mode_by_broker[broker_id]
+    for exact in evaluation.fx:
+        broker = broker_by_id[exact.broker_id]
         conversions.append(
             PlannerConversion(
-                conversion_id=_conversion_id(exacts[0]),
-                mode=mode,
-                sequence=sequence.next() if mode == "manual" else None,
-                broker_id=broker_id,
-                source_debit=_positive_money(sum((exact.source_debit for exact in exacts), _EXACT_ZERO), source_currency),
-                destination_credit=_positive_money(sum((exact.posted_destination_credit for exact in exacts), _EXACT_ZERO), destination_currency),
-                spot_rate=rows[0].spot_rate,
-                effective_rate=rows[0].effective_rate,
-                spread_loss=_money(sum((exact.spread_loss for exact in exacts), _EXACT_ZERO), scenario.valuation_currency),
-                fx_action_ids=[row.action_id for row in rows],
-                provenance_ids=_canonical_provenance_ids(
-                    {provenance_id for row in rows for provenance_id in row.provenance_ids},
-                    context=f"conversion {broker_id!r} {source_currency}->{destination_currency}",
-                    asset_ids=(),
-                ),
+                conversion_id=_conversion_id(exact),
+                mode=broker.conversion_mode,
+                sequence=sequence.next() if broker.conversion_mode == "manual" else None,
+                broker_id=exact.broker_id,
+                source_debit=_positive_money(exact.source_debit, exact.source_currency),
+                destination_credit=_positive_money(exact.posted_destination_credit, exact.destination_currency),
+                spot_rate=ExactFxRate(source_currency=exact.source_currency, destination_currency=exact.destination_currency, value=ratio_to_exact_number(exact.approved_rate)),
+                effective_rate=ExactFxRate(source_currency=exact.source_currency, destination_currency=exact.destination_currency, value=ratio_to_exact_number(exact.effective_rate)),
+                spread_loss=_money(exact.spread_loss, scenario.valuation_currency),
+                provenance_ids=_canonical_provenance_ids({broker.provenance_id}, context=f"conversion {exact.broker_id!r} {exact.source_currency}->{exact.destination_currency}", asset_ids=()),
             )
         )
     return conversions
@@ -605,7 +590,6 @@ def build_order_rows(scenario: ExactPlannerScenario, evaluation: ExactEvaluation
                 execution_margin_cost=_money(order.execution_margin_loss, scenario.valuation_currency),
                 cash_debit=_positive_money(order.posted_cash_amount, order.native_currency),
                 fee=_nonnegative_money(order.posted_fee, order.native_currency),
-                fx_cost=_money(_EXACT_ZERO, scenario.valuation_currency),
                 buffer=_nonnegative_money(_EXACT_ZERO, order.native_currency),
                 explanation_keys=[],
                 provenance_ids=_canonical_provenance_ids(
@@ -641,6 +625,8 @@ def build_ledger_rows(evaluation: ExactEvaluation) -> list[PlannerLedgerRow]:
                 initial_selected=ratio_to_fixed_decimal(ledger.initial_selected),
                 funding_in=ratio_to_fixed_decimal(ledger.funding_in),
                 funding_out=ratio_to_fixed_decimal(ledger.funding_out),
+                transfer_in=ratio_to_fixed_decimal(ledger.transfer_in),
+                transfer_out=ratio_to_fixed_decimal(ledger.transfer_out),
                 fx_debit=ratio_to_fixed_decimal(ledger.fx_debit),
                 fx_credit=ratio_to_fixed_decimal(ledger.fx_credit),
                 buy_debit=ratio_to_fixed_decimal(ledger.buy_debit),
@@ -648,6 +634,8 @@ def build_ledger_rows(evaluation: ExactEvaluation) -> list[PlannerLedgerRow]:
                 buy_fees=ratio_to_fixed_decimal(ledger.buy_fees),
                 sell_fees=ratio_to_fixed_decimal(ledger.sell_fees),
                 broker_withheld_tax=ratio_to_fixed_decimal(ledger.broker_withheld_tax),
+                # The engine posts no foreign withholding yet (C2 of project 67 adds the posting family): the column is zero until then.
+                foreign_withholding_tax=ratio_to_fixed_decimal(_EXACT_ZERO),
                 self_reserved_tax=ratio_to_fixed_decimal(ledger.self_reserved_tax),
                 rounding_delta=ratio_to_exact_number(ledger.raw_rounding_delta),
                 final_spendable=ratio_to_fixed_decimal(ledger.final_spendable),
@@ -723,6 +711,35 @@ def build_costs(scenario: ExactPlannerScenario, evaluation: ExactEvaluation) -> 
         execution_margin_cost=_money(costs.execution_margin_loss, currency),
         broker_withheld_tax=_money(costs.broker_withheld_tax, currency),
         self_reserved_tax=_money(costs.self_reserved_tax, currency),
+        # No foreign withholding is posted yet (see ``build_ledger_rows``): the line is zero until C2.
+        foreign_withholding_tax=_money(_EXACT_ZERO, currency),
+    )
+
+
+def build_plan_accounts(scenario: ExactPlannerScenario, evaluation: ExactEvaluation) -> PlannerPlanAccounts:
+    """The plan's accounts (contract §6.1), the same for both Tools: ``F``, ``W``, the money lost by entry, ``N``, all read off
+    B1's exact accounting and costs. The entries are the exact costs and the rounding adjustment, whose sum is ``F − W`` by the
+    identity ``ExactAccountingEvaluation`` checks. In the PAC ``N`` is the shortfall plus the trapped cash."""
+    accounting = _require_accounting(evaluation)
+    costs = evaluation.costs
+    if costs is None:
+        raise ValueError("plan accounts require an evaluation that produced costs")
+    currency = scenario.valuation_currency
+    return PlannerPlanAccounts(
+        initial_wealth=_money(accounting.initial_wealth, currency),
+        final_wealth=_money(accounting.final_wealth, currency),
+        money_lost=PlannerMoneyLost(
+            buy_fees=_money(costs.buy_fees, currency),
+            sell_fees=_money(costs.sell_fees, currency),
+            fx_spread_loss=_money(costs.fx_spread_loss, currency),
+            execution_margin_cost=_money(costs.execution_margin_loss, currency),
+            broker_withheld_tax=_money(costs.broker_withheld_tax, currency),
+            self_reserved_tax=_money(costs.self_reserved_tax, currency),
+            # No foreign withholding is posted yet (C2 of project 67): the entry is zero until then.
+            foreign_withholding_tax=_money(_EXACT_ZERO, currency),
+            rounding=_money(accounting.rounding_adjustment + accounting.identity_delta, currency),
+        ),
+        uninvested=_money(accounting.uninvested, currency),
     )
 
 
@@ -861,13 +878,15 @@ def build_solver_evidence(scenario: ExactPlannerScenario, view: ExactPolicyView,
     could reasonably suspect data loss. They are not lost — the tie-break is
     published separately, exactly once, as ``PlannerObjectiveResults.tie_break``.
 
-    **One fact about the tie stages does need a row, so it borrows one.** The
-    wire accepts a limit ``stop_reason`` only when some row is ``unfinished``
-    (``_validate_stop_evidence``). When every named stage finished but a
-    tie-break stage did not, no row could say so, and the result would fail
-    validation. So when any tie-break stage is ``unfinished``, the named row
-    with the highest ordinal is reported ``unfinished`` as well; its numbers
-    stay the ones SCIP reported.
+    **One fact about the tie stages does need a row, so the PAC borrows one.**
+    The wire accepts a limit ``stop_reason`` only when some row is
+    ``unfinished`` (``_validate_stop_evidence``). When every named stage
+    finished but a tie-break stage did not, no row could say so, and the result
+    would fail validation. So when any tie-break stage is ``unfinished``, the
+    named row with the highest ordinal is reported ``unfinished`` as well; its
+    numbers stay the ones SCIP reported. The Rebalancer borrows none: its
+    canonical vector is an entry of ``score.tie_breaks``, which the stop rule
+    reads.
 
     **The absolute gap is recomputed, exactly.** The schema checks
     ``absolute_gap >= |primal - dual|`` in exact arithmetic on the published
@@ -876,7 +895,8 @@ def build_solver_evidence(scenario: ExactPlannerScenario, view: ExactPolicyView,
     instead (``_published_gap``).
     """
     unit_by_code = {ref.code: ref.unit for ref in view.objectives}
-    tie_unfinished = any(report.status == "unfinished" and report.objective_code not in unit_by_code for report in result.stages)
+    # The Rebalancer's canonical vector has its own entry in ``score.tie_breaks`` (B3 of project 67): no row is borrowed.
+    tie_unfinished = scenario.product != "rebalancer" and any(report.status == "unfinished" and report.objective_code not in unit_by_code for report in result.stages)
     last_ordinal = max((report.ordinal for report in result.stages if report.objective_code in unit_by_code), default=None)
     settings = [SolverSettingEvidence(name=setting.name, value=setting.value) for setting in result.settings]
     tolerances = SolverToleranceEvidence(
@@ -889,8 +909,11 @@ def build_solver_evidence(scenario: ExactPlannerScenario, view: ExactPolicyView,
     for report in result.stages:
         if report.objective_code not in unit_by_code:
             continue  # a tie:* stage — see the docstring
-        primal = _float_text(report.primal)
-        dual = _float_text(report.dual)
+        # SCIP minimizes ``scale ×`` the objective (D2 of the step-2 plan of project 67): the evidence publishes the
+        # objective's own unit, the one of its value, so the bounds are divided by the stage's scale here and only here.
+        scale = float(report.scale)
+        primal = _float_text(None if report.primal is None else report.primal / scale)
+        dual = _float_text(None if report.dual is None else report.dual / scale)
         stages.append(
             SolverStageEvidence(
                 kind="reported_floating",
@@ -903,7 +926,7 @@ def build_solver_evidence(scenario: ExactPlannerScenario, view: ExactPolicyView,
                 unit=_objective_unit(unit_by_code[report.objective_code], scenario.valuation_currency),
                 primal=primal,
                 dual=dual,
-                absolute_gap=_published_gap(primal, dual, report.absolute_gap),
+                absolute_gap=_published_gap(primal, dual, None if report.absolute_gap is None else report.absolute_gap / scale),
                 relative_gap=_float_text(report.relative_gap, nonnegative=True),
                 tolerances=tolerances,
                 engine=result.engine,
@@ -1005,7 +1028,8 @@ def build_stop_reason(result: SolverRunResult) -> str:
     assets x brokers, not in assets, and do not read the table above as a
     promise.
     """
-    unfinished = [stage for stage in result.stages if stage.status == "unfinished"]
+    # D4: a tie-break whose plan the exact comparison rejected was closed by SCIP; no limit stopped the search there.
+    unfinished = [stage for stage in result.stages if stage.status == "unfinished" and not stage.rejected]
     if not unfinished:
         return "completed"
     deciding = next((stage for stage in unfinished if stage.scip_status != "optimal"), None)

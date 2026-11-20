@@ -68,14 +68,16 @@ import pytest
 from backend.app.services.pac_allocator.evaluation.errors import ExactEvaluatorError
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
 from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
-from backend.app.services.pac_allocator.models import DecisionAccess, ExactEvaluation, ExactPlannerScenario
+from backend.app.services.pac_allocator.models import DecisionAccess, ExactEvaluation, ExactLimit, ExactPlannerScenario, ExactTargetFidelity, ExactTargetWeight
 from backend.app.services.pac_allocator.numeric import ExactRatio
+from backend.test_scripts.test_services import _reb_small_cases as cases
 from backend.test_scripts.test_services._pac_exhaustive_oracle import (
     MAX_EXHAUSTIVE_ORACLE_CANDIDATES,
     OracleDomainTooLargeError,
     estimate_oracle_domain_size,
     run_exhaustive_oracle,
 )
+from backend.test_scripts.test_services._pac_fx_decisions import fx_id
 from backend.test_scripts.test_services.test_pac_planner_evaluator import (
     ONE,
     ZERO,
@@ -91,13 +93,12 @@ from backend.test_scripts.test_services.test_pac_planner_evaluator import (
     _funding_route,
     _fx_rate,
     _invest_and_sell_scenario,
-    _invest_only_baseline,
     _min_fragmentation_scenario,
     _objective_map,
     _order_route,
     _pac_scenario,
     _scenario,
-    _sell_extension,
+    _sell_door,
 )
 
 # --------------------------------------------------------------------------
@@ -733,7 +734,7 @@ def test_exact_fx_credit_tie_optimum_matches_the_hand_derived_one() -> None:
     scenario = _credit_tie_fx_scenario(price=R(2), cap=R(4))
     view = build_exact_policy_view(scenario)
     funding = exact_decision_id("funding_transfer", "route:funding:eur")
-    fx = exact_decision_id("fx_debit", "route:buy:usd:EUR")
+    fx = fx_id(scenario, source="EUR", destination="USD")
     buy = exact_decision_id("buy_quantum", "route:buy:usd")
 
     # The derivation's premises, read off the view: three free decisions, the
@@ -755,7 +756,7 @@ def test_exact_fx_credit_tie_optimum_matches_the_hand_derived_one() -> None:
     assert _objective_map(view, best)["fixed_l2"] == R(1)
 
     # The optimum stands on no rounding at all: an exact 6 USD credit, posted 6.
-    fx_evaluation = next(item for item in best.fx if item.order_route_id == "route:buy:usd" and item.source_currency == "EUR")
+    fx_evaluation = next(item for item in best.fx if item.source_currency == "EUR")
     assert fx_evaluation.exact_destination_credit == R(6)
     assert fx_evaluation.posted_destination_credit == R(6)
     order_evaluation = next(item for item in best.orders if item.route_id == "route:buy:usd")
@@ -769,7 +770,7 @@ def test_exact_fx_credit_tie_optimum_matches_the_hand_derived_one() -> None:
     # the whole 5 EUR convert into the 7.5 USD tie, posted at its floor, 7,
     # one dollar short of the 8 USD that 4 units cost.
     tie_point = evaluate_exact_candidate(scenario, view, _candidate(view, {buy: 4, funding: 5, fx: 5}, candidate_id="credit-tie:cap"))
-    tie_fx = next(item for item in tie_point.fx if item.order_route_id == "route:buy:usd" and item.source_currency == "EUR")
+    tie_fx = next(item for item in tie_point.fx if item.source_currency == "EUR")
     assert (tie_fx.exact_destination_credit, tie_fx.posted_destination_credit) == (R(15, 2), R(7))
     tie_usd_cell = next(ledger for ledger in tie_point.ledgers if ledger.broker_id == "broker:destination" and ledger.currency == "USD")
     assert (tie_usd_cell.fx_credit, tie_usd_cell.buy_debit, tie_usd_cell.final_spendable) == (R(7), R(8), R(-1))
@@ -873,26 +874,21 @@ def test_no_op_scenario_best_candidate_is_all_zero() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_infeasible_exact_required_minimum_above_reachable_cap_rejects_every_candidate() -> None:
+def test_infeasible_exact_asset_minimum_above_reachable_cap_rejects_every_candidate() -> None:
     """Research question: can a PAC-`proportional` *primary* view ever be
     exhaustively infeasible — i.e. is the all-zero/baseline candidate
     always trivially feasible?
 
-    Answer: **no, it is not always trivially feasible.** `ORDER_REQUIRED_MIN`
-    (see `evaluator.py::_order_route_constraint_facts`) is a hard floor on
-    `measure = step * quanta` that, for a *buy* route on a `primary` view,
-    is **not** relaxed to zero the way it is for sell-side routes on
-    `primary`/`invest_only_baseline` purposes, and it is **not** gated by
-    "is this decision active" the way `ORDER_MIN_IF_ACTIVE` is. So setting
-    a route's `required_minimum` above the maximum measure the route can
-    ever reach (its cap, here 3 quanta at a step of 1 = a measure of 3)
-    makes every candidate in the domain infeasible, including zero -
-    this is a genuine, reproducible construction, not a fabricated one:
-    it reuses the exact same `_pac_scenario(required=..., route_cap=...)`
-    knobs the sibling suite's own
-    `test_order_minimum_required_and_cap_contracts` already exercises.
+    Answer: **no, it is not always trivially feasible.** A minimum on an
+    Asset's final value (V5, ``ENTRY_VALUE_WITHIN_LIMITS``) is a hard floor
+    that doing nothing does not meet. So setting the Asset's minimum above
+    the most the route can ever buy (its cap, here 3 units of EUR10 = EUR30,
+    against a minimum of EUR50) makes every candidate in the domain
+    infeasible, including zero. It is the construction the route's «required
+    minimum» used to give (M19 took that field out of the contract); the
+    entry's minimum is what obliges a buy now.
     """
-    scenario = _pac_scenario(required=R(5), route_cap=R(3))
+    scenario = replace(_pac_scenario(route_cap=R(3)), target_weights=(ExactTargetWeight("asset:a", R(1), minimum=ExactLimit("amount", R(50))),))
     view = build_exact_policy_view(scenario)
     assert view.purpose == "primary"
     assert scenario.policy == "proportional"
@@ -905,13 +901,13 @@ def test_infeasible_exact_required_minimum_above_reachable_cap_rejects_every_can
     assert domain_size == 4
 
     # Confirm, by direct replay, that every single candidate in the domain
-    # (including the all-zero one) fails specifically because of
-    # ORDER_REQUIRED_MIN - not some unrelated, incidental conflict.
+    # (including the all-zero one) fails specifically because of the Asset's
+    # limit - not some unrelated, incidental conflict.
     for quanta in range(0, 4):
         candidate = _candidate(view, {only_decision.decision_id: quanta}, candidate_id=f"manual:{quanta}")
         evaluation = evaluate_exact_candidate(scenario, view, candidate)
         assert evaluation.feasible is False
-        assert "ORDER_REQUIRED_MIN" in evaluation.conflict_codes
+        assert "ENTRY_VALUE_WITHIN_LIMITS" in evaluation.conflict_codes
 
     result = run_exhaustive_oracle(scenario, view)
     assert result.enumerated_candidates == 4
@@ -971,7 +967,7 @@ def test_checkpoint_cancellation_during_candidate_evaluation_propagates() -> Non
 
 
 def test_frozen_exact_decision_contributes_one_value_not_its_theoretical_range() -> None:
-    """`build_exact_policy_view(..., purpose="sell_extension")` freezes the
+    """`build_exact_policy_view(..., purpose="deployment")` freezes the
     funding decision to whatever the baseline consumed (per its docstring).
     The frozen decision's `upper_quanta` is *not* clamped down to the
     frozen point (it keeps the bound the decision would have had if it
@@ -986,8 +982,7 @@ def test_frozen_exact_decision_contributes_one_value_not_its_theoretical_range()
     prove the one-value-not-a-range contract.
     """
     scenario = _invest_and_sell_scenario()
-    _baseline_view, baseline_candidate = _invest_only_baseline(scenario)
-    sell_view = _sell_extension(scenario, baseline_candidate)
+    sell_view = _sell_door(scenario, {exact_decision_id("buy_quantum", "route:buy:b"): 2})
 
     funding_decision_id = exact_decision_id("funding_transfer", "route:funding")
     frozen_access = _decision(sell_view, funding_decision_id)
@@ -1014,3 +1009,47 @@ def test_frozen_exact_with_missing_frozen_quanta_is_unreachable_via_valid_constr
     unsafe = _unsafe_frozen_exact_access_missing_frozen_quanta()
     with pytest.raises(OracleDomainTooLargeError, match="missing frozen_quanta"):
         estimate_oracle_domain_size(_fake_view(unsafe))
+
+
+# --------------------------------------------------------------------------
+# B1-12 (project 67): the exhaustive oracle confirms the small cases computed by hand
+# --------------------------------------------------------------------------
+
+
+def _small_case(name: str) -> ExactPlannerScenario:
+    """The hand-computed cases of specifica §11, cut to the oracle's size (B1 plan, «Peso dell'oracolo»).
+
+    T1 has no cash, so no route: one candidate. T4 and T5 buy in steps of 5 EUR with each route capped at the cash (41 × 41 and
+    21 × 21 candidates; the best plans, 195 and 95, are multiples of 5). T6 has one route by whole units and no currency pair.
+    """
+    if name == "t1":
+        return replace(cases.t1(), order_routes=())
+    if name == "t4":
+        return cases.t4(amount_step=ExactRatio(5), caps={"asset:a": ExactRatio(200), "asset:b": ExactRatio(200)})
+    if name == "t5":
+        return cases.t5(amount_step=ExactRatio(5), caps={"asset:a": ExactRatio(100), "asset:b": ExactRatio(100)})
+    return cases.t6(target_fidelity=ExactTargetFidelity(kind="weighted", distance_weight=ExactRatio(4)))
+
+
+@pytest.mark.parametrize(
+    ("name", "domain", "best", "score"),
+    [
+        pytest.param("t1", 1, {}, ExactRatio(8, 25), id="t1-no-trade"),
+        pytest.param("t4", 41 * 41, {cases.buy_decision("asset:b"): 39}, ExactRatio(1_001, 200), id="t4-buy-195-of-b"),
+        pytest.param("t5", 21 * 21, {}, ExactRatio(2), id="t5-idle-cash-wins"),
+        pytest.param("t6", 3, {cases.buy_decision("asset:a"): 1}, ExactRatio(3_205), id="t6-one-unit"),
+    ],
+)
+def test_oracle_confirms_the_hand_computed_small_cases(name: str, domain: int, best: dict[str, int], score: ExactRatio) -> None:
+    """The oracle enumerates every candidate of the reduced case and picks the plan computed by hand, with its ``J``."""
+    scenario = _small_case(name)
+    view = build_exact_policy_view(scenario)
+    assert estimate_oracle_domain_size(view) == domain
+
+    result = run_exhaustive_oracle(scenario, view)
+
+    assert result.best_candidate is not None
+    chosen = {item.decision_id: item.quanta for item in result.best_candidate.decisions if item.quanta}
+    assert chosen == best
+    score_ref = next(ref for ref in view.objectives if ref.ordinal == 1)
+    assert next(item.value for item in result.best_evaluation.objectives if item.ref_id == score_ref.ref_id) == score

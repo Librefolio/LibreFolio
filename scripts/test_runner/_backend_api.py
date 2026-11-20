@@ -1253,6 +1253,15 @@ def e2e_brim(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "BRIM E2E tests", verbose=verbose)
 
 
+def e2e_planner_engine(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the planner engine E2E (lot T0 of project 67): a portfolio built through the API, planned through the Tool."""
+    print_section("E2E: Planner Engine From the Portfolio")
+    print_info("Testing: brokers, assets, prices, transactions → POST /portfolio/allocation-source → request → POST /tools/compute")
+    print_info("Tests: PAC hand plan and in-process equality, the Broker profile issue, Rebalancer T4/T5/no holdings, a saved FX rate read")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_e2e/test_planner_engine_e2e.py", test_names)
+    return run_command(cmd, "Planner engine E2E tests", verbose=verbose)
+
+
 def e2e_backup_roundtrip(verbose: bool = False, test_names: list = None) -> bool:
     """Test the founder's acceptance of the instance backup: a populated instance backed up, restored on an empty one."""
     print_section("E2E: Backup and Restore Round Trip")
@@ -1378,7 +1387,7 @@ Tests for REST API endpoints (server auto-started):
         isolation="pure",
     )
     add_test(api, "tools", api_tools, name="Tools API", desc="Catalog, bulk compute, diagnostics, and authorization")
-    add_test(api, "pac-planner-tool", api_pac_planner_tool, name="PAC Planner Tool API", desc="pac_allocator plan through the live compute endpoint")
+    add_test(api, "pac-planner-tool", api_pac_planner_tool, name="PAC Planner Tool API", desc="pac_allocator and portfolio_rebalancer plan through the live compute endpoint")
     add_test(api, "risk", api_risk, name="Risk Analysis API", desc="Catalog, bulk query, isolation, and populated-DB analytics, and per-period asset eligibility")
     add_test(api, "assets-provider", api_assets_provider, name="Assets Provider API", desc="Provider assignment endpoints")
     add_test(
@@ -1938,6 +1947,18 @@ Complete workflow tests via REST API:
     )
     add_test(e2e, "search-to-prices", search2prices_test, name="Search to Prices", desc="Full asset lifecycle flow", prereq="Database created", tests="Search → Create → Assign → Metadata → Prices")
     add_test(e2e, "brim-e2e", e2e_brim, name="BRIM E2E", desc="Test complete BRIM import flow", prereq="Database created", tests="Upload → Parse → Asset Mapping → Import")
+    add_test(
+        e2e,
+        "planner-engine",
+        e2e_planner_engine,
+        name="Planner Engine E2E",
+        desc="Lot T0 of project 67: a portfolio built through the API (broker, assets, prices, transactions), read back with POST /portfolio/allocation-source, composed into a request with what no endpoint gives yet written by hand (order modes, fees, routes, targets, strategy, fidelity), planned through POST /tools/compute with the identity and engine window of GET /tools/catalog: PAC hand plan and in-process equality; the Broker profile issue until P3; Rebalancer «Invest only» T4 (buy 195 of B, J = 1001/200), T5 (no operation, J = 2), no holdings (needs_input); T4 with a USD Asset valued at a saved EUR/USD rate read, never written",
+        prereq="Database populated (the FX case reads a saved EUR/USD rate)",
+        tests="Build → Source → Compose → Compute → Hand numbers and in-process plan",
+        # WRITE-SCOPED: every test registers its own user, creates its own Broker and uuid-named Assets, their prices and
+        # the Broker's transactions, addresses them by id and deletes them; the FX rate is only read (D13), never written.
+        isolation="write-scoped",
+    )
     add_test(
         e2e,
         "backup-roundtrip",

@@ -6,10 +6,11 @@ from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from backend.app.services.pac_allocator.evaluation.bounds import current_invested, selected_funding
+from backend.app.services.financial_math.fees import calculate_fee
+from backend.app.services.pac_allocator.evaluation.bounds import current_invested, selected_funding, transfer_decision_id
 from backend.app.services.pac_allocator.evaluation.errors import ExactScenarioContractError
-from backend.app.services.pac_allocator.evaluation.keys import entity_refs, exact_decision_id, fx_debit_key, source_key
-from backend.app.services.pac_allocator.evaluation.reachability import buy_pool_currencies, source_reachability
+from backend.app.services.pac_allocator.evaluation.keys import entity_refs, exact_decision_id, source_key
+from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs, source_reachability
 from backend.app.services.pac_allocator.evaluation.references import ledger_keys
 from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex, convert_currency, fx_rate, order_prices, to_valuation, valuation_rate_of
 from backend.app.services.pac_allocator.ledger import (
@@ -24,6 +25,7 @@ from backend.app.services.pac_allocator.models import (
     ExactAccountingEvaluation,
     ExactAssetEvaluation,
     ExactBrokerLedgerEvaluation,
+    ExactCashTargetEvaluation,
     ExactCostEvaluation,
     ExactFundingSourceEvaluation,
     ExactFundingTransferEvaluation,
@@ -38,7 +40,6 @@ from backend.app.services.pac_allocator.models import (
 )
 from backend.app.services.pac_allocator.numeric import (
     ExactRatio,
-    calculate_fee,
     calculate_fx_credit,
     calculate_planning_fx_rate,
     calculate_tax_reserve,
@@ -60,6 +61,43 @@ class EconomicState:
     assets: tuple[ExactAssetEvaluation, ...]
     accounting: ExactAccountingEvaluation
     costs: ExactCostEvaluation
+    cash_targets: tuple[ExactCashTargetEvaluation, ...] = ()
+
+
+def initial_cash_by_cell(index: ScenarioIndex, ledgers: tuple[ExactBrokerLedgerEvaluation, ...]) -> dict[tuple[str, str], ExactRatio]:
+    """The selected cash every Broker and currency cell starts from, valued in the valuation currency: the «before» of a cash
+    item in the Rebalancer's report (contract §6.2), read like ``final_cash_by_cell``."""
+    return {(row.broker_id, row.currency): to_valuation(index, row.initial_selected, row.currency) for row in ledgers}
+
+
+def final_cash_by_cell(index: ScenarioIndex, ledgers: tuple[ExactBrokerLedgerEvaluation, ...]) -> dict[tuple[str, str], ExactRatio]:
+    """The final spendable cash of every Broker and currency cell, valued in the valuation currency.
+
+    The one reading of a cash cell's value: the limits on cash (V5), the cash rows of the report and the distance ``D`` of the
+    Rebalancer all take it from here.
+    """
+    return {(row.broker_id, row.currency): to_valuation(index, row.final_spendable, row.currency) for row in ledgers}
+
+
+def _evaluate_cash_targets(scenario: ExactPlannerScenario, final_cash: dict[tuple[str, str], ExactRatio], reference: ExactRatio) -> tuple[ExactCashTargetEvaluation, ...]:
+    """One row per cash cell with a target weight (Rebalancer, specifica §6.1), in the order of the scenario's entries."""
+    rows = []
+    for entry in scenario.cash_entries:
+        if entry.weight == _EXACT_ZERO:
+            continue
+        target_value = entry.weight * reference
+        final_value = final_cash.get((entry.broker_id, entry.currency), _EXACT_ZERO)
+        rows.append(
+            ExactCashTargetEvaluation(
+                broker_id=entry.broker_id,
+                currency=entry.currency,
+                target_weight=entry.weight,
+                target_value=target_value,
+                final_value=final_value,
+                residual=final_value - target_value,
+            )
+        )
+    return tuple(rows)
 
 
 def _append_exact_flow(
@@ -265,89 +303,93 @@ def _evaluate_fx(
     checkpoint: Checkpoint | None,
 ) -> tuple[ExactFxEvaluation, ...]:
     result = []
-    for route in scenario.order_routes:
-        if route.side != "buy":
-            continue
+    for spec in fx_decision_specs(scenario, index, checkpoint):
         check_budget(checkpoint)
-        quote_currency = index.assets[route.asset_id].quote.price.currency
-        for currency in buy_pool_currencies(
-            scenario,
+        decision_quanta = quanta[spec.decision_id]
+        if decision_quanta == 0:
+            continue
+        currency, quote_currency = spec.source_currency, spec.destination_currency
+        source_debit = index.currency_quantum[currency] * decision_quanta
+        approved_rate = fx_rate(index.fx_rate_by_pair, currency, quote_currency)
+        # The planning rate: the spread rate, capped at the triangle through
+        # the valuation currency, so no conversion creates value.
+        source_valuation_rate = valuation_rate_of(index, currency)
+        destination_valuation_rate = valuation_rate_of(index, quote_currency)
+        effective_rate = calculate_planning_fx_rate(
+            approved_rate=approved_rate,
+            spread=scenario.fx_spread_rate,
+            source_valuation_rate=source_valuation_rate,
+            destination_valuation_rate=destination_valuation_rate,
+        )
+        exact_credit = calculate_fx_credit(
+            source_debit=source_debit,
+            approved_rate=approved_rate,
+            spread=scenario.fx_spread_rate,
+            source_valuation_rate=source_valuation_rate,
+            destination_valuation_rate=destination_valuation_rate,
+        )
+        _append_exact_flow(
+            postings,
+            posting_id=f"fx-debit:{spec.key}",
+            family="fx_debit",
+            broker_id=spec.broker_id,
+            currency=currency,
+            amount=source_debit,
+            entity_refs=spec.entity_refs,
+        )
+        posted_credit = _append_rounded_posting(
+            postings,
+            posting_id=f"fx-credit:{spec.key}",
+            family="fx_credit",
+            broker_id=spec.broker_id,
+            currency=quote_currency,
+            exact_amount=exact_credit,
+            quantum=index.currency_quantum[quote_currency],
+            entity_refs=spec.entity_refs,
+        )
+        spread_loss = to_valuation(index, source_debit, currency) - to_valuation(
             index,
-            broker_id=route.broker_id,
-            quote_currency=quote_currency,
-            checkpoint=checkpoint,
-        ):
-            decision_id = exact_decision_id(
-                "fx_debit",
-                fx_debit_key(route.route_id, currency),
-            )
-            decision_quanta = quanta[decision_id]
-            if decision_quanta == 0:
-                continue
-            source_debit = index.currency_quantum[currency] * decision_quanta
-            approved_rate = fx_rate(index.fx_rate_by_pair, currency, quote_currency)
-            # The planning rate: the spread rate, capped at the triangle through
-            # the valuation currency, so no conversion creates value.
-            source_valuation_rate = valuation_rate_of(index, currency)
-            destination_valuation_rate = valuation_rate_of(index, quote_currency)
-            effective_rate = calculate_planning_fx_rate(
-                approved_rate=approved_rate,
-                spread=scenario.fx_spread_rate,
-                source_valuation_rate=source_valuation_rate,
-                destination_valuation_rate=destination_valuation_rate,
-            )
-            exact_credit = calculate_fx_credit(
+            exact_credit,
+            quote_currency,
+        )
+        result.append(
+            ExactFxEvaluation(
+                decision_id=spec.decision_id,
+                broker_id=spec.broker_id,
+                source_currency=currency,
+                destination_currency=quote_currency,
+                quanta=decision_quanta,
                 source_debit=source_debit,
                 approved_rate=approved_rate,
-                spread=scenario.fx_spread_rate,
-                source_valuation_rate=source_valuation_rate,
-                destination_valuation_rate=destination_valuation_rate,
+                effective_rate=effective_rate,
+                exact_destination_credit=exact_credit,
+                posted_destination_credit=posted_credit,
+                spread_loss=spread_loss,
             )
-            posting_refs = entity_refs(
-                ("order_route", route.route_id),
-                ("currency", currency),
-            )
-            _append_exact_flow(
-                postings,
-                posting_id=f"fx-debit:{route.route_id}:{currency}",
-                family="fx_debit",
-                broker_id=route.broker_id,
-                currency=currency,
-                amount=source_debit,
-                entity_refs=posting_refs,
-            )
-            posted_credit = _append_rounded_posting(
-                postings,
-                posting_id=f"fx-credit:{route.route_id}:{currency}",
-                family="fx_credit",
-                broker_id=route.broker_id,
-                currency=quote_currency,
-                exact_amount=exact_credit,
-                quantum=index.currency_quantum[quote_currency],
-                entity_refs=posting_refs,
-            )
-            spread_loss = to_valuation(index, source_debit, currency) - to_valuation(
-                index,
-                exact_credit,
-                quote_currency,
-            )
-            result.append(
-                ExactFxEvaluation(
-                    decision_id=decision_id,
-                    order_route_id=route.route_id,
-                    broker_id=route.broker_id,
-                    source_currency=currency,
-                    destination_currency=quote_currency,
-                    quanta=decision_quanta,
-                    source_debit=source_debit,
-                    approved_rate=approved_rate,
-                    effective_rate=effective_rate,
-                    exact_destination_credit=exact_credit,
-                    posted_destination_credit=posted_credit,
-                    spread_loss=spread_loss,
-                )
-            )
-    return tuple(sorted(result, key=lambda item: (item.order_route_id, item.source_currency)))
+        )
+    return tuple(sorted(result, key=lambda item: (item.broker_id, item.source_currency, item.destination_currency)))
+
+
+def _evaluate_transfers(
+    scenario: ExactPlannerScenario,
+    index: ScenarioIndex,
+    quanta: Mapping[str, int],
+    postings: list[ExactLedgerPosting],
+    checkpoint: Checkpoint | None,
+) -> None:
+    """Post every transfer between Brokers: exact out of the source cell and into the destination cell (A2, project 67).
+
+    A transfer is free and instant (``decisioni-REB.md`` §11.1), so the two postings carry the same amount and the scenario's
+    wealth does not move (property P4). No rounding: the amount is a whole number of the currency's minor unit.
+    """
+    for lane in scenario.transfer_lanes:
+        check_budget(checkpoint)
+        decision_id = transfer_decision_id(lane)
+        amount = index.currency_quantum[lane.currency] * quanta[decision_id]
+        refs = entity_refs(("source_broker", lane.source_broker_id), ("destination_broker", lane.destination_broker_id), ("currency", lane.currency))
+        key = decision_id.removeprefix("transfer:")
+        _append_exact_flow(postings, posting_id=f"transfer-out:{key}", family="transfer_out", broker_id=lane.source_broker_id, currency=lane.currency, amount=amount, entity_refs=refs)
+        _append_exact_flow(postings, posting_id=f"transfer-in:{key}", family="transfer_in", broker_id=lane.destination_broker_id, currency=lane.currency, amount=amount, entity_refs=refs)
 
 
 def _sell_tax_facts(
@@ -698,6 +740,7 @@ def evaluate_economic_state(
         postings,
         checkpoint,
     )
+    _evaluate_transfers(scenario, index, quanta, postings, checkpoint)
     fx = _evaluate_fx(
         scenario,
         index,
@@ -749,12 +792,15 @@ def evaluate_economic_state(
         )
     trapped_funding = selected_value - reachable_funding
     fixed_reference = invested_value + reachable_funding
+    initial_wealth = invested_value + selected_value
+    # The PAC aims at what it can reach; the Rebalancer at the whole wealth that enters the plan (specifica §6.1).
+    target_reference = initial_wealth if scenario.product == "rebalancer" else fixed_reference
     assets = _evaluate_assets(
         scenario,
         index,
         holdings,
         orders,
-        fixed_reference,
+        target_reference,
         checkpoint,
     )
     final_invested = sum(
@@ -774,17 +820,9 @@ def evaluate_economic_state(
         ),
         _EXACT_ZERO,
     )
-    broker_spendable_cash = sum(
-        (
-            to_valuation(
-                index,
-                row.final_spendable,
-                row.currency,
-            )
-            for row in ledgers
-        ),
-        _EXACT_ZERO,
-    )
+    final_cash = final_cash_by_cell(index, ledgers)
+    broker_spendable_cash = sum(final_cash.values(), _EXACT_ZERO)
+    cash_targets = _evaluate_cash_targets(scenario, final_cash, target_reference)
     free_cash = broker_spendable_cash + external_contribution_cash - trapped_funding
     physical_reserves = costs.self_reserved_tax
     economic_losses = costs.buy_fees + costs.sell_fees + costs.fx_spread_loss + costs.execution_margin_loss + costs.broker_withheld_tax
@@ -817,6 +855,7 @@ def evaluate_economic_state(
     )
     shortfall = fixed_reference - final_invested
     identity_delta = shortfall - (free_cash + physical_reserves + economic_losses + rounding_adjustment)
+    final_wealth = final_invested + broker_spendable_cash + external_contribution_cash
     accounting = ExactAccountingEvaluation(
         current_invested=invested_value,
         selected_funding=selected_value,
@@ -831,6 +870,10 @@ def evaluate_economic_state(
         rounding_adjustment=rounding_adjustment,
         rounding_bound=rounding_bound,
         identity_delta=identity_delta,
+        initial_wealth=initial_wealth,
+        final_wealth=final_wealth,
+        wealth_loss=initial_wealth - final_wealth,
+        uninvested=initial_wealth - final_invested - sum((row.final_value for row in cash_targets), _EXACT_ZERO),
     )
     check_budget(checkpoint)
     return EconomicState(
@@ -844,4 +887,5 @@ def evaluate_economic_state(
         assets=assets,
         accounting=accounting,
         costs=costs,
+        cash_targets=cash_targets,
     )

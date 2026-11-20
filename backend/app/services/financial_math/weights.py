@@ -52,6 +52,24 @@ def gross_weights(values: Mapping[int, Decimal]) -> dict[int, Decimal]:
     return {key: abs(value) / total for key, value in values.items()}
 
 
+def largest_weight_deviation_at[N](items: Iterable[tuple[N, N]], total: N) -> tuple[N, int | None] | None:
+    """The largest distance between an item's weight and its target weight, ``max |value / total − target|``, as a share
+    of one, and the position, in ``items``, of the item that reaches it (the Rebalancer's «largest deviation from the
+    target» and «which entry», X14 of project 67): the first one on a tie, ``None`` when no item is off its target (the
+    deviation is zero, or there are no items).
+
+    ``items`` are ``(value, target_weight)`` pairs; the number type is the caller's (``Decimal``, the PAC's ``ExactRatio``),
+    so an exact caller gets an exact answer. None when the total is zero or negative: there is no share."""
+    if total <= 0:
+        return None
+    largest, position = total * 0, None
+    for index, (value, target) in enumerate(items):
+        deviation = abs(value / total - target)
+        if deviation > largest:
+            largest, position = deviation, index
+    return largest, position
+
+
 def concentration(weights_percent: Iterable[Decimal]) -> tuple[Decimal | None, Decimal | None]:
     """The largest absolute weight and the Herfindahl–Hirschman index (Σ w², in points: 10 000 = one position), over
     every weight given — never a top-N subset. (None, None) without weights."""

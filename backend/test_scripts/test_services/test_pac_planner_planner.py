@@ -1,7 +1,7 @@
 """Orchestration tests for ``plan_pac_allocation`` (PAC planner v2).
 
 This suite is the durable form of the Stage-5b smoke harness, driven from the
-*same real wire fixture* (``_pac_request`` → ``pac_plan_request.min.v2.json``)
+*same real wire fixture* (``_pac_request`` → ``pac_plan_request.min.2-0-0.json``)
 and validated through ``PAC_PLAN_INPUT_ADAPTER`` before it ever reaches the
 service. Variants are built with ``copy.deepcopy`` plus targeted edits, never
 hand-rolled.
@@ -50,8 +50,8 @@ needs D more" (test_rounding_top_up_*). Any other rejection raises
   and its old module path no longer resolves (test_exhaustive_oracle_is_test_only);
   a domain far too large to enumerate is planned without enumerating it
   (test_x1_*).
-* **``plan_rebalancing`` is deliberately absent**, and ``plan_pac_allocation`` is
-  deliberately *not* re-exported from the package ``__init__`` so P1 consumers
+* **``plan_rebalancing`` sits beside ``plan_pac_allocation``** (B3 of project 67); neither is
+  deliberately re-exported from the package ``__init__`` so P1 consumers
   do not drag SCIP in at import — pinned by a subprocess (item 9).
 * **A Broker's conversion mode changes no figure** (R4.9): the same FX plan,
   planned with manual and with automatic conversions, publishes the same
@@ -96,6 +96,7 @@ from __future__ import annotations
 import ast
 import copy
 import importlib.util
+import json
 import math
 import os
 import re
@@ -109,11 +110,15 @@ from pathlib import Path
 from typing import get_args
 
 import pytest
+from pydantic import ValidationError
 
 from backend.app.schemas.pac_allocator.evidence import InfeasibilityProvenProof, ReportedFloatingSolverEvidence
+from backend.app.schemas.pac_allocator.exact import exact_fraction
 from backend.app.schemas.pac_allocator.results import (
     PAC_PLAN_INPUT_ADAPTER,
     PAC_PLAN_OUTPUT_ADAPTER,
+    REBALANCER_PLAN_INPUT_ADAPTER,
+    REBALANCER_PLAN_OUTPUT_ADAPTER,
     PacPlannerInvalidResult,
     PacPlannerNeedsInputResult,
     PacPlannerReadyIncumbentResult,
@@ -123,14 +128,20 @@ from backend.app.schemas.pac_allocator.results import (
     PacPlannerUnsupportedResult,
     PlannerResultSnapshot,
 )
-from backend.app.services.pac_allocator import planner
+from backend.app.services.pac_allocator import planner, rebalancer_report
 from backend.app.services.pac_allocator.evaluation.errors import ExactEvaluatorError, ExactReplayRejectedError
-from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
+from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_do_nothing, evaluate_exact_candidate
 from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
+from backend.app.services.pac_allocator.models import ExactCashEntry, ExactLimit
 from backend.app.services.pac_allocator.normalize import normalize_pac_plan
-from backend.app.services.pac_allocator.planner import plan_pac_allocation
+from backend.app.services.pac_allocator.numeric import ExactRatio as R
+from backend.app.services.pac_allocator.planner import plan_pac_allocation, plan_rebalancing
+from backend.app.services.tools.executor import TOOL_PROGRESS_MESSAGE_CAP
 from backend.test_scripts.test_schemas.test_pac_planner_schemas import _compact_pac_request, _fixture, _pac_request
-from backend.test_scripts.test_services._pac_synthetic_requests import FX_TRIANGLE, V, fx_conversion_request, make, scaled
+from backend.test_scripts.test_services import _pac_reference_values as ref
+from backend.test_scripts.test_services import _reb_small_requests as reb
+from backend.test_scripts.test_services._pac_fx_decisions import fx_id
+from backend.test_scripts.test_services._pac_synthetic_requests import FX_TRIANGLE, V, amount_limit, asset_entry, cash_entry, fx_conversion_request, make, scaled
 
 # The repository root: parents = [test_services, test_scripts, backend, <root>].
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -169,15 +180,13 @@ def _incumbent_payload(payload: dict | None = None) -> dict:
 
 
 def _forced_min_payload() -> dict:
-    """A provably-infeasible request: require ≥1 whole unit against €5 / €10 unit.
+    """A provably-infeasible request: a minimum of EUR10 on the Asset against EUR20 of cash and a unit that costs EUR30.
 
-    Normalizes cleanly (infeasibility is a *search* result, not a normalization
-    error). No oracle runs in production: SCIP closes the first, still-global
-    stage ``infeasible``, and that status is the proof.
+    The sum check passes (10 <= 20) so the request normalizes cleanly: infeasibility is a *search* result, not a normalization
+    error. No oracle runs in production: SCIP closes the first, still-global stage ``infeasible``, and that status is the
+    proof. The Asset's minimum obliges the buy that the route's «required minimum» used to oblige (M19).
     """
-    payload = _pac_request()
-    payload["order_routes"][0]["required_minimum"] = {"kind": "whole_quantity", "quantity": "1", "unit": "asset_unit"}
-    return payload
+    return _limited_request(asset_entry(_ASSET_ONE_ID, "1", minimum=amount_limit("10")), cash="20.00", unit_price="30.00")
 
 
 def _empty_assets_payload() -> dict:
@@ -230,7 +239,7 @@ def _two_etf_contribution_payload() -> dict:
     route_two["asset_id"] = _ASSET_TWO_ID
     payload["order_routes"].append(route_two)
 
-    payload["target_weights"] = [{"asset_id": _ASSET_ONE_ID, "weight": "0.5"}, {"asset_id": _ASSET_TWO_ID, "weight": "0.5"}]
+    payload["target_weights"] = [asset_entry(_ASSET_ONE_ID, "0.5"), asset_entry(_ASSET_TWO_ID, "0.5")]
     payload["existing_cash"] = []
     payload["contributions"] = [{"contribution_id": "contribution-one", "label": "Monthly", "amount": {"amount": "100.00", "currency": "EUR"}, "provenance_id": "prov-manual"}]
     payload["funding_routes"] = [
@@ -290,7 +299,6 @@ def test_unmodified_fixture_is_no_op_optimal(noop_result):
     assert solution.validation == "decimal_verified"
     assert solution.order_rows == []
     assert solution.funding_actions == []
-    assert solution.fx_actions == []
     assert solution.conversions == []
     _revalidate(noop_result)
 
@@ -346,6 +354,20 @@ def test_failure_availabilities_end_to_end(builder, availability, issue_kind, re
 
 
 @pytest.mark.parametrize(("builder", "availability", "issue_kind", "result_type"), _FAILURES)
+def test_failure_results_do_not_use_the_snapshot_id_as_request_fingerprint(builder, availability, issue_kind, result_type):
+    """§6, §10.2: a failure has no exact scenario, so it has no scenario fingerprint to carry. The field is empty; it is never the
+    snapshot's own identifier, which says nothing about the request."""
+    request = _validated(builder())
+
+    result = plan_pac_allocation(request)
+
+    assert isinstance(result, result_type)
+    assert result.snapshot.snapshot_id == request.snapshot.snapshot_id
+    assert result.snapshot.request_fingerprint == ""
+    _revalidate(result)
+
+
+@pytest.mark.parametrize(("builder", "availability", "issue_kind", "result_type"), _FAILURES)
 def test_failure_result_mapping_is_direct(builder, availability, issue_kind, result_type):
     """``_failure_result`` maps each normalizer availability onto its wire type.
 
@@ -356,7 +378,7 @@ def test_failure_result_mapping_is_direct(builder, availability, issue_kind, res
     request = _validated(builder())
     outcome = normalize_pac_plan(request)
     assert outcome.availability == availability
-    snapshot = PlannerResultSnapshot(snapshot_id=request.snapshot.snapshot_id, request_fingerprint=request.snapshot.snapshot_id)
+    snapshot = PlannerResultSnapshot(snapshot_id=request.snapshot.snapshot_id, request_fingerprint="")
 
     result = planner._failure_result(outcome.availability, snapshot, list(outcome.issues))
     assert isinstance(result, result_type)
@@ -550,6 +572,41 @@ def test_rounding_top_up_covers_a_candidate_one_minor_unit_short(monkeypatch):
     assert Decimal(valuation["value"]["value"]) == minor
 
 
+def test_a_pac_plan_of_the_wide_model_with_a_top_up_is_published_and_roundtrips(monkeypatch):
+    """Lot ZB-b of project 67 on the PAC: a plan of the wide model that needs a rounding top-up is published, not proven,
+    with its top-up, and survives the PAC's output union strictly. Two seams, both of this file: the prudent model is made
+    infeasible by one row (``test_a_pac_plan_of_the_wide_model_is_published_not_proven_and_roundtrips``), and the wide
+    model's candidate is set to the EUR tie's three units, a minor unit short (the safety net's seam above)."""
+    price, cash, _ = _ROUNDING_TIES["EUR"]
+    request = _validated(_tie_payload("EUR", price, cash))
+    buy_id = exact_decision_id("buy_quantum", _ASSET_ONE_ROUTE_ID)
+    real_compile, real_solve = planner.compile_policy_program, planner.solve_policy_program
+
+    def prudent_infeasible(scenario, view, **kwargs):
+        program = real_compile(scenario, view, **kwargs)
+        if not kwargs.get("outer", False):
+            zero = program.model.addVar(vtype="C", lb=0.0, ub=0.0, name="test_zero")
+            program.model.addCons(zero >= 1, name="test_prudent_infeasible")
+        return program
+
+    def wide_buys_the_tie(program, *args, **kwargs):
+        run = real_solve(program, *args, **kwargs)
+        if not program.outer:
+            return run
+        assert run.candidate is not None, "the wide model must hold a candidate for the seam to tamper with"
+        candidate = replace(run.candidate, decisions=tuple(replace(item, quanta=3) if item.decision_id == buy_id else item for item in run.candidate.decisions))
+        return replace(run, candidate=candidate)
+
+    monkeypatch.setattr(planner, "compile_policy_program", prudent_infeasible)
+    monkeypatch.setattr(planner, "solve_policy_program", wide_buys_the_tie)
+    result = plan_pac_allocation(request, solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+    assert isinstance(result, PacPlannerReadyIncumbentResult)
+    assert result.proof.kind == "not_proven"
+    wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(result, mode="json", by_alias=True)
+    assert [(row["broker_id"], row["currency"]) for row in wire["primary_solution"]["rounding_top_ups"]] == [(_BROKER_ONE_ID, "EUR")]
+    assert PAC_PLAN_OUTPUT_ADAPTER.validate_json(PAC_PLAN_OUTPUT_ADAPTER.dump_json(result), strict=True) == result
+
+
 def _threshold_breach_payload() -> dict:
     """The EUR tie with a EUR 1 fixed fee: SCIP buys 2 units; a third leaves the pool EUR 1.01 short."""
     price, cash, _ = _ROUNDING_TIES["EUR"]
@@ -676,8 +733,8 @@ def test_ready_infeasible_result_type_pins_completed_and_infeasibility_proof():
 def test_forced_infeasible_returns_ready_infeasible_not_raise():
     """A provably-infeasible plan RETURNS ``ready_infeasible``, proven by SCIP's own status.
 
-    The input — ``required_minimum`` of one whole unit, €5 of cash against a
-    €10 unit price — cannot be satisfied at all, so SCIP reports the first,
+    The input — a minimum of €10 on the Asset, €20 of cash against a €30
+    unit price — cannot be satisfied at all, so SCIP reports the first,
     still-global stage ``infeasible``. Under D-X1 that status *is* the proof:
     ``infeasibility_proven`` from ``solver_status``, whose witness names exactly
     that first objective, and ``stop_reason="completed"`` because the search
@@ -717,18 +774,142 @@ def test_forced_infeasible_returns_ready_infeasible_not_raise():
 
 
 # --------------------------------------------------------------------------
-# Item 8 — plan_rebalancing is absent; __all__ is minimal.
+# Item 8 — plan_rebalancing is exported beside plan_pac_allocation (B3 of project 67).
 # --------------------------------------------------------------------------
-def test_plan_rebalancing_is_absent_and_all_is_minimal():
-    """Absent beats always-failing.
+def test_plan_rebalancing_is_exported_beside_plan_pac_allocation():
+    """B3 test 8: both service functions are exported, and nothing else; neither is re-exported by the package (item 9)."""
+    assert planner.__all__ == ["plan_pac_allocation", "plan_rebalancing"]
+    assert callable(planner.plan_rebalancing)
 
-    Every Rebalancer policy and the SELL verifier are deferred. A
-    ``plan_rebalancing`` that existed but always failed would invite wiring; an
-    absent one fails at import, in the exact place the missing work is obvious.
-    So the export surface is a single function and nothing more.
-    """
-    assert not hasattr(planner, "plan_rebalancing")
-    assert planner.__all__ == ["plan_pac_allocation"]
+
+# --------------------------------------------------------------------------
+# B3 (project 67) — plan_rebalancing on the small cases of specifica-REB §11
+# --------------------------------------------------------------------------
+def _rebalance(payload: dict):
+    result = plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(payload))
+    return REBALANCER_PLAN_OUTPUT_ADAPTER.dump_python(result, mode="json")
+
+
+_REB_SMALL_CASES = (
+    pytest.param(reb.t1, "ready_no_op", {}, id="t1-no-trade"),
+    pytest.param(reb.t5, "ready_no_op", {}, id="t5-idle-cash-wins"),
+    pytest.param(reb.t4, "ready_incumbent", {"asset-b": {"kind": "monetary_amount", "amount": {"amount": "195", "currency": "EUR"}, "order_amount_step": {"amount": "1", "currency": "EUR"}}}, id="t4-buy-195-of-b"),
+    pytest.param(reb.t6, "ready_incumbent", {"asset-a": {"kind": "whole_quantity", "quantity": "1", "quantity_step": "1", "unit": "asset_unit"}}, id="t6-one-unit"),
+)
+
+
+@pytest.mark.parametrize(("build", "state", "orders"), _REB_SMALL_CASES)
+def test_plan_rebalancing_small_cases_end_to_end(build, state: str, orders: dict) -> None:
+    """B3 test 9: T1 (with its cash row at zero) and T5 are no operation; T4 buys 195 of B; T6 buys one unit and converts
+    nothing. Every run is «optimal proven» on a completed search."""
+    wire = _rebalance(build())
+    assert (wire["result_state"], wire["proof"]["kind"], wire["stop_reason"]) == (state, "optimal_proven", "completed")
+    solution = wire["primary_solution"]
+    assert {row["asset_id"]: row["instruction"] for row in solution["order_rows"]} == orders
+    assert solution["conversions"] == [] and solution["transfers"] == []
+    if build is reb.t1:
+        # T1's cash row is selected at zero: nothing is uninvested, before or after.
+        assert solution["uninvested_row"]["final_value"]["value"] == {"kind": "finite_decimal", "value": "0"}
+
+
+def test_rebalancer_positions_only_broker_gets_no_order_and_no_transfer() -> None:
+    """Q-F3a-5b of project 67 (the consultant's (a)): the portfolio counts everything owned, the plan acts only where the user
+    chose. T4 plus a Broker that only holds 1 000 of A (no capability, no fee, no cash, no route): the plan still runs, and
+    no order row, transfer, funding action or conversion names that Broker."""
+    wire = _rebalance(reb.with_positions_only_broker(reb.t4()))
+
+    assert wire["availability"] == "ready"
+    solution = wire["primary_solution"]
+    for section in ("order_rows", "transfers", "funding_actions", "conversions"):
+        assert reb.HELD_BROKER not in json.dumps(solution[section]), section
+
+
+def test_rebalancer_plan_with_a_custom_fidelity_publishes_its_lambda() -> None:
+    """F3a step 10b of project 67, found in the browser: a plan with the «custom» fidelity failed while building its basis
+    (the request's λ reached the basis by its Python name, ``lambda_``). T4 at λ = 0.6 is a ready plan, and its basis
+    publishes the fidelity as the request wrote it, on the wire as ``lambda``."""
+    result = plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.t4(fidelity={"kind": "custom", "lambda": "0.6"})))
+    wire = REBALANCER_PLAN_OUTPUT_ADAPTER.dump_python(result, mode="json")
+
+    assert wire["availability"] == "ready"
+    assert wire["scenario_basis"]["target_fidelity"] == {"kind": "custom", "lambda": "0.6"}
+    # The result survives its wire union both ways, as every ready Rebalancer result.
+    assert REBALANCER_PLAN_OUTPUT_ADAPTER.validate_json(REBALANCER_PLAN_OUTPUT_ADAPTER.dump_json(result), strict=True) == result
+
+
+def test_rebalancer_ready_output_revalidates_against_the_wire_union() -> None:
+    """B3 test 10: a ready Rebalancer result survives ``REBALANCER_PLAN_OUTPUT_ADAPTER`` as Python and as JSON."""
+    result = plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.t4()))
+    assert REBALANCER_PLAN_OUTPUT_ADAPTER.validate_python(result.model_dump(mode="python")) == result
+    assert REBALANCER_PLAN_OUTPUT_ADAPTER.validate_json(REBALANCER_PLAN_OUTPUT_ADAPTER.dump_json(result), strict=True) == result
+
+
+def _t4_with_operation_count_left_open(monkeypatch: pytest.MonkeyPatch, *, rejected: bool) -> None:
+    """T4's real SCIP run, with its ``operation_count`` stage reported unfinished as the solver reports it: rejected by the
+    exact comparison (D4, ``solver._close_stage``) or stopped by the clock. ``route_priority`` stays finished after it."""
+    real_solve = planner.solve_policy_program
+
+    def left_open(*args, **kwargs):
+        run = real_solve(*args, **kwargs)
+        named = {stage.objective_code: stage.status for stage in run.stages if not stage.stage.startswith("tie:")}
+        assert (named["operation_count"], named["route_priority"]) == ("finished", "finished"), "PREMISE: T4 closes both"
+        stages = tuple(replace(stage, status="unfinished", rejected=rejected, scip_status="optimal" if rejected else "timelimit") if stage.objective_code == "operation_count" else stage for stage in run.stages)
+        return replace(run, stages=stages)
+
+    monkeypatch.setattr(planner, "solve_policy_program", left_open)
+
+
+def test_a_rejected_tie_break_before_a_closed_stage_publishes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """D4 (B2 review of project 67) meets the order of the solver evidence (lot CR; G5 seed 8 at 30 s failed to publish): a
+    tie-break whose plan the exact comparison rejected is reported unfinished, and the cascade goes on, so a later stage
+    can close. That is a legitimate state, and the wire says it: the order rule (finished before unfinished) skips a row
+    whose tie-break ``score.tie_breaks`` names as rejected."""
+    _t4_with_operation_count_left_open(monkeypatch, rejected=True)
+    result = plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.t4()))
+
+    assert REBALANCER_PLAN_OUTPUT_ADAPTER.validate_json(REBALANCER_PLAN_OUTPUT_ADAPTER.dump_json(result), strict=True) == result
+    statuses = {stage.objective_code: stage.status for stage in result.solver_evidence.stages}
+    assert (statuses["operation_count"], statuses["route_priority"]) == ("unfinished", "finished")
+    assert {stage.objective_code: stage.status for stage in result.primary_solution.score.tie_breaks}["operation_count"] == "rejected"
+    assert result.stop_reason == "completed"
+
+
+def test_an_unfinished_stage_before_a_closed_one_is_still_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The order rule stays for every row that is not a rejected tie-break: a stage the clock stopped, followed by a stage
+    that finished, is not a state the cascade produces, and the wire refuses it."""
+    _t4_with_operation_count_left_open(monkeypatch, rejected=False)
+    with pytest.raises(ValidationError, match="Finished solver stages must precede unfinished stages"):
+        plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.t4()))
+
+
+def _without_holdings() -> dict:
+    payload = reb.t4()
+    payload["holdings"] = []
+    return payload
+
+
+def _worth_nothing() -> dict:
+    payload = reb.t4()
+    for holding in payload["holdings"]:
+        holding["planning_quantity"] = "0"
+    return payload
+
+
+@pytest.mark.parametrize(
+    ("build", "availability", "code"),
+    [
+        pytest.param(_without_holdings, "needs_input", "portfolio_rebalancer.holdings_missing", id="no-holdings"),
+        pytest.param(_worth_nothing, "needs_input", "portfolio_rebalancer.nonpositive_current_portfolio", id="worth-nothing"),
+        pytest.param(lambda: reb.t1(cash=None), "needs_input", "allocation.no_selected_funding", id="t1-without-a-cash-row"),
+    ],
+)
+def test_rebalancer_failure_availabilities(build, availability: str, code: str) -> None:
+    """B3 test 11: no holdings, a portfolio worth nothing, and T1 with no cash row and no contribution are answered with
+    their codes, never a plan."""
+    wire = _rebalance(build())
+    assert wire["availability"] == availability, wire["issues"]
+    assert code in {issue["code"] for issue in wire["issues"]}
+    assert "primary_solution" not in wire
 
 
 # --------------------------------------------------------------------------
@@ -784,7 +965,7 @@ def _action_sequences(solution) -> list[int]:
 
 
 def _referenced_provenance(solution) -> set[str]:
-    rows = (*solution.funding_actions, *solution.fx_actions, *solution.conversions, *solution.order_rows, *solution.exposure_rows)
+    rows = (*solution.funding_actions, *solution.conversions, *solution.order_rows, *solution.exposure_rows)
     return {provenance_id for row in rows for provenance_id in row.provenance_ids}
 
 
@@ -905,34 +1086,27 @@ def test_conversion_mode_changes_no_figure_of_the_plan(fx_plan_by_mode):
     for mode, wire in fx_plan_by_mode.items():
         assert (wire["result_state"], wire["proof"]["kind"]) == ("ready_incumbent", "optimal_proven"), mode
         solution = wire["primary_solution"]
-        assert solution["funding_actions"] and solution["fx_actions"] and solution["order_rows"], f"{mode}: the scenario must fund, convert and buy"
+        assert solution["funding_actions"] and solution["conversions"] and solution["order_rows"], f"{mode}: the scenario must fund, convert and buy"
         assert [row["mode"] for row in solution["conversions"]] == [mode], solution["conversions"]
 
     manual, automatic = fx_plan_by_mode["manual"], fx_plan_by_mode["automatic"]
-    assert manual["primary_solution"]["fx_actions"] == automatic["primary_solution"]["fx_actions"]
     assert _without_numbering(manual["primary_solution"]) == _without_numbering(automatic["primary_solution"])
     assert manual["scenario_basis"] == automatic["scenario_basis"]
 
 
-def test_conversion_mode_conversion_aggregates_the_fx_actions(fx_plan_by_mode):
-    """The published conversion is the EUR→USD one at broker-one, built from every FX action.
+def test_conversion_mode_publishes_one_conversion_per_decision(fx_plan_by_mode):
+    """The published conversion is the EUR→USD one at broker-one, the engine's one FX decision for that pair, in either mode.
 
-    Its debit and spread are the exact sums of the actions', its credit the sum
-    of their posted credits, and each action names it — read off the live
-    result, in either mode.
+    Since A2 the engine decides FX once per Broker and pair, and since contract 2.0.0 the conversion is that decision: its
+    debit, posted credit and spread are read straight off the live result.
     """
     for mode, wire in fx_plan_by_mode.items():
         solution = wire["primary_solution"]
+        assert "fx_actions" not in solution
         (conversion,) = solution["conversions"]
         assert conversion["conversion_id"] == f"conversion:{_BROKER_ONE_ID}:EUR:USD", mode
         assert (conversion["broker_id"], conversion["source_debit"]["currency"], conversion["destination_credit"]["currency"]) == (_BROKER_ONE_ID, "EUR", "USD")
-        actions = solution["fx_actions"]
-        assert conversion["fx_action_ids"] == [action["action_id"] for action in actions]
-        assert {action["conversion_id"] for action in actions} == {conversion["conversion_id"]}
-        assert all("sequence" not in action for action in actions), actions
-        assert Fraction(Decimal(conversion["source_debit"]["amount"])) == sum(Fraction(Decimal(action["source_debit"]["amount"])) for action in actions)
-        assert Fraction(Decimal(conversion["destination_credit"]["amount"])) == sum(Fraction(Decimal(action["destination_credit"]["amount"])) for action in actions)
-        assert _wire_exact(conversion["spread_loss"]["value"]) == sum(_wire_exact(action["spread_loss"]["value"]) for action in actions)
+        assert "fx_action_ids" not in conversion
         assert _wire_exact(conversion["spread_loss"]["value"]) > 0, "a 4% spread must cost something"
 
 
@@ -999,7 +1173,7 @@ def test_manual_conversion_reaching_an_exact_credit_tie_still_plans():
     tie_quanta = Fraction(Decimal("25.00")) / minor_unit["EUR"]
     assert tie_quanta.denominator == 1
     assert (tie_quanta * minor_unit["EUR"] * rate / minor_unit["USD"]) % 1 == Fraction(1, 2)
-    fx_decision_id = exact_decision_id("fx_debit", f"{_ASSET_ONE_ROUTE_ID}:EUR")
+    fx_decision_id = fx_id(scenario, source="EUR")
     (fx_access,) = [access for access in build_exact_policy_view(scenario, purpose="primary").decisions if access.decision_id == fx_decision_id]
     assert fx_access.mode == "mutable"
     assert fx_access.lower_quanta <= tie_quanta <= fx_access.upper_quanta
@@ -1012,9 +1186,9 @@ def test_manual_conversion_reaching_an_exact_credit_tie_still_plans():
 
     wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(result, mode="json", by_alias=True)
     solution = wire["primary_solution"]
-    assert solution["funding_actions"] and solution["fx_actions"] and solution["order_rows"], "the plan must fund, convert and buy"
+    assert solution["funding_actions"] and solution["conversions"] and solution["order_rows"], "the plan must fund, convert and buy"
     usd_minor_unit = _published_minor_unit(wire, "USD")
-    for action in solution["fx_actions"]:
+    for action in solution["conversions"]:
         debit, credit = action["source_debit"], action["destination_credit"]
         assert (debit["currency"], credit["currency"]) == ("EUR", "USD"), action
         assert Decimal(credit["amount"]) == (Decimal(debit["amount"]) * Decimal("1.1298")).quantize(usd_minor_unit, rounding=ROUND_FLOOR), action
@@ -1077,8 +1251,8 @@ _FX_RATE_INCONSISTENT_CHF_USD = {
 
 
 def _fx_actions(wire: dict) -> list[tuple[str, str, str, str]]:
-    """Every published FX action as ``(source currency, debit, destination currency, credit)``."""
-    return [(action["source_debit"]["currency"], action["source_debit"]["amount"], action["destination_credit"]["currency"], action["destination_credit"]["amount"]) for action in wire["primary_solution"]["fx_actions"]]
+    """Every published conversion as ``(source currency, debit, destination currency, credit)``."""
+    return [(action["source_debit"]["currency"], action["source_debit"]["amount"], action["destination_credit"]["currency"], action["destination_credit"]["amount"]) for action in wire["primary_solution"]["conversions"]]
 
 
 def _fx_orders(wire: dict) -> list[tuple[str, str, str]]:
@@ -1104,7 +1278,7 @@ def _fx_eur_usd_residual(wire: dict, currency: str, spread: str) -> Fraction:
     """
     kept = 1 - Fraction(Decimal(spread))
     residual = Fraction(0)
-    for action in wire["primary_solution"]["fx_actions"]:
+    for action in wire["primary_solution"]["conversions"]:
         debit, credit = action["source_debit"], action["destination_credit"]
         if credit["currency"] == currency:
             exact = Fraction(Decimal(debit["amount"])) * kept * _FX_EUR_USD_RATES[(debit["currency"], credit["currency"])]
@@ -1371,7 +1545,7 @@ def _rd_rounding_violations(payload: dict, wire: dict) -> list[str]:
         return [*violations, "no primary solution"]
 
     val = _rd_value_in_valuation(payload)
-    for action in solution["fx_actions"]:
+    for action in solution["conversions"]:
         debit, credit = action["source_debit"], action["destination_credit"]
         debit_amount, credit_amount = Fraction(Decimal(debit["amount"])), Fraction(Decimal(credit["amount"]))
         minor = Fraction(_published_minor_unit(wire, credit["currency"]))
@@ -1515,7 +1689,7 @@ def test_rounding_direction_cross_rate_inside_the_coherence_band_converts_at_the
     assert (wire["proof"]["kind"], wire["stop_reason"]) == ("optimal_proven", "completed")
     assert _fx_actions(wire) == [("RON", "100", "USD", "21.83")]
     assert [_order_summary(row) for row in wire["primary_solution"]["order_rows"]] == [("buy", "whole_quantity", Fraction(1), "asset_unit")]
-    (action,) = wire["primary_solution"]["fx_actions"]
+    (action,) = wire["primary_solution"]["conversions"]
     spot, effective = action["spot_rate"], action["effective_rate"]
     assert (spot["source_currency"], spot["destination_currency"], _wire_exact(spot["value"])) == ("RON", "USD", rates["RON/USD"])
     assert (effective["source_currency"], effective["destination_currency"], _wire_exact(effective["value"])) == ("RON", "USD", Fraction(31, 142))
@@ -1823,7 +1997,7 @@ def test_exhaustive_oracle_is_test_only():
 # A field equal to its default may be omitted; a fee schedule without money
 # takes the route's quote currency (F1-extended, plan §3).
 # --------------------------------------------------------------------------
-_CANDIDATE_MAX_FIXTURE = "pac_plan_request.candidate-max.v2.json"
+_CANDIDATE_MAX_FIXTURE = "pac_plan_request.candidate-max.2-0-0.json"
 _BROKER_ONE_CAPABILITY_ID = "cap-broker-one-eur-whole"
 _RATE_SCHEDULE_ID = "fee-broker-one-rate-buy"
 # SCIP's own floats: compared with a tolerance, never exactly.
@@ -2003,7 +2177,7 @@ def test_solver_infeasibility_contradicted_by_the_exact_zero_plan_raises(monkeyp
     normalized = normalize_pac_plan(request)
     assert normalized.ready, f"PREMISE: the request normalizes, issues {[issue.code for issue in normalized.issues]}"
     scenario = normalized.normalized
-    zero = planner._zero_candidate_evaluation(scenario, build_exact_policy_view(scenario, purpose="primary"))
+    zero = evaluate_do_nothing(scenario, build_exact_policy_view(scenario, purpose="primary"))
     assert (zero.candidate_valid, zero.feasible) == (True, True), f"PREMISE: the do-nothing plan is valid and feasible, conflicts {zero.conflict_codes}"
 
     real_solve = planner.solve_policy_program
@@ -2042,7 +2216,7 @@ def test_huge_amounts_never_turn_a_feasible_zero_plan_into_proven_infeasibility(
     normalized = normalize_pac_plan(request)
     assert normalized.ready, f"PREMISE: the scaled request normalizes, issues {[issue.code for issue in normalized.issues]}"
     scenario = normalized.normalized
-    zero = planner._zero_candidate_evaluation(scenario, build_exact_policy_view(scenario, purpose="primary"))
+    zero = evaluate_do_nothing(scenario, build_exact_policy_view(scenario, purpose="primary"))
     assert (zero.candidate_valid, zero.feasible) == (True, True), f"PREMISE: the do-nothing plan is valid and feasible, conflicts {zero.conflict_codes}"
 
     try:
@@ -2057,3 +2231,382 @@ def test_huge_amounts_never_turn_a_feasible_zero_plan_into_proven_infeasibility(
         assert isinstance(outcome, SolverInfeasibilityContradictedError), repr(outcome)
     else:
         _revalidate(outcome)
+
+
+# --------------------------------------------------------------------------
+# A3 step 5 (project 67), M20: «no solution with these limits» is decided after the calculation, without a second search
+# --------------------------------------------------------------------------
+
+
+def _scenario_with_entry_limit(*, minimum: str | None = "10000", cash_maximum: str | None = None):
+    """The incumbent payload's scenario (EUR50 against an EUR10 unit) with a limit on its one Asset or its one cash cell.
+
+    A minimum of EUR10000 on the Asset cannot be reached with EUR50: the model has no solution *because of the limit*.
+    """
+    scenario = normalize_pac_plan(_validated(_incumbent_payload())).normalized
+    (weight,) = scenario.target_weights
+    if minimum is not None:
+        scenario = replace(scenario, target_weights=(replace(weight, minimum=ExactLimit("amount", R(int(minimum)))),))
+    if cash_maximum is not None:
+        (cash,) = scenario.existing_cash
+        scenario = replace(scenario, cash_entries=(ExactCashEntry(broker_id=cash.broker_id, currency=cash.selected.currency, minimum=None, maximum=ExactLimit("amount", R(int(cash_maximum)))),))
+    return scenario
+
+
+@pytest.mark.parametrize("name", sorted(ref.GRID_VARIANTS) + sorted(ref.CASES))
+def test_zero_plan_passes_the_replay_without_limits_or_required_minimum(name):
+    """M20: a request with no limit and no required minimum never is ``ready_infeasible``, because doing nothing is a valid
+    and feasible plan. This is the verification of 12/11 turned into a test, over every case of the reference corpus and every
+    variant of the two grids. A new rule that obliges an operation turns it red, and the rule of M20 no longer holds."""
+    builders = {**ref.GRID_VARIANTS, **ref.CASES}
+    payload = builders[name]()
+    assert not ref.uses_required_minimum(payload)
+    scenario = normalize_pac_plan(_validated(payload)).normalized
+    evaluation = evaluate_do_nothing(scenario, build_exact_policy_view(scenario, purpose="primary"))
+    assert (evaluation.candidate_valid, evaluation.feasible) == (True, True), evaluation.conflict_codes
+
+
+def test_infeasible_with_limits_lists_the_limited_entries_and_no_incumbent_never_does():
+    """The planner reports which entries carry a limit only when SCIP proves there is no plan: ``ready_infeasible`` and at
+    least one limit. A search that merely ran out of time (``ready_no_incumbent``) never gets the list, nor does a plan, nor
+    a scenario with no limit (which, with M19, is never ``ready_infeasible``). The list is the planner's own; the wire result
+    carries it as ``allocation.bounds_unsatisfiable``, one issue per entry."""
+    scenario = _scenario_with_entry_limit(minimum="10000", cash_maximum="20")
+    report = planner.plan_exact_scenario(scenario, solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+    assert isinstance(report.result, PacPlannerReadyInfeasibleResult)
+    assert [entry.key for entry in report.limited_entries] == [f"asset:{scenario.target_weights[0].asset_id}", f"cash:{scenario.existing_cash[0].broker_id}:EUR"]
+
+    timed_out = planner.plan_exact_scenario(scenario, solver_time_budget_seconds=0.0)
+    assert isinstance(timed_out.result, PacPlannerReadyNoIncumbentResult)
+    assert timed_out.limited_entries == ()
+
+    feasible = planner.plan_exact_scenario(_scenario_with_entry_limit(minimum=None, cash_maximum="40"), solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+    assert isinstance(feasible.result, (PacPlannerReadyIncumbentResult, PacPlannerReadyNoOpResult))
+    assert feasible.limited_entries == ()
+
+
+def test_planner_solves_once_and_checks_a_prudent_infeasible_once_on_the_wide_model(monkeypatch):
+    """M20: no second search to find out whether the limits are the cause. ``solve_policy_program`` runs once for a request
+    with a plan. Lot ZB of project 67 (specification §16.16): the model is prudent, so when it closes infeasible the
+    planner solves the wide model once, the one whose «infeasible» is a proof; nothing more."""
+    calls = []
+    real_solve = planner.solve_policy_program
+
+    def counting_solve(program, *args, **kwargs):
+        calls.append(program)
+        return real_solve(program, *args, **kwargs)
+
+    monkeypatch.setattr(planner, "solve_policy_program", counting_solve)
+    report = planner.plan_exact_scenario(_scenario_with_entry_limit(), solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+    assert isinstance(report.result, PacPlannerReadyInfeasibleResult)
+    assert [program.outer for program in calls] == [False, True]
+
+    calls.clear()
+    feasible = planner.plan_exact_scenario(_scenario_with_entry_limit(minimum=None, cash_maximum="40"), solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+    assert isinstance(feasible.result, (PacPlannerReadyIncumbentResult, PacPlannerReadyNoOpResult))
+    assert [program.outer for program in calls] == [False]
+
+
+def test_a_pac_plan_of_the_wide_model_is_published_not_proven_and_roundtrips(monkeypatch):
+    """Lot ZB of project 67 on the PAC: when the prudent model closes infeasible, the PAC's plan of the wide model is
+    published, not proven, and the result survives the PAC's output union strictly. The prudent model is made infeasible
+    here by one row, so the wide one (the same scenario, with no margin) holds the plan the PAC would have published."""
+    real_compile = planner.compile_policy_program
+    compiled = []
+
+    def prudent_infeasible(scenario, view, **kwargs):
+        program = real_compile(scenario, view, **kwargs)
+        compiled.append(kwargs.get("outer", False))
+        if not kwargs.get("outer", False):
+            zero = program.model.addVar(vtype="C", lb=0.0, ub=0.0, name="test_zero")
+            program.model.addCons(zero >= 1, name="test_prudent_infeasible")
+        return program
+
+    monkeypatch.setattr(planner, "compile_policy_program", prudent_infeasible)
+    scenario = normalize_pac_plan(_validated(_incumbent_payload())).normalized
+    result = planner.plan_exact_scenario(scenario, solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS).result
+    assert compiled == [False, True]
+    assert isinstance(result, (PacPlannerReadyIncumbentResult, PacPlannerReadyNoOpResult))
+    assert result.proof.kind == "not_proven"
+    assert PAC_PLAN_OUTPUT_ADAPTER.validate_json(PAC_PLAN_OUTPUT_ADAPTER.dump_json(result), strict=True) == result
+
+
+def test_a_limit_a_thousandth_under_a_reachable_value_never_makes_the_run_fail():
+    """A3 fix: an Asset in USD bought by amount (FX 1.085) and an EUR maximum less than a thousandth under a value the plan can
+    reach. SCIP's relative row tolerance would let it buy the overshooting cents and the replay would raise
+    ``ExactReplayRejectedError`` (the user's «run failed»); the integer bound keeps it a plan, and a plan within the maximum."""
+    from backend.test_scripts.test_services.test_pac_planner_evaluator import _MAXIMUM_JUST_UNDER_IT, _usd_by_amount_scenario  # noqa: PLC0415 — scenario builders live with the evaluator suite
+
+    scenario = _usd_by_amount_scenario(_MAXIMUM_JUST_UNDER_IT)
+    report = planner.plan_exact_scenario(scenario, solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+    assert isinstance(report.result, PacPlannerReadyIncumbentResult)
+    wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(report.result, mode="json", by_alias=True)
+    published = ref.wire_fraction(wire["primary_solution"]["asset_rows"][0]["final_value"])
+    assert published <= Fraction(_MAXIMUM_JUST_UNDER_IT.numerator, _MAXIMUM_JUST_UNDER_IT.denominator)
+
+
+# --------------------------------------------------------------------------
+# A4 steps 3 and 5 (project 67): limits from the request, T11, T12, M20
+# --------------------------------------------------------------------------
+
+
+def _limited_request(*entries: dict, cash: str = "50.00", unit_price: str | None = None) -> dict:
+    """The incumbent payload (EUR50, one whole-unit Asset at EUR10) with ``entries`` as its target entries."""
+    payload = _incumbent_payload()
+    for row in payload["existing_cash"]:
+        row["available"]["amount"] = cash
+        row["selected"]["amount"] = cash
+    if unit_price is not None:
+        payload["assets"][0]["quote"]["amount"] = unit_price
+    payload["target_weights"] = list(entries)
+    return payload
+
+
+def _codes(result) -> list[str]:
+    return [issue.code for issue in result.issues]
+
+
+def test_sum_of_minimums_above_the_reference_is_refused_with_the_entry_names(monkeypatch):
+    """T12, from the request, before SCIP: a minimum of EUR100 on the Asset and one of EUR30 on the Broker's cash cell add up
+    to more than the EUR50 the plan can reach. The result is ``invalid``, one issue per entry that counts, each naming its
+    entry; the solver never runs."""
+    calls = []
+    monkeypatch.setattr(planner, "solve_policy_program", lambda *args, **kwargs: calls.append(args))
+    payload = _limited_request(asset_entry(_ASSET_ONE_ID, "1", minimum=amount_limit("100")), cash_entry("broker-one", "EUR", minimum=amount_limit("30")))
+
+    result = plan_pac_allocation(_validated(payload))
+
+    assert isinstance(result, PacPlannerInvalidResult)
+    issues = [issue for issue in result.issues if issue.code == "allocation.bounds_min_sum_exceeds_reference"]
+    assert sorted((issue.path.entity_kind, issue.path.entity_id) for issue in issues) == [("asset", _ASSET_ONE_ID), ("cash", "broker-one:EUR")]
+    assert calls == []
+    _revalidate(result)
+
+
+def test_cash_maximum_request_invests_the_excess():
+    """T11, PAC form, from request to result: EUR50 of cash, a whole-unit Asset at EUR10 and a maximum of EUR10 on the cash cell.
+    The plan buys at least four units and leaves at most EUR10 in the cell."""
+    payload = _limited_request(asset_entry(_ASSET_ONE_ID, "1"), cash_entry("broker-one", "EUR", maximum=amount_limit("10")))
+
+    result = plan_pac_allocation(_validated(payload), solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+
+    assert isinstance(result, PacPlannerReadyIncumbentResult), _codes(result)
+    wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(result, mode="json", by_alias=True)
+    (cell,) = [row for row in wire["primary_solution"]["ledger_rows"] if (row["broker_id"], row["currency"]) == ("broker-one", "EUR")]
+    assert Decimal(cell["final_spendable"]) <= Decimal("10")
+    assert sum(Decimal(row["cash_debit"]["amount"]) for row in wire["primary_solution"]["order_rows"]) >= Decimal("40")
+
+
+def test_infeasible_plan_lists_every_entry_with_a_limit():
+    """M20, §10.2: ``ready_infeasible`` with limits in the request carries one ``allocation.bounds_unsatisfiable`` per entry
+    that has a limit, severity ``warning``, kind ``constraint``, the path on the entry. EUR50 of cash and units of EUR20: a
+    minimum of EUR45 on the Asset passes the checks (45 <= 50) but cannot be bought (three units cost EUR60)."""
+    payload = _limited_request(
+        asset_entry(_ASSET_ONE_ID, "1", minimum=amount_limit("45")),
+        cash_entry("broker-one", "EUR", maximum=amount_limit("5")),
+        unit_price="20.00",
+    )
+
+    result = plan_pac_allocation(_validated(payload), solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+
+    assert isinstance(result, PacPlannerReadyInfeasibleResult), _codes(result)
+    listed = [issue for issue in result.issues if issue.code == "allocation.bounds_unsatisfiable"]
+    assert sorted((issue.path.entity_kind, issue.path.entity_id) for issue in listed) == [("asset", _ASSET_ONE_ID), ("cash", "broker-one:EUR")]
+    assert {(issue.severity, issue.kind) for issue in listed} == {("warning", "constraint")}
+    _revalidate(result)
+
+
+def test_no_incumbent_never_carries_bounds_unsatisfiable():
+    """M20: a search that ran out of time says nothing about the limits."""
+    payload = _limited_request(asset_entry(_ASSET_ONE_ID, "1", minimum=amount_limit("45")), unit_price="20.00")
+
+    result = plan_pac_allocation(_validated(payload), solver_time_budget_seconds=0.0)
+
+    assert isinstance(result, PacPlannerReadyNoIncumbentResult)
+    assert "allocation.bounds_unsatisfiable" not in _codes(result)
+
+
+def test_asset_minimum_obliges_a_buy_where_required_minimum_did():
+    """The case of ``_forced_min_payload`` redone with the Asset's minimum (M19): EUR5 of cash against a EUR10 unit, a minimum of
+    EUR10 on the Asset. Same ``ready_infeasible`` with the solver's proof, and the issue names the entry. (The sum check passes
+    only because the minimum is a share of nothing: a minimum of EUR10 over EUR5 of cash would be refused as a sum first, so
+    the cash is EUR20 and the unit EUR30.)"""
+    payload = _limited_request(asset_entry(_ASSET_ONE_ID, "1", minimum=amount_limit("10")), cash="20.00", unit_price="30.00")
+
+    result = plan_pac_allocation(_validated(payload), solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+
+    assert isinstance(result, PacPlannerReadyInfeasibleResult), _codes(result)
+    assert result.proof.kind == "infeasibility_proven" and result.proof.proof_source == "solver_status"
+    assert [(issue.path.entity_kind, issue.path.entity_id) for issue in result.issues if issue.code == "allocation.bounds_unsatisfiable"] == [("asset", _ASSET_ONE_ID)]
+
+
+def test_result_publishes_the_limit_rows_and_the_new_ledger_columns():
+    """Contract §6.2, §6.5: the Asset row says its minimum and maximum (amounts, ``null`` when unset), a cash entry with a limit has
+    a row of its own with its final spendable cash in the valuation currency, and the ledger rows carry the transfer and foreign
+    withholding columns, all zero in a PAC (it has no transfers and no foreign tax)."""
+    payload = _limited_request(asset_entry(_ASSET_ONE_ID, "1", minimum=amount_limit("20")), cash_entry("broker-one", "EUR", maximum=amount_limit("10")))
+
+    result = plan_pac_allocation(_validated(payload), solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+
+    assert isinstance(result, PacPlannerReadyIncumbentResult), _codes(result)
+    wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(result, mode="json", by_alias=True)["primary_solution"]
+    (asset,) = wire["asset_rows"]
+    assert asset["minimum"]["currency"] == "EUR" and Decimal(asset["minimum"]["value"]["value"]) == Decimal("20")
+    assert asset["maximum"] is None
+    (cash,) = wire["cash_rows"]
+    assert (cash["broker_id"], cash["currency"], cash["minimum"]) == ("broker-one", "EUR", None)
+    assert Decimal(cash["maximum"]["value"]["value"]) == Decimal("10")
+    assert Decimal(cash["final_value"]["value"]["value"]) <= Decimal("10")
+    assert all((row["transfer_in"], row["transfer_out"], row["foreign_withholding_tax"]) == ("0", "0", "0") for row in wire["ledger_rows"])
+    assert Decimal(wire["costs"]["foreign_withholding_tax"]["value"]["value"]) == 0
+    _revalidate(result)
+
+
+def test_result_without_limits_has_no_cash_rows_and_null_asset_limits():
+    result = plan_pac_allocation(_validated(_incumbent_payload()), solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+
+    assert isinstance(result, PacPlannerReadyIncumbentResult), _codes(result)
+    wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(result, mode="json", by_alias=True)["primary_solution"]
+    assert wire["cash_rows"] == []
+    assert all((row["minimum"], row["maximum"]) == (None, None) for row in wire["asset_rows"])
+
+
+# --------------------------------------------------------------------------
+# V2 (project 67) — the planner reports its phases
+# --------------------------------------------------------------------------
+_PLANNER_PHASES = ("validate", "model", "search", "verify", "report")
+# The cap of progress messages per item the platform forwards (V1 of project 67).
+_PROGRESS_CAP = TOOL_PROGRESS_MESSAGE_CAP
+
+
+class _Recorder:
+    """A progress function that only records what it is told, as ``report_progress(phase, step=None, total=None)``."""
+
+    def __init__(self) -> None:
+        self.messages: list[tuple[str, int | None, int | None]] = []
+
+    def __call__(self, phase: str, step: int | None = None, total: int | None = None) -> None:
+        self.messages.append((phase, step, total))
+
+
+def _pac_buying_request():
+    payload = _pac_request()
+    for cash in payload["existing_cash"]:
+        cash["available"]["amount"] = "50.00"
+        cash["selected"]["amount"] = "50.00"
+    return PAC_PLAN_INPUT_ADAPTER.validate_python(payload)
+
+
+def test_pac_plan_reports_its_phases_in_order() -> None:
+    """V2 test 1: validate, model, search over the five named stages of the PAC cascade («2 of 5»), verify, report."""
+    recorder = _Recorder()
+    plan_pac_allocation(_pac_buying_request(), progress=recorder)
+    assert recorder.messages == [("validate", None, None), ("model", None, None), *(("search", step, 5) for step in range(1, 6)), ("verify", None, None), ("report", None, None)]
+
+
+@pytest.mark.parametrize(("fidelity", "total"), [pytest.param(reb.BALANCED, 3, id="weighted"), pytest.param({"kind": "target_first"}, 4, id="target-first")])
+def test_rebalancer_search_counts_the_score_then_the_tie_breaks(fidelity: dict, total: int) -> None:
+    """V2 test 2: the search counts the stages of the program by name: the score (or the chain's two) first, then the two
+    named tie-breaks; the canonical vector, one stage per decision, is not counted."""
+    recorder = _Recorder()
+    plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.t4(fidelity=fidelity)), progress=recorder)
+    searches = [message for message in recorder.messages if message[0] == "search"]
+    assert searches == [("search", step, total) for step in range(1, total + 1)]
+
+
+@pytest.mark.parametrize("plan", [pytest.param(lambda progress: plan_pac_allocation(_pac_buying_request(), progress=progress), id="pac"), pytest.param(lambda progress: plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.t4()), progress=progress), id="rebalancer-t4")])
+def test_a_plan_without_reporter_is_unchanged(plan) -> None:
+    """V2 test 3: the same result, field by field, with and without the progress function."""
+    assert plan(_Recorder()).model_dump(mode="json") == plan(None).model_dump(mode="json")
+
+
+def test_validation_failure_reports_only_the_validate_phase() -> None:
+    """V2 test 4: a result without a plan stops at the phase it is born in: a request without holdings, only ``validate``."""
+    payload = reb.t4()
+    payload["holdings"] = []
+    recorder = _Recorder()
+    result = plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(payload), progress=recorder)
+    assert result.result_state == "needs_input"
+    assert recorder.messages == [("validate", None, None)]
+
+
+@pytest.mark.parametrize("plan", [pytest.param(lambda progress: plan_pac_allocation(_pac_buying_request(), progress=progress), id="pac"), pytest.param(lambda progress: plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.t4()), progress=progress), id="rebalancer-t4")])
+def test_progress_messages_carry_only_a_phase_and_two_counts(plan) -> None:
+    """V2 test 5: each message is one of the five phase names and at most two whole counts, never a datum of the scenario
+    or of the result; tests 6: under the cap, no (phase, step) twice."""
+    recorder = _Recorder()
+    plan(recorder)
+    assert recorder.messages
+    for phase, step, total in recorder.messages:
+        assert phase in _PLANNER_PHASES
+        assert all(value is None or (type(value) is int and value >= 1) for value in (step, total))
+        assert (step is None) == (total is None) == (phase != "search")
+    assert len(recorder.messages) <= _PROGRESS_CAP
+    assert len({(phase, step) for phase, step, _total in recorder.messages}) == len(recorder.messages)
+    assert list(dict.fromkeys(phase for phase, _step, _total in recorder.messages)) == list(_PLANNER_PHASES)
+
+
+# --------------------------------------------------------------------------
+# The Rebalancer's exposure covers the whole portfolio, with a cash row (developer's decision 4 of 13/11, project 67)
+# --------------------------------------------------------------------------
+
+
+def test_rebalancer_exposure_is_on_the_whole_portfolio_with_a_cash_row() -> None:
+    """T4 (A 5 000, B 4 800, cash 200, F = 10 000; buy 195 of B with a 5 EUR fee, W = 9 995): every dimension has its
+    categories and exactly one ``cash`` row. Before is on F, the target on the items' weights (not renormalised), after on
+    W; the cash row is present even where its target and its final value are zero."""
+    result = plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.t4()))
+    assert result.result_state == "ready_incumbent"
+    rows = result.primary_solution.exposure_rows
+    expected = {"before": Fraction(9_800, 10_000), "target": Fraction(1), "after": Fraction(9_995, 9_995)}
+    expected_cash = {"before": Fraction(200, 10_000), "target": Fraction(0), "after": Fraction(0)}
+    for dimension in ("asset_type", "sector", "geography"):
+        dimension_rows = [row for row in rows if row.dimension == dimension]
+        (cash,) = [row for row in dimension_rows if row.kind == "cash"]
+        (category,) = [row for row in dimension_rows if row.kind == "category"]
+        for row, values in ((category, expected), (cash, expected_cash)):
+            read = {"before": _available(row.before_weight), "target": _exact(row.target_weight), "after": _available(row.final_weight)}
+            assert read == values, (dimension, row.kind)
+    (equity,) = [row for row in rows if row.dimension == "asset_type" and row.kind == "category"]
+    assert (equity.category_id, equity.label) == ("equity", "Equity")
+    assert not hasattr(next(row for row in rows if row.kind == "cash"), "category_id")
+
+
+def test_rebalancer_exposure_cash_row_reads_the_cash_items() -> None:
+    """A cash item with a weight (A 0.50, B 0.48, cash 0.02 on T4): the cash row's target is the cash item's weight, the
+    categories hold the Assets' weights as they are, and each base still sums to one, as the schema checks it."""
+    payload = reb.t4()
+    payload["target_weights"] = [
+        {"kind": "asset", "asset_id": "asset-a", "weight": "0.5", "minimum": None, "maximum": None},
+        {"kind": "asset", "asset_id": "asset-b", "weight": "0.48", "minimum": None, "maximum": None},
+        {"kind": "cash", "broker_id": reb.BROKER, "currency": "EUR", "weight": "0.02", "minimum": None, "maximum": None},
+    ]
+    result = plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(payload))
+    assert result.result_state in ("ready_incumbent", "ready_no_op"), result.issues
+    solution = result.primary_solution
+    accounts = solution.plan_accounts
+    initial, final = _exact(accounts.initial_wealth.value), _exact(accounts.final_wealth.value)
+    for dimension in ("asset_type", "sector", "geography"):
+        rows = [row for row in solution.exposure_rows if row.dimension == dimension]
+        (cash,) = [row for row in rows if row.kind == "cash"]
+        assert _exact(cash.target_weight) == Fraction(1, 50)
+        assert _available(cash.before_weight) == (initial - _exact(solution.accounting.current_invested.value)) / initial
+        assert _available(cash.final_weight) == (final - _exact(solution.accounting.final_invested.value)) / final
+        assert sum(_exact(row.target_weight) for row in rows) == 1
+        assert sum(_available(row.before_weight) for row in rows) == sum(_available(row.final_weight) for row in rows) == 1
+    assert REBALANCER_PLAN_OUTPUT_ADAPTER.validate_python(REBALANCER_PLAN_OUTPUT_ADAPTER.dump_python(result, mode="json")) == result
+
+
+def test_rebalancer_exposure_weight_at_a_zero_base() -> None:
+    """The report's weight: unavailable for its base's own reason at a zero base, the exact ratio otherwise."""
+    assert rebalancer_report._weight(R(5), R(0), "zero_final_wealth").reason == "zero_final_wealth"
+    assert _available(rebalancer_report._weight(R(5), R(20), "zero_final_wealth")) == Fraction(1, 4)
+
+
+def _available(value) -> Fraction:
+    assert value.kind == "available", value
+    return _exact(value.value)
+
+
+def _exact(number) -> Fraction:
+    return exact_fraction(number)

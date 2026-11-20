@@ -13,6 +13,7 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES
 
 from backend.app.services.platform.request_id import RequestIdMiddleware
 from backend.app.services.platform.security_headers import SecurityHeadersMiddleware
@@ -42,8 +43,9 @@ MIDDLEWARE_STACK: tuple[MiddlewareEntry, ...] = (
     # gzip: a first visit drops from ~7.5 MB to ~2.8 MB. Starlette leaves images, fonts,
     # archives, Server-Sent Events, 206 range replies and pre-encoded responses alone,
     # adds `Vary: Accept-Encoding`, and compresses bodies >= 128 KiB off the event loop.
-    # Level 6 compresses as well as 9 on these bodies for a third of the CPU.
-    MiddlewareEntry("gzip", GZipMiddleware, {"minimum_size": 1024, "compresslevel": 6}),
+    # Level 6 compresses as well as 9 on these bodies for a third of the CPU. JSON lines (the Tool stream, lot V1 of
+    # project 67) are left alone too: compressed, a line would wait in the compressor instead of reaching the browser.
+    MiddlewareEntry("gzip", GZipMiddleware, {"minimum_size": 1024, "compresslevel": 6, "exclude_content_types": (*DEFAULT_EXCLUDED_CONTENT_TYPES, "application/x-ndjson")}),
     # Configure CORS
     MiddlewareEntry("cors", CORSMiddleware, {"allow_credentials": True, "allow_methods": ["*"], "allow_headers": ["*"]}),
 )

@@ -1,0 +1,3515 @@
+{
+  "request": {
+    "operation": "plan",
+    "snapshot": {
+      "snapshot_id": "draft:4",
+      "draft_revision": 4,
+      "captured_at": "2026-11-16T09:11:30.411Z"
+    },
+    "as_of": "2026-11-16",
+    "valuation_currency": "EUR",
+    "provenance": [
+      {
+        "kind": "domain_copy",
+        "provenance_id": "copy:23/source:market-data",
+        "domain": "market_data",
+        "source_ref": "enc:assets_2bprice_5fhistory",
+        "captured_at": "2026-11-16T09:11:24.269Z"
+      },
+      {
+        "kind": "domain_copy",
+        "provenance_id": "copy:24/source:market-data",
+        "domain": "market_data",
+        "source_ref": "enc:assets_2bprice_5fhistory",
+        "captured_at": "2026-11-16T09:11:24.269Z"
+      },
+      {
+        "kind": "domain_copy",
+        "provenance_id": "copy:1/source:broker-domain",
+        "domain": "broker",
+        "source_ref": "enc:brokers_2bbroker_5fuser_5faccess_2btransactions",
+        "captured_at": "2026-11-16T09:11:23.847Z"
+      },
+      {
+        "kind": "domain_copy",
+        "provenance_id": "copy:1/source:portfolio-ledger",
+        "domain": "portfolio",
+        "source_ref": "enc:transactions_2bbroker_5fuser_5faccess",
+        "captured_at": "2026-11-16T09:11:23.847Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:7",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:8",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:9",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:10",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:11",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:12",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:13",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:14",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:15",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:16",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:17",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:18",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:19",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:20",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194Z"
+      },
+      {
+        "kind": "domain_copy",
+        "provenance_id": "copy:71/source:portfolio-ledger",
+        "domain": "portfolio",
+        "source_ref": "enc:transactions_2bbroker_5fuser_5faccess",
+        "captured_at": "2026-11-16T09:11:24.269Z"
+      }
+    ],
+    "fx_rates": {
+      "EUR/USD": "1.120124108"
+    },
+    "assets": [
+      {
+        "asset_id": "asset:1",
+        "identity": {
+          "kind": "domain_asset",
+          "source_asset_id": "1",
+          "name": "Apple Inc.",
+          "ticker": "AAPL",
+          "asset_class": "stock"
+        },
+        "quote": {
+          "amount": "286.9415349194",
+          "currency": "USD",
+          "quote_base_quantity": "1",
+          "provenance_id": "copy:23/source:market-data"
+        },
+        "exposures": [
+          {
+            "dimension": "asset_type",
+            "category_id": "STOCK",
+            "label": "STOCK",
+            "weight": "1",
+            "provenance_id": "copy:24/source:market-data"
+          },
+          {
+            "dimension": "geography",
+            "category_id": "USA",
+            "label": "USA",
+            "weight": "1",
+            "provenance_id": "copy:24/source:market-data"
+          }
+        ]
+      },
+      {
+        "asset_id": "asset:6",
+        "identity": {
+          "kind": "domain_asset",
+          "source_asset_id": "6",
+          "name": "Bitcoin",
+          "ticker": "BTC-USD",
+          "asset_class": "crypto"
+        },
+        "quote": {
+          "amount": "12700.9205852454",
+          "currency": "USD",
+          "quote_base_quantity": "1",
+          "provenance_id": "copy:23/source:market-data"
+        },
+        "exposures": [
+          {
+            "dimension": "asset_type",
+            "category_id": "CRYPTO",
+            "label": "CRYPTO",
+            "weight": "1",
+            "provenance_id": "copy:24/source:market-data"
+          },
+          {
+            "dimension": "sector",
+            "category_id": "Other",
+            "label": "Other",
+            "weight": "1",
+            "provenance_id": "copy:24/source:market-data"
+          }
+        ]
+      },
+      {
+        "asset_id": "asset:7",
+        "identity": {
+          "kind": "domain_asset",
+          "source_asset_id": "7",
+          "name": "Ethereum",
+          "ticker": "ETH-USD",
+          "asset_class": "crypto"
+        },
+        "quote": {
+          "amount": "805.827399467312",
+          "currency": "USD",
+          "quote_base_quantity": "1",
+          "provenance_id": "copy:23/source:market-data"
+        },
+        "exposures": [
+          {
+            "dimension": "asset_type",
+            "category_id": "CRYPTO",
+            "label": "CRYPTO",
+            "weight": "1",
+            "provenance_id": "copy:24/source:market-data"
+          },
+          {
+            "dimension": "sector",
+            "category_id": "Other",
+            "label": "Other",
+            "weight": "1",
+            "provenance_id": "copy:24/source:market-data"
+          }
+        ]
+      },
+      {
+        "asset_id": "asset:2",
+        "identity": {
+          "kind": "domain_asset",
+          "source_asset_id": "2",
+          "name": "Microsoft Corporation",
+          "ticker": "MSFT",
+          "asset_class": "stock"
+        },
+        "quote": {
+          "amount": "324.584679909439",
+          "currency": "USD",
+          "quote_base_quantity": "1",
+          "provenance_id": "copy:23/source:market-data"
+        },
+        "exposures": [
+          {
+            "dimension": "asset_type",
+            "category_id": "STOCK",
+            "label": "STOCK",
+            "weight": "1",
+            "provenance_id": "copy:24/source:market-data"
+          },
+          {
+            "dimension": "geography",
+            "category_id": "USA",
+            "label": "USA",
+            "weight": "1",
+            "provenance_id": "copy:24/source:market-data"
+          }
+        ]
+      },
+      {
+        "asset_id": "asset:4",
+        "identity": {
+          "kind": "domain_asset",
+          "source_asset_id": "4",
+          "name": "RE Loan Milano",
+          "ticker": null,
+          "asset_class": "crowdfund"
+        },
+        "quote": {
+          "amount": "10063.5915406982",
+          "currency": "EUR",
+          "quote_base_quantity": "1",
+          "provenance_id": "copy:23/source:market-data"
+        },
+        "exposures": [
+          {
+            "dimension": "asset_type",
+            "category_id": "CROWDFUND",
+            "label": "CROWDFUND",
+            "weight": "1",
+            "provenance_id": "copy:24/source:market-data"
+          },
+          {
+            "dimension": "sector",
+            "category_id": "enc:Real_20Estate",
+            "label": "Real Estate",
+            "weight": "1",
+            "provenance_id": "copy:24/source:market-data"
+          },
+          {
+            "dimension": "geography",
+            "category_id": "ITA",
+            "label": "ITA",
+            "weight": "1",
+            "provenance_id": "copy:24/source:market-data"
+          }
+        ]
+      },
+      {
+        "asset_id": "asset:5",
+        "identity": {
+          "kind": "domain_asset",
+          "source_asset_id": "5",
+          "name": "RE Loan Roma",
+          "ticker": null,
+          "asset_class": "crowdfund"
+        },
+        "quote": {
+          "amount": "5078.55012546307",
+          "currency": "EUR",
+          "quote_base_quantity": "1",
+          "provenance_id": "copy:23/source:market-data"
+        },
+        "exposures": [
+          {
+            "dimension": "asset_type",
+            "category_id": "CROWDFUND",
+            "label": "CROWDFUND",
+            "weight": "1",
+            "provenance_id": "copy:24/source:market-data"
+          },
+          {
+            "dimension": "sector",
+            "category_id": "enc:Real_20Estate",
+            "label": "Real Estate",
+            "weight": "1",
+            "provenance_id": "copy:24/source:market-data"
+          },
+          {
+            "dimension": "geography",
+            "category_id": "ITA",
+            "label": "ITA",
+            "weight": "1",
+            "provenance_id": "copy:24/source:market-data"
+          }
+        ]
+      },
+      {
+        "asset_id": "asset:3",
+        "identity": {
+          "kind": "domain_asset",
+          "source_asset_id": "3",
+          "name": "Tesla, Inc.",
+          "ticker": "TSLA",
+          "asset_class": "stock"
+        },
+        "quote": {
+          "amount": "298.821306926382",
+          "currency": "USD",
+          "quote_base_quantity": "1",
+          "provenance_id": "copy:23/source:market-data"
+        },
+        "exposures": [
+          {
+            "dimension": "asset_type",
+            "category_id": "STOCK",
+            "label": "STOCK",
+            "weight": "1",
+            "provenance_id": "copy:24/source:market-data"
+          },
+          {
+            "dimension": "sector",
+            "category_id": "enc:Consumer_20Discretionary",
+            "label": "Consumer Discretionary",
+            "weight": "0.7",
+            "provenance_id": "copy:24/source:market-data"
+          },
+          {
+            "dimension": "sector",
+            "category_id": "Energy",
+            "label": "Energy",
+            "weight": "0.3",
+            "provenance_id": "copy:24/source:market-data"
+          },
+          {
+            "dimension": "geography",
+            "category_id": "CHN",
+            "label": "CHN",
+            "weight": "0.25",
+            "provenance_id": "copy:24/source:market-data"
+          },
+          {
+            "dimension": "geography",
+            "category_id": "DEU",
+            "label": "DEU",
+            "weight": "0.25",
+            "provenance_id": "copy:24/source:market-data"
+          },
+          {
+            "dimension": "geography",
+            "category_id": "USA",
+            "label": "USA",
+            "weight": "0.5",
+            "provenance_id": "copy:24/source:market-data"
+          }
+        ]
+      }
+    ],
+    "brokers": [
+      {
+        "broker_id": "broker:1",
+        "identity": {
+          "kind": "domain_broker",
+          "source_broker_id": "1",
+          "name": "Interactive Brokers",
+          "active": true
+        },
+        "provenance_id": "copy:1/source:broker-domain",
+        "conversion_mode": "manual",
+        "capabilities": [
+          {
+            "kind": "whole_quantity",
+            "capability_id": "broker:1/mode:EUR",
+            "quantity_unit": "asset_unit",
+            "quantity_step": "1"
+          },
+          {
+            "kind": "whole_quantity",
+            "capability_id": "broker:1/mode:USD",
+            "quantity_unit": "asset_unit",
+            "quantity_step": "1"
+          }
+        ]
+      },
+      {
+        "broker_id": "broker:2",
+        "identity": {
+          "kind": "domain_broker",
+          "source_broker_id": "2",
+          "name": "DEGIRO",
+          "active": true
+        },
+        "provenance_id": "copy:1/source:broker-domain",
+        "conversion_mode": "manual",
+        "capabilities": [
+          {
+            "kind": "whole_quantity",
+            "capability_id": "broker:2/mode:EUR",
+            "quantity_unit": "asset_unit",
+            "quantity_step": "1"
+          },
+          {
+            "kind": "whole_quantity",
+            "capability_id": "broker:2/mode:USD",
+            "quantity_unit": "asset_unit",
+            "quantity_step": "1"
+          }
+        ]
+      },
+      {
+        "broker_id": "broker:3",
+        "identity": {
+          "kind": "domain_broker",
+          "source_broker_id": "3",
+          "name": "Directa SIM",
+          "active": true
+        },
+        "provenance_id": "copy:71/source:portfolio-ledger",
+        "conversion_mode": "manual"
+      },
+      {
+        "broker_id": "broker:4",
+        "identity": {
+          "kind": "domain_broker",
+          "source_broker_id": "4",
+          "name": "eToro",
+          "active": true
+        },
+        "provenance_id": "copy:71/source:portfolio-ledger",
+        "conversion_mode": "manual"
+      },
+      {
+        "broker_id": "broker:5",
+        "identity": {
+          "kind": "domain_broker",
+          "source_broker_id": "5",
+          "name": "Coinbase",
+          "active": true
+        },
+        "provenance_id": "copy:71/source:portfolio-ledger",
+        "conversion_mode": "manual"
+      },
+      {
+        "broker_id": "broker:8",
+        "identity": {
+          "kind": "domain_broker",
+          "source_broker_id": "8",
+          "name": "Hidden Admin Broker",
+          "active": true
+        },
+        "provenance_id": "copy:71/source:portfolio-ledger",
+        "conversion_mode": "manual"
+      },
+      {
+        "broker_id": "broker:6",
+        "identity": {
+          "kind": "domain_broker",
+          "source_broker_id": "6",
+          "name": "Recrowd",
+          "active": true
+        },
+        "provenance_id": "copy:71/source:portfolio-ledger",
+        "conversion_mode": "manual"
+      }
+    ],
+    "existing_cash": [
+      {
+        "cash_id": "cash:broker:1:EUR",
+        "broker_id": "broker:1",
+        "available": {
+          "amount": "17350",
+          "currency": "EUR"
+        },
+        "selected": {
+          "amount": "17350",
+          "currency": "EUR"
+        },
+        "provenance_id": "copy:1/source:portfolio-ledger"
+      },
+      {
+        "cash_id": "cash:broker:1:USD",
+        "broker_id": "broker:1",
+        "available": {
+          "amount": "5344.53",
+          "currency": "USD"
+        },
+        "selected": {
+          "amount": "5344.53",
+          "currency": "USD"
+        },
+        "provenance_id": "copy:1/source:portfolio-ledger"
+      },
+      {
+        "cash_id": "cash:broker:2:EUR",
+        "broker_id": "broker:2",
+        "available": {
+          "amount": "8200",
+          "currency": "EUR"
+        },
+        "selected": {
+          "amount": "8200",
+          "currency": "EUR"
+        },
+        "provenance_id": "copy:1/source:portfolio-ledger"
+      },
+      {
+        "cash_id": "cash:broker:2:USD",
+        "broker_id": "broker:2",
+        "available": {
+          "amount": "0",
+          "currency": "USD"
+        },
+        "selected": {
+          "amount": "0",
+          "currency": "USD"
+        },
+        "provenance_id": "copy:1/source:portfolio-ledger"
+      }
+    ],
+    "holdings": [
+      {
+        "holding_id": "holding:asset:1:broker:1",
+        "asset_id": "asset:1",
+        "broker_id": "broker:1",
+        "custody_quantity": "17.5",
+        "economic_share": "0.4",
+        "planning_quantity": "7",
+        "quantity_unit": "asset_unit",
+        "provenance_id": "copy:71/source:portfolio-ledger"
+      },
+      {
+        "holding_id": "holding:asset:1:broker:2",
+        "asset_id": "asset:1",
+        "broker_id": "broker:2",
+        "custody_quantity": "5",
+        "economic_share": "1",
+        "planning_quantity": "5",
+        "quantity_unit": "asset_unit",
+        "provenance_id": "copy:71/source:portfolio-ledger"
+      },
+      {
+        "holding_id": "holding:asset:1:broker:3",
+        "asset_id": "asset:1",
+        "broker_id": "broker:3",
+        "custody_quantity": "13",
+        "economic_share": "1",
+        "planning_quantity": "13",
+        "quantity_unit": "asset_unit",
+        "provenance_id": "copy:71/source:portfolio-ledger"
+      },
+      {
+        "holding_id": "holding:asset:1:broker:4",
+        "asset_id": "asset:1",
+        "broker_id": "broker:4",
+        "custody_quantity": "10",
+        "economic_share": "1",
+        "planning_quantity": "10",
+        "quantity_unit": "asset_unit",
+        "provenance_id": "copy:71/source:portfolio-ledger"
+      },
+      {
+        "holding_id": "holding:asset:1:broker:5",
+        "asset_id": "asset:1",
+        "broker_id": "broker:5",
+        "custody_quantity": "1.5",
+        "economic_share": "0.4",
+        "planning_quantity": "0.6",
+        "quantity_unit": "asset_unit",
+        "provenance_id": "copy:71/source:portfolio-ledger"
+      },
+      {
+        "holding_id": "holding:asset:1:broker:8",
+        "asset_id": "asset:1",
+        "broker_id": "broker:8",
+        "custody_quantity": "1",
+        "economic_share": "1",
+        "planning_quantity": "1",
+        "quantity_unit": "asset_unit",
+        "provenance_id": "copy:71/source:portfolio-ledger"
+      },
+      {
+        "holding_id": "holding:asset:6:broker:1",
+        "asset_id": "asset:6",
+        "broker_id": "broker:1",
+        "custody_quantity": "0.05",
+        "economic_share": "0.4",
+        "planning_quantity": "0.02",
+        "quantity_unit": "asset_unit",
+        "provenance_id": "copy:71/source:portfolio-ledger"
+      },
+      {
+        "holding_id": "holding:asset:6:broker:5",
+        "asset_id": "asset:6",
+        "broker_id": "broker:5",
+        "custody_quantity": "0.1",
+        "economic_share": "0.4",
+        "planning_quantity": "0.04",
+        "quantity_unit": "asset_unit",
+        "provenance_id": "copy:71/source:portfolio-ledger"
+      },
+      {
+        "holding_id": "holding:asset:7:broker:1",
+        "asset_id": "asset:7",
+        "broker_id": "broker:1",
+        "custody_quantity": "0.002",
+        "economic_share": "0.4",
+        "planning_quantity": "0.0008",
+        "quantity_unit": "asset_unit",
+        "provenance_id": "copy:71/source:portfolio-ledger"
+      },
+      {
+        "holding_id": "holding:asset:7:broker:5",
+        "asset_id": "asset:7",
+        "broker_id": "broker:5",
+        "custody_quantity": "0.8",
+        "economic_share": "0.4",
+        "planning_quantity": "0.32",
+        "quantity_unit": "asset_unit",
+        "provenance_id": "copy:71/source:portfolio-ledger"
+      },
+      {
+        "holding_id": "holding:asset:2:broker:1",
+        "asset_id": "asset:2",
+        "broker_id": "broker:1",
+        "custody_quantity": "8",
+        "economic_share": "0.4",
+        "planning_quantity": "3.2",
+        "quantity_unit": "asset_unit",
+        "provenance_id": "copy:71/source:portfolio-ledger"
+      },
+      {
+        "holding_id": "holding:asset:2:broker:2",
+        "asset_id": "asset:2",
+        "broker_id": "broker:2",
+        "custody_quantity": "2",
+        "economic_share": "1",
+        "planning_quantity": "2",
+        "quantity_unit": "asset_unit",
+        "provenance_id": "copy:71/source:portfolio-ledger"
+      },
+      {
+        "holding_id": "holding:asset:4:broker:6",
+        "asset_id": "asset:4",
+        "broker_id": "broker:6",
+        "custody_quantity": "1",
+        "economic_share": "1",
+        "planning_quantity": "1",
+        "quantity_unit": "asset_unit",
+        "provenance_id": "copy:71/source:portfolio-ledger"
+      },
+      {
+        "holding_id": "holding:asset:5:broker:6",
+        "asset_id": "asset:5",
+        "broker_id": "broker:6",
+        "custody_quantity": "1",
+        "economic_share": "1",
+        "planning_quantity": "1",
+        "quantity_unit": "asset_unit",
+        "provenance_id": "copy:71/source:portfolio-ledger"
+      },
+      {
+        "holding_id": "holding:asset:3:broker:3",
+        "asset_id": "asset:3",
+        "broker_id": "broker:3",
+        "custody_quantity": "8",
+        "economic_share": "1",
+        "planning_quantity": "8",
+        "quantity_unit": "asset_unit",
+        "provenance_id": "copy:71/source:portfolio-ledger"
+      }
+    ],
+    "target_weights": [
+      {
+        "kind": "asset",
+        "asset_id": "asset:1",
+        "weight": "0.2"
+      },
+      {
+        "kind": "asset",
+        "asset_id": "asset:6",
+        "weight": "0.1"
+      },
+      {
+        "kind": "asset",
+        "asset_id": "asset:7",
+        "weight": "0.1"
+      },
+      {
+        "kind": "asset",
+        "asset_id": "asset:2",
+        "weight": "0.1"
+      },
+      {
+        "kind": "asset",
+        "asset_id": "asset:4",
+        "weight": "0.1"
+      },
+      {
+        "kind": "asset",
+        "asset_id": "asset:5",
+        "weight": "0.1"
+      },
+      {
+        "kind": "asset",
+        "asset_id": "asset:3",
+        "weight": "0.1"
+      },
+      {
+        "kind": "cash",
+        "broker_id": "broker:1",
+        "currency": "EUR",
+        "weight": "0.1"
+      },
+      {
+        "kind": "cash",
+        "broker_id": "broker:1",
+        "currency": "USD",
+        "weight": "0.1"
+      }
+    ],
+    "order_routes": [
+      {
+        "route_id": "route:7",
+        "asset_id": "asset:1",
+        "broker_id": "broker:1",
+        "capability_id": "broker:1/mode:USD",
+        "side": "buy",
+        "provenance_id": "manual:route:7"
+      },
+      {
+        "route_id": "route:8",
+        "asset_id": "asset:1",
+        "broker_id": "broker:2",
+        "capability_id": "broker:2/mode:USD",
+        "side": "buy",
+        "provenance_id": "manual:route:8"
+      },
+      {
+        "route_id": "route:9",
+        "asset_id": "asset:6",
+        "broker_id": "broker:1",
+        "capability_id": "broker:1/mode:USD",
+        "side": "buy",
+        "provenance_id": "manual:route:9"
+      },
+      {
+        "route_id": "route:10",
+        "asset_id": "asset:6",
+        "broker_id": "broker:2",
+        "capability_id": "broker:2/mode:USD",
+        "side": "buy",
+        "provenance_id": "manual:route:10"
+      },
+      {
+        "route_id": "route:11",
+        "asset_id": "asset:7",
+        "broker_id": "broker:1",
+        "capability_id": "broker:1/mode:USD",
+        "side": "buy",
+        "provenance_id": "manual:route:11"
+      },
+      {
+        "route_id": "route:12",
+        "asset_id": "asset:7",
+        "broker_id": "broker:2",
+        "capability_id": "broker:2/mode:USD",
+        "side": "buy",
+        "provenance_id": "manual:route:12"
+      },
+      {
+        "route_id": "route:13",
+        "asset_id": "asset:2",
+        "broker_id": "broker:1",
+        "capability_id": "broker:1/mode:USD",
+        "side": "buy",
+        "provenance_id": "manual:route:13"
+      },
+      {
+        "route_id": "route:14",
+        "asset_id": "asset:2",
+        "broker_id": "broker:2",
+        "capability_id": "broker:2/mode:USD",
+        "side": "buy",
+        "provenance_id": "manual:route:14"
+      },
+      {
+        "route_id": "route:15",
+        "asset_id": "asset:4",
+        "broker_id": "broker:1",
+        "capability_id": "broker:1/mode:EUR",
+        "side": "buy",
+        "provenance_id": "manual:route:15"
+      },
+      {
+        "route_id": "route:16",
+        "asset_id": "asset:4",
+        "broker_id": "broker:2",
+        "capability_id": "broker:2/mode:EUR",
+        "side": "buy",
+        "provenance_id": "manual:route:16"
+      },
+      {
+        "route_id": "route:17",
+        "asset_id": "asset:5",
+        "broker_id": "broker:1",
+        "capability_id": "broker:1/mode:EUR",
+        "side": "buy",
+        "provenance_id": "manual:route:17"
+      },
+      {
+        "route_id": "route:18",
+        "asset_id": "asset:5",
+        "broker_id": "broker:2",
+        "capability_id": "broker:2/mode:EUR",
+        "side": "buy",
+        "provenance_id": "manual:route:18"
+      },
+      {
+        "route_id": "route:19",
+        "asset_id": "asset:3",
+        "broker_id": "broker:1",
+        "capability_id": "broker:1/mode:USD",
+        "side": "buy",
+        "provenance_id": "manual:route:19"
+      },
+      {
+        "route_id": "route:20",
+        "asset_id": "asset:3",
+        "broker_id": "broker:2",
+        "capability_id": "broker:2/mode:USD",
+        "side": "buy",
+        "provenance_id": "manual:route:20"
+      }
+    ],
+    "policy": "invest_only",
+    "target_fidelity": {
+      "kind": "level",
+      "level": "balanced"
+    }
+  },
+  "result": {
+    "operation": "plan",
+    "availability": "ready",
+    "snapshot": {
+      "snapshot_id": "draft:4",
+      "request_fingerprint": "b6e218c08b5814b0a7540ab2a3065acca4a371dd4f46efd4898bf8967247d0e1"
+    },
+    "catalogs": {
+      "assets": [
+        {
+          "asset_id": "asset:1",
+          "name": "Apple Inc.",
+          "ticker": "AAPL",
+          "asset_class": "stock"
+        },
+        {
+          "asset_id": "asset:2",
+          "name": "Microsoft Corporation",
+          "ticker": "MSFT",
+          "asset_class": "stock"
+        },
+        {
+          "asset_id": "asset:3",
+          "name": "Tesla, Inc.",
+          "ticker": "TSLA",
+          "asset_class": "stock"
+        },
+        {
+          "asset_id": "asset:4",
+          "name": "RE Loan Milano",
+          "ticker": null,
+          "asset_class": "crowdfund"
+        },
+        {
+          "asset_id": "asset:5",
+          "name": "RE Loan Roma",
+          "ticker": null,
+          "asset_class": "crowdfund"
+        },
+        {
+          "asset_id": "asset:6",
+          "name": "Bitcoin",
+          "ticker": "BTC-USD",
+          "asset_class": "crypto"
+        },
+        {
+          "asset_id": "asset:7",
+          "name": "Ethereum",
+          "ticker": "ETH-USD",
+          "asset_class": "crypto"
+        }
+      ],
+      "brokers": [
+        {
+          "broker_id": "broker:1",
+          "name": "Interactive Brokers"
+        },
+        {
+          "broker_id": "broker:2",
+          "name": "DEGIRO"
+        },
+        {
+          "broker_id": "broker:3",
+          "name": "Directa SIM"
+        },
+        {
+          "broker_id": "broker:4",
+          "name": "eToro"
+        },
+        {
+          "broker_id": "broker:5",
+          "name": "Coinbase"
+        },
+        {
+          "broker_id": "broker:6",
+          "name": "Recrowd"
+        },
+        {
+          "broker_id": "broker:8",
+          "name": "Hidden Admin Broker"
+        }
+      ],
+      "currencies": [
+        {
+          "currency": "EUR",
+          "minor_unit": "0.01"
+        },
+        {
+          "currency": "USD",
+          "minor_unit": "0.01"
+        }
+      ]
+    },
+    "provenance": [
+      {
+        "kind": "domain_copy",
+        "provenance_id": "copy:1/source:broker-domain",
+        "domain": "broker",
+        "source_ref": "enc:brokers_2bbroker_5fuser_5faccess_2btransactions",
+        "source_label": null,
+        "captured_at": "2026-11-16T09:11:23.847000Z"
+      },
+      {
+        "kind": "domain_copy",
+        "provenance_id": "copy:1/source:portfolio-ledger",
+        "domain": "portfolio",
+        "source_ref": "enc:transactions_2bbroker_5fuser_5faccess",
+        "source_label": null,
+        "captured_at": "2026-11-16T09:11:23.847000Z"
+      },
+      {
+        "kind": "domain_copy",
+        "provenance_id": "copy:23/source:market-data",
+        "domain": "market_data",
+        "source_ref": "enc:assets_2bprice_5fhistory",
+        "source_label": null,
+        "captured_at": "2026-11-16T09:11:24.269000Z"
+      },
+      {
+        "kind": "domain_copy",
+        "provenance_id": "copy:24/source:market-data",
+        "domain": "market_data",
+        "source_ref": "enc:assets_2bprice_5fhistory",
+        "source_label": null,
+        "captured_at": "2026-11-16T09:11:24.269000Z"
+      },
+      {
+        "kind": "domain_copy",
+        "provenance_id": "copy:71/source:portfolio-ledger",
+        "domain": "portfolio",
+        "source_ref": "enc:transactions_2bbroker_5fuser_5faccess",
+        "source_label": null,
+        "captured_at": "2026-11-16T09:11:24.269000Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:10",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194000Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:11",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194000Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:12",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194000Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:13",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194000Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:14",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194000Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:15",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194000Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:16",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194000Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:17",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194000Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:18",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194000Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:19",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194000Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:20",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194000Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:7",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194000Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:8",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194000Z"
+      },
+      {
+        "kind": "manual",
+        "provenance_id": "manual:route:9",
+        "label": "order route",
+        "entered_at": "2026-11-16T09:11:24.194000Z"
+      }
+    ],
+    "scenario_basis": {
+      "as_of": "2026-11-16",
+      "valuation_currency": "EUR",
+      "policy": "invest_only",
+      "counts": {
+        "assets": 7,
+        "brokers": 7,
+        "currencies": 2,
+        "holdings": 15,
+        "existing_cash": 4,
+        "contributions": 0,
+        "funding_routes": 0,
+        "capabilities": 4,
+        "fx_rates": 1,
+        "order_routes": 14,
+        "provenance": 19
+      },
+      "current_invested": {
+        "value": {
+          "kind": "exact_ratio",
+          "numerator": "814052839021813570812429",
+          "denominator": "28003102700000000000",
+          "display_decimal": "29070.094401425509567282",
+          "display_scale": 18,
+          "display_authority": "non_authoritative"
+        },
+        "currency": "EUR"
+      },
+      "selected_funding": {
+        "value": {
+          "kind": "exact_ratio",
+          "numerator": "8490925239850",
+          "denominator": "280031027",
+          "display_decimal": "30321.373066456668032003",
+          "display_scale": 18,
+          "display_authority": "non_authoritative"
+        },
+        "currency": "EUR"
+      },
+      "reachable_funding": {
+        "value": {
+          "kind": "exact_ratio",
+          "numerator": "8490925239850",
+          "denominator": "280031027",
+          "display_decimal": "30321.373066456668032003",
+          "display_scale": 18,
+          "display_authority": "non_authoritative"
+        },
+        "currency": "EUR"
+      },
+      "trapped_funding": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "0"
+        },
+        "currency": "EUR"
+      },
+      "fixed_reference": {
+        "value": {
+          "kind": "exact_ratio",
+          "numerator": "1663145363006813570812429",
+          "denominator": "28003102700000000000",
+          "display_decimal": "59391.467467882177599285",
+          "display_scale": 18,
+          "display_authority": "non_authoritative"
+        },
+        "currency": "EUR"
+      },
+      "target_fidelity": {
+        "kind": "level",
+        "level": "balanced"
+      },
+      "initial_wealth": {
+        "value": {
+          "kind": "exact_ratio",
+          "numerator": "1663145363006813570812429",
+          "denominator": "28003102700000000000",
+          "display_decimal": "59391.467467882177599285",
+          "display_scale": 18,
+          "display_authority": "non_authoritative"
+        },
+        "currency": "EUR"
+      }
+    },
+    "stop_reason": "time_limit",
+    "solver_evidence": {
+      "kind": "reported_floating",
+      "stages": [
+        {
+          "kind": "reported_floating",
+          "stage": "plan_score",
+          "objective_code": "plan_score",
+          "ordinal": 1,
+          "status": "finished",
+          "scope": "global",
+          "sense": "min",
+          "unit": {
+            "kind": "valuation_money",
+            "currency_code": "EUR"
+          },
+          "primal": "775.8364439286943",
+          "dual": "775.8364439286943",
+          "absolute_gap": "0",
+          "relative_gap": "0",
+          "tolerances": {
+            "feasibility": "0.000001",
+            "integrality": "0.000000001",
+            "absolute_gap": "0",
+            "relative_gap": "0"
+          },
+          "engine": "SCIP",
+          "version": "10.0",
+          "settings": [
+            {
+              "name": "time_budget",
+              "value": "3.5"
+            },
+            {
+              "name": "expr/pow/expandmaxexponent",
+              "value": "1"
+            }
+          ]
+        },
+        {
+          "kind": "reported_floating",
+          "stage": "operation_count",
+          "objective_code": "operation_count",
+          "ordinal": 2,
+          "status": "unfinished",
+          "scope": "incumbent_face",
+          "sense": "min",
+          "unit": {
+            "kind": "count"
+          },
+          "primal": "6",
+          "dual": "6",
+          "absolute_gap": "0",
+          "relative_gap": "0",
+          "tolerances": {
+            "feasibility": "0.000001",
+            "integrality": "0.000000001",
+            "absolute_gap": "0",
+            "relative_gap": "0"
+          },
+          "engine": "SCIP",
+          "version": "10.0",
+          "settings": [
+            {
+              "name": "time_budget",
+              "value": "3.5"
+            },
+            {
+              "name": "expr/pow/expandmaxexponent",
+              "value": "1"
+            }
+          ]
+        },
+        {
+          "kind": "reported_floating",
+          "stage": "route_priority",
+          "objective_code": "route_priority",
+          "ordinal": 3,
+          "status": "unfinished",
+          "scope": "incumbent_face",
+          "sense": "min",
+          "unit": {
+            "kind": "ordinal_penalty"
+          },
+          "primal": "0",
+          "dual": "0",
+          "absolute_gap": "0",
+          "relative_gap": "0",
+          "tolerances": {
+            "feasibility": "0.000001",
+            "integrality": "0.000000001",
+            "absolute_gap": "0",
+            "relative_gap": "0"
+          },
+          "engine": "SCIP",
+          "version": "10.0",
+          "settings": [
+            {
+              "name": "time_budget",
+              "value": "3.5"
+            },
+            {
+              "name": "expr/pow/expandmaxexponent",
+              "value": "1"
+            }
+          ]
+        }
+      ]
+    },
+    "issues": [],
+    "result_state": "ready_incumbent",
+    "outcome": "incumbent_found",
+    "proof": {
+      "kind": "optimal_proven",
+      "proof_source": "solver_status",
+      "witness": {
+        "kind": "solver_status",
+        "objective_codes": ["plan_score"]
+      }
+    },
+    "primary_solution": {
+      "solution_id": "solution:primary",
+      "solution_kind": "primary",
+      "validation": "decimal_verified",
+      "asset_rows": [
+        {
+          "asset_id": "asset:1",
+          "before_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "262551504451251",
+              "denominator": "28003102700",
+              "display_decimal": "9375.800505536516851756",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "before_weight": {
+            "kind": "exact_ratio",
+            "numerator": "262551504451251000000000",
+            "denominator": "1663145363006813570812429",
+            "display_decimal": "0.157864435840161363",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.2"
+          },
+          "target_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "1663145363006813570812429",
+              "denominator": "140015513500000000000",
+              "display_decimal": "11878.293493576435519857",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "final_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "170730213277043",
+              "denominator": "14001551350",
+              "display_decimal": "12193.664045451863446546",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "final_weight": {
+            "kind": "exact_ratio",
+            "numerator": "341460426554086000000000",
+            "denominator": "1663145363006813570812429",
+            "display_decimal": "0.205310031311248111",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "residual": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "44156769763616429187571",
+              "denominator": "140015513500000000000",
+              "display_decimal": "315.370551875427926689",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "buy_mid_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "15781784420567",
+              "denominator": "5600620540",
+              "display_decimal": "2817.86353991534659479",
+              "display_scale": 17,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "sell_mid_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "minimum": null,
+          "maximum": null
+        },
+        {
+          "asset_id": "asset:2",
+          "before_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "4219600838822707",
+              "denominator": "2800310270000",
+              "display_decimal": "1506.833326302341133077",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "before_weight": {
+            "kind": "exact_ratio",
+            "numerator": "42196008388227070000000",
+            "denominator": "1663145363006813570812429",
+            "display_decimal": "0.025371208871328346",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.1"
+          },
+          "target_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "1663145363006813570812429",
+              "denominator": "280031027000000000000",
+              "display_decimal": "5939.146746788217759929",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "final_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "17202988035200267",
+              "denominator": "2800310270000",
+              "display_decimal": "6143.2435610787753887",
+              "display_scale": 16,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "final_weight": {
+            "kind": "exact_ratio",
+            "numerator": "172029880352002670000000",
+            "denominator": "1663145363006813570812429",
+            "display_decimal": "0.103436466936954024",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "residual": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "57153440513213129187571",
+              "denominator": "280031027000000000000",
+              "display_decimal": "204.096814290557628772",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "buy_mid_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "324584679909439",
+              "denominator": "70007756750",
+              "display_decimal": "4636.410234776434255623",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "sell_mid_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "minimum": null,
+          "maximum": null
+        },
+        {
+          "asset_id": "asset:3",
+          "before_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "149410653463191",
+              "denominator": "70007756750",
+              "display_decimal": "2134.201414233873448602",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "before_weight": {
+            "kind": "exact_ratio",
+            "numerator": "59764261385276400000000",
+            "denominator": "1663145363006813570812429",
+            "display_decimal": "0.035934478557681887",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.1"
+          },
+          "target_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "1663145363006813570812429",
+              "denominator": "280031027000000000000",
+              "display_decimal": "5939.146746788217759929",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "final_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "448231960389573",
+              "denominator": "70007756750",
+              "display_decimal": "6402.604242701620345805",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "final_weight": {
+            "kind": "exact_ratio",
+            "numerator": "179292784155829200000000",
+            "denominator": "1663145363006813570812429",
+            "display_decimal": "0.10780343567304566",
+            "display_scale": 17,
+            "display_authority": "non_authoritative"
+          },
+          "residual": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "129782478551478429187571",
+              "denominator": "280031027000000000000",
+              "display_decimal": "463.457495913402585877",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "buy_mid_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "149410653463191",
+              "denominator": "35003878375",
+              "display_decimal": "4268.402828467746897204",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "sell_mid_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "minimum": null,
+          "maximum": null
+        },
+        {
+          "asset_id": "asset:4",
+          "before_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "10063.5915406982"
+            },
+            "currency": "EUR"
+          },
+          "before_weight": {
+            "kind": "exact_ratio",
+            "numerator": "281811787445022924305140",
+            "denominator": "1663145363006813570812429",
+            "display_decimal": "0.169445073000434057",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.1"
+          },
+          "target_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "1663145363006813570812429",
+              "denominator": "280031027000000000000",
+              "display_decimal": "5939.146746788217759929",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "final_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "10063.5915406982"
+            },
+            "currency": "EUR"
+          },
+          "final_weight": {
+            "kind": "exact_ratio",
+            "numerator": "281811787445022924305140",
+            "denominator": "1663145363006813570812429",
+            "display_decimal": "0.169445073000434057",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "residual": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "1154972511443415672238971",
+              "denominator": "280031027000000000000",
+              "display_decimal": "4124.444793909982240071",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "buy_mid_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "sell_mid_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "minimum": null,
+          "maximum": null
+        },
+        {
+          "asset_id": "asset:5",
+          "before_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "5078.55012546307"
+            },
+            "currency": "EUR"
+          },
+          "before_weight": {
+            "kind": "exact_ratio",
+            "numerator": "142215160730440234267289",
+            "denominator": "1663145363006813570812429",
+            "display_decimal": "0.08550975993663496",
+            "display_scale": 17,
+            "display_authority": "non_authoritative"
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.1"
+          },
+          "target_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "1663145363006813570812429",
+              "denominator": "280031027000000000000",
+              "display_decimal": "5939.146746788217759929",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "final_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "5078.55012546307"
+            },
+            "currency": "EUR"
+          },
+          "final_weight": {
+            "kind": "exact_ratio",
+            "numerator": "142215160730440234267289",
+            "denominator": "1663145363006813570812429",
+            "display_decimal": "0.08550975993663496",
+            "display_scale": 17,
+            "display_authority": "non_authoritative"
+          },
+          "residual": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "-240993755702411228139539",
+              "denominator": "280031027000000000000",
+              "display_decimal": "-860.596621325147759929",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "buy_mid_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "sell_mid_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "minimum": null,
+          "maximum": null
+        },
+        {
+          "asset_id": "asset:6",
+          "before_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "190513808778681",
+              "denominator": "280031027000",
+              "display_decimal": "680.33107195182696666",
+              "display_scale": 17,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "before_weight": {
+            "kind": "exact_ratio",
+            "numerator": "19051380877868100000000",
+            "denominator": "1663145363006813570812429",
+            "display_decimal": "0.011455030511238632",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.1"
+          },
+          "target_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "1663145363006813570812429",
+              "denominator": "280031027000000000000",
+              "display_decimal": "5939.146746788217759929",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "final_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "190513808778681",
+              "denominator": "280031027000",
+              "display_decimal": "680.33107195182696666",
+              "display_scale": 17,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "final_weight": {
+            "kind": "exact_ratio",
+            "numerator": "19051380877868100000000",
+            "denominator": "1663145363006813570812429",
+            "display_decimal": "0.011455030511238632",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "residual": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "-1472631554228132570812429",
+              "denominator": "280031027000000000000",
+              "display_decimal": "-5258.815674836390793269",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "buy_mid_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "sell_mid_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "minimum": null,
+          "maximum": null
+        },
+        {
+          "asset_id": "asset:7",
+          "before_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "20196049199149507",
+              "denominator": "87509695937500",
+              "display_decimal": "230.786417239681167187",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "before_weight": {
+            "kind": "exact_ratio",
+            "numerator": "6462735743727842240000",
+            "denominator": "1663145363006813570812429",
+            "display_decimal": "0.003885851403898822",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.1"
+          },
+          "target_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "1663145363006813570812429",
+              "denominator": "280031027000000000000",
+              "display_decimal": "5939.146746788217759929",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "final_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "523838173866219507",
+              "denominator": "87509695937500",
+              "display_decimal": "5986.058667605795062131",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "final_weight": {
+            "kind": "exact_ratio",
+            "numerator": "167628215637190242240000",
+            "denominator": "1663145363006813570812429",
+            "display_decimal": "0.10078987643878216",
+            "display_scale": 17,
+            "display_authority": "non_authoritative"
+          },
+          "residual": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "13136793365088851587571",
+              "denominator": "280031027000000000000",
+              "display_decimal": "46.911920817577302202",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "buy_mid_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "201456849866828",
+              "denominator": "35003878375",
+              "display_decimal": "5755.272250366113894944",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "sell_mid_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "minimum": null,
+          "maximum": null
+        }
+      ],
+      "cash_rows": [
+        {
+          "broker_id": "broker:1",
+          "currency": "EUR",
+          "before_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "17350"
+            },
+            "currency": "EUR"
+          },
+          "before_weight": {
+            "kind": "exact_ratio",
+            "numerator": "485853831845000000000000",
+            "denominator": "1663145363006813570812429",
+            "display_decimal": "0.29212950512432722",
+            "display_scale": 17,
+            "display_authority": "non_authoritative"
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.1"
+          },
+          "target_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "1663145363006813570812429",
+              "denominator": "280031027000000000000",
+              "display_decimal": "5939.146746788217759929",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "final_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "6261"
+            },
+            "currency": "EUR"
+          },
+          "final_weight": {
+            "kind": "exact_ratio",
+            "numerator": "175327426004700000000000",
+            "denominator": "1663145363006813570812429",
+            "display_decimal": "0.105419183376565575",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "residual": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "90128897040186429187571",
+              "denominator": "280031027000000000000",
+              "display_decimal": "321.853253211782240071",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "minimum": null,
+          "maximum": null
+        },
+        {
+          "broker_id": "broker:1",
+          "currency": "USD",
+          "before_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "1336132500000",
+              "denominator": "280031027",
+              "display_decimal": "4771.373066456668032003",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "before_weight": {
+            "kind": "exact_ratio",
+            "numerator": "133613250000000000000000",
+            "denominator": "1663145363006813570812429",
+            "display_decimal": "0.080337686032710668",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.1"
+          },
+          "target_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "1663145363006813570812429",
+              "denominator": "280031027000000000000",
+              "display_decimal": "5939.146746788217759929",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "final_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "1753182500000",
+              "denominator": "280031027",
+              "display_decimal": "6260.672321856677688791",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "final_weight": {
+            "kind": "exact_ratio",
+            "numerator": "175318250000000000000000",
+            "denominator": "1663145363006813570812429",
+            "display_decimal": "0.105413666116977748",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "residual": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "90037136993186429187571",
+              "denominator": "280031027000000000000",
+              "display_decimal": "321.525575068459928862",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "minimum": null,
+          "maximum": null
+        }
+      ],
+      "uninvested_row": {
+        "before_value": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "8200"
+          },
+          "currency": "EUR"
+        },
+        "before_weight": {
+          "kind": "exact_ratio",
+          "numerator": "229625442140000000000000",
+          "denominator": "1663145363006813570812429",
+          "display_decimal": "0.138066970721584046",
+          "display_scale": 18,
+          "display_authority": "non_authoritative"
+        },
+        "final_value": {
+          "value": {
+            "kind": "exact_ratio",
+            "numerator": "45050256248371",
+            "denominator": "140015513500",
+            "display_decimal": "321.751891074348700653",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "currency": "EUR"
+        },
+        "final_weight": {
+          "kind": "exact_ratio",
+          "numerator": "9010051249674200000000",
+          "denominator": "1663145363006813570812429",
+          "display_decimal": "0.005417476698119073",
+          "display_scale": 18,
+          "display_authority": "non_authoritative"
+        }
+      },
+      "funding_actions": [],
+      "conversions": [
+        {
+          "conversion_id": "conversion:broker:1:EUR:USD",
+          "mode": "manual",
+          "sequence": 2,
+          "broker_id": "broker:1",
+          "source_debit": {
+            "amount": "18967.27",
+            "currency": "EUR"
+          },
+          "destination_credit": {
+            "amount": "21245.69",
+            "currency": "USD"
+          },
+          "spot_rate": {
+            "source_currency": "EUR",
+            "destination_currency": "USD",
+            "value": {
+              "kind": "finite_decimal",
+              "value": "1.120124108"
+            }
+          },
+          "effective_rate": {
+            "source_currency": "EUR",
+            "destination_currency": "USD",
+            "value": {
+              "kind": "finite_decimal",
+              "value": "1.120124108"
+            }
+          },
+          "spread_loss": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "provenance_ids": ["copy:1/source:broker-domain"]
+        }
+      ],
+      "transfers": [
+        {
+          "transfer_id": "transfer:8:broker:28:broker:1:EUR",
+          "sequence": 1,
+          "source_broker_id": "broker:2",
+          "destination_broker_id": "broker:1",
+          "amount": {
+            "amount": "7878.27",
+            "currency": "EUR"
+          }
+        }
+      ],
+      "order_rows": [
+        {
+          "kind": "buy",
+          "order_id": "order:route:11",
+          "sequence": 3,
+          "asset_id": "asset:7",
+          "broker_id": "broker:1",
+          "route_id": "route:11",
+          "instruction": {
+            "kind": "whole_quantity",
+            "quantity": "8",
+            "quantity_step": "1",
+            "unit": "asset_unit"
+          },
+          "economic_quantity": {
+            "kind": "exact",
+            "value": {
+              "kind": "finite_decimal",
+              "value": "8"
+            },
+            "unit": "asset_unit"
+          },
+          "source_price": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "805.827399467312"
+            },
+            "currency": "USD",
+            "quote_base_quantity": "1",
+            "quantity_unit": "asset_unit"
+          },
+          "mid_price": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "805.827399467312"
+            },
+            "currency": "USD",
+            "quote_base_quantity": "1",
+            "quantity_unit": "asset_unit"
+          },
+          "charge_price": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "805.827399467312"
+            },
+            "currency": "USD",
+            "quote_base_quantity": "1",
+            "quantity_unit": "asset_unit"
+          },
+          "mid_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "201456849866828",
+              "denominator": "35003878375",
+              "display_decimal": "5755.272250366113894944",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "execution_margin_cost": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "cash_debit": {
+            "amount": "6446.62",
+            "currency": "USD"
+          },
+          "fee": {
+            "amount": "0",
+            "currency": "USD"
+          },
+          "buffer": {
+            "amount": "0",
+            "currency": "USD"
+          },
+          "explanation_keys": [],
+          "provenance_ids": ["copy:23/source:market-data", "manual:route:11"]
+        },
+        {
+          "kind": "buy",
+          "order_id": "order:route:13",
+          "sequence": 4,
+          "asset_id": "asset:2",
+          "broker_id": "broker:1",
+          "route_id": "route:13",
+          "instruction": {
+            "kind": "whole_quantity",
+            "quantity": "16",
+            "quantity_step": "1",
+            "unit": "asset_unit"
+          },
+          "economic_quantity": {
+            "kind": "exact",
+            "value": {
+              "kind": "finite_decimal",
+              "value": "16"
+            },
+            "unit": "asset_unit"
+          },
+          "source_price": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "324.584679909439"
+            },
+            "currency": "USD",
+            "quote_base_quantity": "1",
+            "quantity_unit": "asset_unit"
+          },
+          "mid_price": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "324.584679909439"
+            },
+            "currency": "USD",
+            "quote_base_quantity": "1",
+            "quantity_unit": "asset_unit"
+          },
+          "charge_price": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "324.584679909439"
+            },
+            "currency": "USD",
+            "quote_base_quantity": "1",
+            "quantity_unit": "asset_unit"
+          },
+          "mid_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "324584679909439",
+              "denominator": "70007756750",
+              "display_decimal": "4636.410234776434255623",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "execution_margin_cost": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "cash_debit": {
+            "amount": "5193.36",
+            "currency": "USD"
+          },
+          "fee": {
+            "amount": "0",
+            "currency": "USD"
+          },
+          "buffer": {
+            "amount": "0",
+            "currency": "USD"
+          },
+          "explanation_keys": [],
+          "provenance_ids": ["copy:23/source:market-data", "manual:route:13"]
+        },
+        {
+          "kind": "buy",
+          "order_id": "order:route:19",
+          "sequence": 5,
+          "asset_id": "asset:3",
+          "broker_id": "broker:1",
+          "route_id": "route:19",
+          "instruction": {
+            "kind": "whole_quantity",
+            "quantity": "16",
+            "quantity_step": "1",
+            "unit": "asset_unit"
+          },
+          "economic_quantity": {
+            "kind": "exact",
+            "value": {
+              "kind": "finite_decimal",
+              "value": "16"
+            },
+            "unit": "asset_unit"
+          },
+          "source_price": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "298.821306926382"
+            },
+            "currency": "USD",
+            "quote_base_quantity": "1",
+            "quantity_unit": "asset_unit"
+          },
+          "mid_price": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "298.821306926382"
+            },
+            "currency": "USD",
+            "quote_base_quantity": "1",
+            "quantity_unit": "asset_unit"
+          },
+          "charge_price": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "298.821306926382"
+            },
+            "currency": "USD",
+            "quote_base_quantity": "1",
+            "quantity_unit": "asset_unit"
+          },
+          "mid_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "149410653463191",
+              "denominator": "35003878375",
+              "display_decimal": "4268.402828467746897204",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "execution_margin_cost": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "cash_debit": {
+            "amount": "4781.15",
+            "currency": "USD"
+          },
+          "fee": {
+            "amount": "0",
+            "currency": "USD"
+          },
+          "buffer": {
+            "amount": "0",
+            "currency": "USD"
+          },
+          "explanation_keys": [],
+          "provenance_ids": ["copy:23/source:market-data", "manual:route:19"]
+        },
+        {
+          "kind": "buy",
+          "order_id": "order:route:7",
+          "sequence": 6,
+          "asset_id": "asset:1",
+          "broker_id": "broker:1",
+          "route_id": "route:7",
+          "instruction": {
+            "kind": "whole_quantity",
+            "quantity": "11",
+            "quantity_step": "1",
+            "unit": "asset_unit"
+          },
+          "economic_quantity": {
+            "kind": "exact",
+            "value": {
+              "kind": "finite_decimal",
+              "value": "11"
+            },
+            "unit": "asset_unit"
+          },
+          "source_price": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "286.9415349194"
+            },
+            "currency": "USD",
+            "quote_base_quantity": "1",
+            "quantity_unit": "asset_unit"
+          },
+          "mid_price": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "286.9415349194"
+            },
+            "currency": "USD",
+            "quote_base_quantity": "1",
+            "quantity_unit": "asset_unit"
+          },
+          "charge_price": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "286.9415349194"
+            },
+            "currency": "USD",
+            "quote_base_quantity": "1",
+            "quantity_unit": "asset_unit"
+          },
+          "mid_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "15781784420567",
+              "denominator": "5600620540",
+              "display_decimal": "2817.86353991534659479",
+              "display_scale": 17,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "execution_margin_cost": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "cash_debit": {
+            "amount": "3156.36",
+            "currency": "USD"
+          },
+          "fee": {
+            "amount": "0",
+            "currency": "USD"
+          },
+          "buffer": {
+            "amount": "0",
+            "currency": "USD"
+          },
+          "explanation_keys": [],
+          "provenance_ids": ["copy:23/source:market-data", "manual:route:7"]
+        }
+      ],
+      "ledger_rows": [
+        {
+          "broker_id": "broker:1",
+          "currency": "EUR",
+          "initial_selected": "17350",
+          "funding_in": "0",
+          "funding_out": "0",
+          "transfer_in": "7878.27",
+          "transfer_out": "0",
+          "fx_debit": "18967.27",
+          "fx_credit": "0",
+          "buy_debit": "0",
+          "gross_sell_credit": "0",
+          "buy_fees": "0",
+          "sell_fees": "0",
+          "broker_withheld_tax": "0",
+          "foreign_withholding_tax": "0",
+          "self_reserved_tax": "0",
+          "rounding_delta": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "final_spendable": "6261",
+          "final_physical": "6261"
+        },
+        {
+          "broker_id": "broker:1",
+          "currency": "USD",
+          "initial_selected": "5344.53",
+          "funding_in": "0",
+          "funding_out": "0",
+          "transfer_in": "0",
+          "transfer_out": "0",
+          "fx_debit": "0",
+          "fx_credit": "21245.69",
+          "buy_debit": "19577.49",
+          "gross_sell_credit": "0",
+          "buy_fees": "0",
+          "sell_fees": "0",
+          "broker_withheld_tax": "0",
+          "foreign_withholding_tax": "0",
+          "self_reserved_tax": "0",
+          "rounding_delta": {
+            "kind": "finite_decimal",
+            "value": "0.011740829808"
+          },
+          "final_spendable": "7012.73",
+          "final_physical": "7012.73"
+        },
+        {
+          "broker_id": "broker:2",
+          "currency": "EUR",
+          "initial_selected": "8200",
+          "funding_in": "0",
+          "funding_out": "0",
+          "transfer_in": "0",
+          "transfer_out": "7878.27",
+          "fx_debit": "0",
+          "fx_credit": "0",
+          "buy_debit": "0",
+          "gross_sell_credit": "0",
+          "buy_fees": "0",
+          "sell_fees": "0",
+          "broker_withheld_tax": "0",
+          "foreign_withholding_tax": "0",
+          "self_reserved_tax": "0",
+          "rounding_delta": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "final_spendable": "321.73",
+          "final_physical": "321.73"
+        },
+        {
+          "broker_id": "broker:2",
+          "currency": "USD",
+          "initial_selected": "0",
+          "funding_in": "0",
+          "funding_out": "0",
+          "transfer_in": "0",
+          "transfer_out": "0",
+          "fx_debit": "0",
+          "fx_credit": "0",
+          "buy_debit": "0",
+          "gross_sell_credit": "0",
+          "buy_fees": "0",
+          "sell_fees": "0",
+          "broker_withheld_tax": "0",
+          "foreign_withholding_tax": "0",
+          "self_reserved_tax": "0",
+          "rounding_delta": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "final_spendable": "0",
+          "final_physical": "0"
+        }
+      ],
+      "rounding_top_ups": [],
+      "exposure_rows": [
+        {
+          "dimension": "asset_type",
+          "before_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "424026948175463158572429",
+              "denominator": "1663145363006813570812429",
+              "display_decimal": "0.254954832937069017",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.2"
+          },
+          "final_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "424026948175463158572429",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.254954926910791144",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "kind": "category",
+          "category_id": "CROWDFUND",
+          "label": "CROWDFUND",
+          "provenance_ids": ["copy:24/source:market-data"]
+        },
+        {
+          "dimension": "asset_type",
+          "before_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "25514116621595942240000",
+              "denominator": "1663145363006813570812429",
+              "display_decimal": "0.015340881915137454",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.2"
+          },
+          "final_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "186679596515058342240000",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.112244948322335937",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "kind": "category",
+          "category_id": "CRYPTO",
+          "label": "CRYPTO",
+          "provenance_ids": ["copy:24/source:market-data"]
+        },
+        {
+          "dimension": "asset_type",
+          "before_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "364511774224754470000000",
+              "denominator": "1663145363006813570812429",
+              "display_decimal": "0.219170123269171595",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.4"
+          },
+          "final_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "692783091061917870000000",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.416550087457257651",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "kind": "category",
+          "category_id": "STOCK",
+          "label": "STOCK",
+          "provenance_ids": ["copy:24/source:market-data"]
+        },
+        {
+          "dimension": "asset_type",
+          "before_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "849092523985000000000000",
+              "denominator": "1663145363006813570812429",
+              "display_decimal": "0.510534161878621935",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.2"
+          },
+          "final_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "359655114236371000000000",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.216250037309615268",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "kind": "cash",
+          "provenance_ids": ["copy:1/source:portfolio-ledger"]
+        },
+        {
+          "dimension": "sector",
+          "before_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "17929278415582920000000",
+              "denominator": "1663145363006813570812429",
+              "display_decimal": "0.010780343567304566",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.03"
+          },
+          "final_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "53787835246748760000000",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.032341042622484089",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "kind": "category",
+          "category_id": "Energy",
+          "label": "Energy",
+          "provenance_ids": ["copy:24/source:market-data"]
+        },
+        {
+          "dimension": "sector",
+          "before_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "25514116621595942240000",
+              "denominator": "1663145363006813570812429",
+              "display_decimal": "0.015340881915137454",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.2"
+          },
+          "final_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "186679596515058342240000",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.112244948322335937",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "kind": "category",
+          "category_id": "Other",
+          "label": "Other",
+          "provenance_ids": ["copy:24/source:market-data"]
+        },
+        {
+          "dimension": "sector",
+          "before_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "41834982969693480000000",
+              "denominator": "1663145363006813570812429",
+              "display_decimal": "0.025154134990377321",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.07"
+          },
+          "final_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "125504948909080440000000",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.075462432785796207",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "kind": "category",
+          "category_id": "enc:Consumer_20Discretionary",
+          "label": "Consumer Discretionary",
+          "provenance_ids": ["copy:24/source:market-data"]
+        },
+        {
+          "dimension": "sector",
+          "before_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "424026948175463158572429",
+              "denominator": "1663145363006813570812429",
+              "display_decimal": "0.254954832937069017",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.2"
+          },
+          "final_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "424026948175463158572429",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.254954926910791144",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "kind": "category",
+          "category_id": "enc:Real_20Estate",
+          "label": "Real Estate",
+          "provenance_ids": ["copy:24/source:market-data"]
+        },
+        {
+          "dimension": "sector",
+          "before_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "304747512839478070000000",
+              "denominator": "1663145363006813570812429",
+              "display_decimal": "0.183235644711489708",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.3"
+          },
+          "final_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "513490306906088670000000",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.308746612048977355",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "kind": "category",
+          "category_id": "allocation.uncategorised",
+          "label": "Uncategorised",
+          "provenance_ids": ["copy:23/source:market-data"]
+        },
+        {
+          "dimension": "sector",
+          "before_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "849092523985000000000000",
+              "denominator": "1663145363006813570812429",
+              "display_decimal": "0.510534161878621935",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.2"
+          },
+          "final_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "359655114236371000000000",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.216250037309615268",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "kind": "cash",
+          "provenance_ids": ["copy:1/source:portfolio-ledger"]
+        },
+        {
+          "dimension": "geography",
+          "before_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "14941065346319100000000",
+              "denominator": "1663145363006813570812429",
+              "display_decimal": "0.008983619639420472",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.025"
+          },
+          "final_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "44823196038957300000000",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.026950868852070074",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "kind": "category",
+          "category_id": "CHN",
+          "label": "CHN",
+          "provenance_ids": ["copy:24/source:market-data"]
+        },
+        {
+          "dimension": "geography",
+          "before_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "14941065346319100000000",
+              "denominator": "1663145363006813570812429",
+              "display_decimal": "0.008983619639420472",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.025"
+          },
+          "final_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "44823196038957300000000",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.026950868852070074",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "kind": "category",
+          "category_id": "DEU",
+          "label": "DEU",
+          "provenance_ids": ["copy:24/source:market-data"]
+        },
+        {
+          "dimension": "geography",
+          "before_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "424026948175463158572429",
+              "denominator": "1663145363006813570812429",
+              "display_decimal": "0.254954832937069017",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.2"
+          },
+          "final_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "424026948175463158572429",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.254954926910791144",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "kind": "category",
+          "category_id": "ITA",
+          "label": "ITA",
+          "provenance_ids": ["copy:24/source:market-data"]
+        },
+        {
+          "dimension": "geography",
+          "before_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "334629643532116270000000",
+              "denominator": "1663145363006813570812429",
+              "display_decimal": "0.201202883990330652",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.35"
+          },
+          "final_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "603136698984003270000000",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.362648349753117503",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "kind": "category",
+          "category_id": "USA",
+          "label": "USA",
+          "provenance_ids": ["copy:24/source:market-data"]
+        },
+        {
+          "dimension": "geography",
+          "before_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "25514116621595942240000",
+              "denominator": "1663145363006813570812429",
+              "display_decimal": "0.015340881915137454",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.2"
+          },
+          "final_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "186679596515058342240000",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.112244948322335937",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "kind": "category",
+          "category_id": "allocation.uncategorised",
+          "label": "Uncategorised",
+          "provenance_ids": ["copy:23/source:market-data"]
+        },
+        {
+          "dimension": "geography",
+          "before_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "849092523985000000000000",
+              "denominator": "1663145363006813570812429",
+              "display_decimal": "0.510534161878621935",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "target_weight": {
+            "kind": "finite_decimal",
+            "value": "0.2"
+          },
+          "final_weight": {
+            "kind": "available",
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "359655114236371000000000",
+              "denominator": "1663144749988810370812429",
+              "display_decimal": "0.216250037309615268",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          "kind": "cash",
+          "provenance_ids": ["copy:1/source:portfolio-ledger"]
+        }
+      ],
+      "accounting": {
+        "current_invested": {
+          "value": {
+            "kind": "exact_ratio",
+            "numerator": "814052839021813570812429",
+            "denominator": "28003102700000000000",
+            "display_decimal": "29070.094401425509567282",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "currency": "EUR"
+        },
+        "selected_funding": {
+          "value": {
+            "kind": "exact_ratio",
+            "numerator": "8490925239850",
+            "denominator": "280031027",
+            "display_decimal": "30321.373066456668032003",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "currency": "EUR"
+        },
+        "reachable_funding": {
+          "value": {
+            "kind": "exact_ratio",
+            "numerator": "8490925239850",
+            "denominator": "280031027",
+            "display_decimal": "30321.373066456668032003",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "currency": "EUR"
+        },
+        "trapped_funding": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "fixed_reference": {
+          "value": {
+            "kind": "exact_ratio",
+            "numerator": "1663145363006813570812429",
+            "denominator": "28003102700000000000",
+            "display_decimal": "59391.467467882177599285",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "currency": "EUR"
+        },
+        "final_invested": {
+          "value": {
+            "kind": "exact_ratio",
+            "numerator": "1303489635752439370812429",
+            "denominator": "28003102700000000000",
+            "display_decimal": "46548.043254951151209842",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "currency": "EUR"
+        },
+        "shortfall": {
+          "value": {
+            "kind": "exact_ratio",
+            "numerator": "1798278636271871",
+            "denominator": "140015513500",
+            "display_decimal": "12843.424212931026389444",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "currency": "EUR"
+        },
+        "free_cash": {
+          "value": {
+            "kind": "exact_ratio",
+            "numerator": "359655114236371",
+            "denominator": "28003102700",
+            "display_decimal": "12843.402321856677688791",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "currency": "EUR"
+        },
+        "physical_reserves": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "economic_losses": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "rounding_delta": {
+          "value": {
+            "kind": "exact_ratio",
+            "numerator": "766272504",
+            "denominator": "35003878375",
+            "display_decimal": "0.021891074348700653",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "currency": "EUR"
+        },
+        "rounding_bound": {
+          "value": {
+            "kind": "exact_ratio",
+            "numerator": "12500000",
+            "denominator": "280031027",
+            "display_decimal": "0.044637910784078937",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "currency": "EUR"
+        },
+        "identity_delta": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        }
+      },
+      "costs": {
+        "buy_fees": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "sell_fees": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "fx_spread_loss": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "execution_margin_cost": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "broker_withheld_tax": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "self_reserved_tax": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "foreign_withholding_tax": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        }
+      },
+      "plan_accounts": {
+        "initial_wealth": {
+          "value": {
+            "kind": "exact_ratio",
+            "numerator": "1663145363006813570812429",
+            "denominator": "28003102700000000000",
+            "display_decimal": "59391.467467882177599285",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "currency": "EUR"
+        },
+        "final_wealth": {
+          "value": {
+            "kind": "exact_ratio",
+            "numerator": "1663144749988810370812429",
+            "denominator": "28003102700000000000",
+            "display_decimal": "59391.445576807828898632",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "currency": "EUR"
+        },
+        "money_lost": {
+          "buy_fees": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "sell_fees": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "fx_spread_loss": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "execution_margin_cost": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "broker_withheld_tax": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "self_reserved_tax": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "foreign_withholding_tax": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "rounding": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "766272504",
+              "denominator": "35003878375",
+              "display_decimal": "0.021891074348700653",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          }
+        },
+        "uninvested": {
+          "value": {
+            "kind": "exact_ratio",
+            "numerator": "45050256248371",
+            "denominator": "140015513500",
+            "display_decimal": "321.751891074348700653",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "currency": "EUR"
+        }
+      },
+      "score": {
+        "distance_weight": {
+          "kind": "finite_decimal",
+          "value": "1"
+        },
+        "target_distance": {
+          "kind": "exact_ratio",
+          "numerator": "903278264390705797942175577989069706225943967943",
+          "denominator": "19604344020668682250000000000000000000000",
+          "display_decimal": "46075413.869415253534522181",
+          "display_scale": 18,
+          "display_authority": "non_authoritative"
+        },
+        "distance_per_wealth": {
+          "value": {
+            "kind": "exact_ratio",
+            "numerator": "903278264390705797942175577989069706225943967943",
+            "denominator": "1164330760132714530580354293086457500000000000",
+            "display_decimal": "775.79180703578333054",
+            "display_scale": 17,
+            "display_authority": "non_authoritative"
+          },
+          "currency": "EUR"
+        },
+        "wealth_loss": {
+          "value": {
+            "kind": "exact_ratio",
+            "numerator": "766272504",
+            "denominator": "35003878375",
+            "display_decimal": "0.021891074348700653",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "currency": "EUR"
+        },
+        "plan_score": {
+          "value": {
+            "kind": "exact_ratio",
+            "numerator": "903303752841942342342254930414752750545943967943",
+            "denominator": "1164330760132714530580354293086457500000000000",
+            "display_decimal": "775.813698110132031193",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "currency": "EUR"
+        },
+        "largest_deviation_before": {
+          "kind": "exact_ratio",
+          "numerator": "3195392955443186429187571",
+          "denominator": "16631453630068135708124290",
+          "display_decimal": "0.19212950512432722",
+          "display_scale": 17,
+          "display_authority": "non_authoritative"
+        },
+        "largest_deviation_after": {
+          "kind": "exact_ratio",
+          "numerator": "1472631554228132570812429",
+          "denominator": "16631453630068135708124290",
+          "display_decimal": "0.088544969488761368",
+          "display_scale": 18,
+          "display_authority": "non_authoritative"
+        },
+        "largest_deviation_before_item": {
+          "kind": "cash",
+          "broker_id": "broker:1",
+          "currency": "EUR"
+        },
+        "largest_deviation_after_item": {
+          "kind": "asset",
+          "asset_id": "asset:6"
+        },
+        "tie_breaks": [
+          {
+            "objective_code": "operation_count",
+            "status": "rejected"
+          },
+          {
+            "objective_code": "route_priority",
+            "status": "rejected"
+          },
+          {
+            "objective_code": "canonical",
+            "status": "unfinished"
+          }
+        ]
+      },
+      "tax_basket_rows": [],
+      "tax_scope_rows": [],
+      "tax_reserves": [],
+      "asset_type_tax_rows": [],
+      "objectives": {
+        "stages": [
+          {
+            "objective_code": "plan_score",
+            "ordinal": 1,
+            "sense": "min",
+            "unit": {
+              "kind": "valuation_money",
+              "currency_code": "EUR"
+            },
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "903303752841942342342254930414752750545943967943",
+              "denominator": "1164330760132714530580354293086457500000000000",
+              "display_decimal": "775.813698110132031193",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            }
+          },
+          {
+            "objective_code": "operation_count",
+            "ordinal": 2,
+            "sense": "min",
+            "unit": {
+              "kind": "count"
+            },
+            "value": {
+              "kind": "finite_decimal",
+              "value": "6"
+            }
+          },
+          {
+            "objective_code": "route_priority",
+            "ordinal": 3,
+            "sense": "min",
+            "unit": {
+              "kind": "ordinal_penalty"
+            },
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            }
+          }
+        ],
+        "tie_break": {
+          "code": "canonical_key",
+          "unit": {
+            "kind": "canonical_key"
+          },
+          "ordered_keys": [
+            "fx:8:broker:1:EUR:USD",
+            "transfer:8:broker:18:broker:2:EUR",
+            "fx:8:broker:1:USD:EUR",
+            "transfer:8:broker:18:broker:2:USD",
+            "fx:8:broker:2:EUR:USD",
+            "transfer:8:broker:28:broker:1:EUR",
+            "fx:8:broker:2:USD:EUR",
+            "transfer:8:broker:28:broker:1:USD",
+            "buy:route:7",
+            "buy:route:8",
+            "buy:route:13",
+            "buy:route:14",
+            "buy:route:19",
+            "buy:route:20",
+            "buy:route:15",
+            "buy:route:16",
+            "buy:route:17",
+            "buy:route:18",
+            "buy:route:9",
+            "buy:route:10",
+            "buy:route:11",
+            "buy:route:12"
+          ]
+        }
+      }
+    },
+    "deployment": {
+      "kind": "unavailable",
+      "reason_code": "allocation.deployment_omitted"
+    }
+  }
+}

@@ -12,6 +12,10 @@
     import BrokerTile from '../shared/BrokerTile.svelte';
     import CurrencyCode from '../shared/CurrencyCode.svelte';
     import PlannerDialog from '../shared/PlannerDialog.svelte';
+    import {getPlannerProfile, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
 
     interface Props {
         kind: 'liquidity' | 'brokers';
@@ -23,7 +27,7 @@
 
     let {kind, draft, accountGeneration, onclose, oncopied}: Props = $props();
 
-    const testid = $derived(kind === 'liquidity' ? 'pac-planner-liquidity-copy' : 'pac-planner-broker-copy');
+    const testid = $derived(kind === 'liquidity' ? testId('liquidity-copy', profile) : testId('broker-copy', profile));
     const load = new SourceLoad();
     let scope = $state<ScopeBroker[] | null>(null);
     let scopeFailed = $state(false);

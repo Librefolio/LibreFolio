@@ -10,6 +10,7 @@ from typing import Annotated, List, Literal, Optional, Union
 
 from pydantic import BeforeValidator, Field, field_validator, model_validator
 
+from backend.app.schemas.broker_profile import BrokerOperatingProfile
 from backend.app.schemas.common import Currency, CurrencyCode, SafeDecimal, StrictModel
 
 
@@ -138,7 +139,8 @@ class PortfolioPlannerSourceSnapshot(StrictModel):
     target_currency: CurrencyCode
     generated_at: datetime
     requested_sections: List[PlannerSourceSection]
-    source_revision: Literal["1.0.0"]
+    #: 1.1.0 (project 67, P3): a Broker row carries its operating profile and `operating_profile_status`.
+    source_revision: Literal["1.1.0"]
 
     @field_validator("generated_at")
     @classmethod
@@ -201,8 +203,16 @@ class PortfolioPlannerSourceBroker(StrictModel):
     active: bool
     allow_cash_overdraft: bool
     allow_asset_shorting: bool
-    execution_profile_status: Literal["not_available"]
+    #: `available` when the account keeps a readable operating profile (P3 of project 67); then `operating_profile` is it.
+    operating_profile_status: Literal["not_available", "available"]
+    operating_profile: Optional[BrokerOperatingProfile] = None
     provenance_id: PlannerSourceProvenanceId
+
+    @model_validator(mode="after")
+    def validate_operating_profile(self) -> PortfolioPlannerSourceBroker:
+        if (self.operating_profile_status == "available") != (self.operating_profile is not None):
+            raise ValueError("operating_profile_status is 'available' exactly when an operating_profile is given")
+        return self
 
 
 class PortfolioPlannerSourceHolding(StrictModel):

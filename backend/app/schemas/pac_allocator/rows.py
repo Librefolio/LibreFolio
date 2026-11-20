@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from typing import Annotated, Literal, Union
 
 from pydantic import Field, model_validator
@@ -14,9 +15,9 @@ from backend.app.schemas.pac_allocator.base import (
     PlannerConversionMode,
     PlannerFixedDecimal,
     PlannerId,
-    PlannerIssueCode,
     PlannerLabel,
     PlannerMessageKey,
+    PlannerMoneyInput,
     PlannerNonNegativeMoneyInput,
     PlannerPositiveDecimal,
     PlannerPositiveInteger,
@@ -28,8 +29,8 @@ from backend.app.schemas.pac_allocator.base import (
     require_unique,
 )
 from backend.app.schemas.pac_allocator.evidence import OBJECTIVE_SIGN_DOMAINS, CanonicalKeyUnit, NumericObjectiveUnit, ObjectiveCode, ObjectiveSense, objective_unit_kind
-from backend.app.schemas.pac_allocator.exact import ExactFxRate, ExactMoney, ExactNumber, ExactNumberAvailability, ExactPrice, ExactRatio, available_fraction, exact_fraction, fixed_fraction, money_fraction
-from backend.app.schemas.pac_allocator.request import CurrencySpec, PlannerFundingSourceRef
+from backend.app.schemas.pac_allocator.exact import AvailableExactNumber, ExactFxRate, ExactMoney, ExactNumber, ExactNumberAvailability, ExactPrice, ExactRatio, available_fraction, exact_fraction, fixed_fraction, money_fraction
+from backend.app.schemas.pac_allocator.request import CurrencySpec, PlannerFundingSourceRef, RebalancerLossScopeInput
 
 
 class PlannerCatalogAsset(AllocationStrictModel):
@@ -93,19 +94,64 @@ class PacAssetPlanRow(AllocationStrictModel):
     residual: ExactMoney
     final_weight: ExactNumberAvailability
     buy_mid_value: ExactMoney
+    minimum: ExactMoney | None = Field(description="The Asset's minimum final value as an amount in the valuation currency, whichever form the request gave it; null when not set.")
+    maximum: ExactMoney | None = Field(description="The Asset's maximum final value as an amount in the valuation currency, whichever form the request gave it; null when not set.")
+
+
+class PacCashEntryRow(AllocationStrictModel):
+    """A cash entry with a limit: the final spendable cash of one Broker in one currency, valued in the valuation currency, and its limits."""
+
+    broker_id: PlannerId
+    currency: CurrencyCode
+    final_value: ExactMoney
+    minimum: ExactMoney | None = Field(description="The cell's minimum final cash as an amount in the valuation currency; null when not set.")
+    maximum: ExactMoney | None = Field(description="The cell's maximum final cash as an amount in the valuation currency; null when not set.")
 
 
 class RebalancerAssetPlanRow(AllocationStrictModel):
+    """An Asset before, at its target and after the plan (contract §6.2). Every weight is a share of ``F``, the wealth the
+    plan starts from, so the Asset rows, the cash item rows and the uninvested row sum to one before and after."""
+
     asset_id: PlannerId
     before_value: ExactMoney
+    before_weight: ExactNumber
     target_weight: ExactNumber
     target_value: ExactMoney
     final_value: ExactMoney
+    final_weight: ExactNumber
     residual: ExactMoney
-    before_weight: ExactNumberAvailability
-    final_weight: ExactNumberAvailability
     buy_mid_value: ExactMoney
     sell_mid_value: ExactMoney
+    minimum: ExactMoney | None = Field(description="The Asset's minimum final value as an amount in the valuation currency, whichever form the request gave it; null when not set.")
+    maximum: ExactMoney | None = Field(description="The Asset's maximum final value as an amount in the valuation currency, whichever form the request gave it; null when not set.")
+
+
+class RebalancerCashItemRow(AllocationStrictModel):
+    """A cash item of the request (a Broker's cash in one currency, with a weight or a limit), before, at its target and
+    after the plan; its spendable cash valued in the valuation currency, every weight a share of ``F``. Only an item with a
+    target weight is an item of the distance; the cash of one with only a limit is part of the uninvested row."""
+
+    broker_id: PlannerId
+    currency: CurrencyCode
+    before_value: ExactMoney
+    before_weight: ExactNumber
+    target_weight: ExactNumber
+    target_value: ExactMoney
+    final_value: ExactMoney
+    final_weight: ExactNumber
+    residual: ExactMoney
+    minimum: ExactMoney | None = Field(description="The item's minimum final cash as an amount in the valuation currency; null when not set.")
+    maximum: ExactMoney | None = Field(description="The item's maximum final cash as an amount in the valuation currency; null when not set.")
+
+
+class RebalancerUninvestedRow(AllocationStrictModel):
+    """What is neither in an Asset nor in a cash item with a target, before and after the plan: ``N = F − Assets − cash
+    items with a target``. Its target is zero. After the plan it includes the money the plan lost."""
+
+    before_value: ExactMoney
+    before_weight: ExactNumber
+    final_value: ExactMoney
+    final_weight: ExactNumber
 
 
 class PlannerFundingAction(AllocationStrictModel):
@@ -119,44 +165,12 @@ class PlannerFundingAction(AllocationStrictModel):
     provenance_ids: Annotated[list[PlannerId], Field(min_length=1)]
 
 
-class PlannerFxAction(AllocationStrictModel):
-    action_id: PlannerId
-    conversion_id: PlannerId = Field(description="The Broker x currency-pair conversion this engine decision belongs to; the conversion, not the action, is what gets executed.")
-    order_route_id: PlannerId = Field(description="Key of the engine decision. The credit is pooled in the Broker's cash in the destination currency and funds every order of that Broker in that currency, so this is not the order the conversion pays for.")
-    broker_id: PlannerId
-    source_debit: PlannerPositiveMoneyInput
-    destination_credit: PlannerPositiveMoneyInput
-    spot_rate: ExactFxRate
-    effective_rate: ExactFxRate
-    spread_loss: ExactMoney
-    provenance_ids: Annotated[list[PlannerId], Field(min_length=1)]
-
-    @model_validator(mode="after")
-    def validate_action_rates_and_costs(self) -> PlannerFxAction:
-        if (self.spot_rate.source_currency, self.spot_rate.destination_currency) != (
-            self.source_debit.currency,
-            self.destination_credit.currency,
-        ):
-            raise ValueError("FX action rates must follow the posted source-to-destination direction")
-        if (self.effective_rate.source_currency, self.effective_rate.destination_currency) != (
-            self.source_debit.currency,
-            self.destination_credit.currency,
-        ):
-            raise ValueError("Effective FX rate must follow the posted source-to-destination direction")
-        if exact_fraction(self.effective_rate.value) > exact_fraction(self.spot_rate.value):
-            raise ValueError("Effective FX rate cannot exceed the approved spot rate")
-        if exact_fraction(self.spread_loss.value) < 0:
-            raise ValueError("FX spread loss cannot be negative")
-        return self
-
-
 class PlannerConversion(AllocationStrictModel):
-    """One currency conversion per Broker and currency pair, aggregated from the engine's FX actions.
+    """One currency conversion per Broker and ordered currency pair: the engine's own decision.
 
-    The engine decides FX per order route, but the credit lands in a cash pool that every
-    order of that Broker in that currency shares, so only the pair total is a fact of the
-    plan. ``source_debit`` and ``spread_loss`` sum the exact action figures;
-    ``destination_credit`` sums the posted credits the ledger reconciles against.
+    The credit lands in a cash pool that every order of that Broker in that currency shares, so the pair is what the plan
+    executes. ``source_debit`` is the exact amount converted, ``destination_credit`` the posted credit the ledger reconciles
+    against, ``spread_loss`` the exact cost in the valuation currency.
     """
 
     conversion_id: PlannerId
@@ -168,7 +182,6 @@ class PlannerConversion(AllocationStrictModel):
     spot_rate: ExactFxRate
     effective_rate: ExactFxRate
     spread_loss: ExactMoney
-    fx_action_ids: Annotated[list[PlannerId], Field(min_length=1)]
     provenance_ids: Annotated[list[PlannerId], Field(min_length=1)]
 
     @model_validator(mode="after")
@@ -182,7 +195,22 @@ class PlannerConversion(AllocationStrictModel):
             raise ValueError("Effective conversion rate cannot exceed the approved spot rate")
         if exact_fraction(self.spread_loss.value) < 0:
             raise ValueError("Conversion spread loss cannot be negative")
-        require_unique(self.fx_action_ids, "Conversion FX action IDs")
+        return self
+
+
+class PlannerTransfer(AllocationStrictModel):
+    """Cash moved from one Broker to another, in one currency, free and instant (contract §6.3, Rebalancer)."""
+
+    transfer_id: PlannerId
+    sequence: PlannerPositiveInteger
+    source_broker_id: PlannerId
+    destination_broker_id: PlannerId
+    amount: PlannerPositiveMoneyInput
+
+    @model_validator(mode="after")
+    def validate_transfer(self) -> PlannerTransfer:
+        if self.source_broker_id == self.destination_broker_id:
+            raise ValueError("A transfer moves cash between two different Brokers")
         return self
 
 
@@ -251,7 +279,6 @@ class PlannerBuyOrderRow(AllocationStrictModel):
     execution_margin_cost: ExactMoney
     cash_debit: PlannerPositiveMoneyInput
     fee: PlannerNonNegativeMoneyInput
-    fx_cost: ExactMoney = Field(description="Always zero: a conversion funds a shared Broker x currency cash pool, so its spread is published on the conversion, not attributed to one order.")
     buffer: PlannerNonNegativeMoneyInput
     explanation_keys: list[PlannerMessageKey]
     provenance_ids: Annotated[list[PlannerId], Field(min_length=1)]
@@ -274,12 +301,30 @@ class PlannerBuyOrderRow(AllocationStrictModel):
             raise ValueError("BUY mid value must be positive")
         if exact_fraction(self.execution_margin_cost.value) < 0:
             raise ValueError("BUY execution-margin cost cannot be negative")
-        if exact_fraction(self.fx_cost.value) != 0:
-            raise ValueError("BUY FX cost must be zero: conversion spreads are published on the conversion")
         return self
 
 
+def _validate_sell_currencies(row: PlannerSellOrderRow) -> None:
+    """A sale's prices, fee, taxes and net credit are in the order currency; its cost basis and gain in one other, the valuation currency."""
+    if {row.source_price.currency, row.mid_price.currency, row.sell_price.currency} != {row.gross_credit.currency}:
+        raise ValueError("SELL prices and gross credit must use one order currency")
+    if len({row.source_price.quote_base_quantity, row.mid_price.quote_base_quantity, row.sell_price.quote_base_quantity}) != 1:
+        raise ValueError("SELL prices must use one quote base quantity")
+    if {row.fee.currency, row.foreign_withholding_tax.currency, row.tax.currency, row.net_credit.currency} != {row.gross_credit.currency}:
+        raise ValueError("SELL fee, taxes and net credit must use the order currency")
+    if row.cost_basis.currency != row.realized_gain.currency:
+        raise ValueError("SELL cost basis and realized gain must use one currency, the valuation currency")
+    if isinstance(row.instruction, MonetaryAmountInstruction) and {row.instruction.amount.currency, row.instruction.order_amount_step.currency} != {row.gross_credit.currency}:
+        raise ValueError("Monetary SELL instruction must use the order currency")
+
+
 class PlannerSellOrderRow(AllocationStrictModel):
+    """A sale (contract §6.3): the gross credit, the fee, the foreign withholding and the tax, all in the order currency, and
+    what is left, ``net_credit``, which may be zero or negative. ``cost_basis`` and ``realized_gain`` are in the valuation
+    currency, where the tax is computed; a loss is a negative gain. ``tax_handling`` says whether the Broker withholds the tax
+    (an administered regime) or the plan sets it aside (a declarative one). ``reason`` is a label the report computes:
+    ``loss_offset`` is a sale at a loss of an Asset that was not above its target before the plan."""
+
     kind: Literal["sell"]
     order_id: PlannerId
     sequence: PlannerPositiveInteger
@@ -295,32 +340,26 @@ class PlannerSellOrderRow(AllocationStrictModel):
     execution_margin_cost: ExactMoney
     gross_credit: PlannerPositiveMoneyInput
     fee: PlannerNonNegativeMoneyInput
-    cost_basis: PlannerNonNegativeMoneyInput
-    taxable_gain: PlannerNonNegativeMoneyInput
-    tax_reserve: PlannerNonNegativeMoneyInput
-    withholding_kind: Literal["broker_withheld", "self_reserved"]
-    spendable_credit: PlannerPositiveMoneyInput
-    irreducibility_evidence_ref: PlannerId
+    cost_basis: ExactMoney
+    realized_gain: ExactMoney
+    foreign_withholding_tax: PlannerNonNegativeMoneyInput
+    tax: PlannerNonNegativeMoneyInput
+    tax_handling: Literal["withheld", "reserved"]
+    net_credit: PlannerMoneyInput
+    reason: Literal["rebalancing", "loss_offset"]
     explanation_keys: list[PlannerMessageKey]
     provenance_ids: Annotated[list[PlannerId], Field(min_length=1)]
 
     @model_validator(mode="after")
     def validate_order_value(self) -> PlannerSellOrderRow:
-        price_currencies = {self.source_price.currency, self.mid_price.currency, self.sell_price.currency}
-        if price_currencies != {self.gross_credit.currency}:
-            raise ValueError("SELL prices and gross credit must use one order currency")
-        if len({self.source_price.quote_base_quantity, self.mid_price.quote_base_quantity, self.sell_price.quote_base_quantity}) != 1:
-            raise ValueError("SELL prices must use one quote base quantity")
+        _validate_sell_currencies(self)
         if exact_fraction(self.sell_price.value) > exact_fraction(self.mid_price.value):
             raise ValueError("SELL execution price cannot exceed mid price")
-        posted_currencies = {self.fee.currency, self.tax_reserve.currency, self.spendable_credit.currency}
-        if posted_currencies != {self.gross_credit.currency}:
-            raise ValueError("SELL fee, tax reserve, and spendable credit must use the order currency")
-        if isinstance(self.instruction, MonetaryAmountInstruction):
-            if {self.instruction.amount.currency, self.instruction.order_amount_step.currency} != {self.gross_credit.currency}:
-                raise ValueError("Monetary SELL instruction must use the order currency")
-        if fixed_fraction(self.spendable_credit.amount) != fixed_fraction(self.gross_credit.amount) - fixed_fraction(self.fee.amount) - fixed_fraction(self.tax_reserve.amount):
-            raise ValueError("SELL spendable credit must equal gross credit less fee and tax reserve")
+        expected_net = fixed_fraction(self.gross_credit.amount) - fixed_fraction(self.fee.amount) - fixed_fraction(self.foreign_withholding_tax.amount) - fixed_fraction(self.tax.amount)
+        if fixed_fraction(self.net_credit.amount) != expected_net:
+            raise ValueError("SELL net credit must equal gross credit less fee, foreign withholding and tax")
+        if money_fraction(self.cost_basis) < 0:
+            raise ValueError("SELL cost basis cannot be negative")
         if exact_fraction(self.mid_value.value) <= 0:
             raise ValueError("SELL mid value must be positive")
         if exact_fraction(self.execution_margin_cost.value) < 0:
@@ -334,39 +373,23 @@ type RebalancerOrderRow = Annotated[
 ]
 
 
-class SellIrreducibilityCheck(AllocationStrictModel):
-    kind: Literal["decrement_one_quantum", "zero_row"]
-    result: Literal["closed_no_better_candidate"]
-    closure_kind: Literal["deterministic_conflict", "exhaustive_oracle"]
-    blocking_issue_codes: Annotated[list[PlannerIssueCode], Field(min_length=1)]
-
-
-class SellIrreducibilityEvidence(AllocationStrictModel):
-    evidence_id: PlannerId
-    order_id: PlannerId
-    checks: Annotated[list[SellIrreducibilityCheck], Field(min_length=2, max_length=2)]
-
-    @model_validator(mode="after")
-    def validate_counterfactual_order(self) -> SellIrreducibilityEvidence:
-        if [check.kind for check in self.checks] != ["decrement_one_quantum", "zero_row"]:
-            raise ValueError("SELL irreducibility requires decrement-one then zero-row counterfactuals")
-        return self
-
-
 class PlannerLedgerRow(AllocationStrictModel):
     broker_id: PlannerId
     currency: CurrencyCode
     initial_selected: PlannerFixedDecimal
     funding_in: PlannerFixedDecimal
     funding_out: PlannerFixedDecimal
+    transfer_in: PlannerFixedDecimal = Field(description="Cash that arrives from another Broker of the plan in this currency.")
+    transfer_out: PlannerFixedDecimal = Field(description="Cash that leaves for another Broker of the plan in this currency.")
     fx_debit: PlannerFixedDecimal
     fx_credit: PlannerFixedDecimal
     buy_debit: PlannerFixedDecimal
     gross_sell_credit: PlannerFixedDecimal
     buy_fees: PlannerFixedDecimal
     sell_fees: PlannerFixedDecimal
-    broker_withheld_tax: PlannerFixedDecimal
-    self_reserved_tax: PlannerFixedDecimal
+    broker_withheld_tax: PlannerFixedDecimal = Field(description="Tax withheld by a Broker whose tax_regime is administered.")
+    foreign_withholding_tax: PlannerFixedDecimal = Field(description="Tax a foreign source withheld before the cash reached the cell.")
+    self_reserved_tax: PlannerFixedDecimal = Field(description="Tax the plan sets aside for a Broker whose tax_regime is declarative: the Broker withholds nothing.")
     rounding_delta: ExactNumber = Field(description="Raw posted-exact rounding delta; credits are negated in the accounting identity.")
     final_spendable: PlannerFixedDecimal
     final_physical: PlannerFixedDecimal
@@ -380,6 +403,8 @@ class PlannerLedgerRow(AllocationStrictModel):
             "initial_selected",
             "funding_in",
             "funding_out",
+            "transfer_in",
+            "transfer_out",
             "fx_debit",
             "fx_credit",
             "buy_debit",
@@ -387,6 +412,7 @@ class PlannerLedgerRow(AllocationStrictModel):
             "buy_fees",
             "sell_fees",
             "broker_withheld_tax",
+            "foreign_withholding_tax",
             "self_reserved_tax",
         )
         if any(fixed_fraction(getattr(self, name)) < 0 for name in nonnegative_fields):
@@ -396,12 +422,15 @@ class PlannerLedgerRow(AllocationStrictModel):
             + fixed_fraction(self.funding_in)
             + fixed_fraction(self.fx_credit)
             + fixed_fraction(self.gross_sell_credit)
+            + fixed_fraction(self.transfer_in)
             - fixed_fraction(self.funding_out)
+            - fixed_fraction(self.transfer_out)
             - fixed_fraction(self.fx_debit)
             - fixed_fraction(self.buy_debit)
             - fixed_fraction(self.buy_fees)
             - fixed_fraction(self.sell_fees)
             - fixed_fraction(self.broker_withheld_tax)
+            - fixed_fraction(self.foreign_withholding_tax)
             - fixed_fraction(self.self_reserved_tax)
         )
         if expected_spendable != fixed_fraction(self.final_spendable):
@@ -451,25 +480,55 @@ class PacExposurePlanRow(AllocationStrictModel):
         return self
 
 
-class RebalancerExposurePlanRow(AllocationStrictModel):
+class RebalancerUnavailableWeight(AllocationStrictModel):
+    """A Rebalancer exposure weight with no base: the wealth it is measured on is zero (before on ``F``, after on ``W``).
+    Its own reasons, so that the PAC's ``UnavailableExactNumber`` (and its fingerprint) stays as it is."""
+
+    kind: Literal["unavailable"]
+    reason: Literal["zero_initial_wealth", "zero_final_wealth"]
+
+
+type RebalancerWeightAvailability = Annotated[Union[AvailableExactNumber, RebalancerUnavailableWeight], Field(discriminator="kind")]
+
+
+class _RebalancerExposureWeights(AllocationStrictModel):
+    """The exposure of the whole portfolio in one dimension (developer's decision of 13/11, project 67): before on the
+    plan's total ``F``, the target on the items' weights as they are (not renormalised), after on the final wealth ``W``."""
+
     dimension: Literal["asset_type", "sector", "geography"]
-    category_id: PlannerId
-    label: PlannerLabel
-    before_weight: ExactNumberAvailability
+    before_weight: RebalancerWeightAvailability
     target_weight: ExactNumber
-    final_weight: ExactNumberAvailability
-    provenance_ids: Annotated[list[PlannerId], Field(min_length=1)]
+    final_weight: RebalancerWeightAvailability
 
     @model_validator(mode="after")
-    def validate_weights(self) -> RebalancerExposurePlanRow:
+    def validate_weights(self) -> _RebalancerExposureWeights:
         target = exact_fraction(self.target_weight)
-        before = available_fraction(self.before_weight)
-        final = available_fraction(self.final_weight)
         if target < 0 or target > 1:
             raise ValueError("Target exposure weight must be between zero and one")
-        if any(value is not None and (value < 0 or value > 1) for value in (before, final)):
+        if any(value is not None and (value < 0 or value > 1) for value in (available_fraction(self.before_weight), available_fraction(self.final_weight))):
             raise ValueError("Available exposure weights must be between zero and one")
         return self
+
+
+class RebalancerExposureCategoryRow(_RebalancerExposureWeights):
+    """A category of the dimension (or the uncategorised rest), as the Assets declare it."""
+
+    kind: Literal["category"]
+    category_id: PlannerId
+    label: PlannerLabel
+    provenance_ids: Annotated[list[PlannerId], Field(min_length=1)]
+
+
+class RebalancerExposureCashRow(_RebalancerExposureWeights):
+    """The cash of the portfolio in this dimension: one row, always there, even at zero. Before: the selected cash and the
+    contributions; target: the cash items' weights; after: the final spendable cash and the contributions not deposited.
+    The tax set aside is not here (it is money lost). No category and no label: the screen names it."""
+
+    kind: Literal["cash"]
+    provenance_ids: list[PlannerId]
+
+
+type RebalancerExposurePlanRow = Annotated[Union[RebalancerExposureCategoryRow, RebalancerExposureCashRow], Field(discriminator="kind")]
 
 
 class PlannerAccountingSummary(AllocationStrictModel):
@@ -493,8 +552,9 @@ class PlannerCostTotals(AllocationStrictModel):
     sell_fees: ExactMoney
     fx_spread_loss: ExactMoney
     execution_margin_cost: ExactMoney
-    broker_withheld_tax: ExactMoney
-    self_reserved_tax: ExactMoney
+    broker_withheld_tax: ExactMoney = Field(description="Tax withheld by a Broker whose tax_regime is administered.")
+    self_reserved_tax: ExactMoney = Field(description="Tax the plan sets aside for a Broker whose tax_regime is declarative: the Broker withholds nothing.")
+    foreign_withholding_tax: ExactMoney
 
 
 class ObjectiveStageResult(AllocationStrictModel):
@@ -541,4 +601,165 @@ class PlannerObjectiveResults(AllocationStrictModel):
         codes = [stage.objective_code for stage in self.stages]
         if ordinals != sorted(ordinals) or len(ordinals) != len(set(ordinals)) or len(codes) != len(set(codes)):
             raise ValueError("Objective stages must have unique codes and ascending ordinals")
+        return self
+
+
+class PlannerMoneyLost(AllocationStrictModel):
+    """The money the plan loses, by entry (contract §6.1), in the valuation currency: its sum is ``F − W``."""
+
+    buy_fees: ExactMoney
+    sell_fees: ExactMoney
+    fx_spread_loss: ExactMoney
+    execution_margin_cost: ExactMoney
+    broker_withheld_tax: ExactMoney
+    self_reserved_tax: ExactMoney
+    foreign_withholding_tax: ExactMoney
+    rounding: ExactMoney = Field(description="What the postings, each rounded against the plan to its currency's minor unit, lose against the exact amounts.")
+
+    def total(self) -> Fraction:
+        return sum((money_fraction(getattr(self, name)) for name in type(self).model_fields), Fraction())
+
+
+class PlannerPlanAccounts(AllocationStrictModel):
+    """The accounts of the plan (contract §6.1, specifica §5-§6), the same for both Tools: the wealth before (``F``: the
+    invested value plus every selected cash and contribution) and after (``W``: Assets plus spendable cash), the money lost
+    on the way, by entry, and what is left uninvested (``N``: neither in an Asset nor in a cash item)."""
+
+    initial_wealth: ExactMoney
+    final_wealth: ExactMoney
+    money_lost: PlannerMoneyLost
+    uninvested: ExactMoney
+
+    @model_validator(mode="after")
+    def validate_accounts(self) -> PlannerPlanAccounts:
+        values = [self.initial_wealth, self.final_wealth, self.uninvested, *(getattr(self.money_lost, name) for name in type(self.money_lost).model_fields)]
+        if len({money.currency for money in values}) != 1:
+            raise ValueError("Plan accounts must use one currency, the valuation currency")
+        if money_fraction(self.initial_wealth) < 0:
+            raise ValueError("Initial wealth cannot be negative")
+        if any(money_fraction(getattr(self.money_lost, name)) < 0 for name in type(self.money_lost).model_fields if name != "rounding"):
+            raise ValueError("Money lost on fees, spread, margins and taxes cannot be negative")
+        if self.money_lost.total() != money_fraction(self.initial_wealth) - money_fraction(self.final_wealth):
+            raise ValueError("The money lost, by entry, must sum to the initial less the final wealth")
+        return self
+
+
+class RebalancerTieBreakStage(AllocationStrictModel):
+    """A tie-break of the Rebalancer, by name, and how SCIP left it: ``closed`` at its optimum, ``unfinished`` at a limit, or
+    ``rejected``: its plan failed the exact check and the plan of the stage before is published (D4). ``canonical`` is the
+    fixed-order tie-break vector, last, on the same level as the named ones (specifica §6.4)."""
+
+    objective_code: ObjectiveCode | Literal["canonical"]
+    status: Literal["closed", "unfinished", "rejected"]
+
+
+class RebalancerAssetItemRef(AllocationStrictModel):
+    """An Asset item of the Rebalancer's distance (an Asset row of the plan)."""
+
+    kind: Literal["asset"]
+    asset_id: PlannerId
+
+
+class RebalancerCashItemRef(AllocationStrictModel):
+    """A cash item of the Rebalancer's distance: a Broker's cash in one currency with a target weight (a cash row of the
+    plan that has a target)."""
+
+    kind: Literal["cash"]
+    broker_id: PlannerId
+    currency: CurrencyCode
+
+
+type RebalancerItemRef = Annotated[Union[RebalancerAssetItemRef, RebalancerCashItemRef], Field(discriminator="kind")]
+
+
+class RebalancerScoreSummary(AllocationStrictModel):
+    """The Rebalancer's score (specifica §6, contract §6.1, §6.6), from the exact values of the published plan.
+
+    ``target_distance`` is ``D``: the squared residuals of the Asset rows and the cash items with a target plus ``N²``, in
+    the valuation currency squared. ``distance_per_wealth`` is ``D / F``. ``wealth_loss`` is ``F − W``. ``distance_weight`` is ``λ`` and
+    ``plan_score`` is ``J = λ·D/F + (F − W)``, both null under «Target first». The largest deviation is the largest
+    ``|weight − target weight|`` over the Asset rows and the cash items with a target, as a share of one, before and after the
+    plan; ``largest_deviation_before_item`` and ``…_after_item`` name the item that reaches it (X14, «which entry»): the
+    first one in the published order (the Asset rows, then the cash rows with a target) on a tie, null when no item is off
+    its target."""
+
+    distance_weight: ExactNumber | None
+    target_distance: ExactNumber
+    distance_per_wealth: ExactMoney
+    wealth_loss: ExactMoney
+    plan_score: ExactMoney | None
+    largest_deviation_before: ExactNumber
+    largest_deviation_after: ExactNumber
+    largest_deviation_before_item: RebalancerItemRef | None
+    largest_deviation_after_item: RebalancerItemRef | None
+    tie_breaks: list[RebalancerTieBreakStage]
+
+    @model_validator(mode="after")
+    def validate_score(self) -> RebalancerScoreSummary:
+        if (self.distance_weight is None) != (self.plan_score is None):
+            raise ValueError("The distance weight and the plan score are both present (a weighted fidelity) or both absent («Target first»)")
+        if self.distance_weight is not None and exact_fraction(self.distance_weight) <= 0:
+            raise ValueError("The distance weight must be positive")
+        if exact_fraction(self.target_distance) < 0 or money_fraction(self.distance_per_wealth) < 0:
+            raise ValueError("The target distance cannot be negative")
+        if any(not 0 <= exact_fraction(value) <= 1 for value in (self.largest_deviation_before, self.largest_deviation_after)):
+            raise ValueError("A deviation of weights is between zero and one")
+        for value, item in ((self.largest_deviation_before, self.largest_deviation_before_item), (self.largest_deviation_after, self.largest_deviation_after_item)):
+            if (item is None) != (exact_fraction(value) == 0):
+                raise ValueError("The largest deviation names its item exactly when some item is off its target")
+        if self.plan_score is not None and self.distance_weight is not None:
+            expected = exact_fraction(self.distance_weight) * money_fraction(self.distance_per_wealth) + money_fraction(self.wealth_loss)
+            if money_fraction(self.plan_score) != expected:
+                raise ValueError("The plan score must equal λ·D/F plus the money lost")
+        require_unique([stage.objective_code for stage in self.tie_breaks], "Rebalancer tie-break stages")
+        return self
+
+
+class RebalancerTaxBasketRow(AllocationStrictModel):
+    """One tax scope (a Broker that withholds, or the declared income) and one basket: gains and losses weighted by the
+    basket's rules, the carried losses used, the taxable base, the tax and the loss left for later (contract §6.4)."""
+
+    scope: RebalancerLossScopeInput
+    basket_id: PlannerId
+    weighted_gains: ExactMoney
+    weighted_losses: ExactMoney
+    carried_losses_used: ExactMoney
+    taxable: ExactMoney
+    tax: ExactMoney
+    loss_left: ExactMoney
+
+    @model_validator(mode="after")
+    def validate_basket(self) -> RebalancerTaxBasketRow:
+        if any(money_fraction(getattr(self, name)) < 0 for name in ("weighted_gains", "weighted_losses", "carried_losses_used", "taxable", "tax", "loss_left")):
+            raise ValueError("Tax basket amounts are magnitudes and cannot be negative")
+        return self
+
+
+class RebalancerTaxScopeRow(AllocationStrictModel):
+    """Whether a tax scope nets sales settled in more than one currency (the note K1 of the interface)."""
+
+    scope: RebalancerLossScopeInput
+    nets_across_currencies: bool
+
+
+class RebalancerTaxReserveRow(AllocationStrictModel):
+    """The tax to set aside on a Broker that withholds nothing, in one currency."""
+
+    broker_id: PlannerId
+    amount: PlannerPositiveMoneyInput
+
+
+class RebalancerAssetTypeTaxRow(AllocationStrictModel):
+    """Gains, losses and tax of the sales, by asset type (the card «gains and losses by type»); ``asset_class`` is the
+    catalog's, null for Assets without one."""
+
+    asset_class: PlannerCode | None
+    realized_gain: ExactMoney
+    realized_loss: ExactMoney
+    tax: ExactMoney
+
+    @model_validator(mode="after")
+    def validate_amounts(self) -> RebalancerAssetTypeTaxRow:
+        if any(money_fraction(getattr(self, name)) < 0 for name in ("realized_gain", "realized_loss", "tax")):
+            raise ValueError("Gains, losses and tax by asset type are magnitudes and cannot be negative")
         return self
