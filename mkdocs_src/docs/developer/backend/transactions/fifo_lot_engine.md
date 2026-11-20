@@ -406,13 +406,26 @@ per-lot accumulators, an audit trail, and asset-level orphans.
 whatever the charge's date. Its audit group has rule `LINKED_TRADE` and the charge's date
 (`_linked_trade_operations`).
 
-A charge **waiting for its trade** — `replay_until` is set and the parent BUY/SELL of its broker is dated after it, read
-from the replayed transactions or, when the caller did not load it, from the event's `parent` facts (`LinkedParent`:
-date, type, broker) — goes on no lot. It is an orphan with its own `LINKED_TRADE` group (no operations, the whole
+A charge whose parent is one of the engine's **DIVIDEND/INTEREST events** of its broker, not after `replay_until`
+(`_linked_income_parent`, 66 M2), goes alone on the lots that earned that income:
+`_holding_operations(income broker, day before the income, …, "INCOME")`, the same D-1 eligibility and quantity
+weights as the income's `ASSET_INCOME_HOLDINGS` group and as a `SAME_DAY_INCOME` tax. Its group has rule
+`LINKED_INCOME` and the charge's date; its `INCOME` operation carries the income's id as `operation_transaction_id`.
+When no lot earned the income, the charge is an orphan with it (developer decision D12): an empty `LINKED_INCOME`
+group, the whole charge as `native_orphan` / `target_orphan`, and the issue
+`ASSET_COST_LINKED_INCOME_NO_ELIGIBLE_LOTS`, dated on the charge, whose params add `parent_transaction_id` and
+`parent_date`. A same-day tax linked to its income takes this branch too: same lots and weights as `SAME_DAY_INCOME`,
+rule `LINKED_INCOME`.
+
+A charge **waiting for its parent** — `replay_until` is set and the parent BUY/SELL or DIVIDEND/INTEREST of its broker
+is dated after it, read from the replayed transactions, then from the engine's income events, then, when the caller
+did not load it, from the event's `parent` facts (`LinkedParent`: date, type, broker) — goes on no lot
+(`_waiting_parent`). It is an orphan with its own group, `LINKED_TRADE` for a trade and `LINKED_INCOME` for an
+income (no operations, the whole
 charge as `native_orphan` / `target_orphan`) and the issue `ASSET_COST_LINKED_PARENT_AFTER_RANGE`, whose params add
 `parent_transaction_id` and `parent_date`. It stays so until the analysis reaches the trade (developer decision, 66
-M1b). A charge linked to a parent the engine knows nothing about, to an income row (M2), to another broker's row or to
-a trade that opened and closed nothing joins its day's pool instead; so does a waiting one when `replay_until` is
+M1b). A charge linked to a parent the engine knows nothing about, to an income known only by its facts, to another
+broker's row or to a trade that opened and closed nothing joins its day's pool instead; so does a waiting one when `replay_until` is
 `None`.
 
 The rest is pooled and matched to operations with a deterministic ladder
@@ -425,9 +438,9 @@ absolute value, as the Dashboard counts fees and taxes:
 | `FEE` | same-day trades → previous-day trades → holdings fallback → orphan |
 | `TAX` | same-day income → same-day trades → previous-day income → previous-day trades → holdings fallback → orphan |
 
-The chosen rule is recorded per group (`LINKED_TRADE`, `SAME_DAY_MIXED_TRADES`, `SAME_DAY_TRADES`,
-`PREVIOUS_DAY_TRADES`, `OPEN_LOTS_FALLBACK`, income-linked variants); within each cost type the `LINKED_TRADE`
-groups come first, by charge date and id. Allocation to a matched trade **crosses** to the lots that
+The chosen rule is recorded per group (`LINKED_TRADE`, `LINKED_INCOME`, `SAME_DAY_MIXED_TRADES`, `SAME_DAY_TRADES`,
+`PREVIOUS_DAY_TRADES`, `OPEN_LOTS_FALLBACK`, income-linked variants); within each cost type the linked groups
+(`LINKED_TRADE` and `LINKED_INCOME` in one list) come first, by charge date and id. Allocation to a matched trade **crosses** to the lots that
 trade touched (BUY → the opened lot; SELL → the FIFO-consumed lots), so a cost follows the same lots the FIFO
 algorithm already selected. A cost with no eligible target becomes `asset_orphan_fees` / `asset_orphan_taxes`.
 

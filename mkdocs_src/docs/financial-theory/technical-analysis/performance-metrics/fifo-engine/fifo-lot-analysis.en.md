@@ -356,6 +356,13 @@ capital-gains tax booked three days after a sale lands on the lots that sale clo
 is outside the analysis (after its end date) stays unallocated, as an orphan cost with its own notice, until the
 trade enters it.
 
+A fee or a tax linked to a **dividend or an interest** — a collection fee, a withholding tax — follows that income:
+it is shared among the lots that earned it, the lots open the day before the income, in proportion to their
+quantities, exactly as the income itself. A dividend of 50 € with lot A holding 10 units and lot B 30 the day
+before gives A 12.50 € and B 37.50 €; a 1 € collection fee linked to it gives A 0.25 € and B 0.75 €, even when a
+buy on the same day opened a third lot. When no lot earned the income, the linked charge stays an orphan cost with
+it, with its own notice; when the income is after the end of the analysis, the charge waits, as for a trade.
+
 The other charges form a cost pool (same broker, same day, same type), matched to the first non-empty target in
 this order:
 
