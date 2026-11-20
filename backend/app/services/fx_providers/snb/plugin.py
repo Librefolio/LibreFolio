@@ -49,8 +49,8 @@ logger = get_logger(__name__)
 # Regex to extract ISO currency code and multiplier from D1 id (e.g. "CNY100" → CNY, 100)
 _D1_RE = re.compile(r"^([A-Z]{3})(\d+)$")
 
-# D1 ids to skip: forward rates and SDR (not real currencies)
-_SKIP_D1_IDS = {"USD3M", "USD6M", "XDR1"}
+# D1 ids to skip: forward rates (not currencies); the SDR (XDR1) is served (Q7 of lane 75)
+_SKIP_D1_IDS = {"USD3M", "USD6M"}
 
 
 @register_provider(FXProviderRegistry)
@@ -181,7 +181,7 @@ class SNBProvider(FXRateProvider):
                 SNBProvider._walk_dimension_items(item.get("dimensionItems", []), iso_to_d1, d1_to_iso)
                 continue
 
-            # Skip forward rates and SDR
+            # Skip forward rates
             if d1_id in _SKIP_D1_IDS:
                 continue
 
