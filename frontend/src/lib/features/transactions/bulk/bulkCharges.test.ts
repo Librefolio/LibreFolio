@@ -135,15 +135,16 @@ function draftByKey(drafts: readonly ChargeDraft[], key: string): ChargeDraft {
     return found[0];
 }
 
-/** The two dependencies `applyChargeDrafts` takes from the editor, as spies. Both return operations WITHOUT `chargeOf`
- *  and `followsParent`: setting them is the module's job, whatever the editor hands back. */
+/** The dependencies `applyChargeDrafts` takes from the editor: two spies, which return operations WITHOUT `chargeOf` and
+ *  `followsParent` (setting them is the module's job, whatever the editor hands back), and the store (`get`, required
+ *  since 66 C22c: `unlinkCharge` reads the saved parent). */
 function makeDeps() {
     const editOpFromTx = vi.fn((id: number): PendingOp | null => {
         const r = get(id);
         return r ? editOp(r, {tempId: `fresh-${id}`}) : null;
     });
     const newChargeOp = vi.fn((draft: ChargeDraft, parent: PendingOp): PendingOp => createOp(`made-${draft.key}`, {...parent.fields, type: draft.type, cash: draft.cash ? {...draft.cash} : null, description: draft.description, quantity: '0', tags: []}));
-    return {editOpFromTx, newChargeOp};
+    return {editOpFromTx, newChargeOp, get};
 }
 
 /** A deep copy, to prove an input was not mutated. */
@@ -1540,5 +1541,124 @@ describe('isPairLeg — the one predicate of «leg of a pair» (66 C22)', () => 
         const fee = byTxId(out, FEE_Q.id);
         expect(fee.chargeOf, 'the adoption names the saved parent, a leg').toBe('t-550');
         expect(isUnderParent(fee, out), 'rule 8: never under a leg').toBe(false);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// 66 C22c — unlinkCharge: «unlink» only from a SAVED parent; a pending link is dropped
+// ---------------------------------------------------------------------------
+
+/**
+ * Consultant's decision (20/11, F7 contract §12.6 and F7-d): `parentUnlink` («scollega», `parent_transaction_id: 0`) is
+ * only for a charge cut from its SAVED parent. A link that is only pending — `chargeOf` a Bulk row that is not its saved
+ * parent, `parentLinkId`, or any link of a new charge (the `linkNew` test of `chargeDraftsFor`) — is undone by dropping it.
+ * `unlinkCharge(op, ops, get)` returns the charge's operation unlinked (assumed: the one operation, not the array); a flag
+ * that is off is absent (`without`), never `false`.
+ *
+ *   - saved parent == the current owner (`chargeOf` its edit row, or `parentLinkId` = it) → `parentUnlink: true`,
+ *     `chargeOf` kept;
+ *   - saved parent P present but another owner now → back to what it was BEFORE that link: unlinked from P
+ *     (`parentUnlink: true`), sitting under P when the Bulk holds P's edit row (`chargeOf` = P's tempId: the «unlink»
+ *     badge needs a `chargeOf`), with no `chargeOf` when P is not in the Bulk; `parentLinkId` and `followsParent`
+ *     dropped either way, and the payload sends 0 (lane correction, 21/11);
+ *   - no saved parent (a saved charge of nobody, or a create) → `chargeOf`, `parentLinkId`, `parentUnlink`,
+ *     `followsParent` and `byParentChoice` dropped; a create that followed its owner (`followsParent`) keeps the owner's
+ *     broker, asset and date it was following, as «Keep» does (`applyDeleteChoice`), every other field its own.
+ * The cells a model cannot hold are left out: a create has no saved parent, and a create row is never a saved parent.
+ *
+ * RED until `bulkCharges.ts` exports `unlinkCharge` (read through the namespace, `c2`): only these cases fail.
+ */
+describe('unlinkCharge — «unlink» only from a saved parent; a pending link is dropped (66 C22c)', () => {
+    type UnlinkCharge = (op: PendingOp, ops: readonly PendingOp[], get: (id: number) => TXReadItem | undefined) => PendingOp;
+    const unlinkCharge: UnlinkCharge = (op, ops, g) => c2<UnlinkCharge>('unlinkCharge')(op, ops, g);
+
+    type Expected = 'unlink-keep-owner' | 'unlink-under-saved' | 'unlink-saved-absent' | 'drop-all';
+    /** `fields`: the fields expected out, when they are not the charge's own. */
+    type Cell = {charge: PendingOp; ops: PendingOp[]; expected: Expected; fields?: DraftFields};
+
+    const newBuy = (): PendingOp => createOp('n-buy', newBuyFields());
+    /** A new FEE whose own broker, asset and date differ from every owner's, so that taking the owner's shows. */
+    const NEW_FEE_FIELDS: DraftFields = {...newBuyFields(), broker_id: 99, asset_id: 202, date: '2026-11-11', type: 'FEE' as DraftFields['type'], quantity: '0', cash: {code: 'EUR', amount: '1.000000'}, description: 'new fee'};
+    const newFee = (chargeOf: string, followsParent = true): PendingOp => createOp('n-fee', {...NEW_FEE_FIELDS}, followsParent ? {chargeOf, followsParent: true} : {chargeOf});
+    /** The new FEE's fields with the broker, asset and date of the owner it followed. */
+    const followed = (owner: DraftFields): DraftFields => ({...NEW_FEE_FIELDS, broker_id: owner.broker_id, asset_id: owner.asset_id, date: owner.date});
+
+    /** The charge among the operations of its case: its owner (when any), another parent, a new BUY. */
+    function cell(charge: PendingOp, others: PendingOp[], expected: Expected, fields?: DraftFields): Cell {
+        return {charge, ops: [...others, charge], expected, fields};
+    }
+
+    const CELLS: Array<[string, () => Cell]> = [
+        // Saved parent == the current owner.
+        ['saved parent == owner, chargeOf its edit row', () => cell(editOp(FEE_A, {chargeOf: 't-501'}), [editOp(BUY_A), editOp(BUY_B)], 'unlink-keep-owner')],
+        ['saved parent == owner, parentLinkId = it (the parent out of the Bulk)', () => cell(editOp(FEE_A, {parentLinkId: BUY_A.id}), [editOp(BUY_B)], 'unlink-keep-owner')],
+        // Saved parent present, another owner now; the saved parent's edit row in the Bulk.
+        ['saved parent present but another, chargeOf another edit row; the saved parent in the Bulk', () => cell(editOp(FEE_A, {chargeOf: 't-511'}), [editOp(BUY_A), editOp(BUY_B)], 'unlink-under-saved')],
+        ['saved parent present but another, chargeOf a create row; the saved parent in the Bulk', () => cell(editOp(FEE_A, {chargeOf: 'n-buy'}), [editOp(BUY_A), newBuy()], 'unlink-under-saved')],
+        ['saved parent present but another, parentLinkId another saved row; the saved parent in the Bulk', () => cell(editOp(FEE_A, {parentLinkId: BUY_B.id}), [editOp(BUY_A)], 'unlink-under-saved')],
+        // The same, the saved parent not in the Bulk.
+        ['saved parent present but another, chargeOf another edit row; the saved parent not in the Bulk', () => cell(editOp(FEE_A, {chargeOf: 't-511'}), [editOp(BUY_B)], 'unlink-saved-absent')],
+        ['saved parent present but another, chargeOf a create row; the saved parent not in the Bulk', () => cell(editOp(FEE_A, {chargeOf: 'n-buy'}), [newBuy()], 'unlink-saved-absent')],
+        ['saved parent present but another, parentLinkId another saved row; the saved parent not in the Bulk', () => cell(editOp(FEE_A, {parentLinkId: BUY_B.id}), [], 'unlink-saved-absent')],
+        // No saved parent.
+        ['no saved parent, chargeOf an edit row', () => cell(editOp(FEE_FREE, {chargeOf: 't-501'}), [editOp(BUY_A)], 'drop-all')],
+        ['no saved parent, chargeOf a create row', () => cell(editOp(FEE_FREE, {chargeOf: 'n-buy'}), [newBuy()], 'drop-all')],
+        ['no saved parent, parentLinkId a saved row', () => cell(editOp(FEE_FREE, {parentLinkId: BUY_B.id}), [editOp(BUY_A)], 'drop-all')],
+        ['no saved parent, chargeOf an edit row, set by a delete choice (byParentChoice)', () => cell({...editOp(FEE_FREE, {chargeOf: 't-501'}), byParentChoice: true} as PendingOp, [editOp(BUY_A)], 'drop-all')],
+        ['the charge is a create, chargeOf an edit row (followsParent): the owner’s broker, asset and date taken', () => cell(newFee('t-501'), [editOp(BUY_A)], 'drop-all', followed(fieldsOf(BUY_A)))],
+        ['the charge is a create, chargeOf a create row (followsParent): the owner’s broker, asset and date taken', () => cell(newFee('n-buy'), [newBuy()], 'drop-all', followed(newBuyFields()))],
+        ['the charge is a create, chargeOf an edit row, opened on its own (no followsParent): its own fields', () => cell(newFee('t-501', false), [editOp(BUY_A)], 'drop-all')],
+    ];
+
+    it.each(CELLS)('%s', (_label, build) => {
+        const {charge, ops, expected, fields} = build();
+        const out = unlinkCharge(charge, ops, get);
+        const flags = {chargeOf: out.chargeOf, parentLinkId: out.parentLinkId, parentUnlink: out.parentUnlink, followsParent: out.followsParent};
+        if (expected === 'unlink-keep-owner') {
+            expect(out.parentUnlink, 'unlinked from its saved parent').toBe(true);
+            expect(out.chargeOf, 'the owner kept').toBe(charge.chargeOf);
+            expect(chargeParentFields(out, ops, get), 'the payload unlinks it').toEqual({parent_transaction_id: 0});
+        } else if (expected === 'unlink-under-saved') {
+            expect(flags, 'back under its saved parent, unlinked from it; the pending link dropped').toEqual({chargeOf: `t-${BUY_A.id}`, parentLinkId: undefined, parentUnlink: true, followsParent: undefined});
+            expect(chargeParentFields(out, ops, get), 'the payload unlinks it from its saved parent').toEqual({parent_transaction_id: 0});
+        } else if (expected === 'unlink-saved-absent') {
+            expect(flags, 'unlinked from its saved parent, which the Bulk does not hold; the pending link dropped').toEqual({chargeOf: undefined, parentLinkId: undefined, parentUnlink: true, followsParent: undefined});
+            expect(chargeParentFields(out, ops, get), 'the payload unlinks it from its saved parent').toEqual({parent_transaction_id: 0});
+        } else {
+            expect({...flags, byParentChoice: (out as WithChoice).byParentChoice}, 'the pending link dropped, nothing else set').toEqual({chargeOf: undefined, parentLinkId: undefined, parentUnlink: undefined, followsParent: undefined, byParentChoice: undefined});
+            expect(chargeParentFields(out, ops, get), 'the payload says nothing about a parent').toBeNull();
+        }
+        expect({op: out.op, tempId: out.tempId, fields: out.fields}, 'the rest of the operation unchanged').toEqual({op: charge.op, tempId: charge.tempId, fields: fields ?? charge.fields});
+    });
+
+    // `applyChargeDrafts` with `deps.get`: FEE_A, saved under BUY_A, unlinked from it here and then linked to BUY_B (the
+    // link «Link» makes: `chargeOf` BUY_B, no `parentUnlink`). In BUY_B's Form its chip is `linkNew`; set to «unlink»,
+    // or left out by the Form (the «dropped» branch at the end), the link made here is undone back to what it was
+    // before it: unlinked from BUY_A, under BUY_A when the Bulk holds it; the payload sends 0.
+    it.each([
+        ['its linkNew chip set to «unlink»', 'unlink', true],
+        ['its linkNew chip left out by the Form', 'dropped', true],
+        ['its linkNew chip set to «unlink», BUY_A not in the Bulk', 'unlink', false],
+        ['its linkNew chip left out by the Form, BUY_A not in the Bulk', 'dropped', false],
+    ] as const)('applyChargeDrafts — FEE_A unlinked from its saved BUY_A, linked to BUY_B, then in BUY_B’s Form %s: unlinked from BUY_A again, payload 0', (_label, how, withA) => {
+        const ops = [...(withA ? [editOp(BUY_A)] : []), editOp(BUY_B), editOp(FEE_B, {chargeOf: 't-511'}), editOp(FEE_A, {chargeOf: 't-511'})];
+        const parent = byTxId(ops, BUY_B.id);
+        const drafts = chargeDraftsFor(parent, ops, get);
+        expect(draftByKey(drafts, `saved-${FEE_A.id}`).linkNew, 'premise: FEE_A is a link made here').toBe(true);
+        const answer = how === 'unlink' ? drafts.map((draft) => (draft.key === `saved-${FEE_A.id}` ? {...draft, state: 'unlink' as const} : draft)) : drafts.filter((draft) => draft.key !== `saved-${FEE_A.id}`);
+
+        const out = applyChargeDrafts(parent, ops, answer, makeDeps());
+
+        const fee = byTxId(out, FEE_A.id);
+        expect({chargeOf: fee.chargeOf, parentLinkId: fee.parentLinkId, parentUnlink: fee.parentUnlink}, 'unlinked from BUY_A, as before the link').toEqual({chargeOf: withA ? `t-${BUY_A.id}` : undefined, parentLinkId: undefined, parentUnlink: true});
+        expect(chargeParentFields(fee, out, get), 'the payload unlinks it from BUY_A').toEqual({parent_transaction_id: 0});
+        expect(byTxId(out, FEE_B.id), 'FEE_B, saved under BUY_B, untouched').toEqual(byTxId(ops, FEE_B.id));
+    });
+
+    it('reads its inputs as given: neither the charge nor the operations mutated', () => {
+        const {charge, ops} = CELLS[2][1]();
+        const before = snapshot({charge, ops});
+        unlinkCharge(charge, ops, get);
+        expect({charge, ops}).toEqual(before);
     });
 });
