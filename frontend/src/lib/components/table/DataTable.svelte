@@ -637,6 +637,8 @@
 
     // Row action handlers
     function handleRowAction(action: RowAction<T>, row: T) {
+        // A blocked action runs on no path (77 SEL-M): its item only says why.
+        if (action.blocked?.(row)) return;
         if (action.requireConfirm) {
             pendingRowAction = {action, row};
             showRowActionModal = true;
@@ -651,17 +653,21 @@
     }
 
     function rowActionsToMenuItems(actions: RowAction<T>[], row: T): ContextMenuItem[] {
-        return actions.map((action) => ({
-            id: action.id,
-            label: typeof action.label === 'function' ? action.label(row) : action.label,
-            icon: action.icon,
-            variant: action.variant,
-            disabled: action.disabled?.(row) ?? false,
-            title: typeof action.title === 'function' ? action.title(row) : action.title,
-            testid: typeof action.testid === 'function' ? action.testid(row) : action.testid,
-            iconClass: action.iconClass?.(row),
-            labelClass: typeof action.labelClass === 'function' ? action.labelClass(row) : action.labelClass,
-        }));
+        return actions.map((action) => {
+            const block = action.blocked?.(row) ?? null;
+            return {
+                id: action.id,
+                label: typeof action.label === 'function' ? action.label(row) : action.label,
+                icon: action.icon,
+                variant: action.variant,
+                blocked: block ? {hint: typeof block.hint === 'function' ? block.hint() : block.hint, reason: block.reason} : undefined,
+                disabled: action.disabled?.(row) ?? false,
+                title: typeof action.title === 'function' ? action.title(row) : action.title,
+                testid: typeof action.testid === 'function' ? action.testid(row) : action.testid,
+                iconClass: action.iconClass?.(row),
+                labelClass: typeof action.labelClass === 'function' ? action.labelClass(row) : action.labelClass,
+            };
+        });
     }
 
     function openRowActionsMenu(row: T, button: HTMLButtonElement): void {
