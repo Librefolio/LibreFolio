@@ -19,7 +19,8 @@ Measured on 19/11/2026 (the site is behind Cloudflare; GET only):
   at most ``RECENT_SPAN_DAYS`` days asks it first, and the whole history only when it does not reach back to the start:
   a daily sync downloads 32 KB, not 8 MB.
 - **Dirty names**: trailing spaces and tabs (``"EURO\\t"``, ``"YEN "``), variants (POUND/POUNDS STERLING, DANISH
-  KRONA/KRONER, JAPANESE YEN) and noise (SDR, WAUA — the African Development Bank's unit of account —, NAIRA, POESO).
+  KRONA/KRONER, JAPANESE YEN) and noise (WAUA — the African Development Bank's unit of account —, NAIRA, POESO). The IMF's SDR is served as XDR
+  (Q7 of lane 75).
   ``CURRENCY_NAMES`` maps the known names; every other row is discarded, and counted in the log.
 - **Conflicting duplicates**: 97 day-and-currency keys appear twice, 64 of them with two different central rates (JPY
   2017-10-09: 2.7072 and 46.0795). Such a day is dropped for that currency, never picked (X-R50); an exact repeat is kept
@@ -64,6 +65,7 @@ CURRENCY_NAMES: dict[str, str] = {
     "DANISH KRONER": "DKK",
     "SOUTH AFRICAN RAND": "ZAR",
     "UAE DIRHAM": "AED",
+    "SDR": "XDR",
 }
 
 _CURRENCIES = sorted({*CURRENCY_NAMES.values(), "NGN"})
@@ -74,10 +76,10 @@ class CBNProvider(FXRateProvider):
     """
     Central Bank of Nigeria FX rate provider.
 
-    Provides the central exchange rate of 11 currencies with NGN as base currency (NGN per 1 unit).
+    Provides the central exchange rate of 12 currencies with NGN as base currency (NGN per 1 unit).
     Data source: the undocumented JSON endpoints of the CBN's rate page.
 
-    Coverage: a fixed name map, 11 currencies plus NGN.
+    Coverage: a fixed name map, 12 currencies plus NGN.
     Update frequency: Nigerian business days.
     """
 
@@ -105,10 +107,10 @@ class CBNProvider(FXRateProvider):
     @property
     def description_i18n(self) -> dict[str, str]:
         return {
-            "en": "Central Bank of Nigeria — the central exchange rate of 11 currencies against the naira (NGN), among them USD, GBP, EUR, the West African CFA franc (XOF), SAR and AED. Nigerian business days, history from 2001. Source: Central Bank of Nigeria.",
-            "it": "Central Bank of Nigeria — il tasso di cambio centrale di 11 valute contro la naira (NGN), tra cui USD, GBP, EUR, il franco CFA dell'Africa occidentale (XOF), SAR e AED. Giorni lavorativi nigeriani, storia dal 2001. Fonte: Central Bank of Nigeria.",
-            "fr": "Central Bank of Nigeria — le taux de change central de 11 devises contre le naira (NGN), dont USD, GBP, EUR, le franc CFA d'Afrique de l'Ouest (XOF), SAR et AED. Jours ouvrables nigérians, historique depuis 2001. Source : Central Bank of Nigeria.",
-            "es": "Central Bank of Nigeria — el tipo de cambio central de 11 monedas contra la naira (NGN), entre ellas USD, GBP, EUR, el franco CFA de África Occidental (XOF), SAR y AED. Días hábiles nigerianos, historial desde 2001. Fuente: Central Bank of Nigeria.",
+            "en": "Central Bank of Nigeria — the central exchange rate of 12 currencies against the naira (NGN), among them USD, GBP, EUR, the West African CFA franc (XOF), SAR and AED. Nigerian business days, history from 2001. Source: Central Bank of Nigeria.",
+            "it": "Central Bank of Nigeria — il tasso di cambio centrale di 12 valute contro la naira (NGN), tra cui USD, GBP, EUR, il franco CFA dell'Africa occidentale (XOF), SAR e AED. Giorni lavorativi nigeriani, storia dal 2001. Fonte: Central Bank of Nigeria.",
+            "fr": "Central Bank of Nigeria — le taux de change central de 12 devises contre le naira (NGN), dont USD, GBP, EUR, le franc CFA d'Afrique de l'Ouest (XOF), SAR et AED. Jours ouvrables nigérians, historique depuis 2001. Source : Central Bank of Nigeria.",
+            "es": "Central Bank of Nigeria — el tipo de cambio central de 12 monedas contra la naira (NGN), entre ellas USD, GBP, EUR, el franco CFA de África Occidental (XOF), SAR y AED. Días hábiles nigerianos, historial desde 2001. Fuente: Central Bank of Nigeria.",
         }
 
     @property
