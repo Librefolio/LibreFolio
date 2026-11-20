@@ -296,6 +296,18 @@ def front_tx_bulk_promote_charges(verbose: bool = False, ui: bool = False, heade
     return _run_playwright("transactions/tx-bulk-promote-charges.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_promote_charges_off(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """«Link as pair» on the Transactions page, off with its reason when a leg has linked charges (project 66, C22)."""
+    print_section("Frontend TX Promote Charges Off Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-promote-charges-off.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_import_charge_links(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """The linked charges a plugin names (ref / parent_ref) through the import wizard to the Bulk and the save (project 66, P1b)."""
     print_section("Frontend TX Import Charge Links Tests")
@@ -889,6 +901,14 @@ def populate_registry(registry: dict) -> None:
         name="TX Bulk Promote Charges Tests",
         desc="Project 66 C21, on a disposable account with two brokers: a saved DEPOSIT with a linked FEE and the saved WITHDRAWAL that cancels it — the Bulk offers no merge while the FEE is linked; «scollega» in the DEPOSIT's Form brings the banner's offer back (the search asked again); merged and saved in one batch (unlink + promote): the server holds the CASH_TRANSFER pair and the FEE with no parent",
         tests="transactions/tx-bulk-promote-charges.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-promote-charges-off",
+        front_tx_promote_charges_off,
+        name="TX Promote Charges Off Tests",
+        desc="Project 66 C22, on a disposable account with two brokers: a saved DEPOSIT with a linked FEE and the saved WITHDRAWAL that cancels it — on the Transactions page «Link as pair» is off (aria-disabled, data-disabled-reason hasCharges), a click opens its reason naming the DEPOSIT and no dialog; without a charge it is on and opens the confirmation",
+        tests="transactions/tx-promote-charges-off.spec.ts",
     )
     add_test(
         cat,

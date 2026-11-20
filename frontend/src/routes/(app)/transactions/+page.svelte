@@ -392,8 +392,13 @@
         });
     });
 
+    /** 66 C22: a pair the linked charges of a row forbid (rule 6) is offered off, with the reason; the backend stays the
+     *  defence (`chargesBlockParentType`). The one place the off state is born: to drop it, return null here. */
+    let promoteChargesHolder = $derived(promoteMatch ? (selectedRows.find((row) => (row.charges_count ?? 0) > 0) ?? null) : null);
+    let promoteHint = $derived(promoteChargesHolder ? $_('transactions.promote.chargesBlock', {values: {type: $_(`transactions.types.${promoteChargesHolder.type}`) || promoteChargesHolder.type, ref: txRowRef(promoteChargesHolder.id, null, $_)}}) : '');
+
     function onPromotePair() {
-        if (selectedRows.length !== 2 || !promoteMatch) return;
+        if (selectedRows.length !== 2 || !promoteMatch || promoteChargesHolder) return;
         const a = selectedRows[0];
         const b = selectedRows[1];
         promoteTarget = {
@@ -839,7 +844,9 @@
                     bulkActions={[
                         {id: 'edit', icon: Pencil, label: () => $_('common.edit') || 'Edit', primary: true, onClick: () => onEditBulk()},
                         {id: 'clone', icon: Copy, label: () => $_('transactions.actions.clone') || 'Clone', onClick: () => onCloneBulk()},
-                        ...(promoteMatch ? [{id: 'promote', icon: Link2, label: () => `🔗 ${$_('transactions.actions.promotePair') || 'Link as pair'}`, onClick: () => onPromotePair()}] : []),
+                        ...(promoteMatch
+                            ? [{id: 'promote', icon: Link2, label: () => `🔗 ${$_('transactions.actions.promotePair') || 'Link as pair'}`, disabled: promoteChargesHolder !== null, hint: () => promoteHint, reason: promoteChargesHolder ? 'hasCharges' : undefined, onClick: () => onPromotePair()}]
+                            : []),
                         ...(linkState.kind !== 'hidden'
                             ? [
                                   {
