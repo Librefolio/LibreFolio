@@ -36,7 +36,7 @@ import backend.app.services.financial_math.lots.prices as prices_module
 import backend.app.services.portfolio.lots_analysis_service as lots_service_module
 from backend.app.db.models import PriceHistory, Transaction, TransactionType
 from backend.app.schemas.common import Currency
-from backend.app.schemas.portfolio.data_quality import IssueCode
+from backend.app.schemas.portfolio.data_quality import IssueCode, IssueSeverity
 from backend.app.schemas.portfolio.lots import BrokerWACHistoryPoint, CumulativeWACHistoryPoint, LotAnalysisType, LotsAnalysisCommon, LotsAnalysisResponse, LotsMethodAnalysis, LotTimelineEventKind
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.average_cost import (
@@ -48,11 +48,12 @@ from backend.app.services.financial_math.average_cost import (
     _fold_average_costs,
     _ResolvedConversion,
 )
+from backend.app.services.financial_math.fifo import models as fifo_models
 from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
-from backend.app.services.financial_math.fifo.models import FifoEngineResult, FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure, LotMatchingMethod
+from backend.app.services.financial_math.fifo.models import EconomicAllocationGroup, FifoDataQualityIssue, FifoEngineResult, FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure, LotMatchingMethod
 from backend.app.services.financial_math.lots.average_cost_lines import ALL_BROKERS, average_cost_points, build_broker_wac_history, build_cumulative_wac_history
 from backend.app.services.financial_math.lots.conversions import FxRateResolver, collect_fx_needs, collect_performance_fx_needs
-from backend.app.services.financial_math.lots.economic_events import build_cost_economic_events, build_engine_transactions, build_income_economic_events
+from backend.app.services.financial_math.lots.economic_events import build_cost_economic_events, build_engine_transactions, build_income_economic_events, withheld_economics
 from backend.app.services.financial_math.lots.histories import (
     PerformanceSourceContext,
     adjustment_cash_flow_cost,
@@ -4424,6 +4425,9 @@ def _service_on_rows(monkeypatch, rows: list[Transaction], *, shorting: bool = F
     }
     for name, value in loaded.items():
         monkeypatch.setattr(service, name, _loader_returning(value))
+    # Project 66, M1b: the facts of the loaded charges' parents, read by id (none here). Not strict until the loader
+    # exists — TestALinkedFeeWhoseTradeIsAfterTheEnd stubs it strictly.
+    monkeypatch.setattr(service, "_load_linked_parents", _loader_returning({}), raising=False)
     # The gap report classifies a missing rate by the configured pairs: none here (a read of the session otherwise).
     monkeypatch.setattr(lots_service_module, "load_configured_fx_pair_sets", _loader_returning((set(), set())))
     return service
@@ -4612,3 +4616,125 @@ class TestALinkedFeeInBothMatchingMethods:
             assert (fees.get(closed_lot), fees.get(open_lot)) == (D("5"), D("0")), method
             assert [(group.rule, group.source_transaction_ids) for group in block.economic_allocation_groups or []] == [("LINKED_TRADE", [4])], method
             assert block.asset_orphan_fees == D("0"), method
+
+
+# --------------------------------------------------------------------------- #
+# Project 66, M1b — a charge linked to a trade after the end of the analysis waits, orphan
+# --------------------------------------------------------------------------- #
+
+_AFTER_RANGE = "ASSET_COST_LINKED_PARENT_AFTER_RANGE"
+
+
+def _linked_parent(day: date, tx_type: str = "BUY", broker_id: int = 1):
+    """The facts of a charge's parent the service reads (M1b): resolved on the module when called, so this file collects
+    before ``LinkedParent`` exists and only the tests that need it are red."""
+    return fifo_models.LinkedParent(date=day, type=tx_type, broker_id=broker_id)
+
+
+class TestTheCostEventsCarryTheirParentFacts:
+    def test_build_cost_economic_events_copies_the_parent_facts(self):
+        """The service hands the builder the parents it read (id → facts); the builder copies each charge's onto its event:
+        none for an unlinked charge, none for a parent the map does not hold. ``parent_transaction_id`` stays as it is."""
+        facts = _linked_parent(date(2024, 3, 12))
+        linked = _tx(2, tx_type=TransactionType.FEE, quantity=D("0"), amount=D("-5"))
+        linked.parent_transaction_id = 1
+        unknown = _tx(3, tx_type=TransactionType.TAX, quantity=D("0"), amount=D("-2"))
+        unknown.parent_transaction_id = 9
+        unlinked = _tx(4, tx_type=TransactionType.FEE, quantity=D("0"), amount=D("-1"))
+        events = build_cost_economic_events(cost_transactions=[linked, unknown, unlinked], fx_resolver=_resolver("EUR"), asset_currency="EUR", target_currency="EUR", parents={1: facts})
+
+        assert [(event.transaction_id, event.parent_transaction_id, event.parent) for event in events] == [(2, 1, facts), (3, 9, None), (4, None, None)]
+
+    def test_without_a_map_no_cost_event_knows_its_parent(self):
+        linked = _tx(2, tx_type=TransactionType.FEE, quantity=D("0"), amount=D("-5"))
+        linked.parent_transaction_id = 1
+        [event] = build_cost_economic_events(cost_transactions=[linked], fx_resolver=_resolver("EUR"), asset_currency="EUR", target_currency="EUR")
+
+        assert (event.parent_transaction_id, event.parent) == (1, None)
+
+
+class TestTheAfterRangeIssueIsAnOrphanWarning:
+    """``_build_data_quality_report`` on the engine's issue: a WARNING with its message key, and — as an orphan code — its
+    amount stated in its own currency when the charge has no rate (the real ``withheld_economics`` marks the group)."""
+
+    def _group(self) -> EconomicAllocationGroup:
+        # The waiting group of a FEE of 9 VND: no rate, so the engine was handed the native placeholder as target.
+        return EconomicAllocationGroup(
+            economic_type="FEE",
+            asset_id=7,
+            broker_id=1,
+            date=date(2024, 3, 10),
+            native_currency="VND",
+            target_currency="EUR",
+            rule="LINKED_TRADE",
+            source_transaction_ids=(4,),
+            native_pool_total=D("9"),
+            target_pool_total=D("9"),
+            operation_allocations=(),
+            native_orphan=D("9"),
+            target_orphan=D("9"),
+        )
+
+    def _issue(self) -> FifoDataQualityIssue:
+        return FifoDataQualityIssue(
+            code=_AFTER_RANGE,
+            transaction_id=4,
+            broker_id=1,
+            params={"economic_type": "FEE", "as_of_date": "2024-03-10", "target_amount": D("9"), "target_currency": "EUR", "parent_transaction_id": 2, "parent_date": "2024-03-12"},
+        )
+
+    @pytest.mark.parametrize(("unconvertible", "stated"), [pytest.param({4}, (D("9"), "VND"), id="without-rate"), pytest.param(set(), (D("9"), "EUR"), id="with-rate")])
+    def test_the_issue_is_a_warning_with_its_key_and_its_amount_in_a_known_currency(self, unconvertible, stated):
+        groups = [self._group()]
+        withheld = withheld_economics(groups, unconvertible_event_ids=unconvertible, unconvertible_trade_ids=set(), trade_currency_by_id={})
+        [issue] = _svc()._build_data_quality_report([self._issue()], groups, withheld).issues
+
+        assert (issue.code, issue.severity, issue.message_i18n_key) == (_AFTER_RANGE, IssueSeverity.WARNING, "dataQuality.assetCostLinkedParentAfterRange")
+        params = issue.message_params
+        assert (params["transaction_id"], params["broker_id"], params["economic_type"], params["as_of_date"]) == (4, 1, "FEE", "2024-03-10")
+        assert (params["target_amount"], params["target_currency"]) == stated
+        assert (params["parent_transaction_id"], params["parent_date"]) == (2, "2024-03-12")
+
+
+class TestALinkedFeeWhoseTradeIsAfterTheEnd:
+    """get_lots_analysis_methods on in-memory rows: the service reads the parent the trades loader never returns (it stops at
+    the end) and hands its facts to the engine, which leaves the FEE waiting in both matching methods."""
+
+    _JAN_10, _MAR_10, _MAR_11, _MAR_12 = date(2024, 1, 10), date(2024, 3, 10), date(2024, 3, 11), date(2024, 3, 12)
+
+    @pytest.mark.asyncio
+    async def test_the_parent_facts_reach_the_engine_and_the_wait_is_reported(self, monkeypatch):
+        """Lot 1 of 10 Jan is open; FEE 4 of 10 Mar is linked to BUY 2 of 12 Mar; the analysis ends on 11 Mar, so the trades
+        loader returns lot 1 only. Without the parent's facts the FEE would take OPEN_LOTS_FALLBACK onto lot 1 (M1)."""
+        fee = _tx(4, tx_type=TransactionType.FEE, tx_date=self._MAR_10, quantity=D("0"), amount=D("-5"))
+        fee.parent_transaction_id = 2
+        service = _service_on_rows(monkeypatch, [_tx(1, tx_date=self._JAN_10, quantity=D("10"), amount=D("-1000"))])
+        monkeypatch.setattr(service, "_load_cost_transactions", _loader_returning([fee]))
+        # Strict: the loader of the parents' facts must exist (M1b), and it answers with BUY 2's.
+        monkeypatch.setattr(service, "_load_linked_parents", _loader_returning({2: _linked_parent(self._MAR_12)}))
+
+        response = await service.get_lots_analysis_methods(
+            user_id=1,
+            asset_id=7,
+            broker_ids=[1],
+            date_from=None,
+            date_to=self._MAR_11,
+            target_currency="EUR",
+            selected_lot_ids=None,
+            requested_analyses=[LotAnalysisType.LOT_SUMMARY],
+            matching_methods=[LotMatchingMethod.FIFO, LotMatchingMethod.LIFO],
+        )
+
+        for method in (LotMatchingMethod.FIFO, LotMatchingMethod.LIFO):
+            block = response.methods[method]
+            assert {lot.lot_id: lot.allocated_fees for lot in block.lots or []} == {1: D("0")}, method
+            groups = [(group.rule, group.source_transaction_ids, group.operation_allocations, group.native_orphan, group.target_orphan) for group in block.economic_allocation_groups or []]
+            assert groups == [("LINKED_TRADE", [4], [], D("5"), D("5"))], method
+            assert block.asset_orphan_fees == D("5"), method
+            assert block.data_quality is not None, method
+            issues = [issue for issue in block.data_quality.issues if issue.code == _AFTER_RANGE]
+            assert len(issues) == 1, (method, block.data_quality.issues)
+            assert (issues[0].severity, issues[0].message_i18n_key) == (IssueSeverity.WARNING, "dataQuality.assetCostLinkedParentAfterRange"), method
+            expected = {"transaction_id": 4, "broker_id": 1, "economic_type": "FEE", "as_of_date": "2024-03-10", "target_amount": D("5"), "target_currency": "EUR", "parent_transaction_id": 2, "parent_date": "2024-03-12"}
+            assert {name: issues[0].message_params.get(name) for name in expected} == expected, method
+            assert "ASSET_COST_NO_ELIGIBLE_LOTS" not in {issue.code for issue in block.data_quality.issues}, method
