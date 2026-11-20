@@ -320,7 +320,8 @@
       "generateInterestHint": "Genera automaticamente eventi di stacco cedola ad ogni data di maturazione. L'interesse maturato viene staccato e l'asset torna al valore iniziale.",
       "interestTypeTooltip": "Determina come viene calcolato l'interesse. Semplice: solo sul valore iniziale. Composto: l'interesse matura anche sugli interessi accumulati.",
       "dayCountTooltip": "Convenzione per il conteggio dei giorni nel periodo di interesse. ACT/365 e ACT/360 sono le più comuni. Influenza il calcolo dell'interesse giornaliero.",
-      "mergeNotConsecutive": "Si uniscono solo periodi uno dopo l'altro: scegli righe vicine."
+      "mergeNotConsecutive": "Si uniscono solo periodi uno dopo l'altro: scegli righe vicine.",
+      "splitTooShort": "Un periodo si divide solo se dura almeno 2 giorni"
     },
     "probe": {
       "history": "Storico",

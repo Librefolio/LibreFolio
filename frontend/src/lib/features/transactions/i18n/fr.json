@@ -462,7 +462,8 @@
       "chooseTitle": "Choisir l'événement",
       "chooseIntro": "Ce jour-là, l'actif a {n} événements du bon type. Lequel cette transaction prend-elle ?",
       "sourceAuto": "automatique",
-      "sourceManual": "saisi à la main"
+      "sourceManual": "saisi à la main",
+      "linkingBusy": "Une liaison est en cours"
     },
     "docsHelp": {
       "list": "Chaque mouvement des courtiers auxquels vous avez accès, du plus récent au plus ancien : achats, ventes, dividendes, frais, transferts et liquidités. Vos positions et votre performance en sont calculées. Ajoutez-les, importez-les, filtrez-les ou modifiez-les ici."

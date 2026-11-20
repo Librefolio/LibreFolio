@@ -462,7 +462,8 @@
       "chooseTitle": "Scegli l'evento",
       "chooseIntro": "Quel giorno l'asset ha {n} eventi del tipo giusto. Quale prende questa transazione?",
       "sourceAuto": "automatico",
-      "sourceManual": "inserito a mano"
+      "sourceManual": "inserito a mano",
+      "linkingBusy": "Un collegamento è in corso"
     },
     "docsHelp": {
       "list": "Ogni movimento dei broker a cui hai accesso, dal più recente: acquisti, vendite, dividendi, commissioni, trasferimenti e liquidità. Le tue posizioni e il rendimento si calcolano a partire da questi. Qui li aggiungi, importi, filtri o modifichi."
