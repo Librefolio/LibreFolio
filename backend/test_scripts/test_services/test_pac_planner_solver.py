@@ -47,10 +47,12 @@ module imports its own primitives from `test_pac_planner_evaluator.py`.
 
 from __future__ import annotations
 
+import json
 import math
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from fractions import Fraction
+from pathlib import Path
 
 import pytest
 from pyscipopt import Model as ScipModel
@@ -1064,3 +1066,38 @@ def test_a_rejected_tie_break_is_reported_unfinished_and_keeps_the_best_plan(mon
     assert (report.status, report.rejected, report.tie_break) == ("unfinished", True, True)
     run = solver_module.SolverRunResult(view_id=view.view_id, outcome="incumbent", candidate=None, stages=(report,), engine="SCIP", version="x", settings=(), tolerances=solver_module.SolverTolerances(1e-6, 1e-9, 0.0, 0.0), wall_seconds=0.0, finished_stage_count=0, anomaly=None)
     assert PR.build_stop_reason(run) == "completed"
+
+
+# ---------------------------------------------------------------------------
+# GPAC-b of project 67: a pinned objective slipping inside SCIP's tolerance (lot 0b)
+# ---------------------------------------------------------------------------
+
+_SLIP_FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "pac_allocator"
+
+
+@pytest.mark.parametrize(
+    "fixture",
+    [
+        pytest.param("pac_plan_request.slip-shortfall.2-0-0.json", id="shortfall"),
+        pytest.param("pac_plan_request.slip-cost.2-0-0.json", id="explicit-cost"),
+    ],
+)
+def test_a_pinned_objective_never_slips(fixture: str) -> None:
+    """No finished stage publishes an exact value outside the bounds SCIP reported for it.
+
+    The gallery's PAC draft of 19/11/2026 (mock data) on two EUR/USD rates where a later stage worsens an objective pinned
+    before it, inside SCIP's tolerance: it is relative to the pin row's side (the invested total), 242 times looser than
+    the check of ``_outside_reported_bounds``; after the slip the later stages re-accept the plan held instead of
+    optimising (consultant REB, GPAC-b). Asserted is the fact, not a reference plan or cost.
+
+    A known defect: the slip itself is reported as an expected failure (``pytest.xfail``, the coordinator's decision of
+    20/11/2026, non-strict), and only the slip. Anything else — a fixture that no longer normalizes, a search without a
+    plan, a solver exception — stays a real red. The lot that repairs the PAC's objective function replaces the call
+    with the assertion.
+    """
+    scenario, view = scenario_of(json.loads((_SLIP_FIXTURES / fixture).read_text(encoding="utf-8")))
+    result = solve_policy_program(compile_policy_program(scenario, view), time_budget_seconds=30.0)
+    assert result.outcome == "incumbent" and result.candidate is not None, (result.outcome, result.anomaly)
+    if result.anomaly and "outside the bounds" in result.anomaly:
+        pytest.xfail(f"known defect GPAC-b (project 67), a pinned objective slips: {result.anomaly}")
+    assert result.anomaly is None, result.anomaly
