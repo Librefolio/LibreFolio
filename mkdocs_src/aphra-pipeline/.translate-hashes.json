@@ -9682,7 +9682,7 @@
     }
   },
   "user/tools/pac-allocator/index.en.md": {
-    "md5": "66666f8e5b425faf7069ab4571f47ec7",
+    "md5": "c9494f149be329c1f89cd32f5f297e27",
     "langs_done": [
       "es",
       "fr",
@@ -9702,7 +9702,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 395.1,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-20T20:16:24.982263+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -9715,7 +9715,7 @@
         "structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. LINE_COUNT: source=537, translated=326 (Δ-211, >15% difference)\n\nSOURCE_OUTLINE (for reference):\n  # 🧮 PAC allocator\n    ## 🗺️ Using the planner\n      ### 🎬 Scenario\n      ### 💰 Liquidity\n      ### 🏦 Brokers\n      ### 💼 Assets\n      ### 🔀 Routing\n      ### ⚖️ Targets\n      ### 💱 FX (only when needed)\n      ### 🧠 Strategy\n      ### ✅ Review\n      ### 📋 Copied or typed values\n      ### ⏳ While it calculates\n    ## 📊 Reading the result {: #reading-the-result }\n      ### 🗂️ How a plan is laid out\n    ## 🧮 What the calculation engine does\n    ## 🎯 How its target is meant to be read\n    ## 🚫 What this tool never does\n    ## 🔒 Your financial data\n    ## 🔗 Related",
         "structural_issues": 1,
         "elapsed_s": 307.0,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-20T20:16:24.982263+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -9730,7 +9730,7 @@
         "elapsed_s": 380.3,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 2\n\n1. BULLET_LIST: source=31, translated=32 (Δ+1)\n  L31: src=0 trn=1\n    EN: stays in its own currency: every exchange needed appears in the plan.\n    TR: - **Desde tus brókers**: efectivo que ya está en tus brókers en LibreFolio. Eliges cuánto de él usar.\n  L32: src=0 trn=1\n    EN: \n    TR: - **Nueva aportación**: dinero nuevo que añades, como la cuota del PAC.\n  L33: src=0 trn=1\n    EN: The reference date is always today: the planner sets it again before every\n    TR: - **Cuenta externa**: un saldo en una cuenta no registrada en LibreFolio, por ejemplo en tu banco. Declaras cuánto hay y\n  L40: src=1 trn=0\n    EN: - **From your Brokers**: cash already on your Brokers in LibreFolio. You choose\n    TR: \n  L42: src=1 trn=0\n    EN: - **New contribution**: new money you add, such as the PAC instalment.\n    TR: \n  L43: src=1 trn=0\n    EN: - **External account**: a balance on an account not registered in LibreFolio,\n    TR: Añade los brókers donde el plan puede comprar: **Elegir bróker existente** copia uno de los tuyos, y **Bróker manual** a\n  L47: src=0 trn=1\n    EN: The Broker that receives a contribution or an external account's money is\n    TR: - El modo de orden: **Por número de unidades** o **Por importe**.\n  L48: src=0 trn=1\n    EN: chosen in the **Brokers** step. Each amount stays in its own currency.\n    TR: - El **Incremento** $\\Delta$: cada orden propuesta es un múltiplo entero de él. Con $q$ el tamaño de una orden, en unida\n  … and more (showing first 8 mismatches)\n2. LINE_COUNT: source=537, translated=324 (Δ-213, >15% difference)\n\nSOURCE_OUTLINE (for reference):\n  # 🧮 PAC allocator\n    ## 🗺️ Using the planner\n      ### 🎬 Scenario\n      ### 💰 Liquidity\n      ### 🏦 Brokers\n      ### 💼 Assets\n      ### 🔀 Routing\n      ### ⚖️ Targets\n      ### 💱 FX (only when needed)\n      ### 🧠 Strategy\n      ### ✅ Review\n      ### 📋 Copied or typed values\n      ### ⏳ While it calculates\n    ## 📊 Reading the result {: #reading-the-result }\n      ### 🗂️ How a plan is laid out\n    ## 🧮 What the calculation engine does\n    ## 🎯 How its target is meant to be read\n    ## 🚫 What this tool never does\n    ## 🔒 Your financial data\n    ## 🔗 Related",
         "final_structural_issues": 2,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-20T20:16:24.982263+00:00",
         "stamped_by": "translate-stamp"
       }
     }

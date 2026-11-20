@@ -183,6 +183,7 @@ Deux actions vous aident à y parvenir :
     total à exactement $100\%$. Pour ne modifier que certaines lignes, **Équilibrer à 100 %** sur
     une ligne donne à cet actif ce qui manque, ou retire l'excédent, et
     **Équilibrer les lignes sélectionnées à 100 %** remet à l'échelle uniquement les lignes que vous cochez.
+    Elle n'apparaît pas quand le total est déjà de $100\%$, et elle est désactivée, avec son motif, quand un objectif n'est pas un nombre ou quand les lignes non cochées font déjà $100\%$ ou plus.
 
 - **Copier la répartition actuelle** lit combien chacun de ces actifs pèse
   aujourd'hui dans les courtiers que vous cochez, en comptant uniquement ces actifs et non

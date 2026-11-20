@@ -130,7 +130,7 @@ Dos acciones te ayudan a conseguirlo:
     w_i' = \frac{w_i}{\sum_j w_j} \cdot 100\%
     $$
 
-    Si todos son $0$, cada Activo recibe una parte igual. El redondeo mantiene el total exactamente en $100\%$. Para cambiar solo algunas filas, **Equilibrar al 100 %** en una fila da a ese Activo lo que falta, o quita el exceso, y **Equilibrar las filas seleccionadas al 100 %** reescala solo las filas que marques.
+    Si todos son $0$, cada Activo recibe una parte igual. El redondeo mantiene el total exactamente en $100\%$. Para cambiar solo algunas filas, **Equilibrar al 100 %** en una fila da a ese Activo lo que falta, o quita el exceso, y **Equilibrar las filas seleccionadas al 100 %** reescala solo las filas que marques. No aparece cuando el total ya es $100\%$, y está desactivada, con su motivo, cuando un objetivo no es un número o cuando las filas no marcadas ya suman $100\%$ o más.
 
 - **Copiar la distribución actual** lee cuánto pesa hoy cada uno de estos Activos en los brókeres que marques, contando solo estos Activos y no el efectivo. Con $H_i$ el valor de mercado del Activo $i$ mantenido allí hoy — lo que te costó, para un Activo sin ningún precio, cuya **Valoración** indica *valorado al coste · sin precio*:
 
