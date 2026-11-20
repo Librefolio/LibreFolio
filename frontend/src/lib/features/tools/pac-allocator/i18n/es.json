@@ -696,7 +696,10 @@
             "draftIntact": "El borrador está intacto.",
             "retry": "Reintentar",
             "title": "Cálculo fallido",
-            "reference": "Referencia en el registro del servidor:"
+            "reference": "Referencia en el registro del servidor:",
+            "copyRequest": "Copiar la solicitud",
+            "copyRequestHint": "Copia los datos enviados para este cálculo, importes incluidos, para adjuntarlos a un informe. El servidor no guarda nada.",
+            "copyRequestFailed": "No se pudo copiar la solicitud. Permite el acceso al portapapeles e inténtalo de nuevo."
           },
           "proof": {
             "absoluteGap": "Brecha abs.",

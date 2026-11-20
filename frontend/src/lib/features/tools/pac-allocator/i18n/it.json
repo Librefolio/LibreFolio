@@ -696,7 +696,10 @@
             "draftIntact": "La bozza è intatta.",
             "retry": "Riprova",
             "title": "Calcolo non riuscito",
-            "reference": "Riferimento nel log del server:"
+            "reference": "Riferimento nel log del server:",
+            "copyRequest": "Copia la richiesta",
+            "copyRequestHint": "Copia i dati inviati per questo calcolo, importi compresi, da allegare a una segnalazione. Il server non conserva nulla.",
+            "copyRequestFailed": "Impossibile copiare la richiesta. Consenti l'accesso agli appunti e riprova."
           },
           "proof": {
             "absoluteGap": "Gap ass.",

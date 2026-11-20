@@ -696,7 +696,10 @@
             "draftIntact": "The draft is intact.",
             "retry": "Retry",
             "title": "Calculation failed",
-            "reference": "Reference in the server log:"
+            "reference": "Reference in the server log:",
+            "copyRequest": "Copy the request",
+            "copyRequestHint": "Copies the data sent for this calculation, amounts included, so you can attach it to a report. Nothing is kept on the server.",
+            "copyRequestFailed": "Could not copy the request. Allow clipboard access and try again."
           },
           "proof": {
             "absoluteGap": "Abs. gap",
