@@ -72,6 +72,39 @@ def test_a_run_that_raises_or_dies_is_a_run_with_no_result() -> None:
     assert [(run.seed, run.result, run.failure) for run in runs] == [(1, 1, None), (2, None, "RuntimeError"), (3, None, "RunProcessEnded")]
 
 
+# A figure out of every source line of this file and of ``seed_runs.py``: found in the log, it can only be the message.
+_PRIVATE_FIGURE = "8642.13"
+
+
+def _refuses_an_amount(seed: int, progress, budget=None) -> int:
+    raise ValueError(f"PRIVATE-{_PRIVATE_FIGURE}: a run refused an amount")
+
+
+@pytest.mark.parametrize("path", ["here", "child"])
+def test_a_failed_run_is_logged_by_class_and_code_site_never_its_message(path: str) -> None:
+    """R1-B2 of project 67 (the LOGS rule, the coordinator's ruling of 20/11): a run that fails is logged by its class and
+    where it was raised (``code_site``), never with ``exc_info``: a rendered traceback ends with the message, which can carry
+    the user's amounts. Both places that log it: a run in the caller's process (``_run_here``) and a run in its own
+    process (``_child``, called here in this process, so that its line is captured)."""
+    from structlog.testing import capture_logs  # noqa: PLC0415 — beside its only use
+
+    with capture_logs() as lines:
+        if path == "here":
+            run = seed_runs._run_here(_refuses_an_amount, 7, None, None, 5.0)
+            assert (run.result, run.failure) == (None, "ValueError")
+        else:
+            receiver, sender = multiprocessing.Pipe(duplex=False)
+            seed_runs._child(_refuses_an_amount, 7, sender, 5.0)
+            assert receiver.recv()[:2] == ("failure", "ValueError")
+            receiver.close()
+
+    (line,) = [line for line in lines if line["event"] == "Planner run failed"]
+    assert (line["seed"], line["error_type"]) == (7, "ValueError"), line
+    assert "exc_info" not in line and "exception" not in line, f"a traceback would render the message: {line}"
+    assert line["where"].endswith(":_refuses_an_amount"), line
+    assert _PRIVATE_FIGURE not in repr(line), f"the message reached the log: {line}"
+
+
 def test_a_run_past_the_deadline_is_stopped_and_has_no_result(monkeypatch) -> None:
     """No wait is unbounded: past the budget and the grace, a run still out is stopped."""
     monkeypatch.setattr(seed_runs, "_GRACE_SECONDS", 0.5)

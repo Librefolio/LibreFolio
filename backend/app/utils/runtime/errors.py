@@ -21,8 +21,8 @@ caught. These helpers serve the code that logs a failure and the platform's safe
   another. ``mark_traceback_reported`` marks the exceptions a traceback shows. The mark is an attribute of the
   exception object: exceptions cannot be weakly referenced.
 - ``code_site`` says where an exception was raised, in code locations only, for a line that must not repeat the
-  exception's message (it can carry the user's amounts): the PAC planner's engine failures and the Tool worker's plugin
-  failures.
+  exception's message (it can carry the user's amounts): the PAC planner's engine failures, the Rebalancer's failed seeded
+  runs and the Tool worker's plugin failures.
 """
 
 import traceback
