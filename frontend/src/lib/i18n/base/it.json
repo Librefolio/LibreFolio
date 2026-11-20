@@ -380,7 +380,8 @@
     },
     "confirmBulkAction": "Sei sicuro di voler eseguire questa azione su",
     "filterLabel": "Filtro",
-    "resetLayout": "Ripristina disposizione"
+    "resetLayout": "Ripristina disposizione",
+    "selectionHint": "Seleziona una o più righe per agire su tutte insieme."
   },
   "date": {
     "today": "Oggi",
