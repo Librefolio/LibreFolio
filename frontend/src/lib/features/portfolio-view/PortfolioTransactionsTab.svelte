@@ -15,7 +15,7 @@
     import TransactionsTable from '$lib/features/transactions/TransactionsTable.svelte';
     import {resolveFormItemsForView, type FormModalItems} from '$lib/features/transactions/resolveFormItems';
     import type {TXReadItem} from '$lib/features/transactions/types';
-    import type {FilterValue} from '$lib/components/table/types';
+    import type {BulkAction, FilterValue} from '$lib/components/table/types';
     import {getBrokerRole} from '$lib/stores/reference/brokerStore';
     import {zodiosApi} from '$lib/api';
     import {_} from '$lib/i18n';
@@ -48,9 +48,14 @@
         onCloneRow?: (row: TXReadItem) => void;
         onDeleteRow?: (row: TXReadItem) => void;
         onFiltersChange?: (filters: Record<string, FilterValue>) => void;
+        /**
+         * 77 SEL-B: the bulk actions of the table's selection panel. Absent, the rows have no checkboxes: nothing would act
+         * on a selection (the dashboard's tab, a broker the reader cannot edit).
+         */
+        selectionActions?: BulkAction<TXReadItem>[];
     }
 
-    let {transactions, brokers, period, testId, tableTestId, table = $bindable(), bar, hideActions = true, onSelectionChange, onEditRow, onCloneRow, onDeleteRow, onFiltersChange}: Props = $props();
+    let {transactions, brokers, period, testId, tableTestId, table = $bindable(), bar, hideActions = true, onSelectionChange, onEditRow, onCloneRow, onDeleteRow, onFiltersChange, selectionActions}: Props = $props();
 
     /** Transaction view modal state (opened from a row's double-click). */
     let viewOpen = $state(false);
@@ -103,6 +108,8 @@
                 {onCloneRow}
                 {onDeleteRow}
                 {onFiltersChange}
+                {selectionActions}
+                selectable={selectionActions !== undefined}
                 onPageChange={(page) => (transactions.currentPage = page)}
                 onPageSizeChange={(size) => transactions.setPageSize(size)}
                 onViewRow={(row) => {

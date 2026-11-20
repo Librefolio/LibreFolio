@@ -48,7 +48,7 @@
     import {busyKey as profileBusyKey, DEFAULT_PORTFOLIO_TAB, portfolioScopeProfile, tabsForProfile, type PortfolioScopeTestIds, type PortfolioTabId, type PortfolioViewScope} from './portfolioScopeProfile';
     import type TransactionsTable from '$lib/features/transactions/TransactionsTable.svelte';
     import type {TXReadItem} from '$lib/features/transactions/types';
-    import type {FilterValue} from '$lib/components/table/types';
+    import type {BulkAction, FilterValue} from '$lib/components/table/types';
     import {PortfolioTransactions} from './portfolioTransactions.svelte';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import {staleFxIssue, type StaleFxPairLike} from '$lib/features/dashboard/staleFxIssue';
@@ -65,6 +65,8 @@
         onFiltersChange: (filters: Record<string, FilterValue>) => void;
         /** The rows and their partner legs are loaded: the bulk workspace reads the originals of a selected row from there (FB-17). */
         onLoaded: (mainRows: TXReadItem[], partnerRows: TXReadItem[]) => void;
+        /** 77 SEL-B: the bulk actions of the table's selection panel; absent, the rows have no checkboxes (nothing acts on them). */
+        selectionActions?: BulkAction<TXReadItem>[];
     }
 
     interface Props {
@@ -623,6 +625,7 @@
                 onCloneRow={transactionsWriter?.onCloneRow}
                 onDeleteRow={transactionsWriter?.onDeleteRow}
                 onFiltersChange={transactionsWriter?.onFiltersChange}
+                selectionActions={transactionsWriter?.selectionActions}
             />
         {:else if activeTab === 'info'}
             {@render infoTab?.()}
