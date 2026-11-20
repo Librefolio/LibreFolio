@@ -319,7 +319,8 @@
       "generateInterest": "Générer Coupon",
       "generateInterestHint": "Générer automatiquement des événements de paiement de coupon à chaque date de maturité. Les intérêts accumulés sont versés et l'actif revient à la valeur initiale.",
       "interestTypeTooltip": "Détermine le mode de calcul des intérêts. Simple : sur la valeur initiale uniquement. Composé : les intérêts s'accumulent aussi sur les intérêts.",
-      "dayCountTooltip": "Convention de calcul des jours dans la période d'intérêt. ACT/365 et ACT/360 sont les plus courantes. Affecte le calcul des intérêts journaliers."
+      "dayCountTooltip": "Convention de calcul des jours dans la période d'intérêt. ACT/365 et ACT/360 sont les plus courantes. Affecte le calcul des intérêts journaliers.",
+      "mergeNotConsecutive": "Seules des périodes consécutives peuvent être fusionnées : choisissez des lignes voisines."
     },
     "probe": {
       "history": "Historique",
@@ -405,10 +406,10 @@
       "addCountry": "Ajouter un pays",
       "emptyHint": "Aucune donnée — utilisez +Ajouter ou Demander au Fournisseur",
       "balanceRow": "Équilibrer à 100%",
-      "balanceSelected": "Équilibrer les lignes sélectionnées",
       "deleteSelected": "Supprimer les lignes sélectionnées",
       "deleteConfirmMessage": "Supprimer {n} entrées de cette distribution ?",
-      "weightPercent": "Poids (%)"
+      "weightPercent": "Poids (%)",
+      "balance": "Équilibrer"
     },
     "showInactive": "Inactifs",
     "edit": {
