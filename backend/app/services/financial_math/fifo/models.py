@@ -32,6 +32,7 @@ IssueCode = Literal[
     "TRANSFER_PAIR_MISSING",
     "ASSET_INCOME_NO_ELIGIBLE_LOTS",
     "ASSET_COST_NO_ELIGIBLE_LOTS",
+    "ASSET_COST_LINKED_PARENT_AFTER_RANGE",
 ]
 # Issue codes that indicate a non-isolable quantitative replay failure (incoherent
 # quantities, invalid fragment topology, or unreconstructable transfers). Their
@@ -244,6 +245,16 @@ class FifoLot:
 
 
 @dataclass(frozen=True, slots=True)
+class LinkedParent:
+    """Project 66 (M1b): the facts of a charge's parent, read by the service even when the parent lies after the end of
+    the analysis, where the engine never sees it. ``type`` is the transaction type's value (``"BUY"``, ``"SELL"``…)."""
+
+    date: date
+    type: str
+    broker_id: int
+
+
+@dataclass(frozen=True, slots=True)
 class EconomicEvent:
     """Non-quantitative economic input (FEE/TAX/DIVIDEND/INTEREST) fed to the engine.
 
@@ -264,6 +275,9 @@ class EconomicEvent:
     #: Project 66 (M1): a FEE/TAX linked by the user to the transaction it was paid for. ``None`` for an unlinked
     #: charge and for every income event.
     parent_transaction_id: int | None = None
+    #: Project 66 (M1b): the parent's facts, when the service read them. The engine reads them only for a parent it
+    #: does not replay itself (after ``replay_until``): such a charge waits, orphan, until the analysis reaches it.
+    parent: LinkedParent | None = None
 
 
 @dataclass(frozen=True, slots=True)
