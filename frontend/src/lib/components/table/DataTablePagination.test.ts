@@ -361,3 +361,18 @@ describe('DataTablePagination — one page size, no selector (77 SEL-D1)', () =>
         expect(screen.getByTestId('pagination-total')).toBeInTheDocument();
     });
 });
+
+/**
+ * Below 480 px the words «per page» leave the balloon (77 SEL-D2, the designer: the pager of the data editor's balloon at
+ * 390 px). They stay the selector's accessible name, with the size it holds, so the control still says what it is; the
+ * visible words are hidden from the accessibility tree, which would read them twice. The width is CSS: only a browser
+ * measures it (the photos of SEL-D2).
+ */
+describe('DataTablePagination — the size selector names itself (77 SEL-D2)', () => {
+    it('the trigger is named «<size> per page»; the visible words are not read again', async () => {
+        await setupI18n();
+        const {container} = mount({pageSize: 25});
+        expect(screen.getByTestId('pagination-size-trigger')).toHaveAttribute('aria-label', '25 per page');
+        expect(container.querySelector('.page-size-label')).toHaveAttribute('aria-hidden', 'true');
+    });
+});

@@ -295,6 +295,8 @@ Changing the page size returns to the first page and is saved under the table's 
 With a single entry in `pageSizeOptions` there is nothing to choose: the pager draws no page-size selector (nor its
 «per page»), only the number of items and the pages (`pagination-total`, 77 SEL-D1). The profile's «Latest changes»,
 which the server pages by 20, is such a pager.
+Below 480 px the words «per page» leave the balloon and stay in the selector's accessible name («25 per page»); the
+balloon is then a row that wraps, so with few pages the size, the total and the pages share one line (77 SEL-D2).
 
 The page-size menu is positioned with **fixed** coordinates computed from its trigger
 (`getFixedDropdownPosition`, `lib/utils/layout/dropdownPosition.ts`): it opens below the trigger,
