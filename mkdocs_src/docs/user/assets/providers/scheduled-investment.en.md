@@ -34,8 +34,10 @@ Then add the periods with **Add First Period**, and **Add Period** for the next 
 | **Frequency** | How often interest matures: Daily, Weekly, Monthly, Quarterly, Semiannual or Annual |
 | **Generate Coupon** | Tick it to pay the accrued interest out at each maturity date |
 
-Periods must follow one another, with no gaps or overlaps. **Split** cuts a period in two; select
-neighbouring periods and click **Merge** to join them.
+Periods must follow one another, with no gaps or overlaps. **Split** cuts a period in two; tick
+neighbouring periods and click **Merge** in the bar of the section's title row to join them. **Merge**
+shows how many periods it joins; it appears from two periods on, and stays off, saying why, when the
+ticked periods are not next to each other. **Delete** in the same bar removes the ticked periods.
 
 !!! note "Limits of a schedule"
 

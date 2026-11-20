@@ -197,11 +197,11 @@ describe('DataEditor — the delete / revert lifecycle through the row menu', ()
 describe('DataEditor — bulk-selecting rows and deleting them in one action', () => {
     it('checking two rows then hitting bulk-delete publishes both as deleted', async () => {
         const {onchange, container} = mount([row('2024-06-10'), row('2024-06-11'), row('2024-06-12')]);
-        // Selecting rows is a DataTable concern surfaced back through onSelectionChange; the
-        // bulk-delete affordance only appears once something is selected.
+        // Selecting rows is a DataTable concern; the selection bar's «Delete» only appears once something is selected
+        // (77 SEL-D2: the bar at the top of the table replaced the tools row's own bin).
         await fireEvent.click(container.querySelector<HTMLElement>('[data-testid="dt-row-checkbox-2024-06-10"]')!);
         await fireEvent.click(container.querySelector<HTMLElement>('[data-testid="dt-row-checkbox-2024-06-11"]')!);
-        const bulkDelete = await screen.findByTestId('data-editor-bulk-delete');
+        const bulkDelete = await screen.findByTestId('toolbar-action-delete');
         await fireEvent.click(bulkDelete);
         await waitFor(() => expect(onchange).toHaveBeenCalled());
         const dirty = lastDirty(onchange);
@@ -1771,4 +1771,48 @@ describe('CsvEditor / DataImportModal — the status words come from the catalog
             expect(confirm).toHaveAttribute('data-has-duplicates', 'true');
         });
     }
+});
+
+/**
+ * 77 SEL-D2 — the editor's rows on the selection panel (designer's choice (b), 20/11): the tools row is a command bar,
+ * not a section head, so it stays as it is, outside the box that scrolls, and the selection bar sits at the top of the
+ * table, inside that box, with the shared hint while nothing is ticked. «Delete» carries the number of rows it takes:
+ * a row already deleted is not taken again. The old counter and bin of the tools row are gone.
+ */
+describe('DataEditor — the selection bar at the top of the table (77 SEL-D2)', () => {
+    const box = (container: HTMLElement, rowId: string) => container.querySelector<HTMLElement>(`[data-testid="dt-row-checkbox-${rowId}"]`)!;
+
+    it('nothing ticked: the bar with its hint sits at the top of the table, not in the tools row', () => {
+        mount([row('2024-06-10'), row('2024-06-11')]);
+        const top = screen.getByTestId('dt-selection-top');
+        expect(within(top).getByTestId('selection-toolbar-hint')).toBeInTheDocument();
+        expect(within(screen.getByTestId('data-editor-tools')).queryByTestId('dt-selection-top')).toBeNull();
+        expect(screen.queryByTestId('data-editor-bulk-delete')).toBeNull();
+    });
+
+    it('two ticked: «Delete 2» deletes both and clears the ticks', async () => {
+        const {onchange, container} = mount([row('2024-06-10'), row('2024-06-11'), row('2024-06-12')]);
+        await fireEvent.click(box(container, '2024-06-10'));
+        await fireEvent.click(box(container, '2024-06-11'));
+        const bar = within(screen.getByTestId('dt-selection-top')).getByTestId('selection-toolbar');
+        expect(within(bar).getByTestId('toolbar-action-delete-count').textContent?.trim()).toBe('2');
+        await fireEvent.click(within(bar).getByTestId('toolbar-action-delete'));
+        await waitFor(() =>
+            expect(
+                lastDirty(onchange)
+                    .map((r) => r.date)
+                    .sort(),
+            ).toEqual(['2024-06-10', '2024-06-11']),
+        );
+        expect(lastDirty(onchange).every((r) => r.status === 'deleted')).toBe(true);
+        expect(box(container, '2024-06-10')).toHaveAttribute('data-state', 'unchecked');
+    });
+
+    it('a row already deleted is not counted again', async () => {
+        const {container} = mount([row('2024-06-10'), row('2024-06-11')]);
+        await runRowAction('2024-06-10', 'delete');
+        await fireEvent.click(box(container, '2024-06-10'));
+        await fireEvent.click(box(container, '2024-06-11'));
+        expect(screen.getByTestId('toolbar-action-delete-count').textContent?.trim()).toBe('1');
+    });
 });

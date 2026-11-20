@@ -18,8 +18,8 @@
  * `component-unit`).
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {mount, unmount, flushSync} from 'svelte';
-import {cleanup, fireEvent, render, screen, within} from '$test/component';
+import {createRawSnippet, mount, unmount, flushSync} from 'svelte';
+import {cleanup, fireEvent, render, screen, waitFor, within} from '$test/component';
 import Tooltip from './Tooltip.svelte';
 
 /**
@@ -210,5 +210,63 @@ describe('Tooltip — no callback survives destroy (K step 14, item 1)', () => {
             if (component) void unmount(component);
             target.remove();
         }
+    });
+});
+
+/**
+ * An icon-only button names itself through its tooltip: the keyboard must reach that name as the pointer does (77
+ * SEL-D2, the compact bar in a section head). `openOnFocus` opens the tooltip at once when the focus arrives from the
+ * keyboard, and closes it when the focus leaves; without the prop nothing changes for the other callers.
+ */
+describe('Tooltip — opens on keyboard focus with openOnFocus (77 SEL-D2)', () => {
+    const child = createRawSnippet(() => ({render: () => '<button type="button" data-testid="probe-btn">Go</button>'}));
+
+    it('the focus on the child opens it at once; leaving closes it', async () => {
+        render(Tooltip, {props: {text: 'Delete', interactiveChild: true, openOnFocus: true, children: child}});
+        const button = screen.getByTestId('probe-btn');
+        button.focus();
+        expect((await screen.findByTestId('tooltip-content')).textContent?.trim()).toBe('Delete');
+        button.blur();
+        await waitFor(() => expect(screen.queryByTestId('tooltip-content')).toBeNull());
+    });
+
+    it('a press that moves no focus (Safari does not focus a clicked button) leaves the next keyboard focus free', async () => {
+        render(Tooltip, {props: {text: 'Delete', interactiveChild: true, openOnFocus: true, children: child}});
+        const button = screen.getByTestId('probe-btn');
+        await fireEvent.pointerDown(button);
+        await fireEvent.pointerUp(button);
+        button.focus();
+        expect((await screen.findByTestId('tooltip-content')).textContent?.trim()).toBe('Delete');
+    });
+
+    it('without the prop the focus opens nothing', async () => {
+        render(Tooltip, {props: {text: 'Delete', interactiveChild: true, children: child}});
+        screen.getByTestId('probe-btn').focus();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(screen.queryByTestId('tooltip-content')).toBeNull();
+    });
+});
+
+/**
+ * `showIf` (77 SEL-D2): a tooltip that names an icon is noise once the name is in view beside it. The caller decides at
+ * the moment of opening, from the trigger: `false` opens nothing, by any path; absent, nothing changes.
+ */
+describe('Tooltip — showIf decides at the moment of opening (77 SEL-D2)', () => {
+    const child = createRawSnippet(() => ({render: () => '<button type="button" data-testid="probe-btn">Go</button>'}));
+
+    it('false: neither the focus nor Enter opens it; true: they do', async () => {
+        let allowed = false;
+        const showIf = vi.fn<(trigger: HTMLElement) => boolean>(() => allowed);
+        render(Tooltip, {props: {text: 'Delete', interactiveChild: true, openOnFocus: true, showIf, children: child}});
+        const button = screen.getByTestId('probe-btn');
+        button.focus();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(screen.queryByTestId('tooltip-content')).toBeNull();
+        expect(showIf).toHaveBeenCalled();
+        expect(showIf.mock.calls[0][0]).toBeInstanceOf(HTMLElement);
+        button.blur();
+        allowed = true;
+        button.focus();
+        expect(await screen.findByTestId('tooltip-content')).toBeInTheDocument();
     });
 });

@@ -313,6 +313,29 @@ describe('the bar in a section head (77 SEL-D)', () => {
         expect(screen.getByTestId('data-table-pagination')).toBe(pagination);
     });
 
+    it('in a head the bar takes the compact form when the head is narrow; each action names its number and opens its name on focus (77 SEL-D2)', async () => {
+        const {list} = actions();
+        render(SectionHeadFixture, {props: {rows: rowsOf(4), bulkActions: list as never}});
+        await tick('r1');
+        // The compact form is a container query on the head (`dt-head`): only a browser measures it (e2e
+        // `asset-profile-edit`, the head's height with and without a selection). Here, the bar says it is in a head.
+        expect(within('section-head', 'selection-toolbar')).toHaveAttribute('data-in-head', 'true');
+        const link = screen.getByTestId('toolbar-action-link');
+        expect(link).toHaveAttribute('aria-label', 'Link, 1');
+        expect(screen.queryByTestId('tooltip-content')).toBeNull();
+        link.focus();
+        expect((await screen.findByTestId('tooltip-content')).textContent?.trim()).toBe('Link');
+        link.blur();
+        await waitFor(() => expect(screen.queryByTestId('tooltip-content')).toBeNull());
+    });
+
+    it('a bar at the top of a table, not in a head, keeps its own form', async () => {
+        const {list} = actions();
+        mount(rowsOf(4), {bulkActions: list, selectionPanel: true});
+        await tick('r1');
+        expect(screen.getByTestId('selection-toolbar')).not.toHaveAttribute('data-in-head');
+    });
+
     it('the count button in the head clears the ticks of the table', async () => {
         const {list} = actions();
         render(SectionHeadFixture, {props: {rows: rowsOf(4), bulkActions: list as never}});

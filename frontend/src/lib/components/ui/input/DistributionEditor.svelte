@@ -23,11 +23,11 @@
   Svelte 5 runes.
 -->
 <script lang="ts">
+    import type {Snippet} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {RefreshCw, Loader2, X as XIcon, Plus, Scale, Trash2, Upload} from 'lucide-svelte';
     import DataTable from '$lib/components/table/DataTable.svelte';
-    import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
-    import type {ColumnDef, RowAction} from '$lib/components/table/types';
+    import type {BulkAction, ColumnDef, RowAction} from '$lib/components/table/types';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import {currentLanguage} from '$lib/stores/app/language';
     import type {CountryInfo} from '$lib/stores/reference/countryStore';
@@ -79,7 +79,6 @@
     let countries: CountryInfo[] = $state([]);
     let addingEntry = $state(false);
     let skipNextSync = false;
-    let selectedIds: string[] = $state([]);
     let showDeleteConfirm = $state(false);
     let pendingDeleteIds: string[] = $state([]);
     let showImportModal = $state(false);
@@ -133,6 +132,10 @@
 
     let totalPercent = $derived(entries.reduce((sum, e) => sum + e.weight, 0));
     let isValid = $derived(Math.abs(totalPercent - 100) < 0.005);
+
+    /** The ticked rows still in the table (a deleted row leaves the selection with it): the head's selection mode. */
+    let tickedIds = $state<string[]>([]);
+    let selecting = $derived(tickedIds.some((id) => entries.some((entry) => entry.id === id)));
     let isExcess = $derived(totalPercent > 100.005);
     let isMissing = $derived(totalPercent < 99.995 && entries.length > 0);
     let maxWeight = $derived(Math.max(...entries.map((e) => e.weight), 1));
@@ -258,10 +261,10 @@
     }
 
     /** Weighted balance on selected rows: distribute delta proportionally to pre-existing weights */
-    function balanceSelected() {
+    function balanceSelected(ids: string[]) {
         const delta = 100 - totalPercent;
         if (Math.abs(delta) < 0.005) return;
-        const selectedSet = new Set(selectedIds);
+        const selectedSet = new Set(ids);
         const selectedEntries = entries.filter((e) => selectedSet.has(e.id));
         if (selectedEntries.length === 0) return;
 
@@ -282,15 +285,14 @@
     }
 
     /** Bulk delete with confirmation */
-    function handleBulkDelete() {
-        pendingDeleteIds = [...selectedIds];
+    function handleBulkDelete(ids: string[]) {
+        pendingDeleteIds = [...ids];
         showDeleteConfirm = true;
     }
 
     function confirmBulkDelete() {
         const deleteSet = new Set(pendingDeleteIds);
         entries = entries.filter((e) => !deleteSet.has(e.id));
-        selectedIds = [];
         pendingDeleteIds = [];
         showDeleteConfirm = false;
         emitChange();
@@ -420,41 +422,50 @@
                   },
               ],
     );
+
+    /**
+     * The selection bar's actions (77 SEL-D2), each on the ticked rows with their number. «Balance» spreads what is
+     * missing over them; at a total of 100 there is nothing to spread, so it is not offered (Q-SEL-17).
+     */
+    const bulkActions: BulkAction<DistEntry>[] = [
+        {
+            id: 'balance',
+            icon: Scale,
+            label: () => $t('assets.distribution.balance'),
+            onClick: (rows) => balanceSelected(rows.map((row) => row.id)),
+            pointless: () => isValid,
+        },
+        {
+            id: 'delete',
+            icon: Trash2,
+            label: () => $t('common.delete'),
+            variant: 'danger',
+            onClick: (rows) => handleBulkDelete(rows.map((row) => row.id)),
+        },
+    ];
 </script>
 
-<div class="space-y-1 text-lf-primary" data-testid="distribution-editor-{kind}">
-    <!-- Section header with +Add, bulk toolbar, and Ask Provider buttons -->
-    <div class="flex items-center justify-between mb-1">
-        <div class="text-xs font-medium text-lf-muted uppercase">
+<!-- The section head (77 SEL-D2): the title, the table's selection bar, the section's own buttons. The table draws it and
+     hands it the bar; with no row (or read-only, where nothing can be ticked) it is drawn here with an empty bar. -->
+{#snippet head(bar: Snippet)}
+    <!-- 77 SEL-D2: the buttons' words may break on two lines beside the compact bar; `leading-3` keeps them within the
+         head's 32 px, so the head does not grow when rows are ticked. -->
+    <!-- 77 SEL-D2 (a): in a narrow head, while rows are ticked, the bar takes the title's place. The title is only visually
+         hidden (CSS below): a screen reader finds the same heading, and the table's first column repeats it in view. -->
+    <div class="mb-1 flex min-h-8 items-center justify-between gap-2" class:selecting data-selecting={selecting ? 'true' : 'false'} data-testid="distribution-head-{kind}">
+        <div class="dist-title text-xs font-medium text-lf-muted uppercase" data-testid="distribution-title-{kind}">
             {kind === 'sector' ? $t('common.sectorDistribution') : $t('common.geoDistribution')}
         </div>
-        <div class="flex items-center gap-1.5">
-            {#if !isReadonly && !disabled && selectedIds.length > 0}
-                <DataTableToolbar
-                    selectedCount={selectedIds.length}
-                    bulkActions={[
-                        {
-                            id: 'balance',
-                            icon: Scale,
-                            label: () => $t('assets.distribution.balanceSelected'),
-                            onClick: balanceSelected,
-                            disabled: isValid,
-                        },
-                        {
-                            id: 'delete',
-                            icon: Trash2,
-                            label: () => $t('assets.distribution.deleteSelected'),
-                            variant: 'danger',
-                            onClick: handleBulkDelete,
-                        },
-                    ]}
-                    onClearSelection={() => {
-                        selectedIds = [];
-                    }}
-                />
-            {/if}
+        <div class="flex min-w-0 items-center gap-1.5">
+            {@render bar()}
             {#if !isReadonly && !disabled}
-                <button type="button" onclick={() => (showImportModal = true)} data-testid="distribution-import-{kind}" class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-lf-muted hover:text-lf-secondary transition-colors" title={$t('dataEditor.importCsv')}>
+                <button
+                    type="button"
+                    onclick={() => (showImportModal = true)}
+                    data-testid="distribution-import-{kind}"
+                    class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] leading-3 font-medium rounded text-lf-muted hover:text-lf-secondary transition-colors"
+                    title={$t('dataEditor.importCsv')}
+                >
                     <Upload size={10} />
                     <span class="hidden sm:inline">{$t('dataEditor.importCsv')}</span>
                 </button>
@@ -464,7 +475,7 @@
                     disabled={addingEntry}
                     data-busy={addingEntry}
                     data-testid="distribution-add-{kind}"
-                    class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-lf-muted hover:text-lf-secondary transition-colors disabled:opacity-50"
+                    class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] leading-3 font-medium rounded text-lf-muted hover:text-lf-secondary transition-colors disabled:opacity-50"
                     title={kind === 'sector' ? $t('assets.distribution.addSector') : $t('assets.distribution.addCountry')}
                 >
                     <Plus size={10} />
@@ -477,7 +488,7 @@
                     onclick={onAskProvider}
                     disabled={!hasProvider || askingProvider}
                     data-testid="distribution-ask-provider-{kind}"
-                    class="flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded
+                    class="flex items-center gap-1 px-1.5 py-0.5 text-[10px] leading-3 font-medium rounded
                                text-lf-muted hover:text-lf-secondary
                                disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                     title={askLabel ?? $t('assets.identifiers.askProvider')}
@@ -492,7 +503,11 @@
             {/if}
         </div>
     </div>
+{/snippet}
 
+{#snippet noBar()}{/snippet}
+
+<div class="space-y-1 text-lf-primary" data-testid="distribution-editor-{kind}">
     <!-- DataTable -->
     {#if entries.length > 0}
         <DataTable
@@ -501,9 +516,10 @@
             getRowId={(r) => r.id}
             storageKey="dist-editor-{kind}"
             enableSelection={!isReadonly && !disabled}
-            onSelectionChange={(ids) => {
-                selectedIds = ids;
-            }}
+            {bulkActions}
+            selectionPanel={true}
+            selectionHead={head}
+            onSelectionChange={(ids) => (tickedIds = ids)}
             enablePagination={true}
             defaultPageSize={5}
             pageSizeOptions={[5, 10, 25, 0]}
@@ -532,8 +548,10 @@
             {/if}
         </div>
     {:else if isReadonly || disabled}
+        {@render head(noBar)}
         <div class="text-xs text-lf-muted italic py-2">—</div>
     {:else}
+        {@render head(noBar)}
         <div class="text-xs text-lf-muted italic py-2">{$t('assets.distribution.emptyHint')}</div>
     {/if}
 </div>
@@ -553,3 +571,22 @@
 />
 
 <DistributionDataImportModal bind:open={showImportModal} title="{kind === 'sector' ? $t('common.sectorDistribution') : $t('common.geoDistribution')} — {$t('dataEditor.importCsv')}" resolveName={(raw) => importNameLookup.get(raw.trim().toLocaleLowerCase()) ?? null} onimport={importDistribution} />
+
+<style>
+    /* 77 SEL-D2 (a): below 40rem of head (the `dt-head` container of the selection panel) the title, the compact bar and
+       the section's three buttons do not fit one line: measured in four languages, the sectors' head is 453 px at 1440
+       and 517 px at 640 (too narrow), 645 px at 768 (enough). */
+    @container dt-head (max-width: 39.98rem) {
+        .selecting .dist-title {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            margin: -1px;
+            padding: 0;
+            overflow: hidden;
+            clip: rect(0 0 0 0);
+            border: 0;
+            white-space: nowrap;
+        }
+    }
+</style>

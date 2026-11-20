@@ -56,9 +56,11 @@
         variant?: 'inline' | 'floating' | 'top' | 'dock';
         /** The `top` bar's words while nothing is selected; absent: the shared hint. */
         hint?: string;
+        /** The `top` bar sits in a section's head (77 SEL-D2): one line, and the compact form when the head is narrow. */
+        inHead?: boolean;
     }
 
-    let {selectedCount, bulkActions, onClearSelection, variant = 'inline', hint}: Props = $props();
+    let {selectedCount, bulkActions, onClearSelection, variant = 'inline', hint, inHead = false}: Props = $props();
 
     /** Room kept at the bottom of the page for the floating bar: its height, its gap and the phone's safe area. */
     const SELBAR_SPACE = 'calc(5.5rem + env(safe-area-inset-bottom, 0px))';
@@ -88,6 +90,12 @@
     function runAction(action: BulkActionInfo) {
         if (action.disabled) return;
         action.onClick();
+    }
+
+    /** The action's word is out of view (a head's compact form): only then its name tooltip adds something. */
+    function wordHidden(trigger: HTMLElement): boolean {
+        const word = trigger.querySelector('.lbl');
+        return !word || word.getClientRects().length === 0;
     }
 
     function getShownLabel(action: BulkActionInfo): string {
@@ -129,7 +137,14 @@
 
 {#snippet floatingAction(action: BulkActionInfo)}
     {#if offWithReason(action)}
-        <Tooltip text={getTooltip(action)} interactiveChild>
+        <!-- The reason of a disabled action, in every form (66 F7); in a head it opens on keyboard focus too. -->
+        <Tooltip text={getTooltip(action)} interactiveChild openOnFocus={inHead}>
+            {@render floatingButton(action)}
+        </Tooltip>
+    {:else if inHead}
+        <!-- In a head's compact form the action is an icon: its name is its tooltip, on hover and on keyboard focus. With
+             its word in view the tooltip would only repeat it, so it opens only while the word is hidden (77 SEL-D2). -->
+        <Tooltip text={getTooltip(action)} interactiveChild openOnFocus showIf={wordHidden}>
             {@render floatingButton(action)}
         </Tooltip>
     {:else}
@@ -149,7 +164,7 @@
         onclick={() => runAction(action)}
         disabled={action.disabled && !reachable}
         aria-disabled={reachable ? 'true' : undefined}
-        title={reachable ? undefined : getTooltip(action)}
+        title={reachable || inHead ? undefined : getTooltip(action)}
         aria-label={action.count !== undefined ? `${getShownLabel(action)}, ${action.count}` : name}
         data-disabled-reason={action.disabled && action.reason ? action.reason : undefined}
         data-primary={action.primary ? 'true' : 'false'}
@@ -206,7 +221,7 @@
 {:else if variant === 'top'}
     {#if selectedCount > 0}
         <!-- svelte-ignore a11y_interactive_supports_focus -->
-        <div class="top-bar" role="toolbar" aria-label={$t('common.selectionActions')} data-testid="selection-toolbar" data-variant="top" data-selected-count={selectedCount} onkeydown={handleKeydown}>
+        <div class="top-bar" class:in-head={inHead} role="toolbar" aria-label={$t('common.selectionActions')} data-testid="selection-toolbar" data-variant="top" data-in-head={inHead ? 'true' : undefined} data-selected-count={selectedCount} onkeydown={handleKeydown}>
             {@render countButton()}
             <span class="visually-hidden" role="status">{selectedCount} {$t('common.selected')}</span>
             {@render wordedActions()}
@@ -505,6 +520,36 @@
         align-items: center;
         gap: 0.375rem;
         min-height: 2rem;
+    }
+
+    /* In a section's head (77 SEL-D2) the bar keeps one line, so the head keeps its height: below 50rem of head (the
+       `dt-head` container, `SelectionPanel`) it takes the compact form of the phone — «2 ×», each action an icon with
+       its number on the corner; its name is the tooltip and the `aria-label`. Measured on the heads of SEL-D2 in the
+       four languages: the whole bar fits from 800 px of head (the sectors with «Balance», in French, the widest; the
+       Asset window's heads are 812 px), not at 760 px (the same sectors) nor at 645 px (the schedule in French). */
+    .top-bar.in-head {
+        flex-wrap: nowrap;
+    }
+
+    @container dt-head (max-width: 49.98rem) {
+        .top-bar.in-head .count-word,
+        .top-bar.in-head .lbl {
+            display: none;
+        }
+
+        .top-bar.in-head .act {
+            position: relative;
+        }
+
+        .top-bar.in-head .act .n {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            min-width: 16px;
+            height: 16px;
+            padding: 0 4px;
+            font-size: 0.625rem;
+        }
     }
 
     .top-hint {

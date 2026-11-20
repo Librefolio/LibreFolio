@@ -293,7 +293,7 @@ describe('ScheduledInvestmentEditor — splitting and merging', () => {
             const id = row.getAttribute('data-row-id');
             await fireEvent.click(screen.getByTestId(`dt-row-checkbox-${id}`));
         }
-        await fireEvent.click(screen.getByTestId('schedule-bulk-merge'));
+        await fireEvent.click(screen.getByTestId('toolbar-action-merge'));
 
         const schedule = lastSchedule(onchange);
         expect(schedule).toHaveLength(1);
@@ -322,14 +322,15 @@ describe('ScheduledInvestmentEditor — splitting and merging', () => {
         for (const idx of [0, 2]) {
             await fireEvent.click(screen.getByTestId(`dt-row-checkbox-${rows[idx].getAttribute('data-row-id')}`));
         }
-        await waitFor(() => expect(screen.getByTestId('schedule-bulk-merge')).toBeDisabled());
+        // Off, and it says why (77 SEL-D2: `aria-disabled` keeps the focus and the reason; the click does nothing).
+        await waitFor(() => expect(screen.getByTestId('toolbar-action-merge')).toHaveAttribute('data-disabled-reason', 'not-consecutive'));
 
-        await fireEvent.click(screen.getByTestId('schedule-bulk-merge'));
+        await fireEvent.click(screen.getByTestId('toolbar-action-merge'));
         expect(onchange).not.toHaveBeenCalled();
 
         // Adding the middle one makes the block contiguous and the action usable.
         await fireEvent.click(screen.getByTestId(`dt-row-checkbox-${rows[1].getAttribute('data-row-id')}`));
-        await waitFor(() => expect(screen.getByTestId('schedule-bulk-merge')).toBeEnabled());
+        await waitFor(() => expect(screen.getByTestId('toolbar-action-merge')).not.toHaveAttribute('data-disabled-reason'));
     });
 
     it('does not offer merge for a single selected period', async () => {
@@ -339,7 +340,9 @@ describe('ScheduledInvestmentEditor — splitting and merging', () => {
         const first = tableRows()[0].getAttribute('data-row-id');
         await fireEvent.click(screen.getByTestId(`dt-row-checkbox-${first}`));
 
-        await waitFor(() => expect(screen.getByTestId('schedule-bulk-merge')).toBeDisabled());
+        // One period has nothing to merge with: the action is not offered (77 SEL-D2, minSelection 2).
+        await waitFor(() => expect(screen.getByTestId('selection-toolbar')).toBeInTheDocument());
+        expect(screen.queryByTestId('toolbar-action-merge')).toBeNull();
     });
 });
 
@@ -412,7 +415,7 @@ describe('ScheduledInvestmentEditor — deleting periods', () => {
         for (const row of tableRows()) {
             await fireEvent.click(screen.getByTestId(`dt-row-checkbox-${row.getAttribute('data-row-id')}`));
         }
-        await fireEvent.click(screen.getByTestId('schedule-bulk-delete'));
+        await fireEvent.click(screen.getByTestId('toolbar-action-delete'));
 
         await waitFor(() => expect(lastSchedule(onchange)).toEqual([]));
         expect(screen.getByTestId('schedule-empty')).toBeInTheDocument();
@@ -424,11 +427,11 @@ describe('ScheduledInvestmentEditor — deleting periods', () => {
 
         const first = tableRows()[0].getAttribute('data-row-id');
         await fireEvent.click(screen.getByTestId(`dt-row-checkbox-${first}`));
-        await waitFor(() => expect(screen.getByTestId('schedule-clear-selection')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByTestId('selection-toolbar-clear')).toBeInTheDocument());
 
-        await fireEvent.click(screen.getByTestId('schedule-clear-selection'));
+        await fireEvent.click(screen.getByTestId('selection-toolbar-clear'));
 
-        await waitFor(() => expect(screen.queryByTestId('schedule-bulk-merge')).toBeNull());
+        await waitFor(() => expect(screen.queryByTestId('selection-toolbar')).toBeNull());
         expect(onchange).not.toHaveBeenCalled();
         expect(tableRows()).toHaveLength(2);
     });
@@ -790,7 +793,7 @@ describe('ScheduledInvestmentEditor — bulk deleting periods (gap reflow)', () 
         const {onchange} = mount(threePeriods());
 
         await selectRow(0);
-        await fireEvent.click(screen.getByTestId('schedule-bulk-delete'));
+        await fireEvent.click(screen.getByTestId('toolbar-action-delete'));
 
         // A head block has no predecessor to negotiate a seam with, so no modal.
         expect(screen.queryByTestId('boundary-modal-confirm')).toBeNull();
@@ -807,7 +810,7 @@ describe('ScheduledInvestmentEditor — bulk deleting periods (gap reflow)', () 
         const {onchange} = mount(threePeriods());
 
         await selectRow(2);
-        await fireEvent.click(screen.getByTestId('schedule-bulk-delete'));
+        await fireEvent.click(screen.getByTestId('toolbar-action-delete'));
 
         expect(screen.queryByTestId('boundary-modal-confirm')).toBeNull();
         const schedule = lastSchedule(onchange);
@@ -823,7 +826,7 @@ describe('ScheduledInvestmentEditor — bulk deleting periods (gap reflow)', () 
         const {onchange} = mount(threePeriods());
 
         await selectRow(1);
-        await fireEvent.click(screen.getByTestId('schedule-bulk-delete'));
+        await fireEvent.click(screen.getByTestId('toolbar-action-delete'));
 
         // A middle block is bounded on both sides, so the user must place the seam.
         await waitFor(() => expect(screen.getByTestId('boundary-modal-confirm')).toBeEnabled());
@@ -843,7 +846,7 @@ describe('ScheduledInvestmentEditor — bulk deleting periods (gap reflow)', () 
         const {onchange} = mount(threePeriods());
 
         await selectRow(1);
-        await fireEvent.click(screen.getByTestId('schedule-bulk-delete'));
+        await fireEvent.click(screen.getByTestId('toolbar-action-delete'));
         await waitFor(() => expect(screen.getByTestId('boundary-modal-cancel')).toBeInTheDocument());
         await fireEvent.click(screen.getByTestId('boundary-modal-cancel'));
 
@@ -869,5 +872,94 @@ describe('ScheduledInvestmentEditor — editing an event note', () => {
         const events = lastPayload(onchange)?.asset_events;
         expect(events[0]).toMatchObject({notes: 'first', value: {amount: '10'}});
         expect(events[1]).toMatchObject({notes: 'amended', value: {amount: '20'}});
+    });
+});
+
+/**
+ * 77 SEL-D2 — the periods on the selection panel (designer's choice 1a; the merge text of mock B7).
+ *
+ * The bar sits in the head, between the title and «Add period», with no hint while nothing is ticked. «Merge» takes at
+ * least two periods: with one it is not offered; with periods that are not next to each other it is off and says why
+ * (`data-disabled-reason`), and pressing it changes nothing. The count button's × clears the ticks of the table.
+ */
+describe('ScheduledInvestmentEditor — the bar in the section head (77 SEL-D2)', () => {
+    function threeApart(): Record<string, unknown> {
+        return {
+            ...twoPeriods(),
+            schedule: [
+                {start_date: '2024-01-01', end_date: '2024-04-30', annual_rate: '0.0100', maturation_frequency: 'MONTHLY', generate_interest: false},
+                {start_date: '2024-05-01', end_date: '2024-08-31', annual_rate: '0.0200', maturation_frequency: 'MONTHLY', generate_interest: false},
+                {start_date: '2024-09-01', end_date: '2024-12-31', annual_rate: '0.0300', maturation_frequency: 'MONTHLY', generate_interest: false},
+            ],
+        };
+    }
+    const tick = async (rowIndex: number) => fireEvent.click(screen.getByTestId(`dt-row-checkbox-${tableRows()[rowIndex].getAttribute('data-row-id')}`));
+    const before = (a: Element, b: Element) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
+
+    it('nothing ticked: the head holds the title and «Add period», no hint', async () => {
+        await setupI18n();
+        mount(twoPeriods());
+        const head = screen.getByTestId('schedule-head');
+        expect(within(head).getByTestId('schedule-add-period')).toBeInTheDocument();
+        expect(screen.queryByTestId('selection-toolbar-hint')).toBeNull();
+        expect(screen.queryByTestId('selection-toolbar')).toBeNull();
+    });
+
+    it('two periods next to each other: «Merge 2» and «Delete 2» in the head, between the title and «Add period»', async () => {
+        await setupI18n();
+        mount(threeApart());
+        await tick(0);
+        await tick(1);
+        const head = screen.getByTestId('schedule-head');
+        const bar = within(head).getByTestId('selection-toolbar');
+        expect(before(within(head).getByTestId('schedule-title'), bar)).toBe(-1);
+        expect(before(bar, within(head).getByTestId('schedule-add-period'))).toBe(-1);
+        expect(within(bar).getByTestId('toolbar-action-merge-count').textContent?.trim()).toBe('2');
+        expect(within(bar).getByTestId('toolbar-action-delete-count').textContent?.trim()).toBe('2');
+        expect(within(bar).getByTestId('toolbar-action-merge')).not.toHaveAttribute('data-disabled-reason');
+    });
+
+    it('with a selection the head is in selection mode; the title text stays in the DOM, and the icon carries it', async () => {
+        // In a narrow head (below 30rem, a container query: only a browser measures it) the bar stands in for the
+        // title: its text is visually hidden, never removed, so a screen reader finds the same heading; the icon's
+        // tooltip shows it (designer, 20/11, option (a)).
+        await setupI18n();
+        mount(threeApart());
+        const head = screen.getByTestId('schedule-head');
+        expect(head).toHaveAttribute('data-selecting', 'false');
+        await tick(0);
+        expect(head).toHaveAttribute('data-selecting', 'true');
+        const text = within(head).getByTestId('schedule-title-text');
+        expect(text.textContent?.trim()).not.toBe('');
+        expect(within(head).getByTestId('schedule-title-icon')).toBeInTheDocument();
+    });
+
+    it('one period: «Merge» is not offered', async () => {
+        await setupI18n();
+        mount(threeApart());
+        await tick(1);
+        const bar = screen.getByTestId('selection-toolbar');
+        expect(within(bar).queryByTestId('toolbar-action-merge')).toBeNull();
+        expect(within(bar).getByTestId('toolbar-action-delete')).toBeInTheDocument();
+    });
+
+    it('periods not next to each other: «Merge» is off and says why; pressing it changes nothing', async () => {
+        await setupI18n();
+        const {onchange} = mount(threeApart());
+        await tick(0);
+        await tick(2);
+        const merge = within(screen.getByTestId('selection-toolbar')).getByTestId('toolbar-action-merge');
+        expect(merge).toHaveAttribute('data-disabled-reason', 'not-consecutive');
+        await fireEvent.click(merge);
+        expect(onchange).not.toHaveBeenCalled();
+    });
+
+    it('the count button’s × clears the ticks of the table', async () => {
+        await setupI18n();
+        mount(twoPeriods());
+        await tick(0);
+        await fireEvent.click(screen.getByTestId('selection-toolbar-clear'));
+        expect(screen.getByTestId(`dt-row-checkbox-${tableRows()[0].getAttribute('data-row-id')}`)).toHaveAttribute('data-state', 'unchecked');
+        expect(screen.queryByTestId('selection-toolbar')).toBeNull();
     });
 });

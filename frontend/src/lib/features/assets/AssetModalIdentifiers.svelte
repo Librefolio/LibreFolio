@@ -1,15 +1,16 @@
 <!--
   AssetModalIdentifiers — the identifiers of the asset in AssetModal: the single-valued types in an editable table (add,
   edit, remove, bulk delete) and the OTHER (soft) identifiers as removable tags. The rows and the table selection are
-  bound to the modal; every edit reports the identifier field it touched, and the modal confirms the bulk delete.
+  bound to the modal; every edit reports the identifier field it touched, and the modal confirms the bulk delete. The
+  table's selection bar sits in the section head (plan 77, SEL-D2): «Delete» with the number of ticked rows.
   Svelte 5 runes.
 -->
 <script lang="ts">
+    import type {Snippet} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {Info, Loader2, Plus, RefreshCw, Trash2, X} from 'lucide-svelte';
     import DataTable from '$lib/components/table/DataTable.svelte';
-    import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
-    import type {ColumnDef as DTColumnDef, RowAction as DTRowAction} from '$lib/components/table/types';
+    import type {BulkAction, ColumnDef as DTColumnDef, RowAction as DTRowAction} from '$lib/components/table/types';
     import TagInput from '$lib/components/ui/input/TagInput.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {IDENTIFIER_TYPES} from '$lib/utils/assetTypes';
@@ -19,18 +20,16 @@
     interface Props {
         /** The identifier rows of the asset: single-valued types and OTHER. */
         rows: IdentifierRow[];
-        /** Ids of the rows selected in the table, for the bulk delete. */
-        selectedIds: string[];
         hasProvider: boolean;
         askingProvider: boolean;
         /** An identifier field the user edited by hand (`identifier_<type>`). */
         onmanualedit: (field: string) => void;
         onaskprovider: () => void;
-        /** Bulk delete of `selectedIds`, which the modal confirms. */
-        onbulkdelete: () => void;
+        /** Bulk delete of the ticked rows' ids, which the modal confirms. */
+        onbulkdelete: (ids: string[]) => void;
     }
 
-    let {rows = $bindable(), selectedIds = $bindable(), hasProvider, askingProvider, onmanualedit, onaskprovider, onbulkdelete}: Props = $props();
+    let {rows = $bindable(), hasProvider, askingProvider, onmanualedit, onaskprovider, onbulkdelete}: Props = $props();
 
     function addIdentifierRow() {
         // OTHER (soft identifiers) is managed via the tag/badge input below, so the table
@@ -104,6 +103,17 @@
         },
     ]);
 
+    /** The selection bar's action (77 SEL-D2): «Delete» on the ticked rows, with their number. */
+    const identifierBulkActions: BulkAction<IdentifierRow>[] = [
+        {
+            id: 'delete',
+            icon: Trash2,
+            label: () => $t('common.delete'),
+            variant: 'danger',
+            onClick: (chosen) => onbulkdelete(chosen.map((row) => row.id)),
+        },
+    ];
+
     let identifierRowActions: DTRowAction<IdentifierRow>[] = $derived([
         {
             id: 'delete',
@@ -115,30 +125,15 @@
     ]);
 </script>
 
-<!-- Sub-section: Identifiers -->
-<div class="space-y-2" data-testid="asset-modal-identifiers">
-    <div class="flex items-center justify-between">
-        <div class="text-[10px] font-semibold text-lf-muted uppercase tracking-wider">
+<!-- The section head (77 SEL-D2): the title, the table's selection bar, the section's own buttons. The same head is drawn
+     by the table (which hands it the bar) and, with no row, here with an empty bar. -->
+{#snippet head(bar: Snippet)}
+    <div class="flex min-h-8 items-center justify-between gap-2" data-testid="asset-modal-identifiers-head">
+        <div class="text-[10px] font-semibold text-lf-muted uppercase tracking-wider" data-testid="asset-modal-identifiers-title">
             {$t('common.identifiers')}
         </div>
-        <div class="flex items-center gap-1.5">
-            {#if selectedIds.length > 0}
-                <DataTableToolbar
-                    selectedCount={selectedIds.length}
-                    bulkActions={[
-                        {
-                            id: 'delete',
-                            icon: Trash2,
-                            label: () => $t('assets.identifiers.deleteSelected'),
-                            variant: 'danger',
-                            onClick: onbulkdelete,
-                        },
-                    ]}
-                    onClearSelection={() => {
-                        selectedIds = [];
-                    }}
-                />
-            {/if}
+        <div class="flex min-w-0 items-center gap-1.5">
+            {@render bar()}
             <button type="button" onclick={addIdentifierRow} data-testid="asset-modal-add-identifier" class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-lf-muted hover:text-lf-secondary transition-colors" title={$t('assets.identifiers.addIdentifier')}>
                 <Plus size={10} /> <span class="hidden sm:inline">{$t('assets.identifiers.addIdentifier')}</span>
             </button>
@@ -154,6 +149,12 @@
             </button>
         </div>
     </div>
+{/snippet}
+
+{#snippet noBar()}{/snippet}
+
+<!-- Sub-section: Identifiers -->
+<div class="space-y-2" data-testid="asset-modal-identifiers">
     {#if rowsFixed.length > 0}
         <DataTable
             data={rowsFixed}
@@ -161,9 +162,9 @@
             getRowId={(r) => r.id}
             storageKey="asset-modal-identifiers"
             enableSelection={true}
-            onSelectionChange={(ids) => {
-                selectedIds = ids;
-            }}
+            bulkActions={identifierBulkActions}
+            selectionPanel={true}
+            selectionHead={head}
             enablePagination={false}
             enableColumnFilters={false}
             enableSorting={false}
@@ -175,6 +176,7 @@
             tableLayout="auto"
         />
     {:else}
+        {@render head(noBar)}
         <div class="text-xs text-lf-muted italic py-1">{$t('assets.identifiers.askProviderHint')}</div>
     {/if}
 
