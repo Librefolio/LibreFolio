@@ -14,7 +14,7 @@ Measured on 19/11/2026:
 
 - Year files from 2005 (2005 already in RON: USD 2.9027 on 03/01/2005); earlier years and future years answer 502.
   ~200–350 KB per year; 5 524 business days from 03/01/2005, no weekend date.
-- 40 codes in all: XAU (gold) and XDR (an open question of lane 75) are not served. Legacy currencies are served for
+- 40 codes in all: XAU (gold) is not served; XDR (the IMF's SDR) is (Q7 of lane 75). Legacy currencies are served for
   their history, as ECB does: SKK until 2008, HRK until 2022, BGN until 2025.
 - ``multiplier="100"`` for HUF, IDR, ISK, JPY, KRW; a missing value is ``-`` (1 093 cells, mostly BGN, RUB and SKK in
   2007). No conflicting duplicate.
@@ -48,8 +48,8 @@ ICON_URL = "https://www.bnr.ro/favicon.ico"
 #: An honest, constant User-Agent, the one BOE sends.
 USER_AGENT = "Mozilla/5.0 (compatible; LibreFolio/1.0; +https://github.com/librefolio)"
 
-#: The currencies served; XAU (gold) and XDR are in the files and are not.
-CURRENCIES = ("AED", "AUD", "BGN", "BRL", "CAD", "CHF", "CNY", "CZK", "DKK", "EGP", "EUR", "GBP", "HKD", "HRK", "HUF", "IDR", "ILS", "INR", "ISK", "JPY", "KRW", "MDL", "MXN", "MYR", "NOK", "NZD", "PHP", "PLN", "RSD", "RUB", "SEK", "SGD", "SKK", "THB", "TRY", "UAH", "USD", "ZAR")
+#: The currencies served; XAU (gold) is in the files and is not.
+CURRENCIES = ("AED", "AUD", "BGN", "BRL", "CAD", "CHF", "CNY", "CZK", "DKK", "EGP", "EUR", "GBP", "HKD", "HRK", "HUF", "IDR", "ILS", "INR", "ISK", "JPY", "KRW", "MDL", "MXN", "MYR", "NOK", "NZD", "PHP", "PLN", "RSD", "RUB", "SEK", "SGD", "SKK", "THB", "TRY", "UAH", "USD", "XDR", "ZAR")
 _CATALOGUE = sorted([*CURRENCIES, "RON"])
 
 
@@ -63,10 +63,10 @@ class BNRProvider(FXRateProvider):
     """
     National Bank of Romania FX rate provider.
 
-    Provides the BNR's daily reference rates of 38 currencies with RON as base currency, RON per unit.
+    Provides the BNR's daily reference rates of 39 currencies with RON as base currency, RON per unit.
     Data source: the BNR's XML files (the last ten days, one file per year).
 
-    Coverage: a fixed list, 38 currencies plus RON.
+    Coverage: a fixed list, 39 currencies plus RON.
     Update frequency: Romanian business days.
     """
 
@@ -97,10 +97,10 @@ class BNRProvider(FXRateProvider):
     @property
     def description_i18n(self) -> dict[str, str]:
         return {
-            "en": "National Bank of Romania — daily reference rates of 38 currencies against the Romanian leu (RON), among them MDL, UAH, RSD, EGP, AED and RUB. Romanian business days, history from 2005. Source: National Bank of Romania.",
-            "it": "National Bank of Romania — tassi di riferimento giornalieri di 38 valute contro il leu romeno (RON), tra cui MDL, UAH, RSD, EGP, AED e RUB. Giorni lavorativi rumeni, storia dal 2005. Fonte: National Bank of Romania.",
-            "fr": "National Bank of Romania — taux de référence quotidiens de 38 devises contre le leu roumain (RON), dont MDL, UAH, RSD, EGP, AED et RUB. Jours ouvrables roumains, historique depuis 2005. Source : National Bank of Romania.",
-            "es": "National Bank of Romania — tipos de referencia diarios de 38 monedas contra el leu rumano (RON), entre ellas MDL, UAH, RSD, EGP, AED y RUB. Días hábiles rumanos, historial desde 2005. Fuente: National Bank of Romania.",
+            "en": "National Bank of Romania — daily reference rates of 39 currencies against the Romanian leu (RON), among them MDL, UAH, RSD, EGP, AED and RUB. Romanian business days, history from 2005. Source: National Bank of Romania.",
+            "it": "National Bank of Romania — tassi di riferimento giornalieri di 39 valute contro il leu romeno (RON), tra cui MDL, UAH, RSD, EGP, AED e RUB. Giorni lavorativi rumeni, storia dal 2005. Fonte: National Bank of Romania.",
+            "fr": "National Bank of Romania — taux de référence quotidiens de 39 devises contre le leu roumain (RON), dont MDL, UAH, RSD, EGP, AED et RUB. Jours ouvrables roumains, historique depuis 2005. Source : National Bank of Romania.",
+            "es": "National Bank of Romania — tipos de referencia diarios de 39 monedas contra el leu rumano (RON), entre ellas MDL, UAH, RSD, EGP, AED y RUB. Días hábiles rumanos, historial desde 2005. Fuente: National Bank of Romania.",
         }
 
     @property
@@ -130,7 +130,7 @@ class BNRProvider(FXRateProvider):
         return list(_CATALOGUE)
 
     async def get_supported_currencies(self) -> list[str]:
-        """The 38 currencies, plus RON: no request."""
+        """The 39 currencies, plus RON: no request."""
         return list(_CATALOGUE)
 
     async def fetch_rates(self, date_range: tuple[FXProviderStartDate, date], currencies: list[str], base_currency: str | None = None) -> dict[str, list[tuple[date, str, str, Decimal]]]:

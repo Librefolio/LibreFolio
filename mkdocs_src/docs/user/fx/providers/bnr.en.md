@@ -16,7 +16,7 @@ The **National Bank of Romania (BNR)** provider retrieves the daily reference ra
 
 ## 💰 Supported Currencies
 
-38 currencies, all against RON:
+39 currencies, all against RON:
 
 - **Major**: EUR 🇪🇺, USD 🇺🇸, GBP 🇬🇧, CHF 🇨🇭, JPY 🇯🇵, CAD 🇨🇦, AUD 🇦🇺, NZD 🇳🇿
 - **Europe**: PLN 🇵🇱, HUF 🇭🇺, CZK 🇨🇿, DKK 🇩🇰, SEK 🇸🇪, NOK 🇳🇴, ISK 🇮🇸, RSD 🇷🇸, MDL 🇲🇩, UAH 🇺🇦, TRY 🇹🇷, RUB 🇷🇺
@@ -29,5 +29,6 @@ The **National Bank of Romania (BNR)** provider retrieves the daily reference ra
 - **Quotes format**: lei per one unit of the foreign currency (e.g. 1 EUR = 5.3442 RON on 19 November 2026); the forint, the yen, the won, the rupiah and the króna are quoted per 100 units. LibreFolio normalizes the rate behind the scenes.
 - **Later starts**: AED, BRL, CNY, INR, KRW, MXN, NZD, RSD, UAH and ZAR start in March 2009; THB in 2017; HKD, IDR, ILS, ISK, MYR, PHP and SGD in September 2024.
 - **Russian rouble**: the RUB rate is the one the National Bank of Romania publishes, not the Central Bank of Russia's.
-- **Not served**: gold (XAU) and the IMF's special drawing right (XDR).
+- **The IMF's special drawing right (XDR)**: served like a currency. It is the IMF's unit of account, a basket of USD, EUR, CNY, JPY and GBP.
+- **Not served**: gold (XAU).
 - **Source and terms**: no terms of use could be read on the bank's site. LibreFolio downloads the rates for your own instance only. The provider's description names the source: «Source: National Bank of Romania».

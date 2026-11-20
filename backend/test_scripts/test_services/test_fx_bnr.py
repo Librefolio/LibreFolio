@@ -5,7 +5,7 @@ Lane 75, wave 2 (plan ``plan-phase02FxCentralBanksOndata2.prompt.md``). Measured
 - ``nbrfxrates10days.xml`` holds the last 10 business days, newest first; ``files/xml/years/nbrfxrates<year>.xml`` holds
   every business day of one year since 2005. A year that does not exist is answered with HTTP 502 and an nginx page.
 - A ``Cube date=...`` holds one ``Rate currency=...`` per currency, the text being lei per ``multiplier`` units (default
-  1; 100 for HUF, JPY, KRW...). A rate that is not published is the text ``-``. XAU and XDR are in the files, not served.
+  1; 100 for HUF, JPY, KRW...). A rate that is not published is the text ``-``. XDR (the SDR) is served; XAU (gold) is in the files, not served.
 - The XML namespace differs between files: ``https://www.bnr.ro/xsd`` in the recent ones, ``http://www.bnr.ro/xsd`` in
   the older year files.
 
@@ -42,7 +42,7 @@ TWO_YEARS = (date(2025, 12, 29), date(2026, 1, 5))  # 7 days, but across two yea
 SERVED = [
     "AED", "AUD", "BGN", "BRL", "CAD", "CHF", "CNY", "CZK", "DKK", "EGP", "EUR", "GBP", "HKD", "HRK", "HUF", "IDR", "ILS",
     "INR", "ISK", "JPY", "KRW", "MDL", "MXN", "MYR", "NOK", "NZD", "PHP", "PLN", "RSD", "RUB", "SEK", "SGD", "SKK", "THB",
-    "TRY", "UAH", "USD", "ZAR",
+    "TRY", "UAH", "USD", "XDR", "ZAR",
 ]  # fmt: skip
 
 
@@ -146,17 +146,30 @@ async def test_bnr_reads_the_file_whatever_its_namespace(monkeypatch: pytest.Mon
 
 
 @pytest.mark.asyncio
-async def test_bnr_gold_and_sdr_are_in_the_files_but_never_returned(monkeypatch: pytest.MonkeyPatch):
-    """XAU and XDR are keys with ``[]`` when asked, with others or alone, and asked alone they cost no request."""
-    body = _xml(_cube("2026-11-19", _rate("USD", "4.5"), _rate("XAU", "520.1234"), _rate("XDR", "6.2")), _usd("2026-11-06"))
+async def test_bnr_sdr_is_served_like_any_currency(monkeypatch: pytest.MonkeyPatch):
+    """XDR comes back as lei per SDR, like any other currency."""
+    body = _xml(_cube("2026-11-19", _rate("USD", "4.5"), _rate("XDR", "6.5306")), _usd("2026-11-06"))
+    _route(monkeypatch, bnr_mod, _by_url(recent=body))
+
+    rates = await BNRProvider().fetch_rates(SHORT_RANGE, ["USD", "XDR"])
+
+    assert rates["XDR"] == [(date(2026, 11, 19), "XDR", "RON", Decimal("6.5306"))]
+    assert rates["USD"] == [(date(2026, 11, 19), "USD", "RON", Decimal("4.5"))]
+
+
+@pytest.mark.asyncio
+async def test_bnr_gold_is_in_the_files_but_never_returned(monkeypatch: pytest.MonkeyPatch):
+    """XAU is a key with ``[]`` when asked, with others or alone, and asked alone it costs no request."""
+    body = _xml(_cube("2026-11-19", _rate("USD", "4.5"), _rate("XAU", "520.1234")), _usd("2026-11-06"))
     asked = _route(monkeypatch, bnr_mod, _by_url(recent=body))
 
-    mixed = await BNRProvider().fetch_rates(SHORT_RANGE, ["USD", "XAU", "XDR"])
-    alone = await BNRProvider().fetch_rates(SHORT_RANGE, ["XAU", "XDR"])
-
-    assert mixed == {"USD": [(date(2026, 11, 19), "USD", "RON", Decimal("4.5"))], "XAU": [], "XDR": []}
-    assert alone == {"XAU": [], "XDR": []}
+    mixed = await BNRProvider().fetch_rates(SHORT_RANGE, ["USD", "XAU"])
     assert len(asked) == 1
+    alone = await BNRProvider().fetch_rates(SHORT_RANGE, ["XAU"])
+
+    assert mixed == {"USD": [(date(2026, 11, 19), "USD", "RON", Decimal("4.5"))], "XAU": []}
+    assert alone == {"XAU": []}
+    assert len(asked) == 1  # the second call added no request
 
 
 @pytest.mark.parametrize("text", ["-", "", "abc", "0", "0.0000", "-2.5"])
@@ -499,7 +512,7 @@ async def test_bnr_catalogue_is_the_served_currencies_plus_ron_without_a_request
     currencies = await BNRProvider().get_supported_currencies()
 
     assert currencies == sorted([*SERVED, "RON"])
-    assert "XAU" not in currencies and "XDR" not in currencies
+    assert "XAU" not in currencies and "XDR" in currencies
     assert BNRProvider().fallback_currencies == currencies
     assert asked == []
 
@@ -512,7 +525,7 @@ def test_bnr_identity_urls_and_constants():
     assert bnr_mod.YEAR_URL.format(year=2024) == YEAR_URL.format(year=2024)
     assert bnr_mod.FIRST_DAY == date(2005, 1, 1)
     assert bnr_mod.RECENT_SPAN_DAYS == 14
-    assert sorted(bnr_mod.CURRENCIES) == SERVED and len(bnr_mod.CURRENCIES) == 38
+    assert sorted(bnr_mod.CURRENCIES) == SERVED and len(bnr_mod.CURRENCIES) == 39 and "XAU" not in bnr_mod.CURRENCIES
 
 
 def test_bnr_pause_between_requests_is_a_third_of_a_second_by_default(monkeypatch: pytest.MonkeyPatch):
