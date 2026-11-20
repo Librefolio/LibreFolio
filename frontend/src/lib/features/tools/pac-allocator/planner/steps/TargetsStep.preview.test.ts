@@ -187,6 +187,67 @@ describe('the Targets step and the preview', () => {
         expect(other?.textContent?.trim()).toBe(formatExactPercent({kind: 'finite_decimal', value: '0.12'}, 1));
     });
 
+    describe('«Other cash» only when it is worth more than 0 today (R1-C of project 67, approved 19/11)', () => {
+        /** The last preview with «Other cash» worth `amount` today. */
+        function withOther(brokerKey: string, amount: string): PreviewReady {
+            const numbers = ready(brokerKey);
+            return {...numbers, items: numbers.items!.map((item) => (item.kind === 'other_cash' ? {...item, value: {value: {kind: 'finite_decimal' as const, value: amount}, currency: 'EUR'}} : item))};
+        }
+        /** Cash without a target of its own: the draft has «Other cash»; whether it shows is the preview's to say. */
+        function withLooseCash() {
+            const made = scenario(REBALANCER_PLANNER_PROFILE);
+            made.draft.addManualAccount({name: 'Bank probe', currency: 'EUR', available: '100', selected: '50'});
+            return made;
+        }
+        const row = () => screen.queryByTestId('rebalancer-planner-target-other-cash');
+
+        it('no row before a preview has said what it is worth', () => {
+            const {draft} = withLooseCash();
+            mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('waiting', null));
+            expect(screen.getByTestId('rebalancer-planner-targets').getAttribute('data-preview')).toBe('waiting');
+            expect(row()).toBeNull();
+        });
+
+        it('no row when it is worth 0 today', () => {
+            const {draft, brokerKey} = withLooseCash();
+            mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', withOther(brokerKey, '0')));
+            expect(screen.getByTestId('rebalancer-planner-targets').getAttribute('data-preview')).toBe('ready');
+            expect(row()).toBeNull();
+        });
+
+        it('the row when it is worth more than 0 today', () => {
+            const {draft, brokerKey} = withLooseCash();
+            mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', withOther(brokerKey, '0.01')));
+            expect(row()).not.toBeNull();
+        });
+
+        it('an exact ratio is read by its sign too: worth a third of a cent, the row is there', () => {
+            const {draft, brokerKey} = withLooseCash();
+            const numbers = ready(brokerKey);
+            const third = {kind: 'exact_ratio' as const, numerator: '1', denominator: '300', display_decimal: '0.003333', display_scale: 6, display_authority: 'non_authoritative' as const};
+            const withRatio: PreviewReady = {...numbers, items: numbers.items!.map((item) => (item.kind === 'other_cash' ? {...item, value: {value: third, currency: 'EUR'}} : item))};
+            mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', withRatio));
+            expect(row()).not.toBeNull();
+        });
+
+        it('a stale preview keeps its answer until the next one: the row stays, or stays out', () => {
+            const {draft, brokerKey} = withLooseCash();
+            mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('waiting', withOther(brokerKey, '50')));
+            expect(screen.getByTestId('rebalancer-planner-targets').getAttribute('data-stale')).toBe('true');
+            expect(row()).not.toBeNull();
+            cleanup();
+            mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('waiting', withOther(brokerKey, '0')));
+            expect(row()).toBeNull();
+        });
+
+        it('a preview worth more than 0 adds no row when no cash is outside the entries', () => {
+            const {draft, brokerKey} = scenario(REBALANCER_PLANNER_PROFILE);
+            draft.addCashEntry(brokerKey, 'EUR');
+            mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', ready(brokerKey)));
+            expect(row()).toBeNull();
+        });
+    });
+
     it('a contribution alone is «Other cash» too: the row is there with its weight (G5-2)', () => {
         const {draft, brokerKey} = scenario(REBALANCER_PLANNER_PROFILE);
         const contribution = draft.addContribution('EUR', 'Salary probe');

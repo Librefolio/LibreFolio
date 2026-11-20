@@ -65,9 +65,16 @@
     function targetable(row: TableRow): boolean {
         return row.kind === 'asset' || (row.kind === 'cash' && profile.cashEntries === 'full');
     }
-    /** «Other cash»: some cash of the scenario has no entry of its own (the Rebalancer only). */
     // «Other cash»: the cash without a cash entry of its own, and the contributions (new money with no target of its own, G5-2).
-    const otherCash = $derived(profile.cashEntries === 'full' && (draft.data.cash.some((cash) => !draft.data.cashEntries.some((entry) => entry.brokerKey === cash.brokerKey && entry.currency === cash.currency)) || draft.data.contributions.some((item) => item.amount.trim() !== '')));
+    // Shown only while it is worth more than 0 today (R1-C of project 67, the developer's «ok» of 19/11): the last preview says
+    // so, stale or not; with none yet there is no row. Its sign is read off the backend's figure, never computed here (N1).
+    const otherCashToday = $derived.by(() => {
+        const item = numbers?.items?.find((candidate) => candidate.kind === 'other_cash');
+        if (!item) return false;
+        const value = item.value.value;
+        return (value.kind === 'finite_decimal' ? decimalSign(value.value) : decimalSign(value.numerator)) === 1;
+    });
+    const otherCash = $derived(profile.cashEntries === 'full' && otherCashToday && (draft.data.cash.some((cash) => !draft.data.cashEntries.some((entry) => entry.brokerKey === cash.brokerKey && entry.currency === cash.currency)) || draft.data.contributions.some((item) => item.amount.trim() !== '')));
     const rows = $derived<TableRow[]>([...draft.targetRows, ...(otherCash ? [{kind: 'other' as const, key: OTHER_CASH_KEY}] : [])]);
     /** The rows whose targets the balancing reads and writes, in table order. */
     const editable = $derived(draft.targetRows.filter(targetable));
