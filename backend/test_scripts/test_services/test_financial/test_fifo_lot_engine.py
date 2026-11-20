@@ -1485,9 +1485,10 @@ class TestCloseCurrency:
 # A FEE/TAX whose ``parent_transaction_id`` names a BUY/SELL the engine replayed, at the charge's own broker, leaves the
 # day's pool before pooling: one ``LINKED_TRADE`` group per charge, dated on the charge, split by
 # ``_split_trade_cost`` between the lots its parent opened (OPENING) and closed (CLOSURE). A charge whose parent is a
-# BUY/SELL of its broker dated after ``replay_until`` waits, orphan (M1b, below). Every other charge — no parent, a
-# parent the engine never saw and knows no facts of, a parent that opened and closed nothing, a parent that is not a
-# trade, or a trade of another broker — keeps today's ladder and its numbers. Within a type the LINKED_TRADE groups come
+# BUY/SELL of its broker dated after ``replay_until`` waits, orphan (M1b, below); a charge whose parent is an income of
+# the engine goes on the lots that earned it (M2, LINKED_INCOME, below). Every other charge — no parent, a parent the
+# engine never saw and knows no facts of, a parent that opened and closed nothing, a parent that is neither a trade nor
+# an income, or a parent of another broker — keeps today's ladder and its numbers. Within a type the linked groups come
 # first, by (charge date, charge id), then the pools.
 
 
@@ -1774,7 +1775,8 @@ class TestLinkedChargeDate:
 
 class TestLinkedChargeFallbacks:
     """A charge whose parent is not a trade the engine replayed — and not a trade of its broker after the end (M1b, which
-    waits: ``TestLinkedChargeWaitingForItsParent``) — keeps today's ladder: same rule, same numbers."""
+    waits: ``TestLinkedChargeWaitingForItsParent``), nor an income of its broker (M2: ``TestLinkedChargeOnItsIncome``)
+    — keeps today's ladder: same rule, same numbers."""
 
     # The consultant's example (§8 of the M1 contract): lot A bought in January and still open; FEE 5 € of 10 Mar linked
     # to a BUY of 12 Mar (lot B).
@@ -1841,18 +1843,9 @@ class TestLinkedChargeFallbacks:
         assert (group.rule, group.operation_allocations, group.target_orphan) == ("OPEN_LOTS_FALLBACK", (), _d("5"))
         assert result.asset_orphan_fees == _d("5")
 
-    def test_a_tax_linked_to_a_dividend_stays_on_the_ladder_until_m2(self):
-        # The fourth case of analysis §3.5 is M2 (LINKED_INCOME). Until then a TAX linked to a dividend keeps
-        # SAME_DAY_INCOME: the D-1 holdings, lots 1 and 2, 3 / 3.
-        result = _run_linked(
-            [_buy(1, "10", "100", dt="2025-01-01"), _buy(2, "10", "100", dt="2025-01-05")],
-            [_income(80, "DIVIDEND", "50", dt="2025-02-10"), _linked_tax(90, "-6", dt="2025-02-10", parent=80)],
-        )
-
-        assert (_lot_taxes(result, 1), _lot_taxes(result, 2)) == (_d("3"), _d("3"))
-        group = _group_of(result, 90)
-        assert group.rule == "SAME_DAY_INCOME"
-        assert [context for context, _tx_id, _lots in _operations(group)] == ["INCOME"]
+    # M2 retarget: test_a_tax_linked_to_a_dividend_stays_on_the_ladder_until_m2 (SAME_DAY_INCOME, 3 / 3) goes on the
+    # dividend's lots now, rule LINKED_INCOME, same 3 / 3 —
+    # TestLinkedChargeOnItsIncome.test_a_tax_linked_to_a_same_day_dividend_goes_on_its_lots.
 
     def test_a_charge_linked_to_a_row_that_is_not_a_trade_stays_on_the_ladder(self):
         # ADJUSTMENT 1 opens lot 1 with a cost but is not a trade; BUY 2 the same day opens lot 2. The FEE linked to the
@@ -1905,11 +1898,13 @@ def _assert_waiting(
     native: str | None = None,
     native_currency: str = "EUR",
     broker_id: int = 1,
+    rule: str = "LINKED_TRADE",
 ) -> None:
-    """The charge waits for its parent: alone in an empty ``LINKED_TRADE`` group, all of it orphan, with its one issue."""
+    """The charge waits for its parent: alone in an empty group of its parent's rule (``LINKED_TRADE`` for a trade,
+    ``LINKED_INCOME`` for an income, M2 §1.3), all of it orphan, with its one issue."""
     group = _group_of(result, charge_id)
     target_total, native_total = _d(amount), _d(native if native is not None else amount)
-    assert (group.economic_type, group.rule, group.source_transaction_ids, group.operation_allocations) == (economic_type, "LINKED_TRADE", (charge_id,), ())
+    assert (group.economic_type, group.rule, group.source_transaction_ids, group.operation_allocations) == (economic_type, rule, (charge_id,), ())
     assert (group.date, group.broker_id, group.native_currency, group.target_currency) == (date.fromisoformat(day), broker_id, native_currency, "EUR")
     assert (group.native_pool_total, group.target_pool_total, group.native_orphan, group.target_orphan) == (native_total, target_total, native_total, target_total)
     issues = [issue for issue in _after_range_issues(result) if issue.transaction_id == charge_id]
@@ -2079,23 +2074,14 @@ class TestLinkedChargeWaitingForItsParent:
 
 
 class TestLinkedChargeAfterTheEndStaysOnTheLadder:
-    """The cases M1b leaves on the ladder (M1b contract §1.7, §7.8, §8.3): same rule, same numbers as in M1, no new issue."""
+    """The cases M1b leaves on the ladder (M1b contract §1.7, §7.8, §8.3): same rule, same numbers as in M1, no new issue.
+    The income parent after the end, on the ladder until M2, waits now (``TestLinkedChargeWaitingForItsIncome``)."""
 
     _LOT_A = _buy(1, "10", "100", dt="2025-01-15")
 
-    @pytest.mark.parametrize("income_type", ["DIVIDEND", "INTEREST"])
-    def test_an_income_parent_after_the_end_stays_on_the_ladder_until_m2(self, income_type):
-        # A TAX of 10 Mar linked to income of 12 Mar, which never is among the engine's transactions: its facts say so.
-        # LINKED_INCOME and its wait are M2; until then OPEN_LOTS_FALLBACK puts the TAX on lot A.
-        result = _run_linked(
-            [self._LOT_A],
-            [_linked_tax(90, "-6", dt="2025-03-10", parent=80, parent_facts=_parent_facts("2025-03-12", tx_type=income_type))],
-            replay_until="2025-03-11",
-        )
-
-        assert _lot_taxes(result, 1) == _d("6")
-        assert _group_of(result, 90).rule == "OPEN_LOTS_FALLBACK"
-        assert _after_range_issues(result) == []
+    # M2 retarget: test_an_income_parent_after_the_end_stays_on_the_ladder_until_m2[DIVIDEND|INTEREST] (OPEN_LOTS_FALLBACK
+    # on lot A) waits now, in an empty LINKED_INCOME group with the M1b code —
+    # TestLinkedChargeWaitingForItsIncome.test_a_charge_linked_to_an_income_after_the_end_waits[income-known-by-its-facts-*].
 
     @pytest.mark.parametrize("parent_in_the_engine", [pytest.param(True, id="parent-among-the-transactions"), pytest.param(False, id="parent-known-by-its-facts")])
     def test_a_parent_of_another_broker_after_the_end_stays_on_the_ladder_and_is_never_named(self, parent_in_the_engine):
@@ -2156,6 +2142,509 @@ class TestLinkedChargeAfterTheEndStaysOnTheLadder:
         assert (_lot_fees(result, 1), _lot_fees(result, 2)) == (_d("0"), _d("5"))
         assert _operations(_group_of(result, 90)) == [("OPENING", 2, (2,))]
         assert _after_range_issues(result) == []
+
+
+# --------------------------------------------------------------------------- #
+# Project 66, M2 — a charge linked to an income goes on the lots that earned it
+# --------------------------------------------------------------------------- #
+#
+# Decision D12 = A (M2 contract §1, §7, §8): a FEE/TAX whose ``parent_transaction_id`` names a DIVIDEND/INTEREST event of
+# the engine — at the charge's broker, not after ``replay_until`` — leaves its pool and goes, alone, onto the lots that
+# earned that income: the LONG holdings of the parent's broker on the day before the parent's date, by quantity, as the
+# income's own ASSET_INCOME_HOLDINGS group and a SAME_DAY_INCOME TAX. Its own group, rule "LINKED_INCOME", dated on the
+# charge, holds one INCOME operation whose ``operation_transaction_id`` is the parent. When no lot earned the income, the
+# charge is orphan with it: an empty LINKED_INCOME group and one ASSET_COST_LINKED_INCOME_NO_ELIGIBLE_LOTS issue (§8). An
+# income parent after the end waits, as in M1b, in an empty LINKED_INCOME group. An income parent at another broker, a
+# parent with no facts, and no end with an absent parent keep the ladder, and no issue names the parent.
+# The rule and the code are strings here: the file collects before the engine knows them.
+
+_LINKED_INCOME = "LINKED_INCOME"
+_INCOME_ORPHAN = "ASSET_COST_LINKED_INCOME_NO_ELIGIBLE_LOTS"
+
+
+def _lot_shares(group: EconomicAllocationGroup) -> list[tuple[int, Decimal]]:
+    """(lot id, weight) of every lot allocation of a group, in the engine's order."""
+    return [(allocation.lot_id, allocation.weight) for op in group.operation_allocations for allocation in op.lot_allocations]
+
+
+def _assert_on_its_income(result, charge_id: int, income_id: int, *, economic_type: str, amount: str, day: str, native: str | None = None) -> None:
+    """The charge is alone in its LINKED_INCOME group, dated on itself, with one INCOME operation naming its income, on the
+    lots and weights of that income's own ASSET_INCOME_HOLDINGS group in the same result (§7.2), all of it allocated."""
+    group = _group_of(result, charge_id)
+    income = _group_of(result, income_id)
+    target_total, native_total = _d(amount), _d(native if native is not None else amount)
+    assert (income.rule, bool(income.operation_allocations)) == ("ASSET_INCOME_HOLDINGS", True), f"precondition: the income was allocated: {income}"
+    assert (group.economic_type, group.rule, group.source_transaction_ids, group.date) == (economic_type, _LINKED_INCOME, (charge_id,), date.fromisoformat(day))
+    assert [(op.context, op.operation_transaction_id) for op in group.operation_allocations] == [("INCOME", income_id)]
+    assert _lot_shares(group) == _lot_shares(income)
+    assert (group.native_pool_total, group.target_pool_total, group.native_orphan, group.target_orphan) == (native_total, target_total, _d("0"), _d("0"))
+    allocations = [allocation for op in group.operation_allocations for allocation in op.lot_allocations]
+    assert sum((allocation.target_amount for allocation in allocations), _d("0")) == target_total
+    assert sum((allocation.native_amount for allocation in allocations), _d("0")) == native_total
+
+
+def _assert_orphan_with_its_income(
+    result,
+    charge_id: int,
+    *,
+    economic_type: str,
+    amount: str,
+    day: str,
+    parent_id: int,
+    parent_day: str,
+    native: str | None = None,
+    native_currency: str = "EUR",
+) -> None:
+    """The charge is orphan with the income no lot earned (D12): alone in an empty LINKED_INCOME group, with its one
+    ASSET_COST_LINKED_INCOME_NO_ELIGIBLE_LOTS issue — dated on the charge, naming the parent (§8) — and never the ladder's code."""
+    group = _group_of(result, charge_id)
+    target_total, native_total = _d(amount), _d(native if native is not None else amount)
+    assert (group.economic_type, group.rule, group.source_transaction_ids, group.operation_allocations) == (economic_type, _LINKED_INCOME, (charge_id,), ())
+    assert (group.date, group.broker_id, group.native_currency, group.target_currency) == (date.fromisoformat(day), 1, native_currency, "EUR")
+    assert (group.native_pool_total, group.target_pool_total, group.native_orphan, group.target_orphan) == (native_total, target_total, native_total, target_total)
+    issues = [issue for issue in result.issues if issue.code == _INCOME_ORPHAN and issue.transaction_id == charge_id]
+    assert len(issues) == 1, f"charge {charge_id} must have exactly one {_INCOME_ORPHAN} issue: {result.issues}"
+    assert issues[0].broker_id == 1
+    assert issues[0].params == {
+        "economic_type": economic_type,
+        "as_of_date": day,
+        "target_amount": target_total,
+        "target_currency": "EUR",
+        "parent_transaction_id": parent_id,
+        "parent_date": parent_day,
+    }
+    assert [issue for issue in result.issues if issue.transaction_id == charge_id and issue.code != _INCOME_ORPHAN] == []
+
+
+def _assert_conserved(result, events: list[EconomicEvent], economic_type: str) -> None:
+    """Σ allocated + orphan == Σ |events| of one type, in target (accumulators and groups) and in native (groups)."""
+    typed = [event for event in events if event.economic_type == economic_type]
+    groups = [group for group in result.economic_allocation_groups if group.economic_type == economic_type]
+    accumulated, orphan = (_sum_allocated_fees(result), result.asset_orphan_fees) if economic_type == "FEE" else (_sum_allocated_taxes(result), result.asset_orphan_taxes)
+    target_total = sum((abs(event.target_amount) for event in typed), _d("0"))
+    native_total = sum((abs(event.native_amount) for event in typed), _d("0"))
+    allocations = [allocation for group in groups for op in group.operation_allocations for allocation in op.lot_allocations]
+    assert accumulated + orphan == target_total, economic_type
+    assert sum((allocation.target_amount for allocation in allocations), _d("0")) + sum((group.target_orphan for group in groups), _d("0")) == target_total, economic_type
+    assert sum((allocation.native_amount for allocation in allocations), _d("0")) + sum((group.native_orphan for group in groups), _d("0")) == native_total, economic_type
+
+
+def _assert_parent_never_named(result) -> None:
+    """No issue names a linked charge's parent: no M1b or M2 code, no ``parent_*`` param (rule 5's defence)."""
+    assert [issue for issue in result.issues if issue.code in (_AFTER_RANGE, _INCOME_ORPHAN)] == []
+    for issue in result.issues:
+        assert not {"parent_transaction_id", "parent_date"} & set(issue.params), issue
+
+
+class TestLinkedChargeOnItsIncome:
+    """The worked example of M2 contract §7.7 and its variations: the charge follows the income it was paid on."""
+
+    # Lot A (10 units) and lot B (30) are held on 9 Mar; the income is of 10 Mar; BUY C opens lot C on 10 Mar.
+    _LOT_A = _buy(1, "10", "100", dt="2025-01-15")
+    _LOT_B = _buy(2, "30", "100", dt="2025-02-03")
+    _LOT_C = _buy(3, "5", "100", dt="2025-03-10")
+
+    @pytest.mark.parametrize("income_type", ["DIVIDEND", "INTEREST"])
+    def test_the_worked_example_shares_the_fee_like_the_income(self, income_type):
+        # Income of 50 € → 12.50 / 37.50 / 0. FEE of 1 € linked to it: before M2 all of it on lot C (SAME_DAY_TRADES); now
+        # 0.25 / 0.75 / 0, the income's shares.
+        result = _run_linked([self._LOT_A, self._LOT_B, self._LOT_C], [_income(80, income_type, "50", dt="2025-03-10"), _linked_fee(90, "-1", dt="2025-03-10", parent=80)])
+
+        assert (_lot_income(result, 1), _lot_income(result, 2), _lot_income(result, 3)) == (_d("12.5"), _d("37.5"), _d("0"))
+        assert (_lot_fees(result, 1), _lot_fees(result, 2), _lot_fees(result, 3)) == (_d("0.25"), _d("0.75"), _d("0"))
+        _assert_on_its_income(result, 90, 80, economic_type="FEE", amount="1", day="2025-03-10")
+        assert (result.asset_orphan_fees, result.issues, result.analysis_status) == (_d("0"), [], "COMPLETE")
+
+    @pytest.mark.parametrize(
+        ("economic_type", "charge_day"),
+        [
+            pytest.param("FEE", "2025-03-14", id="fee-four-days-later-before-m2-open-lots-fallback"),
+            pytest.param("TAX", "2025-03-11", id="tax-the-day-after-before-m2-previous-day-income"),
+            pytest.param("TAX", "2025-03-14", id="tax-four-days-later-before-m2-open-lots-fallback"),
+        ],
+    )
+    def test_a_charge_dated_days_after_its_dividend_uses_the_dividends_day_before(self, economic_type, charge_day):
+        # BUY 4 opens lot 4 (20 units) on 12 Mar, after the dividend; the charge of 4 € is dated later. Before M2: four days
+        # later, OPEN_LOTS_FALLBACK on the holdings of 13 Mar, A / B / 4 = 10 / 30 / 20; a TAX of the day after,
+        # PREVIOUS_DAY_INCOME (same numbers, another rule). Now always the dividend's 9 Mar: 1 / 3 / 0, rule LINKED_INCOME.
+        result = _run_linked(
+            [self._LOT_A, self._LOT_B, _buy(4, "20", "100", dt="2025-03-12")],
+            [_income(80, "DIVIDEND", "50", dt="2025-03-10"), _linked_cost(90, economic_type, "-4", dt=charge_day, parent=80)],
+        )
+
+        lot_cost = _lot_fees if economic_type == "FEE" else _lot_taxes
+        assert (lot_cost(result, 1), lot_cost(result, 2), lot_cost(result, 4)) == (_d("1"), _d("3"), _d("0"))
+        _assert_on_its_income(result, 90, 80, economic_type=economic_type, amount="4", day=charge_day)
+
+    def test_a_negative_dividend_still_shares_its_fee_by_quantity(self):
+        # A correction of −50 € takes 12.50 / 37.50 off lots A and B (MF-F1). The FEE of 1 € linked to it still splits by
+        # quantity, as a cost: 0.25 / 0.75, never signed by its income. Before M2: SAME_DAY_TRADES on lot C.
+        result = _run_linked([self._LOT_A, self._LOT_B, self._LOT_C], [_income(80, "DIVIDEND", "-50", dt="2025-03-10"), _linked_fee(90, "-1", dt="2025-03-10", parent=80)])
+
+        assert (_lot_income(result, 1), _lot_income(result, 2)) == (_d("-12.5"), _d("-37.5"))
+        assert (_lot_fees(result, 1), _lot_fees(result, 2), _lot_fees(result, 3)) == (_d("0.25"), _d("0.75"), _d("0"))
+        _assert_on_its_income(result, 90, 80, economic_type="FEE", amount="1", day="2025-03-10")
+
+    def test_a_tax_linked_to_a_same_day_dividend_goes_on_its_lots(self):
+        # Retargeted from M1 (test_a_tax_linked_to_a_dividend_stays_on_the_ladder_until_m2): lots 1 and 2 (10 units each)
+        # earned the dividend; its TAX of 6 € was SAME_DAY_INCOME, 3 / 3. Now LINKED_INCOME: the same 3 / 3, its own group.
+        result = _run_linked(
+            [_buy(1, "10", "100", dt="2025-01-01"), _buy(2, "10", "100", dt="2025-01-05")],
+            [_income(80, "DIVIDEND", "50", dt="2025-02-10"), _linked_tax(90, "-6", dt="2025-02-10", parent=80)],
+        )
+
+        assert (_lot_taxes(result, 1), _lot_taxes(result, 2)) == (_d("3"), _d("3"))
+        _assert_on_its_income(result, 90, 80, economic_type="TAX", amount="6", day="2025-02-10")
+
+    def test_a_same_day_tax_linked_to_its_dividend_has_the_numbers_of_same_day_income(self):
+        # Lots of 10 and 20 units: a third does not terminate. Reference run: the TAX unlinked and the only TAX
+        # (SAME_DAY_INCOME). Linked, it is LINKED_INCOME with the same lot allocations to the last digit (§7.2).
+        txs = [_buy(1, "10", "100", dt="2025-01-15"), _buy(2, "20", "100", dt="2025-02-03")]
+        income = _income(80, "DIVIDEND", "50", dt="2025-03-10")
+        alone = _run_linked(txs, [income, _tax(90, "-1", dt="2025-03-10")])
+        reference = _group_of(alone, 90)
+        assert reference.rule == "SAME_DAY_INCOME", "precondition: the TAX alone follows the income"
+
+        linked = _run_linked(txs, [income, _linked_tax(90, "-1", dt="2025-03-10", parent=80)])
+
+        _assert_on_its_income(linked, 90, 80, economic_type="TAX", amount="1", day="2025-03-10")
+        [reference_operation] = reference.operation_allocations
+        [operation] = _group_of(linked, 90).operation_allocations
+        assert operation.lot_allocations == reference_operation.lot_allocations
+        assert {lot: _lot_taxes(linked, lot) for lot in (1, 2)} == {lot: _lot_taxes(alone, lot) for lot in (1, 2)}
+
+    @pytest.mark.parametrize(
+        ("method", "expected"),
+        [pytest.param(LotMatchingMethod.FIFO, {1: "1", 2: "2", 4: "0"}, id="FIFO"), pytest.param(LotMatchingMethod.LIFO, {1: "2", 2: "1", 4: "0"}, id="LIFO")],
+    )
+    def test_the_lots_that_earned_the_income_follow_the_matching_method(self, method, expected):
+        # Lots 1 and 2 (10 units each); SELL 3 of 5 units on 1 Feb leaves 5 + 10 in FIFO, 10 + 5 in LIFO. Dividend of 30 €
+        # on 10 Mar, BUY 4 on 12 Mar, FEE of 3 € of 13 Mar linked to the dividend. Before M2: PREVIOUS_DAY_TRADES puts it on
+        # lot 4. Now the lots each method left holding on 9 Mar.
+        txs = [_buy(1, "10", "100", dt="2025-01-01"), _buy(2, "10", "100", dt="2025-01-05"), _sell(3, "5", "120", dt="2025-02-01"), _buy(4, "10", "100", dt="2025-03-12")]
+        result = _run_linked(txs, [_income(80, "DIVIDEND", "30", dt="2025-03-10"), _linked_fee(90, "-3", dt="2025-03-13", parent=80)], matching_method=method)
+
+        assert {lot: _lot_fees(result, lot) for lot in (1, 2, 4)} == {lot: _d(value) for lot, value in expected.items()}
+        _assert_on_its_income(result, 90, 80, economic_type="FEE", amount="3", day="2025-03-13")
+
+    def test_an_unlinked_fee_of_the_same_pool_key_keeps_the_numbers_it_has_alone(self):
+        # Mixed day: the worked example plus an unlinked FEE of 2 € with the same broker, day and currencies. Alone it is
+        # SAME_DAY_TRADES on lot C; it must keep exactly that. Before M2 the two made one pool of 3 € on lot C.
+        txs = [self._LOT_A, self._LOT_B, self._LOT_C]
+        income = _income(80, "DIVIDEND", "50", dt="2025-03-10")
+        alone = _run_linked(txs, [income, _fee(91, "-2", dt="2025-03-10")])
+        reference = _group_of(alone, 91)
+        assert (reference.rule, reference.source_transaction_ids, _operations(reference)) == ("SAME_DAY_TRADES", (91,), [("OPENING", 3, (3,))]), "precondition: FEE 91 alone"
+
+        events = [income, _linked_fee(90, "-1", dt="2025-03-10", parent=80), _fee(91, "-2", dt="2025-03-10")]
+        mixed = _run_linked(txs, events)
+
+        unlinked = _group_of(mixed, 91)
+        assert (unlinked.rule, unlinked.source_transaction_ids, unlinked.native_pool_total, unlinked.target_pool_total) == ("SAME_DAY_TRADES", (91,), _d("2"), _d("2"))
+        assert unlinked.operation_allocations == reference.operation_allocations
+        _assert_on_its_income(mixed, 90, 80, economic_type="FEE", amount="1", day="2025-03-10")
+        assert {lot: _lot_fees(mixed, lot) for lot in (1, 2, 3)} == {1: _d("0.25"), 2: _d("0.75"), 3: _d("2")}
+        _assert_conserved(mixed, events, "FEE")
+        assert mixed.asset_orphan_fees == _d("0")
+
+    @pytest.mark.parametrize(
+        "replay_until",
+        [pytest.param(None, id="no-end"), pytest.param("2025-03-10", id="income-dated-on-the-end"), pytest.param("2025-06-30", id="later-end")],
+    )
+    def test_an_income_of_the_engine_not_after_the_end_is_followed(self, replay_until):
+        # §7.2 twins: with no end, with the income dated on the end (not after it), or with a later end, an income among the
+        # engine's events is the charge's parent. The facts the service reads say the same day.
+        facts = _parent_facts("2025-03-10", tx_type="DIVIDEND")
+        result = _run_linked(
+            [self._LOT_A, self._LOT_B, self._LOT_C],
+            [_income(80, "DIVIDEND", "50", dt="2025-03-10"), _linked_fee(90, "-1", dt="2025-03-10", parent=80, parent_facts=facts)],
+            replay_until=replay_until,
+        )
+
+        assert (_lot_fees(result, 1), _lot_fees(result, 2), _lot_fees(result, 3)) == (_d("0.25"), _d("0.75"), _d("0"))
+        _assert_on_its_income(result, 90, 80, economic_type="FEE", amount="1", day="2025-03-10")
+        assert _after_range_issues(result) == []
+
+    def test_the_engines_income_event_wins_over_the_facts(self):
+        # §7.2 twin of M1b's: the engine holds the dividend of 10 Mar (end 11 Mar); the facts claim 1 Apr, after the end.
+        # The engine's event decides: on the dividend's lots, no wait.
+        result = _run_linked(
+            [self._LOT_A, self._LOT_B, self._LOT_C],
+            [_income(80, "DIVIDEND", "50", dt="2025-03-10"), _linked_fee(90, "-1", dt="2025-03-10", parent=80, parent_facts=_parent_facts("2025-04-01", tx_type="DIVIDEND"))],
+            replay_until="2025-03-11",
+        )
+
+        assert (_lot_fees(result, 1), _lot_fees(result, 2), _lot_fees(result, 3)) == (_d("0.25"), _d("0.75"), _d("0"))
+        _assert_on_its_income(result, 90, 80, economic_type="FEE", amount="1", day="2025-03-10")
+        assert _after_range_issues(result) == []
+
+
+class TestLinkedChargeOrphanWithItsIncome:
+    """D12: when no lot earned the income, the charge linked to it is orphan with it (M2 contract §1.2, §8)."""
+
+    # The only lot is opened on the income's day: nothing is held on 9 Mar, so the dividend is orphan.
+    _LOT_C = _buy(3, "5", "100", dt="2025-03-10")
+
+    @pytest.mark.parametrize(
+        "fee_day",
+        [
+            pytest.param("2025-03-10", id="same-day-before-m2-same-day-trades"),
+            pytest.param("2025-03-13", id="days-later-before-m2-open-lots-fallback"),
+        ],
+    )
+    def test_a_fee_linked_to_an_orphan_dividend_is_orphan_with_it(self, fee_day):
+        # Before M2 the FEE found lot C through the ladder (the BUY of its day, or the holdings of 12 Mar). Now it is orphan
+        # with the dividend: its issue is dated on the FEE and names the dividend's day (§8).
+        events = [_income(80, "DIVIDEND", "50", dt="2025-03-10"), _linked_fee(90, "-1", dt=fee_day, parent=80)]
+        result = _run_linked([self._LOT_C], events)
+
+        assert (result.asset_orphan_income, "ASSET_INCOME_NO_ELIGIBLE_LOTS" in _issue_codes(result)) == (_d("50"), True), "precondition: the dividend is orphan"
+        assert (_lot_fees(result, 3), result.asset_orphan_fees) == (_d("0"), _d("1"))
+        _assert_orphan_with_its_income(result, 90, economic_type="FEE", amount="1", day=fee_day, parent_id=80, parent_day="2025-03-10")
+        assert "ASSET_COST_NO_ELIGIBLE_LOTS" not in _issue_codes(result)
+        _assert_conserved(result, events, "FEE")
+        assert result.analysis_status == "DEGRADED"
+
+    def test_a_same_day_tax_linked_to_an_orphan_dividend_takes_the_linked_code(self):
+        # Before M2: SAME_DAY_INCOME, orphan with ASSET_COST_NO_ELIGIBLE_LOTS. §8: linked, it takes the linked code; the
+        # ladder's code stays for the charges without a link.
+        events = [_income(80, "DIVIDEND", "50", dt="2025-03-10"), _linked_tax(90, "-6", dt="2025-03-10", parent=80)]
+        result = _run_linked([self._LOT_C], events)
+
+        assert (_lot_taxes(result, 3), result.asset_orphan_taxes) == (_d("0"), _d("6"))
+        _assert_orphan_with_its_income(result, 90, economic_type="TAX", amount="6", day="2025-03-10", parent_id=80, parent_day="2025-03-10")
+        assert "ASSET_COST_NO_ELIGIBLE_LOTS" not in _issue_codes(result)
+        _assert_conserved(result, events, "TAX")
+
+    def test_an_unlinked_tax_of_the_same_day_keeps_the_ladders_code(self):
+        # Mixed day: beside the linked TAX 90, an unlinked TAX 91 of the same pool key follows the orphan income as it does
+        # alone (SAME_DAY_INCOME, ASSET_COST_NO_ELIGIBLE_LOTS, 2 €), and never takes the linked code.
+        income = _income(80, "DIVIDEND", "50", dt="2025-03-10")
+        alone = _run_linked([self._LOT_C], [income, _tax(91, "-2", dt="2025-03-10")])
+        reference = _group_of(alone, 91)
+        assert (reference.rule, reference.operation_allocations, reference.target_orphan) == ("SAME_DAY_INCOME", (), _d("2")), "precondition: TAX 91 alone"
+
+        events = [income, _linked_tax(90, "-6", dt="2025-03-10", parent=80), _tax(91, "-2", dt="2025-03-10")]
+        result = _run_linked([self._LOT_C], events)
+
+        unlinked = _group_of(result, 91)
+        assert (unlinked.rule, unlinked.source_transaction_ids, unlinked.operation_allocations, unlinked.target_orphan) == ("SAME_DAY_INCOME", (91,), (), _d("2"))
+        assert [issue.params for issue in result.issues if issue.code == "ASSET_COST_NO_ELIGIBLE_LOTS"] == [issue.params for issue in alone.issues if issue.code == "ASSET_COST_NO_ELIGIBLE_LOTS"]
+        _assert_orphan_with_its_income(result, 90, economic_type="TAX", amount="6", day="2025-03-10", parent_id=80, parent_day="2025-03-10")
+        assert result.asset_orphan_taxes == _d("8")
+        _assert_conserved(result, events, "TAX")
+
+    def test_an_income_on_date_min_leaves_its_charge_orphan_without_overflow(self):
+        # MF-SEC8-2b: an income on date.min has no day before, so no lot earned it; its linked FEE is orphan with it,
+        # never an OverflowError. Before M2: SAME_DAY_TRADES on the lot bought that day.
+        events = [_income(80, "DIVIDEND", "50", dt="0001-01-01"), _linked_fee(90, "-1", dt="0001-01-01", parent=80)]
+        result = _run_linked([_buy(3, "5", "100", dt="0001-01-01")], events)
+
+        assert result.asset_orphan_fees == _d("1")
+        _assert_orphan_with_its_income(result, 90, economic_type="FEE", amount="1", day="0001-01-01", parent_id=80, parent_day="0001-01-01")
+
+
+class TestLinkedChargeWaitingForItsIncome:
+    """An income parent after ``replay_until`` waits, as a trade does in M1b: an empty LINKED_INCOME group (§1.3)."""
+
+    _LOT_A = _buy(1, "10", "100", dt="2025-01-15")
+
+    @pytest.mark.parametrize("income_type", ["DIVIDEND", "INTEREST"])
+    @pytest.mark.parametrize("parent_in_the_engine", [pytest.param(True, id="income-among-the-engines-events"), pytest.param(False, id="income-known-by-its-facts")])
+    def test_a_charge_linked_to_an_income_after_the_end_waits(self, income_type, parent_in_the_engine):
+        # Retargeted from M1b (test_an_income_parent_after_the_end_stays_on_the_ladder_until_m2, the facts variant): a TAX of
+        # 10 Mar linked to an income of 12 Mar; the analysis ends on 11 Mar. Before M2: OPEN_LOTS_FALLBACK put the TAX on
+        # lot A. Now it waits, orphan, with the M1b code. The income is among the engine's events (a direct caller), or —
+        # the service's shape, which loads income up to the end — known by its facts only.
+        facts = None if parent_in_the_engine else _parent_facts("2025-03-12", tx_type=income_type)
+        income = [_income(80, income_type, "50", dt="2025-03-12")] if parent_in_the_engine else []
+        result = _run_linked([self._LOT_A], [*income, _linked_tax(90, "-6", dt="2025-03-10", parent=80, parent_facts=facts)], replay_until="2025-03-11")
+
+        assert (_lot_taxes(result, 1), result.asset_orphan_taxes) == (_d("0"), _d("6"))
+        _assert_waiting(result, 90, economic_type="TAX", amount="6", day="2025-03-10", parent_id=80, parent_day="2025-03-12", rule=_LINKED_INCOME)
+        assert {"ASSET_COST_NO_ELIGIBLE_LOTS", _INCOME_ORPHAN} & set(_issue_codes(result)) == set()
+
+    @pytest.mark.parametrize(("method", "lot"), [pytest.param(LotMatchingMethod.FIFO, 2, id="FIFO"), pytest.param(LotMatchingMethod.LIFO, 1, id="LIFO")])
+    def test_a_fee_linked_to_an_income_after_the_end_waits_in_both_methods(self, method, lot):
+        # Lots 1 and 2 open, SELL 3 of 10 Feb closes one of them (FIFO lot 1, LIFO lot 2); the FEE of 1 Mar is linked to a
+        # dividend of 20 Mar the service knows by its facts; the analysis ends on 15 Mar. Before M2: OPEN_LOTS_FALLBACK on
+        # the lot each method left open. Now it waits in both methods.
+        txs = [_buy(1, "10", "100", dt="2025-01-01"), _buy(2, "10", "100", dt="2025-01-05"), _sell(3, "10", "120", dt="2025-02-10")]
+        events = [_linked_fee(90, "-5", dt="2025-03-01", parent=80, parent_facts=_parent_facts("2025-03-20", tx_type="DIVIDEND"))]
+        result = _run_linked(txs, events, replay_until="2025-03-15", matching_method=method)
+
+        assert (_lot_fees(result, lot), result.asset_orphan_fees) == (_d("0"), _d("5"))
+        _assert_waiting(result, 90, economic_type="FEE", amount="5", day="2025-03-01", parent_id=80, parent_day="2025-03-20", rule=_LINKED_INCOME)
+
+
+class TestLinkedChargeOnAnIncomeStaysOnTheLadder:
+    """The cases M2 leaves on the ladder (§1.4): same rule and numbers as before M2, and no issue names the parent."""
+
+    _LOT_A = _buy(1, "10", "100", dt="2025-01-15")
+    _LOT_C = _buy(3, "5", "100", dt="2025-03-10")
+
+    @pytest.mark.parametrize(
+        ("lots_at_broker_2", "replay_until", "income_in_the_engine"),
+        [
+            pytest.param(True, None, True, id="income-earned-at-broker-2"),
+            pytest.param(False, None, True, id="income-orphan-at-broker-2"),
+            pytest.param(False, "2025-03-11", False, id="income-after-the-end-at-broker-2"),
+        ],
+    )
+    def test_an_income_of_another_broker_is_never_followed_nor_named(self, lots_at_broker_2, replay_until, income_in_the_engine):
+        # Defence of rule 5: the dividend 80 sits at broker 2 (its broker edited after the link); the FEE of broker 1 names
+        # it. Earned, orphan, or after the end (known by its facts), the FEE takes broker 1's ladder: SAME_DAY_TRADES on
+        # lot C, as before M2, and no issue carries the parent.
+        txs = [self._LOT_A, self._LOT_C, *([_buy(5, "10", "100", dt="2025-01-15", broker_id=2)] if lots_at_broker_2 else [])]
+        income = [_income(80, "DIVIDEND", "50", dt="2025-03-10", broker_id=2)] if income_in_the_engine else []
+        facts = _parent_facts("2025-03-10" if income_in_the_engine else "2025-03-12", tx_type="DIVIDEND", broker_id=2)
+        result = _run_linked(txs, [*income, _linked_fee(90, "-1", dt="2025-03-10", parent=80, parent_facts=facts)], replay_until=replay_until)
+
+        assert (_lot_fees(result, 1), _lot_fees(result, 3)) == (_d("0"), _d("1"))
+        group = _group_of(result, 90)
+        assert (group.rule, _operations(group)) == ("SAME_DAY_TRADES", [("OPENING", 3, (3,))])
+        _assert_parent_never_named(result)
+
+    @pytest.mark.parametrize("replay_until", [pytest.param(None, id="no-end"), pytest.param("2025-03-11", id="with-an-end")])
+    def test_a_parent_absent_with_no_facts_keeps_the_ladder_beside_a_dividend(self, replay_until):
+        # A TAX linked to row 81, which the engine never saw and knows no facts of, on the day of dividend 80: it follows
+        # that income through the ladder (SAME_DAY_INCOME), as before M2 — never LINKED_INCOME by guess.
+        result = _run_linked(
+            [self._LOT_A, self._LOT_C],
+            [_income(80, "DIVIDEND", "50", dt="2025-03-10"), _linked_tax(90, "-6", dt="2025-03-10", parent=81)],
+            replay_until=replay_until,
+        )
+
+        assert (_lot_taxes(result, 1), _lot_taxes(result, 3)) == (_d("6"), _d("0"))
+        assert _group_of(result, 90).rule == "SAME_DAY_INCOME"
+        _assert_parent_never_named(result)
+
+    @pytest.mark.parametrize(
+        "facts_day",
+        [pytest.param("2025-03-11", id="income-dated-on-the-end"), pytest.param("2025-03-05", id="income-before-the-end")],
+    )
+    def test_an_income_known_only_by_its_facts_and_not_after_the_end_keeps_the_ladder(self, facts_day):
+        # §7.2 twin of M1b's test_a_parent_dated_on_the_end_is_not_after_it: the facts say DIVIDEND, on or before the end,
+        # but the engine holds no such income event (the service can reach this: the income loader drops a zero amount,
+        # the parents' read does not). Nothing waits and nothing is followed by guess: SAME_DAY_TRADES on lot C.
+        result = _run_linked(
+            [self._LOT_A, self._LOT_C],
+            [_linked_fee(90, "-1", dt="2025-03-10", parent=80, parent_facts=_parent_facts(facts_day, tx_type="DIVIDEND"))],
+            replay_until="2025-03-11",
+        )
+
+        assert (_lot_fees(result, 1), _lot_fees(result, 3)) == (_d("0"), _d("1"))
+        assert _group_of(result, 90).rule == "SAME_DAY_TRADES"
+        _assert_parent_never_named(result)
+
+    def test_without_an_end_an_income_known_only_by_its_facts_keeps_the_ladder(self):
+        # No replay_until (a direct caller): nothing is after the end; the income of 12 Mar is not among the events, so the
+        # FEE of 10 Mar takes SAME_DAY_TRADES on lot C, as before M2.
+        result = _run_linked([self._LOT_A, self._LOT_C], [_linked_fee(90, "-1", dt="2025-03-10", parent=80, parent_facts=_parent_facts("2025-03-12", tx_type="DIVIDEND"))])
+
+        assert (_lot_fees(result, 1), _lot_fees(result, 3)) == (_d("0"), _d("1"))
+        assert _group_of(result, 90).rule == "SAME_DAY_TRADES"
+        _assert_parent_never_named(result)
+
+
+class TestLinkedIncomeConservationAndAudit:
+    # Lot A (10) and B (30) earn the dividend of 10 Mar; lot C opens that day. The INTEREST of 15 Jan is orphan (lot A
+    # is bought that day). The end is 31 Mar.
+    _TXS = [_buy(1, "10", "100", dt="2025-01-15"), _buy(2, "30", "100", dt="2025-02-03"), _buy(3, "5", "100", dt="2025-03-10")]
+
+    def test_on_its_income_orphan_with_it_waiting_and_unlinked_conserve_both_totals(self):
+        events = [
+            _income(80, "DIVIDEND", "50", dt="2025-03-10"),
+            _income(81, "INTEREST", "7", dt="2025-01-15"),
+            _linked_fee(90, "-1", dt="2025-03-10", parent=80),
+            _fee(91, "-2", dt="2025-03-10"),
+            _linked_fee(92, "-10", dt="2025-03-12", parent=80, native_currency="USD", target_amount="-9"),
+            _linked_fee(93, "-3", dt="2025-01-20", parent=81),
+            _linked_tax(94, "-6", dt="2025-03-10", parent=80),
+            _linked_tax(95, "-4", dt="2025-03-20", parent=82, parent_facts=_parent_facts("2025-04-02", tx_type="INTEREST")),
+            _tax(96, "-1.5", dt="2025-03-20"),
+        ]
+        result = _run_linked(self._TXS, events, replay_until="2025-03-31")
+
+        for event in events:
+            _group_of(result, event.transaction_id)
+        _assert_on_its_income(result, 90, 80, economic_type="FEE", amount="1", day="2025-03-10")
+        _assert_on_its_income(result, 92, 80, economic_type="FEE", amount="9", day="2025-03-12", native="10")
+        _assert_on_its_income(result, 94, 80, economic_type="TAX", amount="6", day="2025-03-10")
+        _assert_orphan_with_its_income(result, 93, economic_type="FEE", amount="3", day="2025-01-20", parent_id=81, parent_day="2025-01-15")
+        _assert_waiting(result, 95, economic_type="TAX", amount="4", day="2025-03-20", parent_id=82, parent_day="2025-04-02", rule=_LINKED_INCOME)
+        assert (_group_of(result, 91).rule, _group_of(result, 96).rule) == ("SAME_DAY_TRADES", "OPEN_LOTS_FALLBACK")
+        # 0.25 + 2.25 on A, 0.75 + 6.75 on B, the unlinked 2 on C.
+        assert {lot: _lot_fees(result, lot) for lot in (1, 2, 3)} == {1: _d("2.5"), 2: _d("7.5"), 3: _d("2")}
+        assert (result.asset_orphan_income, result.asset_orphan_fees, result.asset_orphan_taxes) == (_d("7"), _d("3"), _d("4"))
+        _assert_conserved(result, events, "FEE")
+        _assert_conserved(result, events, "TAX")
+
+    def test_the_linked_groups_sort_by_charge_date_and_id_before_the_pools(self):
+        # FEE 92 (8 Mar, dated before its dividend: rule 4, never judged) and 93 (10 Mar) on dividend 80; FEE 91 (10 Mar) on
+        # BUY C; FEE 95 unlinked. One list of linked groups by (charge date, id), whatever their rule, then the pool.
+        result = _run_linked(
+            self._TXS,
+            [
+                _income(80, "DIVIDEND", "50", dt="2025-03-10"),
+                _fee(95, "-1", dt="2025-03-10"),
+                _linked_fee(93, "-1", dt="2025-03-10", parent=80),
+                _linked_fee(91, "-1", dt="2025-03-10", parent=3),
+                _linked_fee(92, "-1", dt="2025-03-08", parent=80),
+            ],
+        )
+
+        layout = [(group.rule, group.source_transaction_ids) for group in result.economic_allocation_groups if group.economic_type == "FEE"]
+        assert layout == [(_LINKED_INCOME, (92,)), ("LINKED_TRADE", (91,)), (_LINKED_INCOME, (93,)), ("SAME_DAY_TRADES", (95,))]
+        _assert_on_its_income(result, 92, 80, economic_type="FEE", amount="1", day="2025-03-08")
+
+    def test_the_linked_income_group_validates_through_the_api_schema(self):
+        result = _run_linked(self._TXS, [_income(80, "DIVIDEND", "50", dt="2025-03-10"), _linked_fee(90, "-1", dt="2025-03-10", parent=80)])
+
+        [mapped] = [group for group in map_economic_groups(result.economic_allocation_groups) if group.economic_type == "FEE"]
+        assert (mapped.rule, mapped.source_transaction_ids) == (_LINKED_INCOME, [90])
+        assert [(op.context, op.operation_transaction_id, [allocation.lot_id for allocation in op.lot_allocations]) for op in mapped.operation_allocations] == [("INCOME", 80, [1, 2])]
+
+    def test_a_linked_income_rule_is_a_rule_of_the_api(self):
+        # Independent of the engine: the API's AllocationRuleLiteral must accept the rule M2 adds (§1.5).
+        group = EconomicAllocationGroup(
+            economic_type="FEE",
+            asset_id=ASSET_ID,
+            broker_id=1,
+            date=date(2025, 3, 10),
+            native_currency="EUR",
+            target_currency="EUR",
+            rule=_LINKED_INCOME,
+            source_transaction_ids=(90,),
+            native_pool_total=_d("1"),
+            target_pool_total=_d("1"),
+            operation_allocations=(
+                TargetOperationAllocation(
+                    context="INCOME",
+                    operation_transaction_id=80,
+                    weight=_d("1"),
+                    lot_allocations=(EconomicLotAllocation(lot_id=1, weight=_d("1"), native_amount=_d("1"), target_amount=_d("1")),),
+                ),
+            ),
+        )
+
+        [mapped] = map_economic_groups([group])
+        assert (mapped.rule, mapped.source_transaction_ids) == (_LINKED_INCOME, [90])
+
+    def test_a_missing_rate_degrades_the_charges_own_group_not_through_its_income(self):
+        # §1.6: the weights of a LINKED_INCOME group are quantities, so the income's missing rate degrades no linked charge;
+        # the charge's own missing rate degrades its group, on the lots of the income.
+        result = _run_linked(self._TXS, [_income(80, "DIVIDEND", "50", dt="2025-03-10"), _linked_fee(90, "-1", dt="2025-03-10", parent=80)])
+        groups = result.economic_allocation_groups
+        fee_index, income_index = _group_index(groups, 90), _group_index(groups, 80)
+        assert groups[fee_index].rule == _LINKED_INCOME, "precondition: the FEE is on its income"
+
+        income_without_rate = withheld_economics(groups, unconvertible_event_ids={80}, unconvertible_trade_ids={80}, trade_currency_by_id={80: "USD"})
+        assert (fee_index in income_without_rate.amount_degraded, fee_index in income_without_rate.split_degraded, income_index in income_without_rate.amount_degraded) == (False, False, True)
+        assert income_without_rate.fees_from == {}
+
+        fee_without_rate = withheld_economics(groups, unconvertible_event_ids={90}, unconvertible_trade_ids=set(), trade_currency_by_id={})
+        assert (fee_without_rate.amount_degraded, fee_without_rate.fees_from) == (frozenset({fee_index}), {1: date(2025, 3, 10), 2: date(2025, 3, 10)})
 
 
 class TestLinkedChargeQuantitySplit:

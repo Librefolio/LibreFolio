@@ -736,3 +736,111 @@ class TestLinkedChargeAfterTheEnd:
             finally:
                 problems = await _drop_wac_env(client, user_id=user_id, broker_id=broker_id, asset_id=asset_id)
         assert not problems, problems
+
+
+LINKED_INCOME = "LINKED_INCOME"
+INCOME_ORPHAN = "ASSET_COST_LINKED_INCOME_NO_ELIGIBLE_LOTS"
+
+
+def _lot_weights(group: dict) -> list[tuple[int, Decimal | None]]:
+    """(lot id, weight) of every lot allocation of a response group, in its order."""
+    return [(allocation["lot_id"], _decimal(allocation["weight"])) for operation in group["operation_allocations"] for allocation in operation["lot_allocations"]]
+
+
+@pytest.mark.asyncio
+class TestLinkedChargeOnItsIncome:
+    """Project 66, M2, on the database through the API: a FEE linked to a DIVIDEND (``parent_ref`` in the same commit)
+    goes on the lots that earned the dividend, in both matching methods — the worked example of M2 contract §7.7.
+
+    Lot A (10 units, 15 Jan 2026) and lot B (30, 3 Feb) are held on 9 Mar; the dividend of 50 EUR is of 10 Mar; BUY C
+    opens lot C on 10 Mar; the FEE of 1 EUR of 10 Mar is linked to the dividend. Before M2 it went all on lot C
+    (SAME_DAY_TRADES); now 0.25 / 0.75 / 0, in a LINKED_INCOME group with one INCOME operation naming the dividend.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _server(self, test_server):
+        pass
+
+    async def test_a_fee_linked_to_a_dividend_goes_on_the_lots_that_earned_it(self):
+        print_section("M2: FEE linked to a DIVIDEND")
+        async with httpx.AsyncClient() as client:
+            broker_id, asset_id = await setup_env(client)
+            user_id = await get_current_user_id(client)
+            try:
+                result = await commit_batch(
+                    client,
+                    creates=[
+                        {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "10000"}},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-15", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-02-03", "quantity": "30", "cash": {"code": "EUR", "amount": "-3000"}},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "DIVIDEND", "date": "2026-03-10", "cash": {"code": "EUR", "amount": "50"}, "ref": "d"},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-03-10", "quantity": "5", "cash": {"code": "EUR", "amount": "-500"}},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "FEE", "date": "2026-03-10", "quantity": "0", "cash": {"code": "EUR", "amount": "-1"}, "parent_ref": "d"},
+                    ],
+                )
+                lot_a, lot_b, dividend, lot_c, fee = (_created_tx_id(result, index) for index in (1, 2, 3, 4, 5))
+                assert (await _read_tx(client, fee))["parent_transaction_id"] == dividend, "precondition: the FEE is linked to the dividend"
+
+                response = await _lots_analysis_to(client, broker_id, asset_id, "2026-03-31")
+                for method in ("FIFO", "LIFO"):
+                    block = response["methods"][method]
+                    lots = {lot["lot_id"]: _decimal(lot["allocated_fees"]) for lot in block["lots"] or []}
+                    assert lots == {lot_a: Decimal("0.25"), lot_b: Decimal("0.75"), lot_c: Decimal("0")}, (method, lots)
+
+                    [income] = _groups_of(block, dividend)
+                    [linked] = _groups_of(block, fee)
+                    assert income["rule"] == "ASSET_INCOME_HOLDINGS", (method, income)
+                    assert (linked["rule"], linked["source_transaction_ids"], linked["date"]) == (LINKED_INCOME, [fee], "2026-03-10"), (method, linked)
+                    assert [(op["context"], op["operation_transaction_id"]) for op in linked["operation_allocations"]] == [("INCOME", dividend)], (method, linked)
+                    assert _lot_weights(linked) == _lot_weights(income), (method, linked, income)
+                    assert [lot for lot, _weight in _lot_weights(linked)] == [lot_a, lot_b], (method, linked)
+                    assert (_decimal(linked["target_orphan"]), _decimal(block["asset_orphan_fees"])) == (Decimal("0"), Decimal("0")), (method, linked)
+                    codes = {issue["code"] for issue in (block["data_quality"] or {}).get("issues", [])}
+                    assert not {"ASSET_COST_NO_ELIGIBLE_LOTS", INCOME_ORPHAN, AFTER_RANGE} & codes, (method, codes)
+                print_success("OK the FEE is on lots A and B, 0.25 / 0.75, like the dividend")
+            finally:
+                problems = await _drop_wac_env(client, user_id=user_id, broker_id=broker_id, asset_id=asset_id)
+        assert not problems, problems
+
+    async def test_a_fee_linked_to_an_orphan_dividend_is_orphan_with_its_warning(self):
+        print_section("M2: FEE linked to an orphan DIVIDEND")
+        async with httpx.AsyncClient() as client:
+            broker_id, asset_id = await setup_env(client)
+            user_id = await get_current_user_id(client)
+            try:
+                # The only lot is bought on the dividend's day: nothing was held on 9 Mar, so the dividend is orphan, and so
+                # is the FEE of 13 Mar linked to it (D12). Before M2: OPEN_LOTS_FALLBACK onto lot C.
+                result = await commit_batch(
+                    client,
+                    creates=[
+                        {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "10000"}},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-03-10", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "DIVIDEND", "date": "2026-03-10", "cash": {"code": "EUR", "amount": "50"}, "ref": "d"},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "FEE", "date": "2026-03-13", "quantity": "0", "cash": {"code": "EUR", "amount": "-1"}, "parent_ref": "d"},
+                    ],
+                )
+                lot_c, dividend, fee = (_created_tx_id(result, index) for index in (1, 2, 3))
+                assert (await _read_tx(client, fee))["parent_transaction_id"] == dividend, "precondition: the FEE is linked to the dividend"
+
+                response = await _lots_analysis_to(client, broker_id, asset_id, "2026-03-31")
+                for method in ("FIFO", "LIFO"):
+                    block = response["methods"][method]
+                    lots = {lot["lot_id"]: _decimal(lot["allocated_fees"]) for lot in block["lots"] or []}
+                    assert lots == {lot_c: Decimal("0")}, (method, lots)
+                    [linked] = _groups_of(block, fee)
+                    assert (linked["rule"], linked["source_transaction_ids"], linked["operation_allocations"], linked["date"]) == (LINKED_INCOME, [fee], [], "2026-03-13"), (method, linked)
+                    assert (_decimal(linked["native_orphan"]), _decimal(linked["target_orphan"]), _decimal(block["asset_orphan_fees"])) == (Decimal("1"), Decimal("1"), Decimal("1")), (method, linked)
+
+                    issues = [issue for issue in (block["data_quality"] or {}).get("issues", []) if issue["code"] == INCOME_ORPHAN and issue["message_params"].get("transaction_id") == fee]
+                    assert len(issues) == 1, (method, block["data_quality"])
+                    issue = issues[0]
+                    assert (issue["severity"], issue["message_i18n_key"]) == ("warning", "dataQuality.assetCostLinkedIncomeNoEligibleLots"), (method, issue)
+                    params = issue["message_params"]
+                    assert (params["broker_id"], params["economic_type"], params["as_of_date"], _decimal(params["target_amount"]), params["target_currency"]) == (broker_id, "FEE", "2026-03-13", Decimal("1"), "EUR"), (method, params)
+                    assert (params["parent_transaction_id"], params["parent_date"]) == (dividend, "2026-03-10"), (method, params)
+                    codes = [issue["code"] for issue in block["data_quality"]["issues"]]
+                    assert "ASSET_COST_NO_ELIGIBLE_LOTS" not in codes, (method, codes)
+                print_success("OK the FEE is orphan with its dividend, ASSET_COST_LINKED_INCOME_NO_ELIGIBLE_LOTS")
+            finally:
+                problems = await _drop_wac_env(client, user_id=user_id, broker_id=broker_id, asset_id=asset_id)
+        assert not problems, problems

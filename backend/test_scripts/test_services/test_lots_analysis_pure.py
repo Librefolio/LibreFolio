@@ -4568,7 +4568,8 @@ class TestTheCostEventsCarryTheirParent:
         assert [(event.transaction_id, event.parent_transaction_id) for event in events] == [(2, 1), (3, None)]
 
     def test_income_events_carry_no_parent(self):
-        """M1 links charges only: an income event has no parent (LINKED_INCOME is M2)."""
+        """An income is never a charge, so its event has no parent. A charge linked to it carries the link (M2, LINKED_INCOME:
+        ``TestALinkedFeeOnItsIncome``), never the income."""
         [event] = build_income_economic_events(
             income_transactions=[_tx(1, tx_type=TransactionType.DIVIDEND, quantity=D("0"), amount=D("50"))],
             fx_resolver=_resolver("EUR"),
@@ -4738,3 +4739,165 @@ class TestALinkedFeeWhoseTradeIsAfterTheEnd:
             expected = {"transaction_id": 4, "broker_id": 1, "economic_type": "FEE", "as_of_date": "2024-03-10", "target_amount": D("5"), "target_currency": "EUR", "parent_transaction_id": 2, "parent_date": "2024-03-12"}
             assert {name: issues[0].message_params.get(name) for name in expected} == expected, method
             assert "ASSET_COST_NO_ELIGIBLE_LOTS" not in {issue.code for issue in block.data_quality.issues}, method
+
+
+# --------------------------------------------------------------------------- #
+# Project 66, M2 — a charge linked to an income goes on the lots that earned it
+# --------------------------------------------------------------------------- #
+# The rule and the code are strings: the file collects before the service knows them.
+
+_LINKED_INCOME = "LINKED_INCOME"
+_INCOME_ORPHAN = "ASSET_COST_LINKED_INCOME_NO_ELIGIBLE_LOTS"
+
+
+def _lot_weights(group) -> list[tuple[int, Decimal]]:
+    """(lot id, weight) of every lot allocation of an audit group of the response, in its order."""
+    return [(allocation.lot_id, allocation.weight) for operation in group.operation_allocations for allocation in operation.lot_allocations]
+
+
+class TestALinkedFeeOnItsIncome:
+    """get_lots_analysis_methods on in-memory rows: the income loader, the charges loader and the parents' read hand the
+    engine a FEE linked to a DIVIDEND; in both matching methods it lands on the lots each method left holding the day
+    before the dividend, as the dividend does."""
+
+    _JAN_10, _FEB_10, _MAR_1, _MAR_10, _MAR_11, _MAR_12, _MAR_13 = date(2024, 1, 10), date(2024, 2, 10), date(2024, 3, 1), date(2024, 3, 10), date(2024, 3, 11), date(2024, 3, 12), date(2024, 3, 13)
+
+    def _held(self) -> list[Transaction]:
+        """Lots 1 (10 Jan) and 2 (10 Feb), 10 units each; 5 units sold on 1 Mar: FIFO leaves 5 + 10, LIFO 10 + 5."""
+        return [
+            _tx(1, tx_date=self._JAN_10, quantity=D("10"), amount=D("-1000")),
+            _tx(2, tx_date=self._FEB_10, quantity=D("10"), amount=D("-900")),
+            _tx(3, tx_type=TransactionType.SELL, tx_date=self._MAR_1, quantity=D("-5"), amount=D("600")),
+        ]
+
+    async def _analysis(self, monkeypatch, rows: list[Transaction], *, income: list[Transaction], fee: Transaction, parents: dict, date_to: date):
+        service = _service_on_rows(monkeypatch, rows)
+        monkeypatch.setattr(service, "_load_income_transactions", _loader_returning(income))
+        monkeypatch.setattr(service, "_load_cost_transactions", _loader_returning([fee]))
+        monkeypatch.setattr(service, "_load_linked_parents", _loader_returning(parents))
+        return await service.get_lots_analysis_methods(
+            user_id=1,
+            asset_id=7,
+            broker_ids=[1],
+            date_from=None,
+            date_to=date_to,
+            target_currency="EUR",
+            selected_lot_ids=None,
+            requested_analyses=[LotAnalysisType.LOT_SUMMARY],
+            matching_methods=[LotMatchingMethod.FIFO, LotMatchingMethod.LIFO],
+        )
+
+    def _fee(self, day: date, amount: Decimal = D("-3")) -> Transaction:
+        fee = _tx(4, tx_type=TransactionType.FEE, tx_date=day, quantity=D("0"), amount=amount)
+        fee.parent_transaction_id = 5
+        return fee
+
+    @pytest.mark.asyncio
+    async def test_the_fee_follows_the_lots_that_earned_the_dividend_in_each_method(self, monkeypatch):
+        """Dividend 5 of 30 € on 10 Mar; BUY 6 opens lot 6 on 12 Mar; FEE 4 of 3 € on 13 Mar is linked to the dividend.
+        Before M2 the FEE took PREVIOUS_DAY_TRADES onto lot 6; now FIFO 1 / 2 and LIFO 2 / 1, lot 6 nothing — the shares
+        and the lots of the dividend's own ASSET_INCOME_HOLDINGS group, in one INCOME operation naming it."""
+        dividend = _tx(5, tx_type=TransactionType.DIVIDEND, tx_date=self._MAR_10, quantity=D("0"), amount=D("30"))
+        rows = [*self._held(), _tx(6, tx_date=self._MAR_12, quantity=D("10"), amount=D("-1000"))]
+        response = await self._analysis(monkeypatch, rows, income=[dividend], fee=self._fee(self._MAR_13), parents={5: _linked_parent(self._MAR_10, "DIVIDEND")}, date_to=_MAR_20)
+
+        for method, expected in ((LotMatchingMethod.FIFO, {1: D("1"), 2: D("2"), 6: D("0")}), (LotMatchingMethod.LIFO, {1: D("2"), 2: D("1"), 6: D("0")})):
+            block = response.methods[method]
+            fees = {lot.lot_id: lot.allocated_fees for lot in block.lots or []}
+            assert {lot: fees.get(lot) for lot in expected} == expected, method
+            groups = block.economic_allocation_groups or []
+            [income] = [group for group in groups if 5 in group.source_transaction_ids]
+            [linked] = [group for group in groups if 4 in group.source_transaction_ids]
+            assert income.rule == "ASSET_INCOME_HOLDINGS", method
+            assert (linked.rule, linked.source_transaction_ids, linked.date) == (_LINKED_INCOME, [4], self._MAR_13), method
+            assert [(operation.context, operation.operation_transaction_id) for operation in linked.operation_allocations] == [("INCOME", 5)], method
+            assert _lot_weights(linked) == _lot_weights(income), method
+            assert (linked.target_orphan, block.asset_orphan_fees) == (D("0"), D("0")), method
+
+    @pytest.mark.asyncio
+    async def test_a_fee_whose_dividend_is_after_the_end_waits(self, monkeypatch):
+        """Dividend 5 of 12 Mar, after the end (11 Mar): the income loader stops at the end and never returns it, the parents'
+        read does. FEE 4 of 10 Mar waits, as M1b: an empty LINKED_INCOME group and the after-range warning, in both
+        methods. Before M2: OPEN_LOTS_FALLBACK onto the lots left open."""
+        response = await self._analysis(monkeypatch, self._held(), income=[], fee=self._fee(self._MAR_10), parents={5: _linked_parent(self._MAR_12, "DIVIDEND")}, date_to=self._MAR_11)
+
+        for method in (LotMatchingMethod.FIFO, LotMatchingMethod.LIFO):
+            block = response.methods[method]
+            assert {lot.lot_id: lot.allocated_fees for lot in block.lots or []} == {1: D("0"), 2: D("0")}, method
+            groups = [(group.rule, group.source_transaction_ids, group.operation_allocations, group.native_orphan, group.target_orphan) for group in block.economic_allocation_groups or []]
+            assert groups == [(_LINKED_INCOME, [4], [], D("3"), D("3"))], method
+            assert block.asset_orphan_fees == D("3"), method
+            assert block.data_quality is not None, method
+            issues = [issue for issue in block.data_quality.issues if issue.code == _AFTER_RANGE]
+            assert len(issues) == 1, (method, block.data_quality.issues)
+            assert (issues[0].severity, issues[0].message_i18n_key) == (IssueSeverity.WARNING, "dataQuality.assetCostLinkedParentAfterRange"), method
+            expected = {"transaction_id": 4, "broker_id": 1, "economic_type": "FEE", "as_of_date": "2024-03-10", "target_amount": D("3"), "target_currency": "EUR", "parent_transaction_id": 5, "parent_date": "2024-03-12"}
+            assert {name: issues[0].message_params.get(name) for name in expected} == expected, method
+
+    @pytest.mark.asyncio
+    async def test_a_fee_linked_to_an_orphan_dividend_is_an_orphan_warning(self, monkeypatch):
+        """Lot 1 is bought on the dividend's day (10 Mar): nothing was held on 9 Mar, so the dividend is orphan, and so is
+        FEE 4 of 13 Mar linked to it (D12) — with its own warning, dated on the FEE and naming the dividend (§8). Before M2
+        the FEE took OPEN_LOTS_FALLBACK onto lot 1."""
+        dividend = _tx(5, tx_type=TransactionType.DIVIDEND, tx_date=self._MAR_10, quantity=D("0"), amount=D("30"))
+        rows = [_tx(1, tx_date=self._MAR_10, quantity=D("10"), amount=D("-1000"))]
+        response = await self._analysis(monkeypatch, rows, income=[dividend], fee=self._fee(self._MAR_13), parents={5: _linked_parent(self._MAR_10, "DIVIDEND")}, date_to=_MAR_20)
+
+        for method in (LotMatchingMethod.FIFO, LotMatchingMethod.LIFO):
+            block = response.methods[method]
+            assert {lot.lot_id: lot.allocated_fees for lot in block.lots or []} == {1: D("0")}, method
+            [linked] = [group for group in block.economic_allocation_groups or [] if 4 in group.source_transaction_ids]
+            assert (linked.rule, linked.operation_allocations, linked.native_orphan, linked.target_orphan) == (_LINKED_INCOME, [], D("3"), D("3")), method
+            assert (block.asset_orphan_fees, block.asset_orphan_income) == (D("3"), D("30")), method
+            assert block.data_quality is not None, method
+            codes = {issue.code for issue in block.data_quality.issues}
+            assert "ASSET_COST_NO_ELIGIBLE_LOTS" not in codes, method
+            issues = [issue for issue in block.data_quality.issues if issue.code == _INCOME_ORPHAN]
+            assert len(issues) == 1, (method, block.data_quality.issues)
+            assert (issues[0].severity, issues[0].message_i18n_key) == (IssueSeverity.WARNING, "dataQuality.assetCostLinkedIncomeNoEligibleLots"), method
+            expected = {"transaction_id": 4, "broker_id": 1, "economic_type": "FEE", "as_of_date": "2024-03-13", "target_amount": D("3"), "target_currency": "EUR", "parent_transaction_id": 5, "parent_date": "2024-03-10"}
+            assert {name: issues[0].message_params.get(name) for name in expected} == expected, method
+
+
+class TestTheLinkedIncomeOrphanIssueIsAnOrphanWarning:
+    """``_build_data_quality_report`` on the engine's new issue (§8): a WARNING with its message key, and — as an orphan
+    code — its amount stated in its own currency when the charge has no rate (the real ``withheld_economics`` marks it)."""
+
+    def _group(self) -> EconomicAllocationGroup:
+        # The orphan group of a FEE of 9 VND linked to an orphan dividend: no rate, so the engine was handed the native
+        # placeholder as target.
+        return EconomicAllocationGroup(
+            economic_type="FEE",
+            asset_id=7,
+            broker_id=1,
+            date=date(2024, 3, 13),
+            native_currency="VND",
+            target_currency="EUR",
+            rule=_LINKED_INCOME,
+            source_transaction_ids=(4,),
+            native_pool_total=D("9"),
+            target_pool_total=D("9"),
+            operation_allocations=(),
+            native_orphan=D("9"),
+            target_orphan=D("9"),
+        )
+
+    def _issue(self) -> FifoDataQualityIssue:
+        return FifoDataQualityIssue(
+            code=_INCOME_ORPHAN,
+            transaction_id=4,
+            broker_id=1,
+            params={"economic_type": "FEE", "as_of_date": "2024-03-13", "target_amount": D("9"), "target_currency": "EUR", "parent_transaction_id": 5, "parent_date": "2024-03-10"},
+        )
+
+    @pytest.mark.parametrize(("unconvertible", "stated"), [pytest.param({4}, (D("9"), "VND"), id="without-rate"), pytest.param(set(), (D("9"), "EUR"), id="with-rate")])
+    def test_the_issue_is_a_warning_with_its_key_and_its_amount_in_a_known_currency(self, unconvertible, stated):
+        groups = [self._group()]
+        withheld = withheld_economics(groups, unconvertible_event_ids=unconvertible, unconvertible_trade_ids=set(), trade_currency_by_id={})
+        [issue] = _svc()._build_data_quality_report([self._issue()], groups, withheld).issues
+
+        assert (issue.code, issue.severity, issue.message_i18n_key) == (_INCOME_ORPHAN, IssueSeverity.WARNING, "dataQuality.assetCostLinkedIncomeNoEligibleLots")
+        params = issue.message_params
+        assert (params["transaction_id"], params["broker_id"], params["economic_type"], params["as_of_date"]) == (4, 1, "FEE", "2024-03-13")
+        assert (params["target_amount"], params["target_currency"]) == stated
+        assert (params["parent_transaction_id"], params["parent_date"]) == (5, "2024-03-10")
