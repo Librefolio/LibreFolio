@@ -25,10 +25,14 @@ Each provider represents a central bank or financial data source that provides e
 | **NORGES** | `norges/plugin.py` | `NORGES` | NOK | SDMX CSV, every currency in one request |
 | **NBU** | `nbu/plugin.py` | `NBU` | UAH | JSON range per currency, every day incl. weekends |
 | **BOC** | `boc/plugin.py` | `BOC` | CAD | Valet JSON, one group request |
+| **BANXICO** | `banxico/plugin.py` | `BANXICO` | MXN | SIE JSON, every series in one request; free token (`token`, a secret setting, in a header) |
+| **CNB** | `cnb/plugin.py` | `CNB` | CZK | Text fixing, one `year.txt` per year, units from the header |
+| **SARB** | `sarb/plugin.py` | `SARB` | ZAR | JSON series per currency, three at once |
+| **BOK** | `bok/plugin.py` | `BOK` | KRW | ECOS JSON, one series per currency, three at once; free key (`api_key`, in the URL path: never log a URL) |
 | **MANUAL** | `manual/plugin.py` | `MANUAL` | Any | Sentinel (no sync) |
 
 A provider's note (`warning_i18n`) has a level, `warning_level`: `"warning"` (⚠️, a data limit that can mislead: SNB,
-BOC, BDI) or `"info"` (ℹ️, a fact worth knowing: FED, NORGES, NBU, BCB). Unit and direction tests: one
+BOC, BDI, SARB, BOK) or `"info"` (ℹ️, a fact worth knowing: FED, NORGES, NBU, BCB, BANXICO, CNB). Unit and direction tests: one
 `test_fx_<code>*.py` per provider, registered in `services provider-errors`; answers are synthetic, never downloaded.
 
 ## MANUAL Provider (Sentinel)
