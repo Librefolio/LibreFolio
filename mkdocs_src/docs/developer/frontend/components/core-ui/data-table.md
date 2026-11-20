@@ -292,6 +292,9 @@ The pagination bar (`DataTablePagination.svelte`) floats in a balloon that stick
 the scroll area. It appears when pagination is on and the filtered rows outnumber the smallest
 non-zero entry of `pageSizeOptions` — or, with `alwaysShowPagination`, as soon as there is one row.
 Changing the page size returns to the first page and is saved under the table's `storageKey`.
+With a single entry in `pageSizeOptions` there is nothing to choose: the pager draws no page-size selector (nor its
+«per page»), only the number of items and the pages (`pagination-total`, 77 SEL-D1). The profile's «Latest changes»,
+which the server pages by 20, is such a pager.
 
 The page-size menu is positioned with **fixed** coordinates computed from its trigger
 (`getFixedDropdownPosition`, `lib/utils/layout/dropdownPosition.ts`): it opens below the trigger,
