@@ -98,13 +98,21 @@ export function remapChargeOf(ops: readonly PendingOp[], fromTempId: string, toT
     return ops.map((op) => (op.chargeOf === fromTempId ? {...op, chargeOf: toTempId} : op));
 }
 
+/** 66 C22: the one predicate of «leg of a pair» (rule 8: a leg is neither a parent nor a charge). Every merge of the Bulk —
+ *  a saved pair loaded, a merge queued for the save (`pendingPromotes`), two new rows merged — goes through
+ *  `collapseIntoPaired`, which names the visible half on the hidden one (`pairedWith`); a saved pair split here loses it.
+ *  A hidden half whose partner is missing (a W4b placeholder) is still a leg. */
+export function isPairLeg<R extends {tempId: string; pairedWith?: string}>(op: R, ops: readonly R[]): boolean {
+    return op.pairedWith !== undefined || ops.some((other) => other.pairedWith === op.tempId);
+}
+
 /** The one predicate of «sits under its parent» (§11.7): owned by a present parent and linked to it, or unlinked from a
  *  parent marked for deletion (the state it keeps under it). 66 C21: never under a leg of a pair (rule 8: a leg is no
  *  parent) — a charge «del» or unlinked of a row merged here is a row of its own, never hidden with the leg. */
 export function isUnderParent<R extends ChargeLinkRow>(op: R, ops: readonly R[]): boolean {
     const owner = ownerOf(op, ops);
     if (!owner) return false;
-    if (owner.pairedWith !== undefined || ops.some((other) => other.pairedWith === owner.tempId)) return false;
+    if (isPairLeg(owner, ops)) return false;
     if (!op.parentUnlink) return true;
     return owner.op === 'edit' && owner.markedDelete === true;
 }

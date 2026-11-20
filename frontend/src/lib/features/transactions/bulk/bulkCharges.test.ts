@@ -1402,3 +1402,143 @@ describe('withoutRows — rows leaving the Bulk, and the new charges linked with
         expect({broker_id: kept.fields.broker_id, asset_id: kept.fields.asset_id, date: kept.fields.date}, 'its own, not BUY_B’s 2026-10-05').toEqual({broker_id: 77, asset_id: 101, date: '2026-10-07'});
     });
 });
+
+/**
+ * 66 C22 (contract 66-C22 §1.1, §2.1, §5.4): one predicate of «leg of a pair», `isPairLeg(op, ops)`, exported by
+ * `bulkCharges.ts`: `op.pairedWith !== undefined || ops.some((o) => o.pairedWith === op.tempId)`. A pair is the Bulk's,
+ * as the payload sends it: a saved pair loaded as such, a merge queued in this Bulk (two saved rows, or a saved and a new
+ * one: `collapseIntoPaired` hides one half with `pairedWith`), two new rows merged (`link_uuid`), the W4b placeholder of a
+ * half the user cannot read, a hidden half whose partner is not there. A saved pair split in this Bulk is no pair (both
+ * halves visible, no `pairedWith`), whatever the store's `related_transaction_id` still says.
+ *
+ * The same question is asked today in three places, which must agree with it on the same rows:
+ *   - `pairIdOf` inside `bulkLinkSelection` (its `!= null` is the mirror row's `related_transaction_id`, read by the
+ *     `paired` reason of `linkSelection`). The roles here make every non-charge type a parent, so no `hidden` outcome
+ *     comes before the `paired` check (a CASH_TRANSFER leg would otherwise hide «Link» first);
+ *   - `isUnderParent` (rule 8: a charge is never under a leg);
+ *   - TBM:712 (`opToTxLike`, the form's `related_transaction_id` of the visible row): component level, in
+ *     `TransactionBulkModal.test.ts`, describe «66 C22».
+ *
+ * RED until `bulkCharges.ts` exports `isPairLeg` (read through the namespace, `c2`): only the cases that call it fail.
+ * The `pairIdOf` and `isUnderParent` cases are guards, green before and after.
+ */
+describe('isPairLeg — the one predicate of «leg of a pair» (66 C22)', () => {
+    type IsPairLeg = (op: PendingOp, ops: readonly PendingOp[]) => boolean;
+    const isPairLeg: IsPairLeg = (op, ops) => c2<IsPairLeg>('isPairLeg')(op, ops);
+
+    /** Two saved rows, unpaired in the store: what a merge queued in this Bulk joins. */
+    const DEP_Q = row(550, 'DEPOSIT', {asset_id: null, cash: {code: 'EUR', amount: '100.000000'}, description: 'queued deposit'});
+    const WD_Q = row(551, 'WITHDRAWAL', {asset_id: null, broker_id: 88, cash: {code: 'EUR', amount: '-100.000000'}, description: 'queued withdrawal'});
+    /** A saved charge of DEP_Q: what an adoption on load reads (path 7). */
+    const FEE_Q = row(552, 'FEE', {asset_id: null, parent_transaction_id: 550, cash: {code: 'EUR', amount: '-1.000000'}, description: 'fee of the queued deposit'});
+    /** A saved pair, linked in the store. */
+    const DEP_S = row(560, 'DEPOSIT', {asset_id: null, related_transaction_id: 561, cash: {code: 'EUR', amount: '100.000000'}, description: 'saved paired deposit'});
+    const WD_S = row(561, 'WITHDRAWAL', {asset_id: null, broker_id: 88, related_transaction_id: 560, cash: {code: 'EUR', amount: '-100.000000'}, description: 'saved paired withdrawal'});
+    /** A free saved FEE on the legs' broker, no asset: the charge `bulkLinkSelection` is asked about. */
+    const FEE_C = row(570, 'FEE', {asset_id: null, cash: {code: 'EUR', amount: '-2.000000'}, description: 'free fee'});
+    const LEG_STORE = new Map<number, TXReadItem>([DEP_Q, WD_Q, FEE_Q, DEP_S, WD_S, FEE_C].map((r) => [r.id, r]));
+    const legGet = (id: number): TXReadItem | undefined => LEG_STORE.get(id) ?? get(id);
+
+    /** Every non-charge type a parent: no `hidden` of `linkSelection` comes before its `paired` reason. */
+    const EQ_OPTS = {roleOf: (type: string): 'charge' | 'parent' | null => (type === 'FEE' || type === 'TAX' ? 'charge' : 'parent'), canEdit: () => true};
+
+    const merged = (r: TXReadItem): DraftFields => ({...fieldsOf(r), type: 'CASH_TRANSFER' as DraftFields['type']});
+
+    /** A case: the operations of the Bulk, the legs (true) and the rows that are no leg (false), by tempId. */
+    type LegCase = {ops: PendingOp[]; legs: string[]; free: string[]};
+
+    const CASES: Array<[string, () => LegCase]> = [
+        ['a saved pair loaded as such (visible edit + hidden edit with pairedWith)', () => ({ops: [editOp(WD_S, {link_uuid: 's'}), editOp(DEP_S, {tempId: 'h-560', pairedWith: 't-561', link_uuid: 's'})], legs: ['t-561', 'h-560'], free: []})],
+        [
+            'a merge of two saved rows queued in this Bulk (the store still unpaired)',
+            () => ({
+                ops: [
+                    {...editOp(WD_Q), fields: merged(WD_Q)},
+                    {...editOp(DEP_Q, {pairedWith: 't-551'}), fields: merged(DEP_Q)},
+                ],
+                legs: ['t-551', 't-550'],
+                free: [],
+            }),
+        ],
+        ['a merge of a saved row and a new one queued in this Bulk', () => ({ops: [{...editOp(WD_Q), fields: merged(WD_Q)}, createOp('n-dep', merged(DEP_Q), {pairedWith: 't-551', link_uuid: 'mixed'})], legs: ['t-551', 'n-dep'], free: []})],
+        ['two new rows merged (shared link_uuid, not queued)', () => ({ops: [createOp('n-wd', merged(WD_Q), {link_uuid: 'nn'}), createOp('n-dep', merged(DEP_Q), {pairedWith: 'n-wd', link_uuid: 'nn'})], legs: ['n-wd', 'n-dep'], free: []})],
+        ['a saved pair split in this Bulk (both halves visible, no pairedWith; the store still linked)', () => ({ops: [editOp(WD_S), editOp(DEP_S)], legs: [], free: ['t-561', 't-560']})],
+        [
+            'W4b: a readable half and the placeholder of the half the user cannot read',
+            () => ({
+                ops: [editOp(WD_S, {link_uuid: 'w4b'}), {op: 'edit', txId: 9_560, markedDelete: false, tempId: 'ph-9560', createdSeq: 9_560, fields: {type: 'WITHDRAWAL', broker_id: 99, date: WD_S.date} as DraftFields, pairedWith: 't-561', link_uuid: 'w4b', inaccessible: true}],
+                legs: ['t-561', 'ph-9560'],
+                free: [],
+            }),
+        ],
+        ['a hidden half whose partner is not in the Bulk (pairedWith naming no operation)', () => ({ops: [editOp(DEP_Q, {pairedWith: 'gone'})], legs: ['t-550'], free: []})],
+        ['two lone rows, no pair', () => ({ops: [editOp(DEP_Q), editOp(WD_Q)], legs: [], free: ['t-550', 't-551']})],
+    ];
+
+    /** The case's operations with the free FEE beside them, and the FEE itself. */
+    function withFee(c: LegCase): {ops: PendingOp[]; fee: PendingOp} {
+        const fee = editOp(FEE_C);
+        return {ops: [...c.ops, fee], fee};
+    }
+
+    /** Whether `bulkLinkSelection` reads `op` as a leg (`pairIdOf(op) != null` → its mirror's `related_transaction_id`). */
+    function linkReadsPaired(op: PendingOp, ops: readonly PendingOp[], fee: PendingOp): boolean {
+        const result = bulkLinkSelection([op, fee], ops, legGet, EQ_OPTS);
+        return result.kind === 'disabled' && result.reason === 'paired';
+    }
+
+    it.each(CASES)('guard — pairIdOf != null (bulkLinkSelection «paired») on %s: exactly the legs', (_label, build) => {
+        const c = build();
+        const {ops, fee} = withFee(c);
+        for (const id of c.legs) expect(linkReadsPaired(byTempId(ops, id), ops, fee), `${id} is a leg`).toBe(true);
+        for (const id of c.free) expect(linkReadsPaired(byTempId(ops, id), ops, fee), `${id} is no leg`).toBe(false);
+    });
+
+    it.each(CASES)('isPairLeg on %s: true for the legs, false otherwise — and equal to pairIdOf != null on every row', (_label, build) => {
+        const c = build();
+        const {ops, fee} = withFee(c);
+        for (const id of c.legs) expect(isPairLeg(byTempId(ops, id), ops), `${id} is a leg`).toBe(true);
+        for (const id of c.free) expect(isPairLeg(byTempId(ops, id), ops), `${id} is no leg`).toBe(false);
+        expect(isPairLeg(fee, ops), 'the free FEE is no leg').toBe(false);
+        for (const op of ops) {
+            if (op === fee) continue;
+            expect(isPairLeg(op, ops), `${op.tempId}: isPairLeg and pairIdOf != null agree`).toBe(linkReadsPaired(op, ops, fee));
+        }
+    });
+
+    it('isPairLeg reads the operations as given: no input mutated', () => {
+        const c = CASES[1][1]();
+        const before = snapshot(c.ops);
+        for (const op of c.ops) isPairLeg(op, c.ops);
+        expect(c.ops).toEqual(before);
+    });
+
+    // Rule 8, unchanged by C22 (C21 put it in `isUnderParent`): a charge owned by a leg is never under it; owned by a row
+    // that is no leg, it is. The same rows as above.
+    it.each(CASES)('guard — isUnderParent (rule 8) on %s: a FEE with chargeOf a leg is not under it; with chargeOf a row that is no leg it is', (_label, build) => {
+        const c = build();
+        for (const id of c.legs) {
+            const fee = editOp(FEE_C, {chargeOf: id});
+            expect(isUnderParent(fee, [...c.ops, fee]), `chargeOf the leg ${id}`).toBe(false);
+        }
+        for (const id of c.free) {
+            const fee = editOp(FEE_C, {chargeOf: id});
+            expect(isUnderParent(fee, [...c.ops, fee]), `chargeOf ${id}, no leg`).toBe(true);
+        }
+    });
+
+    // Path 7 (§1.6): the adoption on load does not look at pairs, so a saved charge of a leg takes the leg as `chargeOf`;
+    // it is never drawn under it (rule 8). In the Bulk the adoption cannot even reach a leg: a row with charges not read
+    // is not offered for a merge (C21, `TransactionBulkModal.test.ts` «C21 §2.1: saved + saved, the DEPOSIT counts a
+    // charge still being read / whose read failed»).
+    it('guard, path 7 — a saved charge of a queued leg, adopted on load: chargeOf the leg, never under it', () => {
+        const legs = [
+            {...editOp(WD_Q), fields: merged(WD_Q)},
+            {...editOp(DEP_Q, {pairedWith: 't-551'}), fields: merged(DEP_Q)},
+        ];
+        const out = adoptCharges([...legs, editOp(FEE_Q)], legGet);
+        const fee = byTxId(out, FEE_Q.id);
+        expect(fee.chargeOf, 'the adoption names the saved parent, a leg').toBe('t-550');
+        expect(isUnderParent(fee, out), 'rule 8: never under a leg').toBe(false);
+    });
+});
