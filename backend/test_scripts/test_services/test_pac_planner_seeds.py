@@ -22,6 +22,8 @@ from backend.app.config import planner as planner_config
 from backend.app.config.planner import planner_fixed_seeds  # the real reader: the autouse fixture replaces the module's
 from backend.app.services.pac_allocator import planner, seed_runs
 from backend.app.services.pac_allocator.proof import PROOF_NOT_CONFIRMED_REASON, SeededRunVote, merge_seeded_runs, seeded_margin, seeded_runs_agree
+from backend.app.services.tool_plugins.pac_allocator import plugin as pac_plugin
+from backend.app.services.tools.base import ToolExecutionContext
 from backend.test_scripts.test_services import _reb_small_cases as cases
 
 # ---------------------------------------------------------------------------- the runs
@@ -616,6 +618,35 @@ def test_three_seeded_runs_of_t4_are_proven_with_the_chosen_seed_on_record() -> 
     result = planner.plan_exact_scenario(cases.t4(), solver_time_budget_seconds=5, seeds=(31, 17, 23)).result
     assert (result.result_state, result.proof.kind) == ("ready_incumbent", "optimal_proven")
     assert {settings.get("randomization/randomseedshift") for settings in _settings(result)} == {"17"}
+
+
+def test_searches_that_close_early_wait_no_longer_with_turns(monkeypatch) -> None:
+    """TURNI «done when» 3: a request whose searches close early lasts as today. The window of three turns only lets a
+    search use its whole limit; it never makes the others wait for it."""
+    monkeypatch.setattr(seed_runs, "usable_cpus", lambda: 1)
+    started = time.monotonic()
+    runs = seed_runs.run_seeds(_echo, seeds=(1, 2, 3), time_budget_seconds=30, window_seconds=100)
+    assert [run.result for run in runs] == [10, 20, 30]
+    assert time.monotonic() - started < 5, "three quick searches, one CPU: done in moments, not in their limits"
+
+
+def test_soft_deadline_does_not_stop_the_last_turn(monkeypatch) -> None:
+    """TURNI step 4 (the plan's test): on one usable CPU, the three searches go in three turns inside the Tool's soft
+    deadline, as the rule of limits sets it. The rule takes its numbers as arguments, so the turns are short here: searches
+    of 1 s that each answer 0.25 s late (inside the runs' own grace), a grace of 1 s between turns, 1 s past the window.
+    The third search starts at about 2.5 s with 2.5 s of the 5 s window left, so it keeps its whole limit; the last turn
+    ends at about 3.75 s, and the soft deadline is at 6 s. The planner's checkpoint stops nothing."""
+    monkeypatch.setattr(seed_runs, "usable_cpus", lambda: 1)
+    policy = pac_plugin.plan_policy(3, run_limit_ms=1_000, grace_ms=1_000, past_window_ms=1_000)
+    started = time.monotonic()
+    context = ToolExecutionContext(execution_id="turns", soft_deadline=started + policy.soft_timeout_ms / 1000, hard_deadline=started + policy.job_timeout_ms / 1000, cancelled=lambda: False)
+
+    def a_little_late(seed: int, progress, budget=None):
+        time.sleep(1.25)
+        return (seed, budget)
+
+    runs = seed_runs.run_seeds(a_little_late, seeds=(1, 2, 3), time_budget_seconds=1.0, window_seconds=policy.engine_timeout_ms / 1000, checkpoint=context.checkpoint)
+    assert [run.result for run in runs] == [(1, 1.0), (2, 1.0), (3, 1.0)], "every turn ran, each search with its whole limit"
 
 
 @pytest.mark.parametrize(("window", "expected"), [(None, None), (15.0, 15.0)])

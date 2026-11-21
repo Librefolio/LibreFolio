@@ -1809,8 +1809,8 @@ def test_currency_catalog_publishes_the_babel_quantum_of_every_referenced_curren
 # far below any enumeration of it (the oracle polls ~89-96 times per candidate).
 _ENUMERATION_CHECKPOINT_BUDGET = 2_000
 
-# The engine window the Tool claims for a plan (``engine_timeout_ms=30_000`` in
-# ``tool_plugins/pac_allocator/plugin.py``), so the X1 scenario is planned exactly as
+# The engine window the Tool claims for a PAC plan (the one-turn row of ``plan_policy`` in
+# ``tool_plugins/pac_allocator/plugin.py``, 30 000 ms), so the X1 scenario is planned exactly as
 # production plans it. A budget handed to SCIP, never an assertion: the test
 # itself neither reads nor asserts on the clock.
 _TOOL_ENGINE_WINDOW_SECONDS = 30.0
