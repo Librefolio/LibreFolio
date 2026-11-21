@@ -66,16 +66,16 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 #### 🎯 Rééquilibreur de portefeuille et Allocateur PAC
 
 - **Rééquilibreur de portefeuille**, un nouvel outil de la page Outils : il ramène un portefeuille que vous détenez déjà vers ses poids cibles. Il n'envoie aucun ordre.
-  - **Son point de départ :** les positions que LibreFolio enregistre chez chaque courtier. Vous pouvez changer une quantité pour simuler un autre portefeuille ; LibreFolio n'est pas modifié.
+  - **Son point de départ :** les positions que LibreFolio enregistre chez chaque courtier. Vous pouvez changer une quantité pour simuler un autre portefeuille ; LibreFolio n'est pas modifié. Sur un compte partagé avec d'autres, le courtier affiche votre part en badge avec votre rôle, comme sur la page du courtier.
   - **Courtiers :** un courtier où vous détenez des positions sans y opérer compte comme « positions seulement », et « Ajouter au plan » permet au plan d'y opérer aussi.
-  - **Cibles :** en pourcentage du portefeuille entier, liquidités comprises. Les liquidités d'un courtier dans une devise peuvent former une ligne à part (« Ajouter des liquidités ») ; le reste est « Autres liquidités », à 0 %. La colonne « Aujourd’hui » montre le poids actuel de chaque ligne.
+  - **Cibles :** en pourcentage du portefeuille entier, liquidités comprises. Les liquidités d'un courtier dans une devise peuvent former une ligne à part (« Ajouter des liquidités ») ; le reste est « Autres liquidités », à 0 %, affichée quand elle vaut quelque chose aujourd'hui. La colonne « Aujourd’hui » montre le poids actuel de chaque ligne.
   - **Stratégie :** « Investir seulement » utilise les liquidités pour acheter ce qui est sous la cible et ne vend rien ; « Investir et vendre » est annoncé pour bientôt.
   - **Fidélité à la cible :** « Attentif aux coûts », « Équilibré », « Fidèle à la cible », « La cible avant tout » ou « Personnalisée ». Elle fixe combien vous acceptez de dépenser en frais pour remettre l'argent sur la cible, et le tableau « Coût maximal acceptable » montre ce montant pour chaque somme mal placée.
   - **Résultat :**
     - le plan dans l'ordre où l'exécuter : d'abord les dépôts, les transferts entre courtiers et les changes de devises, puis les achats chez chaque courtier ;
     - le tableau « Allocation par ligne » : aujourd'hui, cible et après le plan, avec vos limites ;
     - les chiffres clés : « Vaut aujourd’hui », « Vaudra après », « Argent perdu », et l'« Écart maximal à l’objectif » avec la ligne à laquelle il appartient ;
-    - les expositions par type d'actif, secteur et pays — aujourd'hui, après le plan et votre cible — sur le portefeuille entier, liquidités comprises.
+    - les expositions par type d'actif, secteur et pays — aujourd'hui, après le plan et votre cible — sur le portefeuille entier, liquidités comprises ; les pays aussi sur deux cartes du monde, votre cible et après le plan.
   - **La fiabilité du plan :** la recherche tourne trois fois, et un plan n'est prouvé le meilleur que si une seconde recherche le confirme. Un plan non prouvé est présenté comme un optimum local, avec sa marge quand les recherches en donnent une : le meilleur plan possible devrait être au plus meilleur de ce montant.
 - **Le profil opérationnel d'un courtier**, dans la fenêtre du courtier. Il réunit la façon dont le courtier prend les ordres (en nombre de parts ou en montant, avec son incrément) et ses frais d'achat et de vente (minimum, pourcentage, maximum, partie fixe), devise par devise, ainsi que sa façon de convertir les devises et son régime fiscal (« Administré » ou « Déclaratif »).
   - Les outils le copient dans un plan, où vous pouvez encore le modifier.
@@ -84,13 +84,14 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **Des limites sur les cibles**, dans l'Allocateur PAC et le Rééquilibreur de portefeuille. Chaque ligne peut avoir un minimum et un maximum de sa valeur à la fin du plan, en montant (500) ou en pourcentage du total (35 %).
   - Les liquidités d'un courtier dans une devise peuvent aussi avoir des limites, avec « Ajouter des liquidités » ; dans le PAC elles n'ont que des limites, pas de cible.
   - Le Récapitulatif et le résumé comptent les lignes avec une limite.
-  - Un minimum au-dessus de son maximum, ou des minimums qui dépassent 100 % au total, sont signalés avant le calcul.
+  - Un minimum au-dessus de son maximum, des minimums qui dépassent 100 % au total ou l'argent du plan, ou un maximum en dessous de ce que vous détenez déjà sont signalés à l'étape Cibles, avant le calcul.
   - Quand les limites ne laissent aucun plan, le résultat indique « Aucune solution avec ces limites » et les énumère.
   - Quand la recherche se termine sans plan dans les limites, le résultat le dit, et précise que ce n'est pas une preuve qu'aucun plan n'existe.
   - Quand les limites ne laissent pas de place aux arrondis, le plan est trouvé en comptant les arrondis en sa faveur : il respecte les limites une fois ajoutée la somme supplémentaire éventuelle que demande le résultat, et il n'est pas prouvé le meilleur. Une limite de liquidités manquée seulement parce que chaque montant est arrondi au centime reçoit une note avec le montant.
 - **Les chiffres du jour pendant que vous modifiez le plan** : l'étape Cibles montre le total que le plan répartit (dans le Rééquilibreur aussi le poids actuel de chaque ligne), mis à jour un instant après chaque modification.
 - **Le calcul montre sa phase** pendant l'attente : « Je contrôle les données », « Je construis le modèle », « Je cherche le plan », « Je vérifie les comptes », « Je prépare le résultat », avec sa position (« 2 sur 5 »).
 - **Quand un courtier convertit la devise à chaque achat, le plan le dit.** Il compte une conversion par paire de devises ; le courtier peut arrondir chaque ordre séparément, donc quelques centimes par ordre peuvent différer.
+- Quand un calcul de l'Allocateur PAC ou du Rééquilibreur de portefeuille échoue, **Copier la requête** copie les données envoyées, à joindre à un signalement. Le serveur ne conserve rien.
 
 ### 🔄 Modifié
 
@@ -134,13 +135,15 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Les analyses de risque publient de nouvelles mesures à côté des existantes : le meilleur jour et les 30 meilleurs jours, la plus forte hausse, la part de jours positifs, les gains face aux pertes (Omega), la semi-déviation, la profondeur moyenne sous le sommet, les jours extrêmes, le jour moyen de hausse et de baisse et la plus longue série positive. La VaR, la CVaR et chaque chiffre déjà publié ne bougent pas. Une série qui n'a jamais gagné, ou jamais perdu, n'est plus marquée partielle pour son meilleur ou pire jour manquant.
 - Le nombre effectif de positions de l'onglet Risque se mesure sur les seules positions qui ont un prix : les liquidités et les positions sans prix ne le gonflent plus, il ne dépasse donc jamais les positions mesurées.
 
+- Dans la fenêtre d'une paire de devises, un clic sur un fournisseur de la légende affiche ou masque sa description ; un double clic ouvre son guide.
+
 #### 🎯 Allocateur PAC et Outils
 
 - **Un plan dont l'optimalité n'est pas prouvée est désormais présenté comme un optimum local.**
 - **L'« Achat obligatoire » d'une route disparaît.** Pour obliger un achat, fixez un minimum sur la cible de l'actif. Le minimum de la route ne vaut que si le plan achète sur cette route.
 - **L'éditeur du courtier du scénario utilise le panneau du profil opérationnel** : frais d'achat et de vente avec minimum, pourcentage, maximum et partie fixe, devise par devise.
 - **Quand le solveur s'arrête sur une erreur numérique** après avoir trouvé un plan, le résultat le dit désormais dans une note : le plan est valide et peut être exécuté, et un meilleur peut exister.
-- Sur la page Outils, le titre d'un outil passe à la ligne entre les mots, et le lien vers la documentation reste à côté, son libellé sous l'icône.
+- Sur la page Outils, le titre d'un outil passe à la ligne entre les mots, et le lien vers la documentation reste à côté, sous forme d'icône.
 
 ### 🐛 Corrections
 
