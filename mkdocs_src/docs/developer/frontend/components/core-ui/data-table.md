@@ -46,8 +46,8 @@ The `DataTable` is a powerful, generic table component built with Svelte 5 Runes
     makes sense but is blocked returns its reason from `blocked(row)` (`{hint, reason}`, as the bulk actions do). Its item
     is `aria-disabled`, reachable, with an ⓘ; a hover, a tap, a click or the keyboard focus opens the reason in the
     shared `Tooltip`, placed against the whole menu. Its click runs nothing and leaves the menu open, and it carries
-    `data-disabled-reason` (the code) for the tests. `disabled(row)` without a reason is the old form, still drawn as
-    native `disabled` until its last users move.
+    `data-disabled-reason` (the code) for the tests. An action is never off without a reason: there is no
+    `disabled(row)` (SEL-M part 2).
   - **Keyboard** (WAI-ARIA menu): the first item takes the focus when the menu opens; ↑ ↓ Home End move through every
     item, the blocked ones too; Enter and Space run; Escape and Tab close it and give the focus back to the ⋮ (or to what
     held it before a right-click). Escape is consumed, so a modal under the menu stays open.
