@@ -2487,7 +2487,8 @@
             icon: Pencil,
             label: () => $t('transactions.bulk.editSingle') || 'Edit row',
             onClick: (row: PendingOp) => handleEditRowClick(row),
-            disabled: (row: PendingOp) => !!getPartnerOp(row.tempId)?.inaccessible,
+            // A pair whose partner sits on a broker the user cannot read is not edited from here: off, saying why (77 SEL-M)
+            blocked: (row: PendingOp) => (getPartnerOp(row.tempId)?.inaccessible ? {hint: () => $t('transactions.bulk.editPartnerInaccessible'), reason: 'partner-inaccessible'} : null),
             // 66 F7-c1: an indented row keeps «Edit row» — on touch and from the keyboard it is the double-click's twin.
         },
         {
@@ -2581,8 +2582,13 @@
                 }
             },
             // 66 F7-c1 (§14.2): «del» on a parent waits for its charges to be read, and stays off when they could not be.
-            disabled: (row: PendingOp) => row.op === 'edit' && !row.markedDelete && chargesUnreadReason(row) !== null,
-            title: (row: PendingOp) => (row.op === 'edit' && !row.markedDelete ? (chargesUnreadReason(row) ?? '') : ''),
+            // The reason is reachable at the touch and from the keyboard (77 SEL-M), its code the state of the read.
+            blocked: (row: PendingOp) => {
+                if (row.op !== 'edit' || row.markedDelete) return null;
+                const unread = chargesUnread(row);
+                const hint = chargesUnreadReason(row);
+                return unread === null || hint === null ? null : {hint, reason: unread === 'loading' ? 'charges-loading' : 'charges-failed'};
+            },
             variant: 'danger' as const,
         },
         {

@@ -2295,8 +2295,9 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
 
         await openMenu(gridRow(BUY.id));
         const del = screen.getByTestId('context-menu-action-mark-delete');
-        expect(del, '«del» on a parent whose charges could not be read is off').toBeDisabled();
-        expect(del.getAttribute('title') ?? '', 'and says why').not.toBe('');
+        // 77 SEL-M: off and reachable, its reason in the shared Tooltip and its code in `data-disabled-reason`
+        expect(del, '«del» on a parent whose charges could not be read is off').toHaveAttribute('aria-disabled', 'true');
+        expect(del, 'and says why').toHaveAttribute('data-disabled-reason', 'charges-failed');
         await fireEvent.click(del);
         await settle();
         expect(rowStatus(gridRow(BUY.id)), 'the click marked nothing').toBe('original');
@@ -2603,7 +2604,7 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
         await waitFor(() => expect(theChip()).toHaveAttribute('data-charges-count', '2'));
         expect(theChip(), 'read by the Bulk itself: closed').toHaveAttribute('aria-expanded', 'false');
         await openMenu(gridRow(BUY.id));
-        expect(screen.getByTestId('context-menu-action-mark-delete'), 'the charges are read: «del» is on again').toBeEnabled();
+        expect(screen.getByTestId('context-menu-action-mark-delete'), 'the charges are read: «del» is on again').not.toHaveAttribute('aria-disabled');
     });
 
     it('«Delete» on a new charge created in the parent’s Form: the row leaves the Bulk, the chip counts one less, no create is sent', async () => {
@@ -2721,7 +2722,8 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
         async function deleteAction(row: HTMLElement): Promise<{enabled: boolean; reason: string}> {
             await openMenu(row);
             const action = screen.getByTestId('context-menu-action-mark-delete');
-            const verdict = {enabled: !(action as HTMLButtonElement).disabled, reason: action.getAttribute('title') ?? ''};
+            // 77 SEL-M: off with its reason is `aria-disabled`, reachable, its reason code in `data-disabled-reason`
+            const verdict = {enabled: action.getAttribute('aria-disabled') !== 'true', reason: action.getAttribute('data-disabled-reason') ?? ''};
             await fireEvent.keyDown(window, {key: 'Escape'});
             await settle();
             await waitFor(() => expect(screen.queryByTestId('context-menu'), 'the menu closed').toBeNull());
@@ -2835,7 +2837,7 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
         await waitFor(() => expect(theChip(), 'the chip appears with the two charges').toHaveAttribute('data-charges-count', '2'));
         expect(rowStatus(gridRow(BUY.id)), 'the parent is still untouched').toBe('original');
         await openMenu(gridRow(BUY.id));
-        expect(screen.getByTestId('context-menu-action-mark-delete'), '«del» is on again').toBeEnabled();
+        expect(screen.getByTestId('context-menu-action-mark-delete'), '«del» is on again').not.toHaveAttribute('aria-disabled');
         expect(screen.queryByTestId('context-menu-action-reset'), 'and, read, the untouched parent no longer offers «Reset row»').toBeNull();
     });
 
@@ -2845,7 +2847,7 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
 
         await openMenu(gridRow(BUY.id));
 
-        expect(screen.getByTestId('context-menu-action-mark-delete'), 'barrier: the menu is drawn, «del» on').toBeEnabled();
+        expect(screen.getByTestId('context-menu-action-mark-delete'), 'barrier: the menu is drawn, «del» on').not.toHaveAttribute('aria-disabled');
         expect(screen.queryByTestId('context-menu-action-reset'), 'nothing to reset').toBeNull();
     });
 
@@ -6416,5 +6418,30 @@ describe('TransactionBulkModal — the selection on the table panel (77 SEL-E)',
         const bar = await screen.findByTestId('selection-toolbar');
         expect(within(bar).queryByTestId('promote-toolbar-confirm')).toBeNull();
         expect(within(bar).getByTestId('tx-bulk-delete-selected-count').textContent?.trim()).toBe('1');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// 77 SEL-M part 2 — the Bulk's row menu: off says why
+// ---------------------------------------------------------------------------
+
+/**
+ * SEL-M part 2 (plan 77, Q-SEL-12): a row action that makes sense but is blocked is off with its reason, reachable
+ * (`aria-disabled`, the reason in the shared Tooltip, its code in `data-disabled-reason`). «Edit row» on a pair whose
+ * partner sits on a broker the user cannot read is one; «del» while the charges are read (or could not be) is the other,
+ * covered above by the F7-c1 cases.
+ */
+describe('TransactionBulkModal — the row menu says why (77 SEL-M part 2)', () => {
+    it('«Edit row» on a pair whose partner is on an unreadable broker: off, with its reason', async () => {
+        txStoreSetAll([SAVED_SENDER], []);
+        mountEditor({action: 'edit', txIds: [SAVED_SENDER.id]});
+        const lock = await screen.findByTestId('tx-bulk-partner-lock');
+        const row = lock.closest('tr') as HTMLElement;
+        await fireEvent.contextMenu(row, {clientX: 10, clientY: 10});
+        const edit = await screen.findByTestId('context-menu-action-edit-single');
+        expect(edit).toHaveAttribute('aria-disabled', 'true');
+        expect(edit).toHaveAttribute('data-disabled-reason', 'partner-inaccessible');
+        await fireEvent.click(edit);
+        expect(screen.getByTestId('context-menu'), 'a click on an item that is off runs nothing: the menu stays open').toBeInTheDocument();
     });
 });

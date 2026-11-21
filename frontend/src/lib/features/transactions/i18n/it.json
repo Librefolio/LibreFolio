@@ -193,7 +193,8 @@
       },
       "chargesReadFailed": "Impossibile leggere le spese collegate di {ids}. «Reimposta riga» le rilegge.",
       "deleteSkippedUnread": "{n, plural, one {# transazione non è stata eliminata: non è stato possibile leggere le sue spese collegate. «Reimposta riga» le rilegge.} other {# transazioni non sono state eliminate: non è stato possibile leggere le loro spese collegate. «Reimposta riga» le rilegge.}}",
-      "rowRef": "riga {n}"
+      "rowRef": "riga {n}",
+      "editPartnerInaccessible": "La transazione collegata è su un broker che non puoi vedere: per questo la riga non si modifica."
     },
     "commit": {
       "serverError": "Salvataggio impossibile — errore del server"

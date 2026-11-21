@@ -193,7 +193,8 @@
       },
       "chargesReadFailed": "Impossible de lire les frais liés de {ids}. «Réinitialiser la ligne» les relit.",
       "deleteSkippedUnread": "{n, plural, one {# transaction n’a pas été supprimée : ses frais liés n’ont pas pu être lus. «Réinitialiser la ligne» les relit.} other {# transactions n’ont pas été supprimées : leurs frais liés n’ont pas pu être lus. «Réinitialiser la ligne» les relit.}}",
-      "rowRef": "ligne {n}"
+      "rowRef": "ligne {n}",
+      "editPartnerInaccessible": "La transaction liée se trouve chez un courtier que vous ne pouvez pas voir : cette ligne ne peut donc pas être modifiée."
     },
     "commit": {
       "serverError": "Sauvegarde impossible — erreur serveur"
