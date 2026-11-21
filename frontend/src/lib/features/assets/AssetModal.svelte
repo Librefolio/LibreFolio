@@ -263,6 +263,27 @@
 
     onDestroy(() => providerProbe.dispose());
 
+    /** The pending scroll to the form's error: one at a time, and none outlives the modal (SEL-FIX1). */
+    let formErrorScroll: ReturnType<typeof setTimeout> | null = null;
+    /** A save that fails after the modal is gone arms nothing. */
+    let destroyed = false;
+
+    /** Brings the inline form error into view once it is drawn (a moment after the error is set). */
+    function scrollToFormError(): void {
+        if (destroyed) return;
+        if (formErrorScroll !== null) clearTimeout(formErrorScroll);
+        formErrorScroll = setTimeout(() => {
+            formErrorScroll = null;
+            document.querySelector('[data-form-error]')?.scrollIntoView({behavior: 'smooth', block: 'center'});
+        }, 50);
+    }
+
+    onDestroy(() => {
+        destroyed = true;
+        if (formErrorScroll !== null) clearTimeout(formErrorScroll);
+        formErrorScroll = null;
+    });
+
     // UI state
     let moreInfoExpanded = $state(false);
     let providerExpanded = $state(false);
@@ -1303,9 +1324,7 @@
         // block (or ticks "No provider") before saving.
         if (editMode && providerDirty && !providerNoProvider && providerCode !== '' && !hasProvider) {
             formError = $t('assets.modal.providerIncomplete');
-            setTimeout(() => {
-                document.querySelector('[data-form-error]')?.scrollIntoView({behavior: 'smooth', block: 'center'});
-            }, 50);
+            scrollToFormError();
             return;
         }
         // I-bis #2 — only gate on the "Save Without Testing?" modal when
@@ -1365,9 +1384,7 @@
         }
         if (result.status === 'error') {
             // Scroll error into view (same behavior as the previous try/catch)
-            setTimeout(() => {
-                document.querySelector('[data-form-error]')?.scrollIntoView({behavior: 'smooth', block: 'center'});
-            }, 50);
+            scrollToFormError();
         }
         saving = false;
     }
@@ -1541,9 +1558,7 @@
                 if (refusal === null) throw removeErr;
                 formError = refusal;
                 pendingSaveAssetId = null;
-                setTimeout(() => {
-                    document.querySelector('[data-form-error]')?.scrollIntoView({behavior: 'smooth', block: 'center'});
-                }, 50);
+                scrollToFormError();
                 return;
             }
         } else if (hasProvider) {
@@ -1558,9 +1573,7 @@
                 if (refusal === null) throw assignErr;
                 formError = refusal;
                 pendingSaveAssetId = null;
-                setTimeout(() => {
-                    document.querySelector('[data-form-error]')?.scrollIntoView({behavior: 'smooth', block: 'center'});
-                }, 50);
+                scrollToFormError();
                 return;
             }
         }

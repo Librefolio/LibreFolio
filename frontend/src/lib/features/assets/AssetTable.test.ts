@@ -39,7 +39,7 @@ vi.mock('$lib/api', () => ({
 
 import {get} from 'svelte/store';
 import {addMessages} from 'svelte-i18n';
-import {render, screen, setupI18n, waitFor, within} from '$test/component';
+import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {_ as t} from '$lib/i18n';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import en from '$lib/i18n/en.json';
@@ -472,5 +472,41 @@ describe('AssetTable — the risk columns (RN-23)', () => {
         expect(cellOf(2, 'maxDrawdown')).toHaveAttribute('title', get(t)('risk.errors.insufficient_history'));
         expect(cellOf(2, 'maxDrawdown')?.textContent).toBe('—');
         expect(cellOf(3, 'maxDrawdown')).toHaveAttribute('data-state', 'pending');
+    });
+});
+
+describe('AssetTable — the row menu says why Sync is off (77 SEL-M)', () => {
+    async function openRowMenu(id: number): Promise<HTMLElement> {
+        const kebab = screen.getByTestId(`row-actions-${id}`);
+        // jsdom has no layout: a menu anchored on a ⋮ of no size closes at once
+        vi.spyOn(kebab, 'getBoundingClientRect').mockReturnValue(new DOMRect(10, 10, 24, 24));
+        await fireEvent.click(kebab);
+        return screen.findByTestId('context-menu');
+    }
+
+    it('without a provider Sync is not offered; an inactive Asset with one shows it off, with its reason; an active one runs it', async () => {
+        render(AssetTable, {
+            data: [
+                {...row(31, 0, 'own'), provider_code: null},
+                {...row(32, 0, 'own', false), provider_code: 'yfinance'},
+                {...row(33, 0, 'own'), provider_code: 'yfinance'},
+            ],
+        });
+        await waitFor(() => expect(document.querySelectorAll('tbody tr[data-row-id]')).toHaveLength(3));
+
+        let menu = await openRowMenu(31);
+        expect(within(menu).queryByTestId('asset-table-sync-action'), 'no provider: nothing to sync').toBeNull();
+        await fireEvent.keyDown(window, {key: 'Escape'});
+        await waitFor(() => expect(screen.queryByTestId('context-menu')).toBeNull());
+
+        menu = await openRowMenu(32);
+        const sync = within(menu).getByTestId('asset-table-sync-action');
+        expect(sync).toHaveAttribute('aria-disabled', 'true');
+        expect(sync).toHaveAttribute('data-disabled-reason', 'inactive');
+        await fireEvent.keyDown(window, {key: 'Escape'});
+        await waitFor(() => expect(screen.queryByTestId('context-menu')).toBeNull());
+
+        menu = await openRowMenu(33);
+        expect(within(menu).getByTestId('asset-table-sync-action')).not.toHaveAttribute('aria-disabled');
     });
 });

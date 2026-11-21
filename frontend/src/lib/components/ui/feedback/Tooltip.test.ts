@@ -270,3 +270,53 @@ describe('Tooltip — showIf decides at the moment of opening (77 SEL-D2)', () =
         expect(await screen.findByTestId('tooltip-content')).toBeInTheDocument();
     });
 });
+
+/**
+ * `anchor` (77 SEL-M): the reason of a disabled item of a row menu is placed against the whole menu, never over its
+ * items. With an anchor the tooltip measures the anchor's box: beside it (right, then left), else above it, else below;
+ * beside it, it stays level with its own trigger. jsdom has no layout: the boxes are given.
+ */
+describe('Tooltip — an anchor other than the trigger (77 SEL-M)', () => {
+    const child = createRawSnippet(() => ({render: () => '<button type="button" data-testid="probe-btn">Sync</button>'}));
+    type Box = {left: number; top: number; width: number; height: number};
+    const rect = ({left, top, width, height}: Box) => ({left, top, width, height, right: left + width, bottom: top + height, x: left, y: top, toJSON: () => ({})}) as DOMRect;
+
+    function place(trigger: Box, anchorBox: Box): HTMLElement {
+        const anchor = document.createElement('div');
+        anchor.dataset.testid = 'probe-anchor';
+        document.body.appendChild(anchor);
+        vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+            if (this.dataset.testid === 'probe-anchor') return rect(anchorBox);
+            if (this.dataset.testid === 'probe-wrap') return rect(trigger);
+            if (this.dataset.testid === 'tooltip-content') return rect({left: 0, top: 0, width: 150, height: 40});
+            return rect({left: 0, top: 0, width: 0, height: 0});
+        });
+        return anchor;
+    }
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+        document.querySelector('[data-testid="probe-anchor"]')?.remove();
+    });
+
+    it('no room on the right of the anchor: on its left, level with the trigger', async () => {
+        // A 1024 × 768 page; the menu at 700–1000, its item at 710–990, 200–230
+        const anchor = place({left: 710, top: 200, width: 280, height: 30}, {left: 700, top: 100, width: 300, height: 300});
+        render(Tooltip, {props: {text: 'Inactive', position: 'right', interactiveChild: true, testId: 'probe-wrap', anchor, children: child}});
+        await fireEvent.click(screen.getByTestId('probe-btn'));
+        const tip = await screen.findByTestId('tooltip-content');
+        // 700 − 8 − 150 = 542 (beside the menu, not beside the item at 552); 215 − 20 = 195
+        await waitFor(() => expect(tip.style.left).toBe('542px'));
+        expect(tip.style.top).toBe('195px');
+    });
+
+    it('no room on either side: above the anchor, never over it', async () => {
+        const anchor = place({left: 20, top: 400, width: 980, height: 30}, {left: 10, top: 300, width: 1000, height: 200});
+        render(Tooltip, {props: {text: 'Inactive', position: 'right', interactiveChild: true, testId: 'probe-wrap', anchor, children: child}});
+        await fireEvent.click(screen.getByTestId('probe-btn'));
+        const tip = await screen.findByTestId('tooltip-content');
+        // 300 − 8 − 40 = 252, centred on the menu: 510 − 75 = 435
+        await waitFor(() => expect(tip.style.top).toBe('252px'));
+        expect(tip.style.left).toBe('435px');
+    });
+});

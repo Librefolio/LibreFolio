@@ -898,33 +898,38 @@
         },
     ]);
 
-    let rowActions: RowAction<ScheduleRow>[] = $derived([
-        {
-            id: 'split',
-            testid: 'schedule-action-split',
-            icon: Scissors,
-            label: () => $t('assets.schedule.split'),
-            visible: (row) => !row.isLate,
-            disabled: (row) => disabled || readonly || daysBetween(row.start_date, row.end_date) < 2,
-            onClick: (row) => {
-                const idx = normalRows.findIndex((r) => r.id === row.id);
-                if (idx >= 0) handleSplitRequest(idx);
-            },
-        },
-        {
-            id: 'delete',
-            testid: 'schedule-action-delete',
-            icon: X,
-            label: () => $t('common.delete'),
-            variant: 'danger',
-            visible: (row) => !row.isLate,
-            disabled: () => disabled || readonly,
-            onClick: (row) => {
-                const idx = normalRows.findIndex((r) => r.id === row.id);
-                if (idx >= 0) handleDelete(idx);
-            },
-        },
-    ]);
+    // Read-only, a period offers no action, so the table has no actions column (77 SEL-M, Q-SEL-12; as Distribution)
+    let rowActions: RowAction<ScheduleRow>[] = $derived(
+        disabled || readonly
+            ? []
+            : [
+                  {
+                      id: 'split',
+                      testid: 'schedule-action-split',
+                      icon: Scissors,
+                      label: () => $t('assets.schedule.split'),
+                      // A period under 2 days says why it cannot be split (77 SEL-M)
+                      visible: (row) => !row.isLate,
+                      blocked: (row) => (daysBetween(row.start_date, row.end_date) < 2 ? {hint: () => $t('assets.schedule.splitTooShort'), reason: 'too-short'} : null),
+                      onClick: (row) => {
+                          const idx = normalRows.findIndex((r) => r.id === row.id);
+                          if (idx >= 0) handleSplitRequest(idx);
+                      },
+                  },
+                  {
+                      id: 'delete',
+                      testid: 'schedule-action-delete',
+                      icon: X,
+                      label: () => $t('common.delete'),
+                      variant: 'danger',
+                      visible: (row) => !row.isLate,
+                      onClick: (row) => {
+                          const idx = normalRows.findIndex((r) => r.id === row.id);
+                          if (idx >= 0) handleDelete(idx);
+                      },
+                  },
+              ],
+    );
 
     /** Whether the given periods follow one another in the schedule, with no period left out between them. */
     function areConsecutive(rows: ScheduleRow[]): boolean {

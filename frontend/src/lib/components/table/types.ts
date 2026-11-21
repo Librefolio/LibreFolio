@@ -377,7 +377,7 @@ export type FooterCells<T> = Record<string, FooterCellContent> | ((rows: T[], se
  *
  * @typeParam T - The row data type
  */
-export interface RowAction<T> extends Omit<ContextMenuItem, 'id' | 'label' | 'disabled' | 'title' | 'testid' | 'iconClass' | 'labelClass'> {
+export interface RowAction<T> extends Omit<ContextMenuItem, 'id' | 'label' | 'disabled' | 'blocked' | 'title' | 'testid' | 'iconClass' | 'labelClass'> {
     /** Unique action identifier */
     id: string;
 
@@ -393,7 +393,13 @@ export interface RowAction<T> extends Omit<ContextMenuItem, 'id' | 'label' | 'di
     /** Conditionally show/hide action */
     visible?: (row: T) => boolean;
 
-    /** Disable action conditionally */
+    /**
+     * Why the action is blocked on this row, or null when it is not (77 SEL-M, Q-SEL-12): then it is off, reachable, and
+     * the row menu says why. An action that makes no sense on a row is not off: it is hidden, with `visible`.
+     */
+    blocked?: (row: T) => SelectionActionBlock | null;
+
+    /** The old form: off with no reason. New actions use `blocked`; this goes once its last users move. */
     disabled?: (row: T) => boolean;
 
     /** Dynamic CSS class for the icon (e.g. 'animate-spin' when loading) */

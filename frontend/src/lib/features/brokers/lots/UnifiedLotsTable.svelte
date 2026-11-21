@@ -375,21 +375,22 @@
             icon: Eye,
             label: () => label('brokers.lots.viewLotDetail', 'View lot detail'),
             onClick: (row) => onCustodyCellClick?.(row.lot),
-            disabled: () => onCustodyCellClick == null,
+            // A page that cannot open it does not offer it (77 SEL-M, Q-SEL-12)
+            visible: () => onCustodyCellClick != null,
         },
         {
             id: 'lot-view-gantt-action',
             icon: BarChart3,
             label: () => label('brokers.lots.viewGanttLot', 'Go to lot in Gantt'),
             onClick: (row) => onViewGanttLot?.(row.lotId),
-            disabled: () => onViewGanttLot == null,
+            visible: () => onViewGanttLot != null,
         },
         {
             id: 'lot-goto-opening-transaction-action',
             icon: ExternalLink,
             label: () => label('brokers.lots.goToOpeningTransaction', 'Go to opening transaction'),
             onClick: (row) => onGotoOpeningTransaction?.(row.lot),
-            disabled: () => onGotoOpeningTransaction == null,
+            visible: () => onGotoOpeningTransaction != null,
         },
         {
             id: 'lot-copy-id-action',

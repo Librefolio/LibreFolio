@@ -61,10 +61,14 @@
         /** Asked at the moment of opening, by every path, with the trigger: `false` opens nothing (77 SEL-D2: the name of
          *  an icon whose word is in view beside it would only repeat it). Absent: always. */
         showIf?: (trigger: HTMLElement) => boolean;
+        /** The box the tooltip is placed against, when it is not the trigger (77 SEL-M: the reason of a disabled item of a
+         *  row menu goes against the whole menu). Beside it, right then left, level with the trigger; with no room on
+         *  either side, above it, else below it: never over it. Absent: the trigger, as always. */
+        anchor?: HTMLElement | null;
         children?: Snippet;
     }
 
-    let {text = '', html = '', math = false, position = 'top', maxWidth = '400px', wrapperClass = '', interactiveChild = false, showDelayMs = 500, testId = '', openOnFocus = false, showIf, children}: Props = $props();
+    let {text = '', html = '', math = false, position = 'top', maxWidth = '400px', wrapperClass = '', interactiveChild = false, showDelayMs = 500, testId = '', openOnFocus = false, showIf, anchor = null, children}: Props = $props();
 
     let visible = $state(false);
     let tooltipElement: HTMLDivElement | undefined = $state(undefined);
@@ -314,6 +318,11 @@
         const gap = 8; // gap between trigger and tooltip
         const pad = 10; // viewport edge padding
 
+        if (anchor) {
+            placeAgainst(anchor.getBoundingClientRect(), triggerRect, tooltipRect, vw, vh, gap, pad);
+            return;
+        }
+
         // Determine best position (flip if needed, fall back to top/bottom when horizontal space is insufficient)
         let pos = position;
         switch (position) {
@@ -367,6 +376,26 @@
 
         fixedTop = top;
         fixedLeft = left;
+    }
+
+    /** Beside the anchor (the asked side first, then the other), level with the trigger; else above it, else below. */
+    function placeAgainst(anchorRect: DOMRect, triggerRect: DOMRect, tooltipRect: DOMRect, vw: number, vh: number, gap: number, pad: number) {
+        const fitsRight = anchorRect.right + gap + tooltipRect.width <= vw - pad;
+        const fitsLeft = anchorRect.left - gap - tooltipRect.width >= pad;
+        const sides = position === 'left' ? ['left', 'right'] : ['right', 'left'];
+        const side = sides.find((candidate) => (candidate === 'right' ? fitsRight : fitsLeft));
+        let top: number;
+        let left: number;
+        if (side) {
+            left = side === 'right' ? anchorRect.right + gap : anchorRect.left - gap - tooltipRect.width;
+            top = triggerRect.top + triggerRect.height / 2 - tooltipRect.height / 2;
+        } else {
+            const above = anchorRect.top - gap - tooltipRect.height >= pad;
+            top = above ? anchorRect.top - gap - tooltipRect.height : anchorRect.bottom + gap;
+            left = anchorRect.left + anchorRect.width / 2 - tooltipRect.width / 2;
+        }
+        fixedLeft = Math.max(pad, Math.min(left, vw - tooltipRect.width - pad));
+        fixedTop = Math.max(pad, Math.min(top, vh - tooltipRect.height - pad));
     }
 
     function schedulePositionUpdate() {

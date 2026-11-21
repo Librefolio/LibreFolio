@@ -320,7 +320,8 @@
       "generateInterestHint": "Generar automáticamente eventos de pago de cupón en cada fecha de maduración. Los intereses acumulados se pagan y el activo vuelve al valor inicial.",
       "interestTypeTooltip": "Determina cómo se calcula el interés. Simple: solo sobre el valor inicial. Compuesto: los intereses se acumulan también sobre los intereses.",
       "dayCountTooltip": "Convención para contar días en el período de interés. ACT/365 y ACT/360 son las más comunes. Afecta el cálculo del interés diario.",
-      "mergeNotConsecutive": "Solo se pueden unir periodos consecutivos: elige filas contiguas."
+      "mergeNotConsecutive": "Solo se pueden unir periodos consecutivos: elige filas contiguas.",
+      "splitTooShort": "Un periodo solo se divide si dura al menos 2 días"
     },
     "probe": {
       "history": "Historial",

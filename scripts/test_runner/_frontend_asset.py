@@ -332,6 +332,16 @@ def front_asset_profile_edit(verbose: bool = False, ui: bool = False, headed: bo
     return _run_playwright("assets/asset-profile-edit.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_asset_row_menu(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the row menu E2E tests (plan 77, SEL-M): a disabled item says why, at the touch and from the keyboard."""
+    print_section("Frontend Asset Row Menu Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("assets/asset-row-menu.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_asset_profile_changes(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the «Ultime variazioni» E2E tests (plan 68, E6a): the panel of the Profilo tab and «Dimentica»."""
     print_section("Frontend Asset Profile Changes Tests")
@@ -473,6 +483,7 @@ def populate_registry(registry: dict) -> None:
         tests="assets/asset-profile-refresh.spec.ts",
     )
     add_test(cat, "asset-profile-edit", front_asset_profile_edit, name="Asset Profile Edit", desc="Plan 68 E8b2: the «Dati del profilo» row of the asset window opens the profile window; a value kept there waits, is counted and is saved with the asset", tests="assets/asset-profile-edit.spec.ts")
+    add_test(cat, "asset-row-menu", front_asset_row_menu, name="Asset Row Menu", desc="Plan 77 SEL-M: in the Assets table the row menu's disabled «Sync» (an inactive Asset with a provider, mocked list) is reachable and says why: from the keyboard (focus on the first item, arrows to the disabled one, its reason on focus, Escape back to ⋮) and at the touch on a phone (a tap opens the reason, the menu stays open, the reason covers no item)", tests="assets/asset-row-menu.spec.ts")
     add_test(
         cat,
         "asset-profile-create",

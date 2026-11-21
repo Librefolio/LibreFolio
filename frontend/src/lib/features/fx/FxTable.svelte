@@ -304,7 +304,8 @@
                     syncingRowIds = new Set([...syncingRowIds].filter((id) => id !== row.slug));
                 }
             },
-            disabled: (row) => row.manualOnly,
+            // A pair with no provider has nothing to sync: not offered (77 SEL-M, Q-SEL-17)
+            visible: (row) => !row.manualOnly,
             iconClass: (row) => (syncingRowIds.has(row.slug) ? 'animate-spin' : ''),
         },
         {
